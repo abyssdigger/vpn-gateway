@@ -476,7 +476,7 @@ class KernelSystemAdapterTests(unittest.TestCase):
                 with self.assertRaises(vpng.KernelError):
                     adapter.get_ip_forward()
 
-    def test_iptables_save_reads_filter_then_nat_with_wait(self):
+    def test_iptables_save_reads_filter_then_nat_without_unsupported_wait(self):
         adapter = vpng.SubprocessKernelInterface(iptables_wait_seconds=7)
         responses = [
             SimpleNamespace(stdout="*filter\nCOMMIT\n"),
@@ -488,8 +488,8 @@ class KernelSystemAdapterTests(unittest.TestCase):
         self.assertEqual(
             run.call_args_list,
             [
-                mock.call(("iptables-save", "-w", "7", "-t", "filter")),
-                mock.call(("iptables-save", "-w", "7", "-t", "nat")),
+                mock.call(("iptables-save", "-t", "filter")),
+                mock.call(("iptables-save", "-t", "nat")),
             ],
         )
 

@@ -51,10 +51,10 @@ from typing import Mapping, Sequence
 
 # ---------------------------------------------------------------------------
 # Architecture: RC2.4.1
-# Implementation: RC2.5
+# Implementation: RC2.5.1
 # ---------------------------------------------------------------------------
 
-VERSION = "RC2.5"
+VERSION = "RC2.5.1"
 
 DEFAULT_CONFIG_PATH = Path("/etc/vpn-gateway/vpn-gateway.toml")
 DEFAULT_LOCK_PATH = Path("/run/vpn-gateway/vpn-gatewayd.lock")
@@ -2189,12 +2189,13 @@ class SubprocessKernelInterface(KernelInterface):
 
     def iptables_save(self) -> str:
         """Return canonical filter+nat inventory from iptables-save."""
-        wait = str(self.iptables_wait_seconds)
+        # Debian 13 iptables-save (iptables-nft 1.8.11) has no -w/--wait
+        # option.  Only iptables-restore uses the bounded xtables wait below.
         filter_save = self._run(
-            ("iptables-save", "-w", wait, "-t", "filter")
+            ("iptables-save", "-t", "filter")
         ).stdout
         nat_save = self._run(
-            ("iptables-save", "-w", wait, "-t", "nat")
+            ("iptables-save", "-t", "nat")
         ).stdout
         return filter_save.rstrip("\n") + "\n" + nat_save.rstrip("\n") + "\n"
 

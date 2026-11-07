@@ -3,6 +3,26 @@
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
+## 2026-11-07 — RC2.5.1 Debian iptables-save compatibility fix
+
+The first real foreground bootstrap on Debian 13.7 / iptables-nft 1.8.11 failed during
+config-independent startup cleanup before any gateway resources were materialized:
+
+```text
+iptables-save: invalid option -- 'w'
+```
+
+The RC2.5 subprocess adapter incorrectly assumed that `iptables-save` accepted the same
+`-w/--wait` option as `iptables-restore`.
+
+Correction:
+
+- `iptables-save -t filter` and `iptables-save -t nat` are now invoked without `-w`;
+- `iptables-restore -w N --noflush` retains bounded xtables lock waiting;
+- the kernel-adapter regression test now asserts the Debian 13-compatible argv exactly.
+
+Architecture remains RC2.4.1; implementation version is RC2.5.1.
+
 ## 2026-11-07 — RC2.5 happy-path bootstrap
 
 Implementation RC2.5 completes the first executable happy-path gateway while retaining
