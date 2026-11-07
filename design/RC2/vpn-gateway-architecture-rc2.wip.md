@@ -1,7 +1,7 @@
 # VPN Gateway — архитектурные решения и инварианты
 
 **Статус:** Release Candidate — кандидат на утверждение и реализацию
-**Версия:** RC2.2  
+**Версия:** RC2.3
 **Дата:** 2026-11-07
 
 Документ фиксирует принятые архитектурные решения проекта VPN Gateway. Он описывает обязательные инварианты, жизненный цикл сервиса, модель владения kernel-state и правила конфигурации. Нереализованные детали, которые ещё требуют отдельного решения, вынесены в раздел **«Открытые решения»**.
@@ -544,24 +544,28 @@ route reconciliation passes              -> DEGRADED
 
 NAT/route dependency ordering больше не требуется: MASQUERADE уже существует до runtime route operations и удаляется только при shutdown cleanup.
 
-Route executor обязан только:
+Route executor обязан соблюдать:
 
 ```text
 1. missing BLACKHOLE route_adds;
-2. ordinary route deletes/adds.
+2. competing exact route_deletes;
+3. authoritative route_replaces;
+4. остальные route_adds.
 ```
 
-Точный порядок независимых ordinary route operations определяется при реализации, но не должен нарушать ownership/authoritative-scope invariants.
+`route_replaces` не означает blind adoption. Это активная materialization operation (`ip route replace` или эквивалент), после которой ownership всё равно фиксируется только успешным verify/commit.
 
 Plan validation checks:
 
 ```text
-1. один и тот же RouteSpec не присутствует одновременно в route_adds и route_deletes;
+1. route_adds, route_deletes и route_replaces попарно disjoint;
 2. foreign route delete допустим только на exact protected prefix;
-3. `proto kernel` route никогда не может присутствовать в route_deletes;
+3. `proto kernel` route никогда не может присутствовать в route_deletes или route_replaces;
 4. owned non-desired delete должен соответствовать ownership соответствующего managed-профиля;
-5. каждый add должен соответствовать runtime DESIRED некоторого managed-профиля;
-6. два managed-профиля не могут претендовать на один exact protected prefix/resource.
+5. каждый add/replace должен соответствовать runtime DESIRED некоторого managed-профиля;
+6. replace допустим только для RouteSpec, уже присутствующего в ACTUAL и отсутствующего в OWNED;
+7. add допустим только для RouteSpec, отсутствующего в ACTUAL;
+8. два managed-профиля не могут претендовать на один exact protected prefix/resource.
 ```
 
 Validation failure до side effects:
@@ -582,7 +586,7 @@ Validation failure до side effects:
 
 Если ресурс находится в `actual ∩ desired`, но отсутствует в `owned`, применяется одно из двух правил:
 
-- для exact-prefix routes из `profile.routes` действует authoritative canonicalization (§23.1): существующий route удаляется, затем создаётся канонический desired `RouteSpec` и записывается в `owned`; при успешной канонизации это не является причиной `FAIL`;
+- для exact-prefix routes из `profile.routes` действует authoritative canonicalization (§23.1): plan содержит `route_replaces` для этого canonical desired `RouteSpec`; после успешной materialization и verify он записывается в `owned`; при успешной канонизации это не является причиной `FAIL`;
 - для остальных ресурсов silent adoption запрещён: конфликт журналируется, daemon reconciliation возвращает `FAIL`, а агрегатор переводит daemon в `DEGRADED`.
 
 
@@ -1534,9 +1538,12 @@ Daemon-level route plan представлен отдельным immutable type
 class ReconciliationPlan:
     route_adds: frozenset[RouteSpec]
     route_deletes: frozenset[RouteSpec]
+    route_replaces: frozenset[RouteSpec]
 ```
 
 `ReconciliationPlan` не содержит итоговых profile results: они появляются только после apply/verify.
+
+`route_replaces` выражает отдельную ownership-canonicalization operation: exact desired `RouteSpec` уже присутствует в ACTUAL, но отсутствует в process-local OWNED. Такая операция не кодируется как одновременный add+delete одного `RouteSpec`, потому что add/delete sets обязаны быть disjoint и имеют другую семантику.
 
 Missing configured blackhole guards включаются в обычный `route_adds` как `RouteSpec(route_type=BLACKHOLE, proto=201, metric=65536, onlink=False)`. Отдельный тип операции для blackhole не нужен: blackhole — это обычный Linux route с типом `BLACKHOLE`, а не отдельный класс kernel-resource.
 
@@ -1596,16 +1603,17 @@ owned - actual    -> убрать из runtime inventory
 desired owned RouteSpec                                      -> keep
 owned non-desired on exact protected prefix                    -> delete
 foreign non-desired on exact protected prefix                  -> delete
-exact desired but not owned                                    -> delete and recreate as owned
+exact desired but not owned                                    -> replace/canonicalize, then verify as owned
 configured blackhole guard (BLACKHOLE, proto 201, metric 65536,
-onlink=False)                                                   -> keep if present, add if missing
+onlink=False)                                                   -> keep if owned+present, add if missing,
+                                                                  replace if present but not owned
 ```
 
 На exact protected prefix coexistence с competing routes не допускается: daemon приводит routing table к собственной канонической конфигурации.
 
 Это является явным исключением из общего правила «не удалять чужие маршруты».
 
-Исключение из authoritative canonicalization: daemon никогда не удаляет `proto kernel` route. Exact protected prefix, совпадающий с host connected `proto kernel` route в main IPv4 table, приводит к fatal startup error через initial `_validate_plan()`, который запрещает любой `route_delete` для `proto kernel`.
+Исключение из authoritative canonicalization: daemon никогда не удаляет и не replace'ит `proto kernel` route. Exact protected prefix, совпадающий с host connected `proto kernel` route в main IPv4 table, приводит к fatal startup error через initial `_validate_plan()`, который запрещает `route_delete`/`route_replace` для `proto kernel`.
 
 More-specific и less-specific маршруты, пересекающиеся с `profile.routes`, не входят в authoritative ownership и автоматически не удаляются.
 
@@ -1706,6 +1714,7 @@ Runtime reconciliation:
 list_routes() -> set[RouteSpec]
 add_route(RouteSpec)
 delete_route(RouteSpec)
+replace_route(RouteSpec)
 
 list_interface_ipv4() -> Mapping[str, frozenset[IPv4Address]]
 ```
@@ -1870,7 +1879,7 @@ class DiagnosticFact:
 
 Если такая возможность появится, она должна проектироваться как отдельная policy axis, а не как ослабление текущего `VPNG-INGRESS` по умолчанию. Вероятная форма — per-profile allow-list локальных destinations с отдельными INPUT/FORWARD rules, независимой validation и явным fail-closed default.
 
-Это **не является частью текущей RC2.2 архитектуры**, не влияет на текущий config schema и не должно учитываться при реализации первой версии daemon.
+Это **не является частью текущей RC2.3 архитектуры**, не влияет на текущий config schema и не должно учитываться при реализации первой версии daemon.
 
 ## 26. Ключевые инварианты
 
@@ -2044,7 +2053,8 @@ class DiagnosticFact:
 
 65. Ресурс `actual ∩ desired`, отсутствующий в `owned`, не присваивается silent.
     Для exact destination из `profile.routes` применяется authoritative canonicalization:
-    existing route удаляется и canonical desired RouteSpec создаётся заново как owned.
+    plan содержит `route_replaces` для canonical desired RouteSpec; ownership появляется
+    только после successful materialization + verify/commit.
 
 66. Runtime inventory профиля commit'ится daemon только после kernel apply + verify
     соответствующего reconciliation результата.
@@ -2138,7 +2148,8 @@ class DiagnosticFact:
 95. Readiness вычисляется VpnGatewayDaemon из единого interface/address snapshot;
     VpnProfile не выполняет kernel readiness queries.
 
-96. ReconciliationPlan является immutable typed route-plan и содержит только route_adds/route_deletes.
+96. ReconciliationPlan является immutable typed route-plan и содержит только
+    route_adds/route_deletes/route_replaces.
 
 97. Plan validation failure на startup является fatal; в runtime plan не применяется
     и daemon переходит в DEGRADED.
@@ -2172,7 +2183,8 @@ class DiagnosticFact:
 107. onlink является частью RouteSpec identity и задаётся владельцем явно.
 
 108. Missing blackhole guards представлены обычными RouteSpec в route_adds; executor
-     применяет их раньше остальных route operations.
+     применяет их раньше остальных route operations. Canonical guard, уже присутствующий
+     в ACTUAL, но не OWNED, выражается через route_replaces.
 
 109. BLACKHOLE является обычным RouteType; отдельный BlackholeOperation/resource type
      не вводится.
@@ -2191,8 +2203,8 @@ class DiagnosticFact:
 114. Fixed firewall/NAT infrastructure проверяется в начале каждого reconciliation pass, до route/interface snapshot.
      UNSAFE и UNKNOWN требуют best-effort ip_forward=0; UNKNOWN не repair'ится вслепую.
 
-115. Daemon никогда не удаляет `proto kernel` route; exact protected-prefix conflict с host
-     connected route является fatal initial-plan validation conflict.
+115. Daemon никогда не удаляет и не replace'ит `proto kernel` route; exact protected-prefix
+     conflict с host connected route является fatal initial-plan validation conflict.
 
 116. Profile FORWARD отбрасывает INVALID для protected destination + expected VPN egress
      до разрешающих ACCEPT.
@@ -2342,5 +2354,16 @@ class DiagnosticFact:
 166. Final config path component обязан быть regular file и проверяется через `lstat`; symlink
      запрещён, чтобы path-security parent directory нельзя было обойти redirect'ом на target
      с иными replacement permissions.
+
+
+167. `route_replaces` является активной authoritative materialization operation, а не silent adoption:
+     RouteSpec должен одновременно принадлежать current DESIRED и ACTUAL, отсутствовать в OWNED,
+     а ownership фиксируется только после verify/commit.
+
+168. route_adds, route_deletes и route_replaces попарно disjoint. `proto kernel` запрещён
+     как в route_deletes, так и в route_replaces.
+
+169. Route executor применяет missing BLACKHOLE adds до потенциально разрушающих операций;
+     затем competing exact deletes, authoritative replaces и остальные adds.
 
 ```

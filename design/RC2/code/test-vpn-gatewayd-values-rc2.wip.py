@@ -85,10 +85,12 @@ class ValueObjectTests(unittest.TestCase):
         plan = vpng.ReconciliationPlan(
             route_adds=frozenset({route}),
             route_deletes=frozenset(),
+            route_replaces=frozenset(),
         )
 
         self.assertIsInstance(plan.route_adds, frozenset)
         self.assertIsInstance(plan.route_deletes, frozenset)
+        self.assertIsInstance(plan.route_replaces, frozenset)
         with self.assertRaises(dataclasses.FrozenInstanceError):
             plan.route_adds = frozenset()
 

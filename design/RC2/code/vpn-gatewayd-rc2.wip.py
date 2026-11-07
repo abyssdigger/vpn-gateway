@@ -48,11 +48,11 @@ from typing import Mapping, Sequence
 
 
 # ---------------------------------------------------------------------------
-# Architecture: RC2.2
-# Implementation: RC2.2.1
+# Architecture: RC2.3
+# Implementation: RC2.3
 # ---------------------------------------------------------------------------
 
-VERSION = "RC2.2.1"
+VERSION = "RC2.3"
 
 DEFAULT_CONFIG_PATH = Path("/etc/vpn-gateway/vpn-gateway.toml")
 DEFAULT_LOCK_PATH = Path("/run/vpn-gateway/vpn-gatewayd.lock")
@@ -213,6 +213,7 @@ class RouteSpec:
 class ReconciliationPlan:
     route_adds: frozenset[RouteSpec]
     route_deletes: frozenset[RouteSpec]
+    route_replaces: frozenset[RouteSpec]
 
 
 @dataclass(slots=True, frozen=True)
@@ -1706,6 +1707,15 @@ class KernelInterface(ABC):
         """Delete exactly the represented route."""
 
     @abstractmethod
+    def replace_route(self, route: RouteSpec) -> None:
+        """
+        Materialize `route` with replace semantics.
+
+        Used only for authoritative canonicalization when the exact desired
+        RouteSpec already exists in ACTUAL but is not OWNED by this process.
+        """
+
+    @abstractmethod
     def list_interface_ipv4(
         self,
     ) -> Mapping[str, frozenset[IPv4Address]]:
@@ -1826,6 +1836,10 @@ class SubprocessKernelInterface(KernelInterface):
 
     def delete_route(self, route: RouteSpec) -> None:
         """TODO: exact route deletion."""
+        raise NotImplementedError
+
+    def replace_route(self, route: RouteSpec) -> None:
+        """TODO: exact route replacement/canonicalization."""
         raise NotImplementedError
 
     def list_interface_ipv4(
@@ -2404,15 +2418,48 @@ class VpnGatewayDaemon:
         interface_ipv4: Mapping[str, frozenset[IPv4Address]],
     ) -> Mapping[str, frozenset[RouteSpec]]:
         """
-        TODO implementation step 4.
+        Build one immutable DESIRED snapshot for the current pass.
 
-        Build exactly one immutable desired snapshot for the current pass:
-        BLACKHOLE routes are always desired; UNICAST routes are desired only
-        for ready profiles.  Return a MappingProxyType whose values are
-        frozensets.  The same snapshot is passed to build/validate/verify and
-        is not recomputed inside those phases.
+        BLACKHOLE guards are always desired.
+        UNICAST peer routes are desired only while the profile is ready.
         """
-        raise NotImplementedError
+        desired: dict[str, frozenset[RouteSpec]] = {}
+
+        for profile_id in sorted(self.profiles, key=str.casefold):
+            profile = self.profiles[profile_id]
+            configured = profile._list_routes(
+                ProfileResourceSet.CONFIGURED
+            )
+
+            if self._profile_is_ready(profile, interface_ipv4):
+                selected = configured
+            else:
+                selected = frozenset(
+                    route
+                    for route in configured
+                    if route.route_type is RouteType.BLACKHOLE
+                )
+
+            desired[profile_id] = frozenset(selected)
+
+        return MappingProxyType(desired)
+
+    def _require_complete_desired_snapshot(
+        self,
+        desired_routes_by_profile: Mapping[
+            str,
+            frozenset[RouteSpec],
+        ],
+    ) -> None:
+        expected = frozenset(self.profiles)
+        actual = frozenset(desired_routes_by_profile)
+        if actual != expected:
+            missing = sorted(expected - actual)
+            unexpected = sorted(actual - expected)
+            raise ReconciliationError(
+                "incomplete desired route snapshot: "
+                f"missing={missing!r}, unexpected={unexpected!r}"
+            )
 
     def _build_plan(
         self,
@@ -2420,8 +2467,54 @@ class VpnGatewayDaemon:
         all_kernel_routes: frozenset[RouteSpec],
         desired_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
     ) -> ReconciliationPlan:
-        """TODO implementation step 4: pure plan construction."""
-        raise NotImplementedError
+        """
+        Pure route-plan construction from ACTUAL + DESIRED + OWNED.
+
+        Authoritative scope is exact protected destinations only:
+        - desired + actual + owned -> keep;
+        - desired + missing actual -> add;
+        - desired + actual + not owned -> replace;
+        - actual exact + non-desired -> delete;
+        - more-/less-specific overlaps -> diagnostics only.
+        """
+        self._require_complete_desired_snapshot(
+            desired_routes_by_profile
+        )
+
+        route_adds: set[RouteSpec] = set()
+        route_deletes: set[RouteSpec] = set()
+        route_replaces: set[RouteSpec] = set()
+
+        for profile_id in sorted(self.profiles, key=str.casefold):
+            profile = self.profiles[profile_id]
+            desired = desired_routes_by_profile[profile_id]
+            owned = profile._list_routes(ProfileResourceSet.OWNED)
+            protected = frozenset(profile.config.routes)
+
+            actual_exact = frozenset(
+                route
+                for route in all_kernel_routes
+                if route.destination in protected
+            )
+
+            for route in actual_exact:
+                if route in desired:
+                    if route not in owned:
+                        route_replaces.add(route)
+                    continue
+
+                route_deletes.add(route)
+
+            actual_exact_set = set(actual_exact)
+            for route in desired:
+                if route not in actual_exact_set:
+                    route_adds.add(route)
+
+        return ReconciliationPlan(
+            route_adds=frozenset(route_adds),
+            route_deletes=frozenset(route_deletes),
+            route_replaces=frozenset(route_replaces),
+        )
 
     def _validate_plan(
         self,
@@ -2431,27 +2524,150 @@ class VpnGatewayDaemon:
         desired_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
     ) -> None:
         """
-        TODO implementation step 4.
+        Validate route-plan safety before any side effect.
 
-        Required checks include:
-        - no RouteSpec in both add/delete;
-        - foreign delete only in exact protected authoritative scope;
-        - proto kernel (KERNEL_ROUTE_PROTO == 2) never appears in route_deletes;
-        - owned non-desired delete has profile ownership justification;
-        - every add belongs to current desired_routes_by_profile;
-        - no two managed profiles claim the same exact resource.
-
-        Exact protected prefix == connected main-table proto-kernel route must
-        therefore fail initial startup plan validation.
+        `route_replaces` expresses authoritative canonicalization of an exact
+        desired RouteSpec that already exists in ACTUAL but is not OWNED.
+        This avoids encoding delete+recreate as an illegal add/delete overlap.
         """
-        raise NotImplementedError
+        self._require_complete_desired_snapshot(
+            desired_routes_by_profile
+        )
+
+        operation_sets = {
+            "add": plan.route_adds,
+            "delete": plan.route_deletes,
+            "replace": plan.route_replaces,
+        }
+        operation_names = tuple(operation_sets)
+        for index, left_name in enumerate(operation_names):
+            for right_name in operation_names[index + 1:]:
+                overlap = (
+                    operation_sets[left_name]
+                    & operation_sets[right_name]
+                )
+                if overlap:
+                    raise PlanValidationError(
+                        f"route plan operations overlap "
+                        f"({left_name}/{right_name}): {overlap!r}"
+                    )
+
+        desired_owners: dict[RouteSpec, str] = {}
+        desired_all: set[RouteSpec] = set()
+        protected_destinations: dict[IPv4Network, str] = {}
+        configured_by_profile: dict[str, frozenset[RouteSpec]] = {}
+        owned_owners: dict[RouteSpec, set[str]] = {}
+
+        for profile_id in sorted(self.profiles, key=str.casefold):
+            profile = self.profiles[profile_id]
+            configured = profile._list_routes(
+                ProfileResourceSet.CONFIGURED
+            )
+            configured_by_profile[profile_id] = configured
+
+            for destination in profile.config.routes:
+                previous = protected_destinations.get(destination)
+                if previous is not None and previous != profile_id:
+                    raise PlanValidationError(
+                        "multiple managed profiles claim exact protected "
+                        f"destination {destination}: "
+                        f"{previous!r}, {profile_id!r}"
+                    )
+                protected_destinations[destination] = profile_id
+
+            for route in desired_routes_by_profile[profile_id]:
+                previous = desired_owners.get(route)
+                if previous is not None and previous != profile_id:
+                    raise PlanValidationError(
+                        "multiple managed profiles claim exact RouteSpec "
+                        f"{route!r}: {previous!r}, {profile_id!r}"
+                    )
+                desired_owners[route] = profile_id
+                desired_all.add(route)
+
+            for route in profile._list_routes(ProfileResourceSet.OWNED):
+                owned_owners.setdefault(route, set()).add(profile_id)
+
+        actual = set(all_kernel_routes)
+
+        for route in plan.route_adds:
+            if route not in desired_all:
+                raise PlanValidationError(
+                    f"route add is not in current DESIRED: {route!r}"
+                )
+            if route in actual:
+                raise PlanValidationError(
+                    f"route add already exists in ACTUAL; "
+                    f"replace/keep required: {route!r}"
+                )
+
+        for route in plan.route_replaces:
+            if route.proto == KERNEL_ROUTE_PROTO:
+                raise PlanValidationError(
+                    f"proto kernel route must never be replaced: {route!r}"
+                )
+            if route not in desired_all:
+                raise PlanValidationError(
+                    f"route replace is not in current DESIRED: {route!r}"
+                )
+            if route not in actual:
+                raise PlanValidationError(
+                    f"route replace is absent from ACTUAL: {route!r}"
+                )
+            if route in owned_owners:
+                raise PlanValidationError(
+                    f"already OWNED desired route must be kept, "
+                    f"not replaced: {route!r}"
+                )
+
+        exact_scope = frozenset(protected_destinations)
+
+        for route in plan.route_deletes:
+            if route.proto == KERNEL_ROUTE_PROTO:
+                raise PlanValidationError(
+                    f"proto kernel route must never be deleted: {route!r}"
+                )
+            if route not in actual:
+                raise PlanValidationError(
+                    f"route delete is absent from ACTUAL: {route!r}"
+                )
+
+            owners = owned_owners.get(route)
+            if owners:
+                justified = any(
+                    route in configured_by_profile[profile_id]
+                    for profile_id in owners
+                )
+                if not justified:
+                    raise PlanValidationError(
+                        "owned route delete has no current configured "
+                        f"ownership justification: {route!r}"
+                    )
+                if route in desired_all:
+                    raise PlanValidationError(
+                        f"OWNED desired route must be kept: {route!r}"
+                    )
+                continue
+
+            if route.destination not in exact_scope:
+                raise PlanValidationError(
+                    "foreign route delete is outside authoritative exact "
+                    f"protected scope: {route!r}"
+                )
+            if route in desired_all:
+                raise PlanValidationError(
+                    "foreign exact desired route must use replace "
+                    f"canonicalization, not delete: {route!r}"
+                )
 
     def _apply_plan(self, plan: ReconciliationPlan) -> None:
         """
         TODO implementation step 6.
 
         Apply missing BLACKHOLE route_adds before ordinary route operations.
-        NAT operations do not exist in ReconciliationPlan.
+        Then delete competing exact routes, perform authoritative replacements,
+        and apply remaining adds.  NAT operations do not exist in
+        ReconciliationPlan.
         """
         raise NotImplementedError
 
@@ -2521,16 +2737,26 @@ class VpnGatewayDaemon:
         all_kernel_routes: frozenset[RouteSpec],
     ) -> frozenset[RouteSpec]:
         """
-        TODO implementation step 4.
+        Return routes related to this profile's protected address space.
 
-        Include:
-        - exact protected prefixes;
-        - competing exact routes;
-        - relevant BLACKHOLE guards;
-        - more-/less-specific overlaps;
-        - exclude default route as an overlap.
+        Exact routes and more-/less-specific overlaps are included for
+        verification/diagnostics.  The default route is deliberately excluded
+        from overlap reporting.
         """
-        raise NotImplementedError
+        protected = profile.config.routes
+        default = IPv4Network("0.0.0.0/0")
+
+        return frozenset(
+            route
+            for route in all_kernel_routes
+            if (
+                route.destination != default
+                and any(
+                    route.destination.overlaps(destination)
+                    for destination in protected
+                )
+            )
+        )
 
     # ---- Readiness / helpers --------------------------------------------
 

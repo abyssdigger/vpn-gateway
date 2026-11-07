@@ -37,6 +37,9 @@ class NoSecurityLoader(vpng.ConfigLoader):
     def _validate_config_security(self, path: Path) -> None:
         del path
 
+    def _validate_opened_config_stat(self, path, file_stat) -> None:
+        del path, file_stat
+
 
 class ConfigTestCase(unittest.TestCase):
     def write_config(self, body: str) -> tuple[tempfile.TemporaryDirectory, Path]:
