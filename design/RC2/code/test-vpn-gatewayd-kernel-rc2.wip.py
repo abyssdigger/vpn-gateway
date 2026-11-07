@@ -453,5 +453,55 @@ class KernelRouteAdapterTests(unittest.TestCase):
                         adapter.list_interface_ipv4()
 
 
+class KernelSystemAdapterTests(unittest.TestCase):
+    def test_ip_forward_procfs_round_trip(self):
+        adapter = kernel()
+        with __import__("tempfile").TemporaryDirectory() as td:
+            path = Path(td) / "ip_forward"
+            path.write_text("0\n", encoding="ascii")
+            with mock.patch.object(vpng, "IP_FORWARD_PATH", path):
+                self.assertFalse(adapter.get_ip_forward())
+                adapter.set_ip_forward(True)
+                self.assertEqual(path.read_text(encoding="ascii"), "1\n")
+                self.assertTrue(adapter.get_ip_forward())
+                adapter.set_ip_forward(False)
+                self.assertEqual(path.read_text(encoding="ascii"), "0\n")
+
+    def test_ip_forward_rejects_unexpected_value(self):
+        adapter = kernel()
+        with __import__("tempfile").TemporaryDirectory() as td:
+            path = Path(td) / "ip_forward"
+            path.write_text("2\n", encoding="ascii")
+            with mock.patch.object(vpng, "IP_FORWARD_PATH", path):
+                with self.assertRaises(vpng.KernelError):
+                    adapter.get_ip_forward()
+
+    def test_iptables_save_reads_filter_then_nat_with_wait(self):
+        adapter = vpng.SubprocessKernelInterface(iptables_wait_seconds=7)
+        responses = [
+            SimpleNamespace(stdout="*filter\nCOMMIT\n"),
+            SimpleNamespace(stdout="*nat\nCOMMIT\n"),
+        ]
+        with mock.patch.object(adapter, "_run", side_effect=responses) as run:
+            snapshot = adapter.iptables_save()
+        self.assertEqual(snapshot, "*filter\nCOMMIT\n*nat\nCOMMIT\n")
+        self.assertEqual(
+            run.call_args_list,
+            [
+                mock.call(("iptables-save", "-w", "7", "-t", "filter")),
+                mock.call(("iptables-save", "-w", "7", "-t", "nat")),
+            ],
+        )
+
+    def test_iptables_restore_uses_wait_and_noflush(self):
+        adapter = vpng.SubprocessKernelInterface(iptables_wait_seconds=7)
+        with mock.patch.object(adapter, "_run") as run:
+            adapter.iptables_restore("*filter\nCOMMIT\n", noflush=True)
+        run.assert_called_once_with(
+            ("iptables-restore", "-w", "7", "--noflush"),
+            input_text="*filter\nCOMMIT\n",
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

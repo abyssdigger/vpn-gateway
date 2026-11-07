@@ -9,7 +9,7 @@ Current scope:
 - stdlib only;
 - one long-lived daemon process;
 - managed_vpns runtime projection;
-- route-only reconciliation plan;
+- happy-path bootstrap with route plan apply/verify;
 - fixed firewall/NAT infrastructure with static MASQUERADE;
 - STARTING/ACTIVE/DEGRADED/ISOLATED/STOPPING lifecycle;
 - stateless marker-based cleanup;
@@ -18,8 +18,8 @@ Current scope:
 - no separate per-profile NAT-safety predicate;
 - no separate preflight phase.
 
-Implementation details explicitly left open by the architecture remain TODOs here,
-especially firewall canonical comparison and the serialized Netlink/event loop.
+Runtime self-healing remains intentionally deferred after the happy-path milestone,
+especially firewall repair, periodic reconciliation and the serialized Netlink event loop.
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ import logging
 import math
 import os
 import re
+import select
 import signal
 import socket
 import stat
@@ -50,10 +51,10 @@ from typing import Mapping, Sequence
 
 # ---------------------------------------------------------------------------
 # Architecture: RC2.4.1
-# Implementation: RC2.4.1
+# Implementation: RC2.5
 # ---------------------------------------------------------------------------
 
-VERSION = "RC2.4.1"
+VERSION = "RC2.5"
 
 DEFAULT_CONFIG_PATH = Path("/etc/vpn-gateway/vpn-gateway.toml")
 DEFAULT_LOCK_PATH = Path("/run/vpn-gateway/vpn-gatewayd.lock")
@@ -71,6 +72,7 @@ PEER_METRIC_STEP = 10
 MAX_ROUTE_METRIC = (1 << 32) - 1
 
 VPNG_CHAIN_PREFIX = "VPNG-"
+IP_FORWARD_PATH = Path("/proc/sys/net/ipv4/ip_forward")
 
 LOG = logging.getLogger("vpn-gatewayd")
 
@@ -2157,33 +2159,55 @@ class SubprocessKernelInterface(KernelInterface):
         )
 
     def get_ip_forward(self) -> bool:
-        """TODO: read /proc/sys/net/ipv4/ip_forward or bounded sysctl."""
-        raise NotImplementedError
+        """Read daemon-owned IPv4 forwarding state from procfs."""
+        try:
+            value = IP_FORWARD_PATH.read_text(encoding="ascii").strip()
+        except OSError as exc:
+            raise KernelError(
+                f"failed to read {IP_FORWARD_PATH}: {exc}"
+            ) from exc
+
+        if value == "0":
+            return False
+        if value == "1":
+            return True
+        raise KernelError(
+            f"unexpected {IP_FORWARD_PATH} value: {value!r}"
+        )
 
     def set_ip_forward(self, enabled: bool) -> None:
-        """TODO: write daemon-owned net.ipv4.ip_forward."""
-        raise NotImplementedError
+        """Set daemon-owned IPv4 forwarding state through procfs."""
+        try:
+            IP_FORWARD_PATH.write_text(
+                "1\n" if enabled else "0\n",
+                encoding="ascii",
+            )
+        except OSError as exc:
+            raise KernelError(
+                f"failed to write {IP_FORWARD_PATH}: {exc}"
+            ) from exc
 
     def iptables_save(self) -> str:
-        """
-        TODO implementation step 5/6.
-
-        Inventory all tables needed to verify the reserved VPNG-* namespace,
-        owned jumps and fixed MASQUERADE rules.
-
-        EXP-001 contract: capture iptables-save stdout directly into memory.
-        Do not create temporary rules files.
-        """
-        raise NotImplementedError
+        """Return canonical filter+nat inventory from iptables-save."""
+        wait = str(self.iptables_wait_seconds)
+        filter_save = self._run(
+            ("iptables-save", "-w", wait, "-t", "filter")
+        ).stdout
+        nat_save = self._run(
+            ("iptables-save", "-w", wait, "-t", "nat")
+        ).stdout
+        return filter_save.rstrip("\n") + "\n" + nat_save.rstrip("\n") + "\n"
 
     def iptables_restore(self, payload: str, *, noflush: bool = True) -> None:
-        """
-        TODO implementation step 5/6.
-
-        Use iptables-restore --noflush and bounded lock wait.
-        Feed `payload` through stdin from memory; no temporary rules files.
-        """
-        raise NotImplementedError
+        """Apply an in-memory restore payload with bounded xtables wait."""
+        argv = [
+            "iptables-restore",
+            "-w",
+            str(self.iptables_wait_seconds),
+        ]
+        if noflush:
+            argv.append("--noflush")
+        self._run(tuple(argv), input_text=payload)
 
 
 # ---------------------------------------------------------------------------
@@ -2410,60 +2434,138 @@ class VpnGatewayDaemon:
         }
 
     def cleanup(self) -> None:
-        """
-        Universal marker-based cleanup, independent of config/persistent state.
+        """Universal marker-based cleanup used before startup and on stop."""
+        try:
+            self.kernel.set_ip_forward(False)
+            if self.kernel.get_ip_forward():
+                raise CleanupError("ip_forward remains enabled after disable")
 
-        Required order:
-        1. ip_forward = 0;
-        2. inventory owned resources by markers;
-        3. delete proto-202 VPN routes;
-        4. remove VPNG-* jumps/chains in managed iptables tables;
-        5. remove proto-201/metric-65536 blackholes only after prior cleanup
-           succeeded;
-        6. verify actual state is clean.
+            routes = self.kernel.list_routes()
+            for route in sorted(
+                (route for route in routes if route.proto == VPN_ROUTE_PROTO),
+                key=self._route_sort_key,
+            ):
+                self.kernel.delete_route(route)
 
-        No whole-table blind flush.
-        """
-        raise NotImplementedError
+            snapshot = self.kernel.iptables_save()
+            cleanup_payload = self._build_firewall_cleanup_payload(snapshot)
+            if cleanup_payload:
+                self.kernel.iptables_restore(cleanup_payload, noflush=True)
+
+            routes = self.kernel.list_routes()
+            blackholes = sorted(
+                (
+                    route
+                    for route in routes
+                    if (
+                        route.route_type is RouteType.BLACKHOLE
+                        and route.proto == BLACKHOLE_ROUTE_PROTO
+                        and route.metric == BLACKHOLE_METRIC
+                    )
+                ),
+                key=self._route_sort_key,
+            )
+            for route in blackholes:
+                self.kernel.delete_route(route)
+
+            remaining_routes = self.kernel.list_routes()
+            if any(route.proto == VPN_ROUTE_PROTO for route in remaining_routes):
+                raise CleanupError("proto-202 VPN routes remain after cleanup")
+            if any(
+                route.route_type is RouteType.BLACKHOLE
+                and route.proto == BLACKHOLE_ROUTE_PROTO
+                and route.metric == BLACKHOLE_METRIC
+                for route in remaining_routes
+            ):
+                raise CleanupError("owned blackhole routes remain after cleanup")
+
+            remaining_fw = self._parse_iptables_save(
+                self.kernel.iptables_save()
+            )
+            self._require_no_vpng_firewall_resources(remaining_fw)
+        except (KernelError, FirewallInspectionError) as exc:
+            raise CleanupError(str(exc)) from exc
 
     def apply(self) -> None:
-        """
-        Fail-hard bootstrap.
+        """Apply one fail-hard happy-path bootstrap transaction boundary."""
+        if self.config is None:
+            raise RuntimeError("config not installed")
 
-        Required order:
-        1. fresh initial routes/interfaces snapshot;
-        2. build + _validate_plan() BEFORE new side effects;
-        3. install fixed firewall/NAT infrastructure, including static
-           MASQUERADE for EVERY managed profile regardless readiness/peers;
-        4. verify fixed firewall/NAT == SAFE;
-        5. apply route plan (BLACKHOLE adds first);
-        6. verify routes against the same desired snapshot; verify result and
-           owned_routes_by_profile must cover every managed profile;
-        7. any profile FAIL/incomplete verify is fatal on startup;
-        8. set and confirm ip_forward = 1 LAST.
-        """
-        raise NotImplementedError
+        initial_routes = self.kernel.list_routes()
+        interface_ipv4 = self.kernel.list_interface_ipv4()
+        desired = self._derive_desired_routes(interface_ipv4=interface_ipv4)
+        plan = self._build_plan(
+            all_kernel_routes=initial_routes,
+            desired_routes_by_profile=desired,
+        )
+        self._validate_plan(
+            plan,
+            all_kernel_routes=initial_routes,
+            desired_routes_by_profile=desired,
+        )
+
+        self.kernel.iptables_restore(
+            self._build_fixed_firewall_nat_payload(),
+            noflush=True,
+        )
+        firewall = self._check_fixed_firewall_nat()
+        if firewall.safety is not FirewallSafety.SAFE:
+            detail = firewall.reason.detail if firewall.reason else None
+            raise ReconciliationError(
+                f"fixed firewall/NAT verification failed: "
+                f"{firewall.safety.name}: {detail or 'no detail'}"
+            )
+
+        self._apply_plan(plan)
+        verified = self._verify_plan(
+            all_kernel_routes=self.kernel.list_routes(),
+            desired_routes_by_profile=desired,
+        )
+        results = self._require_complete_profile_results(
+            verified.profile_results
+        )
+        failed = [
+            profile_id
+            for profile_id, result in results.items()
+            if result.result is not ApplyStateResult.SUCCESS
+        ]
+        if failed:
+            raise ReconciliationError(
+                f"initial route verification failed for profiles: {failed!r}"
+            )
+
+        self._commit_owned(
+            verified_routes_by_profile=verified.owned_routes_by_profile
+        )
+
+        self.kernel.set_ip_forward(True)
+        if not self.kernel.get_ip_forward():
+            raise KernelError("ip_forward remains disabled after enable")
 
     def run(self) -> None:
-        """
-        Serialized event loop placeholder.
+        """Happy-path runtime: remain alive until SIGTERM/SIGINT wakes us."""
+        reader = self._signal_wakeup_reader
+        if reader is None:
+            raise RuntimeError("signal wakeup reader is not installed")
 
-        Must serialize:
-        - Netlink events;
-        - periodic reconciliation;
-        - future IPC;
-        - shutdown.
+        while not self._shutdown_requested:
+            try:
+                readable, _, _ = select.select([reader], [], [])
+            except InterruptedError:
+                continue
+            if reader not in readable:
+                continue
 
-        At most one reconciliation plan executes at a time.
-        Netlink bursts are coalesced/debounced.
-        WATCHDOG=1 must be scheduled before the watchdog deadline even when no
-        external events arrive.
+            while True:
+                try:
+                    data = reader.recv(4096)
+                except BlockingIOError:
+                    break
+                if not data:
+                    break
 
-        The selector must include `_signal_wakeup_reader`; SIGTERM/SIGINT wake
-        it immediately through signal.set_wakeup_fd instead of waiting for the
-        periodic reconciliation timeout.
-        """
-        raise NotImplementedError
+        # Runtime reconciliation/Netlink/watchdog are intentionally deferred
+        # until the happy-path bootstrap has been exercised on the target host.
 
     # ---- Runtime reconciliation ----------------------------------------
 
@@ -2962,16 +3064,46 @@ class VpnGatewayDaemon:
                     f"canonicalization, not delete: {route!r}"
                 )
 
-    def _apply_plan(self, plan: ReconciliationPlan) -> None:
-        """
-        TODO implementation step 6.
+    @staticmethod
+    def _route_sort_key(route: RouteSpec) -> tuple[object, ...]:
+        return (
+            int(route.destination.network_address),
+            route.destination.prefixlen,
+            route.route_type.value,
+            -1 if route.via is None else int(route.via),
+            route.interface or "",
+            -1 if route.metric is None else route.metric,
+            -1 if route.proto is None else route.proto,
+            route.onlink,
+        )
 
-        Apply missing BLACKHOLE route_adds before ordinary route operations.
-        Then delete competing exact routes, perform authoritative replacements,
-        and apply remaining adds.  NAT operations do not exist in
-        ReconciliationPlan.
-        """
-        raise NotImplementedError
+    def _apply_plan(self, plan: ReconciliationPlan) -> None:
+        """Apply one validated route plan with BLACKHOLE guards first."""
+        blackhole_adds = sorted(
+            (
+                route
+                for route in plan.route_adds
+                if route.route_type is RouteType.BLACKHOLE
+            ),
+            key=self._route_sort_key,
+        )
+        remaining_adds = sorted(
+            (
+                route
+                for route in plan.route_adds
+                if route.route_type is not RouteType.BLACKHOLE
+            ),
+            key=self._route_sort_key,
+        )
+
+        for route in blackhole_adds:
+            self.kernel.add_route(route)
+        for route in sorted(plan.route_deletes, key=self._route_sort_key):
+            self.kernel.delete_route(route)
+        for route in sorted(plan.route_replaces, key=self._route_sort_key):
+            self.kernel.replace_route(route)
+        for route in remaining_adds:
+            self.kernel.add_route(route)
 
     def _verify_plan(
         self,
@@ -2979,13 +3111,46 @@ class VpnGatewayDaemon:
         all_kernel_routes: frozenset[RouteSpec],
         desired_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
     ) -> RouteVerifyResult:
-        """
-        TODO implementation step 6.
+        """Verify exact protected-prefix state against the same DESIRED snapshot."""
+        self._require_complete_desired_snapshot(desired_routes_by_profile)
 
-        Verify against the immutable desired snapshot created before plan
-        construction.  Must return a result for every managed profile.
-        """
-        raise NotImplementedError
+        profile_results: dict[str, ProfileResult] = {}
+        owned_routes: dict[str, frozenset[RouteSpec]] = {}
+
+        for profile_id in sorted(self.profiles, key=str.casefold):
+            profile = self.profiles[profile_id]
+            desired = desired_routes_by_profile[profile_id]
+            protected = frozenset(profile.config.routes)
+            actual_exact = frozenset(
+                route
+                for route in all_kernel_routes
+                if route.destination in protected
+            )
+
+            if actual_exact == desired:
+                profile_results[profile_id] = ProfileResult(
+                    result=ApplyStateResult.SUCCESS
+                )
+                owned_routes[profile_id] = desired
+            else:
+                profile_results[profile_id] = ProfileResult(
+                    result=ApplyStateResult.FAIL,
+                    reason=DiagnosticFact(
+                        code=RuntimeReasonCode.PROFILE_ROUTE_MISMATCH,
+                        detail=(
+                            f"desired={sorted(desired, key=self._route_sort_key)!r}; "
+                            f"actual_exact={sorted(actual_exact, key=self._route_sort_key)!r}"
+                        ),
+                    ),
+                )
+                owned_routes[profile_id] = profile._list_routes(
+                    ProfileResourceSet.OWNED
+                )
+
+        return RouteVerifyResult(
+            profile_results=MappingProxyType(profile_results),
+            owned_routes_by_profile=MappingProxyType(owned_routes),
+        )
 
     def _require_complete_profile_results(
         self,
@@ -3131,45 +3296,300 @@ class VpnGatewayDaemon:
                 ),
             )
 
+    @staticmethod
+    def _parse_iptables_save(
+        snapshot: str,
+    ) -> Mapping[str, Mapping[str, object]]:
+        tables: dict[str, dict[str, object]] = {}
+        current: dict[str, object] | None = None
+
+        for raw_line in snapshot.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("*"):
+                name = line[1:]
+                if not name or name in tables:
+                    raise FirewallInspectionError(
+                        f"invalid/duplicate iptables-save table line: {line!r}"
+                    )
+                current = {"chains": set(), "rules": {}}
+                tables[name] = current
+                continue
+            if line == "COMMIT":
+                if current is None:
+                    raise FirewallInspectionError("COMMIT outside table")
+                current = None
+                continue
+            if current is None:
+                raise FirewallInspectionError(
+                    f"iptables-save line outside table: {line!r}"
+                )
+            if line.startswith(":"):
+                chain = line[1:].split(None, 1)[0]
+                if not chain:
+                    raise FirewallInspectionError(
+                        f"invalid chain declaration: {line!r}"
+                    )
+                chains = current["chains"]
+                assert isinstance(chains, set)
+                chains.add(chain)
+                rules = current["rules"]
+                assert isinstance(rules, dict)
+                rules.setdefault(chain, [])
+                continue
+            if line.startswith("-A "):
+                parts = line.split(None, 2)
+                if len(parts) < 3:
+                    raise FirewallInspectionError(
+                        f"invalid rule line: {line!r}"
+                    )
+                chain = parts[1]
+                rules = current["rules"]
+                assert isinstance(rules, dict)
+                rules.setdefault(chain, []).append(line)
+                continue
+            raise FirewallInspectionError(
+                f"unsupported iptables-save line: {line!r}"
+            )
+
+        if current is not None:
+            raise FirewallInspectionError("iptables-save table missing COMMIT")
+        return MappingProxyType(tables)
+
+    @staticmethod
+    def _jump_target(rule: str) -> str | None:
+        tokens = rule.split()
+        try:
+            index = tokens.index("-j")
+        except ValueError:
+            return None
+        if index + 1 >= len(tokens):
+            return None
+        return tokens[index + 1]
+
+    def _fixed_firewall_model(
+        self,
+    ) -> tuple[
+        Mapping[str, tuple[str, ...]],
+        Mapping[str, Mapping[str, tuple[str, ...]]],
+    ]:
+        if self.config is None:
+            raise RuntimeError("config not installed")
+
+        profile_ids = tuple(sorted(self.profiles, key=str.casefold))
+        input_jumps = tuple(
+            f"-A INPUT -j {self.profiles[profile_id].config.chain_input}"
+            for profile_id in profile_ids
+        )
+        forward_jumps = (
+            "-A FORWARD -j VPNG-INGRESS",
+            "-A FORWARD -j VPNG-RESERVED",
+            *(
+                f"-A FORWARD -j {self.profiles[profile_id].config.chain_forward}"
+                for profile_id in profile_ids
+            ),
+        )
+        nat_jumps = tuple(
+            f"-A POSTROUTING -j {self.profiles[profile_id].config.chain_nat}"
+            for profile_id in profile_ids
+        )
+
+        filter_rules: dict[str, tuple[str, ...]] = {}
+        ingress: list[str] = []
+        for profile_id in profile_ids:
+            cfg = self.profiles[profile_id].config
+            ingress.extend((
+                f"-A VPNG-INGRESS -i {cfg.interface} -m conntrack --ctstate INVALID -j DROP",
+                f"-A VPNG-INGRESS -i {cfg.interface} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
+                f"-A VPNG-INGRESS -i {cfg.interface} -j REJECT --reject-with icmp-host-prohibited",
+            ))
+        ingress.append("-A VPNG-INGRESS -j RETURN")
+        filter_rules["VPNG-INGRESS"] = tuple(ingress)
+
+        reserved = [
+            f"-A VPNG-RESERVED -d {self.profiles[profile_id].config.network} "
+            "-j REJECT --reject-with icmp-host-prohibited"
+            for profile_id in profile_ids
+        ]
+        reserved.append("-A VPNG-RESERVED -j RETURN")
+        filter_rules["VPNG-RESERVED"] = tuple(reserved)
+
+        nat_rules: dict[str, tuple[str, ...]] = {}
+        for profile_id in profile_ids:
+            profile = self.profiles[profile_id]
+            cfg = profile.config
+            input_rules = (
+                f"-A {cfg.chain_input} -i {cfg.interface} -m conntrack --ctstate INVALID -j DROP",
+                f"-A {cfg.chain_input} -i {cfg.interface} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
+                f"-A {cfg.chain_input} -s {cfg.network} -d {cfg.local_address}/32 -i {cfg.interface} -m conntrack --ctstate NEW -j ACCEPT",
+                f"-A {cfg.chain_input} -i {cfg.interface} -j REJECT --reject-with icmp-host-prohibited",
+                f"-A {cfg.chain_input} -j RETURN",
+            )
+            filter_rules[cfg.chain_input] = input_rules
+
+            forward_rules: list[str] = []
+            sources = self.effective_sources(profile)
+            for destination in cfg.routes:
+                forward_rules.append(
+                    f"-A {cfg.chain_forward} -d {destination} -o {cfg.interface} "
+                    "-m conntrack --ctstate INVALID -j DROP"
+                )
+                for source in sources:
+                    forward_rules.append(
+                        f"-A {cfg.chain_forward} -s {source} -d {destination} "
+                        f"-o {cfg.interface} -j ACCEPT"
+                    )
+                forward_rules.append(
+                    f"-A {cfg.chain_forward} -d {destination} "
+                    "-j REJECT --reject-with icmp-host-prohibited"
+                )
+            forward_rules.append(f"-A {cfg.chain_forward} -j RETURN")
+            filter_rules[cfg.chain_forward] = tuple(forward_rules)
+
+            nat_rules[cfg.chain_nat] = (
+                f"-A {cfg.chain_nat} -o {cfg.interface} -m addrtype ! --src-type LOCAL -j MASQUERADE",
+                f"-A {cfg.chain_nat} -j RETURN",
+            )
+
+        jumps = MappingProxyType({
+            "INPUT": input_jumps,
+            "FORWARD": tuple(forward_jumps),
+            "POSTROUTING": nat_jumps,
+        })
+        chain_rules = MappingProxyType({
+            "filter": MappingProxyType(filter_rules),
+            "nat": MappingProxyType(nat_rules),
+        })
+        return jumps, chain_rules
+
     def _compare_fixed_firewall_nat(self, snapshot: str) -> FirewallCheck:
-        """
-        TODO implementation step 5/6.
+        """Compare only daemon-owned namespace and built-in jump prefixes."""
+        parsed = self._parse_iptables_save(snapshot)
+        jumps, expected = self._fixed_firewall_model()
 
-        EXP-001 PASS established the comparison boundary retained by RC2.2:
-        - iptables-save stdout is the canonical inventory representation;
-        - strip only comments/blank lines demonstrated as volatile;
-        - minimally parse tables, chain declarations, ordered chain contents,
-          and exact positions/uniqueness of daemon jumps;
-        - compare individual rules as canonical iptables-save strings;
-        - do NOT compare restore payload text directly with save output;
-        - do NOT build a universal semantic firewall AST/normalizer.
+        for table_name in ("filter", "nat"):
+            table = parsed.get(table_name)
+            if table is None:
+                raise FirewallInspectionError(
+                    f"iptables-save missing {table_name!r} table"
+                )
+            chains = table["chains"]
+            rules = table["rules"]
+            assert isinstance(chains, set)
+            assert isinstance(rules, dict)
 
-        Expected parse/comparison inability must raise FirewallInspectionError
-        so _check_fixed_firewall_nat() maps it to UNKNOWN.  Programming errors
-        must not be hidden by a broad catch.
-        """
-        raise NotImplementedError
+            expected_chains = set(expected[table_name])
+            actual_owned = {
+                chain for chain in chains if chain.startswith(VPNG_CHAIN_PREFIX)
+            }
+            if actual_owned != expected_chains:
+                return FirewallCheck(
+                    safety=FirewallSafety.UNSAFE,
+                    reason=DiagnosticFact(
+                        RuntimeReasonCode.FIREWALL_DRIFT,
+                        f"{table_name} VPNG chains expected={sorted(expected_chains)!r} "
+                        f"actual={sorted(actual_owned)!r}",
+                    ),
+                )
+
+            for chain, expected_rules in expected[table_name].items():
+                actual_rules = tuple(rules.get(chain, ()))
+                if actual_rules != expected_rules:
+                    return FirewallCheck(
+                        safety=FirewallSafety.UNSAFE,
+                        reason=DiagnosticFact(
+                            RuntimeReasonCode.FIREWALL_DRIFT,
+                            f"{table_name}/{chain} rules differ",
+                        ),
+                    )
+
+        filter_rules = parsed["filter"]["rules"]
+        nat_rules = parsed["nat"]["rules"]
+        assert isinstance(filter_rules, dict)
+        assert isinstance(nat_rules, dict)
+
+        for chain, expected_prefix in (
+            ("INPUT", jumps["INPUT"]),
+            ("FORWARD", jumps["FORWARD"]),
+        ):
+            actual = tuple(filter_rules.get(chain, ()))
+            if actual[:len(expected_prefix)] != expected_prefix:
+                return FirewallCheck(
+                    FirewallSafety.UNSAFE,
+                    DiagnosticFact(
+                        RuntimeReasonCode.FIREWALL_DRIFT,
+                        f"filter/{chain} VPNG jump prefix differs",
+                    ),
+                )
+            if any(
+                (self._jump_target(rule) or "").startswith(VPNG_CHAIN_PREFIX)
+                for rule in actual[len(expected_prefix):]
+            ):
+                return FirewallCheck(
+                    FirewallSafety.UNSAFE,
+                    DiagnosticFact(
+                        RuntimeReasonCode.FIREWALL_DRIFT,
+                        f"filter/{chain} has extra VPNG jump",
+                    ),
+                )
+
+        postrouting = tuple(nat_rules.get("POSTROUTING", ()))
+        expected_postrouting = jumps["POSTROUTING"]
+        if postrouting[:len(expected_postrouting)] != expected_postrouting:
+            return FirewallCheck(
+                FirewallSafety.UNSAFE,
+                DiagnosticFact(
+                    RuntimeReasonCode.FIREWALL_DRIFT,
+                    "nat/POSTROUTING VPNG jump prefix differs",
+                ),
+            )
+        if any(
+            (self._jump_target(rule) or "").startswith(VPNG_CHAIN_PREFIX)
+            for rule in postrouting[len(expected_postrouting):]
+        ):
+            return FirewallCheck(
+                FirewallSafety.UNSAFE,
+                DiagnosticFact(
+                    RuntimeReasonCode.FIREWALL_DRIFT,
+                    "nat/POSTROUTING has extra VPNG jump",
+                ),
+            )
+
+        return FirewallCheck(FirewallSafety.SAFE, None)
 
     def _build_fixed_firewall_nat_payload(self) -> str:
-        """
-        TODO implementation step 5/6.
+        """Build deterministic filter+nat bootstrap payload without foreign flush."""
+        jumps, chain_rules = self._fixed_firewall_model()
+        lines: list[str] = ["*filter"]
+        for chain in sorted(chain_rules["filter"]):
+            lines.append(f":{chain} - [0:0]")
 
-        Policy belongs here, NOT in KernelInterface.
+        for position, rule in enumerate(jumps["INPUT"], start=1):
+            lines.append(rule.replace("-A INPUT", f"-I INPUT {position}", 1))
+        for position, rule in enumerate(jumps["FORWARD"], start=1):
+            lines.append(
+                rule.replace("-A FORWARD", f"-I FORWARD {position}", 1)
+            )
+        for chain in sorted(chain_rules["filter"]):
+            lines.extend(chain_rules["filter"][chain])
+        lines.append("COMMIT")
 
-        Build fixed filter/NAT policy from current managed config:
-        - profile INPUT chains;
-        - VPNG-INGRESS;
-        - VPNG-RESERVED;
-        - profile FORWARD chains;
-        - profile NAT chains;
-        - static MASQUERADE on every managed profile.interface;
-        - deterministic jumps sorted by case-insensitive profile ID.
-
-        Return the complete restore payload as an in-memory string.  Policy is
-        the single source of truth for both materialization and expected
-        canonical comparison state.
-        """
-        raise NotImplementedError
+        lines.append("*nat")
+        for chain in sorted(chain_rules["nat"]):
+            lines.append(f":{chain} - [0:0]")
+        for position, rule in enumerate(jumps["POSTROUTING"], start=1):
+            lines.append(
+                rule.replace(
+                    "-A POSTROUTING",
+                    f"-I POSTROUTING {position}",
+                    1,
+                )
+            )
+        for chain in sorted(chain_rules["nat"]):
+            lines.extend(chain_rules["nat"][chain])
+        lines.append("COMMIT")
+        return "\n".join(lines) + "\n"
 
     def _repair_fixed_firewall_nat(self) -> None:
         """
@@ -3183,13 +3603,81 @@ class VpnGatewayDaemon:
         raise NotImplementedError
 
     def _build_firewall_cleanup_payload(self, snapshot: str) -> str:
-        """
-        TODO implementation step 7.
+        """Build exact deletions for the reserved VPNG-* namespace."""
+        parsed = self._parse_iptables_save(snapshot)
+        payload: list[str] = []
 
-        Stateless cleanup by reserved VPNG-* namespace, without current config.
-        Must remove only owned jumps/chains, never blind-flush foreign tables.
-        """
-        raise NotImplementedError
+        for table_name in ("filter", "nat"):
+            table = parsed.get(table_name)
+            if table is None:
+                raise FirewallInspectionError(
+                    f"iptables-save missing {table_name!r} table"
+                )
+            chains = table["chains"]
+            rules = table["rules"]
+            assert isinstance(chains, set)
+            assert isinstance(rules, dict)
+
+            owned_chains = sorted(
+                chain for chain in chains if chain.startswith(VPNG_CHAIN_PREFIX)
+            )
+            delete_rules: list[str] = []
+            for chain, chain_rules in rules.items():
+                for rule in chain_rules:
+                    target = self._jump_target(rule)
+                    if target is None or not target.startswith(VPNG_CHAIN_PREFIX):
+                        continue
+                    prefix = f"-A {chain}"
+                    if not rule.startswith(prefix):
+                        raise FirewallInspectionError(
+                            f"cannot transform rule for cleanup: {rule!r}"
+                        )
+                    delete_rules.append(
+                        rule.replace(prefix, f"-D {chain}", 1)
+                    )
+
+            if not owned_chains and not delete_rules:
+                continue
+
+            payload.append(f"*{table_name}")
+            payload.extend(delete_rules)
+            for chain in owned_chains:
+                payload.append(f"-F {chain}")
+            for chain in owned_chains:
+                payload.append(f"-X {chain}")
+            payload.append("COMMIT")
+
+        if not payload:
+            return ""
+        return "\n".join(payload) + "\n"
+
+    @classmethod
+    def _require_no_vpng_firewall_resources(
+        cls,
+        parsed: Mapping[str, Mapping[str, object]],
+    ) -> None:
+        for table_name in ("filter", "nat"):
+            table = parsed.get(table_name)
+            if table is None:
+                raise CleanupError(f"missing {table_name!r} table after cleanup")
+            chains = table["chains"]
+            rules = table["rules"]
+            assert isinstance(chains, set)
+            assert isinstance(rules, dict)
+            leftover_chains = sorted(
+                chain for chain in chains if chain.startswith(VPNG_CHAIN_PREFIX)
+            )
+            if leftover_chains:
+                raise CleanupError(
+                    f"VPNG chains remain in {table_name}: {leftover_chains!r}"
+                )
+            for chain, chain_rules in rules.items():
+                for rule in chain_rules:
+                    target = cls._jump_target(rule)
+                    if target and target.startswith(VPNG_CHAIN_PREFIX):
+                        raise CleanupError(
+                            f"VPNG jump remains in {table_name}/{chain}: {rule}"
+                        )
 
     # ---- ip_forward ------------------------------------------------------
 

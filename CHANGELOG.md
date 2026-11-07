@@ -3,6 +3,50 @@
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
+## 2026-11-07 — RC2.5 happy-path bootstrap
+
+Implementation RC2.5 completes the first executable happy-path gateway while retaining
+architecture RC2.4.1.
+
+Implemented:
+
+- config-independent marker cleanup before config load and on graceful stop;
+- real `net.ipv4.ip_forward` procfs adapter;
+- memory-only `iptables-save` / `iptables-restore --noflush` adapter with bounded lock wait;
+- fixed INPUT/FORWARD/NAT policy materialization and verification;
+- daemon jumps inserted as a deterministic prefix ahead of foreign/UFW rules;
+- static MASQUERADE for every managed VPN egress;
+- initial route plan apply with missing BLACKHOLE guards first;
+- fresh exact route verification and OWNED commit only after successful verify;
+- `ip_forward=1` only after firewall and route verification;
+- signal-only happy-path RUN loop until SIGTERM/SIGINT, followed by cleanup.
+
+Runtime firewall repair, periodic reconciliation and Netlink self-healing remain intentionally
+deferred. External drift during RC2.5 testing requires a service restart.
+
+Regression:
+
+```text
+Config/security: 22/22 PASS
+Value/profile:    7/7 PASS
+Route planning:  14/14 PASS
+Kernel adapter:  17/17 PASS
+Bootstrap:         7/7 PASS
+Total:            67/67 PASS
+
+py_compile: PASS
+--version:  PASS (RC2.5)
+--help:     PASS
+--check-config: PASS
+```
+
+The RC2.5 firewall comparator was also checked against the real Debian 13 canonical
+`iptables-save` snapshot retained from EXP-001 and classified it as `SAFE`.
+
+Next milestone: run RC2.5 in the foreground on the sterile Debian 13 gateway and validate
+real forwarding through the already-established VPN interface before adding runtime
+self-healing.
+
 ## 2026-11-07 — EXP-002A confirmed
 
 EXP-002A passed against the corrected RC2.4.1 adapter:
