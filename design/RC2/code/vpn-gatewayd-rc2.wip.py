@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-vpn-gatewayd — implementation for architecture RC2.4.
+vpn-gatewayd — implementation for architecture RC2.4.1.
 
 This file is intentionally rebuilt from the architecture document only.
 It does not preserve API or structure from earlier skeletons.
@@ -49,11 +49,11 @@ from typing import Mapping, Sequence
 
 
 # ---------------------------------------------------------------------------
-# Architecture: RC2.4
-# Implementation: RC2.4
+# Architecture: RC2.4.1
+# Implementation: RC2.4.1
 # ---------------------------------------------------------------------------
 
-VERSION = "RC2.4"
+VERSION = "RC2.4.1"
 
 DEFAULT_CONFIG_PATH = Path("/etc/vpn-gateway/vpn-gateway.toml")
 DEFAULT_LOCK_PATH = Path("/run/vpn-gateway/vpn-gatewayd.lock")
@@ -2089,10 +2089,15 @@ class SubprocessKernelInterface(KernelInterface):
         """
         Return every interface and its local IPv4 addresses.
 
+        The command is intentionally not filtered with `-4`: Debian 13
+        iproute2 omits addressless interfaces from `ip -j -4 addr show`.
+        Reading all families preserves interface existence; only
+        `addr_info[].family == "inet"` contributes addresses.
+
         `addr_info[].local` is authoritative for tun/point-to-point interfaces;
-        peer/broadcast fields are deliberately ignored.
+        peer/address/broadcast fields are deliberately ignored.
         """
-        completed = self._run(("ip", "-j", "-4", "addr", "show"))
+        completed = self._run(("ip", "-j", "addr", "show"))
         payload = self._load_json_array(
             completed.stdout,
             context="IPv4 address inventory",

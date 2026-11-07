@@ -3,6 +3,31 @@
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
+## 2026-11-07 — RC2.4.1 EXP-002 correction
+
+EXP-002 live smoke found one real mismatch in the RC2.4 address-inventory contract.
+
+- `ip -j -4 addr show` omitted an existing interface with no IPv4 address;
+- adapter changed to `ip -j addr show` and filters only `family == "inet"` in Python;
+- numeric route types emitted by `ip -j -N` (`6/7/8/9`) were confirmed and were already
+  accepted by the parser;
+- P2P local address handling through `addr_info[].local` was confirmed;
+- EXP-002 is recorded as FAIL with one actionable finding; EXP-002A is pending to validate
+  the corrected adapter directly.
+
+Regression after the correction:
+
+```text
+Config/security: 22/22 PASS
+Value/profile:    7/7 PASS
+Route planning:  14/14 PASS
+Kernel adapter:  13/13 PASS
+Total:           56/56 PASS
+
+py_compile: PASS
+--version:  PASS (RC2.4.1)
+```
+
 ## 2026-11-07 — RC2.4 kernel route adapter
 
 Реализован реальный iproute2 boundary для route/address части `SubprocessKernelInterface`.

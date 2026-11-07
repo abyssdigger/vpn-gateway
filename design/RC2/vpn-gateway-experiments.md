@@ -1,6 +1,6 @@
 # VPN-GATE — Experiment Log
 
-**Current architecture:** [VPN Gateway Architecture RC2.4](vpn-gateway-architecture-rc2.wip.md)
+**Current architecture:** [VPN Gateway Architecture RC2.4.1](vpn-gateway-architecture-rc2.wip.md)
 
 This document is the laboratory record for implementation/research questions that must be resolved on the target Debian environment. Each experiment records:
 
@@ -13,11 +13,52 @@ This document is the laboratory record for implementation/research questions tha
 Experimental results are not silently promoted into architecture. A result first appears here; if it changes a requirement or implementation contract, the corresponding architecture revision is referenced explicitly.
 
 
+
 ---
+
+## EXP-002A — Address inventory follow-up
+
+**Status:** PENDING  
+**Architecture baseline:** RC2.4.1  
+**Target:** Debian 13 gateway/test host, stock iproute2  
+**Script:** `vpn-gateway-exp-002a-address-inventory.sh`
+
+### Motivation
+
+EXP-002 demonstrated that `ip -j -4 addr show` omits an interface with no IPv4 address.
+RC2.4.1 changes `SubprocessKernelInterface.list_interface_ipv4()` to read
+`ip -j addr show` and filter IPv4 records in Python.
+
+This follow-up runs the **actual RC2.4.1 adapter** inside a disposable network namespace.
+
+### Pass criteria
+
+The adapter snapshot must report:
+
+```text
+empty0 -> frozenset()
+p2p0   -> {172.20.140.1}
+```
+
+The P2P remote endpoint field is intentionally ignored; only `local` participates in
+readiness.
+
+### Procedure
+
+```bash
+git pull --ff-only
+cd "design/RC2/experiments/EXP-002A Address inventory follow-up"
+sudo ./vpn-gateway-exp-002a-address-inventory.sh
+```
+
+### Result
+
+**PENDING.**
+
 
 ## EXP-002 — Route adapter iproute2 live smoke
 
-**Status:** PENDING  
+**Status:** COMPLETE — FAIL (one actionable adapter mismatch)  
 **Architecture baseline:** RC2.4  
 **Target:** Debian 13 gateway/test host, stock iproute2  
 **Script:** `vpn-gateway-exp-002-route-adapter-smoke.sh`  
@@ -86,10 +127,96 @@ per-command return codes/stdout/stderr and `result.txt`.
 
 ### Result
 
-**PENDING.**
+**Run:** `2026-11-07T17:03:04Z`  
+**Host:** `testing`  
+**Archive SHA256:** `8f905a83df018cfeef5d4c00387b05beeaae5b0ee6b9f3f8a7988ab7c5badf1c`
 
-After the target-host run, the observed output and archive SHA256 are recorded here before
-any implementation consequence is promoted into the architecture.
+Environment:
+
+```text
+Debian GNU/Linux 13.7 (trixie)
+kernel: Linux 6.12.115+deb13.1-amd64
+iproute2: 6.15.0
+libbpf: 1.5.0
+Python: 3.13.5
+```
+
+Observed analyzer result:
+
+```text
+H1 numeric route protocol inventory: PASS
+H2 UNICAST add -> replace -> delete: PASS
+H3 BLACKHOLE add -> delete: FAIL
+H4 RTPROT_BOOT normalization/delete: PASS
+H5 IPv4 address local/peer/empty interface shape: FAIL
+H6 supported route types/default JSON shape: FAIL
+OVERALL=FAIL
+```
+
+The raw observations show three distinct findings.
+
+#### Finding A — `-N` numeric route types: analyzer false negatives
+
+For non-UNICAST route types, `ip -j -N` returned numeric decimal strings:
+
+```text
+BLACKHOLE   -> "type": "6"
+UNREACHABLE -> "type": "7"
+PROHIBIT    -> "type": "8"
+THROW       -> "type": "9"
+```
+
+RC2.4 adapter already accepts these numeric/string forms in `_parse_route_type()`.
+Therefore the H3/H6 FAIL labels were caused by EXP-002 expecting textual type names,
+not by an adapter defect.
+
+H3's add/delete commands themselves succeeded and the BLACKHOLE route had the expected
+`proto=201` and `metric=65536`.
+
+#### Finding B — P2P remote-peer field: analyzer false negative
+
+The point-to-point record was:
+
+```json
+{"family":"inet","local":"172.20.140.1","address":"172.20.140.2","prefixlen":32,...}
+```
+
+The remote endpoint is exposed as `address`, not `peer`, on this iproute2 build.
+The adapter deliberately consumes only `addr_info[].local`, so the observed local address
+matches the runtime readiness contract. No adapter change is required for P2P semantics.
+
+#### Finding C — addressless interface omission: real adapter mismatch
+
+`empty0` was absent from `ip -j -4 addr show`.
+
+Therefore RC2.4 could not satisfy its own `KernelInterface.list_interface_ipv4()` contract:
+
+```text
+existing interface without IPv4 -> empty frozenset
+missing key -> interface does not exist
+```
+
+This distinction is not currently required to decide readiness (both states are not-ready),
+but it is part of the kernel-boundary contract and must not be represented incorrectly.
+
+### Decision
+
+EXP-002 produced one actionable implementation correction:
+
+```text
+ip -j -4 addr show
+        ->
+ip -j addr show
+```
+
+The adapter now reads the complete interface/address snapshot and filters
+`addr_info[].family == "inet"` in Python. This preserves addressless interfaces as
+empty IPv4 sets without introducing a second independently sampled `ip link` snapshot.
+
+The route parser/mutator design is retained. Architecture RC2.4.1 records the actual
+numeric route-type behavior and the corrected address inventory command.
+
+A narrow EXP-002A validates the corrected adapter itself against the target iproute2.
 
 
 ## EXP-001 — Fixed firewall/NAT canonical round-trip

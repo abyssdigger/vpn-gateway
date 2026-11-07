@@ -1,7 +1,7 @@
 # VPN Gateway — архитектурные решения и инварианты
 
 **Статус:** Release Candidate — кандидат на утверждение и реализацию
-**Версия:** RC2.4
+**Версия:** RC2.4.1
 **Дата:** 2026-11-07
 
 Документ фиксирует принятые архитектурные решения проекта VPN Gateway. Он описывает обязательные инварианты, жизненный цикл сервиса, модель владения kernel-state и правила конфигурации. Нереализованные детали, которые ещё требуют отдельного решения, вынесены в раздел **«Открытые решения»**.
@@ -1578,7 +1578,7 @@ Debian 13 implementation `SubprocessKernelInterface` использует iprout
 
 ```text
 ip -j -N -4 route show table main
-ip -j -4 addr show
+ip -j addr show
 ```
 
 Для route inventory опция `-N` обязательна: protocol/scope identifiers выводятся
@@ -1588,6 +1588,8 @@ snapshot выполняется детерминированно:
 - `default` -> `0.0.0.0/0`;
 - bare IPv4 destination -> `/32`;
 - отсутствующий route type -> `UNICAST`;
+- при `-N` non-UNICAST route type может приходить числом/decimal string
+  (`6=BLACKHOLE`, `7=UNREACHABLE`, `8=PROHIBIT`, `9=THROW`); adapter принимает обе формы;
 - отсутствующий `protocol` -> `RTPROT_BOOT = 3` (iproute2 штатно может не печатать boot);
 - `flags[]` содержит `onlink` -> `RouteSpec.onlink=True`.
 
@@ -1607,10 +1609,14 @@ ip -4 route {add|del|replace} TYPE PREFIX table main proto N [metric M] [via A] 
 `proto=None` не материализуется через скрытый iproute2 default и считается
 `KernelError`.
 
-Address inventory использует `addr_info[].local`, а не peer/broadcast fields, поэтому
-туннельные и point-to-point interfaces интерпретируются по локальному адресу.
-Существующий interface без IPv4 остаётся в mapping с пустым `frozenset`; отсутствие
-ключа означает отсутствие interface.
+Address inventory использует `ip -j addr show` без `-4`: EXP-002 показал,
+что Debian 13 iproute2 исключает interface без IPv4 из `ip -j -4 addr show`.
+Adapter фильтрует только `addr_info[].family == "inet"` уже после чтения общего interface
+snapshot, поэтому существующий interface без IPv4 остаётся в mapping с пустым `frozenset`.
+
+Для tun/point-to-point semantics authoritative полем остаётся `addr_info[].local`.
+Remote peer может быть представлен иным полем (в EXP-002 — `address`), но readiness его
+не использует. Отсутствие ключа interface означает отсутствие interface.
 
 Итоговый ownership передаётся профилю только после verify соответствующего reconciliation результата. Предпочтительно обновлять ownership профиля как единый runtime-state commit, а не мутировать `owned_*` по ходу отдельных kernel-операций.
 
@@ -2408,7 +2414,8 @@ class DiagnosticFact:
      затем competing exact deletes, authoritative replaces и остальные adds.
 
 170. Main IPv4 route inventory выполняется через `ip -j -N -4 route show table main`;
-     adapter нормализует default/bare-host destinations и отсутствующий RTPROT_BOOT в numeric `proto=3`.
+     adapter нормализует default/bare-host destinations и отсутствующий RTPROT_BOOT в numeric
+     `proto=3`; numeric route-type IDs/decimal strings от `-N` также нормализуются.
 
 171. Route form, которую текущий single-next-hop `RouteSpec` не может представить
      (multipath/nexthops/nhid/structured cross-family via), приводит к `KernelError`;
@@ -2417,7 +2424,11 @@ class DiagnosticFact:
 172. Route add/delete/replace явно работают с `table main` и materialize'ят все поля,
      представленные `RouteSpec`; `proto=None` не заменяется скрытым iproute2 default.
 
-173. Interface IPv4 inventory использует `ip -j -4 addr show` и `addr_info[].local`;
-     существующий interface без IPv4 возвращается как empty frozenset.
+173. Interface IPv4 inventory использует `ip -j addr show` без family filter и затем
+     учитывает только `addr_info[].family == "inet"`; это сохраняет addressless interfaces
+     в snapshot как empty frozenset.
+
+174. Для point-to-point address inventory authoritative полем является `addr_info[].local`;
+     имя/наличие поля remote peer не входит в readiness contract.
 
 ```

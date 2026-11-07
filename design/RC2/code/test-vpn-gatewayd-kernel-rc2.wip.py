@@ -14,7 +14,7 @@ from unittest import mock
 MODULE_PATH = Path(__file__).with_name("vpn-gatewayd-rc2.wip.py")
 
 spec = importlib.util.spec_from_file_location(
-    "vpn_gatewayd_rc24_kernel",
+    "vpn_gatewayd_rc241_kernel",
     MODULE_PATH,
 )
 assert spec is not None and spec.loader is not None
@@ -147,6 +147,36 @@ class KernelRouteAdapterTests(unittest.TestCase):
                 onlink=False,
             ),
             routes,
+        )
+
+    def test_list_routes_accepts_numeric_route_type_strings_from_dash_N(self):
+        adapter = kernel()
+        payload = [
+            {
+                "type": "6",
+                "dst": "192.0.2.0/24",
+                "protocol": "201",
+                "metric": 65536,
+                "flags": [],
+            },
+            {
+                "type": "9",
+                "dst": "198.51.100.0/24",
+                "protocol": "202",
+                "flags": [],
+            },
+        ]
+
+        with mock.patch.object(
+            adapter,
+            "_run",
+            return_value=completed(payload),
+        ):
+            routes = adapter.list_routes()
+
+        self.assertEqual(
+            {route.route_type for route in routes},
+            {vpng.RouteType.BLACKHOLE, vpng.RouteType.THROW},
         )
 
     def test_list_routes_missing_protocol_normalizes_to_boot(self):
@@ -340,6 +370,16 @@ class KernelRouteAdapterTests(unittest.TestCase):
                 ],
             },
             {"ifname": "wg0", "addr_info": []},
+            {
+                "ifname": "v6only0",
+                "addr_info": [
+                    {
+                        "family": "inet6",
+                        "local": "2001:db8::1",
+                        "prefixlen": 64,
+                    }
+                ],
+            },
         ]
 
         with mock.patch.object(
@@ -349,7 +389,7 @@ class KernelRouteAdapterTests(unittest.TestCase):
         ) as run:
             addresses = adapter.list_interface_ipv4()
 
-        run.assert_called_once_with(("ip", "-j", "-4", "addr", "show"))
+        run.assert_called_once_with(("ip", "-j", "addr", "show"))
         self.assertIsInstance(addresses, MappingProxyType)
         self.assertEqual(
             addresses["lo"],
@@ -360,6 +400,7 @@ class KernelRouteAdapterTests(unittest.TestCase):
             frozenset({IPv4Address("172.20.130.1")}),
         )
         self.assertEqual(addresses["wg0"], frozenset())
+        self.assertEqual(addresses["v6only0"], frozenset())
 
     def test_list_interface_ipv4_merges_duplicate_interface_records(self):
         adapter = kernel()
