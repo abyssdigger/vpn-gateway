@@ -3,6 +3,20 @@
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
+## 2026-11-07 — EXP-002A confirmed
+
+EXP-002A passed against the corrected RC2.4.1 adapter:
+
+```text
+empty0 = frozenset()
+p2p0   = frozenset({IPv4Address('172.20.140.1')})
+EXP-002A OVERALL=PASS
+```
+
+This confirms the live Debian 13 / iproute2 address-inventory contract after the EXP-002
+correction. The route/address kernel boundary is now considered validated; the next
+implementation block is `_apply_plan()` / `_verify_plan()`.
+
 ## 2026-11-07 — RC2.4.1 EXP-002 correction
 
 EXP-002 live smoke found one real mismatch in the RC2.4 address-inventory contract.

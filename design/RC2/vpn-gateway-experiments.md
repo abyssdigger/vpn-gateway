@@ -18,7 +18,7 @@ Experimental results are not silently promoted into architecture. A result first
 
 ## EXP-002A — Address inventory follow-up
 
-**Status:** PENDING  
+**Status:** COMPLETE — PASS  
 **Architecture baseline:** RC2.4.1  
 **Target:** Debian 13 gateway/test host, stock iproute2  
 **Script:** `vpn-gateway-exp-002a-address-inventory.sh`
@@ -53,7 +53,28 @@ sudo ./vpn-gateway-exp-002a-address-inventory.sh
 
 ### Result
 
-**PENDING.**
+Observed output:
+
+```text
+empty0 = frozenset()
+p2p0   = frozenset({IPv4Address('172.20.140.1')})
+EXP-002A OVERALL=PASS
+```
+
+### Decision
+
+**EXP-002A result: PASS.**
+
+The corrected RC2.4.1 address inventory contract is confirmed on the target Debian 13 /
+iproute2 environment:
+
+- an existing interface with no IPv4 address remains present with an empty IPv4 set;
+- a point-to-point interface is represented by its local IPv4 address;
+- remote peer/address fields do not participate in readiness.
+
+Together with EXP-002, this closes the live validation of the RC2.4.1 route/address
+`SubprocessKernelInterface` boundary. The next implementation block is
+`_apply_plan()` / `_verify_plan()`.
 
 
 ## EXP-002 — Route adapter iproute2 live smoke
