@@ -9,7 +9,7 @@ from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).with_name("vpn-gatewayd-rc2.2.1.py")
+MODULE_PATH = Path(__file__).with_name("vpn-gatewayd-rc2.wip.py")
 
 spec = importlib.util.spec_from_file_location("vpn_gatewayd_rc221_values", MODULE_PATH)
 assert spec is not None and spec.loader is not None

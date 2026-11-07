@@ -248,5 +248,4 @@ Next implementation consequence:
 
 - `_compare_fixed_firewall_nat()` should use a small `iptables-save` structural parser/extractor plus canonical rule-string comparison, not a general iptables AST and not direct payload-text comparison.
 
-Separately, apply the already agreed post-experiment architecture/deployment updates: startup signal handling, service deployment recommendations, subprocess diagnostics, `ip_forward` read-before-write, periodic persistent-failure reminders, and related tests.
-
+The post-experiment architecture/deployment updates were incorporated in RC2.1.
