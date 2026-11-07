@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-vpn-gatewayd — implementation for architecture RC2.2.
+vpn-gatewayd — implementation for architecture RC2.3.
 
 This file is intentionally rebuilt from the architecture document only.
 It does not preserve API or structure from earlier skeletons.

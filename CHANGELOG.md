@@ -3,85 +3,16 @@
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
-## 2026-11-07 — стартовая точка журнала
+## 2026-11-07 — repository state synchronization
 
-На момент начала ведения журнала в реализации уже присутствовали следующие блоки.
+Repository metadata synchronized with the actual RC2.3 development state:
 
-### Configuration
+- changelog switched to newest-first order;
+- daemon top-level description synchronized from RC2.2 to RC2.3;
+- accidentally committed Python bytecode removed;
+- `.gitignore` now excludes `__pycache__/` and `*.py[cod]`.
 
-Реализован `ConfigLoader` для `/etc/vpn-gateway/vpn-gateway.toml`.
-
-Основные свойства:
-
-- secure open конфигурации с `O_NOFOLLOW`;
-- проверка final path component через `lstat`;
-- повторная проверка реально открытого объекта через `fstat`;
-- config file и parent directory должны принадлежать root и не быть writable для group/other;
-- runtime загружает и валидирует только profiles из `managed_vpns`;
-- malformed unmanaged profile не блокирует normal startup;
-- `--check-config` выполняет полный offline lint всего catalog:
-  - managed errors -> ERROR;
-  - unmanaged invalid definitions/conflicts -> WARNING;
-  - допустимые особые состояния, например `peers=[]`, -> NOTE;
-- case-insensitive разрешение profile IDs;
-- нормализация duplicate set-like values;
-- проверка конфликтов managed interfaces, protected routes и VPN transport networks;
-- runtime config преобразуется в typed immutable representation.
-
-### Typed route/profile model
-
-Реализованы базовые typed value objects:
-
-- `RouteSpec`;
-- `RouteType`;
-- lifecycle/state/reason enums;
-- immutable reconciliation-related value objects.
-
-`VpnProfile` уже умеет строить `CONFIGURED` route set:
-
-- BLACKHOLE guard для каждого protected prefix;
-- peer UNICAST routes;
-- peer metrics `10, 20, ...` в порядке `peers`;
-- при `peers=[]` остаются только BLACKHOLE guards.
-
-Также реализован process-local `OWNED` state:
-
-- ACTUAL kernel state сам по себе не означает ownership;
-- OWNED заменяется только после успешного verify;
-- replacement выполняется atomically;
-- входной route set копируется defensively.
-
-### Daemon skeleton
-
-Уже присутствуют:
-
-- lifecycle/state machinery;
-- managed profile registry;
-- readiness helper по наличию interface и ожидаемого local IPv4 address;
-- `effective_sources()`;
-- guards, требующие полный result mapping ровно по всем managed profiles;
-- `_commit_owned()` с проверкой полного mapping до первой mutation;
-- fixed firewall/NAT, cleanup, runtime reconciliation и Netlink contracts/skeletons.
-
-Большая часть firewall/NAT, cleanup, event loop и route apply/verify на этой точке ещё
-оставалась implementation TODO.
-
-### Kernel abstraction
-
-Определён `KernelInterface` и subprocess-based implementation skeleton.
-
-В abstraction предусмотрены операции для:
-
-- route inventory;
-- route mutation;
-- interface IPv4 inventory;
-- `net.ipv4.ip_forward`;
-- `iptables-save`;
-- `iptables-restore`.
-
-Конкретная route materialization на этой точке ещё не реализована.
-
----
+No functional daemon behavior changed in this commit.
 
 ## 2026-11-07 — RC2.3 route reconciliation planning
 
@@ -201,3 +132,83 @@ _verify_plan()
 
 После этого route reconciliation впервые сможет работать с реальным kernel state,
 а не только с pure-model snapshots.
+
+---
+
+## 2026-11-07 — стартовая точка журнала
+
+На момент начала ведения журнала в реализации уже присутствовали следующие блоки.
+
+### Configuration
+
+Реализован `ConfigLoader` для `/etc/vpn-gateway/vpn-gateway.toml`.
+
+Основные свойства:
+
+- secure open конфигурации с `O_NOFOLLOW`;
+- проверка final path component через `lstat`;
+- повторная проверка реально открытого объекта через `fstat`;
+- config file и parent directory должны принадлежать root и не быть writable для group/other;
+- runtime загружает и валидирует только profiles из `managed_vpns`;
+- malformed unmanaged profile не блокирует normal startup;
+- `--check-config` выполняет полный offline lint всего catalog:
+  - managed errors -> ERROR;
+  - unmanaged invalid definitions/conflicts -> WARNING;
+  - допустимые особые состояния, например `peers=[]`, -> NOTE;
+- case-insensitive разрешение profile IDs;
+- нормализация duplicate set-like values;
+- проверка конфликтов managed interfaces, protected routes и VPN transport networks;
+- runtime config преобразуется в typed immutable representation.
+
+### Typed route/profile model
+
+Реализованы базовые typed value objects:
+
+- `RouteSpec`;
+- `RouteType`;
+- lifecycle/state/reason enums;
+- immutable reconciliation-related value objects.
+
+`VpnProfile` уже умеет строить `CONFIGURED` route set:
+
+- BLACKHOLE guard для каждого protected prefix;
+- peer UNICAST routes;
+- peer metrics `10, 20, ...` в порядке `peers`;
+- при `peers=[]` остаются только BLACKHOLE guards.
+
+Также реализован process-local `OWNED` state:
+
+- ACTUAL kernel state сам по себе не означает ownership;
+- OWNED заменяется только после успешного verify;
+- replacement выполняется atomically;
+- входной route set копируется defensively.
+
+### Daemon skeleton
+
+Уже присутствуют:
+
+- lifecycle/state machinery;
+- managed profile registry;
+- readiness helper по наличию interface и ожидаемого local IPv4 address;
+- `effective_sources()`;
+- guards, требующие полный result mapping ровно по всем managed profiles;
+- `_commit_owned()` с проверкой полного mapping до первой mutation;
+- fixed firewall/NAT, cleanup, runtime reconciliation и Netlink contracts/skeletons.
+
+Большая часть firewall/NAT, cleanup, event loop и route apply/verify на этой точке ещё
+оставалась implementation TODO.
+
+### Kernel abstraction
+
+Определён `KernelInterface` и subprocess-based implementation skeleton.
+
+В abstraction предусмотрены операции для:
+
+- route inventory;
+- route mutation;
+- interface IPv4 inventory;
+- `net.ipv4.ip_forward`;
+- `iptables-save`;
+- `iptables-restore`.
+
+Конкретная route materialization на этой точке ещё не реализована.
