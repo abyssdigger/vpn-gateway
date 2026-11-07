@@ -3,6 +3,33 @@
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
+## 2026-11-08 — EXP-003 first live end-to-end gateway PASS
+
+RC2.5.1 completed the first real end-to-end happy-path test on the Debian 13 lab topology.
+
+Validated live:
+
+- `net.ipv4.ip_forward=1` after successful startup;
+- owned `proto 201` blackhole for `10.0.0.0/8`;
+- preferred `proto 202` route via `172.20.130.5 dev vpns0 metric 10 onlink`;
+- expected `VPNG-*` INPUT/FORWARD/NAT chains and prefix jumps;
+- server-side MASQUERADE on `vpns0`;
+- OpenConnect-client forwarding plus egress MASQUERADE;
+- real Windows LAN traffic to `<protected-target-ip>` traversing
+  `<gateway-lan-ip> -> 172.20.130.5 -> <lan-router-ip> -> <protected-target-ip>`.
+
+The same target previously went directly through `<lan-router-ip>`; after installing the
+test route through `<gateway-lan-ip>`, reachability remained intact and the trace visibly
+followed the intended VPN gateway path.
+
+External CLI boundary forms are now to be manually validated on the target Debian before
+being encoded in the subprocess adapter; this rule was applied before the RC2.5.1 retry.
+
+EXP-003 is recorded in `design/RC2/vpn-gateway-experiments.md`.
+
+Next validation block: graceful shutdown/cleanup. Runtime reconciliation and self-healing
+remain intentionally deferred.
+
 ## 2026-11-07 — RC2.5.1 Debian iptables-save compatibility fix
 
 The first real foreground bootstrap on Debian 13.7 / iptables-nft 1.8.11 failed during

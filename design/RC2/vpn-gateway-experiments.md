@@ -1,5 +1,140 @@
 # VPN-GATE — Experiment Log
 
+## EXP-003 — First live end-to-end happy-path gateway
+
+### Motivation
+
+Validate the RC2.5.1 happy-path implementation on a real Debian 13 gateway with an
+already-established OpenConnect transport and a real protected-network target. This is the
+first test of the complete forwarding path rather than isolated route/firewall adapters.
+
+### Topology
+
+```text
+allowed Windows LAN host
+  -> <gateway-lan-ip>  vpn-gatewayd / ocserv
+  -> vpns0 172.20.130.1
+  -> 172.20.130.5     OpenConnect client (tun0)
+  -> <oc-client-lan-ip>  client LAN side / ens18
+  -> <lan-router-ip>    LAN router
+  -> <protected-target-ip>     protected-network target
+```
+
+Gateway profile:
+
+```toml
+managed_vpns = ["oc"]
+common_allowed_sources = []
+
+[vpn.oc]
+interface = "vpns0"
+network = "172.20.130.0/29"
+local_address = "172.20.130.1"
+peers = ["172.20.130.5"]
+routes = ["10.0.0.0/8"]
+allowed_sources = ["<allowed-source>"]
+```
+
+OpenConnect client forwarding/NAT used for this test:
+
+```text
+net.ipv4.ip_forward = 1
+-P FORWARD ACCEPT
+-A POSTROUTING -s 172.20.130.0/29 -o ens18 -j MASQUERADE
+```
+
+### Boundary preflight
+
+After the first RC2.5 live attempt exposed that Debian 13
+`iptables-save` does not support `-w`, RC2.5.1 was produced. Before retrying the daemon,
+the exact external CLI forms used by the corrected adapter were checked manually:
+
+```text
+iptables-save filter rc=0
+iptables-save nat rc=0
+iptables-restore rc=0
+```
+
+The tested restore form was an empty `*filter ... COMMIT` payload with
+`iptables-restore -w 5 --noflush`; it made no policy changes.
+
+### Result
+
+**Run:** 2026-11-07/08 local lab time  
+**Implementation:** RC2.5.1  
+**Architecture:** RC2.4.1
+
+Foreground startup completed and remained running.
+
+Observed gateway state:
+
+```text
+net.ipv4.ip_forward = 1
+blackhole 10.0.0.0/8 metric 65536
+10.0.0.0/8 via 172.20.130.5 dev vpns0 metric 10 onlink
+```
+
+The route listings were queried separately by owned protocol (`201` for the blackhole and
+`202` for the VPN unicast route).
+
+Observed fixed policy included the expected daemon-owned chains and prefix jumps:
+
+```text
+INPUT       -> VPNG-OC-INPUT
+FORWARD     -> VPNG-INGRESS
+FORWARD     -> VPNG-RESERVED
+FORWARD     -> VPNG-OC-FORWARD
+POSTROUTING -> VPNG-OC-NAT
+```
+
+The profile FORWARD chain admitted only the configured source toward `10.0.0.0/8`, then
+rejected the remaining traffic for that destination. The NAT chain contained:
+
+```text
+-o vpns0 -m addrtype ! --src-type LOCAL -j MASQUERADE
+```
+
+End-to-end comparison from the allowed Windows LAN host:
+
+Before adding the test route:
+
+```text
+1  <lan-router-ip>
+2  <protected-target-ip>
+```
+
+After adding `10.0.0.0/8 via <gateway-lan-ip>`:
+
+```text
+1  <gateway-lan-ip>
+2  172.20.130.5
+3  <lan-router-ip>
+4  <protected-target-ip>
+```
+
+The target remained reachable after the route change. The trace therefore visibly traversed
+the intended vpn-gatewayd host and OpenConnect peer before returning to the LAN router and
+reaching the protected target.
+
+### Decision
+
+**EXP-003 result: PASS.**
+
+RC2.5.1 is confirmed to provide a working initial happy path for this topology:
+
+- startup cleanup and materialization complete successfully;
+- `ip_forward` is enabled only after policy/route setup;
+- owned blackhole and preferred VPN unicast route coexist as designed;
+- fixed INPUT/FORWARD/NAT policy permits the configured source and egress;
+- server-side MASQUERADE through `vpns0` works in the end-to-end path;
+- the OpenConnect client can forward the tunnel traffic onward when its forwarding and
+  egress MASQUERADE are configured;
+- a real LAN client reaches a real `10.0.0.0/8` target through the complete path.
+
+This experiment does **not** validate graceful shutdown cleanup, crash behavior, runtime
+drift repair, periodic reconciliation, or Netlink self-healing. Those remain separate work.
+
+
 **Current architecture:** [VPN Gateway Architecture RC2.4.1](vpn-gateway-architecture-rc2.wip.md)
 
 This document is the laboratory record for implementation/research questions that must be resolved on the target Debian environment. Each experiment records:
@@ -285,8 +420,8 @@ Two managed profiles are represented, matching the RC2 examples closely:
 
 | profile | interface | VPN network | protected routes | effective sources |
 |---|---|---|---|---|
-| `backup` | `wg0` | `172.20.126.0/29` | `100.64.0.0/10`, `192.168.0.0/16` | `10.200.200.8/32` |
-| `primary` | `vpns0` | `172.20.130.0/29` | `10.0.0.0/8` | `10.200.200.8/32`, `10.200.201.0/24` |
+| `backup` | `wg0` | `172.20.126.0/29` | `100.64.0.0/10`, `192.168.0.0/16` | `<protected-target-ip>/32` |
+| `primary` | `vpns0` | `172.20.130.0/29` | `10.0.0.0/8` | `<protected-target-ip>/32`, `10.200.201.0/24` |
 
 The payload includes:
 
