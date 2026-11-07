@@ -1,7 +1,6 @@
 # VPN-GATE — Experiment Log
 
-**Architecture baseline at experiment time:** [VPN Gateway Architecture RC2](vpn-gateway-architecture-rc2.md)  
-**Decision incorporated into:** [VPN Gateway Architecture RC2.1](vpn-gateway-architecture-rc2.1.md)
+**Current architecture:** [VPN Gateway Architecture RC2.4](vpn-gateway-architecture-rc2.wip.md)
 
 This document is the laboratory record for implementation/research questions that must be resolved on the target Debian environment. Each experiment records:
 
@@ -13,7 +12,85 @@ This document is the laboratory record for implementation/research questions tha
 
 Experimental results are not silently promoted into architecture. A result first appears here; if it changes a requirement or implementation contract, the corresponding architecture revision is referenced explicitly.
 
+
 ---
+
+## EXP-002 — Route adapter iproute2 live smoke
+
+**Status:** PENDING  
+**Architecture baseline:** RC2.4  
+**Target:** Debian 13 gateway/test host, stock iproute2  
+**Script:** `vpn-gateway-exp-002-route-adapter-smoke.sh`  
+**Script SHA256:** `8debfc6f01024e50829f378c0a3929b2f01b01af0321aed084a80ad688512e39`
+
+### Motivation
+
+RC2.4 implements the route/address part of `SubprocessKernelInterface` against iproute2 JSON
+and explicit `ip route add|del|replace` command forms. Before `_apply_plan()` and
+`_verify_plan()` depend on this boundary, the assumptions must be checked against the
+actual Debian 13 target environment.
+
+The experiment verifies both JSON inventory shape and the exact mutation forms emitted by
+the adapter.
+
+### Safety boundary
+
+The experiment does **not** change host routing, addresses, firewall, NAT or forwarding.
+
+All interfaces, addresses and routes are created inside one disposable network namespace.
+The namespace is removed explicitly before artifact packaging and also by an EXIT trap.
+
+Host-visible effects are limited to:
+
+- temporary network namespace creation/removal;
+- files written into the current working directory.
+
+### Hypotheses
+
+- **H1 — numeric protocol inventory:** `ip -j -N -4 route show table main` represents
+  a connected kernel route with numeric `RTPROT_KERNEL = 2`.
+- **H2 — UNICAST round-trip:** the exact RC2.4 UNICAST form can be added, identically
+  replaced, observed without canonical identity drift, and deleted using the full
+  `RouteSpec` fields including `proto 202`, metric, via/dev and `onlink`.
+- **H3 — BLACKHOLE round-trip:** the exact BLACKHOLE form with `proto 201 metric 65536`
+  can be added and deleted.
+- **H4 — RTPROT_BOOT normalization:** a route added without explicit protocol is represented
+  either with omitted protocol or numeric `3`, and can subsequently be deleted with
+  explicit `proto 3`.
+- **H5 — IPv4 address inventory:** `ip -j -4 addr show` keeps an interface with no IPv4
+  as an entry with empty `addr_info`, and a point-to-point-shaped record exposes the
+  local address through `addr_info[].local` independently of `peer`.
+- **H6 — supported route forms:** BLACKHOLE, UNREACHABLE, PROHIBIT, THROW and default
+  UNICAST routes have the JSON type/protocol/metric representation expected by RC2.4.
+
+### Procedure
+
+From the repository root on the Debian 13 test host:
+
+```bash
+git pull --ff-only
+cd "design/RC2/experiments/EXP-002 Route adapter iproute2 live smoke"
+sudo ./vpn-gateway-exp-002-route-adapter-smoke.sh
+```
+
+The script creates:
+
+```text
+vpn-gateway-exp-002-<UTC timestamp>/
+vpn-gateway-exp-002-<UTC timestamp>.tar.gz
+vpn-gateway-exp-002-<UTC timestamp>.tar.gz.sha256
+```
+
+The result directory contains environment data, raw route/address JSON snapshots,
+per-command return codes/stdout/stderr and `result.txt`.
+
+### Result
+
+**PENDING.**
+
+After the target-host run, the observed output and archive SHA256 are recorded here before
+any implementation consequence is promoted into the architecture.
+
 
 ## EXP-001 — Fixed firewall/NAT canonical round-trip
 
