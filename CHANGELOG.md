@@ -1,0 +1,203 @@
+# VPN-GATE change log
+
+Краткий технический журнал развития реализации. Здесь фиксируются существенные
+architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
+
+## 2026-11-07 — стартовая точка журнала
+
+На момент начала ведения журнала в реализации уже присутствовали следующие блоки.
+
+### Configuration
+
+Реализован `ConfigLoader` для `/etc/vpn-gateway/vpn-gateway.toml`.
+
+Основные свойства:
+
+- secure open конфигурации с `O_NOFOLLOW`;
+- проверка final path component через `lstat`;
+- повторная проверка реально открытого объекта через `fstat`;
+- config file и parent directory должны принадлежать root и не быть writable для group/other;
+- runtime загружает и валидирует только profiles из `managed_vpns`;
+- malformed unmanaged profile не блокирует normal startup;
+- `--check-config` выполняет полный offline lint всего catalog:
+  - managed errors -> ERROR;
+  - unmanaged invalid definitions/conflicts -> WARNING;
+  - допустимые особые состояния, например `peers=[]`, -> NOTE;
+- case-insensitive разрешение profile IDs;
+- нормализация duplicate set-like values;
+- проверка конфликтов managed interfaces, protected routes и VPN transport networks;
+- runtime config преобразуется в typed immutable representation.
+
+### Typed route/profile model
+
+Реализованы базовые typed value objects:
+
+- `RouteSpec`;
+- `RouteType`;
+- lifecycle/state/reason enums;
+- immutable reconciliation-related value objects.
+
+`VpnProfile` уже умеет строить `CONFIGURED` route set:
+
+- BLACKHOLE guard для каждого protected prefix;
+- peer UNICAST routes;
+- peer metrics `10, 20, ...` в порядке `peers`;
+- при `peers=[]` остаются только BLACKHOLE guards.
+
+Также реализован process-local `OWNED` state:
+
+- ACTUAL kernel state сам по себе не означает ownership;
+- OWNED заменяется только после успешного verify;
+- replacement выполняется atomically;
+- входной route set копируется defensively.
+
+### Daemon skeleton
+
+Уже присутствуют:
+
+- lifecycle/state machinery;
+- managed profile registry;
+- readiness helper по наличию interface и ожидаемого local IPv4 address;
+- `effective_sources()`;
+- guards, требующие полный result mapping ровно по всем managed profiles;
+- `_commit_owned()` с проверкой полного mapping до первой mutation;
+- fixed firewall/NAT, cleanup, runtime reconciliation и Netlink contracts/skeletons.
+
+Большая часть firewall/NAT, cleanup, event loop и route apply/verify на этой точке ещё
+оставалась implementation TODO.
+
+### Kernel abstraction
+
+Определён `KernelInterface` и subprocess-based implementation skeleton.
+
+В abstraction предусмотрены операции для:
+
+- route inventory;
+- route mutation;
+- interface IPv4 inventory;
+- `net.ipv4.ip_forward`;
+- `iptables-save`;
+- `iptables-restore`.
+
+Конкретная route materialization на этой точке ещё не реализована.
+
+---
+
+## 2026-11-07 — RC2.3 route reconciliation planning
+
+Реализован pure route-planning layer поверх одного immutable ACTUAL/DESIRED snapshot.
+
+### `_derive_desired_routes()`
+
+- ready profile -> BLACKHOLE + UNICAST;
+- not-ready profile -> только BLACKHOLE;
+- DESIRED вычисляется один раз на reconciliation pass;
+- полученный snapshot используется далее без повторного вычисления readiness.
+
+### `_build_plan()`
+
+План строится по ACTUAL + DESIRED + process-local OWNED:
+
+- missing desired -> add;
+- desired + actual + owned -> keep;
+- desired + actual + not owned -> authoritative canonicalization;
+- competing exact foreign route -> delete;
+- owned non-desired exact route -> delete;
+- more-/less-specific routes не изменяются.
+
+### Explicit replace operation
+
+Обнаружен архитектурный пробел в прежней модели:
+
+```text
+ReconciliationPlan(adds, deletes)
+```
+
+не мог корректно представить состояние:
+
+```text
+actual ∩ desired
+но RouteSpec не OWNED текущим процессом
+```
+
+Одновременный add+delete одного и того же `RouteSpec` противоречил invariants самого plan.
+
+Поэтому `ReconciliationPlan` расширен до:
+
+```text
+route_adds
+route_deletes
+route_replaces
+```
+
+`route_replaces` является явной authoritative canonicalization operation, а не silent adoption.
+
+В `KernelInterface` добавлен соответствующий contract:
+
+```text
+replace_route(RouteSpec)
+```
+
+Ownership после replace всё равно появляется только после успешного verify/commit.
+
+### `_validate_plan()`
+
+Реализованы safety checks:
+
+- add/delete/replace sets попарно disjoint;
+- add разрешён только для current DESIRED route, отсутствующего в ACTUAL;
+- replace разрешён только для current DESIRED route, присутствующего в ACTUAL и отсутствующего в OWNED;
+- foreign delete допустим только внутри authoritative exact protected-prefix scope;
+- owned non-desired delete должен иметь ownership justification;
+- `proto kernel` нельзя delete или replace;
+- exact protected prefix, совпадающий с connected `proto kernel` route, является fatal plan conflict;
+- incomplete DESIRED snapshot запрещён;
+- duplicate exact resource claims между managed profiles запрещены defensively.
+
+### `_routes_for_profile()`
+
+Related route set включает:
+
+- exact protected-prefix routes;
+- competing exact routes;
+- more-specific overlaps;
+- less-specific overlaps.
+
+Default route `0.0.0.0/0` из overlap diagnostics исключается.
+
+### Tests
+
+После этого этапа ожидаемый regression set:
+
+```text
+Config/security: 22/22 PASS
+Value/profile:    7/7 PASS
+Route planning:  14/14 PASS
+Total:           43/43 PASS
+
+py_compile: PASS
+--version:  PASS
+--help:     PASS
+```
+
+### Следующий блок
+
+Следующий implementation milestone — реальный route kernel adapter:
+
+```text
+ip -j route
+ip -j addr
+ip route add
+ip route del
+ip route replace
+```
+
+После него должны быть реализованы:
+
+```text
+_apply_plan()
+_verify_plan()
+```
+
+После этого route reconciliation впервые сможет работать с реальным kernel state,
+а не только с pure-model snapshots.
