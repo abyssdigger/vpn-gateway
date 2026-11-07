@@ -246,3 +246,133 @@ Current `run()` blocks indefinitely in `select.select([reader], [], [])`. Theref
 **Worst fail-closed risk found in RC2.5.1:** none.
 
 The next milestone can remain narrowly scoped to graceful shutdown/cleanup validation. Runtime reconciliation and self-healing should remain deferred until the lifecycle and recovery cases above are proven live.
+
+---
+
+## Maintainer disposition
+
+This section records the project decision on the review findings. It is normative only as a
+work-tracking decision; architecture changes still require an explicit architecture update.
+
+### Accepted for the next maintenance patch
+
+**1.2 / 3.1 — read-before-write for `ip_forward`: ACCEPT.**
+
+Both bootstrap enable and universal cleanup should follow invariant 162 literally:
+
+- read current value;
+- write only if a change is needed;
+- confirm the resulting value.
+
+This is a small robustness/contract correction and should be implemented with focused unit
+tests before the next live lifecycle experiment.
+
+Planned implementation milestone: **RC2.5.2**.
+
+### Rejected
+
+**1.1 / B2 — move `_commit_owned` after forwarding enable: REJECT.**
+
+The current order is intentionally safer:
+
+```text
+route verify
+-> commit process-local OWNED
+-> enable + confirm ip_forward
+```
+
+`ip_forward=1` is required to be the last fallible step of bootstrap that can expose
+forwarding. Moving `_commit_owned` after it would create a worse failure mode: an unexpected
+OWNED-commit exception could make `apply()` fail while forwarding was already enabled.
+Process-local OWNED being committed just before the final forwarding step is therefore
+accepted semantics.
+
+**1.3 / B4 — combined "atomic" route/interface snapshot API: REJECT as unnecessary.**
+
+Invariant 93 requires one fresh route inventory, one fresh interface/address inventory, and
+one immutable DESIRED snapshot to be reused consistently through the pass. It does not require
+an atomic kernel transaction spanning route and address dumps. Wrapping the same two reads in
+a `snapshot()` method would not make them atomic and would add abstraction without improving
+the safety property.
+
+If a future backend can provide a genuinely stronger atomic snapshot contract and a concrete
+race is demonstrated, this can be reconsidered.
+
+### Requires experiment before any code change
+
+**1.4 / B5 — foreign route metric collision: DEFER TO EXPERIMENT.**
+
+The review's broad `metric 10` example does not match the current executor ordering for a
+competing foreign unicast exact route: the planner schedules the foreign exact route for
+delete, and ordinary unicast adds occur after deletes.
+
+A narrower case may still matter: a missing managed BLACKHOLE is added *before* destructive
+operations, so a foreign exact route with a kernel-conflicting key may cause the blackhole add
+to fail before that foreign route is deleted.
+
+Do not add speculative validation. First reproduce the exact iproute2/kernel behavior on the
+target Debian with a small isolated experiment. Only then decide whether plan validation or
+materialization needs a new rule.
+
+### Accepted as architectural observations, no code change now
+
+- Blackhole `metric 65536` + preferred unicast `metric 10` coexistence is accepted and is
+  already live-confirmed by EXP-003.
+- Readiness intentionally means interface existence + expected local IPv4 address; it does not
+  currently include `operstate`/`LOWER_UP`.
+- Fixed firewall/NAT ownership and config-independent cleanup semantics are accepted as
+  consistent with RC2.4.1.
+- Empty firewall-cleanup payload as a no-op is correct.
+- Fresh post-cleanup firewall verification is correct fail-closed behavior.
+- `InterruptedError` handling and parser `assert` cleanup are non-actionable housekeeping
+  unless a concrete problem appears.
+
+### Lifecycle validation scheduling
+
+The review's A1–A6 list is useful, but not all items belong to one immediate milestone.
+
+**EXP-004 — next live milestone: graceful shutdown + idempotency**
+
+Validate together:
+
+- A1: SIGTERM from RUN performs complete cleanup;
+- A4: up -> down -> up produces equivalent owned state before/after;
+- repeated cleanup of already-clean state remains a no-op.
+
+Expected post-stop state:
+
+- `ip_forward=0`;
+- no `proto 202` routes;
+- no `proto 201 metric 65536` blackholes;
+- no `VPNG-*` chains or jumps.
+
+**Subsequent lifecycle/fault-injection milestone, before production service readiness:**
+
+- A2: cleanup failure preserves fail-closed ordering and returns non-zero;
+- A3: abnormal death / `kill -9` recovery in RUN and during partial apply;
+- A5: SIGTERM after APPLY but before `READY=1`.
+
+These need deliberate fault injection/checkpoints rather than ad-hoc timing.
+
+**A6 is split by deployment stage:**
+
+- Debian 13 CLI forms for `iptables-save` and `iptables-restore` are already live-confirmed
+  by EXP-003 after the RC2.5.1 fix.
+- `ExecStopPost` recovery is tested when the systemd unit is introduced.
+- `WatchdogSec=` must **not** be enabled with the current blocking `run()`. Watchdog support
+  is a later implementation feature and requires periodic heartbeat scheduling first.
+
+### Resulting near-term order
+
+```text
+RC2.5.2
+  -> ip_forward read-before-write corrections + unit tests
+EXP-004
+  -> graceful shutdown + cleanup + up/down/up idempotency
+then
+  -> dedicated lifecycle fault-injection tests
+then
+  -> systemd deployment / ExecStopPost / optional watchdog support
+then
+  -> runtime reconciliation/self-healing
+```

@@ -28,9 +28,14 @@ being encoded in the subprocess adapter; this rule was applied before the RC2.5.
 EXP-003 is recorded in `design/RC2/vpn-gateway-experiments.md`.
 
 Independent technical review: [`RC2.5.1-review-2026-11-08.md`](design/RC2/code/reviews/RC2.5.1-review-2026-11-08.md).
+The review now includes maintainer disposition: read-before-write forwarding fixes are
+accepted for RC2.5.2; moving OWNED commit after forwarding and a pseudo-atomic combined
+snapshot API are rejected; route metric-collision handling requires a target experiment
+before any validation rule is added.
 
-Next validation block: graceful shutdown/cleanup. Runtime reconciliation and self-healing
-remain intentionally deferred.
+Next order: RC2.5.2 forwarding read-before-write correction, then EXP-004 graceful
+shutdown/cleanup + up/down/up idempotency. Fault injection, systemd safety-net behavior and
+runtime self-healing remain intentionally deferred.
 
 ## 2026-11-07 — RC2.5.1 Debian iptables-save compatibility fix
 
