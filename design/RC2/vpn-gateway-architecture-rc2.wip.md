@@ -1,7 +1,7 @@
 # VPN Gateway — архитектурные решения и инварианты
 
 **Статус:** Release Candidate — кандидат на утверждение и реализацию
-**Версия:** RC2.3
+**Версия:** RC2.4
 **Дата:** 2026-11-07
 
 Документ фиксирует принятые архитектурные решения проекта VPN Gateway. Он описывает обязательные инварианты, жизненный цикл сервиса, модель владения kernel-state и правила конфигурации. Нереализованные детали, которые ещё требуют отдельного решения, вынесены в раздел **«Открытые решения»**.
@@ -1571,6 +1571,47 @@ Readiness используется при построении DESIRED, но dae
 
 Kernel add/delete, canonicalization exact-prefix routes, verify и commit ownership выполняет `VpnGatewayDaemon` через общий `KernelInterface`.
 
+### 23.2. Subprocess route/address adapter
+
+Debian 13 implementation `SubprocessKernelInterface` использует iproute2 JSON как
+машинный inventory boundary:
+
+```text
+ip -j -N -4 route show table main
+ip -j -4 addr show
+```
+
+Для route inventory опция `-N` обязательна: protocol/scope identifiers выводятся
+численно и adapter не зависит от локальных `rt_protos` aliases. Нормализация route
+snapshot выполняется детерминированно:
+
+- `default` -> `0.0.0.0/0`;
+- bare IPv4 destination -> `/32`;
+- отсутствующий route type -> `UNICAST`;
+- отсутствующий `protocol` -> `RTPROT_BOOT = 3` (iproute2 штатно может не печатать boot);
+- `flags[]` содержит `onlink` -> `RouteSpec.onlink=True`.
+
+Текущий `RouteSpec` является single-next-hop model. Поэтому route entries с
+`nexthops`, `nhid`, multipath representation или structured/cross-family `via`
+не пропускаются молча: inventory завершается `KernelError`. Неполный ACTUAL snapshot
+опаснее отказа reconciliation, потому что может привести к ошибочной authoritative
+canonicalization.
+
+Route mutations материализуются только в IPv4 main table и всегда задают представленные
+`RouteSpec` поля явно:
+
+```text
+ip -4 route {add|del|replace} TYPE PREFIX table main proto N [metric M] [via A] [dev IF] [onlink]
+```
+
+`proto=None` не материализуется через скрытый iproute2 default и считается
+`KernelError`.
+
+Address inventory использует `addr_info[].local`, а не peer/broadcast fields, поэтому
+туннельные и point-to-point interfaces интерпретируются по локальному адресу.
+Существующий interface без IPv4 остаётся в mapping с пустым `frozenset`; отсутствие
+ключа означает отсутствие interface.
+
 Итоговый ownership передаётся профилю только после verify соответствующего reconciliation результата. Предпочтительно обновлять ownership профиля как единый runtime-state commit, а не мутировать `owned_*` по ходу отдельных kernel-операций.
 
 `reported_route_overlaps` хранится на уровне `VpnGatewayDaemon` как `dict[str, frozenset[RouteSpec]]`, потому что overlaps вычисляются из общего kernel snapshot и используются только для edge-triggered INFO-логирования. Каждый per-profile фрагмент `reported_route_overlaps` заменяется целиком после анализа.
@@ -2365,5 +2406,18 @@ class DiagnosticFact:
 
 169. Route executor применяет missing BLACKHOLE adds до потенциально разрушающих операций;
      затем competing exact deletes, authoritative replaces и остальные adds.
+
+170. Main IPv4 route inventory выполняется через `ip -j -N -4 route show table main`;
+     adapter нормализует default/bare-host destinations и отсутствующий RTPROT_BOOT в numeric `proto=3`.
+
+171. Route form, которую текущий single-next-hop `RouteSpec` не может представить
+     (multipath/nexthops/nhid/structured cross-family via), приводит к `KernelError`;
+     silent omission из ACTUAL запрещён.
+
+172. Route add/delete/replace явно работают с `table main` и materialize'ят все поля,
+     представленные `RouteSpec`; `proto=None` не заменяется скрытым iproute2 default.
+
+173. Interface IPv4 inventory использует `ip -j -4 addr show` и `addr_info[].local`;
+     существующий interface без IPv4 возвращается как empty frozenset.
 
 ```

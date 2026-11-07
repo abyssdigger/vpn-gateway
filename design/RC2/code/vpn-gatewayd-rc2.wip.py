@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-vpn-gatewayd — implementation for architecture RC2.3.
+vpn-gatewayd — implementation for architecture RC2.4.
 
 This file is intentionally rebuilt from the architecture document only.
 It does not preserve API or structure from earlier skeletons.
@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import errno
 import fcntl
+import json
 import logging
 import math
 import os
@@ -48,11 +49,11 @@ from typing import Mapping, Sequence
 
 
 # ---------------------------------------------------------------------------
-# Architecture: RC2.3
-# Implementation: RC2.3
+# Architecture: RC2.4
+# Implementation: RC2.4
 # ---------------------------------------------------------------------------
 
-VERSION = "RC2.3"
+VERSION = "RC2.4"
 
 DEFAULT_CONFIG_PATH = Path("/etc/vpn-gateway/vpn-gateway.toml")
 DEFAULT_LOCK_PATH = Path("/run/vpn-gateway/vpn-gatewayd.lock")
@@ -1752,11 +1753,11 @@ class KernelInterface(ABC):
 
 class SubprocessKernelInterface(KernelInterface):
     """
-    Debian 13 adapter placeholder.
+    Debian 13 subprocess adapter.
 
-    Route/address inventory will use `ip -j`.
-    Firewall inventory/apply will use iptables-save/iptables-restore with
-    bounded subprocess timeouts and bounded iptables lock wait.
+    Route/address inventory and route mutations use iproute2.
+    Forwarding and firewall methods are completed in later implementation
+    steps.  All subprocesses use bounded timeouts and a stable locale.
 
     Policy construction deliberately does not live here.
     """
@@ -1817,42 +1818,338 @@ class SubprocessKernelInterface(KernelInterface):
                 f"failed to execute {list(argv)!r}: {exc}"
             ) from exc
 
+    @staticmethod
+    def _load_json_array(stdout: str, *, context: str) -> list[object]:
+        try:
+            payload = json.loads(stdout)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise KernelError(
+                f"{context}: command returned invalid JSON: {exc}"
+            ) from exc
+
+        if not isinstance(payload, list):
+            raise KernelError(
+                f"{context}: expected top-level JSON array, "
+                f"got {type(payload).__name__}"
+            )
+
+        return payload
+
+    @staticmethod
+    def _parse_route_destination(value: object) -> IPv4Network:
+        if not isinstance(value, str) or not value:
+            raise KernelError(
+                f"route inventory: invalid destination {value!r}"
+            )
+
+        normalized = "0.0.0.0/0" if value == "default" else value
+        if "/" not in normalized:
+            normalized = f"{normalized}/32"
+
+        try:
+            return IPv4Network(normalized, strict=True)
+        except ValueError as exc:
+            raise KernelError(
+                f"route inventory: invalid IPv4 destination {value!r}"
+            ) from exc
+
+    @staticmethod
+    def _parse_route_type(value: object) -> RouteType:
+        if value is None:
+            return RouteType.UNICAST
+
+        names = {
+            "unicast": RouteType.UNICAST,
+            "blackhole": RouteType.BLACKHOLE,
+            "unreachable": RouteType.UNREACHABLE,
+            "prohibit": RouteType.PROHIBIT,
+            "throw": RouteType.THROW,
+        }
+        numbers = {
+            1: RouteType.UNICAST,
+            6: RouteType.BLACKHOLE,
+            7: RouteType.UNREACHABLE,
+            8: RouteType.PROHIBIT,
+            9: RouteType.THROW,
+        }
+
+        if isinstance(value, str):
+            lowered = value.casefold()
+            if lowered in names:
+                return names[lowered]
+            if value.isdecimal():
+                value = int(value)
+
+        if isinstance(value, int) and not isinstance(value, bool):
+            route_type = numbers.get(value)
+            if route_type is not None:
+                return route_type
+
+        raise KernelError(
+            f"route inventory: unsupported route type {value!r}"
+        )
+
+    @staticmethod
+    def _parse_route_protocol(value: object) -> int:
+        # iproute2 omits RTPROT_BOOT (3) unless detailed output is requested.
+        if value is None:
+            return 3
+
+        if isinstance(value, str) and value.isdecimal():
+            value = int(value)
+
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or not 0 <= value <= 255
+        ):
+            raise KernelError(
+                f"route inventory: invalid numeric protocol {value!r}"
+            )
+
+        return value
+
+    @staticmethod
+    def _parse_optional_metric(value: object) -> int | None:
+        if value is None:
+            return None
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or not 0 <= value <= MAX_ROUTE_METRIC
+        ):
+            raise KernelError(
+                f"route inventory: invalid metric {value!r}"
+            )
+        return value
+
+    @classmethod
+    def _parse_route_entry(cls, entry: object) -> RouteSpec:
+        if not isinstance(entry, dict):
+            raise KernelError(
+                f"route inventory: expected object, got "
+                f"{type(entry).__name__}"
+            )
+
+        # These forms cannot be represented faithfully by the current
+        # single-next-hop RouteSpec.  Never silently omit them from ACTUAL.
+        for unsupported in ("nexthops", "nhid", "multipath"):
+            if unsupported in entry:
+                raise KernelError(
+                    "route inventory: unsupported multi/nexthop route "
+                    f"contains {unsupported!r}: {entry!r}"
+                )
+
+        table = entry.get("table")
+        if table not in (None, "main", 254, "254"):
+            raise KernelError(
+                f"route inventory: unexpected non-main table {table!r}"
+            )
+
+        gateway_value = entry.get("gateway")
+        gateway: IPv4Address | None
+        if gateway_value is None:
+            gateway = None
+        elif isinstance(gateway_value, str):
+            try:
+                gateway = IPv4Address(gateway_value)
+            except ValueError as exc:
+                raise KernelError(
+                    f"route inventory: invalid IPv4 gateway "
+                    f"{gateway_value!r}"
+                ) from exc
+        else:
+            raise KernelError(
+                f"route inventory: invalid gateway {gateway_value!r}"
+            )
+
+        if "via" in entry:
+            raise KernelError(
+                "route inventory: cross-family/structured via is not "
+                f"representable: {entry['via']!r}"
+            )
+
+        interface = entry.get("dev")
+        if interface is not None and (
+            not isinstance(interface, str) or not interface
+        ):
+            raise KernelError(
+                f"route inventory: invalid interface {interface!r}"
+            )
+
+        flags = entry.get("flags", [])
+        if not isinstance(flags, list) or not all(
+            isinstance(flag, str) for flag in flags
+        ):
+            raise KernelError(
+                f"route inventory: invalid flags {flags!r}"
+            )
+
+        return RouteSpec(
+            destination=cls._parse_route_destination(entry.get("dst")),
+            route_type=cls._parse_route_type(entry.get("type")),
+            via=gateway,
+            interface=interface,
+            metric=cls._parse_optional_metric(entry.get("metric")),
+            proto=cls._parse_route_protocol(entry.get("protocol")),
+            onlink="onlink" in flags,
+        )
+
     def list_routes(self) -> frozenset[RouteSpec]:
         """
-        TODO implementation step 5.
+        Return normalized main-table IPv4 routes from iproute2 JSON.
 
-        Parse `ip -j -4 route show table main`.
-        Normalize:
-        - "default" -> 0.0.0.0/0;
-        - bare host dst -> /32;
-        - named proto, especially "kernel", -> numeric ID;
-        - onlink flag into RouteSpec.onlink.
+        `-N` forces protocol/scope identifiers to numeric form.  The adapter
+        still normalizes the protocol omitted by iproute2 for RTPROT_BOOT.
+        Structurally unrepresentable multipath/nexthop routes fail inventory
+        instead of being silently omitted from ACTUAL.
         """
-        raise NotImplementedError
+        completed = self._run(
+            (
+                "ip",
+                "-j",
+                "-N",
+                "-4",
+                "route",
+                "show",
+                "table",
+                "main",
+            )
+        )
+        payload = self._load_json_array(
+            completed.stdout,
+            context="route inventory",
+        )
+        return frozenset(
+            self._parse_route_entry(entry)
+            for entry in payload
+        )
+
+    @staticmethod
+    def _route_command_argv(
+        action: str,
+        route: RouteSpec,
+    ) -> tuple[str, ...]:
+        type_name = {
+            RouteType.UNICAST: "unicast",
+            RouteType.BLACKHOLE: "blackhole",
+            RouteType.UNREACHABLE: "unreachable",
+            RouteType.PROHIBIT: "prohibit",
+            RouteType.THROW: "throw",
+        }[route.route_type]
+
+        if route.proto is None:
+            raise KernelError(
+                f"cannot materialize route with proto=None: {route!r}"
+            )
+        if not 0 <= route.proto <= 255:
+            raise KernelError(
+                f"cannot materialize route with invalid proto: {route!r}"
+            )
+
+        argv = [
+            "ip",
+            "-4",
+            "route",
+            action,
+            type_name,
+            str(route.destination),
+            "table",
+            "main",
+            "proto",
+            str(route.proto),
+        ]
+
+        if route.metric is not None:
+            argv.extend(("metric", str(route.metric)))
+        if route.via is not None:
+            argv.extend(("via", str(route.via)))
+        if route.interface is not None:
+            argv.extend(("dev", route.interface))
+        if route.onlink:
+            argv.append("onlink")
+
+        return tuple(argv)
 
     def add_route(self, route: RouteSpec) -> None:
-        """TODO: exact route materialization from complete RouteSpec."""
-        raise NotImplementedError
+        """Materialize one complete RouteSpec in the main IPv4 table."""
+        self._run(self._route_command_argv("add", route))
 
     def delete_route(self, route: RouteSpec) -> None:
-        """TODO: exact route deletion."""
-        raise NotImplementedError
+        """Delete the represented route from the main IPv4 table."""
+        self._run(self._route_command_argv("del", route))
 
     def replace_route(self, route: RouteSpec) -> None:
-        """TODO: exact route replacement/canonicalization."""
-        raise NotImplementedError
+        """Canonicalize one complete RouteSpec with `ip route replace`."""
+        self._run(self._route_command_argv("replace", route))
 
     def list_interface_ipv4(
         self,
     ) -> Mapping[str, frozenset[IPv4Address]]:
         """
-        TODO implementation step 5.
+        Return every interface and its local IPv4 addresses.
 
-        Parse `ip -j -4 addr show`.
-        For tun/p2p semantics use address_info[].local, not peer-oriented
-        address fields.
+        `addr_info[].local` is authoritative for tun/point-to-point interfaces;
+        peer/broadcast fields are deliberately ignored.
         """
-        raise NotImplementedError
+        completed = self._run(("ip", "-j", "-4", "addr", "show"))
+        payload = self._load_json_array(
+            completed.stdout,
+            context="IPv4 address inventory",
+        )
+
+        mutable: dict[str, set[IPv4Address]] = {}
+        for entry in payload:
+            if not isinstance(entry, dict):
+                raise KernelError(
+                    "IPv4 address inventory: expected object, got "
+                    f"{type(entry).__name__}"
+                )
+
+            interface = entry.get("ifname")
+            if not isinstance(interface, str) or not interface:
+                raise KernelError(
+                    "IPv4 address inventory: invalid/missing ifname "
+                    f"{interface!r}"
+                )
+
+            addresses = mutable.setdefault(interface, set())
+            address_info = entry.get("addr_info", [])
+            if not isinstance(address_info, list):
+                raise KernelError(
+                    f"IPv4 address inventory: invalid addr_info for "
+                    f"{interface!r}: {address_info!r}"
+                )
+
+            for info in address_info:
+                if not isinstance(info, dict):
+                    raise KernelError(
+                        "IPv4 address inventory: invalid address object "
+                        f"for {interface!r}: {info!r}"
+                    )
+                if info.get("family") not in (None, "inet"):
+                    continue
+
+                local = info.get("local")
+                if not isinstance(local, str) or not local:
+                    raise KernelError(
+                        "IPv4 address inventory: missing local address "
+                        f"for {interface!r}: {info!r}"
+                    )
+                try:
+                    addresses.add(IPv4Address(local))
+                except ValueError as exc:
+                    raise KernelError(
+                        "IPv4 address inventory: invalid local IPv4 "
+                        f"{local!r} for {interface!r}"
+                    ) from exc
+
+        return MappingProxyType(
+            {
+                interface: frozenset(addresses)
+                for interface, addresses in mutable.items()
+            }
+        )
 
     def get_ip_forward(self) -> bool:
         """TODO: read /proc/sys/net/ipv4/ip_forward or bounded sysctl."""

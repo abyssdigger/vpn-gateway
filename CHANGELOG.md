@@ -3,6 +3,64 @@
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
+## 2026-11-07 — RC2.4 kernel route adapter
+
+Реализован реальный iproute2 boundary для route/address части `SubprocessKernelInterface`.
+
+### Route inventory
+
+- используется `ip -j -N -4 route show table main`;
+- `default` нормализуется в `0.0.0.0/0`;
+- bare host destination нормализуется в `/32`;
+- protocol IDs читаются численно благодаря `-N`;
+- отсутствующий RTPROT_BOOT нормализуется в `proto=3`;
+- поддерживаются UNICAST/BLACKHOLE/UNREACHABLE/PROHIBIT/THROW;
+- `onlink` переносится из JSON flags;
+- multipath/nexthop-group/structured-via routes не пропускаются молча и дают `KernelError`.
+
+### Route mutations
+
+Реализованы:
+
+```text
+add_route()
+delete_route()
+replace_route()
+```
+
+Команды явно задают IPv4 `table main`, route type, numeric protocol и остальные поля
+`RouteSpec`. `proto=None` считается нематериализуемым состоянием и не подменяется
+iproute2 default.
+
+### Interface IPv4 inventory
+
+Реализован `list_interface_ipv4()` через `ip -j -4 addr show`:
+
+- используется `addr_info[].local`;
+- peer/broadcast fields не влияют на readiness;
+- interface без IPv4 возвращается с пустым `frozenset`.
+
+### Tests
+
+Добавлено 12 kernel-adapter unit tests.
+
+Ожидаемый regression set:
+
+```text
+Config/security: 22/22 PASS
+Value/profile:    7/7 PASS
+Route planning:  14/14 PASS
+Kernel adapter:  12/12 PASS
+Total:           55/55 PASS
+
+py_compile: PASS
+--version:  PASS (RC2.4)
+--help:     PASS
+```
+
+Следующий шаг — live smoke на Debian 13 с реальным `iproute2`, после чего можно
+реализовывать `_apply_plan()` и `_verify_plan()`.
+
 ## 2026-11-07 — repository state synchronization
 
 Repository metadata synchronized with the actual RC2.3 development state:
