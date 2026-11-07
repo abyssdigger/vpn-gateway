@@ -27,6 +27,8 @@ being encoded in the subprocess adapter; this rule was applied before the RC2.5.
 
 EXP-003 is recorded in `design/RC2/vpn-gateway-experiments.md`.
 
+Independent technical review: [`RC2.5.1-review-2026-11-08.md`](design/RC2/code/reviews/RC2.5.1-review-2026-11-08.md).
+
 Next validation block: graceful shutdown/cleanup. Runtime reconciliation and self-healing
 remain intentionally deferred.
 
