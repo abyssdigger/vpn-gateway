@@ -21,7 +21,7 @@ Experimental results are not silently promoted into architecture. A result first
 **Architecture baseline:** RC2.4  
 **Target:** Debian 13 gateway/test host, stock iproute2  
 **Script:** `vpn-gateway-exp-002-route-adapter-smoke.sh`  
-**Script SHA256:** `8debfc6f01024e50829f378c0a3929b2f01b01af0321aed084a80ad688512e39`
+**Script SHA256:** `57658923a76d94a4926968cfd2a2dd6bdf6a373190c73bc88e280005403ac346`
 
 ### Motivation
 
