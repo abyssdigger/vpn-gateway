@@ -1,7 +1,7 @@
 # VPN Gateway — архитектурные решения и инварианты
 
 **Статус:** Release Candidate — кандидат на утверждение и реализацию
-**Версия:** RC2.6
+**Версия:** RC2.6.1
 **Дата:** 2026-11-08
 
 Документ фиксирует принятые архитектурные решения проекта VPN Gateway. Он описывает обязательные инварианты, жизненный цикл сервиса, модель владения kernel-state и правила конфигурации. Нереализованные детали, которые ещё требуют отдельного решения, вынесены в раздел **«Открытые решения»**.
@@ -263,9 +263,17 @@ verify'ит состояние и только после этого может 
 Особенно это заметно при быстром появлении второго matching interface или delete/recreate
 под тем же именем: старые exact-name rules физически существуют до реакции daemon.
 
-Архитектура принимает этот bounded event-reaction window в рамках dedicated trusted gateway
-host. Он уменьшается Netlink wakeup + periodic full resync, но не изображается как
-атомарная kernel transaction.
+Архитектура принимает этот bounded event-reaction window как неизбежную границу
+многозадачной ОС на dedicated trusted gateway host. Он уменьшается Netlink wakeup +
+periodic full resync, но не изображается как атомарная kernel transaction.
+
+Threat-model boundary для этого окна явный:
+
+- untrusted local users/processes не имеют `CAP_NET_ADMIN` и не могут создавать,
+  переименовывать или удалять network interfaces;
+- runtime netdev lifecycle выполняют trusted VPN software, kernel и administrator;
+- ifindex позволяет обнаружить same-name replacement при следующем snapshot, но существующее
+  iptables rule по имени не может быть исторически привязано к старому ifindex.
 
 При этом новые/unbound selector-family interfaces не должны иметь permissive static wildcard
 rules. Для local INPUT требуется fixed **deny-only selector guard**, который блокирует
@@ -567,8 +575,21 @@ startup fail-hard; RUN способен переходить в DEGRADED/ISOLATE
 
 ### 8.1. Immutable reconciliation snapshot
 
-Каждый pass получает один fresh interface snapshot и разрешает selector каждого managed
-profile в immutable binding result:
+Каждый completed pass использует один daemon-level immutable snapshot, концептуально:
+
+```text
+ReconciliationSnapshot
+    interfaces
+    resolutions_by_profile
+    readiness_by_profile
+    desired_routes_by_profile
+    desired_full_policy
+```
+
+Точное имя/type является implementation-level, но семантика обязательна: это одна
+зафиксированная интерпретация одного fresh interface inventory + immutable config.
+
+Selector каждого managed profile разрешается в:
 
 ```text
 ABSENT
@@ -576,20 +597,19 @@ BOUND(name, ifindex)
 AMBIGUOUS(matches...)
 ```
 
-Readiness вычисляется поверх этого же snapshot:
+Readiness вычисляется поверх того же interface snapshot:
 
 ```text
 ready = BOUND
         AND expected local_address присутствует на bound interface
 ```
 
-Из config + immutable binding/readiness snapshot daemon один раз строит:
+Из config + этого immutable binding/readiness snapshot daemon один раз строит full desired
+firewall/NAT policy и desired routes. Selector/readiness/DESIRED не пересчитываются между
+build/apply/verify фазами pass.
 
-- desired firewall/NAT policy;
-- desired routes per profile;
-- diagnostic/profile result context.
-
-Selector не пересчитывается между build/apply/verify фазами pass.
+Это **не** означает atomic kernel transaction между отдельными route/interface/firewall
+syscalls. Snapshot гарантирует только внутреннюю консистентность orchestration pass.
 
 ### 8.2. Bootstrap apply
 
@@ -646,22 +666,40 @@ onlink      = true
 Runtime pass сериализован одним event loop и запускается по relevant Netlink event,
 periodic tick, full resync или administrative trigger.
 
-Базовый порядок:
+#### Interface inventory failure
 
-1. fresh interface snapshot;
-2. resolve binding/readiness snapshot;
-3. сравнить с последним committed binding snapshot;
-4. если binding identity/cardinality изменились:
-   - best-effort `ip_forward=0` до policy mutation;
-5. построить expected firewall/NAT из config + current binding snapshot;
-6. inventory/compare firewall/NAT;
-7. `UNKNOWN` -> best-effort forwarding OFF, ISOLATED, без blind repair;
-8. `UNSAFE` -> best-effort forwarding OFF, repair filter -> nat, verify;
-9. только после firewall/NAT SAFE читать strict full route snapshot;
-10. derive immutable desired routes;
-11. build/validate/apply/verify route plan;
-12. commit OWNED + binding snapshot только после verify;
-13. после completed SAFE policy + route pass привести exclusive-owned `ip_forward` к
+Fresh interface inventory является policy-critical: без него daemon не может достоверно
+вычислить binding-specific INPUT/FORWARD/NAT state.
+
+Если interface inventory/read/parse/resolution не завершён:
+
+1. best-effort привести `ip_forward=0`;
+2. state = `ISOLATED`;
+3. не выполнять blind repair binding-specific NAT/allow policy;
+4. если firewall inventory читаем, daemon **может и должен предпочитать** безопасное
+   config-only isolation filter (§8.6), не требующее concrete binding;
+5. retry на следующем serialized reconciliation pass.
+
+Такой failure не классифицируется как обычный route/profile `DEGRADED`.
+
+#### Normal pass
+
+После успешного interface inventory:
+
+1. построить один immutable `ReconciliationSnapshot`;
+2. сравнить current binding identity/cardinality с последним committed binding snapshot;
+3. при binding transition best-effort привести `ip_forward=0`;
+4. inventory current firewall/NAT;
+5. если inventory/canonical interpretation `UNKNOWN`:
+   - best-effort forwarding OFF;
+   - `ISOLATED`;
+   - blind repair не выполнять;
+6. если current policy `UNSAFE` либо binding transition требует rematerialization:
+   выполнить deny-first repair sequence (§8.6);
+7. только после full desired firewall/NAT `SAFE` читать strict full route snapshot;
+8. build/validate/apply/verify route plan из того же `ReconciliationSnapshot`;
+9. commit OWNED + binding snapshot только после verify;
+10. после completed SAFE policy + route pass привести exclusive-owned `ip_forward` к
     требуемому состоянию.
 
 Binding transition, включая BOUND -> ABSENT, ABSENT -> BOUND, BOUND(name/ifindex A) ->
@@ -683,7 +721,7 @@ BOUND(name/ifindex B) и переход в/из AMBIGUOUS, считается po
 для остальных profiles, но overall lifecycle state остаётся DEGRADED с profile FAIL до
 устранения ambiguity.
 
-### 8.6. Firewall safety state
+### 8.6. Firewall safety state и deny-first repair
 
 Firewall/NAT state:
 
@@ -693,15 +731,58 @@ UNSAFE
 UNKNOWN
 ```
 
-Expected state теперь зависит от immutable binding snapshot текущего pass, а не только от
-config.
+Full expected state зависит от immutable `ReconciliationSnapshot`.
 
-`UNKNOWN` никогда не repair'ится вслепую. Daemon сначала best-effort выключает forwarding
-и остаётся ISOLATED.
+Отдельно policy layer обязан уметь построить config-only **isolation filter**:
 
-Для `UNSAFE` daemon пытается выключить forwarding, затем repair'ит filter раньше nat и
-verify'ит policy. Failure `set_ip_forward(False)` является high-severity fact, но не
-причиной прекратить полезный repair.
+```text
+desired_isolation_filter(config)
+```
+
+Он не содержит binding-specific ACCEPT rules и не требует interface inventory. Он сохраняет
+только fail-closed structural filter policy:
+
+- managed INPUT selector guards;
+- transport-network rejects;
+- unconditional protected-destination rejects;
+- terminal `VPNG-FORWARD-DENY`;
+- необходимые structural chains/jumps.
+
+`UNKNOWN` full-policy inventory/interpretation никогда не repair'ится вслепую. Daemon
+best-effort выключает forwarding и остаётся ISOLATED.
+
+Для подтверждённого `UNSAFE` либо binding transition применяется **deny-first** sequence:
+
+```text
+1. best-effort ip_forward=0
+
+2. materialize isolation filter
+3. verify isolation filter
+
+4. materialize desired NAT for current immutable binding snapshot
+5. verify desired NAT
+
+6. materialize full desired filter including binding-specific exact ACCEPT
+7. verify full desired filter
+
+8. reconcile + verify routes
+
+9. only after completed full verify:
+       enable/confirm forwarding as required
+```
+
+Это ordering обязателен даже если `set_ip_forward(False)` завершился ошибкой. Благодаря
+этому full FORWARD ACCEPT не появляется раньше verified NAT.
+
+Если isolation filter materialize/verify неуспешен, daemon остаётся ISOLATED и не переходит
+к NAT/full-filter/routes.
+
+Простой глобальный swap `nat -> filter` запрещён: при уже небезопасном/open filter это
+оставило бы permissive forwarding active дольше. Safety barrier именно deny-only filter.
+
+Если forwarding подтверждён OFF, implementation может оптимизировать технические детали
+транзакций только при сохранении той же observable safety semantics; архитектурная модель
+остаётся deny-first.
 
 ### 8.7. Route executor
 
@@ -736,16 +817,21 @@ failed apply при уже включённом forwarding.
 ### 8.9. Lifecycle state
 
 ```text
-firewall != SAFE                         -> ISOLATED
+interface/policy observability insufficient -> ISOLATED
+firewall != SAFE                            -> ISOLATED
 firewall == SAFE
   AND all managed profiles SUCCESS
-  AND ip_forward == 1                    -> ACTIVE
+  AND ip_forward == 1                       -> ACTIVE
 firewall == SAFE, остальные completed
-profile/policy passes                     -> DEGRADED
+profile/policy passes                        -> DEGRADED
 ```
 
 ABSENT/not-ready профиль не является ошибкой сам по себе, если его blackhole/deny desired
 state успешно materialized. AMBIGUOUS является profile FAIL.
+
+`ACTIVE` означает, что **желаемое kernel policy-state полностью реализовано**, а не что VPN
+peer/tunnel connectivity доказана. Поэтому operational status обязан отдельно показывать
+для каждого profile selector, binding, readiness и route result.
 
 Ручной `sysctl -w net.ipv4.ip_forward=0` не является administrative pause; clean completed
 pass восстанавливает exclusive-owned value.
@@ -1207,6 +1293,16 @@ prefix% -> ^prefix[0-9]+$
 Символ `+` в config selector запрещён, чтобы не смешивать config semantics с iptables
 interface wildcard semantics.
 
+Numeric-family selector резервирует на dedicated gateway весь matching runtime namespace
+для этого managed profile. Любой посторонний interface, совпавший с
+`^prefix[0-9]+$`, участвует в cardinality и может намеренно перевести profile в
+AMBIGUOUS fail-closed state.
+
+Если target-validated deny-only iptables guard окажется шире numeric regex (например,
+prefix wildcard матчится также на недесятичные suffixes), operationally reserved считается
+весь фактический guard match scope. Это должно быть зафиксировано результатом соответствующего
+target experiment.
+
 ### 15.3. Managed selector exclusivity
 
 Managed selectors должны быть pairwise disjoint по множеству возможных concrete names.
@@ -1223,6 +1319,9 @@ vpns% + vpns%
 
 Если один selector может когда-либо классифицировать тот же concrete Linux interface, что и
 другой managed selector, runtime projection invalid.
+
+Администратор обязан использовать разные interface-name families для разных managed VPN
+instances и не создавать unrelated netdevs внутри зарезервированного family namespace.
 
 ## 16. VPN-сети и адреса
 
@@ -1243,7 +1342,10 @@ IPv4/CIDR и внутренние address/peer contracts проверяются 
 
 Для managed-профиля `--check-config` при `peers=[]` выводит информационный `NOTE`: UNICAST VPN routes не будут созданы, protected routes останутся под BLACKHOLE. Это не `WARNING` и не ошибка.
 
-Если `peers = []` у managed-профиля, конфигурация остаётся валидной: profile VPN UNICAST routes не устанавливаются, а защищаемые `routes` остаются под blackhole. Постоянный MASQUERADE managed interface всё равно существует как fixed infrastructure.
+Если `peers = []` у managed-профиля, конфигурация остаётся валидной: profile VPN UNICAST
+routes не устанавливаются, а защищаемые `routes` остаются под blackhole. Binding-specific
+MASQUERADE существует только если profile ready и имеет concrete binding; сам `peers=[]`
+на NAT readiness не влияет.
 
 Network address и broadcast address не считаются запрещёнными адресами внутри VPN-сети. Для tunnel/point-to-point семантики нижний и верхний адрес диапазона могут использоваться как обычные адреса `local_address` или `peer`.
 
@@ -1487,6 +1589,9 @@ InterfaceRecord:
     ipv4: frozenset[IPv4Address]
 ```
 
+Если один inventory payload содержит одно имя с несовместимыми ifindex identities, adapter
+не merge'ит их молча и возвращает `KernelError`.
+
 Resolution одного profile selector даёт:
 
 ```text
@@ -1504,12 +1609,9 @@ kernel reads/writes и не выбирает runtime interface.
 Старая идея `CONFIGURED routes` как полного набора готовых `RouteSpec` больше не
 является корректной: BLACKHOLE config-only, но UNICAST требует concrete binding.
 
-Daemon строит immutable `desired_routes_by_profile` непосредственно из:
-
-```text
-profile config
-+ binding/readiness snapshot
-```
+Daemon создаёт один immutable pass-level `ReconciliationSnapshot`, который содержит как
+минимум interface inventory, resolutions/readiness, desired routes и full desired policy.
+Он строится один раз и переиспользуется всеми build/apply/verify фазами pass.
 
 ### 23.2. Route model
 
@@ -1595,20 +1697,39 @@ Full route inventory по-прежнему reject'ит непредставим�
 Filtered cleanup inventory получает protocol identity из query context, потому что iproute2
 может не печатать `protocol` в selected output.
 
+Protocol-selective inventory остаётся strict **внутри reserved marker namespace**:
+непредставимый `proto 201/202` multipath/nhid/structured route не пропускается молча и
+является cleanup failure. Для `proto 201` owned cleanup resource обязан дополнительно
+соответствовать `type=BLACKHOLE metric=65536`; иная форма с reserved proto 201 является
+marker conflict, а не кандидатом на silent delete.
+
 Address/interface parser учитывает только `addr_info[].family == "inet"` и поле
-`local`; ifindex сохраняется в InterfaceRecord.
+`local`; ifindex сохраняется в InterfaceRecord. Duplicate records одного имени могут
+объединяться только при согласованном ifindex identity.
 
 ### 23.5. Firewall policy model
 
-Expected firewall/NAT model строится daemon'ом из двух inputs:
+Policy layer строит из immutable config + pass snapshot две явные формы:
 
 ```text
-immutable config
-immutable current binding/readiness snapshot
+desired_full_policy(snapshot)
+desired_isolation_filter(config)
 ```
 
-Structural resources и binding-specific rules выводятся одной policy model, чтобы compare и
-restore payload не имели независимых источников истины.
+Точные function/class names implementation-level.
+
+Full policy содержит structural resources + binding-specific exact rules.
+
+Isolation filter:
+
+- не зависит от interface inventory;
+- не содержит binding-specific ACCEPT;
+- не содержит permissive wildcard;
+- сохраняет INPUT selector guards, transport-network rejects, protected-destination rejects
+  и terminal FORWARD deny.
+
+Обе формы выводятся из одной policy model, чтобы compare/restore не имели независимых
+источников истины. Deny-first repair orchestration не выполняет ad-hoc rule surgery.
 
 Wildcard/family selector никогда не материализуется в allow/NAT rule.
 
@@ -1682,8 +1803,12 @@ Unknown interface events могут быть проигнорированы то
 - Subprocess calls имеют bounded timeout и stable `LC_ALL=C`/`LANG=C`.
 - Netfilter notifications остаются optional enhancement; correctness опирается на
   Netlink-route events + periodic full reconciliation.
-- Binding change materialization выполняется при forwarding OFF; filter repair раньше nat,
-  policy verify раньше route restoration.
+- Binding-sensitive repair использует deny-first barrier:
+  isolation filter -> verify -> desired NAT -> verify -> full desired filter -> verify ->
+  routes -> verify. Это ordering сохраняется даже если forwarding OFF не удалось подтвердить.
+- Interface inventory failure является isolation-class failure: binding-specific blind repair
+  запрещён, config-only isolation filter может использоваться как безопасный barrier при
+  читаемом firewall boundary.
 - Route/address/interface snapshots не являются атомарной kernel transaction. Архитектура
   требует один fresh snapshot каждого типа, reused consistently within pass, а не
   псевдо-atomic wrapper.
@@ -1835,70 +1960,99 @@ Unknown interface events могут быть проигнорированы то
 
 54. Firewall safety = SAFE/UNSAFE/UNKNOWN; UNKNOWN не repair'ится blind.
 
-55. UNSAFE repair выполняется filter -> nat; failure disable forwarding логируется, но не
-    отменяет полезный repair.
+55. UNSAFE/binding repair использует deny-first ordering:
+    isolation filter -> verify -> desired NAT -> verify -> full desired filter -> verify ->
+    routes -> verify.
 
-56. After isolation forwarding возвращается только после SAFE policy + completed fresh route pass.
+56. Failure подтвердить ip_forward=0 не разрешает full ACCEPT раньше verified NAT; deny-first
+    barrier всё равно применяется.
 
-57. Runtime ambiguity desired policy удаляет/не создаёт exact allow/NAT/unicast, сохраняя
+57. Interface inventory/read/parse/resolution failure -> ISOLATED, не обычный DEGRADED.
+
+58. При interface inventory failure binding-specific blind repair запрещён; config-only
+    isolation filter допустим как безопасный barrier при читаемом firewall boundary.
+
+59. After isolation forwarding возвращается только после SAFE full policy + completed fresh route pass.
+
+60. Runtime ambiguity desired policy удаляет/не создаёт exact allow/NAT/unicast, сохраняя
     blackhole/deny.
 
-58. ABSENT/not-ready profile сам по себе не FAIL, если fail-closed desired state успешно verified.
+61. ABSENT/not-ready profile сам по себе не FAIL, если fail-closed desired state успешно verified.
 
-59. AMBIGUOUS profile является FAIL до восстановления uniqueness.
+62. AMBIGUOUS profile является FAIL до восстановления uniqueness.
 
-60. ACTIVE = policy SAFE + all profile results SUCCESS + ip_forward=1.
+63. ACTIVE = policy SAFE + all profile results SUCCESS + ip_forward=1; ACTIVE не означает
+    доказанную VPN connectivity.
 
-61. SAFE с profile FAIL -> DEGRADED; non-SAFE -> ISOLATED.
+64. SAFE с profile FAIL -> DEGRADED; non-SAFE или insufficient policy observability -> ISOLATED.
 
-62. cleanup order: forwarding OFF -> proto202 -> firewall/NAT -> proto201 blackhole -> verify.
+65. cleanup order: forwarding OFF -> proto202 -> firewall/NAT -> proto201 blackhole -> verify.
 
-63. Blackhole снимается только после подтверждённой очистки остальных owned resources.
+66. Blackhole снимается только после подтверждённой очистки остальных owned resources.
 
-64. iptables cleanup exact; никаких global table flush.
+67. iptables cleanup exact; никаких global table flush.
 
-65. VPNG-* namespace полностью reserved daemon'ом.
+68. VPNG-* namespace полностью reserved daemon'ом.
 
-66. Per-table iptables restore atomicity не считается cross-table atomicity.
+69. Per-table iptables restore atomicity не считается cross-table atomicity.
 
-67. Runtime directory final component non-symlink directory, mode 0700, expected service owner.
+70. Runtime directory final component non-symlink directory, mode 0700, expected service owner.
 
-68. Missing runtime directory daemon может создать сам при достаточных правах.
+71. Missing runtime directory daemon может создать сам при достаточных правах.
 
-69. Existing wrong runtime-dir owner/mode не чинится молча.
+72. Existing wrong runtime-dir owner/mode не чинится молча.
 
-70. Lock file O_NOFOLLOW + lifetime nonblocking flock.
+73. Lock file O_NOFOLLOW + lifetime nonblocking flock.
 
-71. Config file regular non-symlink, root-owned, parent protected from group/other writes.
+74. Config file regular non-symlink, root-owned, parent protected from group/other writes.
 
-72. --check-config не acquires runtime lock и не меняет kernel state.
+75. --check-config не acquires runtime lock и не меняет kernel state.
 
-73. Unknown config keys fatal для managed runtime projection.
+76. Unknown config keys fatal для managed runtime projection.
 
-74. Unmanaged malformed definitions не блокируют startup; lint gives WARNING.
+77. Unmanaged malformed definitions не блокируют startup; lint gives WARNING.
 
-75. Managed protected routes globally non-overlapping and не пересекают managed vpn.network.
+78. Managed protected routes globally non-overlapping and не пересекают managed vpn.network.
 
-76. peers order задаёт metrics 10,20,30...; peers=[] валиден.
+79. peers order задаёт metrics 10,20,30...; peers=[] валиден.
 
-77. common_allowed_sources union profile.allowed_sources; deny/exclude semantics нет.
+80. common_allowed_sources union profile.allowed_sources; deny/exclude semantics нет.
 
-78. Reverse accessibility не входит в текущий contract и не получается ослаблением ingress deny.
+81. Reverse accessibility не входит в текущий contract и не получается ослаблением ingress deny.
 
-79. Python implementation может быть multi-file package, но имеет один daemon entry point.
+82. Python implementation может быть multi-file package, но имеет один daemon entry point.
 
-80. Domain boundaries должны быть переносимы в future Rust modules/structs/enums; Rust deployment
+83. Domain boundaries должны быть переносимы в future Rust modules/structs/enums; Rust deployment
     ориентирован на один executable binary.
 
-81. Один event loop сериализует Netlink, timer, IPC и shutdown; parallel reconciliation запрещён.
+84. Один event loop сериализует Netlink, timer, IPC и shutdown; parallel reconciliation запрещён.
 
-82. Signal handlers не выполняют kernel work; shutdown проходит через serialized lifecycle cleanup.
+85. Signal handlers не выполняют kernel work; shutdown проходит через serialized lifecycle cleanup.
 
-83. SIGHUP не reload'ит config.
+86. SIGHUP не reload'ит config.
 
-84. External CLI safety contracts проверяются на target Debian до закрепления в adapter.
+87. External CLI safety contracts проверяются на target Debian до закрепления в adapter.
 
-85. Programming exceptions не маскируются как expected UNKNOWN/DEGRADED.
+88. Programming exceptions не маскируются как expected UNKNOWN/DEGRADED.
 
-86. Machine reason identity задаётся stable enum codes, не free-form exception text.
+89. Machine reason identity задаётся stable enum codes, не free-form exception text.
+
+90. Numeric-family selector reserves its matching runtime ifname namespace for the managed
+    profile; unrelated matching netdev can intentionally force AMBIGUOUS fail-closed state.
+
+91. Residual event-reaction window is an explicit trusted-host threat-model boundary:
+    untrusted processes do not possess CAP_NET_ADMIN/netdev lifecycle control.
+
+92. Same-name/new-ifindex replacement is detectable at snapshot reconciliation but existing
+    iptables name matches cannot be retroactively bound to historical ifindex.
+
+93. Interface inventory duplicate name with conflicting ifindex is invalid kernel inventory.
+
+94. Protocol-selective cleanup remains strict for reserved proto 201/202 entries; unsupported
+    selected route shapes are fatal, not silently skipped.
+
+95. desired isolation filter is config-only and contains no binding-specific ACCEPT.
+
+96. Operational status reports selector/binding/readiness separately from lifecycle ACTIVE.
+
 ```

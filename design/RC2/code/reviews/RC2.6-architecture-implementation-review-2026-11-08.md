@@ -332,3 +332,15 @@ RC2.6 is implementable and the proposed package split is appropriate.
 Before coding, incorporate the safety review's deny-first cross-table repair and explicit
 interface-inventory failure semantics. After that, a staged refactor/implementation is
 preferable to trying to patch RC2.5.1 in place without new typed boundaries.
+
+---
+
+## Maintainer disposition
+
+**ACCEPTED in architecture RC2.6.1.**
+
+All substantive findings in this review were accepted for the architecture correction.
+Implementation remains unchanged pending RC2.6.1 re-review and the target validation required
+for deny-only selector-family iptables matching.
+
+See `design/RC2/vpn-gateway-architecture-rc2.wip.md` and the RC2.6.1 changelog entry.

@@ -4,6 +4,34 @@
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
 
+## 2026-11-08 — Architecture RC2.6.1 review corrections
+
+Both RC2.6 architecture reviews were accepted and incorporated before implementation.
+
+RC2.6.1 adds:
+
+- deny-first binding-sensitive repair:
+  isolation filter -> NAT -> full filter -> routes, with verify between stages;
+- the deny-first barrier remains mandatory when `ip_forward=0` cannot be confirmed;
+- interface inventory/read/parse/resolution failure is an ISOLATED-class failure because
+  full binding-specific policy cannot be derived safely;
+- a config-only isolation filter is explicit and contains no binding-specific ACCEPT;
+- one immutable pass-level reconciliation snapshot holds interface resolution/readiness,
+  desired routes and full desired policy;
+- numeric-family selectors reserve their runtime interface-name namespace;
+- same-name/ifindex replacement and the kernel-event reaction window are explicit trusted-host
+  threat-model boundaries;
+- filtered proto-201/202 cleanup remains strict inside the reserved marker namespace;
+- status must expose selector/binding/readiness separately from ACTIVE lifecycle state.
+
+The old `filter -> nat` repair contract is removed. Python implementation remains RC2.5.1
+and is intentionally unchanged.
+
+Next: short independent re-review of RC2.6.1, then target experiment for deny-only
+interface-family iptables matching before implementation.
+
+
+
 ## 2026-11-08 — RC2.6 independent architecture reviews
 
 Two independent review passes were archived before implementation:

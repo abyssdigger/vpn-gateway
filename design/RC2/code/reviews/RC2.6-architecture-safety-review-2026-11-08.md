@@ -258,3 +258,15 @@ Required before implementation:
    assumption.
 
 After those changes, the architecture is suitable for implementation-oriented review.
+
+---
+
+## Maintainer disposition
+
+**ACCEPTED in architecture RC2.6.1.**
+
+All substantive findings in this review were accepted for the architecture correction.
+Implementation remains unchanged pending RC2.6.1 re-review and the target validation required
+for deny-only selector-family iptables matching.
+
+See `design/RC2/vpn-gateway-architecture-rc2.wip.md` and the RC2.6.1 changelog entry.
