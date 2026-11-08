@@ -1,5 +1,13 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 review archive
+
+Two independent RC3 reviews and the project response are archived under `design/reviews/`.
+Review filenames now follow `<subject>-YYYY-MM-DD-<description>.md`, so artifacts group by
+subject/version and then sort chronologically. Existing RC2 review blobs are renamed without
+content changes.
+
+
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
@@ -107,8 +115,8 @@ selector-family iptables interface match/canonicalization.
 
 Reviews:
 
-- `design/reviews/RC2.6.2-architecture-safety-vivisection-2026-11-08.md`
-- `design/reviews/RC2.6.2-architecture-implementation-vivisection-2026-11-08.md`
+- `design/reviews/RC2.6.2-2026-11-08-architecture-safety-vivisection.md`
+- `design/reviews/RC2.6.2-2026-11-08-architecture-implementation-vivisection.md`
 
 Next: target experiment for the deny-only family guard, then staged RC2.6.x implementation.
 
@@ -149,8 +157,8 @@ Result:
 
 Reviews:
 
-- `design/reviews/RC2.6.1-architecture-safety-rereview-2026-11-08.md`
-- `design/reviews/RC2.6.1-architecture-implementation-rereview-2026-11-08.md`
+- `design/reviews/RC2.6.1-2026-11-08-architecture-safety-rereview.md`
+- `design/reviews/RC2.6.1-2026-11-08-architecture-implementation-rereview.md`
 
 No architecture change is made by this re-review commit.
 
@@ -189,9 +197,9 @@ interface-family iptables matching before implementation.
 Two independent review passes were archived before implementation:
 
 - safety/state-machine review:
-  `design/reviews/RC2.6-architecture-safety-review-2026-11-08.md`;
+  `design/reviews/RC2.6-2026-11-08-architecture-safety-review.md`;
 - implementation/data-model review:
-  `design/reviews/RC2.6-architecture-implementation-review-2026-11-08.md`.
+  `design/reviews/RC2.6-2026-11-08-architecture-implementation-review.md`.
 
 The safety review found one high-severity ordering issue: after RC2.6 makes NAT and ACCEPT
 rules binding-specific, the old `filter -> nat` repair sequence is unsafe if
@@ -233,7 +241,7 @@ The bounded kernel-event -> daemon-reaction window for dynamic interface familie
 in the architecture rather than hidden behind static-interface assumptions.
 
 Post-EXP expert review:
-`design/reviews/EXP-004-post-review-2026-11-08.md`.
+`design/reviews/EXP-004-2026-11-08-post-review.md`.
 
 Next: independent architecture review before any RC2.6 implementation work.
 
@@ -299,7 +307,7 @@ being encoded in the subprocess adapter; this rule was applied before the RC2.5.
 
 EXP-003 is recorded in `design/vpn-gateway-experiments.md`.
 
-Independent technical review: [`RC2.5.1-review-2026-11-08.md`](design/reviews/RC2.5.1-review-2026-11-08.md).
+Independent technical review: [`RC2.5.1-2026-11-08-review.md`](design/reviews/RC2.5.1-2026-11-08-review.md).
 The review now includes maintainer disposition: read-before-write forwarding fixes are
 accepted for RC2.5.2; moving OWNED commit after forwarding and a pseudo-atomic combined
 snapshot API are rejected; route metric-collision handling requires a target experiment
