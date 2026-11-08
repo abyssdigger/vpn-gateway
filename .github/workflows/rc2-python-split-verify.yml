@@ -24,9 +24,10 @@ jobs:
             design/RC2/code/python/vpn_gatewayd
       - name: Run RC2 unit tests
         run: |
-          python -m unittest discover \
-            -s design/RC2/code/python/tests \
-            -p 'test-*.py' -v
+          for test_file in design/RC2/code/python/tests/test-*.py; do
+            echo "==> $test_file"
+            python "$test_file"
+          done
       - name: Verify CLI version
         run: |
           test "$(python design/RC2/code/python/vpn-gatewayd.py --version)" = "vpn-gatewayd RC2.5.1"
