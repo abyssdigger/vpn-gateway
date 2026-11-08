@@ -1,5 +1,13 @@
 # VPN-GATE change log
 
+## 2026-11-09 — Terminology exception for handshake
+
+`handshake` is added to the project-wide language exceptions and the RC3 normative glossary
+as an established protocol-interaction term. It may remain untranslated when referring to a
+protocol phase or result, including WireGuard/VPN handshake wording.
+
+No architecture semantics change.
+
 ## 2026-11-09 — RC3 Russian terminology audit
 
 A terminology-only pass applies the root `PROJECT-CONVENTIONS.md` language rule to the
