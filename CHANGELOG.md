@@ -4,6 +4,30 @@
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
 
+## 2026-11-08 — RC2.6.1 architecture re-review
+
+Two independent re-review passes were archived against RC2.6.1.
+
+Result:
+
+- all previous HIGH findings are resolved;
+- no new architecture blocker was found;
+- safety review requests two narrow clarifications before implementation:
+  isolation-filter verification is not equivalent to full-policy SAFE, and isolation
+  materialization must replace stale daemon binding-specific ACCEPT state rather than merely
+  append denies;
+- implementation review considers RC2.6.1 implementable and leaves selector overlap corner
+  cases/package migration discipline to unit tests and implementation sequencing.
+
+Reviews:
+
+- `design/RC2/code/reviews/RC2.6.1-architecture-safety-rereview-2026-11-08.md`
+- `design/RC2/code/reviews/RC2.6.1-architecture-implementation-rereview-2026-11-08.md`
+
+No architecture change is made by this re-review commit.
+
+
+
 ## 2026-11-08 — Architecture RC2.6.1 review corrections
 
 Both RC2.6 architecture reviews were accepted and incorporated before implementation.
