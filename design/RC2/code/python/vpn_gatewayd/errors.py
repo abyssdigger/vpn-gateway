@@ -29,3 +29,4 @@ class FirewallInspectionError(GatewayError):
 
 
 class KernelError(GatewayError):
+    """Base class for expected kernel/userspace adapter failures."""
