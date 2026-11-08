@@ -1,5 +1,485 @@
 # VPN-GATE — Experiment Log
 
+## EXP-004 — Gateway boundary validation after first live happy path
+
+**Status:** COMPLETE — PASS with architecture/implementation findings  
+**Architecture baseline:** RC2.4.1  
+**Implementation:** RC2.5.1  
+**Run:** 2026-11-08
+
+### Motivation
+
+EXP-003 proved that RC2.5.1 can materialize a working initial OpenConnect gateway path.
+EXP-004 probes the boundaries that the happy path did not exercise:
+
+1. whether daemon ownership of global IPv4 forwarding is complete rather than limited to
+   configured protected destinations;
+2. whether the FIB remains fail-closed when the VPN interface disappears;
+3. whether an ocserv `device` value is an exact runtime interface name or only a prefix;
+4. whether the planned `iptables-restore --noflush` cleanup payload is transactionally safe
+   on the target Debian backend;
+5. whether cleanup can inventory only daemon marker routes without parsing unrelated,
+   unsupported foreign route shapes.
+
+The subexperiments share one lab environment but have independent hypotheses, procedures,
+results and decisions.
+
+### Environment
+
+Captured on the Debian 13 gateway before the block:
+
+```text
+Debian 13.7
+kernel: 6.12.115+deb13.1-amd64
+iptables: v1.8.11 (nf_tables)
+iptables-save: v1.8.11 (nf_tables)
+iptables-restore: v1.8.11 (nf_tables)
+iptables alternative: /usr/sbin/xtables-nft-multi
+iproute2: 6.15.0
+libbpf: 1.5.0
+nftables: 1.1.3
+ocserv: 1.3.0-2
+GnuTLS: 3.8.9
+```
+
+The gateway profile under test used:
+
+```text
+VPN network:       172.20.130.0/29
+server local VPN:  172.20.130.1
+OpenConnect peer:  172.20.130.5
+protected route:   <protected-prefix>
+```
+
+All LAN host/target addresses are intentionally redacted from this record. The
+`172.20.130.0/29` transport addresses are part of the repository's documented test design.
+
+### Setup finding — runtime directory bootstrap
+
+After a gateway reboot, foreground startup failed before lock acquisition because
+`/run/vpn-gateway` did not exist. Creating the directory manually as root with mode `0700`
+allowed startup to proceed.
+
+Decision for the implementation review:
+
+- the daemon should safely ensure `/run/vpn-gateway` exists before opening its lock file;
+- the path must be a real directory, not a symlink, mode `0700`, and owned by the
+  expected daemon service identity; the current root foreground deployment therefore
+  expects UID 0;
+- systemd `RuntimeDirectory=` remains the preferred deployment mechanism, especially for
+  a future non-root service identity, but daemon correctness should not depend on it when
+  the process itself has permission to create the directory;
+- a configurable alternative lock path is not required now. It may be added later only if
+  a real multi-unit/shared-lock use case appears.
+
+---
+
+### EXP-004.1 — Complete IPv4 FORWARD ownership
+
+#### Hypothesis
+
+RC2.5.1 owns only managed destination paths inside its `VPNG-*` chains. Because the daemon
+also enables global `net.ipv4.ip_forward`, unmatched transit traffic may return from all
+daemon chains and be accepted by the host's base `FORWARD` policy.
+
+#### Baseline
+
+With the daemon active:
+
+```text
+net.ipv4.ip_forward = 1
+-P FORWARD ACCEPT
+-A FORWARD -j VPNG-INGRESS
+-A FORWARD -j VPNG-RESERVED
+-A FORWARD -j VPNG-OC-FORWARD
+```
+
+For a destination outside the protected prefix, VPN transport network and local LAN,
+all three daemon chains return without making a terminal decision.
+
+The unmanaged target was first verified to be reachable through the ordinary LAN router:
+
+```text
+<allowed-source-ip>
+  -> <lan-router-ip>
+  -> <unmanaged-target-ip>
+```
+
+A host route was then installed on the source so only that unmanaged target traversed the
+vpn-gateway host.
+
+#### Result
+
+The trace changed to:
+
+```text
+<allowed-source-ip>
+  -> <gateway-lan-ip>
+  -> <unmanaged-target-ip>
+```
+
+and ICMP echo continued to succeed.
+
+The packet therefore entered the vpn-gateway host, matched no managed destination rule,
+returned to the built-in `FORWARD` chain and was accepted by its base policy.
+
+#### Decision
+
+**EXP-004.1 result: CONFIRMED.**
+
+This is an architecture-level policy gap, not a lab anomaly.
+
+Because vpn-gatewayd owns the transition of global `net.ipv4.ip_forward` to `1`, it must
+also make a terminal policy decision for **all IPv4 forwarded traffic** while forwarding is
+enabled. Unmatched forwarding must not depend on a pre-existing `FORWARD ACCEPT` policy or
+on downstream foreign rules.
+
+The exact fixed-firewall representation is deferred to the post-EXP architecture review,
+but complete daemon ownership of the forwarding decision is now a requirement.
+
+---
+
+### EXP-004.2 — FIB fail-closed behavior across VPN disappearance
+
+#### Hypothesis
+
+With both routes present, the preferred managed unicast route is selected over the
+high-metric blackhole. When the VPN interface disappears, the kernel removes the dependent
+unicast route but the marker blackhole remains and prevents fallback through the ordinary
+default route.
+
+#### Procedure and result
+
+With the VPN up and RC2.5.1 freshly applied:
+
+```text
+blackhole <protected-prefix> proto 201 metric 65536
+<protected-prefix> via 172.20.130.5 dev vpns0 proto 202 metric 10 onlink
+```
+
+A live lookup returned:
+
+```text
+<protected-target-ip> via 172.20.130.5 dev vpns0 src 172.20.130.1
+```
+
+The OpenConnect client service was then stopped. The ocserv runtime interface disappeared,
+the kernel removed the dependent `proto 202` route, and the route table retained:
+
+```text
+blackhole <protected-prefix> proto 201 metric 65536
+```
+
+On this kernel/iproute2 combination, `ip -4 route get <protected-target-ip>` against the
+remaining blackhole returned:
+
+```text
+RTNETLINK answers: Invalid argument
+```
+
+Most importantly, no lookup result via the ordinary default gateway was produced.
+
+After the OpenConnect client reconnected, ocserv recreated `vpns0` with the expected local
+and peer addresses, but RC2.5.1 did not recreate `proto 202` while already in RUN. Only the
+blackhole remained until daemon reconciliation/restart.
+
+#### Decision
+
+**EXP-004.2 result: PASS.**
+
+The route design is fail-closed across VPN-interface loss:
+
+- kernel teardown removes the interface-dependent managed unicast route;
+- the independent blackhole survives;
+- the protected destination does not fall back through the default route.
+
+The reconnect observation also confirms the already-known RC2.5.1 limitation: runtime
+interface recovery alone does not restore managed unicast routes because runtime
+reconciliation is not implemented yet.
+
+The observed `EINVAL` from `ip route get` is a diagnostic behavior of this tested
+blackhole case and is not interpreted as absence of the blackhole route.
+
+---
+
+### EXP-004.3 — ocserv runtime interface identity
+
+#### Hypothesis
+
+The ocserv `device` setting may name an interface family rather than a stable exact
+interface. A configuration that hard-codes `interface = "vpns0"` may therefore be unsafe.
+
+#### Procedure and result
+
+Several sequential single-client disconnect/reconnect cycles all reused:
+
+```text
+vpns0
+```
+
+This alone did not prove exact-name stability.
+
+Next, with the OpenConnect client stopped, a temporary TUN named `vpns0` was created on the
+server. On reconnect, ocserv successfully allocated:
+
+```text
+device: vpns1
+local:  172.20.130.1
+peer:   172.20.130.5
+```
+
+Finally, ocserv was configured with:
+
+```ini
+device = vpns0
+```
+
+and the next connection created:
+
+```text
+vpns00
+```
+
+Therefore the setting is a basename/prefix used to construct runtime device names, not an
+exact permanent Linux interface name.
+
+A side check also demonstrated that `#` is a valid character in a Linux netdev name on
+this target (`test#` was created successfully), so it is unsuitable as a configuration
+sentinel.
+
+#### Decision
+
+**EXP-004.3 result: PASS with architecture change required.**
+
+Keep one configuration key, `interface`, with two modes:
+
+```toml
+interface = "wg0"    # exact runtime interface
+interface = "vpns%"  # numeric runtime-interface family
+```
+
+The trailing `%` is a vpn-gatewayd configuration sentinel, not a general glob or regex.
+
+Normative semantics chosen for the architecture review:
+
+```text
+"wg0"   -> exact name "wg0"
+"vpns%" -> runtime names matching ^vpns[0-9]+$
+```
+
+The sentinel is permitted only once and only as the final character.
+
+For a numeric family:
+
+- zero matching runtime interfaces -> profile is DOWN/not ready;
+- exactly one matching runtime interface -> that interface is the profile's runtime device;
+- more than one match -> state is ambiguous and must fail closed.
+
+The daemon must never select the first, lowest-numbered or newest interface from an
+ambiguous family.
+
+This convention also leaves administrators free to give separate ocserv/WireGuard
+instances different prefixes.
+
+---
+
+### EXP-004.4 — iptables cleanup transaction contract
+
+#### Hypothesis
+
+The cleanup form planned by RC2.5.1 can remove all daemon jumps and then flush/delete owned
+chains in one `iptables-restore --noflush` transaction per table, while preserving foreign
+chains/rules. If a foreign reference prevents chain deletion, the table `COMMIT` should
+fail without partially applying earlier delete/flush operations.
+
+#### Safety boundary
+
+All tests ran inside a disposable network namespace.
+
+#### Filter positive case
+
+The test table contained two `FORWARD -> VPNG-TEST` jumps with a foreign jump between them,
+an owned rule inside `VPNG-TEST`, and an independent `FOREIGN` chain/rule.
+
+One restore payload performed:
+
+```text
+-D FORWARD -j VPNG-TEST
+-D FORWARD -j VPNG-TEST
+-F VPNG-TEST
+-X VPNG-TEST
+```
+
+Observed:
+
+```text
+rc=0
+```
+
+Both owned jumps and the owned chain disappeared. The foreign jump, chain and rule remained
+unchanged.
+
+#### NAT positive case
+
+The same pattern was repeated in `nat` with duplicate
+`POSTROUTING -> VPNG-TEST-NAT` jumps and an independent foreign NAT chain.
+
+Observed:
+
+```text
+rc=0
+```
+
+The owned NAT resources disappeared and the foreign NAT resources remained unchanged.
+
+#### Negative external-reference case
+
+To test table-transaction failure independently of cleanup-builder discovery, a foreign
+chain was made to reference the daemon-owned chain:
+
+```text
+FORWARD     -> VPNG-TEST
+FORWARD     -> FOREIGN-REF
+FOREIGN-REF -> VPNG-TEST
+```
+
+The synthetic cleanup payload deliberately did **not** delete
+`FOREIGN-REF -> VPNG-TEST`; it attempted to delete the daemon jump, flush `VPNG-TEST`,
+and delete the owned chain in one restore transaction.
+
+This is intentionally narrower than an end-to-end test of
+`_build_firewall_cleanup_payload()`: the current builder treats ordinary jumps whose
+target is `VPNG-*` as marker-owned jumps and would normally include an explicit deletion
+for such a visible `-j VPNG-*` rule.
+
+Observed:
+
+```text
+iptables-restore v1.8.11 (nf_tables):
+line 4: CHAIN_DEL failed (Device or resource busy): chain VPNG-TEST
+rc=4
+```
+
+A subsequent `iptables-save` showed the complete original table state: the earlier
+`-D` and `-F` operations had not been partially committed.
+
+#### Decision
+
+**EXP-004.4 result: PASS.**
+
+On the tested Debian 13 / iptables-nft 1.8.11 backend, the current cleanup design is
+validated:
+
+- duplicate daemon jumps can be deleted explicitly in the same payload;
+- `-F` and `-X` may follow those deletes before one `COMMIT`;
+- foreign rules/chains are preserved;
+- if an external reference remains undeleted and makes the daemon chain undeletable,
+  restore fails nonzero and leaves the table unchanged rather than partially cleaned.
+
+The architecture's per-table transaction assumption remains valid for this backend.
+
+---
+
+### EXP-004.5 — Marker-selective route inventory for cleanup
+
+#### Hypothesis
+
+Config-independent cleanup should not need to parse the entire `main` routing table.
+Explicit `proto 201` and `proto 202` selectors should return only daemon marker routes,
+thereby isolating cleanup from unrelated foreign route forms that the strict reconciliation
+parser intentionally rejects.
+
+#### Safety boundary
+
+All routes/interfaces were created inside the EXP-004 disposable network namespace.
+
+The namespace contained:
+
+- a daemon-like `proto 201` blackhole;
+- a daemon-like `proto 202` unicast route;
+- a connected kernel route;
+- an unrelated foreign multipath route with a `nexthops` array.
+
+Full inventory included all of them, including:
+
+```json
+{"dst":"198.18.0.0/16","nexthops":[{"dev":"dummy0",...},{"dev":"dummy1",...}]}
+```
+
+Selective queries were then run:
+
+```text
+ip -j -N -4 route show table main proto 201
+ip -j -N -4 route show table main proto 202
+```
+
+Observed `proto 201` result:
+
+```json
+[{"type":"6","dst":"<protected-prefix>","metric":65536,"flags":[]}]
+```
+
+Observed `proto 202` result:
+
+```json
+[{"dst":"<protected-prefix>","gateway":"172.20.130.5","dev":"dummy0","metric":10,"flags":["onlink"]}]
+```
+
+The foreign multipath route was absent from both results.
+
+The protocol field itself is omitted by iproute2 when the protocol is already specified as
+a selector. Cleanup therefore knows the protocol from the query contract rather than
+requiring a `protocol` field in each returned JSON object.
+
+#### Decision
+
+**EXP-004.5 result: PASS.**
+
+Introduce a cleanup-specific owned-route inventory based on two selective queries:
+
+```text
+proto 201
+proto 202
+```
+
+The cleanup parser may assign the known marker protocol from the query context.
+
+Do **not** weaken the strict full-table inventory/parser used by normal reconciliation:
+foreign exact-prefix competitors and unsupported route forms remain relevant there and must
+not be silently ignored.
+
+This change removes an unnecessary cleanup failure mode where an unrelated foreign
+multipath/nhid route elsewhere in `main` could otherwise make config-independent cleanup
+abort before reaching daemon-owned state.
+
+---
+
+### EXP-004 overall decision
+
+**EXP-004 result: PASS.**
+
+The block resolves five gateway-boundary questions and produces four concrete
+post-experiment changes/reviews:
+
+1. make daemon forwarding ownership complete whenever vpn-gatewayd enables global IPv4
+   forwarding;
+2. add dynamic numeric interface-family semantics to the existing `interface` key using a
+   trailing `%` sentinel, with ambiguity always fail-closed;
+3. use marker-selective route inventory for config-independent cleanup while retaining the
+   strict full inventory for reconciliation;
+4. make standalone daemon startup safely create/validate its runtime directory instead of
+   depending exclusively on systemd to create it.
+
+The blackhole fail-closed route design and the per-table iptables cleanup transaction design
+are retained as validated.
+
+Runtime route restoration after VPN reconnect remains intentionally unimplemented in
+RC2.5.1 and is now directly demonstrated as the next runtime-reconciliation concern.
+
+Architecture and implementation are **not** modified by this experiment record itself.
+They must be reviewed against these results in a separate post-EXP step.
+
+
 ## EXP-003 — First live end-to-end happy-path gateway
 
 ### Motivation

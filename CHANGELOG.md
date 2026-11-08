@@ -3,6 +3,43 @@
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
+## 2026-11-08 — EXP-004 gateway boundary validation PASS
+
+EXP-004 completed five live boundary checks after the RC2.5.1 happy-path run.
+
+Validated/observed:
+
+- unmanaged forwarded traffic currently falls through daemon chains into base
+  `FORWARD ACCEPT`; because vpn-gatewayd owns global `ip_forward`, complete IPv4
+  forwarding-policy ownership is now required;
+- on OpenConnect interface loss, the dependent `proto 202` route disappears while the
+  `proto 201` blackhole survives and prevents default-route fallback;
+- when the VPN reconnects, RC2.5.1 does not restore `proto 202` without daemon
+  reconciliation/restart, confirming the known runtime-reconciliation gap;
+- ocserv `device` is a prefix, not an exact interface name: occupying `vpns0` produced
+  `vpns1`, and `device = vpns0` produced `vpns00`;
+- configuration direction is one `interface` key with trailing `%` for a numeric family
+  (for example `vpns%` -> `^vpns[0-9]+$`); more than one match is ambiguous and
+  fail-closed;
+- filter and nat cleanup payloads using duplicate `-D`, then `-F/-X`, succeeded in one
+  `iptables-restore --noflush` transaction while preserving foreign rules;
+- a synthetic undeleted external reference made `CHAIN_DEL` fail with rc=4 and left the
+  table unchanged, confirming per-table transactional behavior on the tested backend;
+- `ip -j -N -4 route show table main proto 201/202` cleanly isolates daemon marker routes
+  from unrelated foreign multipath state and is suitable for cleanup-specific inventory.
+
+Setup also exposed that standalone foreground startup currently assumes
+`/run/vpn-gateway` already exists. Post-EXP review should make the daemon safely
+create/validate this private `0700` runtime directory and its expected owner while retaining systemd
+`RuntimeDirectory=` as the deployment default.
+
+Full procedure/results: `design/RC2/vpn-gateway-experiments.md`.
+
+This EXP supersedes the previous sequencing note that called graceful shutdown
+"EXP-004". The next step is a post-EXP architecture/implementation review; lifecycle
+shutdown/up-down-up validation moves to EXP-005 unless that review identifies a prerequisite.
+
+
 ## 2026-11-08 — EXP-003 first live end-to-end gateway PASS
 
 RC2.5.1 completed the first real end-to-end happy-path test on the Debian 13 lab topology.
