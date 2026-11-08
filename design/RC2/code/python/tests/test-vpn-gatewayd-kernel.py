@@ -11,16 +11,11 @@ from types import MappingProxyType, SimpleNamespace
 from unittest import mock
 
 
-MODULE_PATH = Path(__file__).with_name("vpn-gatewayd-rc2.wip.py")
-
-spec = importlib.util.spec_from_file_location(
-    "vpn_gatewayd_rc241_kernel",
-    MODULE_PATH,
-)
-assert spec is not None and spec.loader is not None
-vpng = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = vpng
-spec.loader.exec_module(vpng)
+ROOT = Path(__file__).resolve().parents[1]
+import sys
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+import vpn_gatewayd as vpng
 
 
 def kernel() -> object:
@@ -459,7 +454,7 @@ class KernelSystemAdapterTests(unittest.TestCase):
         with __import__("tempfile").TemporaryDirectory() as td:
             path = Path(td) / "ip_forward"
             path.write_text("0\n", encoding="ascii")
-            with mock.patch.object(vpng, "IP_FORWARD_PATH", path):
+            with mock.patch("vpn_gatewayd.kernel.IP_FORWARD_PATH", path):
                 self.assertFalse(adapter.get_ip_forward())
                 adapter.set_ip_forward(True)
                 self.assertEqual(path.read_text(encoding="ascii"), "1\n")
@@ -472,7 +467,7 @@ class KernelSystemAdapterTests(unittest.TestCase):
         with __import__("tempfile").TemporaryDirectory() as td:
             path = Path(td) / "ip_forward"
             path.write_text("2\n", encoding="ascii")
-            with mock.patch.object(vpng, "IP_FORWARD_PATH", path):
+            with mock.patch("vpn_gatewayd.kernel.IP_FORWARD_PATH", path):
                 with self.assertRaises(vpng.KernelError):
                     adapter.get_ip_forward()
 
