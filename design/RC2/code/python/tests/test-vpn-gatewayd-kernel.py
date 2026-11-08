@@ -454,7 +454,7 @@ class KernelSystemAdapterTests(unittest.TestCase):
         with __import__("tempfile").TemporaryDirectory() as td:
             path = Path(td) / "ip_forward"
             path.write_text("0\n", encoding="ascii")
-            with mock.patch.object(vpng, "IP_FORWARD_PATH", path):
+            with mock.patch("vpn_gatewayd.kernel.IP_FORWARD_PATH", path):
                 self.assertFalse(adapter.get_ip_forward())
                 adapter.set_ip_forward(True)
                 self.assertEqual(path.read_text(encoding="ascii"), "1\n")
@@ -467,7 +467,7 @@ class KernelSystemAdapterTests(unittest.TestCase):
         with __import__("tempfile").TemporaryDirectory() as td:
             path = Path(td) / "ip_forward"
             path.write_text("2\n", encoding="ascii")
-            with mock.patch.object(vpng, "IP_FORWARD_PATH", path):
+            with mock.patch("vpn_gatewayd.kernel.IP_FORWARD_PATH", path):
                 with self.assertRaises(vpng.KernelError):
                     adapter.get_ip_forward()
 
