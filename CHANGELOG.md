@@ -3,6 +3,39 @@
 Краткий технический журнал развития реализации. Здесь фиксируются существенные
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
+
+## 2026-11-08 — Architecture RC2.6 after EXP-004
+
+Architecture revised from RC2.4.1 to RC2.6 before further Python implementation.
+
+Key changes:
+
+- complete IPv4 FORWARD ownership: terminal `VPNG-FORWARD-DENY` before foreign rules;
+- `interface` is now an exact or numeric-family selector (`vpns%`);
+- selectors resolve only to concrete runtime interfaces; wildcard selector text never enters
+  RouteSpec/allow/NAT kernel operations;
+- selector overlap inside the managed set is a fatal config error;
+- runtime binding tracks exact name + ifindex; ambiguity is fail-closed;
+- firewall/NAT policy now has structural plus binding-specific parts;
+- MASQUERADE and profile allow rules follow a verified ready concrete binding;
+- binding transitions isolate forwarding before policy/route rematerialization;
+- fixed deny-only selector INPUT guard is required; exact iptables prefix syntax remains a
+  target experiment before implementation;
+- cleanup route inventory uses selective proto 201/202 queries, while normal reconciliation
+  retains strict full-table inventory;
+- daemon safely creates/validates its private runtime directory before lock;
+- Python implementation may be split into a package/directory with one daemon entry point,
+  keeping domain boundaries suitable for a future single-binary Rust implementation.
+
+The bounded kernel-event -> daemon-reaction window for dynamic interface families is explicit
+in the architecture rather than hidden behind static-interface assumptions.
+
+Post-EXP expert review:
+`design/RC2/code/reviews/EXP-004-post-review-2026-11-08.md`.
+
+Next: independent architecture review before any RC2.6 implementation work.
+
+
 ## 2026-11-08 — EXP-004 gateway boundary validation PASS
 
 EXP-004 completed five live boundary checks after the RC2.5.1 happy-path run.
