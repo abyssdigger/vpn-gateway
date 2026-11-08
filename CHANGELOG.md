@@ -4,6 +4,40 @@
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
 
+## 2026-11-08 — RC2.6.2 architecture vivisection APPROVED
+
+Two independent adversarial review passes were archived against RC2.6.2.
+
+Safety/state-machine verdict: **APPROVE**.
+
+- isolation barrier replacement semantics are sufficient;
+- isolation verification cannot be confused with full-policy SAFE;
+- failure to disable forwarding remains fail-closed under deny-first ordering;
+- bootstrap full-filter-before-NAT remains safe because cleanup has already confirmed
+  `ip_forward=0`;
+- no new ordinary-default-route leak path was found;
+- same-name/ifindex replacement remains an explicitly accepted trusted-host reaction-window
+  limitation.
+
+Implementation/data-model verdict: **APPROVE**.
+
+- selector -> concrete binding -> kernel resource boundaries are implementable;
+- one immutable desired reconciliation snapshot is coherent with fresh ACTUAL verify reads;
+- multi-file Python package split is recommended;
+- no architecture-level implementation blocker remains.
+
+The only pre-code external contract still requiring target validation is the deny-only
+selector-family iptables interface match/canonicalization.
+
+Reviews:
+
+- `design/RC2/code/reviews/RC2.6.2-architecture-safety-vivisection-2026-11-08.md`
+- `design/RC2/code/reviews/RC2.6.2-architecture-implementation-vivisection-2026-11-08.md`
+
+Next: target experiment for the deny-only family guard, then staged RC2.6.x implementation.
+
+
+
 ## 2026-11-08 — Architecture RC2.6.2 final isolation-barrier clarification
 
 RC2.6.2 incorporates the two remaining RC2.6.1 safety re-review clarifications:
