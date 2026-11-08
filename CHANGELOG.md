@@ -1,5 +1,19 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 Russian terminology audit
+
+A terminology-only pass applies the root `PROJECT-CONVENTIONS.md` language rule to the
+entire RC3 architecture. Ordinary prose is rewritten in Russian while technical identifiers,
+commands, named states and documented English exceptions remain unchanged.
+
+The audit is archived as
+`design/reviews/RC3-2026-11-09-russian-terminology-audit.md`. Using the same heuristic on
+narrative prose, ordinary English-like tokens fall from 1864 to 164 (~91.2% reduction).
+Section 26 is additionally reviewed manually because its normative prose is inside a fenced
+block and therefore is not represented by that metric.
+
+No architecture semantics are intentionally changed.
+
 ## 2026-11-09 — Project conventions
 
 A root-level normative `PROJECT-CONVENTIONS.md` is added to preserve repository-wide rules
