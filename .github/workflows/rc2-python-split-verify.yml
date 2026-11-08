@@ -1,0 +1,32 @@
+name: RC2 Python split verification
+
+on:
+  push:
+    branches:
+      - rc2-python-split
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Reconstruct pre-split monolith
+        run: git show 3a75d9c5cb75f41b4695f1db2cc9d7063ec05baf:design/RC2/code/vpn-gatewayd-rc2.wip.py > /tmp/vpn-gatewayd-monolith.py
+      - name: Verify AST convergence
+        run: |
+          python design/RC2/code/python/tests/verify-split.py \
+            /tmp/vpn-gatewayd-monolith.py \
+            design/RC2/code/python/vpn_gatewayd
+      - name: Run RC2 unit tests
+        run: |
+          python -m unittest discover \
+            -s design/RC2/code/python/tests \
+            -p 'test-*.py' -v
+      - name: Verify CLI version
+        run: |
+          test "$(python design/RC2/code/python/vpn-gatewayd.py --version)" = "vpn-gatewayd RC2.5.1"

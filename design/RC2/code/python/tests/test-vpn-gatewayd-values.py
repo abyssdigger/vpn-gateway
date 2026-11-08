@@ -9,13 +9,11 @@ from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).with_name("vpn-gatewayd-rc2.wip.py")
-
-spec = importlib.util.spec_from_file_location("vpn_gatewayd_rc221_values", MODULE_PATH)
-assert spec is not None and spec.loader is not None
-vpng = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = vpng
-spec.loader.exec_module(vpng)
+ROOT = Path(__file__).resolve().parents[1]
+import sys
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+import vpn_gatewayd as vpng
 
 
 def profile_config(*, peers: tuple[str, ...]) -> object:

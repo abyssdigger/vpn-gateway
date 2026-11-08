@@ -12,14 +12,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-MODULE_PATH = Path(__file__).with_name("vpn-gatewayd-rc2.wip.py")
-
-spec = importlib.util.spec_from_file_location("vpn_gatewayd_rc221", MODULE_PATH)
-assert spec is not None and spec.loader is not None
-vpng = importlib.util.module_from_spec(spec)
+ROOT = Path(__file__).resolve().parents[1]
 import sys
-sys.modules[spec.name] = vpng
-spec.loader.exec_module(vpng)
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+import vpn_gatewayd as vpng
 
 
 VALID_PRIMARY = """
