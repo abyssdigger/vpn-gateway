@@ -25,7 +25,7 @@ IPv6-маршрутизация проектом не поддерживаетс
 
 ## 2. Общие принципы
 
-### 2.1. Fail hard
+### 2.1. Жёсткий отказ
 
 При ошибке очистки, валидации или применения конфигурации сервис не переходит в частично рабочее состояние.
 
@@ -38,13 +38,13 @@ IPv6-маршрутизация проектом не поддерживаетс
 
 Режим `DEGRADED` на старте не используется.
 
-### 2.2. Fail closed
+### 2.2. Отказ с запретом
 
 Защищаемый трафик не должен при отказе VPN или ошибке конфигурации уходить через обычный default route.
 
 Blackhole-маршруты являются одним из защитных механизмов и устанавливаются до разрешения forwarding.
 
-Важно: blackhole обеспечивает fail-closed на уровне выбора маршрута для соответствующего prefix. Он не является универсальной гарантией доставки и не заменяет независимую фильтрацию `FORWARD`.
+Важно: blackhole обеспечивает отказ с запретом на уровне выбора маршрута для соответствующего префикса. Он не является универсальной гарантией доставки и не заменяет независимую фильтрацию `FORWARD`.
 
 
 ### 2.3. Один владелец сетевого состояния
@@ -65,8 +65,8 @@ Kubernetes, другими gateway-сервисами или иными комп
 
 Эксклюзивное владение глобальным `net.ipv4.ip_forward` означает эксклюзивную
 ответственность за **весь IPv4 FORWARD decision** во время работы daemon. Пока
-`ip_forward=1`, каждый forwarded IPv4 packet обязан получить terminal verdict внутри
-daemon-owned prefix policy; пакет не может провалиться в foreign rules или built-in
+`ip_forward=1`, каждый forwarded IPv4 packet обязан получить окончательное решение внутри
+daemon-owned префикса правил; пакет не может провалиться в сторонние правила или built-in
 `FORWARD ACCEPT`.
 
 Чужие FORWARD rules не удаляются и не переписываются. Они физически остаются после
@@ -76,7 +76,7 @@ daemon-owned prefix, но при включённом forwarding недости�
 
 `net.ipv4.ip_forward` находится в exclusive ownership daemon'а. Ручное изменение sysctl
 не является persistent administrative pause/override и будет приведено daemon'ом к
-требуемому значению на следующем завершённом reconciliation pass.
+требуемому значению на следующем завершённом цикле согласования.
 
 ### 2.4. Никакого скрытого fallback на старый конфиг
 
@@ -140,7 +140,7 @@ vpn-gatewayd
 Daemon пишет обычные текстовые логи в `stderr`; при запуске под systemd они захватываются journal. Structured logging/JSON не требуется.
 
 
-## 4. Мониторинг VPN-интерфейса и runtime binding
+## 4. Мониторинг VPN-интерфейса и runtime-привязка
 
 Для мониторинга используется Linux Netlink через стандартный Python `socket`:
 
@@ -156,52 +156,53 @@ NETLINK_ROUTE
 - `RTM_NEWADDR`;
 - `RTM_DELADDR`.
 
-При старте daemon выполняет полный interface/address snapshot и не полагается только на
-будущие события. При потере Netlink-событий, например `ENOBUFS`, выполняется full resync.
-Periodic reconciliation остаётся safety net против resource drift и потерянных событий.
+При запуске daemon выполняет полный interface/address snapshot и не полагается только на
+будущие события. При потере Netlink-событий, например `ENOBUFS`, выполняется полная
+пересверка. Периодическое согласование остаётся страховкой от дрифта ресурсов и потерянных
+событий.
 
-### 4.1. Interface selector
+### 4.1. Селектор интерфейса
 
-Поле config `interface` является **selector**, а не обязательно конкретным Linux netdev.
+Поле config `interface` является **селектором**, а не обязательно конкретным Linux netdev.
 
 Поддерживаются две формы:
 
 ```text
-wg0    -> exact selector
-vpns+  -> prefix-family selector
+wg0    -> точный селектор
+vpns+  -> префиксный селектор
 ```
 
-Trailing `+` использует ту же prefix/wildcard semantics, которая подтверждена EXP-005
-для входного interface operand `iptables -i prefix+`: `vpns+` означает весь textual
-interface-name namespace с prefix `vpns`, включая bare name `vpns`.
+Завершающий `+` использует семантику сопоставления по префиксу, подтверждённую EXP-005
+для входного interface operand `iptables -i prefix+`: `vpns+` означает всё пространство
+имён интерфейсов с префиксом `vpns`, включая имя `vpns` без суффикса.
 
 Это не shell glob и не пользовательский regex.
 
-Selector используется только для поиска/классификации runtime interfaces. Prefix selector
-с `+` **никогда** не передаётся в route, ACCEPT или NAT kernel operations; там после
-resolution используется только concrete exact interface name.
+Селектор используется только для поиска и классификации runtime-интерфейсов. Строка
+префиксного селектора с `+` **никогда** не передаётся в route, ACCEPT или NAT operations;
+после разрешения селектора эти ресурсы используют только точное имя найденного интерфейса.
 
-Daemon разрешает selector по единому interface snapshot:
+Daemon разрешает селектор по одному interface snapshot:
 
 ```text
-0 matches  -> binding absent
-1 match    -> concrete binding
->1 matches -> ambiguous
+0 совпадений  -> ABSENT (отсутствует)
+1 совпадение  -> BOUND(name, ifindex), жесткая привязка
+>1 совпадения -> AMBIGUOUS (неоднозначен)
 ```
 
-Concrete binding содержит как минимум exact interface name и ifindex из snapshot. Ifindex
-нужен для обнаружения delete/recreate под тем же именем; kernel allow/NAT/routes всё равно
-materialize'ятся по exact имени.
+Жесткая привязка содержит как минимум точное имя интерфейса и ifindex из snapshot. Ifindex
+нужен для обнаружения удаления и повторного создания интерфейса под тем же именем;
+route/iptables operations всё равно используют точное имя netdev.
 
 Daemon никогда не выбирает «первый», «минимальный номер», «самый новый» или иной
-произвольный interface при ambiguity.
+произвольный интерфейс при неоднозначности.
 
-### 4.2. Selector conflicts в конфигурации
+### 4.2. Конфликты селекторов в конфигурации
 
-Два simultaneously managed selectors не могут иметь непустое множество общих возможных
-runtime interface names.
+Два одновременно управляемых селектора не могут иметь непустое множество общих возможных
+runtime-имён интерфейсов.
 
-Это config error и блокирует startup.
+Это ошибка конфигурации, блокирующая запуск.
 
 Примеры конфликтов:
 
@@ -211,23 +212,24 @@ vpns+ + vpns1+
 vpns+ + vpns+
 ```
 
-Exact names и selector matching case-sensitive, как Linux interface names.
+Точные имена и сопоставление селектора чувствительны к регистру, как и Linux interface
+names.
 
-Для prefix-family selector prefix должен содержать хотя бы один допустимый символ Linux
-interface name; trailing `+` является selector operator и не входит в concrete name.
+Для префиксного селектора префикс должен содержать хотя бы один допустимый символ Linux
+interface name; завершающий `+` является оператором селектора и не входит в конкретное имя.
 
-Unmanaged definitions не блокируют runtime startup; соответствующие selector conflicts с
-managed profiles являются WARNING в `--check-config`, как и остальные unmanaged
-cross-conflicts.
+Неуправляемые definitions не блокируют runtime-запуск; соответствующие конфликты с
+управляемыми профилями являются WARNING в `--check-config`, как и остальные
+cross-conflicts неуправляемых definitions.
 
 ### 4.3. Критерий готовности VPN
 
-Профиль считается ready, если одновременно:
+Профиль считается готовым, если одновременно:
 
-1. selector разрешён ровно в один concrete interface;
-2. это тот же concrete interface identity snapshot (name + ifindex), который рассматривается
-   в текущем reconciliation pass;
-3. на concrete interface присутствует ожидаемый `local_address`.
+1. селектор разрешён ровно в один интерфейс;
+2. это та же жесткая привязка `name + ifindex`, которая рассматривается в текущем цикле
+   согласования;
+3. на интерфейсе присутствует ожидаемый `local_address`.
 
 Не используются как критерий готовности:
 
@@ -238,47 +240,50 @@ cross-conflicts.
 - handshake VPN-протокола;
 - фактическое прохождение трафика.
 
-Если selector имеет 0 matches либо concrete interface существует без ожидаемого local IPv4,
-профиль not ready. Его protected routes остаются под blackhole и terminal FORWARD reject.
+Если селектор не имеет совпадений либо найденный интерфейс существует без ожидаемого local
+IPv4, профиль не готов. Его защищаемые маршруты остаются под blackhole и окончательным
+FORWARD REJECT.
 
-Если selector ambiguous:
+Если селектор находится в состоянии `AMBIGUOUS` (неоднозначен):
 
-- на startup это fatal runtime-environment conflict; сервис не включает forwarding;
+- при запуске это fatal runtime-environment conflict; сервис не включает forwarding;
 - в RUN профиль переходит в FAIL/DEGRADED;
-- binding-specific allow/NAT/unicast state для этого профиля должен быть удалён/не создан;
-- blackhole и deny policy сохраняются.
+- правила allow/NAT/unicast, зависящие от привязки, должны быть удалены или не созданы;
+- blackhole и запрещающая политика сохраняются.
 
-### 4.4. Binding transition и residual reaction window
+### 4.4. Смена привязки и остаточное окно реакции
 
-Появление, исчезновение, ifindex replacement либо изменение selector cardinality является
-binding event и инициирует full serialized reconciliation.
+Появление, исчезновение, замена ifindex либо изменение числа совпадений селектора считается
+событием смены привязки и инициирует полное сериализованное согласование.
 
-При подтверждённом изменении binding daemon сначала best-effort отключает
-`ip_forward`, затем materialize'ит policy/routes для нового immutable binding snapshot,
-verify'ит состояние и только после этого может вернуть forwarding.
+При подтверждённой смене привязки daemon сначала best-effort отключает `ip_forward`,
+затем применяет политику и маршруты для нового immutable snapshot привязки, проверяет
+состояние и только после этого может вернуть forwarding.
 
-Есть принципиальный residual window между kernel event и обработкой Netlink event daemon'ом.
-Особенно это заметно при быстром появлении второго matching interface или delete/recreate
-под тем же именем: старые exact-name rules физически существуют до реакции daemon.
+Существует принципиальное окно реакции между событием ядра и обработкой Netlink-события
+daemon. Особенно это заметно при быстром появлении второго подходящего интерфейса или при
+удалении и повторном создании интерфейса под тем же именем: старые exact-name rules
+физически существуют до реакции daemon.
 
-Архитектура принимает этот bounded event-reaction window как неизбежную границу
-многозадачной ОС на dedicated trusted gateway host. Он уменьшается Netlink wakeup +
-periodic full resync, но не изображается как атомарная kernel transaction.
+Архитектура принимает это ограниченное окно реакции как неизбежную границу многозадачной ОС
+на выделенном доверенном gateway host. Оно уменьшается пробуждением по Netlink и
+периодической полной пересверкой, но не изображается как атомарная kernel transaction.
 
-Threat-model boundary для этого окна явный:
+Граница модели угроз для этого окна явная:
 
-- untrusted local users/processes не имеют `CAP_NET_ADMIN` и не могут создавать,
-  переименовывать или удалять network interfaces;
-- runtime netdev lifecycle выполняют trusted VPN software, kernel и administrator;
-- ifindex позволяет обнаружить same-name replacement при следующем snapshot, но существующее
-  iptables rule по имени не может быть исторически привязано к старому ifindex.
+- недоверенные локальные пользователи и процессы не имеют `CAP_NET_ADMIN` и не могут
+  создавать, переименовывать или удалять network interfaces;
+- жизненным циклом runtime-netdev управляют доверенное VPN software, kernel и administrator;
+- ifindex позволяет обнаружить повторное создание интерфейса под тем же именем при следующем
+  snapshot, но существующее iptables rule по имени нельзя задним числом привязать к старому
+  ifindex.
 
-При этом новые/unbound selector-family interfaces не должны иметь permissive static wildcard
-rules. Для local INPUT используется заранее установленный **deny-only selector guard**
-`-i prefix+`, whose match scope and canonical `iptables-save` representation are
-confirmed by EXP-005. Он блокирует traffic от selector family, если его не завершила более
-ранняя exact binding-specific profile chain. Prefix/wildcard matching никогда не
-используется для ACCEPT или NAT.
+При этом новые или ещё не привязанные интерфейсы префиксного семейства не должны иметь
+статических разрешающих правил по шаблону. Для local INPUT заранее устанавливается
+**защитное правило селектора только с запретом** `-i prefix+`; область его совпадения и
+каноническое представление в `iptables-save` подтверждены EXP-005. Оно блокирует трафик
+семейства селектора, если его не завершила более ранняя точная цепочка профиля, зависящая
+от привязки. Сопоставление по префиксу никогда не используется для ACCEPT или NAT.
 
 ## 5. Жизненный цикл сервиса
 
@@ -424,12 +429,12 @@ service user с минимальными capabilities/permissions, если live
 достаточность. Config/path security contract остаётся root-controlled.
 
 
-## 6. Универсальный cleanup
+## 6. Универсальная очистка
 
 `cleanup()` не зависит от текущего конфига и persistent runtime state. Он используется
-перед startup config load, после аварийного предыдущего запуска и при штатном stop.
+перед загрузкой config при запуске, после аварийного предыдущего запуска и при штатном stop.
 
-Успешный cleanup означает отсутствие всех marker-owned ресурсов VPN Gateway и
+Успешная очистка означает отсутствие всех marker-owned ресурсов VPN Gateway и
 `ip_forward=0`.
 
 ### 6.1. Ownership markers
@@ -445,9 +450,9 @@ owned jumps      -> jumps с target VPNG-*
 
 Префикс `VPNG-` целиком зарезервирован daemon'ом в используемых iptables tables.
 
-### 6.2. Cleanup route inventory
+### 6.2. Инвентаризация маршрутов для очистки
 
-Config-independent cleanup **не читает полный main route snapshot**.
+Не зависящая от конфигурации очистка **не читает полный main route snapshot**.
 
 Для owned route discovery используются marker-selective queries:
 
@@ -465,7 +470,7 @@ EXP-004.5 подтвердил, что такие selectors исключают u
 Strict full-table `list_routes()` сохраняется для normal reconciliation и по-прежнему
 ошибается на непредставимых multipath/nhid forms, а не silently omits их.
 
-### 6.3. Порядок cleanup
+### 6.3. Порядок очистки
 
 1. read-before-write привести `ip_forward` к 0 и подтвердить;
 2. selective inventory + удалить `proto 202`;
@@ -478,7 +483,7 @@ EXP-004.4 подтвердил используемый per-table cleanup transa
 iptables-nft 1.8.11: duplicate `-D`, затем `-F/-X`, один `COMMIT`. Failure удаления chain
 не оставляет частично применённую table transaction на протестированном backend.
 
-### 6.4. Результаты cleanup
+### 6.4. Результаты очистки
 
 **SUCCESS**
 
@@ -492,7 +497,7 @@ iptables-nft 1.8.11: duplicate `-D`, затем `-F/-X`, один `COMMIT`. Fail
 Полная очистка не подтверждена. Startup не продолжается. Blackhole не снимаются, если
 очистка остальных owned resources не подтверждена.
 
-### 6.5. Никаких blind flush
+### 6.5. Никаких слепых flush
 
 Запрещено:
 
@@ -567,12 +572,15 @@ validated managed runtime projection
 Отдельной фазы `preflight()` нет. Kernel-dependent safety checks входят в build/validate initial reconciliation plan. В частности, `_validate_plan()` запрещает удаление `proto kernel`; exact protected prefix, совпадающий с host connected `proto kernel` route, поэтому приводит к fatal startup error до route side effects.
 
 
-## 8. Apply и runtime reconciliation
+## 8. Применение и runtime-согласование
 
-Bootstrap и runtime используют один policy/binding model, но разную error semantics:
-startup fail-hard; RUN способен переходить в DEGRADED/ISOLATED.
+Bootstrap и runtime используют одну policy (политику) и binding model (модель привязки), но
+разную error semantics: при запуске действует жёсткий отказ; RUN способен переходить в
+DEGRADED/ISOLATED. В плотных технических блоках этого раздела после первого употребления
+сохраняются краткие формы binding (привязка), concrete binding (жесткая привязка),
+reconciliation (согласование), materialize (применить) и verify (проверить).
 
-### 8.1. Immutable reconciliation snapshot
+### 8.1. Неизменяемый snapshot согласования
 
 Каждый completed pass использует один daemon-level immutable snapshot, концептуально:
 
@@ -660,7 +668,7 @@ onlink      = true
 
 Prefix selector никогда не попадает в RouteSpec.
 
-### 8.4. Runtime reconciliation
+### 8.4. Runtime-согласование
 
 Runtime pass сериализован одним event loop и запускается по relevant Netlink event,
 periodic tick, full resync или administrative trigger.
@@ -720,71 +728,74 @@ BOUND(name/ifindex B) и переход в/из AMBIGUOUS, считается po
 для остальных profiles, но overall lifecycle state остаётся DEGRADED с profile FAIL до
 устранения ambiguity.
 
-### 8.6. Firewall safety state и deny-first repair
+### 8.6. Состояние безопасности firewall и восстановление с первоначальным запретом
 
-Firewall/NAT state:
+Firewall/NAT state использует именованные состояния:
 
 ```text
-SAFE
-UNSAFE
-UNKNOWN
+SAFE     -> безопасно
+UNSAFE   -> небезопасно
+UNKNOWN  -> состояние неизвестно
 ```
 
-Full expected state зависит от immutable `ReconciliationSnapshot`.
+Полное ожидаемое состояние зависит от immutable `ReconciliationSnapshot`.
 
-Отдельно policy layer обязан уметь построить config-only **isolation filter**:
+Отдельно слой policy (политики) обязан уметь построить config-only **изолирующий фильтр**:
 
 ```text
 desired_isolation_filter(config)
 ```
 
-Он не содержит binding-specific ACCEPT rules и не требует interface inventory. Он сохраняет
-только fail-closed structural filter policy:
+Он не содержит ACCEPT rules, зависящих от binding, и не требует interface inventory. Он
+сохраняет только структурную политику фильтрации с отказом с запретом:
 
-- managed INPUT selector guards;
-- transport-network rejects;
-- unconditional protected-destination rejects;
-- terminal `VPNG-FORWARD-DENY`;
+- защитные правила INPUT управляемых селекторов;
+- rejects транспортных сетей VPN;
+- безусловные rejects защищаемых назначений;
+- окончательный `VPNG-FORWARD-DENY`;
 - необходимые structural chains/jumps.
 
-`UNKNOWN` full-policy inventory/interpretation никогда не repair'ится вслепую. Daemon
-best-effort выключает forwarding и остаётся ISOLATED.
+Состояние `UNKNOWN` никогда не восстанавливается вслепую. Daemon best-effort выключает
+forwarding и остаётся ISOLATED.
 
-Для подтверждённого `UNSAFE` либо binding transition применяется **deny-first** sequence:
+Для подтверждённого `UNSAFE` либо смены binding применяется последовательность с
+первоначальным запретом:
 
 ```text
 1. best-effort ip_forward=0
 
-2. materialize isolation filter as the complete daemon-owned filter desired state for this stage
-   (thereby removing stale binding-specific daemon ACCEPT rules)
-3. verify isolation filter
-   - this verify is only an isolation-barrier result and is NOT full-policy SAFE
+2. применить изолирующий фильтр как полное daemon-owned filter desired state
+   для этой промежуточной стадии; stale ACCEPT rules, зависящие от binding,
+   должны быть удалены
+3. проверить изолирующий фильтр
+   - эта проверка подтверждает только защитный барьер
+   - она НЕ означает full-policy SAFE
 
-4. materialize desired NAT for current immutable binding snapshot
-5. verify desired NAT
+4. применить desired NAT для текущего immutable binding snapshot
+5. проверить desired NAT
 
-6. materialize full desired filter including binding-specific exact ACCEPT
-7. verify full desired filter
-   - only after NAT + full filter verify may full desired firewall/NAT be classified SAFE
+6. применить full desired filter с точными ACCEPT rules, зависящими от binding
+7. проверить full desired filter
+   - только после проверки NAT + full filter полное firewall/NAT state может быть SAFE
 
-8. reconcile + verify routes
+8. согласовать и проверить routes
 
-9. only after completed full verify:
-       enable/confirm forwarding as required
+9. только после полной успешной проверки:
+       включить/подтвердить forwarding согласно требуемому состоянию
 ```
 
-Это ordering обязателен даже если `set_ip_forward(False)` завершился ошибкой. Благодаря
-этому full FORWARD ACCEPT не появляется раньше verified NAT.
+Этот порядок обязателен даже если `set_ip_forward(False)` завершился ошибкой. Благодаря
+этому полный FORWARD ACCEPT не появляется раньше проверенного NAT.
 
-Если isolation filter materialize/verify неуспешен, daemon остаётся ISOLATED и не переходит
-к NAT/full-filter/routes.
+Если изолирующий фильтр не удалось применить или проверить, daemon остаётся ISOLATED и не
+переходит к NAT/full-filter/routes.
 
-Простой глобальный swap `nat -> filter` запрещён: при уже небезопасном/open filter это
-оставило бы permissive forwarding active дольше. Safety barrier именно deny-only filter.
+Простая глобальная перестановка `nat -> filter` запрещена: при уже небезопасном/open
+filter она оставила бы разрешающий forwarding активным дольше. Защитным барьером является
+именно фильтр с первоначальным запретом.
 
-Если forwarding подтверждён OFF, implementation может оптимизировать технические детали
-транзакций только при сохранении той же observable safety semantics; архитектурная модель
-остаётся deny-first.
+Если forwarding подтверждён OFF, реализация может оптимизировать технические детали
+транзакций только при сохранении той же наблюдаемой семантики безопасности.
 
 ### 8.7. Route executor
 
@@ -800,7 +811,7 @@ best-effort выключает forwarding и остаётся ISOLATED.
 Route plan validation сохраняет authoritative exact-prefix semantics и запрет mutation
 `proto kernel`.
 
-### 8.8. OWNED и binding commit
+### 8.8. OWNED и фиксация binding
 
 Process-local OWNED routes и committed binding snapshot изменяются только после completed
 verify соответствующего pass.
@@ -840,6 +851,9 @@ pass восстанавливает exclusive-owned value.
 
 
 ## 9. Firewall и blackhole
+
+В этом разделе guard (защитное правило) и ingress (входящий трафик) после первого
+употребления могут сохраняться в английской краткой форме внутри описаний iptables.
 
 Daemon-owned filter policy состоит из structural и binding-specific частей.
 
@@ -1021,6 +1035,9 @@ Cleanup удаляет только маршруты `proto 202`, принадл
 
 
 ## 11. NAT
+
+В этом разделе egress (исходящий трафик / выходной интерфейс) может сохраняться как
+краткий технический термин внутри описаний правил.
 
 Для каждого managed profile существует structural chain:
 
@@ -1238,12 +1255,12 @@ peers = []                      -> разрешено
 Отдельная проверка `profiles total count > 0` не нужна: non-empty `managed_vpns` уже требует существования хотя бы одной definition.
 
 
-## 15. Interface selectors
+## 15. Селекторы интерфейсов
 
-Поле `interface` runtime-валидируется только для managed definitions;
-`--check-config` lint'ит unmanaged definitions.
+Поле `interface` runtime-валидируется только для управляемых definitions;
+`--check-config` проверяет также неуправляемые definitions.
 
-### 15.1. Exact selector
+### 15.1. Точный селектор
 
 Разрешено:
 
@@ -1259,12 +1276,14 @@ Regex:
 [A-Za-z][A-Za-z0-9_.-]{0,14}
 ```
 
-Символ `+` целиком зарезервирован selector grammar для prefix-family form и поэтому не
-поддерживается в exact selector ни в какой позиции. Для trailing `+` существует и прямое
-техническое основание: vpn-gateway основан на iptables, а iptables трактует trailing `+`
-в interface operand как wildcard/prefix match, а не literal exact name.
+Символ `+` целиком зарезервирован грамматикой селектора для префиксной формы и поэтому
+не поддерживается в точном селекторе ни в какой позиции.
 
-Запрещённые exact names case-insensitive:
+Для завершающего `+` есть и прямое техническое основание: vpn-gateway использует iptables,
+а iptables трактует завершающий `+` в interface operand как сопоставление по префиксу, а
+не как буквальное точное имя.
+
+Запрещённые точные имена без учёта регистра:
 
 ```text
 lo
@@ -1273,7 +1292,7 @@ default
 all
 ```
 
-### 15.2. Prefix-family selector
+### 15.2. Префиксный селектор
 
 Форма:
 
@@ -1281,37 +1300,40 @@ all
 <prefix>+
 ```
 
-Prefix соответствует тем же допустимым символам exact name, начинается с ASCII letter и
-имеет длину 1..14. Trailing `+` является selector operator и не входит в concrete
-interface name.
+Префикс соответствует тем же допустимым символам точного имени, начинается с ASCII-буквы и
+имеет длину 1..14. Завершающий `+` является оператором селектора и не входит в конкретное
+имя интерфейса.
 
 Семантика:
 
 ```text
-prefix+ -> все interface names, начинающиеся с prefix,
+prefix+ -> все имена интерфейсов, начинающиеся с prefix,
            включая bare name prefix
 ```
 
-Это намеренно совпадает с target-validated `iptables -i prefix+` semantics.
+Эта семантика намеренно совпадает с проверенным на целевой системе
+`iptables -i prefix+`.
 
-`+` разрешён только один и только последним символом selector.
+`+` разрешён только один раз и только последним символом селектора.
 
-Literal exact interface name, заканчивающееся на `+`, vpn-gateway не поддерживает.
-Обоснование прямое: vpn-gateway основан на iptables, а iptables трактует trailing `+` в
-interface operand как wildcard/prefix match, поэтому такой operand нельзя безопасно
-интерпретировать как exact interface name.
+Literal exact interface name, содержащее `+`, vpn-gateway не поддерживает. Это проектное
+ограничение следует из выбранной грамматики; для trailing `+` дополнительно действует
+прямое ограничение iptables: такой operand означает сопоставление по префиксу, а не exact
+match.
 
-Prefix-family selector резервирует на dedicated gateway **весь** matching textual ifname
-namespace для этого managed profile. Любой посторонний interface внутри этого prefix
-участвует в cardinality и может намеренно перевести profile в AMBIGUOUS fail-closed state.
+Префиксный селектор резервирует на выделенном gateway **всё текстовое пространство имён
+интерфейсов с данным префиксом** для одного управляемого профиля. Любой посторонний
+интерфейс внутри этого пространства участвует в подсчёте совпадений и может намеренно
+перевести профиль в состояние AMBIGUOUS с отказом с запретом.
 
-### 15.3. Managed selector exclusivity
+### 15.3. Взаимная исключительность управляемых селекторов
 
-Managed selectors должны быть pairwise disjoint по множеству возможных concrete names.
+Управляемые селекторы должны быть попарно непересекающимися по множеству возможных
+конкретных имён.
 
-Проверяется не только string equality.
+Проверяется не только строковое равенство.
 
-Примеры fatal conflicts:
+Примеры фатальных конфликтов:
 
 ```text
 vpns+ + vpns0
@@ -1319,7 +1341,8 @@ vpns+ + vpns1+
 vpns+ + vpns+
 ```
 
-Для prefix families overlap означает пересечение textual prefix namespaces. Например:
+Для префиксных семейств наложение означает пересечение текстовых пространств имён.
+Например:
 
 ```text
 vpns+   + vpns1+   -> overlap
@@ -1327,11 +1350,12 @@ vpns1+  + vpns12+  -> overlap
 vpns1+  + vpns2+   -> disjoint
 ```
 
-Если один selector может когда-либо классифицировать тот же concrete Linux interface, что и
-другой managed selector, runtime projection invalid.
+Если один селектор когда-либо может классифицировать тот же конкретный Linux interface, что
+и другой управляемый селектор, runtime projection недопустима.
 
-Администратор обязан использовать разные interface-name namespaces для разных managed VPN
-instances и не создавать unrelated netdevs внутри зарезервированного prefix namespace.
+Администратор обязан использовать разные пространства имён интерфейсов для разных
+управляемых VPN instances и не создавать посторонние netdevs внутри зарезервированного
+пространства имён префикса.
 
 ## 16. VPN-сети и адреса
 
@@ -1718,53 +1742,56 @@ Address/interface parser учитывает только `addr_info[].family == 
 `local`; ifindex сохраняется в InterfaceRecord. Duplicate records одного имени могут
 объединяться только при согласованном ifindex identity.
 
-### 23.5. Firewall policy model
+### 23.5. Модель политики firewall
 
-Policy layer строит из immutable config + pass snapshot две явные формы:
+Слой policy строит из immutable config + snapshot текущего цикла две явные формы:
 
 ```text
 desired_full_policy(snapshot)
 desired_isolation_filter(config)
 ```
 
-Точные function/class names implementation-level.
+Точные имена функций и классов относятся к уровню реализации.
 
-Full policy содержит structural resources + binding-specific exact rules.
+Полная политика содержит structural resources и точные rules, зависящие от binding.
 
-Isolation filter:
+Изолирующий фильтр:
 
 - не зависит от interface inventory;
-- не содержит binding-specific ACCEPT;
-- не содержит permissive wildcard;
-- сохраняет INPUT selector guards, transport-network rejects, protected-destination rejects
-  и terminal FORWARD deny.
+- не содержит ACCEPT, зависящих от binding;
+- не содержит разрешающего сопоставления по префиксу;
+- сохраняет защитные правила INPUT селекторов, rejects транспортных сетей VPN,
+  rejects защищаемых назначений и окончательный FORWARD deny.
 
-При materialization isolation filter является **полным desired daemon-owned filter state**
-для этой промежуточной стадии. Он не добавляется поверх текущего filter: stale
-binding-specific daemon ACCEPT rules, отсутствующие в isolation desired state, обязаны быть
-удалены/заменены в той же stage materialization.
+При применении изолирующий фильтр является **полным daemon-owned filter desired state** для
+этой промежуточной стадии. Он не добавляется поверх текущего filter: stale daemon ACCEPT
+rules, которых нет в desired state изолирующей стадии, должны быть удалены или заменены в
+той же операции применения.
 
-Успешный verify isolation filter означает только:
+Успешная проверка изолирующего фильтра означает только:
 
 ```text
 isolation filter verified
 ```
 
-и **никогда не эквивалентен**:
+и **никогда не эквивалентна**:
 
 ```text
 full desired firewall/NAT SAFE
 ```
 
-Только full desired firewall/NAT SAFE после desired NAT + full filter verify может открыть
-путь к завершению route reconciliation и последующему включению forwarding.
+Только full desired firewall/NAT SAFE после проверки desired NAT и full filter может открыть
+путь к завершению согласования маршрутов и последующему включению forwarding.
 
-Обе формы выводятся из одной policy model, чтобы compare/restore не имели независимых
-источников истины. Deny-first repair orchestration не выполняет ad-hoc rule surgery.
+Обе формы выводятся из одной модели policy, чтобы compare/restore не имели независимых
+источников истины. Оркестрация восстановления с первоначальным запретом не выполняет
+ad-hoc surgery над отдельными rules.
 
-Wildcard/family selector никогда не материализуется в allow/NAT rule.
+Префиксный селектор никогда не применяется в allow/NAT rule; там используется только точное
+имя жесткой привязки.
 
-Deny-only selector INPUT guard является отдельным structural safety mechanism.
+Защитное правило INPUT селектора только с запретом является отдельным structural safety
+mechanism.
 
 ### 23.6. Routing ownership policy
 
@@ -1791,7 +1818,7 @@ Fail-closed теперь обеспечивается тремя независ�
 2. unconditional protected-destination REJECT внутри profile FORWARD chain;
 3. global terminal `VPNG-FORWARD-DENY`.
 
-### 23.7. Event loop
+### 23.7. Цикл обработки событий
 
 Один `VpnGatewayDaemon` владеет:
 
@@ -1810,7 +1837,7 @@ Unknown interface events могут быть проигнорированы то
 инициировать resync даже если concrete binding ещё не известен.
 
 
-## 24. Implementation notes, уже зафиксированные архитектурой
+## 24. Замечания по реализации, уже зафиксированные архитектурой
 
 - EXP-001 подтвердил canonical `iptables-save` representation для tested Debian 13 /
   iptables-nft backend; daemon использует minimal structural parser + canonical rule strings.
@@ -1860,16 +1887,22 @@ Unknown interface events могут быть проигнорированы то
 
 Следующие implementation/research details требуют подтверждения:
 
-1. Точный механизм serialized event loop и debounce/coalesce Netlink bursts.
-2. Full resync strategy после Netlink `ENOBUFS`.
+1. Точный механизм сериализованного цикла обработки событий и debounce/coalesce Netlink bursts.
+2. Стратегия полной пересверки после Netlink `ENOBUFS`.
 3. Финальный systemd privilege model: root либо отдельный service user + минимальные
    capabilities/permissions.
 4. Точный минимальный IPC/admin command set.
 5. Foreign exact route metric/key collision edge case, ранее отложенный до отдельного target
    experiment.
-6. Repair-storm/latching thresholds не вводятся без наблюдаемых данных.
+6. Пороги repair-storm/latching не вводятся без наблюдаемых данных.
 
 ## 26. Ключевые инварианты
+
+Ниже используется компактная техническая запись. В пределах этого блока: selector
+(селектор), binding (привязка), concrete binding (жесткая привязка), reconciliation
+(согласование), policy (политика), guard (защитное правило), verify (проверить), cleanup
+(очистка), overlap (наложение), marker (маркер владения). Именованные состояния и
+идентификаторы сохраняются без перевода.
 
 ```text
 1. Один daemon process владеет всеми VPN-GATE kernel resources.

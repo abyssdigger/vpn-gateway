@@ -4,6 +4,25 @@
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
 
+## 2026-11-09 — RC3 terminology normalization
+
+RC3 terminology is normalized against `design/RC3/terms-and-definitions.md`.
+
+The language pass deliberately avoids mechanical word substitution:
+
+- natural Russian terms are used where they preserve precision;
+- dense technical blocks use the documented `English term (Russian meaning)` convention and
+  may retain the English short form until the end of the logical block;
+- runtime, daemon, snapshot, desired/actual/owned state, ownership, daemon-owned, fallback,
+  failover and CLI remain normative English exceptions;
+- technical identifiers, commands and named states remain unchanged;
+- historical English prose in the experiment log remains in its recorded language, while
+  new Russian annotations follow the RC3 terminology document.
+
+No Python implementation files are changed.
+
+
+
 ## 2026-11-09 — RC3 semantic baseline and project terminology
 
 RC3 documentation is branched from RC2.6.3 without changing the Python implementation.
