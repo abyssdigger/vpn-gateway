@@ -4,6 +4,37 @@
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
 
+## 2026-11-08 — EXP-005 PASS; architecture RC2.6.3 adopts iptables-native prefix selector
+
+EXP-005 validated the remaining deny-only interface-family firewall contract on target
+Debian 13 / iptables-nft 1.8.11.
+
+Confirmed:
+
+- `iptables-restore` accepts `-i vpns+`;
+- `iptables-save` preserves the same canonical operand;
+- `vpns+` matches the entire textual prefix namespace, including bare `vpns`, numeric
+  suffixes and nonnumeric suffixes;
+- an earlier exact `-i vpns0` ACCEPT takes precedence, while another prefix member reaches
+  the later deny-only guard.
+
+Architecture advanced to RC2.6.3:
+
+- old vpn-gateway-only percent-sentinel numeric-family syntax is removed;
+- `prefix+` is the single prefix-family selector and deliberately mirrors iptables
+  semantics;
+- the whole textual prefix namespace is reserved by a managed prefix selector;
+- trailing `+` exact interface names are unsupported because iptables interprets that
+  operand as wildcard/prefix matching;
+- wildcard/prefix remains forbidden for ACCEPT/NAT/routes; those always use the resolved
+  concrete exact interface.
+
+Python implementation remains RC2.5.1 and is intentionally unchanged.
+
+Next: implementation can proceed without a remaining selector-family firewall experiment.
+
+
+
 ## 2026-11-08 — RC2.6.2 architecture vivisection APPROVED
 
 Two independent adversarial review passes were archived against RC2.6.2.

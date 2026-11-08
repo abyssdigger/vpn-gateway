@@ -1,5 +1,137 @@
 # VPN-GATE — Experiment Log
 
+## EXP-005 — iptables interface-prefix guard contract
+
+**Status:** COMPLETE — PASS  
+**Architecture baseline:** RC2.6.2  
+**Implementation:** RC2.5.1 running on the gateway; experiment traffic isolated in network namespaces  
+**Run:** 2026-11-08
+
+### Motivation
+
+RC2.6.2 requires a deny-only INPUT guard that exists before the runtime VPN interface name
+is known. The remaining external contract was the exact target behavior of iptables
+interface-prefix matching and its canonical save form.
+
+The experiment intentionally tests only the firewall boundary. Prefix matching is not
+permitted for ACCEPT, NAT or route resources.
+
+### Environment
+
+Same target gateway family as EXP-004:
+
+```text
+Debian 13.7
+iptables: v1.8.11 (nf_tables)
+iptables-save: v1.8.11 (nf_tables)
+iptables-restore: v1.8.11 (nf_tables)
+```
+
+### EXP-005.1 — acceptance and canonical save form
+
+A namespace-local filter table was loaded with:
+
+```text
+-A VPNG-INPUT-GUARD -i vpns+ -j REJECT --reject-with icmp-host-prohibited
+```
+
+Result:
+
+```text
+iptables-restore rc=0
+```
+
+`iptables-save -t filter` emitted the same canonical interface operand:
+
+```text
+-A VPNG-INPUT-GUARD -i vpns+ -j REJECT --reject-with icmp-host-prohibited
+```
+
+**Result: PASS.**
+
+### EXP-005.2 — actual match scope
+
+Packets were injected through interfaces renamed sequentially to:
+
+```text
+vpns0
+vpns1
+vpnsX
+vpns
+other0
+```
+
+Observed counters:
+
+```text
+vpns0    ping_rc=1 reject_packets=1
+vpns1    ping_rc=1 reject_packets=1
+vpnsX    ping_rc=1 reject_packets=1
+vpns     ping_rc=1 reject_packets=1
+other0   ping_rc=0 reject_packets=0
+```
+
+Therefore target iptables semantics are textual prefix matching:
+
+```text
+-i vpns+  -> matches vpns and every interface name beginning with vpns
+```
+
+It is not equivalent to the previously proposed numeric-only discovery convention.
+
+**Result: PASS.**
+
+### EXP-005.3 — exact rule before broad deny guard
+
+The test INPUT prefix was rebuilt as:
+
+```text
+exact profile rule: -i vpns0 -j ACCEPT
+then guard:         -i vpns+ -j REJECT
+```
+
+Observed:
+
+```text
+vpns0    ping_rc=0 exact=1 guard=0
+vpnsX    ping_rc=1 exact=0 guard=1
+```
+
+A known concrete binding can therefore be handled by an earlier exact profile rule while
+every other interface in the reserved prefix namespace remains denied by the pre-existing
+guard.
+
+**Result: PASS.**
+
+### Architecture decision
+
+EXP-005 removes the need for a separate vpn-gateway-only percent-sentinel selector grammar.
+
+Architecture RC2.6.3 uses:
+
+```text
+interface = "wg0"    # exact selector
+interface = "vpns+"  # prefix-family selector
+```
+
+The `+` selector deliberately follows the tested iptables interface-prefix contract.
+
+Consequences:
+
+- a prefix selector reserves the entire textual prefix namespace, not only numeric suffixes;
+- discovery cardinality is computed over that same namespace;
+- `+` is allowed only as the final selector operator;
+- prefix matching is deny-only in firewall policy;
+- ACCEPT, NAT and routes use only a resolved concrete exact interface name;
+- an exact selector ending in literal `+` is unsupported because the iptables backend
+  interprets trailing `+` as wildcard/prefix syntax rather than an exact interface operand.
+
+This closes the pre-binding firewall-protection question: the deny-only guard can be
+materialized before any concrete runtime interface exists.
+
+---
+
+
 ## EXP-004 — Gateway boundary validation after first live happy path
 
 **Status:** COMPLETE — PASS with architecture/implementation findings  

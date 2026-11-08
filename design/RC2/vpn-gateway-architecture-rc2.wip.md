@@ -1,7 +1,7 @@
 # VPN Gateway — архитектурные решения и инварианты
 
 **Статус:** Release Candidate — кандидат на утверждение и реализацию
-**Версия:** RC2.6.2
+**Версия:** RC2.6.3
 **Дата:** 2026-11-08
 
 Документ фиксирует принятые архитектурные решения проекта VPN Gateway. Он описывает обязательные инварианты, жизненный цикл сервиса, модель владения kernel-state и правила конфигурации. Нереализованные детали, которые ещё требуют отдельного решения, вынесены в раздел **«Открытые решения»**.
@@ -166,21 +166,18 @@ Periodic reconciliation остаётся safety net против resource drift 
 
 ```text
 wg0    -> exact selector
-vpns%  -> numeric-family selector
+vpns+  -> prefix-family selector
 ```
 
-Trailing `%` является специальным sentinel vpn-gatewayd, а не glob/regex.
+Trailing `+` использует ту же prefix/wildcard semantics, что и interface operand
+`iptables -i/-o`: `vpns+` означает весь textual interface-name namespace с prefix
+`vpns`, включая bare name `vpns`.
 
-Семантика numeric-family selector:
+Это не shell glob и не пользовательский regex.
 
-```text
-vpns% -> ^vpns[0-9]+$
-```
-
-`%` разрешён только один раз и только последним символом.
-
-Selector используется только для поиска/классификации runtime interfaces. Строка с `%`
-**никогда** не передаётся в route, iptables или NAT kernel operations.
+Selector используется только для поиска/классификации runtime interfaces. Prefix selector
+с `+` **никогда** не передаётся в route, ACCEPT или NAT kernel operations; там после
+resolution используется только concrete exact interface name.
 
 Daemon разрешает selector по единому interface snapshot:
 
@@ -191,9 +188,8 @@ Daemon разрешает selector по единому interface snapshot:
 ```
 
 Concrete binding содержит как минимум exact interface name и ifindex из snapshot. Ifindex
-нужен для обнаружения delete/recreate под тем же именем; kernel policy всё равно
-materialize'ится по exact имени, потому что route/iptables interface operands используют
-имя netdev.
+нужен для обнаружения delete/recreate под тем же именем; kernel allow/NAT/routes всё равно
+materialize'ятся по exact имени.
 
 Daemon никогда не выбирает «первый», «минимальный номер», «самый новый» или иной
 произвольный interface при ambiguity.
@@ -208,15 +204,15 @@ runtime interface names.
 Примеры конфликтов:
 
 ```text
-vpns% + vpns0
-vpns% + vpns1%
-vpns% + vpns%
+vpns+ + vpns0
+vpns+ + vpns1+
+vpns+ + vpns+
 ```
 
 Exact names и selector matching case-sensitive, как Linux interface names.
 
-Для numeric-family prefix должно оставаться место хотя бы для одной цифры в пределах
-15-символьного Linux ifname contract проекта.
+Для prefix-family selector prefix должен содержать хотя бы один допустимый символ Linux
+interface name; trailing `+` является selector operator и не входит в concrete name.
 
 Unmanaged definitions не блокируют runtime startup; соответствующие selector conflicts с
 managed profiles являются WARNING в `--check-config`, как и остальные unmanaged
@@ -659,7 +655,7 @@ metric      = 10,20,30...
 onlink      = true
 ```
 
-Строка selector с `%` никогда не попадает в RouteSpec.
+Prefix selector никогда не попадает в RouteSpec.
 
 ### 8.4. Runtime reconciliation
 
@@ -914,11 +910,9 @@ RETURN
 После profile chains `VPNG-INPUT-GUARD` fail-closed блокирует traffic от всех configured
 managed interface selectors, не завершённый более ранней exact profile chain.
 
-Для exact selector guard использует exact ifname. Для numeric-family selector guard обязан
-иметь deny-only family semantics. Wildcard/prefix matching никогда не используется для
-ACCEPT или NAT.
-
-Точная iptables family-match encoding остаётся target-validated implementation contract.
+Для exact selector guard использует exact ifname. Для prefix-family selector guard
+использует тот же deny-only `-i prefix+` contract, что подтверждён EXP-005.
+Wildcard/prefix matching никогда не используется для ACCEPT или NAT.
 
 Traffic, не относящийся ни к одному managed selector, после daemon INPUT prefix продолжает
 обрабатываться базовым host firewall.
@@ -1051,7 +1045,7 @@ RETURN
 RETURN
 ```
 
-Selector string, включая `%`, никогда не используется как NAT interface operand.
+Prefix selector string никогда не используется как NAT interface operand.
 
 При binding transition daemon отключает forwarding до rematerialization/verify binding-specific
 filter/NAT policy. NAT должен быть verified до добавления/восстановления proto-202 routes
@@ -1072,7 +1066,7 @@ complete FORWARD ownership допускает egress только explicit profi
 ### 11.1. Event gap
 
 Старая static NAT model имела красивое свойство «rule уже существует до появления
-interface». Для numeric-family selector это невозможно без permissive wildcard, который
+interface». Для prefix-family selector это невозможно без permissive wildcard, который
 архитектура запрещает.
 
 Поэтому binding-specific NAT следует за discovery concrete interface.
@@ -1124,7 +1118,7 @@ common_allowed_sources = [
 ]
 
 [vpn.primary]
-interface = "vpns%"
+interface = "vpns+"
 network = "172.20.130.0/29"
 local_address = "172.20.130.1"
 peers = [
@@ -1271,40 +1265,37 @@ default
 all
 ```
 
-### 15.2. Numeric-family selector
+### 15.2. Prefix-family selector
 
 Форма:
 
 ```text
-<prefix>%
+<prefix>+
 ```
 
 Prefix соответствует тем же допустимым символам exact name, начинается с ASCII letter и
-имеет длину 1..14, чтобы concrete name мог содержать хотя бы одну digit и укладываться в
-15 символов.
-
-`%` разрешён только один и только последним символом.
+имеет длину 1..14. Trailing `+` является selector operator и не входит в concrete
+interface name.
 
 Семантика:
 
 ```text
-prefix% -> ^prefix[0-9]+$
+prefix+ -> все interface names, начинающиеся с prefix,
+           включая bare name prefix
 ```
 
-Это не shell glob и не regex пользователя.
+Это намеренно совпадает с target-validated `iptables -i prefix+` semantics.
 
-Символ `+` в config selector запрещён, чтобы не смешивать config semantics с iptables
-interface wildcard semantics.
+`+` разрешён только один и только последним символом selector.
 
-Numeric-family selector резервирует на dedicated gateway весь matching runtime namespace
-для этого managed profile. Любой посторонний interface, совпавший с
-`^prefix[0-9]+$`, участвует в cardinality и может намеренно перевести profile в
-AMBIGUOUS fail-closed state.
+Literal exact interface name, заканчивающееся на `+`, vpn-gateway не поддерживает.
+Обоснование прямое: vpn-gateway основан на iptables, а iptables трактует trailing `+` в
+interface operand как wildcard/prefix match, поэтому такой operand нельзя безопасно
+интерпретировать как exact interface name.
 
-Если target-validated deny-only iptables guard окажется шире numeric regex (например,
-prefix wildcard матчится также на недесятичные suffixes), operationally reserved считается
-весь фактический guard match scope. Это должно быть зафиксировано результатом соответствующего
-target experiment.
+Prefix-family selector резервирует на dedicated gateway **весь** matching textual ifname
+namespace для этого managed profile. Любой посторонний interface внутри этого prefix
+участвует в cardinality и может намеренно перевести profile в AMBIGUOUS fail-closed state.
 
 ### 15.3. Managed selector exclusivity
 
@@ -1315,16 +1306,24 @@ Managed selectors должны быть pairwise disjoint по множеств�
 Примеры fatal conflicts:
 
 ```text
-vpns% + vpns0
-vpns% + vpns1%
-vpns% + vpns%
+vpns+ + vpns0
+vpns+ + vpns1+
+vpns+ + vpns+
+```
+
+Для prefix families overlap означает пересечение textual prefix namespaces. Например:
+
+```text
+vpns+   + vpns1+   -> overlap
+vpns1+  + vpns12+  -> overlap
+vpns1+  + vpns2+   -> disjoint
 ```
 
 Если один selector может когда-либо классифицировать тот же concrete Linux interface, что и
 другой managed selector, runtime projection invalid.
 
-Администратор обязан использовать разные interface-name families для разных managed VPN
-instances и не создавать unrelated netdevs внутри зарезервированного family namespace.
+Администратор обязан использовать разные interface-name namespaces для разных managed VPN
+instances и не создавать unrelated netdevs внутри зарезервированного prefix namespace.
 
 ## 16. VPN-сети и адреса
 
@@ -1578,10 +1577,11 @@ Immutable runtime config содержит только managed typed profiles.
 ```text
 InterfaceSelector:
     EXACT(name)
-    NUMERIC_FAMILY(prefix)
+    PREFIX_FAMILY(prefix)
 ```
 
-Raw sentinel string `vpns%` не должен распространяться дальше config/domain boundary.
+Raw selector string `vpns+` не должен распространяться дальше config/domain boundary как
+allow/NAT/route operand; после resolution kernel resources используют concrete exact name.
 
 Interface inventory представлен typed snapshot, содержащим как минимум:
 
@@ -1814,14 +1814,20 @@ Unknown interface events могут быть проигнорированы то
 - EXP-004.1 подтвердил необходимость complete IPv4 FORWARD ownership.
 - EXP-004.2 подтвердил fail-closed coexistence `proto 201` blackhole +
   preferred `proto 202` unicast и отсутствие default fallback после VPN loss.
-- EXP-004.3 подтвердил ocserv numeric interface family; config selector `vpns%` является
-  discovery notation, а kernel resources используют только concrete resolved name.
+- EXP-004.3 подтвердил, что ocserv создаёт runtime interface family, а не гарантированный
+  exact ifname.
+- EXP-005 подтвердил target iptables prefix contract: `-i vpns+` принимается и
+  канонически сохраняется как `-i vpns+`; он матчится на `vpns`, `vpns0`, `vpns1`,
+  `vpnsX`, но не на `other0`; более ранний exact `-i vpns0` ACCEPT обходит последующий
+  deny-only `-i vpns+` guard.
+- Поэтому config prefix selector использует тот же trailing `+` contract; kernel
+  allow/NAT/routes используют только concrete resolved exact name.
 - EXP-004.4 подтвердил per-table cleanup transaction `-D -> -F -> -X -> COMMIT`.
 - EXP-004.5 подтвердил marker-selective `proto 201/202` route inventory для cleanup.
 - External CLI forms, влияющие на safety contract, должны вручную проверяться на target
   Debian до кодирования в subprocess adapter.
-- Новый deny-only selector-family INPUT guard требует отдельной target-проверки exact
-  iptables interface-prefix syntax/canonicalization.
+- Deny-only selector-family INPUT guard target-validated EXP-005; prefix wildcard
+  запрещён для ACCEPT/NAT.
 - `ip_forward` изменяется read-before-write и результат подтверждается.
 - Subprocess calls имеют bounded timeout и stable `LC_ALL=C`/`LANG=C`.
 - Netfilter notifications остаются optional enhancement; correctness опирается на
@@ -1846,18 +1852,14 @@ Unknown interface events могут быть проигнорированы то
 
 Следующие implementation/research details требуют подтверждения:
 
-1. Exact iptables encoding/canonical save form deny-only interface-prefix guard для
-   `interface = "prefix%"`. До target experiment allow/NAT wildcard запрещён и конкретный
-   CLI не фиксируется архитектурой.
-2. Точный механизм serialized event loop и debounce/coalesce Netlink bursts.
-3. Full resync strategy после Netlink `ENOBUFS`.
-4. Финальный systemd privilege model: root либо отдельный service user + минимальные
+1. Точный механизм serialized event loop и debounce/coalesce Netlink bursts.
+2. Full resync strategy после Netlink `ENOBUFS`.
+3. Финальный systemd privilege model: root либо отдельный service user + минимальные
    capabilities/permissions.
-5. Точный минимальный IPC/admin command set.
-6. Foreign exact route metric/key collision edge case, ранее отложенный до отдельного target
+4. Точный минимальный IPC/admin command set.
+5. Foreign exact route metric/key collision edge case, ранее отложенный до отдельного target
    experiment.
-7. Repair-storm/latching thresholds не вводятся без наблюдаемых данных.
-
+6. Repair-storm/latching thresholds не вводятся без наблюдаемых данных.
 
 ## 26. Ключевые инварианты
 
@@ -1890,13 +1892,16 @@ Unknown interface events могут быть проигнорированы то
 
 13. INPUT foreign host-firewall rules сохраняют значение для traffic вне managed selectors.
 
-14. Interface config value является selector: exact name либо numeric family prefix%.
+14. Interface config value является selector: exact name либо prefix family `prefix+`.
 
-15. '%' разрешён только один и только последним символом; это не glob/regex.
+15. Trailing `+` является prefix-selector operator и использует target-validated iptables
+    interface-prefix semantics.
 
-16. Numeric family prefix% означает ^prefix[0-9]+$.
+16. Prefix family `prefix+` означает весь textual ifname namespace, начинающийся с
+    `prefix`, включая bare name `prefix`.
 
-17. Selector string с '%' никогда не попадает в RouteSpec/iptables allow/NAT kernel operand.
+17. Prefix selector никогда не попадает в RouteSpec/iptables ACCEPT/NAT kernel operand;
+    эти ресурсы используют только resolved concrete exact ifname.
 
 18. Managed selectors pairwise disjoint по множеству возможных concrete names; overlap fatal.
 
@@ -2060,8 +2065,9 @@ Unknown interface events могут быть проигнорированы то
 
 89. Machine reason identity задаётся stable enum codes, не free-form exception text.
 
-90. Numeric-family selector reserves its matching runtime ifname namespace for the managed
-    profile; unrelated matching netdev can intentionally force AMBIGUOUS fail-closed state.
+90. Prefix-family selector reserves its entire matching textual runtime ifname namespace for
+    the managed profile; unrelated matching netdev can intentionally force AMBIGUOUS
+    fail-closed state.
 
 91. Residual event-reaction window is an explicit trusted-host threat-model boundary:
     untrusted processes do not possess CAP_NET_ADMIN/netdev lifecycle control.
