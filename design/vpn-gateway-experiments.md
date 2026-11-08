@@ -413,6 +413,13 @@ ambiguous family.
 This convention also leaves administrators free to give separate ocserv/WireGuard
 instances different prefixes.
 
+> **Последующее архитектурное примечание (RC3):** предложенная после EXP-004.3
+> грамматика `vpns%` сохранена выше как исторически принятое на тот момент решение.
+> EXP-005 позднее подтвердил нативную семантику iptables `prefix+`; RC3 поэтому заменяет
+> `%` на `+` и резервирует всё текстовое пространство имён соответствующего префикса.
+> Фактический вывод EXP-004.3 — необходимость семейства runtime-интерфейсов — остаётся
+> неизменным.
+
 ---
 
 ### EXP-004.4 — iptables cleanup transaction contract

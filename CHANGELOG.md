@@ -4,6 +4,32 @@
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
 
+## 2026-11-09 — RC3 semantic baseline and project terminology
+
+RC3 documentation is branched from RC2.6.3 without changing the Python implementation.
+
+RC3 incorporates the independent RC2.6.3 consistency review:
+
+- §4.4 no longer treats the deny-only `-i prefix+` guard as an unvalidated future
+  experiment; EXP-005 is the validating evidence;
+- the architecture claims only the tested ingress `iptables -i prefix+` contract, not an
+  untested `-o prefix+` contract;
+- `+` is reserved by selector grammar in all positions for exact-selector names; trailing
+  `+` additionally has the direct iptables wildcard/prefix rationale;
+- EXP-004 keeps its historical `%` decision verbatim in substance and receives a clearly
+  marked subsequent RC3 note explaining that EXP-005 superseded the selector syntax.
+
+A normative terminology document is added at
+`design/RC3/terms-and-definitions.md`. The architecture references it explicitly.
+
+The experiment log/evidence is now project-scoped at
+`design/vpn-gateway-experiments.md` and `design/experiments/`, not tied to RC2.
+
+Python implementation remains RC2.5.1 and is intentionally unchanged. Package split is the
+next implementation step after RC3 documentation is finalized.
+
+
+
 ## 2026-11-08 — EXP-005 PASS; architecture RC2.6.3 adopts iptables-native prefix selector
 
 EXP-005 validated the remaining deny-only interface-family firewall contract on target
