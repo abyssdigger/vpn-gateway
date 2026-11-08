@@ -1,7 +1,7 @@
 # VPN Gateway — архитектурные решения и инварианты
 
 **Статус:** Release Candidate — кандидат на утверждение и реализацию
-**Версия:** RC2.6.1
+**Версия:** RC2.6.2
 **Дата:** 2026-11-08
 
 Документ фиксирует принятые архитектурные решения проекта VPN Gateway. Он описывает обязательные инварианты, жизненный цикл сервиса, модель владения kernel-state и правила конфигурации. Нереализованные детали, которые ещё требуют отдельного решения, вынесены в раздел **«Открытые решения»**.
@@ -756,14 +756,17 @@ best-effort выключает forwarding и остаётся ISOLATED.
 ```text
 1. best-effort ip_forward=0
 
-2. materialize isolation filter
+2. materialize isolation filter as the complete daemon-owned filter desired state for this stage
+   (thereby removing stale binding-specific daemon ACCEPT rules)
 3. verify isolation filter
+   - this verify is only an isolation-barrier result and is NOT full-policy SAFE
 
 4. materialize desired NAT for current immutable binding snapshot
 5. verify desired NAT
 
 6. materialize full desired filter including binding-specific exact ACCEPT
 7. verify full desired filter
+   - only after NAT + full filter verify may full desired firewall/NAT be classified SAFE
 
 8. reconcile + verify routes
 
@@ -1728,6 +1731,26 @@ Isolation filter:
 - сохраняет INPUT selector guards, transport-network rejects, protected-destination rejects
   и terminal FORWARD deny.
 
+При materialization isolation filter является **полным desired daemon-owned filter state**
+для этой промежуточной стадии. Он не добавляется поверх текущего filter: stale
+binding-specific daemon ACCEPT rules, отсутствующие в isolation desired state, обязаны быть
+удалены/заменены в той же stage materialization.
+
+Успешный verify isolation filter означает только:
+
+```text
+isolation filter verified
+```
+
+и **никогда не эквивалентен**:
+
+```text
+full desired firewall/NAT SAFE
+```
+
+Только full desired firewall/NAT SAFE после desired NAT + full filter verify может открыть
+путь к завершению route reconciliation и последующему включению forwarding.
+
 Обе формы выводятся из одной policy model, чтобы compare/restore не имели независимых
 источников истины. Deny-first repair orchestration не выполняет ad-hoc rule surgery.
 
@@ -2053,6 +2076,16 @@ Unknown interface events могут быть проигнорированы то
 
 95. desired isolation filter is config-only and contains no binding-specific ACCEPT.
 
-96. Operational status reports selector/binding/readiness separately from lifecycle ACTIVE.
+96. Isolation filter materialization is replacement/canonicalization of the complete
+    daemon-owned filter desired state for that stage; stale daemon binding-specific ACCEPT
+    rules may not remain reachable.
+
+97. Isolation-filter verify is a distinct barrier result and never satisfies full desired
+    firewall/NAT SAFE.
+
+98. Full-policy SAFE requires desired NAT + full desired filter to be verified for the same
+    immutable reconciliation snapshot.
+
+99. Operational status reports selector/binding/readiness separately from lifecycle ACTIVE.
 
 ```

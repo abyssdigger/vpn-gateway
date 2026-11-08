@@ -4,6 +4,24 @@
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
 
+## 2026-11-08 — Architecture RC2.6.2 final isolation-barrier clarification
+
+RC2.6.2 incorporates the two remaining RC2.6.1 safety re-review clarifications:
+
+- isolation-filter materialization is a complete replacement/canonicalization of the
+  daemon-owned filter desired state for that stage, so stale binding-specific daemon ACCEPT
+  rules cannot survive underneath the barrier;
+- successful isolation-filter verification is explicitly **not** equivalent to full desired
+  firewall/NAT SAFE;
+- full-policy SAFE requires verified desired NAT plus verified full desired filter for the
+  same immutable reconciliation snapshot.
+
+Python implementation remains RC2.5.1 and is intentionally unchanged.
+
+Next: independent RC2.6.2 architecture vivisection before implementation.
+
+
+
 ## 2026-11-08 — RC2.6.1 architecture re-review
 
 Two independent re-review passes were archived against RC2.6.1.

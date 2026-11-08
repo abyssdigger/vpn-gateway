@@ -143,3 +143,18 @@ No new architecture blocker was found.
 The only architecture-adjacent clarification worth taking before code is the safety review's
 distinction between an isolation-filter verify and full-policy SAFE. The remaining findings
 belong in implementation tests and migration discipline.
+
+---
+
+## Maintainer disposition
+
+**ACCEPTED in architecture RC2.6.2.**
+
+Both safety clarifications were incorporated:
+
+1. isolation-filter verification is a separate barrier result and cannot satisfy full-policy
+   SAFE;
+2. isolation materialization replaces/canonicalizes the complete daemon-owned filter desired
+   state for that stage and therefore removes stale binding-specific daemon ACCEPT rules.
+
+Implementation remains unchanged pending RC2.6.2 re-review.
