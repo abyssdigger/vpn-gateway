@@ -1,5 +1,25 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 technical consistency cleanup
+
+A final expert review resolves remaining semantic ambiguities before implementation:
+
+- cleanup now treats confirmed `ip_forward=0` as a hard barrier before destructive teardown;
+- IPv6 forwarding is an explicit startup prerequisite and must remain disabled outside the
+  IPv4-only daemon policy;
+- managed VPN INPUT no longer permits generic NEW connections to the gateway itself;
+- INPUT/FORWARD/POSTROUTING built-in prefix placement is verified and pre-prefix foreign
+  rules are `UNSAFE` drift;
+- profile ordering is defined as locale-independent ASCII lexical order of normalized IDs;
+- local gateway OUTPUT is explicitly outside source ACL/FORWARD policy;
+- managed/unmanaged configuration validation scope is made consistent;
+- route priority is bounded to the Linux u32 priority field;
+- `ProfileResult` SUCCESS/FAIL semantics are made normative;
+- diagnostic reason-code stability is defined without pretending the architecture already
+  enumerates the implementation catalog;
+- READY/watchdog and ENOBUFS wording is made internally consistent.
+
+
 ## 2026-11-09 — Terminology exception for handshake
 
 `handshake` is added to the project-wide language exceptions and the RC3 normative glossary
