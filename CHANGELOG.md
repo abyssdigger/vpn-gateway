@@ -1,5 +1,22 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 Russian technical editing pass
+
+A terminology-only editorial pass follows the final technical cleanup:
+
+- mixed Russian/English prose is reduced where the English word is not an identifier;
+- `handshake` is restored as the established protocol term;
+- `ownership`, desired/actual state and daemon-owned wording are aligned with the RC3
+  glossary;
+- awkward or colloquial wording such as “пожизненная блокировка” and “TOML-экзотика” is
+  replaced with normative technical Russian;
+- pseudocode and invariant prose are normalized to Russian grammar without changing their
+  technical contracts;
+- `blackhole` is explicitly recorded as an accepted Linux routing term.
+
+No architecture semantics are intentionally changed.
+
+
 ## 2026-11-09 — RC3 technical consistency cleanup
 
 A final expert review resolves remaining semantic ambiguities before implementation:
