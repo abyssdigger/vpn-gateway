@@ -1,5 +1,13 @@
 # VPN-GATE change log
 
+## 2026-11-09 — Project conventions
+
+A root-level normative `PROJECT-CONVENTIONS.md` is added to preserve repository-wide rules
+across review/refactor sessions: Russian-preferred documentation, verbatim review archival,
+review filename ordering, separation of semantic and terminology-only commits, historical
+experiment baseline handling, and archived-RC discipline.
+
+
 ## 2026-11-09 — RC3 review resolution
 
 RC3 architecture is updated from the archived architecture review and §26 invariant audit.
