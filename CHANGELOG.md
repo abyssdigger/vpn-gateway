@@ -1,5 +1,31 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 review resolution
+
+RC3 architecture is updated from the archived architecture review and §26 invariant audit.
+
+Safety-relevant changes:
+
+- `VPNG-INGRESS` gains deny-only selector guards after ready exact-interface blocks, closing
+  the unbound prefix-family ingress path discovered by review;
+- readiness changes are policy-changing transitions just like binding changes and use the
+  same deny-first recovery sequence;
+- the isolation filter is specified as a complete global filter barrier, including exact
+  profile-chain contents and the intentional brief outage of all managed forwarding;
+- isolation-filter application is explicitly filter-only; existing NAT may remain behind the
+  verified deny barrier until desired NAT is applied and verified;
+- verified FORWARD ownership is distinguished from the reaction window caused by a foreign
+  rule inserted before the daemon prefix;
+- a stable diagnostic-reason model is restored to the normative implementation model;
+- OUTPUT remains host-admin policy and foreign POSTROUTING processing is explicitly
+  preserved;
+- runtime exact `proto kernel` protected-prefix collision is fail-closed DEGRADED;
+- a concrete RC2.5.1 -> RC3 implementation migration checklist is added.
+
+The experiment journal now states that historical section/invariant references belong to the
+recorded architecture baseline and are not renumbered retroactively.
+
+
 ## 2026-11-09 — RC3 review archive
 
 Two independent RC3 reviews and the project response are archived under `design/reviews/`.

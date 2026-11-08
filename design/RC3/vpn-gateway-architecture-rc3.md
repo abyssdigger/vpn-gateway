@@ -63,16 +63,27 @@ Blackhole-маршруты являются одним из защитных м�
 Kubernetes, другими gateway-сервисами или иными компонентами, которым требуется
 `net.ipv4.ip_forward=1`, не поддерживается.
 
-Эксклюзивное владение глобальным `net.ipv4.ip_forward` означает эксклюзивную
-ответственность за **весь IPv4 FORWARD decision** во время работы daemon. Пока
-`ip_forward=1`, каждый forwarded IPv4 packet обязан получить окончательное решение внутри
-daemon-owned префикса правил; пакет не может провалиться в сторонние правила или built-in
-`FORWARD ACCEPT`.
+Эксклюзивное владение глобальным `net.ipv4.ip_forward` и эксклюзивная ответственность за
+окончательное решение для всего IPv4-трафика `FORWARD` являются двумя связанными
+архитектурными обязательствами daemon. Пока `ip_forward=1`, в **проверенном требуемом
+состоянии** каждый пересылаемый IPv4-пакет обязан получить окончательное решение внутри
+daemon-owned префикса правил; пакет не должен доходить до сторонних правил или встроенной
+политики `FORWARD ACCEPT`.
 
-Чужие FORWARD rules не удаляются и не переписываются. Они физически остаются после
-daemon-owned prefix, но при включённом forwarding недостижимы из-за terminal
-`VPNG-FORWARD-DENY`. После `cleanup()` daemon-owned jumps/chains исчезают и
-`ip_forward=0`; базовый firewall хоста снова полностью принадлежит администратору.
+В проверенном состоянии daemon-owned префикс физически начинается с позиции 1, а сторонние
+`FORWARD` rules сохраняются после `VPNG-FORWARD-DENY` и поэтому недостижимы при
+включённой пересылке.
+
+Если внешний менеджер во время работы вставил стороннее правило перед daemon-owned
+префиксом, это считается рассогласованием `UNSAFE`. До следующего цикла согласования
+существует окно реакции, в котором такое правило может получить влияние на решение.
+Восстановление с первоначальным запретом заново размещает daemon-owned префикс с позиции 1;
+стороннее правило не удаляется, а физически оказывается после `VPNG-FORWARD-DENY`.
+Постоянное конкурентное переписывание префикса внешним менеджером остаётся
+неподдерживаемой конфигурацией.
+
+После `cleanup()` daemon-owned jumps/chains исчезают и `ip_forward=0`; базовый firewall
+хоста снова полностью принадлежит администратору.
 
 `net.ipv4.ip_forward` находится в exclusive ownership daemon'а. Ручное изменение sysctl
 не является persistent administrative pause/override и будет приведено daemon'ом к
@@ -251,23 +262,41 @@ FORWARD REJECT.
 - правила allow/NAT/unicast, зависящие от привязки, должны быть удалены или не созданы;
 - blackhole и запрещающая политика сохраняются.
 
-### 4.4. Смена привязки и остаточное окно реакции
+### 4.4. Смена привязки, смена готовности и остаточное окно реакции
 
 Появление, исчезновение, замена ifindex либо изменение числа совпадений селектора считается
-событием смены привязки и инициирует полное сериализованное согласование.
+**сменой привязки** и инициирует полное сериализованное согласование.
 
-При подтверждённой смене привязки daemon сначала best-effort отключает `ip_forward`,
-затем применяет политику и маршруты для нового immutable snapshot привязки, проверяет
-состояние и только после этого может вернуть forwarding.
+Появление или исчезновение ожидаемого `local_address` на неизменной жесткой привязке
+считается **сменой готовности**. Смена привязки или смена готовности является
+**переходом, меняющим политику**, потому что меняет набор разрешающих INPUT/FORWARD rules,
+NAT либо маршрутов `proto 202`.
 
-Существует принципиальное окно реакции между событием ядра и обработкой Netlink-события
-daemon. Особенно это заметно при быстром появлении второго подходящего интерфейса или при
-удалении и повторном создании интерфейса под тем же именем: старые exact-name rules
-физически существуют до реакции daemon.
+При подтверждённом переходе, меняющем политику, daemon сначала best-effort отключает
+`ip_forward`, затем применяет политику и маршруты для нового immutable snapshot,
+проверяет состояние и только после этого может вернуть пересылку.
 
-Архитектура принимает это ограниченное окно реакции как неизбежную границу многозадачной ОС
-на выделенном доверенном gateway host. Оно уменьшается пробуждением по Netlink и
-периодической полной пересверкой, но не изображается как атомарная kernel transaction.
+Существует принципиальное окно реакции между изменением состояния ядра и обработкой
+Netlink-события daemon. Особенно это заметно при быстром появлении второго подходящего
+интерфейса или при удалении и повторном создании интерфейса под тем же именем: старые
+правила по точному имени физически существуют до реакции daemon.
+
+Для префиксного семейства дополнительное запрещающее правило входящего FORWARD-трафика в
+`VPNG-INGRESS` закрывает сценарий, при котором новый ещё не привязанный интерфейс мог бы
+дойти до старой разрешающей цепочки профиля. Неустранимой остаётся граница сопоставления
+iptables по имени: уже существующее правило по имени нельзя задним числом привязать к
+историческому ifindex при пересоздании интерфейса с тем же именем.
+
+Если своевременный Netlink-сигнал не получен или потерян, периодический цикл согласования
+служит резервным механизмом обнаружения изменения. При работающем цикле обработки событий
+следующая такая пересверка наступает не позже следующего `reconcile_interval`,
+настраиваемого в диапазоне 1–60 секунд. Это не является гарантией при зависшем daemon:
+в таком состоянии сам таймер также не исполняется.
+
+Архитектура принимает остаточное окно реакции как неизбежную границу многозадачной ОС на
+выделенном доверенном gateway host. Она уменьшает окно пробуждением по Netlink,
+запрещающими правилами селекторов и периодической полной пересверкой, но не изображает
+набор отдельных kernel operations как атомарную транзакцию.
 
 Граница модели угроз для этого окна явная:
 
@@ -278,12 +307,18 @@ daemon. Особенно это заметно при быстром появл�
   snapshot, но существующее iptables rule по имени нельзя задним числом привязать к старому
   ifindex.
 
-При этом новые или ещё не привязанные интерфейсы префиксного семейства не должны иметь
-статических разрешающих правил по шаблону. Для local INPUT заранее устанавливается
-**защитное правило селектора только с запретом** `-i prefix+`; область его совпадения и
-каноническое представление в `iptables-save` подтверждены EXP-005. Оно блокирует трафик
-семейства селектора, если его не завершила более ранняя точная цепочка профиля, зависящая
-от привязки. Сопоставление по префиксу никогда не используется для ACCEPT или NAT.
+Новые или ещё не привязанные интерфейсы управляемых селекторов не должны иметь статических
+разрешающих правил по шаблону.
+
+Для local INPUT заранее устанавливается защитное правило селектора только с запретом:
+для точного селектора — по точному имени, для префиксного — `-i prefix+`.
+`VPNG-INPUT-GUARD` блокирует такой трафик, если его не завершила более ранняя точная
+цепочка готового профиля.
+
+Для FORWARD тот же принцип реализуется внутри `VPNG-INGRESS`: точные правила готовых
+жестких привязок выполняются раньше запрещающих правил всех управляемых селекторов.
+Префиксное сопоставление `-i prefix+` разрешено только в таком запрещающем защитном
+правиле. Оно никогда не используется для `ACCEPT`, NAT или маршрутов.
 
 ## 5. Жизненный цикл сервиса
 
@@ -637,7 +672,7 @@ syscalls. Snapshot гарантирует только внутреннюю ко
    - UNICAST только для ready profile и только с exact bound interface name;
 9. apply route plan; missing BLACKHOLE guards идут первой фазой;
 10. fresh route verify относительно того же desired snapshot;
-11. commit process-local OWNED routes и committed binding snapshot;
+11. commit process-local OWNED routes и подтверждённое состояние привязки/готовности;
 12. read-before-write включить `ip_forward=1` самым последним и подтвердить.
 
 Если любой этап до последнего подтверждения неуспешен, startup fatal и forwarding не должен
@@ -673,44 +708,56 @@ Prefix selector никогда не попадает в RouteSpec.
 Runtime pass сериализован одним event loop и запускается по relevant Netlink event,
 periodic tick, full resync или administrative trigger.
 
-#### Interface inventory failure
+#### Ошибка инвентаризации интерфейсов
 
-Fresh interface inventory является policy-critical: без него daemon не может достоверно
-вычислить binding-specific INPUT/FORWARD/NAT state.
+Fresh interface inventory является критичным для политики: без него daemon не может
+достоверно вычислить зависящие от привязки INPUT/FORWARD/NAT state.
 
-Если interface inventory/read/parse/resolution не завершён:
+Если чтение или разбор interface inventory не завершены либо весь этап разрешения
+селекторов нельзя достоверно завершить:
 
 1. best-effort привести `ip_forward=0`;
 2. state = `ISOLATED`;
-3. не выполнять blind repair binding-specific NAT/allow policy;
-4. если firewall inventory читаем, daemon **может и должен предпочитать** безопасное
-   config-only isolation filter (§8.6), не требующее concrete binding;
-5. retry на следующем serialized reconciliation pass.
+3. не выполнять слепое восстановление зависящей от привязки NAT/разрешающей политики;
+4. если firewall inventory читаем, daemon может и должен предпочитать безопасный
+   config-only isolation filter (§8.6), не требующий жесткой привязки;
+5. retry на следующем сериализованном цикле согласования.
 
-Такой failure не классифицируется как обычный route/profile `DEGRADED`.
+Обычный результат одного профиля `AMBIGUOUS` не относится к этому классу ошибок
+наблюдаемости: он обрабатывается как profile FAIL/`DEGRADED` (§8.5).
 
-#### Normal pass
+#### Обычный цикл
 
-После успешного interface inventory:
+После успешной инвентаризации интерфейсов:
 
 1. построить один immutable `ReconciliationSnapshot`;
-2. сравнить current binding identity/cardinality с последним committed binding snapshot;
-3. при binding transition best-effort привести `ip_forward=0`;
-4. inventory current firewall/NAT;
-5. если inventory/canonical interpretation `UNKNOWN`:
+2. сравнить текущую identity/cardinality привязки **и готовность** с последним
+   подтверждённым состоянием привязки/готовности;
+3. при переходе, меняющем политику, best-effort привести `ip_forward=0`;
+4. прочитать текущий firewall/NAT;
+5. если inventory/canonical interpretation = `UNKNOWN`:
    - best-effort forwarding OFF;
    - `ISOLATED`;
-   - blind repair не выполнять;
-6. если current policy `UNSAFE` либо binding transition требует rematerialization:
-   выполнить deny-first repair sequence (§8.6);
+   - слепое восстановление не выполнять;
+6. если текущая policy = `UNSAFE` либо переход, меняющий политику, требует
+   повторного применения ресурсов, выполнить последовательность восстановления с
+   первоначальным запретом (§8.6);
 7. только после full desired firewall/NAT `SAFE` читать strict full route snapshot;
 8. build/validate/apply/verify route plan из того же `ReconciliationSnapshot`;
-9. commit OWNED + binding snapshot только после verify;
-10. после completed SAFE policy + route pass привести exclusive-owned `ip_forward` к
-    требуемому состоянию.
+9. commit OWNED + подтверждённое состояние привязки/готовности только после verify;
+10. после завершённого SAFE policy + route pass привести exclusive-owned
+    `ip_forward` к требуемому состоянию.
 
-Binding transition, включая BOUND -> ABSENT, ABSENT -> BOUND, BOUND(name/ifindex A) ->
-BOUND(name/ifindex B) и переход в/из AMBIGUOUS, считается policy transition.
+Сменой привязки считаются как минимум:
+
+- `BOUND -> ABSENT`;
+- `ABSENT -> BOUND`;
+- `BOUND(name/ifindex A) -> BOUND(name/ifindex B)`;
+- переход в `AMBIGUOUS` или выход из него.
+
+Сменой готовности считается изменение присутствия ожидаемого `local_address` при
+неизменной жесткой привязке. Оба класса изменений являются переходами, меняющими
+политику, и используют один порядок восстановления.
 
 ### 8.5. Runtime ambiguity
 
@@ -740,41 +787,42 @@ UNKNOWN  -> состояние неизвестно
 
 Полное ожидаемое состояние зависит от immutable `ReconciliationSnapshot`.
 
-Отдельно слой policy (политики) обязан уметь построить config-only **изолирующий фильтр**:
+Отдельно слой политики обязан уметь построить config-only **изолирующий фильтр**:
 
 ```text
 desired_isolation_filter(config)
 ```
 
-Он не содержит ACCEPT rules, зависящих от binding, и не требует interface inventory. Он
-сохраняет только структурную политику фильтрации с отказом с запретом:
+Он не содержит `ACCEPT` rules, зависящих от привязки, и не требует interface inventory.
+Он сохраняет только структурную политику фильтрации с отказом с запретом:
 
-- защитные правила INPUT управляемых селекторов;
+- запрещающие правила INPUT управляемых селекторов;
+- запрещающие правила входящего FORWARD-трафика управляемых селекторов;
 - rejects транспортных сетей VPN;
 - безусловные rejects защищаемых назначений;
 - окончательный `VPNG-FORWARD-DENY`;
 - необходимые structural chains/jumps.
 
 Состояние `UNKNOWN` никогда не восстанавливается вслепую. Daemon best-effort выключает
-forwarding и остаётся ISOLATED.
+forwarding и остаётся `ISOLATED`.
 
-Для подтверждённого `UNSAFE` либо смены binding применяется последовательность с
-первоначальным запретом:
+Для подтверждённого `UNSAFE` либо перехода, меняющего политику, применяется
+последовательность с первоначальным запретом:
 
 ```text
 1. best-effort ip_forward=0
 
 2. применить изолирующий фильтр как полное daemon-owned filter desired state
-   для этой промежуточной стадии; stale ACCEPT rules, зависящие от binding,
-   должны быть удалены
+   для этой промежуточной стадии; все stale ACCEPT rules, зависящие от
+   привязки, для всех профилей должны быть удалены
 3. проверить изолирующий фильтр
    - эта проверка подтверждает только защитный барьер
    - она НЕ означает full-policy SAFE
 
-4. применить desired NAT для текущего immutable binding snapshot
+4. применить desired NAT для текущего immutable snapshot
 5. проверить desired NAT
 
-6. применить full desired filter с точными ACCEPT rules, зависящими от binding
+6. применить full desired filter с точными ACCEPT rules, зависящими от привязки
 7. проверить full desired filter
    - только после проверки NAT + full filter полное firewall/NAT state может быть SAFE
 
@@ -784,14 +832,25 @@ forwarding и остаётся ISOLATED.
        включить/подтвердить forwarding согласно требуемому состоянию
 ```
 
-Этот порядок обязателен даже если `set_ip_forward(False)` завершился ошибкой. Благодаря
-этому полный FORWARD ACCEPT не появляется раньше проверенного NAT.
+Изолирующий фильтр применяется как **полное** daemon-owned состояние таблицы filter на
+промежуточной стадии. Поэтому на время защитного барьера разрешающие правила всех
+управляемых профилей временно отсутствуют и вся управляемая пересылка запрещена, включая
+профили, чья привязка не менялась. Сохранение разрешающих правил «незатронутых» профилей
+не является допустимой оптимизацией этого протокола восстановления.
 
-Если изолирующий фильтр не удалось применить или проверить, daemon остаётся ISOLATED и не
-переходит к NAT/full-filter/routes.
+Применение изолирующего фильтра не изменяет таблицу nat. Ранее применённые правила NAT
+могут временно оставаться в ядре за уже проверенным запрещающим барьером до шага 4, где
+требуемый NAT для текущего snapshot применяется и проверяется. Наличие старого NAT за
+проверенным фильтрующим барьером само по себе не открывает путь пересылки.
+
+Этот порядок обязателен даже если `set_ip_forward(False)` завершился ошибкой. Благодаря
+этому полный FORWARD `ACCEPT` не появляется раньше проверенного NAT.
+
+Если изолирующий фильтр не удалось применить или проверить, daemon остаётся `ISOLATED`
+и не переходит к NAT/full-filter/routes.
 
 Простая глобальная перестановка `nat -> filter` запрещена: при уже небезопасном/open
-filter она оставила бы разрешающий forwarding активным дольше. Защитным барьером является
+filter она оставила бы разрешающую пересылку активной дольше. Защитным барьером является
 именно фильтр с первоначальным запретом.
 
 Если forwarding подтверждён OFF, реализация может оптимизировать технические детали
@@ -811,21 +870,21 @@ filter она оставила бы разрешающий forwarding актив
 Route plan validation сохраняет authoritative exact-prefix semantics и запрет mutation
 `proto kernel`.
 
-### 8.8. OWNED и фиксация binding
+### 8.8. OWNED и фиксация привязки/готовности
 
-Process-local OWNED routes и committed binding snapshot изменяются только после completed
-verify соответствующего pass.
+Process-local OWNED routes и последнее подтверждённое состояние привязки/готовности
+изменяются только после completed verify соответствующего pass.
 
 Bootstrap ordering остаётся:
 
 ```text
 route/policy verify
--> commit process-local OWNED/binding
+-> commit process-local OWNED + binding/readiness state
 -> enable + confirm ip_forward
 ```
 
-Commit после forwarding запрещён: неожиданная process-local commit ошибка не должна оставлять
-failed apply при уже включённом forwarding.
+Commit после forwarding запрещён: неожиданная process-local commit error не должна
+оставлять failed apply при уже включённом forwarding.
 
 ### 8.9. Lifecycle state
 
@@ -875,25 +934,37 @@ Binding-specific часть строится только из exact concrete re
 ```text
 1..N   -> VPNG-<PROFILE>-INPUT, sorted profile ID
 N+1    -> VPNG-INPUT-GUARD
-далее  -> foreign INPUT rules
+далее  -> сторонние INPUT rules
 ```
 
-`FORWARD`:
+`FORWARD` в проверенном требуемом состоянии:
 
 ```text
 1      -> VPNG-INGRESS
 2      -> VPNG-RESERVED
 3..    -> VPNG-<PROFILE>-FORWARD, sorted profile ID
 last   -> VPNG-FORWARD-DENY
-далее  -> foreign FORWARD rules, физически сохранённые, но недостижимые при ip_forward=1
+далее  -> сторонние FORWARD rules
 ```
+
+Стороннее правило, вставленное перед этим префиксом, считается рассогласованием
+`UNSAFE`; восстановление с первоначальным запретом возвращает daemon-owned префикс на
+позицию 1 и физически сдвигает стороннее правило за `VPNG-FORWARD-DENY`, не удаляя его.
 
 `POSTROUTING`:
 
 ```text
 1..N   -> VPNG-<PROFILE>-NAT
-далее  -> foreign rules
+далее  -> сторонние rules
 ```
+
+Каждая profile NAT chain при несовпадении возвращает управление через `RETURN`.
+Поэтому сторонние `POSTROUTING` rules сохраняются и остаются достижимыми для
+неуправляемого исходящего трафика.
+
+`OUTPUT` не входит в область управления VPN Gateway: daemon не создаёт, не изменяет, не
+переставляет и не удаляет правила этой цепочки. Политика `OUTPUT` принадлежит
+администратору хоста.
 
 Каждый daemon jump существует ровно один раз и использует plain `-j`.
 
@@ -936,7 +1007,7 @@ Traffic, не относящийся ни к одному managed selector, по
 
 ### 9.3. FORWARD semantics
 
-`VPNG-INGRESS` для каждого **ready concrete binding**:
+`VPNG-INGRESS` сначала содержит точный блок для каждой **готовой жесткой привязки**:
 
 ```text
 -i concrete
@@ -949,16 +1020,34 @@ ctstate ESTABLISHED,RELATED
 
 -i concrete
     REJECT --reject-with icmp-host-prohibited
+```
+
+После всех точных блоков `VPNG-INGRESS` содержит запрещающее правило для каждого
+управляемого селектора, в детерминированном порядке профилей:
+
+```text
+точный селектор:
+    -i exact
+        REJECT --reject-with icmp-host-prohibited
+
+префиксный селектор:
+    -i prefix+
+        REJECT --reject-with icmp-host-prohibited
 
 RETURN
 ```
 
-Unbound/new selector-family ingress, не совпавший с exact block, всё равно не может
-провалиться в foreign FORWARD: его завершит `VPNG-FORWARD-DENY`.
+Точный блок готового интерфейса расположен раньше соответствующего запрещающего правила.
+Поэтому установленный ответный трафик готовой жесткой привязки может завершиться
+`ACCEPT`, а новый, ещё не привязанный интерфейс управляемого префиксного семейства
+останавливается в `VPNG-INGRESS` и не достигает разрешающих цепочек профилей.
 
-`VPNG-RESERVED` всегда REJECT'ит destination в любой managed `vpn.network`.
+Префиксное сопоставление используется здесь только для запрета. Оно не применяется в
+`ACCEPT`, NAT или маршрутах.
 
-Profile FORWARD chain для каждого protected destination:
+`VPNG-RESERVED` всегда `REJECT`'ит destination в любой managed `vpn.network`.
+
+Profile FORWARD chain для каждого защищаемого назначения:
 
 ```text
 если profile ready:
@@ -976,7 +1065,10 @@ Profile FORWARD chain для каждого protected destination:
 RETURN
 ```
 
-То есть protected destination terminally closed даже когда profile absent/ambiguous.
+Отсутствие `-i` в разрешающем правиле профиля не предоставляет обратный доступ через
+управляемые VPN-интерфейсы: такой входящий трафик уже обязан завершиться внутри
+`VPNG-INGRESS`. Это сохраняет возможность принимать разрешённый LAN-трафик с любого
+неуправляемого локального интерфейса.
 
 После всех profile chains `VPNG-FORWARD-DENY` делает complete global forwarding ownership:
 
@@ -988,8 +1080,8 @@ everything else
     REJECT --reject-with icmp-host-prohibited
 ```
 
-Ни один forwarded IPv4 packet при daemon-owned `ip_forward=1` не достигает foreign
-FORWARD rules или built-in policy.
+В проверенном требуемом состоянии ни один пересылаемый IPv4-пакет при daemon-owned
+`ip_forward=1` не достигает сторонних `FORWARD` rules или встроенной policy.
 
 ### 9.4. Fail2ban
 
@@ -1067,9 +1159,12 @@ RETURN
 
 Prefix selector string никогда не используется как NAT interface operand.
 
-При binding transition daemon отключает forwarding до rematerialization/verify binding-specific
-filter/NAT policy. NAT должен быть verified до добавления/восстановления proto-202 routes
-через новый concrete interface.
+При переходе, меняющем политику, daemon отключает forwarding до повторного применения и
+проверки зависящей от привязки filter/NAT policy. NAT должен быть проверен до
+добавления/восстановления маршрутов proto 202 через новое точное имя интерфейса.
+
+Сторонние POSTROUTING rules не удаляются. Если профильная NAT-цепочка не совпала с
+трафиком, её RETURN передаёт обработку последующим сторонним правилам.
 
 Это возвращает safety dependency:
 
@@ -1356,6 +1451,9 @@ vpns1+  + vpns2+   -> disjoint
 Администратор обязан использовать разные пространства имён интерфейсов для разных
 управляемых VPN instances и не создавать посторонние netdevs внутри зарезервированного
 пространства имён префикса.
+
+Ошибка проверки пересечения должна явно называть оба конфликтующих профиля и оба селектора,
+чтобы результат `--check-config` был пригоден для непосредственного исправления конфигурации.
 
 ## 16. VPN-сети и адреса
 
@@ -1684,14 +1782,18 @@ route_replaces
 Process-local runtime state daemon/profile хранит:
 
 - confirmed OWNED routes;
-- последний committed concrete binding snapshot;
+- последнее подтверждённое состояние жесткой привязки и готовности;
 - diagnostic overlap cache.
 
-Binding snapshot не является persistent state и не считается kernel truth. Каждый pass
-получает fresh interface inventory.
+OWNED routes и подтверждённое состояние привязки/готовности являются только состоянием
+текущего процесса. Они не сохраняются на диск, не переживают перезапуск и в новом процессе
+начинаются пустыми.
 
-OWNED routes и binding commit'ятся только после успешного verify соответствующего desired
-snapshot.
+Подтверждённое состояние привязки/готовности не считается kernel truth. Каждый pass получает
+fresh interface inventory и заново вычисляет resolution/readiness.
+
+OWNED routes и состояние привязки/готовности commit'ятся только после успешного verify
+соответствующего desired snapshot.
 
 ### 23.4. Kernel boundary
 
@@ -1753,20 +1855,48 @@ desired_isolation_filter(config)
 
 Точные имена функций и классов относятся к уровню реализации.
 
-Полная политика содержит structural resources и точные rules, зависящие от binding.
+Полная политика содержит structural resources и точные rules, зависящие от привязки.
 
 Изолирующий фильтр:
 
 - не зависит от interface inventory;
-- не содержит ACCEPT, зависящих от binding;
+- не содержит `ACCEPT`, зависящих от привязки;
 - не содержит разрешающего сопоставления по префиксу;
-- сохраняет защитные правила INPUT селекторов, rejects транспортных сетей VPN,
-  rejects защищаемых назначений и окончательный FORWARD deny.
+- сохраняет защитные правила INPUT селекторов;
+- сохраняет запрещающие правила входящего FORWARD-трафика селекторов;
+- сохраняет rejects транспортных сетей VPN, защищаемых назначений и окончательный
+  `VPNG-FORWARD-DENY`.
+
+Его профильные цепочки имеют однозначную структуру.
+
+`VPNG-<PROFILE>-INPUT` в изолирующем фильтре:
+
+```text
+RETURN
+```
+
+`VPNG-<PROFILE>-FORWARD`:
+
+```text
+для каждого protected destination:
+    -d route
+        REJECT --reject-with icmp-host-prohibited
+
+RETURN
+```
+
+`VPNG-INGRESS` не содержит точных блоков готовых жестких привязок. Он содержит только
+запрещающие правила всех управляемых селекторов и завершающий `RETURN`.
 
 При применении изолирующий фильтр является **полным daemon-owned filter desired state** для
-этой промежуточной стадии. Он не добавляется поверх текущего filter: stale daemon ACCEPT
-rules, которых нет в desired state изолирующей стадии, должны быть удалены или заменены в
-той же операции применения.
+этой промежуточной стадии. Он не добавляется поверх текущего filter: stale daemon
+`ACCEPT` rules, которых нет в требуемом состоянии изолирующей стадии, должны быть удалены
+или заменены в той же операции применения.
+
+Применение изолирующего фильтра не изменяет таблицу nat. Ранее применённый NAT может
+временно оставаться за проверенным запрещающим барьером. Затем orchestration применяет и
+проверяет требуемый NAT текущего snapshot и только после этого применяет полную разрешающую
+политику фильтрации.
 
 Успешная проверка изолирующего фильтра означает только:
 
@@ -1774,24 +1904,22 @@ rules, которых нет в desired state изолирующей стади�
 isolation filter verified
 ```
 
-и **никогда не эквивалентна**:
+и никогда не эквивалентна:
 
 ```text
 full desired firewall/NAT SAFE
 ```
 
-Только full desired firewall/NAT SAFE после проверки desired NAT и full filter может открыть
-путь к завершению согласования маршрутов и последующему включению forwarding.
+Только full desired firewall/NAT `SAFE` после проверки desired NAT и full filter может
+открыть путь к завершению согласования маршрутов и последующему включению forwarding.
 
-Обе формы выводятся из одной модели policy, чтобы compare/restore не имели независимых
-источников истины. Оркестрация восстановления с первоначальным запретом не выполняет
-ad-hoc surgery над отдельными rules.
+Обе формы выводятся из **одной модели политики**. Сравнение и восстановление не имеют
+независимых источников истины; orchestration не выполняет ad-hoc surgery над отдельными
+rules.
 
-Префиксный селектор никогда не применяется в allow/NAT rule; там используется только точное
-имя жесткой привязки.
-
-Защитное правило INPUT селектора только с запретом является отдельным structural safety
-mechanism.
+Префиксный селектор никогда не применяется в разрешающем `ACCEPT` или NAT rule; там
+используется только точное имя жесткой привязки. Сопоставление `-i prefix+` допустимо
+только в проверенных на целевой системе запрещающих защитных правилах INPUT/FORWARD.
 
 ### 23.6. Routing ownership policy
 
@@ -1810,12 +1938,17 @@ configured blackhole guard            -> always desired
 `proto kernel` никогда не delete/replace. Exact protected prefix, совпавший с connected
 kernel route, fatal на startup.
 
+Если такой exact `proto kernel` conflict появляется во время RUN, daemon также не имеет
+права изменять этот маршрут. План маршрутизации завершается ошибкой для соответствующего
+профиля; при уже проверенной безопасной firewall policy lifecycle остаётся fail-closed и
+переходит в `DEGRADED`, а не принимает kernel route как OWNED.
+
 More-specific/less-specific overlaps автоматически не удаляются и остаются diagnostic.
 
-Fail-closed теперь обеспечивается тремя независимыми слоями:
+Fail-closed обеспечивается тремя независимыми слоями:
 
 1. BLACKHOLE для protected prefix;
-2. unconditional protected-destination REJECT внутри profile FORWARD chain;
+2. unconditional protected-destination `REJECT` внутри profile FORWARD chain;
 3. global terminal `VPNG-FORWARD-DENY`.
 
 ### 23.7. Цикл обработки событий
@@ -1835,6 +1968,28 @@ reconciliation читает fresh full interface snapshot.
 Unknown interface events могут быть проигнорированы только если имя не может соответствовать
 ни одному managed selector. Событие имени, которое **может** match managed selector, должно
 инициировать resync даже если concrete binding ещё не известен.
+
+### 23.8. Диагностическая модель
+
+Ожидаемые operational failures имеют стабильную машинную идентичность причины, независимую
+от человекочитаемого текста. Концептуальный контракт:
+
+```text
+DiagnosticFact:
+    code   -> стабильный код причины
+    detail -> необязательный человекочитаемый контекст
+```
+
+Точные имена Python-классов относятся к реализации; архитектурным контрактом является
+enum-подобный стабильный набор кодов причин, пригодный для переноса в Rust.
+
+Код причины используется для машинной идентичности, дедупликации повторяющихся состояний и
+операционного статуса. Поле detail предназначено только для диагностики человеком и не
+должно определять identity события.
+
+Ожидаемые ошибки kernel/userspace boundary переводятся в известные диагностические причины
+на соответствующей orchestration boundary. Programming exceptions, нарушенные внутренние
+инварианты и иные неожиданные ошибки не маскируются как штатные `UNKNOWN`/`DEGRADED`.
 
 
 ## 24. Замечания по реализации, уже зафиксированные архитектурой
@@ -1861,15 +2016,17 @@ Unknown interface events могут быть проигнорированы то
 - EXP-004.5 подтвердил marker-selective `proto 201/202` route inventory для cleanup.
 - External CLI forms, влияющие на safety contract, должны вручную проверяться на target
   Debian до кодирования в subprocess adapter.
-- Deny-only selector-family INPUT guard target-validated EXP-005; prefix wildcard
-  запрещён для ACCEPT/NAT.
+- Запрещающее сопоставление префиксного семейства для INPUT и FORWARD проверено EXP-005;
+  префиксное сопоставление запрещено для разрешающих `ACCEPT`/NAT.
 - `ip_forward` изменяется read-before-write и результат подтверждается.
 - Subprocess calls имеют bounded timeout и stable `LC_ALL=C`/`LANG=C`.
 - Netfilter notifications остаются optional enhancement; correctness опирается на
   Netlink-route events + periodic full reconciliation.
-- Binding-sensitive repair использует deny-first barrier:
-  isolation filter -> verify -> desired NAT -> verify -> full desired filter -> verify ->
-  routes -> verify. Это ordering сохраняется даже если forwarding OFF не удалось подтвердить.
+- Переходы, меняющие политику (смена привязки или готовности), используют восстановление с
+  первоначальным запретом: isolation filter -> verify -> desired NAT -> verify -> full desired
+  filter -> verify -> routes -> verify. Защитный барьер временно запрещает управляемую
+  пересылку всех профилей, даже если изменился только один. Этот порядок сохраняется и при
+  неудаче подтверждения forwarding OFF.
 - Interface inventory failure является isolation-class failure: binding-specific blind repair
   запрещён, config-only isolation filter может использоваться как безопасный barrier при
   читаемом firewall boundary.
@@ -1882,6 +2039,30 @@ Unknown interface events могут быть проигнорированы то
 - Python implementation может быть package с несколькими файлами; один daemon entry point
   сохраняется. Будущий Rust — один binary.
 
+
+### 24.1. Несовместимые изменения относительно реализации RC2.5.1
+
+Следующий рефакторинг реализации обязан учитывать как минимум:
+
+- typed `InterfaceSelector` для exact/prefix-family forms;
+- `InterfaceRecord` с `name`, `ifindex` и IPv4-адресами;
+- `InterfaceResolution` с `ABSENT/BOUND/AMBIGUOUS`;
+- замену `list_interface_ipv4()` на инвентаризацию интерфейсов с ifindex;
+- отказ от идеи полного набора готовых `CONFIGURED RouteSpec` внутри `VpnProfile`;
+- один immutable `ReconciliationSnapshot` на цикл согласования;
+- две производные формы одной модели политики: full policy и isolation filter;
+- process-local подтверждённое состояние привязки и готовности;
+- `RouteSpec.interface` только с точным runtime-именем, никогда с selector sentinel.
+
+`ReconciliationPlan` может сохранить модель `adds/deletes/replaces`; архитектура не
+требует менять её только ради RC3. Набор значений `DaemonState` также не обязан меняться,
+если новые условия переходов выражаются существующими состояниями.
+
+Regression baseline реализации RC2 сохранён в:
+
+```text
+design/RC2/code/python/tests/
+```
 
 ## 25. Открытые решения
 
@@ -1926,12 +2107,15 @@ Unknown interface events могут быть проигнорированы то
 
 10. ip_forward exclusive-owned daemon'ом и изменяется read-before-write с verify.
 
-11. Exclusive ownership ip_forward означает terminal verdict для каждого IPv4 FORWARD packet.
+11. Эксклюзивное владение `ip_forward` архитектурно связано с эксклюзивной ответственностью
+    daemon за окончательное решение для каждого IPv4-пакета `FORWARD`.
 
-12. Foreign FORWARD rules физически сохраняются, но недостижимы при ip_forward=1 из-за
-    VPNG-FORWARD-DENY.
+12. В проверенном состоянии сторонние `FORWARD` rules физически находятся после daemon-owned
+    префикса и недостижимы из-за `VPNG-FORWARD-DENY`; правило, вставленное перед префиксом,
+    является `UNSAFE` drift до следующего цикла согласования.
 
-13. INPUT foreign host-firewall rules сохраняют значение для traffic вне managed selectors.
+13. Сторонние INPUT host-firewall rules сохраняют значение для traffic вне managed selectors;
+    `OUTPUT` не изменяется daemon и полностью остаётся политикой администратора хоста.
 
 14. Interface config value является selector: exact name либо prefix family `prefix+`.
 
@@ -1941,8 +2125,9 @@ Unknown interface events могут быть проигнорированы то
 16. Prefix family `prefix+` означает весь textual ifname namespace, начинающийся с
     `prefix`, включая bare name `prefix`.
 
-17. Prefix selector никогда не попадает в RouteSpec/iptables ACCEPT/NAT kernel operand;
-    эти ресурсы используют только resolved concrete exact ifname.
+17. Префиксный selector никогда не используется в `RouteSpec` и разрешающих interface
+    conditions `ACCEPT`/NAT; они используют только точное имя жесткой привязки. Сопоставление
+    `-i prefix+` допустимо только в проверенных запрещающих selector guards.
 
 18. Managed selectors pairwise disjoint по множеству возможных concrete names; overlap fatal.
 
@@ -1973,32 +2158,36 @@ Unknown interface events могут быть проигнорированы то
 29. Profile FORWARD dynamic ACCEPT требует source + protected destination + exact concrete
     egress.
 
-30. Для каждого protected destination после dynamic ACCEPT всегда существует unconditional
-    REJECT.
+30. В каждом отдельном блоке protected destination после dynamic `ACCEPT` всегда существует
+    unconditional `REJECT`.
 
 31. VPNG-FORWARD-DENY делает terminal DROP/REJECT для всего оставшегося IPv4 transit.
 
 32. FORWARD к managed transport vpn.network REJECT'ится до profile ACL.
 
-33. New ingress из ready managed VPN interface не разрешает reverse forwarding:
-    INVALID DROP, ESTABLISHED/RELATED ACCEPT, остальное REJECT.
+33. `VPNG-INGRESS` для ready exact interface: INVALID `DROP`, ESTABLISHED/RELATED `ACCEPT`,
+    остальное `REJECT`; ingress managed selector, не завершённый точным блоком, `REJECT`'ится
+    запрещающим selector guard до profile ACL.
 
 34. NAT chain существует structural для каждого managed profile; MASQUERADE exact concrete
-    egress существует только при ready binding.
+    egress существует только при ready binding; сторонние `POSTROUTING` rules сохраняются и
+    остаются достижимыми после profile-chain `RETURN` для неуправляемого egress.
 
 35. NAT policy verified раньше proto-202 route restoration через новый binding.
 
-36. Binding transition detected -> best-effort ip_forward=0 before binding-sensitive policy
-    mutation.
+36. Смена привязки или смена готовности является переходом, меняющим политику: до изменения
+    зависящих от неё ресурсов выполняется best-effort `ip_forward=0`.
 
-37. Residual kernel-event -> daemon-reaction window существует и документирован; architecture
-    не изображает его как атомарный.
+37. Остаточное окно kernel-event -> daemon-reaction существует и документировано; запрещающие
+    selector guards закрывают ingress нового непривязанного семейного interface, но same-name /
+    new-ifindex limitation iptables остаётся границей модели.
 
 38. Netlink event является wakeup/dirty signal; authoritative state читается fresh snapshot.
 
 39. Event имени, потенциально matching managed selector, инициирует resync.
 
-40. Periodic reconciliation обязателен как safety net; reconcile_interval нельзя отключить 0.
+40. Periodic reconciliation обязателен как safety net; `reconcile_interval` имеет диапазон
+    `[1.0, 60.0]` и не может быть отключён значением 0.
 
 41. One immutable binding/readiness snapshot reused through build/apply/verify pass.
 
@@ -2018,25 +2207,27 @@ Unknown interface events могут быть проигнорированы то
 
 49. Default route не считается overlap diagnostic resource.
 
-50. OWNED routes и committed binding state меняются только после verify.
+50. OWNED routes и подтверждённое binding/readiness state являются process-local, после
+    restart начинаются пустыми и меняются только после verify.
 
 51. Process-local OWNED/binding commit происходит до final forwarding enable, не после.
 
 52. Kernel actual-state само по себе не означает ownership adoption.
 
-53. Fixed/structural и binding-specific firewall rules имеют единый desired policy builder;
-    compare и restore не имеют независимых policy sources.
+53. `desired_full_policy` и `desired_isolation_filter` являются двумя производными формами
+    одной policy model; compare и restore не имеют независимых policy sources.
 
 54. Firewall safety = SAFE/UNSAFE/UNKNOWN; UNKNOWN не repair'ится blind.
 
-55. UNSAFE/binding repair использует deny-first ordering:
+55. `UNSAFE` либо переход, меняющий политику, использует deny-first ordering:
     isolation filter -> verify -> desired NAT -> verify -> full desired filter -> verify ->
     routes -> verify.
 
 56. Failure подтвердить ip_forward=0 не разрешает full ACCEPT раньше verified NAT; deny-first
     barrier всё равно применяется.
 
-57. Interface inventory/read/parse/resolution failure -> ISOLATED, не обычный DEGRADED.
+57. Interface inventory read/parse failure либо невозможность завершить pass-level resolution
+    -> `ISOLATED`; per-profile `AMBIGUOUS` является profile FAIL/`DEGRADED`, а не этой ошибкой.
 
 58. При interface inventory failure binding-specific blind repair запрещён; config-only
     isolation filter допустим как безопасный barrier при читаемом firewall boundary.
@@ -2102,9 +2293,11 @@ Unknown interface events могут быть проигнорированы то
 
 87. External CLI safety contracts проверяются на target Debian до закрепления в adapter.
 
-88. Programming exceptions не маскируются как expected UNKNOWN/DEGRADED.
+88. Programming exceptions и нарушения внутренних контрактов не маскируются как ожидаемые
+    operational `UNKNOWN`/`DEGRADED` failures.
 
-89. Machine reason identity задаётся stable enum codes, не free-form exception text.
+89. Машинная идентичность диагностической причины задаётся стабильным enum-подобным кодом;
+    свободный текст detail не участвует в identity/dedup.
 
 90. Prefix-family selector reserves its entire matching textual runtime ifname namespace for
     the managed profile; unrelated matching netdev can intentionally force AMBIGUOUS
@@ -2116,7 +2309,8 @@ Unknown interface events могут быть проигнорированы то
 92. Same-name/new-ifindex replacement is detectable at snapshot reconciliation but existing
     iptables name matches cannot be retroactively bound to historical ifindex.
 
-93. Interface inventory duplicate name with conflicting ifindex is invalid kernel inventory.
+93. Duplicate interface name с conflicting ifindex является invalid kernel inventory и
+    возвращает `KernelError`; adapter не выбирает одну запись и не merge'ит конфликт молча.
 
 94. Protocol-selective cleanup remains strict for reserved proto 201/202 entries; unsupported
     selected route shapes are fatal, not silently skipped.
