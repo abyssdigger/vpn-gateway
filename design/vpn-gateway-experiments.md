@@ -747,7 +747,7 @@ This experiment does **not** validate graceful shutdown cleanup, crash behavior,
 drift repair, periodic reconciliation, or Netlink self-healing. Those remain separate work.
 
 
-**Current architecture:** [VPN Gateway Architecture RC2.4.1](vpn-gateway-architecture-rc2.wip.md)
+**Current architecture:** [VPN Gateway Architecture RC2.4.1](RC2/vpn-gateway-architecture-rc2.wip.md)
 
 This document is the laboratory record for implementation/research questions that must be resolved on the target Debian environment. Each experiment records:
 
@@ -794,7 +794,7 @@ readiness.
 
 ```bash
 git pull --ff-only
-cd "design/RC2/experiments/EXP-002A Address inventory follow-up"
+cd "design/experiments/EXP-002A Address inventory follow-up"
 sudo ./vpn-gateway-exp-002a-address-inventory.sh
 ```
 
@@ -878,7 +878,7 @@ From the repository root on the Debian 13 test host:
 
 ```bash
 git pull --ff-only
-cd "design/RC2/experiments/EXP-002 Route adapter iproute2 live smoke"
+cd "design/experiments/EXP-002 Route adapter iproute2 live smoke"
 sudo ./vpn-gateway-exp-002-route-adapter-smoke.sh
 ```
 

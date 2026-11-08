@@ -223,7 +223,7 @@ Setup also exposed that standalone foreground startup currently assumes
 create/validate this private `0700` runtime directory and its expected owner while retaining systemd
 `RuntimeDirectory=` as the deployment default.
 
-Full procedure/results: `design/RC2/vpn-gateway-experiments.md`.
+Full procedure/results: `design/vpn-gateway-experiments.md`.
 
 This EXP supersedes the previous sequencing note that called graceful shutdown
 "EXP-004". The next step is a post-EXP architecture/implementation review; lifecycle
@@ -252,7 +252,7 @@ followed the intended VPN gateway path.
 External CLI boundary forms are now to be manually validated on the target Debian before
 being encoded in the subprocess adapter; this rule was applied before the RC2.5.1 retry.
 
-EXP-003 is recorded in `design/RC2/vpn-gateway-experiments.md`.
+EXP-003 is recorded in `design/vpn-gateway-experiments.md`.
 
 Independent technical review: [`RC2.5.1-review-2026-11-08.md`](design/RC2/code/reviews/RC2.5.1-review-2026-11-08.md).
 The review now includes maintainer disposition: read-before-write forwarding fixes are
