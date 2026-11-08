@@ -4,6 +4,28 @@
 architecture/implementation milestones, состояние тестов и следующий незакрытый блок.
 
 
+## 2026-11-08 — RC2.6 independent architecture reviews
+
+Two independent review passes were archived before implementation:
+
+- safety/state-machine review:
+  `design/RC2/code/reviews/RC2.6-architecture-safety-review-2026-11-08.md`;
+- implementation/data-model review:
+  `design/RC2/code/reviews/RC2.6-architecture-implementation-review-2026-11-08.md`.
+
+The safety review found one high-severity ordering issue: after RC2.6 makes NAT and ACCEPT
+rules binding-specific, the old `filter -> nat` repair sequence is unsafe if
+`ip_forward=0` cannot be confirmed. It recommends a deny-only filter baseline before NAT
+and before restoring full ACCEPT rules.
+
+It also requires interface-inventory failure to isolate the daemon because expected policy
+can no longer be derived without a trustworthy binding snapshot.
+
+No RC2.6 architecture changes are made by the review commit itself; maintainer disposition
+and architecture correction are the next step.
+
+
+
 ## 2026-11-08 — Architecture RC2.6 after EXP-004
 
 Architecture revised from RC2.4.1 to RC2.6 before further Python implementation.
