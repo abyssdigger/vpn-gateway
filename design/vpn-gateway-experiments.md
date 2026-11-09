@@ -12,7 +12,7 @@
 
 ## EXP-009 — RC3: несколько runtime-интерфейсов одного transport profile
 
-**Статус:** COMPLETE — PASS  
+**Статус:** IN PROGRESS — discovery PASS, route failover pending  
 **Architecture baseline:** RC3 до исправления binding model по EXP-009  
 **Запуск:** 2026-11-10  
 **Тип:** ручной live discovery experiment  
@@ -57,9 +57,21 @@ vpns01           UNKNOWN        172.20.130.1 peer 172.20.130.5/32
 Две одновременно исправные сессии занимают **разные** server-side runtime interfaces.
 У обоих interfaces один local VPN address и разные point-to-point remote peers.
 
-### Результат
+### Промежуточный результат
 
-**EXP-009 result: PASS.**
+**H1 — concurrent multi-interface discovery: PASS.**
+
+Полный EXP-009 пока не закрыт. Следующая ручная фаза должна независимо от
+`vpn-gatewayd` проверить реальный route failover к `172.21.201.19`:
+
+- primary path: `172.20.130.6 / vpns00 / metric 10`;
+- secondary path: `172.20.130.5 / vpns01 / metric 20`;
+- после отключения primary kernel должен удалить зависимый primary route и выбрать
+  secondary route;
+- проверка включает реальное прохождение traffic с LAN host, а не только `ip route get`.
+
+Архитектурный вывод о необходимости multi-binding selector/binding model уже доказан H1
+и не зависит от результата route-failover фазы.
 
 Эксперимент опровергает архитектурное предположение, что healthy profile обязательно имеет
 один runtime interface. По прежнему правилу cardinality для `vpns+` это исправное
