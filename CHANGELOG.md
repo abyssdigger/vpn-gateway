@@ -1,5 +1,17 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 interface resolution and readiness core
+
+Pure interface-state logic now resolves one typed selector against one inventory snapshot:
+
+- zero matches -> `ABSENT`;
+- one match -> `BOUND(name, ifindex)`;
+- multiple matches -> `AMBIGUOUS`;
+- readiness requires a `BOUND` record containing the configured local IPv4 address.
+
+Resolution output is deterministic and independent of Netlink event payloads; kernel
+inventory integration remains a later step.
+
 ## 2026-11-09 — RC3 typed selector in runtime configuration
 
 The managed runtime projection now carries `InterfaceSelector` instead of a raw interface

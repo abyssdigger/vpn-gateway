@@ -125,5 +125,78 @@ class InterfaceRecordTests(unittest.TestCase):
             vpng.InterfaceResolution.ambiguous((one,))
 
 
+class InterfaceResolutionFunctionTests(unittest.TestCase):
+    def test_resolve_absent_bound_ambiguous(self):
+        selector = vpng.InterfaceSelector.parse("vpns+")
+        vpns0 = vpng.InterfaceRecord(
+            "vpns0",
+            7,
+            frozenset({IPv4Address("172.20.130.1")}),
+        )
+        vpns1 = vpng.InterfaceRecord("vpns1", 8, frozenset())
+        other = vpng.InterfaceRecord("wg0", 9, frozenset())
+
+        absent = vpng.resolve_interface_selector(selector, [other])
+        self.assertIs(
+            absent.state,
+            vpng.InterfaceResolutionState.ABSENT,
+        )
+
+        bound = vpng.resolve_interface_selector(
+            selector,
+            [other, vpns0],
+        )
+        self.assertIs(
+            bound.state,
+            vpng.InterfaceResolutionState.BOUND,
+        )
+        self.assertEqual(bound.bound_record, vpns0)
+
+        ambiguous = vpng.resolve_interface_selector(
+            selector,
+            [vpns1, other, vpns0],
+        )
+        self.assertIs(
+            ambiguous.state,
+            vpng.InterfaceResolutionState.AMBIGUOUS,
+        )
+        self.assertEqual(
+            tuple(record.name for record in ambiguous.matches),
+            ("vpns0", "vpns1"),
+        )
+
+    def test_readiness_uses_bound_record_and_expected_local_address(self):
+        expected = IPv4Address("172.20.130.1")
+        ready = vpng.InterfaceRecord(
+            "vpns0",
+            7,
+            frozenset({expected}),
+        )
+        wrong = vpng.InterfaceRecord(
+            "vpns0",
+            7,
+            frozenset({IPv4Address("172.20.130.2")}),
+        )
+
+        self.assertTrue(
+            vpng.interface_resolution_ready(
+                vpng.InterfaceResolution.bound(ready),
+                expected,
+            )
+        )
+        self.assertFalse(
+            vpng.interface_resolution_ready(
+                vpng.InterfaceResolution.bound(wrong),
+                expected,
+            )
+        )
+        self.assertFalse(
+            vpng.interface_resolution_ready(
+                vpng.InterfaceResolution.absent(),
+                expected,
+            )
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

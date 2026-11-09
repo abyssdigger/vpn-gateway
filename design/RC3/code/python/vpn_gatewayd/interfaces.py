@@ -145,3 +145,30 @@ class InterfaceResolution:
         if self.state is not InterfaceResolutionState.BOUND:
             return None
         return self.matches[0]
+
+
+def resolve_interface_selector(
+    selector: InterfaceSelector,
+    records: tuple[InterfaceRecord, ...] | list[InterfaceRecord],
+) -> InterfaceResolution:
+    """Resolve one selector against one immutable interface inventory."""
+    matches = tuple(
+        sorted(
+            (record for record in records if selector.matches(record.name)),
+            key=lambda record: (record.name, record.ifindex),
+        )
+    )
+    if not matches:
+        return InterfaceResolution.absent()
+    if len(matches) == 1:
+        return InterfaceResolution.bound(matches[0])
+    return InterfaceResolution.ambiguous(matches)
+
+
+def interface_resolution_ready(
+    resolution: InterfaceResolution,
+    expected_local_address: IPv4Address,
+) -> bool:
+    """Readiness is unique binding plus expected local IPv4 presence."""
+    record = resolution.bound_record
+    return record is not None and expected_local_address in record.ipv4
