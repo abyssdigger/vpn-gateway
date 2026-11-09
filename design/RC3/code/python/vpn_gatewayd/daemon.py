@@ -5,10 +5,10 @@ import select
 import signal
 import socket
 import time
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Network
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping
+from typing import Mapping, Sequence
 
 from .config import ConfigLoader
 from .constants import (
@@ -18,6 +18,7 @@ from .constants import (
     DEFAULT_LOCK_PATH,
     KERNEL_ROUTE_PROTO,
     LOG,
+    PEER_METRIC_STEP,
     VPNG_CHAIN_PREFIX,
     VPN_ROUTE_PROTO,
 )
@@ -28,6 +29,12 @@ from .errors import (
     PlanValidationError,
     ReconciliationError,
 )
+from .interfaces import (
+    InterfaceRecord,
+    InterfaceResolutionState,
+    ProfileInterfaceState,
+    resolve_profile_interface_state,
+)
 from .kernel import KernelInterface
 from .models import (
     ApplyStateResult,
@@ -36,7 +43,6 @@ from .models import (
     FirewallCheck,
     FirewallSafety,
     GatewayConfig,
-    ProfileResourceSet,
     ProfileResult,
     RUNTIME_REASON_TEXT,
     ReconciliationPlan,
@@ -233,9 +239,24 @@ class VpnGatewayDaemon:
         if self.config is None:
             raise RuntimeError("config not installed")
 
+        interface_state = self._resolve_profile_interfaces(
+            self.kernel.list_interfaces()
+        )
+        ambiguous = [
+            profile_id
+            for profile_id, state in interface_state.items()
+            if state.resolution.state is InterfaceResolutionState.AMBIGUOUS
+        ]
+        if ambiguous:
+            raise ReconciliationError(
+                "ambiguous interface selector during startup: "
+                f"{ambiguous!r}"
+            )
+
+        desired = self._derive_desired_routes(
+            interface_state_by_profile=interface_state
+        )
         initial_routes = self.kernel.list_routes()
-        interface_ipv4 = self.kernel.list_interface_ipv4()
-        desired = self._derive_desired_routes(interface_ipv4=interface_ipv4)
         plan = self._build_plan(
             all_kernel_routes=initial_routes,
             desired_routes_by_profile=desired,
@@ -277,7 +298,9 @@ class VpnGatewayDaemon:
             )
 
         self._commit_owned(
-            verified_routes_by_profile=verified.owned_routes_by_profile
+            verified_routes_by_profile=verified.owned_routes_by_profile,
+            verified_results=results,
+            interface_state_by_profile=interface_state,
         )
 
         self.kernel.set_ip_forward(True)
@@ -528,65 +551,140 @@ class VpnGatewayDaemon:
 
     def _reconcile_routes_once(self) -> Mapping[str, ProfileResult]:
         """
-        One lifecycle-neutral route reconciliation pass.
+        Perform one route-side reconciliation against one interface snapshot.
 
-        Required flow:
-        - fresh route + interface/address snapshots;
-        - derive readiness;
-        - CONFIGURED + OWNED -> one immutable desired_routes_by_profile;
-        - build route-only plan from that same desired snapshot;
-        - validate against that same desired snapshot;
-        - apply, BLACKHOLE adds first;
-        - fresh verify against that same desired snapshot;
-        - map result per managed profile;
-        - commit each profile OWNED only from verified state.
-
-        This method must not mutate DaemonState.
-
-        Contract:
-        - return only after a completed fresh verify;
-        - per-profile FAIL is a valid result only after that completed verify;
-        - if snapshot/build/apply/verify/commit-contract cannot complete,
-          propagate KernelError, PlanValidationError or ReconciliationError;
-        - if verify itself raises KernelError, propagate it unchanged;
-        - never return a partial/empty result to represent an incomplete pass;
-        - returned keys must equal the complete managed profile key set;
-        - do not replace previously confirmed OWNED state for a profile unless
-          the current pass has verified the replacement.
+        Interface resolution/readiness is computed once and reused for desired
+        route derivation and committed process-local state.
         """
-        raise NotImplementedError
+        interface_state = self._resolve_profile_interfaces(
+            self.kernel.list_interfaces()
+        )
+        desired = self._derive_desired_routes(
+            interface_state_by_profile=interface_state
+        )
+        actual = self.kernel.list_routes()
+        plan = self._build_plan(
+            all_kernel_routes=actual,
+            desired_routes_by_profile=desired,
+        )
+        self._validate_plan(
+            plan,
+            all_kernel_routes=actual,
+            desired_routes_by_profile=desired,
+        )
+        self._apply_plan(plan)
+
+        verified = self._verify_plan(
+            all_kernel_routes=self.kernel.list_routes(),
+            desired_routes_by_profile=desired,
+        )
+        route_results = self._require_complete_profile_results(
+            verified.profile_results
+        )
+        self._commit_owned(
+            verified_routes_by_profile=verified.owned_routes_by_profile,
+            verified_results=route_results,
+            interface_state_by_profile=interface_state,
+        )
+
+        results = dict(route_results)
+        for profile_id, state in interface_state.items():
+            if state.resolution.state is not InterfaceResolutionState.AMBIGUOUS:
+                continue
+            matches = ", ".join(
+                f"{record.name}@{record.ifindex}"
+                for record in state.resolution.matches
+            )
+            results[profile_id] = ProfileResult(
+                result=ApplyStateResult.FAIL,
+                reason=DiagnosticFact(
+                    code=RuntimeReasonCode.PROFILE_INTERFACE_AMBIGUOUS,
+                    detail=f"selector matches: {matches}",
+                ),
+            )
+
+        return MappingProxyType(results)
 
     # ---- Route plan ------------------------------------------------------
+
+    def _resolve_profile_interfaces(
+        self,
+        interface_records: Sequence[InterfaceRecord],
+    ) -> Mapping[str, ProfileInterfaceState]:
+        state: dict[str, ProfileInterfaceState] = {}
+        records = tuple(interface_records)
+
+        for profile_id in sorted(self.profiles, key=str.casefold):
+            cfg = self.profiles[profile_id].config
+            state[profile_id] = resolve_profile_interface_state(
+                cfg.interface,
+                records,
+                cfg.local_address,
+            )
+
+        return MappingProxyType(state)
 
     def _derive_desired_routes(
         self,
         *,
-        interface_ipv4: Mapping[str, frozenset[IPv4Address]],
+        interface_state_by_profile: Mapping[str, ProfileInterfaceState],
     ) -> Mapping[str, frozenset[RouteSpec]]:
         """
-        Build one immutable DESIRED snapshot for the current pass.
+        Derive routes from immutable config plus one resolved interface state.
 
-        BLACKHOLE guards are always desired.
-        UNICAST peer routes are desired only while the profile is ready.
+        BLACKHOLE depends only on configuration. UNICAST additionally requires
+        readiness and uses only the exact name from the current binding.
         """
-        desired: dict[str, frozenset[RouteSpec]] = {}
-
-        for profile_id in sorted(self.profiles, key=str.casefold):
-            profile = self.profiles[profile_id]
-            configured = profile._list_routes(
-                ProfileResourceSet.CONFIGURED
+        expected = frozenset(self.profiles)
+        actual = frozenset(interface_state_by_profile)
+        if actual != expected:
+            raise ReconciliationError(
+                "incomplete interface-state snapshot: "
+                f"missing={sorted(expected - actual)!r}, "
+                f"unexpected={sorted(actual - expected)!r}"
             )
 
-            if self._profile_is_ready(profile, interface_ipv4):
-                selected = configured
-            else:
-                selected = frozenset(
-                    route
-                    for route in configured
-                    if route.route_type is RouteType.BLACKHOLE
+        desired: dict[str, frozenset[RouteSpec]] = {}
+        for profile_id in sorted(self.profiles, key=str.casefold):
+            profile = self.profiles[profile_id]
+            cfg = profile.config
+            state = interface_state_by_profile[profile_id]
+            routes: set[RouteSpec] = set()
+
+            for destination in cfg.routes:
+                routes.add(
+                    RouteSpec(
+                        destination=destination,
+                        route_type=RouteType.BLACKHOLE,
+                        via=None,
+                        interface=None,
+                        metric=BLACKHOLE_METRIC,
+                        proto=BLACKHOLE_ROUTE_PROTO,
+                        onlink=False,
+                    )
                 )
 
-            desired[profile_id] = frozenset(selected)
+            if state.ready:
+                binding = state.binding
+                if binding is None:
+                    raise ReconciliationError(
+                        f"{profile_id}: ready state has no exact binding"
+                    )
+                for destination in cfg.routes:
+                    for index, peer in enumerate(cfg.peers):
+                        routes.add(
+                            RouteSpec(
+                                destination=destination,
+                                route_type=RouteType.UNICAST,
+                                via=peer,
+                                interface=binding.name,
+                                metric=(index + 1) * PEER_METRIC_STEP,
+                                proto=VPN_ROUTE_PROTO,
+                                onlink=True,
+                            )
+                        )
+
+            desired[profile_id] = frozenset(routes)
 
         return MappingProxyType(desired)
 
@@ -634,7 +732,7 @@ class VpnGatewayDaemon:
         for profile_id in sorted(self.profiles, key=str.casefold):
             profile = self.profiles[profile_id]
             desired = desired_routes_by_profile[profile_id]
-            owned = profile._list_routes(ProfileResourceSet.OWNED)
+            owned = profile.owned_routes
             protected = frozenset(profile.config.routes)
 
             actual_exact = frozenset(
@@ -701,16 +799,10 @@ class VpnGatewayDaemon:
         desired_owners: dict[RouteSpec, str] = {}
         desired_all: set[RouteSpec] = set()
         protected_destinations: dict[IPv4Network, str] = {}
-        configured_by_profile: dict[str, frozenset[RouteSpec]] = {}
         owned_owners: dict[RouteSpec, set[str]] = {}
 
         for profile_id in sorted(self.profiles, key=str.casefold):
             profile = self.profiles[profile_id]
-            configured = profile._list_routes(
-                ProfileResourceSet.CONFIGURED
-            )
-            configured_by_profile[profile_id] = configured
-
             for destination in profile.config.routes:
                 previous = protected_destinations.get(destination)
                 if previous is not None and previous != profile_id:
@@ -731,7 +823,7 @@ class VpnGatewayDaemon:
                 desired_owners[route] = profile_id
                 desired_all.add(route)
 
-            for route in profile._list_routes(ProfileResourceSet.OWNED):
+            for route in profile.owned_routes:
                 owned_owners.setdefault(route, set()).add(profile_id)
 
         actual = set(all_kernel_routes)
@@ -781,7 +873,8 @@ class VpnGatewayDaemon:
             owners = owned_owners.get(route)
             if owners:
                 justified = any(
-                    route in configured_by_profile[profile_id]
+                    route.destination
+                    in self.profiles[profile_id].config.routes
                     for profile_id in owners
                 )
                 if not justified:
@@ -885,9 +978,7 @@ class VpnGatewayDaemon:
                         ),
                     ),
                 )
-                owned_routes[profile_id] = profile._list_routes(
-                    ProfileResourceSet.OWNED
-                )
+                owned_routes[profile_id] = profile.owned_routes
 
         return RouteVerifyResult(
             profile_results=MappingProxyType(profile_results),
@@ -918,26 +1009,36 @@ class VpnGatewayDaemon:
         self,
         *,
         verified_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
+        verified_results: Mapping[str, ProfileResult],
+        interface_state_by_profile: Mapping[str, ProfileInterfaceState],
     ) -> None:
         """
-        Commit profile ownership only after a complete verify result.
-
-        Validate the entire managed key set BEFORE mutating any profile so a
-        partial verify result cannot partially replace process-local OWNED.
+        Commit OWNED + binding/readiness only for profiles whose route state
+        was successfully verified in this cycle.
         """
         expected = frozenset(self.profiles)
-        actual = frozenset(verified_routes_by_profile)
-        if actual != expected:
-            missing = sorted(expected - actual)
-            unexpected = sorted(actual - expected)
-            raise ReconciliationError(
-                "incomplete verified ownership mapping: "
-                f"missing={missing!r}, unexpected={unexpected!r}"
-            )
+        mappings = {
+            "routes": frozenset(verified_routes_by_profile),
+            "results": frozenset(verified_results),
+            "interfaces": frozenset(interface_state_by_profile),
+        }
+        for name, actual in mappings.items():
+            if actual != expected:
+                raise ReconciliationError(
+                    f"incomplete verified {name} mapping: "
+                    f"missing={sorted(expected - actual)!r}, "
+                    f"unexpected={sorted(actual - expected)!r}"
+                )
 
         for profile_id in sorted(expected):
-            self.profiles[profile_id].update_owned_state(
-                routes=verified_routes_by_profile[profile_id]
+            result = verified_results[profile_id]
+            if result.result is not ApplyStateResult.SUCCESS:
+                continue
+            state = interface_state_by_profile[profile_id]
+            self.profiles[profile_id].commit_verified_state(
+                routes=verified_routes_by_profile[profile_id],
+                binding=state.binding,
+                ready=state.ready,
             )
 
     def _routes_for_profile(
@@ -968,17 +1069,6 @@ class VpnGatewayDaemon:
         )
 
     # ---- Readiness / helpers --------------------------------------------
-
-    def _profile_is_ready(
-        self,
-        profile: VpnProfile,
-        interface_ipv4: Mapping[str, frozenset[IPv4Address]],
-    ) -> bool:
-        addresses = interface_ipv4.get(str(profile.config.interface))
-        return (
-            addresses is not None
-            and profile.config.local_address in addresses
-        )
 
     def effective_sources(
         self,

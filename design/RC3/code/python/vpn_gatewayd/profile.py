@@ -1,83 +1,47 @@
 from __future__ import annotations
 
-from .constants import (
-    BLACKHOLE_METRIC,
-    BLACKHOLE_ROUTE_PROTO,
-    PEER_METRIC_STEP,
-    VPN_ROUTE_PROTO,
-)
-from .models import ProfileResourceSet, RouteSpec, RouteType, VpnProfileConfig
+from .interfaces import InterfaceBinding
+from .models import RouteSpec, VpnProfileConfig
+
 
 class VpnProfile:
     """
     Pure profile/domain object.
 
-    No kernel reads.
-    No kernel writes.
-    No readiness query.
-    No Netlink socket.
+    Immutable configuration is separate from process-local committed state.
+    No kernel reads, writes, readiness queries or Netlink operations live here.
     """
 
     def __init__(self, config: VpnProfileConfig) -> None:
         self.config = config
         self._owned_routes: set[RouteSpec] = set()
+        self._committed_binding: InterfaceBinding | None = None
+        self._committed_ready = False
 
-    def _list_routes(self, source: ProfileResourceSet) -> frozenset[RouteSpec]:
-        if source is ProfileResourceSet.CONFIGURED:
-            return self._configured_routes()
-        if source is ProfileResourceSet.OWNED:
-            return frozenset(self._owned_routes)
-        raise AssertionError(f"unhandled ProfileResourceSet: {source!r}")
+    @property
+    def owned_routes(self) -> frozenset[RouteSpec]:
+        return frozenset(self._owned_routes)
 
-    def _configured_routes(self) -> frozenset[RouteSpec]:
-        """
-        CONFIGURED is derived only from immutable config.
+    @property
+    def committed_binding(self) -> InterfaceBinding | None:
+        return self._committed_binding
 
-        For every protected prefix:
-        - one BLACKHOLE guard;
-        - one UNICAST route per peer.
-        """
-        routes: set[RouteSpec] = set()
+    @property
+    def committed_ready(self) -> bool:
+        return self._committed_ready
 
-        for destination in self.config.routes:
-            routes.add(
-                RouteSpec(
-                    destination=destination,
-                    route_type=RouteType.BLACKHOLE,
-                    via=None,
-                    interface=None,
-                    metric=BLACKHOLE_METRIC,
-                    proto=BLACKHOLE_ROUTE_PROTO,
-                    onlink=False,
-                )
-            )
-
-            for index, peer in enumerate(self.config.peers):
-                routes.add(
-                    RouteSpec(
-                        destination=destination,
-                        route_type=RouteType.UNICAST,
-                        via=peer,
-                        interface=str(self.config.interface),
-                        metric=(index + 1) * PEER_METRIC_STEP,
-                        proto=VPN_ROUTE_PROTO,
-                        onlink=True,
-                    )
-                )
-
-        return frozenset(routes)
-
-    def update_owned_state(
+    def commit_verified_state(
         self,
         *,
         routes: set[RouteSpec] | frozenset[RouteSpec],
+        binding: InterfaceBinding | None,
+        ready: bool,
     ) -> None:
-        """Atomic defensive replacement after daemon verify."""
-        self._owned_routes = set(routes)
+        """Replace process-local state only after daemon verification."""
+        if ready and binding is None:
+            raise ValueError("ready committed state requires a binding")
 
-
-# ---------------------------------------------------------------------------
-# Kernel/userspace boundary
-# ---------------------------------------------------------------------------
-
-
+        new_routes = set(routes)
+        self._owned_routes = new_routes
+        self._committed_binding = binding
+        self._committed_ready = ready

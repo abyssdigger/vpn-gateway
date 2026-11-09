@@ -30,11 +30,6 @@ class RouteType(Enum):
     THROW = auto()
 
 
-class ProfileResourceSet(Enum):
-    CONFIGURED = auto()
-    OWNED = auto()
-
-
 class ApplyStateResult(Enum):
     SUCCESS = auto()
     FAIL = auto()
@@ -53,6 +48,7 @@ class RuntimeReasonCode(Enum):
     FIREWALL_REPAIR_FAILED = auto()
     ROUTE_PASS_INCOMPLETE = auto()
     PROFILE_ROUTE_MISMATCH = auto()
+    PROFILE_INTERFACE_AMBIGUOUS = auto()
     FORWARDING_DISABLE_FAILED = auto()
     FORWARDING_ENABLE_FAILED = auto()
     FORWARDING_QUERY_FAILED = auto()
@@ -73,6 +69,8 @@ RUNTIME_REASON_TEXT: Mapping[RuntimeReasonCode, str] = MappingProxyType(
             "route reconciliation pass did not complete",
         RuntimeReasonCode.PROFILE_ROUTE_MISMATCH:
             "verified profile route state differs from desired state",
+        RuntimeReasonCode.PROFILE_INTERFACE_AMBIGUOUS:
+            "interface selector resolves ambiguously",
         RuntimeReasonCode.FORWARDING_DISABLE_FAILED:
             "failed to confirm ip_forward disabled",
         RuntimeReasonCode.FORWARDING_ENABLE_FAILED:

@@ -198,5 +198,33 @@ class InterfaceResolutionFunctionTests(unittest.TestCase):
         )
 
 
+class ProfileInterfaceStateTests(unittest.TestCase):
+    def test_state_combines_resolution_and_readiness(self):
+        expected = IPv4Address("172.20.130.1")
+        record = vpng.InterfaceRecord(
+            "vpns0",
+            7,
+            frozenset({expected}),
+        )
+        state = vpng.resolve_profile_interface_state(
+            vpng.InterfaceSelector.parse("vpns+"),
+            [record],
+            expected,
+        )
+
+        self.assertTrue(state.ready)
+        self.assertEqual(
+            state.binding,
+            vpng.InterfaceBinding("vpns0", 7),
+        )
+
+    def test_ready_requires_bound_resolution(self):
+        with self.assertRaises(ValueError):
+            vpng.ProfileInterfaceState(
+                vpng.InterfaceResolution.absent(),
+                True,
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

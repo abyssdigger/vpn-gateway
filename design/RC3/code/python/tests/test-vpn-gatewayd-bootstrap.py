@@ -45,6 +45,21 @@ def make_daemon(kernel=None):
     return daemon
 
 
+def desired_routes(daemon):
+    state = daemon._resolve_profile_interfaces(
+        (
+            vpng.InterfaceRecord(
+                "vpns0",
+                7,
+                frozenset({IPv4Address("172.20.130.1")}),
+            ),
+        )
+    )
+    return daemon._derive_desired_routes(
+        interface_state_by_profile=state
+    )
+
+
 def route(*, kind, proto, metric, via=None, interface=None, onlink=False):
     return vpng.RouteSpec(
         destination=IPv4Network("10.0.0.0/8"),
@@ -172,7 +187,7 @@ COMMIT
     def test_verify_plan_requires_exact_authoritative_state(self):
         daemon = make_daemon()
         profile = daemon.profiles["primary"]
-        desired = profile._list_routes(vpng.ProfileResourceSet.CONFIGURED)
+        desired = desired_routes(daemon)["primary"]
         desired_map = MappingProxyType({"primary": desired})
 
         ok = daemon._verify_plan(
@@ -309,11 +324,15 @@ COMMIT
                 self.events.append("list_routes")
                 return frozenset(self.routes)
 
-            def list_interface_ipv4(self):
-                self.events.append("list_interface_ipv4")
-                return MappingProxyType({
-                    "vpns0": frozenset({IPv4Address("172.20.130.1")})
-                })
+            def list_interfaces(self):
+                self.events.append("list_interfaces")
+                return (
+                    vpng.InterfaceRecord(
+                        "vpns0",
+                        7,
+                        frozenset({IPv4Address("172.20.130.1")}),
+                    ),
+                )
 
             def iptables_restore(self, payload, *, noflush=True):
                 self.events.append("iptables_restore")
@@ -355,7 +374,7 @@ COMMIT
         self.assertLess(blackhole_index, unicast_index)
         self.assertLess(unicast_index, forward_index)
         self.assertEqual(
-            daemon.profiles["primary"]._list_routes(vpng.ProfileResourceSet.OWNED),
+            daemon.profiles["primary"].owned_routes,
             frozenset(kernel.routes),
         )
 

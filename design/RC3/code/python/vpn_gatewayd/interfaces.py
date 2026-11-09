@@ -172,3 +172,37 @@ def interface_resolution_ready(
     """Readiness is unique binding plus expected local IPv4 presence."""
     record = resolution.bound_record
     return record is not None and expected_local_address in record.ipv4
+
+
+@dataclass(slots=True, frozen=True)
+class ProfileInterfaceState:
+    resolution: InterfaceResolution
+    ready: bool
+
+    def __post_init__(self) -> None:
+        if (
+            self.ready
+            and self.resolution.state is not InterfaceResolutionState.BOUND
+        ):
+            raise ValueError(
+                "ready profile interface state requires BOUND resolution"
+            )
+
+    @property
+    def binding(self) -> InterfaceBinding | None:
+        return self.resolution.binding
+
+
+def resolve_profile_interface_state(
+    selector: InterfaceSelector,
+    records: tuple[InterfaceRecord, ...] | list[InterfaceRecord],
+    expected_local_address: IPv4Address,
+) -> ProfileInterfaceState:
+    resolution = resolve_interface_selector(selector, records)
+    return ProfileInterfaceState(
+        resolution=resolution,
+        ready=interface_resolution_ready(
+            resolution,
+            expected_local_address,
+        ),
+    )

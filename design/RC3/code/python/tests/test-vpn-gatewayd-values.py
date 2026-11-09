@@ -92,107 +92,66 @@ class ValueObjectTests(unittest.TestCase):
         with self.assertRaises(dataclasses.FrozenInstanceError):
             plan.route_adds = frozenset()
 
-    def test_configured_routes_with_empty_peers_are_blackholes_only(self):
+    def test_profile_process_state_starts_empty(self):
         profile = vpng.VpnProfile(profile_config(peers=()))
 
-        routes = profile._list_routes(vpng.ProfileResourceSet.CONFIGURED)
+        self.assertEqual(profile.owned_routes, frozenset())
+        self.assertIsNone(profile.committed_binding)
+        self.assertFalse(profile.committed_ready)
 
-        self.assertEqual(len(routes), 2)
-        self.assertEqual(
-            {route.destination for route in routes},
-            {
-                IPv4Network("10.0.0.0/8"),
-                IPv4Network("192.168.0.0/16"),
-            },
-        )
-        for route in routes:
-            self.assertIs(route.route_type, vpng.RouteType.BLACKHOLE)
-            self.assertIsNone(route.via)
-            self.assertIsNone(route.interface)
-            self.assertEqual(route.metric, vpng.BLACKHOLE_METRIC)
-            self.assertEqual(route.proto, vpng.BLACKHOLE_ROUTE_PROTO)
-            self.assertFalse(route.onlink)
-
-    def test_configured_routes_with_peers_have_ordered_metrics_per_destination(self):
-        profile = vpng.VpnProfile(
-            profile_config(
-                peers=("172.20.130.6", "172.20.130.5"),
-            )
-        )
-
-        routes = profile._list_routes(vpng.ProfileResourceSet.CONFIGURED)
-
-        # 2 protected destinations × (1 blackhole + 2 peer routes)
-        self.assertEqual(len(routes), 6)
-
-        for destination in (
-            IPv4Network("10.0.0.0/8"),
-            IPv4Network("192.168.0.0/16"),
-        ):
-            per_destination = {
-                route
-                for route in routes
-                if route.destination == destination
-            }
-            blackholes = {
-                route
-                for route in per_destination
-                if route.route_type is vpng.RouteType.BLACKHOLE
-            }
-            unicast = sorted(
-                (
-                    route
-                    for route in per_destination
-                    if route.route_type is vpng.RouteType.UNICAST
-                ),
-                key=lambda route: route.metric,
-            )
-
-            self.assertEqual(len(blackholes), 1)
-            self.assertEqual(
-                [(str(route.via), route.metric) for route in unicast],
-                [
-                    ("172.20.130.6", 10),
-                    ("172.20.130.5", 20),
-                ],
-            )
-            for route in unicast:
-                self.assertEqual(route.interface, "vpns0")
-                self.assertEqual(route.proto, vpng.VPN_ROUTE_PROTO)
-                self.assertTrue(route.onlink)
-
-    def test_owned_state_replacement_is_defensive(self):
+    def test_commit_verified_state_is_defensive(self):
         profile = vpng.VpnProfile(profile_config(peers=()))
-        route = next(
-            iter(profile._list_routes(vpng.ProfileResourceSet.CONFIGURED))
+        route = vpng.RouteSpec(
+            destination=IPv4Network("10.0.0.0/8"),
+            route_type=vpng.RouteType.BLACKHOLE,
+            via=None,
+            interface=None,
+            metric=vpng.BLACKHOLE_METRIC,
+            proto=vpng.BLACKHOLE_ROUTE_PROTO,
+            onlink=False,
         )
         source = {route}
 
-        profile.update_owned_state(routes=source)
+        profile.commit_verified_state(
+            routes=source,
+            binding=None,
+            ready=False,
+        )
         source.clear()
 
-        self.assertEqual(
-            profile._list_routes(vpng.ProfileResourceSet.OWNED),
-            frozenset({route}),
-        )
+        self.assertEqual(profile.owned_routes, frozenset({route}))
+        self.assertIsNone(profile.committed_binding)
+        self.assertFalse(profile.committed_ready)
 
-    def test_owned_state_replacement_replaces_atomically(self):
+    def test_commit_verified_state_replaces_binding_and_readiness(self):
         profile = vpng.VpnProfile(profile_config(peers=()))
-        configured = list(
-            profile._list_routes(vpng.ProfileResourceSet.CONFIGURED)
-        )
+        binding = vpng.InterfaceBinding("vpns0", 7)
 
-        profile.update_owned_state(routes={configured[0]})
-        self.assertEqual(
-            profile._list_routes(vpng.ProfileResourceSet.OWNED),
-            frozenset({configured[0]}),
+        profile.commit_verified_state(
+            routes=frozenset(),
+            binding=binding,
+            ready=True,
         )
+        self.assertEqual(profile.committed_binding, binding)
+        self.assertTrue(profile.committed_ready)
 
-        profile.update_owned_state(routes={configured[1]})
-        self.assertEqual(
-            profile._list_routes(vpng.ProfileResourceSet.OWNED),
-            frozenset({configured[1]}),
+        profile.commit_verified_state(
+            routes=frozenset(),
+            binding=None,
+            ready=False,
         )
+        self.assertIsNone(profile.committed_binding)
+        self.assertFalse(profile.committed_ready)
+
+    def test_ready_committed_state_requires_binding(self):
+        profile = vpng.VpnProfile(profile_config(peers=()))
+
+        with self.assertRaises(ValueError):
+            profile.commit_verified_state(
+                routes=frozenset(),
+                binding=None,
+                ready=True,
+            )
 
 
 if __name__ == "__main__":

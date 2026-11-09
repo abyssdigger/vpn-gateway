@@ -1,5 +1,20 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 binding-aware route derivation
+
+Route derivation is migrated from RC2 static `CONFIGURED RouteSpec` state to RC3
+config + resolved binding semantics:
+
+- BLACKHOLE routes depend only on configuration;
+- UNICAST routes exist only for ready profiles and always use the exact bound ifname;
+- prefix selector text can no longer enter a `RouteSpec`;
+- `VpnProfile` now stores only process-local OWNED routes and committed binding/readiness;
+- runtime route passes use typed interface inventory and return profile FAIL for AMBIGUOUS
+  selector state after verified fail-closed routes.
+
+ConfigLoader still accepts exact selectors only; prefix activation waits for firewall/NAT
+policy migration.
+
 ## 2026-11-09 — RC3 typed interface kernel inventory
 
 `SubprocessKernelInterface.list_interfaces()` now exposes immutable `InterfaceRecord`
