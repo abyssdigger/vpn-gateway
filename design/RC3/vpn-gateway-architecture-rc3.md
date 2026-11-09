@@ -976,7 +976,11 @@ Netlink-событию, периодическому таймеру, полно�
     `PeerBinding` multi-binding профиля materialize соответствующие отсутствующие
     `UNICAST RouteSpec` в этом же цикле;
 11. зафиксировать OWNED и подтвержденное binding state только после успешной проверки;
-12. привести daemon-owned `ip_forward` к требуемому значению.
+12. для завершенного не-ISOLATED цикла в `RUN` требуемое значение daemon-owned
+    `ip_forward` равно 1; попытаться привести его к 1 и повторно прочитать;
+13. подтвержденный `ip_forward=0` после неудачной попытки включения является безопасной
+    потерей доступности и дает `DEGRADED`; невозможность достоверно прочитать
+    `ip_forward` является недостаточной наблюдаемостью и дает `ISOLATED`.
 
 Binding transition включает как минимум:
 
@@ -1158,14 +1162,19 @@ active concrete bindings, peer bindings и ambiguity изменяются тол
 ### 8.9. Состояние жизненного цикла
 
 ```text
-недостаточная наблюдаемость интерфейсов/политики -> ISOLATED
-firewall/NAT != SAFE                             -> ISOLATED
+недостаточная наблюдаемость интерфейсов/политики/ip_forward -> ISOLATED
+firewall/NAT != SAFE                                        -> ISOLATED
+
 firewall/NAT == SAFE
   И все управляемые профили SUCCESS
-  И ip_forward == 1                              -> ACTIVE
+  И ip_forward == 1                                         -> ACTIVE
+
 firewall/NAT == SAFE
-  И хотя бы один профиль FAIL
-  И остальные проверки завершены                -> DEGRADED
+  И остальные проверки завершены
+  И (
+       хотя бы один профиль FAIL
+       ИЛИ подтвержденный ip_forward == 0
+    )                                                       -> DEGRADED
 ```
 
 Profile result определяется только после построения desired state и проверки фактических
@@ -1197,9 +1206,16 @@ configured peers независимо от transport-level handshake. Поэто
 
 `AMBIGUOUS` всегда является `FAIL`; его обработка определена в §8.5.
 
+В завершенном не-`ISOLATED` цикле `RUN` daemon стремится держать
+`ip_forward=1`, чтобы исправные профили продолжали обслуживаться. Если полная политика
+`SAFE`, но повторное чтение подтверждает `ip_forward=0`, это `DEGRADED`, а не
+`ISOLATED`: forwarding недоступен, но небезопасная пересылка отсутствует. Если значение
+`ip_forward` невозможно достоверно прочитать, цикл имеет недостаточную наблюдаемость и
+переходит в `ISOLATED`.
+
 `ACTIVE` означает, что требуемое состояние политики и маршрутов в ядре полностью
-реализовано для всех профилей. Ни `ACTIVE`, ни profile `SUCCESS` не являются
-health-check VPN transport.
+реализовано для всех профилей и forwarding подтвержден включенным. Ни `ACTIVE`, ни
+profile `SUCCESS` не являются health-check VPN transport.
 
 Операционный status для каждого профиля обязан показывать как минимум:
 
@@ -2870,8 +2886,10 @@ design/RC2/code/python/tests/
 63. `ACTIVE` = политика `SAFE` + результаты всех профилей `SUCCESS` + `ip_forward=1`;
     ни `ACTIVE`, ни profile `SUCCESS` не означают доказанную end-to-end связность VPN.
 
-64. `SAFE` с `FAIL` профиля -> `DEGRADED`; состояние не `SAFE` или недостаточная
-    наблюдаемость политики -> `ISOLATED`.
+64. В завершенном `RUN` при `SAFE` policy подтвержденный `ip_forward=0` либо хотя бы
+    один profile `FAIL` -> `DEGRADED`; `ACTIVE` требует все profiles `SUCCESS` и
+    `ip_forward=1`. Не-`SAFE` policy либо недостаточная наблюдаемость policy/ip_forward
+    -> `ISOLATED`.
 
 65. Очистка не переходит к разрушительным операциям, пока не подтверждено `ip_forward=0`;
     затем: `proto 202` -> `filter`/NAT -> `proto 201` blackhole -> проверка.
