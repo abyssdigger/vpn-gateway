@@ -169,6 +169,12 @@ foreign_after_prefix() {
     [[ -n "$pos" && "$pos" -gt "$n" ]]
 }
 
+forward_recovery_complete() {
+    prefix_is_first FORWARD "$BASE_FORWARD" &&
+    foreign_after_prefix FORWARD "$FWD_CHAIN" "$BASE_FORWARD" &&
+    daemon_active_state
+}
+
 start_forward_watcher() {
     local file="$1" stopfile="$2"
     : >"$file"
@@ -340,22 +346,59 @@ FWD_STOP="$OUT/.h4-watch-stop"
 start_forward_watcher "$FWD_WATCH" "$FWD_STOP"
 iptables -I FORWARD 1 -j "$FWD_CHAIN"
 
-if wait_until "$RECOVERY_TENTHS" prefix_is_first FORWARD "$BASE_FORWARD"; then
+if wait_until "$RECOVERY_TENTHS" forward_recovery_complete; then
     stop_forward_watcher "$FWD_STOP"
     capture_phase h4-forward-repaired
-    if ! grep -q ' 0$' "$FWD_WATCH"; then
+    if ! grep -q ' 0
+kill -TERM "$DAEMON_PID" 2>/dev/null || true
+if wait "$DAEMON_PID"; then
+    DAEMON_PID=""
+else
+    rc=$?
+    DAEMON_PID=""
+    fail "daemon graceful shutdown returned rc=$rc"
+fi
+
+capture_phase post-daemon-cleanup
+
+if [[ "$(cat /proc/sys/net/ipv4/ip_forward)" == "0" ]] &&
+   firewall_clean &&
+   routes_clean; then
+    pass "H5 graceful cleanup"
+else
+    fail "H5 graceful cleanup"
+fi
+
+cleanup_foreign
+capture_phase post-harness-cleanup
+
+if (( FAILS == 0 )); then
+    log "OVERALL=PASS"
+    RC=0
+else
+    log "OVERALL=FAIL failures=$FAILS"
+    RC=1
+fi
+
+tar -czf "$OUT.tar.gz" "$OUT"
+sha256sum "$OUT.tar.gz" >"$OUT.tar.gz.sha256"
+log "archive=$OUT.tar.gz"
+log "sha256_file=$OUT.tar.gz.sha256"
+
+exit "$RC"
+ "$FWD_WATCH"; then
         fail "H4 FORWARD repair did not observe protective ip_forward=0"
-    elif ! foreign_after_prefix FORWARD "$FWD_CHAIN" "$BASE_FORWARD"; then
-        fail "H4 foreign FORWARD jump was not preserved after daemon prefix"
-    elif daemon_active_state; then
-        pass "H4 FORWARD barrier repair"
     else
-        fail "H4 repaired FORWARD prefix but daemon ACTIVE state is incomplete"
+        pass "H4 FORWARD barrier repair"
     fi
 else
     stop_forward_watcher "$FWD_STOP"
     capture_phase h4-forward-timeout
-    fail "H4 daemon-owned FORWARD prefix was not restored"
+    if prefix_is_first FORWARD "$BASE_FORWARD"; then
+        fail "H4 FORWARD prefix repaired but full ACTIVE recovery did not complete"
+    else
+        fail "H4 daemon-owned FORWARD prefix was not restored"
+    fi
 fi
 
 kill -TERM "$DAEMON_PID" 2>/dev/null || true
