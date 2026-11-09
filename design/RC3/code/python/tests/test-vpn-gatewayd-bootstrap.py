@@ -73,44 +73,40 @@ def route(*, kind, proto, metric, via=None, interface=None, onlink=False):
 
 
 class BootstrapTests(unittest.TestCase):
-    def test_fixed_firewall_payload_uses_inserted_prefix_and_static_nat(self):
+    def test_snapshot_uses_exact_binding_for_policy_and_routes(self):
         daemon = make_daemon()
-        payload = daemon._build_fixed_firewall_nat_payload()
-
-        self.assertIn("-I INPUT 1 -j VPNG-PRIMARY-INPUT", payload)
-        self.assertIn("-I FORWARD 1 -j VPNG-INGRESS", payload)
-        self.assertIn("-I FORWARD 2 -j VPNG-RESERVED", payload)
-        self.assertIn("-I FORWARD 3 -j VPNG-PRIMARY-FORWARD", payload)
-        self.assertIn("-I POSTROUTING 1 -j VPNG-PRIMARY-NAT", payload)
-        self.assertIn(
-            "-A VPNG-PRIMARY-NAT -o vpns0 -m addrtype ! --src-type LOCAL -j MASQUERADE",
-            payload,
+        snapshot = daemon._build_reconciliation_snapshot(
+            (
+                vpng.InterfaceRecord(
+                    "vpns0",
+                    7,
+                    frozenset({IPv4Address("172.20.130.1")}),
+                ),
+            )
         )
 
-    def test_firewall_compare_accepts_owned_state_before_foreign_rules(self):
-        daemon = make_daemon()
-        jumps, model = daemon._fixed_firewall_model()
-        lines = ["*filter", ":INPUT ACCEPT [0:0]", ":FORWARD ACCEPT [0:0]", ":OUTPUT ACCEPT [0:0]"]
-        for chain in sorted(model["filter"]):
-            lines.append(f":{chain} - [0:0]")
-        lines.extend(jumps["INPUT"])
-        lines.append("-A INPUT -p tcp --dport 22 -j ACCEPT")
-        lines.extend(jumps["FORWARD"])
-        lines.append("-A FORWARD -j ACCEPT")
-        for chain in sorted(model["filter"]):
-            lines.extend(model["filter"][chain])
-        lines.append("COMMIT")
-        lines.extend(["*nat", ":PREROUTING ACCEPT [0:0]", ":INPUT ACCEPT [0:0]", ":OUTPUT ACCEPT [0:0]", ":POSTROUTING ACCEPT [0:0]"])
-        for chain in sorted(model["nat"]):
-            lines.append(f":{chain} - [0:0]")
-        lines.extend(jumps["POSTROUTING"])
-        lines.append("-A POSTROUTING -o ens18 -j MASQUERADE")
-        for chain in sorted(model["nat"]):
-            lines.extend(model["nat"][chain])
-        lines.append("COMMIT")
+        nat_rules = snapshot.desired_full_policy.nat.chain(
+            "VPNG-PRIMARY-NAT"
+        ).rules
+        self.assertTrue(any("-o vpns0 " in rule for rule in nat_rules))
 
-        result = daemon._compare_fixed_firewall_nat("\n".join(lines) + "\n")
-        self.assertIs(result.safety, vpng.FirewallSafety.SAFE)
+        unicast = [
+            item
+            for item in snapshot.desired_routes_by_profile["primary"]
+            if item.route_type is vpng.RouteType.UNICAST
+        ]
+        self.assertEqual(len(unicast), 1)
+        self.assertEqual(unicast[0].interface, "vpns0")
+
+    def test_global_ipv6_prerequisite_rejects_enabled_forwarding(self):
+        kernel = mock.Mock()
+        kernel.get_ipv6_all_forwarding.return_value = True
+        kernel.get_ipv6_default_forwarding.return_value = False
+        kernel.get_ipv6_default_disabled.return_value = True
+
+        daemon = make_daemon(kernel)
+        with self.assertRaises(vpng.ReconciliationError):
+            daemon._check_global_ipv6_prerequisites()
 
     def test_firewall_cleanup_removes_only_vpng_namespace(self):
         daemon = make_daemon()
@@ -305,20 +301,23 @@ COMMIT
             def __init__(self):
                 self.events = []
                 self.forwarding = False
-                self.blackhole = route(
-                    kind=vpng.RouteType.BLACKHOLE,
-                    proto=vpng.BLACKHOLE_ROUTE_PROTO,
-                    metric=vpng.BLACKHOLE_METRIC,
-                )
-                self.unicast = route(
-                    kind=vpng.RouteType.UNICAST,
-                    proto=vpng.VPN_ROUTE_PROTO,
-                    metric=10,
-                    via="172.20.130.6",
-                    interface="vpns0",
-                    onlink=True,
-                )
                 self.routes = set()
+
+            def get_ipv6_all_forwarding(self):
+                self.events.append("ipv6_all_forwarding")
+                return False
+
+            def get_ipv6_default_forwarding(self):
+                self.events.append("ipv6_default_forwarding")
+                return False
+
+            def get_ipv6_default_disabled(self):
+                self.events.append("ipv6_default_disable")
+                return True
+
+            def get_interface_ipv6_disabled(self, interface):
+                self.events.append(("ipv6_interface_disable", interface))
+                return True
 
             def list_routes(self):
                 self.events.append("list_routes")
@@ -333,13 +332,6 @@ COMMIT
                         frozenset({IPv4Address("172.20.130.1")}),
                     ),
                 )
-
-            def iptables_restore(self, payload, *, noflush=True):
-                self.events.append("iptables_restore")
-
-            def iptables_save(self):
-                self.events.append("iptables_save")
-                return ""
 
             def add_route(self, item):
                 self.events.append(("add", item.route_type))
@@ -361,21 +353,58 @@ COMMIT
 
         kernel = FakeKernel()
         daemon = make_daemon(kernel)
-        with mock.patch.object(
-            daemon,
-            "_check_fixed_firewall_nat",
-            return_value=vpng.FirewallCheck(vpng.FirewallSafety.SAFE, None),
+
+        def filter_restore(*args, **kwargs):
+            del args, kwargs
+            kernel.events.append("filter_restore")
+
+        def nat_restore(*args, **kwargs):
+            del args, kwargs
+            kernel.events.append("nat_restore")
+
+        with (
+            mock.patch.object(
+                daemon,
+                "_restore_filter_policy",
+                side_effect=filter_restore,
+            ),
+            mock.patch.object(
+                daemon,
+                "_restore_nat_policy",
+                side_effect=nat_restore,
+            ),
+            mock.patch.object(
+                daemon,
+                "_check_firewall_nat_policy",
+                return_value=vpng.FirewallCheck(
+                    vpng.FirewallSafety.SAFE,
+                    None,
+                ),
+            ),
         ):
             daemon.apply()
 
-        blackhole_index = kernel.events.index(("add", vpng.RouteType.BLACKHOLE))
-        unicast_index = kernel.events.index(("add", vpng.RouteType.UNICAST))
+        filter_index = kernel.events.index("filter_restore")
+        nat_index = kernel.events.index("nat_restore")
+        blackhole_index = kernel.events.index(
+            ("add", vpng.RouteType.BLACKHOLE)
+        )
+        unicast_index = kernel.events.index(
+            ("add", vpng.RouteType.UNICAST)
+        )
         forward_index = kernel.events.index(("forward", True))
+
+        self.assertLess(filter_index, nat_index)
+        self.assertLess(nat_index, blackhole_index)
         self.assertLess(blackhole_index, unicast_index)
         self.assertLess(unicast_index, forward_index)
         self.assertEqual(
             daemon.profiles["primary"].owned_routes,
             frozenset(kernel.routes),
+        )
+        self.assertIs(
+            daemon.profiles["primary"].committed_resolution_state,
+            vpng.InterfaceResolutionState.BOUND,
         )
 
 
