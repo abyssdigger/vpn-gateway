@@ -39,7 +39,14 @@ IPv6-маршрутизация проектом не поддерживаетс
 - процесс завершается с ненулевым кодом;
 - systemd переводит сервис в `failed`.
 
-Режим `DEGRADED` при запуске не используется.
+Startup error никогда не маскируется переходом в `DEGRADED`: ошибка очистки,
+конфигурации, обязательной проверки или применения приводит к жесткому отказу.
+
+Недоступность VPN path при однозначном binding state не является startup error. Если
+fail-closed desired state полностью применено и проверено, daemon может успешно завершить
+startup и впервые войти в `RUN` как `DEGRADED`. Таким образом, после успешного startup
+первым рабочим состоянием может быть `ACTIVE` или `DEGRADED`; `failed` означает
+именно неуспешный startup.
 
 ### 2.2. Отказ с запретом
 
@@ -1177,9 +1184,9 @@ secondary `PeerBinding` существует, соответствующие rou
 всех protected destinations, профиль остается `SUCCESS`. Отсутствующие остальные peers
 не являются ошибкой.
 
-Если у профиля нет ни одного verified desired UNICAST path для его protected destinations
-(в том числе при `peers=[]` или отсутствии всех `PeerBinding` селектора multi-binding),
-профиль имеет `FAIL`. При подтвержденной `SAFE` политике это безопасная потеря
+Если хотя бы для одного protected destination профиля нет ни одного verified desired
+UNICAST path (в том числе при `peers=[]` или отсутствии всех `PeerBinding` селектора
+multi-binding), профиль имеет `FAIL`. При подтвержденной `SAFE` политике это безопасная потеря
 доступности: daemon остается работающим и переходит в `DEGRADED`, а blackhole и
 окончательные запреты сохраняют fail closed.
 
@@ -1884,7 +1891,13 @@ IPv4/CIDR, локальный адрес и адреса удаленных ст
 
 Для управляемого профиля `--check-config` при `peers=[]` выводит информационный
 `NOTE`: маршруты `UNICAST` VPN не будут созданы, защищаемые маршруты останутся под
-`BLACKHOLE`. Это не `WARNING` и не ошибка.
+`BLACKHOLE`. Это не `WARNING` и не ошибка конфигурации.
+
+Операционное следствие при этом однозначно: managed profile с `peers=[]` не может иметь
+verified UNICAST path, поэтому после успешного fail-closed startup его
+`ProfileResult=FAIL`, а daemon не может быть `ACTIVE` и работает в `DEGRADED`.
+Такое состояние разрешено для staged/fail-closed deployment и не превращается в startup
+error.
 
 Если `peers = []` у управляемого профиля, конфигурация остается валидной: маршруты VPN
 `UNICAST` не устанавливаются, а защищаемые `routes` остаются под blackhole.
@@ -2496,7 +2509,8 @@ UNICAST path для каждого protected destination, profile остаетс
 
 - profile resolution `AMBIGUOUS`;
 - desired policy/route state профиля не удалось применить или проверить;
-- после проверки не существует ни одного desired UNICAST path для protected destinations.
+- хотя бы для одного protected destination после проверки не существует ни одного
+  desired UNICAST path.
 
 Последний случай является **availability failure при сохраненной безопасности**. Если
 global firewall/NAT остается `SAFE` и fail-closed routes/rules проверены, daemon
@@ -2845,9 +2859,11 @@ design/RC2/code/python/tests/
 
 61. Profile `SUCCESS` требует как минимум один verified desired UNICAST RouteSpec для
     каждого protected destination. Partial multi-binding availability остается `SUCCESS`,
-    если хотя бы один peer path materialized и verified; ноль UNICAST paths = `FAIL`,
-    но при SAFE policy это DEGRADED, а не ISOLATED. У селектора single-binding отсутствие
-    handshake peer не меняет binding truth и не является end-to-end health signal.
+    если для каждого protected destination хотя бы один peer path materialized и verified.
+    Если хотя бы для одного protected destination verified UNICAST path отсутствует,
+    profile = `FAIL`; при SAFE policy это DEGRADED, а не ISOLATED. У селектора
+    single-binding отсутствие handshake peer не меняет binding truth и не является
+    end-to-end health signal.
 
 62. Профиль AMBIGUOUS остается `FAIL` до восстановления однозначного binding resolution.
 
