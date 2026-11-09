@@ -223,15 +223,26 @@ class KernelRouteAdapterTests(unittest.TestCase):
             with self.assertRaises(vpng.KernelError):
                 adapter.list_routes_by_proto(vpng.VPN_ROUTE_PROTO)
 
-        with mock.patch.object(
-            adapter,
-            "_run",
-            return_value=completed(
-                [{"dst": "10.0.0.0/8", "nhid": 42}]
-            ),
+        for entry in (
+            {"dst": "10.0.0.0/8", "nhid": 42},
+            {
+                "dst": "10.0.0.0/8",
+                "nexthops": [
+                    {"gateway": "192.0.2.1", "dev": "ens18"}
+                ],
+            },
+            {"dst": "10.0.0.0/8", "multipath": []},
         ):
-            with self.assertRaises(vpng.KernelError):
-                adapter.list_routes_by_proto(vpng.VPN_ROUTE_PROTO)
+            with self.subTest(entry=entry):
+                with mock.patch.object(
+                    adapter,
+                    "_run",
+                    return_value=completed([entry]),
+                ):
+                    with self.assertRaises(vpng.KernelError):
+                        adapter.list_routes_by_proto(
+                            vpng.VPN_ROUTE_PROTO
+                        )
 
     def test_list_routes_missing_protocol_normalizes_to_boot(self):
         adapter = kernel()
