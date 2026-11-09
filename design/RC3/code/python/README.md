@@ -10,8 +10,9 @@ Current migration status:
 
 - RC2.5.1 package structure preserved as the starting point;
 - typed interface selector / inventory / resolution value objects added;
-- selector support is not yet enabled in the running ConfigLoader, so the old RC2 route
-  path cannot accidentally receive a prefix selector before route/policy migration.
+- `VpnProfileConfig.interface` now carries an `InterfaceSelector` value;
+- the running ConfigLoader remains exact-selector-only until binding-aware route/policy
+  migration, so the legacy RC2 path cannot receive a prefix selector prematurely.
 
 Entry point: `vpn-gatewayd.py`.
 

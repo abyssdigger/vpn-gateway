@@ -19,7 +19,7 @@ import vpn_gatewayd as vpng
 def make_config() -> object:
     profile = vpng.VpnProfileConfig(
         profile_id="primary",
-        interface="vpns0",
+        interface=vpng.InterfaceSelector.parse("vpns0"),
         network=IPv4Network("172.20.130.0/29"),
         local_address=IPv4Address("172.20.130.1"),
         peers=(IPv4Address("172.20.130.6"),),

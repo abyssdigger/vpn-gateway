@@ -58,7 +58,7 @@ class VpnProfile:
                         destination=destination,
                         route_type=RouteType.UNICAST,
                         via=peer,
-                        interface=self.config.interface,
+                        interface=str(self.config.interface),
                         metric=(index + 1) * PEER_METRIC_STEP,
                         proto=VPN_ROUTE_PROTO,
                         onlink=True,

@@ -28,7 +28,7 @@ def make_profile(
     return vpng.VpnProfile(
         vpng.VpnProfileConfig(
             profile_id=profile_id,
-            interface=interface,
+            interface=vpng.InterfaceSelector.parse(interface),
             network=IPv4Network(network),
             local_address=IPv4Address(local_address),
             peers=tuple(IPv4Address(item) for item in peers),

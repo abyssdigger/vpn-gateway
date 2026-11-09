@@ -6,6 +6,8 @@ from ipaddress import IPv4Address, IPv4Network
 from types import MappingProxyType
 from typing import Mapping
 
+from .interfaces import InterfaceSelector
+
 class DaemonState(Enum):
     STARTING = auto()
     ACTIVE = auto()
@@ -120,7 +122,7 @@ class VpnProfileConfig:
     """
 
     profile_id: str
-    interface: str
+    interface: InterfaceSelector
     network: IPv4Network
     local_address: IPv4Address
     peers: tuple[IPv4Address, ...]

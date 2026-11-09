@@ -974,7 +974,7 @@ class VpnGatewayDaemon:
         profile: VpnProfile,
         interface_ipv4: Mapping[str, frozenset[IPv4Address]],
     ) -> bool:
-        addresses = interface_ipv4.get(profile.config.interface)
+        addresses = interface_ipv4.get(str(profile.config.interface))
         return (
             addresses is not None
             and profile.config.local_address in addresses
@@ -1142,9 +1142,9 @@ class VpnGatewayDaemon:
         for profile_id in profile_ids:
             cfg = self.profiles[profile_id].config
             ingress.extend((
-                f"-A VPNG-INGRESS -i {cfg.interface} -m conntrack --ctstate INVALID -j DROP",
-                f"-A VPNG-INGRESS -i {cfg.interface} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
-                f"-A VPNG-INGRESS -i {cfg.interface} -j REJECT --reject-with icmp-host-prohibited",
+                f"-A VPNG-INGRESS -i {str(cfg.interface)} -m conntrack --ctstate INVALID -j DROP",
+                f"-A VPNG-INGRESS -i {str(cfg.interface)} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
+                f"-A VPNG-INGRESS -i {str(cfg.interface)} -j REJECT --reject-with icmp-host-prohibited",
             ))
         ingress.append("-A VPNG-INGRESS -j RETURN")
         filter_rules["VPNG-INGRESS"] = tuple(ingress)
@@ -1162,10 +1162,10 @@ class VpnGatewayDaemon:
             profile = self.profiles[profile_id]
             cfg = profile.config
             input_rules = (
-                f"-A {cfg.chain_input} -i {cfg.interface} -m conntrack --ctstate INVALID -j DROP",
-                f"-A {cfg.chain_input} -i {cfg.interface} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
-                f"-A {cfg.chain_input} -s {cfg.network} -d {cfg.local_address}/32 -i {cfg.interface} -m conntrack --ctstate NEW -j ACCEPT",
-                f"-A {cfg.chain_input} -i {cfg.interface} -j REJECT --reject-with icmp-host-prohibited",
+                f"-A {cfg.chain_input} -i {str(cfg.interface)} -m conntrack --ctstate INVALID -j DROP",
+                f"-A {cfg.chain_input} -i {str(cfg.interface)} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
+                f"-A {cfg.chain_input} -s {cfg.network} -d {cfg.local_address}/32 -i {str(cfg.interface)} -m conntrack --ctstate NEW -j ACCEPT",
+                f"-A {cfg.chain_input} -i {str(cfg.interface)} -j REJECT --reject-with icmp-host-prohibited",
                 f"-A {cfg.chain_input} -j RETURN",
             )
             filter_rules[cfg.chain_input] = input_rules
@@ -1174,13 +1174,13 @@ class VpnGatewayDaemon:
             sources = self.effective_sources(profile)
             for destination in cfg.routes:
                 forward_rules.append(
-                    f"-A {cfg.chain_forward} -d {destination} -o {cfg.interface} "
+                    f"-A {cfg.chain_forward} -d {destination} -o {str(cfg.interface)} "
                     "-m conntrack --ctstate INVALID -j DROP"
                 )
                 for source in sources:
                     forward_rules.append(
                         f"-A {cfg.chain_forward} -s {source} -d {destination} "
-                        f"-o {cfg.interface} -j ACCEPT"
+                        f"-o {str(cfg.interface)} -j ACCEPT"
                     )
                 forward_rules.append(
                     f"-A {cfg.chain_forward} -d {destination} "
@@ -1190,7 +1190,7 @@ class VpnGatewayDaemon:
             filter_rules[cfg.chain_forward] = tuple(forward_rules)
 
             nat_rules[cfg.chain_nat] = (
-                f"-A {cfg.chain_nat} -o {cfg.interface} -m addrtype ! --src-type LOCAL -j MASQUERADE",
+                f"-A {cfg.chain_nat} -o {str(cfg.interface)} -m addrtype ! --src-type LOCAL -j MASQUERADE",
                 f"-A {cfg.chain_nat} -j RETURN",
             )
 

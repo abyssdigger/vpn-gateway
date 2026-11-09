@@ -1,5 +1,15 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 typed selector in runtime configuration
+
+The managed runtime projection now carries `InterfaceSelector` instead of a raw interface
+string. Existing RC2 execution paths explicitly render the selector back to an exact
+interface name, while ConfigLoader remains exact-only at this migration stage.
+
+Cross-profile interface validation already uses selector-set overlap semantics, preparing
+the configuration layer for prefix families without enabling them before binding-aware
+route/policy derivation is implemented.
+
 ## 2026-11-09 — RC3 implementation bootstrap and interface domain model
 
 Implementation work starts without modifying the frozen RC2 baseline:

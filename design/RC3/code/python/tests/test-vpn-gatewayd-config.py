@@ -82,7 +82,11 @@ class ConfigTestCase(unittest.TestCase):
             tuple(map(str, cfg.common_allowed_sources)),
             ("10.200.200.8/32", "10.200.200.9/32"),
         )
-        self.assertEqual(cfg.vpns["primary"].interface, "vpns0")
+        self.assertIsInstance(
+            cfg.vpns["primary"].interface,
+            vpng.InterfaceSelector,
+        )
+        self.assertEqual(str(cfg.vpns["primary"].interface), "vpns0")
         self.assertEqual(
             tuple(map(str, cfg.vpns["backup"].routes)),
             ("100.64.0.0/10", "192.168.0.0/16"),

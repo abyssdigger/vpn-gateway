@@ -18,6 +18,7 @@ from .constants import (
     PEER_METRIC_STEP,
 )
 from .errors import ConfigError
+from .interfaces import InterfaceSelector
 from .models import (
     ConfigCheckResult,
     ConfigIssue,
@@ -874,7 +875,7 @@ class ConfigLoader:
         location: str,
         issues: list[ConfigIssue],
         level: ConfigIssueLevel,
-    ) -> str | None:
+    ) -> InterfaceSelector | None:
         if not isinstance(value, str):
             issues.append(
                 ConfigIssue(level, location, "must be a string")
@@ -901,7 +902,7 @@ class ConfigLoader:
             )
             return None
 
-        return value
+        return InterfaceSelector.parse(value)
 
     def _parse_ipv4_address(
         self,
@@ -1227,7 +1228,7 @@ class ConfigLoader:
             left = profiles[left_id]
             for right_id in profile_ids[left_index + 1:]:
                 right = profiles[right_id]
-                if left.interface != right.interface:
+                if not left.interface.overlaps(right.interface):
                     continue
                 level = conflict_level(left_id, right_id)
                 if level is None:
@@ -1236,8 +1237,9 @@ class ConfigLoader:
                     ConfigIssue(
                         level,
                         "vpn",
-                        f"interface {left.interface!r} is shared by "
-                        f"profiles {left_id!r} and {right_id!r}",
+                        f"interface selectors {str(left.interface)!r} and "
+                        f"{str(right.interface)!r} overlap for profiles "
+                        f"{left_id!r} and {right_id!r}",
                     )
                 )
 
