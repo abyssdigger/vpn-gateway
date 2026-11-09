@@ -10,6 +10,108 @@
 `Architecture baseline`, указанному в самой записи. При выпуске последующих RC такие ссылки
 не перенумеровываются задним числом.
 
+## EXP-008 — RC3 live runtime drift recovery
+
+**Status:** READY TO RUN  
+**Architecture baseline:** RC3  
+**Prerequisite:** EXP-007 COMPLETE — PASS  
+**Target:** dedicated Debian 13 vpn-gateway host with a READY OpenConnect binding  
+**Harness:** [`design/experiments/EXP-008 RC3 live runtime drift recovery/vpn-gateway-exp-008-runtime-drift.sh`](experiments/EXP-008%20RC3%20live%20runtime%20drift%20recovery/vpn-gateway-exp-008-runtime-drift.sh)  
+**Safety:** live-host fault-injection experiment; daemon owns the gateway state for the duration
+
+### Motivation
+
+EXP-007 proved startup, steady reconciliation and graceful cleanup. EXP-008 exercises the
+runtime reconciliation paths that are materially different after the daemon is already
+ACTIVE.
+
+The experiment deliberately separates three kinds of recoverable drift:
+
+1. deletion of an owned proto-202 route;
+2. confirmed INPUT-only firewall drift;
+3. transit-affecting FORWARD drift.
+
+The last two cases must take different safety paths.
+
+### Preconditions
+
+The same clean ownership boundary as EXP-007 is required before startup:
+
+- `net.ipv4.ip_forward=0`;
+- no `VPNG-*` resources;
+- no proto-201/proto-202 routes;
+- real managed VPN interface already READY;
+- managed profile has at least one peer and protected route.
+
+### Hypotheses
+
+#### H1 — live startup
+
+The daemon reaches the same ACTIVE materialized state proven by EXP-007.
+
+#### H2 — owned route drift self-heals
+
+The harness deletes one exact daemon-owned proto-202 route. The daemon must restore the
+same route through runtime reconciliation and remain ACTIVE with forwarding enabled.
+
+This mutation produces a route Netlink event; periodic reconciliation remains the fallback.
+
+#### H3 — INPUT-only drift uses narrow repair
+
+The harness creates a foreign `EXP008-IN` chain and inserts its jump at INPUT position 1,
+ahead of the daemon-owned INPUT prefix.
+
+Required recovery:
+
+- daemon-owned INPUT prefix returns to position 1;
+- the foreign jump is preserved after the daemon-owned prefix;
+- daemon-owned FORWARD/NAT state is not intentionally rebuilt by the test;
+- `ip_forward` must remain 1 throughout the observed recovery window.
+
+A high-frequency watcher records any observed zero value. Seeing `ip_forward=0` is a FAIL
+for this hypothesis.
+
+#### H4 — FORWARD drift uses the protective barrier
+
+The harness creates a foreign `EXP008-FWD` chain and inserts its jump at FORWARD position
+1, ahead of the daemon-owned terminal prefix.
+
+Required recovery:
+
+- daemon-owned FORWARD prefix returns to position 1;
+- the foreign jump is preserved after `VPNG-FORWARD-DENY`;
+- the daemon remains/rereturns ACTIVE;
+- the observer must see `ip_forward=0` during the repair;
+- after repair, `ip_forward=1`.
+
+Because ordinary iptables rule changes do not wake the Netlink listener, this case is
+expected to be detected by the next periodic reconciliation. The observer begins before
+fault injection and runs until the repaired prefix is verified.
+
+#### H5 — graceful cleanup
+
+After the fault-injection phases, SIGTERM must still remove every daemon-owned resource and
+return `ip_forward` to 0. The harness then removes its own foreign EXP008 chains.
+
+### Artifacts
+
+The harness writes timestamped snapshots for baseline, route recovery, INPUT repair,
+FORWARD repair and post-cleanup state, plus:
+
+- `daemon.log`;
+- forwarding watcher logs;
+- injected/recovered rule snapshots;
+- `result.txt`;
+- tarball + SHA256.
+
+### Decision
+
+PASS closes the first real-host runtime drift recovery gate. Managed-interface
+disappearance/reappearance and selector ambiguity remain a separate transport-lifecycle
+experiment because they require controlled mutation of the VPN interface itself.
+
+---
+
 ## EXP-007 — RC3 live daemon lifecycle smoke
 
 **Status:** COMPLETE — PASS  

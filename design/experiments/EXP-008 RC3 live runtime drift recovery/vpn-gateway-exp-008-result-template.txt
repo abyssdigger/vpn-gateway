@@ -1,0 +1,16 @@
+EXP-008 RC3 live runtime drift recovery
+Run:
+Host:
+Commit:
+Config:
+Archive SHA256:
+
+H1 live startup:
+H2 proto-202 route recovery:
+H3 INPUT-only narrow repair:
+H4 FORWARD barrier repair:
+H5 graceful cleanup:
+
+OVERALL=
+
+Notes:
