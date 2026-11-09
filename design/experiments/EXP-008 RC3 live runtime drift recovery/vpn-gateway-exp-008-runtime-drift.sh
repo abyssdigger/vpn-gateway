@@ -349,7 +349,20 @@ iptables -I FORWARD 1 -j "$FWD_CHAIN"
 if wait_until "$RECOVERY_TENTHS" forward_recovery_complete; then
     stop_forward_watcher "$FWD_STOP"
     capture_phase h4-forward-repaired
-    if ! grep -q ' 0
+    if ! grep -q ' 0$' "$FWD_WATCH"; then
+        fail "H4 FORWARD repair did not observe protective ip_forward=0"
+    else
+        pass "H4 FORWARD barrier repair"
+    fi
+else
+    stop_forward_watcher "$FWD_STOP"
+    capture_phase h4-forward-timeout
+    if prefix_is_first FORWARD "$BASE_FORWARD"; then
+        fail "H4 FORWARD prefix repaired but full ACTIVE recovery did not complete"
+    else
+        fail "H4 daemon-owned FORWARD prefix was not restored"
+    fi
+fi
 kill -TERM "$DAEMON_PID" 2>/dev/null || true
 if wait "$DAEMON_PID"; then
     DAEMON_PID=""
