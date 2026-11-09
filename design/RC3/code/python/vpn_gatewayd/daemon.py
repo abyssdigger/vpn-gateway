@@ -107,10 +107,8 @@ class VpnGatewayDaemon:
         self._previous_wakeup_fd = -1
         self._previous_signal_handlers: dict[int, object] = {}
 
-        # Conscious boundary: the architecture requires one daemon-owned
-        # Netlink listener.  It is an event source owned by orchestration, not
-        # a policy/materialization operation of KernelInterface.  Exact
-        # serialized event-loop mechanics remain open.
+        # The daemon-owned Netlink listener is an orchestration event source,
+        # not a policy/materialization operation of KernelInterface.
         self._netlink_socket: socket.socket | None = None
 
     # ---- Lifecycle -------------------------------------------------------

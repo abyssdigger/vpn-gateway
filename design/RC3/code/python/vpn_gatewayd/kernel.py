@@ -52,14 +52,9 @@ class KernelInterface(ABC):
         RouteSpec already exists in ACTUAL but is not OWNED by this process.
         """
 
+    @abstractmethod
     def list_interfaces(self) -> tuple[InterfaceRecord, ...]:
-        """
-        Return the typed interface inventory required by RC3.
-
-        Kept non-abstract during the staged RC2->RC3 migration so legacy test
-        doubles remain constructible until daemon integration switches over.
-        """
-        raise NotImplementedError
+        """Return the typed interface inventory required by RC3."""
 
     @abstractmethod
     def list_interface_ipv4(
@@ -118,9 +113,10 @@ class SubprocessKernelInterface(KernelInterface):
     """
     Debian 13 subprocess adapter.
 
-    Route/address inventory and route mutations use iproute2.
-    Forwarding and firewall methods are completed in later implementation
-    steps.  All subprocesses use bounded timeouts and a stable locale.
+    Route/address inventory and route mutations use iproute2; forwarding,
+    IPv6 host prerequisites and firewall/NAT materialization use the native
+    procfs/sysctl and iptables userspace interfaces required by RC3. All
+    subprocesses use bounded timeouts and a stable locale.
 
     Policy construction deliberately does not live here.
     """

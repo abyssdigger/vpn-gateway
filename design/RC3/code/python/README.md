@@ -6,7 +6,7 @@ It was bootstrapped blob-for-blob from the frozen RC2.5.1 Python baseline in
 `design/RC2/code/python/`. RC3 changes are applied here only; the RC2 tree remains a
 regression baseline and is not rewritten to match the new architecture.
 
-Current migration status:
+Current RC3 implementation status:
 
 - RC2.5.1 package structure preserved as the starting point;
 - typed interface selector / inventory / resolution value objects added;
