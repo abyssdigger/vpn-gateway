@@ -12,24 +12,20 @@
 
 ## EXP-009 — RC3: несколько runtime-интерфейсов одного transport profile
 
-**Статус:** IN PROGRESS — discovery PASS, route failover pending  
+**Статус:** COMPLETE — PASS  
 **Architecture baseline:** RC3 до исправления binding model по EXP-009  
 **Запуск:** 2026-11-10  
-**Тип:** ручной live discovery experiment  
+**Тип:** ручной live experiment без `vpn-gatewayd`  
 **Target:** выделенный Debian 13 ocserv gateway с двумя одновременными OpenConnect clients  
 **Результат:** [`EXP-009-result-20261110.md`](experiments/EXP-009%20RC3%20multi-interface%20binding%20discovery/EXP-009-result-20261110.md)
 
 ### Мотивация
 
 RC3 исходил из предположения, что один managed profile разрешается максимум в один
-concrete runtime interface. Для WireGuard это естественная модель; та же модель была
-распространена на OpenConnect через `interface = "vpns+"`.
+concrete runtime interface. Перед реализацией требовалось наблюсти реальную topology двух
+одновременно подключенных peers и отдельно проверить route failover/failback.
 
-Перед следующими transport-lifecycle experiments требовалось непосредственно наблюсти
-топологию двух одновременно подключенных peers, а не выводить ее из документации
-конкретного VPN transport.
-
-### Процедура
+### H1 — concurrent multi-interface discovery
 
 Два независимых OpenConnect client одновременно подключены к одному ocserv endpoint:
 
@@ -38,10 +34,7 @@ pri -> fixed VPN peer 172.20.130.6
 sec -> fixed VPN peer 172.20.130.5
 ```
 
-На сервере состояние наблюдалось через `occtl show users` и `ip -br -4 addr show`
-с фильтром namespace `vpns`.
-
-### Наблюдение
+Наблюдаемое server state:
 
 ```text
 === ocserv users ===
@@ -54,61 +47,78 @@ vpns00           UNKNOWN        172.20.130.1 peer 172.20.130.6/32
 vpns01           UNKNOWN        172.20.130.1 peer 172.20.130.5/32
 ```
 
-Две одновременно исправные сессии занимают **разные** server-side runtime interfaces.
-У обоих interfaces один local VPN address и разные point-to-point remote peers.
+**H1: PASS.** Две одновременно исправные сессии занимают разные runtime interfaces,
+имеют один local VPN address и разные point-to-point remote peers.
 
-### Промежуточный результат
+### H2 — route failover и failback materialization
 
-**H1 — concurrent multi-interface discovery: PASS.**
+Эксперимент выполнен полностью вручную, без `vpn-gatewayd`. Client-side forwarding/NAT
+были уже заданы systemd units OpenConnect. На server были включены forwarding и точный
+MASQUERADE для `vpns00` и `vpns01`.
 
-Полный EXP-009 пока не закрыт. Следующая ручная фаза должна независимо от
-`vpn-gatewayd` проверить реальный route failover к `172.21.201.19`:
+Оба OC clients независимо достигали реальной цели `172.21.201.19`.
 
-- primary path: `172.20.130.6 / vpns00 / metric 10`;
-- secondary path: `172.20.130.5 / vpns01 / metric 20`;
-- после отключения primary kernel должен удалить зависимый primary route и выбрать
-  secondary route;
-- проверка включает реальное прохождение traffic с LAN host, а не только `ip route get`.
+На server были созданы:
 
-Архитектурный вывод о необходимости multi-binding selector/binding model уже доказан H1
-и не зависит от результата route-failover фазы.
+```text
+172.21.201.19 via 172.20.130.6 dev vpns00 metric 10 onlink
+172.21.201.19 via 172.20.130.5 dev vpns01 metric 20 onlink
+```
 
-Эксперимент опровергает архитектурное предположение, что healthy profile обязательно имеет
-один runtime interface. По прежнему правилу cardinality для `vpns+` это исправное
-состояние было бы ошибочно классифицировано как `AMBIGUOUS`.
+При двух живых peers kernel выбирал primary `.6/vpns00`. Реальный LAN host шел:
 
-### Архитектурное решение
+```text
+192.168.201.107
+-> 172.20.130.6
+-> 192.168.201.1
+-> 172.21.201.19
+```
 
-Исправление является общим и не связано с конкретным VPN transport:
+После остановки primary OpenConnect client `vpns00` исчез. Kernel автоматически удалил
+зависимый route metric 10 и оставил:
 
-1. discovery selector и кратность bindings являются разными понятиями;
-2. exact name и `prefix+` сохраняют single-binding semantics;
-3. `prefix%` вводится как numeric multi-binding discovery
-   (`^prefix[0-9]+# VPN-GATE — журнал экспериментов
+```text
+vpns01           UNKNOWN        172.20.130.1 peer 172.20.130.5/32
+172.21.201.19 via 172.20.130.5 dev vpns01 metric 20 onlink
+```
 
-**Терминология:** [RC3 — термины и определения](RC3/terms-and-definitions.md).
+Тот же LAN host без ручного изменения routing продолжил идти через secondary:
 
-Исторические экспериментальные записи сохраняют язык, на котором они были зафиксированы:
-это часть доказательной базы. Новые русскоязычные пояснения и решения используют
-нормативную терминологию RC3; технические идентификаторы и команды не переводятся.
+```text
+192.168.201.107
+-> 172.20.130.5
+-> 192.168.201.1
+-> 172.21.201.19
+```
 
-Ссылки на номера разделов и инвариантов внутри исторической записи относятся к
-`Architecture baseline`, указанному в самой записи. При выпуске последующих RC такие ссылки
-не перенумеровываются задним числом.
+После повторного запуска primary client `vpns00` вернулся, но route metric 10
+автоматически **не восстановился**:
 
-);
-4. непустое явное множество уникальных exact interface names также является
-   multi-binding selector;
-5. multi-binding peer association выводится из наблюдаемого point-to-point
-   `(local_address, peer)` evidence, а не из порядка interfaces, numeric suffix или
-   позиции в массиве `peers`;
-6. allowing firewall rules, NAT и routes всегда используют exact concrete interface names;
-7. deny-only firewall protection для `prefix%` повторно использует уже проверенный
-   контракт `-i prefix+`, поэтому его защитное пространство имен намеренно шире discovery.
+```text
+vpns01           UNKNOWN        172.20.130.1 peer 172.20.130.5/32
+vpns00           UNKNOWN        172.20.130.1 peer 172.20.130.6/32
+172.21.201.19 via 172.20.130.5 dev vpns01 metric 20 onlink
+```
 
-EXP-009 повторно открывает implementation gate только для selector/binding resolution.
-Выводы EXP-006/007/008 о firewall transactions, protective barrier, route ownership,
-runtime repair и cleanup остаются действующими.
+После ручного повторного добавления primary route оба route снова присутствовали, kernel
+выбрал metric 10, а LAN traceroute снова пошел через `172.20.130.6`.
+
+**H2: PASS.**
+
+### Наблюдаемый контракт
+
+1. healthy profile может иметь несколько одновременных runtime interfaces;
+2. point-to-point kernel inventory дает association evidence `(local_address, peer)`;
+3. удаление concrete interface автоматически удаляет зависимый kernel route;
+4. оставшийся route с большей metric становится рабочим backup path;
+5. повторное появление interface не восстанавливает удаленный route;
+6. failback требует повторной materialization preferred route после восстановления
+   соответствующей binding.
+
+**EXP-009: COMPLETE — PASS.**
+
+Архитектурная модель выводится из этих наблюдений отдельно; OpenConnect является
+конкретной реализацией experiment target, а не специальным случаем архитектуры.
 
 ---
 

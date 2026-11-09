@@ -47,12 +47,17 @@ that older single-binding model.
 
 The architecture now requires:
 
-- exact and `prefix+` single-binding selectors;
-- `prefix%` numeric multi-binding selector;
-- explicit exact-set multi-binding selector;
+- selector binding cardinality: `SINGLE | MULTI`;
+- exact and `prefix+` as селекторы single-binding;
+- `prefix%` and explicit exact set as селекторы multi-binding;
 - point-to-point peer evidence in interface inventory;
-- `PeerBinding(peer -> exact interface)`;
-- multiple exact INPUT/FORWARD/NAT blocks and peer-specific route interfaces.
+- `PeerBinding(peer -> exact interface)` for multi-binding route materialization;
+- multiple exact INPUT/FORWARD/NAT blocks and peer-specific route interfaces;
+- route failback when a desired binding reappears.
+
+Netlink events remain wakeup hints. A route is materialized from the current reconciliation
+snapshot: an active concrete binding for a selector single-binding, or a unique
+`PeerBinding` for a selector multi-binding.
 
 The 125/125 unit-suite result remains valid for the pre-EXP-009 implementation baseline,
 but it is not evidence that the new multi-binding architecture is implemented.
