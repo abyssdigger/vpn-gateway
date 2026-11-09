@@ -1,0 +1,26 @@
+EXP-008 RC3 live runtime drift recovery
+Run: 2026-11-09T21:04:10Z
+Architecture baseline: RC3
+Prerequisite: EXP-007 COMPLETE — PASS
+Archive: vpn-gateway-exp-008-20261109-210410Z.tar.gz
+SHA256 file: vpn-gateway-exp-008-20261109-210410Z.tar.gz.sha256
+
+H1 live startup: PASS
+H2 proto-202 route recovery: PASS
+H3 INPUT-only narrow repair: PASS
+H4 FORWARD barrier repair: PASS
+H5 graceful cleanup: PASS
+
+Observed harness output:
+
+EXP-008 RC3 live runtime drift recovery
+PASS: H1 live startup
+PASS: H2 proto-202 route recovery
+PASS: H3 INPUT-only narrow repair
+PASS: H4 FORWARD barrier repair
+PASS: H5 graceful cleanup
+OVERALL=PASS
+archive=vpn-gateway-exp-008-20261109-210410Z.tar.gz
+sha256_file=vpn-gateway-exp-008-20261109-210410Z.tar.gz.sha256
+
+OVERALL=PASS

@@ -12,11 +12,13 @@
 
 ## EXP-008 — RC3 live runtime drift recovery
 
-**Status:** READY TO RUN  
+**Status:** COMPLETE — PASS  
 **Architecture baseline:** RC3  
 **Prerequisite:** EXP-007 COMPLETE — PASS  
 **Target:** dedicated Debian 13 vpn-gateway host with a READY OpenConnect binding  
 **Harness:** [`design/experiments/EXP-008 RC3 live runtime drift recovery/vpn-gateway-exp-008-runtime-drift.sh`](experiments/EXP-008%20RC3%20live%20runtime%20drift%20recovery/vpn-gateway-exp-008-runtime-drift.sh)  
+**Result:** [`vpn-gateway-exp-008-result-20261109.txt`](experiments/EXP-008%20RC3%20live%20runtime%20drift%20recovery/vpn-gateway-exp-008-result-20261109.txt)  
+**Run:** 2026-11-09T21:04:10Z  
 **Safety:** live-host fault-injection experiment; daemon owns the gateway state for the duration
 
 ### Motivation
@@ -104,9 +106,35 @@ FORWARD repair and post-cleanup state, plus:
 - `result.txt`;
 - tarball + SHA256.
 
+### Result
+
+Final live run:
+
+```text
+EXP-008 RC3 live runtime drift recovery
+PASS: H1 live startup
+PASS: H2 proto-202 route recovery
+PASS: H3 INPUT-only narrow repair
+PASS: H4 FORWARD barrier repair
+PASS: H5 graceful cleanup
+OVERALL=PASS
+archive=vpn-gateway-exp-008-20261109-210410Z.tar.gz
+sha256_file=vpn-gateway-exp-008-20261109-210410Z.tar.gz.sha256
+```
+
+The run confirms on the real Debian 13 gateway that:
+
+- deletion of an owned proto-202 route is detected and repaired at runtime;
+- confirmed INPUT-only drift is repaired without dropping IPv4 forwarding;
+- FORWARD drift takes the protective barrier path and is repaired before forwarding is
+  restored;
+- graceful cleanup still succeeds after all injected faults.
+
 ### Decision
 
-PASS closes the first real-host runtime drift recovery gate. Managed-interface
+**EXP-008 result: PASS.**
+
+The first real-host runtime drift recovery gate is closed. Managed-interface
 disappearance/reappearance and selector ambiguity remain a separate transport-lifecycle
 experiment because they require controlled mutation of the VPN interface itself.
 

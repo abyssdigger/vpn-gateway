@@ -43,3 +43,22 @@ sudo ./vpn-gateway-exp-008-runtime-drift.sh \
 
 On failure, keep the generated timestamped directory and send `result.txt` plus
 `daemon.log`.
+
+
+## Recorded result
+
+Final run on 2026-11-09:
+
+```text
+PASS: H1 live startup
+PASS: H2 proto-202 route recovery
+PASS: H3 INPUT-only narrow repair
+PASS: H4 FORWARD barrier repair
+PASS: H5 graceful cleanup
+OVERALL=PASS
+archive=vpn-gateway-exp-008-20261109-210410Z.tar.gz
+sha256_file=vpn-gateway-exp-008-20261109-210410Z.tar.gz.sha256
+```
+
+This closes the first live runtime-recovery gate. Interface disappearance/reappearance and
+selector ambiguity remain intentionally out of scope for EXP-008.
