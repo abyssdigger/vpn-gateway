@@ -22,7 +22,12 @@ Current migration status:
 - the kernel adapter exposes the IPv6 host-prerequisite sysctls required by RC3;
 - firewall/NAT comparison now classifies confirmed drift as INPUT-only or transit-affecting;
 - restore payload generation uses the EXP-006 `iptables-restore --noflush` contract and
-  has a dedicated INPUT-only payload that contains no FORWARD operations.
+  has a dedicated INPUT-only payload that contains no FORWARD operations;
+- startup and runtime orchestration consume one immutable reconciliation snapshot;
+- policy-changing binding/readiness transitions use isolation -> NAT -> full-filter repair;
+- confirmed INPUT-only drift uses narrow repair without disabling forwarding;
+- runtime performs periodic full reconciliation at `reconcile_interval`; Netlink wakeups
+  remain an optional later optimization.
 
 Entry point: `vpn-gatewayd.py`.
 

@@ -47,6 +47,7 @@ from .models import (
     ProfileResult,
     RUNTIME_REASON_TEXT,
     ReconciliationPlan,
+    ReconciliationSnapshot,
     RouteSpec,
     RouteType,
     RouteVerifyResult,
@@ -244,16 +245,19 @@ class VpnGatewayDaemon:
             raise CleanupError(str(exc)) from exc
 
     def apply(self) -> None:
-        """Apply one fail-hard happy-path bootstrap transaction boundary."""
+        """Apply one fail-hard RC3 startup reconciliation."""
         if self.config is None:
             raise RuntimeError("config not installed")
 
-        interface_state = self._resolve_profile_interfaces(
-            self.kernel.list_interfaces()
-        )
+        self._check_global_ipv6_prerequisites()
+        interfaces = self.kernel.list_interfaces()
+        self._check_interface_ipv6_prerequisites(interfaces)
+        snapshot = self._build_reconciliation_snapshot(interfaces)
+
         ambiguous = [
             profile_id
-            for profile_id, state in interface_state.items()
+            for profile_id, state
+            in snapshot.interface_state_by_profile.items()
             if state.resolution.state is InterfaceResolutionState.AMBIGUOUS
         ]
         if ambiguous:
@@ -262,36 +266,33 @@ class VpnGatewayDaemon:
                 f"{ambiguous!r}"
             )
 
-        desired = self._derive_desired_routes(
-            interface_state_by_profile=interface_state
-        )
         initial_routes = self.kernel.list_routes()
         plan = self._build_plan(
             all_kernel_routes=initial_routes,
-            desired_routes_by_profile=desired,
+            desired_routes_by_profile=snapshot.desired_routes_by_profile,
         )
         self._validate_plan(
             plan,
             all_kernel_routes=initial_routes,
-            desired_routes_by_profile=desired,
+            desired_routes_by_profile=snapshot.desired_routes_by_profile,
         )
 
-        self.kernel.iptables_restore(
-            self._build_fixed_firewall_nat_payload(),
-            noflush=True,
+        self._restore_filter_policy(snapshot.desired_full_policy.filter)
+        self._restore_nat_policy(snapshot.desired_full_policy.nat)
+        firewall = self._check_firewall_nat_policy(
+            snapshot.desired_full_policy
         )
-        firewall = self._check_fixed_firewall_nat()
         if firewall.safety is not FirewallSafety.SAFE:
             detail = firewall.reason.detail if firewall.reason else None
             raise ReconciliationError(
-                f"fixed firewall/NAT verification failed: "
+                "firewall/NAT verification failed during startup: "
                 f"{firewall.safety.name}: {detail or 'no detail'}"
             )
 
         self._apply_plan(plan)
         verified = self._verify_plan(
             all_kernel_routes=self.kernel.list_routes(),
-            desired_routes_by_profile=desired,
+            desired_routes_by_profile=snapshot.desired_routes_by_profile,
         )
         results = self._require_complete_profile_results(
             verified.profile_results
@@ -309,7 +310,7 @@ class VpnGatewayDaemon:
         self._commit_owned(
             verified_routes_by_profile=verified.owned_routes_by_profile,
             verified_results=results,
-            interface_state_by_profile=interface_state,
+            interface_state_by_profile=snapshot.interface_state_by_profile,
         )
 
         self.kernel.set_ip_forward(True)
@@ -317,196 +318,257 @@ class VpnGatewayDaemon:
             raise KernelError("ip_forward remains disabled after enable")
 
     def run(self) -> None:
-        """Happy-path runtime: remain alive until SIGTERM/SIGINT wakes us."""
+        """
+        Serialized periodic reconciliation loop.
+
+        Netlink wakeups remain a later optimization. Correctness relies on
+        periodic full reconciliation, so firewall drift is still repaired
+        without an external notification source.
+        """
         reader = self._signal_wakeup_reader
         if reader is None:
             raise RuntimeError("signal wakeup reader is not installed")
+        if self.config is None:
+            raise RuntimeError("config not installed")
+
+        interval = self.config.reconcile_interval
+        next_reconcile = time.monotonic() + interval
 
         while not self._shutdown_requested:
+            timeout = max(0.0, next_reconcile - time.monotonic())
             try:
-                readable, _, _ = select.select([reader], [], [])
+                readable, _, _ = select.select([reader], [], [], timeout)
             except InterruptedError:
                 continue
-            if reader not in readable:
+
+            if reader in readable:
+                while True:
+                    try:
+                        data = reader.recv(4096)
+                    except BlockingIOError:
+                        break
+                    if not data:
+                        break
+
+            if self._shutdown_requested:
+                break
+
+            if time.monotonic() < next_reconcile:
                 continue
 
-            while True:
-                try:
-                    data = reader.recv(4096)
-                except BlockingIOError:
-                    break
-                if not data:
-                    break
-
-        # Runtime reconciliation/Netlink/watchdog are intentionally deferred
-        # until the happy-path bootstrap has been exercised on the target host.
+            self.reconcile()
+            next_reconcile = time.monotonic() + interval
 
     # ---- Runtime reconciliation ----------------------------------------
 
     def reconcile(self) -> None:
-        """
-        Runtime orchestration skeleton.
+        """Run one serialized RC3 reconciliation pass."""
+        if self.config is None:
+            raise RuntimeError("config not installed")
 
-        Fixed firewall/NAT verification is always first.  Route reconciliation
-        starts only after fixed infrastructure is SAFE.
-        """
-        firewall = self._check_fixed_firewall_nat()
         pass_incidents: list[DiagnosticFact] = []
-        isolation_disable_fact: DiagnosticFact | None = None
 
-        if firewall.safety is FirewallSafety.UNKNOWN:
-            isolation_disable_fact = self._best_effort_disable_forwarding(
-                high_severity_context="firewall/NAT UNKNOWN"
-            )
-            self.state = DaemonState.ISOLATED
-
-            facts: list[DiagnosticFact] = []
-            if firewall.reason is not None:
-                facts.append(firewall.reason)
-            if isolation_disable_fact is not None:
-                facts.append(isolation_disable_fact)
-
-            signature_parts: list[object] = [
-                "isolated",
-                "firewall-unknown",
+        try:
+            interfaces = self.kernel.list_interfaces()
+        except KernelError as exc:
+            facts = [
+                DiagnosticFact(
+                    RuntimeReasonCode.INTERFACE_INVENTORY_FAILED,
+                    str(exc),
+                )
             ]
-            signature_parts.extend(
-                ("reason", fact.code) for fact in facts
+            disable_fact = self._best_effort_disable_forwarding(
+                high_severity_context="interface inventory failed"
             )
-
+            if disable_fact is not None:
+                facts.append(disable_fact)
+            isolation_fact = self._best_effort_apply_isolation_filter()
+            if isolation_fact is not None:
+                facts.append(isolation_fact)
+            self.state = DaemonState.ISOLATED
             self._log_reconcile_outcome(
-                tuple(signature_parts),
+                (
+                    "isolated",
+                    "interface-inventory-failed",
+                    *(("reason", fact.code) for fact in facts),
+                ),
                 level=logging.ERROR,
                 facts=tuple(facts),
             )
-            # Blind repair is forbidden for UNKNOWN.
             return
+
+        snapshot = self._build_reconciliation_snapshot(interfaces)
+        policy_transition = self._snapshot_changes_policy(snapshot)
+        forwarding_intentionally_disabled = False
+
+        if policy_transition:
+            disable_fact = self._best_effort_disable_forwarding(
+                high_severity_context="policy-changing interface transition"
+            )
+            forwarding_intentionally_disabled = True
+            if disable_fact is not None:
+                pass_incidents.append(disable_fact)
+
+        firewall = self._check_firewall_nat_policy(
+            snapshot.desired_full_policy
+        )
+
+        if firewall.safety is FirewallSafety.UNKNOWN:
+            if firewall.reason is not None:
+                pass_incidents.append(firewall.reason)
+            disable_fact = self._best_effort_disable_forwarding(
+                high_severity_context="firewall/NAT UNKNOWN"
+            )
+            if disable_fact is not None:
+                pass_incidents.append(disable_fact)
+            self.state = DaemonState.ISOLATED
+            self._log_reconcile_outcome(
+                (
+                    "isolated",
+                    "firewall-unknown",
+                    *(("reason", fact.code) for fact in pass_incidents),
+                ),
+                level=logging.ERROR,
+                facts=tuple(pass_incidents),
+            )
+            return
+
+        heavy_repair = policy_transition
 
         if firewall.safety is FirewallSafety.UNSAFE:
             if firewall.reason is not None:
                 pass_incidents.append(firewall.reason)
 
-            isolation_disable_fact = self._best_effort_disable_forwarding(
-                high_severity_context="firewall/NAT UNSAFE"
-            )
-            if isolation_disable_fact is not None:
-                pass_incidents.append(isolation_disable_fact)
+            if (
+                firewall.scope is FirewallDriftScope.INPUT_ONLY
+                and not policy_transition
+            ):
+                try:
+                    self._restore_filter_policy(
+                        snapshot.desired_full_policy.filter,
+                        input_only=True,
+                    )
+                    repaired = self._check_firewall_nat_policy(
+                        snapshot.desired_full_policy
+                    )
+                except (KernelError, FirewallInspectionError) as exc:
+                    repaired = FirewallCheck(
+                        FirewallSafety.UNKNOWN,
+                        DiagnosticFact(
+                            RuntimeReasonCode.FIREWALL_REPAIR_FAILED,
+                            str(exc),
+                        ),
+                    )
 
-            # Even if disabling forwarding failed, restoring filter/NAT is
-            # still useful and required.  filter before nat inside repair.
+                if repaired.safety is not FirewallSafety.SAFE:
+                    if repaired.reason is not None:
+                        pass_incidents.append(repaired.reason)
+                    disable_fact = self._best_effort_disable_forwarding(
+                        high_severity_context="INPUT-only repair failed"
+                    )
+                    if disable_fact is not None:
+                        pass_incidents.append(disable_fact)
+                    isolation_fact = self._best_effort_apply_isolation_filter()
+                    if isolation_fact is not None:
+                        pass_incidents.append(isolation_fact)
+                    self.state = DaemonState.ISOLATED
+                    self._log_reconcile_outcome(
+                        (
+                            "isolated",
+                            "input-repair-failed",
+                            *(("reason", fact.code)
+                              for fact in pass_incidents),
+                        ),
+                        level=logging.ERROR,
+                        facts=tuple(pass_incidents),
+                    )
+                    return
+            else:
+                heavy_repair = True
+
+        if heavy_repair:
+            if not forwarding_intentionally_disabled:
+                disable_fact = self._best_effort_disable_forwarding(
+                    high_severity_context="transit firewall/NAT repair"
+                )
+                forwarding_intentionally_disabled = True
+                if disable_fact is not None:
+                    pass_incidents.append(disable_fact)
+
             try:
-                self._repair_fixed_firewall_nat()
-                repaired = self._check_fixed_firewall_nat()
-            except KernelError as exc:
-                repaired = FirewallCheck(
-                    safety=FirewallSafety.UNKNOWN,
-                    reason=DiagnosticFact(
-                        code=RuntimeReasonCode.FIREWALL_REPAIR_FAILED,
-                        detail=str(exc),
-                    ),
+                self._repair_firewall_nat_with_barrier(snapshot)
+            except (KernelError, FirewallInspectionError, ReconciliationError) as exc:
+                pass_incidents.append(
+                    DiagnosticFact(
+                        RuntimeReasonCode.FIREWALL_REPAIR_FAILED,
+                        str(exc),
+                    )
                 )
-
-            if repaired.safety is not FirewallSafety.SAFE:
                 self.state = DaemonState.ISOLATED
-
-                facts = list(pass_incidents)
-                if repaired.reason is not None:
-                    facts.append(repaired.reason)
-
-                signature_parts = [
-                    "isolated",
-                    "firewall-repair-failed",
-                    repaired.safety,
-                ]
-                signature_parts.extend(
-                    ("reason", fact.code) for fact in facts
-                )
-
                 self._log_reconcile_outcome(
-                    tuple(signature_parts),
+                    (
+                        "isolated",
+                        "firewall-repair-failed",
+                        *(("reason", fact.code)
+                          for fact in pass_incidents),
+                    ),
                     level=logging.ERROR,
-                    facts=tuple(facts),
+                    facts=tuple(pass_incidents),
                 )
                 return
 
-            firewall = repaired
-
-        # Fixed firewall/NAT is now SAFE.  A fresh route pass is required
-        # before forwarding can be restored after isolation.
         try:
             profile_results = self._require_complete_profile_results(
-                self._reconcile_routes_once()
+                self._reconcile_routes_snapshot(snapshot)
             )
         except (KernelError, PlanValidationError, ReconciliationError) as exc:
-            # SAFE firewall + incomplete route pass => DEGRADED.
-            #
-            # Severity depends on CURRENT forwarding availability:
-            # - confirmed ON  -> WARNING (gateway is still forwarding);
-            # - OFF/unknown   -> ERROR   (gateway is not confirmed usable).
             self.state = DaemonState.DEGRADED
             forwarding_on, forwarding_query_error = (
                 self._query_forwarding_state()
             )
-
             facts = list(pass_incidents)
             facts.append(
                 DiagnosticFact(
-                    code=RuntimeReasonCode.ROUTE_PASS_INCOMPLETE,
-                    detail=f"{type(exc).__name__}: {exc}",
+                    RuntimeReasonCode.ROUTE_PASS_INCOMPLETE,
+                    f"{type(exc).__name__}: {exc}",
                 )
             )
             if forwarding_query_error is not None:
                 facts.append(forwarding_query_error)
-
-            signature_parts: list[object] = [
-                "degraded",
-                "route-pass-incomplete",
-                ("ip-forward", forwarding_on),
-            ]
-            signature_parts.extend(
-                ("reason", fact.code) for fact in facts
-            )
-
             self._log_reconcile_outcome(
-                tuple(signature_parts),
-                level=(
-                    logging.WARNING
-                    if forwarding_on
-                    else logging.ERROR
+                (
+                    "degraded",
+                    "route-pass-incomplete",
+                    ("ip-forward", forwarding_on),
+                    *(("reason", fact.code) for fact in facts),
                 ),
+                level=logging.WARNING if forwarding_on else logging.ERROR,
                 facts=tuple(facts),
             )
             return
 
-        # A completed SAFE fresh route pass is sufficient to restore global
-        # forwarding even if a profile result is FAIL: profile-local route
-        # failures remain fail-closed via BLACKHOLE/FORWARD policy.
         forwarding_enabled, forwarding_enable_fact = (
             self._best_effort_enable_forwarding()
         )
 
-        # If we intentionally isolated this same pass because firewall was
-        # UNSAFE, restoring ip_forward is part of that recovery and must not
-        # create a duplicate FORWARDING_RESTORED incident.
         if (
-            forwarding_enabled
+            forwarding_intentionally_disabled
+            and forwarding_enabled
             and forwarding_enable_fact is not None
             and forwarding_enable_fact.code
                 is RuntimeReasonCode.FORWARDING_RESTORED
         ):
-            if not pass_incidents:
-                pass_incidents.append(forwarding_enable_fact)
             forwarding_enable_fact = None
 
         all_success = all(
             result.result is ApplyStateResult.SUCCESS
             for result in profile_results.values()
         )
-
-        if all_success and forwarding_enabled:
-            self.state = DaemonState.ACTIVE
-        else:
-            self.state = DaemonState.DEGRADED
+        self.state = (
+            DaemonState.ACTIVE
+            if all_success and forwarding_enabled
+            else DaemonState.DEGRADED
+        )
 
         profile_signature: list[tuple[object, ...]] = []
         current_facts: list[DiagnosticFact] = []
@@ -524,53 +586,35 @@ class VpnGatewayDaemon:
         if self.state is DaemonState.ACTIVE:
             recovered_from = tuple(pass_incidents)
         else:
-            # The pass did not fully recover to ACTIVE.  Preserve prior
-            # incidents as current-pass diagnostic facts, without claiming
-            # "recovered from".
             current_facts[0:0] = pass_incidents
 
-        signature_parts: list[object] = [
+        signature = (
             self.state,
+            ("policy-transition", policy_transition),
             tuple(profile_signature),
             ("ip-forward", forwarding_enabled),
-        ]
-        signature_parts.extend(
-            ("reason", fact.code) for fact in current_facts
+            *(("reason", fact.code) for fact in current_facts),
         )
-
         if self.state is DaemonState.ACTIVE:
-            level = (
-                logging.WARNING
-                if recovered_from
-                else logging.INFO
-            )
+            level = logging.WARNING if recovered_from else logging.INFO
         elif forwarding_enabled:
-            # DEGRADED but gateway is still forwarding.
             level = logging.WARNING
         else:
-            # DEGRADED and forwarding is OFF/not confirmed usable.
             level = logging.ERROR
 
         self._log_reconcile_outcome(
-            tuple(signature_parts),
+            signature,
             level=level,
             facts=tuple(current_facts),
             recovered_from=recovered_from,
         )
 
-    def _reconcile_routes_once(self) -> Mapping[str, ProfileResult]:
-        """
-        Perform one route-side reconciliation against one interface snapshot.
-
-        Interface resolution/readiness is computed once and reused for desired
-        route derivation and committed process-local state.
-        """
-        interface_state = self._resolve_profile_interfaces(
-            self.kernel.list_interfaces()
-        )
-        desired = self._derive_desired_routes(
-            interface_state_by_profile=interface_state
-        )
+    def _reconcile_routes_snapshot(
+        self,
+        snapshot: ReconciliationSnapshot,
+    ) -> Mapping[str, ProfileResult]:
+        """Reconcile routes using the same snapshot as firewall/NAT."""
+        desired = snapshot.desired_routes_by_profile
         actual = self.kernel.list_routes()
         plan = self._build_plan(
             all_kernel_routes=actual,
@@ -593,11 +637,11 @@ class VpnGatewayDaemon:
         self._commit_owned(
             verified_routes_by_profile=verified.owned_routes_by_profile,
             verified_results=route_results,
-            interface_state_by_profile=interface_state,
+            interface_state_by_profile=snapshot.interface_state_by_profile,
         )
 
         results = dict(route_results)
-        for profile_id, state in interface_state.items():
+        for profile_id, state in snapshot.interface_state_by_profile.items():
             if state.resolution.state is not InterfaceResolutionState.AMBIGUOUS:
                 continue
             matches = ", ".join(
@@ -605,15 +649,109 @@ class VpnGatewayDaemon:
                 for record in state.resolution.matches
             )
             results[profile_id] = ProfileResult(
-                result=ApplyStateResult.FAIL,
-                reason=DiagnosticFact(
-                    code=RuntimeReasonCode.PROFILE_INTERFACE_AMBIGUOUS,
-                    detail=f"selector matches: {matches}",
+                ApplyStateResult.FAIL,
+                DiagnosticFact(
+                    RuntimeReasonCode.PROFILE_INTERFACE_AMBIGUOUS,
+                    f"selector matches: {matches}",
                 ),
             )
 
         return MappingProxyType(results)
 
+    # ---- Snapshot / host prerequisites -----------------------------------
+
+    def _check_global_ipv6_prerequisites(self) -> None:
+        checks = (
+            (
+                "net.ipv6.conf.all.forwarding",
+                self.kernel.get_ipv6_all_forwarding(),
+                False,
+            ),
+            (
+                "net.ipv6.conf.default.forwarding",
+                self.kernel.get_ipv6_default_forwarding(),
+                False,
+            ),
+            (
+                "net.ipv6.conf.default.disable_ipv6",
+                self.kernel.get_ipv6_default_disabled(),
+                True,
+            ),
+        )
+        violations = [
+            f"{name}={int(actual)} expected={int(expected)}"
+            for name, actual, expected in checks
+            if actual is not expected
+        ]
+        if violations:
+            raise ReconciliationError(
+                "IPv6 host prerequisites are not satisfied: "
+                + "; ".join(violations)
+            )
+
+    def _check_interface_ipv6_prerequisites(
+        self,
+        interfaces: Sequence[InterfaceRecord],
+    ) -> None:
+        if self.config is None:
+            raise RuntimeError("config not installed")
+
+        selectors = tuple(
+            cfg.interface for cfg in self.config.vpns.values()
+        )
+        for record in interfaces:
+            if not any(
+                selector.matches(record.name) for selector in selectors
+            ):
+                continue
+            if not self.kernel.get_interface_ipv6_disabled(record.name):
+                raise ReconciliationError(
+                    "IPv6 must be disabled on every interface matching a "
+                    f"managed selector: {record.name!r}"
+                )
+
+    def _build_reconciliation_snapshot(
+        self,
+        interfaces: Sequence[InterfaceRecord],
+    ) -> ReconciliationSnapshot:
+        if self.config is None:
+            raise RuntimeError("config not installed")
+
+        interface_tuple = tuple(interfaces)
+        interface_state = self._resolve_profile_interfaces(interface_tuple)
+        desired_routes = self._derive_desired_routes(
+            interface_state_by_profile=interface_state
+        )
+        full_policy = desired_full_policy(self.config, interface_state)
+        return ReconciliationSnapshot(
+            interfaces=interface_tuple,
+            interface_state_by_profile=interface_state,
+            desired_routes_by_profile=desired_routes,
+            desired_full_policy=full_policy,
+        )
+
+    def _snapshot_changes_policy(
+        self,
+        snapshot: ReconciliationSnapshot,
+    ) -> bool:
+        for profile_id, state in snapshot.interface_state_by_profile.items():
+            profile = self.profiles[profile_id]
+            if profile.committed_resolution_state is None:
+                return True
+            if (
+                profile.committed_resolution_state
+                is not state.resolution.state
+            ):
+                return True
+            if profile.committed_match_count != len(state.resolution.matches):
+                return True
+            if profile.committed_binding != state.binding:
+                return True
+            if profile.committed_ready != state.ready:
+                return True
+        return False
+
+    # ---- Route plan ------------------------------------------------------
     # ---- Route plan ------------------------------------------------------
 
     def _resolve_profile_interfaces(
@@ -1048,6 +1186,8 @@ class VpnGatewayDaemon:
                 routes=verified_routes_by_profile[profile_id],
                 binding=state.binding,
                 ready=state.ready,
+                resolution_state=state.resolution.state,
+                match_count=len(state.resolution.matches),
             )
 
     def _routes_for_profile(
@@ -1326,6 +1466,54 @@ class VpnGatewayDaemon:
                 ),
             )
 
+    def _check_filter_policy(
+        self,
+        desired: FilterPolicy,
+    ) -> FirewallCheck:
+        try:
+            parsed = self._parse_iptables_save(self.kernel.iptables_save())
+            return self._compare_filter_policy(parsed, desired)
+        except KernelError as exc:
+            return FirewallCheck(
+                FirewallSafety.UNKNOWN,
+                DiagnosticFact(
+                    RuntimeReasonCode.FIREWALL_INVENTORY_FAILED,
+                    str(exc),
+                ),
+            )
+        except FirewallInspectionError as exc:
+            return FirewallCheck(
+                FirewallSafety.UNKNOWN,
+                DiagnosticFact(
+                    RuntimeReasonCode.FIREWALL_INSPECTION_FAILED,
+                    str(exc),
+                ),
+            )
+
+    def _check_nat_policy(
+        self,
+        desired: NatPolicy,
+    ) -> FirewallCheck:
+        try:
+            parsed = self._parse_iptables_save(self.kernel.iptables_save())
+            return self._compare_nat_policy(parsed, desired)
+        except KernelError as exc:
+            return FirewallCheck(
+                FirewallSafety.UNKNOWN,
+                DiagnosticFact(
+                    RuntimeReasonCode.FIREWALL_INVENTORY_FAILED,
+                    str(exc),
+                ),
+            )
+        except FirewallInspectionError as exc:
+            return FirewallCheck(
+                FirewallSafety.UNKNOWN,
+                DiagnosticFact(
+                    RuntimeReasonCode.FIREWALL_INSPECTION_FAILED,
+                    str(exc),
+                ),
+            )
+
     def _build_filter_restore_payload(
         self,
         desired: FilterPolicy,
@@ -1421,46 +1609,81 @@ class VpnGatewayDaemon:
         payload = self._build_nat_restore_payload(desired, snapshot)
         self.kernel.iptables_restore(payload, noflush=True)
 
-    # ---- Fixed firewall/NAT ---------------------------------------------
+    def _best_effort_apply_isolation_filter(
+        self,
+    ) -> DiagnosticFact | None:
+        if self.config is None:
+            raise RuntimeError("config not installed")
 
-    def _check_fixed_firewall_nat(self) -> FirewallCheck:
-        """
-        Read-only verification.
-
-        Must verify:
-        - reserved VPNG-* chains expected for current managed config;
-        - fixed INPUT/FORWARD chains and contents;
-        - VPNG-INGRESS;
-        - VPNG-RESERVED;
-        - profile NAT chains;
-        - static MASQUERADE for every managed profile, including peers=[];
-        - exact owned jump layout/order in INPUT/FORWARD/POSTROUTING.
-
-        Inventory failure => UNKNOWN.
-        Readable confirmed drift => UNSAFE.
-        Exact match => SAFE.
-        """
+        isolation = desired_isolation_filter(self.config)
         try:
-            snapshot = self.kernel.iptables_save()
-        except KernelError as exc:
-            return FirewallCheck(
-                safety=FirewallSafety.UNKNOWN,
-                reason=DiagnosticFact(
-                    code=RuntimeReasonCode.FIREWALL_INVENTORY_FAILED,
-                    detail=str(exc),
-                ),
+            self._restore_filter_policy(isolation)
+            checked = self._check_filter_policy(isolation)
+        except (KernelError, FirewallInspectionError) as exc:
+            return DiagnosticFact(
+                RuntimeReasonCode.FIREWALL_REPAIR_FAILED,
+                str(exc),
             )
 
-        try:
-            return self._compare_fixed_firewall_nat(snapshot)
-        except FirewallInspectionError as exc:
-            return FirewallCheck(
-                safety=FirewallSafety.UNKNOWN,
-                reason=DiagnosticFact(
-                    code=RuntimeReasonCode.FIREWALL_INSPECTION_FAILED,
-                    detail=str(exc),
-                ),
+        if checked.safety is FirewallSafety.SAFE:
+            return None
+        detail = (
+            checked.reason.detail
+            if checked.reason is not None
+            else checked.safety.name
+        )
+        return DiagnosticFact(
+            RuntimeReasonCode.FIREWALL_REPAIR_FAILED,
+            f"isolation filter verification failed: {detail}",
+        )
+
+    def _repair_firewall_nat_with_barrier(
+        self,
+        snapshot: ReconciliationSnapshot,
+    ) -> None:
+        if self.config is None:
+            raise RuntimeError("config not installed")
+
+        isolation = desired_isolation_filter(self.config)
+        self._restore_filter_policy(isolation)
+        isolation_check = self._check_filter_policy(isolation)
+        if isolation_check.safety is not FirewallSafety.SAFE:
+            detail = (
+                isolation_check.reason.detail
+                if isolation_check.reason is not None
+                else isolation_check.safety.name
             )
+            raise ReconciliationError(
+                f"isolation filter verification failed: {detail}"
+            )
+
+        self._restore_nat_policy(snapshot.desired_full_policy.nat)
+        nat_check = self._check_nat_policy(snapshot.desired_full_policy.nat)
+        if nat_check.safety is not FirewallSafety.SAFE:
+            detail = (
+                nat_check.reason.detail
+                if nat_check.reason is not None
+                else nat_check.safety.name
+            )
+            raise ReconciliationError(
+                f"NAT verification failed after isolation: {detail}"
+            )
+
+        self._restore_filter_policy(snapshot.desired_full_policy.filter)
+        full_check = self._check_firewall_nat_policy(
+            snapshot.desired_full_policy
+        )
+        if full_check.safety is not FirewallSafety.SAFE:
+            detail = (
+                full_check.reason.detail
+                if full_check.reason is not None
+                else full_check.safety.name
+            )
+            raise ReconciliationError(
+                f"full firewall/NAT verification failed: {detail}"
+            )
+
+    # ---- iptables parsing / cleanup -------------------------------------
 
     @staticmethod
     def _parse_iptables_save(
@@ -1533,240 +1756,6 @@ class VpnGatewayDaemon:
         if index + 1 >= len(tokens):
             return None
         return tokens[index + 1]
-
-    def _fixed_firewall_model(
-        self,
-    ) -> tuple[
-        Mapping[str, tuple[str, ...]],
-        Mapping[str, Mapping[str, tuple[str, ...]]],
-    ]:
-        if self.config is None:
-            raise RuntimeError("config not installed")
-
-        profile_ids = tuple(sorted(self.profiles, key=str.casefold))
-        input_jumps = tuple(
-            f"-A INPUT -j {self.profiles[profile_id].config.chain_input}"
-            for profile_id in profile_ids
-        )
-        forward_jumps = (
-            "-A FORWARD -j VPNG-INGRESS",
-            "-A FORWARD -j VPNG-RESERVED",
-            *(
-                f"-A FORWARD -j {self.profiles[profile_id].config.chain_forward}"
-                for profile_id in profile_ids
-            ),
-        )
-        nat_jumps = tuple(
-            f"-A POSTROUTING -j {self.profiles[profile_id].config.chain_nat}"
-            for profile_id in profile_ids
-        )
-
-        filter_rules: dict[str, tuple[str, ...]] = {}
-        ingress: list[str] = []
-        for profile_id in profile_ids:
-            cfg = self.profiles[profile_id].config
-            ingress.extend((
-                f"-A VPNG-INGRESS -i {str(cfg.interface)} -m conntrack --ctstate INVALID -j DROP",
-                f"-A VPNG-INGRESS -i {str(cfg.interface)} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
-                f"-A VPNG-INGRESS -i {str(cfg.interface)} -j REJECT --reject-with icmp-host-prohibited",
-            ))
-        ingress.append("-A VPNG-INGRESS -j RETURN")
-        filter_rules["VPNG-INGRESS"] = tuple(ingress)
-
-        reserved = [
-            f"-A VPNG-RESERVED -d {self.profiles[profile_id].config.network} "
-            "-j REJECT --reject-with icmp-host-prohibited"
-            for profile_id in profile_ids
-        ]
-        reserved.append("-A VPNG-RESERVED -j RETURN")
-        filter_rules["VPNG-RESERVED"] = tuple(reserved)
-
-        nat_rules: dict[str, tuple[str, ...]] = {}
-        for profile_id in profile_ids:
-            profile = self.profiles[profile_id]
-            cfg = profile.config
-            input_rules = (
-                f"-A {cfg.chain_input} -i {str(cfg.interface)} -m conntrack --ctstate INVALID -j DROP",
-                f"-A {cfg.chain_input} -i {str(cfg.interface)} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT",
-                f"-A {cfg.chain_input} -s {cfg.network} -d {cfg.local_address}/32 -i {str(cfg.interface)} -m conntrack --ctstate NEW -j ACCEPT",
-                f"-A {cfg.chain_input} -i {str(cfg.interface)} -j REJECT --reject-with icmp-host-prohibited",
-                f"-A {cfg.chain_input} -j RETURN",
-            )
-            filter_rules[cfg.chain_input] = input_rules
-
-            forward_rules: list[str] = []
-            sources = self.effective_sources(profile)
-            for destination in cfg.routes:
-                forward_rules.append(
-                    f"-A {cfg.chain_forward} -d {destination} -o {str(cfg.interface)} "
-                    "-m conntrack --ctstate INVALID -j DROP"
-                )
-                for source in sources:
-                    forward_rules.append(
-                        f"-A {cfg.chain_forward} -s {source} -d {destination} "
-                        f"-o {str(cfg.interface)} -j ACCEPT"
-                    )
-                forward_rules.append(
-                    f"-A {cfg.chain_forward} -d {destination} "
-                    "-j REJECT --reject-with icmp-host-prohibited"
-                )
-            forward_rules.append(f"-A {cfg.chain_forward} -j RETURN")
-            filter_rules[cfg.chain_forward] = tuple(forward_rules)
-
-            nat_rules[cfg.chain_nat] = (
-                f"-A {cfg.chain_nat} -o {str(cfg.interface)} -m addrtype ! --src-type LOCAL -j MASQUERADE",
-                f"-A {cfg.chain_nat} -j RETURN",
-            )
-
-        jumps = MappingProxyType({
-            "INPUT": input_jumps,
-            "FORWARD": tuple(forward_jumps),
-            "POSTROUTING": nat_jumps,
-        })
-        chain_rules = MappingProxyType({
-            "filter": MappingProxyType(filter_rules),
-            "nat": MappingProxyType(nat_rules),
-        })
-        return jumps, chain_rules
-
-    def _compare_fixed_firewall_nat(self, snapshot: str) -> FirewallCheck:
-        """Compare only daemon-owned namespace and built-in jump prefixes."""
-        parsed = self._parse_iptables_save(snapshot)
-        jumps, expected = self._fixed_firewall_model()
-
-        for table_name in ("filter", "nat"):
-            table = parsed.get(table_name)
-            if table is None:
-                raise FirewallInspectionError(
-                    f"iptables-save missing {table_name!r} table"
-                )
-            chains = table["chains"]
-            rules = table["rules"]
-            assert isinstance(chains, set)
-            assert isinstance(rules, dict)
-
-            expected_chains = set(expected[table_name])
-            actual_owned = {
-                chain for chain in chains if chain.startswith(VPNG_CHAIN_PREFIX)
-            }
-            if actual_owned != expected_chains:
-                return FirewallCheck(
-                    safety=FirewallSafety.UNSAFE,
-                    reason=DiagnosticFact(
-                        RuntimeReasonCode.FIREWALL_DRIFT,
-                        f"{table_name} VPNG chains expected={sorted(expected_chains)!r} "
-                        f"actual={sorted(actual_owned)!r}",
-                    ),
-                )
-
-            for chain, expected_rules in expected[table_name].items():
-                actual_rules = tuple(rules.get(chain, ()))
-                if actual_rules != expected_rules:
-                    return FirewallCheck(
-                        safety=FirewallSafety.UNSAFE,
-                        reason=DiagnosticFact(
-                            RuntimeReasonCode.FIREWALL_DRIFT,
-                            f"{table_name}/{chain} rules differ",
-                        ),
-                    )
-
-        filter_rules = parsed["filter"]["rules"]
-        nat_rules = parsed["nat"]["rules"]
-        assert isinstance(filter_rules, dict)
-        assert isinstance(nat_rules, dict)
-
-        for chain, expected_prefix in (
-            ("INPUT", jumps["INPUT"]),
-            ("FORWARD", jumps["FORWARD"]),
-        ):
-            actual = tuple(filter_rules.get(chain, ()))
-            if actual[:len(expected_prefix)] != expected_prefix:
-                return FirewallCheck(
-                    FirewallSafety.UNSAFE,
-                    DiagnosticFact(
-                        RuntimeReasonCode.FIREWALL_DRIFT,
-                        f"filter/{chain} VPNG jump prefix differs",
-                    ),
-                )
-            if any(
-                (self._jump_target(rule) or "").startswith(VPNG_CHAIN_PREFIX)
-                for rule in actual[len(expected_prefix):]
-            ):
-                return FirewallCheck(
-                    FirewallSafety.UNSAFE,
-                    DiagnosticFact(
-                        RuntimeReasonCode.FIREWALL_DRIFT,
-                        f"filter/{chain} has extra VPNG jump",
-                    ),
-                )
-
-        postrouting = tuple(nat_rules.get("POSTROUTING", ()))
-        expected_postrouting = jumps["POSTROUTING"]
-        if postrouting[:len(expected_postrouting)] != expected_postrouting:
-            return FirewallCheck(
-                FirewallSafety.UNSAFE,
-                DiagnosticFact(
-                    RuntimeReasonCode.FIREWALL_DRIFT,
-                    "nat/POSTROUTING VPNG jump prefix differs",
-                ),
-            )
-        if any(
-            (self._jump_target(rule) or "").startswith(VPNG_CHAIN_PREFIX)
-            for rule in postrouting[len(expected_postrouting):]
-        ):
-            return FirewallCheck(
-                FirewallSafety.UNSAFE,
-                DiagnosticFact(
-                    RuntimeReasonCode.FIREWALL_DRIFT,
-                    "nat/POSTROUTING has extra VPNG jump",
-                ),
-            )
-
-        return FirewallCheck(FirewallSafety.SAFE, None)
-
-    def _build_fixed_firewall_nat_payload(self) -> str:
-        """Build deterministic filter+nat bootstrap payload without foreign flush."""
-        jumps, chain_rules = self._fixed_firewall_model()
-        lines: list[str] = ["*filter"]
-        for chain in sorted(chain_rules["filter"]):
-            lines.append(f":{chain} - [0:0]")
-
-        for position, rule in enumerate(jumps["INPUT"], start=1):
-            lines.append(rule.replace("-A INPUT", f"-I INPUT {position}", 1))
-        for position, rule in enumerate(jumps["FORWARD"], start=1):
-            lines.append(
-                rule.replace("-A FORWARD", f"-I FORWARD {position}", 1)
-            )
-        for chain in sorted(chain_rules["filter"]):
-            lines.extend(chain_rules["filter"][chain])
-        lines.append("COMMIT")
-
-        lines.append("*nat")
-        for chain in sorted(chain_rules["nat"]):
-            lines.append(f":{chain} - [0:0]")
-        for position, rule in enumerate(jumps["POSTROUTING"], start=1):
-            lines.append(
-                rule.replace(
-                    "-A POSTROUTING",
-                    f"-I POSTROUTING {position}",
-                    1,
-                )
-            )
-        for chain in sorted(chain_rules["nat"]):
-            lines.extend(chain_rules["nat"][chain])
-        lines.append("COMMIT")
-        return "\n".join(lines) + "\n"
-
-    def _repair_fixed_firewall_nat(self) -> None:
-        """
-        Repair confirmed UNSAFE fixed policy.
-
-        Cross-table atomicity does not exist:
-        - normal case: forwarding has already been disabled;
-        - if sysctl disable failed, still restore filter first, then nat;
-        - verify again after repair.
-        """
-        raise NotImplementedError
 
     def _build_firewall_cleanup_payload(self, snapshot: str) -> str:
         """Build exact deletions for the reserved VPNG-* namespace."""
