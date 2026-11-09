@@ -1,12 +1,18 @@
-# RC2 Python implementation
+# RC3 Python implementation
 
-This directory is a mechanical decomposition of the RC2.5.1 Python monolith.
+This directory is the active RC3 implementation line.
 
-No gateway policy, lifecycle ordering, route/firewall semantics, configuration
-semantics, or ownership marker values are intentionally changed by this split.
+It was bootstrapped blob-for-blob from the frozen RC2.5.1 Python baseline in
+`design/RC2/code/python/`. RC3 changes are applied here only; the RC2 tree remains a
+regression baseline and is not rewritten to match the new architecture.
+
+Current migration status:
+
+- RC2.5.1 package structure preserved as the starting point;
+- typed interface selector / inventory / resolution value objects added;
+- selector support is not yet enabled in the running ConfigLoader, so the old RC2 route
+  path cannot accidentally receive a prefix selector before route/policy migration.
 
 Entry point: `vpn-gatewayd.py`.
 
 The package is under `vpn_gatewayd/`; tests are under `tests/`.
-`tests/verify-split.py` compares top-level class/function ASTs and simple
-top-level assignments against the pre-split monolith.

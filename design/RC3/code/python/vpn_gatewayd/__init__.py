@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-# Compatibility surface for the mechanically split RC2 implementation.
-# Class/function bodies remain those of the RC2.5.1 monolith.
+# RC3 package surface. Existing RC2.5.1 components are migrated incrementally.
 
 import os
 
 from .constants import *
 from .errors import *
 from .models import *
+from .interfaces import *
 from .config import ConfigLoader
 from .profile import VpnProfile
 from .kernel import KernelInterface, SubprocessKernelInterface

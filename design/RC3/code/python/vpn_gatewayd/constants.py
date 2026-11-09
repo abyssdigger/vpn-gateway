@@ -6,11 +6,11 @@ from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
-# Architecture: RC2.4.1
-# Implementation: RC2.5.1
+# Architecture: RC3
+# Implementation: RC3 development line
 # ---------------------------------------------------------------------------
 
-VERSION = "RC2.5.1"
+VERSION = "RC3-dev"
 
 DEFAULT_CONFIG_PATH = Path("/etc/vpn-gateway/vpn-gateway.toml")
 DEFAULT_LOCK_PATH = Path("/run/vpn-gateway/vpn-gatewayd.lock")

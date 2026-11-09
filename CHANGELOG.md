@@ -1,5 +1,19 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 implementation bootstrap and interface domain model
+
+Implementation work starts without modifying the frozen RC2 baseline:
+
+- `design/RC3/code/python/` is bootstrapped blob-for-blob from RC2.5.1 in a separate
+  mechanical commit;
+- RC3 adds immutable `InterfaceSelector`, `InterfaceRecord`, `InterfaceBinding` and
+  `InterfaceResolution` domain values;
+- exact and prefix-family selector matching/overlap semantics are covered by focused unit
+  tests;
+- prefix selectors are intentionally not wired into the running loader yet, preventing the
+  legacy RC2 route path from receiving `vpns+` before binding-aware route/policy migration.
+
+
 ## 2026-11-09 — RC3 terminology refinements
 
 Terminology is refined after manual Russian-language review:
