@@ -98,6 +98,8 @@ class ValueObjectTests(unittest.TestCase):
         self.assertEqual(profile.owned_routes, frozenset())
         self.assertIsNone(profile.committed_binding)
         self.assertFalse(profile.committed_ready)
+        self.assertIsNone(profile.committed_resolution_state)
+        self.assertIsNone(profile.committed_match_count)
 
     def test_commit_verified_state_is_defensive(self):
         profile = vpng.VpnProfile(profile_config(peers=()))
@@ -134,6 +136,11 @@ class ValueObjectTests(unittest.TestCase):
         )
         self.assertEqual(profile.committed_binding, binding)
         self.assertTrue(profile.committed_ready)
+        self.assertIs(
+            profile.committed_resolution_state,
+            vpng.InterfaceResolutionState.BOUND,
+        )
+        self.assertEqual(profile.committed_match_count, 1)
 
         profile.commit_verified_state(
             routes=frozenset(),
@@ -142,6 +149,11 @@ class ValueObjectTests(unittest.TestCase):
         )
         self.assertIsNone(profile.committed_binding)
         self.assertFalse(profile.committed_ready)
+        self.assertIs(
+            profile.committed_resolution_state,
+            vpng.InterfaceResolutionState.ABSENT,
+        )
+        self.assertEqual(profile.committed_match_count, 0)
 
     def test_ready_committed_state_requires_binding(self):
         profile = vpng.VpnProfile(profile_config(peers=()))

@@ -50,6 +50,7 @@ class ConfigIssueLevel(Enum):
 
 
 class RuntimeReasonCode(Enum):
+    INTERFACE_INVENTORY_FAILED = auto()
     FIREWALL_INVENTORY_FAILED = auto()
     FIREWALL_INSPECTION_FAILED = auto()
     FIREWALL_DRIFT = auto()
@@ -65,6 +66,8 @@ class RuntimeReasonCode(Enum):
 
 RUNTIME_REASON_TEXT: Mapping[RuntimeReasonCode, str] = MappingProxyType(
     {
+        RuntimeReasonCode.INTERFACE_INVENTORY_FAILED:
+            "failed to inventory interfaces for reconciliation",
         RuntimeReasonCode.FIREWALL_INVENTORY_FAILED:
             "failed to inventory fixed firewall/NAT state",
         RuntimeReasonCode.FIREWALL_INSPECTION_FAILED:
