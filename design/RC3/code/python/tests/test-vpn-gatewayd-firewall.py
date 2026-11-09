@@ -166,6 +166,62 @@ class FirewallPolicyOrchestrationTests(unittest.TestCase):
                     vpng.FirewallDriftScope.TRANSIT,
                 )
 
+    def test_quoted_comment_does_not_fake_vpng_jump(self):
+        snapshot = serialize_policy(
+            self.desired,
+            foreign_input=(
+                '-A INPUT -m comment --comment "x -j VPNG-PRIMARY-INPUT" '
+                '-j ACCEPT',
+            ),
+        )
+
+        result = self.daemon._compare_firewall_nat_policy(
+            snapshot,
+            self.desired,
+        )
+        self.assertIs(result.safety, vpng.FirewallSafety.SAFE)
+
+        cleanup = self.daemon._build_firewall_cleanup_payload(snapshot)
+        self.assertNotIn(
+            '-D INPUT -m comment --comment "x -j VPNG-PRIMARY-INPUT" '
+            '-j ACCEPT',
+            cleanup,
+        )
+
+    def test_real_goto_reference_to_vpng_chain_is_detected(self):
+        snapshot = serialize_policy(
+            self.desired,
+            foreign_input=(
+                "-A INPUT -p tcp --dport 2222 -g VPNG-PRIMARY-INPUT",
+            ),
+        )
+        result = self.daemon._compare_firewall_nat_policy(
+            snapshot,
+            self.desired,
+        )
+        self.assertIs(result.safety, vpng.FirewallSafety.UNSAFE)
+        self.assertIs(result.scope, vpng.FirewallDriftScope.INPUT_ONLY)
+
+        cleanup = self.daemon._build_firewall_cleanup_payload(snapshot)
+        self.assertIn(
+            "-D INPUT -p tcp --dport 2222 -g VPNG-PRIMARY-INPUT",
+            cleanup,
+        )
+
+    def test_malformed_quoted_rule_makes_inspection_unknown(self):
+        self.daemon.kernel.iptables_save.return_value = (
+            serialize_policy(self.desired).replace(
+                self.desired.filter.input_jumps[0],
+                '-A INPUT -m comment --comment "unterminated '
+                '-j ACCEPT\n' + self.desired.filter.input_jumps[0],
+                1,
+            )
+        )
+
+        result = self.daemon._check_firewall_nat_policy(self.desired)
+        self.assertIs(result.safety, vpng.FirewallSafety.UNKNOWN)
+        self.assertIsNone(result.scope)
+
     def test_input_only_payload_contains_no_forward_or_nat_operations(self):
         snapshot = serialize_policy(self.desired)
         snapshot = snapshot.replace(

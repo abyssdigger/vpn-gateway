@@ -3,6 +3,7 @@ from __future__ import annotations
 import errno
 import logging
 import select
+import shlex
 import signal
 import socket
 import time
@@ -1763,14 +1764,31 @@ class VpnGatewayDaemon:
 
     @staticmethod
     def _jump_target(rule: str) -> str | None:
-        tokens = rule.split()
+        """
+        Return the actual jump/goto target from one iptables-save rule.
+
+        iptables-save quotes comment text. A plain str.split() would therefore
+        misread a comment such as "x -j VPNG-FOO" as a real daemon-owned jump.
+        Parse shell-style quoting and recognize both jump and goto references
+        to the reserved VPNG-* namespace.
+        """
         try:
-            index = tokens.index("-j")
-        except ValueError:
-            return None
-        if index + 1 >= len(tokens):
-            return None
-        return tokens[index + 1]
+            tokens = shlex.split(rule, posix=True)
+        except ValueError as exc:
+            raise FirewallInspectionError(
+                f"cannot parse iptables-save rule quoting: {rule!r}: {exc}"
+            ) from exc
+
+        for index, token in enumerate(tokens):
+            if token not in ("-j", "--jump", "-g", "--goto"):
+                continue
+            if index + 1 >= len(tokens):
+                raise FirewallInspectionError(
+                    f"iptables-save rule has target option without value: "
+                    f"{rule!r}"
+                )
+            return tokens[index + 1]
+        return None
 
     def _build_firewall_cleanup_payload(self, snapshot: str) -> str:
         """Build exact deletions for the reserved VPNG-* namespace."""
