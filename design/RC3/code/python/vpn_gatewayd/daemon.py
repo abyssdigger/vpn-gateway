@@ -1764,6 +1764,13 @@ class VpnGatewayDaemon:
                     raise FirewallInspectionError(
                         f"invalid rule line: {line!r}"
                     )
+                try:
+                    shlex.split(line, posix=True)
+                except ValueError as exc:
+                    raise FirewallInspectionError(
+                        "cannot parse iptables-save rule quoting: "
+                        f"{line!r}: {exc}"
+                    ) from exc
                 chain = parts[1]
                 rules = current["rules"]
                 assert isinstance(rules, dict)
