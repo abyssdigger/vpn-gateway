@@ -15,6 +15,7 @@
 **Status:** PLANNED  
 **Architecture baseline:** RC3  
 **Target:** Debian 13 gateway/test host, iptables-nft 1.8.11  
+**Harness:** [`design/experiments/EXP-006 Firewall orchestration target validation/vpn-gateway-exp-006-firewall-orchestration.sh`](experiments/EXP-006%20Firewall%20orchestration%20target%20validation/vpn-gateway-exp-006-firewall-orchestration.sh)  
 **Required before:** подключение RC3 firewall orchestration к рабочей реализации
 
 ### Motivation
