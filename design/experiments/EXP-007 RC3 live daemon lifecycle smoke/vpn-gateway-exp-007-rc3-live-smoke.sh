@@ -2,6 +2,10 @@
 set -u -o pipefail
 export LC_ALL=C LANG=C
 
+if [[ -t 1 ]] && command -v reset >/dev/null 2>&1; then
+    reset
+fi
+
 CONFIG=""
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PYTHON_TREE="$(cd -- "$SCRIPT_DIR/../../RC3/code/python" && pwd -P)"
@@ -109,7 +113,9 @@ active_owned_state_present() {
     snap="$(iptables-save -t filter; iptables-save -t nat)" || return 1
     grep -q '^:VPNG-' <<<"$snap" || return 1
     [[ -n "$(ip -4 route show proto 201)" ]] || return 1
-    [[ -n "$(ip -4 route show proto 202)" ]] || return 1
+    if [[ "$EXPECT_PROTO202" == "1" ]]; then
+        [[ -n "$(ip -4 route show proto 202)" ]] || return 1
+    fi
 }
 
 wait_active() {
@@ -173,15 +179,24 @@ else
     exit 1
 fi
 
-RECONCILE_WAIT="$(
+read -r RECONCILE_WAIT EXPECT_PROTO202 < <(
     python3 - "$CONFIG" <<'PY'
 import math, sys, tomllib
 with open(sys.argv[1], "rb") as f:
     doc = tomllib.load(f)
 interval = float(doc.get("reconcile_interval", 10.0))
-print(max(2, math.ceil(interval) + 2))
+managed = doc.get("managed_vpns", [])
+vpns = doc.get("vpn", {})
+expect_proto202 = any(
+    bool(vpns.get(profile_id, {}).get("peers", []))
+    and bool(vpns.get(profile_id, {}).get("routes", []))
+    for profile_id in managed
+)
+print(max(2, math.ceil(interval) + 2), int(expect_proto202))
 PY
-)" || exit 2
+) || exit 2
+
+log "expect_proto202=$EXPECT_PROTO202"
 
 (
     cd "$PYTHON_TREE" &&
