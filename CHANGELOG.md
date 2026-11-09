@@ -1,5 +1,23 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 terminology refinements
+
+Terminology is refined after manual Russian-language review:
+
+- `flock` is described as an exclusive lock acquired without waiting, avoiding the
+  misleading phrase “exclusive non-blocking lock”;
+- `runtime` usage is split between compound technical entities such as
+  `runtime-интерфейс` and temporal wording “во время исполнения” for daemon activity;
+- “среда исполнения” is preferred over “среда выполнения”;
+- `firewall` is restored as an accepted term for installed filtering policy/rules, while
+  NAT remains a separate entity and combined state is written `firewall/NAT`;
+- `daemon-owned` is restored as an accepted ownership term where it makes architecture
+  prose shorter and more precise;
+- the empty-list schema example again uses the real `profile.routes` configuration field.
+
+No architecture semantics change.
+
+
 ## 2026-11-09 — RC3 Russian technical editing pass
 
 A terminology-only editorial pass follows the final technical cleanup:
