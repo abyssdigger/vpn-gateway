@@ -10,6 +10,8 @@ Current RC3 implementation status:
 
 - RC2.5.1 package structure preserved as the starting point;
 - typed interface selector / inventory / resolution value objects added;
+- universal cleanup uses selective proto-201/proto-202 route inventory and never reads
+  unrelated main-table routes;
 - `VpnProfileConfig.interface` now carries an `InterfaceSelector` value;
 - pure selector resolution and readiness logic implements `ABSENT`/`BOUND`/`AMBIGUOUS`;
 - `SubprocessKernelInterface.list_interfaces()` inventories name/ifindex/IPv4;

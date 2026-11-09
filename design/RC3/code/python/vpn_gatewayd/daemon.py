@@ -198,11 +198,8 @@ class VpnGatewayDaemon:
             if self.kernel.get_ip_forward():
                 raise CleanupError("ip_forward remains enabled after disable")
 
-            routes = self.kernel.list_routes()
-            for route in sorted(
-                (route for route in routes if route.proto == VPN_ROUTE_PROTO),
-                key=self._route_sort_key,
-            ):
+            vpn_routes = self.kernel.list_routes_by_proto(VPN_ROUTE_PROTO)
+            for route in sorted(vpn_routes, key=self._route_sort_key):
                 self.kernel.delete_route(route)
 
             snapshot = self.kernel.iptables_save()
@@ -210,31 +207,49 @@ class VpnGatewayDaemon:
             if cleanup_payload:
                 self.kernel.iptables_restore(cleanup_payload, noflush=True)
 
-            routes = self.kernel.list_routes()
-            blackholes = sorted(
-                (
-                    route
-                    for route in routes
-                    if (
-                        route.route_type is RouteType.BLACKHOLE
-                        and route.proto == BLACKHOLE_ROUTE_PROTO
-                        and route.metric == BLACKHOLE_METRIC
-                    )
-                ),
-                key=self._route_sort_key,
+            blackhole_routes = self.kernel.list_routes_by_proto(
+                BLACKHOLE_ROUTE_PROTO
             )
-            for route in blackholes:
+            blackhole_conflicts = tuple(
+                route
+                for route in blackhole_routes
+                if not (
+                    route.route_type is RouteType.BLACKHOLE
+                    and route.metric == BLACKHOLE_METRIC
+                )
+            )
+            if blackhole_conflicts:
+                raise CleanupError(
+                    "reserved proto-201 marker conflict: "
+                    f"{blackhole_conflicts!r}"
+                )
+
+            for route in sorted(
+                blackhole_routes,
+                key=self._route_sort_key,
+            ):
                 self.kernel.delete_route(route)
 
-            remaining_routes = self.kernel.list_routes()
-            if any(route.proto == VPN_ROUTE_PROTO for route in remaining_routes):
+            if self.kernel.list_routes_by_proto(VPN_ROUTE_PROTO):
                 raise CleanupError("proto-202 VPN routes remain after cleanup")
-            if any(
-                route.route_type is RouteType.BLACKHOLE
-                and route.proto == BLACKHOLE_ROUTE_PROTO
-                and route.metric == BLACKHOLE_METRIC
-                for route in remaining_routes
-            ):
+
+            remaining_blackholes = self.kernel.list_routes_by_proto(
+                BLACKHOLE_ROUTE_PROTO
+            )
+            remaining_conflicts = tuple(
+                route
+                for route in remaining_blackholes
+                if not (
+                    route.route_type is RouteType.BLACKHOLE
+                    and route.metric == BLACKHOLE_METRIC
+                )
+            )
+            if remaining_conflicts:
+                raise CleanupError(
+                    "reserved proto-201 marker conflict remains: "
+                    f"{remaining_conflicts!r}"
+                )
+            if remaining_blackholes:
                 raise CleanupError("owned blackhole routes remain after cleanup")
 
             remaining_fw = self._parse_iptables_save(

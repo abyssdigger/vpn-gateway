@@ -174,6 +174,65 @@ class KernelRouteAdapterTests(unittest.TestCase):
             {vpng.RouteType.BLACKHOLE, vpng.RouteType.THROW},
         )
 
+    def test_list_routes_by_proto_uses_selective_query_and_context_proto(self):
+        adapter = kernel()
+        payload = [
+            {
+                "dst": "10.0.0.0/8",
+                "gateway": "172.20.130.6",
+                "dev": "vpns0",
+                "metric": 10,
+                "flags": ["onlink"],
+            }
+        ]
+
+        with mock.patch.object(
+            adapter,
+            "_run",
+            return_value=completed(payload),
+        ) as run:
+            routes = adapter.list_routes_by_proto(vpng.VPN_ROUTE_PROTO)
+
+        run.assert_called_once_with(
+            (
+                "ip",
+                "-j",
+                "-N",
+                "-4",
+                "route",
+                "show",
+                "table",
+                "main",
+                "proto",
+                "202",
+            )
+        )
+        route = next(iter(routes))
+        self.assertEqual(route.proto, vpng.VPN_ROUTE_PROTO)
+
+    def test_list_routes_by_proto_rejects_mismatched_or_unrepresentable_marker(self):
+        adapter = kernel()
+
+        with mock.patch.object(
+            adapter,
+            "_run",
+            return_value=completed(
+                [{"dst": "10.0.0.0/8", "protocol": 201, "flags": []}]
+            ),
+        ):
+            with self.assertRaises(vpng.KernelError):
+                adapter.list_routes_by_proto(vpng.VPN_ROUTE_PROTO)
+
+        with mock.patch.object(
+            adapter,
+            "_run",
+            return_value=completed(
+                [{"dst": "10.0.0.0/8", "nhid": 42}]
+            ),
+        ):
+            with self.assertRaises(vpng.KernelError):
+                adapter.list_routes_by_proto(vpng.VPN_ROUTE_PROTO)
+
     def test_list_routes_missing_protocol_normalizes_to_boot(self):
         adapter = kernel()
         with mock.patch.object(

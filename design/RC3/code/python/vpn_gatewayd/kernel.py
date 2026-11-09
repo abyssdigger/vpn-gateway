@@ -36,6 +36,10 @@ class KernelInterface(ABC):
         """Return normalized main IPv4 routing-table snapshot."""
 
     @abstractmethod
+    def list_routes_by_proto(self, proto: int) -> frozenset[RouteSpec]:
+        """Return strict main-table inventory filtered by known route proto."""
+
+    @abstractmethod
     def add_route(self, route: RouteSpec) -> None:
         """Materialize the complete RouteSpec without hidden policy defaults."""
 
@@ -283,7 +287,12 @@ class SubprocessKernelInterface(KernelInterface):
         return value
 
     @classmethod
-    def _parse_route_entry(cls, entry: object) -> RouteSpec:
+    def _parse_route_entry(
+        cls,
+        entry: object,
+        *,
+        protocol_context: int | None = None,
+    ) -> RouteSpec:
         if not isinstance(entry, dict):
             raise KernelError(
                 f"route inventory: expected object, got "
@@ -344,13 +353,27 @@ class SubprocessKernelInterface(KernelInterface):
                 f"route inventory: invalid flags {flags!r}"
             )
 
+        if protocol_context is None:
+            protocol = cls._parse_route_protocol(entry.get("protocol"))
+        else:
+            if "protocol" in entry:
+                observed_protocol = cls._parse_route_protocol(
+                    entry.get("protocol")
+                )
+                if observed_protocol != protocol_context:
+                    raise KernelError(
+                        "filtered route inventory: protocol does not match "
+                        f"query context {protocol_context}: {entry!r}"
+                    )
+            protocol = protocol_context
+
         return RouteSpec(
             destination=cls._parse_route_destination(entry.get("dst")),
             route_type=cls._parse_route_type(entry.get("type")),
             via=gateway,
             interface=interface,
             metric=cls._parse_optional_metric(entry.get("metric")),
-            proto=cls._parse_route_protocol(entry.get("protocol")),
+            proto=protocol,
             onlink="onlink" in flags,
         )
 
@@ -381,6 +404,47 @@ class SubprocessKernelInterface(KernelInterface):
         )
         return frozenset(
             self._parse_route_entry(entry)
+            for entry in payload
+        )
+
+    def list_routes_by_proto(self, proto: int) -> frozenset[RouteSpec]:
+        """
+        Return strict marker-scoped route inventory for universal cleanup.
+
+        The query is intentionally selective so unrelated foreign main-table
+        routes are never parsed during cleanup.  Debian iproute2 may omit the
+        protocol field from output already filtered by protocol, so the known
+        protocol identity is supplied from the query context.
+        """
+        if (
+            not isinstance(proto, int)
+            or isinstance(proto, bool)
+            or not 0 <= proto <= 255
+        ):
+            raise KernelError(
+                f"invalid route protocol for filtered inventory: {proto!r}"
+            )
+
+        completed = self._run(
+            (
+                "ip",
+                "-j",
+                "-N",
+                "-4",
+                "route",
+                "show",
+                "table",
+                "main",
+                "proto",
+                str(proto),
+            )
+        )
+        payload = self._load_json_array(
+            completed.stdout,
+            context=f"route inventory proto {proto}",
+        )
+        return frozenset(
+            self._parse_route_entry(entry, protocol_context=proto)
             for entry in payload
         )
 

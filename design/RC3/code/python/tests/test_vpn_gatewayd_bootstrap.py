@@ -240,7 +240,14 @@ COMMIT
                 return self.forwarding
 
             def list_routes(self):
-                return frozenset(self.routes)
+                raise vpng.KernelError(
+                    "foreign multipath route makes full inventory unavailable"
+                )
+
+            def list_routes_by_proto(self, proto):
+                return frozenset(
+                    item for item in self.routes if item.proto == proto
+                )
 
             def delete_route(self, item):
                 self.events.append(("delete", item))
@@ -295,6 +302,42 @@ COMMIT
             kernel.events.index("firewall_cleanup"),
             kernel.events.index(("delete", blackhole)),
         )
+
+    def test_cleanup_rejects_reserved_proto201_marker_conflict(self):
+        conflict = route(
+            kind=vpng.RouteType.UNICAST,
+            proto=vpng.BLACKHOLE_ROUTE_PROTO,
+            metric=vpng.BLACKHOLE_METRIC,
+            via="172.20.130.6",
+            interface="vpns0",
+            onlink=True,
+        )
+
+        kernel = mock.Mock()
+        kernel.get_ip_forward.return_value = False
+        kernel.list_routes_by_proto.side_effect = (
+            frozenset(),
+            frozenset({conflict}),
+        )
+        kernel.iptables_save.return_value = """*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+COMMIT
+*nat
+:POSTROUTING ACCEPT [0:0]
+COMMIT
+"""
+
+        daemon = vpng.VpnGatewayDaemon(
+            config_path=Path("/dev/null"),
+            kernel=kernel,
+            config_loader=mock.Mock(),
+        )
+
+        with self.assertRaises(vpng.CleanupError):
+            daemon.cleanup()
+
+        kernel.delete_route.assert_not_called()
 
     def test_apply_enables_forwarding_only_after_firewall_and_routes_verify(self):
         class FakeKernel:
