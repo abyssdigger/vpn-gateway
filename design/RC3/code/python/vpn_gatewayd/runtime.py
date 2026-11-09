@@ -4,6 +4,7 @@ import errno
 import fcntl
 import os
 import socket
+import stat
 from pathlib import Path
 
 from .constants import DEFAULT_LOCK_PATH, LOG
@@ -17,24 +18,92 @@ class InstanceLock:
         self._fd: int | None = None
 
     def __enter__(self) -> "InstanceLock":
-        fd = os.open(
-            self.path,
-            os.O_RDWR
-            | os.O_CREAT
-            | os.O_CLOEXEC
-            | os.O_NOFOLLOW,
-            0o600,
-        )
+        runtime_dir = self.path.parent
+        expected_uid = os.geteuid()
+
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            os.mkdir(runtime_dir, 0o700)
+        except FileExistsError:
+            pass
         except OSError as exc:
+            raise InstanceLockError(
+                f"cannot create runtime directory {runtime_dir}: {exc}"
+            ) from exc
+
+        dir_flags = os.O_RDONLY | os.O_CLOEXEC | os.O_DIRECTORY | os.O_NOFOLLOW
+        try:
+            dir_fd = os.open(runtime_dir, dir_flags)
+        except OSError as exc:
+            raise InstanceLockError(
+                f"cannot safely open runtime directory {runtime_dir}: {exc}"
+            ) from exc
+
+        try:
+            directory_stat = os.fstat(dir_fd)
+            directory_mode = stat.S_IMODE(directory_stat.st_mode)
+            if not stat.S_ISDIR(directory_stat.st_mode):
+                raise InstanceLockError(
+                    f"runtime path is not a directory: {runtime_dir}"
+                )
+            if directory_stat.st_uid != expected_uid:
+                raise InstanceLockError(
+                    f"runtime directory owner mismatch: {runtime_dir}: "
+                    f"uid={directory_stat.st_uid} expected={expected_uid}"
+                )
+            if directory_mode != 0o700:
+                raise InstanceLockError(
+                    f"runtime directory mode mismatch: {runtime_dir}: "
+                    f"mode={directory_mode:04o} expected=0700"
+                )
+
+            try:
+                fd = os.open(
+                    self.path.name,
+                    os.O_RDWR
+                    | os.O_CREAT
+                    | os.O_CLOEXEC
+                    | os.O_NOFOLLOW,
+                    0o600,
+                    dir_fd=dir_fd,
+                )
+            except OSError as exc:
+                raise InstanceLockError(
+                    f"cannot safely open lock file {self.path}: {exc}"
+                ) from exc
+        finally:
+            os.close(dir_fd)
+
+        try:
+            lock_stat = os.fstat(fd)
+            lock_mode = stat.S_IMODE(lock_stat.st_mode)
+            if not stat.S_ISREG(lock_stat.st_mode):
+                raise InstanceLockError(
+                    f"lock path is not a regular file: {self.path}"
+                )
+            if lock_stat.st_uid != expected_uid:
+                raise InstanceLockError(
+                    f"lock file owner mismatch: {self.path}: "
+                    f"uid={lock_stat.st_uid} expected={expected_uid}"
+                )
+            if lock_mode != 0o600:
+                raise InstanceLockError(
+                    f"lock file mode mismatch: {self.path}: "
+                    f"mode={lock_mode:04o} expected=0600"
+                )
+
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BaseException as exc:
             os.close(fd)
-            if exc.errno in (errno.EACCES, errno.EAGAIN):
+            if isinstance(exc, OSError) and exc.errno in (
+                errno.EACCES,
+                errno.EAGAIN,
+            ):
                 raise InstanceLockError(
                     f"another vpn-gatewayd instance is running "
                     f"(lock busy: {self.path})"
                 ) from exc
             raise
+
         self._fd = fd
         return self
 
