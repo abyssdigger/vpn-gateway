@@ -10,6 +10,105 @@
 `Architecture baseline`, указанному в самой записи. При выпуске последующих RC такие ссылки
 не перенумеровываются задним числом.
 
+## EXP-007 — RC3 live daemon lifecycle smoke
+
+**Status:** READY TO RUN  
+**Architecture baseline:** RC3  
+**Implementation:** RC3 Python development line, unit suite 122/122 PASS  
+**Target:** dedicated Debian 13 vpn-gateway host with the real OpenConnect transport already established  
+**Harness:** [`design/experiments/EXP-007 RC3 live daemon lifecycle smoke/vpn-gateway-exp-007-rc3-live-smoke.sh`](experiments/EXP-007%20RC3%20live%20daemon%20lifecycle%20smoke/vpn-gateway-exp-007-rc3-live-smoke.sh)  
+**Safety:** live-host experiment; run only in a maintenance window after stopping any previous vpn-gateway controller/daemon
+
+### Motivation
+
+EXP-003 proved the RC2.5.1 initial happy path. EXP-006 validated the target
+`iptables-restore --noflush` mechanics required by RC3. The RC3 Python implementation is
+now unit-clean, but the complete RC3 daemon lifecycle has not yet been executed against the
+real Debian kernel boundary.
+
+EXP-007 is deliberately narrow. It validates the first live implementation gate before
+injecting runtime drift or Netlink transition scenarios.
+
+### Scope
+
+The harness runs the actual RC3 entry point against a supplied root-owned production-style
+configuration and records three phases:
+
+1. **PRE** — clean fail-closed host state before the daemon starts;
+2. **ACTIVE** — state after startup and after at least one periodic reconciliation interval;
+3. **POST** — state after graceful `SIGTERM` shutdown and universal cleanup.
+
+It does not inject firewall drift, route drift, interface disappearance, ambiguity or
+Netlink loss. Those are follow-up experiments after this lifecycle gate passes.
+
+### Preconditions
+
+- dedicated Debian 13 gateway/test host;
+- real VPN transport interface is already present and has the configured local IPv4;
+- prior vpn-gateway service/controller is stopped;
+- `net.ipv4.ip_forward=0`;
+- no existing `VPNG-*` chains/jumps;
+- no existing route protocol 201/202 entries;
+- RC3 host IPv6 prerequisites satisfy the architecture;
+- configuration path and parent directory satisfy RC3 ownership/mode checks.
+
+The harness refuses to proceed if the clean ownership boundary is not satisfied.
+
+### Hypotheses / pass criteria
+
+- **H1 — config boundary:** `vpn-gatewayd.py --check-config` succeeds.
+- **H2 — startup materialization:** the daemon remains alive, enables
+  `net.ipv4.ip_forward=1`, creates daemon-owned `VPNG-*` filter/NAT resources,
+  installs at least one proto-201 blackhole and at least one proto-202 unicast route.
+- **H3 — steady reconciliation:** after one configured `reconcile_interval` plus guard
+  time, the daemon is still alive and the owned-state snapshot remains valid.
+- **H4 — graceful cleanup:** `SIGTERM` exits cleanly, returns
+  `net.ipv4.ip_forward` to 0, removes all `VPNG-*` resources and removes all
+  proto-201/202 routes that were absent at PRE.
+
+All four hypotheses must pass.
+
+### Artifacts
+
+The harness creates:
+
+```text
+vpn-gateway-exp-007-<UTC timestamp>/
+    environment.txt
+    config-check.txt
+    daemon.log
+    pre/
+    active-initial/
+    active-stable/
+    post/
+    result.txt
+vpn-gateway-exp-007-<UTC timestamp>.tar.gz
+vpn-gateway-exp-007-<UTC timestamp>.tar.gz.sha256
+```
+
+Each phase contains forwarding/sysctl state, interface inventory, route inventory,
+`iptables-save` filter/NAT snapshots, and daemon-owned resource extracts.
+
+### Run
+
+From the experiment directory:
+
+```bash
+sudo ./vpn-gateway-exp-007-rc3-live-smoke.sh \
+    --config /etc/vpn-gateway/vpn-gateway.toml
+```
+
+By default the harness resolves the RC3 Python tree at
+`../../RC3/code/python`. `--python-tree` can override it.
+
+### Decision rule
+
+A PASS closes only the **RC3 live lifecycle/materialization gate**. Runtime recovery,
+INPUT-only drift repair, transit drift isolation, selector ambiguity and interface
+appearance/disappearance remain separate validation work.
+
+---
+
 ## EXP-006 — замена существующих цепочек и восстановление daemon-owned префикса
 
 **Status:** COMPLETE — PASS  

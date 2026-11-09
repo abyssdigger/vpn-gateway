@@ -1,0 +1,15 @@
+EXP-007 RC3 live daemon lifecycle smoke
+Run:
+Host:
+Commit:
+Config:
+Archive SHA256:
+
+H1 config boundary:
+H2 startup materialization:
+H3 steady reconciliation:
+H4 graceful cleanup:
+
+OVERALL=
+
+Notes:
