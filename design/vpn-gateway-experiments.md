@@ -10,6 +10,96 @@
 `Architecture baseline`, указанному в самой записи. При выпуске последующих RC такие ссылки
 не перенумеровываются задним числом.
 
+## EXP-009 — RC3: несколько runtime-интерфейсов одного transport profile
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** RC3 до исправления binding model по EXP-009  
+**Запуск:** 2026-11-10  
+**Тип:** ручной live discovery experiment  
+**Target:** выделенный Debian 13 ocserv gateway с двумя одновременными OpenConnect clients  
+**Результат:** [`EXP-009-result-20261110.md`](experiments/EXP-009%20RC3%20multi-interface%20binding%20discovery/EXP-009-result-20261110.md)
+
+### Мотивация
+
+RC3 исходил из предположения, что один managed profile разрешается максимум в один
+concrete runtime interface. Для WireGuard это естественная модель; та же модель была
+распространена на OpenConnect через `interface = "vpns+"`.
+
+Перед следующими transport-lifecycle experiments требовалось непосредственно наблюсти
+топологию двух одновременно подключенных peers, а не выводить ее из документации
+конкретного VPN transport.
+
+### Процедура
+
+Два независимых OpenConnect client одновременно подключены к одному ocserv endpoint:
+
+```text
+pri -> fixed VPN peer 172.20.130.6
+sec -> fixed VPN peer 172.20.130.5
+```
+
+На сервере состояние наблюдалось через `occtl show users` и `ip -br -4 addr show`
+с фильтром namespace `vpns`.
+
+### Наблюдение
+
+```text
+=== ocserv users ===
+      id     user    vhost             ip         vpn-ip device   since    dtls-cipher    status
+   31612      sec  default 192.168.201.199   172.20.130.5 vpns01     6s  (AES-256-GCM) connected
+   31214      pri  default 192.168.201.108   172.20.130.6 vpns00    45s  (AES-256-GCM) connected
+
+=== vpns interfaces ===
+vpns00           UNKNOWN        172.20.130.1 peer 172.20.130.6/32
+vpns01           UNKNOWN        172.20.130.1 peer 172.20.130.5/32
+```
+
+Две одновременно исправные сессии занимают **разные** server-side runtime interfaces.
+У обоих interfaces один local VPN address и разные point-to-point remote peers.
+
+### Результат
+
+**EXP-009 result: PASS.**
+
+Эксперимент опровергает архитектурное предположение, что healthy profile обязательно имеет
+один runtime interface. По прежнему правилу cardinality для `vpns+` это исправное
+состояние было бы ошибочно классифицировано как `AMBIGUOUS`.
+
+### Архитектурное решение
+
+Исправление является общим и не связано с конкретным VPN transport:
+
+1. discovery selector и кратность bindings являются разными понятиями;
+2. exact name и `prefix+` сохраняют single-binding semantics;
+3. `prefix%` вводится как numeric multi-binding discovery
+   (`^prefix[0-9]+# VPN-GATE — журнал экспериментов
+
+**Терминология:** [RC3 — термины и определения](RC3/terms-and-definitions.md).
+
+Исторические экспериментальные записи сохраняют язык, на котором они были зафиксированы:
+это часть доказательной базы. Новые русскоязычные пояснения и решения используют
+нормативную терминологию RC3; технические идентификаторы и команды не переводятся.
+
+Ссылки на номера разделов и инвариантов внутри исторической записи относятся к
+`Architecture baseline`, указанному в самой записи. При выпуске последующих RC такие ссылки
+не перенумеровываются задним числом.
+
+);
+4. непустое явное множество уникальных exact interface names также является
+   multi-binding selector;
+5. multi-binding peer association выводится из наблюдаемого point-to-point
+   `(local_address, peer)` evidence, а не из порядка interfaces, numeric suffix или
+   позиции в массиве `peers`;
+6. allowing firewall rules, NAT и routes всегда используют exact concrete interface names;
+7. deny-only firewall protection для `prefix%` повторно использует уже проверенный
+   контракт `-i prefix+`, поэтому его защитное пространство имен намеренно шире discovery.
+
+EXP-009 повторно открывает implementation gate только для selector/binding resolution.
+Выводы EXP-006/007/008 о firewall transactions, protective barrier, route ownership,
+runtime repair и cleanup остаются действующими.
+
+---
+
 ## EXP-008 — RC3 live runtime drift recovery
 
 **Status:** COMPLETE — PASS  

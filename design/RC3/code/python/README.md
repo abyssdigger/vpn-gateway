@@ -37,3 +37,22 @@ Current RC3 implementation status:
 Entry point: `vpn-gatewayd.py`.
 
 The package is under `vpn_gatewayd/`; tests are under `tests/`.
+
+
+## EXP-009 architectural impact
+
+EXP-009 invalidated the pre-EXP-009 assumption that every managed profile resolves to at
+most one concrete runtime interface. The current Python implementation still implements
+that older single-binding model.
+
+The architecture now requires:
+
+- exact and `prefix+` single-binding selectors;
+- `prefix%` numeric multi-binding selector;
+- explicit exact-set multi-binding selector;
+- point-to-point peer evidence in interface inventory;
+- `PeerBinding(peer -> exact interface)`;
+- multiple exact INPUT/FORWARD/NAT blocks and peer-specific route interfaces.
+
+The 125/125 unit-suite result remains valid for the pre-EXP-009 implementation baseline,
+but it is not evidence that the new multi-binding architecture is implemented.
