@@ -344,6 +344,129 @@ class KernelRouteAdapterTests(unittest.TestCase):
                         method(route)
         run.assert_not_called()
 
+    def test_list_interfaces_keeps_ifindex_ipv4_and_empty_interfaces(self):
+        adapter = kernel()
+        payload = [
+            {
+                "ifindex": 1,
+                "ifname": "lo",
+                "addr_info": [
+                    {"family": "inet", "local": "127.0.0.1"},
+                    {"family": "inet6", "local": "::1"},
+                ],
+            },
+            {
+                "ifindex": 7,
+                "ifname": "vpns0",
+                "addr_info": [
+                    {
+                        "family": "inet",
+                        "local": "172.20.130.1",
+                        "peer": "172.20.130.6",
+                    }
+                ],
+            },
+            {"ifindex": 8, "ifname": "wg0", "addr_info": []},
+        ]
+
+        with mock.patch.object(
+            adapter,
+            "_run",
+            return_value=completed(payload),
+        ) as run:
+            records = adapter.list_interfaces()
+
+        run.assert_called_once_with(("ip", "-j", "addr", "show"))
+        self.assertEqual(
+            records,
+            (
+                vpng.InterfaceRecord(
+                    "lo",
+                    1,
+                    frozenset({IPv4Address("127.0.0.1")}),
+                ),
+                vpng.InterfaceRecord(
+                    "vpns0",
+                    7,
+                    frozenset({IPv4Address("172.20.130.1")}),
+                ),
+                vpng.InterfaceRecord("wg0", 8, frozenset()),
+            ),
+        )
+
+    def test_list_interfaces_merges_only_same_name_same_ifindex(self):
+        adapter = kernel()
+        payload = [
+            {
+                "ifindex": 2,
+                "ifname": "ens18",
+                "addr_info": [{"family": "inet", "local": "10.0.0.1"}],
+            },
+            {
+                "ifindex": 2,
+                "ifname": "ens18",
+                "addr_info": [{"family": "inet", "local": "10.0.0.2"}],
+            },
+        ]
+
+        with mock.patch.object(
+            adapter,
+            "_run",
+            return_value=completed(payload),
+        ):
+            records = adapter.list_interfaces()
+
+        self.assertEqual(
+            records,
+            (
+                vpng.InterfaceRecord(
+                    "ens18",
+                    2,
+                    frozenset(
+                        {
+                            IPv4Address("10.0.0.1"),
+                            IPv4Address("10.0.0.2"),
+                        }
+                    ),
+                ),
+            ),
+        )
+
+        payload[1]["ifindex"] = 3
+        with mock.patch.object(
+            adapter,
+            "_run",
+            return_value=completed(payload),
+        ):
+            with self.assertRaises(vpng.KernelError):
+                adapter.list_interfaces()
+
+    def test_list_interfaces_rejects_invalid_ifindex_and_inet_local(self):
+        adapter = kernel()
+
+        for entry in (
+            {"ifname": "vpns0", "addr_info": []},
+            {"ifindex": 0, "ifname": "vpns0", "addr_info": []},
+            {
+                "ifindex": 7,
+                "ifname": "vpns0",
+                "addr_info": [{"family": "inet"}],
+            },
+            {
+                "ifindex": 7,
+                "ifname": "vpns0",
+                "addr_info": [{"family": "inet", "local": "not-an-ip"}],
+            },
+        ):
+            with self.subTest(entry=entry):
+                with mock.patch.object(
+                    adapter,
+                    "_run",
+                    return_value=completed([entry]),
+                ):
+                    with self.assertRaises(vpng.KernelError):
+                        adapter.list_interfaces()
+
     def test_list_interface_ipv4_uses_local_and_keeps_empty_interfaces(self):
         adapter = kernel()
         payload = [

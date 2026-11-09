@@ -10,6 +10,7 @@ from typing import Mapping, Sequence
 
 from .constants import IP_FORWARD_PATH, MAX_ROUTE_METRIC
 from .errors import KernelError
+from .interfaces import InterfaceRecord
 from .models import RouteSpec, RouteType
 
 class KernelInterface(ABC):
@@ -43,6 +44,15 @@ class KernelInterface(ABC):
         Used only for authoritative canonicalization when the exact desired
         RouteSpec already exists in ACTUAL but is not OWNED by this process.
         """
+
+    def list_interfaces(self) -> tuple[InterfaceRecord, ...]:
+        """
+        Return the typed interface inventory required by RC3.
+
+        Kept non-abstract during the staged RC2->RC3 migration so legacy test
+        doubles remain constructible until daemon integration switches over.
+        """
+        raise NotImplementedError
 
     @abstractmethod
     def list_interface_ipv4(
@@ -410,6 +420,99 @@ class SubprocessKernelInterface(KernelInterface):
     def replace_route(self, route: RouteSpec) -> None:
         """Canonicalize one complete RouteSpec with `ip route replace`."""
         self._run(self._route_command_argv("replace", route))
+
+    def list_interfaces(self) -> tuple[InterfaceRecord, ...]:
+        """
+        Return a typed snapshot of every interface and its local IPv4 addresses.
+
+        The command is intentionally not filtered with `-4`: addressless and
+        IPv6-only interfaces must remain visible to selector resolution.
+        Duplicate records for one name may be merged only when their ifindex is
+        identical; conflicting ifindex values are an invalid inventory.
+        """
+        completed = self._run(("ip", "-j", "addr", "show"))
+        payload = self._load_json_array(
+            completed.stdout,
+            context="interface inventory",
+        )
+
+        mutable: dict[str, tuple[int, set[IPv4Address]]] = {}
+        for entry in payload:
+            if not isinstance(entry, dict):
+                raise KernelError(
+                    "interface inventory: expected object, got "
+                    f"{type(entry).__name__}"
+                )
+
+            name = entry.get("ifname")
+            if not isinstance(name, str) or not name:
+                raise KernelError(
+                    "interface inventory: invalid/missing ifname "
+                    f"{name!r}"
+                )
+
+            ifindex = entry.get("ifindex")
+            if (
+                not isinstance(ifindex, int)
+                or isinstance(ifindex, bool)
+                or ifindex <= 0
+            ):
+                raise KernelError(
+                    f"interface inventory: invalid/missing ifindex "
+                    f"for {name!r}: {ifindex!r}"
+                )
+
+            existing = mutable.get(name)
+            if existing is None:
+                addresses: set[IPv4Address] = set()
+                mutable[name] = (ifindex, addresses)
+            else:
+                existing_ifindex, addresses = existing
+                if existing_ifindex != ifindex:
+                    raise KernelError(
+                        "interface inventory: duplicate ifname with "
+                        f"conflicting ifindex: {name!r} has "
+                        f"{existing_ifindex} and {ifindex}"
+                    )
+
+            address_info = entry.get("addr_info", [])
+            if not isinstance(address_info, list):
+                raise KernelError(
+                    f"interface inventory: invalid addr_info for "
+                    f"{name!r}: {address_info!r}"
+                )
+
+            for info in address_info:
+                if not isinstance(info, dict):
+                    raise KernelError(
+                        "interface inventory: invalid address object "
+                        f"for {name!r}: {info!r}"
+                    )
+                if info.get("family") != "inet":
+                    continue
+
+                local = info.get("local")
+                if not isinstance(local, str) or not local:
+                    raise KernelError(
+                        "interface inventory: missing local IPv4 "
+                        f"for {name!r}: {info!r}"
+                    )
+                try:
+                    addresses.add(IPv4Address(local))
+                except ValueError as exc:
+                    raise KernelError(
+                        "interface inventory: invalid local IPv4 "
+                        f"{local!r} for {name!r}"
+                    ) from exc
+
+        return tuple(
+            InterfaceRecord(
+                name=name,
+                ifindex=ifindex,
+                ipv4=frozenset(addresses),
+            )
+            for name, (ifindex, addresses) in sorted(mutable.items())
+        )
 
     def list_interface_ipv4(
         self,

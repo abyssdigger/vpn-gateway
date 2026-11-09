@@ -1,5 +1,14 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 typed interface kernel inventory
+
+`SubprocessKernelInterface.list_interfaces()` now exposes immutable `InterfaceRecord`
+snapshots with interface name, ifindex and local IPv4 addresses.
+
+The new parser preserves addressless/IPv6-only interfaces, merges duplicate records only
+when the ifindex agrees, and rejects conflicting same-name ifindex data. The legacy
+`list_interface_ipv4()` boundary remains temporarily available until daemon integration.
+
 ## 2026-11-09 — RC3 interface resolution and readiness core
 
 Pure interface-state logic now resolves one typed selector against one inventory snapshot:
