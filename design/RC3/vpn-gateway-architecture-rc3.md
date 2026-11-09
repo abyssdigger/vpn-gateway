@@ -354,6 +354,14 @@ concrete binding. Наличие или отсутствие transport-level han
 (local_address, peer)
 ```
 
+В RC3 это единственный нормативный механизм association для селектора multi-binding.
+Следовательно, multi-binding transport обязан публиковать однозначный remote peer в
+IPv4 point-to-point address inventory. Если transport этого evidence не предоставляет,
+daemon не пытается угадывать association по имени interface, порядку создания, suffix,
+route table или иным косвенным признакам: соответствующая `PeerBinding` отсутствует.
+Поддержка multi-binding transport без point-to-point evidence потребует отдельного
+будущего association mechanism.
+
 Результат для конкретного configured peer:
 
 ```text
@@ -858,8 +866,14 @@ point-to-point evidence и неизменяемой конфигурации.
 14. по схеме «прочитать перед записью» включить `ip_forward=1` самым последним и
     подтвердить результат.
 
-Если любой этап до последнего подтверждения неуспешен, запуск завершается фатальной
-ошибкой, а пересылка не должна оставаться включенной.
+Если любой обязательный этап применения или проверки неуспешен, запуск завершается
+фатальной ошибкой, а пересылка не должна оставаться включенной.
+
+Недоступность всех configured peers сама по себе не является ошибкой startup. Если
+binding resolution однозначен, fail-closed desired state успешно применено и проверено,
+daemon может завершить startup и войти в `RUN` сразу в состоянии `DEGRADED`: profile
+result будет `FAIL` из-за отсутствия verified UNICAST path, но systemd unit остается
+успешно запущенным. `AMBIGUOUS` при startup по-прежнему является фатальной ошибкой.
 
 Порядок начального применения `filter -> nat` не противоречит протоколу с первоначальным
 запретом из §8.6. Перед `APPLY` успешная начальная `cleanup()` уже подтвердила
@@ -1133,27 +1147,65 @@ active concrete bindings, peer bindings и ambiguity изменяются тол
 
 Фиксация после включения пересылки запрещена.
 
+
 ### 8.9. Состояние жизненного цикла
 
 ```text
 недостаточная наблюдаемость интерфейсов/политики -> ISOLATED
-firewall/NAT != SAFE                  -> ISOLATED
+firewall/NAT != SAFE                             -> ISOLATED
 firewall/NAT == SAFE
   И все управляемые профили SUCCESS
   И ip_forward == 1                              -> ACTIVE
-firewall/NAT == SAFE, остальные
-  проверки профилей/политики завершены           -> DEGRADED
+firewall/NAT == SAFE
+  И хотя бы один профиль FAIL
+  И остальные проверки завершены                -> DEGRADED
 ```
 
-Отсутствие одного или всех configured peers само по себе не является ошибкой, если
-требуемое fail-closed состояние успешно применено и проверено. `AMBIGUOUS` является
-`FAIL` профиля.
+Profile result определяется только после построения desired state и проверки фактических
+маршрутов.
 
-`ACTIVE` означает, что **требуемое состояние политики в ядре полностью реализовано**, а
-не то, что доказана связность с удаленной стороной VPN через туннель. Семантика результатов
-профиля `SUCCESS`/`FAIL` определена в §23.9. Поэтому операционный статус обязан отдельно
-показывать для каждого профиля selector form, binding cardinality, candidates, active
-concrete bindings, peer bindings и результат маршрутизации.
+Профиль имеет `SUCCESS`, если одновременно:
+
+1. binding resolution не `AMBIGUOUS`;
+2. его вклад в full desired firewall/NAT policy успешно применен и проверен;
+3. route plan для всех его protected destinations успешно применен и проверен;
+4. для **каждого** protected destination существует как минимум один verified desired
+   `UNICAST RouteSpec`.
+
+Для селектора multi-binding это означает, что отсутствие primary peer допустимо: если
+secondary `PeerBinding` существует, соответствующие routes materialized и проверены для
+всех protected destinations, профиль остается `SUCCESS`. Отсутствующие остальные peers
+не являются ошибкой.
+
+Если у профиля нет ни одного verified desired UNICAST path для его protected destinations
+(в том числе при `peers=[]` или отсутствии всех `PeerBinding` селектора multi-binding),
+профиль имеет `FAIL`. При подтвержденной `SAFE` политике это безопасная потеря
+доступности: daemon остается работающим и переходит в `DEGRADED`, а blackhole и
+окончательные запреты сохраняют fail closed.
+
+Для селектора single-binding наличие active concrete binding materialize routes всех
+configured peers независимо от transport-level handshake. Поэтому `SUCCESS` такого
+профиля означает только наличие и проверку требуемых kernel routes/policy; он **не**
+доказывает end-to-end reachability удаленной стороны.
+
+`AMBIGUOUS` всегда является `FAIL`; его обработка определена в §8.5.
+
+`ACTIVE` означает, что требуемое состояние политики и маршрутов в ядре полностью
+реализовано для всех профилей. Ни `ACTIVE`, ни profile `SUCCESS` не являются
+health-check VPN transport.
+
+Операционный status для каждого профиля обязан показывать как минимум:
+
+- `ProfileResult = SUCCESS|FAIL` и стабильную причину `FAIL`;
+- selector form и binding cardinality;
+- candidates;
+- active concrete bindings;
+- peer bindings;
+- desired/verified `UNICAST RouteSpec` либо эквивалентный список peer/interface/metric;
+- ambiguity, если она есть.
+
+Такой status обязан позволять отличить partial multi-binding failover с `SUCCESS` от
+полного отсутствия route path с `FAIL`.
 
 Ручной `sysctl -w net.ipv4.ip_forward=0` не является административной паузой; успешно
 завершенный чистый цикл согласования восстанавливает требуемое значение `ip_forward`,
@@ -1164,7 +1216,7 @@ concrete bindings, peer bindings и результат маршрутизаци�
 Политика сетевых правил (firewall и NAT) daemon-owned ресурсов состоит из структурной части и части, зависящей
 от привязки.
 
-Структурная часть существует для всех управляемых профилей независимо от готовности:
+Структурная часть существует для всех управляемых профилей независимо от текущего binding state:
 
 - зарезервированные цепочки `VPNG-*`;
 - детерминированный префикс переходов из встроенных цепочек;
@@ -1370,7 +1422,7 @@ metric 65536
 type blackhole
 ```
 
-Blackhole не зависит от привязки или готовности.
+Blackhole не зависит от текущего binding state и наличия UNICAST path.
 
 EXP-004.2 подтвердил: при исчезновении зависящего от интерфейса `proto 202` UNICAST
 blackhole остается и не дает защищаемому назначению уйти через маршрут по умолчанию.
@@ -2414,6 +2466,7 @@ DiagnosticFact:
 неожиданные ошибки не маскируются как штатные `UNKNOWN`/`DEGRADED`.
 
 
+
 ### 23.9. Результат профиля
 
 Завершенный цикл согласования формирует для каждого managed profile:
@@ -2423,22 +2476,46 @@ SUCCESS
 FAIL
 ```
 
-`SUCCESS` означает, что desired state для фактически доступного binding set успешно
-применено и проверено. Поэтому отсутствие одного или всех configured peers у селектора
-multi-binding может иметь `SUCCESS`, если fail-closed state корректно: отсутствующие peer
-routes не созданы, blackhole/guards присутствуют, а существующие однозначные bindings
-обслуживаются согласно policy.
+Результат формируется **после** проверки full desired firewall/NAT policy и route state.
 
-У селектора single-binding отсутствие transport handshake отдельного configured peer не
-меняет binding state и само по себе не переводит профиль в `FAIL`.
+`SUCCESS` означает, что:
 
-`FAIL` означает, что desired state профиля не удалось получить или проверить либо
-profile resolution находится в `AMBIGUOUS`. Ambiguity не разрешается произвольным
-выбором interface.
+- profile resolution однозначен;
+- binding-specific contribution профиля к full desired policy применен и проверен;
+- для каждого `profile.route` существует как минимум один verified desired
+  `UNICAST RouteSpec`;
+- все остальные требуемые route resources профиля, включая `BLACKHOLE`, соответствуют
+  desired state.
 
-Ошибка наблюдаемости, не позволяющая построить binding results вообще, является ошибкой
-уровня всего reconciliation pass и переводит daemon в `ISOLATED`, а не искусственно в
-набор profile `FAIL`.
+Для селектора multi-binding не требуется присутствие всех configured peers. Если primary
+peer отсутствует, но хотя бы одна другая однозначная `PeerBinding` дает verified
+UNICAST path для каждого protected destination, profile остается `SUCCESS`. Это
+нормальный partial failover, а не degraded profile.
+
+`FAIL` означает одно из следующего:
+
+- profile resolution `AMBIGUOUS`;
+- desired policy/route state профиля не удалось применить или проверить;
+- после проверки не существует ни одного desired UNICAST path для protected destinations.
+
+Последний случай является **availability failure при сохраненной безопасности**. Если
+global firewall/NAT остается `SAFE` и fail-closed routes/rules проверены, daemon
+переходит в `DEGRADED`, а не в `ISOLATED`. Это также относится к валидной
+конфигурации `peers=[]`.
+
+Для селектора single-binding configured peers используют одну active
+`ConcreteBinding`. Отсутствие transport handshake отдельного peer не меняет binding
+state и не удаляет route; следовательно, `SUCCESS` в этой модели подтверждает kernel
+configuration, но не end-to-end reachability.
+
+Для селектора multi-binding peer-specific route требует однозначной `PeerBinding`.
+RC3 поддерживает такую association только по наблюдаемому point-to-point
+`(local_address, peer)` evidence. Отсутствие evidence не заменяется эвристикой и
+соответствующий peer не дает UNICAST path.
+
+Ошибка наблюдаемости, не позволяющая достоверно построить binding results вообще, является
+ошибкой уровня reconciliation pass и переводит daemon в `ISOLATED`, а не искусственно
+в набор profile `FAIL`.
 
 ## 24. Замечания по реализации, уже зафиксированные архитектурой
 
@@ -2482,8 +2559,8 @@ profile resolution находится в `AMBIGUOUS`. Ambiguity не разре�
   `LC_ALL=C`/`LANG=C`.
 - Уведомления Netfilter остаются необязательным улучшением; корректность опирается на
   Netlink-события маршрутов и периодическое полное согласование.
-- Переходы, меняющие политику (смена привязки или готовности), используют восстановление с
-  первоначальным запретом: изолирующий фильтр -> проверка -> требуемый NAT -> проверка ->
+- Переходы, меняющие политику (изменение candidates, active bindings, peer association
+  или ambiguity), используют восстановление с первоначальным запретом: изолирующий фильтр -> проверка -> требуемый NAT -> проверка ->
   полный требуемый фильтр -> проверка -> маршруты -> проверка. Защитный барьер временно
   запрещает управляемую пересылку всех профилей, даже если изменился только один. Этот
   порядок сохраняется и при неудаче подтверждения выключенной пересылки.
@@ -2508,8 +2585,8 @@ profile resolution находится в `AMBIGUOUS`. Ambiguity не разре�
 - IPv6 является обязательным условием среды: на целевой системе Debian 13 / Linux 6.12
   перед `RUN` проверяются `net.ipv6.conf.all.forwarding=0`,
   `net.ipv6.conf.default.forwarding=0` и
-  `net.ipv6.conf.default.disable_ipv6=1`; у уже существующих интерфейсов, совпадающих с
-  управляемыми селекторами, также проверяется `disable_ipv6=1`. Для ядер с независимым
+  `net.ipv6.conf.default.disable_ipv6=1`; у всех уже существующих interfaces в защитном
+  пространстве имен управляемых селекторов также проверяется `disable_ipv6=1`. Для ядер с независимым
   механизмом фактической IPv6-пересылки на отдельных интерфейсах дополнительно проверяются
   соответствующие переопределения.
 - `INPUT` управляемого VPN-профиля не содержит общего `NEW ACCEPT`: удаленная сторона не
@@ -2530,7 +2607,7 @@ profile resolution находится в `AMBIGUOUS`. Ambiguity не разре�
 - отказ от идеи полного набора готовых `CONFIGURED RouteSpec` внутри `VpnProfile`;
 - один неизменяемый `ReconciliationSnapshot` на цикл согласования;
 - две производные формы одной модели политики: полную политику и изолирующий фильтр;
-- локальное для процесса подтвержденное состояние привязки и готовности;
+- локальное для процесса подтвержденное binding state;
 - `RouteSpec.interface` только с точным именем runtime-интерфейса, никогда со специальным значением
   селектора;
 - проверку обязательных IPv6-условий §2.6 до `RUN`;
@@ -2596,8 +2673,8 @@ design/RC2/code/python/tests/
 10. `ip_forward` находится в исключительном управлении daemon, изменяется только по схеме
     «прочитать перед записью» и подтверждается повторным чтением; IPv6 daemon не
     маршрутизирует и не фильтрует, поэтому требует выключенной IPv6-пересылки и
-    `disable_ipv6=1` для всех существующих интерфейсов, совпадающих с управляемыми
-    селекторами, согласно §2.6. Эти IPv6-условия являются доверенными обязательными
+    `disable_ipv6=1` для всех существующих interfaces в защитном пространстве имен
+    управляемых селекторов, согласно §2.6. Эти IPv6-условия являются доверенными обязательными
     условиями хоста и должны сохраняться во время `RUN`.
 
 11. Эксклюзивное управление `ip_forward` архитектурно связано с эксклюзивной ответственностью
@@ -2650,11 +2727,12 @@ design/RC2/code/python/tests/
     UNICAST у селектора single-binding использует active binding; у селектора multi-binding
     — configured peer + exact interface его `PeerBinding`.
 
-25. BLACKHOLE и REJECT защищаемого назначения не зависят от привязки/готовности.
+25. BLACKHOLE и REJECT защищаемого назначения не зависят от текущего binding state или
+    наличия UNICAST path.
 
-26. Точная цепочка `INPUT` готового профиля разрешает только ESTABLISHED,RELATED и запрещает
-    остальное; общего NEW ACCEPT с VPN-стороны нет. Незавершенный трафик селектора закрывает
-    VPNG-INPUT-GUARD.
+26. Точный `INPUT` block active concrete interface разрешает только ESTABLISHED,RELATED и
+    запрещает остальное; общего NEW ACCEPT с VPN-стороны нет. Незавершенный traffic
+    защитного пространства имен закрывает VPNG-INPUT-GUARD.
 
 27. Сопоставление семейства по префиксу допустимо только как проверенное запрещающее
     защитное правило; префиксные ACCEPT/NAT запрещены.
@@ -2765,14 +2843,16 @@ design/RC2/code/python/tests/
 60. Desired policy профиля AMBIGUOUS не содержит binding-specific ACCEPT/NAT/UNICAST,
     сохраняя blackhole и guards.
 
-61. Отсутствие одного или всех configured peers у селектора multi-binding само по себе не
-    является FAIL, если соответствующее fail-closed desired state успешно применено и
-    проверено. У селектора single-binding отсутствие handshake peer не меняет binding truth.
+61. Profile `SUCCESS` требует как минимум один verified desired UNICAST RouteSpec для
+    каждого protected destination. Partial multi-binding availability остается `SUCCESS`,
+    если хотя бы один peer path materialized и verified; ноль UNICAST paths = `FAIL`,
+    но при SAFE policy это DEGRADED, а не ISOLATED. У селектора single-binding отсутствие
+    handshake peer не меняет binding truth и не является end-to-end health signal.
 
-62. Профиль AMBIGUOUS остается FAIL до восстановления однозначного binding resolution.
+62. Профиль AMBIGUOUS остается `FAIL` до восстановления однозначного binding resolution.
 
-63. `ACTIVE` = политика `SAFE` + результаты всех профилей `SUCCESS` + `ip_forward=1`; `ACTIVE` не
-    означает доказанную связность VPN.
+63. `ACTIVE` = политика `SAFE` + результаты всех профилей `SUCCESS` + `ip_forward=1`;
+    ни `ACTIVE`, ни profile `SUCCESS` не означают доказанную end-to-end связность VPN.
 
 64. `SAFE` с `FAIL` профиля -> `DEGRADED`; состояние не `SAFE` или недостаточная
     наблюдаемость политики -> `ISOLATED`.

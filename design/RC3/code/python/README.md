@@ -59,5 +59,13 @@ Netlink events remain wakeup hints. A route is materialized from the current rec
 snapshot: an active concrete binding for a selector single-binding, or a unique
 `PeerBinding` for a selector multi-binding.
 
+Profile-result semantics also changed: a partially available multi-binding profile is
+`SUCCESS` when at least one desired UNICAST path per protected destination is materialized
+and verified; zero UNICAST paths is `FAIL`/`DEGRADED` even when fail-closed security
+state is correct. `SUCCESS` is not an end-to-end connectivity health-check.
+
+References to readiness / `ABSENT` / `BOUND` in the implementation-status bullets above
+describe the current pre-EXP-009 code, not the normative post-EXP-009 RC3 domain model.
+
 The 125/125 unit-suite result remains valid for the pre-EXP-009 implementation baseline,
 but it is not evidence that the new multi-binding architecture is implemented.
