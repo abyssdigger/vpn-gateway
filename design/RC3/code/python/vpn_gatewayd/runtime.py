@@ -122,7 +122,8 @@ class SystemdNotifier:
     """
     Minimal optional sd_notify-compatible helper.
 
-    Event-loop scheduling of WATCHDOG=1 remains an implementation task.
+    WATCHDOG_USEC/WATCHDOG_PID are interpreted only as event-loop timing
+    metadata. Notification transport failure never changes gateway policy.
     """
 
     def __init__(self) -> None:
@@ -131,6 +132,39 @@ class SystemdNotifier:
     @property
     def enabled(self) -> bool:
         return bool(self._notify_socket)
+
+    def watchdog_interval(self) -> float | None:
+        """
+        Return a conservative heartbeat cadence in seconds.
+
+        systemd recommends notifying more often than WatchdogSec. Use half of
+        WATCHDOG_USEC and honor WATCHDOG_PID when present.
+        """
+        if not self._notify_socket:
+            return None
+
+        watchdog_pid = os.environ.get("WATCHDOG_PID")
+        if watchdog_pid:
+            try:
+                if int(watchdog_pid, 10) != os.getpid():
+                    return None
+            except ValueError:
+                LOG.warning("invalid WATCHDOG_PID=%r; watchdog disabled", watchdog_pid)
+                return None
+
+        value = os.environ.get("WATCHDOG_USEC")
+        if not value:
+            return None
+        try:
+            usec = int(value, 10)
+        except ValueError:
+            LOG.warning("invalid WATCHDOG_USEC=%r; watchdog disabled", value)
+            return None
+        if usec <= 0:
+            LOG.warning("non-positive WATCHDOG_USEC=%r; watchdog disabled", value)
+            return None
+
+        return usec / 2_000_000.0
 
     def notify(self, message: str) -> None:
         if not self._notify_socket:

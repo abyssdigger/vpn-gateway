@@ -338,10 +338,23 @@ class VpnGatewayDaemon:
         netlink = self._netlink_socket
 
         interval = self.config.reconcile_interval
-        next_reconcile = time.monotonic() + interval
+        now = time.monotonic()
+        next_reconcile = now + interval
+
+        watchdog_interval = self.notifier.watchdog_interval()
+        next_watchdog = (
+            None
+            if watchdog_interval is None
+            else now + watchdog_interval
+        )
 
         while not self._shutdown_requested:
-            timeout = max(0.0, next_reconcile - time.monotonic())
+            now = time.monotonic()
+            deadline = next_reconcile
+            if next_watchdog is not None:
+                deadline = min(deadline, next_watchdog)
+            timeout = max(0.0, deadline - now)
+
             try:
                 readable, _, _ = select.select(
                     [reader, netlink],
@@ -369,6 +382,10 @@ class VpnGatewayDaemon:
                 netlink_triggered = self._drain_netlink_socket(netlink)
 
             now = time.monotonic()
+            if next_watchdog is not None and now >= next_watchdog:
+                self.notifier.watchdog()
+                next_watchdog = now + watchdog_interval
+
             if not netlink_triggered and now < next_reconcile:
                 continue
 

@@ -29,6 +29,8 @@ Current migration status:
 - runtime reconciliation is serialized and triggered by NETLINK_ROUTE link/IPv4-address/
   IPv4-route events plus the periodic `reconcile_interval` full resync; Netlink messages
   are wakeup hints only, and ENOBUFS also forces a full reconciliation.
+- optional systemd watchdog cadence is derived from `WATCHDOG_USEC`/`WATCHDOG_PID`
+  and emitted by the same serialized event loop without changing policy semantics.
 
 Entry point: `vpn-gatewayd.py`.
 

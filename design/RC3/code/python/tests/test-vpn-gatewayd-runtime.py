@@ -6,6 +6,7 @@ import stat
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +87,34 @@ class InstanceLockSecurityTests(unittest.TestCase):
                 with vpng.InstanceLock(lock_path):
                     self.fail("lock unexpectedly acquired")
 
+
+
+class SystemdNotifierTests(unittest.TestCase):
+    def test_watchdog_interval_uses_half_watchdog_usec(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "NOTIFY_SOCKET": "/run/systemd/notify",
+                "WATCHDOG_USEC": "10000000",
+                "WATCHDOG_PID": str(os.getpid()),
+            },
+            clear=False,
+        ):
+            notifier = vpng.SystemdNotifier()
+            self.assertEqual(notifier.watchdog_interval(), 5.0)
+
+    def test_watchdog_interval_ignores_other_pid(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "NOTIFY_SOCKET": "/run/systemd/notify",
+                "WATCHDOG_USEC": "10000000",
+                "WATCHDOG_PID": str(os.getpid() + 1),
+            },
+            clear=False,
+        ):
+            notifier = vpng.SystemdNotifier()
+            self.assertIsNone(notifier.watchdog_interval())
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

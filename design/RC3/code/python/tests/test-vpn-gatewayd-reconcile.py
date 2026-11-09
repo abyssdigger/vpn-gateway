@@ -336,6 +336,41 @@ class NetlinkEventTests(unittest.TestCase):
         )
         self.assertEqual(sock.recv.call_count, 3)
 
+    def test_run_schedules_optional_systemd_watchdog(self):
+        daemon = make_daemon()
+        reader = mock.Mock()
+        netlink = mock.Mock()
+        daemon._signal_wakeup_reader = reader
+        daemon._netlink_socket = netlink
+        daemon.notifier = mock.Mock()
+        daemon.notifier.watchdog_interval.return_value = 2.0
+
+        monotonic = iter((100.0, 100.0, 102.0, 102.0))
+        select_calls = 0
+
+        def fake_select(readers, _w, _x, timeout):
+            nonlocal select_calls
+            select_calls += 1
+            self.assertEqual(readers, [reader, netlink])
+            self.assertEqual(timeout, 2.0)
+            if select_calls == 2:
+                daemon._shutdown_requested = True
+            return ([], [], [])
+
+        with (
+            mock.patch(
+                "vpn_gatewayd.daemon.time.monotonic",
+                side_effect=lambda: next(monotonic),
+            ),
+            mock.patch(
+                "vpn_gatewayd.daemon.select.select",
+                side_effect=fake_select,
+            ),
+        ):
+            daemon.run()
+
+        daemon.notifier.watchdog.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
