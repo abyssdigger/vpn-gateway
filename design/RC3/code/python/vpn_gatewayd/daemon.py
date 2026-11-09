@@ -41,6 +41,7 @@ from .models import (
     DaemonState,
     DiagnosticFact,
     FirewallCheck,
+    FirewallDriftScope,
     FirewallSafety,
     GatewayConfig,
     ProfileResult,
@@ -50,6 +51,14 @@ from .models import (
     RouteType,
     RouteVerifyResult,
     RuntimeReasonCode,
+)
+from .policy import (
+    FilterPolicy,
+    FirewallNatPolicy,
+    NatPolicy,
+    PolicyChain,
+    desired_full_policy,
+    desired_isolation_filter,
 )
 from .profile import VpnProfile
 from .runtime import InstanceLock, SystemdNotifier
@@ -1086,6 +1095,331 @@ class VpnGatewayDaemon:
                 key=lambda net: (int(net.network_address), net.prefixlen),
             )
         )
+
+    # ---- RC3 firewall/NAT policy ----------------------------------------
+
+    @staticmethod
+    def _policy_chain_map(
+        chains: Sequence[PolicyChain],
+    ) -> Mapping[str, tuple[str, ...]]:
+        return MappingProxyType(
+            {chain.name: chain.rules for chain in chains}
+        )
+
+    @classmethod
+    def _input_policy_chain_names(
+        cls,
+        policy: FilterPolicy,
+    ) -> frozenset[str]:
+        names: set[str] = set()
+        for rule in policy.input_jumps:
+            target = cls._jump_target(rule)
+            if target is None:
+                raise FirewallInspectionError(
+                    f"INPUT policy jump has no target: {rule!r}"
+                )
+            names.add(target)
+        return frozenset(names)
+
+    @classmethod
+    def _rule_delete_form(cls, rule: str, chain: str) -> str:
+        prefix = f"-A {chain}"
+        if not rule.startswith(prefix):
+            raise FirewallInspectionError(
+                f"cannot transform rule for deletion: {rule!r}"
+            )
+        return rule.replace(prefix, f"-D {chain}", 1)
+
+    @staticmethod
+    def _insert_form(rule: str, chain: str, position: int) -> str:
+        prefix = f"-A {chain}"
+        if not rule.startswith(prefix):
+            raise FirewallInspectionError(
+                f"cannot transform policy jump for insertion: {rule!r}"
+            )
+        return rule.replace(prefix, f"-I {chain} {position}", 1)
+
+    def _compare_filter_policy(
+        self,
+        parsed: Mapping[str, Mapping[str, object]],
+        desired: FilterPolicy,
+    ) -> FirewallCheck:
+        table = parsed.get("filter")
+        if table is None:
+            raise FirewallInspectionError(
+                "iptables-save missing 'filter' table"
+            )
+        chains = table["chains"]
+        rules = table["rules"]
+        assert isinstance(chains, set)
+        assert isinstance(rules, dict)
+
+        desired_map = self._policy_chain_map(desired.chains)
+        expected_chains = set(desired_map)
+        actual_owned = {
+            chain for chain in chains if chain.startswith(VPNG_CHAIN_PREFIX)
+        }
+        input_chains = self._input_policy_chain_names(desired)
+
+        input_drift: list[str] = []
+        transit_drift: list[str] = []
+
+        missing = expected_chains - actual_owned
+        extra = actual_owned - expected_chains
+        for chain in sorted(missing):
+            target = input_drift if chain in input_chains else transit_drift
+            target.append(f"missing filter chain {chain}")
+        if extra:
+            transit_drift.append(
+                f"unexpected filter VPNG chains {sorted(extra)!r}"
+            )
+
+        for chain, expected_rules in desired_map.items():
+            if chain not in actual_owned:
+                continue
+            actual_rules = tuple(rules.get(chain, ()))
+            if actual_rules == expected_rules:
+                continue
+            target = input_drift if chain in input_chains else transit_drift
+            target.append(f"filter/{chain} rules differ")
+
+        for builtin, expected_prefix, target in (
+            ("INPUT", desired.input_jumps, input_drift),
+            ("FORWARD", desired.forward_jumps, transit_drift),
+        ):
+            actual = tuple(rules.get(builtin, ()))
+            if actual[:len(expected_prefix)] != expected_prefix:
+                target.append(f"filter/{builtin} VPNG jump prefix differs")
+            if any(
+                (self._jump_target(rule) or "").startswith(VPNG_CHAIN_PREFIX)
+                for rule in actual[len(expected_prefix):]
+            ):
+                target.append(f"filter/{builtin} has extra VPNG jump")
+
+        if not input_drift and not transit_drift:
+            return FirewallCheck(FirewallSafety.SAFE, None)
+
+        scope = (
+            FirewallDriftScope.TRANSIT
+            if transit_drift
+            else FirewallDriftScope.INPUT_ONLY
+        )
+        detail = "; ".join((*transit_drift, *input_drift))
+        return FirewallCheck(
+            FirewallSafety.UNSAFE,
+            DiagnosticFact(RuntimeReasonCode.FIREWALL_DRIFT, detail),
+            scope,
+        )
+
+    def _compare_nat_policy(
+        self,
+        parsed: Mapping[str, Mapping[str, object]],
+        desired: NatPolicy,
+    ) -> FirewallCheck:
+        table = parsed.get("nat")
+        if table is None:
+            raise FirewallInspectionError(
+                "iptables-save missing 'nat' table"
+            )
+        chains = table["chains"]
+        rules = table["rules"]
+        assert isinstance(chains, set)
+        assert isinstance(rules, dict)
+
+        desired_map = self._policy_chain_map(desired.chains)
+        expected_chains = set(desired_map)
+        actual_owned = {
+            chain for chain in chains if chain.startswith(VPNG_CHAIN_PREFIX)
+        }
+
+        drift: list[str] = []
+        missing = expected_chains - actual_owned
+        extra = actual_owned - expected_chains
+        if missing:
+            drift.append(f"missing nat VPNG chains {sorted(missing)!r}")
+        if extra:
+            drift.append(f"unexpected nat VPNG chains {sorted(extra)!r}")
+
+        for chain, expected_rules in desired_map.items():
+            if chain not in actual_owned:
+                continue
+            actual_rules = tuple(rules.get(chain, ()))
+            if actual_rules != expected_rules:
+                drift.append(f"nat/{chain} rules differ")
+
+        postrouting = tuple(rules.get("POSTROUTING", ()))
+        expected_prefix = desired.postrouting_jumps
+        if postrouting[:len(expected_prefix)] != expected_prefix:
+            drift.append("nat/POSTROUTING VPNG jump prefix differs")
+        if any(
+            (self._jump_target(rule) or "").startswith(VPNG_CHAIN_PREFIX)
+            for rule in postrouting[len(expected_prefix):]
+        ):
+            drift.append("nat/POSTROUTING has extra VPNG jump")
+
+        if not drift:
+            return FirewallCheck(FirewallSafety.SAFE, None)
+
+        return FirewallCheck(
+            FirewallSafety.UNSAFE,
+            DiagnosticFact(
+                RuntimeReasonCode.FIREWALL_DRIFT,
+                "; ".join(drift),
+            ),
+            FirewallDriftScope.TRANSIT,
+        )
+
+    def _compare_firewall_nat_policy(
+        self,
+        snapshot: str,
+        desired: FirewallNatPolicy,
+    ) -> FirewallCheck:
+        parsed = self._parse_iptables_save(snapshot)
+        filter_check = self._compare_filter_policy(parsed, desired.filter)
+        nat_check = self._compare_nat_policy(parsed, desired.nat)
+
+        if (
+            filter_check.safety is FirewallSafety.SAFE
+            and nat_check.safety is FirewallSafety.SAFE
+        ):
+            return FirewallCheck(FirewallSafety.SAFE, None)
+
+        if nat_check.safety is FirewallSafety.UNSAFE:
+            details = []
+            if filter_check.reason is not None:
+                details.append(filter_check.reason.detail or "filter drift")
+            if nat_check.reason is not None:
+                details.append(nat_check.reason.detail or "nat drift")
+            return FirewallCheck(
+                FirewallSafety.UNSAFE,
+                DiagnosticFact(
+                    RuntimeReasonCode.FIREWALL_DRIFT,
+                    "; ".join(details),
+                ),
+                FirewallDriftScope.TRANSIT,
+            )
+
+        return filter_check
+
+    def _check_firewall_nat_policy(
+        self,
+        desired: FirewallNatPolicy,
+    ) -> FirewallCheck:
+        try:
+            snapshot = self.kernel.iptables_save()
+        except KernelError as exc:
+            return FirewallCheck(
+                FirewallSafety.UNKNOWN,
+                DiagnosticFact(
+                    RuntimeReasonCode.FIREWALL_INVENTORY_FAILED,
+                    str(exc),
+                ),
+            )
+        try:
+            return self._compare_firewall_nat_policy(snapshot, desired)
+        except FirewallInspectionError as exc:
+            return FirewallCheck(
+                FirewallSafety.UNKNOWN,
+                DiagnosticFact(
+                    RuntimeReasonCode.FIREWALL_INSPECTION_FAILED,
+                    str(exc),
+                ),
+            )
+
+    def _build_filter_restore_payload(
+        self,
+        desired: FilterPolicy,
+        snapshot: str,
+        *,
+        input_only: bool = False,
+    ) -> str:
+        parsed = self._parse_iptables_save(snapshot)
+        table = parsed.get("filter")
+        if table is None:
+            raise FirewallInspectionError(
+                "iptables-save missing 'filter' table"
+            )
+        rules = table["rules"]
+        assert isinstance(rules, dict)
+
+        desired_map = self._policy_chain_map(desired.chains)
+        if input_only:
+            chain_names = self._input_policy_chain_names(desired)
+            builtins = (("INPUT", desired.input_jumps),)
+        else:
+            chain_names = frozenset(desired_map)
+            builtins = (
+                ("INPUT", desired.input_jumps),
+                ("FORWARD", desired.forward_jumps),
+            )
+
+        lines: list[str] = ["*filter"]
+        for builtin, _ in builtins:
+            for rule in rules.get(builtin, ()):
+                target = self._jump_target(rule)
+                if target and target.startswith(VPNG_CHAIN_PREFIX):
+                    lines.append(self._rule_delete_form(rule, builtin))
+
+        for chain in sorted(chain_names):
+            lines.append(f":{chain} - [0:0]")
+
+        for builtin, jumps in builtins:
+            for position, rule in enumerate(jumps, start=1):
+                lines.append(self._insert_form(rule, builtin, position))
+
+        for chain in sorted(chain_names):
+            lines.extend(desired_map[chain])
+        lines.append("COMMIT")
+        return "\n".join(lines) + "\n"
+
+    def _build_nat_restore_payload(
+        self,
+        desired: NatPolicy,
+        snapshot: str,
+    ) -> str:
+        parsed = self._parse_iptables_save(snapshot)
+        table = parsed.get("nat")
+        if table is None:
+            raise FirewallInspectionError(
+                "iptables-save missing 'nat' table"
+            )
+        rules = table["rules"]
+        assert isinstance(rules, dict)
+
+        desired_map = self._policy_chain_map(desired.chains)
+        lines: list[str] = ["*nat"]
+        for rule in rules.get("POSTROUTING", ()):
+            target = self._jump_target(rule)
+            if target and target.startswith(VPNG_CHAIN_PREFIX):
+                lines.append(self._rule_delete_form(rule, "POSTROUTING"))
+
+        for chain in sorted(desired_map):
+            lines.append(f":{chain} - [0:0]")
+        for position, rule in enumerate(desired.postrouting_jumps, start=1):
+            lines.append(self._insert_form(rule, "POSTROUTING", position))
+        for chain in sorted(desired_map):
+            lines.extend(desired_map[chain])
+        lines.append("COMMIT")
+        return "\n".join(lines) + "\n"
+
+    def _restore_filter_policy(
+        self,
+        desired: FilterPolicy,
+        *,
+        input_only: bool = False,
+    ) -> None:
+        snapshot = self.kernel.iptables_save()
+        payload = self._build_filter_restore_payload(
+            desired,
+            snapshot,
+            input_only=input_only,
+        )
+        self.kernel.iptables_restore(payload, noflush=True)
+
+    def _restore_nat_policy(self, desired: NatPolicy) -> None:
+        snapshot = self.kernel.iptables_save()
+        payload = self._build_nat_restore_payload(desired, snapshot)
+        self.kernel.iptables_restore(payload, noflush=True)
 
     # ---- Fixed firewall/NAT ---------------------------------------------
 

@@ -25,6 +25,11 @@ class FirewallSafety(Enum):
     UNKNOWN = auto()
 
 
+class FirewallDriftScope(Enum):
+    INPUT_ONLY = auto()
+    TRANSIT = auto()
+
+
 class RouteType(Enum):
     UNICAST = auto()
     BLACKHOLE = auto()
@@ -224,21 +229,32 @@ class DiagnosticFact:
 
 @dataclass(slots=True, frozen=True)
 class FirewallCheck:
-    """Read-only result of fixed firewall/NAT verification."""
+    """Read-only result of firewall/NAT verification."""
 
     safety: FirewallSafety
     reason: DiagnosticFact | None
+    scope: FirewallDriftScope | None = None
 
     def __post_init__(self) -> None:
         if self.safety is FirewallSafety.SAFE:
-            if self.reason is not None:
-                raise ValueError("SAFE FirewallCheck must not carry a reason")
+            if self.reason is not None or self.scope is not None:
+                raise ValueError(
+                    "SAFE FirewallCheck must not carry reason/scope"
+                )
             return
 
         if self.reason is None:
             raise ValueError(
                 "UNSAFE/UNKNOWN FirewallCheck requires a DiagnosticFact"
             )
+
+        if self.safety is FirewallSafety.UNKNOWN:
+            if self.scope is not None:
+                raise ValueError("UNKNOWN FirewallCheck must not carry scope")
+            return
+
+        if self.scope is None:
+            raise ValueError("UNSAFE FirewallCheck requires drift scope")
 
 
 @dataclass(slots=True, frozen=True)

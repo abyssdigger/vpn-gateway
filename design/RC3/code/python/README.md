@@ -19,7 +19,10 @@ Current migration status:
 - pure full/isolation firewall policy derivation is available without orchestration side effects;
 - runtime configuration now accepts exact and prefix-family interface selectors;
 - immutable `ReconciliationSnapshot` value support is available for daemon integration;
-- the kernel adapter exposes the IPv6 host-prerequisite sysctls required by RC3.
+- the kernel adapter exposes the IPv6 host-prerequisite sysctls required by RC3;
+- firewall/NAT comparison now classifies confirmed drift as INPUT-only or transit-affecting;
+- restore payload generation uses the EXP-006 `iptables-restore --noflush` contract and
+  has a dedicated INPUT-only payload that contains no FORWARD operations.
 
 Entry point: `vpn-gatewayd.py`.
 
