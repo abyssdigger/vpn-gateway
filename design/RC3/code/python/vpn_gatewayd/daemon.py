@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import logging
 import select
 import signal
@@ -319,11 +320,11 @@ class VpnGatewayDaemon:
 
     def run(self) -> None:
         """
-        Serialized periodic reconciliation loop.
+        Serialized reconciliation loop driven by Netlink and a periodic timer.
 
-        Netlink wakeups remain a later optimization. Correctness relies on
-        periodic full reconciliation, so firewall drift is still repaired
-        without an external notification source.
+        Netlink data is only a wakeup hint. Policy is always derived from a
+        fresh full inventory, so message loss or coalescing cannot become a
+        policy fact. ENOBUFS therefore requests the same full reconciliation.
         """
         reader = self._signal_wakeup_reader
         if reader is None:
@@ -331,13 +332,22 @@ class VpnGatewayDaemon:
         if self.config is None:
             raise RuntimeError("config not installed")
 
+        if self._netlink_socket is None:
+            self._netlink_socket = self._open_netlink_socket()
+        netlink = self._netlink_socket
+
         interval = self.config.reconcile_interval
         next_reconcile = time.monotonic() + interval
 
         while not self._shutdown_requested:
             timeout = max(0.0, next_reconcile - time.monotonic())
             try:
-                readable, _, _ = select.select([reader], [], [], timeout)
+                readable, _, _ = select.select(
+                    [reader, netlink],
+                    [],
+                    [],
+                    timeout,
+                )
             except InterruptedError:
                 continue
 
@@ -353,7 +363,12 @@ class VpnGatewayDaemon:
             if self._shutdown_requested:
                 break
 
-            if time.monotonic() < next_reconcile:
+            netlink_triggered = False
+            if netlink in readable:
+                netlink_triggered = self._drain_netlink_socket(netlink)
+
+            now = time.monotonic()
+            if not netlink_triggered and now < next_reconcile:
                 continue
 
             self.reconcile()
@@ -1979,16 +1994,70 @@ class VpnGatewayDaemon:
             self._signal_wakeup_writer.close()
             self._signal_wakeup_writer = None
 
+        if self._netlink_socket is not None:
+            self._netlink_socket.close()
+            self._netlink_socket = None
+
     def _open_netlink_socket(self) -> socket.socket:
         """
-        TODO implementation step 8.
+        Open the single daemon-owned NETLINK_ROUTE event source.
 
-        One daemon-owned AF_NETLINK/NETLINK_ROUTE socket subscribed to link and
-        IPv4 address changes.  This listener intentionally remains outside
-        KernelInterface because it feeds orchestration events and materializes
-        no policy.  ENOBUFS must trigger a full resync.
+        The socket subscribes only to event classes that can affect the RC3
+        reconciliation snapshot or route state. Events are not interpreted as
+        policy facts; they only schedule a fresh full reconciliation.
         """
-        raise NotImplementedError
+        # linux/rtnetlink.h:
+        # RTMGRP_LINK=0x1, RTMGRP_IPV4_IFADDR=0x10,
+        # RTMGRP_IPV4_ROUTE=0x40.
+        groups = 0x1 | 0x10 | 0x40
+
+        try:
+            netlink = socket.socket(
+                socket.AF_NETLINK,
+                socket.SOCK_RAW,
+                socket.NETLINK_ROUTE,
+            )
+            netlink.setblocking(False)
+            netlink.bind((0, groups))
+        except OSError as exc:
+            try:
+                netlink.close()
+            except (NameError, OSError):
+                pass
+            raise KernelError(
+                f"failed to open NETLINK_ROUTE listener: {exc}"
+            ) from exc
+
+        return netlink
+
+    @staticmethod
+    def _drain_netlink_socket(netlink: socket.socket) -> bool:
+        """
+        Drain one readable Netlink burst and request full reconciliation.
+
+        ENOBUFS means messages were lost; because the daemon never treats
+        individual messages as policy facts, the safe response is exactly the
+        same: perform a fresh full reconciliation.
+        """
+        triggered = False
+
+        while True:
+            try:
+                data = netlink.recv(65535)
+            except BlockingIOError:
+                break
+            except OSError as exc:
+                if exc.errno == errno.ENOBUFS:
+                    return True
+                raise KernelError(
+                    f"NETLINK_ROUTE receive failed: {exc}"
+                ) from exc
+
+            if not data:
+                break
+            triggered = True
+
+        return triggered
 
     def _log_reconcile_outcome(
         self,

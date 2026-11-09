@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import errno
+import socket
 import sys
 import unittest
 from ipaddress import IPv4Address, IPv4Network
@@ -297,6 +299,42 @@ class ReconcileTests(unittest.TestCase):
             self.daemon._repair_firewall_nat_with_barrier(snapshot)
 
         self.assertEqual(events, ["isolation", "nat", "full"])
+
+
+
+class NetlinkEventTests(unittest.TestCase):
+    def test_open_netlink_socket_subscribes_required_groups(self):
+        daemon = make_daemon()
+        sock = mock.Mock()
+
+        with mock.patch("vpn_gatewayd.daemon.socket.socket", return_value=sock) as ctor:
+            result = daemon._open_netlink_socket()
+
+        self.assertIs(result, sock)
+        ctor.assert_called_once_with(
+            socket.AF_NETLINK,
+            socket.SOCK_RAW,
+            socket.NETLINK_ROUTE,
+        )
+        sock.setblocking.assert_called_once_with(False)
+        sock.bind.assert_called_once_with((0, 0x1 | 0x10 | 0x40))
+
+    def test_netlink_enobufs_requests_full_reconcile(self):
+        sock = mock.Mock()
+        sock.recv.side_effect = OSError(errno.ENOBUFS, "buffer full")
+
+        self.assertTrue(
+            vpng.VpnGatewayDaemon._drain_netlink_socket(sock)
+        )
+
+    def test_netlink_burst_is_coalesced_into_one_trigger(self):
+        sock = mock.Mock()
+        sock.recv.side_effect = [b"event-1", b"event-2", BlockingIOError()]
+
+        self.assertTrue(
+            vpng.VpnGatewayDaemon._drain_netlink_socket(sock)
+        )
+        self.assertEqual(sock.recv.call_count, 3)
 
 
 if __name__ == "__main__":

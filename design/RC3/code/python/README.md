@@ -26,8 +26,9 @@ Current migration status:
 - startup and runtime orchestration consume one immutable reconciliation snapshot;
 - policy-changing binding/readiness transitions use isolation -> NAT -> full-filter repair;
 - confirmed INPUT-only drift uses narrow repair without disabling forwarding;
-- runtime performs periodic full reconciliation at `reconcile_interval`; Netlink wakeups
-  remain an optional later optimization.
+- runtime reconciliation is serialized and triggered by NETLINK_ROUTE link/IPv4-address/
+  IPv4-route events plus the periodic `reconcile_interval` full resync; Netlink messages
+  are wakeup hints only, and ENOBUFS also forces a full reconciliation.
 
 Entry point: `vpn-gatewayd.py`.
 
