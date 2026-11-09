@@ -8,6 +8,7 @@ from .constants import *
 from .errors import *
 from .models import *
 from .interfaces import *
+from .policy import *
 from .config import ConfigLoader
 from .profile import VpnProfile
 from .kernel import KernelInterface, SubprocessKernelInterface

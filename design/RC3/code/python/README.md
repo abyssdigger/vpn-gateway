@@ -16,6 +16,7 @@ Current migration status:
 - route derivation now uses exact resolved binding names; static `CONFIGURED RouteSpec`
   state has been removed from `VpnProfile`;
 - process-local committed state now includes OWNED routes plus binding/readiness;
+- pure full/isolation firewall policy derivation is available without orchestration side effects;
 - the running ConfigLoader remains exact-selector-only until binding-aware route/policy
   migration, so the legacy RC2 path cannot receive a prefix selector prematurely.
 

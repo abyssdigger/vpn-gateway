@@ -1,5 +1,20 @@
 # VPN-GATE change log
 
+## 2026-11-09 — RC3 pure firewall/NAT policy model
+
+A pure policy layer now derives both RC3 policy forms from one model:
+
+- `desired_full_policy(config, interface_state)` returns full firewall + NAT state;
+- `desired_isolation_filter(config)` returns a filter-only deny-first barrier and cannot
+  carry NAT by type;
+- binding-specific ACCEPT/NAT rules use only exact resolved interface names;
+- exact ingress blocks precede deny-only selector guards;
+- VPN-side generic INPUT NEW acceptance is absent;
+- absent/not-ready/ambiguous profiles retain structural deny policy and RETURN-only NAT.
+
+The existing daemon firewall builder is not switched yet; integration follows in a
+separate commit.
+
 ## 2026-11-09 — RC3 binding-aware route derivation
 
 Route derivation is migrated from RC2 static `CONFIGURED RouteSpec` state to RC3
