@@ -64,3 +64,23 @@ All four checks must pass:
 
 If the harness exits early, preserve the generated directory and `daemon.log`; do not
 manually erase evidence before reviewing the failure.
+
+
+## Recorded result
+
+Final run on 2026-11-09:
+
+```text
+PASS: H1 config boundary
+expect_proto202=1
+PASS: H2 startup materialization
+PASS: H3 steady reconciliation
+PASS: H4 graceful cleanup
+OVERALL=PASS
+archive=vpn-gateway-exp-007-20261109-205313Z.tar.gz
+sha256_file=vpn-gateway-exp-007-20261109-205313Z.tar.gz.sha256
+```
+
+The production OpenConnect profile must use the prefix-family selector `vpns+` for the
+observed dynamically named interface `vpns00`. An earlier exact `vpns0` selector
+correctly remained fail-closed and did not install proto-202.

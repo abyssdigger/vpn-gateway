@@ -12,11 +12,13 @@
 
 ## EXP-007 — RC3 live daemon lifecycle smoke
 
-**Status:** READY TO RUN  
+**Status:** COMPLETE — PASS  
 **Architecture baseline:** RC3  
-**Implementation:** RC3 Python development line, unit suite 122/122 PASS  
+**Implementation:** RC3 Python development line, unit suite 125/125 PASS  
 **Target:** dedicated Debian 13 vpn-gateway host with the real OpenConnect transport already established  
 **Harness:** [`design/experiments/EXP-007 RC3 live daemon lifecycle smoke/vpn-gateway-exp-007-rc3-live-smoke.sh`](experiments/EXP-007%20RC3%20live%20daemon%20lifecycle%20smoke/vpn-gateway-exp-007-rc3-live-smoke.sh)  
+**Result:** [`vpn-gateway-exp-007-result-20261109.txt`](experiments/EXP-007%20RC3%20live%20daemon%20lifecycle%20smoke/vpn-gateway-exp-007-result-20261109.txt)  
+**Run:** 2026-11-09T20:53:13Z  
 **Safety:** live-host experiment; run only in a maintenance window after stopping any previous vpn-gateway controller/daemon
 
 ### Motivation
@@ -101,11 +103,56 @@ sudo ./vpn-gateway-exp-007-rc3-live-smoke.sh \
 By default the harness resolves the RC3 Python tree at
 `../../RC3/code/python`. `--python-tree` can override it.
 
-### Decision rule
+### Result
 
-A PASS closes only the **RC3 live lifecycle/materialization gate**. Runtime recovery,
-INPUT-only drift repair, transit drift isolation, selector ambiguity and interface
-appearance/disappearance remain separate validation work.
+Final live run:
+
+```text
+EXP-007 RC3 live daemon lifecycle smoke
+PASS: H1 config boundary
+expect_proto202=1
+PASS: H2 startup materialization
+PASS: H3 steady reconciliation
+PASS: H4 graceful cleanup
+OVERALL=PASS
+archive=vpn-gateway-exp-007-20261109-205313Z.tar.gz
+sha256_file=vpn-gateway-exp-007-20261109-205313Z.tar.gz.sha256
+```
+
+All four hypotheses passed on the real Debian 13 gateway.
+
+The run confirms that the RC3 daemon:
+
+- accepts the production-style config through the security/lint boundary;
+- materializes the expected daemon-owned firewall/NAT and route state;
+- enables IPv4 forwarding only after startup materialization;
+- remains stable across at least one periodic reconciliation interval;
+- handles graceful SIGTERM shutdown;
+- removes daemon-owned firewall/NAT and proto-201/proto-202 route state and returns
+  `net.ipv4.ip_forward` to 0.
+
+### Setup findings
+
+Two pre-final runs produced useful negative evidence.
+
+1. The original EXP-007 harness unconditionally required a proto-202 route whenever a
+   profile contained routes. That predicate was corrected to account for the configured
+   peer set.
+2. The live OpenConnect interface was `vpns00` while the config used the exact selector
+   `interface = "vpns0"`. RC3 therefore correctly resolved the profile as not READY,
+   retained the fail-closed proto-201 blackhole, omitted proto-202, and still remained
+   operationally fail-closed. Changing the selector to `interface = "vpns+"` produced
+   the intended READY binding and the final PASS.
+
+The second finding is direct live evidence that exact-vs-prefix selector semantics do not
+silently broaden and that a non-matching exact selector fails closed.
+
+### Decision
+
+**EXP-007 result: PASS.**
+
+The RC3 live lifecycle/materialization gate is closed. The next experimental block may
+exercise runtime recovery and drift handling rather than repeating startup validation.
 
 ---
 
