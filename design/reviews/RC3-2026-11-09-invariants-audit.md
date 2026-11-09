@@ -6,7 +6,7 @@
 
 ### A1. Invariant 17 технически неверен про «kernel operand»
 
-```text
+```
 17. Prefix selector никогда не попадает в RouteSpec/iptables ACCEPT/NAT kernel operand;
     эти ресурсы используют только resolved concrete exact ifname.
 ```
@@ -15,7 +15,7 @@
 
 Invariant 27 спасает ситуацию:
 
-```text
+```
 27. Family wildcard/prefix match допустим только как deny-only guard после target
     validation; wildcard ACCEPT/NAT запрещён.
 ```
@@ -24,17 +24,17 @@ Invariant 27 спасает ситуацию:
 
 ### A2. Invariant 11 смешивает два разных свойства
 
-```text
+```
 11. Exclusive ownership ip_forward means terminal verdict for each IPv4 FORWARD packet.
 ```
 
-«Exclusive ownership» — это про sysctl (кто пишет `net.ipv4.ip_forward`). «Terminal verdict» — это про firewall prefix (`VPNG-FORWARD-DENY` на конце). Это **два разных** свойства. По §2.3 они связаны решением архитектуры (владелец sysctl обязан владеть и terminal verdict), но invariant сформулирован так, будто первое логически влечёт второе.
+«Exclusive ownership» — это про sysctl (кто пишет `net.ipv4.ip_forward`). «Terminal verdict» — это про firewall prefix (VPNG-FORWARD-DENY на конце). Это **два разных** свойства. По §2.3 они связаны решением архитектуры (владелец sysctl обязан владеть и terminal verdict), но invariant сформулирован так, будто первое логически влечёт второе.
 
 Правка: разделить. «Exclusive ownership of ip_forward is accompanied by exclusive ownership of the terminal FORWARD verdict via VPNG-FORWARD-DENY at the end of daemon-owned prefix.» Или в §2.3 добавить, что это — ассоциированное обязательство, а не следствие.
 
 ### A3. Invariant 12 требует уточнения «physically after prefix»
 
-```text
+```
 12. Foreign FORWARD rules физически сохраняются, но недостижимы при ip_forward=1 из-за
     VPNG-FORWARD-DENY.
 ```
@@ -45,7 +45,7 @@ Invariant 27 спасает ситуацию:
 
 ### A4. Invariant 57 «resolution failure» — двусмысленность уровня
 
-```text
+```
 57. Interface inventory/read/parse/resolution failure -> ISOLATED, not ordinary DEGRADED.
 ```
 
@@ -60,7 +60,7 @@ Invariant 27 спасает ситуацию:
 
 ### A5. Invariants 88 и 89 ссылаются на механизмы, которых нет в RC3 §23
 
-```text
+```
 88. Programming exceptions не маскируются как expected UNKNOWN/DEGRADED.
 89. Machine reason identity задаётся stable enum codes, не free-form exception text.
 ```
@@ -76,7 +76,7 @@ Invariant 88 (не маскировать programming errors) остаётся �
 
 ### A6. Invariant 93 «invalid kernel inventory» не говорит, что это KernelError
 
-```text
+```
 93. Interface inventory duplicate name with conflicting ifindex is invalid kernel inventory.
 ```
 
@@ -86,7 +86,7 @@ Invariant 88 (не маскировать programming errors) остаётся �
 
 ### B1. Readiness transition (BOUND с IP → BOUND без IP) не покрыт invariant 36
 
-```text
+```
 36. Binding transition detected -> best-effort ip_forward=0 before binding-sensitive
     policy mutation.
 ```
@@ -123,7 +123,7 @@ Invariant 40 говорит «cannot be disabled with 0». §13 говорит r
 
 ### C1. Invariant 44 — частный случай 45
 
-```text
+```
 44. Missing BLACKHOLE adds выполняются раньше destructive route operations.
 45. Route executor: blackhole adds -> exact deletes -> replaces -> remaining adds.
 ```
@@ -132,7 +132,7 @@ Invariant 40 говорит «cannot be disabled with 0». §13 говорит r
 
 ### C2. Invariant 43 — следствие 42
 
-```text
+```
 42. Desired BLACKHOLE RouteSpec config-only; desired UNICAST RouteSpec config + concrete binding.
 43. UNICAST RouteSpec.interface всегда exact concrete ifname.
 ```
@@ -149,7 +149,7 @@ Invariant 40 говорит «cannot be disabled with 0». §13 говорит r
 
 ### C5. Invariant 63/64 — комплементарные, оставить
 
-```text
+```
 63. ACTIVE = policy SAFE + all profile results SUCCESS + ip_forward=1.
 64. SAFE with profile FAIL -> DEGRADED; non-SAFE or insufficient policy observability -> ISOLATED.
 ```
@@ -158,7 +158,7 @@ Invariant 40 говорит «cannot be disabled with 0». §13 говорит r
 
 ### C6. Invariant 26 не упоминает INPUT-GUARD chain в перечислении
 
-```text
+```
 26. Profile INPUT exact chain завершает managed ready-interface traffic; unconsumed
     selector traffic закрывает deny-only VPNG-INPUT-GUARD.
 ```

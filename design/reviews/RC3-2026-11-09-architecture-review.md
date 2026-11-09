@@ -5,19 +5,12 @@
 ## Что закрыто относительно RC2.4.1 / прошлого ревью
 
 - **Полное владение FORWARD decision** (§2.3, §9.3, invariant 11/12/28/29): после `ip_forward=1` любой forwarded пакет обязан получить терминальный вердикт в daemon-owned prefix, foreign FORWARD rules физически остаются, но недостижимы. Это закрывает EXP-004.1 явно.
-
 - **Selector → binding → readiness** (§4.1–§4.4, §15, invariants 14–22): exact/prefix family selectors, `ABSENT/BOUND/AMBIGUOUS`, ifindex для обнаружения reuse. `+` наследует нативно проверенную EXP-005 семантику iptables interface prefix, а не shell glob. `vpns%` / numeric family из EXP-004.3 явно отменён в пользу `vpns+`.
-
 - **Deny-first repair** (§8.6, §23.5, invariants 55–59, 95–98): isolation filter является полным daemon-owned filter desired state, verify изоляции — отдельный barrier result, full-policy `SAFE` требует NAT + full filter, verify'd на том же snapshot. Порядок обязателен даже при неудачном `set_ip_forward(False)`.
-
 - **Runtime reconciliation binding-transition** (§8.4, §8.5, §11.1): binding transition идёт через отключение forwarding → deny-first barrier → восстановление, AMBIGUOUS на runtime = profile FAIL/DEGRADED с сохранением blackhole/deny.
-
 - **Cleanup selective inventory** (§6.2, invariant 8, 9, 94): `proto 201/202` filtered queries для cleanup, полный strict inventory сохранён для normal reconciliation. EXP-004.5 показал, что это не понижает строгость на нужной семантике.
-
 - **Runtime directory bootstrap** (§5.2, invariants 70–73): daemon сам ensure/validate `/run/vpn-gateway` (non-symlink, `0700`, owner = service identity, не «чинит» чужое владение через chmod/chown).
-
 - **Runtime lifecycle state** (§8.9, invariant 63): `ACTIVE = policy SAFE + все profile SUCCESS + ip_forward=1`, при этом ABSENT не FAIL (если blackhole/deny verified), AMBIGUOUS = FAIL. `ACTIVE` явно отделён от «VPN connectivity доказана».
-
 - **Package structure** (§23): multi-file Python package допустим; будущий Rust — один binary; entry point один.
 
 Отдельно отмечу: **предложенный в прошлый раз `_commit_owned` перед `set_ip_forward(True)` теперь зафиксирован** (§8.8 «Commit после forwarding запрещён») с правильным обоснованием. Это то, что раньше в RC2.5.1 я предлагал сделать наоборот — RC3 выбрал более безопасную сторону.
@@ -28,7 +21,7 @@
 
 §9.3 profile FORWARD ACCEPT:
 
-```text
+```
 -s source -d route -o concrete → ACCEPT
 ```
 
@@ -41,7 +34,6 @@
 То есть спуфленный пакет из свежепоявившегося интерфейса в prefix space проходит через "правильный" bound-интерфейс. VPNG-FORWARD-DENY этот пакет не увидит — он ACCEPT'нут в profile chain.
 
 Это **в пределах объявленной threat model** (invariant 91, §4.4), потому что:
-
 - untrusted процессы не имеют `CAP_NET_ADMIN` и не создают интерфейсы;
 - создаёт интерфейс доверенное VPN software.
 
@@ -88,7 +80,6 @@
 EXP-001 в журнале ссылается на «Invariant 134», «Invariant 148», «Invariant 153». В RC3 invariants переписаны и перенумерованы в 1–99. Этих номеров больше нет.
 
 Формально эксперимент — исторический документ, и ссылки были валидны на момент его проведения (RC2.x). Но чтобы избежать путаницы при чтении RC3-современным читателем, стоит либо:
-
 - добавить в шапку EXP-001 фразу «architecture references were valid at RC2 time; RC3 has renumbered invariants»;
 - либо в разделе «Architecture references» привести актуальные номера из RC3 (или указать, что они были перенумерованы).
 
@@ -107,13 +98,11 @@ EXP-001 в журнале ссылается на «Invariant 134», «Invariant
 ### 7. Специфичность `--check-config` для selector overlap
 
 §15.3 говорит: «Управляемые селекторы должны быть попарно непересекающимися». Примеры:
-
-```text
+```
 vpns+ + vpns0
 vpns+ + vpns1+
 vpns+ + vpns+
 ```
-
 Всё верно. Но есть пограничный случай: `vpns0` (exact) + `vpns0+` (prefix). `vpns0+` матчит `vpns0`, `vpns00`, `vpns0abc`, ... Exact `vpns0` тоже матчит `vpns0`. Overlap. Это должно быть fatal. Проверка «пересечение множеств» это ловит. Good.
 
 Другой пограничный: `a` (exact, 1 символ) + `ab+`. `ab+` матчит `ab`, `aba`, `abb`, ... Exact `a` матчит `a`. Пересечение пусто (ни одно имя не начинается одновременно с `a` и с `ab` — ну, `a` начинается с `a`, но не с `ab`). Значит disjoint. Формально OK.
@@ -147,7 +136,6 @@ vpns+ + vpns+
 ## Что стоит подтвердить / уточнить перед рефакторингом кода
 
 1. **Явный список breaking changes** для `KernelInterface`, `VpnProfile`, `ReconciliationPlan`, `DaemonState`:
-
    - `list_interface_ipv4` → `list_interfaces` (с ifindex);
    - `CONFIGURED routes` как полный набор больше не корректно (инвариант §23.1);
    - `ReconciliationSnapshot` как pass-level immutable;
@@ -162,12 +150,11 @@ vpns+ + vpns+
 4. **`--check-config` для selector overlap** — я вижу, что архитектура это проверяет, но стоит убедиться, что `--check-config` действительно это делает и что сообщение об ошибке явное (какие два селектора конфликтуют).
 
 5. **`proto kernel` exact collision** — §23.6 упоминает, что "Exact protected prefix, совпавший с connected kernel route, fatal на startup." Хорошо. Но что при **runtime**? Если admin вручную добавит `proto kernel route` на exact protected prefix (что технически означает: подключён host-адрес с этим prefix), то:
-
    - binding snapshot не меняется;
    - policy может стать UNSAFE (если роут конфликтует с нашими desired routes);
    - next reconcile detect fail route pass;
    - apply не сможет добавить наш route (конфликт metric? или EEXIST?).
-
+   
    Стоит подтвердить, что это fail-closed: reconcile pass с `_validate_plan` считает `proto kernel` в route_deletes → `PlanValidationError` → DEGRADED. Good.
 
 ## Итог
@@ -175,11 +162,12 @@ vpns+ + vpns+
 RC3 — сильная, хорошо обоснованная эволюция. Каждое крупное изменение следует из EXP-004/005. Инварианты консолидированы (99 вместо 174) и стали читаемее.
 
 **Реальные риски:**
-
 - явная дыра в окне реакции для FORWARD (в пределах threat model, но не названа явно);
 - deny-first repair даёт полный краткий outage всех профилей (не задокументирован явно);
 - неоднозначность структуры profile chains в isolation filter;
 - EXP-001 ссылается на устаревшие номера инвариантов;
-- readiness transition не входит в явный список «policy transitions».
+- readiness transition не входит в явный список «policy transitions» в §8.4.
 
 **Не блокеры, но стоит закрыть до code-refactor:** список breaking changes для `KernelInterface` и других контрактов; явные фразы о том, что isolation filter — это полная замена, и что profile chains в нём содержат только structural part.
+
+Если хотите — могу отдельно пройтись по §26 invariants 1–99 на предмет дублирования/пропусков/несогласованности с конкретными разделами (это уже чистовой аудит, не архитектурные вопросы).
