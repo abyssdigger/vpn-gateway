@@ -29,5 +29,9 @@ MAX_ROUTE_METRIC = (1 << 32) - 1
 
 VPNG_CHAIN_PREFIX = "VPNG-"
 IP_FORWARD_PATH = Path("/proc/sys/net/ipv4/ip_forward")
+IPV6_CONF_DIR = Path("/proc/sys/net/ipv6/conf")
+IPV6_ALL_FORWARDING_PATH = IPV6_CONF_DIR / "all" / "forwarding"
+IPV6_DEFAULT_FORWARDING_PATH = IPV6_CONF_DIR / "default" / "forwarding"
+IPV6_DEFAULT_DISABLE_PATH = IPV6_CONF_DIR / "default" / "disable_ipv6"
 
 LOG = logging.getLogger("vpn-gatewayd")

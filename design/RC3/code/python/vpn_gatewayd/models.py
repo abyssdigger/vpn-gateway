@@ -4,9 +4,12 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from ipaddress import IPv4Address, IPv4Network
 from types import MappingProxyType
-from typing import Mapping
+from typing import TYPE_CHECKING, Mapping
 
-from .interfaces import InterfaceSelector
+from .interfaces import InterfaceRecord, InterfaceSelector, ProfileInterfaceState
+
+if TYPE_CHECKING:
+    from .policy import FirewallNatPolicy
 
 class DaemonState(Enum):
     STARTING = auto()
@@ -104,6 +107,41 @@ class ReconciliationPlan:
     route_adds: frozenset[RouteSpec]
     route_deletes: frozenset[RouteSpec]
     route_replaces: frozenset[RouteSpec]
+
+
+@dataclass(slots=True, frozen=True)
+class ReconciliationSnapshot:
+    """
+    One immutable daemon interpretation of one fresh interface inventory.
+
+    The snapshot couples interface resolution/readiness, desired routes and
+    full firewall/NAT policy so one reconciliation pass cannot accidentally
+    mix observations from different interface inventories.
+    """
+
+    interfaces: tuple[InterfaceRecord, ...]
+    interface_state_by_profile: Mapping[str, ProfileInterfaceState]
+    desired_routes_by_profile: Mapping[str, frozenset[RouteSpec]]
+    desired_full_policy: FirewallNatPolicy
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "interfaces", tuple(self.interfaces))
+        object.__setattr__(
+            self,
+            "interface_state_by_profile",
+            MappingProxyType(dict(self.interface_state_by_profile)),
+        )
+        object.__setattr__(
+            self,
+            "desired_routes_by_profile",
+            MappingProxyType(
+                {
+                    profile_id: frozenset(routes)
+                    for profile_id, routes
+                    in self.desired_routes_by_profile.items()
+                }
+            ),
+        )
 
 
 @dataclass(slots=True, frozen=True)

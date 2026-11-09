@@ -17,8 +17,9 @@ Current migration status:
   state has been removed from `VpnProfile`;
 - process-local committed state now includes OWNED routes plus binding/readiness;
 - pure full/isolation firewall policy derivation is available without orchestration side effects;
-- the running ConfigLoader remains exact-selector-only until binding-aware route/policy
-  migration, so the legacy RC2 path cannot receive a prefix selector prematurely.
+- runtime configuration now accepts exact and prefix-family interface selectors;
+- immutable `ReconciliationSnapshot` value support is available for daemon integration;
+- the kernel adapter exposes the IPv6 host-prerequisite sysctls required by RC3.
 
 Entry point: `vpn-gatewayd.py`.
 

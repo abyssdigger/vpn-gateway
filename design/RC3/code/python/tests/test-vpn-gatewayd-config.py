@@ -92,6 +92,32 @@ class ConfigTestCase(unittest.TestCase):
             ("100.64.0.0/10", "192.168.0.0/16"),
         )
 
+    def test_runtime_accepts_prefix_interface_selector(self):
+        td, path = self.write_config(
+            """
+            managed_vpns = ["primary"]
+            common_allowed_sources = []
+
+            [vpn.primary]
+            interface = "vpns+"
+            network = "172.20.130.0/29"
+            local_address = "172.20.130.1"
+            peers = ["172.20.130.6"]
+            routes = ["10.0.0.0/8"]
+            allowed_sources = []
+            """
+        )
+        self.addCleanup(td.cleanup)
+
+        cfg = NoSecurityLoader().load_runtime(path)
+
+        selector = cfg.vpns["primary"].interface
+        self.assertIs(
+            selector.kind,
+            vpng.InterfaceSelectorKind.PREFIX_FAMILY,
+        )
+        self.assertEqual(str(selector), "vpns+")
+
     def test_malformed_unmanaged_definition_does_not_block_runtime(self):
         td, path = self.write_config(
             """

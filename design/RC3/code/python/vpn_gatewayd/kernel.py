@@ -8,7 +8,14 @@ from ipaddress import IPv4Address, IPv4Network
 from types import MappingProxyType
 from typing import Mapping, Sequence
 
-from .constants import IP_FORWARD_PATH, MAX_ROUTE_METRIC
+from .constants import (
+    IP_FORWARD_PATH,
+    IPV6_ALL_FORWARDING_PATH,
+    IPV6_CONF_DIR,
+    IPV6_DEFAULT_DISABLE_PATH,
+    IPV6_DEFAULT_FORWARDING_PATH,
+    MAX_ROUTE_METRIC,
+)
 from .errors import KernelError
 from .interfaces import InterfaceRecord
 from .models import RouteSpec, RouteType
@@ -73,6 +80,24 @@ class KernelInterface(ABC):
 
     @abstractmethod
     def set_ip_forward(self, enabled: bool) -> None:
+        pass
+
+    # ---- IPv6 host prerequisites ----------------------------------------
+
+    @abstractmethod
+    def get_ipv6_all_forwarding(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_ipv6_default_forwarding(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_ipv6_default_disabled(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_interface_ipv6_disabled(self, interface: str) -> bool:
         pass
 
     # ---- Fixed firewall/NAT ---------------------------------------------
@@ -615,6 +640,43 @@ class SubprocessKernelInterface(KernelInterface):
             raise KernelError(
                 f"failed to write {IP_FORWARD_PATH}: {exc}"
             ) from exc
+
+    @staticmethod
+    def _read_boolean_sysctl(path: os.PathLike[str] | str) -> bool:
+        path_obj = os.fspath(path)
+        try:
+            with open(path_obj, "r", encoding="ascii") as fh:
+                value = fh.read().strip()
+        except OSError as exc:
+            raise KernelError(
+                f"failed to read {path_obj}: {exc}"
+            ) from exc
+
+        if value == "0":
+            return False
+        if value == "1":
+            return True
+        raise KernelError(
+            f"unexpected boolean sysctl {path_obj} value: {value!r}"
+        )
+
+    def get_ipv6_all_forwarding(self) -> bool:
+        return self._read_boolean_sysctl(IPV6_ALL_FORWARDING_PATH)
+
+    def get_ipv6_default_forwarding(self) -> bool:
+        return self._read_boolean_sysctl(IPV6_DEFAULT_FORWARDING_PATH)
+
+    def get_ipv6_default_disabled(self) -> bool:
+        return self._read_boolean_sysctl(IPV6_DEFAULT_DISABLE_PATH)
+
+    def get_interface_ipv6_disabled(self, interface: str) -> bool:
+        if not interface or "/" in interface or interface in {".", ".."}:
+            raise KernelError(
+                f"invalid interface name for IPv6 sysctl lookup: {interface!r}"
+            )
+        return self._read_boolean_sysctl(
+            IPV6_CONF_DIR / interface / "disable_ipv6"
+        )
 
     def iptables_save(self) -> str:
         """Return canonical filter+nat inventory from iptables-save."""

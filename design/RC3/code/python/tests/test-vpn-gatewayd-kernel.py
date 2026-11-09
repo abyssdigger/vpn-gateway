@@ -594,6 +594,62 @@ class KernelSystemAdapterTests(unittest.TestCase):
                 with self.assertRaises(vpng.KernelError):
                     adapter.get_ip_forward()
 
+    def test_ipv6_prerequisite_sysctls_are_read_as_boolean(self):
+        adapter = kernel()
+        with __import__("tempfile").TemporaryDirectory() as td:
+            root = Path(td)
+            all_forward = root / "all-forwarding"
+            default_forward = root / "default-forwarding"
+            default_disable = root / "default-disable"
+            conf = root / "conf"
+            interface_dir = conf / "vpns0"
+            interface_dir.mkdir(parents=True)
+            interface_disable = interface_dir / "disable_ipv6"
+
+            all_forward.write_text("0\n", encoding="ascii")
+            default_forward.write_text("0\n", encoding="ascii")
+            default_disable.write_text("1\n", encoding="ascii")
+            interface_disable.write_text("1\n", encoding="ascii")
+
+            with (
+                mock.patch(
+                    "vpn_gatewayd.kernel.IPV6_ALL_FORWARDING_PATH",
+                    all_forward,
+                ),
+                mock.patch(
+                    "vpn_gatewayd.kernel.IPV6_DEFAULT_FORWARDING_PATH",
+                    default_forward,
+                ),
+                mock.patch(
+                    "vpn_gatewayd.kernel.IPV6_DEFAULT_DISABLE_PATH",
+                    default_disable,
+                ),
+                mock.patch("vpn_gatewayd.kernel.IPV6_CONF_DIR", conf),
+            ):
+                self.assertFalse(adapter.get_ipv6_all_forwarding())
+                self.assertFalse(adapter.get_ipv6_default_forwarding())
+                self.assertTrue(adapter.get_ipv6_default_disabled())
+                self.assertTrue(
+                    adapter.get_interface_ipv6_disabled("vpns0")
+                )
+
+    def test_ipv6_prerequisite_sysctl_rejects_unexpected_value(self):
+        adapter = kernel()
+        with __import__("tempfile").TemporaryDirectory() as td:
+            path = Path(td) / "forwarding"
+            path.write_text("2\n", encoding="ascii")
+            with mock.patch(
+                "vpn_gatewayd.kernel.IPV6_ALL_FORWARDING_PATH",
+                path,
+            ):
+                with self.assertRaises(vpng.KernelError):
+                    adapter.get_ipv6_all_forwarding()
+
+    def test_interface_ipv6_sysctl_rejects_path_like_name(self):
+        adapter = kernel()
+        with self.assertRaises(vpng.KernelError):
+            adapter.get_interface_ipv6_disabled("../all")
+
     def test_iptables_save_reads_filter_then_nat_without_unsupported_wait(self):
         adapter = vpng.SubprocessKernelInterface(iptables_wait_seconds=7)
         responses = [

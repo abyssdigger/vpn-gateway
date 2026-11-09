@@ -882,27 +882,17 @@ class ConfigLoader:
             )
             return None
 
-        if not self._INTERFACE_RE.fullmatch(value):
+        try:
+            return InterfaceSelector.parse(value)
+        except ValueError as exc:
             issues.append(
                 ConfigIssue(
                     level,
                     location,
-                    "must match [A-Za-z][A-Za-z0-9_.-]{0,14}",
+                    f"invalid interface selector: {exc}",
                 )
             )
             return None
-
-        if value.casefold() in self._FORBIDDEN_INTERFACES:
-            issues.append(
-                ConfigIssue(
-                    level,
-                    location,
-                    f"forbidden interface name: {value!r}",
-                )
-            )
-            return None
-
-        return InterfaceSelector.parse(value)
 
     def _parse_ipv4_address(
         self,
