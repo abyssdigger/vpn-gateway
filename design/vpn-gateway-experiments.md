@@ -12,11 +12,13 @@
 
 ## EXP-006 — замена существующих цепочек и восстановление daemon-owned префикса
 
-**Status:** PLANNED  
+**Status:** COMPLETE — PASS  
 **Architecture baseline:** RC3  
-**Target:** Debian 13 gateway/test host, iptables-nft 1.8.11  
+**Run:** 2026-11-09  
+**Target:** Debian GNU/Linux 13 (trixie), Linux 6.12.115+deb13.1-amd64, iptables v1.8.11 (nf_tables)  
 **Harness:** [`design/experiments/EXP-006 Firewall orchestration target validation/vpn-gateway-exp-006-firewall-orchestration.sh`](experiments/EXP-006%20Firewall%20orchestration%20target%20validation/vpn-gateway-exp-006-firewall-orchestration.sh)  
-**Required before:** подключение RC3 firewall orchestration к рабочей реализации
+**Result:** [`vpn-gateway-exp-006-result-20261109.txt`](experiments/EXP-006%20Firewall%20orchestration%20target%20validation/vpn-gateway-exp-006-result-20261109.txt)  
+**Implementation gate:** satisfied; RC3 firewall orchestration may be connected to the working implementation
 
 ### Motivation
 
@@ -136,8 +138,22 @@ daemon-owned NAT.
 
 EXP-006 считается успешным только если все четыре подэксперимента проходят на целевом
 iptables-nft backend, включая точечное восстановление `INPUT` без изменения активной
-пересылки. До этого firewall orchestration RC3 не считается подтвержденным для подключения
-к рабочему daemon.
+пересылки.
+
+### Result
+
+На целевой Debian 13 системе все четыре подэксперимента завершились `PASS`:
+
+- EXP-006.1 подтвердил замену содержимого существующей daemon-owned chain через
+  `iptables-restore --noflush` с сохранением несвязанных сторонних правил;
+- EXP-006.2 подтвердил переход `full -> isolation -> full`;
+- EXP-006.3 подтвердил точечное восстановление `INPUT` при активной пересылке без
+  изменения `ip_forward`, `FORWARD` и NAT и без разрыва живого транзитного потока;
+- EXP-006.4 подтвердил отсутствие частично примененного состояния после ошибки
+  `iptables-restore` до `COMMIT`.
+
+Итоговый код возврата harness: `0`. Implementation gate для подключения RC3 firewall
+orchestration закрыт положительно.
 
 ---
 

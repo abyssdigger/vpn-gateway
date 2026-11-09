@@ -14,8 +14,10 @@
 - IPv4-only deployment дополнительно требует выключенного IPv6 на управляемых
   VPN-интерфейсах;
 - follow-up review отказался от анализатора сторонних INPUT-цепочек: подтвержденный INPUT-only drift восстанавливается точечно без изменения `ip_forward` и транзитной политики; Fail2ban остается обычной host-policy после daemon-owned INPUT-префикса;
-- добавлен `EXP-006` для target validation замены существующих цепочек и восстановления
-  daemon-owned префикса; подключение firewall orchestration блокируется до его PASS.
+- `EXP-006` выполнен на Debian 13 / Linux 6.12.115 / iptables-nft 1.8.11: все четыре
+  подэксперимента PASS; подтверждены замена существующих chains через `--noflush`,
+  `full -> isolation -> full`, точечный INPUT-only repair при живом транзите и
+  транзакционно чистая ошибка restore; implementation gate firewall orchestration снят.
 
 Код не изменен.
 

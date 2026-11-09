@@ -1,0 +1,23 @@
+EXP-006 target preflight
+  OS:       Debian GNU/Linux 13 (trixie)
+  kernel:   6.12.115+deb13.1-amd64
+  iptables: iptables v1.8.11 (nf_tables)
+
+== EXP-006.1: existing chain replacement with --noflush ==
+PASS: EXP-006.1
+
+== EXP-006.2: full -> isolation -> full ==
+PASS: EXP-006.2
+
+== EXP-006.3: INPUT-only repair with live forwarding ==
+PASS: EXP-006.3
+
+== EXP-006.4: failed restore is transactionally clean ==
+  expected restore failure rc=2
+  stderr: iptables-restore v1.8.11 (nf_tables): unknown option "--definitely-invalid-option"
+  stderr: Error occurred at line: 4
+  stderr: Try `iptables-restore -h' or 'iptables-restore --help' for more information.
+PASS: EXP-006.4
+
+EXP-006 RESULT: PASS
+rc=0
