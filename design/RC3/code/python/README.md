@@ -18,11 +18,14 @@ Implemented domain model:
   - multiple prefix: `"vpns+"`;
   - ordered explicit exact list: `["vpnA", "vpnB", "vpnC"]`;
 - legacy `%` selector syntax is rejected;
-- transport `peers` is not part of `VpnProfileConfig`; a legacy managed `peers` key
-  is rejected by the closed schema;
+- transport `peers` and exact `local_address` are not part of `VpnProfileConfig`;
+  legacy managed keys with those names are rejected by the closed schema;
 - one profile may have multiple simultaneous active concrete bindings;
 - concrete binding identity is exact `name + ifindex`;
-- a candidate becomes active only when it contains the configured `local_address`;
+- a candidate becomes active only when it has at least one local IPv4 address inside the
+  configured `network`;
+- interface address prefix length is not compared with `network`; tunnel/P2P local /32
+  representation remains valid when the host IPv4 belongs to the logical transport network;
 - point-to-point remote endpoint, transport handshake and peer state are not route truth.
 
 Deterministic active ordering:
@@ -111,9 +114,9 @@ python -m compileall -q design/RC3/code/python
 PASS
 
 python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
-Ran 121 tests
+Ran 124 tests
 OK
-121/121 PASS
+124/124 PASS
 ```
 
 The temporary validation workflow was removed after the successful run; it is not part of

@@ -1,3 +1,35 @@
+## 2026-11-10 — RC3 removes redundant local_address
+
+External optimization review identified that the post-EXP-009 `local_address` field had
+only one remaining function: qualifying a selector-matching candidate as an active
+interface. The already mandatory `network` field fully covers that requirement.
+
+Accepted change:
+
+- `local_address` removed from the normative closed schema, domain model and Python
+  `VpnProfileConfig`;
+- legacy `local_address` is now an unknown managed profile key;
+- a candidate becomes active when at least one of its local IPv4 addresses belongs to
+  `profile.network`;
+- different concrete interfaces of one profile may use different host addresses inside the
+  same transport network;
+- an interface with no IPv4 or only addresses outside `profile.network` remains
+  candidate-only and guard-blocked;
+- applicability checks host-address membership only; actual interface prefix length is not
+  required to equal the logical transport network prefix;
+- exact host-address assignment remains transport configuration, not VPN-GATE state.
+
+Validation after implementation:
+
+```text
+Python 3.13 compileall: PASS
+Unit tests: 124/124 PASS
+```
+
+The first validation run caught one stale firewall-test helper still passing the old exact
+IPv4 argument to the resolver; after correcting that fixture, the full suite passed.
+The temporary validation workflow was removed.
+
 ## 2026-11-10 — RC3 interface-centric architecture and implementation after EXP-009
 
 - EXP-009 completed: OpenConnect multi-interface lifecycle, direct `dev` routing and
