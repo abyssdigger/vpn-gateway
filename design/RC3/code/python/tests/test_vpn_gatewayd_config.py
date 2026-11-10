@@ -110,6 +110,35 @@ class ConfigTestCase(unittest.TestCase):
         )
         self.assertEqual(str(selector), "vpns+")
 
+    def test_explicit_list_metric_must_stay_below_blackhole(self):
+        td, path = self.write_config(
+            """
+            managed_vpns = ["primary"]
+            common_allowed_sources = []
+
+            [vpn.primary]
+            interface = ["vpnA", "vpnB", "vpnC"]
+            network = "172.20.130.0/29"
+            routes = ["10.0.0.0/8"]
+            allowed_sources = []
+            """
+        )
+        self.addCleanup(td.cleanup)
+
+        loader = NoSecurityLoader()
+        with mock.patch("vpn_gatewayd.config.BLACKHOLE_METRIC", 30):
+            with self.assertRaises(vpng.ConfigError):
+                loader.load_runtime(path)
+            result = loader.check(path)
+
+        self.assertTrue(
+            any(
+                issue.location == "vpn.primary.interface"
+                and "BLACKHOLE_METRIC" in issue.message
+                for issue in result.issues
+            )
+        )
+
     def test_malformed_unmanaged_definition_does_not_block_runtime(self):
         td, path = self.write_config(
             """
