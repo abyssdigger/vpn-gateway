@@ -13,7 +13,7 @@ NG1 is built around two concepts:
 
 ROU is the primary NG1 component.
 
-BOU is deliberately replaceable: any firewall/router able to correctly handle the two external ROU interfaces may fulfill the role. A native VPN-GATE BOU is planned later, optimized for **PEACEFUL** and **AGGRESSIVE** modes.
+BOU is deliberately replaceable: any firewall/router able to correctly handle the external ROU interface may fulfill the role. A native VPN-GATE BOU is planned later, optimized for **PEACEFUL** and **AGGRESSIVE** modes.
 
 BOU evolved conceptually from the earlier RC2/RC3 boundary-controller / boundaryd idea. In NG1 the old boundary layer is no longer part of the router core; it becomes an independent host-side firewall/router concern.
 
@@ -24,9 +24,9 @@ ROU is a virtual router embedded in a Linux host but isolated from the host netw
 ROU owns:
 
 - its network namespace;
-- both veth pairs;
-- its external interfaces;
-- their internal peers;
+- its host-facing veth pair;
+- its external interface;
+- its internal peer;
 - loopback inside the namespace;
 - namespace-local IPv4 sysctls;
 - routing state and RPDB inside the namespace;
@@ -37,56 +37,106 @@ ROU owns:
 
 The host main namespace is not part of the internal ROU routing domain.
 
-### 2.1 External interfaces
+### 2.1 External interface
 
-Default external interface names:
+ROU exposes one conventional L3 interface to the host.
 
-    rouvpn0    payload/data plane
-    rouwan0    VPN transport/underlay plane
+Default external interface name:
 
-Both names are configurable. Core logic must use semantic roles rather than hard-coded names.
+    rouvpn0
+
+The name is configurable. Core logic must use the semantic role rather than a hard-coded name.
 
 Conceptually:
 
                         MAIN NETWORK NAMESPACE
-
-                  payload                  transport
-                     |                         |
-                  rouvpn0                  rouwan0
-                     |                         |
-                  === veth ================= veth ===
-                     |                         |
-                   host0                    uplink0
+                                 |
+                              rouvpn0
+                                 |
+                              === veth ===
+                                 |
+                               host0
 
                         ROU NETWORK NAMESPACE
                              |
+                             +-- local VPN transport listeners/clients
                              +-- profile routing
                              +-- firewall / NAT
                              +-- wg0 / wg1 / vpns0 / ...
 
-### 2.2 Payload interface
+The same interface carries three classes of traffic using ordinary Linux IP semantics:
 
-**rouvpn0** is the default external payload interface.
+1. **Forwarded payload** entering through host0 and dispatched into profile routing.
+2. **Inbound VPN transport** addressed to a local ROU endpoint and delivered by the local table to a VPN listener or ROU transport relay.
+3. **Locally generated VPN transport** emitted by a VPN client/process inside ROU and routed through the namespace main table via host0.
 
-All user routed traffic entering or leaving ROU uses this interface.
+No dedicated transport/underlay interface is required.
 
-ROU does not know which host-side sources are trusted, how the host selected ROU as a next hop, which host firewall rule admitted a packet, or which host routing-policy decision led to the payload interface.
+### 2.2 Payload path
+
+Payload entering through rouvpn0/host0 with a non-local destination follows the forwarding path:
+
+    host/LAN
+        -> rouvpn0
+        -> host0
+        -> profile selection
+        -> profile routing table
+        -> admitted VPN binding
+
+Return payload from a VPN binding is routed back through host0/rouvpn0 according to profile direction and routing policy.
+
+ROU does not know which host-side sources are trusted, how the host selected ROU as a next hop, which host firewall rule admitted a packet, or which host routing-policy decision led to rouvpn0.
 
 Host-side admission and steering belong to BOU or another external firewall/router.
 
-### 2.3 Transport interface
+### 2.3 VPN transport path
 
-**rouwan0** is the default external VPN underlay/transport interface.
+VPN transport shares rouvpn0/host0 but does not use profile payload routing.
 
-It provides connectivity for the VPN transports themselves:
+Inbound transport addressed to a local ROU endpoint is delivered locally before profile dispatch.
 
-    WG client -> remote WG server
-    OpenConnect client -> remote VPN server
+Locally generated VPN transport uses the ROU namespace main table, typically with a default route via host0.
 
-    remote WG client -> local WG listener
-    remote OC client -> local ocserv
+This deliberately mirrors conventional Linux VPN operation: one ordinary network interface may carry both routed payload and the outer VPN transport.
 
-Payload and VPN underlay are deliberately separated.
+### 2.4 Binding transport publication
+
+ROU may publish TCP/UDP transport endpoints for a BindingSpec.
+
+Publication allows a stable internal VPN configuration to remain unchanged while the host-facing port is changed in ROU configuration.
+
+Conceptual compact syntax:
+
+    5678/udp>7890
+    44443/tcp>44443
+    44443/udp>44443
+    4700:4900/udp>55200:55400
+
+A mapping means:
+
+    host-facing ROU transport port/protocol
+        -> internal transport endpoint associated with the binding
+
+For equal external/internal ports the right side may later be made optional as shorthand.
+
+For ranges:
+
+- bounds are inclusive;
+- external and internal ranges must contain the same number of ports;
+- mapping is positional.
+
+For example:
+
+    4700:4900/udp>55200:55400
+
+maps 4700 to 55200, 4701 to 55201, and so on.
+
+The publication mechanism is transport-level TCP/UDP relay functionality owned by ROU, not BOU. It is independent of the VPN protocol itself.
+
+For UDP, the relay must preserve per-peer return-path association so that replies from an internal VPN listener are returned through the corresponding published host-side endpoint.
+
+This lets a support VPN be configured once on an internal port while the externally visible ROU publication changes independently.
+
 
 ## 3. ROU lifecycle
 
@@ -107,8 +157,8 @@ At minimum it:
 1. validates bootstrap and router configuration;
 2. creates the network namespace;
 3. creates rouvpn0 <-> host0;
-4. creates rouwan0 <-> uplink0;
-5. configures boundary addressing;
+4. configures link addressing;
+5. prepares configured transport publications;
 6. brings up loopback;
 7. configures required namespace-local sysctls;
 8. installs initial fail-closed internal state;
@@ -139,7 +189,8 @@ rou show is a read-only administrative view. It should eventually expose at leas
 
 - lifecycle state;
 - namespace identity;
-- payload and transport interface pairs;
+- rouvpn0/host0 interface pair;
+- published transport endpoints;
 - configuration generation/hash;
 - profiles and directions;
 - profile routing tables;
@@ -189,9 +240,9 @@ The namespace main table is primarily the VPN transport/underlay routing domain.
 
 Typical meaning:
 
-    default -> uplink0
+    default -> host0
 
-Locally created VPN transport traffic uses this path.
+Locally created VPN transport traffic uses this path and exits through rouvpn0 into the host network stack.
 
 Profile payload routing must not depend on the namespace main default.
 
@@ -255,6 +306,7 @@ Conceptually:
         interface
         network
         capacity
+        publish[]         # optional TCP/UDP transport publication
         launch_command    # optional future feature
 
 interface is either an exact interface name or a trailing-prefix selector.
@@ -347,7 +399,7 @@ Future per-profile policy may add protocol/port/service restrictions.
 
 Payload NAT belongs to ROU where required by a VPN transport/profile.
 
-VPN underlay NAT is a separate host-boundary concern and does not belong to profile payload NAT.
+VPN underlay traffic exits through host0/rouvpn0 as ordinary locally generated ROU traffic. Any further host-side routing or NAT is an external host/BOU concern and does not belong to profile payload NAT.
 
 ## 14. VPN transport ownership
 
@@ -405,17 +457,17 @@ The later production implementation should reproduce the same semantics against 
 
 ## 17. BOU concept
 
-BOU is the host-side firewall/router layer around the two ordinary external ROU interfaces.
+BOU is the optional host-side firewall/router layer around the ordinary external ROU interface.
 
 The name and concept evolved from the earlier boundaryd / boundary-controller design.
 
 In NG1, BOU is no longer responsible for constructing ROU. ROU is self-contained and creates its own namespace, veth pairs and supervised runtime.
 
-BOU only sees two host interfaces and applies host policy around them.
+BOU sees rouvpn0 as an ordinary L3 interface and applies host policy around it.
 
-For the payload interface BOU may provide source/admission filtering, host-side steering, anti-leak routing policy and containment.
+BOU may provide source/admission filtering, host-side steering, anti-leak routing policy, containment, and ordinary host-side routing/NAT for ROU-originated transport traffic.
 
-For the transport interface BOU may provide underlay egress, publication of inbound VPN listeners, host-side NAT where necessary and transport firewalling.
+Publication of a binding's TCP/UDP transport endpoint belongs to ROU itself. BOU may still restrict access to that published host-side port like any other firewall.
 
 ### 17.1 PEACEFUL mode
 
@@ -443,11 +495,11 @@ A native VPN-GATE BOU is planned, but its implementation language is intentional
 
 ROU and BOU do not require runtime RPC to operate safely.
 
-Their runtime interface is kernel networking state represented by the two external ROU interfaces.
+Their runtime interface is ordinary kernel networking state represented by rouvpn0 and the host-side sockets/endpoints ROU explicitly publishes.
 
 ROU observes and controls only its own namespace.
 
-BOU observes and controls host-side state around the two external interfaces.
+BOU observes and controls host-side policy around rouvpn0 and the host network environment.
 
 Future Unix sockets may expose read-only status, diagnostics and event history for administrators, but they are not part of the safety-critical control plane.
 
@@ -488,24 +540,29 @@ Primary source material includes the existing experiment log under design/vpn-ga
 
 1. ROU owns its network namespace.
 2. ROU creates and removes its own namespace/veth infrastructure.
-3. ROU exposes two conceptually distinct external interfaces: payload and transport.
-4. Default external names are rouvpn0 and rouwan0; both are configurable.
-5. Payload and VPN underlay never share the same logical interface role.
-6. All VPN transport processes and tunnel interfaces live inside the ROU namespace.
-7. Namespace main routing serves underlay; payload routing is profile-based.
-8. Every enabled profile owns a dedicated routing table.
-9. Profile tables are fail-closed routing domains.
-10. Every protected destination retains an explicit blackhole.
-11. Every profile table has a terminal fail-closed route.
-12. Profile direction is per-profile policy.
-13. Binding priority follows bindings[] order independently of selector type.
-14. Deterministic prefix bindings reserve capacity-sized metric pools.
-15. capacity=-1 prefix bindings share a tail pool without guaranteed mutual priority.
-16. Capacity overflow isolates only excess concrete interfaces; it does not automatically invalidate the whole profile.
-17. Managed binding lifecycle must not alter BindingSpec routing semantics.
-18. ROU may later maintain configurable live/warm binding capacity.
-19. BOU is outside ROU routing semantics and may be replaced by another firewall/router.
-20. PEACEFUL protects the remote VPN side from unauthorized transit through ROU.
-21. AGGRESSIVE additionally protects VPN-managed traffic from leaking around ROU.
-22. ROU and BOU require no safety-critical runtime RPC.
-23. RC2/RC3 are reusable evidence/design sources, but not normative NG1 topology.
+3. ROU exposes one conventional host-facing L3 interface.
+4. The default external interface name is rouvpn0 and is configurable.
+5. Payload and VPN transport share rouvpn0 using ordinary Linux local/forwarded routing semantics.
+6. No dedicated transport/underlay interface is required.
+7. All VPN transport processes and tunnel interfaces live inside the ROU namespace.
+8. Inbound VPN transport is delivered to local ROU endpoints before profile payload dispatch.
+9. Locally generated VPN transport uses namespace main routing via host0.
+10. Forwarded payload entering through host0 is selected into profile routing tables.
+11. ROU may publish binding-specific TCP/UDP transport endpoints through host-side relay sockets.
+12. Binding transport publication belongs to ROU, not BOU.
+13. Every enabled profile owns a dedicated routing table.
+14. Profile tables are fail-closed routing domains.
+15. Every protected destination retains an explicit blackhole.
+16. Every profile table has a terminal fail-closed route.
+17. Profile direction is per-profile policy.
+18. Binding priority follows bindings[] order independently of selector type.
+19. Deterministic prefix bindings reserve capacity-sized metric pools.
+20. capacity=-1 prefix bindings share a tail pool without guaranteed mutual priority.
+21. Capacity overflow isolates only excess concrete interfaces; it does not automatically invalidate the whole profile.
+22. Managed binding lifecycle must not alter BindingSpec routing semantics.
+23. ROU may later maintain configurable live/warm binding capacity.
+24. BOU is outside ROU routing semantics and may be replaced by another firewall/router.
+25. PEACEFUL protects the remote VPN side from unauthorized transit through ROU.
+26. AGGRESSIVE additionally protects VPN-managed traffic from leaking around ROU.
+27. ROU and BOU require no safety-critical runtime RPC.
+28. RC2/RC3 are reusable evidence/design sources, but not normative NG1 topology.
