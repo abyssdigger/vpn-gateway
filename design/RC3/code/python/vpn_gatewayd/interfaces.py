@@ -150,7 +150,7 @@ def _ordered_candidates(
         return () if record is None else (record,)
     if selector.kind is InterfaceSelectorKind.PREFIX:
         return tuple(
-            r for r in records
+            r for r in by_name.values()
             if r.name.startswith(selector.values[0])
         )
     return tuple(by_name[name] for name in selector.values if name in by_name)
