@@ -339,6 +339,15 @@ Candidate без ожидаемого `local_address`:
 `operstate`, `LOWER_UP`, ping, handshake и transport-specific peer state не являются
 источником binding truth.
 
+Для всех binding-specific resources используется один нормативный `active_order`:
+
+- exact — единственный active interface;
+- `prefix+` — case-sensitive bytewise ASCII order active exact names;
+- explicit list — config order, отфильтрованный до currently active elements.
+
+Один и тот же `active_order` используется для route metrics, INPUT/FORWARD exact blocks,
+`VPNG-INGRESS`, NAT MASQUERADE rules и status output.
+
 ### 4.4. Materialization маршрутов по active binding set
 
 Для каждого protected destination всегда существует config-derived `BLACKHOLE`.
@@ -814,10 +823,12 @@ active bindings и desired state не пересчитываются между 
 7. прочитать строгий route snapshot, построить и проверить route plan;
 8. materialize BLACKHOLE и direct `proto 202 dev <exact-interface>` routes;
 9. повторно проверить exact protected-prefix route state;
-10. сформировать `ProfileResult`;
-11. зафиксировать OWNED routes и active binding state только после verification;
-12. установить и повторно подтвердить `ip_forward=1`;
-13. перейти в `RUN`.
+10. подтвердить verification result для desired fail-closed state;
+11. сформировать functional `ProfileResult` поверх verified state;
+12. зафиксировать OWNED routes и active binding state после verification независимо от
+    availability SUCCESS/FAIL;
+13. установить и повторно подтвердить `ip_forward=1`;
+14. перейти в `RUN`.
 
 Отсутствие active concrete binding не является startup error само по себе. Если
 fail-closed desired policy и route state полностью применены и проверены, профиль получает
@@ -825,6 +836,8 @@ fail-closed desired policy и route state полностью применены 
 
 Ошибка inventory, config, firewall/NAT apply/verification, route apply/verification либо
 невозможность финально подтвердить `ip_forward=1` остается hard startup failure.
+Zero-path `ProfileResult=FAIL` после successful BLACKHOLE-only/direct-route verification
+**не является route verification failure** и не превращается в startup error.
 
 На обычном startup forwarding изначально выключен, поэтому первоначальное применение
 `filter -> nat -> routes` безопасно без дополнительного runtime barrier.
@@ -1061,6 +1074,11 @@ Process-local OWNED routes и последнее подтвержденное с
 concrete bindings изменяются только после завершенной успешной проверки соответствующего
 цикла.
 
+**Verification success и `ProfileResult` — разные оси.** Если fail-closed desired state
+полностью verified, candidate/active binding state текущего snapshot фиксируется даже
+когда functional availability дает `ProfileResult=FAIL` из-за zero UNICAST paths. Иначе
+валидный `RUN/DEGRADED` создавал бы ложный policy transition на каждом periodic pass.
+
 Порядок запуска и policy-changing reconciliation:
 
 ```text
@@ -1220,7 +1238,8 @@ ctstate ESTABLISHED,RELATED
     REJECT --reject-with icmp-host-prohibited
 ```
 
-После всех exact blocks цепочка возвращает управление через `RETURN`.
+Exact blocks идут в нормативном `active_order` §4.3. После всех exact blocks цепочка
+возвращает управление через `RETURN`.
 
 Таким образом, удаленная сторона VPN не может инициировать новое соединение с самим
 шлюзом через active managed interface. Разрешен только ответный
@@ -1241,7 +1260,7 @@ Traffic вне защитных пространств имен после daemo
 ### 9.3. Семантика FORWARD
 
 `VPNG-INGRESS` сначала содержит exact block для каждого уникального active concrete
-interface:
+interface в нормативном `active_order` §4.3:
 
 ```text
 -i <точный-интерфейс>
@@ -1263,8 +1282,8 @@ materialize как набор exact guards. Затем следует `RETURN`.
 `VPNG-RESERVED` всегда выполняет `REJECT` для назначения в любую managed
 `vpn.network`.
 
-Цепочка `FORWARD` профиля для каждого protected destination и каждого уникального active
-egress interface содержит:
+Цепочка `FORWARD` профиля для каждого protected destination обходит active egress
+interfaces в нормативном `active_order` §4.3 и для каждого содержит:
 
 ```text
 -d route -o <точный-интерфейс> ctstate INVALID
@@ -1377,7 +1396,8 @@ VPNG-<PROFILE>-NAT
 
 и детерминированный переход из `POSTROUTING`.
 
-Для каждого уникального active egress interface профиля создается:
+Для каждого уникального active egress interface профиля в нормативном `active_order`
+§4.3 создается:
 
 ```text
 -o <точный-интерфейс>
@@ -1969,12 +1989,16 @@ Process-local state хранит:
 - verified OWNED routes;
 - последнее verified candidate identities;
 - active concrete binding identities;
-- selector-derived ordering/metrics, достаточные для обнаружения transition;
+- normative `active_order` и selector-derived metrics, достаточные для обнаружения transition;
 - diagnostic overlap cache.
 
 State не сохраняется на диск и не является source of truth. Каждый reconciliation заново
 читает inventory и строит current state. OWNED/binding state фиксируется только после
 successful verification.
+
+Commit verified binding state не зависит от functional `ProfileResult`: verified
+zero-path state с `ProfileResult=FAIL` также commit-ится. При actual verification error
+state не принимается как verified.
 
 ### 23.4. Граница взаимодействия с ядром
 
@@ -2342,7 +2366,7 @@ may retain adds/deletes/replaces.
 
 21. Идентичность concrete binding включает exact name + ifindex; повторное создание имени с новым ifindex является binding transition.
 
-22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces; selector template никогда не является allowing operand.
+22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Все binding-specific resources одного profile materialize в едином normative active_order: exact single; prefix bytewise ASCII; explicit list config order filtered to active.
 
 23. `operstate`/`LOWER_UP`, ping и handshake не определяют active binding; expected local IPv4 определяет interface applicability.
 
@@ -2418,9 +2442,9 @@ may retain adds/deletes/replaces.
 
 49. Маршрут по умолчанию не считается ресурсом диагностики пересечений.
 
-50. OWNED routes и подтвержденное candidate/active binding state process-local, после restart начинаются пустыми и меняются только после verification.
+50. OWNED routes и подтвержденное candidate/active binding state process-local, после restart начинаются пустыми и меняются только после verification. Verified binding state commit не зависит от functional ProfileResult SUCCESS: verified zero-path FAIL также commit-ится.
 
-51. Process-local фиксация OWNED/active binding state выполняется до final enable forwarding, а не после.
+51. Process-local фиксация OWNED/active binding state выполняется после verification и до final enable forwarding; availability FAIL не блокирует commit verified fail-closed state.
 
 52. Само по себе фактическое состояние ядра не означает принятия ресурса во владение.
 
@@ -2453,7 +2477,7 @@ may retain adds/deletes/replaces.
 
 60. Desired policy профиля без active bindings не содержит binding-specific ACCEPT/NAT/UNICAST, сохраняя blackhole, selector guards и protected-destination REJECT.
 
-61. Profile `SUCCESS` требует как минимум один verified desired UNICAST RouteSpec для каждого protected destination. Partial prefix/list availability остается `SUCCESS`, если такой path существует; ноль paths -> `FAIL`, а при SAFE policy -> DEGRADED. Это не end-to-end health signal.
+61. Profile `SUCCESS` требует как минимум один verified desired UNICAST RouteSpec для каждого protected destination. Partial prefix/list availability остается `SUCCESS`, если такой path существует; zero paths -> functional `FAIL`, а при SAFE verified fail-closed state -> DEGRADED. Verification success и functional ProfileResult являются разными осями.
 
 62. Multiple candidates/active bindings у prefix/list не являются ошибкой. Конфликт managed selector namespaces является config error; duplicate interface name with conflicting ifindex is inventory error.
 
