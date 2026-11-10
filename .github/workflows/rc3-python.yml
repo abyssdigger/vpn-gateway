@@ -1,0 +1,28 @@
+name: RC3 Python validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Compile RC3 Python tree
+        run: python -m compileall -q design/RC3/code/python
+
+      - name: Run RC3 unit tests
+        run: python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
