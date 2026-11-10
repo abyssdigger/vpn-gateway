@@ -433,6 +433,14 @@ snapshot.
 reconciliation обязан materialize отсутствующий desired route. Это является механизмом
 failback и не требует ping, handshake health-check или отдельной transport-specific логики.
 
+EXP-009.1 дополнительно подтвердил отрицательным контролем: если preferred route остается
+в таблице и продолжает выигрывать по metric, фактическая потеря forwarding за этим route
+сама по себе не заставляет Linux выбрать существующий backup route с большей metric.
+Следовательно, metric задает предпочтение routes, но не является механизмом path-health
+detection. EXP-009.2 отдельно проверяет этот класс отказа для WireGuard peer при
+постоянном single-binding interface `wg0`; до его завершения OpenConnect evidence не
+считается доказательством WireGuard peer-failure semantics.
+
 ### 4.5. Смена привязок и остаточное окно реакции
 
 Появление, исчезновение или замена ifindex кандидата, изменение множества active concrete
@@ -929,7 +937,7 @@ onlink      = true
 
 Ни одна форма селектора не попадает в `RouteSpec`.
 
-EXP-009 подтвердил lifecycle multi-binding маршрутов на реальных point-to-point
+EXP-009.1 подтвердил lifecycle multi-binding маршрутов на реальных point-to-point
 interfaces: исчезновение concrete interface автоматически удаляет зависимый kernel route
 и оставляет доступным backup route с большей metric; повторное появление interface route
 не восстанавливает, поэтому reconciliation обязан materialize отсутствующий desired
@@ -2029,7 +2037,7 @@ route: daemon не использует ping или handshake как источ�
 route исчезает, и следующий существующий route с большей metric становится
 предпочтительным перед blackhole.
 
-EXP-009 подтвердил этот lifecycle end-to-end на реальной цели `172.21.201.19`: удаление
+EXP-009.1 подтвердил этот lifecycle end-to-end на реальной цели `172.21.201.19`: удаление
 preferred point-to-point interface автоматически убрало зависимый route, traffic продолжил
 идти через backup, а после возвращения interface preferred route потребовал повторной
 materialization daemon'ом.
@@ -2567,11 +2575,11 @@ RC3 поддерживает такую association только по наблю
   `-i vpns+` принимается и канонически сохраняется как `-i vpns+`; он совпадает с
   `vpns`, `vpns0`, `vpns1`, `vpnsX`, но не с `other0`; более ранний точный
   `-i vpns0` `ACCEPT` обходит последующее запрещающее `-i vpns+`.
-- EXP-009 показал, что healthy topology одного transport profile может содержать несколько
+- EXP-009.1 показал, что healthy topology одного transport profile может содержать несколько
   одновременных runtime interfaces. Поэтому exact и `+` относятся к селекторам
   single-binding, а `%` и explicit exact set — к селекторам multi-binding. Allowing
   rules, NAT и routes используют только exact concrete bindings.
-- EXP-009 также подтвердил lifecycle multi-binding route: исчезновение concrete interface
+- EXP-009.1 также подтвердил lifecycle multi-binding route: исчезновение concrete interface
   удаляет зависимый kernel route и позволяет выбрать backup route с большей metric; возврат
   interface сам route не восстанавливает. После повторного формирования `PeerBinding`
   reconciliation обязан materialize отсутствующий desired primary route.

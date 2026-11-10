@@ -39,9 +39,9 @@ Entry point: `vpn-gatewayd.py`.
 The package is under `vpn_gatewayd/`; tests are under `tests/`.
 
 
-## EXP-009 architectural impact
+## EXP-009.1 architectural impact
 
-EXP-009 invalidated the pre-EXP-009 assumption that every managed profile resolves to at
+EXP-009.1 invalidated the pre-EXP-009 assumption that every managed profile resolves to at
 most one concrete runtime interface. The current Python implementation still implements
 that older single-binding model.
 
@@ -58,6 +58,14 @@ The architecture now requires:
 Netlink events remain wakeup hints. A route is materialized from the current reconciliation
 snapshot: an active concrete binding for a selector single-binding, or a unique
 `PeerBinding` for a selector multi-binding.
+
+The OpenConnect negative control in EXP-009.1 also showed that route metrics do not detect
+a dead path: with the preferred route still present and winning by metric, disabling
+forwarding behind that path did not move traffic to the secondary route.
+
+EXP-009.2 remains pending and will test WireGuard peer failure with stable `wg0`. Until
+that experiment is complete, OpenConnect interface-lifecycle evidence is not treated as
+proof of WireGuard peer-failure/failover behavior.
 
 Profile-result semantics also changed: a partially available multi-binding profile is
 `SUCCESS` when at least one desired UNICAST path per protected destination is materialized
