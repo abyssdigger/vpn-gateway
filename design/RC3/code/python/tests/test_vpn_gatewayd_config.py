@@ -99,7 +99,7 @@ class ConfigTestCase(unittest.TestCase):
             """
         )
         self.assertFalse(cfg.enabled)
-        self.assertEqual(dict(cfg.profiles), ())
+        self.assertEqual(dict(cfg.profiles), {})
         self.assertEqual(cfg.common_allowed_sources, ())
 
     def test_global_disabled_still_rejects_unknown_top_level_key(self):
