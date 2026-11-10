@@ -74,6 +74,11 @@ class ValueObjectTests(unittest.TestCase):
         profile = vpng.VpnProfile(profile_config())
         self.assertEqual(profile.owned_routes, frozenset())
         self.assertIsNone(profile.committed_active_bindings)
+        self.assertEqual(dict(profile.committed_prefix_metrics), {})
+        self.assertEqual(
+            profile.committed_prefix_metric_cursor,
+            vpng.FIRST_UNICAST_METRIC,
+        )
 
     def test_commit_verified_state_is_defensive_and_allows_zero_path(self):
         profile = vpng.VpnProfile(profile_config())
@@ -91,6 +96,8 @@ class ValueObjectTests(unittest.TestCase):
         profile.commit_verified_state(
             routes=source,
             active_bindings=(),
+            prefix_metrics={},
+            prefix_metric_cursor=vpng.FIRST_UNICAST_METRIC,
         )
         source.clear()
 
@@ -107,13 +114,45 @@ class ValueObjectTests(unittest.TestCase):
         profile.commit_verified_state(
             routes=frozenset(),
             active_bindings=first,
+            prefix_metrics={first[0]: 10},
+            prefix_metric_cursor=20,
         )
         self.assertEqual(profile.committed_active_bindings, first)
+        self.assertEqual(dict(profile.committed_prefix_metrics), {first[0]: 10})
+
         profile.commit_verified_state(
             routes=frozenset(),
             active_bindings=second,
+            prefix_metrics={second[0]: 10, second[1]: 20},
+            prefix_metric_cursor=30,
         )
         self.assertEqual(profile.committed_active_bindings, second)
+        self.assertEqual(
+            dict(profile.committed_prefix_metrics),
+            {second[0]: 10, second[1]: 20},
+        )
+        self.assertEqual(profile.committed_prefix_metric_cursor, 30)
+
+    def test_prefix_commit_rejects_incomplete_or_duplicate_allocator_state(self):
+        profile = vpng.VpnProfile(profile_config())
+        first = vpng.InterfaceBinding("vpns0", 7)
+        second = vpng.InterfaceBinding("vpns1", 8)
+
+        with self.assertRaises(ValueError):
+            profile.commit_verified_state(
+                routes=frozenset(),
+                active_bindings=(first,),
+                prefix_metrics={},
+                prefix_metric_cursor=10,
+            )
+
+        with self.assertRaises(ValueError):
+            profile.commit_verified_state(
+                routes=frozenset(),
+                active_bindings=(first, second),
+                prefix_metrics={first: 10, second: 10},
+                prefix_metric_cursor=20,
+            )
 
 
 if __name__ == "__main__":
