@@ -10,7 +10,7 @@ For `prefix+`:
 - if several new bindings are first observed in one snapshot, only that new group uses
   bytewise ASCII as a deterministic tie-breaker;
 - INPUT/FORWARD exact blocks, VPNG-INGRESS and NAT follow this stable process-local order;
-- a lexically earlier new interface therefore does not cause existing exact rules to move;
+- a lexically earlier new interface therefore does not change the relative desired order of existing exact rules; a protective full-policy restore may still rebuild the owned chain transactionally;
 - status exposes the order as useful diagnostic evidence of first acceptance by the
   current daemon process;
 - the order is not persisted across restart and is not a route-priority guarantee.

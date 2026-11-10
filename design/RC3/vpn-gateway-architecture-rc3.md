@@ -354,7 +354,9 @@ interfaces архитектура не задает.
 
 `active_order` используется для INPUT/FORWARD exact blocks, `VPNG-INGRESS`, NAT,
 status output и обхода новых prefix-bindings при выделении метрик. Поэтому появление
-нового prefix-interface не переставляет существующие exact rules/NAT entries.
+нового prefix-interface не меняет относительный порядок существующих exact blocks/rules
+в требуемой policy. Protective-barrier restore при этом по-прежнему может транзакционно
+пересобрать daemon-owned chain целиком.
 
 Для `prefix+` этот порядок не является гарантией route preference. Он также не является
 персистентной историей создания interfaces: после restart daemon строит новый process-local
@@ -1306,10 +1308,11 @@ ctstate ESTABLISHED,RELATED
     REJECT --reject-with icmp-host-prohibited
 ```
 
-Exact blocks идут в нормативном `active_order` §4.3. Для `prefix+` добавление новой
-binding дописывает новый exact block после уже принятых bindings и не меняет относительный
-порядок существующих blocks. После всех exact blocks цепочка возвращает управление через
-`RETURN`.
+Exact blocks идут в нормативном `active_order` §4.3. Для `prefix+` в требуемой policy
+block новой binding располагается после уже принятых bindings и не меняет относительный
+порядок существующих blocks. Транзакционное применение полной цепочки не считается
+изменением этого логического порядка. После всех exact blocks цепочка возвращает
+управление через `RETURN`.
 
 Таким образом, удаленная сторона VPN не может инициировать новое соединение с самим
 шлюзом через active managed interface. Разрешен только ответный
@@ -1330,8 +1333,8 @@ Traffic вне защитных пространств имен после daemo
 ### 9.3. Семантика FORWARD
 
 `VPNG-INGRESS` сначала содержит exact block для каждого уникального active concrete
-interface в нормативном `active_order` §4.3. Для `prefix+` существующие blocks не
-переставляются при добавлении новой binding:
+interface в нормативном `active_order` §4.3. Для `prefix+` добавление новой binding не
+меняет относительный порядок уже существующих blocks:
 
 ```text
 -i <точный-интерфейс>
@@ -2479,7 +2482,7 @@ may retain adds/deletes/replaces.
 
 21. Идентичность concrete binding включает exact name + ifindex; повторное создание имени с новым ifindex является binding transition.
 
-22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Для binding-specific policy применяется active_order: exact single; prefix process-local append-only order surviving bindings; explicit list config order filtered to active. Появление нового prefix-interface не переставляет existing exact firewall/NAT blocks. Prefix route metrics от active_order не определяют гарантированный priority.
+22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Для binding-specific policy применяется active_order: exact single; prefix process-local append-only order surviving bindings; explicit list config order filtered to active. Появление нового prefix-interface не меняет relative desired order существующих exact firewall/NAT blocks; full protective restore может технически пересобрать chain целиком. Prefix route metrics от active_order не определяют гарантированный priority.
 
 23. `operstate`/`LOWER_UP`, ping и handshake не определяют active binding; interface applicability определяется local IPv4 membership в `profile.network`.
 
