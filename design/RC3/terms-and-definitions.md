@@ -33,7 +33,7 @@
 | prefix selector | префиксный селектор | Форма `prefix+`: textual prefix discovery с 0..N simultaneous candidates; active exact names сортируются ASCII-лексикографически для route metrics. |
 | explicit exact list | явный упорядоченный список точных имен | Непустой массив уникальных exact interface names. Порядок элементов задает стабильные route-priority slots. |
 | guard namespace | защитное пространство имен | Множество interface names, которое selector заранее закрывает deny-only firewall guard: exact name, textual prefix либо exact elements списка. |
-| concrete binding | точная привязка интерфейса | Идентичность active concrete interface как пары exact `name + ifindex`; applicability дополнительно требует configured `local_address`. |
+| concrete binding | точная привязка интерфейса | Идентичность active concrete interface как пары exact `name + ifindex`; applicability дополнительно требует хотя бы один local IPv4 address внутри `profile.network`. |
 | binding set | множество привязок | Совокупность active concrete bindings профиля в одном reconciliation snapshot. |
 | binding transition | смена привязок | Изменение candidate/active binding identity или set; active-set/identity change может быть policy-changing transition. |
 | policy-changing transition | переход, меняющий политику | Смена binding set, меняющая набор binding-specific resources ядра. |

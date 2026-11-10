@@ -320,13 +320,13 @@ Candidate определяется только формой селектора:
 - `prefix+` — все существующие interfaces с textual prefix;
 - explicit list — существующие interfaces, чьи exact names перечислены в списке.
 
-Candidate становится **active concrete binding**, только если на нем присутствует
-ожидаемый `local_address` профиля.
+Candidate становится **active concrete binding**, только если на нем присутствует хотя бы
+один local IPv4 address, принадлежащий `profile.network`.
 
 Несколько candidates/active bindings для `prefix+` и explicit list являются штатным
 состоянием. Понятие selector `AMBIGUOUS` для этого больше не требуется.
 
-Candidate без ожидаемого `local_address`:
+Candidate без local IPv4 address из `profile.network`:
 
 - остается видимым в status;
 - не получает exact `ACCEPT`, NAT или `proto 202` route;
@@ -416,16 +416,17 @@ EXP-009 подтвердил:
 
 - появление или исчезновение active concrete binding;
 - замена `name + ifindex` active binding;
-- появление или исчезновение ожидаемого `local_address`, меняющее active set;
+- добавление/удаление local IPv4, меняющее принадлежность candidate к `profile.network`
+  и тем самым active set;
 - изменение metric assignment из-за изменения active set префиксного селектора.
 
 При таком переходе daemon по возможности сначала приводит `ip_forward=0`, затем
 применяет и проверяет firewall/NAT, routes и только после завершенной проверки возвращает
 forwarding.
 
-Появление matching candidate без ожидаемого `local_address` само по себе не открывает
-разрешающий path: guard уже существует из config, а binding-specific resources для
-candidate отсутствуют.
+Появление matching candidate без local IPv4 из `profile.network` само по себе не
+открывает разрешающий path: guard уже существует из config, а binding-specific resources
+для candidate отсутствуют.
 
 Для `prefix+` guard использует `-i prefix+`. Для explicit list guard содержит
 отдельное exact deny-правило каждого имени. Exact active blocks выполняются раньше guard.
@@ -817,7 +818,8 @@ active bindings и desired state не пересчитываются между 
 2. прочитать один interface/address snapshot;
 3. проверить `disable_ipv6=1` на всех существующих interfaces защитных пространств
    имен управляемых селекторов;
-4. построить candidates и active concrete bindings по `local_address`;
+4. построить candidates и active concrete bindings по membership local IPv4 в
+   `profile.network`;
 5. построить full desired firewall/NAT policy;
 6. применить и проверить `filter`, затем `nat`;
 7. прочитать строгий route snapshot, построить и проверить route plan;
@@ -1472,14 +1474,12 @@ common_allowed_sources = [
 [vpn.primary]
 interface = "vpns+"
 network = "172.20.130.0/29"
-local_address = "172.20.130.1"
 routes = ["10.0.0.0/8"]
 allowed_sources = ["10.200.201.0/24"]
 
 [vpn.backup]
 interface = "wg0"
 network = "172.20.126.0/29"
-local_address = "172.20.126.1"
 routes = [
     "100.64.0.0/10",
     "192.168.0.0/16",
@@ -1493,7 +1493,6 @@ Explicit ordered multi-interface profile:
 [vpn.explicit]
 interface = ["vpnA", "vpnB", "vpnC"]
 network = "172.20.140.0/29"
-local_address = "172.20.140.1"
 routes = ["172.21.0.0/16"]
 allowed_sources = []
 ```
@@ -1519,13 +1518,13 @@ common_allowed_sources      array[string], required
 [vpn.<profile>]
 interface                   string | array[string], required; exact / prefix+ / ordered exact list
 network                     string, required
-local_address               string, required
 routes                      array[string], required
 allowed_sources             array[string], required
 ```
 
-Ключ `peers` больше не входит в RC3 schema и является unknown key. Селектор `prefix%`
-больше не поддерживается и является invalid interface selector.
+Ключи `peers` и `local_address` больше не входят в RC3 schema и являются unknown
+profile keys. Селектор `prefix%` больше не поддерживается и является invalid interface
+selector.
 
 Profile id:
 
@@ -1594,8 +1593,8 @@ default
 all
 ```
 
-Exact selector имеет не более одного candidate. При наличии expected `local_address`
-candidate становится active и получает metric 10.
+Exact selector имеет не более одного candidate. При наличии хотя бы одного local IPv4 из
+`profile.network` candidate становится active и получает metric 10.
 
 ### 15.2. Префиксный селектор `+`
 
@@ -1672,20 +1671,25 @@ invalid. Conflict только с unmanaged description не блокирует 
 
 Для каждого profile:
 
-- `network` — canonical IPv4 CIDR;
+- `network` — canonical IPv4 CIDR transport address space;
 - `/32` запрещен, минимально допустима `/31`;
-- `local_address` — IPv4 внутри `network`;
 - selector namespaces managed profiles не пересекаются;
 - protected `routes` не пересекаются с managed `network`.
 
-`network` является объявленной transport network и используется в structural
-fail-closed policy, включая `VPNG-RESERVED`.
+`network` имеет две связанные функции:
 
-`local_address` является transport-agnostic readiness predicate concrete interface:
-candidate считается active только при наличии этого exact local IPv4. Архитектура
-поддерживает transports, которые могут обеспечить стабильный ожидаемый local IPv4 на
-managed concrete interfaces. Если transport этого не гарантирует, он несовместим с
-текущей RC3 binding model без отдельного расширения.
+1. structural fail-closed protection, включая `VPNG-RESERVED`;
+2. transport-agnostic interface applicability predicate.
+
+Matching candidate считается active concrete binding, если в его kernel inventory есть
+хотя бы один local IPv4 address, принадлежащий `profile.network`.
+
+Проверяется **host IPv4 membership**, а не фактическая prefix length адреса на interface.
+P2P/tunnel transport может представить local endpoint как /32 даже при более широкой
+логической `profile.network`; это не делает candidate inactive.
+
+Конкретный host address внутри transport network является ответственностью transport
+configuration и отдельно в VPN-GATE не задается.
 
 Remote point-to-point address, peer address и handshake в config отсутствуют и не
 участвуют в active binding resolution.
@@ -1943,7 +1947,8 @@ Point-to-point peer evidence может быть сохранено диагно
 domain input для route derivation.
 
 Exact active set содержит максимум одну binding. Prefix/list допускают несколько.
-Active predicate: candidate содержит configured `local_address`.
+Active predicate: candidate содержит хотя бы один local IPv4 address внутри configured
+`network`.
 
 `VpnProfile` хранит immutable config и process-local verified OWNED/binding state; kernel
 самостоятельно не читает.
@@ -2273,6 +2278,8 @@ Implementation update must include at least:
 - prefix/list may resolve to multiple simultaneous active bindings;
 - no `AMBIGUOUS` selector state for normal multiplicity;
 - `peers` removed from config/domain model;
+- `local_address` removed from config/domain model; interface applicability derives from
+  local IPv4 membership in `network`;
 - transport peer-association domain object removed;
 - point-to-point remote endpoint removed from route association;
 - desired UNICAST is direct `dev exact-interface proto 202`, `via=None`,
@@ -2360,7 +2367,7 @@ may retain adds/deletes/replaces.
 
 18. Managed selectors попарно не пересекаются по guard namespace; overlap является fatal config error.
 
-19. Candidate становится active concrete binding только при наличии configured `local_address`; multiple active bindings у prefix/list являются штатными.
+19. Candidate становится active concrete binding только при наличии хотя бы одного local IPv4 address внутри configured `profile.network`; multiple active bindings у prefix/list являются штатными.
 
 20. Transport peer address, handshake, endpoint reachability и point-to-point remote evidence не являются route/binding truth VPN-GATE.
 
@@ -2368,7 +2375,7 @@ may retain adds/deletes/replaces.
 
 22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Все binding-specific resources одного profile materialize в едином normative active_order: exact single; prefix bytewise ASCII; explicit list config order filtered to active.
 
-23. `operstate`/`LOWER_UP`, ping и handshake не определяют active binding; expected local IPv4 определяет interface applicability.
+23. `operstate`/`LOWER_UP`, ping и handshake не определяют active binding; interface applicability определяется local IPv4 membership в `profile.network`.
 
 24. Daemon-owned UNICAST route является direct `dev <exact-interface>` route с `via=None`, `onlink=False`, `proto=202`; transport peer selection находится вне route model.
 
@@ -2558,7 +2565,7 @@ may retain adds/deletes/replaces.
     кодов является контрактом реализации/интерфейса после публикации, а свободный текст
     `detail` не участвует в идентичности/дедупликации.
 
-90. Префиксный селектор резервирует весь textual prefix namespace deny-only guard; matching interface без expected local address остается guard-blocked и не переводит профиль в ambiguity.
+90. Префиксный селектор резервирует весь textual prefix namespace deny-only guard; matching interface без local IPv4 из `profile.network` остается guard-blocked и не становится active.
 
 91. Остаточное окно «событие -> реакция» является явной границей модели угроз доверенного
     хоста: недоверенные процессы не имеют `CAP_NET_ADMIN` и не управляют жизненным циклом
