@@ -1,3 +1,21 @@
+## 2026-11-10 — RC3 prefix metrics become a cyclic technical allocator
+
+The architecture no longer derives `prefix+` route priority from ASCII interface-name
+ordering.
+
+- exact selector keeps metric 10;
+- explicit ordered list keeps administrator-defined stable priority slots;
+- `prefix+` uses a process-local cyclic allocator for unique technical UNICAST metrics;
+- continuous `ConcreteBinding(name, ifindex)` keeps its allocated metric;
+- newly appearing prefix bindings do not renumber existing routes;
+- all daemon-owned UNICAST metrics are strictly lower than `BLACKHOLE_METRIC`;
+- allocator wraps to the first metric, skips occupied values and fails closed only if all
+  valid slots are exhausted;
+- allocator state is committed only after successful verification and is not persisted
+  across restart;
+- ASCII ordering remains only for canonical policy/status construction and reproducible
+  traversal of simultaneously new bindings; it is not a route-priority contract.
+
 ## 2026-11-10 — RC3 post-simplification code cleanup
 
 A focused code audit verified initialization, discovery, monitoring and fail-closed

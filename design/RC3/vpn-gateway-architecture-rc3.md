@@ -269,15 +269,15 @@ Netlink-событие является только сигналом к reconci
 
 1. множество candidate runtime-интерфейсов;
 2. защитное пространство имен для deny-only firewall guard;
-3. для множественных форм — детерминированный порядок route preference.
+3. форму назначения метрик UNICAST-маршрутам.
 
 Нормативная семантика:
 
-| Форма | Candidates | Защитный guard | Порядок route preference |
+| Форма | Candidates | Защитный guard | Семантика метрик |
 |---|---|---|---|
-| exact `name` | только `name` | exact `name` | единственный active interface |
-| `prefix+` | все имена с началом `prefix`, включая exact `prefix` | `-i prefix+` | ASCII-лексикографический порядок active exact names текущего snapshot |
-| explicit list | перечисленные exact names | exact guard каждого имени | порядок элементов конфигурации |
+| exact `name` | только `name` | exact `name` | единственный active interface получает metric 10 |
+| `prefix+` | все имена с началом `prefix`, включая exact `prefix` | `-i prefix+` | уникальные технические metrics выделяются динамически; приоритет между interfaces не гарантируется |
+| explicit list | перечисленные exact names | exact guard каждого имени | порядок элементов конфигурации задает стабильный route preference |
 
 Завершающий `+` использует подтвержденную EXP-005 textual-prefix семантику iptables.
 Оператор `%` больше не является частью конфигурационной грамматики RC3.
@@ -332,21 +332,23 @@ Candidate без local IPv4 address из `profile.network`:
 - не получает exact `ACCEPT`, NAT или `proto 202` route;
 - остается закрыт guard-правилом селектора.
 
-Точный селектор естественно дает 0 или 1 candidate. Для префикса active bindings
-упорядочиваются ASCII-лексикографически по exact interface name. Для explicit list
-приоритет определяется позицией exact name в конфигурации.
+Точный селектор естественно дает 0 или 1 candidate. Для explicit list route preference
+определяется позицией exact name в конфигурации. Для `prefix+` приоритет между active
+interfaces архитектура не задает.
 
 `operstate`, `LOWER_UP`, ping, handshake и transport-specific peer state не являются
 источником binding truth.
 
-Для всех binding-specific resources используется один нормативный `active_order`:
+Для детерминированного построения и сравнения binding-specific policy используется
+нормативный `active_order`:
 
 - exact — единственный active interface;
 - `prefix+` — case-sensitive bytewise ASCII order active exact names;
 - explicit list — config order, отфильтрованный до currently active elements.
 
-Один и тот же `active_order` используется для route metrics, INPUT/FORWARD exact blocks,
-`VPNG-INGRESS`, NAT MASQUERADE rules и status output.
+`active_order` используется для INPUT/FORWARD exact blocks, `VPNG-INGRESS`, NAT,
+status output и детерминированного обхода новых prefix-bindings при выделении метрик.
+Для `prefix+` этот порядок **не является гарантией route preference**.
 
 ### 4.4. Materialization маршрутов по active binding set
 
@@ -363,28 +365,22 @@ proto       = 202
 onlink      = false
 ```
 
-Metric определяется формой селектора.
+Для всех daemon-owned UNICAST действует общий инвариант:
+
+```text
+0 < metric < BLACKHOLE_METRIC
+BLACKHOLE_METRIC = 65536
+ROUTE_METRIC_STEP = 10
+FIRST_UNICAST_METRIC = 10
+```
+
+Тем самым любой требуемый UNICAST-маршрут имеет меньшую metric, чем защитный BLACKHOLE.
 
 Exact:
 
 ```text
 единственный active interface -> metric 10
 ```
-
-`prefix+`:
-
-```text
-active exact names текущего snapshot
--> case-sensitive bytewise ASCII sort
--> 10,20,30...
-```
-
-Сортировка сравнивает exact interface names по последовательности ASCII code values,
-не зависит от locale и не использует natural/numeric suffix ordering. Например,
-`vpns10` предшествует `vpns9`; это нормативно, а не ошибка сортировки.
-
-Если active set префиксного селектора изменился, metrics пересчитываются из текущего
-snapshot. История появления interfaces не является источником истины.
 
 Explicit list:
 
@@ -395,7 +391,43 @@ interface[2] -> metric 30
 ...
 ```
 
-Отсутствующий элемент списка не сдвигает metric следующих элементов.
+Отсутствующий элемент списка не сдвигает metric следующих элементов. Конфигурация
+недопустима, если metric любого slot будет `>= BLACKHOLE_METRIC`.
+
+Для `prefix+` metric является техническим уникальным идентификатором одновременного
+UNICAST-маршрута, а не гарантированным приоритетом interface.
+
+Daemon хранит только во время жизни процесса подтвержденное распределение:
+
+```text
+ConcreteBinding(name, ifindex) -> metric
+next_metric_cursor
+```
+
+Правила allocator:
+
+1. непрерывно active binding сохраняет выделенную metric;
+2. исчезнувшая binding освобождает metric после успешной фиксации нового состояния;
+3. новая binding получает следующее свободное значение начиная с `next_metric_cursor`;
+4. рассматриваются только значения `FIRST_UNICAST_METRIC + N * ROUTE_METRIC_STEP`,
+   строго меньшие `BLACKHOLE_METRIC`;
+5. при достижении верхней границы поиск циклически продолжается с
+   `FIRST_UNICAST_METRIC`;
+6. уже занятая metric пропускается; немедленное заполнение более ранней «дырки» не
+   требуется;
+7. если полный цикл не нашел свободного значения, распределение метрик завершается
+   ошибкой;
+8. новая binding с тем же именем, но новым `ifindex`, не наследует прежнюю metric;
+9. после restart распределение начинается заново и прежние metrics не гарантируются.
+
+Если в одном snapshot одновременно появились несколько новых prefix-bindings, они
+обрабатываются в `active_order` только для воспроизводимого распределения внутри
+одного цикла. Это не превращает ASCII-порядок имен в обещанный route preference.
+
+Предварительно рассчитанное распределение и новый cursor входят в snapshot согласования,
+но process-local allocator state фиксируется только после успешной проверки полного
+требуемого состояния. При неуспешном применении/verification прежнее подтвержденное
+распределение и cursor не изменяются.
 
 EXP-009 подтвердил:
 
@@ -418,7 +450,8 @@ EXP-009 подтвердил:
 - замена `name + ifindex` active binding;
 - добавление/удаление local IPv4, меняющее принадлежность candidate к `profile.network`
   и тем самым active set;
-- изменение metric assignment из-за изменения active set префиксного селектора.
+- изменение metric, назначенной существующей active binding, если такое изменение
+  вообще требуется корректирующим согласованием.
 
 При таком переходе daemon по возможности сначала приводит `ip_forward=0`, затем
 применяет и проверяет firewall/NAT, routes и только после завершенной проверки возвращает
@@ -798,6 +831,8 @@ ReconciliationSnapshot
     interfaces
     selector_candidates_by_profile
     active_bindings_by_profile
+    prefix_metric_allocations_by_profile
+    prefix_metric_cursor_by_profile
     desired_routes_by_profile
     desired_full_policy
 ```
@@ -806,8 +841,8 @@ Point-to-point remote endpoints и transport peer state не являются в
 derivation.
 
 Из snapshot daemon один раз строит full desired firewall/NAT policy и routes. Candidates,
-active bindings и desired state не пересчитываются между построением, применением и
-проверкой одного цикла. Snapshot не означает атомарность kernel operations; он
+active bindings, предварительное распределение prefix metrics и desired state не
+пересчитываются между построением, применением и проверкой одного цикла. Snapshot не означает атомарность kernel operations; он
 гарантирует внутреннюю согласованность оркестрации.
 
 ### 8.2. Применение при запуске
@@ -866,7 +901,7 @@ type        = UNICAST
 via         = None
 interface   = exact active interface
 proto       = 202
-metric      = selector-derived priority
+metric      = selector/list-derived or allocated prefix metric
 onlink      = false
 ```
 
@@ -1139,7 +1174,8 @@ end-to-end transport reachability. Ping, handshake и transport peer health не
 - candidates;
 - active concrete bindings;
 - desired/verified direct `UNICAST RouteSpec` с interface/metric;
-- для explicit list — configured order; для prefix — текущий deterministic sorted order.
+- для explicit list — configured order;
+- для prefix — текущие binding -> metric allocations; порядок приоритета не обещается.
 
 Ручной `sysctl -w net.ipv4.ip_forward=0` не является административной паузой; чистый
 reconciliation возвращает daemon-owned desired value.
@@ -1615,9 +1651,10 @@ Deny-only guard использует проверенную EXP-005 форму:
 -i prefix+
 ```
 
-Active exact names сортируются case-sensitive bytewise ASCII в каждом snapshot; этот
-порядок задает metrics 10,20,30... и не зависит от locale, natural-sort rules или
-истории появления.
+Active exact names сортируются case-sensitive bytewise ASCII для канонического
+построения policy/status и воспроизводимого обхода новых bindings allocator'ом. Этот
+порядок не задает гарантированный route preference; metrics prefix-bindings выделяются
+по правилам §4.4.
 
 ### 15.3. Явный упорядоченный список точных имен
 
@@ -1761,12 +1798,16 @@ UNICAST proto 202 создается как direct route на каждый activ
 Metric contract:
 
 ```text
+для всех UNICAST:
+    0 < metric < BLACKHOLE_METRIC
+
 exact:
     active interface -> 10
 
 prefix+:
-    ASCII-sort текущих active exact names
-    -> 10,20,30...
+    unique metric from cyclic process-local allocator
+    continuous binding keeps its metric
+    route preference between interfaces is not guaranteed
 
 explicit ordered list:
     config index 0,1,2...
@@ -1774,14 +1815,22 @@ explicit ordered list:
     absent list element не сдвигает следующие metrics
 ```
 
-Для prefix selector изменение active set может изменить metrics оставшихся interfaces;
-это expected desired-state transition и reconciliation canonicalizes routes к новому
-snapshot. Для explicit list priority slots стабильны.
+Для exact и explicit list диапазон проверяется при config validation; любой вычисляемый
+UNICAST metric обязан быть строго меньше `BLACKHOLE_METRIC`.
 
-Для exact и explicit list metric range проверяется при config validation. Для `prefix+`
-число active interfaces известно только из runtime inventory, поэтому range проверяется
-при построении desired routes каждого reconciliation snapshot. Overflow является ошибкой
-reconciliation/domain projection: wrap, saturation и silent truncation запрещены.
+Для `prefix+` capacity определяется текущими `BLACKHOLE_METRIC`,
+`FIRST_UNICAST_METRIC` и `ROUTE_METRIC_STEP`. При значениях 65536/10/10 доступны
+6553 одновременных metric slots. Это не архитектурный предел: изменение констант может
+расширить пространство без изменения модели allocator.
+
+Allocator не перенумеровывает непрерывно active bindings при появлении/исчезновении
+соседних interfaces. Освобожденные slots могут быть использованы после циклического
+возврата cursor. Исчерпание всех допустимых slots является ошибкой построения требуемого
+маршрутного состояния: на startup это hard failure, во время исполнения daemon не
+открывает новый путь и использует обычный fail-closed/isolation path.
+
+Metric сама по себе не является health-check и для `prefix+` не является обещанием
+семантического приоритета между interfaces.
 
 EXP-009 подтвердил interface lifecycle, direct OpenConnect route без `via` и отсутствие
 health-aware failover только по metric. Transport-specific peer health не входит в route
@@ -1803,7 +1852,9 @@ contribution. Остальные paths продолжают быть desired и 
 профиль может оставаться `SUCCESS`.
 
 Изменение candidate set отражается в status. Изменение active binding identity/set либо
-selector-derived metric assignment является policy-changing transition.
+изменение metric уже существующей active binding является policy-changing transition.
+Обычное добавление новой prefix-binding получает новую свободную metric без
+перенумерации существующих bindings.
 
 Transport peer inventory, handshake, remote endpoint reachability и internal transport
 routing не входят в VPN-GATE state model.
@@ -1953,10 +2004,11 @@ Active predicate: candidate содержит хотя бы один local IPv4 a
 самостоятельно не читает.
 
 `BLACKHOLE` выводится из config. `UNICAST` выводится из protected destination +
-active concrete binding + selector-derived metric.
+active concrete binding + metric semantics соответствующей формы selector. Для
+`prefix+` metric зависит также от подтвержденного process-local allocator state.
 
 Один immutable `ReconciliationSnapshot` содержит inventory, candidates, active bindings,
-desired routes и full desired policy.
+предварительное распределение prefix metrics/cursor, desired routes и full desired policy.
 
 ### 23.2. Модель маршрутов
 
@@ -1992,18 +2044,25 @@ Process-local state хранит:
 
 - verified OWNED routes;
 - active concrete binding identities в normative `active_order`, достаточные для
-  обнаружения policy-changing transition.
+  обнаружения policy-changing transition;
+- для каждого `prefix+` profile — подтвержденное отображение
+  `ConcreteBinding(name, ifindex) -> metric` и `next_metric_cursor`.
 
 Current candidate set остается частью immutable reconciliation snapshot, но отдельно как
 committed process-local state не хранится.
 
-State не сохраняется на диск и не является source of truth. Каждый reconciliation заново
-читает inventory и строит current state. OWNED/binding state фиксируется только после
-successful verification.
+Allocator state не сохраняется на диск и не является источником сетевой истины. После
+restart cleanup удаляет `proto 202`, а allocator начинается с пустого отображения и
+`FIRST_UNICAST_METRIC`.
 
-Commit verified binding state не зависит от functional `ProfileResult`: verified
-zero-path state с `ProfileResult=FAIL` также commit-ится. При actual verification error
-state не принимается как verified.
+Каждый reconciliation заново читает inventory и строит current state. Предварительное
+распределение prefix metrics вычисляется из последнего verified allocator state и current
+active bindings; само распределение и cursor фиксируются только после successful
+verification полного требуемого состояния.
+
+Commit verified binding/allocator state не зависит от functional `ProfileResult`:
+verified zero-path state с `ProfileResult=FAIL` также commit-ится. При actual
+verification error прежние verified binding/allocator state сохраняются.
 
 ### 23.4. Граница взаимодействия с ядром
 
@@ -2284,8 +2343,11 @@ Implementation update must include at least:
 - point-to-point remote endpoint removed from route association;
 - desired UNICAST is direct `dev exact-interface proto 202`, `via=None`,
   `onlink=False`;
-- prefix metrics derive from ASCII-sorted current active names;
-- explicit-list metrics derive from stable configured slots;
+- prefix metrics use a cyclic process-local allocator; continuous bindings retain
+  allocated metrics, all UNICAST metrics remain below BLACKHOLE_METRIC, and no prefix
+  route-priority order is guaranteed;
+- explicit-list metrics derive from stable configured slots and must remain below
+  BLACKHOLE_METRIC;
 - full policy/NAT derives from all active exact interfaces;
 - snapshot stores candidates + active bindings; committed transition state stores only verified active bindings;
 - `ProfileResult` checks verified UNICAST path existence, not merely exact desired-set
@@ -2361,9 +2423,9 @@ may retain adds/deletes/replaces.
 
 15. Exact selector имеет не более одной candidate binding; `prefix+` и explicit list допускают несколько simultaneous candidates/active bindings без состояния ambiguity.
 
-16. `prefix+` discovery охватывает весь textual prefix, включая exact name `prefix`; active exact names сортируются case-sensitive bytewise ASCII, без locale/natural sorting, для route metrics.
+16. `prefix+` discovery охватывает весь textual prefix, включая exact name `prefix`; active exact names могут сортироваться case-sensitive bytewise ASCII для канонического построения policy/status и воспроизводимого обхода allocator, но этот порядок не задает гарантированный route preference.
 
-17. Explicit list непустой, содержит уникальные valid exact names и сохраняет config order как route-priority slots; отсутствующий элемент не сдвигает metrics следующих.
+17. Explicit list непустой, содержит уникальные valid exact names и сохраняет config order как route-priority slots; отсутствующий элемент не сдвигает metrics следующих; каждая вычисляемая UNICAST metric обязана быть < BLACKHOLE_METRIC.
 
 18. Managed selectors попарно не пересекаются по guard namespace; overlap является fatal config error.
 
@@ -2373,7 +2435,7 @@ may retain adds/deletes/replaces.
 
 21. Идентичность concrete binding включает exact name + ifindex; повторное создание имени с новым ifindex является binding transition.
 
-22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Все binding-specific resources одного profile materialize в едином normative active_order: exact single; prefix bytewise ASCII; explicit list config order filtered to active.
+22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Для канонического построения binding-specific policy применяется active_order: exact single; prefix bytewise ASCII; explicit list config order filtered to active. Prefix route metrics от active_order не выводятся.
 
 23. `operstate`/`LOWER_UP`, ping и handshake не определяют active binding; interface applicability определяется local IPv4 membership в `profile.network`.
 
@@ -2412,7 +2474,7 @@ may retain adds/deletes/replaces.
 
 35. NAT проверяется раньше восстановления маршрутов proto 202 через новую привязку.
 
-36. Изменение active binding set/identity либо selector-derived metric assignment является policy-changing transition. Candidate-only change без active-resource change не требует тяжелого IPv4 barrier только после successful current IPv6 prerequisite verification.
+36. Изменение active binding set/identity либо metric существующей active binding является policy-changing transition. Новая prefix-binding получает свободную metric без перенумерации непрерывно active bindings. Candidate-only change без active-resource change не требует тяжелого IPv4 barrier только после successful current IPv6 prerequisite verification.
 
 37. Остаточное окно «событие ядра -> реакция daemon» существует и документировано;
     запрещающие правила селекторов закрывают входящий трафик нового непривязанного
@@ -2430,7 +2492,7 @@ may retain adds/deletes/replaces.
 
 41. Один immutable snapshot interfaces/candidates/active bindings повторно используется на всех фазах построения, применения и проверки одного цикла.
 
-42. BLACKHOLE RouteSpec выводится только из config. UNICAST RouteSpec выводится из protected destination + active concrete binding + selector-derived metric.
+42. BLACKHOLE RouteSpec выводится только из config. UNICAST RouteSpec выводится из protected destination + active concrete binding + metric semantics selector form; для `prefix+` используется verified process-local allocator state.
 
 43. `RouteSpec.interface` для desired UNICAST содержит exact active interface name; `via=None`, `onlink=False`; selector value туда не попадает.
 
@@ -2449,9 +2511,9 @@ may retain adds/deletes/replaces.
 
 49. Маршрут по умолчанию не считается ресурсом диагностики пересечений.
 
-50. OWNED routes и подтвержденное active binding state process-local, после restart начинаются пустыми и меняются только после verification. Current candidates заново выводятся из каждого snapshot и отдельно не commit-ятся. Verified binding state commit не зависит от functional ProfileResult SUCCESS: verified zero-path FAIL также commit-ится.
+50. OWNED routes, подтвержденное active binding state и prefix metric allocator state process-local, после restart начинаются пустыми и меняются только после verification. Current candidates заново выводятся из каждого snapshot и отдельно не commit-ятся. Verified state commit не зависит от functional ProfileResult SUCCESS: verified zero-path FAIL также commit-ится.
 
-51. Process-local фиксация OWNED/active binding state выполняется после verification и до final enable forwarding; availability FAIL не блокирует commit verified fail-closed state.
+51. Process-local фиксация OWNED/active binding/prefix allocator state выполняется после verification и до final enable forwarding; availability FAIL не блокирует commit verified fail-closed state.
 
 52. Само по себе фактическое состояние ядра не означает принятия ресурса во владение.
 
@@ -2532,7 +2594,7 @@ may retain adds/deletes/replaces.
 78. Защищаемые маршруты управляемых профилей глобально не пересекаются и не пересекают
     управляемые vpn.network.
 
-79. Metrics: exact active interface = 10; prefix active names case-sensitive bytewise ASCII sort -> 10,20,30... current snapshot; explicit list slots -> 10,20,30... config order без сдвига отсутствующих элементов. Exact/list range валидируется из config; prefix range проверяется runtime при desired-route derivation; overflow запрещен.
+79. Metrics: все daemon-owned UNICAST имеют 0 < metric < BLACKHOLE_METRIC. Exact = 10. Explicit list использует slots 10,20,30... по config order без сдвига отсутствующих элементов и валидируется против BLACKHOLE_METRIC. Prefix использует циклический process-local allocator с шагом ROUTE_METRIC_STEP: непрерывно active binding сохраняет metric, занятые значения пропускаются, при верхней границе поиск возвращается к FIRST_UNICAST_METRIC, при полном исчерпании slots возникает ошибка; гарантированного route preference между prefix-bindings нет.
 
 80. `common_allowed_sources` объединяется с `profile.allowed_sources`; отрицательных правил
     и исключений нет.
@@ -2596,5 +2658,5 @@ may retain adds/deletes/replaces.
 98. `SAFE` полной политики требует проверки требуемого NAT и полного требуемого фильтра для
     одного и того же неизменяемого snapshot согласования.
 
-99. Операционный status сообщает selector form, candidates, active concrete bindings, selector-derived ordering/metrics и ProfileResult отдельно от lifecycle state ACTIVE.
+99. Операционный status сообщает selector form, candidates, active concrete bindings, interface/metric для desired/verified UNICAST и ProfileResult отдельно от lifecycle state ACTIVE; для `prefix+` отображаемые metrics не трактуются как гарантированный приоритет interfaces.
 ```
