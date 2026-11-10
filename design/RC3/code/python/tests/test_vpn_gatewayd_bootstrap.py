@@ -19,15 +19,22 @@ import vpn_gatewayd as vpng
 def make_config() -> object:
     profile = vpng.VpnProfileConfig(
         profile_id="primary",
-        interface=vpng.InterfaceSelector.parse("vpns0"),
-        network=IPv4Network("172.20.130.0/29"),
         routes=(IPv4Network("10.0.0.0/8"),),
+        bindings=(
+            vpng.BindingSpec(
+                vpng.InterfaceSelector.parse("vpns0"),
+                IPv4Network("172.20.130.0/29"),
+                0,
+                0,
+            ),
+        ),
         allowed_sources=(),
     )
     return vpng.GatewayConfig(
+        enabled=True,
         reconcile_interval=10.0,
         common_allowed_sources=(IPv4Network("10.200.200.8/32"),),
-        vpns=MappingProxyType({"primary": profile}),
+        profiles=MappingProxyType({"primary": profile}),
     )
 
 
