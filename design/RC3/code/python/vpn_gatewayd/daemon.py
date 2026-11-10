@@ -555,6 +555,10 @@ class VpnGatewayDaemon:
                 panic_required = True
             else:
                 try:
+                    self._validate_local_route_source(
+                        previous_routes,
+                        intermediate_routes,
+                    )
                     if has_remove:
                         self._apply_local_remove(
                             previous_policy,
@@ -2067,6 +2071,54 @@ class VpnGatewayDaemon:
             return None
         lines.append("COMMIT")
         return "\n".join(lines) + "\n"
+
+    def _validate_local_route_source(
+        self,
+        previous_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
+        intermediate_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
+    ) -> None:
+        """
+        Verify route source state before the first local transition mutation.
+
+        The kernel may already have removed proto-202 routes belonging to
+        bindings that are about to be REMOVEd.  No other exact-route drift is
+        accepted.
+        """
+        actual = self.kernel.list_routes()
+        for profile_id in sorted(self.profiles, key=str.casefold):
+            profile = self.profiles[profile_id]
+            previous = previous_routes_by_profile[profile_id]
+            intermediate = intermediate_routes_by_profile[profile_id]
+            protected = frozenset(profile.config.routes)
+            actual_exact = frozenset(
+                route
+                for route in actual
+                if route.destination in protected
+            )
+
+            removable = previous - intermediate
+            if any(
+                route.route_type is not RouteType.UNICAST
+                or route.proto != VPN_ROUTE_PROTO
+                for route in removable
+            ):
+                raise ReconciliationError(
+                    f"{profile_id}: local REMOVE source contains "
+                    "non-proto-202 delta"
+                )
+
+            unexpected = actual_exact - previous
+            missing_survivors = (previous & intermediate) - actual_exact
+            missing_other = (
+                previous - actual_exact - removable
+            )
+            if unexpected or missing_survivors or missing_other:
+                raise ReconciliationError(
+                    f"{profile_id}: unexpected route drift before local "
+                    f"transition: unexpected={unexpected!r}, "
+                    f"missing_survivors={missing_survivors!r}, "
+                    f"missing_other={missing_other!r}"
+                )
 
     def _require_local_route_phase(
         self,
