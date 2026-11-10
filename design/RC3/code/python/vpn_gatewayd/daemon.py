@@ -668,30 +668,51 @@ class VpnGatewayDaemon:
             try:
                 profile_results = self._reconcile_routes_snapshot(snapshot)
             except (KernelError, PlanValidationError, ReconciliationError) as exc:
-                self.state = DaemonState.DEGRADED
-                forwarding_on, forwarding_query_error = (
-                    self._query_forwarding_state()
-                )
-                facts = list(pass_incidents)
-                facts.append(
+                pass_incidents.append(
                     DiagnosticFact(
                         RuntimeReasonCode.ROUTE_PASS_INCOMPLETE,
                         f"{type(exc).__name__}: {exc}",
                     )
                 )
-                if forwarding_query_error is not None:
-                    facts.append(forwarding_query_error)
-                self._log_reconcile_outcome(
-                    (
-                        "degraded",
-                        "route-pass-incomplete",
-                        ("ip-forward", forwarding_on),
-                        *(("reason", fact.code) for fact in facts),
-                    ),
-                    level=logging.WARNING if forwarding_on else logging.ERROR,
-                    facts=tuple(facts),
+                disable_fact = self._best_effort_disable_forwarding(
+                    high_severity_context="route repair failed; INIT/PANIC"
                 )
-                return
+                forwarding_intentionally_disabled = True
+                forwarding_disabled = disable_fact is None
+                if disable_fact is not None:
+                    pass_incidents.append(disable_fact)
+
+                try:
+                    self._rebuild_firewall_nat_init_panic(
+                        snapshot,
+                        forwarding_disabled=forwarding_disabled,
+                    )
+                    profile_results = self._reconcile_routes_snapshot(snapshot)
+                except (
+                    KernelError,
+                    FirewallInspectionError,
+                    PlanValidationError,
+                    ReconciliationError,
+                ) as panic_exc:
+                    pass_incidents.append(
+                        DiagnosticFact(
+                            RuntimeReasonCode.ROUTE_PASS_INCOMPLETE,
+                            "INIT/PANIC route recovery failed: "
+                            f"{type(panic_exc).__name__}: {panic_exc}",
+                        )
+                    )
+                    self.state = DaemonState.ISOLATED
+                    self._log_reconcile_outcome(
+                        (
+                            "isolated",
+                            "route-init-panic-failed",
+                            *(("reason", fact.code)
+                              for fact in pass_incidents),
+                        ),
+                        level=logging.ERROR,
+                        facts=tuple(pass_incidents),
+                    )
+                    return
 
         forwarding_enabled, forwarding_enable_fact = (
             self._best_effort_enable_forwarding()
