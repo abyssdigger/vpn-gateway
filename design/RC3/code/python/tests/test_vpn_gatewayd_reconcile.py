@@ -66,6 +66,8 @@ class SnapshotTests(unittest.TestCase):
         daemon.profiles["primary"].commit_verified_state(
             routes=frozenset(),
             active_bindings=state.active_bindings,
+            prefix_metrics=first.prefix_metric_allocations_by_profile["primary"],
+            prefix_metric_cursor=first.prefix_metric_cursor_by_profile["primary"],
         )
 
         self.assertFalse(daemon._snapshot_changes_policy(first))
@@ -172,6 +174,37 @@ class ReconcileTests(unittest.TestCase):
         self.assertTrue(restore_filter.called)
         self.assertTrue(restore_filter.call_args.kwargs["input_only"])
         self.assertIs(self.daemon.state, vpng.DaemonState.ACTIVE)
+
+    def test_snapshot_projection_failure_isolates_without_partial_apply(self):
+        with (
+            mock.patch.object(
+                self.daemon,
+                "_build_reconciliation_snapshot",
+                side_effect=vpng.ReconciliationError(
+                    "prefix metric allocator exhausted"
+                ),
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_disable_forwarding",
+                return_value=None,
+            ) as disable,
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_apply_isolation_filter",
+                return_value=None,
+            ) as isolation,
+            mock.patch.object(
+                self.daemon,
+                "_check_firewall_nat_policy",
+            ) as firewall,
+        ):
+            self.daemon.reconcile()
+
+        self.assertIs(self.daemon.state, vpng.DaemonState.ISOLATED)
+        disable.assert_called_once()
+        isolation.assert_called_once()
+        firewall.assert_not_called()
 
     def test_runtime_ipv6_violation_latches_isolation_until_restart(self):
         self.kernel.get_ipv6_all_forwarding.return_value = True
