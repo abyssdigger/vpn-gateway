@@ -347,10 +347,9 @@ interfaces архитектура не задает.
 - explicit list — config order, отфильтрованный до currently active elements.
 
 Для `prefix+` непрерывно active binding сохраняет свою позицию. Новая binding
-добавляется в конец, исчезнувшая удаляется без перестановки остальных. Если несколько
-новых bindings впервые обнаружены в одном snapshot и их взаимный порядок наблюдать уже
-невозможно, только эта новая группа упорядочивается case-sensitive bytewise ASCII перед
-добавлением.
+добавляется в конец, исчезнувшая удаляется без перестановки остальных. Если несколько новых bindings впервые обнаружены в одном snapshot, они добавляются
+в том порядке, в котором встретились в interface inventory этого snapshot. Дополнительная
+сортировка или канонизация этой группы не выполняется.
 
 `active_order` используется для INPUT/FORWARD exact blocks, `VPNG-INGRESS`, NAT,
 status output и обхода новых prefix-bindings при выделении метрик. Поэтому появление
@@ -440,10 +439,11 @@ reconciliation сравнивает маршруты по их полной ид
 порядка сериализации или обхода само по себе не является drift и не должно вызывать
 удаление, повторное добавление или переназначение metric существующего desired route.
 
-Если в одном snapshot одновременно появились несколько новых prefix-bindings, только
-эта новая группа сортируется case-sensitive bytewise ASCII перед добавлением в конец
-текущего prefix active_order и распределением metrics. Уже принятые bindings не
-переставляются. Это не превращает ASCII-порядок имен в обещанный route preference.
+Если в одном snapshot одновременно появились несколько новых prefix-bindings, они
+добавляются в конец текущего prefix active_order и получают metrics в порядке появления
+в interface inventory этого snapshot. Уже принятые bindings не переставляются.
+Никакая дополнительная сортировка имен не выполняется, и этот порядок не является
+обещанным route preference.
 
 Предварительно рассчитанное распределение и новый cursor входят в snapshot согласования,
 но process-local allocator state фиксируется только после успешной проверки полного
@@ -1696,8 +1696,8 @@ Deny-only guard использует проверенную EXP-005 форму:
 
 Active exact names идут в нормативном `active_order` §4.3. Для `prefix+`
 непрерывно active bindings сохраняют относительный порядок первого принятия текущим
-daemon, новые bindings добавляются в конец, а case-sensitive bytewise ASCII используется
-только как tie-break внутри группы новых bindings, впервые обнаруженных в одном snapshot.
+daemon, а новые bindings добавляются в конец в порядке их появления в interface inventory
+текущего snapshot.
 Этот порядок используется при построении policy/status и при обходе новых bindings
 allocator'ом, но не задает гарантированный route preference. Уже существующие
 firewall/NAT rules и UNICAST routes не переставляются, не пересоздаются и не получают
