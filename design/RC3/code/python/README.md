@@ -69,7 +69,10 @@ Firewall/NAT:
   verification between stages and without rebuilding surviving contributions;
 - replacement, including same-name/new-ifindex, is `REMOVE old -> ADD new`;
 - `INIT/PANIC` is the only global rebuild path and is reserved for startup, unexpected
-  FORWARD/NAT drift, UNKNOWN state, non-decomposable transitions, or failed local apply;
+  FORWARD/NAT drift, UNKNOWN state, non-decomposable transitions, failed local apply, or
+  a route repair/apply/verification that did not complete;
+- route-only drift is first repaired by the normal route executor under the verified
+  filter; only a failed route repair escalates to `INIT/PANIC`;
 - confirmed INPUT-only drift still uses narrow repair without disabling forwarding.
 
 Lifecycle and verification:
