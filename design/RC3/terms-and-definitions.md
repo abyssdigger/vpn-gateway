@@ -37,8 +37,7 @@
 | binding set | множество привязок | Совокупность active concrete bindings профиля в одном reconciliation snapshot. |
 | binding transition | смена привязок | Изменение candidate/active binding identity или set; active-set/identity change может быть policy-changing transition. |
 | policy-changing transition | переход, меняющий политику | Смена binding set, меняющая набор binding-specific resources ядра. |
-| absent | отсутствует | Состояние, при котором требуемая concrete/peer binding сейчас отсутствует. |
-| ambiguous | неоднозначен | Состояние, при котором selector или peer association нельзя разрешить однозначно без произвольного выбора interface. |
+| absent | отсутствует | Состояние, при котором candidate или active concrete binding сейчас отсутствует; transport peer semantics в термин не входит. |
 | profile result | результат профиля | `SUCCESS` или `FAIL` после проверки desired state. `SUCCESS` требует как минимум одного verified desired UNICAST path для каждого protected destination и не является end-to-end health-check. |
 | reconciliation | согласование | Сопоставление требуемого и фактического состояния с последующим приведением управляемых ресурсов к требуемому состоянию. |
 | reconciliation pass | цикл согласования | Один сериализованный проход чтения состояния, построения требуемой модели, применения изменений и проверки результата. |

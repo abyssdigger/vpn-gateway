@@ -178,10 +178,10 @@ IPv6-пересылки при `net.ipv6.conf.all.forwarding=0`. Поэтому 
 net.ipv6.conf.<interface>.disable_ipv6 = 1
 ```
 
-Проверяется именно защитное пространство имен, а не только множество кандидатов discovery.
-Поэтому для `prefix%` проверка охватывает весь textual prefix, который закрывается
-deny-only правилом `-i prefix+`, включая ненумерические имена. Только после этой проверки
-строятся кандидаты, привязки и политика.
+Проверяется именно защитное пространство имен, а не только множество active bindings.
+Для префиксного селектора проверка охватывает весь textual prefix, закрываемый deny-only
+правилом `-i prefix+`; для explicit list — каждое перечисленное exact name. Только после
+этой проверки строятся candidates, active bindings и policy.
 
 Значение `default.disable_ipv6=1` обеспечивает выключенный IPv6 для создаваемых позднее
 интерфейсов по умолчанию.
@@ -750,8 +750,9 @@ TOML-документ + выбор управляемых профилей
 ошибкой и нормализуется: например, дубликаты в `managed_vpns`, точные дубликаты
 `routes` одного управляемого профиля и дубликаты ACL.
 
-`peers` — сознательное исключение: порядок элементов задает метрики маршрутов, поэтому
-дубликат меняет модель приоритета и не является просто избыточностью множества.
+Explicit interface list является упорядоченным списком, а не множеством: duplicate exact
+name запрещен, потому что одна concrete interface не может занимать два route-priority
+slot.
 
 Отдельной фазы `preflight()` нет. Проверки безопасности, зависящие от состояния ядра,
 входят в построение и проверку начального плана согласования. В частности,
@@ -1215,8 +1216,7 @@ ctstate ESTABLISHED,RELATED
 
 - exact selector — exact interface rule;
 - `prefix+` — `-i prefix+`;
-- `prefix%` — тот же deny-only `-i prefix+`;
-- explicit exact set — exact deny rule для каждого элемента.
+- explicit exact list — exact deny rule для каждого элемента.
 
 Prefix matching никогда не используется для `ACCEPT` или NAT.
 
@@ -1242,8 +1242,8 @@ ctstate ESTABLISHED,RELATED
 ```
 
 После exact blocks идут deny guards всех managed selectors в детерминированном порядке
-профилей. Для `prefix+` и `prefix%` guard использует `-i prefix+`; explicit exact
-set материализуется как набор exact guards. Затем следует `RETURN`.
+профилей. Для `prefix+` guard использует `-i prefix+`; explicit exact list
+materialize как набор exact guards. Затем следует `RETURN`.
 
 `VPNG-RESERVED` всегда выполняет `REJECT` для назначения в любую managed
 `vpn.network`.
