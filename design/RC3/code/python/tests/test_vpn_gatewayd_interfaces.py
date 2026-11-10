@@ -76,7 +76,7 @@ class InterfaceStateTests(unittest.TestCase):
         with self.assertRaises(dataclasses.FrozenInstanceError):
             record.ifindex = 8
 
-    def test_prefix_allows_multiple_active_and_uses_bytewise_name_order(self):
+    def test_prefix_initial_snapshot_uses_bytewise_tiebreak_order(self):
         state = vpng.resolve_profile_interface_state(
             vpng.InterfaceSelector.parse("vpns+"),
             (
@@ -95,6 +95,54 @@ class InterfaceStateTests(unittest.TestCase):
             (
                 vpng.InterfaceBinding("vpns10", 10),
                 vpng.InterfaceBinding("vpns9", 9),
+            ),
+        )
+
+    def test_prefix_preserves_survivor_order_and_appends_new_bindings(self):
+        previous = (
+            vpng.InterfaceBinding("vpns2", 2),
+            vpng.InterfaceBinding("vpns9", 9),
+        )
+        state = vpng.resolve_profile_interface_state(
+            vpng.InterfaceSelector.parse("vpns+"),
+            (
+                self.record("vpns10", 10, "172.20.130.1"),
+                self.record("vpns9", 9, "172.20.130.1"),
+                self.record("vpns2", 2, "172.20.130.1"),
+                self.record("vpns1", 1, "172.20.130.1"),
+            ),
+            IPv4Network("172.20.130.0/29"),
+            previous_active_bindings=previous,
+        )
+        self.assertEqual(
+            state.active_bindings,
+            (
+                vpng.InterfaceBinding("vpns2", 2),
+                vpng.InterfaceBinding("vpns9", 9),
+                vpng.InterfaceBinding("vpns1", 1),
+                vpng.InterfaceBinding("vpns10", 10),
+            ),
+        )
+
+    def test_prefix_same_name_new_ifindex_is_fresh_binding(self):
+        previous = (
+            vpng.InterfaceBinding("vpns2", 2),
+            vpng.InterfaceBinding("vpns9", 9),
+        )
+        state = vpng.resolve_profile_interface_state(
+            vpng.InterfaceSelector.parse("vpns+"),
+            (
+                self.record("vpns2", 22, "172.20.130.1"),
+                self.record("vpns9", 9, "172.20.130.1"),
+            ),
+            IPv4Network("172.20.130.0/29"),
+            previous_active_bindings=previous,
+        )
+        self.assertEqual(
+            state.active_bindings,
+            (
+                vpng.InterfaceBinding("vpns9", 9),
+                vpng.InterfaceBinding("vpns2", 22),
             ),
         )
 
