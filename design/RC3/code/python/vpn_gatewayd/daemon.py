@@ -875,6 +875,69 @@ class VpnGatewayDaemon:
                     return True
         return False
 
+    def _snapshot_is_clean_prefix_addition(
+        self,
+        snapshot: ReconciliationSnapshot,
+    ) -> bool:
+        """Return True only for insertion-only prefix binding growth."""
+        changed = False
+        for profile_id, state in snapshot.interface_state_by_profile.items():
+            profile = self.profiles[profile_id]
+            committed = profile.committed_active_bindings
+            if committed is None:
+                return False
+
+            current = state.active_bindings
+            if current == committed:
+                if profile.config.interface.kind is InterfaceSelectorKind.PREFIX:
+                    desired_metrics = (
+                        snapshot.prefix_metric_allocations_by_profile[profile_id]
+                    )
+                    if dict(profile.committed_prefix_metrics) != dict(desired_metrics):
+                        return False
+                continue
+
+            if profile.config.interface.kind is not InterfaceSelectorKind.PREFIX:
+                return False
+            if len(current) <= len(committed):
+                return False
+            if current[:len(committed)] != committed:
+                return False
+
+            desired_metrics = snapshot.prefix_metric_allocations_by_profile[
+                profile_id
+            ]
+            for binding in committed:
+                if (
+                    desired_metrics.get(binding)
+                    != profile.committed_prefix_metrics.get(binding)
+                ):
+                    return False
+            changed = True
+
+        return changed
+
+    def _committed_full_policy(
+        self,
+        snapshot: ReconciliationSnapshot,
+    ) -> FirewallNatPolicy:
+        """Build the last verified binding-specific policy for delta checks."""
+        if self.config is None:
+            raise RuntimeError("config not installed")
+
+        previous: dict[str, ProfileInterfaceState] = {}
+        for profile_id, state in snapshot.interface_state_by_profile.items():
+            committed = self.profiles[profile_id].committed_active_bindings
+            if committed is None:
+                raise ReconciliationError(
+                    f"{profile_id}: no committed binding state for additive transition"
+                )
+            previous[profile_id] = ProfileInterfaceState(
+                candidates=state.candidates,
+                active_bindings=committed,
+            )
+        return desired_full_policy(self.config, MappingProxyType(previous))
+
     # ---- Route plan ------------------------------------------------------
 
     def _resolve_profile_interfaces(
@@ -1789,6 +1852,103 @@ class VpnGatewayDaemon:
                     RuntimeReasonCode.FIREWALL_INSPECTION_FAILED,
                     str(exc),
                 ),
+            )
+
+    @classmethod
+    def _build_insertion_only_table_payload(
+        cls,
+        table_name: str,
+        previous_chains: Sequence[PolicyChain],
+        desired_chains: Sequence[PolicyChain],
+    ) -> str | None:
+        """
+        Build an insertion-only --noflush payload.
+
+        Existing rule sequences must remain an exact subsequence of DESIRED.
+        Only missing rules are inserted at their final 1-based positions.
+        """
+        previous = cls._policy_chain_map(previous_chains)
+        desired = cls._policy_chain_map(desired_chains)
+        if set(previous) != set(desired):
+            raise ReconciliationError(
+                f"{table_name}: additive policy changed chain set"
+            )
+
+        lines: list[str] = [f"*{table_name}"]
+        changed = False
+        for chain in desired:
+            old_rules = previous[chain]
+            new_rules = desired[chain]
+            old_index = 0
+            insertions: list[tuple[int, str]] = []
+
+            for position, rule in enumerate(new_rules, start=1):
+                if (
+                    old_index < len(old_rules)
+                    and rule == old_rules[old_index]
+                ):
+                    old_index += 1
+                    continue
+                insertions.append((position, rule))
+
+            if old_index != len(old_rules):
+                raise ReconciliationError(
+                    f"{table_name}/{chain}: existing rule order is not "
+                    "preserved by additive desired policy"
+                )
+
+            for position, rule in insertions:
+                lines.append(cls._insert_form(rule, chain, position))
+                changed = True
+
+        if not changed:
+            return None
+        lines.append("COMMIT")
+        return "\n".join(lines) + "\n"
+
+    def _apply_clean_prefix_addition(
+        self,
+        previous: FirewallNatPolicy,
+        desired: FirewallNatPolicy,
+    ) -> None:
+        """Apply only newly appended prefix-binding firewall/NAT contribution."""
+        nat_payload = self._build_insertion_only_table_payload(
+            "nat",
+            previous.nat.chains,
+            desired.nat.chains,
+        )
+        if nat_payload is not None:
+            self.kernel.iptables_restore(nat_payload, noflush=True)
+
+        nat_check = self._check_nat_policy(desired.nat)
+        if nat_check.safety is not FirewallSafety.SAFE:
+            detail = (
+                nat_check.reason.detail
+                if nat_check.reason is not None
+                else nat_check.safety.name
+            )
+            raise ReconciliationError(
+                f"NAT verification failed after additive apply: {detail}"
+            )
+
+        filter_payload = self._build_insertion_only_table_payload(
+            "filter",
+            previous.filter.chains,
+            desired.filter.chains,
+        )
+        if filter_payload is not None:
+            self.kernel.iptables_restore(filter_payload, noflush=True)
+
+        full_check = self._check_firewall_nat_policy(desired)
+        if full_check.safety is not FirewallSafety.SAFE:
+            detail = (
+                full_check.reason.detail
+                if full_check.reason is not None
+                else full_check.safety.name
+            )
+            raise ReconciliationError(
+                f"full firewall/NAT verification failed after additive apply: "
+                f"{detail}"
             )
 
     def _build_filter_restore_payload(
