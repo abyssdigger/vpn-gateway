@@ -975,23 +975,26 @@ runtime interface name.
 2. построить один immutable `ReconciliationSnapshot`, включая provisional prefix
    metric allocation/cursor;
 3. сравнить candidates и active concrete binding identities с последним verified state;
-4. прочитать firewall/NAT и классифицировать `SAFE/UNSAFE/UNKNOWN`;
-5. `UNKNOWN` либо неопределимая область drift -> `ISOLATED`;
-6. INPUT-only `UNSAFE` без binding transition -> narrow INPUT repair;
-7. если full policy текущего verified state `SAFE`, классифицировать изменение
-   binding-specific ресурсов как локальный `ADD`, локальный `REMOVE`, композицию
-   `REMOVE -> ADD` либо как неразложимый переход;
-8. выполнить локальные `ADD`/`REMOVE` по §8.6 без изменения `ip_forward`;
-9. `FORWARD`/NAT `UNSAFE`, `UNKNOWN`, неразложимый переход или ошибка/verification
-   failure локальной процедуры -> `INIT/PANIC` §8.6;
-10. после `SAFE` полной policy и verified routes зафиксировать OWNED, active binding
+4. если binding transition отсутствует, сравнить firewall/NAT с current desired policy;
+5. если binding transition есть, построить policy последнего committed binding state и
+   проверить фактический source state относительно нее; расхождения, не объясняемые
+   ожидаемой kernel-side потерей ресурсов исчезнувшей binding, являются drift;
+6. `UNKNOWN` либо неопределимая область drift -> `INIT/PANIC`;
+7. INPUT-only `UNSAFE` без binding transition -> narrow INPUT repair;
+8. при verified source state классифицировать binding delta как локальный `ADD`,
+   локальный `REMOVE`, композицию `REMOVE -> ADD` либо как неразложимый переход;
+9. выполнить локальные `ADD`/`REMOVE` по §8.6 без изменения `ip_forward`;
+10. неожиданный `FORWARD`/NAT drift, `UNKNOWN`, неразложимый переход или
+    apply/verification failure локальной процедуры -> `INIT/PANIC` §8.6;
+11. после `SAFE` полной policy и verified routes зафиксировать OWNED, active binding
     state и prefix allocator mapping/cursor;
-11. в завершенном non-ISOLATED `RUN` привести `ip_forward` к 1 и reread;
-12. confirmed `ip_forward=0` после failed enable -> `DEGRADED`; unreadable
+12. в завершенном non-ISOLATED `RUN` привести `ip_forward` к 1 и reread;
+13. confirmed `ip_forward=0` после failed enable -> `DEGRADED`; unreadable
     `ip_forward` -> `ISOLATED`.
 
-Candidate-only change без изменения active set не требует тяжелого IPv4 barrier **только
-после successful IPv6 prerequisite verification текущего guard namespace**. После этой
+Candidate-only change без изменения active set не требует `ADD`, `REMOVE` или
+`INIT/PANIC` **только после successful IPv6 prerequisite verification текущего guard
+namespace**. После этой
 проверки allowing IPv4 policy действительно не меняется; status обновляется из нового
 snapshot.
 
@@ -1046,8 +1049,11 @@ binding state: она одной транзакцией восстанавлив
 
 `ADD` применяется, когда относительно последнего verified state требуются только новые
 binding-specific contributions, а все непрерывно существующие bindings сохраняют identity,
-metric и relative order. Процедура не ограничена формой `prefix+`: exact и explicit-list
-появления используют тот же протокол, если изменение доказуемо insertion-only.
+metric и relative order. Перед локальной мутацией daemon обязан подтвердить, что
+фактическое source state соответствует последнему committed state; отсутствие именно тех
+ресурсов, которые новая binding должна добавить, не считается drift. Процедура не
+ограничена формой `prefix+`: exact и explicit-list появления используют тот же протокол,
+если изменение доказуемо insertion-only.
 
 `ip_forward` не изменяется. Старые verified paths продолжают работать.
 
@@ -1076,7 +1082,10 @@ relative order. Существующие desired routes не удаляются,
 
 `REMOVE` применяется, когда относительно последнего verified state исчезает один или
 несколько binding-specific contributions, а surviving bindings сохраняют identity,
-metric и relative order.
+metric и relative order. Перед локальной мутацией daemon подтверждает отсутствие
+постороннего drift. Ресурс исчезнувшей binding, уже автоматически удаленный ядром
+(например, direct route после удаления interface), считается допустимой частью ожидаемой
+REMOVE-delta, а не drift.
 
 `ip_forward` не изменяется. Безопасность обеспечивается порядком удаления:
 
@@ -1122,7 +1131,9 @@ contributions остаются неизменными. Изменение metric
 
 - на startup;
 - при `FORWARD`/NAT drift либо `UNKNOWN`;
-- при ошибке inventory/snapshot, когда binding-specific state нельзя достоверно вывести;
+- при ошибке inventory/snapshot, когда binding-specific state нельзя достоверно вывести
+  (в этом случае PANIC может завершиться verified isolation и ожиданием следующего
+  достоверного snapshot без попытки построить full binding-specific state);
 - при ошибке или verification failure `ADD`/`REMOVE`;
 - при transition, который нельзя безопасно разложить на локальные `REMOVE` и `ADD`;
 - при иных нарушениях, после которых прежний full managed state нельзя считать verified.
@@ -2763,13 +2774,13 @@ may retain adds/deletes/replaces.
 95. `desired_isolation_filter` выводится только из конфигурации и не содержит `ACCEPT`,
     зависящих от привязки.
 
-96. Применение изолирующего фильтра заменяет/канонизирует полное требуемое состояние под
-    управлением daemon для таблицы `filter` на этой стадии; устаревшие daemon-owned
-    `ACCEPT`, зависящие от
-    привязки, не должны оставаться достижимыми.
+96. В `INIT/PANIC`, когда защитным барьером служит isolation filter, его применение
+    заменяет/канонизирует полное требуемое daemon-owned состояние таблицы `filter` на
+    этой стадии; устаревшие binding-specific `ACCEPT` не должны оставаться достижимыми.
 
-97. Проверка изолирующего фильтра является отдельным результатом защитного барьера и
-    никогда не удовлетворяет состоянию `SAFE` полной политики firewall/NAT.
+97. Проверка isolation filter является отдельным результатом защитного барьера
+    `INIT/PANIC` и никогда не удовлетворяет состоянию `SAFE` полной политики
+    firewall/NAT.
 
 98. `SAFE` полной политики требует проверки требуемого NAT и полного требуемого фильтра для
     одного и того же неизменяемого snapshot согласования.
