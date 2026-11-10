@@ -801,6 +801,13 @@ class VpnGatewayDaemon:
         route_results = self._require_complete_profile_results(
             verified.profile_results
         )
+        expected_profiles = frozenset(self.profiles)
+        if verified.verified_profiles != expected_profiles:
+            failed = sorted(expected_profiles - verified.verified_profiles)
+            raise ReconciliationError(
+                "runtime route verification did not complete for profiles: "
+                f"{failed!r}"
+            )
         self._commit_owned(
             verified_routes_by_profile=verified.owned_routes_by_profile,
             verified_profiles=verified.verified_profiles,
@@ -1674,25 +1681,33 @@ class VpnGatewayDaemon:
                 "incomplete prefix metric cursor mapping"
             )
 
+        # Validate every prospective per-profile commit before mutating
+        # any process-local committed state.  VpnProfile validation is
+        # deterministic and depends only on config + supplied state, so a
+        # successful shadow commit guarantees that the following real commits
+        # cannot fail on validation halfway through the commit boundary.
+        prepared: list[tuple[str, dict[str, object]]] = []
         for profile_id in sorted(verified_profiles):
             state = interface_state_by_profile[profile_id]
             profile = self.profiles[profile_id]
+            kwargs: dict[str, object] = {
+                "routes": verified_routes_by_profile[profile_id],
+                "active_bindings": state.active_bindings,
+            }
             if profile.config.interface.kind is InterfaceSelectorKind.PREFIX:
-                profile.commit_verified_state(
-                    routes=verified_routes_by_profile[profile_id],
-                    active_bindings=state.active_bindings,
-                    prefix_metrics=prefix_metric_allocations_by_profile[
-                        profile_id
-                    ],
-                    prefix_metric_cursor=prefix_metric_cursor_by_profile[
-                        profile_id
-                    ],
+                kwargs["prefix_metrics"] = (
+                    prefix_metric_allocations_by_profile[profile_id]
                 )
-            else:
-                profile.commit_verified_state(
-                    routes=verified_routes_by_profile[profile_id],
-                    active_bindings=state.active_bindings,
+                kwargs["prefix_metric_cursor"] = (
+                    prefix_metric_cursor_by_profile[profile_id]
                 )
+
+            shadow = VpnProfile(profile.config)
+            shadow.commit_verified_state(**kwargs)
+            prepared.append((profile_id, kwargs))
+
+        for profile_id, kwargs in prepared:
+            self.profiles[profile_id].commit_verified_state(**kwargs)
 
     # ---- RC3 firewall/NAT policy ----------------------------------------
 
@@ -2761,24 +2776,6 @@ class VpnGatewayDaemon:
                 detail="ip_forward was OFF before the enable step",
             ),
         )
-
-    def _query_forwarding_state(
-        self,
-    ) -> tuple[bool, DiagnosticFact | None]:
-        """
-        Return (confirmed_on, error) without emitting an intermediate log.
-
-        Query failure is conservatively treated as not confirmed ON.  The
-        caller includes the error in the final reconciliation signature, so
-        severity remains a property of the final current-state diagnosis.
-        """
-        try:
-            return self.kernel.get_ip_forward(), None
-        except KernelError as exc:
-            return False, DiagnosticFact(
-                code=RuntimeReasonCode.FORWARDING_QUERY_FAILED,
-                detail=str(exc),
-            )
 
     # ---- Events / signals / logging -------------------------------------
 
