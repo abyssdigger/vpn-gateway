@@ -590,6 +590,51 @@ class ReconcileTests(unittest.TestCase):
         rebuild.assert_called_once()
         self.assertIs(self.daemon.state, vpng.DaemonState.ACTIVE)
 
+    def test_failed_route_repair_escalates_to_init_panic(self):
+        safe = vpng.FirewallCheck(vpng.FirewallSafety.SAFE, None)
+
+        with (
+            mock.patch.object(
+                self.daemon,
+                "_snapshot_changes_policy",
+                return_value=False,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_check_firewall_nat_policy",
+                return_value=safe,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_reconcile_routes_snapshot",
+                side_effect=(
+                    vpng.ReconciliationError("route apply failed"),
+                    success_results(),
+                ),
+            ) as routes,
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_disable_forwarding",
+                return_value=None,
+            ) as disable,
+            mock.patch.object(
+                self.daemon,
+                "_rebuild_firewall_nat_init_panic",
+            ) as rebuild,
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_enable_forwarding",
+                return_value=(True, None),
+            ),
+        ):
+            self.daemon.reconcile()
+
+        self.assertEqual(routes.call_count, 2)
+        disable.assert_called_once()
+        rebuild.assert_called_once()
+        self.assertTrue(rebuild.call_args.kwargs["forwarding_disabled"])
+        self.assertIs(self.daemon.state, vpng.DaemonState.ACTIVE)
+
     def test_init_panic_uses_direct_full_rebuild_when_forwarding_is_off(self):
         snapshot = self.daemon._build_reconciliation_snapshot(
             (ready_record(),)
