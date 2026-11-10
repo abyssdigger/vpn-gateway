@@ -511,9 +511,9 @@ BOU observes and controls host-side policy around rouvpn0, published endpoints, 
 
 Future Unix sockets may expose read-only status, diagnostics and event history for administrators, but they are not part of the safety-critical control plane.
 
-## 19. Transport publication proof obligation
+## 19. Transport publication evidence
 
-The first implementation prerequisite for transport publication is EXP-010.
+Transport publication has passed two implementation prerequisites: EXP-010 and EXP-011.
 
 The experiment intentionally does not require WireGuard. It must prove the generic chain:
 
@@ -533,7 +533,80 @@ The experiment separates two questions:
 
 Only the second proves the NG1 namespace topology. A sandbox lacking network-namespace privileges may validate the first without claiming the experiment complete.
 
-## 20. Inheritance from RC2/RC3
+EXP-010 completed that namespace proof with a generic UDP listener.
+
+EXP-011 then replaced the dummy listener with a real ocserv/OpenConnect endpoint while
+preserving the existing external endpoint `44443/tcp+udp`. The host-side publication
+relay forwarded both TCP/TLS/CSTP and UDP/DTLS to ocserv inside the private ROU namespace.
+The client explicitly reported both CSTP and DTLS connected, and the ocserv-created
+`vpnsXX` interfaces existed only inside the ROU namespace.
+
+Therefore same-port real-protocol transport publication is an established NG1 primitive,
+not an open prerequisite. Arbitrary external/internal port translation for protocols that
+advertise transport endpoints remains protocol-specific and is not implied by EXP-011.
+
+The EXP-011 proof relay intentionally supported only one UDP peer association. This is
+sufficient for the topology/protocol proof but not for production: a general ROU UDP relay
+must maintain independent per-peer association state.
+
+## 20. First executable ROU prototype boundary
+
+The first executable ROU implementation is intentionally narrower than the full NG1
+configuration model. It is a lifecycle and integrity prototype, not the first generic
+configuration release.
+
+ROU v0 may hard-code:
+
+- one ROU instance and namespace;
+- one host-facing veth pair;
+- one OUTBOUND profile;
+- one OpenConnect/ocserv prefix binding;
+- the binding network and capacity;
+- one protected test destination;
+- one profile routing table and RPDB rule;
+- one TCP and one UDP publication on the same external/internal ocserv port;
+- the existing known-good ocserv configuration as the source for a derived runtime config.
+
+The purpose is to prove the complete appliance control loop before adding a broad parser.
+
+ROU v0 must distinguish two classes of change:
+
+1. **normal binding lifecycle** — eligible `vpnsXX` interfaces may appear, disappear and
+   reappear as clients connect and disconnect;
+2. **structural owned-state drift** — unexpected mutation of ROU-owned profile routing,
+   RPDB, firewall/NAT or appliance infrastructure.
+
+For the first implementation, any change requiring structural reprojection uses a
+protective forwarding barrier:
+
+    set net.ipv4.ip_forward=0
+        -> project complete owned state
+        -> verify complete owned state
+        -> set net.ipv4.ip_forward=1
+
+This deliberately trades transient availability for a small and strong safety model while
+the control loop is being validated.
+
+A disappearing VPN binding is not itself corruption. Reconciliation recalculates admitted
+bindings and fail-closed profile state from a fresh namespace snapshot. If no usable
+binding remains, the profile table retains its blackholes and forwarding to that profile
+remains fail-closed.
+
+Initial live gates for ROU v0 are:
+
+- clean creation from no namespace/veth;
+- real ocserv startup and client reconnection through publication;
+- correct materialization of the VPN interface inside the namespace;
+- normal preferred-binding disappearance and survivor behavior;
+- zero-binding fail-closed behavior;
+- recovery after injected owned route/RPDB/firewall drift;
+- detection of structural appliance drift that cannot be safely repaired in place;
+- graceful shutdown and complete removal of owned host/netns resources.
+
+General configuration parsing, multiple profiles, arbitrary selectors/transports, warm
+capacity and BOU integration are explicitly deferred until these lifecycle gates pass.
+
+## 21. Inheritance from RC2/RC3
 
 NG1 changes topology and ownership, but it does **not** discard the engineering work already completed in RC2 and RC3.
 
@@ -566,7 +639,7 @@ In short:
 
 Primary source material includes the existing experiment log under design/vpn-gateway-experiments.md, the RC2/RC3 architecture documents, reviews and the RC3 Python implementation.
 
-## 21. Initial NG1 invariants
+## 22. Initial NG1 invariants
 
 1. ROU owns its network namespace.
 2. ROU creates and removes its own namespace/veth infrastructure.
@@ -598,3 +671,8 @@ Primary source material includes the existing experiment log under design/vpn-ga
 28. AGGRESSIVE additionally protects VPN-managed traffic from leaking around ROU.
 29. ROU and BOU require no safety-critical runtime RPC.
 30. RC2/RC3 are reusable evidence/design sources, but not normative NG1 topology.
+31. Same-port TCP/TLS/CSTP and UDP/DTLS publication through a private ROU namespace is experimentally proven by EXP-011.
+32. A production UDP publication relay must maintain independent per-peer association state.
+33. ROU-owned structural state may be repaired under a forwarding barrier; forwarding is restored only after verification.
+34. Normal VPN binding disappearance is a lifecycle event, not structural corruption.
+35. With zero admitted bindings, profile routing remains explicitly fail-closed rather than falling through to namespace main routing.
