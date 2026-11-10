@@ -1,3 +1,32 @@
+## 2026-11-10 — RC3 post-simplification code cleanup
+
+A focused code audit verified initialization, discovery, monitoring and fail-closed
+protection after removing peers and `local_address`.
+
+Removed migration/dead state:
+
+- write-only committed candidate history;
+- obsolete untyped `list_interface_ipv4()` kernel boundary and its three tests;
+- abandoned route-overlap cache/helper;
+- unused daemon ACL merge helper;
+- unused selector/state convenience properties;
+- redundant ConfigLoader selector-validation constants;
+- duplicate ProfileResult completeness check.
+
+The IPv6 prerequisite latch is now checked before interface inventory; while latched,
+periodic passes still reassert forwarding-off/isolation policy but skip unnecessary
+interface discovery.
+
+Core monitoring semantics were intentionally retained:
+
+- LINK events for interface create/delete/recreate and ifindex identity;
+- IPv4 address events for `network` membership transitions;
+- route events for low-latency drift detection;
+- periodic full reconciliation as the source-of-truth fallback.
+
+Validation: Python 3.13 `compileall` PASS; **121/121 unit tests PASS**. The test count
+decreased by exactly three because the deleted legacy kernel API no longer requires tests.
+
 ## 2026-11-10 — RC3 removes redundant local_address
 
 External optimization review identified that the post-EXP-009 `local_address` field had

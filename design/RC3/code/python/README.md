@@ -114,10 +114,44 @@ python -m compileall -q design/RC3/code/python
 PASS
 
 python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
-Ran 124 tests
+Ran 121 tests
 OK
-124/124 PASS
+121/121 PASS
 ```
 
 The temporary validation workflow was removed after the successful run; it is not part of
 the deployment/runtime architecture.
+
+## Post-simplification cleanup
+
+After removing transport peers and exact `local_address`, the implementation was audited
+for migration residue. The following dead layers were removed without changing desired
+runtime behavior:
+
+- write-only committed candidate history;
+- obsolete `KernelInterface.list_interface_ipv4()` compatibility API and its legacy tests;
+- unused route-overlap cache/helper;
+- unused daemon `effective_sources()` helper;
+- unused `InterfaceSelector.value` and `ProfileInterfaceState.has_active_path`;
+- redundant ConfigLoader interface-regex constants;
+- duplicate completed-profile-result validation.
+
+When an IPv6 prerequisite violation is latched until restart, periodic isolation
+maintenance now runs before interface inventory, avoiding an unnecessary
+`ip -j addr show` on every latched pass.
+
+Post-cleanup Python 3.13 validation:
+
+```text
+python -m compileall -q design/RC3/code/python
+PASS
+
+python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
+Ran 121 tests
+OK
+121/121 PASS
+```
+
+The reduction from 124 to 121 tests is exactly the removal of three tests for the deleted
+legacy `list_interface_ipv4()` API.
+
