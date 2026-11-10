@@ -354,8 +354,10 @@ interfaces архитектура не задает.
 `active_order` используется для INPUT/FORWARD exact blocks, `VPNG-INGRESS`, NAT,
 status output и обхода новых prefix-bindings при выделении метрик. Поэтому появление
 нового prefix-interface не меняет относительный порядок существующих exact blocks/rules
-в требуемой policy. Protective-barrier restore при этом по-прежнему может транзакционно
-пересобрать daemon-owned chain целиком.
+в требуемой policy. При подтвержденном чистом additive transition применяется narrow
+incremental path §8.6, который существующие binding-specific rules не удаляет и не
+пересоздает; full protective restore остается fallback для переходов, не удовлетворяющих
+его предусловиям.
 
 Для `prefix+` этот порядок не является гарантией route preference. Он также не является
 персистентной историей создания interfaces: после restart daemon строит новый process-local
@@ -2433,8 +2435,8 @@ Implementation update must include at least:
 - desired UNICAST is direct `dev exact-interface proto 202`, `via=None`,
   `onlink=False`;
 - prefix active_order is process-local and append-only for surviving bindings: new
-  bindings append, removed bindings disappear, existing firewall/NAT rules are not
-  reordered merely because a lexically earlier name appears;
+  bindings append in snapshot inventory order, removed bindings disappear, and a clean
+  additive transition does not reorder/recreate existing firewall/NAT rules;
 - prefix metrics use a cyclic process-local allocator; continuous bindings retain
   allocated metrics, all UNICAST metrics remain below BLACKHOLE_METRIC, and no prefix
   route-priority order is guaranteed;
