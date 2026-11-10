@@ -2273,7 +2273,7 @@ Implementation update must include at least:
 - prefix/list may resolve to multiple simultaneous active bindings;
 - no `AMBIGUOUS` selector state for normal multiplicity;
 - `peers` removed from config/domain model;
-- `PeerBinding` removed;
+- transport peer-association domain object removed;
 - point-to-point remote endpoint removed from route association;
 - desired UNICAST is direct `dev exact-interface proto 202`, `via=None`,
   `onlink=False`;

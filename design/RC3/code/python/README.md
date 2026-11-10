@@ -113,6 +113,7 @@ PASS
 python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
 Ran 121 tests
 OK
+121/121 PASS
 ```
 
 The temporary validation workflow was removed after the successful run; it is not part of
