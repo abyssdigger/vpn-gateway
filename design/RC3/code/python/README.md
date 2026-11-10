@@ -64,11 +64,12 @@ Firewall/NAT:
 - selector wildcards appear only in deny-only guards;
 - allowing INPUT/FORWARD blocks and MASQUERADE rules use exact active interface names;
 - all simultaneous active interfaces of a profile are materialized;
-- a clean additive `prefix+` transition from a verified SAFE state uses an insertion-only
-  path: disable forwarding -> add new NAT contribution -> add new filter contribution ->
-  add new routes; existing binding-specific rules/routes are not rebuilt;
-- other policy-changing active-binding transitions use the verified protective barrier:
-  isolation filter -> NAT -> full filter -> routes;
+- normal binding lifecycle uses two local procedures without changing `ip_forward`:
+  `ADD = NAT -> filter -> route` and `REMOVE = filter -> route -> NAT`, with
+  verification between stages and without rebuilding surviving contributions;
+- replacement, including same-name/new-ifindex, is `REMOVE old -> ADD new`;
+- `INIT/PANIC` is the only global rebuild path and is reserved for startup, unexpected
+  FORWARD/NAT drift, UNKNOWN state, non-decomposable transitions, or failed local apply;
 - confirmed INPUT-only drift still uses narrow repair without disabling forwarding.
 
 Lifecycle and verification:
