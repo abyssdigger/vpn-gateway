@@ -28,13 +28,13 @@
 | startup | запуск | Последовательность действий от старта процесса до перехода в рабочий режим. |
 | cleanup | очистка | Удаление ресурсов проекта из ядра и выключение IPv4-маршрутизации, когда это предусмотрено жизненным циклом. |
 | daemon | — | Долгоживущий процесс `vpn-gatewayd`, управляющий ресурсами VPN Gateway. |
-| selector | селектор | Правило построения candidate runtime-интерфейсов, active binding set и защитного пространства имен; форма selector также определяет семантику назначения UNICAST metrics. |
+| selector | селектор | Поле `BindingSpec.interface`, задающее exact name либо textual `prefix+`; определяет candidate interfaces и deny-only guard namespace. |
 | exact selector | точный селектор | Строковая форма одного конкретного exact interface name; candidate set имеет размер 0..1. |
-| prefix selector | префиксный селектор | Форма `prefix+`: textual prefix discovery с 0..N simultaneous candidates. Непрерывно active bindings сохраняют process-local порядок первого принятия daemon; новые добавляются в конец в порядке interface inventory текущего snapshot, без дополнительной сортировки имен. UNICAST metrics выделяются циклическим process-local allocator; гарантированный route preference между interfaces отсутствует. |
-| explicit exact list | явный упорядоченный список точных имен | Непустой массив уникальных exact interface names. Порядок элементов задает стабильные route-priority slots; все вычисляемые UNICAST metrics должны быть меньше BLACKHOLE_METRIC. |
-| guard namespace | защитное пространство имен | Множество interface names, которое selector заранее закрывает deny-only firewall guard: exact name, textual prefix либо exact elements списка. |
-| concrete binding | точная привязка интерфейса | Идентичность active concrete interface как пары exact `name + ifindex`; applicability дополнительно требует хотя бы один local IPv4 address внутри `profile.network`. |
-| binding set | множество привязок | Совокупность active concrete bindings профиля в одном reconciliation snapshot. Для `prefix+` verified process-local order surviving bindings сохраняется между циклами текущего процесса. |
+| prefix selector | префиксный селектор | Форма `prefix+`: textual prefix discovery с 0..N simultaneous candidates. Все prefix BindingSpec профиля используют общий process-local allocator; гарантированный route preference между prefix interfaces отсутствует. |
+| BindingSpec | спецификация привязки | Один элемент `profile.bindings[]`: пара `interface` selector + собственная transport `network`; exact entries также получают config-derived `exact_rank`. |
+| guard namespace | защитное пространство имен | Множество interface names, которое один BindingSpec заранее закрывает deny-only firewall guard: exact name либо textual prefix. |
+| concrete binding | точная привязка интерфейса | Идентичность active concrete interface как пары exact `name + ifindex`; applicability дополнительно требует local IPv4 внутри `network` owning BindingSpec. |
+| binding set | множество привязок | Совокупность active concrete bindings профиля в одном reconciliation snapshot. Exact bindings идут по config-derived exact rank; prefix survivors сохраняют process-local relative order. |
 | binding transition | смена привязок | Изменение candidate/active binding identity или set; active-set/identity change может быть policy-changing transition. |
 | policy-changing transition | переход, меняющий политику | Смена binding set, меняющая набор binding-specific resources ядра; штатная delta классифицируется как `ADD`, `REMOVE` либо их композиция, иначе используется `INIT/PANIC`. |
 | ADD | — | Локальная процедура появления binding-specific contribution: NAT -> filter -> route с verification между стадиями, без изменения `ip_forward` и без пересборки surviving resources. |
@@ -94,7 +94,7 @@
 ## Технические идентификаторы и именованные состояния
 
 Имена `INPUT`, `FORWARD`, `ACCEPT`, `REJECT`, `DROP`, `MASQUERADE`, `SAFE`,
-`UNSAFE`, `UNKNOWN`, `ACTIVE`, `DEGRADED`, `ISOLATED`, `RouteSpec`, `ifindex`,
+`UNSAFE`, `UNKNOWN`, `DISABLED`, `ACTIVE`, `DEGRADED`, `ISOLATED`, `RouteSpec`, `ifindex`,
 `Netlink`, `iptables`, `systemd` и аналогичные технические идентификаторы не переводятся.
 
 При первом употреблении именованного состояния в логическом блоке текста следует по
