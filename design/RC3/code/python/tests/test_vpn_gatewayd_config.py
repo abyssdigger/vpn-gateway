@@ -20,6 +20,9 @@ class NoSecurityLoader(vpng.ConfigLoader):
     def _validate_config_security(self, path: Path) -> None:
         return
 
+    def _validate_opened_config_stat(self, path: Path, file_stat) -> None:
+        return
+
 
 class ConfigTestCase(unittest.TestCase):
     def setUp(self):
