@@ -34,11 +34,11 @@ Active ordering:
 - prefix selector: process-local stable order of first accepted bindings;
 - explicit list: configured order filtered to active elements.
 
-For `prefix+`, surviving bindings keep their relative order, new bindings append, and
-removed bindings disappear without reordering survivors. If several new bindings are first
-seen in one snapshot, only that new group uses bytewise ASCII as a deterministic
-tie-breaker. This order drives binding-specific firewall/NAT materialization and is useful
-diagnostically; it is not a route-priority guarantee and is not persisted across restart.
+For `prefix+`, surviving bindings keep their relative order, new bindings append in the
+order returned by the current interface inventory, and removed bindings disappear without
+reordering survivors. No extra name sorting is applied. This order drives binding-specific
+firewall/NAT materialization and is useful diagnostically; it is not a route-priority
+guarantee and is not persisted across restart.
 
 Routing:
 
