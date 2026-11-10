@@ -52,10 +52,28 @@ def records(items):
 
 def derive(daemon, items=()):
     state = daemon._resolve_profile_interfaces(records(items))
+    allocations, cursors = daemon._build_prefix_metric_state(state)
     desired = daemon._derive_desired_routes(
-        interface_state_by_profile=state
+        interface_state_by_profile=state,
+        prefix_metric_allocations_by_profile=allocations,
     )
     return state, desired
+
+
+def commit_state(profile, daemon, state, routes):
+    allocations, cursors = daemon._build_prefix_metric_state(state)
+    if profile.config.interface.kind is vpng.InterfaceSelectorKind.PREFIX:
+        profile.commit_verified_state(
+            routes=routes,
+            active_bindings=state[profile.config.profile_id].active_bindings,
+            prefix_metrics=allocations[profile.config.profile_id],
+            prefix_metric_cursor=cursors[profile.config.profile_id],
+        )
+    else:
+        profile.commit_verified_state(
+            routes=routes,
+            active_bindings=state[profile.config.profile_id].active_bindings,
+        )
 
 
 def by_type(routes, route_type):
@@ -130,6 +148,85 @@ class RouteDerivationTests(unittest.TestCase):
         self.assertTrue(
             all(route.via is None and not route.onlink for route in unicast)
         )
+
+    def test_prefix_new_binding_keeps_existing_order_and_metrics(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+
+        first = daemon._build_reconciliation_snapshot(
+            records(
+                (
+                    ("vpns2", 2, "172.20.130.1"),
+                    ("vpns9", 9, "172.20.130.1"),
+                )
+            )
+        )
+        first_state = first.interface_state_by_profile["primary"]
+        profile.commit_verified_state(
+            routes=first.desired_routes_by_profile["primary"],
+            active_bindings=first_state.active_bindings,
+            prefix_metrics=first.prefix_metric_allocations_by_profile["primary"],
+            prefix_metric_cursor=first.prefix_metric_cursor_by_profile["primary"],
+        )
+
+        second = daemon._build_reconciliation_snapshot(
+            records(
+                (
+                    ("vpns10", 10, "172.20.130.1"),
+                    ("vpns2", 2, "172.20.130.1"),
+                    ("vpns9", 9, "172.20.130.1"),
+                )
+            )
+        )
+        second_state = second.interface_state_by_profile["primary"]
+        self.assertEqual(
+            tuple(binding.name for binding in second_state.active_bindings),
+            ("vpns2", "vpns9", "vpns10"),
+        )
+        metrics = second.prefix_metric_allocations_by_profile["primary"]
+        self.assertEqual(metrics[vpng.InterfaceBinding("vpns2", 2)], 10)
+        self.assertEqual(metrics[vpng.InterfaceBinding("vpns9", 9)], 20)
+        self.assertEqual(metrics[vpng.InterfaceBinding("vpns10", 10)], 30)
+
+        nat = second.desired_full_policy.nat.chain("VPNG-PRIMARY-NAT").rules
+        interfaces = tuple(
+            token
+            for rule in nat
+            for token in rule.split()
+            if token.startswith("vpns")
+        )
+        self.assertEqual(interfaces, ("vpns2", "vpns9", "vpns10"))
+
+    def test_prefix_freed_metric_is_not_reused_before_cursor_wrap(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+        first = daemon._build_reconciliation_snapshot(
+            records(
+                (
+                    ("vpns2", 2, "172.20.130.1"),
+                    ("vpns9", 9, "172.20.130.1"),
+                )
+            )
+        )
+        state = first.interface_state_by_profile["primary"]
+        profile.commit_verified_state(
+            routes=first.desired_routes_by_profile["primary"],
+            active_bindings=state.active_bindings,
+            prefix_metrics=first.prefix_metric_allocations_by_profile["primary"],
+            prefix_metric_cursor=first.prefix_metric_cursor_by_profile["primary"],
+        )
+
+        second = daemon._build_reconciliation_snapshot(
+            records(
+                (
+                    ("vpns9", 9, "172.20.130.1"),
+                    ("vpns10", 10, "172.20.130.1"),
+                )
+            )
+        )
+        metrics = second.prefix_metric_allocations_by_profile["primary"]
+        self.assertEqual(metrics[vpng.InterfaceBinding("vpns9", 9)], 20)
+        self.assertEqual(metrics[vpng.InterfaceBinding("vpns10", 10)], 30)
 
     def test_explicit_list_preserves_priority_holes(self):
         profile = make_profile(
@@ -221,11 +318,7 @@ class RoutePlanningTests(unittest.TestCase):
 
     def test_owned_desired_actual_is_kept(self):
         routes = self.desired["primary"]
-        state = self.state["primary"]
-        self.profile.commit_verified_state(
-            routes=routes,
-            active_bindings=state.active_bindings,
-        )
+        commit_state(self.profile, self.daemon, self.state, routes)
         plan = self.daemon._build_plan(
             all_kernel_routes=routes,
             desired_routes_by_profile=self.desired,
@@ -305,12 +398,15 @@ class RouteVerificationTests(unittest.TestCase):
             frozenset({"primary"}),
         )
 
+        allocations, cursors = daemon._build_prefix_metric_state(state)
         daemon._commit_owned(
             verified_routes_by_profile=(
                 verified.owned_routes_by_profile
             ),
             verified_profiles=verified.verified_profiles,
             interface_state_by_profile=state,
+            prefix_metric_allocations_by_profile=allocations,
+            prefix_metric_cursor_by_profile=cursors,
         )
         self.assertEqual(
             profile.committed_active_bindings,
