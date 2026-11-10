@@ -6,10 +6,12 @@ from ipaddress import IPv4Address, IPv4Network
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Mapping
 
+from .constants import FIRST_UNICAST_METRIC, ROUTE_METRIC_STEP
 from .interfaces import (
+    BindingSpec,
     InterfaceBinding,
     InterfaceRecord,
-    InterfaceSelector,
+    InterfaceSelectorKind,
     ProfileInterfaceState,
 )
 
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
 
 class DaemonState(Enum):
     STARTING = auto()
+    DISABLED = auto()
     ACTIVE = auto()
     DEGRADED = auto()
     ISOLATED = auto()
@@ -68,7 +71,6 @@ class RuntimeReasonCode(Enum):
     PROFILE_NO_UNICAST_PATH = auto()
     FORWARDING_DISABLE_FAILED = auto()
     FORWARDING_ENABLE_FAILED = auto()
-    FORWARDING_QUERY_FAILED = auto()
     FORWARDING_RESTORED = auto()
 
 
@@ -98,8 +100,6 @@ RUNTIME_REASON_TEXT: Mapping[RuntimeReasonCode, str] = MappingProxyType(
             "failed to confirm ip_forward disabled",
         RuntimeReasonCode.FORWARDING_ENABLE_FAILED:
             "failed to confirm ip_forward enabled",
-        RuntimeReasonCode.FORWARDING_QUERY_FAILED:
-            "failed to query ip_forward state",
         RuntimeReasonCode.FORWARDING_RESTORED:
             "ip_forward was unexpectedly disabled and was restored",
     }
@@ -173,10 +173,44 @@ class ReconciliationSnapshot:
 @dataclass(slots=True, frozen=True)
 class VpnProfileConfig:
     profile_id: str
-    interface: InterfaceSelector
-    network: IPv4Network
     routes: tuple[IPv4Network, ...]
+    bindings: tuple[BindingSpec, ...]
     allowed_sources: tuple[IPv4Network, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "routes", tuple(self.routes))
+        object.__setattr__(self, "bindings", tuple(self.bindings))
+        object.__setattr__(self, "allowed_sources", tuple(self.allowed_sources))
+
+    @property
+    def exact_count(self) -> int:
+        return sum(
+            spec.interface.kind is InterfaceSelectorKind.EXACT
+            for spec in self.bindings
+        )
+
+    @property
+    def has_prefix_bindings(self) -> bool:
+        return any(
+            spec.interface.kind is InterfaceSelectorKind.PREFIX
+            for spec in self.bindings
+        )
+
+    @property
+    def dynamic_metric_min(self) -> int:
+        return (
+            FIRST_UNICAST_METRIC
+            + self.exact_count * ROUTE_METRIC_STEP
+        )
+
+    def binding_by_index(self, config_index: int) -> BindingSpec:
+        try:
+            spec = self.bindings[config_index]
+        except IndexError as exc:
+            raise ValueError(f"invalid BindingSpec index: {config_index}") from exc
+        if spec.config_index != config_index:
+            raise ValueError("BindingSpec config_index does not match tuple position")
+        return spec
 
     @property
     def chain_input(self) -> str:
@@ -193,9 +227,22 @@ class VpnProfileConfig:
 
 @dataclass(slots=True, frozen=True)
 class GatewayConfig:
+    enabled: bool
     reconcile_interval: float
     common_allowed_sources: tuple[IPv4Network, ...]
-    vpns: Mapping[str, VpnProfileConfig]
+    profiles: Mapping[str, VpnProfileConfig]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "common_allowed_sources",
+            tuple(self.common_allowed_sources),
+        )
+        object.__setattr__(
+            self,
+            "profiles",
+            MappingProxyType(dict(self.profiles)),
+        )
 
 
 @dataclass(slots=True, frozen=True)
