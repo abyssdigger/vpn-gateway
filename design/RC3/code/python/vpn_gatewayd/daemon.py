@@ -1216,10 +1216,10 @@ class VpnGatewayDaemon:
         allocations: dict[InterfaceBinding, int] = {}
         used: set[int] = set()
 
-        for binding in state.prefix_bindings:
-            if binding not in committed:
-                continue
-            metric = committed[binding]
+        # A disappeared binding frees its metric only after the new verified
+        # state commits. Until then its committed slot remains reserved, so a
+        # mixed REMOVE+ADD snapshot cannot recycle it provisionally.
+        for binding, metric in committed.items():
             if not self._valid_prefix_metric(metric, start):
                 raise ReconciliationError(
                     f"{profile_id}: invalid committed prefix metric {metric}"
@@ -1228,8 +1228,9 @@ class VpnGatewayDaemon:
                 raise ReconciliationError(
                     f"{profile_id}: duplicate committed prefix metric {metric}"
                 )
-            allocations[binding] = metric
             used.add(metric)
+            if binding in state.prefix_bindings:
+                allocations[binding] = metric
 
         for binding in state.prefix_bindings:
             if binding in allocations:
