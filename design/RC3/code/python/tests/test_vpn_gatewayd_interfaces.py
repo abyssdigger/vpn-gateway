@@ -4,7 +4,7 @@ from __future__ import annotations
 import dataclasses
 import sys
 import unittest
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,7 +77,6 @@ class InterfaceStateTests(unittest.TestCase):
             record.ifindex = 8
 
     def test_prefix_allows_multiple_active_and_uses_bytewise_name_order(self):
-        expected = IPv4Address("172.20.130.1")
         state = vpng.resolve_profile_interface_state(
             vpng.InterfaceSelector.parse("vpns+"),
             (
@@ -85,7 +84,7 @@ class InterfaceStateTests(unittest.TestCase):
                 self.record("vpns10", 10, "172.20.130.1"),
                 self.record("other0", 11, "172.20.130.1"),
             ),
-            expected,
+            IPv4Network("172.20.130.0/29"),
         )
         self.assertEqual(
             tuple(record.name for record in state.candidates),
@@ -99,15 +98,31 @@ class InterfaceStateTests(unittest.TestCase):
             ),
         )
 
-    def test_matching_candidate_without_local_address_remains_inactive(self):
-        expected = IPv4Address("172.20.130.1")
+    def test_matching_candidates_with_different_addresses_inside_network_are_active(self):
         state = vpng.resolve_profile_interface_state(
             vpng.InterfaceSelector.parse("vpns+"),
             (
                 self.record("vpns0", 7, "172.20.130.1"),
                 self.record("vpns1", 8, "172.20.130.2"),
             ),
-            expected,
+            IPv4Network("172.20.130.0/29"),
+        )
+        self.assertEqual(
+            state.active_bindings,
+            (
+                vpng.InterfaceBinding("vpns0", 7),
+                vpng.InterfaceBinding("vpns1", 8),
+            ),
+        )
+
+    def test_matching_candidate_without_address_in_network_remains_inactive(self):
+        state = vpng.resolve_profile_interface_state(
+            vpng.InterfaceSelector.parse("vpns+"),
+            (
+                self.record("vpns0", 7, "172.20.130.1"),
+                self.record("vpns1", 8, "172.20.131.2"),
+            ),
+            IPv4Network("172.20.130.0/29"),
         )
         self.assertEqual(
             tuple(record.name for record in state.candidates),
@@ -119,14 +134,13 @@ class InterfaceStateTests(unittest.TestCase):
         )
 
     def test_explicit_list_preserves_config_order_and_missing_holes(self):
-        expected = IPv4Address("172.20.140.1")
         state = vpng.resolve_profile_interface_state(
             vpng.InterfaceSelector.parse(["vpnB", "vpnA", "vpnC"]),
             (
                 self.record("vpnA", 1, "172.20.140.1"),
                 self.record("vpnC", 3, "172.20.140.1"),
             ),
-            expected,
+            IPv4Network("172.20.140.0/29"),
         )
         self.assertEqual(
             tuple(record.name for record in state.candidates),
@@ -145,7 +159,7 @@ class InterfaceStateTests(unittest.TestCase):
             vpng.resolve_profile_interface_state(
                 vpng.InterfaceSelector.parse("vpns+"),
                 (self.record("vpns0", 7), self.record("vpns0", 8)),
-                IPv4Address("172.20.130.1"),
+                IPv4Network("172.20.130.0/29"),
             )
 
 

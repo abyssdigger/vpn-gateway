@@ -19,7 +19,6 @@ def profile(
     *,
     interface: str,
     network: str,
-    local_address: str,
     routes: tuple[str, ...],
     allowed_sources: tuple[str, ...] = (),
 ) -> vpng.VpnProfileConfig:
@@ -27,7 +26,6 @@ def profile(
         profile_id=profile_id,
         interface=vpng.InterfaceSelector.parse(interface),
         network=IPv4Network(network),
-        local_address=IPv4Address(local_address),
         routes=tuple(IPv4Network(item) for item in routes),
         allowed_sources=tuple(
             IPv4Network(item) for item in allowed_sources
@@ -40,7 +38,6 @@ def config() -> vpng.GatewayConfig:
         "primary",
         interface="vpns+",
         network="172.20.130.0/29",
-        local_address="172.20.130.1",
         routes=("10.0.0.0/8",),
         allowed_sources=("10.200.201.0/24",),
     )
@@ -48,7 +45,6 @@ def config() -> vpng.GatewayConfig:
         "backup",
         interface="wg0",
         network="172.20.126.0/29",
-        local_address="172.20.126.1",
         routes=("192.168.0.0/16",),
     )
     return vpng.GatewayConfig(
@@ -71,12 +67,12 @@ def interface_state():
         "primary": vpng.resolve_profile_interface_state(
             vpng.InterfaceSelector.parse("vpns+"),
             (primary_record,),
-            IPv4Address("172.20.130.1"),
+            IPv4Network("172.20.130.0/29"),
         ),
         "backup": vpng.resolve_profile_interface_state(
             vpng.InterfaceSelector.parse("wg0"),
             (),
-            IPv4Address("172.20.126.1"),
+            IPv4Network("172.20.126.0/29"),
         ),
     })
 

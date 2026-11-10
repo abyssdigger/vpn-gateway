@@ -4,7 +4,7 @@ from __future__ import annotations
 import dataclasses
 import sys
 import unittest
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Network
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +18,6 @@ def profile_config():
         profile_id="primary",
         interface=vpng.InterfaceSelector.parse("vpns+"),
         network=IPv4Network("172.20.130.0/29"),
-        local_address=IPv4Address("172.20.130.1"),
         routes=(
             IPv4Network("10.0.0.0/8"),
             IPv4Network("192.168.0.0/16"),

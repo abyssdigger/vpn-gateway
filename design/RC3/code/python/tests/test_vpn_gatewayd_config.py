@@ -23,7 +23,6 @@ VALID_PRIMARY = """
 [vpn.primary]
 interface = "vpns0"
 network = "172.20.130.0/29"
-local_address = "172.20.130.1"
 routes = ["10.0.0.0/8"]
 allowed_sources = ["10.200.201.0/24"]
 """
@@ -57,14 +56,12 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = ["10.200.201.0/24"]
 
             [vpn.backup]
             interface = "wg0"
             network = "172.20.126.0/29"
-            local_address = "172.20.126.1"
             routes = ["100.64.0.0/10", "192.168.0.0/16"]
             allowed_sources = []
             """
@@ -98,7 +95,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns+"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             """
@@ -151,14 +147,12 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["172.20.126.0/29"]
             allowed_sources = []
 
             [vpn.backup]
             interface = "wg0"
             network = "172.20.126.0/29"
-            local_address = "172.20.126.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             """
@@ -189,7 +183,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.backup]
             interface = "wg0"
             network = "10.20.0.0/16"
-            local_address = "10.20.0.1"
             routes = ["192.168.0.0/16"]
             allowed_sources = []
             """
@@ -222,7 +215,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8", "10.0.0.0/8"]
             allowed_sources = [
                 "10.200.201.1",
@@ -254,14 +246,12 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
             [vpn.PRIMARY]
             interface = "wg0"
             network = "172.20.126.0/29"
-            local_address = "172.20.126.1"
             routes = ["192.168.0.0/16"]
             allowed_sources = []
             """
@@ -282,21 +272,18 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.other]
             interface = "tun0"
             network = "172.20.140.0/29"
-            local_address = "172.20.140.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
             [vpn.primary]
             interface = "vpns0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["192.168.0.0/16"]
             allowed_sources = []
 
             [vpn.PRIMARY]
             interface = "wg0"
             network = "172.20.126.0/29"
-            local_address = "172.20.126.1"
             routes = ["100.64.0.0/10"]
             allowed_sources = []
             """
@@ -327,7 +314,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = ["vpnB", "vpnA", "vpnC"]
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             """
@@ -347,7 +333,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "wg0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             peers = ["172.20.130.2"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
@@ -375,7 +360,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = ["vpnA", "vpnA"]
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             """
@@ -394,14 +378,12 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns+"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
             [vpn.backup]
             interface = ["vpns9", "tun0"]
             network = "172.20.126.0/29"
-            local_address = "172.20.126.1"
             routes = ["192.168.0.0/16"]
             allowed_sources = []
             """
@@ -420,7 +402,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns0"
             network = "172.20.130.1/29"
-            local_address = "172.20.130.1"
             routes = ["10.1.2.3/8"]
             allowed_sources = []
             """
@@ -457,14 +438,12 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "tun0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
             [vpn.backup]
             interface = "tun0"
             network = "172.20.126.0/29"
-            local_address = "172.20.126.1"
             routes = ["192.168.0.0/16"]
             allowed_sources = []
             """
@@ -485,7 +464,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8", "10.20.0.0/16"]
             allowed_sources = []
             """
@@ -505,14 +483,12 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
             [vpn.backup]
             interface = "wg0"
             network = "172.20.126.0/29"
-            local_address = "172.20.126.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             """
@@ -530,7 +506,7 @@ class ConfigTestCase(unittest.TestCase):
             )
         )
 
-    def test_slash31_and_local_endpoint_address_are_valid(self):
+    def test_slash31_network_is_valid(self):
         td, path = self.write_config(
             """
             managed_vpns = ["primary"]
@@ -539,7 +515,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "tun0"
             network = "172.20.130.0/31"
-            local_address = "172.20.130.0"
             routes = ["10.0.0.1/32"]
             allowed_sources = []
             """
@@ -548,7 +523,33 @@ class ConfigTestCase(unittest.TestCase):
 
         cfg = NoSecurityLoader().load_runtime(path)
         self.assertEqual(str(cfg.vpns["primary"].network), "172.20.130.0/31")
-        self.assertEqual(str(cfg.vpns["primary"].local_address), "172.20.130.0")
+
+    def test_legacy_local_address_key_is_unknown_managed_key(self):
+        td, path = self.write_config(
+            """
+            managed_vpns = ["primary"]
+            common_allowed_sources = []
+
+            [vpn.primary]
+            interface = "wg0"
+            network = "172.20.130.0/29"
+            local_address = "172.20.130.1"
+            routes = ["10.0.0.0/8"]
+            allowed_sources = []
+            """
+        )
+        self.addCleanup(td.cleanup)
+
+        loader = NoSecurityLoader()
+        with self.assertRaises(vpng.ConfigError):
+            loader.load_runtime(path)
+        result = loader.check(path)
+        self.assertTrue(result.has_errors)
+        self.assertTrue(any(
+            issue.location == "vpn.primary.local_address"
+            and "unknown profile key" in issue.message
+            for issue in result.issues
+        ))
 
     def test_unknown_top_level_key_is_error(self):
         td, path = self.write_config(
@@ -575,7 +576,6 @@ class ConfigTestCase(unittest.TestCase):
             [vpn.primary]
             interface = "vpns0"
             network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             surprise = true

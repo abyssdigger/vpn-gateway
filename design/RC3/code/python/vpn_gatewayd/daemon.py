@@ -834,7 +834,7 @@ class VpnGatewayDaemon:
             state[profile_id] = resolve_profile_interface_state(
                 cfg.interface,
                 records,
-                cfg.local_address,
+                cfg.network,
             )
 
         return MappingProxyType(state)

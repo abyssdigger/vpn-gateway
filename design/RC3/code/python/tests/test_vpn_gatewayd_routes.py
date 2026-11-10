@@ -18,7 +18,6 @@ def make_profile(
     profile_id="primary",
     interface="vpns+",
     network="172.20.130.0/29",
-    local_address="172.20.130.1",
     routes=("10.0.0.0/8",),
 ):
     return vpng.VpnProfile(
@@ -26,7 +25,6 @@ def make_profile(
             profile_id=profile_id,
             interface=vpng.InterfaceSelector.parse(interface),
             network=IPv4Network(network),
-            local_address=IPv4Address(local_address),
             routes=tuple(IPv4Network(item) for item in routes),
             allowed_sources=(),
         )
@@ -163,12 +161,23 @@ class RouteDerivationTests(unittest.TestCase):
             {vpng.RouteType.BLACKHOLE},
         )
 
-    def test_candidate_wrong_local_address_does_not_get_route(self):
+    def test_candidate_different_address_inside_network_gets_route(self):
         profile = make_profile()
         daemon = make_daemon(profile)
         _, desired = derive(
             daemon,
             (("vpns0", 7, "172.20.130.2"),),
+        )
+        self.assertTrue(
+            by_type(desired["primary"], vpng.RouteType.UNICAST)
+        )
+
+    def test_candidate_address_outside_network_does_not_get_route(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+        _, desired = derive(
+            daemon,
+            (("vpns0", 7, "172.20.131.2"),),
         )
         self.assertFalse(
             by_type(desired["primary"], vpng.RouteType.UNICAST)

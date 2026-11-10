@@ -52,7 +52,6 @@ class ConfigLoader:
         {
             "interface",
             "network",
-            "local_address",
             "routes",
             "allowed_sources",
         }
@@ -735,16 +734,6 @@ class ConfigLoader:
             if "network" in body
             else None
         )
-        local_address = (
-            self._parse_ipv4_address(
-                body["local_address"],
-                location=f"{base}.local_address",
-                issues=issues,
-                level=invalid_level,
-            )
-            if "local_address" in body
-            else None
-        )
         routes = (
             self._parse_routes(
                 body["routes"],
@@ -773,31 +762,17 @@ class ConfigLoader:
             for value in (
                 interface,
                 network,
-                local_address,
                 routes,
                 allowed_sources,
             )
         ):
             valid = False
 
-        if network is not None and local_address is not None:
-            if local_address not in network:
-                issues.append(
-                    ConfigIssue(
-                        invalid_level,
-                        f"{base}.local_address",
-                        f"{local_address} is outside VPN network {network}",
-                    )
-                )
-                valid = False
-
-
         if not valid:
             return None
 
         assert interface is not None
         assert network is not None
-        assert local_address is not None
         assert routes is not None
         assert allowed_sources is not None
 
@@ -805,7 +780,6 @@ class ConfigLoader:
             profile_id=profile_id,
             interface=interface,
             network=network,
-            local_address=local_address,
             routes=routes,
             allowed_sources=allowed_sources,
         )
@@ -845,28 +819,6 @@ class ConfigLoader:
             return None
 
         return selector
-
-    def _parse_ipv4_address(
-        self,
-        value: object,
-        *,
-        location: str,
-        issues: list[ConfigIssue],
-        level: ConfigIssueLevel,
-    ) -> IPv4Address | None:
-        if not isinstance(value, str):
-            issues.append(
-                ConfigIssue(level, location, "must be an IPv4 address string")
-            )
-            return None
-
-        try:
-            return IPv4Address(value)
-        except ValueError as exc:
-            issues.append(
-                ConfigIssue(level, location, f"invalid IPv4 address: {exc}")
-            )
-            return None
 
     def _parse_network(
         self,

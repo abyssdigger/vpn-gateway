@@ -22,7 +22,6 @@ def make_config():
         profile_id="primary",
         interface=vpng.InterfaceSelector.parse("vpns+"),
         network=IPv4Network("172.20.130.0/29"),
-        local_address=IPv4Address("172.20.130.1"),
         routes=(IPv4Network("10.0.0.0/8"),),
         allowed_sources=(),
     )

@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum, auto
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, IPv4Network
 from typing import Sequence
 
 _EXACT_INTERFACE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
@@ -172,12 +172,12 @@ def _ordered_candidates(
 def resolve_profile_interface_state(
     selector: InterfaceSelector,
     records: Sequence[InterfaceRecord],
-    expected_local_address: IPv4Address,
+    network: IPv4Network,
 ) -> ProfileInterfaceState:
     candidates = _ordered_candidates(selector, records)
     active = tuple(
         InterfaceBinding.from_record(record)
         for record in candidates
-        if expected_local_address in record.ipv4
+        if any(address in network for address in record.ipv4)
     )
     return ProfileInterfaceState(candidates=candidates, active_bindings=active)

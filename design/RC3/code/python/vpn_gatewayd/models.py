@@ -147,7 +147,6 @@ class VpnProfileConfig:
     profile_id: str
     interface: InterfaceSelector
     network: IPv4Network
-    local_address: IPv4Address
     routes: tuple[IPv4Network, ...]
     allowed_sources: tuple[IPv4Network, ...]
 
