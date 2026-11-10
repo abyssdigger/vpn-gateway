@@ -464,6 +464,26 @@ class KernelRouteAdapterTests(unittest.TestCase):
             ),
         )
 
+    def test_list_interfaces_preserves_iproute2_record_order(self):
+        adapter = kernel()
+        payload = [
+            {"ifindex": 9, "ifname": "vpns9", "addr_info": []},
+            {"ifindex": 10, "ifname": "vpns10", "addr_info": []},
+            {"ifindex": 2, "ifname": "ens18", "addr_info": []},
+        ]
+
+        with mock.patch.object(
+            adapter,
+            "_run",
+            return_value=completed(payload),
+        ):
+            records = adapter.list_interfaces()
+
+        self.assertEqual(
+            tuple(record.name for record in records),
+            ("vpns9", "vpns10", "ens18"),
+        )
+
     def test_list_interfaces_merges_only_same_name_same_ifindex(self):
         adapter = kernel()
         payload = [
