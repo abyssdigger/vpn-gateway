@@ -197,13 +197,20 @@ Daemon не изменяет перечисленные IPv6 sysctl: они яв
 конфигурации выделенного доверенного хоста. Несоответствие при запуске является фатальной
 ошибкой до любых действий, которые могут разрешить IPv4-пересылку.
 
-Все перечисленные IPv6-условия должны сохраняться и во время `RUN`. Изменение
-`all.forwarding`, `default.forwarding`, `default.disable_ipv6` либо включение IPv6
-на уже существующем управляемом VPN-интерфейсе доверенным VPN-ПО или администратором во
-время `RUN` находится вне поддерживаемой модели эксплуатации и требует исправления
-конфигурации хоста и перезапуска сервиса. IPv4-состояние `ISOLATED` не считается
-защитой от такого нарушения, потому что daemon не управляет IPv6 firewall и IPv6
-пересылкой.
+Все перечисленные IPv6-условия должны сохраняться и во время `RUN`. Каждый полный
+reconciliation pass после свежей interface inventory и **до построения allowing policy**
+повторно проверяет глобальные IPv6 prerequisites и `disable_ipv6=1` для всех текущих
+interfaces guard namespaces.
+
+Нарушение во время `RUN` является host-prerequisite breach: daemon не исправляет IPv6
+sysctl, не продолжает ordinary materialization, best-effort выключает IPv4 forwarding и
+применяет config-derived isolation filter, если состояние filter читаемо, после чего
+остается `ISOLATED` с high-severity diagnostic до исправления хоста и restart.
+
+`ISOLATED` при этом описывает только управляемое daemon IPv4-состояние и **не является
+гарантией IPv6 protection**, потому что daemon не владеет IPv6 firewall/forwarding.
+Оператор обязан устранить prerequisite violation; автоматическое возвращение в
+`ACTIVE` после такого нарушения без restart не поддерживается.
 
 ## 3. Процессная модель
 
@@ -869,23 +876,27 @@ runtime interface name.
 
 После успешной inventory:
 
-1. построить один immutable `ReconciliationSnapshot`;
-2. сравнить candidates и active concrete binding identities с последним verified state;
-3. при policy-changing transition по возможности привести `ip_forward=0`;
+1. повторно проверить global/per-interface IPv6 prerequisites §2.6 для current guard
+   namespaces; violation -> host-prerequisite isolation path без allowing apply;
+2. построить один immutable `ReconciliationSnapshot`;
+3. сравнить candidates и active concrete binding identities с последним verified state;
+5. при policy-changing transition по возможности привести `ip_forward=0`;
 4. прочитать firewall/NAT и классифицировать `SAFE/UNSAFE/UNKNOWN`;
-5. `UNKNOWN` либо неопределимая область drift -> `ISOLATED`;
-6. INPUT-only `UNSAFE` без policy transition -> narrow INPUT repair;
-7. FORWARD/NAT `UNSAFE` либо policy transition -> protective barrier §8.6;
-8. после `SAFE` полной policy прочитать strict route snapshot;
-9. построить, проверить, применить и повторно проверить route plan из того же snapshot;
-10. materialize отсутствующие direct routes для всех active bindings;
-11. зафиксировать OWNED и active binding state только после successful verification;
-12. в завершенном non-ISOLATED `RUN` привести `ip_forward` к 1 и reread;
-13. confirmed `ip_forward=0` после failed enable -> `DEGRADED`; unreadable
+6. `UNKNOWN` либо неопределимая область drift -> `ISOLATED`;
+7. INPUT-only `UNSAFE` без policy transition -> narrow INPUT repair;
+8. FORWARD/NAT `UNSAFE` либо policy transition -> protective barrier §8.6;
+9. после `SAFE` полной policy прочитать strict route snapshot;
+10. построить, проверить, применить и повторно проверить route plan из того же snapshot;
+11. materialize отсутствующие direct routes для всех active bindings;
+12. зафиксировать OWNED и active binding state только после successful verification;
+13. в завершенном non-ISOLATED `RUN` привести `ip_forward` к 1 и reread;
+14. confirmed `ip_forward=0` после failed enable -> `DEGRADED`; unreadable
     `ip_forward` -> `ISOLATED`.
 
-Candidate-only change без изменения active set не требует тяжелого barrier, потому что
-разрешающая policy не меняется; status все равно обновляется из нового snapshot.
+Candidate-only change без изменения active set не требует тяжелого IPv4 barrier **только
+после successful IPv6 prerequisite verification текущего guard namespace**. После этой
+проверки allowing IPv4 policy действительно не меняется; status обновляется из нового
+snapshot.
 
 ### 8.5. Частичная доступность множественного селектора
 
@@ -2292,12 +2303,7 @@ may retain adds/deletes/replaces.
 9. При обычном согласовании полная инвентаризация маршрутов остается строгой и не
    пропускает молча неподдерживаемые multipath/nhid формы.
 
-10. `ip_forward` находится в исключительном управлении daemon, изменяется только по схеме
-    «прочитать перед записью» и подтверждается повторным чтением; IPv6 daemon не
-    маршрутизирует и не фильтрует, поэтому требует выключенной IPv6-пересылки и
-    `disable_ipv6=1` для всех существующих interfaces в защитном пространстве имен
-    управляемых селекторов, согласно §2.6. Эти IPv6-условия являются доверенными обязательными
-    условиями хоста и должны сохраняться во время `RUN`.
+10. `ip_forward` находится в исключительном управлении daemon и read-after-write verified. IPv6 daemon не маршрутизирует/не фильтрует: global prerequisites и `disable_ipv6=1` для всех current guard-namespace interfaces проверяются startup и на каждом полном RUN reconciliation до allowing policy. Runtime violation блокирует ordinary apply и оставляет IPv4 state ISOLATED; это не считается IPv6 protection.
 
 11. Эксклюзивное управление `ip_forward` архитектурно связано с эксклюзивной ответственностью
     daemon за окончательное решение для каждого IPv4-пакета FORWARD.
@@ -2367,7 +2373,7 @@ may retain adds/deletes/replaces.
 
 35. NAT проверяется раньше восстановления маршрутов proto 202 через новую привязку.
 
-36. Изменение active binding set/identity либо selector-derived metric assignment является policy-changing transition; candidate-only change без изменения active resources не требует тяжелого barrier.
+36. Изменение active binding set/identity либо selector-derived metric assignment является policy-changing transition. Candidate-only change без active-resource change не требует тяжелого IPv4 barrier только после successful current IPv6 prerequisite verification.
 
 37. Остаточное окно «событие ядра -> реакция daemon» существует и документировано;
     запрещающие правила селекторов закрывают входящий трафик нового непривязанного
