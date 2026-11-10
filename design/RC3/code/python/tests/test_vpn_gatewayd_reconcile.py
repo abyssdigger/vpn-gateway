@@ -195,6 +195,7 @@ class ReconcileTests(unittest.TestCase):
         isolation.assert_called_once()
 
         self.kernel.get_ipv6_all_forwarding.return_value = False
+        self.kernel.list_interfaces.reset_mock()
         with (
             mock.patch.object(
                 self.daemon,
@@ -213,6 +214,7 @@ class ReconcileTests(unittest.TestCase):
         ):
             self.daemon.reconcile()
         snapshot.assert_not_called()
+        self.kernel.list_interfaces.assert_not_called()
         self.assertIs(self.daemon.state, vpng.DaemonState.ISOLATED)
 
     def test_transit_drift_uses_barrier_repair(self):
