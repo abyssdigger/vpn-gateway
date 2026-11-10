@@ -48,7 +48,7 @@ class FirewallNatPolicy:
 
 
 def _profile_ids(config: GatewayConfig) -> tuple[str, ...]:
-    return tuple(sorted(config.vpns, key=lambda item: item.upper()))
+    return tuple(sorted(config.profiles, key=lambda item: item.upper()))
 
 
 def _effective_sources(
@@ -66,7 +66,7 @@ def _require_complete_interface_state(
     config: GatewayConfig,
     state_by_profile: Mapping[str, ProfileInterfaceState],
 ) -> None:
-    expected = frozenset(config.vpns)
+    expected = frozenset(config.profiles)
     actual = frozenset(state_by_profile)
     if actual != expected:
         raise ValueError(
@@ -81,8 +81,8 @@ def _selector_guard_rules(
     profile: VpnProfileConfig,
 ) -> tuple[str, ...]:
     return tuple(
-        f"-A {chain} -i {interface} -j {_REJECT}"
-        for interface in profile.interface.guard_interfaces()
+        f"-A {chain} -i {spec.interface.guard_interface()} -j {_REJECT}"
+        for spec in profile.bindings
     )
 
 
@@ -93,7 +93,10 @@ def _input_guard_rules(
     rules: list[str] = []
     for profile_id in profile_ids:
         rules.extend(
-            _selector_guard_rules("VPNG-INPUT-GUARD", config.vpns[profile_id])
+            _selector_guard_rules(
+                "VPNG-INPUT-GUARD",
+                config.profiles[profile_id],
+            )
         )
     rules.append("-A VPNG-INPUT-GUARD -j RETURN")
     return tuple(rules)
@@ -106,7 +109,10 @@ def _ingress_guard_rules(
     rules: list[str] = []
     for profile_id in profile_ids:
         rules.extend(
-            _selector_guard_rules("VPNG-INGRESS", config.vpns[profile_id])
+            _selector_guard_rules(
+                "VPNG-INGRESS",
+                config.profiles[profile_id],
+            )
         )
     rules.append("-A VPNG-INGRESS -j RETURN")
     return tuple(rules)
@@ -116,9 +122,17 @@ def _reserved_rules(
     config: GatewayConfig,
     profile_ids: tuple[str, ...],
 ) -> tuple[str, ...]:
-    rules = [
-        f"-A VPNG-RESERVED -d {config.vpns[profile_id].network} -j {_REJECT}"
+    networks = {
+        spec.network
         for profile_id in profile_ids
+        for spec in config.profiles[profile_id].bindings
+    }
+    rules = [
+        f"-A VPNG-RESERVED -d {network} -j {_REJECT}"
+        for network in sorted(
+            networks,
+            key=lambda net: (int(net.network_address), net.prefixlen),
+        )
     ]
     rules.append("-A VPNG-RESERVED -j RETURN")
     return tuple(rules)
@@ -138,7 +152,7 @@ def _filter_jumps(
     input_jumps = tuple(
         [
             *(
-                f"-A INPUT -j {config.vpns[profile_id].chain_input}"
+                f"-A INPUT -j {config.profiles[profile_id].chain_input}"
                 for profile_id in profile_ids
             ),
             "-A INPUT -j VPNG-INPUT-GUARD",
@@ -149,7 +163,7 @@ def _filter_jumps(
             "-A FORWARD -j VPNG-INGRESS",
             "-A FORWARD -j VPNG-RESERVED",
             *(
-                f"-A FORWARD -j {config.vpns[profile_id].chain_forward}"
+                f"-A FORWARD -j {config.profiles[profile_id].chain_forward}"
                 for profile_id in profile_ids
             ),
             "-A FORWARD -j VPNG-FORWARD-DENY",
@@ -193,19 +207,12 @@ def _build_filter_policy(
     ingress_rules.append("-A VPNG-INGRESS -j RETURN")
     chains.append(PolicyChain("VPNG-INGRESS", tuple(ingress_rules)))
     chains.append(
-        PolicyChain(
-            "VPNG-RESERVED",
-            _reserved_rules(config, profile_ids),
-        )
+        PolicyChain("VPNG-RESERVED", _reserved_rules(config, profile_ids))
     )
 
     for profile_id in profile_ids:
-        profile = config.vpns[profile_id]
-        state = (
-            None
-            if state_by_profile is None
-            else state_by_profile[profile_id]
-        )
+        profile = config.profiles[profile_id]
+        state = None if state_by_profile is None else state_by_profile[profile_id]
 
         input_rules: list[str] = []
         if state is not None:
@@ -235,9 +242,7 @@ def _build_filter_policy(
                 f"-A {profile.chain_forward} -d {destination} -j {_REJECT}"
             )
         forward_rules.append(f"-A {profile.chain_forward} -j RETURN")
-        chains.append(
-            PolicyChain(profile.chain_forward, tuple(forward_rules))
-        )
+        chains.append(PolicyChain(profile.chain_forward, tuple(forward_rules)))
 
     chains.append(
         PolicyChain(
@@ -245,9 +250,8 @@ def _build_filter_policy(
             _input_guard_rules(config, profile_ids),
         )
     )
-    chains.append(
-        PolicyChain("VPNG-FORWARD-DENY", _forward_deny_rules())
-    )
+    chains.append(PolicyChain("VPNG-FORWARD-DENY", _forward_deny_rules()))
+
     return FilterPolicy(
         input_jumps=input_jumps,
         forward_jumps=forward_jumps,
@@ -271,21 +275,24 @@ def desired_full_policy(
     )
 
     postrouting_jumps = tuple(
-        f"-A POSTROUTING -j {config.vpns[profile_id].chain_nat}"
+        f"-A POSTROUTING -j {config.profiles[profile_id].chain_nat}"
         for profile_id in profile_ids
     )
     nat_chains: list[PolicyChain] = []
     for profile_id in profile_ids:
-        profile = config.vpns[profile_id]
-        rules = [
-            f"-A {profile.chain_nat} -o {binding.name} "
-            "-m addrtype ! --src-type LOCAL -j MASQUERADE"
-            for binding in state_by_profile[profile_id].active_bindings
-        ]
+        profile = config.profiles[profile_id]
+        seen: set[str] = set()
+        rules: list[str] = []
+        for binding in state_by_profile[profile_id].active_bindings:
+            if binding.name in seen:
+                continue
+            seen.add(binding.name)
+            rules.append(
+                f"-A {profile.chain_nat} -o {binding.name} "
+                "-m addrtype ! --src-type LOCAL -j MASQUERADE"
+            )
         rules.append(f"-A {profile.chain_nat} -j RETURN")
-        nat_chains.append(
-            PolicyChain(profile.chain_nat, tuple(rules))
-        )
+        nat_chains.append(PolicyChain(profile.chain_nat, tuple(rules)))
 
     return FirewallNatPolicy(
         filter=filter_policy,
