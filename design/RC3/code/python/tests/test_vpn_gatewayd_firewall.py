@@ -44,6 +44,23 @@ def state():
     return MappingProxyType({"primary": resolved})
 
 
+def state_for(*names):
+    records = tuple(
+        vpng.InterfaceRecord(
+            name,
+            index,
+            frozenset({IPv4Address("172.20.130.1")}),
+        )
+        for index, name in enumerate(names, start=7)
+    )
+    resolved = vpng.resolve_profile_interface_state(
+        vpng.InterfaceSelector.parse("vpns+"),
+        records,
+        IPv4Network("172.20.130.0/29"),
+    )
+    return MappingProxyType({"primary": resolved})
+
+
 def daemon():
     d = vpng.VpnGatewayDaemon(
         config_path=Path("/dev/null"),
@@ -255,6 +272,68 @@ class FirewallPolicyOrchestrationTests(unittest.TestCase):
         self.assertIn("-I FORWARD 3 -j VPNG-PRIMARY-FORWARD", payload)
         self.assertIn("-I FORWARD 4 -j VPNG-FORWARD-DENY", payload)
         self.assertIn(":VPNG-FORWARD-DENY - [0:0]", payload)
+
+    def test_additive_payload_inserts_only_new_binding_rules(self):
+        previous = vpng.desired_full_policy(
+            config(),
+            state_for("vpns9"),
+        )
+        desired = vpng.desired_full_policy(
+            config(),
+            state_for("vpns9", "vpns10"),
+        )
+
+        filter_payload = self.daemon._build_insertion_only_table_payload(
+            "filter",
+            previous.filter.chains,
+            desired.filter.chains,
+        )
+        nat_payload = self.daemon._build_insertion_only_table_payload(
+            "nat",
+            previous.nat.chains,
+            desired.nat.chains,
+        )
+
+        self.assertIsNotNone(filter_payload)
+        self.assertIsNotNone(nat_payload)
+        self.assertNotIn(":VPNG-", filter_payload)
+        self.assertNotIn(":VPNG-", nat_payload)
+        self.assertNotIn("-D ", filter_payload)
+        self.assertNotIn("-D ", nat_payload)
+        self.assertIn("-i vpns10", filter_payload)
+        self.assertIn("-o vpns10", filter_payload)
+        self.assertIn("-o vpns10", nat_payload)
+        self.assertNotIn("-i vpns9", filter_payload)
+        self.assertNotIn("-o vpns9", nat_payload)
+
+    def test_additive_payload_rejects_existing_rule_reorder(self):
+        previous = (
+            vpng.PolicyChain(
+                "VPNG-X",
+                (
+                    "-A VPNG-X -i vpns1 -j ACCEPT",
+                    "-A VPNG-X -i vpns2 -j ACCEPT",
+                    "-A VPNG-X -j RETURN",
+                ),
+            ),
+        )
+        reordered = (
+            vpng.PolicyChain(
+                "VPNG-X",
+                (
+                    "-A VPNG-X -i vpns2 -j ACCEPT",
+                    "-A VPNG-X -i vpns1 -j ACCEPT",
+                    "-A VPNG-X -j RETURN",
+                ),
+            ),
+        )
+
+        with self.assertRaises(vpng.ReconciliationError):
+            self.daemon._build_insertion_only_table_payload(
+                "filter",
+                previous,
+                reordered,
+            )
 
     def test_nat_payload_uses_exact_runtime_binding(self):
         snapshot = serialize_policy(self.desired)
