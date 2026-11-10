@@ -1673,7 +1673,10 @@ Prefix entries между exact entries rank не занимают.
 ```
 
 Prefix начинается с ASCII letter, использует exact-name grammar и имеет длину 1..14.
-`+` допустим только последним символом.
+`+` допустим только последним символом. Prefix guard namespace не должен включать ни
+одно forbidden exact name: если forbidden name начинается с указанного prefix, такой
+BindingSpec является config error. Это распространяет exact-name safety restriction на
+весь namespace, который реально охватывает `-i prefix+`.
 
 Candidates — все interface names, начинающиеся с prefix, включая exact `prefix`.
 Guard использует только deny semantics `-i prefix+`.
@@ -2308,126 +2311,128 @@ reconciliation pass целиком и дает `ISOLATED`.
    default empty.
 8. Один BindingSpec содержит `interface` selector и собственную `network`.
 9. BindingSpec selector имеет только EXACT или PREFIX; LIST selector отсутствует.
-10. Selector namespaces всех enabled BindingSpec попарно не пересекаются.
-11. Concrete binding identity = exact interface name + ifindex.
-12. Candidate становится active только при наличии local IPv4 внутри owning
+10. Ни exact selector, ни namespace prefix selector не может включать forbidden exact
+    interface names (`lo`, `any`, `default`, `all`).
+11. Selector namespaces всех enabled BindingSpec попарно не пересекаются.
+12. Concrete binding identity = exact interface name + ifindex.
+13. Candidate становится active только при наличии local IPv4 внутри owning
     BindingSpec.network.
-13. BindingSpec.network является trust boundary applicability, а не доказательством
+14. BindingSpec.network является trust boundary applicability, а не доказательством
     transport process identity.
-14. Binding networks разных specs могут пересекаться; interface ownership задается
+15. Binding networks разных specs могут пересекаться; interface ownership задается
     selector namespace.
-15. Protected route не пересекается ни с одной enabled BindingSpec.network.
-16. Protected routes enabled profiles глобально не имеют нетождественных overlap/nesting.
-17. Point-to-point remote address, peer, handshake, operstate и LOWER_UP не являются
+16. Protected route не пересекается ни с одной enabled BindingSpec.network.
+17. Protected routes enabled profiles глобально не имеют нетождественных overlap/nesting.
+18. Point-to-point remote address, peer, handshake, operstate и LOWER_UP не являются
     binding truth.
-18. Allowing INPUT/FORWARD, NAT и UNICAST route используют только exact active interface
+19. Allowing INPUT/FORWARD, NAT и UNICAST route используют только exact active interface
     names; prefix syntax допустим только в deny guards.
-19. Candidate-only interface остается guard-blocked и не получает allowing resources.
-20. IPv6 host prerequisites проверяются до allowing projection; violation в RUN latch-ит
+20. Candidate-only interface остается guard-blocked и не получает allowing resources.
+21. IPv6 host prerequisites проверяются до allowing projection; violation в RUN latch-ит
     ISOLATED до restart.
-21. IPv6 disable check охватывает selector namespace каждого enabled BindingSpec, а не
+22. IPv6 disable check охватывает selector namespace каждого enabled BindingSpec, а не
     только active bindings.
-22. Для каждого protected destination всегда существует desired BLACKHOLE proto 201
+23. Для каждого protected destination всегда существует desired BLACKHOLE proto 201
     metric 65536.
-23. Каждый desired UNICAST route direct: `via=None`, exact `dev`, proto 202,
+24. Каждый desired UNICAST route direct: `via=None`, exact `dev`, proto 202,
     `onlink=false`.
-24. Все daemon-owned UNICAST metrics строго меньше BLACKHOLE_METRIC.
-25. Exact rank считается только среди exact BindingSpec профиля в config order.
-26. Exact metric = FIRST_UNICAST_METRIC + exact_rank*ROUTE_METRIC_STEP.
-27. Missing exact binding не сдвигает metrics остальных exact specs.
-28. Same-name/new-ifindex exact binding является новой concrete identity, но получает ту
+25. Все daemon-owned UNICAST metrics строго меньше BLACKHOLE_METRIC.
+26. Exact rank считается только среди exact BindingSpec профиля в config order.
+27. Exact metric = FIRST_UNICAST_METRIC + exact_rank*ROUTE_METRIC_STEP.
+28. Missing exact binding не сдвигает metrics остальных exact specs.
+29. Same-name/new-ifindex exact binding является новой concrete identity, но получает ту
     же config-derived exact metric.
-29. Все prefix BindingSpec профиля используют один shared dynamic allocator.
-30. `dynamic_metric_min = FIRST_UNICAST_METRIC + exact_count*ROUTE_METRIC_STEP`.
-31. Любой exact route профиля имеет меньшую metric, чем любой dynamic prefix route.
-32. Позиция prefix BindingSpec внутри `bindings[]` route priority не задает.
-33. Непрерывно active prefix binding сохраняет metric.
-34. Исчезнувшая prefix binding освобождает metric только после verified-state commit.
-35. Новая prefix binding получает следующий свободный aligned metric от process-local
+30. Все prefix BindingSpec профиля используют один shared dynamic allocator.
+31. `dynamic_metric_min = FIRST_UNICAST_METRIC + exact_count*ROUTE_METRIC_STEP`.
+32. Любой exact route профиля имеет меньшую metric, чем любой dynamic prefix route.
+33. Позиция prefix BindingSpec внутри `bindings[]` route priority не задает.
+34. Непрерывно active prefix binding сохраняет metric.
+35. Исчезнувшая prefix binding освобождает metric только после verified-state commit.
+36. Новая prefix binding получает следующий свободный aligned metric от process-local
     cursor; allocator циклически wrap-ится к dynamic_metric_min.
-36. Prefix allocator не заполняет ранние holes специально и пропускает occupied metrics.
-37. Exhausted prefix metric space делает snapshot projection failed/ISOLATED; partial
+37. Prefix allocator не заполняет ранние holes специально и пропускает occupied metrics.
+38. Exhausted prefix metric space делает snapshot projection failed/ISOLATED; partial
     desired state не принимается.
-38. Если profile имеет prefix BindingSpec, config оставляет минимум один dynamic slot.
-39. Prefix active_order process-local: survivors сохраняют relative order, new append в
+39. Если profile имеет prefix BindingSpec, config оставляет минимум один dynamic slot.
+40. Prefix active_order process-local: survivors сохраняют relative order, new append в
     interface-inventory encounter order, дополнительная сортировка запрещена.
-40. Prefix active_order диагностический; route preference между prefix bindings не
+41. Prefix active_order диагностический; route preference между prefix bindings не
     гарантируется и после restart может измениться.
-41. Profile active serialization order: active exact bindings по exact rank, затем
+42. Profile active serialization order: active exact bindings по exact rank, затем
     process-local prefix active_order.
-42. Existing survivor firewall/NAT rules и routes не удаляются/пересоздаются только ради
+43. Existing survivor firewall/NAT rules и routes не удаляются/пересоздаются только ради
     canonical reordering.
-43. RouteSpec traversal/serialization order не является route semantics и не вызывает
+44. RouteSpec traversal/serialization order не является route semantics и не вызывает
     churn unchanged routes.
-44. EXP-009: transport peer не является route-next-hop abstraction; WireGuard peer
+45. EXP-009: transport peer не является route-next-hop abstraction; WireGuard peer
     selection принадлежит AllowedIPs.
-45. VPN-GATE failover/failback основывается на independent concrete interfaces, а не на
+46. VPN-GATE failover/failback основывается на independent concrete interfaces, а не на
     нескольких peers одного WG interface.
-46. Failover по metric является interface-availability mechanism, не remote health-check.
-47. Netlink event — wakeup hint; source of truth — fresh full snapshot.
-48. Потеря Netlink events компенсируется periodic reconciliation.
-49. Same-name/new-ifindex replacement = REMOVE old -> ADD new.
-50. Штатный ADD: NAT -> verify -> filter -> verify -> route -> verify -> commit.
-51. Штатный REMOVE: filter -> verify -> route -> verify -> NAT -> verify -> commit.
-52. Normal ADD/REMOVE не изменяет `ip_forward`.
-53. Mixed safely decomposable transition выполняет все REMOVE до ADD.
-54. Survivor identity/order/metric должны сохраняться; если локальность нельзя доказать,
+47. Failover по metric является interface-availability mechanism, не remote health-check.
+48. Netlink event — wakeup hint; source of truth — fresh full snapshot.
+49. Потеря Netlink events компенсируется periodic reconciliation.
+50. Same-name/new-ifindex replacement = REMOVE old -> ADD new.
+51. Штатный ADD: NAT -> verify -> filter -> verify -> route -> verify -> commit.
+52. Штатный REMOVE: filter -> verify -> route -> verify -> NAT -> verify -> commit.
+53. Normal ADD/REMOVE не изменяет `ip_forward`.
+54. Mixed safely decomposable transition выполняет все REMOVE до ADD.
+55. Survivor identity/order/metric должны сохраняться; если локальность нельзя доказать,
     используется INIT/PANIC.
-55. Source firewall/NAT и route state проверяются до первой local mutation.
-56. Для REMOVE допускается kernel-side disappearance route удаленной binding; missing
+56. Source firewall/NAT и route state проверяются до первой local mutation.
+57. Для REMOVE допускается kernel-side disappearance route удаленной binding; missing
     survivor route не допускается.
-57. INIT/PANIC использует confirmed `ip_forward=0` либо verified isolation filter как
+58. INIT/PANIC использует confirmed `ip_forward=0` либо verified isolation filter как
     global barrier.
-58. При confirmed forwarding OFF isolation stage не требуется перед full rebuild.
-59. При isolation barrier allowing filter не применяется раньше verified NAT.
-60. INPUT-only confirmed drift может ремонтироваться точечно без изменения FORWARD/NAT/routes.
-61. FORWARD/NAT drift, UNKNOWN, non-decomposable transition или local procedure failure
+59. При confirmed forwarding OFF isolation stage не требуется перед full rebuild.
+60. При isolation barrier allowing filter не применяется раньше verified NAT.
+61. INPUT-only confirmed drift может ремонтироваться точечно без изменения FORWARD/NAT/routes.
+62. FORWARD/NAT drift, UNKNOWN, non-decomposable transition или local procedure failure
     используют INIT/PANIC.
-62. Ordinary route-only drift при SAFE filter сначала исправляется route executor.
-63. Любой failed route build/apply/**structural verification** эскалирует в INIT/PANIC.
-64. Functional zero-path `ProfileResult=FAIL` при exact structural verification не
+63. Ordinary route-only drift при SAFE filter сначала исправляется route executor.
+64. Любой failed route build/apply/**structural verification** эскалирует в INIT/PANIC.
+65. Functional zero-path `ProfileResult=FAIL` при exact structural verification не
     является route verification failure.
-65. Verification success и functional availability — разные оси.
-66. Verified zero-path fail-closed state commit-ится и дает DEGRADED, а не PANIC.
-67. Profile SUCCESS требует хотя бы один verified desired UNICAST path для каждого
+66. Verification success и functional availability — разные оси.
+67. Verified zero-path fail-closed state commit-ится и дает DEGRADED, а не PANIC.
+68. Profile SUCCESS требует хотя бы один verified desired UNICAST path для каждого
     protected destination.
-68. ACTIVE требует SAFE policy, все enabled profiles SUCCESS и `ip_forward=1`.
-69. DISABLED является intentional state, не ACTIVE/DEGRADED/ISOLATED.
-70. ISOLATED используется при недостаточной наблюдаемости/неверифицируемом safety state.
-71. OWNED routes, verified binding state, prefix active_order и allocator state
+69. ACTIVE требует SAFE policy, все enabled profiles SUCCESS и `ip_forward=1`.
+70. DISABLED является intentional state, не ACTIVE/DEGRADED/ISOLATED.
+71. ISOLATED используется при недостаточной наблюдаемости/неверифицируемом safety state.
+72. OWNED routes, verified binding state, prefix active_order и allocator state
     process-local и после restart строятся заново.
-72. Prospective verified-state commit готовится и полностью валидируется до первой
+73. Prospective verified-state commit готовится и полностью валидируется до первой
     мутации committed process-local state.
-73. Commit stage после successful preparation не должен иметь validation path, способный
+74. Commit stage после successful preparation не должен иметь validation path, способный
     создать partial multi-profile commit.
-74. Failed apply/verification не изменяет committed binding/allocator state.
-75. Само наличие ресурса в kernel не означает принятия его daemon во владение.
-76. desired_full_policy и desired_isolation_filter выводятся из одной config/domain model.
-77. VPNG-RESERVED закрывает destinations всех enabled BindingSpec.network до profile ACL.
-78. VPNG-INGRESS exact block: INVALID DROP; ESTABLISHED,RELATED ACCEPT; остальное REJECT.
-79. Для каждого protected destination после dynamic ACCEPT существует unconditional REJECT.
-80. VPNG-FORWARD-DENY окончательно закрывает оставшийся transit IPv4.
-81. NAT profile chain содержит MASQUERADE для каждого unique active egress interface и
+75. Failed apply/verification не изменяет committed binding/allocator state.
+76. Само наличие ресурса в kernel не означает принятия его daemon во владение.
+77. desired_full_policy и desired_isolation_filter выводятся из одной config/domain model.
+78. VPNG-RESERVED закрывает destinations всех enabled BindingSpec.network до profile ACL.
+79. VPNG-INGRESS exact block: INVALID DROP; ESTABLISHED,RELATED ACCEPT; остальное REJECT.
+80. Для каждого protected destination после dynamic ACCEPT существует unconditional REJECT.
+81. VPNG-FORWARD-DENY окончательно закрывает оставшийся transit IPv4.
+82. NAT profile chain содержит MASQUERADE для каждого unique active egress interface и
     terminal RETURN; foreign POSTROUTING остается достижим для unmanaged traffic.
-82. Cleanup сначала подтверждает `ip_forward=0`, затем удаляет proto 202,
+83. Cleanup сначала подтверждает `ip_forward=0`, затем удаляет proto 202,
     daemon-owned firewall/NAT, затем proto 201, после чего проверяет отсутствие owned state.
-83. Blackhole не снимается до подтвержденной очистки остальных owned resources.
-84. Cleanup не flush-ит целиком routing/filter/nat tables.
-85. Reserved namespace `VPNG-*` полностью принадлежит daemon.
-86. Config file security, runtime directory 0700, O_NOFOLLOW lock и lifetime flock
+84. Blackhole не снимается до подтвержденной очистки остальных owned resources.
+85. Cleanup не flush-ит целиком routing/filter/nat tables.
+86. Reserved namespace `VPNG-*` полностью принадлежит daemon.
+87. Config file security, runtime directory 0700, O_NOFOLLOW lock и lifetime flock
     остаются обязательными.
-87. `--check-config` использует ту же staged enabled projection, но не берет instance
+88. `--check-config` использует ту же staged enabled projection, но не берет instance
     lock и не меняет kernel.
-88. Disabled profile намеренно не lint-ится; для проверки его body его включают в копии config.
-89. SIGHUP не reload-ит config; config changes применяются только restart.
-90. Reconciliation/event handling serialized; параллельные reconciliation запрещены.
-91. Programming errors/internal contract violations не маскируются как ожидаемые
+89. Disabled profile намеренно не lint-ится; для проверки его body его включают в копии config.
+90. SIGHUP не reload-ит config; config changes применяются только restart.
+91. Reconciliation/event handling serialized; параллельные reconciliation запрещены.
+92. Programming errors/internal contract violations не маскируются как ожидаемые
     UNKNOWN/DEGRADED.
-92. Diagnostic reason code является stable machine identity; free-form detail не участвует
+93. Diagnostic reason code является stable machine identity; free-form detail не участвует
     в идентичности.
-93. Threat model: untrusted local processes не имеют CAP_NET_ADMIN и не управляют interface
+94. Threat model: untrusted local processes не имеют CAP_NET_ADMIN и не управляют interface
     lifecycle.
-94. Остаточное окно event->reaction и невозможность iptables привязать name rule к
+95. Остаточное окно event->reaction и невозможность iptables привязать name rule к
     historical ifindex являются явными границами модели.
-95. Current Python package decomposition не является архитектурным API; domain boundaries
+96. Current Python package decomposition не является архитектурным API; domain boundaries
     должны переноситься в будущие Rust struct/enum/modules.
