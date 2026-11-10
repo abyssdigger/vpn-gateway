@@ -1,6 +1,6 @@
 # VPN-GATE NG1 — Architecture Draft 1
 
-Status: **first architecture draft**.
+Status: **Draft 1 with executable ROU v0 ready for live gate (EXP-012)**.
 
 Companion concept: `design/NG1/rou-concept.md`.
 
@@ -605,6 +605,56 @@ Initial live gates for ROU v0 are:
 
 General configuration parsing, multiple profiles, arbitrary selectors/transports, warm
 capacity and BOU integration are explicitly deferred until these lifecycle gates pass.
+
+### 20.1 Implemented ROU v0
+
+The executable reference implementation is:
+
+    design/NG1/code/python/rou_v0/
+
+It is a clean NG1 implementation rather than an adaptation of the RC3 daemon. RC2/RC3
+were used as evidence for already-proven kernel behavior and failure modes.
+
+The implementation currently hard-codes the v0 lab boundary defined above and includes:
+
+- namespace/veth creation and destruction;
+- derived ocserv runtime configuration and process lifecycle inside the ROU namespace;
+- host-side TCP publication relay;
+- host-side UDP publication with independent per-external-peer associations;
+- fresh-snapshot discovery of concrete `vpns+` interfaces by `(ifname, ifindex)`;
+- capacity-2 metric allocation with survivor stability and delayed metric reuse across a
+  verified REMOVE commit;
+- a dedicated profile routing table with direct-dev unicast routes, protected blackhole and
+  terminal blackhole default;
+- an `iif host0` RPDB dispatch rule;
+- OUTBOUND-only filter semantics and per-binding MASQUERADE;
+- complete owned-state reconciliation under the forwarding barrier;
+- semantic route/RPDB verification using `ip -j`;
+- canonical filter/NAT verification using `iptables-legacy-save`;
+- fatal isolation/cleanup on non-repairable appliance-infrastructure loss;
+- read-only JSON status plus a single-instance runtime lock.
+
+The EXP-011 one-peer UDP limitation is therefore not carried into v0: each external UDP
+peer has its own connected internal UDP socket and return-path association.
+
+### 20.2 Verification boundary
+
+Rootless checks completed before the first live run:
+
+- Python bytecode compilation;
+- 8 unit tests covering binding projection, capacity/overflow, delayed metric reuse,
+  same-name/new-ifindex identity and fail-closed route/firewall projection;
+- two-peer UDP relay smoke;
+- shell syntax validation of the live harness.
+
+The available execution sandbox does not permit creation of Linux network namespaces.
+Therefore no claim is made yet for the complete kernel control loop. EXP-012 is the
+first live lifecycle/integrity gate on the dedicated Debian test VM.
+
+The live harness exercises startup, simultaneous DTLS for both real OC clients, payload
+routing, preferred-binding disappearance, fresh return, zero-path state, route drift,
+firewall drift and structural `host0` loss. No generic configuration work should begin
+until this gate is closed.
 
 ## 21. Inheritance from RC2/RC3
 
