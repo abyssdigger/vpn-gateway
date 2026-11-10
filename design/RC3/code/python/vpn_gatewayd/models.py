@@ -57,6 +57,7 @@ class ConfigIssueLevel(Enum):
 
 class RuntimeReasonCode(Enum):
     INTERFACE_INVENTORY_FAILED = auto()
+    SNAPSHOT_PROJECTION_FAILED = auto()
     IPV6_PREREQUISITE_FAILED = auto()
     FIREWALL_INVENTORY_FAILED = auto()
     FIREWALL_INSPECTION_FAILED = auto()
@@ -75,6 +76,8 @@ RUNTIME_REASON_TEXT: Mapping[RuntimeReasonCode, str] = MappingProxyType(
     {
         RuntimeReasonCode.INTERFACE_INVENTORY_FAILED:
             "failed to inventory interfaces for reconciliation",
+        RuntimeReasonCode.SNAPSHOT_PROJECTION_FAILED:
+            "failed to build complete reconciliation snapshot",
         RuntimeReasonCode.IPV6_PREREQUISITE_FAILED:
             "IPv6 host prerequisites are not satisfied",
         RuntimeReasonCode.FIREWALL_INVENTORY_FAILED:
