@@ -150,10 +150,8 @@ def _ordered_candidates(
         return () if record is None else (record,)
     if selector.kind is InterfaceSelectorKind.PREFIX:
         return tuple(
-            sorted(
-                (r for r in by_name.values() if r.name.startswith(selector.values[0])),
-                key=lambda r: r.name,
-            )
+            r for r in records
+            if r.name.startswith(selector.values[0])
         )
     return tuple(by_name[name] for name in selector.values if name in by_name)
 
@@ -182,14 +180,9 @@ def resolve_profile_interface_state(
         )
         survivor_set = set(survivors)
         new_bindings = tuple(
-            sorted(
-                (
-                    binding
-                    for binding in current_active
-                    if binding not in survivor_set
-                ),
-                key=lambda binding: (binding.name, binding.ifindex),
-            )
+            binding
+            for binding in current_active
+            if binding not in survivor_set
         )
         active = survivors + new_bindings
     else:
