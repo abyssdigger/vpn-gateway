@@ -12,75 +12,54 @@
 
 ## EXP-011 — NG1: ocserv/OpenConnect transport publication
 
-**Статус:** PREPARED — live run pending  
+**Статус:** COMPLETE — PASS  
 **Architecture baseline:** NG1 Draft 1 + EXP-010 PASS  
 **Тип:** real-protocol transport publication proof (TCP/TLS/CSTP + UDP/DTLS)  
+**Result:** [EXP-011-result-20261111.md](experiments/EXP-011%20NG1%20ocserv%20transport%20publication/EXP-011-result-20261111.md)  
 **Artifacts:**  
 - [experiment design](experiments/EXP-011%20NG1%20ocserv%20transport%20publication/README.md)  
 - [TCP+UDP relay](experiments/EXP-011%20NG1%20ocserv%20transport%20publication/vpn-gateway-exp-011-oc-relay.py)  
 - [live harness](experiments/EXP-011%20NG1%20ocserv%20transport%20publication/vpn-gateway-exp-011-harness.sh)
 
-### Мотивация
+### Результат
 
-EXP-010 доказал generic UDP publication/relay через отдельный ROU netns.
-EXP-011 заменяет dummy listener реальным ocserv и проверяет оба транспорта OpenConnect:
+Штатный test ocserv на `192.168.201.107:44443` был остановлен, а тот же внешний
+TCP/UDP endpoint временно занял ROU publication relay. Внутри `vg-exp011` ocserv
+слушал `192.0.2.2:44443`. Конфигурация клиентов не менялась.
 
-- TCP/TLS/CSTP;
-- UDP/DTLS.
+Подтверждено:
 
-OpenConnect использует TCP/TLS как control + backup data channel, а UDP/DTLS как primary
-data channel. Сервер предоставляет DTLS endpoint после установления TLS session, поэтому
-первый proof использует одинаковый published/internal port 44443 для обоих протоколов.
+- оба существующих OpenConnect клиента автоматически дошли через TCP relay до временного
+  ocserv;
+- клиент `pri` явно установил `CSTP connected` и
+  `Established DTLS connection`;
+- relay зарегистрировал bidirectional TCP и UDP traffic;
+- `occtl` показал `pri` как `AES-256-GCM connected`;
+- `vpns00` и `vpns01` материализовались только внутри ROU netns;
+- main namespace содержал только host-side `exp11h`;
+- cleanup удалил namespace, veth и publication sockets;
+- после возврата штатного `ocserv.service` оба клиента переподключились.
 
-### Топология
+Экспериментальный UDP relay намеренно одноклиентский. При двух одновременных клиентах
+`sec` показывал `(no-dtls)`, тогда как `pri` сохранил DTLS. Это соответствует
+заявленной области PoC; production relay обязан иметь независимые per-peer UDP
+associations.
 
-    remote OpenConnect client
-             |
-             | TCP 44443 + UDP 44443
-             v
-       host :44443
-             |
-       ROU relay
-       TCP + UDP
-             |
-          exp11h
-      192.0.2.1/30
-             |
-           veth
-             |
-           host0
-      192.0.2.2/30
-             |
-        ROU netns
-             |
-      ocserv :44443
-      TCP + UDP/DTLS
+### Решение
 
-Штатный test ocserv на 44443 перед опытом останавливается; его конфигурация не изменяется. ROU relay временно занимает тот же внешний TCP/UDP endpoint, поэтому конфигурация клиентов не меняется.
+**EXP-011: COMPLETE — PASS.**
 
-### Гипотезы
+Реальный ocserv/OpenConnect подтверждает NG1 transport-publication boundary для обоих
+транспортов без изменения внешнего client endpoint:
 
-- **H1:** клиент устанавливает TLS/CSTP через TCP publication relay.
-- **H2:** клиент устанавливает DTLS через UDP publication relay.
-- **H3:** ocserv-created VPN interface существует только внутри ROU netns.
-- **H4:** production ocserv/config на host 44443 остаются нетронутыми.
-- **H5:** cleanup удаляет experiment processes/netns/veth без изменения production config.
+    client :44443
+        -> ROU-owned host TCP/UDP publication
+        -> relay
+        -> ocserv inside private ROU netns
+        -> vpnsXX inside that netns
 
-### PASS criterion
-
-EXP-011 закрывается PASS только если client log явно подтверждает оба канала:
-
-    SSL/TLS connected
-    DTLS connected
-
-и relay log показывает bidirectional TCP и UDP traffic через publication boundary.
-
-### Отдельно отложенный вопрос
-
-Произвольная port-number translation для протокола, который сообщает клиенту transport
-endpoint на application level, не считается автоматически прозрачной. EXP-011 сначала
-проверяет same-port real-protocol publication; translation semantics при необходимости
-будут отдельным экспериментом.
+Same-port real-protocol publication считается доказанной. Произвольная translation
+external/internal port остаётся отдельным protocol-semantic вопросом.
 
 ---
 
