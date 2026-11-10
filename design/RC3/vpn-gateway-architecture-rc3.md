@@ -976,9 +976,11 @@ runtime interface name.
    metric allocation/cursor;
 3. сравнить candidates и active concrete binding identities с последним verified state;
 4. если binding transition отсутствует, сравнить firewall/NAT с current desired policy;
-5. если binding transition есть, построить policy последнего committed binding state и
-   проверить фактический source state относительно нее; расхождения, не объясняемые
-   ожидаемой kernel-side потерей ресурсов исчезнувшей binding, являются drift;
+5. если binding transition есть, построить policy/routes последнего committed binding
+   state и проверить фактический source state **до первой мутации**; firewall/NAT должны
+   соответствовать committed state, а для routes допускается только уже произошедшая
+   kernel-side потеря proto-202 ресурсов bindings, входящих в REMOVE; любой посторонний
+   exact route, отсутствие route surviving binding или иное расхождение является drift;
 6. `UNKNOWN` либо неопределимая область drift -> `INIT/PANIC`;
 7. INPUT-only `UNSAFE` без binding transition -> narrow INPUT repair;
 8. при verified source state классифицировать binding delta как локальный `ADD`,
