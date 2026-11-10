@@ -68,12 +68,6 @@ class InterfaceSelector:
             return cls(InterfaceSelectorKind.EXACT_LIST, tuple(value))
         raise TypeError("interface selector must be a string or array of strings")
 
-    @property
-    def value(self) -> str:
-        if self.kind is InterfaceSelectorKind.EXACT_LIST:
-            raise AttributeError("explicit interface list has no single value")
-        return self.values[0]
-
     def __str__(self) -> str:
         if self.kind is InterfaceSelectorKind.PREFIX:
             return f"{self.values[0]}+"
@@ -136,11 +130,6 @@ class ProfileInterfaceState:
     def __post_init__(self) -> None:
         object.__setattr__(self, "candidates", tuple(self.candidates))
         object.__setattr__(self, "active_bindings", tuple(self.active_bindings))
-
-    @property
-    def has_active_path(self) -> bool:
-        return bool(self.active_bindings)
-
 
 def _ordered_candidates(
     selector: InterfaceSelector,

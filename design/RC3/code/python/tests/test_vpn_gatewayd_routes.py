@@ -224,10 +224,6 @@ class RoutePlanningTests(unittest.TestCase):
         state = self.state["primary"]
         self.profile.commit_verified_state(
             routes=routes,
-            candidates=tuple(
-                vpng.InterfaceBinding.from_record(record)
-                for record in state.candidates
-            ),
             active_bindings=state.active_bindings,
         )
         plan = self.daemon._build_plan(

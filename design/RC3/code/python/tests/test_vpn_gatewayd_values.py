@@ -73,7 +73,6 @@ class ValueObjectTests(unittest.TestCase):
     def test_profile_verified_state_starts_empty(self):
         profile = vpng.VpnProfile(profile_config())
         self.assertEqual(profile.owned_routes, frozenset())
-        self.assertIsNone(profile.committed_candidates)
         self.assertIsNone(profile.committed_active_bindings)
 
     def test_commit_verified_state_is_defensive_and_allows_zero_path(self):
@@ -91,13 +90,11 @@ class ValueObjectTests(unittest.TestCase):
         candidates = (vpng.InterfaceBinding("vpns0", 7),)
         profile.commit_verified_state(
             routes=source,
-            candidates=candidates,
             active_bindings=(),
         )
         source.clear()
 
         self.assertEqual(profile.owned_routes, frozenset({route}))
-        self.assertEqual(profile.committed_candidates, candidates)
         self.assertEqual(profile.committed_active_bindings, ())
 
     def test_commit_replaces_active_binding_set(self):
@@ -109,13 +106,11 @@ class ValueObjectTests(unittest.TestCase):
         )
         profile.commit_verified_state(
             routes=frozenset(),
-            candidates=first,
             active_bindings=first,
         )
         self.assertEqual(profile.committed_active_bindings, first)
         profile.commit_verified_state(
             routes=frozenset(),
-            candidates=second,
             active_bindings=second,
         )
         self.assertEqual(profile.committed_active_bindings, second)

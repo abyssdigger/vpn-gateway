@@ -65,10 +65,6 @@ class SnapshotTests(unittest.TestCase):
         state = first.interface_state_by_profile["primary"]
         daemon.profiles["primary"].commit_verified_state(
             routes=frozenset(),
-            candidates=tuple(
-                vpng.InterfaceBinding.from_record(record)
-                for record in state.candidates
-            ),
             active_bindings=state.active_bindings,
         )
 

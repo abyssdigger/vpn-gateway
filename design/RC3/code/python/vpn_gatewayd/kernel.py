@@ -5,8 +5,7 @@ import os
 import subprocess
 from abc import ABC, abstractmethod
 from ipaddress import IPv4Address, IPv4Network
-from types import MappingProxyType
-from typing import Mapping, Sequence
+from typing import Sequence
 
 from .constants import (
     IP_FORWARD_PATH,
@@ -59,17 +58,6 @@ class KernelInterface(ABC):
     @abstractmethod
     def list_interfaces(self) -> tuple[InterfaceRecord, ...]:
         """Return the typed interface inventory required by RC3."""
-
-    @abstractmethod
-    def list_interface_ipv4(
-        self,
-    ) -> Mapping[str, frozenset[IPv4Address]]:
-        """
-        Return every existing interface.
-
-        Existing interface with no IPv4 -> empty frozenset.
-        Missing key -> interface does not exist.
-        """
 
     # ---- Forwarding ------------------------------------------------------
 
@@ -597,79 +585,6 @@ class SubprocessKernelInterface(KernelInterface):
                 ipv4=frozenset(addresses),
             )
             for name, (ifindex, addresses) in sorted(mutable.items())
-        )
-
-    def list_interface_ipv4(
-        self,
-    ) -> Mapping[str, frozenset[IPv4Address]]:
-        """
-        Return every interface and its local IPv4 addresses.
-
-        The command is intentionally not filtered with `-4`: Debian 13
-        iproute2 omits addressless interfaces from `ip -j -4 addr show`.
-        Reading all families preserves interface existence; only
-        `addr_info[].family == "inet"` contributes addresses.
-
-        `addr_info[].local` is authoritative for tun/point-to-point interfaces;
-        peer/address/broadcast fields are deliberately ignored.
-        """
-        completed = self._run(("ip", "-j", "addr", "show"))
-        payload = self._load_json_array(
-            completed.stdout,
-            context="IPv4 address inventory",
-        )
-
-        mutable: dict[str, set[IPv4Address]] = {}
-        for entry in payload:
-            if not isinstance(entry, dict):
-                raise KernelError(
-                    "IPv4 address inventory: expected object, got "
-                    f"{type(entry).__name__}"
-                )
-
-            interface = entry.get("ifname")
-            if not isinstance(interface, str) or not interface:
-                raise KernelError(
-                    "IPv4 address inventory: invalid/missing ifname "
-                    f"{interface!r}"
-                )
-
-            addresses = mutable.setdefault(interface, set())
-            address_info = entry.get("addr_info", [])
-            if not isinstance(address_info, list):
-                raise KernelError(
-                    f"IPv4 address inventory: invalid addr_info for "
-                    f"{interface!r}: {address_info!r}"
-                )
-
-            for info in address_info:
-                if not isinstance(info, dict):
-                    raise KernelError(
-                        "IPv4 address inventory: invalid address object "
-                        f"for {interface!r}: {info!r}"
-                    )
-                if info.get("family") not in (None, "inet"):
-                    continue
-
-                local = info.get("local")
-                if not isinstance(local, str) or not local:
-                    raise KernelError(
-                        "IPv4 address inventory: missing local address "
-                        f"for {interface!r}: {info!r}"
-                    )
-                try:
-                    addresses.add(IPv4Address(local))
-                except ValueError as exc:
-                    raise KernelError(
-                        "IPv4 address inventory: invalid local IPv4 "
-                        f"{local!r} for {interface!r}"
-                    ) from exc
-
-        return MappingProxyType(
-            {
-                interface: frozenset(addresses)
-                for interface, addresses in mutable.items()
-            }
         )
 
     def get_ip_forward(self) -> bool:

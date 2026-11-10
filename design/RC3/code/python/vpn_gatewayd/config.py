@@ -57,8 +57,6 @@ class ConfigLoader:
         }
     )
     _PROFILE_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,14}$")
-    _INTERFACE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
-    _FORBIDDEN_INTERFACES = frozenset({"lo", "any", "default", "all"})
 
     def load_runtime(self, path: Path) -> GatewayConfig:
         """

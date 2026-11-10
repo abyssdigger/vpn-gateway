@@ -99,7 +99,6 @@ class VpnGatewayDaemon:
         self.config: GatewayConfig | None = None
         self.profiles: Mapping[str, VpnProfile] = MappingProxyType({})
 
-        self._reported_route_overlaps: dict[str, frozenset[RouteSpec]] = {}
         self._shutdown_requested = False
         self._last_reconcile_log_signature: tuple[object, ...] | None = None
         self._last_reconcile_log_at: float | None = None
@@ -190,9 +189,6 @@ class VpnGatewayDaemon:
             for profile_id, profile_config in config.vpns.items()
         }
         self.profiles = MappingProxyType(profiles)
-        self._reported_route_overlaps = {
-            profile_id: frozenset() for profile_id in profiles
-        }
 
     def cleanup(self) -> None:
         """Universal marker-based cleanup used before startup and on stop."""
@@ -412,6 +408,30 @@ class VpnGatewayDaemon:
 
         pass_incidents: list[DiagnosticFact] = []
 
+        if self._host_prerequisite_latched:
+            facts = [
+                DiagnosticFact(
+                    RuntimeReasonCode.IPV6_PREREQUISITE_FAILED,
+                    "restart required after prior IPv6 prerequisite violation",
+                )
+            ]
+            disable_fact = self._best_effort_disable_forwarding(
+                high_severity_context="IPv6 prerequisite violation latched"
+            )
+            if disable_fact is not None:
+                facts.append(disable_fact)
+            isolation_fact = self._best_effort_apply_isolation_filter()
+            if isolation_fact is not None:
+                facts.append(isolation_fact)
+            self.state = DaemonState.ISOLATED
+            self._log_reconcile_outcome(
+                ("isolated", "ipv6-prerequisite-latched",
+                 *(("reason", fact.code) for fact in facts)),
+                level=logging.ERROR,
+                facts=tuple(facts),
+            )
+            return
+
         try:
             interfaces = self.kernel.list_interfaces()
         except KernelError as exc:
@@ -436,30 +456,6 @@ class VpnGatewayDaemon:
                     "interface-inventory-failed",
                     *(("reason", fact.code) for fact in facts),
                 ),
-                level=logging.ERROR,
-                facts=tuple(facts),
-            )
-            return
-
-        if self._host_prerequisite_latched:
-            facts = [
-                DiagnosticFact(
-                    RuntimeReasonCode.IPV6_PREREQUISITE_FAILED,
-                    "restart required after prior IPv6 prerequisite violation",
-                )
-            ]
-            disable_fact = self._best_effort_disable_forwarding(
-                high_severity_context="IPv6 prerequisite violation latched"
-            )
-            if disable_fact is not None:
-                facts.append(disable_fact)
-            isolation_fact = self._best_effort_apply_isolation_filter()
-            if isolation_fact is not None:
-                facts.append(isolation_fact)
-            self.state = DaemonState.ISOLATED
-            self._log_reconcile_outcome(
-                ("isolated", "ipv6-prerequisite-latched",
-                 *(("reason", fact.code) for fact in facts)),
                 level=logging.ERROR,
                 facts=tuple(facts),
             )
@@ -614,9 +610,7 @@ class VpnGatewayDaemon:
                 return
 
         try:
-            profile_results = self._require_complete_profile_results(
-                self._reconcile_routes_snapshot(snapshot)
-            )
+            profile_results = self._reconcile_routes_snapshot(snapshot)
         except (KernelError, PlanValidationError, ReconciliationError) as exc:
             self.state = DaemonState.DEGRADED
             forwarding_on, forwarding_query_error = (
@@ -819,7 +813,6 @@ class VpnGatewayDaemon:
                 return True
         return False
 
-    # ---- Route plan ------------------------------------------------------
     # ---- Route plan ------------------------------------------------------
 
     def _resolve_profile_interfaces(
@@ -1289,61 +1282,10 @@ class VpnGatewayDaemon:
 
         for profile_id in sorted(verified_profiles):
             state = interface_state_by_profile[profile_id]
-            candidates = tuple(
-                InterfaceBinding.from_record(record)
-                for record in state.candidates
-            )
             self.profiles[profile_id].commit_verified_state(
                 routes=verified_routes_by_profile[profile_id],
-                candidates=candidates,
                 active_bindings=state.active_bindings,
             )
-
-    def _routes_for_profile(
-        self,
-        profile: VpnProfile,
-        all_kernel_routes: frozenset[RouteSpec],
-    ) -> frozenset[RouteSpec]:
-        """
-        Return routes related to this profile's protected address space.
-
-        Exact routes and more-/less-specific overlaps are included for
-        verification/diagnostics.  The default route is deliberately excluded
-        from overlap reporting.
-        """
-        protected = profile.config.routes
-        default = IPv4Network("0.0.0.0/0")
-
-        return frozenset(
-            route
-            for route in all_kernel_routes
-            if (
-                route.destination != default
-                and any(
-                    route.destination.overlaps(destination)
-                    for destination in protected
-                )
-            )
-        )
-
-    # ---- Readiness / helpers --------------------------------------------
-
-    def effective_sources(
-        self,
-        profile: VpnProfile,
-    ) -> tuple[IPv4Network, ...]:
-        if self.config is None:
-            raise RuntimeError("config not installed")
-
-        merged = set(self.config.common_allowed_sources)
-        merged.update(profile.config.allowed_sources)
-
-        return tuple(
-            sorted(
-                merged,
-                key=lambda net: (int(net.network_address), net.prefixlen),
-            )
-        )
 
     # ---- RC3 firewall/NAT policy ----------------------------------------
 

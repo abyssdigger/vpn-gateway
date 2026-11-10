@@ -1072,13 +1072,12 @@ VPN-интерфейсов: на стадии изоляции точные ра
 
 ### 8.8. OWNED и фиксация binding state
 
-Process-local OWNED routes и последнее подтвержденное состояние candidates/active
-concrete bindings изменяются только после завершенной успешной проверки соответствующего
-цикла.
+Process-local OWNED routes и последнее подтвержденное состояние active concrete bindings
+изменяются только после завершенной успешной проверки соответствующего цикла.
 
 **Verification success и `ProfileResult` — разные оси.** Если fail-closed desired state
-полностью verified, candidate/active binding state текущего snapshot фиксируется даже
-когда functional availability дает `ProfileResult=FAIL` из-за zero UNICAST paths. Иначе
+полностью verified, active binding state текущего snapshot фиксируется даже когда functional availability
+дает `ProfileResult=FAIL` из-за zero UNICAST paths. Иначе
 валидный `RUN/DEGRADED` создавал бы ложный policy transition на каждом periodic pass.
 
 Порядок запуска и policy-changing reconciliation:
@@ -1992,10 +1991,11 @@ Route plan сохраняет `adds/deletes/replaces` и authoritative exact-pre
 Process-local state хранит:
 
 - verified OWNED routes;
-- последнее verified candidate identities;
-- active concrete binding identities;
-- normative `active_order` и selector-derived metrics, достаточные для обнаружения transition;
-- diagnostic overlap cache.
+- active concrete binding identities в normative `active_order`, достаточные для
+  обнаружения policy-changing transition.
+
+Current candidate set остается частью immutable reconciliation snapshot, но отдельно как
+committed process-local state не хранится.
 
 State не сохраняется на диск и не является source of truth. Каждый reconciliation заново
 читает inventory и строит current state. OWNED/binding state фиксируется только после
@@ -2287,7 +2287,7 @@ Implementation update must include at least:
 - prefix metrics derive from ASCII-sorted current active names;
 - explicit-list metrics derive from stable configured slots;
 - full policy/NAT derives from all active exact interfaces;
-- snapshot/committed state stores candidate and active binding sets;
+- snapshot stores candidates + active bindings; committed transition state stores only verified active bindings;
 - `ProfileResult` checks verified UNICAST path existence, not merely exact desired-set
   equality;
 - successful startup may enter `RUN/DEGRADED` when no active path exists but fail-closed
@@ -2449,7 +2449,7 @@ may retain adds/deletes/replaces.
 
 49. Маршрут по умолчанию не считается ресурсом диагностики пересечений.
 
-50. OWNED routes и подтвержденное candidate/active binding state process-local, после restart начинаются пустыми и меняются только после verification. Verified binding state commit не зависит от functional ProfileResult SUCCESS: verified zero-path FAIL также commit-ится.
+50. OWNED routes и подтвержденное active binding state process-local, после restart начинаются пустыми и меняются только после verification. Current candidates заново выводятся из каждого snapshot и отдельно не commit-ятся. Verified binding state commit не зависит от functional ProfileResult SUCCESS: verified zero-path FAIL также commit-ится.
 
 51. Process-local фиксация OWNED/active binding state выполняется после verification и до final enable forwarding; availability FAIL не блокирует commit verified fail-closed state.
 
