@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum, auto
 from ipaddress import IPv4Address
-
+from typing import Sequence
 
 _EXACT_INTERFACE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
 _PREFIX_INTERFACE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,13}$")
@@ -13,66 +13,95 @@ _FORBIDDEN_EXACT_INTERFACES = frozenset({"lo", "any", "default", "all"})
 
 class InterfaceSelectorKind(Enum):
     EXACT = auto()
-    PREFIX_FAMILY = auto()
+    PREFIX = auto()
+    EXACT_LIST = auto()
 
 
 @dataclass(slots=True, frozen=True)
 class InterfaceSelector:
-    """Validated interface selector from configuration."""
+    """Validated interface selector; values preserve normative selector order."""
 
     kind: InterfaceSelectorKind
-    value: str
+    values: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if self.kind is InterfaceSelectorKind.EXACT:
-            if not _EXACT_INTERFACE_RE.fullmatch(self.value):
-                raise ValueError(
-                    "exact interface selector must match "
-                    "[A-Za-z][A-Za-z0-9_.-]{0,14}"
-                )
-            if self.value.casefold() in _FORBIDDEN_EXACT_INTERFACES:
-                raise ValueError(
-                    f"forbidden exact interface selector: {self.value!r}"
-                )
-            return
+        values = tuple(self.values)
+        object.__setattr__(self, "values", values)
+        if self.kind in (InterfaceSelectorKind.EXACT, InterfaceSelectorKind.PREFIX):
+            if len(values) != 1:
+                raise ValueError("exact/prefix selector requires exactly one value")
+        elif self.kind is InterfaceSelectorKind.EXACT_LIST:
+            if not values:
+                raise ValueError("explicit interface list must not be empty")
+            if len(set(values)) != len(values):
+                raise ValueError("explicit interface list contains duplicates")
+        else:
+            raise ValueError(f"unknown interface selector kind: {self.kind!r}")
 
-        if self.kind is InterfaceSelectorKind.PREFIX_FAMILY:
-            if not _PREFIX_INTERFACE_RE.fullmatch(self.value):
+        if self.kind is InterfaceSelectorKind.PREFIX:
+            value = values[0]
+            if not _PREFIX_INTERFACE_RE.fullmatch(value):
                 raise ValueError(
                     "prefix interface selector must have a 1..14 character "
                     "prefix matching [A-Za-z][A-Za-z0-9_.-]*"
                 )
             return
 
-        raise ValueError(f"unknown interface selector kind: {self.kind!r}")
+        for value in values:
+            if not _EXACT_INTERFACE_RE.fullmatch(value):
+                raise ValueError(
+                    "exact interface name must match "
+                    "[A-Za-z][A-Za-z0-9_.-]{0,14}"
+                )
+            if value.casefold() in _FORBIDDEN_EXACT_INTERFACES:
+                raise ValueError(f"forbidden exact interface name: {value!r}")
 
     @classmethod
-    def parse(cls, text: str) -> InterfaceSelector:
-        if not isinstance(text, str):
-            raise TypeError("interface selector must be a string")
-        if text.endswith("+"):
-            return cls(InterfaceSelectorKind.PREFIX_FAMILY, text[:-1])
-        return cls(InterfaceSelectorKind.EXACT, text)
+    def parse(cls, value: object) -> "InterfaceSelector":
+        if isinstance(value, str):
+            if value.endswith("+"):
+                return cls(InterfaceSelectorKind.PREFIX, (value[:-1],))
+            return cls(InterfaceSelectorKind.EXACT, (value,))
+        if isinstance(value, list):
+            if not all(isinstance(item, str) for item in value):
+                raise TypeError("explicit interface list must contain strings")
+            return cls(InterfaceSelectorKind.EXACT_LIST, tuple(value))
+        raise TypeError("interface selector must be a string or array of strings")
+
+    @property
+    def value(self) -> str:
+        if self.kind is InterfaceSelectorKind.EXACT_LIST:
+            raise AttributeError("explicit interface list has no single value")
+        return self.values[0]
 
     def __str__(self) -> str:
-        if self.kind is InterfaceSelectorKind.PREFIX_FAMILY:
-            return f"{self.value}+"
-        return self.value
+        if self.kind is InterfaceSelectorKind.PREFIX:
+            return f"{self.values[0]}+"
+        if self.kind is InterfaceSelectorKind.EXACT:
+            return self.values[0]
+        return "[" + ", ".join(repr(value) for value in self.values) + "]"
 
     def matches(self, interface_name: str) -> bool:
         if self.kind is InterfaceSelectorKind.EXACT:
-            return interface_name == self.value
-        return interface_name.startswith(self.value)
+            return interface_name == self.values[0]
+        if self.kind is InterfaceSelectorKind.PREFIX:
+            return interface_name.startswith(self.values[0])
+        return interface_name in self.values
 
-    def overlaps(self, other: InterfaceSelector) -> bool:
-        """Return whether both selectors can match at least one same ifname."""
-        if self.kind is InterfaceSelectorKind.EXACT:
-            return other.matches(self.value)
-        if other.kind is InterfaceSelectorKind.EXACT:
-            return self.matches(other.value)
-        return self.value.startswith(other.value) or other.value.startswith(
-            self.value
-        )
+    def guard_interfaces(self) -> tuple[str, ...]:
+        if self.kind is InterfaceSelectorKind.PREFIX:
+            return (f"{self.values[0]}+",)
+        return self.values
+
+    def overlaps(self, other: "InterfaceSelector") -> bool:
+        if self.kind is InterfaceSelectorKind.PREFIX:
+            if other.kind is InterfaceSelectorKind.PREFIX:
+                left, right = self.values[0], other.values[0]
+                return left.startswith(right) or right.startswith(left)
+            return any(name.startswith(self.values[0]) for name in other.values)
+        if other.kind is InterfaceSelectorKind.PREFIX:
+            return any(name.startswith(other.values[0]) for name in self.values)
+        return bool(set(self.values) & set(other.values))
 
 
 @dataclass(slots=True, frozen=True)
@@ -95,114 +124,60 @@ class InterfaceBinding:
     ifindex: int
 
     @classmethod
-    def from_record(cls, record: InterfaceRecord) -> InterfaceBinding:
+    def from_record(cls, record: InterfaceRecord) -> "InterfaceBinding":
         return cls(record.name, record.ifindex)
-
-
-class InterfaceResolutionState(Enum):
-    ABSENT = auto()
-    BOUND = auto()
-    AMBIGUOUS = auto()
-
-
-@dataclass(slots=True, frozen=True)
-class InterfaceResolution:
-    state: InterfaceResolutionState
-    matches: tuple[InterfaceRecord, ...]
-
-    def __post_init__(self) -> None:
-        count = len(self.matches)
-        if self.state is InterfaceResolutionState.ABSENT and count != 0:
-            raise ValueError("ABSENT resolution must have no matches")
-        if self.state is InterfaceResolutionState.BOUND and count != 1:
-            raise ValueError("BOUND resolution must have exactly one match")
-        if self.state is InterfaceResolutionState.AMBIGUOUS and count < 2:
-            raise ValueError("AMBIGUOUS resolution must have at least two matches")
-
-    @classmethod
-    def absent(cls) -> InterfaceResolution:
-        return cls(InterfaceResolutionState.ABSENT, ())
-
-    @classmethod
-    def bound(cls, record: InterfaceRecord) -> InterfaceResolution:
-        return cls(InterfaceResolutionState.BOUND, (record,))
-
-    @classmethod
-    def ambiguous(
-        cls,
-        matches: tuple[InterfaceRecord, ...],
-    ) -> InterfaceResolution:
-        return cls(InterfaceResolutionState.AMBIGUOUS, matches)
-
-    @property
-    def binding(self) -> InterfaceBinding | None:
-        if self.state is not InterfaceResolutionState.BOUND:
-            return None
-        return InterfaceBinding.from_record(self.matches[0])
-
-    @property
-    def bound_record(self) -> InterfaceRecord | None:
-        if self.state is not InterfaceResolutionState.BOUND:
-            return None
-        return self.matches[0]
-
-
-def resolve_interface_selector(
-    selector: InterfaceSelector,
-    records: tuple[InterfaceRecord, ...] | list[InterfaceRecord],
-) -> InterfaceResolution:
-    """Resolve one selector against one immutable interface inventory."""
-    matches = tuple(
-        sorted(
-            (record for record in records if selector.matches(record.name)),
-            key=lambda record: (record.name, record.ifindex),
-        )
-    )
-    if not matches:
-        return InterfaceResolution.absent()
-    if len(matches) == 1:
-        return InterfaceResolution.bound(matches[0])
-    return InterfaceResolution.ambiguous(matches)
-
-
-def interface_resolution_ready(
-    resolution: InterfaceResolution,
-    expected_local_address: IPv4Address,
-) -> bool:
-    """Readiness is unique binding plus expected local IPv4 presence."""
-    record = resolution.bound_record
-    return record is not None and expected_local_address in record.ipv4
 
 
 @dataclass(slots=True, frozen=True)
 class ProfileInterfaceState:
-    resolution: InterfaceResolution
-    ready: bool
+    candidates: tuple[InterfaceRecord, ...]
+    active_bindings: tuple[InterfaceBinding, ...]
 
     def __post_init__(self) -> None:
-        if (
-            self.ready
-            and self.resolution.state is not InterfaceResolutionState.BOUND
-        ):
-            raise ValueError(
-                "ready profile interface state requires BOUND resolution"
-            )
+        object.__setattr__(self, "candidates", tuple(self.candidates))
+        object.__setattr__(self, "active_bindings", tuple(self.active_bindings))
 
     @property
-    def binding(self) -> InterfaceBinding | None:
-        return self.resolution.binding
+    def has_active_path(self) -> bool:
+        return bool(self.active_bindings)
+
+
+def _ordered_candidates(
+    selector: InterfaceSelector,
+    records: Sequence[InterfaceRecord],
+) -> tuple[InterfaceRecord, ...]:
+    by_name: dict[str, InterfaceRecord] = {}
+    for record in records:
+        previous = by_name.get(record.name)
+        if previous is not None and previous.ifindex != record.ifindex:
+            raise ValueError(
+                "duplicate interface name with conflicting ifindex: "
+                f"{record.name!r} has {previous.ifindex} and {record.ifindex}"
+            )
+        by_name[record.name] = record
+
+    if selector.kind is InterfaceSelectorKind.EXACT:
+        record = by_name.get(selector.values[0])
+        return () if record is None else (record,)
+    if selector.kind is InterfaceSelectorKind.PREFIX:
+        return tuple(
+            sorted(
+                (r for r in by_name.values() if r.name.startswith(selector.values[0])),
+                key=lambda r: r.name,
+            )
+        )
+    return tuple(by_name[name] for name in selector.values if name in by_name)
 
 
 def resolve_profile_interface_state(
     selector: InterfaceSelector,
-    records: tuple[InterfaceRecord, ...] | list[InterfaceRecord],
+    records: Sequence[InterfaceRecord],
     expected_local_address: IPv4Address,
 ) -> ProfileInterfaceState:
-    resolution = resolve_interface_selector(selector, records)
-    return ProfileInterfaceState(
-        resolution=resolution,
-        ready=interface_resolution_ready(
-            resolution,
-            expected_local_address,
-        ),
+    candidates = _ordered_candidates(selector, records)
+    active = tuple(
+        InterfaceBinding.from_record(record)
+        for record in candidates
+        if expected_local_address in record.ipv4
     )
+    return ProfileInterfaceState(candidates=candidates, active_bindings=active)

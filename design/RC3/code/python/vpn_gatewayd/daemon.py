@@ -20,7 +20,8 @@ from .constants import (
     DEFAULT_LOCK_PATH,
     KERNEL_ROUTE_PROTO,
     LOG,
-    PEER_METRIC_STEP,
+    MAX_ROUTE_METRIC,
+    ROUTE_METRIC_STEP,
     VPNG_CHAIN_PREFIX,
     VPN_ROUTE_PROTO,
 )
@@ -32,8 +33,9 @@ from .errors import (
     ReconciliationError,
 )
 from .interfaces import (
+    InterfaceBinding,
     InterfaceRecord,
-    InterfaceResolutionState,
+    InterfaceSelectorKind,
     ProfileInterfaceState,
     resolve_profile_interface_state,
 )
@@ -101,6 +103,7 @@ class VpnGatewayDaemon:
         self._shutdown_requested = False
         self._last_reconcile_log_signature: tuple[object, ...] | None = None
         self._last_reconcile_log_at: float | None = None
+        self._host_prerequisite_latched = False
 
         self._signal_wakeup_reader: socket.socket | None = None
         self._signal_wakeup_writer: socket.socket | None = None
@@ -154,7 +157,7 @@ class VpnGatewayDaemon:
                 ):
                     return
 
-                self.state = DaemonState.ACTIVE
+                # apply() sets ACTIVE or DEGRADED from verified ProfileResult.
                 self.notifier.ready()
 
                 # run() returns only for a requested graceful shutdown.
@@ -269,18 +272,6 @@ class VpnGatewayDaemon:
         self._check_interface_ipv6_prerequisites(interfaces)
         snapshot = self._build_reconciliation_snapshot(interfaces)
 
-        ambiguous = [
-            profile_id
-            for profile_id, state
-            in snapshot.interface_state_by_profile.items()
-            if state.resolution.state is InterfaceResolutionState.AMBIGUOUS
-        ]
-        if ambiguous:
-            raise ReconciliationError(
-                "ambiguous interface selector during startup: "
-                f"{ambiguous!r}"
-            )
-
         initial_routes = self.kernel.list_routes()
         plan = self._build_plan(
             all_kernel_routes=initial_routes,
@@ -312,25 +303,32 @@ class VpnGatewayDaemon:
         results = self._require_complete_profile_results(
             verified.profile_results
         )
-        failed = [
-            profile_id
-            for profile_id, result in results.items()
-            if result.result is not ApplyStateResult.SUCCESS
-        ]
-        if failed:
+        expected_profiles = frozenset(self.profiles)
+        if verified.verified_profiles != expected_profiles:
+            failed = sorted(expected_profiles - verified.verified_profiles)
             raise ReconciliationError(
-                f"initial route verification failed for profiles: {failed!r}"
+                "initial route verification did not complete for profiles: "
+                f"{failed!r}"
             )
 
         self._commit_owned(
             verified_routes_by_profile=verified.owned_routes_by_profile,
-            verified_results=results,
+            verified_profiles=verified.verified_profiles,
             interface_state_by_profile=snapshot.interface_state_by_profile,
         )
 
         self.kernel.set_ip_forward(True)
         if not self.kernel.get_ip_forward():
             raise KernelError("ip_forward remains disabled after enable")
+
+        self.state = (
+            DaemonState.ACTIVE
+            if all(
+                result.result is ApplyStateResult.SUCCESS
+                for result in results.values()
+            )
+            else DaemonState.DEGRADED
+        )
 
     def run(self) -> None:
         """
@@ -438,6 +436,58 @@ class VpnGatewayDaemon:
                     "interface-inventory-failed",
                     *(("reason", fact.code) for fact in facts),
                 ),
+                level=logging.ERROR,
+                facts=tuple(facts),
+            )
+            return
+
+        if self._host_prerequisite_latched:
+            facts = [
+                DiagnosticFact(
+                    RuntimeReasonCode.IPV6_PREREQUISITE_FAILED,
+                    "restart required after prior IPv6 prerequisite violation",
+                )
+            ]
+            disable_fact = self._best_effort_disable_forwarding(
+                high_severity_context="IPv6 prerequisite violation latched"
+            )
+            if disable_fact is not None:
+                facts.append(disable_fact)
+            isolation_fact = self._best_effort_apply_isolation_filter()
+            if isolation_fact is not None:
+                facts.append(isolation_fact)
+            self.state = DaemonState.ISOLATED
+            self._log_reconcile_outcome(
+                ("isolated", "ipv6-prerequisite-latched",
+                 *(("reason", fact.code) for fact in facts)),
+                level=logging.ERROR,
+                facts=tuple(facts),
+            )
+            return
+
+        try:
+            self._check_global_ipv6_prerequisites()
+            self._check_interface_ipv6_prerequisites(interfaces)
+        except (KernelError, ReconciliationError) as exc:
+            self._host_prerequisite_latched = True
+            facts = [
+                DiagnosticFact(
+                    RuntimeReasonCode.IPV6_PREREQUISITE_FAILED,
+                    str(exc),
+                )
+            ]
+            disable_fact = self._best_effort_disable_forwarding(
+                high_severity_context="IPv6 prerequisite violation"
+            )
+            if disable_fact is not None:
+                facts.append(disable_fact)
+            isolation_fact = self._best_effort_apply_isolation_filter()
+            if isolation_fact is not None:
+                facts.append(isolation_fact)
+            self.state = DaemonState.ISOLATED
+            self._log_reconcile_outcome(
+                ("isolated", "ipv6-prerequisite-failed",
+                 *(("reason", fact.code) for fact in facts)),
                 level=logging.ERROR,
                 facts=tuple(facts),
             )
@@ -682,27 +732,10 @@ class VpnGatewayDaemon:
         )
         self._commit_owned(
             verified_routes_by_profile=verified.owned_routes_by_profile,
-            verified_results=route_results,
+            verified_profiles=verified.verified_profiles,
             interface_state_by_profile=snapshot.interface_state_by_profile,
         )
-
-        results = dict(route_results)
-        for profile_id, state in snapshot.interface_state_by_profile.items():
-            if state.resolution.state is not InterfaceResolutionState.AMBIGUOUS:
-                continue
-            matches = ", ".join(
-                f"{record.name}@{record.ifindex}"
-                for record in state.resolution.matches
-            )
-            results[profile_id] = ProfileResult(
-                ApplyStateResult.FAIL,
-                DiagnosticFact(
-                    RuntimeReasonCode.PROFILE_INTERFACE_AMBIGUOUS,
-                    f"selector matches: {matches}",
-                ),
-            )
-
-        return MappingProxyType(results)
+        return route_results
 
     # ---- Snapshot / host prerequisites -----------------------------------
 
@@ -781,19 +814,8 @@ class VpnGatewayDaemon:
         snapshot: ReconciliationSnapshot,
     ) -> bool:
         for profile_id, state in snapshot.interface_state_by_profile.items():
-            profile = self.profiles[profile_id]
-            if profile.committed_resolution_state is None:
-                return True
-            if (
-                profile.committed_resolution_state
-                is not state.resolution.state
-            ):
-                return True
-            if profile.committed_match_count != len(state.resolution.matches):
-                return True
-            if profile.committed_binding != state.binding:
-                return True
-            if profile.committed_ready != state.ready:
+            committed = self.profiles[profile_id].committed_active_bindings
+            if committed is None or committed != state.active_bindings:
                 return True
         return False
 
@@ -817,17 +839,52 @@ class VpnGatewayDaemon:
 
         return MappingProxyType(state)
 
+    def _binding_metrics(
+        self,
+        profile_id: str,
+        state: ProfileInterfaceState,
+    ) -> tuple[tuple[InterfaceBinding, int], ...]:
+        cfg = self.profiles[profile_id].config
+        selector = cfg.interface
+        result: list[tuple[InterfaceBinding, int]] = []
+
+        if selector.kind is InterfaceSelectorKind.EXACT:
+            for binding in state.active_bindings:
+                result.append((binding, ROUTE_METRIC_STEP))
+        elif selector.kind is InterfaceSelectorKind.PREFIX:
+            for index, binding in enumerate(state.active_bindings):
+                metric = (index + 1) * ROUTE_METRIC_STEP
+                if metric > MAX_ROUTE_METRIC:
+                    raise ReconciliationError(
+                        f"{profile_id}: prefix active interface count makes "
+                        "route metric exceed unsigned 32-bit range"
+                    )
+                result.append((binding, metric))
+        elif selector.kind is InterfaceSelectorKind.EXACT_LIST:
+            slot_by_name = {
+                name: index for index, name in enumerate(selector.values)
+            }
+            for binding in state.active_bindings:
+                metric = (slot_by_name[binding.name] + 1) * ROUTE_METRIC_STEP
+                if metric > MAX_ROUTE_METRIC:
+                    raise ReconciliationError(
+                        f"{profile_id}: explicit interface list makes route "
+                        "metric exceed unsigned 32-bit range"
+                    )
+                result.append((binding, metric))
+        else:
+            raise ReconciliationError(
+                f"{profile_id}: unsupported interface selector kind "
+                f"{selector.kind!r}"
+            )
+        return tuple(result)
+
     def _derive_desired_routes(
         self,
         *,
         interface_state_by_profile: Mapping[str, ProfileInterfaceState],
     ) -> Mapping[str, frozenset[RouteSpec]]:
-        """
-        Derive routes from immutable config plus one resolved interface state.
-
-        BLACKHOLE depends only on configuration. UNICAST additionally requires
-        readiness and uses only the exact name from the current binding.
-        """
+        """Derive BLACKHOLE + direct interface routes from one snapshot."""
         expected = frozenset(self.profiles)
         actual = frozenset(interface_state_by_profile)
         if actual != expected:
@@ -839,8 +896,7 @@ class VpnGatewayDaemon:
 
         desired: dict[str, frozenset[RouteSpec]] = {}
         for profile_id in sorted(self.profiles, key=str.casefold):
-            profile = self.profiles[profile_id]
-            cfg = profile.config
+            cfg = self.profiles[profile_id].config
             state = interface_state_by_profile[profile_id]
             routes: set[RouteSpec] = set()
 
@@ -857,25 +913,19 @@ class VpnGatewayDaemon:
                     )
                 )
 
-            if state.ready:
-                binding = state.binding
-                if binding is None:
-                    raise ReconciliationError(
-                        f"{profile_id}: ready state has no exact binding"
-                    )
+            for binding, metric in self._binding_metrics(profile_id, state):
                 for destination in cfg.routes:
-                    for index, peer in enumerate(cfg.peers):
-                        routes.add(
-                            RouteSpec(
-                                destination=destination,
-                                route_type=RouteType.UNICAST,
-                                via=peer,
-                                interface=binding.name,
-                                metric=(index + 1) * PEER_METRIC_STEP,
-                                proto=VPN_ROUTE_PROTO,
-                                onlink=True,
-                            )
+                    routes.add(
+                        RouteSpec(
+                            destination=destination,
+                            route_type=RouteType.UNICAST,
+                            via=None,
+                            interface=binding.name,
+                            metric=metric,
+                            proto=VPN_ROUTE_PROTO,
+                            onlink=False,
                         )
+                    )
 
             desired[profile_id] = frozenset(routes)
 
@@ -1139,11 +1189,12 @@ class VpnGatewayDaemon:
         all_kernel_routes: frozenset[RouteSpec],
         desired_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
     ) -> RouteVerifyResult:
-        """Verify exact protected-prefix state against the same DESIRED snapshot."""
+        """Verify exact route state, then derive functional availability."""
         self._require_complete_desired_snapshot(desired_routes_by_profile)
 
         profile_results: dict[str, ProfileResult] = {}
         owned_routes: dict[str, frozenset[RouteSpec]] = {}
+        verified_profiles: set[str] = set()
 
         for profile_id in sorted(self.profiles, key=str.casefold):
             profile = self.profiles[profile_id]
@@ -1155,12 +1206,7 @@ class VpnGatewayDaemon:
                 if route.destination in protected
             )
 
-            if actual_exact == desired:
-                profile_results[profile_id] = ProfileResult(
-                    result=ApplyStateResult.SUCCESS
-                )
-                owned_routes[profile_id] = desired
-            else:
+            if actual_exact != desired:
                 profile_results[profile_id] = ProfileResult(
                     result=ApplyStateResult.FAIL,
                     reason=DiagnosticFact(
@@ -1172,10 +1218,37 @@ class VpnGatewayDaemon:
                     ),
                 )
                 owned_routes[profile_id] = profile.owned_routes
+                continue
+
+            verified_profiles.add(profile_id)
+            owned_routes[profile_id] = desired
+            missing = [
+                destination
+                for destination in profile.config.routes
+                if not any(
+                    route.route_type is RouteType.UNICAST
+                    and route.destination == destination
+                    for route in desired
+                )
+            ]
+            if missing:
+                profile_results[profile_id] = ProfileResult(
+                    result=ApplyStateResult.FAIL,
+                    reason=DiagnosticFact(
+                        RuntimeReasonCode.PROFILE_NO_UNICAST_PATH,
+                        "no desired UNICAST path for: "
+                        + ", ".join(str(item) for item in missing),
+                    ),
+                )
+            else:
+                profile_results[profile_id] = ProfileResult(
+                    result=ApplyStateResult.SUCCESS
+                )
 
         return RouteVerifyResult(
             profile_results=MappingProxyType(profile_results),
             owned_routes_by_profile=MappingProxyType(owned_routes),
+            verified_profiles=frozenset(verified_profiles),
         )
 
     def _require_complete_profile_results(
@@ -1202,38 +1275,28 @@ class VpnGatewayDaemon:
         self,
         *,
         verified_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
-        verified_results: Mapping[str, ProfileResult],
+        verified_profiles: frozenset[str],
         interface_state_by_profile: Mapping[str, ProfileInterfaceState],
     ) -> None:
-        """
-        Commit OWNED + binding/readiness only for profiles whose route state
-        was successfully verified in this cycle.
-        """
+        """Commit verified route + binding state, including zero-path FAIL."""
         expected = frozenset(self.profiles)
-        mappings = {
-            "routes": frozenset(verified_routes_by_profile),
-            "results": frozenset(verified_results),
-            "interfaces": frozenset(interface_state_by_profile),
-        }
-        for name, actual in mappings.items():
-            if actual != expected:
-                raise ReconciliationError(
-                    f"incomplete verified {name} mapping: "
-                    f"missing={sorted(expected - actual)!r}, "
-                    f"unexpected={sorted(actual - expected)!r}"
-                )
+        if frozenset(verified_routes_by_profile) != expected:
+            raise ReconciliationError("incomplete verified routes mapping")
+        if frozenset(interface_state_by_profile) != expected:
+            raise ReconciliationError("incomplete verified interfaces mapping")
+        if not verified_profiles <= expected:
+            raise ReconciliationError("verified profile set contains unknown profile")
 
-        for profile_id in sorted(expected):
-            result = verified_results[profile_id]
-            if result.result is not ApplyStateResult.SUCCESS:
-                continue
+        for profile_id in sorted(verified_profiles):
             state = interface_state_by_profile[profile_id]
+            candidates = tuple(
+                InterfaceBinding.from_record(record)
+                for record in state.candidates
+            )
             self.profiles[profile_id].commit_verified_state(
                 routes=verified_routes_by_profile[profile_id],
-                binding=state.binding,
-                ready=state.ready,
-                resolution_state=state.resolution.state,
-                match_count=len(state.resolution.matches),
+                candidates=candidates,
+                active_bindings=state.active_bindings,
             )
 
     def _routes_for_profile(

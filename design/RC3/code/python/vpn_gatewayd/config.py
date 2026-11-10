@@ -15,10 +15,10 @@ from .constants import (
     MAX_RECONCILE_INTERVAL,
     MAX_ROUTE_METRIC,
     MIN_RECONCILE_INTERVAL,
-    PEER_METRIC_STEP,
+    ROUTE_METRIC_STEP,
 )
 from .errors import ConfigError
-from .interfaces import InterfaceSelector
+from .interfaces import InterfaceSelector, InterfaceSelectorKind
 from .models import (
     ConfigCheckResult,
     ConfigIssue,
@@ -53,7 +53,6 @@ class ConfigLoader:
             "interface",
             "network",
             "local_address",
-            "peers",
             "routes",
             "allowed_sources",
         }
@@ -82,8 +81,7 @@ class ConfigLoader:
             malformed/unusable unmanaged definitions or future activation
             conflicts; harmless duplicate set-like inputs.
         NOTE:
-            valid but operationally notable managed state, currently including
-            managed peers=[].
+            valid but operationally notable state; no mandatory RC3 note exists.
 
         No runtime lock.  No cleanup.  No kernel side effects.
         """
@@ -405,15 +403,6 @@ class ConfigLoader:
                 continue
 
             parsed_profiles[profile_id] = parsed
-            if managed and not parsed.peers:
-                issues.append(
-                    ConfigIssue(
-                        ConfigIssueLevel.NOTE,
-                        f"vpn.{profile_id}.peers",
-                        "empty peers list: no UNICAST VPN routes will be "
-                        "created; protected routes remain blackholed",
-                    )
-                )
 
         self._check_cross_conflicts(
             parsed_profiles,
@@ -756,16 +745,6 @@ class ConfigLoader:
             if "local_address" in body
             else None
         )
-        peers = (
-            self._parse_peers(
-                body["peers"],
-                location=f"{base}.peers",
-                issues=issues,
-                invalid_level=invalid_level,
-            )
-            if "peers" in body
-            else None
-        )
         routes = (
             self._parse_routes(
                 body["routes"],
@@ -795,7 +774,6 @@ class ConfigLoader:
                 interface,
                 network,
                 local_address,
-                peers,
                 routes,
                 allowed_sources,
             )
@@ -813,40 +791,6 @@ class ConfigLoader:
                 )
                 valid = False
 
-        if peers is not None:
-            if len(peers) * PEER_METRIC_STEP > MAX_ROUTE_METRIC:
-                issues.append(
-                    ConfigIssue(
-                        invalid_level,
-                        f"{base}.peers",
-                        "peer count makes route metric exceed unsigned "
-                        "32-bit range",
-                    )
-                )
-                valid = False
-
-            if network is not None:
-                for index, peer in enumerate(peers):
-                    if peer not in network:
-                        issues.append(
-                            ConfigIssue(
-                                invalid_level,
-                                f"{base}.peers[{index}]",
-                                f"{peer} is outside VPN network {network}",
-                            )
-                        )
-                        valid = False
-            if local_address is not None:
-                for index, peer in enumerate(peers):
-                    if peer == local_address:
-                        issues.append(
-                            ConfigIssue(
-                                invalid_level,
-                                f"{base}.peers[{index}]",
-                                "peer must not equal local_address",
-                            )
-                        )
-                        valid = False
 
         if not valid:
             return None
@@ -854,7 +798,6 @@ class ConfigLoader:
         assert interface is not None
         assert network is not None
         assert local_address is not None
-        assert peers is not None
         assert routes is not None
         assert allowed_sources is not None
 
@@ -863,7 +806,6 @@ class ConfigLoader:
             interface=interface,
             network=network,
             local_address=local_address,
-            peers=peers,
             routes=routes,
             allowed_sources=allowed_sources,
         )
@@ -876,15 +818,9 @@ class ConfigLoader:
         issues: list[ConfigIssue],
         level: ConfigIssueLevel,
     ) -> InterfaceSelector | None:
-        if not isinstance(value, str):
-            issues.append(
-                ConfigIssue(level, location, "must be a string")
-            )
-            return None
-
         try:
-            return InterfaceSelector.parse(value)
-        except ValueError as exc:
+            selector = InterfaceSelector.parse(value)
+        except (TypeError, ValueError) as exc:
             issues.append(
                 ConfigIssue(
                     level,
@@ -893,6 +829,22 @@ class ConfigLoader:
                 )
             )
             return None
+
+        if (
+            selector.kind is InterfaceSelectorKind.EXACT_LIST
+            and len(selector.values) * ROUTE_METRIC_STEP > MAX_ROUTE_METRIC
+        ):
+            issues.append(
+                ConfigIssue(
+                    level,
+                    location,
+                    "explicit interface list makes route metric exceed "
+                    "unsigned 32-bit range",
+                )
+            )
+            return None
+
+        return selector
 
     def _parse_ipv4_address(
         self,
@@ -994,57 +946,6 @@ class ConfigLoader:
             parsed.append(item)
 
         return parsed if valid else None
-
-    def _parse_peers(
-        self,
-        value: object,
-        *,
-        location: str,
-        issues: list[ConfigIssue],
-        invalid_level: ConfigIssueLevel,
-    ) -> tuple[IPv4Address, ...] | None:
-        raw = self._parse_string_array(
-            value,
-            location=location,
-            issues=issues,
-            level=invalid_level,
-        )
-        if raw is None:
-            return None
-
-        peers: list[IPv4Address] = []
-        seen: dict[IPv4Address, int] = {}
-        valid = True
-
-        for index, item in enumerate(raw):
-            try:
-                peer = IPv4Address(item)
-            except ValueError as exc:
-                issues.append(
-                    ConfigIssue(
-                        invalid_level,
-                        f"{location}[{index}]",
-                        f"invalid IPv4 address: {exc}",
-                    )
-                )
-                valid = False
-                continue
-
-            if peer in seen:
-                issues.append(
-                    ConfigIssue(
-                        invalid_level,
-                        f"{location}[{index}]",
-                        f"duplicate peer; same address as index {seen[peer]}",
-                    )
-                )
-                valid = False
-                continue
-
-            seen[peer] = index
-            peers.append(peer)
-
-        return tuple(peers) if valid else None
 
     def _parse_routes(
         self,
