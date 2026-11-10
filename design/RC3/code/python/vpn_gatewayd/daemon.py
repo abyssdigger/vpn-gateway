@@ -147,16 +147,21 @@ class VpnGatewayDaemon:
                 ):
                     return
 
-                self.apply()
+                if config.enabled:
+                    self.apply()
 
-                # Critical boundary: APPLY may have enabled ip_forward.
-                # Never emit READY=1 or enter RUN if shutdown was requested.
-                if self._startup_shutdown_checkpoint(
-                    kernel_may_be_dirty=True
-                ):
-                    return
+                    # Critical boundary: APPLY may have enabled ip_forward.
+                    # Never emit READY=1 or enter RUN if shutdown was requested.
+                    if self._startup_shutdown_checkpoint(
+                        kernel_may_be_dirty=True
+                    ):
+                        return
+                else:
+                    # cleanup() already confirmed forwarding OFF and removed
+                    # owned resources. Disabled mode intentionally has no
+                    # profile/kernel materialization.
+                    self.state = DaemonState.DISABLED
 
-                # apply() sets ACTIVE or DEGRADED from verified ProfileResult.
                 self.notifier.ready()
 
                 # run() returns only for a requested graceful shutdown.
@@ -186,7 +191,7 @@ class VpnGatewayDaemon:
         self.config = config
         profiles = {
             profile_id: VpnProfile(profile_config)
-            for profile_id, profile_config in config.vpns.items()
+            for profile_id, profile_config in config.profiles.items()
         }
         self.profiles = MappingProxyType(profiles)
 
@@ -262,6 +267,8 @@ class VpnGatewayDaemon:
         """Apply one fail-hard RC3 startup reconciliation."""
         if self.config is None:
             raise RuntimeError("config not installed")
+        if not self.config.enabled:
+            raise RuntimeError("apply called for disabled config")
 
         self._check_global_ipv6_prerequisites()
         interfaces = self.kernel.list_interfaces()
@@ -411,6 +418,32 @@ class VpnGatewayDaemon:
         """Run one serialized RC3 reconciliation pass."""
         if self.config is None:
             raise RuntimeError("config not installed")
+
+        if not self.config.enabled:
+            try:
+                if self.kernel.get_ip_forward():
+                    self.kernel.set_ip_forward(False)
+                if self.kernel.get_ip_forward():
+                    raise KernelError("ip_forward remains enabled in DISABLED mode")
+            except KernelError as exc:
+                self.state = DaemonState.ISOLATED
+                self._log_reconcile_outcome(
+                    ("isolated", "disabled-forwarding-failed"),
+                    level=logging.ERROR,
+                    facts=(
+                        DiagnosticFact(
+                            RuntimeReasonCode.FORWARDING_DISABLE_FAILED,
+                            str(exc),
+                        ),
+                    ),
+                )
+                return
+            self.state = DaemonState.DISABLED
+            self._log_reconcile_outcome(
+                ("disabled", ("ip-forward", False)),
+                level=logging.INFO,
+            )
+            return
 
         pass_incidents: list[DiagnosticFact] = []
 
@@ -852,6 +885,7 @@ class VpnGatewayDaemon:
                 + "; ".join(violations)
             )
 
+
     def _check_interface_ipv6_prerequisites(
         self,
         interfaces: Sequence[InterfaceRecord],
@@ -860,7 +894,9 @@ class VpnGatewayDaemon:
             raise RuntimeError("config not installed")
 
         selectors = tuple(
-            cfg.interface for cfg in self.config.vpns.values()
+            spec.interface
+            for cfg in self.config.profiles.values()
+            for spec in cfg.bindings
         )
         for record in interfaces:
             if not any(
@@ -869,9 +905,10 @@ class VpnGatewayDaemon:
                 continue
             if not self.kernel.get_interface_ipv6_disabled(record.name):
                 raise ReconciliationError(
-                    "IPv6 must be disabled on every interface matching a "
-                    f"managed selector: {record.name!r}"
+                    "IPv6 must be disabled on every interface matching an "
+                    f"enabled BindingSpec selector: {record.name!r}"
                 )
+
 
     def _build_reconciliation_snapshot(
         self,
@@ -894,7 +931,7 @@ class VpnGatewayDaemon:
                 ),
             )
             full_policy = desired_full_policy(self.config, interface_state)
-        except ValueError as exc:
+        except (ValueError, ReconciliationError) as exc:
             raise ReconciliationError(
                 f"reconciliation snapshot projection failed: {exc}"
             ) from exc
@@ -908,6 +945,7 @@ class VpnGatewayDaemon:
             desired_full_policy=full_policy,
         )
 
+
     def _snapshot_changes_policy(
         self,
         snapshot: ReconciliationSnapshot,
@@ -917,13 +955,14 @@ class VpnGatewayDaemon:
             committed = profile.committed_active_bindings
             if committed is None or committed != state.active_bindings:
                 return True
-            if profile.config.interface.kind is InterfaceSelectorKind.PREFIX:
+            if profile.config.has_prefix_bindings:
                 desired_metrics = snapshot.prefix_metric_allocations_by_profile[
                     profile_id
                 ]
                 if dict(profile.committed_prefix_metrics) != dict(desired_metrics):
                     return True
         return False
+
 
     def _build_local_transition(
         self,
@@ -936,13 +975,7 @@ class VpnGatewayDaemon:
         bool,
         bool,
     ]:
-        """
-        Build OLD -> SURVIVORS -> DESIRED for a local binding transition.
-
-        Surviving bindings must retain identity, relative order and, for prefix
-        selectors, metric.  A same-name/new-ifindex replacement is therefore
-        forced through an empty/survivor intermediate state.
-        """
+        """Build OLD -> SURVIVORS -> DESIRED for a local binding transition."""
         if self.config is None:
             raise RuntimeError("config not installed")
 
@@ -961,6 +994,7 @@ class VpnGatewayDaemon:
             snapshot.interface_state_by_profile.items()
         ):
             profile = self.profiles[profile_id]
+            cfg = profile.config
             committed = profile.committed_active_bindings
             if committed is None:
                 raise ReconciliationError(
@@ -986,36 +1020,77 @@ class VpnGatewayDaemon:
             if len(survivors_new) != len(current):
                 has_add = True
 
+            old_prefix_metrics = dict(profile.committed_prefix_metrics)
+            old_prefix = tuple(
+                binding for binding in committed
+                if binding in old_prefix_metrics
+            )
+            survivor_prefix = tuple(
+                binding for binding in survivors_old
+                if binding in old_prefix_metrics
+            )
+            old_exact = tuple(
+                binding for binding in committed
+                if binding not in old_prefix_metrics
+            )
+            survivor_exact = tuple(
+                binding for binding in survivors_old
+                if binding not in old_prefix_metrics
+            )
+
+            def owner_map(
+                bindings: tuple[InterfaceBinding, ...],
+            ) -> Mapping[InterfaceBinding, int]:
+                owners: dict[InterfaceBinding, int] = {}
+                for binding in bindings:
+                    matches = [
+                        spec.config_index
+                        for spec in cfg.bindings
+                        if spec.interface.matches(binding.name)
+                    ]
+                    if len(matches) != 1:
+                        raise ReconciliationError(
+                            f"{profile_id}: cannot resolve owning BindingSpec "
+                            f"for committed binding {binding!r}"
+                        )
+                    owners[binding] = matches[0]
+                return MappingProxyType(owners)
+
             previous_state[profile_id] = ProfileInterfaceState(
                 candidates=current_state.candidates,
                 active_bindings=committed,
+                exact_bindings=old_exact,
+                prefix_bindings=old_prefix,
+                owner_index_by_binding=owner_map(committed),
             )
             intermediate_state[profile_id] = ProfileInterfaceState(
                 candidates=current_state.candidates,
                 active_bindings=survivors_old,
+                exact_bindings=survivor_exact,
+                prefix_bindings=survivor_prefix,
+                owner_index_by_binding=owner_map(survivors_old),
             )
 
-            if profile.config.interface.kind is InterfaceSelectorKind.PREFIX:
-                old_metrics = dict(profile.committed_prefix_metrics)
+            if cfg.has_prefix_bindings:
                 new_metrics = dict(
                     snapshot.prefix_metric_allocations_by_profile[profile_id]
                 )
-                if frozenset(old_metrics) != committed_set:
+                if frozenset(old_prefix_metrics) != frozenset(old_prefix):
                     raise ReconciliationError(
                         f"{profile_id}: committed prefix metric state is incomplete"
                     )
-                for binding in survivors_old:
-                    if old_metrics[binding] != new_metrics.get(binding):
+                for binding in survivor_prefix:
+                    if old_prefix_metrics[binding] != new_metrics.get(binding):
                         raise ReconciliationError(
                             f"{profile_id}: surviving prefix metric changed"
                         )
                 previous_prefix_metrics[profile_id] = MappingProxyType(
-                    old_metrics
+                    old_prefix_metrics
                 )
                 intermediate_prefix_metrics[profile_id] = MappingProxyType(
                     {
-                        binding: old_metrics[binding]
-                        for binding in survivors_old
+                        binding: old_prefix_metrics[binding]
+                        for binding in survivor_prefix
                     }
                 )
 
@@ -1027,9 +1102,7 @@ class VpnGatewayDaemon:
         previous_state_ro = MappingProxyType(previous_state)
         intermediate_state_ro = MappingProxyType(intermediate_state)
         previous_metrics_ro = MappingProxyType(previous_prefix_metrics)
-        intermediate_metrics_ro = MappingProxyType(
-            intermediate_prefix_metrics
-        )
+        intermediate_metrics_ro = MappingProxyType(intermediate_prefix_metrics)
 
         previous_policy = desired_full_policy(
             self.config,
@@ -1063,7 +1136,6 @@ class VpnGatewayDaemon:
             has_add,
         )
 
-    # ---- Route plan ------------------------------------------------------
 
     def _resolve_profile_interfaces(
         self,
@@ -1073,45 +1145,48 @@ class VpnGatewayDaemon:
         records = tuple(interface_records)
 
         for profile_id in sorted(self.profiles, key=str.casefold):
-            cfg = self.profiles[profile_id].config
-            previous = (
-                self.profiles[profile_id].committed_active_bindings or ()
+            profile = self.profiles[profile_id]
+            committed = profile.committed_active_bindings or ()
+            committed_prefix = set(profile.committed_prefix_metrics)
+            previous_prefix = tuple(
+                binding for binding in committed
+                if binding in committed_prefix
             )
             state[profile_id] = resolve_profile_interface_state(
-                cfg.interface,
+                profile.config.bindings,
                 records,
-                cfg.network,
-                previous_active_bindings=previous,
+                previous_prefix_active_bindings=previous_prefix,
             )
 
         return MappingProxyType(state)
 
+
     @staticmethod
-    def _valid_prefix_metric(metric: int) -> bool:
+    def _valid_prefix_metric(metric: int, start: int) -> bool:
         return (
-            FIRST_UNICAST_METRIC <= metric < BLACKHOLE_METRIC
-            and (metric - FIRST_UNICAST_METRIC) % ROUTE_METRIC_STEP == 0
+            start <= metric < BLACKHOLE_METRIC
+            and (metric - start) % ROUTE_METRIC_STEP == 0
         )
 
     @staticmethod
-    def _advance_prefix_metric(metric: int) -> int:
+    def _advance_prefix_metric(metric: int, start: int) -> int:
         candidate = metric + ROUTE_METRIC_STEP
         if candidate >= BLACKHOLE_METRIC:
-            return FIRST_UNICAST_METRIC
+            return start
         return candidate
 
     @staticmethod
-    def _prefix_metric_capacity() -> int:
+    def _prefix_metric_capacity(start: int) -> int:
         if (
-            FIRST_UNICAST_METRIC <= 0
+            start <= 0
             or ROUTE_METRIC_STEP <= 0
-            or FIRST_UNICAST_METRIC >= BLACKHOLE_METRIC
+            or start >= BLACKHOLE_METRIC
         ):
             raise ReconciliationError(
-                "invalid UNICAST/BLACKHOLE metric constants"
+                "invalid dynamic UNICAST/BLACKHOLE metric range"
             )
         return (
-            (BLACKHOLE_METRIC - 1 - FIRST_UNICAST_METRIC)
+            (BLACKHOLE_METRIC - 1 - start)
             // ROUTE_METRIC_STEP
         ) + 1
 
@@ -1121,31 +1196,31 @@ class VpnGatewayDaemon:
         state: ProfileInterfaceState,
     ) -> tuple[Mapping[InterfaceBinding, int], int]:
         profile = self.profiles[profile_id]
+        start = profile.config.dynamic_metric_min
         committed = dict(profile.committed_prefix_metrics)
         cursor = profile.committed_prefix_metric_cursor
 
-        if not self._valid_prefix_metric(cursor):
+        if not self._valid_prefix_metric(cursor, start):
             raise ReconciliationError(
-                f"{profile_id}: invalid committed prefix metric cursor "
-                f"{cursor}"
+                f"{profile_id}: invalid committed prefix metric cursor {cursor}"
             )
 
-        capacity = self._prefix_metric_capacity()
-        if len(state.active_bindings) > capacity:
+        capacity = self._prefix_metric_capacity(start)
+        if len(state.prefix_bindings) > capacity:
             raise ReconciliationError(
                 f"{profile_id}: prefix metric allocator exhausted "
-                f"({len(state.active_bindings)} active bindings, "
+                f"({len(state.prefix_bindings)} active prefix bindings, "
                 f"{capacity} available slots)"
             )
 
         allocations: dict[InterfaceBinding, int] = {}
         used: set[int] = set()
 
-        for binding in state.active_bindings:
+        for binding in state.prefix_bindings:
             if binding not in committed:
                 continue
             metric = committed[binding]
-            if not self._valid_prefix_metric(metric):
+            if not self._valid_prefix_metric(metric, start):
                 raise ReconciliationError(
                     f"{profile_id}: invalid committed prefix metric {metric}"
                 )
@@ -1156,18 +1231,17 @@ class VpnGatewayDaemon:
             allocations[binding] = metric
             used.add(metric)
 
-        for binding in state.active_bindings:
+        for binding in state.prefix_bindings:
             if binding in allocations:
                 continue
-
             candidate = cursor
             for _ in range(capacity):
                 if candidate not in used:
                     allocations[binding] = candidate
                     used.add(candidate)
-                    cursor = self._advance_prefix_metric(candidate)
+                    cursor = self._advance_prefix_metric(candidate, start)
                     break
-                candidate = self._advance_prefix_metric(candidate)
+                candidate = self._advance_prefix_metric(candidate, start)
             else:
                 raise ReconciliationError(
                     f"{profile_id}: prefix metric allocator exhausted"
@@ -1187,7 +1261,7 @@ class VpnGatewayDaemon:
 
         for profile_id in sorted(self.profiles, key=str.casefold):
             profile = self.profiles[profile_id]
-            if profile.config.interface.kind is not InterfaceSelectorKind.PREFIX:
+            if not profile.config.has_prefix_bindings:
                 continue
             metrics, cursor = self._allocate_prefix_metrics(
                 profile_id,
@@ -1207,45 +1281,44 @@ class VpnGatewayDaemon:
         ],
     ) -> tuple[tuple[InterfaceBinding, int], ...]:
         cfg = self.profiles[profile_id].config
-        selector = cfg.interface
         result: list[tuple[InterfaceBinding, int]] = []
 
-        if selector.kind is InterfaceSelectorKind.EXACT:
-            for binding in state.active_bindings:
-                result.append((binding, FIRST_UNICAST_METRIC))
-        elif selector.kind is InterfaceSelectorKind.PREFIX:
+        for binding in state.exact_bindings:
+            owner_index = state.owner_index_by_binding[binding]
+            spec = cfg.binding_by_index(owner_index)
+            if spec.exact_rank is None:
+                raise ReconciliationError(
+                    f"{profile_id}: exact binding owned by prefix BindingSpec"
+                )
+            metric = (
+                FIRST_UNICAST_METRIC
+                + spec.exact_rank * ROUTE_METRIC_STEP
+            )
+            if metric >= BLACKHOLE_METRIC:
+                raise ReconciliationError(
+                    f"{profile_id}: exact metric reaches BLACKHOLE_METRIC"
+                )
+            result.append((binding, metric))
+
+        if state.prefix_bindings:
             metrics = prefix_metric_allocations_by_profile.get(profile_id)
             if metrics is None:
                 raise ReconciliationError(
                     f"{profile_id}: missing prefix metric allocation"
                 )
-            if set(metrics) != set(state.active_bindings):
+            if set(metrics) != set(state.prefix_bindings):
                 raise ReconciliationError(
                     f"{profile_id}: prefix metric allocation does not "
-                    "match active bindings"
+                    "match active prefix bindings"
                 )
-            for binding in state.active_bindings:
+            for binding in state.prefix_bindings:
                 result.append((binding, metrics[binding]))
-        elif selector.kind is InterfaceSelectorKind.EXACT_LIST:
-            slot_by_name = {
-                name: index for index, name in enumerate(selector.values)
-            }
-            for binding in state.active_bindings:
-                metric = (
-                    FIRST_UNICAST_METRIC
-                    + slot_by_name[binding.name] * ROUTE_METRIC_STEP
+        elif profile_id in prefix_metric_allocations_by_profile:
+            if prefix_metric_allocations_by_profile[profile_id]:
+                raise ReconciliationError(
+                    f"{profile_id}: prefix metrics exist without active prefix bindings"
                 )
-                if metric >= BLACKHOLE_METRIC:
-                    raise ReconciliationError(
-                        f"{profile_id}: explicit interface list makes "
-                        "UNICAST route metric reach BLACKHOLE_METRIC"
-                    )
-                result.append((binding, metric))
-        else:
-            raise ReconciliationError(
-                f"{profile_id}: unsupported interface selector kind "
-                f"{selector.kind!r}"
-            )
+
         return tuple(result)
 
     def _derive_desired_routes(
@@ -1647,6 +1720,7 @@ class VpnGatewayDaemon:
             )
         return MappingProxyType(dict(results))
 
+
     def _commit_owned(
         self,
         *,
@@ -1658,19 +1732,19 @@ class VpnGatewayDaemon:
         ],
         prefix_metric_cursor_by_profile: Mapping[str, int],
     ) -> None:
-        """Commit verified route, binding-order and allocator state."""
+        """Two-phase commit of verified route/binding/allocator state."""
         expected = frozenset(self.profiles)
         if frozenset(verified_routes_by_profile) != expected:
             raise ReconciliationError("incomplete verified routes mapping")
         if frozenset(interface_state_by_profile) != expected:
             raise ReconciliationError("incomplete verified interfaces mapping")
-        if not verified_profiles <= expected:
-            raise ReconciliationError("verified profile set contains unknown profile")
+        if verified_profiles != expected:
+            raise ReconciliationError("cannot partially commit verified profiles")
 
         expected_prefix = frozenset(
             profile_id
             for profile_id, profile in self.profiles.items()
-            if profile.config.interface.kind is InterfaceSelectorKind.PREFIX
+            if profile.config.has_prefix_bindings
         )
         if frozenset(prefix_metric_allocations_by_profile) != expected_prefix:
             raise ReconciliationError(
@@ -1681,37 +1755,29 @@ class VpnGatewayDaemon:
                 "incomplete prefix metric cursor mapping"
             )
 
-        # Validate every prospective per-profile commit before mutating
-        # any process-local committed state.  VpnProfile validation is
-        # deterministic and depends only on config + supplied state, so a
-        # successful shadow commit guarantees that the following real commits
-        # cannot fail on validation halfway through the commit boundary.
-        prepared: list[tuple[str, dict[str, object]]] = []
-        for profile_id in sorted(verified_profiles):
+        prepared = {}
+        for profile_id in sorted(expected):
             state = interface_state_by_profile[profile_id]
             profile = self.profiles[profile_id]
-            kwargs: dict[str, object] = {
-                "routes": verified_routes_by_profile[profile_id],
-                "active_bindings": state.active_bindings,
-            }
-            if profile.config.interface.kind is InterfaceSelectorKind.PREFIX:
-                kwargs["prefix_metrics"] = (
-                    prefix_metric_allocations_by_profile[profile_id]
-                )
-                kwargs["prefix_metric_cursor"] = (
-                    prefix_metric_cursor_by_profile[profile_id]
-                )
+            prepared[profile_id] = profile.prepare_verified_state(
+                routes=verified_routes_by_profile[profile_id],
+                active_bindings=state.active_bindings,
+                prefix_bindings=state.prefix_bindings,
+                prefix_metrics=prefix_metric_allocations_by_profile.get(
+                    profile_id,
+                    {},
+                ),
+                prefix_metric_cursor=prefix_metric_cursor_by_profile.get(
+                    profile_id
+                ),
+            )
 
-            shadow = VpnProfile(profile.config)
-            shadow.commit_verified_state(**kwargs)
-            prepared.append((profile_id, kwargs))
+        # No validation or allocation is allowed below this line.
+        for profile_id in sorted(expected):
+            self.profiles[profile_id].commit_prepared_state(
+                prepared[profile_id]
+            )
 
-        for profile_id, kwargs in prepared:
-            self.profiles[profile_id].commit_verified_state(**kwargs)
-
-    # ---- RC3 firewall/NAT policy ----------------------------------------
-
-    @staticmethod
     def _policy_chain_map(
         chains: Sequence[PolicyChain],
     ) -> Mapping[str, tuple[str, ...]]:
