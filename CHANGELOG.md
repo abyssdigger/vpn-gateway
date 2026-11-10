@@ -1,3 +1,21 @@
+## 2026-11-10 — RC3 stable prefix order and metric allocator implemented
+
+Python implementation now matches the revised prefix ordering/metric architecture.
+
+- prefix bindings preserve verified process-local relative order while continuously active;
+- new bindings append instead of causing ASCII reordering of existing firewall/NAT blocks;
+- simultaneous newly observed bindings use ASCII only as a local tie-breaker;
+- prefix metric allocation is cyclic and process-local;
+- existing bindings preserve allocated metrics;
+- every daemon-owned UNICAST metric is strictly below `BLACKHOLE_METRIC`;
+- explicit-list validation now uses `BLACKHOLE_METRIC`, not merely uint32 capacity;
+- `FIRST_UNICAST_METRIC` is independent from `ROUTE_METRIC_STEP`;
+- snapshot projection failure, including allocator exhaustion, isolates fail-closed;
+- verified active order, allocator mapping and cursor share one commit boundary.
+
+Validation: Python 3.13 `compileall` PASS; **130/130 unit tests PASS**. The temporary
+validation workflow was removed after the successful run.
+
 ## 2026-11-10 — RC3 prefix bindings keep stable process-local order
 
 The prefix metric allocator simplification is extended to firewall/NAT/status ordering.

@@ -28,26 +28,36 @@ Implemented domain model:
   representation remains valid when the host IPv4 belongs to the logical transport network;
 - point-to-point remote endpoint, transport handshake and peer state are not route truth.
 
-Deterministic active ordering:
+Active ordering:
 
 - exact selector: one active interface;
-- prefix selector: current active exact names in case-sensitive bytewise ASCII order;
+- prefix selector: process-local stable order of first accepted bindings;
 - explicit list: configured order filtered to active elements.
 
-The same order drives direct routes and binding-specific firewall/NAT materialization.
+For `prefix+`, surviving bindings keep their relative order, new bindings append, and
+removed bindings disappear without reordering survivors. If several new bindings are first
+seen in one snapshot, only that new group uses bytewise ASCII as a deterministic
+tie-breaker. This order drives binding-specific firewall/NAT materialization and is useful
+diagnostically; it is not a route-priority guarantee and is not persisted across restart.
 
 Routing:
 
 - one `proto 201 metric 65536` BLACKHOLE remains required for every protected
   destination;
+- every daemon-owned UNICAST metric is strictly lower than `BLACKHOLE_METRIC`;
 - daemon-owned UNICAST routes are direct interface routes:
   `dev <exact-interface> proto 202 metric <N>`;
 - desired UNICAST uses `via=None` and `onlink=False`;
-- exact metric is 10;
-- prefix metrics are 10,20,30... over the current sorted active set;
-- explicit-list metrics use stable configuration slots, so a missing earlier interface
-  does not renumber later interfaces;
-- prefix metric overflow is checked at runtime without wrap/truncation.
+- exact metric is `FIRST_UNICAST_METRIC` (currently 10);
+- explicit-list slot N uses
+  `FIRST_UNICAST_METRIC + N * ROUTE_METRIC_STEP` and therefore preserves configured
+  priority holes;
+- prefix metrics come from a cyclic process-local allocator;
+- a continuously active prefix binding keeps its metric;
+- new prefix bindings do not renumber existing routes;
+- the allocator wraps before `BLACKHOLE_METRIC`, skips occupied values and fails closed
+  only if every valid slot is occupied;
+- prefix route preference between interfaces is intentionally unspecified.
 
 Firewall/NAT:
 
@@ -114,9 +124,9 @@ python -m compileall -q design/RC3/code/python
 PASS
 
 python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
-Ran 121 tests
+Ran 130 tests
 OK
-121/121 PASS
+130/130 PASS
 ```
 
 The temporary validation workflow was removed after the successful run; it is not part of
@@ -154,4 +164,42 @@ OK
 
 The reduction from 124 to 121 tests is exactly the removal of three tests for the deleted
 legacy `list_interface_ipv4()` API.
+
+## Prefix stable-order and metric allocator implementation
+
+The post-EXP-009 simplification was extended so a newly appearing `prefix+` interface no
+longer causes existing binding-specific rules or routes to be reordered merely because its
+name sorts earlier.
+
+Verified process-local prefix state now consists of:
+
+```text
+active_order
+ConcreteBinding(name, ifindex) -> metric
+next_metric_cursor
+```
+
+A reconciliation snapshot derives provisional order/allocation from the last verified
+state and current interface inventory. The order, allocation and cursor are committed only
+after successful verification together with OWNED routes and active binding state.
+
+Runtime snapshot projection failure, including metric-slot exhaustion, uses the fail-closed
+isolation path and never applies a partial desired state.
+
+Validation on Python 3.13:
+
+```text
+python -m compileall -q design/RC3/code/python
+PASS
+
+python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
+Ran 130 tests
+OK
+130/130 PASS
+```
+
+The suite includes regression coverage for stable survivor order, same-name/new-ifindex
+fresh bindings, preserved metrics, non-immediate hole reuse, allocator wrap-around,
+occupied-slot skipping, allocator exhaustion and explicit-list
+`metric < BLACKHOLE_METRIC` validation.
 
