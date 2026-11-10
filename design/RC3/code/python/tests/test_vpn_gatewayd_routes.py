@@ -33,8 +33,19 @@ def make_profile(
 
 def make_daemon(*profiles):
     daemon = object.__new__(vpng.VpnGatewayDaemon)
-    daemon.profiles = MappingProxyType(
+    profile_map = MappingProxyType(
         {profile.config.profile_id: profile for profile in profiles}
+    )
+    daemon.profiles = profile_map
+    daemon.config = vpng.GatewayConfig(
+        reconcile_interval=10.0,
+        common_allowed_sources=(),
+        vpns=MappingProxyType(
+            {
+                profile_id: profile.config
+                for profile_id, profile in profile_map.items()
+            }
+        ),
     )
     return daemon
 
