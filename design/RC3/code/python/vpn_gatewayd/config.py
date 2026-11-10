@@ -11,9 +11,10 @@ from types import MappingProxyType
 from typing import Mapping, Sequence
 
 from .constants import (
+    BLACKHOLE_METRIC,
     DEFAULT_RECONCILE_INTERVAL,
+    FIRST_UNICAST_METRIC,
     MAX_RECONCILE_INTERVAL,
-    MAX_ROUTE_METRIC,
     MIN_RECONCILE_INTERVAL,
     ROUTE_METRIC_STEP,
 )
@@ -802,19 +803,21 @@ class ConfigLoader:
             )
             return None
 
-        if (
-            selector.kind is InterfaceSelectorKind.EXACT_LIST
-            and len(selector.values) * ROUTE_METRIC_STEP > MAX_ROUTE_METRIC
-        ):
-            issues.append(
-                ConfigIssue(
-                    level,
-                    location,
-                    "explicit interface list makes route metric exceed "
-                    "unsigned 32-bit range",
-                )
+        if selector.kind is InterfaceSelectorKind.EXACT_LIST:
+            last_metric = (
+                FIRST_UNICAST_METRIC
+                + (len(selector.values) - 1) * ROUTE_METRIC_STEP
             )
-            return None
+            if last_metric >= BLACKHOLE_METRIC:
+                issues.append(
+                    ConfigIssue(
+                        level,
+                        location,
+                        "explicit interface list makes UNICAST route metric "
+                        "reach or exceed BLACKHOLE_METRIC",
+                    )
+                )
+                return None
 
         return selector
 

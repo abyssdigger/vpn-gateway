@@ -6,7 +6,12 @@ from ipaddress import IPv4Address, IPv4Network
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Mapping
 
-from .interfaces import InterfaceRecord, InterfaceSelector, ProfileInterfaceState
+from .interfaces import (
+    InterfaceBinding,
+    InterfaceRecord,
+    InterfaceSelector,
+    ProfileInterfaceState,
+)
 
 if TYPE_CHECKING:
     from .policy import FirewallNatPolicy
@@ -120,6 +125,10 @@ class ReconciliationPlan:
 class ReconciliationSnapshot:
     interfaces: tuple[InterfaceRecord, ...]
     interface_state_by_profile: Mapping[str, ProfileInterfaceState]
+    prefix_metric_allocations_by_profile: Mapping[
+        str, Mapping[InterfaceBinding, int]
+    ]
+    prefix_metric_cursor_by_profile: Mapping[str, int]
     desired_routes_by_profile: Mapping[str, frozenset[RouteSpec]]
     desired_full_policy: FirewallNatPolicy
 
@@ -129,6 +138,22 @@ class ReconciliationSnapshot:
             self,
             "interface_state_by_profile",
             MappingProxyType(dict(self.interface_state_by_profile)),
+        )
+        object.__setattr__(
+            self,
+            "prefix_metric_allocations_by_profile",
+            MappingProxyType(
+                {
+                    profile_id: MappingProxyType(dict(metrics))
+                    for profile_id, metrics
+                    in self.prefix_metric_allocations_by_profile.items()
+                }
+            ),
+        )
+        object.__setattr__(
+            self,
+            "prefix_metric_cursor_by_profile",
+            MappingProxyType(dict(self.prefix_metric_cursor_by_profile)),
         )
         object.__setattr__(
             self,

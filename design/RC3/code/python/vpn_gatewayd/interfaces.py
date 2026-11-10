@@ -162,11 +162,37 @@ def resolve_profile_interface_state(
     selector: InterfaceSelector,
     records: Sequence[InterfaceRecord],
     network: IPv4Network,
+    previous_active_bindings: Sequence[InterfaceBinding] = (),
 ) -> ProfileInterfaceState:
     candidates = _ordered_candidates(selector, records)
-    active = tuple(
+    current_active = tuple(
         InterfaceBinding.from_record(record)
         for record in candidates
         if any(address in network for address in record.ipv4)
     )
+
+    if selector.kind is InterfaceSelectorKind.PREFIX:
+        previous = tuple(previous_active_bindings)
+        if len(set(previous)) != len(previous):
+            raise ValueError("previous active bindings contain duplicates")
+
+        current_set = set(current_active)
+        survivors = tuple(
+            binding for binding in previous if binding in current_set
+        )
+        survivor_set = set(survivors)
+        new_bindings = tuple(
+            sorted(
+                (
+                    binding
+                    for binding in current_active
+                    if binding not in survivor_set
+                ),
+                key=lambda binding: (binding.name, binding.ifindex),
+            )
+        )
+        active = survivors + new_bindings
+    else:
+        active = current_active
+
     return ProfileInterfaceState(candidates=candidates, active_bindings=active)
