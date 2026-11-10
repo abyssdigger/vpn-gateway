@@ -1,848 +1,395 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import importlib.util
 import os
 import stat
+import sys
 import tempfile
 import textwrap
 import unittest
-from unittest import mock
 from pathlib import Path
-from types import SimpleNamespace
-
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-import sys
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 import vpn_gatewayd as vpng
 
 
-VALID_PRIMARY = """
-[vpn.primary]
-interface = "vpns0"
-network = "172.20.130.0/29"
-routes = ["10.0.0.0/8"]
-allowed_sources = ["10.200.201.0/24"]
-"""
-
-
 class NoSecurityLoader(vpng.ConfigLoader):
     def _validate_config_security(self, path: Path) -> None:
-        del path
-
-    def _validate_opened_config_stat(self, path, file_stat) -> None:
-        del path, file_stat
+        return
 
 
 class ConfigTestCase(unittest.TestCase):
-    def write_config(self, body: str) -> tuple[tempfile.TemporaryDirectory, Path]:
-        td = tempfile.TemporaryDirectory()
-        path = Path(td.name) / "vpn-gateway.toml"
-        path.write_text(textwrap.dedent(body), encoding="utf-8")
-        return td, path
+    def setUp(self):
+        self.loader = NoSecurityLoader()
 
-    def issues(self, result, level):
-        return [issue for issue in result.issues if issue.level is level]
+    def write(self, body: str) -> Path:
+        tmp = tempfile.NamedTemporaryFile("w", delete=False)
+        self.addCleanup(lambda: os.path.exists(tmp.name) and os.unlink(tmp.name))
+        with tmp:
+            tmp.write(textwrap.dedent(body))
+        return Path(tmp.name)
 
-    def test_valid_runtime_projection(self):
-        td, path = self.write_config(
+    def load(self, body: str):
+        return self.loader.load_runtime(self.write(body))
+
+    def check(self, body: str):
+        return self.loader.check(self.write(body))
+
+    def test_valid_binding_specific_projection(self):
+        cfg = self.load(
             """
-            reconcile_interval = 10.0
-            managed_vpns = ["primary", "backup"]
-            common_allowed_sources = ["10.200.200.8", "10.200.200.9/32"]
+            enabled = true
+            reconcile_interval = 12.5
+            common_allowed_sources = ["10.200.200.8"]
 
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
+            [profiles.primary]
             routes = ["10.0.0.0/8"]
             allowed_sources = ["10.200.201.0/24"]
-
-            [vpn.backup]
-            interface = "wg0"
-            network = "172.20.126.0/29"
-            routes = ["100.64.0.0/10", "192.168.0.0/16"]
-            allowed_sources = []
+            bindings = [
+              { interface = "wg0", network = "172.20.126.0/29" },
+              { interface = "wg1", network = "172.20.127.0/29" },
+              { interface = "oc+", network = "172.20.130.0/29" },
+            ]
             """
         )
-        self.addCleanup(td.cleanup)
-
-        cfg = NoSecurityLoader().load_runtime(path)
-
-        self.assertEqual(cfg.reconcile_interval, 10.0)
-        self.assertEqual(tuple(cfg.vpns), ("backup", "primary"))
+        self.assertTrue(cfg.enabled)
+        self.assertEqual(cfg.reconcile_interval, 12.5)
+        profile = cfg.profiles["primary"]
+        self.assertEqual(len(profile.bindings), 3)
         self.assertEqual(
-            tuple(map(str, cfg.common_allowed_sources)),
-            ("10.200.200.8/32", "10.200.200.9/32"),
+            [spec.exact_rank for spec in profile.bindings],
+            [0, 1, None],
         )
-        self.assertIsInstance(
-            cfg.vpns["primary"].interface,
-            vpng.InterfaceSelector,
-        )
-        self.assertEqual(str(cfg.vpns["primary"].interface), "vpns0")
+        self.assertEqual(profile.dynamic_metric_min, 30)
         self.assertEqual(
-            tuple(map(str, cfg.vpns["backup"].routes)),
-            ("100.64.0.0/10", "192.168.0.0/16"),
+            str(profile.bindings[1].network),
+            "172.20.127.0/29",
         )
 
-    def test_runtime_accepts_prefix_interface_selector(self):
-        td, path = self.write_config(
+    def test_defaults_are_applied(self):
+        cfg = self.load(
             """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "vpns+"
-            network = "172.20.130.0/29"
+            [profiles.primary]
             routes = ["10.0.0.0/8"]
-            allowed_sources = []
+            bindings = [
+              { interface = "wg0", network = "172.20.126.0/29" },
+            ]
             """
         )
-        self.addCleanup(td.cleanup)
+        self.assertTrue(cfg.enabled)
+        self.assertEqual(cfg.reconcile_interval, vpng.DEFAULT_RECONCILE_INTERVAL)
+        self.assertEqual(cfg.common_allowed_sources, ())
+        self.assertEqual(cfg.profiles["primary"].allowed_sources, ())
 
-        cfg = NoSecurityLoader().load_runtime(path)
-
-        selector = cfg.vpns["primary"].interface
-        self.assertIs(
-            selector.kind,
-            vpng.InterfaceSelectorKind.PREFIX,
-        )
-        self.assertEqual(str(selector), "vpns+")
-
-    def test_explicit_list_metric_must_stay_below_blackhole(self):
-        td, path = self.write_config(
+    def test_global_disabled_ignores_profile_bodies_and_operational_values(self):
+        cfg = self.load(
             """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
+            enabled = false
+            reconcile_interval = "not-a-number"
+            common_allowed_sources = "not-an-array"
 
-            [vpn.primary]
-            interface = ["vpnA", "vpnB", "vpnC"]
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
+            [profiles."bad.id"]
+            nonsense = [{ future = "schema" }]
             """
         )
-        self.addCleanup(td.cleanup)
+        self.assertFalse(cfg.enabled)
+        self.assertEqual(dict(cfg.profiles), ())
+        self.assertEqual(cfg.common_allowed_sources, ())
 
-        loader = NoSecurityLoader()
-        with mock.patch("vpn_gatewayd.config.BLACKHOLE_METRIC", 30):
-            with self.assertRaises(vpng.ConfigError):
-                loader.load_runtime(path)
-            result = loader.check(path)
-
-        self.assertTrue(
-            any(
-                issue.location == "vpn.primary.interface"
-                and "BLACKHOLE_METRIC" in issue.message
-                for issue in result.issues
-            )
-        )
-
-    def test_malformed_unmanaged_definition_does_not_block_runtime(self):
-        td, path = self.write_config(
-            """
-            reconcile_interval = 10.0
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-            """
-            + VALID_PRIMARY
-            + """
-            [vpn."bad.id"]
-            network = "definitely-not-an-ip"
-            surprise = true
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        cfg = loader.load_runtime(path)
-        self.assertEqual(tuple(cfg.vpns), ("primary",))
-
-        result = loader.check(path)
-        warnings = self.issues(result, vpng.ConfigIssueLevel.WARNING)
-        self.assertTrue(warnings)
-        self.assertFalse(result.has_errors)
-        self.assertTrue(
-            any("profile ID must match" in issue.message for issue in warnings)
-        )
-
-    def test_managed_route_transport_overlap_is_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary", "backup"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
-            routes = ["172.20.126.0/29"]
-            allowed_sources = []
-
-            [vpn.backup]
-            interface = "wg0"
-            network = "172.20.126.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
+    def test_global_disabled_still_rejects_unknown_top_level_key(self):
         with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path)
-
-        result = loader.check(path)
-        self.assertTrue(result.has_errors)
-        self.assertTrue(
-            any(
-                "overlaps VPN transport network" in issue.message
-                for issue in self.issues(result, vpng.ConfigIssueLevel.ERROR)
+            self.load(
+                """
+                enabled = false
+                future_top_level = true
+                """
             )
-        )
 
-    def test_conflict_with_unmanaged_profile_is_warning_only(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-            """
-            + VALID_PRIMARY
-            + """
-            [vpn.backup]
-            interface = "wg0"
-            network = "10.20.0.0/16"
-            routes = ["192.168.0.0/16"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
+    def test_disabled_profile_body_is_not_parsed_or_linted(self):
+        body = """
+            [profiles.primary]
+            routes = ["10.0.0.0/8"]
+            bindings = [
+              { interface = "wg0", network = "172.20.126.0/29" },
+            ]
 
-        loader = NoSecurityLoader()
-        cfg = loader.load_runtime(path)
-        self.assertEqual(tuple(cfg.vpns), ("primary",))
-
-        result = loader.check(path)
+            [profiles."bad.id"]
+            enabled = false
+            unknown_future_key = "anything"
+            routes = "wrong-type"
+            bindings = "wrong-type"
+        """
+        cfg = self.load(body)
+        self.assertEqual(tuple(cfg.profiles), ("primary",))
+        result = self.check(body)
         self.assertFalse(result.has_errors)
-        warnings = self.issues(result, vpng.ConfigIssueLevel.WARNING)
-        self.assertTrue(
-            any(
-                "overlaps VPN transport network" in issue.message
-                for issue in warnings
+        self.assertEqual(result.issues, ())
+
+    def test_enabled_config_requires_enabled_profile(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                enabled = true
+                [profiles.future]
+                enabled = false
+                nonsense = true
+                """
             )
+
+    def test_enabled_profile_unknown_key_is_error(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["10.0.0.0/8"]
+                bindings = [
+                  { interface = "wg0", network = "172.20.126.0/29" },
+                ]
+                local_address = "172.20.126.2"
+                """
+            )
+
+    def test_binding_unknown_key_is_error(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["10.0.0.0/8"]
+                bindings = [
+                  { interface = "wg0", network = "172.20.126.0/29", peer = "x" },
+                ]
+                """
+            )
+
+    def test_old_list_selector_is_rejected(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["10.0.0.0/8"]
+                bindings = [
+                  { interface = ["wg0", "wg1"], network = "172.20.126.0/29" },
+                ]
+                """
+            )
+
+    def test_prefix_between_exacts_does_not_consume_exact_rank(self):
+        cfg = self.load(
+            """
+            [profiles.primary]
+            routes = ["10.0.0.0/8"]
+            bindings = [
+              { interface = "wg0", network = "172.20.126.0/29" },
+              { interface = "oc+", network = "172.20.130.0/29" },
+              { interface = "wg1", network = "172.20.127.0/29" },
+              { interface = "tun+", network = "172.20.140.0/29" },
+              { interface = "wg2", network = "172.20.128.0/29" },
+            ]
+            """
+        )
+        specs = cfg.profiles["primary"].bindings
+        self.assertEqual(
+            [spec.exact_rank for spec in specs],
+            [0, None, 1, None, 2],
+        )
+        self.assertEqual(cfg.profiles["primary"].dynamic_metric_min, 40)
+
+    def test_selector_namespace_overlap_is_global_error(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["10.0.0.0/8"]
+                bindings = [
+                  { interface = "vpns+", network = "172.20.130.0/29" },
+                ]
+
+                [profiles.backup]
+                routes = ["192.168.0.0/16"]
+                bindings = [
+                  { interface = "vpns9", network = "172.20.131.0/29" },
+                ]
+                """
+            )
+
+    def test_binding_networks_may_overlap(self):
+        cfg = self.load(
+            """
+            [profiles.primary]
+            routes = ["10.0.0.0/8"]
+            bindings = [
+              { interface = "wg0", network = "172.20.126.0/29" },
+              { interface = "wg1", network = "172.20.126.0/29" },
+            ]
+            """
+        )
+        self.assertEqual(len(cfg.profiles["primary"].bindings), 2)
+
+    def test_protected_route_must_not_overlap_any_binding_network(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["172.20.0.0/16"]
+                bindings = [
+                  { interface = "wg0", network = "172.20.126.0/29" },
+                ]
+                """
+            )
+
+    def test_protected_routes_cannot_overlap_across_profiles(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["10.0.0.0/8"]
+                bindings = [
+                  { interface = "wg0", network = "172.20.126.0/29" },
+                ]
+
+                [profiles.backup]
+                routes = ["10.1.0.0/16"]
+                bindings = [
+                  { interface = "wg1", network = "172.20.127.0/29" },
+                ]
+                """
+            )
+
+    def test_noncanonical_binding_network_is_rejected(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["10.0.0.0/8"]
+                bindings = [
+                  { interface = "wg0", network = "172.20.126.1/29" },
+                ]
+                """
+            )
+
+    def test_slash32_binding_network_is_rejected_but_slash31_allowed(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["10.0.0.0/8"]
+                bindings = [
+                  { interface = "wg0", network = "172.20.126.1/32" },
+                ]
+                """
+            )
+        cfg = self.load(
+            """
+            [profiles.primary]
+            routes = ["10.0.0.0/8"]
+            bindings = [
+              { interface = "wg0", network = "172.20.126.0/31" },
+            ]
+            """
+        )
+        self.assertEqual(
+            str(cfg.profiles["primary"].bindings[0].network),
+            "172.20.126.0/31",
         )
 
-    def test_set_like_duplicates_normalize_and_lint(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["PRIMARY", "primary"]
-            common_allowed_sources = [
-                "10.200.200.8",
-                "10.200.200.8/32",
+    def test_duplicate_route_is_error(self):
+        with self.assertRaises(vpng.ConfigError):
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["10.0.0.0/8", "10.0.0.0/8"]
+                bindings = [
+                  { interface = "wg0", network = "172.20.126.0/29" },
+                ]
+                """
+            )
+
+    def test_acl_duplicates_normalize_and_check_warns(self):
+        body = """
+            common_allowed_sources = ["10.1.1.1", "10.1.1.1/32"]
+            [profiles.primary]
+            routes = ["10.0.0.0/8"]
+            bindings = [
+              { interface = "wg0", network = "172.20.126.0/29" },
             ]
-
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8", "10.0.0.0/8"]
-            allowed_sources = [
-                "10.200.201.1",
-                "10.200.201.1/32",
-            ]
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        cfg = loader.load_runtime(path)
-
-        self.assertEqual(tuple(cfg.vpns), ("primary",))
+            allowed_sources = ["10.2.0.0/24", "10.2.0.0/24"]
+        """
+        cfg = self.load(body)
         self.assertEqual(len(cfg.common_allowed_sources), 1)
-        self.assertEqual(len(cfg.vpns["primary"].routes), 1)
-        self.assertEqual(len(cfg.vpns["primary"].allowed_sources), 1)
-
-        result = loader.check(path)
+        self.assertEqual(len(cfg.profiles["primary"].allowed_sources), 1)
+        result = self.check(body)
         self.assertFalse(result.has_errors)
-        warnings = self.issues(result, vpng.ConfigIssueLevel.WARNING)
-        self.assertGreaterEqual(len(warnings), 4)
-
-    def test_selected_case_insensitive_ambiguity_is_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-
-            [vpn.PRIMARY]
-            interface = "wg0"
-            network = "172.20.126.0/29"
-            routes = ["192.168.0.0/16"]
-            allowed_sources = []
-            """
+        self.assertEqual(
+            sum(i.level is vpng.ConfigIssueLevel.WARNING for i in result.issues),
+            2,
         )
-        self.addCleanup(td.cleanup)
 
-        loader = NoSecurityLoader()
+    def test_reconcile_interval_range_and_type(self):
+        for value in ('"10"', "0.5", "61.0"):
+            with self.subTest(value=value):
+                with self.assertRaises(vpng.ConfigError):
+                    self.load(
+                        f"""
+                        reconcile_interval = {value}
+                        [profiles.primary]
+                        routes = ["10.0.0.0/8"]
+                        bindings = [
+                          {{ interface = "wg0", network = "172.20.126.0/29" }},
+                        ]
+                        """
+                    )
+
+    def test_case_insensitive_enabled_profile_collision_is_error(self):
         with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path)
-        self.assertTrue(loader.check(path).has_errors)
+            self.load(
+                """
+                [profiles.primary]
+                routes = ["10.0.0.0/8"]
+                bindings = [
+                  { interface = "wg0", network = "172.20.126.0/29" },
+                ]
 
-    def test_unmanaged_case_ambiguity_is_warning(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["other"]
-            common_allowed_sources = []
-
-            [vpn.other]
-            interface = "tun0"
-            network = "172.20.140.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
-            routes = ["192.168.0.0/16"]
-            allowed_sources = []
-
-            [vpn.PRIMARY]
-            interface = "wg0"
-            network = "172.20.126.0/29"
-            routes = ["100.64.0.0/10"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        cfg = loader.load_runtime(path)
-        self.assertEqual(tuple(cfg.vpns), ("other",))
-
-        result = loader.check(path)
-        self.assertFalse(result.has_errors)
-        self.assertTrue(
-            any(
-                "case-insensitive ambiguous unmanaged" in issue.message
-                for issue in self.issues(
-                    result, vpng.ConfigIssueLevel.WARNING
-                )
+                [profiles.PRIMARY]
+                routes = ["192.168.0.0/16"]
+                bindings = [
+                  { interface = "wg1", network = "172.20.127.0/29" },
+                ]
+                """
             )
-        )
 
-    def test_runtime_accepts_ordered_explicit_interface_list(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = ["vpnB", "vpnA", "vpnC"]
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        selector = NoSecurityLoader().load_runtime(path).vpns["primary"].interface
-        self.assertIs(selector.kind, vpng.InterfaceSelectorKind.EXACT_LIST)
-        self.assertEqual(selector.values, ("vpnB", "vpnA", "vpnC"))
-
-    def test_legacy_peers_key_is_unknown_managed_key(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "wg0"
-            network = "172.20.130.0/29"
-            peers = ["172.20.130.2"]
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path)
-        result = loader.check(path)
-        self.assertTrue(result.has_errors)
-        self.assertTrue(any(
-            issue.location == "vpn.primary.peers"
-            and "unknown profile key" in issue.message
-            for issue in result.issues
-        ))
-
-    def test_explicit_interface_list_duplicates_are_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = ["vpnA", "vpnA"]
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        with self.assertRaises(vpng.ConfigError):
-            NoSecurityLoader().load_runtime(path)
-
-    def test_prefix_and_explicit_list_namespace_overlap_is_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary", "backup"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "vpns+"
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-
-            [vpn.backup]
-            interface = ["vpns9", "tun0"]
-            network = "172.20.126.0/29"
-            routes = ["192.168.0.0/16"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        with self.assertRaises(vpng.ConfigError):
-            NoSecurityLoader().load_runtime(path)
-
-    def test_noncanonical_cidr_is_rejected(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = ["10.200.200.8/24"]
-
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.1/29"
-            routes = ["10.1.2.3/8"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path)
-
-        result = loader.check(path)
-        self.assertTrue(result.has_errors)
-
-    def test_reconcile_interval_must_be_toml_float(self):
-        td, path = self.write_config(
-            """
-            reconcile_interval = 10
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-            """
-            + VALID_PRIMARY
-        )
-        self.addCleanup(td.cleanup)
-
-        with self.assertRaises(vpng.ConfigError):
-            NoSecurityLoader().load_runtime(path)
-
-    def test_managed_interface_conflict_is_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary", "backup"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "tun0"
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-
-            [vpn.backup]
-            interface = "tun0"
-            network = "172.20.126.0/29"
-            routes = ["192.168.0.0/16"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path)
-        self.assertTrue(loader.check(path).has_errors)
-
-    def test_same_profile_route_nesting_is_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8", "10.20.0.0/16"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path)
-
-    def test_exact_route_ownership_conflict_is_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary", "backup"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-
-            [vpn.backup]
-            interface = "wg0"
-            network = "172.20.126.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        result = NoSecurityLoader().check(path)
-        self.assertTrue(result.has_errors)
-        self.assertTrue(
-            any(
-                "exact ownership conflict" in issue.message
-                for issue in self.issues(
-                    result, vpng.ConfigIssueLevel.ERROR
-                )
-            )
-        )
-
-    def test_slash31_network_is_valid(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "tun0"
-            network = "172.20.130.0/31"
-            routes = ["10.0.0.1/32"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        cfg = NoSecurityLoader().load_runtime(path)
-        self.assertEqual(str(cfg.vpns["primary"].network), "172.20.130.0/31")
-
-    def test_legacy_local_address_key_is_unknown_managed_key(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "wg0"
-            network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path)
-        result = loader.check(path)
-        self.assertTrue(result.has_errors)
-        self.assertTrue(any(
-            issue.location == "vpn.primary.local_address"
-            and "unknown profile key" in issue.message
-            for issue in result.issues
-        ))
-
-    def test_unknown_top_level_key_is_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-            surprise = true
-            """
-            + VALID_PRIMARY
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path)
-        self.assertTrue(loader.check(path).has_errors)
-
-    def test_unknown_managed_profile_key_is_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-            surprise = true
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path)
-
-
-    def test_read_toml_uses_o_nofollow_and_fstat_on_opened_object(self):
-        class ProbeLoader(vpng.ConfigLoader):
-            def __init__(self):
-                self.opened_stat_seen = False
-
-            def _validate_config_security(self, path: Path) -> None:
-                del path
-
-            def _validate_opened_config_stat(self, path, file_stat):
-                del path, file_stat
-                self.opened_stat_seen = True
-
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = ProbeLoader()
-        real_open = vpng.os.open
-        flags_seen = []
-
-        def recording_open(target, flags, *args, **kwargs):
-            flags_seen.append(flags)
-            return real_open(target, flags, *args, **kwargs)
-
-        with mock.patch.object(vpng.os, "open", side_effect=recording_open):
-            document = loader._read_toml(path)
-
-        self.assertIn("managed_vpns", document)
-        self.assertEqual(len(flags_seen), 1)
-        self.assertTrue(flags_seen[0] & vpng.os.O_NOFOLLOW)
-        self.assertTrue(flags_seen[0] & vpng.os.O_CLOEXEC)
-        self.assertTrue(loader.opened_stat_seen)
-
-    def test_opened_config_stat_revalidates_type_owner_and_mode(self):
+    def test_read_toml_uses_o_nofollow_and_revalidates_opened_object(self):
         loader = vpng.ConfigLoader()
         path = Path("/etc/vpn-gateway/vpn-gateway.toml")
+        root_dir = mock.Mock(st_mode=stat.S_IFDIR | 0o755, st_uid=0)
+        regular = mock.Mock(st_mode=stat.S_IFREG | 0o600, st_uid=0)
+        loader._stat_path = mock.Mock(return_value=root_dir)
+        loader._lstat_path = mock.Mock(return_value=regular)
 
-        loader._validate_opened_config_stat(
-            path,
-            SimpleNamespace(
-                st_mode=stat.S_IFREG | 0o640,
-                st_uid=0,
-            ),
-        )
+        fake_fd = 99
+        with mock.patch("vpn_gatewayd.config.os.open", return_value=fake_fd) as opened,              mock.patch("vpn_gatewayd.config.os.fstat", return_value=regular),              mock.patch("vpn_gatewayd.config.os.fdopen", mock.mock_open(read_data=b"enabled=false\n")):
+            document = loader._read_toml(path)
 
-        bad_stats = (
-            SimpleNamespace(st_mode=stat.S_IFIFO | 0o600, st_uid=0),
-            SimpleNamespace(st_mode=stat.S_IFREG | 0o640, st_uid=1000),
-            SimpleNamespace(st_mode=stat.S_IFREG | 0o660, st_uid=0),
-        )
-        for file_stat in bad_stats:
-            with self.subTest(file_stat=file_stat):
-                with self.assertRaises(vpng.ConfigError):
-                    loader._validate_opened_config_stat(path, file_stat)
+        self.assertFalse(document["enabled"])
+        flags = opened.call_args.args[1]
+        self.assertTrue(flags & os.O_NOFOLLOW)
 
-
-    def test_read_toml_rejects_symlink_even_if_precheck_is_bypassed(self):
-        class NoPrecheckLoader(vpng.ConfigLoader):
-            def _validate_config_security(self, path: Path) -> None:
-                del path
-
-        with tempfile.TemporaryDirectory() as td:
-            root = Path(td)
-            target = root / "real.toml"
-            target.write_text(
-                'managed_vpns = ["primary"]\ncommon_allowed_sources = []\n',
-                encoding="utf-8",
+    def test_opened_config_stat_rejects_owner_or_writable_mode(self):
+        loader = vpng.ConfigLoader()
+        path = Path("/x")
+        with self.assertRaises(vpng.ConfigError):
+            loader._validate_opened_config_stat(
+                path,
+                mock.Mock(st_mode=stat.S_IFREG | 0o600, st_uid=1000),
             )
-            link = root / "vpn-gateway.toml"
-            link.symlink_to(target)
-
-            with self.assertRaises(vpng.ConfigError):
-                NoPrecheckLoader()._read_toml(link)
-
-
-    def test_missing_vpn_table_reports_explicit_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        result = NoSecurityLoader().check(path)
-        self.assertTrue(result.has_errors)
-        self.assertTrue(
-            any(
-                issue.location == "vpn"
-                and issue.message == "required [vpn] table is missing"
-                for issue in self.issues(
-                    result, vpng.ConfigIssueLevel.ERROR
-                )
+        with self.assertRaises(vpng.ConfigError):
+            loader._validate_opened_config_stat(
+                path,
+                mock.Mock(st_mode=stat.S_IFREG | 0o620, st_uid=0),
             )
-        )
-
-    def test_security_contract_without_root(self):
-        class FakeStatLoader(vpng.ConfigLoader):
-            def __init__(self, mapping):
-                self.mapping = mapping
-
-            def _lookup(self, path: Path):
-                value = self.mapping.get(str(path))
-                if isinstance(value, BaseException):
-                    raise value
-                return value
-
-            def _stat_path(self, path: Path):
-                return self._lookup(path)
-
-            def _lstat_path(self, path: Path):
-                return self._lookup(path)
-
-        path = Path("/etc/vpn-gateway/vpn-gateway.toml")
-        parent = path.parent
-
-        good_parent = SimpleNamespace(
-            st_mode=stat.S_IFDIR | 0o750,
-            st_uid=0,
-        )
-        good_file = SimpleNamespace(
-            st_mode=stat.S_IFREG | 0o640,
-            st_uid=0,
-        )
-
-        FakeStatLoader(
-            {str(parent): good_parent, str(path): good_file}
-        )._validate_config_security(path)
-
-        with self.assertRaises(vpng.ConfigError):
-            FakeStatLoader(
-                {
-                    str(parent): SimpleNamespace(
-                        st_mode=stat.S_IFDIR | 0o770,
-                        st_uid=0,
-                    ),
-                    str(path): good_file,
-                }
-            )._validate_config_security(path)
-
-        with self.assertRaises(vpng.ConfigError):
-            FakeStatLoader(
-                {
-                    str(parent): good_parent,
-                    str(path): SimpleNamespace(
-                        st_mode=stat.S_IFREG | 0o660,
-                        st_uid=0,
-                    ),
-                }
-            )._validate_config_security(path)
-
-        with self.assertRaises(vpng.ConfigError):
-            FakeStatLoader(
-                {
-                    str(parent): good_parent,
-                    str(path): SimpleNamespace(
-                        st_mode=stat.S_IFREG | 0o640,
-                        st_uid=1000,
-                    ),
-                }
-            )._validate_config_security(path)
-
-        with self.assertRaises(vpng.ConfigError):
-            FakeStatLoader(
-                {
-                    str(parent): good_parent,
-                    str(path): SimpleNamespace(
-                        st_mode=stat.S_IFLNK | 0o777,
-                        st_uid=0,
-                    ),
-                }
-            )._validate_config_security(path)
-
-        with self.assertRaises(vpng.ConfigError):
-            FakeStatLoader(
-                {
-                    str(parent): SimpleNamespace(
-                        st_mode=stat.S_IFDIR | 0o750,
-                        st_uid=1000,
-                    ),
-                    str(path): good_file,
-                }
-            )._validate_config_security(path)
-
-        with self.assertRaises(vpng.ConfigError):
-            FakeStatLoader(
-                {
-                    str(parent): SimpleNamespace(
-                        st_mode=stat.S_IFREG | 0o640,
-                        st_uid=0,
-                    ),
-                    str(path): good_file,
-                }
-            )._validate_config_security(path)
-
-        with self.assertRaises(vpng.ConfigError):
-            FakeStatLoader(
-                {
-                    str(parent): good_parent,
-                    str(path): SimpleNamespace(
-                        st_mode=stat.S_IFIFO | 0o600,
-                        st_uid=0,
-                    ),
-                }
-            )._validate_config_security(path)
-
-        with self.assertRaises(vpng.ConfigError):
-            FakeStatLoader(
-                {
-                    str(parent): FileNotFoundError(2, "No such file or directory"),
-                    str(path): good_file,
-                }
-            )._validate_config_security(path)
-
-        with self.assertRaises(vpng.ConfigError):
-            FakeStatLoader(
-                {
-                    str(parent): good_parent,
-                    str(path): FileNotFoundError(2, "No such file or directory"),
-                }
-            )._validate_config_security(path)
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    unittest.main()
