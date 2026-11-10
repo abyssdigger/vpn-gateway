@@ -435,6 +435,11 @@ next_metric_cursor
    численного значения допустимо;
 9. после restart распределение начинается заново и прежние metrics не гарантируются.
 
+Порядок перечисления `RouteSpec` не является частью desired route semantics. Route
+reconciliation сравнивает маршруты по их полной идентичности/множеству; изменение
+порядка сериализации или обхода само по себе не является drift и не должно вызывать
+удаление, повторное добавление или переназначение metric существующего desired route.
+
 Если в одном snapshot одновременно появились несколько новых prefix-bindings, только
 эта новая группа сортируется case-sensitive bytewise ASCII перед добавлением в конец
 текущего prefix active_order и распределением metrics. Уже принятые bindings не
@@ -1689,10 +1694,15 @@ Deny-only guard использует проверенную EXP-005 форму:
 -i prefix+
 ```
 
-Active exact names сортируются case-sensitive bytewise ASCII для канонического
-построения policy/status и воспроизводимого обхода новых bindings allocator'ом. Этот
-порядок не задает гарантированный route preference; metrics prefix-bindings выделяются
-по правилам §4.4.
+Active exact names идут в нормативном `active_order` §4.3. Для `prefix+`
+непрерывно active bindings сохраняют относительный порядок первого принятия текущим
+daemon, новые bindings добавляются в конец, а case-sensitive bytewise ASCII используется
+только как tie-break внутри группы новых bindings, впервые обнаруженных в одном snapshot.
+Этот порядок используется при построении policy/status и при обходе новых bindings
+allocator'ом, но не задает гарантированный route preference. Уже существующие
+firewall/NAT rules и UNICAST routes не переставляются, не пересоздаются и не получают
+новые metrics только ради канонизации порядка; metrics prefix-bindings выделяются по
+правилам §4.4.
 
 ### 15.3. Явный упорядоченный список точных имен
 
