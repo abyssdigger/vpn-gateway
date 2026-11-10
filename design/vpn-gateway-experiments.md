@@ -10,6 +10,126 @@
 `Architecture baseline`, указанному в самой записи. При выпуске последующих RC такие ссылки
 не перенумеровываются задним числом.
 
+## EXP-010 — NG1: ROU transport publication relay
+
+**Статус:** IN PROGRESS — Phase A PASS; Phase B prepared, live run pending  
+**Architecture baseline:** NG1 Draft 1  
+**Тип:** generic UDP transport proof; WireGuard intentionally excluded  
+**Artifacts:**  
+- [rootless local smoke](experiments/EXP-010%20NG1%20ROU%20transport%20publication/vpn-gateway-exp-010-local-smoke.py)  
+- [Phase A result](experiments/EXP-010%20NG1%20ROU%20transport%20publication/EXP-010-phase-A-result.md)  
+- [netns probe](experiments/EXP-010%20NG1%20ROU%20transport%20publication/vpn-gateway-exp-010-rou-transport-publication.sh)
+
+### Мотивация
+
+NG1 вводит transport publication как ROU-owned механизм:
+
+    host-side published TCP/UDP socket
+        -> ROU relay
+        -> stable internal transport listener inside ROU namespace
+
+Это позволяет один раз настроить опорный VPN на внутреннем порту, а затем менять
+host-facing publication только в ROU config, не изменяя WireGuard/ocserv/OpenConnect config.
+
+До подключения реального VPN необходимо отдельно доказать две вещи:
+
+1. сам socket/relay workflow;
+2. тот же workflow через отдельный Linux network namespace.
+
+### Проверяемая цепочка
+
+Эксперимент намеренно заменяет WireGuard простым UDP listener:
+
+    client input
+        -> published UDP port
+        -> relay
+        -> internal listener
+        -> listener records exact input
+        -> listener emits PAYLOAD:<input> to independent sink
+        -> sink records dependent payload
+
+Дополнительно listener возвращает:
+
+    ACK:<input>
+
+через relay исходному client.
+
+Таким образом успешный прогон доказывает не только доставку на внутренний port, но и то,
+что listener действительно получил конкретный input и породил наблюдаемый output,
+зависимый от него.
+
+### Phase A — rootless local relay smoke
+
+**Статус:** PASS  
+**Среда:** доступный execution container  
+**Network namespace:** не используется
+
+Все четыре роли работают отдельными UDP sockets в одном namespace:
+
+- client;
+- published relay;
+- internal listener;
+- independent sink.
+
+Наблюдено:
+
+    CLIENT_TX: b'exp010-local-smoke'
+    RELAY_RX: ('127.0.0.1', 40186) b'exp010-local-smoke'
+    RELAY_FWD: ('127.0.0.1', 55129) -> ('127.0.0.1', 17890)
+    INTERNAL_RX: ('127.0.0.1', 55129) b'exp010-local-smoke'
+    INTERNAL_TX: b'PAYLOAD:exp010-local-smoke'
+    INTERNAL_ACK: b'ACK:exp010-local-smoke'
+    INTERNAL_PASS: ok
+    RELAY_RETURN: ('127.0.0.1', 17890) b'ACK:exp010-local-smoke'
+    RELAY_TX: ('127.0.0.1', 40186) b'ACK:exp010-local-smoke'
+    RELAY_PASS: ok
+    SINK_RX: ('127.0.0.1', 56150) b'PAYLOAD:exp010-local-smoke'
+    SINK_PASS: ok
+    CLIENT_RX: ('127.0.0.1', 15678) b'ACK:exp010-local-smoke'
+    CLIENT_PASS: ok
+    OVERALL=PASS
+
+Динамические source ports являются run-local и не входят в критерий PASS.
+
+**Вывод Phase A:** generic UDP publication/relay workflow работоспособен.
+Это не является доказательством namespace topology.
+
+### Phase B — ROU network namespace
+
+**Статус:** PREPARED — NOT RUN
+
+Phase B сохраняет тот же application-level workflow, но переносит internal listener в
+отдельный namespace и соединяет main namespace с ним через veth:
+
+    main NS                         ROU NS
+
+    published socket
+         |
+       relay
+         |
+      exp10h  <----------------->  host0
+    192.0.2.1/30                 192.0.2.2/30
+                                      |
+                              internal UDP :17890
+
+Listener отправляет dependent payload обратно на host-visible sink через тот же veth.
+
+Prepared script создает namespace/veth только на время опыта и удаляет их через cleanup trap.
+
+Текущий execution container не предоставляет необходимые privileges для создания
+network namespace/veth, поэтому Phase B здесь сознательно не помечается PASS.
+
+### Гипотезы Phase B
+
+- **H1:** datagram на published host-side port проходит relay и наблюдается listener внутри ROU netns.
+- **H2:** listener внутри ROU netns может породить зависимый от input datagram, который наблюдается host-side sink.
+- **H3:** listener reply возвращается через relay исходному client.
+- **H4:** после cleanup эксперимент не оставляет namespace/veth state.
+
+EXP-010 считается COMPLETE только после успешного Phase B live run.
+
+---
+
 ## EXP-009 — RC3: interface-centric failover semantics
 
 **Статус:** COMPLETE — PASS  
