@@ -55,7 +55,10 @@ class InterfaceSelectorTests(unittest.TestCase):
         )
 
     def test_invalid_forms_are_rejected(self):
-        for value in ("+bad", "lo", "any", "default", "all", "a" * 16):
+        for value in (
+            "+bad", "lo", "any", "default", "all", "l+", "lo+", "a+", "d+",
+            "a" * 16,
+        ):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     vpng.InterfaceSelector.parse(value)
