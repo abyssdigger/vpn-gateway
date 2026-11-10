@@ -525,49 +525,23 @@ class VpnGatewayDaemon:
             return
 
         policy_transition = self._snapshot_changes_policy(snapshot)
-        clean_prefix_addition = (
-            policy_transition
-            and self._snapshot_is_clean_prefix_addition(snapshot)
-        )
         forwarding_intentionally_disabled = False
+        profile_results: Mapping[str, ProfileResult] | None = None
+        panic_required = False
 
-        firewall = self._check_firewall_nat_policy(
-            snapshot.desired_full_policy
-        )
-
-        if firewall.safety is FirewallSafety.UNKNOWN:
-            if firewall.reason is not None:
-                pass_incidents.append(firewall.reason)
-            disable_fact = self._best_effort_disable_forwarding(
-                high_severity_context="firewall/NAT UNKNOWN"
-            )
-            if disable_fact is not None:
-                pass_incidents.append(disable_fact)
-            self.state = DaemonState.ISOLATED
-            self._log_reconcile_outcome(
-                (
-                    "isolated",
-                    "firewall-unknown",
-                    *(("reason", fact.code) for fact in pass_incidents),
-                ),
-                level=logging.ERROR,
-                facts=tuple(pass_incidents),
-            )
-            return
-
-        previous_policy: FirewallNatPolicy | None = None
-        additive_source_safe = False
-        if (
-            clean_prefix_addition
-            and firewall.safety is FirewallSafety.UNSAFE
-        ):
+        if policy_transition:
             try:
-                previous_policy = self._committed_full_policy(snapshot)
-                previous_check = self._check_firewall_nat_policy(
-                    previous_policy
-                )
+                (
+                    previous_policy,
+                    intermediate_policy,
+                    previous_routes,
+                    intermediate_routes,
+                    has_remove,
+                    has_add,
+                ) = self._build_local_transition(snapshot)
+                source_check = self._check_firewall_nat_policy(previous_policy)
             except ReconciliationError as exc:
-                previous_check = FirewallCheck(
+                source_check = FirewallCheck(
                     FirewallSafety.UNKNOWN,
                     DiagnosticFact(
                         RuntimeReasonCode.FIREWALL_INSPECTION_FAILED,
@@ -575,65 +549,54 @@ class VpnGatewayDaemon:
                     ),
                 )
 
-            if previous_check.safety is FirewallSafety.UNKNOWN:
-                if previous_check.reason is not None:
-                    pass_incidents.append(previous_check.reason)
-                disable_fact = self._best_effort_disable_forwarding(
-                    high_severity_context="additive source policy UNKNOWN"
-                )
-                if disable_fact is not None:
-                    pass_incidents.append(disable_fact)
-                self.state = DaemonState.ISOLATED
-                self._log_reconcile_outcome(
-                    (
-                        "isolated",
-                        "additive-source-policy-unknown",
-                        *(("reason", fact.code)
-                          for fact in pass_incidents),
-                    ),
-                    level=logging.ERROR,
-                    facts=tuple(pass_incidents),
-                )
-                return
-
-            additive_source_safe = (
-                previous_check.safety is FirewallSafety.SAFE
-            )
-
-        if policy_transition:
-            disable_fact = self._best_effort_disable_forwarding(
-                high_severity_context="policy-changing interface transition"
-            )
-            forwarding_intentionally_disabled = True
-            if disable_fact is not None:
-                pass_incidents.append(disable_fact)
-
-        heavy_repair = False
-
-        if firewall.safety is FirewallSafety.UNSAFE:
-            if additive_source_safe:
-                assert previous_policy is not None
+            if source_check.safety is not FirewallSafety.SAFE:
+                if source_check.reason is not None:
+                    pass_incidents.append(source_check.reason)
+                panic_required = True
+            else:
                 try:
-                    self._apply_clean_prefix_addition(
-                        previous_policy,
-                        snapshot.desired_full_policy,
+                    if has_remove:
+                        self._apply_local_remove(
+                            previous_policy,
+                            intermediate_policy,
+                            previous_routes,
+                            intermediate_routes,
+                        )
+                    if has_add:
+                        self._apply_local_add(
+                            intermediate_policy,
+                            snapshot.desired_full_policy,
+                            intermediate_routes,
+                            snapshot.desired_routes_by_profile,
+                        )
+                    profile_results = self._verify_and_commit_local_transition(
+                        snapshot
                     )
-                except (KernelError, FirewallInspectionError, ReconciliationError) as exc:
+                except (
+                    KernelError,
+                    FirewallInspectionError,
+                    PlanValidationError,
+                    ReconciliationError,
+                ) as exc:
                     pass_incidents.append(
                         DiagnosticFact(
                             RuntimeReasonCode.FIREWALL_REPAIR_FAILED,
-                            f"additive prefix apply failed: {exc}",
+                            f"local binding transition failed: {exc}",
                         )
                     )
-                    heavy_repair = True
-            else:
+                    panic_required = True
+        else:
+            firewall = self._check_firewall_nat_policy(
+                snapshot.desired_full_policy
+            )
+            if firewall.safety is FirewallSafety.UNKNOWN:
                 if firewall.reason is not None:
                     pass_incidents.append(firewall.reason)
-
-                if (
-                    firewall.scope is FirewallDriftScope.INPUT_ONLY
-                    and not policy_transition
-                ):
+                panic_required = True
+            elif firewall.safety is FirewallSafety.UNSAFE:
+                if firewall.reason is not None:
+                    pass_incidents.append(firewall.reason)
+                if firewall.scope is FirewallDriftScope.INPUT_ONLY:
                     try:
                         self._restore_filter_policy(
                             snapshot.desired_full_policy.filter,
@@ -650,56 +613,45 @@ class VpnGatewayDaemon:
                                 str(exc),
                             ),
                         )
-
                     if repaired.safety is not FirewallSafety.SAFE:
                         if repaired.reason is not None:
                             pass_incidents.append(repaired.reason)
-                        disable_fact = self._best_effort_disable_forwarding(
-                            high_severity_context="INPUT-only repair failed"
-                        )
-                        if disable_fact is not None:
-                            pass_incidents.append(disable_fact)
-                        isolation_fact = self._best_effort_apply_isolation_filter()
-                        if isolation_fact is not None:
-                            pass_incidents.append(isolation_fact)
-                        self.state = DaemonState.ISOLATED
-                        self._log_reconcile_outcome(
-                            (
-                                "isolated",
-                                "input-repair-failed",
-                                *(("reason", fact.code)
-                                  for fact in pass_incidents),
-                            ),
-                            level=logging.ERROR,
-                            facts=tuple(pass_incidents),
-                        )
-                        return
+                        panic_required = True
                 else:
-                    heavy_repair = True
+                    panic_required = True
 
-        if heavy_repair:
-            if not forwarding_intentionally_disabled:
-                disable_fact = self._best_effort_disable_forwarding(
-                    high_severity_context="transit firewall/NAT repair"
-                )
-                forwarding_intentionally_disabled = True
-                if disable_fact is not None:
-                    pass_incidents.append(disable_fact)
+        if panic_required:
+            disable_fact = self._best_effort_disable_forwarding(
+                high_severity_context="INIT/PANIC"
+            )
+            forwarding_intentionally_disabled = True
+            forwarding_disabled = disable_fact is None
+            if disable_fact is not None:
+                pass_incidents.append(disable_fact)
 
             try:
-                self._repair_firewall_nat_with_barrier(snapshot)
-            except (KernelError, FirewallInspectionError, ReconciliationError) as exc:
+                self._rebuild_firewall_nat_init_panic(
+                    snapshot,
+                    forwarding_disabled=forwarding_disabled,
+                )
+                profile_results = self._reconcile_routes_snapshot(snapshot)
+            except (
+                KernelError,
+                FirewallInspectionError,
+                PlanValidationError,
+                ReconciliationError,
+            ) as exc:
                 pass_incidents.append(
                     DiagnosticFact(
                         RuntimeReasonCode.FIREWALL_REPAIR_FAILED,
-                        str(exc),
+                        f"INIT/PANIC failed: {exc}",
                     )
                 )
                 self.state = DaemonState.ISOLATED
                 self._log_reconcile_outcome(
                     (
                         "isolated",
-                        "firewall-repair-failed",
+                        "init-panic-failed",
                         *(("reason", fact.code)
                           for fact in pass_incidents),
                     ),
@@ -708,33 +660,34 @@ class VpnGatewayDaemon:
                 )
                 return
 
-        try:
-            profile_results = self._reconcile_routes_snapshot(snapshot)
-        except (KernelError, PlanValidationError, ReconciliationError) as exc:
-            self.state = DaemonState.DEGRADED
-            forwarding_on, forwarding_query_error = (
-                self._query_forwarding_state()
-            )
-            facts = list(pass_incidents)
-            facts.append(
-                DiagnosticFact(
-                    RuntimeReasonCode.ROUTE_PASS_INCOMPLETE,
-                    f"{type(exc).__name__}: {exc}",
+        if profile_results is None:
+            try:
+                profile_results = self._reconcile_routes_snapshot(snapshot)
+            except (KernelError, PlanValidationError, ReconciliationError) as exc:
+                self.state = DaemonState.DEGRADED
+                forwarding_on, forwarding_query_error = (
+                    self._query_forwarding_state()
                 )
-            )
-            if forwarding_query_error is not None:
-                facts.append(forwarding_query_error)
-            self._log_reconcile_outcome(
-                (
-                    "degraded",
-                    "route-pass-incomplete",
-                    ("ip-forward", forwarding_on),
-                    *(("reason", fact.code) for fact in facts),
-                ),
-                level=logging.WARNING if forwarding_on else logging.ERROR,
-                facts=tuple(facts),
-            )
-            return
+                facts = list(pass_incidents)
+                facts.append(
+                    DiagnosticFact(
+                        RuntimeReasonCode.ROUTE_PASS_INCOMPLETE,
+                        f"{type(exc).__name__}: {exc}",
+                    )
+                )
+                if forwarding_query_error is not None:
+                    facts.append(forwarding_query_error)
+                self._log_reconcile_outcome(
+                    (
+                        "degraded",
+                        "route-pass-incomplete",
+                        ("ip-forward", forwarding_on),
+                        *(("reason", fact.code) for fact in facts),
+                    ),
+                    level=logging.WARNING if forwarding_on else logging.ERROR,
+                    facts=tuple(facts),
+                )
+                return
 
         forwarding_enabled, forwarding_enable_fact = (
             self._best_effort_enable_forwarding()
@@ -940,47 +893,143 @@ class VpnGatewayDaemon:
                     return True
         return False
 
-    def _snapshot_is_clean_prefix_addition(
+    def _build_local_transition(
         self,
         snapshot: ReconciliationSnapshot,
-    ) -> bool:
-        """Return True only for insertion-only prefix binding growth."""
-        changed = False
-        for profile_id, state in snapshot.interface_state_by_profile.items():
+    ) -> tuple[
+        FirewallNatPolicy,
+        FirewallNatPolicy,
+        Mapping[str, frozenset[RouteSpec]],
+        Mapping[str, frozenset[RouteSpec]],
+        bool,
+        bool,
+    ]:
+        """
+        Build OLD -> SURVIVORS -> DESIRED for a local binding transition.
+
+        Surviving bindings must retain identity, relative order and, for prefix
+        selectors, metric.  A same-name/new-ifindex replacement is therefore
+        forced through an empty/survivor intermediate state.
+        """
+        if self.config is None:
+            raise RuntimeError("config not installed")
+
+        previous_state: dict[str, ProfileInterfaceState] = {}
+        intermediate_state: dict[str, ProfileInterfaceState] = {}
+        previous_prefix_metrics: dict[
+            str, Mapping[InterfaceBinding, int]
+        ] = {}
+        intermediate_prefix_metrics: dict[
+            str, Mapping[InterfaceBinding, int]
+        ] = {}
+        has_remove = False
+        has_add = False
+
+        for profile_id, current_state in (
+            snapshot.interface_state_by_profile.items()
+        ):
             profile = self.profiles[profile_id]
             committed = profile.committed_active_bindings
             if committed is None:
-                return False
+                raise ReconciliationError(
+                    f"{profile_id}: no committed binding state"
+                )
 
-            current = state.active_bindings
-            if current == committed:
-                if profile.config.interface.kind is InterfaceSelectorKind.PREFIX:
-                    desired_metrics = (
-                        snapshot.prefix_metric_allocations_by_profile[profile_id]
+            current = current_state.active_bindings
+            committed_set = frozenset(committed)
+            current_set = frozenset(current)
+            survivors_old = tuple(
+                binding for binding in committed if binding in current_set
+            )
+            survivors_new = tuple(
+                binding for binding in current if binding in committed_set
+            )
+            if survivors_old != survivors_new:
+                raise ReconciliationError(
+                    f"{profile_id}: surviving binding order changed"
+                )
+
+            if len(survivors_old) != len(committed):
+                has_remove = True
+            if len(survivors_new) != len(current):
+                has_add = True
+
+            previous_state[profile_id] = ProfileInterfaceState(
+                candidates=current_state.candidates,
+                active_bindings=committed,
+            )
+            intermediate_state[profile_id] = ProfileInterfaceState(
+                candidates=current_state.candidates,
+                active_bindings=survivors_old,
+            )
+
+            if profile.config.interface.kind is InterfaceSelectorKind.PREFIX:
+                old_metrics = dict(profile.committed_prefix_metrics)
+                new_metrics = dict(
+                    snapshot.prefix_metric_allocations_by_profile[profile_id]
+                )
+                if frozenset(old_metrics) != committed_set:
+                    raise ReconciliationError(
+                        f"{profile_id}: committed prefix metric state is incomplete"
                     )
-                    if dict(profile.committed_prefix_metrics) != dict(desired_metrics):
-                        return False
-                continue
+                for binding in survivors_old:
+                    if old_metrics[binding] != new_metrics.get(binding):
+                        raise ReconciliationError(
+                            f"{profile_id}: surviving prefix metric changed"
+                        )
+                previous_prefix_metrics[profile_id] = MappingProxyType(
+                    old_metrics
+                )
+                intermediate_prefix_metrics[profile_id] = MappingProxyType(
+                    {
+                        binding: old_metrics[binding]
+                        for binding in survivors_old
+                    }
+                )
 
-            if profile.config.interface.kind is not InterfaceSelectorKind.PREFIX:
-                return False
-            if len(current) <= len(committed):
-                return False
-            if current[:len(committed)] != committed:
-                return False
+        if not has_remove and not has_add:
+            raise ReconciliationError(
+                "policy transition is not decomposable into binding ADD/REMOVE"
+            )
 
-            desired_metrics = snapshot.prefix_metric_allocations_by_profile[
-                profile_id
-            ]
-            for binding in committed:
-                if (
-                    desired_metrics.get(binding)
-                    != profile.committed_prefix_metrics.get(binding)
-                ):
-                    return False
-            changed = True
+        previous_state_ro = MappingProxyType(previous_state)
+        intermediate_state_ro = MappingProxyType(intermediate_state)
+        previous_metrics_ro = MappingProxyType(previous_prefix_metrics)
+        intermediate_metrics_ro = MappingProxyType(
+            intermediate_prefix_metrics
+        )
 
-        return changed
+        previous_policy = desired_full_policy(
+            self.config,
+            previous_state_ro,
+        )
+        intermediate_policy = desired_full_policy(
+            self.config,
+            intermediate_state_ro,
+        )
+        previous_routes = self._derive_desired_routes(
+            interface_state_by_profile=previous_state_ro,
+            prefix_metric_allocations_by_profile=previous_metrics_ro,
+        )
+        intermediate_routes = self._derive_desired_routes(
+            interface_state_by_profile=intermediate_state_ro,
+            prefix_metric_allocations_by_profile=intermediate_metrics_ro,
+        )
+
+        for profile_id, routes in previous_routes.items():
+            if routes != self.profiles[profile_id].owned_routes:
+                raise ReconciliationError(
+                    f"{profile_id}: committed route state does not match OWNED"
+                )
+
+        return (
+            previous_policy,
+            intermediate_policy,
+            previous_routes,
+            intermediate_routes,
+            has_remove,
+            has_add,
+        )
 
     def _committed_full_policy(
         self,
