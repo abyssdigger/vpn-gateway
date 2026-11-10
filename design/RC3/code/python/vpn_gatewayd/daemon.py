@@ -525,15 +525,11 @@ class VpnGatewayDaemon:
             return
 
         policy_transition = self._snapshot_changes_policy(snapshot)
+        clean_prefix_addition = (
+            policy_transition
+            and self._snapshot_is_clean_prefix_addition(snapshot)
+        )
         forwarding_intentionally_disabled = False
-
-        if policy_transition:
-            disable_fact = self._best_effort_disable_forwarding(
-                high_severity_context="policy-changing interface transition"
-            )
-            forwarding_intentionally_disabled = True
-            if disable_fact is not None:
-                pass_incidents.append(disable_fact)
 
         firewall = self._check_firewall_nat_policy(
             snapshot.desired_full_policy
@@ -559,58 +555,127 @@ class VpnGatewayDaemon:
             )
             return
 
-        heavy_repair = policy_transition
+        previous_policy: FirewallNatPolicy | None = None
+        additive_source_safe = False
+        if (
+            clean_prefix_addition
+            and firewall.safety is FirewallSafety.UNSAFE
+        ):
+            try:
+                previous_policy = self._committed_full_policy(snapshot)
+                previous_check = self._check_firewall_nat_policy(
+                    previous_policy
+                )
+            except ReconciliationError as exc:
+                previous_check = FirewallCheck(
+                    FirewallSafety.UNKNOWN,
+                    DiagnosticFact(
+                        RuntimeReasonCode.FIREWALL_INSPECTION_FAILED,
+                        str(exc),
+                    ),
+                )
+
+            if previous_check.safety is FirewallSafety.UNKNOWN:
+                if previous_check.reason is not None:
+                    pass_incidents.append(previous_check.reason)
+                disable_fact = self._best_effort_disable_forwarding(
+                    high_severity_context="additive source policy UNKNOWN"
+                )
+                if disable_fact is not None:
+                    pass_incidents.append(disable_fact)
+                self.state = DaemonState.ISOLATED
+                self._log_reconcile_outcome(
+                    (
+                        "isolated",
+                        "additive-source-policy-unknown",
+                        *(("reason", fact.code)
+                          for fact in pass_incidents),
+                    ),
+                    level=logging.ERROR,
+                    facts=tuple(pass_incidents),
+                )
+                return
+
+            additive_source_safe = (
+                previous_check.safety is FirewallSafety.SAFE
+            )
+
+        if policy_transition:
+            disable_fact = self._best_effort_disable_forwarding(
+                high_severity_context="policy-changing interface transition"
+            )
+            forwarding_intentionally_disabled = True
+            if disable_fact is not None:
+                pass_incidents.append(disable_fact)
+
+        heavy_repair = False
 
         if firewall.safety is FirewallSafety.UNSAFE:
-            if firewall.reason is not None:
-                pass_incidents.append(firewall.reason)
-
-            if (
-                firewall.scope is FirewallDriftScope.INPUT_ONLY
-                and not policy_transition
-            ):
+            if additive_source_safe:
+                assert previous_policy is not None
                 try:
-                    self._restore_filter_policy(
-                        snapshot.desired_full_policy.filter,
-                        input_only=True,
+                    self._apply_clean_prefix_addition(
+                        previous_policy,
+                        snapshot.desired_full_policy,
                     )
-                    repaired = self._check_firewall_nat_policy(
-                        snapshot.desired_full_policy
-                    )
-                except (KernelError, FirewallInspectionError) as exc:
-                    repaired = FirewallCheck(
-                        FirewallSafety.UNKNOWN,
+                except (KernelError, FirewallInspectionError, ReconciliationError) as exc:
+                    pass_incidents.append(
                         DiagnosticFact(
                             RuntimeReasonCode.FIREWALL_REPAIR_FAILED,
-                            str(exc),
-                        ),
+                            f"additive prefix apply failed: {exc}",
+                        )
                     )
-
-                if repaired.safety is not FirewallSafety.SAFE:
-                    if repaired.reason is not None:
-                        pass_incidents.append(repaired.reason)
-                    disable_fact = self._best_effort_disable_forwarding(
-                        high_severity_context="INPUT-only repair failed"
-                    )
-                    if disable_fact is not None:
-                        pass_incidents.append(disable_fact)
-                    isolation_fact = self._best_effort_apply_isolation_filter()
-                    if isolation_fact is not None:
-                        pass_incidents.append(isolation_fact)
-                    self.state = DaemonState.ISOLATED
-                    self._log_reconcile_outcome(
-                        (
-                            "isolated",
-                            "input-repair-failed",
-                            *(("reason", fact.code)
-                              for fact in pass_incidents),
-                        ),
-                        level=logging.ERROR,
-                        facts=tuple(pass_incidents),
-                    )
-                    return
+                    heavy_repair = True
             else:
-                heavy_repair = True
+                if firewall.reason is not None:
+                    pass_incidents.append(firewall.reason)
+
+                if (
+                    firewall.scope is FirewallDriftScope.INPUT_ONLY
+                    and not policy_transition
+                ):
+                    try:
+                        self._restore_filter_policy(
+                            snapshot.desired_full_policy.filter,
+                            input_only=True,
+                        )
+                        repaired = self._check_firewall_nat_policy(
+                            snapshot.desired_full_policy
+                        )
+                    except (KernelError, FirewallInspectionError) as exc:
+                        repaired = FirewallCheck(
+                            FirewallSafety.UNKNOWN,
+                            DiagnosticFact(
+                                RuntimeReasonCode.FIREWALL_REPAIR_FAILED,
+                                str(exc),
+                            ),
+                        )
+
+                    if repaired.safety is not FirewallSafety.SAFE:
+                        if repaired.reason is not None:
+                            pass_incidents.append(repaired.reason)
+                        disable_fact = self._best_effort_disable_forwarding(
+                            high_severity_context="INPUT-only repair failed"
+                        )
+                        if disable_fact is not None:
+                            pass_incidents.append(disable_fact)
+                        isolation_fact = self._best_effort_apply_isolation_filter()
+                        if isolation_fact is not None:
+                            pass_incidents.append(isolation_fact)
+                        self.state = DaemonState.ISOLATED
+                        self._log_reconcile_outcome(
+                            (
+                                "isolated",
+                                "input-repair-failed",
+                                *(("reason", fact.code)
+                                  for fact in pass_incidents),
+                            ),
+                            level=logging.ERROR,
+                            facts=tuple(pass_incidents),
+                        )
+                        return
+                else:
+                    heavy_repair = True
 
         if heavy_repair:
             if not forwarding_intentionally_disabled:
