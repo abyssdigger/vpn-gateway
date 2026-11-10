@@ -2,6 +2,8 @@
 
 Status: **first architecture draft**.
 
+Companion concept: `design/NG1/rou-concept.md`.
+
 NG1 is a next-generation design, not an incremental RC3 revision. The base abstraction changes from a host-integrated VPN gateway to a self-contained virtual VPN router appliance.
 
 ## 1. Components
@@ -33,7 +35,9 @@ ROU owns:
 - firewall and NAT inside the namespace;
 - VPN tunnel interfaces;
 - profile state;
-- lifecycle of ROU-managed VPN processes.
+- lifecycle of ROU-managed VPN processes;
+- host-side TCP/UDP publication sockets explicitly declared by ROU configuration;
+- relay state connecting those published sockets to internal transport endpoints.
 
 The host main namespace is not part of the internal ROU routing domain.
 
@@ -133,9 +137,13 @@ maps 4700 to 55200, 4701 to 55201, and so on.
 
 The publication mechanism is transport-level TCP/UDP relay functionality owned by ROU, not BOU. It is independent of the VPN protocol itself.
 
-For UDP, the relay must preserve per-peer return-path association so that replies from an internal VPN listener are returned through the corresponding published host-side endpoint.
+The published socket exists in the host main namespace because it must receive traffic addressed to the host. It is nevertheless an explicitly owned ROU resource and follows the ROU instance lifecycle. The VPN process and its internal listener remain inside the ROU namespace.
+
+For UDP, the relay must preserve per-peer return-path association so that replies from an internal VPN listener are returned through the corresponding published host-side endpoint. For TCP, publication is connection-oriented relay.
 
 This lets a support VPN be configured once on an internal port while the externally visible ROU publication changes independently.
+
+Publication is not payload routing and does not make the host main namespace part of the ROU routing domain. It is a narrow transport facade owned by ROU.
 
 
 ## 3. ROU lifecycle
@@ -158,7 +166,7 @@ At minimum it:
 2. creates the network namespace;
 3. creates rouvpn0 <-> host0;
 4. configures link addressing;
-5. prepares configured transport publications;
+5. prepares configured transport publications and their host-side sockets;
 6. brings up loopback;
 7. configures required namespace-local sysctls;
 8. installs initial fail-closed internal state;
@@ -497,13 +505,35 @@ ROU and BOU do not require runtime RPC to operate safely.
 
 Their runtime interface is ordinary kernel networking state represented by rouvpn0 and the host-side sockets/endpoints ROU explicitly publishes.
 
-ROU observes and controls only its own namespace.
+ROU controls its own namespace plus only the explicitly owned host-side resources required to instantiate the appliance: rouvpn0 and configured publication sockets/relay state. It does not own general host routing or firewall policy.
 
-BOU observes and controls host-side policy around rouvpn0 and the host network environment.
+BOU observes and controls host-side policy around rouvpn0, published endpoints, and the host network environment.
 
 Future Unix sockets may expose read-only status, diagnostics and event history for administrators, but they are not part of the safety-critical control plane.
 
-## 19. Inheritance from RC2/RC3
+## 19. Transport publication proof obligation
+
+The first implementation prerequisite for transport publication is EXP-010.
+
+The experiment intentionally does not require WireGuard. It must prove the generic chain:
+
+    host input
+        -> ROU published UDP socket
+        -> ROU relay
+        -> listener inside a separate ROU network namespace
+        -> output derived from received input
+        -> host-visible sink
+
+A second observable response may return through the relay to the original client.
+
+The experiment separates two questions:
+
+1. whether the relay/listener signaling logic works at all;
+2. whether the same logic crosses a real Linux network-namespace boundary through rouvpn0/host0.
+
+Only the second proves the NG1 namespace topology. A sandbox lacking network-namespace privileges may validate the first without claiming the experiment complete.
+
+## 20. Inheritance from RC2/RC3
 
 NG1 changes topology and ownership, but it does **not** discard the engineering work already completed in RC2 and RC3.
 
@@ -536,7 +566,7 @@ In short:
 
 Primary source material includes the existing experiment log under design/vpn-gateway-experiments.md, the RC2/RC3 architecture documents, reviews and the RC3 Python implementation.
 
-## 20. Initial NG1 invariants
+## 21. Initial NG1 invariants
 
 1. ROU owns its network namespace.
 2. ROU creates and removes its own namespace/veth infrastructure.
@@ -549,20 +579,22 @@ Primary source material includes the existing experiment log under design/vpn-ga
 9. Locally generated VPN transport uses namespace main routing via host0.
 10. Forwarded payload entering through host0 is selected into profile routing tables.
 11. ROU may publish binding-specific TCP/UDP transport endpoints through host-side relay sockets.
-12. Binding transport publication belongs to ROU, not BOU.
-13. Every enabled profile owns a dedicated routing table.
-14. Profile tables are fail-closed routing domains.
-15. Every protected destination retains an explicit blackhole.
-16. Every profile table has a terminal fail-closed route.
-17. Profile direction is per-profile policy.
-18. Binding priority follows bindings[] order independently of selector type.
-19. Deterministic prefix bindings reserve capacity-sized metric pools.
-20. capacity=-1 prefix bindings share a tail pool without guaranteed mutual priority.
-21. Capacity overflow isolates only excess concrete interfaces; it does not automatically invalidate the whole profile.
-22. Managed binding lifecycle must not alter BindingSpec routing semantics.
-23. ROU may later maintain configurable live/warm binding capacity.
-24. BOU is outside ROU routing semantics and may be replaced by another firewall/router.
-25. PEACEFUL protects the remote VPN side from unauthorized transit through ROU.
-26. AGGRESSIVE additionally protects VPN-managed traffic from leaking around ROU.
-27. ROU and BOU require no safety-critical runtime RPC.
-28. RC2/RC3 are reusable evidence/design sources, but not normative NG1 topology.
+12. Published host-side sockets are explicit ROU-owned lifecycle resources even though they exist in the main namespace.
+13. VPN listeners/processes themselves remain inside the ROU namespace.
+14. Binding transport publication belongs to ROU, not BOU.
+15. Every enabled profile owns a dedicated routing table.
+16. Profile tables are fail-closed routing domains.
+17. Every protected destination retains an explicit blackhole.
+18. Every profile table has a terminal fail-closed route.
+19. Profile direction is per-profile policy.
+20. Binding priority follows bindings[] order independently of selector type.
+21. Deterministic prefix bindings reserve capacity-sized metric pools.
+22. capacity=-1 prefix bindings share a tail pool without guaranteed mutual priority.
+23. Capacity overflow isolates only excess concrete interfaces; it does not automatically invalidate the whole profile.
+24. Managed binding lifecycle must not alter BindingSpec routing semantics.
+25. ROU may later maintain configurable live/warm binding capacity.
+26. BOU is outside ROU routing semantics and may be replaced by another firewall/router.
+27. PEACEFUL protects the remote VPN side from unauthorized transit through ROU.
+28. AGGRESSIVE additionally protects VPN-managed traffic from leaking around ROU.
+29. ROU and BOU require no safety-critical runtime RPC.
+30. RC2/RC3 are reusable evidence/design sources, but not normative NG1 topology.
