@@ -857,7 +857,7 @@ active bindings, предварительное распределение prefi
 3. проверить `disable_ipv6=1` на всех существующих interfaces защитных пространств
    имен управляемых селекторов;
 4. построить candidates и active concrete bindings по membership local IPv4 в
-   `profile.network`;
+   `profile.network`, а для `prefix+` также provisional metric allocation/cursor;
 5. построить full desired firewall/NAT policy;
 6. применить и проверить `filter`, затем `nat`;
 7. прочитать строгий route snapshot, построить и проверить route plan;
@@ -929,23 +929,36 @@ runtime interface name.
 пытается выключить forwarding и может применить config-derived isolation filter, но не
 угадывает active interfaces.
 
+#### Ошибка построения snapshot / предметной проекции
+
+Если после успешной inventory невозможно построить полный `ReconciliationSnapshot`,
+частичное desired state не используется. Это относится в том числе к исчерпанию всех
+допустимых prefix metric slots.
+
+Во время `RUN` daemon best-effort выключает forwarding, может применить выводимый только
+из config isolation filter и переходит в `ISOLATED`. Provisional allocator mapping/cursor
+не commit-ятся. При startup такая ошибка является hard startup failure до открытия
+разрешающего пути.
+
 #### Обычный цикл
 
 После успешной inventory:
 
 1. повторно проверить global/per-interface IPv6 prerequisites §2.6 для current guard
    namespaces; violation -> host-prerequisite isolation path без allowing apply;
-2. построить один immutable `ReconciliationSnapshot`;
+2. построить один immutable `ReconciliationSnapshot`, включая provisional prefix
+   metric allocation/cursor;
 3. сравнить candidates и active concrete binding identities с последним verified state;
-5. при policy-changing transition по возможности привести `ip_forward=0`;
-4. прочитать firewall/NAT и классифицировать `SAFE/UNSAFE/UNKNOWN`;
+4. при policy-changing transition по возможности привести `ip_forward=0`;
+5. прочитать firewall/NAT и классифицировать `SAFE/UNSAFE/UNKNOWN`;
 6. `UNKNOWN` либо неопределимая область drift -> `ISOLATED`;
 7. INPUT-only `UNSAFE` без policy transition -> narrow INPUT repair;
 8. FORWARD/NAT `UNSAFE` либо policy transition -> protective barrier §8.6;
 9. после `SAFE` полной policy прочитать strict route snapshot;
 10. построить, проверить, применить и повторно проверить route plan из того же snapshot;
 11. materialize отсутствующие direct routes для всех active bindings;
-12. зафиксировать OWNED и active binding state только после successful verification;
+12. зафиксировать OWNED, active binding state и prefix allocator mapping/cursor только
+    после successful verification;
 13. в завершенном non-ISOLATED `RUN` привести `ip_forward` к 1 и reread;
 14. confirmed `ip_forward=0` после failed enable -> `DEGRADED`; unreadable
     `ip_forward` -> `ISOLATED`.
@@ -1601,8 +1614,9 @@ interface = []                  -> запрещено
 ```
 
 Отдельный лимит общего количества profiles не требуется. Для explicit interface list
-число элементов ограничивается валидностью имен и тем, что максимальная `(index+1)*10`
-route metric помещается в unsigned 32-bit priority; это проверяется config validator.
+число элементов ограничивается валидностью имен и тем, что каждая вычисляемая
+`(index+1)*ROUTE_METRIC_STEP` UNICAST metric строго меньше `BLACKHOLE_METRIC`;
+это проверяется config validator.
 Для prefix selector runtime active count проверяется отдельно при desired-route derivation.
 
 ## 15. Селекторы интерфейсов
@@ -2004,8 +2018,9 @@ Exact active set содержит максимум одну binding. Prefix/list
 Active predicate: candidate содержит хотя бы один local IPv4 address внутри configured
 `network`.
 
-`VpnProfile` хранит immutable config и process-local verified OWNED/binding state; kernel
-самостоятельно не читает.
+`VpnProfile` хранит immutable config и process-local verified OWNED/binding state; для
+`prefix+` рядом хранится verified metric allocator mapping/cursor. Kernel самостоятельно
+эту модель не читает.
 
 `BLACKHOLE` выводится из config. `UNICAST` выводится из protected destination +
 active concrete binding + metric semantics соответствующей формы selector. Для
@@ -2541,7 +2556,7 @@ may retain adds/deletes/replaces.
 56. Невозможность подтвердить ip_forward=0 не разрешает полный ACCEPT раньше проверенного
     NAT; защитный барьер с первоначальным запретом все равно применяется.
 
-57. Ошибка interface inventory/parsing либо невозможность построить достоверный active binding snapshot на уровне цикла -> ISOLATED; отсутствие active path при достоверном snapshot -> profile FAIL / DEGRADED.
+57. Ошибка interface inventory/parsing либо невозможность построить полный ReconciliationSnapshot, включая exhausted prefix metric allocator, на уровне цикла -> ISOLATED; partial desired state и provisional allocator state не принимаются. Отсутствие active path при достоверном snapshot -> profile FAIL / DEGRADED.
 
 58. При ошибке инвентаризации интерфейсов слепое восстановление политики, зависящей от
     привязки, запрещено; изолирующий фильтр, выводимый только из конфигурации, допустим как
@@ -2600,7 +2615,7 @@ may retain adds/deletes/replaces.
 78. Защищаемые маршруты управляемых профилей глобально не пересекаются и не пересекают
     управляемые vpn.network.
 
-79. Metrics: все daemon-owned UNICAST имеют 0 < metric < BLACKHOLE_METRIC. Exact = 10. Explicit list использует slots 10,20,30... по config order без сдвига отсутствующих элементов и валидируется против BLACKHOLE_METRIC. Prefix использует циклический process-local allocator с шагом ROUTE_METRIC_STEP: непрерывно active binding сохраняет metric, занятые значения пропускаются, при верхней границе поиск возвращается к FIRST_UNICAST_METRIC, при полном исчерпании slots возникает ошибка; гарантированного route preference между prefix-bindings нет.
+79. Metrics: все daemon-owned UNICAST имеют 0 < metric < BLACKHOLE_METRIC. Exact = 10. Explicit list использует slots 10,20,30... по config order без сдвига отсутствующих элементов; config validator запрещает любой slot с metric >= BLACKHOLE_METRIC. Prefix использует циклический process-local allocator с шагом ROUTE_METRIC_STEP: непрерывно active binding сохраняет metric, занятые значения пропускаются, при верхней границе поиск возвращается к FIRST_UNICAST_METRIC, при полном исчерпании slots построение snapshot завершается ошибкой; гарантированного route preference между prefix-bindings нет.
 
 80. `common_allowed_sources` объединяется с `profile.allowed_sources`; отрицательных правил
     и исключений нет.
