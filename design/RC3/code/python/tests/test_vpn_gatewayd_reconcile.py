@@ -250,7 +250,7 @@ class ReconcileTests(unittest.TestCase):
         self.kernel.list_interfaces.assert_not_called()
         self.assertIs(self.daemon.state, vpng.DaemonState.ISOLATED)
 
-    def test_transit_drift_uses_barrier_repair(self):
+    def test_transit_drift_uses_init_panic_rebuild(self):
         unsafe = vpng.FirewallCheck(
             vpng.FirewallSafety.UNSAFE,
             vpng.DiagnosticFact(
@@ -278,8 +278,8 @@ class ReconcileTests(unittest.TestCase):
             ) as disable,
             mock.patch.object(
                 self.daemon,
-                "_repair_firewall_nat_with_barrier",
-            ) as repair,
+                "_rebuild_firewall_nat_init_panic",
+            ) as rebuild,
             mock.patch.object(
                 self.daemon,
                 "_reconcile_routes_snapshot",
@@ -294,11 +294,20 @@ class ReconcileTests(unittest.TestCase):
             self.daemon.reconcile()
 
         disable.assert_called_once()
-        repair.assert_called_once()
+        rebuild.assert_called_once()
+        self.assertTrue(rebuild.call_args.kwargs["forwarding_disabled"])
         self.assertIs(self.daemon.state, vpng.DaemonState.ACTIVE)
 
-    def test_policy_transition_with_safe_policy_skips_rebuild(self):
+    def test_local_binding_transition_does_not_disable_forwarding(self):
         safe = vpng.FirewallCheck(vpng.FirewallSafety.SAFE, None)
+        snapshot = self.daemon._build_reconciliation_snapshot(
+            (ready_record(),)
+        )
+        previous_policy = snapshot.desired_full_policy
+        intermediate_policy = snapshot.desired_full_policy
+        previous_routes = snapshot.desired_routes_by_profile
+        intermediate_routes = snapshot.desired_routes_by_profile
+
         with (
             mock.patch.object(
                 self.daemon,
@@ -307,8 +316,15 @@ class ReconcileTests(unittest.TestCase):
             ),
             mock.patch.object(
                 self.daemon,
-                "_snapshot_is_clean_prefix_addition",
-                return_value=False,
+                "_build_local_transition",
+                return_value=(
+                    previous_policy,
+                    intermediate_policy,
+                    previous_routes,
+                    intermediate_routes,
+                    False,
+                    True,
+                ),
             ),
             mock.patch.object(
                 self.daemon,
@@ -317,18 +333,21 @@ class ReconcileTests(unittest.TestCase):
             ),
             mock.patch.object(
                 self.daemon,
+                "_apply_local_add",
+            ) as add,
+            mock.patch.object(
+                self.daemon,
+                "_verify_and_commit_local_transition",
+                return_value=success_results(),
+            ),
+            mock.patch.object(
+                self.daemon,
                 "_best_effort_disable_forwarding",
-                return_value=None,
             ) as disable,
             mock.patch.object(
                 self.daemon,
-                "_repair_firewall_nat_with_barrier",
-            ) as repair,
-            mock.patch.object(
-                self.daemon,
-                "_reconcile_routes_snapshot",
-                return_value=success_results(),
-            ),
+                "_rebuild_firewall_nat_init_panic",
+            ) as rebuild,
             mock.patch.object(
                 self.daemon,
                 "_best_effort_enable_forwarding",
@@ -337,22 +356,19 @@ class ReconcileTests(unittest.TestCase):
         ):
             self.daemon.reconcile()
 
-        disable.assert_called_once()
-        repair.assert_not_called()
+        disable.assert_not_called()
+        add.assert_called_once()
+        rebuild.assert_not_called()
+        self.assertIs(self.daemon.state, vpng.DaemonState.ACTIVE)
 
-    def test_clean_prefix_addition_uses_incremental_apply(self):
-        unsafe = vpng.FirewallCheck(
-            vpng.FirewallSafety.UNSAFE,
-            vpng.DiagnosticFact(
-                vpng.RuntimeReasonCode.FIREWALL_DRIFT,
-                "new binding contribution absent",
-            ),
-            vpng.FirewallDriftScope.TRANSIT,
-        )
+    def test_replacement_runs_remove_before_add_without_disabling_forwarding(self):
         safe = vpng.FirewallCheck(vpng.FirewallSafety.SAFE, None)
-        previous = self.daemon._build_reconciliation_snapshot(
+        snapshot = self.daemon._build_reconciliation_snapshot(
             (ready_record(),)
-        ).desired_full_policy
+        )
+        policy = snapshot.desired_full_policy
+        routes = snapshot.desired_routes_by_profile
+        events = []
 
         with (
             mock.patch.object(
@@ -362,23 +378,73 @@ class ReconcileTests(unittest.TestCase):
             ),
             mock.patch.object(
                 self.daemon,
-                "_snapshot_is_clean_prefix_addition",
-                return_value=True,
+                "_build_local_transition",
+                return_value=(policy, policy, routes, routes, True, True),
             ),
             mock.patch.object(
                 self.daemon,
                 "_check_firewall_nat_policy",
-                side_effect=(unsafe, safe),
+                return_value=safe,
             ),
             mock.patch.object(
                 self.daemon,
-                "_committed_full_policy",
-                return_value=previous,
+                "_apply_local_remove",
+                side_effect=lambda *args: events.append("remove"),
             ),
             mock.patch.object(
                 self.daemon,
-                "_apply_clean_prefix_addition",
-            ) as additive,
+                "_apply_local_add",
+                side_effect=lambda *args: events.append("add"),
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_verify_and_commit_local_transition",
+                return_value=success_results(),
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_disable_forwarding",
+            ) as disable,
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_enable_forwarding",
+                return_value=(True, None),
+            ),
+        ):
+            self.daemon.reconcile()
+
+        self.assertEqual(events, ["remove", "add"])
+        disable.assert_not_called()
+
+    def test_failed_local_transition_falls_back_to_init_panic(self):
+        safe = vpng.FirewallCheck(vpng.FirewallSafety.SAFE, None)
+        snapshot = self.daemon._build_reconciliation_snapshot(
+            (ready_record(),)
+        )
+        policy = snapshot.desired_full_policy
+        routes = snapshot.desired_routes_by_profile
+
+        with (
+            mock.patch.object(
+                self.daemon,
+                "_snapshot_changes_policy",
+                return_value=True,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_build_local_transition",
+                return_value=(policy, policy, routes, routes, False, True),
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_check_firewall_nat_policy",
+                return_value=safe,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_apply_local_add",
+                side_effect=vpng.ReconciliationError("boom"),
+            ),
             mock.patch.object(
                 self.daemon,
                 "_best_effort_disable_forwarding",
@@ -386,8 +452,8 @@ class ReconcileTests(unittest.TestCase):
             ) as disable,
             mock.patch.object(
                 self.daemon,
-                "_repair_firewall_nat_with_barrier",
-            ) as repair,
+                "_rebuild_firewall_nat_init_panic",
+            ) as rebuild,
             mock.patch.object(
                 self.daemon,
                 "_reconcile_routes_snapshot",
@@ -402,10 +468,59 @@ class ReconcileTests(unittest.TestCase):
             self.daemon.reconcile()
 
         disable.assert_called_once()
-        additive.assert_called_once()
-        repair.assert_not_called()
+        rebuild.assert_called_once()
+        self.assertIs(self.daemon.state, vpng.DaemonState.ACTIVE)
 
-    def test_barrier_repair_orders_isolation_nat_full(self):
+    def test_init_panic_uses_direct_full_rebuild_when_forwarding_is_off(self):
+        snapshot = self.daemon._build_reconciliation_snapshot(
+            (ready_record(),)
+        )
+        events = []
+
+        def restore_filter(policy, *, input_only=False):
+            self.assertFalse(input_only)
+            accepts = any(
+                "-j ACCEPT" in rule
+                for chain in policy.chains
+                for rule in chain.rules
+            )
+            events.append("full" if accepts else "isolation")
+
+        def restore_nat(policy):
+            del policy
+            events.append("nat")
+
+        safe = vpng.FirewallCheck(vpng.FirewallSafety.SAFE, None)
+        with (
+            mock.patch.object(
+                self.daemon,
+                "_restore_filter_policy",
+                side_effect=restore_filter,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_restore_nat_policy",
+                side_effect=restore_nat,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_check_filter_policy",
+                return_value=safe,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_check_firewall_nat_policy",
+                return_value=safe,
+            ),
+        ):
+            self.daemon._rebuild_firewall_nat_init_panic(
+                snapshot,
+                forwarding_disabled=True,
+            )
+
+        self.assertEqual(events, ["full", "nat"])
+
+    def test_init_panic_uses_isolation_when_forwarding_cannot_be_disabled(self):
         snapshot = self.daemon._build_reconciliation_snapshot(
             (ready_record(),)
         )
@@ -452,7 +567,10 @@ class ReconcileTests(unittest.TestCase):
                 return_value=safe,
             ),
         ):
-            self.daemon._repair_firewall_nat_with_barrier(snapshot)
+            self.daemon._rebuild_firewall_nat_init_panic(
+                snapshot,
+                forwarding_disabled=False,
+            )
 
         self.assertEqual(events, ["isolation", "nat", "full"])
 
