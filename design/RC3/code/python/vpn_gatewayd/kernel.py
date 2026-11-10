@@ -584,7 +584,7 @@ class SubprocessKernelInterface(KernelInterface):
                 ifindex=ifindex,
                 ipv4=frozenset(addresses),
             )
-            for name, (ifindex, addresses) in sorted(mutable.items())
+            for name, (ifindex, addresses) in mutable.items()
         )
 
     def get_ip_forward(self) -> bool:
