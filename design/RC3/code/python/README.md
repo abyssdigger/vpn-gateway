@@ -210,3 +210,28 @@ fresh bindings, preserved metrics, non-immediate hole reuse, allocator wrap-arou
 occupied-slot skipping, allocator exhaustion and explicit-list
 `metric < BLACKHOLE_METRIC` validation.
 
+
+
+## ADD/REMOVE/INIT-PANIC validation
+
+After replacing the transitional prefix-only path with the generic runtime model
+
+```text
+ADD         = NAT -> filter -> route
+REMOVE      = filter -> route -> NAT
+replacement = REMOVE old -> ADD new
+INIT/PANIC  = global fail-closed rebuild
+```
+
+the complete RC3 Python tree was validated on GitHub Actions with Python 3.13:
+
+```text
+python -m compileall -q design/RC3/code/python
+PASS
+
+python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
+PASS
+142 test methods
+```
+
+The temporary validation workflow was removed after the successful run.
