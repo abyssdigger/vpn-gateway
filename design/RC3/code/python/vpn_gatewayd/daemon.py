@@ -1778,6 +1778,7 @@ class VpnGatewayDaemon:
                 prepared[profile_id]
             )
 
+    @staticmethod
     def _policy_chain_map(
         chains: Sequence[PolicyChain],
     ) -> Mapping[str, tuple[str, ...]]:
