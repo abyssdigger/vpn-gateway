@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from unittest import mock
 from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path
 from types import MappingProxyType
@@ -238,6 +239,51 @@ class RouteDerivationTests(unittest.TestCase):
         metrics = second.prefix_metric_allocations_by_profile["primary"]
         self.assertEqual(metrics[vpng.InterfaceBinding("vpns9", 9)], 20)
         self.assertEqual(metrics[vpng.InterfaceBinding("vpns10", 10)], 30)
+
+    def test_prefix_allocator_wraps_and_skips_occupied_slots(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+        first = vpng.InterfaceBinding("vpns1", 1)
+        second = vpng.InterfaceBinding("vpns2", 2)
+        profile.commit_verified_state(
+            routes=frozenset(),
+            active_bindings=(first, second),
+            prefix_metrics={first: 10, second: 30},
+            prefix_metric_cursor=30,
+        )
+
+        with mock.patch("vpn_gatewayd.daemon.BLACKHOLE_METRIC", 40):
+            snapshot = daemon._build_reconciliation_snapshot(
+                records(
+                    (
+                        ("vpns1", 1, "172.20.130.1"),
+                        ("vpns2", 2, "172.20.130.1"),
+                        ("vpns3", 3, "172.20.130.1"),
+                    )
+                )
+            )
+
+        metrics = snapshot.prefix_metric_allocations_by_profile["primary"]
+        self.assertEqual(metrics[first], 10)
+        self.assertEqual(metrics[second], 30)
+        self.assertEqual(metrics[vpng.InterfaceBinding("vpns3", 3)], 20)
+
+    def test_prefix_allocator_exhaustion_rejects_snapshot(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+        with (
+            mock.patch("vpn_gatewayd.daemon.BLACKHOLE_METRIC", 30),
+            self.assertRaises(vpng.ReconciliationError),
+        ):
+            daemon._build_reconciliation_snapshot(
+                records(
+                    (
+                        ("vpns1", 1, "172.20.130.1"),
+                        ("vpns2", 2, "172.20.130.1"),
+                        ("vpns3", 3, "172.20.130.1"),
+                    )
+                )
+            )
 
     def test_explicit_list_preserves_priority_holes(self):
         profile = make_profile(
