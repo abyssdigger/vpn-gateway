@@ -10,165 +10,87 @@
 `Architecture baseline`, указанному в самой записи. При выпуске последующих RC такие ссылки
 не перенумеровываются задним числом.
 
-## EXP-009 — RC3: failover semantics при нескольких peers
+## EXP-009 — RC3: interface-centric failover semantics
 
-**Статус:** IN PROGRESS — EXP-009.1 COMPLETE/PASS; EXP-009.2 PENDING  
-**Architecture baseline:** RC3 после EXP-006, до окончательного transport-lifecycle решения  
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** RC3 после EXP-006, до interface-centric пересмотра модели  
 **Запуск:** 2026-11-10  
 **Тип:** ручной live experiment без `vpn-gatewayd`  
+**Target:** Debian 13 gateway; OpenConnect multi-interface + WireGuard stable-interface cases  
 **Результат:** [`EXP-009-result-20261110.md`](experiments/EXP-009%20RC3%20multi-interface%20binding%20discovery/EXP-009-result-20261110.md)
 
 ### Мотивация
 
-EXP-009 проверяет два принципиально разных случая отказа peer:
+Эксперимент начался как проверка association configured peer с runtime-интерфейсом и
+route failover. Последующие live-наблюдения показали, что transport peer является лишней
+абстракцией для VPN-GATE: Linux routes выбирают concrete interface, а transport может
+иметь собственную внутреннюю peer-selection semantics.
 
-1. **EXP-009.1 — OpenConnect:** peer failure может удалить отдельный point-to-point runtime
-   interface и тем самым изменить kernel routing topology.
-2. **EXP-009.2 — WireGuard:** peer failure должен быть проверен отдельно для постоянного
-   single-binding interface `wg0`, жизненный цикл которого не обязан следовать lifecycle
-   отдельного peer.
+### EXP-009.1 — OpenConnect multi-interface lifecycle
 
-Цель разделения — не переносить наблюдаемое поведение OpenConnect на WireGuard без
-отдельного live evidence.
+**Статус:** COMPLETE — PASS
 
-### EXP-009.1 — OpenConnect peer failure
+Подтверждено:
 
-**Статус:** COMPLETE — PASS  
-**Target:** Debian 13 ocserv gateway, два одновременных OpenConnect clients
+1. две одновременные OpenConnect sessions создают разные runtime-интерфейсы
+   `vpns00` / `vpns01` с одним server-side local IPv4 `172.20.130.1`;
+2. исчезновение `vpns00` автоматически удаляет зависимый route через этот interface;
+3. оставшийся route через `vpns01` становится рабочим backup path;
+4. возвращение `vpns00` само route не восстанавливает — требуется reconciliation;
+5. если preferred route остается существовать, но forwarding за ним мертв, metric сам
+   не обнаруживает path failure и traffic на backup не переключается;
+6. direct route без transport next-hop работает:
+   `172.21.201.19/32 dev vpns00 proto 202 metric 10` успешно достиг реального target.
 
-Configured peers:
+### EXP-009.2 — WireGuard peer semantics
 
-```text
-pri -> fixed VPN peer 172.20.130.6
-sec -> fixed VPN peer 172.20.130.5
-```
+**Статус:** COMPLETE — PASS
 
-#### H1 — concurrent multi-interface discovery
+На одном стабильном `wg0` одновременно работали peers `172.20.126.2` и
+`172.20.126.3`.
 
-Наблюдаемое server state при двух одновременных сессиях:
+Подтверждено:
 
-```text
-=== ocserv users ===
-      id     user    vhost             ip         vpn-ip device   since    dtls-cipher    status
-   31612      sec  default 192.168.201.199   172.20.130.5 vpns01     6s  (AES-256-GCM) connected
-   31214      pri  default 192.168.201.108   172.20.130.6 vpns00    45s  (AES-256-GCM) connected
+1. Linux FIB допускает два routes к одной цели через один `wg0` с разными next-hop и
+   metric, но next-hop не выбирает WireGuard peer;
+2. без target prefix в WireGuard `AllowedIPs` отправка дала
+   `Required key not available`;
+3. target prefix `172.21.201.19/32` может принадлежать только одному peer одного
+   `wg0`; назначение того же prefix второму peer переприсваивает ownership;
+4. фактический traffic идет к peer, владеющему destination по `AllowedIPs`, даже если
+   Linux FIB показывает другой next-hop;
+5. отключение WireGuard на owning peer не меняет runtime `AllowedIPs` ownership и не
+   вызывает автоматический переход на другой peer;
+6. static config с одинаковым target prefix у двух peers разрешается по принципу
+   «последний примененный peer получает prefix»; смена порядка peer-блоков зеркально
+   меняет владельца prefix;
+7. handshake/endpoint availability не участвует в таком ownership decision.
 
-=== vpns interfaces ===
-vpns00           UNKNOWN        172.20.130.1 peer 172.20.130.6/32
-vpns01           UNKNOWN        172.20.130.1 peer 172.20.130.5/32
-```
+Во время подготовки WG baseline также наблюдалась transient NAT/path anomaly. Причина не
+установлена; удаление старых OC MASQUERADE rules совпало с восстановлением пути, но
+повторное добавление правила отказ не воспроизвело. Подробности сохранены в result artifact
+как диагностическая отправная точка, но не используются как архитектурное доказательство.
 
-**H1: PASS.** Healthy concurrent peers используют разные runtime interfaces, один local
-VPN address и разные point-to-point remote peers.
+### Наблюдаемый контракт EXP-009
 
-#### H2 — interface disappearance gives route failover
+- VPN-GATE может выводить routing/failover state непосредственно из concrete
+  runtime-интерфейсов;
+- transport peer не является надежным или необходимым route-next-hop abstraction;
+- prefix-family transport штатно может иметь несколько одновременно active concrete
+  interfaces;
+- stable exact interface может скрывать собственную transport peer-selection semantics,
+  которой VPN-GATE не должен пытаться управлять через Linux route next-hop;
+- route metrics задают приоритет существующих interface paths, но не являются
+  end-to-end health-check;
+- Netlink по-прежнему только будит reconciliation; snapshot concrete interfaces решает,
+  какие paths должны существовать.
 
-Оба clients независимо достигали реальной цели `172.21.201.19`.
+**EXP-009: COMPLETE — PASS.**
 
-На server существовали:
-
-```text
-172.21.201.19 via 172.20.130.6 dev vpns00 metric 10 onlink
-172.21.201.19 via 172.20.130.5 dev vpns01 metric 20 onlink
-```
-
-При двух sessions kernel выбирал primary `.6/vpns00`.
-
-После остановки primary OpenConnect client interface `vpns00` исчез. Linux автоматически
-удалил зависимый route metric 10, после чего остался:
-
-```text
-172.21.201.19 via 172.20.130.5 dev vpns01 metric 20 onlink
-```
-
-LAN host без изменения своей routing configuration продолжил достигать цели через
-`172.20.130.5`.
-
-**H2: PASS.** Backup route начинает использоваться после исчезновения preferred route,
-вызванного исчезновением concrete interface.
-
-#### H3 — interface return requires route rematerialization
-
-После повторного подключения primary `vpns00` снова появился, но preferred route metric 10
-сам не восстановился. После ручной materialization:
-
-```text
-172.21.201.19 via 172.20.130.6 dev vpns00 metric 10 onlink
-172.21.201.19 via 172.20.130.5 dev vpns01 metric 20 onlink
-```
-
-kernel снова выбрал primary, и LAN traffic вернулся на `172.20.130.6`.
-
-**H3: PASS.** Возврат concrete interface требует reconciliation/rematerialization
-desired preferred route.
-
-#### H4 — dead preferred path does not imply metric failover
-
-Дополнительный отрицательный контроль выполнен при сохраненных OpenConnect sessions и
-server-side routes metric 10/20. На client `pri` был выключен только IPv4 forwarding:
-
-```text
-net.ipv4.ip_forward = 0
-```
-
-OpenConnect session не останавливалась; server-side interface и preferred route не
-удалялись намеренно. Secondary path оставался доступным.
-
-С LAN Windows host:
-
-```text
-tracert 172.21.201.19
-
-  1    <1 ms    <1 ms    <1 ms  192.168.201.107
-  2     *        *        *     timeout
-  3     *        *        *     timeout
-```
-
-Traffic не перешел на route metric 20.
-
-**H4: PASS как отрицательный контроль.** Наличие backup route с большей metric само по
-себе не является механизмом path-health detection. Пока preferred route остается
-пригодным с точки зрения routing table, Linux продолжает выбирать его; недоступность
-forwarding за этим route не вызывает автоматический переход на secondary.
-
-Это наблюдение не зависит от OpenConnect как протокола в своей routing-семантике, но
-конкретный WireGuard peer-failure scenario все равно требует EXP-009.2.
-
-#### Наблюдаемый контракт EXP-009.1
-
-1. Healthy OpenConnect profile может иметь несколько одновременных runtime interfaces.
-2. Point-to-point kernel inventory дает association evidence `(local_address, peer)`.
-3. Исчезновение concrete interface автоматически удаляет зависимый kernel route.
-4. После удаления preferred route backup route с большей metric становится рабочим путем.
-5. Повторное появление interface не восстанавливает route.
-6. Failback требует rematerialization preferred route.
-7. Route metric задает предпочтение **между существующими пригодными routes**, но не
-   определяет end-to-end работоспособность preferred path и не инициирует failover при
-   сохраненном preferred route.
-
-**EXP-009.1: COMPLETE — PASS.**
-
-### EXP-009.2 — WireGuard peer failure
-
-**Статус:** PENDING
-
-Target scenario:
-
-- постоянный exact interface `wg0`;
-- preferred и secondary peer paths;
-- оба соответствующих routes существуют;
-- preferred WireGuard peer становится недоступен без удаления `wg0`;
-- проверяется фактическое поведение traffic и kernel routes.
-
-EXP-009.2 должен определить, дает ли WireGuard/Linux какой-либо наблюдаемый kernel-level
-механизм, способный сделать preferred route непригодным при peer failure, либо при
-сохраненном route traffic продолжает направляться в недоступный primary path.
-
-До завершения EXP-009.2 поведение OpenConnect из EXP-009.1 не считается доказательством
-WireGuard failover semantics.
+Архитектурный переход от peer-centric к interface-centric модели выполняется отдельным
+нормативным изменением RC3.
 
 ---
-
 ## EXP-008 — RC3 live runtime drift recovery
 
 **Status:** COMPLETE — PASS  
