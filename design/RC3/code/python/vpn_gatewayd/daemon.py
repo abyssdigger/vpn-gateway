@@ -2109,15 +2109,11 @@ class VpnGatewayDaemon:
 
             unexpected = actual_exact - previous
             missing_survivors = (previous & intermediate) - actual_exact
-            missing_other = (
-                previous - actual_exact - removable
-            )
-            if unexpected or missing_survivors or missing_other:
+            if unexpected or missing_survivors:
                 raise ReconciliationError(
                     f"{profile_id}: unexpected route drift before local "
                     f"transition: unexpected={unexpected!r}, "
-                    f"missing_survivors={missing_survivors!r}, "
-                    f"missing_other={missing_other!r}"
+                    f"missing_survivors={missing_survivors!r}"
                 )
 
     def _require_local_route_phase(
@@ -2514,8 +2510,6 @@ class VpnGatewayDaemon:
                 "full firewall/NAT verification failed during INIT/PANIC: "
                 f"{self._firewall_check_detail(full_check)}"
             )
-
-    # ---- iptables parsing / cleanup -------------------------------------
 
     # ---- iptables parsing / cleanup -------------------------------------
 
