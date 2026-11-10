@@ -2020,12 +2020,208 @@ class VpnGatewayDaemon:
         lines.append("COMMIT")
         return "\n".join(lines) + "\n"
 
-    def _apply_clean_prefix_addition(
+    @classmethod
+    def _build_deletion_only_table_payload(
+        cls,
+        table_name: str,
+        previous_chains: Sequence[PolicyChain],
+        desired_chains: Sequence[PolicyChain],
+    ) -> str | None:
+        """
+        Build a deletion-only --noflush payload.
+
+        DESIRED rule sequences must be an exact subsequence of PREVIOUS.
+        Surviving rules are never deleted or reinserted.
+        """
+        previous = cls._policy_chain_map(previous_chains)
+        desired = cls._policy_chain_map(desired_chains)
+        if set(previous) != set(desired):
+            raise ReconciliationError(
+                f"{table_name}: subtractive policy changed chain set"
+            )
+
+        lines: list[str] = [f"*{table_name}"]
+        changed = False
+        for chain in previous:
+            old_rules = previous[chain]
+            new_rules = desired[chain]
+            new_index = 0
+
+            for rule in old_rules:
+                if (
+                    new_index < len(new_rules)
+                    and rule == new_rules[new_index]
+                ):
+                    new_index += 1
+                    continue
+                lines.append(cls._rule_delete_form(rule, chain))
+                changed = True
+
+            if new_index != len(new_rules):
+                raise ReconciliationError(
+                    f"{table_name}/{chain}: surviving rule order is not "
+                    "preserved by subtractive desired policy"
+                )
+
+        if not changed:
+            return None
+        lines.append("COMMIT")
+        return "\n".join(lines) + "\n"
+
+    def _require_local_route_phase(
+        self,
+        desired_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
+    ) -> RouteVerifyResult:
+        verified = self._verify_plan(
+            all_kernel_routes=self.kernel.list_routes(),
+            desired_routes_by_profile=desired_routes_by_profile,
+        )
+        expected = frozenset(self.profiles)
+        if verified.verified_profiles != expected:
+            raise ReconciliationError(
+                "local route phase did not reach exact desired state"
+            )
+        return verified
+
+    def _apply_local_route_delta(
+        self,
+        previous_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
+        desired_routes_by_profile: Mapping[str, frozenset[RouteSpec]],
+        *,
+        addition: bool,
+    ) -> None:
+        """
+        Apply only expected proto-202 additions or removals.
+
+        REMOVE tolerates an expected disappearing-interface route already
+        removed by the kernel.  Any unrelated exact-route drift is rejected.
+        """
+        actual = self.kernel.list_routes()
+        operations: list[RouteSpec] = []
+
+        for profile_id in sorted(self.profiles, key=str.casefold):
+            profile = self.profiles[profile_id]
+            previous = previous_routes_by_profile[profile_id]
+            desired = desired_routes_by_profile[profile_id]
+            protected = frozenset(profile.config.routes)
+            actual_exact = frozenset(
+                route
+                for route in actual
+                if route.destination in protected
+            )
+
+            removed = previous - desired
+            added = desired - previous
+            changed = added if addition else removed
+            forbidden = removed if addition else added
+            if forbidden:
+                direction = "ADD" if addition else "REMOVE"
+                raise ReconciliationError(
+                    f"{profile_id}: {direction} route phase contains "
+                    f"opposite-direction delta: {forbidden!r}"
+                )
+            if any(
+                route.route_type is not RouteType.UNICAST
+                or route.proto != VPN_ROUTE_PROTO
+                for route in changed
+            ):
+                raise ReconciliationError(
+                    f"{profile_id}: local route delta is not pure proto-202 "
+                    "UNICAST"
+                )
+
+            if addition:
+                if actual_exact != previous:
+                    raise ReconciliationError(
+                        f"{profile_id}: unexpected route drift before ADD"
+                    )
+                operations.extend(changed)
+            else:
+                unexpected = actual_exact - previous
+                missing_survivors = (previous & desired) - actual_exact
+                if unexpected or missing_survivors:
+                    raise ReconciliationError(
+                        f"{profile_id}: unexpected route drift before REMOVE: "
+                        f"unexpected={unexpected!r}, "
+                        f"missing_survivors={missing_survivors!r}"
+                    )
+                operations.extend(changed & actual_exact)
+
+        for route in sorted(operations, key=self._route_sort_key):
+            if addition:
+                self.kernel.add_route(route)
+            else:
+                self.kernel.delete_route(route)
+
+        self._require_local_route_phase(desired_routes_by_profile)
+
+    @staticmethod
+    def _firewall_check_detail(check: FirewallCheck) -> str:
+        return (
+            check.reason.detail
+            if check.reason is not None and check.reason.detail is not None
+            else check.safety.name
+        )
+
+    def _apply_local_remove(
         self,
         previous: FirewallNatPolicy,
         desired: FirewallNatPolicy,
+        previous_routes: Mapping[str, frozenset[RouteSpec]],
+        desired_routes: Mapping[str, frozenset[RouteSpec]],
     ) -> None:
-        """Apply only newly appended prefix-binding firewall/NAT contribution."""
+        """REMOVE = filter -> routes -> NAT, without changing ip_forward."""
+        filter_payload = self._build_deletion_only_table_payload(
+            "filter",
+            previous.filter.chains,
+            desired.filter.chains,
+        )
+        if filter_payload is not None:
+            self.kernel.iptables_restore(filter_payload, noflush=True)
+
+        filter_check = self._check_filter_policy(desired.filter)
+        if filter_check.safety is not FirewallSafety.SAFE:
+            raise ReconciliationError(
+                "filter verification failed after REMOVE: "
+                f"{self._firewall_check_detail(filter_check)}"
+            )
+
+        self._apply_local_route_delta(
+            previous_routes,
+            desired_routes,
+            addition=False,
+        )
+
+        nat_payload = self._build_deletion_only_table_payload(
+            "nat",
+            previous.nat.chains,
+            desired.nat.chains,
+        )
+        if nat_payload is not None:
+            self.kernel.iptables_restore(nat_payload, noflush=True)
+
+        nat_check = self._check_nat_policy(desired.nat)
+        if nat_check.safety is not FirewallSafety.SAFE:
+            raise ReconciliationError(
+                "NAT verification failed after REMOVE: "
+                f"{self._firewall_check_detail(nat_check)}"
+            )
+
+        full_check = self._check_firewall_nat_policy(desired)
+        if full_check.safety is not FirewallSafety.SAFE:
+            raise ReconciliationError(
+                "full firewall/NAT verification failed after REMOVE: "
+                f"{self._firewall_check_detail(full_check)}"
+            )
+
+    def _apply_local_add(
+        self,
+        previous: FirewallNatPolicy,
+        desired: FirewallNatPolicy,
+        previous_routes: Mapping[str, frozenset[RouteSpec]],
+        desired_routes: Mapping[str, frozenset[RouteSpec]],
+    ) -> None:
+        """ADD = NAT -> filter -> routes, without changing ip_forward."""
         nat_payload = self._build_insertion_only_table_payload(
             "nat",
             previous.nat.chains,
@@ -2036,13 +2232,9 @@ class VpnGatewayDaemon:
 
         nat_check = self._check_nat_policy(desired.nat)
         if nat_check.safety is not FirewallSafety.SAFE:
-            detail = (
-                nat_check.reason.detail
-                if nat_check.reason is not None
-                else nat_check.safety.name
-            )
             raise ReconciliationError(
-                f"NAT verification failed after additive apply: {detail}"
+                "NAT verification failed after ADD: "
+                f"{self._firewall_check_detail(nat_check)}"
             )
 
         filter_payload = self._build_insertion_only_table_payload(
@@ -2055,15 +2247,39 @@ class VpnGatewayDaemon:
 
         full_check = self._check_firewall_nat_policy(desired)
         if full_check.safety is not FirewallSafety.SAFE:
-            detail = (
-                full_check.reason.detail
-                if full_check.reason is not None
-                else full_check.safety.name
-            )
             raise ReconciliationError(
-                f"full firewall/NAT verification failed after additive apply: "
-                f"{detail}"
+                "full firewall/NAT verification failed after ADD: "
+                f"{self._firewall_check_detail(full_check)}"
             )
+
+        self._apply_local_route_delta(
+            previous_routes,
+            desired_routes,
+            addition=True,
+        )
+
+    def _verify_and_commit_local_transition(
+        self,
+        snapshot: ReconciliationSnapshot,
+    ) -> Mapping[str, ProfileResult]:
+        verified = self._require_local_route_phase(
+            snapshot.desired_routes_by_profile
+        )
+        results = self._require_complete_profile_results(
+            verified.profile_results
+        )
+        self._commit_owned(
+            verified_routes_by_profile=verified.owned_routes_by_profile,
+            verified_profiles=verified.verified_profiles,
+            interface_state_by_profile=snapshot.interface_state_by_profile,
+            prefix_metric_allocations_by_profile=(
+                snapshot.prefix_metric_allocations_by_profile
+            ),
+            prefix_metric_cursor_by_profile=(
+                snapshot.prefix_metric_cursor_by_profile
+            ),
+        )
+        return results
 
     def _build_filter_restore_payload(
         self,
@@ -2188,51 +2404,66 @@ class VpnGatewayDaemon:
             f"isolation filter verification failed: {detail}",
         )
 
-    def _repair_firewall_nat_with_barrier(
+    def _rebuild_firewall_nat_init_panic(
         self,
         snapshot: ReconciliationSnapshot,
+        *,
+        forwarding_disabled: bool,
     ) -> None:
+        """
+        Rebuild full managed firewall/NAT state for INIT/PANIC.
+
+        A confirmed ip_forward=0 is already a sufficient global barrier.
+        Otherwise a verified isolation filter is required before any allowing
+        filter can be installed.
+        """
         if self.config is None:
             raise RuntimeError("config not installed")
 
-        isolation = desired_isolation_filter(self.config)
-        self._restore_filter_policy(isolation)
-        isolation_check = self._check_filter_policy(isolation)
-        if isolation_check.safety is not FirewallSafety.SAFE:
-            detail = (
-                isolation_check.reason.detail
-                if isolation_check.reason is not None
-                else isolation_check.safety.name
+        if forwarding_disabled:
+            self._restore_filter_policy(snapshot.desired_full_policy.filter)
+            filter_check = self._check_filter_policy(
+                snapshot.desired_full_policy.filter
             )
-            raise ReconciliationError(
-                f"isolation filter verification failed: {detail}"
-            )
+            if filter_check.safety is not FirewallSafety.SAFE:
+                raise ReconciliationError(
+                    "filter verification failed during INIT/PANIC: "
+                    f"{self._firewall_check_detail(filter_check)}"
+                )
 
-        self._restore_nat_policy(snapshot.desired_full_policy.nat)
-        nat_check = self._check_nat_policy(snapshot.desired_full_policy.nat)
-        if nat_check.safety is not FirewallSafety.SAFE:
-            detail = (
-                nat_check.reason.detail
-                if nat_check.reason is not None
-                else nat_check.safety.name
-            )
-            raise ReconciliationError(
-                f"NAT verification failed after isolation: {detail}"
-            )
+            self._restore_nat_policy(snapshot.desired_full_policy.nat)
+        else:
+            isolation = desired_isolation_filter(self.config)
+            self._restore_filter_policy(isolation)
+            isolation_check = self._check_filter_policy(isolation)
+            if isolation_check.safety is not FirewallSafety.SAFE:
+                raise ReconciliationError(
+                    "isolation filter verification failed during INIT/PANIC: "
+                    f"{self._firewall_check_detail(isolation_check)}"
+                )
 
-        self._restore_filter_policy(snapshot.desired_full_policy.filter)
+            self._restore_nat_policy(snapshot.desired_full_policy.nat)
+            nat_check = self._check_nat_policy(
+                snapshot.desired_full_policy.nat
+            )
+            if nat_check.safety is not FirewallSafety.SAFE:
+                raise ReconciliationError(
+                    "NAT verification failed during INIT/PANIC: "
+                    f"{self._firewall_check_detail(nat_check)}"
+                )
+
+            self._restore_filter_policy(snapshot.desired_full_policy.filter)
+
         full_check = self._check_firewall_nat_policy(
             snapshot.desired_full_policy
         )
         if full_check.safety is not FirewallSafety.SAFE:
-            detail = (
-                full_check.reason.detail
-                if full_check.reason is not None
-                else full_check.safety.name
-            )
             raise ReconciliationError(
-                f"full firewall/NAT verification failed: {detail}"
+                "full firewall/NAT verification failed during INIT/PANIC: "
+                f"{self._firewall_check_detail(full_check)}"
             )
+
+    # ---- iptables parsing / cleanup -------------------------------------
 
     # ---- iptables parsing / cleanup -------------------------------------
 
