@@ -1,237 +1,247 @@
 # RC3 Python implementation
 
-This directory is the active RC3 implementation line.
+This directory is the active RC3 implementation line. RC2 remains a frozen regression
+baseline under `design/RC2/code/python/`.
 
-It was bootstrapped from the frozen RC2.5.1 Python baseline in
-`design/RC2/code/python/`. RC3 changes are applied here only; the RC2 tree remains a
-regression baseline.
+## Current domain model
 
-## Current RC3 implementation status
+RC3 is interface-centric and transport-agnostic. A routing profile describes protected
+routes plus an ordered set of binding specifications:
 
-The Python implementation now follows the **interface-centric RC3 architecture accepted
-after EXP-009**.
+```toml
+enabled = true
+reconcile_interval = 10.0
 
-Implemented domain model:
+common_allowed_sources = [
+    "10.200.200.8/32",
+]
 
-- `InterfaceSelector` supports:
-  - exact string: `"wg0"`;
-  - multiple prefix: `"vpns+"`;
-  - ordered explicit exact list: `["vpnA", "vpnB", "vpnC"]`;
-- legacy `%` selector syntax is rejected;
-- transport `peers` and exact `local_address` are not part of `VpnProfileConfig`;
-  legacy managed keys with those names are rejected by the closed schema;
-- one profile may have multiple simultaneous active concrete bindings;
-- concrete binding identity is exact `name + ifindex`;
-- a candidate becomes active only when it has at least one local IPv4 address inside the
-  configured `network`;
-- interface address prefix length is not compared with `network`; tunnel/P2P local /32
-  representation remains valid when the host IPv4 belongs to the logical transport network;
-- point-to-point remote endpoint, transport handshake and peer state are not route truth.
+[profiles.primary]
+enabled = true
+routes = [
+    "10.0.0.0/8",
+    "192.168.0.0/16",
+]
+allowed_sources = []
 
-Active ordering:
+bindings = [
+    { interface = "wg0",    network = "172.20.126.0/29" },
+    { interface = "wg1",    network = "172.20.127.0/29" },
+    { interface = "ocvpn+", network = "172.20.130.0/29" },
+]
+```
 
-- exact selector: one active interface;
-- prefix selector: process-local stable order of first accepted bindings;
-- explicit list: configured order filtered to active elements.
+Each `BindingSpec` owns:
 
-For `prefix+`, surviving bindings keep their relative order, new bindings append in the
-order returned by the current interface inventory, and removed bindings disappear without
-reordering survivors. No extra name sorting is applied. This order drives binding-specific
-firewall/NAT materialization and is useful diagnostically; it is not a route-priority
-guarantee and is not persisted across restart.
+- one exact interface selector or one trailing-`+` textual prefix selector;
+- its own IPv4 transport network;
+- for exact entries, a fixed config-derived priority rank.
 
-Routing:
+There is no LIST selector domain type. Multiple exact bindings are expressed as multiple
+ordered `bindings[]` entries.
 
-- one `proto 201 metric 65536` BLACKHOLE remains required for every protected
-  destination;
-- every daemon-owned UNICAST metric is strictly lower than `BLACKHOLE_METRIC`;
-- daemon-owned UNICAST routes are direct interface routes:
-  `dev <exact-interface> proto 202 metric <N>`;
-- desired UNICAST uses `via=None` and `onlink=False`;
-- exact metric is `FIRST_UNICAST_METRIC` (currently 10);
-- explicit-list slot N uses
-  `FIRST_UNICAST_METRIC + N * ROUTE_METRIC_STEP` and therefore preserves configured
-  priority holes;
-- prefix metrics come from a cyclic process-local allocator;
-- a continuously active prefix binding keeps its metric;
-- new prefix bindings do not renumber existing routes;
-- the allocator wraps before `BLACKHOLE_METRIC`, skips occupied values and fails closed
-  only if every valid slot is occupied;
-- prefix route preference between interfaces is intentionally unspecified.
+A concrete runtime binding is identified by exact `name + ifindex`. A candidate becomes
+active only when it has at least one local IPv4 address inside the network of its owning
+BindingSpec. Point-to-point remote address, transport peer, handshake, `operstate` and
+`LOWER_UP` are not binding truth.
 
-Firewall/NAT:
+## Enabled projection
 
-- selector wildcards appear only in deny-only guards;
-- allowing INPUT/FORWARD blocks and MASQUERADE rules use exact active interface names;
-- all simultaneous active interfaces of a profile are materialized;
-- normal binding lifecycle uses two local procedures without changing `ip_forward`:
-  `ADD = NAT -> filter -> route` and `REMOVE = filter -> route -> NAT`, with
-  verification between stages and without rebuilding surviving contributions;
-- replacement, including same-name/new-ifindex, is `REMOVE old -> ADD new`;
-- `INIT/PANIC` is the only global rebuild path and is reserved for startup, unexpected
-  FORWARD/NAT drift, UNKNOWN state, non-decomposable transitions, failed local apply, or
-  a route repair/apply/verification that did not complete;
-- route-only drift is first repaired by the normal route executor under the verified
-  filter; only a failed route repair escalates to `INIT/PANIC`;
-- confirmed INPUT-only drift still uses narrow repair without disabling forwarding.
+`enabled` defaults to true at both top-level and profile level.
 
-Lifecycle and verification:
+Parsing is staged:
 
-- one immutable `ReconciliationSnapshot` is used per reconciliation pass;
-- Netlink events are wakeup hints; the fresh snapshot decides;
-- IPv6 host prerequisites are revalidated on every full reconciliation before allowing
-  policy is built;
-- a runtime IPv6 prerequisite violation latches the daemon into the host-prerequisite
-  isolation path until restart;
-- structural verification success is distinct from functional `ProfileResult`;
-- a verified zero-path state is committed, yields `ProfileResult=FAIL`, and may run as
-  `DEGRADED`;
-- successful startup may therefore enter either `ACTIVE` or `DEGRADED`;
-- actual apply/verification failures remain hard startup failures or isolation/error paths.
+1. parse TOML and top-level envelope;
+2. if top-level `enabled=false`, stop before profile-body parsing;
+3. inspect only `profile.enabled`;
+4. discard disabled profiles before parsing their body;
+5. fully parse and cross-validate enabled profiles only.
 
-The generic `RouteSpec` still retains `via` and `onlink` because foreign kernel
-routes may contain them; daemon-owned desired UNICAST routes do not.
+A disabled profile is intentionally not linted by normal startup or `--check-config`.
+Top-level `enabled=false` produces the intentional `DISABLED` lifecycle state with
+`ip_forward=0` and no managed network materialization.
 
-Entry point: `vpn-gatewayd.py`.
+`common_allowed_sources` and per-profile `allowed_sources` are optional and default to
+empty. Enabled profiles require non-empty `routes[]` and `bindings[]`.
 
-The package is under `vpn_gatewayd/`; tests are under `tests/`.
+## Selector and address-space safety
 
-## EXP-009 basis
+Enabled BindingSpec selector namespaces are globally non-overlapping.
 
-EXP-009 is `COMPLETE — PASS`.
-
-The live experiment established the implementation boundary used above:
-
-- OpenConnect can expose multiple simultaneous concrete interfaces;
-- interface disappearance removes dependent routes and interface return requires route
-  rematerialization;
-- OpenConnect protected traffic works with a direct `dev vpns00` route without a
-  configured transport peer next-hop;
-- route metric does not detect a dead path behind a still-present preferred route;
-- WireGuard peer selection inside one stable `wg0` is owned by WireGuard
-  `AllowedIPs`, not by Linux route next-hop;
-- duplicate WireGuard destination prefixes do not create primary/secondary peer routing;
-  the last applied peer owns the prefix;
-- WireGuard peer health does not automatically transfer that destination ownership.
-
-The resulting RC3 rule is:
+Exact forbidden interface names are:
 
 ```text
-VPN-GATE manages concrete VPN interfaces and protected routes.
-Transport peer selection remains inside the transport.
+lo
+any
+default
+all
 ```
+
+A prefix selector is also rejected if its guard namespace would include any forbidden
+exact name. This matters because `-i prefix+` is a deny-only guard over the whole textual
+namespace.
+
+Binding networks may overlap each other because selector namespaces determine ownership.
+Protected routes may not overlap any enabled BindingSpec network.
+
+## Routing and metrics
+
+Every protected destination always has:
+
+```text
+BLACKHOLE proto 201 metric 65536
+```
+
+Every active concrete binding receives a direct route:
+
+```text
+dev <exact-interface> proto 202 metric <N>
+via=None
+onlink=False
+```
+
+Exact bindings use fixed metrics derived only from their ordinal among exact BindingSpec
+entries:
+
+```text
+FIRST_UNICAST_METRIC = 10
+ROUTE_METRIC_STEP    = 10
+
+exact_metric(rank) = 10 + rank * 10
+```
+
+Prefix entries between exact entries do not consume exact ranks. Therefore an ordered
+profile such as:
+
+```text
+wg0, oc-a+, wg1, oc-b+
+```
+
+has fixed exact metrics:
+
+```text
+wg0 -> 10
+wg1 -> 20
+```
+
+and all prefix bindings share one process-local cyclic allocator beginning at:
+
+```text
+dynamic_metric_min = 10 + exact_count * 10
+                   = 30
+```
+
+Consequences:
+
+- all exact bindings are preferred over all dynamic prefix bindings;
+- exact failover/failback is stable across interface disappearance/recreation;
+- prefix position in `bindings[]` does not define route preference;
+- continuous prefix survivors keep their metrics;
+- newly accepted prefix bindings do not renumber survivors;
+- removed prefix metrics remain reserved until the new verified state commits;
+- the allocator wraps, skips occupied slots and fails closed on true exhaustion;
+- prefix allocator/order state is process-local and is rebuilt after restart.
+
+## Runtime ordering
+
+Active serialization order is:
+
+1. active exact bindings by exact config rank;
+2. active prefix bindings by process-local first-acceptance order.
+
+Prefix survivors keep relative order; new prefix bindings append in fresh interface
+inventory encounter order. No additional interface-name sorting is performed.
+
+This order drives binding-specific firewall/NAT/status serialization. It is diagnostic
+state, not a prefix route-priority contract.
+
+## Firewall/NAT and lifecycle
+
+Allowing INPUT/FORWARD rules, NAT and routes always use exact active interface names.
+Prefix syntax appears only in deny guards.
+
+Normal local lifecycle:
+
+```text
+ADD    = NAT -> verify -> filter -> verify -> route -> verify -> commit
+REMOVE = filter -> verify -> route -> verify -> NAT -> verify -> commit
+```
+
+Neither normal ADD nor REMOVE changes `ip_forward`.
+
+Same-name/new-ifindex replacement is:
+
+```text
+REMOVE old -> verified gap -> ADD new
+```
+
+Surviving rules/routes are not deleted, recreated, reordered or re-metriced merely to
+canonicalize output.
+
+`INIT/PANIC` is the global fail-closed path for startup, unsafe/unknown transit state,
+non-decomposable transitions, local-procedure failure, or failed structural route
+build/apply/verification.
+
+Route-only drift is first repaired under a verified SAFE filter. If the route pass cannot
+be structurally verified, the pass escalates to `INIT/PANIC`.
+
+Structural verification is distinct from functional availability:
+
+- structurally exact zero-path state is committed;
+- its `ProfileResult` is `FAIL`;
+- daemon lifecycle is `DEGRADED`, not PANIC.
+
+Verified process-local state uses a two-phase commit: all prospective profile state is
+prepared/validated before the first committed-state mutation.
+
+## EXP-009 boundary
+
+EXP-009 established the key transport boundary:
+
+- OpenConnect can expose multiple simultaneous concrete interfaces;
+- protected traffic works through direct `dev <interface>` routes;
+- interface disappearance removes dependent kernel routes;
+- WireGuard chooses peers through `AllowedIPs`, not through Linux route next-hop;
+- multiple WireGuard peers behind one `wg0` are therefore not VPN-GATE failover units.
+
+VPN-GATE failover/failback is built from independent concrete interfaces. This is why
+binding-specific networks are required: `wg0`, `wg1`, and dynamic OpenConnect sessions
+may legitimately belong to different transport networks inside one routing profile.
 
 ## Validation
 
-The interface-centric implementation and migrated unit suite were validated on GitHub
-Actions with Python 3.13:
+Permanent CI is defined in:
+
+```text
+.github/workflows/rc3-python.yml
+```
+
+It runs on pushes and pull requests to `main` using Python 3.13:
 
 ```text
 python -m compileall -q design/RC3/code/python
-PASS
-
 python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
-Ran 130 tests
-OK
-130/130 PASS
 ```
 
-The temporary validation workflow was removed after the successful run; it is not part of
-the deployment/runtime architecture.
+The suite covers config staging, BindingSpec qualification, heterogeneous transport
+networks, exact failback, shared prefix allocation, survivor order/metrics, same-name/new
+ifindex replacement, firewall/NAT drift handling, ADD/REMOVE/INIT-PANIC, route planning,
+zero-path verification, IPv6 latch and disabled runtime state.
 
-## Post-simplification cleanup
-
-After removing transport peers and exact `local_address`, the implementation was audited
-for migration residue. The following dead layers were removed without changing desired
-runtime behavior:
-
-- write-only committed candidate history;
-- obsolete `KernelInterface.list_interface_ipv4()` compatibility API and its legacy tests;
-- unused route-overlap cache/helper;
-- unused daemon `effective_sources()` helper;
-- unused `InterfaceSelector.value` and `ProfileInterfaceState.has_active_path`;
-- redundant ConfigLoader interface-regex constants;
-- duplicate completed-profile-result validation.
-
-When an IPv6 prerequisite violation is latched until restart, periodic isolation
-maintenance now runs before interface inventory, avoiding an unnecessary
-`ip -j addr show` on every latched pass.
-
-Post-cleanup Python 3.13 validation:
+## Entry point
 
 ```text
-python -m compileall -q design/RC3/code/python
-PASS
-
-python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
-Ran 121 tests
-OK
-121/121 PASS
+vpn-gatewayd.py
 ```
 
-The reduction from 124 to 121 tests is exactly the removal of three tests for the deleted
-legacy `list_interface_ipv4()` API.
-
-## Prefix stable-order and metric allocator implementation
-
-The post-EXP-009 simplification was extended so a newly appearing `prefix+` interface no
-longer causes existing binding-specific rules or routes to be reordered merely because its
-name sorts earlier.
-
-Verified process-local prefix state now consists of:
+Implementation package:
 
 ```text
-active_order
-ConcreteBinding(name, ifindex) -> metric
-next_metric_cursor
+vpn_gatewayd/
 ```
 
-A reconciliation snapshot derives provisional order/allocation from the last verified
-state and current interface inventory. The order, allocation and cursor are committed only
-after successful verification together with OWNED routes and active binding state.
-
-Runtime snapshot projection failure, including metric-slot exhaustion, uses the fail-closed
-isolation path and never applies a partial desired state.
-
-Validation on Python 3.13:
+Tests:
 
 ```text
-python -m compileall -q design/RC3/code/python
-PASS
-
-python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
-Ran 130 tests
-OK
-130/130 PASS
+tests/
 ```
-
-The suite includes regression coverage for stable survivor order, same-name/new-ifindex
-fresh bindings, preserved metrics, non-immediate hole reuse, allocator wrap-around,
-occupied-slot skipping, allocator exhaustion and explicit-list
-`metric < BLACKHOLE_METRIC` validation.
-
-
-
-## ADD/REMOVE/INIT-PANIC validation
-
-After replacing the transitional prefix-only path with the generic runtime model
-
-```text
-ADD         = NAT -> filter -> route
-REMOVE      = filter -> route -> NAT
-replacement = REMOVE old -> ADD new
-INIT/PANIC  = global fail-closed rebuild
-```
-
-the complete RC3 Python tree was validated on GitHub Actions with Python 3.13:
-
-```text
-python -m compileall -q design/RC3/code/python
-PASS
-
-python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
-PASS
-142 test methods
-```
-
-The temporary validation workflow was removed after the successful run.
