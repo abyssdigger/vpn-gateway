@@ -374,6 +374,68 @@ class RouteDerivationTests(unittest.TestCase):
             {("wg0", 10), ("wg1", 20), ("oc0", 30), ("oc1", 40)},
         )
 
+    def test_shared_prefix_allocator_spans_multiple_binding_specs(self):
+        profile = make_profile(
+            bindings=(
+                vpng.BindingSpec(
+                    vpng.InterfaceSelector.parse("wg0"),
+                    IPv4Network("172.20.126.0/29"),
+                    0,
+                    0,
+                ),
+                vpng.BindingSpec(
+                    vpng.InterfaceSelector.parse("oca+"),
+                    IPv4Network("172.20.130.0/29"),
+                    1,
+                    None,
+                ),
+                vpng.BindingSpec(
+                    vpng.InterfaceSelector.parse("ocb+"),
+                    IPv4Network("172.20.131.0/29"),
+                    2,
+                    None,
+                ),
+            )
+        )
+        daemon = make_daemon(profile)
+        state, desired = derive(
+            daemon,
+            (
+                ("wg0", 1, "172.20.126.2"),
+                ("ocb0", 2, "172.20.131.2"),
+                ("oca0", 3, "172.20.130.2"),
+            ),
+        )
+        self.assertEqual(
+            tuple(b.name for b in state["primary"].prefix_bindings),
+            ("ocb0", "oca0"),
+        )
+        unicast = by_type(desired["primary"], vpng.RouteType.UNICAST)
+        self.assertEqual(
+            {(r.interface, r.metric) for r in unicast},
+            {("wg0", 10), ("ocb0", 20), ("oca0", 30)},
+        )
+
+    def test_exact_same_name_new_ifindex_keeps_fixed_metric(self):
+        profile = make_profile(
+            interface="wg0",
+            network="172.20.126.0/29",
+        )
+        daemon = make_daemon(profile)
+        _, first = derive(daemon, (("wg0", 7, "172.20.126.2"),))
+        _, second = derive(daemon, (("wg0", 8, "172.20.126.2"),))
+        first_route = next(
+            r for r in first["primary"]
+            if r.route_type is vpng.RouteType.UNICAST
+        )
+        second_route = next(
+            r for r in second["primary"]
+            if r.route_type is vpng.RouteType.UNICAST
+        )
+        self.assertEqual(first_route.metric, 10)
+        self.assertEqual(second_route.metric, 10)
+        self.assertEqual(first_route.interface, second_route.interface)
+
     def test_no_active_interface_keeps_blackhole_only(self):
         profile = make_profile()
         daemon = make_daemon(profile)
