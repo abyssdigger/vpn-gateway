@@ -366,9 +366,13 @@ Exact:
 
 ```text
 active exact names текущего snapshot
--> ASCII sort
+-> case-sensitive bytewise ASCII sort
 -> 10,20,30...
 ```
+
+Сортировка сравнивает exact interface names по последовательности ASCII code values,
+не зависит от locale и не использует natural/numeric suffix ordering. Например,
+`vpns10` предшествует `vpns9`; это нормативно, а не ошибка сортировки.
 
 Если active set префиксного селектора изменился, metrics пересчитываются из текущего
 snapshot. История появления interfaces не является источником истины.
@@ -1539,8 +1543,9 @@ interface = []                  -> запрещено
 ```
 
 Отдельный лимит общего количества profiles не требуется. Для explicit interface list
-число элементов ограничивается только валидностью имен и тем, что максимальная
-`(index+1)*10` route metric помещается в unsigned 32-bit priority.
+число элементов ограничивается валидностью имен и тем, что максимальная `(index+1)*10`
+route metric помещается в unsigned 32-bit priority; это проверяется config validator.
+Для prefix selector runtime active count проверяется отдельно при desired-route derivation.
 
 ## 15. Селекторы интерфейсов
 
@@ -1592,8 +1597,9 @@ Deny-only guard использует проверенную EXP-005 форму:
 -i prefix+
 ```
 
-Active exact names сортируются ASCII-лексикографически в каждом snapshot; этот порядок
-задает metrics 10,20,30... и не зависит от истории появления.
+Active exact names сортируются case-sensitive bytewise ASCII в каждом snapshot; этот
+порядок задает metrics 10,20,30... и не зависит от locale, natural-sort rules или
+истории появления.
 
 ### 15.3. Явный упорядоченный список точных имен
 
@@ -1749,8 +1755,10 @@ explicit ordered list:
 это expected desired-state transition и reconciliation canonicalizes routes к новому
 snapshot. Для explicit list priority slots стабильны.
 
-Validator проверяет, что максимальная вычисляемая metric помещается в unsigned 32-bit
-route priority.
+Для exact и explicit list metric range проверяется при config validation. Для `prefix+`
+число active interfaces известно только из runtime inventory, поэтому range проверяется
+при построении desired routes каждого reconciliation snapshot. Overflow является ошибкой
+reconciliation/domain projection: wrap, saturation и silent truncation запрещены.
 
 EXP-009 подтвердил interface lifecycle, direct OpenConnect route без `via` и отсутствие
 health-aware failover только по metric. Transport-specific peer health не входит в route
@@ -2322,7 +2330,7 @@ may retain adds/deletes/replaces.
 
 15. Exact selector имеет не более одной candidate binding; `prefix+` и explicit list допускают несколько simultaneous candidates/active bindings без состояния ambiguity.
 
-16. `prefix+` discovery охватывает весь textual prefix, включая exact name `prefix`; active exact names префиксного selector сортируются ASCII-лексикографически для route metrics.
+16. `prefix+` discovery охватывает весь textual prefix, включая exact name `prefix`; active exact names сортируются case-sensitive bytewise ASCII, без locale/natural sorting, для route metrics.
 
 17. Explicit list непустой, содержит уникальные valid exact names и сохраняет config order как route-priority slots; отсутствующий элемент не сдвигает metrics следующих.
 
@@ -2493,7 +2501,7 @@ may retain adds/deletes/replaces.
 78. Защищаемые маршруты управляемых профилей глобально не пересекаются и не пересекают
     управляемые vpn.network.
 
-79. Metrics: exact active interface = 10; prefix active names ASCII-sort -> 10,20,30... текущего snapshot; explicit list slots -> 10,20,30... по config order без сдвига отсутствующих элементов; metric <= 4294967295.
+79. Metrics: exact active interface = 10; prefix active names case-sensitive bytewise ASCII sort -> 10,20,30... current snapshot; explicit list slots -> 10,20,30... config order без сдвига отсутствующих элементов. Exact/list range валидируется из config; prefix range проверяется runtime при desired-route derivation; overflow запрещен.
 
 80. `common_allowed_sources` объединяется с `profile.allowed_sources`; отрицательных правил
     и исключений нет.
