@@ -1,6 +1,6 @@
 # VPN-GATE NG1 — ROU concept
 
-Status: **working concept**.
+Status: **working concept; publication proven, executable ROU v0 prepared**.
 
 This document captures the top-level NG1 model before implementation details are frozen in the architecture.
 
@@ -224,17 +224,24 @@ ROU does not own:
 
 This keeps ROU self-contained without turning it into the host firewall.
 
-## 11. Immediate proof obligation
+## 11. Implementation status
 
-Before implementation, NG1 must prove the minimum publication chain independently of WireGuard:
+The original publication proof obligation is closed:
 
-    host input
-        -> published socket
-        -> relay
-        -> listener inside separate netns
-        -> output generated from received input
-        -> host-visible sink
+- EXP-010 proved the generic host-socket -> relay -> private-netns listener topology;
+- EXP-011 proved the same boundary with real ocserv/OpenConnect TCP/TLS/CSTP and UDP/DTLS.
 
-A successful test demonstrates that ROU can carry a transport signal through the namespace boundary and emit a dependent result back out without requiring VPN-specific behavior.
+The first executable ROU prototype now lives under:
 
-This is EXP-010.
+    design/NG1/code/python/rou_v0/
+
+ROU v0 intentionally hard-codes one ocserv-backed OUTBOUND profile. It is used to prove
+the complete appliance lifecycle and integrity model before a generic configuration layer
+is introduced.
+
+The v0 UDP relay already advances beyond EXP-011 by maintaining an independent internal
+UDP socket/association for each external peer, allowing simultaneous DTLS clients.
+
+The next proof obligation is EXP-012: a live end-to-end run of the v0 controller including
+binding disappearance/reappearance, zero-path fail-closed behavior, owned-state drift
+repair under the forwarding barrier and non-repairable namespace-infrastructure loss.
