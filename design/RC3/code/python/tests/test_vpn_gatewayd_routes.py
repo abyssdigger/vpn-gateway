@@ -131,7 +131,7 @@ class RouteDerivationTests(unittest.TestCase):
                 binding.name
                 for binding in state["primary"].active_bindings
             ),
-            ("vpns10", "vpns9"),
+            ("vpns9", "vpns10"),
         )
         unicast = by_type(
             desired["primary"],
@@ -145,7 +145,7 @@ class RouteDerivationTests(unittest.TestCase):
             {
                 route.metric
                 for route in unicast
-                if route.interface == "vpns10"
+                if route.interface == "vpns9"
             },
             {10},
         )
@@ -153,7 +153,7 @@ class RouteDerivationTests(unittest.TestCase):
             {
                 route.metric
                 for route in unicast
-                if route.interface == "vpns9"
+                if route.interface == "vpns10"
             },
             {20},
         )
