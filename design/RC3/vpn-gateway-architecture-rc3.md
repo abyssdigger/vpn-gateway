@@ -417,7 +417,9 @@ next_metric_cursor
    требуется;
 7. если полный цикл не нашел свободного значения, распределение метрик завершается
    ошибкой;
-8. новая binding с тем же именем, но новым `ifindex`, не наследует прежнюю metric;
+8. новая binding с тем же именем, но новым `ifindex`, не имеет гарантии наследования
+   прежней metric и проходит обычное allocation; случайное получение того же свободного
+   численного значения допустимо;
 9. после restart распределение начинается заново и прежние metrics не гарантируются.
 
 Если в одном snapshot одновременно появились несколько новых prefix-bindings, они
@@ -434,8 +436,9 @@ EXP-009 подтвердил:
 - исчезновение concrete interface автоматически удаляет зависимый route;
 - возвращение interface само route не восстанавливает;
 - reconciliation обязан rematerialize current desired direct route;
-- metric выбирает предпочтительный существующий interface path, но не является
-  end-to-end health-check;
+- Linux metric участвует в выборе предпочтительного существующего route, но не является
+  end-to-end health-check; для explicit list VPN-GATE гарантирует configured priority, а
+  для `prefix+` относительный preference interfaces не является контрактом;
 - OpenConnect path работает с direct `dev vpns00 proto 202 metric 10` без `via`;
 - WireGuard peer selection внутри `wg0` принадлежит самому transport и не должна
   моделироваться Linux next-hop внутри VPN-GATE.
@@ -862,8 +865,8 @@ active bindings, предварительное распределение prefi
 9. повторно проверить exact protected-prefix route state;
 10. подтвердить verification result для desired fail-closed state;
 11. сформировать functional `ProfileResult` поверх verified state;
-12. зафиксировать OWNED routes и active binding state после verification независимо от
-    availability SUCCESS/FAIL;
+12. зафиксировать OWNED routes, active binding state и prefix allocator mapping/cursor
+    после verification независимо от availability SUCCESS/FAIL;
 13. установить и повторно подтвердить `ip_forward=1`;
 14. перейти в `RUN`.
 
@@ -1107,8 +1110,9 @@ VPN-интерфейсов: на стадии изоляции точные ра
 
 ### 8.8. OWNED и фиксация binding state
 
-Process-local OWNED routes и последнее подтвержденное состояние active concrete bindings
-изменяются только после завершенной успешной проверки соответствующего цикла.
+Process-local OWNED routes, последнее подтвержденное состояние active concrete bindings
+и prefix allocator mapping/cursor изменяются только после завершенной успешной проверки
+соответствующего цикла.
 
 **Verification success и `ProfileResult` — разные оси.** Если fail-closed desired state
 полностью verified, active binding state текущего snapshot фиксируется даже когда functional availability
@@ -1119,7 +1123,7 @@ Process-local OWNED routes и последнее подтвержденное с
 
 ```text
 проверить routes/policy
--> зафиксировать OWNED + active binding state
+-> зафиксировать OWNED + active binding state + prefix allocator state
 -> включить и подтвердить ip_forward
 ```
 
@@ -2349,7 +2353,9 @@ Implementation update must include at least:
 - explicit-list metrics derive from stable configured slots and must remain below
   BLACKHOLE_METRIC;
 - full policy/NAT derives from all active exact interfaces;
-- snapshot stores candidates + active bindings; committed transition state stores only verified active bindings;
+- snapshot stores candidates + active bindings + provisional prefix metric allocations/cursor;
+  committed transition state stores verified active bindings together with verified
+  prefix allocator mapping/cursor;
 - `ProfileResult` checks verified UNICAST path existence, not merely exact desired-set
   equality;
 - successful startup may enter `RUN/DEGRADED` when no active path exists but fail-closed
@@ -2490,7 +2496,7 @@ may retain adds/deletes/replaces.
 40. Периодическое согласование обязательно как страховка; `reconcile_interval` имеет диапазон
     [1.0, 60.0] и не может быть отключен значением 0.
 
-41. Один immutable snapshot interfaces/candidates/active bindings повторно используется на всех фазах построения, применения и проверки одного цикла.
+41. Один immutable snapshot interfaces/candidates/active bindings/provisional prefix metric allocations повторно используется на всех фазах построения, применения и проверки одного цикла; provisional allocator mapping/cursor не меняется внутри цикла.
 
 42. BLACKHOLE RouteSpec выводится только из config. UNICAST RouteSpec выводится из protected destination + active concrete binding + metric semantics selector form; для `prefix+` используется verified process-local allocator state.
 
@@ -2511,9 +2517,9 @@ may retain adds/deletes/replaces.
 
 49. Маршрут по умолчанию не считается ресурсом диагностики пересечений.
 
-50. OWNED routes, подтвержденное active binding state и prefix metric allocator state process-local, после restart начинаются пустыми и меняются только после verification. Current candidates заново выводятся из каждого snapshot и отдельно не commit-ятся. Verified state commit не зависит от functional ProfileResult SUCCESS: verified zero-path FAIL также commit-ится.
+50. OWNED routes, подтвержденное active binding state и prefix allocator mapping/cursor process-local, после restart начинаются пустыми и меняются только после verification. Current candidates заново выводятся из каждого snapshot и отдельно не commit-ятся. Verified state commit не зависит от functional ProfileResult SUCCESS: verified zero-path FAIL также commit-ится.
 
-51. Process-local фиксация OWNED/active binding/prefix allocator state выполняется после verification и до final enable forwarding; availability FAIL не блокирует commit verified fail-closed state.
+51. Process-local фиксация OWNED/active binding/prefix allocator state выполняется одной verified-state commit boundary после verification и до final enable forwarding; failed apply/verification не изменяет allocator mapping/cursor, availability FAIL не блокирует commit verified fail-closed state.
 
 52. Само по себе фактическое состояние ядра не означает принятия ресурса во владение.
 
