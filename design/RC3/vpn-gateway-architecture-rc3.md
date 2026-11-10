@@ -364,8 +364,10 @@ binding обслуживается локальной процедурой `REMO
 
 Для `prefix+` этот порядок не является гарантией route preference. Он также не является
 персистентной историей создания interfaces: после restart daemon строит новый process-local
-order из первого доступного snapshot. Во время непрерывной работы порядок полезен
-диагностически как порядок первого принятия bindings daemon'ом.
+order из первого доступного snapshot. Поэтому наблюдавшийся до restart относительный route
+preference между prefix-bindings не переносится через restart и может измениться.
+Во время непрерывной работы порядок полезен диагностически как порядок первого принятия
+bindings daemon'ом.
 
 ### 4.4. Materialization маршрутов по active binding set
 
@@ -1767,10 +1769,12 @@ Active exact names идут в нормативном `active_order` §4.3. Дл
 daemon, а новые bindings добавляются в конец в порядке их появления в interface inventory
 текущего snapshot.
 Этот порядок используется при построении policy/status и при обходе новых bindings
-allocator'ом, но не задает гарантированный route preference. Уже существующие
-firewall/NAT rules и UNICAST routes не переставляются, не пересоздаются и не получают
-новые metrics только ради канонизации порядка; metrics prefix-bindings выделяются по
-правилам §4.4.
+allocator'ом, но не задает гарантированный route preference. Для профиля, которому нужен
+стабильный route preference между interfaces (например primary/secondary), следует
+использовать explicit ordered list §15.3, а не `prefix+`.
+Уже существующие firewall/NAT rules и UNICAST routes не переставляются, не пересоздаются
+и не получают новые metrics только ради канонизации порядка; metrics prefix-bindings
+выделяются по правилам §4.4.
 
 ### 15.3. Явный упорядоченный список точных имен
 
@@ -1835,6 +1839,13 @@ invalid. Conflict только с unmanaged description не блокирует 
 
 Matching candidate считается active concrete binding, если в его kernel inventory есть
 хотя бы один local IPv4 address, принадлежащий `profile.network`.
+
+Это является явной границей модели доверия: transport configuration и администратор
+обязаны не назначать адрес из `profile.network` постороннему interface, имя которого
+попадает под selector этого профиля. Такой matching interface будет корректно по правилам
+VPN-GATE квалифицирован как active binding и получит binding-specific policy/routes.
+Это предположение модели эксплуатации, а не отдельная попытка VPN-GATE доказать
+происхождение адреса или принадлежность interface конкретному transport process.
 
 Проверяется **host IPv4 membership**, а не фактическая prefix length адреса на interface.
 P2P/tunnel transport может представить local endpoint как /32 даже при более широкой
@@ -2048,6 +2059,10 @@ IPC не должен позволять клиенту напрямую изм�
 - состояние исполнения, сохраняемое между запусками, как источник истины;
 - проверка доступности удаленной стороны VPN (ping);
 - проверка WireGuard handshake;
+- failover между несколькими transport peers одного WireGuard interface: EXP-009
+  подтвердил, что WireGuard выбирает peer по `AllowedIPs`, а Linux route next-hop не
+  выбирает peer; если нужен управляемый VPN-GATE route preference/failover, transports
+  должны экспонироваться как отдельные concrete interfaces либо решаться самим transport;
 - пересылка IPv6;
 - сторонние Python-библиотеки.
 
