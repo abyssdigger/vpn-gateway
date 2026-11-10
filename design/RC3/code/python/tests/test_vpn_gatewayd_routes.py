@@ -20,13 +20,23 @@ def make_profile(
     interface="vpns+",
     network="172.20.130.0/29",
     routes=("10.0.0.0/8",),
+    bindings=None,
 ):
+    if bindings is None:
+        selector = vpng.InterfaceSelector.parse(interface)
+        bindings = (
+            vpng.BindingSpec(
+                selector,
+                IPv4Network(network),
+                0,
+                0 if selector.kind is vpng.InterfaceSelectorKind.EXACT else None,
+            ),
+        )
     return vpng.VpnProfile(
         vpng.VpnProfileConfig(
             profile_id=profile_id,
-            interface=vpng.InterfaceSelector.parse(interface),
-            network=IPv4Network(network),
             routes=tuple(IPv4Network(item) for item in routes),
+            bindings=tuple(bindings),
             allowed_sources=(),
         )
     )
@@ -39,9 +49,10 @@ def make_daemon(*profiles):
     )
     daemon.profiles = profile_map
     daemon.config = vpng.GatewayConfig(
+        enabled=True,
         reconcile_interval=10.0,
         common_allowed_sources=(),
-        vpns=MappingProxyType(
+        profiles=MappingProxyType(
             {
                 profile_id: profile.config
                 for profile_id, profile in profile_map.items()
@@ -74,18 +85,14 @@ def derive(daemon, items=()):
 
 def commit_state(profile, daemon, state, routes):
     allocations, cursors = daemon._build_prefix_metric_state(state)
-    if profile.config.interface.kind is vpng.InterfaceSelectorKind.PREFIX:
-        profile.commit_verified_state(
-            routes=routes,
-            active_bindings=state[profile.config.profile_id].active_bindings,
-            prefix_metrics=allocations[profile.config.profile_id],
-            prefix_metric_cursor=cursors[profile.config.profile_id],
-        )
-    else:
-        profile.commit_verified_state(
-            routes=routes,
-            active_bindings=state[profile.config.profile_id].active_bindings,
-        )
+    current = state[profile.config.profile_id]
+    profile.commit_verified_state(
+        routes=routes,
+        active_bindings=current.active_bindings,
+        prefix_bindings=current.prefix_bindings,
+        prefix_metrics=allocations.get(profile.config.profile_id, {}),
+        prefix_metric_cursor=cursors.get(profile.config.profile_id),
+    )
 
 
 def by_type(routes, route_type):
@@ -177,6 +184,7 @@ class RouteDerivationTests(unittest.TestCase):
         profile.commit_verified_state(
             routes=first.desired_routes_by_profile["primary"],
             active_bindings=first_state.active_bindings,
+            prefix_bindings=first_state.prefix_bindings,
             prefix_metrics=first.prefix_metric_allocations_by_profile["primary"],
             prefix_metric_cursor=first.prefix_metric_cursor_by_profile["primary"],
         )
@@ -224,6 +232,7 @@ class RouteDerivationTests(unittest.TestCase):
         profile.commit_verified_state(
             routes=first.desired_routes_by_profile["primary"],
             active_bindings=state.active_bindings,
+            prefix_bindings=state.prefix_bindings,
             prefix_metrics=first.prefix_metric_allocations_by_profile["primary"],
             prefix_metric_cursor=first.prefix_metric_cursor_by_profile["primary"],
         )
@@ -248,6 +257,7 @@ class RouteDerivationTests(unittest.TestCase):
         profile.commit_verified_state(
             routes=frozenset(),
             active_bindings=(first, second),
+            prefix_bindings=(first, second),
             prefix_metrics={first: 10, second: 30},
             prefix_metric_cursor=30,
         )
@@ -285,16 +295,35 @@ class RouteDerivationTests(unittest.TestCase):
                 )
             )
 
-    def test_explicit_list_preserves_priority_holes(self):
+    def test_exact_bindings_preserve_priority_holes(self):
         profile = make_profile(
-            interface=["vpnA", "vpnB", "vpnC"]
+            bindings=(
+                vpng.BindingSpec(
+                    vpng.InterfaceSelector.parse("vpnA"),
+                    IPv4Network("172.20.130.0/29"),
+                    0,
+                    0,
+                ),
+                vpng.BindingSpec(
+                    vpng.InterfaceSelector.parse("vpnB"),
+                    IPv4Network("172.20.131.0/29"),
+                    1,
+                    1,
+                ),
+                vpng.BindingSpec(
+                    vpng.InterfaceSelector.parse("vpnC"),
+                    IPv4Network("172.20.132.0/29"),
+                    2,
+                    2,
+                ),
+            )
         )
         daemon = make_daemon(profile)
         _, desired = derive(
             daemon,
             (
                 ("vpnA", 1, "172.20.130.1"),
-                ("vpnC", 3, "172.20.130.1"),
+                ("vpnC", 3, "172.20.132.1"),
             ),
         )
         unicast = by_type(
@@ -304,6 +333,45 @@ class RouteDerivationTests(unittest.TestCase):
         self.assertEqual(
             {(route.interface, route.metric) for route in unicast},
             {("vpnA", 10), ("vpnC", 30)},
+        )
+
+    def test_prefix_pool_starts_after_all_exact_slots(self):
+        profile = make_profile(
+            bindings=(
+                vpng.BindingSpec(
+                    vpng.InterfaceSelector.parse("wg0"),
+                    IPv4Network("172.20.126.0/29"),
+                    0,
+                    0,
+                ),
+                vpng.BindingSpec(
+                    vpng.InterfaceSelector.parse("oc+"),
+                    IPv4Network("172.20.130.0/29"),
+                    1,
+                    None,
+                ),
+                vpng.BindingSpec(
+                    vpng.InterfaceSelector.parse("wg1"),
+                    IPv4Network("172.20.127.0/29"),
+                    2,
+                    1,
+                ),
+            )
+        )
+        daemon = make_daemon(profile)
+        _, desired = derive(
+            daemon,
+            (
+                ("wg0", 1, "172.20.126.2"),
+                ("wg1", 2, "172.20.127.2"),
+                ("oc0", 3, "172.20.130.2"),
+                ("oc1", 4, "172.20.130.3"),
+            ),
+        )
+        unicast = by_type(desired["primary"], vpng.RouteType.UNICAST)
+        self.assertEqual(
+            {(r.interface, r.metric) for r in unicast},
+            {("wg0", 10), ("wg1", 20), ("oc0", 30), ("oc1", 40)},
         )
 
     def test_no_active_interface_keeps_blackhole_only(self):
