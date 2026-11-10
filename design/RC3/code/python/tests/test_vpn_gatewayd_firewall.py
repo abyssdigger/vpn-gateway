@@ -306,6 +306,68 @@ class FirewallPolicyOrchestrationTests(unittest.TestCase):
         self.assertNotIn("-i vpns9", filter_payload)
         self.assertNotIn("-o vpns9", nat_payload)
 
+    def test_subtractive_payload_deletes_only_removed_binding_rules(self):
+        previous = vpng.desired_full_policy(
+            config(),
+            state_for("vpns9", "vpns10"),
+        )
+        desired = vpng.desired_full_policy(
+            config(),
+            state_for("vpns9"),
+        )
+
+        filter_payload = self.daemon._build_deletion_only_table_payload(
+            "filter",
+            previous.filter.chains,
+            desired.filter.chains,
+        )
+        nat_payload = self.daemon._build_deletion_only_table_payload(
+            "nat",
+            previous.nat.chains,
+            desired.nat.chains,
+        )
+
+        self.assertIsNotNone(filter_payload)
+        self.assertIsNotNone(nat_payload)
+        self.assertNotIn(":VPNG-", filter_payload)
+        self.assertNotIn(":VPNG-", nat_payload)
+        self.assertNotIn("-I ", filter_payload)
+        self.assertNotIn("-I ", nat_payload)
+        self.assertIn("-i vpns10", filter_payload)
+        self.assertIn("-o vpns10", filter_payload)
+        self.assertIn("-o vpns10", nat_payload)
+        self.assertNotIn("-i vpns9", filter_payload)
+        self.assertNotIn("-o vpns9", nat_payload)
+
+    def test_subtractive_payload_rejects_survivor_reorder(self):
+        previous = (
+            vpng.PolicyChain(
+                "VPNG-X",
+                (
+                    "-A VPNG-X -i vpns1 -j ACCEPT",
+                    "-A VPNG-X -i vpns2 -j ACCEPT",
+                    "-A VPNG-X -j RETURN",
+                ),
+            ),
+        )
+        reordered = (
+            vpng.PolicyChain(
+                "VPNG-X",
+                (
+                    "-A VPNG-X -i vpns2 -j ACCEPT",
+                    "-A VPNG-X -i vpns1 -j ACCEPT",
+                    "-A VPNG-X -j RETURN",
+                ),
+            ),
+        )
+
+        with self.assertRaises(vpng.ReconciliationError):
+            self.daemon._build_deletion_only_table_payload(
+                "filter",
+                previous,
+                reordered,
+            )
+
     def test_additive_payload_rejects_existing_rule_reorder(self):
         previous = (
             vpng.PolicyChain(
