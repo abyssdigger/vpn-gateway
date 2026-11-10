@@ -10,6 +10,50 @@
 `Architecture baseline`, указанному в самой записи. При выпуске последующих RC такие ссылки
 не перенумеровываются задним числом.
 
+## EXP-012 — NG1: ROU v0 lifecycle and integrity
+
+**Статус:** PREPARED — live run pending  
+**Architecture baseline:** NG1 Draft 1 + EXP-010/011 PASS + executable ROU v0  
+**Тип:** first complete appliance lifecycle / fail-closed / drift-recovery gate  
+**Design:** [EXP-012 README](experiments/EXP-012%20NG1%20ROU%20v0%20lifecycle%20integrity/README.md)  
+**Implementation:** [ROU v0](NG1/code/python/rou_v0/README.md)
+
+### Цель
+
+Проверить на dedicated Debian/ocserv стенде первый целиком исполняемый ROU:
+
+- создание и удаление собственного netns/veth;
+- запуск реального ocserv внутри ROU;
+- TCP/UDP publication с независимыми UDP peer associations;
+- materialization двух `vpnsXX` bindings и profile table;
+- реальный payload path;
+- штатный drop/return binding;
+- zero-path fail-closed;
+- repair owned route/firewall drift под `ip_forward=0` barrier;
+- fail-closed teardown при нарушении целостности appliance infrastructure.
+
+### Подготовленная проверка
+
+Live harness:
+
+    design/NG1/code/python/rou_v0/rou_v0_live_smoke.sh
+
+Он содержит H1-H10 и завершает успешный прогон строкой:
+
+    OVERALL=PASS
+
+До live run rootless-проверки реализации завершены успешно:
+
+- `py_compile`;
+- 8 unit tests;
+- multi-peer UDP relay smoke;
+- `bash -n` live harness.
+
+Доступная sandbox-среда не разрешает `ip netns`, поэтому kernel/netns lifecycle
+намеренно остаётся неподтверждённым до живого прогона.
+
+---
+
 ## EXP-011 — NG1: ocserv/OpenConnect transport publication
 
 **Статус:** COMPLETE — PASS  
