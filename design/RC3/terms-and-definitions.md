@@ -28,19 +28,14 @@
 | startup | запуск | Последовательность действий от старта процесса до перехода в рабочий режим. |
 | cleanup | очистка | Удаление ресурсов проекта из ядра и выключение IPv4-маршрутизации, когда это предусмотрено жизненным циклом. |
 | daemon | — | Долгоживущий процесс `vpn-gatewayd`, управляющий ресурсами VPN Gateway. |
-| selector | селектор | Правило построения множества candidate runtime-интерфейсов, binding cardinality и защитного пространства имен. |
-| binding cardinality | кратность привязки | Свойство формы селектора: `SINGLE` либо `MULTI`; не равно текущему числу candidates. |
-| single-binding selector | селектор single-binding | Селектор с `binding_cardinality=SINGLE`: одновременно допускается не более одной concrete binding. В обычном множественном числе: «селекторы single-binding». |
-| multi-binding selector | селектор multi-binding | Селектор с `binding_cardinality=MULTI`: одновременно допускается несколько concrete bindings. В обычном множественном числе: «селекторы multi-binding». |
-| exact selector | точный селектор | Exact form селектора single-binding для одного конкретного interface name. |
-| prefix selector | префиксный селектор | Форма `prefix+`: textual prefix discovery, селектор single-binding. |
-| numeric family selector | числовой селектор | Форма `prefix%`: discovery только имен `^prefix[0-9]+$`, селектор multi-binding. |
-| explicit exact set | явное множество точных имен | Селектор multi-binding, заданный непустым массивом уникальных exact interface names. |
-| guard namespace | защитное пространство имен | Множество interface names, которое селектор заранее закрывает deny-only firewall guard; для `prefix%` шире discovery и равно textual `prefix+`. |
-| concrete binding | точная привязка интерфейса | Идентичность concrete interface как пары exact `name + ifindex`. |
-| peer binding | привязка peer | Однозначная связь configured peer с concrete binding; у селектора multi-binding строится по point-to-point endpoint evidence. |
-| binding set | множество привязок | Совокупность active concrete bindings и peer bindings профиля в одном reconciliation snapshot. |
-| binding transition | смена привязок | Изменение candidates, `name+ifindex`, active binding set, peer mapping или ambiguity. |
+| selector | селектор | Правило построения candidate runtime-интерфейсов, active binding set, защитного пространства имен и, для множественных форм, детерминированного route-priority order. |
+| exact selector | точный селектор | Строковая форма одного конкретного exact interface name; candidate set имеет размер 0..1. |
+| prefix selector | префиксный селектор | Форма `prefix+`: textual prefix discovery с 0..N simultaneous candidates; active exact names сортируются ASCII-лексикографически для route metrics. |
+| explicit exact list | явный упорядоченный список точных имен | Непустой массив уникальных exact interface names. Порядок элементов задает стабильные route-priority slots. |
+| guard namespace | защитное пространство имен | Множество interface names, которое selector заранее закрывает deny-only firewall guard: exact name, textual prefix либо exact elements списка. |
+| concrete binding | точная привязка интерфейса | Идентичность active concrete interface как пары exact `name + ifindex`; applicability дополнительно требует configured `local_address`. |
+| binding set | множество привязок | Совокупность active concrete bindings профиля в одном reconciliation snapshot. |
+| binding transition | смена привязок | Изменение candidate/active binding identity или set; active-set/identity change может быть policy-changing transition. |
 | policy-changing transition | переход, меняющий политику | Смена binding set, меняющая набор binding-specific resources ядра. |
 | absent | отсутствует | Состояние, при котором требуемая concrete/peer binding сейчас отсутствует. |
 | ambiguous | неоднозначен | Состояние, при котором selector или peer association нельзя разрешить однозначно без произвольного выбора interface. |
@@ -57,7 +52,7 @@
 | firewall | — | Набор и политика установленных правил фильтрации пакетов. NAT является отдельной сущностью; совокупное состояние обозначается как `firewall/NAT`. |
 | policy | политика | Требуемая совокупность правил фильтрации, преобразования адресов и связанных ограничений. |
 | structural policy | структурная политика | Часть политики, существующая независимо от текущего binding state. |
-| binding-specific | зависящий от привязки | Ресурс или правило, требуемое состояние которого зависит от текущих active concrete bindings или peer bindings. |
+| binding-specific | зависящий от привязки | Ресурс или правило, требуемое состояние которого зависит от текущих active concrete bindings или active concrete bindings. |
 | materialize | применить, создать в ядре | Создать или привести реальные ресурсы ядра к вычисленному требуемому представлению. |
 | verify | проверить | Повторно прочитать фактическое состояние и подтвердить его соответствие требуемому. |
 | canonical | канонический | Имеющий единственную принятую форму представления для сравнения. |

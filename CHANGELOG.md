@@ -1,3 +1,12 @@
+## 2026-11-10 — RC3 interface-centric route model after EXP-009
+
+- EXP-009 completed: OpenConnect multi-interface lifecycle and WireGuard peer-selection semantics validated live.
+- Removed transport `peers` / `PeerBinding` from the normative VPN-GATE route model.
+- Selector grammar reduced to exact, `prefix+`, and ordered explicit exact list; `%` removed.
+- Daemon-owned UNICAST routes are direct `dev <exact-interface> proto 202` routes without transport next-hop.
+- Prefix metrics derive from ASCII-sorted current active interfaces; explicit-list metrics derive from stable configured order.
+- `local_address` remains the transport-agnostic applicability predicate for concrete interfaces.
+
 # VPN-GATE change log
 
 ## 2026-11-09 — RC3 принят к реализации после post-final review
