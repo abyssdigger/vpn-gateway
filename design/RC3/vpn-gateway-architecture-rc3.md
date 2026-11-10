@@ -2480,7 +2480,7 @@ may retain adds/deletes/replaces.
 
 15. Exact selector имеет не более одной candidate binding; `prefix+` и explicit list допускают несколько simultaneous candidates/active bindings без состояния ambiguity.
 
-16. `prefix+` discovery охватывает весь textual prefix, включая exact name `prefix`; process-local active_order сохраняет относительный порядок непрерывно active bindings, новые bindings добавляются в конец, исчезнувшие удаляются без перестановки остальных. Если несколько новых bindings впервые обнаружены одним snapshot, только их взаимный порядок определяется case-sensitive bytewise ASCII.
+16. `prefix+` discovery охватывает весь textual prefix, включая exact name `prefix`; process-local active_order сохраняет относительный порядок непрерывно active bindings, новые bindings добавляются в конец в порядке их появления в interface inventory текущего snapshot, исчезнувшие удаляются без перестановки остальных. Дополнительная сортировка новых bindings не выполняется.
 
 17. Explicit list непустой, содержит уникальные valid exact names и сохраняет config order как route-priority slots; отсутствующий элемент не сдвигает metrics следующих; каждая вычисляемая UNICAST metric обязана быть < BLACKHOLE_METRIC.
 
