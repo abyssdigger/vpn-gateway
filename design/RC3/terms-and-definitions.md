@@ -36,7 +36,10 @@
 | concrete binding | точная привязка интерфейса | Идентичность active concrete interface как пары exact `name + ifindex`; applicability дополнительно требует хотя бы один local IPv4 address внутри `profile.network`. |
 | binding set | множество привязок | Совокупность active concrete bindings профиля в одном reconciliation snapshot. Для `prefix+` verified process-local order surviving bindings сохраняется между циклами текущего процесса. |
 | binding transition | смена привязок | Изменение candidate/active binding identity или set; active-set/identity change может быть policy-changing transition. |
-| policy-changing transition | переход, меняющий политику | Смена binding set, меняющая набор binding-specific resources ядра. |
+| policy-changing transition | переход, меняющий политику | Смена binding set, меняющая набор binding-specific resources ядра; штатная delta классифицируется как `ADD`, `REMOVE` либо их композиция, иначе используется `INIT/PANIC`. |
+| ADD | — | Локальная процедура появления binding-specific contribution: NAT -> filter -> route с verification между стадиями, без изменения `ip_forward` и без пересборки surviving resources. |
+| REMOVE | — | Локальная процедура исчезновения binding-specific contribution: filter -> route -> NAT с verification между стадиями, без изменения `ip_forward` и без пересборки surviving resources. |
+| INIT/PANIC | — | Единственная глобальная процедура startup/error recovery: закрыть forwarding подтвержденным `ip_forward=0` либо verified isolation filter, полностью пересобрать managed state, проверить и только затем открыть forwarding. |
 | absent | отсутствует | Состояние, при котором candidate или active concrete binding сейчас отсутствует; transport peer semantics в термин не входит. |
 | profile result | результат профиля | `SUCCESS` или `FAIL` после проверки desired state. `SUCCESS` требует как минимум одного verified desired UNICAST path для каждого protected destination и не является end-to-end health-check. |
 | reconciliation | согласование | Сопоставление требуемого и фактического состояния с последующим приведением управляемых ресурсов к требуемому состоянию. |
@@ -64,7 +67,7 @@
 | failover | — | Намеренное переключение на резервный рабочий путь или экземпляр. |
 | guard | защитное правило | Правило, заранее запрещающее небезопасный трафик или состояние. |
 | isolation filter | изолирующий фильтр | Полная промежуточная политика фильтрации без разрешающих правил, зависящих от привязки. |
-| barrier | защитный барьер | Проверенное безопасное промежуточное состояние, через которое проходит восстановление. |
+| barrier | защитный барьер | Проверенное безопасное промежуточное состояние внутри `INIT/PANIC`: подтвержденный `ip_forward=0` либо verified isolation filter. |
 | wildcard | шаблон по префиксу | Сопоставление группы имен по общей начальной части; в iptables для интерфейсов используется завершающий `+`. |
 | namespace | пространство имен | Совокупность имен интерфейсов, относящихся к одному префиксному селектору. |
 | terminal verdict | окончательное решение | Решение `ACCEPT`, `DROP` или `REJECT`, после которого дальнейшая обработка пакета в данной цепочке не продолжается. |
