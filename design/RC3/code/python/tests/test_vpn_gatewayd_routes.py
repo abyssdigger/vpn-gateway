@@ -278,6 +278,34 @@ class RouteDerivationTests(unittest.TestCase):
         self.assertEqual(metrics[second], 30)
         self.assertEqual(metrics[vpng.InterfaceBinding("vpns3", 3)], 20)
 
+    def test_removed_prefix_metric_stays_reserved_until_commit(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+        removed = vpng.InterfaceBinding("vpns1", 1)
+        survivor = vpng.InterfaceBinding("vpns2", 2)
+        profile.commit_verified_state(
+            routes=frozenset(),
+            active_bindings=(removed, survivor),
+            prefix_bindings=(removed, survivor),
+            prefix_metrics={removed: 10, survivor: 30},
+            prefix_metric_cursor=30,
+        )
+
+        with mock.patch("vpn_gatewayd.daemon.BLACKHOLE_METRIC", 40):
+            snapshot = daemon._build_reconciliation_snapshot(
+                records(
+                    (
+                        ("vpns2", 2, "172.20.130.1"),
+                        ("vpns3", 3, "172.20.130.1"),
+                    )
+                )
+            )
+
+        metrics = snapshot.prefix_metric_allocations_by_profile["primary"]
+        self.assertEqual(metrics[survivor], 30)
+        self.assertEqual(metrics[vpng.InterfaceBinding("vpns3", 3)], 20)
+        self.assertNotIn(10, metrics.values())
+
     def test_prefix_allocator_exhaustion_rejects_snapshot(self):
         profile = make_profile()
         daemon = make_daemon(profile)
