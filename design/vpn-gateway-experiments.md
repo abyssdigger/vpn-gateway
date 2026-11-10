@@ -12,12 +12,13 @@
 
 ## EXP-010 — NG1: ROU transport publication relay
 
-**Статус:** IN PROGRESS — Phase A PASS; Phase B prepared, live run pending  
+**Статус:** COMPLETE — PASS  
 **Architecture baseline:** NG1 Draft 1  
 **Тип:** generic UDP transport proof; WireGuard intentionally excluded  
 **Artifacts:**  
 - [rootless local smoke](experiments/EXP-010%20NG1%20ROU%20transport%20publication/vpn-gateway-exp-010-local-smoke.py)  
 - [Phase A result](experiments/EXP-010%20NG1%20ROU%20transport%20publication/EXP-010-phase-A-result.md)  
+- [Phase B result](experiments/EXP-010%20NG1%20ROU%20transport%20publication/EXP-010-phase-B-result.md)  
 - [netns probe](experiments/EXP-010%20NG1%20ROU%20transport%20publication/vpn-gateway-exp-010-rou-transport-publication.sh)
 
 ### Мотивация
@@ -96,7 +97,7 @@ host-facing publication только в ROU config, не изменяя WireGuar
 
 ### Phase B — ROU network namespace
 
-**Статус:** PREPARED — NOT RUN
+**Статус:** PASS
 
 Phase B сохраняет тот же application-level workflow, но переносит internal listener в
 отдельный namespace и соединяет main namespace с ним через veth:
@@ -116,17 +117,44 @@ Listener отправляет dependent payload обратно на host-visible
 
 Prepared script создает namespace/veth только на время опыта и удаляет их через cleanup trap.
 
-Текущий execution container не предоставляет необходимые privileges для создания
-network namespace/veth, поэтому Phase B здесь сознательно не помечается PASS.
+Phase B был запущен на живом Debian-стенде с доступными network namespace/veth primitives.
 
-### Гипотезы Phase B
+### Результат Phase B
 
-- **H1:** datagram на published host-side port проходит relay и наблюдается listener внутри ROU netns.
-- **H2:** listener внутри ROU netns может породить зависимый от input datagram, который наблюдается host-side sink.
-- **H3:** listener reply возвращается через relay исходному client.
-- **H4:** после cleanup эксперимент не оставляет namespace/veth state.
+Наблюдено:
 
-EXP-010 считается COMPLETE только после успешного Phase B live run.
+    EXP-010 NG1 ROU transport publication namespace relay
+    H1 published socket -> relay -> netns listener: PASS
+    H2 netns listener -> dependent host-visible payload: PASS
+    H3 netns listener -> relay -> original client response: PASS
+
+    OVERALL=PASS
+
+Подтверждено:
+
+- host-side published UDP socket принимает входной datagram;
+- relay передает его через veth в отдельный ROU netns;
+- listener внутри ROU netns регистрирует исходный input;
+- listener генерирует зависимый от input datagram, наблюдаемый host-side sink;
+- reply listener'а возвращается через relay исходному client.
+
+Cleanup namespace/veth обеспечивается harness trap; отдельный H4 в данном прогоне не был
+выведен как самостоятельная строка результата и поэтому не используется как доказательство.
+
+### Решение
+
+**EXP-010: COMPLETE — PASS.**
+
+Для NG1 подтверждена generic transport-publication topology без зависимости от конкретного
+VPN protocol:
+
+    host-side published socket
+        -> ROU relay
+        -> private ROU netns listener
+        -> dependent output / return path
+
+Это достаточно, чтобы считать базовую publication abstraction жизнеспособной и переходить
+к следующему эксперименту с реальным WG/OC endpoint, не меняя саму boundary-модель.
 
 ---
 
