@@ -76,7 +76,7 @@ class InterfaceStateTests(unittest.TestCase):
         with self.assertRaises(dataclasses.FrozenInstanceError):
             record.ifindex = 8
 
-    def test_prefix_initial_snapshot_uses_bytewise_tiebreak_order(self):
+    def test_prefix_initial_snapshot_preserves_inventory_order(self):
         state = vpng.resolve_profile_interface_state(
             vpng.InterfaceSelector.parse("vpns+"),
             (
@@ -88,13 +88,13 @@ class InterfaceStateTests(unittest.TestCase):
         )
         self.assertEqual(
             tuple(record.name for record in state.candidates),
-            ("vpns10", "vpns9"),
+            ("vpns9", "vpns10"),
         )
         self.assertEqual(
             state.active_bindings,
             (
-                vpng.InterfaceBinding("vpns10", 10),
                 vpng.InterfaceBinding("vpns9", 9),
+                vpng.InterfaceBinding("vpns10", 10),
             ),
         )
 
@@ -119,8 +119,8 @@ class InterfaceStateTests(unittest.TestCase):
             (
                 vpng.InterfaceBinding("vpns2", 2),
                 vpng.InterfaceBinding("vpns9", 9),
-                vpng.InterfaceBinding("vpns1", 1),
                 vpng.InterfaceBinding("vpns10", 10),
+                vpng.InterfaceBinding("vpns1", 1),
             ),
         )
 
