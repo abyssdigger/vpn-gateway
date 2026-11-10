@@ -98,9 +98,11 @@ daemon-owned префикса правил; пакет не должен дох�
 транзакцией возвращает свою `INPUT`-политику в требуемое состояние и проверяет результат,
 не изменяя `ip_forward`, `FORWARD`, NAT или маршруты.
 
-Рассогласование `FORWARD` или NAT, переход, меняющий политику, а также случай, когда
-область рассогласования нельзя достоверно ограничить только `INPUT`, используют
-восстановление с первоначальным запретом (§8.6).
+Штатные изменения binding-specific ресурсов выполняются локальными процедурами `ADD`
+и `REMOVE` (§8.6) без глобального выключения forwarding. Рассогласование `FORWARD`
+или NAT, состояние `UNKNOWN`, ошибка локальной процедуры либо случай, когда изменение
+нельзя безопасно представить как `ADD`/`REMOVE`, используют глобальную процедуру
+`INIT/PANIC` (§8.6).
 
 До следующего цикла согласования после внешнего изменения существует окно реакции.
 Постоянное конкурентное переписывание daemon-owned ресурсов внешним менеджером остается
@@ -354,10 +356,11 @@ interfaces архитектура не задает.
 `active_order` используется для INPUT/FORWARD exact blocks, `VPNG-INGRESS`, NAT,
 status output и обхода новых prefix-bindings при выделении метрик. Поэтому появление
 нового prefix-interface не меняет относительный порядок существующих exact blocks/rules
-в требуемой policy. При подтвержденном чистом additive transition применяется narrow
-incremental path §8.6, который существующие binding-specific rules не удаляет и не
-пересоздает; full protective restore остается fallback для переходов, не удовлетворяющих
-его предусловиям.
+в требуемой policy. Штатное появление binding обслуживается локальной процедурой `ADD` §8.6, которая
+существующие binding-specific rules не удаляет и не пересоздает. Штатное исчезновение
+binding обслуживается локальной процедурой `REMOVE`. Глобальная пересборка применяется
+только через `INIT/PANIC`, когда локальный переход нельзя доказать безопасным или
+локальная процедура завершилась ошибкой.
 
 Для `prefix+` этот порядок не является гарантией route preference. Он также не является
 персистентной историей создания interfaces: после restart daemon строит новый process-local
@@ -477,9 +480,11 @@ EXP-009 подтвердил:
 - изменение metric, назначенной существующей active binding, если такое изменение
   вообще требуется корректирующим согласованием.
 
-При таком переходе daemon по возможности сначала приводит `ip_forward=0`, затем
-применяет и проверяет firewall/NAT, routes и только после завершенной проверки возвращает
-forwarding.
+Сам по себе такой переход не требует глобального изменения `ip_forward`.
+Штатные изменения active binding state раскладываются на локальные `ADD` и `REMOVE`
+§8.6; replacement `name + ifindex` выполняется как `REMOVE old -> ADD new`.
+Глобальное выключение forwarding и полная пересборка требуются только для
+`INIT/PANIC`.
 
 Появление matching candidate без local IPv4 из `profile.network` само по себе не
 открывает разрешающий path: guard уже существует из config, а binding-specific resources
@@ -972,16 +977,17 @@ runtime interface name.
 3. сравнить candidates и active concrete binding identities с последним verified state;
 4. прочитать firewall/NAT и классифицировать `SAFE/UNSAFE/UNKNOWN`;
 5. `UNKNOWN` либо неопределимая область drift -> `ISOLATED`;
-6. INPUT-only `UNSAFE` без policy transition -> narrow INPUT repair;
-7. чистый additive `prefix+` transition при исходном `SAFE` -> incremental binding-add path §8.6;
-8. FORWARD/NAT `UNSAFE` либо иной policy-changing transition -> protective barrier §8.6;
-9. после `SAFE` полной policy прочитать strict route snapshot;
-10. построить, проверить, применить и повторно проверить route plan из того же snapshot;
-11. materialize отсутствующие direct routes для всех active bindings;
-12. зафиксировать OWNED, active binding state и prefix allocator mapping/cursor только
-    после successful verification;
-13. в завершенном non-ISOLATED `RUN` привести `ip_forward` к 1 и reread;
-14. confirmed `ip_forward=0` после failed enable -> `DEGRADED`; unreadable
+6. INPUT-only `UNSAFE` без binding transition -> narrow INPUT repair;
+7. если full policy текущего verified state `SAFE`, классифицировать изменение
+   binding-specific ресурсов как локальный `ADD`, локальный `REMOVE`, композицию
+   `REMOVE -> ADD` либо как неразложимый переход;
+8. выполнить локальные `ADD`/`REMOVE` по §8.6 без изменения `ip_forward`;
+9. `FORWARD`/NAT `UNSAFE`, `UNKNOWN`, неразложимый переход или ошибка/verification
+   failure локальной процедуры -> `INIT/PANIC` §8.6;
+10. после `SAFE` полной policy и verified routes зафиксировать OWNED, active binding
+    state и prefix allocator mapping/cursor;
+11. в завершенном non-ISOLATED `RUN` привести `ip_forward` к 1 и reread;
+12. confirmed `ip_forward=0` после failed enable -> `DEGRADED`; unreadable
     `ip_forward` -> `ISOLATED`.
 
 Candidate-only change без изменения active set не требует тяжелого IPv4 barrier **только
@@ -1011,7 +1017,7 @@ snapshot.
 между managed selector namespaces является config error, а некорректная inventory с одним
 именем и разными ifindex — error уровня reconciliation pass.
 
-### 8.6. Состояние безопасности firewall и восстановление с первоначальным запретом
+### 8.6. Три процедуры изменения состояния: ADD, REMOVE и INIT/PANIC
 
 Состояние firewall/NAT использует именованные значения:
 
@@ -1021,144 +1027,140 @@ UNSAFE   -> небезопасно
 UNKNOWN  -> состояние неизвестно
 ```
 
-Полное ожидаемое состояние зависит от неизменяемого `ReconciliationSnapshot`.
+Полное ожидаемое состояние зависит от одного неизменяемого
+`ReconciliationSnapshot`.
 
-Отдельно слой политики обязан уметь построить **изолирующий фильтр**, выводимый только из
-конфигурации:
+Слой политики также обязан уметь построить `desired_isolation_filter(config)`:
+полную config-derived deny-only форму managed `filter`, не содержащую
+binding-specific `ACCEPT` и не зависящую от interface inventory. Она используется
+только внутри `INIT/PANIC`.
 
-```text
-desired_isolation_filter(config)
-```
+Подтвержденное рассогласование, ограниченное только `INPUT` и не сопровождаемое
+binding transition, сохраняет отдельный narrow repair EXP-006. Это не lifecycle-процедура
+binding state: она одной транзакцией восстанавливает только daemon-owned `INPUT` и
+`VPNG-INPUT-GUARD`, не изменяя `ip_forward`, `FORWARD`, NAT или routes. Если
+точечный repair не применился или не verified, дальнейшее восстановление идет через
+`INIT/PANIC`.
 
-Он не содержит правил `ACCEPT`, зависящих от привязки, и не требует инвентаризации
-интерфейсов. Он сохраняет только структурную политику фильтрации с отказом с запретом:
+#### ADD
 
-- запрещающие правила `INPUT` управляемых селекторов;
-- запрещающие правила входящего `FORWARD`-трафика управляемых селекторов;
-- `REJECT` транспортных сетей VPN;
-- безусловные `REJECT` защищаемых назначений;
-- окончательный `VPNG-FORWARD-DENY`;
-- необходимые структурные цепочки и переходы.
+`ADD` применяется, когда относительно последнего verified state требуются только новые
+binding-specific contributions, а все непрерывно существующие bindings сохраняют identity,
+metric и relative order. Процедура не ограничена формой `prefix+`: exact и explicit-list
+появления используют тот же протокол, если изменение доказуемо insertion-only.
 
-Состояние `UNKNOWN` никогда не восстанавливается вслепую. Daemon по возможности выключает
-пересылку и остается в `ISOLATED`.
+`ip_forward` не изменяется. Старые verified paths продолжают работать.
 
-Подтвержденное рассогласование, ограниченное только `INPUT`, имеет отдельный узкий путь
-восстановления. Daemon одной транзакцией таблицы `filter`:
-
-1. восстанавливает содержимое daemon-owned профильных `INPUT`-цепочек и
-   `VPNG-INPUT-GUARD`, если они изменены;
-2. удаляет и заново вставляет только принадлежащие daemon переходы из встроенной
-   `INPUT`, возвращая daemon-owned префикс на позицию 1;
-3. сохраняет сторонние правила и цепочки;
-4. повторно читает таблицу и проверяет требуемую `INPUT`-политику.
-
-Payload этой транзакции намеренно ограничен daemon-owned `INPUT`-цепочками и операциями
-с переходами из встроенной `INPUT`. Он **не содержит** объявлений, правил или операций с
-daemon-owned `FORWARD`-цепочками и переходами из встроенной `FORWARD`.
-
-На этом пути `ip_forward` не изменяется, изолирующий фильтр не применяется,
-`FORWARD`, NAT и маршруты не перестраиваются. Причина: `INPUT` определяет доступ к
-локальным сервисам самого хоста и не участвует в транзитном пути. Выключение пересылки не
-устраняет угрозу от раннего стороннего `INPUT ACCEPT`, а только без необходимости
-прерывает транзит.
-
-Если точечное восстановление `INPUT` не удалось применить или проверить, daemon больше
-не имеет подтвержденного безопасного полного состояния firewall и переходит к обычному
-fail-closed пути `ISOLATED`; неуспешное точечное восстановление не считается успешной
-оптимизацией.
-
-Чистое добавление одной или нескольких новых active bindings к `prefix+` имеет отдельный
-инкрементальный путь, если исходная полная firewall/NAT policy подтверждена как `SAFE`,
-ни одна ранее verified active binding не исчезла и не изменила identity/metric/order, а
-новый desired state отличается только contribution новых bindings.
-
-На этом пути daemon:
+Порядок:
 
 ```text
-1. по возможности ip_forward=0
-2. добавить только новые MASQUERADE rules в конец binding-specific части NAT chain,
-   перед существующим RETURN; существующие NAT rules не удалять и не переставлять
-3. проверить NAT
-4. добавить только новые exact INPUT/FORWARD blocks в позиции, определяемые append-only
-   active_order; относительный порядок и текст существующих blocks не изменять
-5. проверить полный filter
-6. добавить только отсутствующие direct proto-202 routes новых bindings
-7. проверить exact protected-prefix route state
-8. commit binding/allocator state
-9. включить и подтвердить ip_forward
+1. добавить только новый NAT contribution
+2. проверить требуемый NAT
+3. добавить только новый exact INPUT/FORWARD contribution
+4. проверить полный требуемый filter
+5. добавить только новые direct proto-202 routes
+6. проверить exact protected-prefix route state
+7. проверить full firewall/NAT policy
+8. commit verified binding/allocator/OWNED state
 ```
 
-Инкрементальный apply может сдвинуть числовые позиции последующих terminal
-`RETURN`/`REJECT` правил вследствие вставки перед ними, но **не удаляет, не пересоздает и
-не меняет относительный порядок уже существующих binding-specific rules**. Аналогично,
-существующие desired UNICAST routes не удаляются, не заменяются и не получают новые
-metrics. Порядок новых bindings определяется только порядком их появления в interface
-inventory snapshot.
+Существующие binding-specific rules не удаляются, не пересоздаются и не меняют
+relative order. Существующие desired routes не удаляются, не заменяются и не получают
+новые metrics. Новые rules могут быть вставлены перед terminal `RETURN`/`REJECT`,
+из-за чего меняются только числовые позиции последующих terminal rules.
 
-Если предусловия этого узкого additive path не выполнены либо его применение/verification
-не удалось, он не деградирует в слепую частичную правку: daemon переходит к обычному
-fail-closed protective path.
+Порядок `NAT -> filter -> route` обязателен: разрешающий route для новой binding не
+создается раньше verified NAT и verified filtering contribution.
 
-Для `UNSAFE`, затрагивающего `FORWARD` или NAT, для неопределенной области
-рассогласования либо для любого policy-changing transition, который не является
-подтвержденным чистым additive `prefix+` transition, применяется последовательность с
-первоначальным запретом:
+#### REMOVE
+
+`REMOVE` применяется, когда относительно последнего verified state исчезает один или
+несколько binding-specific contributions, а surviving bindings сохраняют identity,
+metric и relative order.
+
+`ip_forward` не изменяется. Безопасность обеспечивается порядком удаления:
 
 ```text
-1. по возможности ip_forward=0
-
-2. применить изолирующий фильтр как полное требуемое daemon-owned состояние таблицы `filter`
-   для этой промежуточной стадии; все устаревшие ACCEPT, зависящие от привязки,
-   для всех профилей должны быть удалены
-3. проверить изолирующий фильтр
-   - эта проверка подтверждает только защитный барьер
-   - она НЕ означает SAFE полной политики
-
-4. применить требуемый NAT для текущего неизменяемого snapshot
-5. проверить требуемый NAT
-
-6. применить полный требуемый filter с точными ACCEPT, зависящими от привязки
-7. проверить полный требуемый filter
-   - только после проверки NAT + полного `filter` состояние firewall/NAT может быть `SAFE`
-
-8. согласовать и проверить маршруты
-
-9. только после полной успешной проверки:
-       включить/подтвердить пересылку согласно требуемому состоянию
+1. удалить только allowing INPUT/FORWARD contribution удаляемой binding
+2. проверить filter: удаляемая binding больше не имеет forwarding permission
+3. удалить ее direct proto-202 routes
+4. проверить exact protected-prefix route state
+5. удалить ее NAT contribution
+6. проверить требуемый NAT и full firewall/NAT policy
+7. commit verified binding/allocator/OWNED state
 ```
 
-Изолирующий фильтр применяется как **полное** принадлежащее daemon состояние таблицы `filter` на
-промежуточной стадии. Поэтому на время защитного барьера разрешающие правила всех
-управляемых профилей временно отсутствуют и вся управляемая пересылка запрещена, включая
-профили, чья привязка не менялась. Сохранение разрешающих правил «незатронутых» профилей
-не является допустимой оптимизацией этого протокола восстановления.
+После шага 2 оставшийся stale route/NAT уже находится за verified deny filter и не может
+дать transit path. После шага 4 допускается временное состояние «NAT без route».
+Обратное состояние «route без NAT» для удаляемой binding намеренно не создается.
 
-Это относится также к `ESTABLISHED,RELATED`-трафику, входящему с управляемых
-VPN-интерфейсов: на стадии изоляции точные разрешающие блоки отсутствуют, а защитные правила селекторов
-выдают запрет. Поэтому административная сессия к самому шлюзу, проходящая через
-управляемый VPN-интерфейс, на время защитного барьера теряет прохождение пакетов и может
-оборваться либо восстановиться после барьера в зависимости от длительности и поведения
-транспортного протокола. Непрерывный административный доступ во время восстановления не
-должен зависеть только от управляемого VPN-пути.
+Surviving binding-specific rules/routes не удаляются, не пересоздаются, не
+переметрируются и не переставляются.
 
-Применение изолирующего фильтра не изменяет таблицу `nat`. Ранее примененные правила NAT
-могут временно оставаться в ядре за уже проверенным запрещающим барьером до шага 4, где
-требуемый NAT для текущего snapshot применяется и проверяется. Наличие старого NAT за
-проверенным фильтрующим барьером само по себе не открывает путь пересылки.
+Replacement одной concrete binding, включая `same name + new ifindex`, не является
+четвертым протоколом:
 
-Этот порядок обязателен даже если `set_ip_forward(False)` завершился ошибкой. Благодаря
-этому полный `ACCEPT` для `FORWARD` не появляется раньше проверенного NAT.
+```text
+REMOVE old binding
+-> verify remove phase
+-> ADD new binding
+-> verify add phase
+```
 
-Если изолирующий фильтр не удалось применить или проверить, daemon остается в `ISOLATED`
-и не переходит к NAT, полному фильтру и маршрутам.
+Остаточное окно до обнаружения same-name/new-ifindex остается границей модели §4.5:
+iptables сопоставляет имя, а не исторический ifindex.
 
-Простая глобальная перестановка `nat -> filter` запрещена: при уже небезопасном или
-разрешающем фильтре она оставила бы разрешенную пересылку активной дольше. Защитным
-барьером является именно фильтр с первоначальным запретом.
+Если изменение одновременно содержит additions/removals, daemon сначала выполняет все
+необходимые `REMOVE`, затем `ADD`, только если можно доказать, что surviving
+contributions остаются неизменными. Изменение metric/order существующей surviving binding,
+неразложимое изменение policy либо невозможность доказать локальную delta переводят
+операцию в `INIT/PANIC`.
 
-Если пересылка подтверждена выключенной, реализация может оптимизировать технические детали
-транзакций только при сохранении той же наблюдаемой семантики безопасности.
+#### INIT/PANIC
+
+`INIT/PANIC` — единственная глобальная процедура. Она используется:
+
+- на startup;
+- при `FORWARD`/NAT drift либо `UNKNOWN`;
+- при ошибке inventory/snapshot, когда binding-specific state нельзя достоверно вывести;
+- при ошибке или verification failure `ADD`/`REMOVE`;
+- при transition, который нельзя безопасно разложить на локальные `REMOVE` и `ADD`;
+- при иных нарушениях, после которых прежний full managed state нельзя считать verified.
+
+Процедура начинается с попытки установить и reread `ip_forward=0`.
+
+Если `ip_forward=0` подтвержден, forwarding уже является глобально закрытым барьером и
+daemon может полностью пересобрать managed `filter`, NAT и routes из одного snapshot.
+
+Если подтвердить `ip_forward=0` не удалось, daemon **не** начинает разрешающую
+пересборку. Сначала он применяет и проверяет `desired_isolation_filter(config)`; только
+verified deny-only filter может заменить не подтвержденный sysctl как защитный барьер.
+
+После наличия одного из этих подтвержденных барьеров:
+
+```text
+1. полностью привести managed filter/NAT к desired state текущего snapshot
+   с правилом: полный allowing filter не считается безопасным раньше verified NAT
+2. полностью привести managed routes к desired state
+3. повторно проверить full firewall/NAT и exact protected-prefix routes
+4. commit verified binding/allocator/OWNED state
+5. установить и reread ip_forward=1
+```
+
+На startup, где `ip_forward=0` подтвержден до применения allowing state, допустим
+прямой полный apply `filter -> NAT -> routes` с verification каждой стадии. При PANIC,
+если защитой служит isolation filter из-за неподтвержденного sysctl, сначала
+применяется/проверяется NAT, затем full filter, затем routes: allowing `FORWARD` не
+появляется раньше verified NAT.
+
+`INIT/PANIC` намеренно может удалить и пересоздать все daemon-owned rules/routes:
+это аварийно-инициализационный механизм, а не штатная обработка lifecycle интерфейсов.
+Сторонние rules/chains вне daemon-owned namespace сохраняются по общим правилам
+ownership.
+
+Состояние `UNKNOWN` никогда не чинится слепой локальной delta. Если защитный барьер
+`INIT/PANIC` не удалось подтвердить, daemon остается `ISOLATED` и не применяет
+allowing state.
 
 ### 8.7. Исполнитель маршрутов
 
@@ -1186,15 +1188,24 @@ Process-local OWNED routes, последнее подтвержденное со
 дает `ProfileResult=FAIL` из-за zero UNICAST paths. Иначе
 валидный `RUN/DEGRADED` создавал бы ложный policy transition на каждом periodic pass.
 
-Порядок запуска и policy-changing reconciliation:
+Порядок завершения verified `ADD`/`REMOVE`:
 
 ```text
-проверить routes/policy
+проверить policy/routes
+-> зафиксировать OWNED + active binding state + prefix allocator state
+```
+
+`ip_forward` при локальной процедуре не изменяется.
+
+Порядок завершения `INIT/PANIC`:
+
+```text
+проверить policy/routes
 -> зафиксировать OWNED + active binding state + prefix allocator state
 -> включить и подтвердить ip_forward
 ```
 
-Фиксация после включения forwarding запрещена.
+Фиксация после открытия forwarding в `INIT/PANIC` запрещена.
 
 ### 8.9. Состояние жизненного цикла
 
@@ -1309,8 +1320,7 @@ last   -> VPNG-FORWARD-DENY
 после перестановки оказывается после `VPNG-INPUT-GUARD`.
 
 Стороннее правило перед daemon-owned префиксом `FORWARD` или `POSTROUTING` является
-транзитным рассогласованием `UNSAFE` и использует восстановление с первоначальным
-запретом. Для `FORWARD` строгий префикс сохраняет полное владение решением через
+транзитным рассогласованием `UNSAFE` и переводит восстановление в `INIT/PANIC`. Для `FORWARD` строгий префикс сохраняет полное владение решением через
 `VPNG-FORWARD-DENY`; для `POSTROUTING` гарантирует обработку daemon-owned NAT раньше
 сторонних преобразований.
 
@@ -2265,7 +2275,9 @@ NAT и полного фильтра может открыть путь к за�
 включению пересылки.
 
 Обе формы выводятся из **одной модели политики**. Сравнение и восстановление не имеют
-независимых источников истины; оркестрация не выполняет точечных правок отдельных правил.
+независимых источников истины. Локальные `ADD`/`REMOVE` применяют только доказанную
+delta между двумя состояниями этой же модели; `INIT/PANIC` пересобирает полное
+daemon-owned состояние.
 
 Ни префиксный селектор, ни explicit list не применяются непосредственно в allowing
 `ACCEPT` или NAT; там используются только exact active interface names. Сопоставление
@@ -2407,12 +2419,14 @@ reconciliation pass целиком и дает `ISOLATED`.
     prefix не создает primary/secondary Linux routes;
   - peer health не переводит destination ownership между WireGuard peers.
 - Allowing rules/NAT/routes используют только exact active interface names.
-- Чистое additive расширение active binding set для `prefix+` при исходном SAFE использует
-  incremental path: ip_forward=0 -> append-only NAT contribution -> verify -> append-only
-  filter contribution -> verify -> new routes -> verify; существующие binding-specific
-  rules/routes не пересобираются. Остальные policy-changing active-binding transitions
-  используют protective barrier: isolation filter -> verify -> NAT -> verify -> full
-  filter -> verify -> routes -> verify.
+- Штатные binding transitions используют две локальные процедуры без изменения
+  `ip_forward`: `ADD = NAT -> filter -> route`, `REMOVE = filter -> route -> NAT`,
+  с verification между стадиями и без пересборки surviving contributions.
+  Replacement выполняется как `REMOVE old -> ADD new`.
+- Startup и ошибки, при которых локальная delta не доказуема или не verified, используют
+  единственную глобальную процедуру `INIT/PANIC`: закрыть forwarding подтвержденным
+  `ip_forward=0` либо verified isolation filter, полностью пересобрать managed
+  firewall/NAT/routes, проверить и только затем открыть forwarding.
 - Confirmed INPUT-only drift without policy transition uses narrow repair.
 - Interface inventory failure forbids blind binding-specific repair and leads to isolation.
 - `ip_forward` remains daemon-owned and read-after-write verified.
@@ -2531,7 +2545,7 @@ may retain adds/deletes/replaces.
 
 21. Идентичность concrete binding включает exact name + ifindex; повторное создание имени с новым ifindex является binding transition.
 
-22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Для binding-specific policy применяется active_order: exact single; prefix process-local append-only order surviving bindings; explicit list config order filtered to active. Чистое появление нового prefix-interface при исходном SAFE использует incremental additive apply: существующие exact firewall/NAT blocks не удаляются, не пересоздаются и не меняют relative order; существующие desired routes и их metrics также не изменяются. Full protective restore допускается только когда narrow additive preconditions не выполнены. Prefix route metrics от active_order не определяют гарантированный priority.
+22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Для binding-specific policy применяется active_order: exact single; prefix process-local append-only order surviving bindings; explicit list config order filtered to active. Штатные additions/removals используют локальные `ADD`/`REMOVE` без изменения `ip_forward`; surviving exact firewall/NAT blocks и desired routes не удаляются, не пересоздаются, не переставляются и не переметрируются. Prefix route metrics от active_order не определяют гарантированный priority.
 
 23. `operstate`/`LOWER_UP`, ping и handshake не определяют active binding; interface applicability определяется local IPv4 membership в `profile.network`.
 
@@ -2568,9 +2582,15 @@ may retain adds/deletes/replaces.
     materialize для каждого unique active egress interface; foreign POSTROUTING rules
     сохраняются и остаются достижимыми после RETURN для unmanaged outgoing traffic.
 
-35. NAT проверяется раньше восстановления маршрутов proto 202 через новую привязку.
+35. `ADD` соблюдает `NAT -> filter -> route`: новый proto 202 route не появляется раньше verified NAT и verified allowing filter. `REMOVE` соблюдает `filter -> route -> NAT`: после закрытия allowing filter route удаляется раньше NAT, поэтому допустимо только временное состояние NAT без route, но не route без NAT для удаляемой binding.
 
-36. Изменение active binding set/identity является policy-changing transition, но для `prefix+` новая binding добавляется в конец process-local active_order и получает свободную metric без перестановки/перенумерации непрерывно active bindings. Изменение metric или относительного order уже существующей binding само является policy-changing transition. Candidate-only change без active-resource change не требует тяжелого IPv4 barrier только после successful current IPv6 prerequisite verification.
+36. Изменение active binding set/identity классифицируется как `ADD`, `REMOVE`,
+    композиция `REMOVE -> ADD` либо `INIT/PANIC`. Для `prefix+` новая binding
+    добавляется в конец process-local active_order и получает свободную metric без
+    перестановки/перенумерации непрерывно active bindings. Изменение metric или relative
+    order surviving binding не является штатной локальной delta и требует
+    `INIT/PANIC`. Candidate-only change без active-resource change не требует
+    глобальной процедуры после successful current IPv6 prerequisite verification.
 
 37. Остаточное окно «событие ядра -> реакция daemon» существует и документировано;
     запрещающие правила селекторов закрывают входящий трафик нового непривязанного
@@ -2621,15 +2641,15 @@ may retain adds/deletes/replaces.
     вслепую. Для подтвержденного `UNSAFE` daemon также определяет, ограничено ли
     рассогласование только `INPUT` либо затрагивает транзитную политику.
 
-55. Подтвержденное `INPUT`-only `UNSAFE` без перехода, меняющего политику,
-    восстанавливается точечно одной транзакцией `filter` без изменения `ip_forward`,
-    `FORWARD`, NAT и маршрутов. `FORWARD`/NAT `UNSAFE`, неопределенная область
-    рассогласования либо переход, меняющий политику, используют порядок с первоначальным
-    запретом: изолирующий фильтр -> проверка -> требуемый NAT -> проверка -> полный
-    требуемый фильтр -> проверка -> маршруты -> проверка.
+55. Подтвержденное `INPUT`-only `UNSAFE` без binding transition восстанавливается
+    точечно одной транзакцией `filter` без изменения `ip_forward`, `FORWARD`, NAT
+    и маршрутов. Штатные binding changes используют локальные `ADD`/`REMOVE`.
+    `FORWARD`/NAT `UNSAFE`, `UNKNOWN`, неразложимый transition либо failure
+    локальной процедуры используют `INIT/PANIC`.
 
-56. Невозможность подтвердить ip_forward=0 не разрешает полный ACCEPT раньше проверенного
-    NAT; защитный барьер с первоначальным запретом все равно применяется.
+56. `INIT/PANIC` сначала требует подтвержденный защитный барьер: `ip_forward=0` либо,
+    если sysctl нельзя подтвердить, verified isolation filter. При втором варианте полный
+    allowing filter не применяется раньше verified NAT.
 
 57. Ошибка interface inventory/parsing либо невозможность построить полный ReconciliationSnapshot, включая exhausted prefix metric allocator, на уровне цикла -> ISOLATED; partial desired state и provisional allocator state не принимаются. Отсутствие active path при достоверном snapshot -> profile FAIL / DEGRADED.
 
@@ -2637,8 +2657,8 @@ may retain adds/deletes/replaces.
     привязки, запрещено; изолирующий фильтр, выводимый только из конфигурации, допустим как
     безопасный барьер при читаемом состоянии фильтрации.
 
-59. После изоляции пересылка возвращается только после SAFE полной политики и завершенной
-    новой проверки маршрутов.
+59. После `INIT/PANIC` пересылка возвращается только после SAFE полной политики,
+    verified exact protected-prefix routes и commit verified state.
 
 60. Desired policy профиля без active bindings не содержит binding-specific ACCEPT/NAT/UNICAST, сохраняя blackhole, selector guards и protected-destination REJECT.
 
