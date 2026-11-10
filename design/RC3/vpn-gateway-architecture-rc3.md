@@ -396,10 +396,10 @@ Exact:
 Explicit list:
 
 ```text
-interface[0] -> metric 10
-interface[1] -> metric 20
-interface[2] -> metric 30
-...
+interface[0] -> FIRST_UNICAST_METRIC
+interface[N] -> FIRST_UNICAST_METRIC + N * ROUTE_METRIC_STEP
+при текущих constants: 10,20,30...
+
 ```
 
 Отсутствующий элемент списка не сдвигает metric следующих элементов. Конфигурация
@@ -1632,7 +1632,7 @@ interface = []                  -> запрещено
 
 Отдельный лимит общего количества profiles не требуется. Для explicit interface list
 число элементов ограничивается валидностью имен и тем, что каждая вычисляемая
-`(index+1)*ROUTE_METRIC_STEP` UNICAST metric строго меньше `BLACKHOLE_METRIC`;
+`FIRST_UNICAST_METRIC + index*ROUTE_METRIC_STEP` UNICAST metric строго меньше `BLACKHOLE_METRIC`;
 это проверяется config validator.
 Для prefix selector runtime active count проверяется отдельно при desired-route derivation.
 
@@ -1845,8 +1845,9 @@ prefix+:
     route preference between interfaces is not guaranteed
 
 explicit ordered list:
-    config index 0,1,2...
-    -> 10,20,30...
+    config index N
+    -> FIRST_UNICAST_METRIC + N * ROUTE_METRIC_STEP
+    при текущих constants -> 10,20,30...
     absent list element не сдвигает следующие metrics
 ```
 
@@ -2637,7 +2638,7 @@ may retain adds/deletes/replaces.
 78. Защищаемые маршруты управляемых профилей глобально не пересекаются и не пересекают
     управляемые vpn.network.
 
-79. Metrics: все daemon-owned UNICAST имеют 0 < metric < BLACKHOLE_METRIC. Exact = 10. Explicit list использует slots 10,20,30... по config order без сдвига отсутствующих элементов; config validator запрещает любой slot с metric >= BLACKHOLE_METRIC. Prefix использует циклический process-local allocator с шагом ROUTE_METRIC_STEP: непрерывно active binding сохраняет metric, занятые значения пропускаются, при верхней границе поиск возвращается к FIRST_UNICAST_METRIC, при полном исчерпании slots построение snapshot завершается ошибкой; гарантированного route preference между prefix-bindings нет.
+79. Metrics: все daemon-owned UNICAST имеют 0 < metric < BLACKHOLE_METRIC. Exact = FIRST_UNICAST_METRIC. Explicit list slot N использует FIRST_UNICAST_METRIC + N*ROUTE_METRIC_STEP без сдвига отсутствующих элементов; config validator запрещает любой slot с metric >= BLACKHOLE_METRIC. Prefix использует то же допустимое пространство метрик и циклический process-local allocator: непрерывно active binding сохраняет metric, занятые значения пропускаются, при верхней границе поиск возвращается к FIRST_UNICAST_METRIC, при полном исчерпании slots построение snapshot завершается ошибкой; гарантированного route preference между prefix-bindings нет.
 
 80. `common_allowed_sources` объединяется с `profile.allowed_sources`; отрицательных правил
     и исключений нет.
