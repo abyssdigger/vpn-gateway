@@ -1,11 +1,28 @@
-## 2026-11-10 — RC3 interface-centric route model after EXP-009
+## 2026-11-10 — RC3 interface-centric architecture and implementation after EXP-009
 
-- EXP-009 completed: OpenConnect multi-interface lifecycle and WireGuard peer-selection semantics validated live.
-- Removed transport `peers` / `PeerBinding` from the normative VPN-GATE route model.
-- Selector grammar reduced to exact, `prefix+`, and ordered explicit exact list; `%` removed.
-- Daemon-owned UNICAST routes are direct `dev <exact-interface> proto 202` routes without transport next-hop.
-- Prefix metrics derive from ASCII-sorted current active interfaces; explicit-list metrics derive from stable configured order.
-- `local_address` remains the transport-agnostic applicability predicate for concrete interfaces.
+- EXP-009 completed: OpenConnect multi-interface lifecycle, direct `dev` routing and
+  WireGuard peer-selection semantics validated live.
+- Removed transport `peers` / `PeerBinding` from the normative VPN-GATE route model and
+  Python runtime configuration.
+- Selector grammar is exact, `prefix+`, or ordered explicit exact list; legacy `%` is
+  rejected.
+- Multiple simultaneous concrete interfaces are normal for prefix/list selectors.
+- Candidate applicability remains gated by stable configured `local_address`.
+- Daemon-owned UNICAST routes are direct `dev <exact-interface> proto 202` routes with
+  no transport next-hop and no `onlink`.
+- Prefix metrics derive from case-sensitive bytewise ASCII ordering of the current active
+  set; explicit-list metrics use stable configured slots.
+- Full firewall/NAT policy materializes every active exact interface; prefix matching is
+  deny-only.
+- Runtime IPv6 prerequisites are revalidated before allowing reconciliation and a violation
+  latches the host-prerequisite isolation path until restart.
+- Verification success is separated from functional availability: verified zero-path state
+  is committed and yields `RUN/DEGRADED`, not a false route-verification failure.
+- Four independent review/fix iterations were completed (networking, security/firewall,
+  config/domain, implementation/operations), followed by a cross-domain
+  **ACCEPT — NO FINDINGS** review.
+- Python 3.13 validation after implementation: `compileall` PASS and **121/121 unit tests
+  PASS**. The temporary validation workflow was removed after the run.
 
 # VPN-GATE change log
 
