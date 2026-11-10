@@ -20,15 +20,22 @@ import vpn_gatewayd as vpng
 def make_config():
     profile = vpng.VpnProfileConfig(
         profile_id="primary",
-        interface=vpng.InterfaceSelector.parse("vpns+"),
-        network=IPv4Network("172.20.130.0/29"),
         routes=(IPv4Network("10.0.0.0/8"),),
+        bindings=(
+            vpng.BindingSpec(
+                vpng.InterfaceSelector.parse("vpns+"),
+                IPv4Network("172.20.130.0/29"),
+                0,
+                None,
+            ),
+        ),
         allowed_sources=(),
     )
     return vpng.GatewayConfig(
+        enabled=True,
         reconcile_interval=10.0,
         common_allowed_sources=(IPv4Network("10.200.200.8/32"),),
-        vpns=MappingProxyType({"primary": profile}),
+        profiles=MappingProxyType({"primary": profile}),
     )
 
 
@@ -66,6 +73,7 @@ class SnapshotTests(unittest.TestCase):
         daemon.profiles["primary"].commit_verified_state(
             routes=frozenset(),
             active_bindings=state.active_bindings,
+            prefix_bindings=state.prefix_bindings,
             prefix_metrics=first.prefix_metric_allocations_by_profile["primary"],
             prefix_metric_cursor=first.prefix_metric_cursor_by_profile["primary"],
         )
@@ -104,6 +112,7 @@ class SnapshotTests(unittest.TestCase):
         daemon.profiles["primary"].commit_verified_state(
             routes=previous.desired_routes_by_profile["primary"],
             active_bindings=previous_state.active_bindings,
+            prefix_bindings=previous_state.prefix_bindings,
             prefix_metrics=previous.prefix_metric_allocations_by_profile["primary"],
             prefix_metric_cursor=previous.prefix_metric_cursor_by_profile["primary"],
         )
@@ -184,6 +193,7 @@ class SnapshotTests(unittest.TestCase):
         daemon.profiles["primary"].commit_verified_state(
             routes=previous.desired_routes_by_profile["primary"],
             active_bindings=previous_state.active_bindings,
+            prefix_bindings=previous_state.prefix_bindings,
             prefix_metrics=previous.prefix_metric_allocations_by_profile["primary"],
             prefix_metric_cursor=previous.prefix_metric_cursor_by_profile["primary"],
         )
