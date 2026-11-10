@@ -9,7 +9,7 @@ ROU_IF="host0"
 HOST_ADDR="192.0.2.1"
 ROU_ADDR="192.0.2.2"
 PREFIX="30"
-PORT="45443"
+PORT="44443"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RELAY="$SCRIPT_DIR/vpn-gateway-exp-011-oc-relay.py"
@@ -62,12 +62,16 @@ if [[ ! -x "$RELAY" ]]; then
     chmod 700 "$RELAY"
 fi
 
+if systemctl is-active --quiet ocserv.service; then
+    echo "ocserv.service is still active; stop it before EXP-011" >&2
+    exit 2
+fi
 if ss -H -ltn "sport = :$PORT" | grep -q .; then
-    echo "TCP $PORT is already in use in main namespace" >&2
+    echo "TCP $PORT is still in use in main namespace" >&2
     exit 2
 fi
 if ss -H -lun "sport = :$PORT" | grep -q .; then
-    echo "UDP $PORT is already in use in main namespace" >&2
+    echo "UDP $PORT is still in use in main namespace" >&2
     exit 2
 fi
 
