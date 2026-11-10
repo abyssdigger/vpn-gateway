@@ -53,8 +53,10 @@ def desired_routes(daemon):
             ),
         )
     )
+    allocations, _ = daemon._build_prefix_metric_state(state)
     return daemon._derive_desired_routes(
-        interface_state_by_profile=state
+        interface_state_by_profile=state,
+        prefix_metric_allocations_by_profile=allocations,
     )
 
 
