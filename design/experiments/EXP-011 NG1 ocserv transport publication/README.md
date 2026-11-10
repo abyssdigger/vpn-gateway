@@ -18,9 +18,9 @@ published/internal port for both protocols.
 
     remote OpenConnect client
              |
-             | TCP 45443 + UDP 45443
+             | TCP 44443 + UDP 44443
              v
-    host address :45443
+    host address :44443
              |
        EXP-011 relay
        TCP + UDP
@@ -35,14 +35,14 @@ published/internal port for both protocols.
              |
         ROU netns
              |
-       ocserv :45443
+       ocserv :44443
        TCP + UDP/DTLS
              |
           vpnsX
 
-The existing production ocserv on host port 44443 is not modified.
+The normal test ocserv service on host port 44443 is intentionally stopped for the duration of EXP-011. Its configuration is not modified. The ROU publication facade temporarily takes over the exact same external TCP/UDP endpoint, so existing OpenConnect client configuration remains unchanged.
 
-## Why 45443 -> 45443
+## Why 44443 -> 44443
 
 EXP-010 already proved generic UDP port translation independently of a VPN protocol.
 
@@ -50,8 +50,7 @@ OpenConnect negotiates its UDP/DTLS channel over the established TLS/CSTP sessio
 server supplies the UDP endpoint. Therefore EXP-011 first isolates the architectural question:
 can the ROU publication layer relay both real OC transports through the namespace boundary?
 
-Port-number translation for protocols that advertise transport endpoints is a separate
-protocol-semantic question and is not required for this proof.
+Because this test VM is disposable, EXP-011 temporarily replaces the normal host listener with the ROU publication facade on the same external port. This removes client-side changes from the experiment and isolates the namespace/publication question. Port-number translation remains a separate protocol-semantic question.
 
 ## Preconditions
 
@@ -61,7 +60,7 @@ Server/test host:
 - `ip netns`/veth support;
 - ocserv installed;
 - existing working ocserv configuration, certificates and user authentication;
-- host TCP/UDP 45443 unused.
+- the normal ocserv service stopped immediately before the experiment so host TCP/UDP 44443 are free.
 
 Remote client:
 
@@ -77,8 +76,8 @@ but must not modify the original file.
 
 Required differences:
 
-    tcp-port = 45443
-    udp-port = 45443
+    tcp-port = 44443
+    udp-port = 44443
     listen-host = 192.0.2.2
     udp-listen-host = 192.0.2.2
 
@@ -102,15 +101,15 @@ It is intentionally a one-client proof relay, not production implementation.
 
 TCP:
 
-- accepts host-side connections on 45443;
-- opens matching TCP connections to 192.0.2.2:45443;
+- accepts host-side connections on 44443;
+- opens matching TCP connections to 192.0.2.2:44443;
 - copies byte streams bidirectionally;
 - permits multiple sequential/concurrent TCP sessions.
 
 UDP:
 
-- listens host-side on 45443;
-- maintains one stable internal UDP socket toward 192.0.2.2:45443;
+- listens host-side on 44443;
+- maintains one stable internal UDP socket toward 192.0.2.2:44443;
 - associates the most recently observed external UDP peer with that internal socket;
 - copies datagrams bidirectionally.
 
@@ -148,15 +147,13 @@ Evidence:
 
 shows the ocserv-created interface while main NS does not contain it.
 
-### H4 — production isolation
+### H4 — configuration preservation
 
-The existing host ocserv on 44443 remains untouched and EXP-011 uses only its temporary
-namespace, veth, temporary config and host publication port 45443.
+The normal ocserv service is stopped, but `/etc/ocserv/ocserv.conf` is not modified. EXP-011 uses only its temporary namespace, veth, temporary derived config and temporary relay on the same host port 44443.
 
 ### H5 — cleanup
 
-Stopping EXP-011 removes experiment relay/processes, veth and network namespace without
-modifying the production ocserv configuration.
+Stopping EXP-011 removes experiment relay/processes, veth and network namespace without modifying the original ocserv configuration. The normal ocserv service can then be started again on 44443.
 
 ## PASS criterion
 
@@ -167,8 +164,8 @@ TLS/CSTP and DTLS transport established through the publication relay.
 
 A mapping such as:
 
-    45443/tcp>44443
-    45443/udp>44443
+    44443/tcp>44443
+    44443/udp>44443
 
 may require additional handling because OpenConnect learns the UDP/DTLS endpoint through
 the server protocol. EXP-011 does not assume arbitrary port translation is transparent for
