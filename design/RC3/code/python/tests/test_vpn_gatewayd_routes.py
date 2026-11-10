@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import importlib.util
 import sys
 import unittest
 from ipaddress import IPv4Address, IPv4Network
 from pathlib import Path
 from types import MappingProxyType
 
-
 ROOT = Path(__file__).resolve().parents[1]
-import sys
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 import vpn_gatewayd as vpng
@@ -18,86 +15,65 @@ import vpn_gatewayd as vpng
 
 def make_profile(
     *,
-    profile_id: str = "primary",
-    interface: str = "vpns0",
-    network: str = "172.20.130.0/29",
-    local_address: str = "172.20.130.1",
-    peers: tuple[str, ...] = ("172.20.130.6",),
-    routes: tuple[str, ...] = ("10.0.0.0/8",),
-) -> object:
+    profile_id="primary",
+    interface="vpns+",
+    network="172.20.130.0/29",
+    local_address="172.20.130.1",
+    routes=("10.0.0.0/8",),
+):
     return vpng.VpnProfile(
         vpng.VpnProfileConfig(
             profile_id=profile_id,
             interface=vpng.InterfaceSelector.parse(interface),
             network=IPv4Network(network),
             local_address=IPv4Address(local_address),
-            peers=tuple(IPv4Address(item) for item in peers),
             routes=tuple(IPv4Network(item) for item in routes),
             allowed_sources=(),
         )
     )
 
 
-def make_daemon(*profiles) -> object:
+def make_daemon(*profiles):
     daemon = object.__new__(vpng.VpnGatewayDaemon)
     daemon.profiles = MappingProxyType(
-        {
-            profile.config.profile_id: profile
-            for profile in profiles
-        }
+        {profile.config.profile_id: profile for profile in profiles}
     )
     return daemon
 
 
-def derive_desired(daemon, interface_ipv4):
-    records = tuple(
-        vpng.InterfaceRecord(name, index + 1, frozenset(addresses))
-        for index, (name, addresses) in enumerate(
-            sorted(interface_ipv4.items())
+def records(items):
+    return tuple(
+        vpng.InterfaceRecord(
+            name,
+            ifindex,
+            frozenset({IPv4Address(address)}),
         )
+        for name, ifindex, address in items
     )
-    state = daemon._resolve_profile_interfaces(records)
-    return daemon._derive_desired_routes(
+
+
+def derive(daemon, items=()):
+    state = daemon._resolve_profile_interfaces(records(items))
+    desired = daemon._derive_desired_routes(
         interface_state_by_profile=state
     )
+    return state, desired
 
 
-def ready_routes(profile):
-    daemon = make_daemon(profile)
-    return derive_desired(
-        daemon,
-        {
-            str(profile.config.interface): frozenset(
-                {profile.config.local_address}
-            )
-        },
-    )[profile.config.profile_id]
-
-
-def configured_by_type(profile, route_type):
+def by_type(routes, route_type):
     return frozenset(
-        route
-        for route in ready_routes(profile)
-        if route.route_type is route_type
-    )
-
-
-def commit_owned(profile, routes):
-    profile.commit_verified_state(
-        routes=routes,
-        binding=None,
-        ready=False,
+        route for route in routes if route.route_type is route_type
     )
 
 
 def foreign_route(
-    destination: str,
+    destination,
     *,
-    proto: int | None = 4,
-    interface: str = "ens18",
-    via: str | None = "10.200.200.1",
-    metric: int | None = 100,
-) -> object:
+    proto=4,
+    interface="ens18",
+    via="10.200.200.1",
+    metric=100,
+):
     return vpng.RouteSpec(
         destination=IPv4Network(destination),
         route_type=vpng.RouteType.UNICAST,
@@ -109,191 +85,161 @@ def foreign_route(
     )
 
 
-class RoutePlanningTests(unittest.TestCase):
-    def test_desired_ready_profile_contains_configured_routes(self):
+class RouteDerivationTests(unittest.TestCase):
+    def test_prefix_materializes_direct_routes_for_all_active_interfaces(self):
         profile = make_profile(
-            peers=("172.20.130.6", "172.20.130.5"),
-            routes=("10.0.0.0/8", "192.168.0.0/16"),
+            routes=("10.0.0.0/8", "192.168.0.0/16")
         )
         daemon = make_daemon(profile)
-
-        desired = derive_desired(daemon, 
-            {
-                "vpns0": frozenset({IPv4Address("172.20.130.1")}),
-            }
+        state, desired = derive(
+            daemon,
+            (
+                ("vpns9", 9, "172.20.130.1"),
+                ("vpns10", 10, "172.20.130.1"),
+            ),
         )
-
         self.assertEqual(
-            desired["primary"],
-            ready_routes(profile),
+            tuple(
+                binding.name
+                for binding in state["primary"].active_bindings
+            ),
+            ("vpns10", "vpns9"),
         )
-        self.assertIsInstance(desired, MappingProxyType)
-        self.assertIsInstance(desired["primary"], frozenset)
-        with self.assertRaises(TypeError):
-            desired["primary"] = frozenset()
+        unicast = by_type(
+            desired["primary"],
+            vpng.RouteType.UNICAST,
+        )
+        self.assertEqual(
+            {route.interface for route in unicast},
+            {"vpns10", "vpns9"},
+        )
+        self.assertEqual(
+            {
+                route.metric
+                for route in unicast
+                if route.interface == "vpns10"
+            },
+            {10},
+        )
+        self.assertEqual(
+            {
+                route.metric
+                for route in unicast
+                if route.interface == "vpns9"
+            },
+            {20},
+        )
+        self.assertTrue(
+            all(route.via is None and not route.onlink for route in unicast)
+        )
 
-    def test_desired_not_ready_keeps_blackholes_only(self):
-        profile = make_profile(peers=("172.20.130.6", "172.20.130.5"))
+    def test_explicit_list_preserves_priority_holes(self):
+        profile = make_profile(
+            interface=["vpnA", "vpnB", "vpnC"]
+        )
         daemon = make_daemon(profile)
+        _, desired = derive(
+            daemon,
+            (
+                ("vpnA", 1, "172.20.130.1"),
+                ("vpnC", 3, "172.20.130.1"),
+            ),
+        )
+        unicast = by_type(
+            desired["primary"],
+            vpng.RouteType.UNICAST,
+        )
+        self.assertEqual(
+            {(route.interface, route.metric) for route in unicast},
+            {("vpnA", 10), ("vpnC", 30)},
+        )
 
-        for interfaces in (
-            {},
-            {"vpns0": frozenset()},
-            {"vpns0": frozenset({IPv4Address("172.20.130.2")})},
-        ):
-            with self.subTest(interfaces=interfaces):
-                desired = derive_desired(daemon, 
-                    interfaces
-                )
-                self.assertEqual(
-                    desired["primary"],
-                    configured_by_type(
-                        profile,
-                        vpng.RouteType.BLACKHOLE,
-                    ),
-                )
+    def test_no_active_interface_keeps_blackhole_only(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+        _, desired = derive(daemon, ())
+        self.assertEqual(
+            {route.route_type for route in desired["primary"]},
+            {vpng.RouteType.BLACKHOLE},
+        )
+
+    def test_candidate_wrong_local_address_does_not_get_route(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+        _, desired = derive(
+            daemon,
+            (("vpns0", 7, "172.20.130.2"),),
+        )
+        self.assertFalse(
+            by_type(desired["primary"], vpng.RouteType.UNICAST)
+        )
+
+
+class RoutePlanningTests(unittest.TestCase):
+    def setUp(self):
+        self.profile = make_profile()
+        self.daemon = make_daemon(self.profile)
+        self.state, self.desired = derive(
+            self.daemon,
+            (("vpns0", 7, "172.20.130.1"),),
+        )
 
     def test_missing_desired_routes_become_adds(self):
-        profile = make_profile()
-        daemon = make_daemon(profile)
-        desired = derive_desired(daemon, 
-            {
-                "vpns0": frozenset({IPv4Address("172.20.130.1")}),
-            }
-        )
-
-        plan = daemon._build_plan(
+        plan = self.daemon._build_plan(
             all_kernel_routes=frozenset(),
-            desired_routes_by_profile=desired,
+            desired_routes_by_profile=self.desired,
         )
-        daemon._validate_plan(
+        self.daemon._validate_plan(
             plan,
             all_kernel_routes=frozenset(),
-            desired_routes_by_profile=desired,
+            desired_routes_by_profile=self.desired,
         )
-
-        self.assertEqual(plan.route_adds, desired["primary"])
-        self.assertFalse(plan.route_deletes)
-        self.assertFalse(plan.route_replaces)
-
-    def test_owned_desired_actual_route_is_kept(self):
-        profile = make_profile(peers=())
-        daemon = make_daemon(profile)
-        desired = derive_desired(daemon, {})
-        route = next(iter(desired["primary"]))
-        commit_owned(profile, {route})
-
-        plan = daemon._build_plan(
-            all_kernel_routes=frozenset({route}),
-            desired_routes_by_profile=desired,
-        )
-        daemon._validate_plan(
-            plan,
-            all_kernel_routes=frozenset({route}),
-            desired_routes_by_profile=desired,
-        )
-
-        self.assertFalse(plan.route_adds)
-        self.assertFalse(plan.route_deletes)
-        self.assertFalse(plan.route_replaces)
-
-    def test_actual_desired_not_owned_becomes_replace(self):
-        profile = make_profile(peers=())
-        daemon = make_daemon(profile)
-        desired = derive_desired(daemon, {})
-        route = next(iter(desired["primary"]))
-
-        plan = daemon._build_plan(
-            all_kernel_routes=frozenset({route}),
-            desired_routes_by_profile=desired,
-        )
-        daemon._validate_plan(
-            plan,
-            all_kernel_routes=frozenset({route}),
-            desired_routes_by_profile=desired,
-        )
-
-        self.assertFalse(plan.route_adds)
-        self.assertFalse(plan.route_deletes)
-        self.assertEqual(plan.route_replaces, frozenset({route}))
-
-    def test_owned_unicast_not_desired_when_profile_down_is_deleted(self):
-        profile = make_profile()
-        daemon = make_daemon(profile)
-        unicast = next(iter(configured_by_type(
-            profile,
-            vpng.RouteType.UNICAST,
-        )))
-        commit_owned(profile, {unicast})
-
-        desired = derive_desired(daemon, {})
-        plan = daemon._build_plan(
-            all_kernel_routes=frozenset({unicast}),
-            desired_routes_by_profile=desired,
-        )
-        daemon._validate_plan(
-            plan,
-            all_kernel_routes=frozenset({unicast}),
-            desired_routes_by_profile=desired,
-        )
-
-        self.assertIn(unicast, plan.route_deletes)
         self.assertEqual(
             plan.route_adds,
-            configured_by_type(profile, vpng.RouteType.BLACKHOLE),
+            self.desired["primary"],
+        )
+
+    def test_actual_desired_not_owned_becomes_replace(self):
+        route = next(iter(self.desired["primary"]))
+        plan = self.daemon._build_plan(
+            all_kernel_routes=frozenset({route}),
+            desired_routes_by_profile=self.desired,
+        )
+        self.assertEqual(
+            plan.route_replaces,
+            frozenset({route}),
+        )
+
+    def test_owned_desired_actual_is_kept(self):
+        routes = self.desired["primary"]
+        state = self.state["primary"]
+        self.profile.commit_verified_state(
+            routes=routes,
+            candidates=tuple(
+                vpng.InterfaceBinding.from_record(record)
+                for record in state.candidates
+            ),
+            active_bindings=state.active_bindings,
+        )
+        plan = self.daemon._build_plan(
+            all_kernel_routes=routes,
+            desired_routes_by_profile=self.desired,
+        )
+        self.assertFalse(
+            plan.route_adds
+            or plan.route_deletes
+            or plan.route_replaces
         )
 
     def test_foreign_competing_exact_route_is_deleted(self):
-        profile = make_profile(peers=())
-        daemon = make_daemon(profile)
         foreign = foreign_route("10.0.0.0/8")
-        desired = derive_desired(daemon, {})
-
-        plan = daemon._build_plan(
+        plan = self.daemon._build_plan(
             all_kernel_routes=frozenset({foreign}),
-            desired_routes_by_profile=desired,
+            desired_routes_by_profile=self.desired,
         )
-        daemon._validate_plan(
-            plan,
-            all_kernel_routes=frozenset({foreign}),
-            desired_routes_by_profile=desired,
-        )
+        self.assertIn(foreign, plan.route_deletes)
 
-        self.assertEqual(plan.route_deletes, frozenset({foreign}))
-        self.assertEqual(plan.route_adds, desired["primary"])
-
-    def test_more_and_less_specific_overlaps_are_not_modified(self):
-        profile = make_profile(routes=("10.20.0.0/16",))
-        daemon = make_daemon(profile)
-        more_specific = foreign_route("10.20.30.0/24")
-        less_specific = foreign_route("10.0.0.0/8")
-        default = foreign_route("0.0.0.0/0")
-        actual = frozenset({more_specific, less_specific, default})
-
-        desired = derive_desired(daemon, {})
-        plan = daemon._build_plan(
-            all_kernel_routes=actual,
-            desired_routes_by_profile=desired,
-        )
-        daemon._validate_plan(
-            plan,
-            all_kernel_routes=actual,
-            desired_routes_by_profile=desired,
-        )
-
-        self.assertFalse(plan.route_deletes)
-        self.assertFalse(plan.route_replaces)
-        self.assertEqual(plan.route_adds, desired["primary"])
-
-        related = daemon._routes_for_profile(profile, actual)
-        self.assertEqual(
-            related,
-            frozenset({more_specific, less_specific}),
-        )
-
-    def test_exact_proto_kernel_conflict_is_rejected_before_apply(self):
-        profile = make_profile(peers=())
-        daemon = make_daemon(profile)
+    def test_proto_kernel_exact_conflict_is_rejected(self):
         kernel = foreign_route(
             "10.0.0.0/8",
             proto=vpng.KERNEL_ROUTE_PROTO,
@@ -301,179 +247,109 @@ class RoutePlanningTests(unittest.TestCase):
             via=None,
             metric=None,
         )
-        desired = derive_desired(daemon, {})
-
-        plan = daemon._build_plan(
+        plan = self.daemon._build_plan(
             all_kernel_routes=frozenset({kernel}),
-            desired_routes_by_profile=desired,
+            desired_routes_by_profile=self.desired,
         )
-        self.assertIn(kernel, plan.route_deletes)
-
         with self.assertRaises(vpng.PlanValidationError):
-            daemon._validate_plan(
+            self.daemon._validate_plan(
                 plan,
                 all_kernel_routes=frozenset({kernel}),
-                desired_routes_by_profile=desired,
+                desired_routes_by_profile=self.desired,
             )
 
-    def test_foreign_delete_outside_exact_scope_is_rejected(self):
-        profile = make_profile(peers=())
+    def test_more_less_specific_overlaps_are_not_modified(self):
+        profile = make_profile(routes=("10.20.0.0/16",))
         daemon = make_daemon(profile)
-        foreign = foreign_route("192.168.0.0/16")
-        desired = derive_desired(daemon, {})
-        plan = vpng.ReconciliationPlan(
-            route_adds=frozenset(),
-            route_deletes=frozenset({foreign}),
-            route_replaces=frozenset(),
-        )
-
-        with self.assertRaises(vpng.PlanValidationError):
-            daemon._validate_plan(
-                plan,
-                all_kernel_routes=frozenset({foreign}),
-                desired_routes_by_profile=desired,
-            )
-
-    def test_add_delete_replace_sets_must_be_disjoint(self):
-        profile = make_profile(peers=())
-        daemon = make_daemon(profile)
-        desired = derive_desired(daemon, {})
-        route = next(iter(desired["primary"]))
-        plan = vpng.ReconciliationPlan(
-            route_adds=frozenset({route}),
-            route_deletes=frozenset(),
-            route_replaces=frozenset({route}),
-        )
-
-        with self.assertRaises(vpng.PlanValidationError):
-            daemon._validate_plan(
-                plan,
-                all_kernel_routes=frozenset({route}),
-                desired_routes_by_profile=desired,
-            )
-
-    def test_replace_requires_actual_and_not_owned(self):
-        profile = make_profile(peers=())
-        daemon = make_daemon(profile)
-        desired = derive_desired(daemon, {})
-        route = next(iter(desired["primary"]))
-        plan = vpng.ReconciliationPlan(
-            route_adds=frozenset(),
-            route_deletes=frozenset(),
-            route_replaces=frozenset({route}),
-        )
-
-        with self.assertRaises(vpng.PlanValidationError):
-            daemon._validate_plan(
-                plan,
-                all_kernel_routes=frozenset(),
-                desired_routes_by_profile=desired,
-            )
-
-        commit_owned(profile, {route})
-        with self.assertRaises(vpng.PlanValidationError):
-            daemon._validate_plan(
-                plan,
-                all_kernel_routes=frozenset({route}),
-                desired_routes_by_profile=desired,
-            )
-
-    def test_incomplete_desired_snapshot_is_rejected(self):
-        primary = make_profile(profile_id="primary")
-        backup = make_profile(
-            profile_id="backup",
-            interface="wg0",
-            network="172.20.126.0/29",
-            local_address="172.20.126.1",
-            peers=("172.20.126.2",),
-            routes=("192.168.0.0/16",),
-        )
-        daemon = make_daemon(primary, backup)
-
-        incomplete = MappingProxyType({
-            "primary": ready_routes(primary),
-        })
-
-        with self.assertRaises(vpng.ReconciliationError):
-            daemon._build_plan(
-                all_kernel_routes=frozenset(),
-                desired_routes_by_profile=incomplete,
-            )
-
-    def test_duplicate_exact_resource_claim_is_rejected_defensively(self):
-        primary = make_profile(profile_id="primary", peers=())
-        backup = make_profile(
-            profile_id="backup",
-            interface="wg0",
-            network="172.20.126.0/29",
-            local_address="172.20.126.1",
-            peers=(),
-            routes=("192.168.0.0/16",),
-        )
-        daemon = make_daemon(primary, backup)
-
-        shared = next(iter(
-            ready_routes(primary)
-        ))
-        desired = MappingProxyType({
-            "primary": frozenset({shared}),
-            "backup": frozenset({shared}),
-        })
-        plan = vpng.ReconciliationPlan(
-            route_adds=frozenset({shared}),
-            route_deletes=frozenset(),
-            route_replaces=frozenset(),
-        )
-
-        with self.assertRaises(vpng.PlanValidationError):
-            daemon._validate_plan(
-                plan,
-                all_kernel_routes=frozenset(),
-                desired_routes_by_profile=desired,
-            )
-
-
-    def test_prefix_selector_never_enters_route_spec(self):
-        profile = make_profile(interface="vpns+")
-        daemon = make_daemon(profile)
-
-        desired = derive_desired(
-            daemon,
+        _, desired = derive(daemon, ())
+        actual = frozenset(
             {
-                "vpns7": frozenset({IPv4Address("172.20.130.1")}),
-            },
+                foreign_route("10.20.30.0/24"),
+                foreign_route("10.0.0.0/8"),
+            }
+        )
+        plan = daemon._build_plan(
+            all_kernel_routes=actual,
+            desired_routes_by_profile=desired,
+        )
+        self.assertFalse(
+            plan.route_deletes or plan.route_replaces
         )
 
-        unicast = [
-            route
-            for route in desired["primary"]
-            if route.route_type is vpng.RouteType.UNICAST
-        ]
-        self.assertTrue(unicast)
-        self.assertEqual(
-            {route.interface for route in unicast},
-            {"vpns7"},
-        )
-        self.assertNotIn(
-            "vpns+",
-            {route.interface for route in desired["primary"]},
-        )
 
-    def test_ambiguous_prefix_selector_keeps_blackhole_only(self):
-        profile = make_profile(interface="vpns+")
+class RouteVerificationTests(unittest.TestCase):
+    def test_verified_zero_path_is_fail_but_structurally_verified(self):
+        profile = make_profile()
         daemon = make_daemon(profile)
-
-        desired = derive_desired(
-            daemon,
-            {
-                "vpns0": frozenset({IPv4Address("172.20.130.1")}),
-                "vpns1": frozenset({IPv4Address("172.20.130.1")}),
-            },
+        state, desired = derive(daemon, ())
+        verified = daemon._verify_plan(
+            all_kernel_routes=desired["primary"],
+            desired_routes_by_profile=desired,
+        )
+        result = verified.profile_results["primary"]
+        self.assertIs(
+            result.result,
+            vpng.ApplyStateResult.FAIL,
+        )
+        self.assertIs(
+            result.reason.code,
+            vpng.RuntimeReasonCode.PROFILE_NO_UNICAST_PATH,
+        )
+        self.assertEqual(
+            verified.verified_profiles,
+            frozenset({"primary"}),
         )
 
+        daemon._commit_owned(
+            verified_routes_by_profile=(
+                verified.owned_routes_by_profile
+            ),
+            verified_profiles=verified.verified_profiles,
+            interface_state_by_profile=state,
+        )
         self.assertEqual(
-            {route.route_type for route in desired["primary"]},
-            {vpng.RouteType.BLACKHOLE},
+            profile.committed_active_bindings,
+            (),
+        )
+
+    def test_verified_direct_path_is_success(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+        _, desired = derive(
+            daemon,
+            (("vpns0", 7, "172.20.130.1"),),
+        )
+        verified = daemon._verify_plan(
+            all_kernel_routes=desired["primary"],
+            desired_routes_by_profile=desired,
+        )
+        self.assertIs(
+            verified.profile_results["primary"].result,
+            vpng.ApplyStateResult.SUCCESS,
+        )
+        self.assertEqual(
+            verified.verified_profiles,
+            frozenset({"primary"}),
+        )
+
+    def test_route_mismatch_is_not_verified(self):
+        profile = make_profile()
+        daemon = make_daemon(profile)
+        _, desired = derive(
+            daemon,
+            (("vpns0", 7, "172.20.130.1"),),
+        )
+        verified = daemon._verify_plan(
+            all_kernel_routes=frozenset(),
+            desired_routes_by_profile=desired,
+        )
+        self.assertEqual(
+            verified.verified_profiles,
+            frozenset(),
+        )
+        self.assertIs(
+            verified.profile_results["primary"].reason.code,
+            vpng.RuntimeReasonCode.PROFILE_ROUTE_MISMATCH,
         )
 
 

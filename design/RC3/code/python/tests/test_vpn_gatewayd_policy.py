@@ -28,7 +28,6 @@ def profile(
         interface=vpng.InterfaceSelector.parse(interface),
         network=IPv4Network(network),
         local_address=IPv4Address(local_address),
-        peers=(),
         routes=tuple(IPv4Network(item) for item in routes),
         allowed_sources=tuple(
             IPv4Network(item) for item in allowed_sources

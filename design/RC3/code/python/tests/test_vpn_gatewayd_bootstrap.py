@@ -22,7 +22,6 @@ def make_config() -> object:
         interface=vpng.InterfaceSelector.parse("vpns0"),
         network=IPv4Network("172.20.130.0/29"),
         local_address=IPv4Address("172.20.130.1"),
-        peers=(IPv4Address("172.20.130.6"),),
         routes=(IPv4Network("10.0.0.0/8"),),
         allowed_sources=(),
     )
@@ -97,6 +96,9 @@ class BootstrapTests(unittest.TestCase):
         ]
         self.assertEqual(len(unicast), 1)
         self.assertEqual(unicast[0].interface, "vpns0")
+        self.assertIsNone(unicast[0].via)
+        self.assertFalse(unicast[0].onlink)
+        self.assertEqual(unicast[0].metric, 10)
 
     def test_global_ipv6_prerequisite_rejects_enabled_forwarding(self):
         kernel = mock.Mock()
@@ -146,9 +148,9 @@ COMMIT
             kind=vpng.RouteType.UNICAST,
             proto=vpng.VPN_ROUTE_PROTO,
             metric=10,
-            via="172.20.130.6",
+            via=None,
             interface="vpns0",
-            onlink=True,
+            onlink=False,
         )
         old = route(
             kind=vpng.RouteType.UNREACHABLE,
@@ -159,9 +161,9 @@ COMMIT
             kind=vpng.RouteType.UNICAST,
             proto=vpng.VPN_ROUTE_PROTO,
             metric=20,
-            via="172.20.130.5",
-            interface="vpns0",
-            onlink=True,
+            via=None,
+            interface="vpns1",
+            onlink=False,
         )
         plan = vpng.ReconciliationPlan(
             route_adds=frozenset({unicast, blackhole}),
@@ -215,9 +217,9 @@ COMMIT
             kind=vpng.RouteType.UNICAST,
             proto=vpng.VPN_ROUTE_PROTO,
             metric=10,
-            via="172.20.130.6",
+            via=None,
             interface="vpns0",
-            onlink=True,
+            onlink=False,
         )
         blackhole = route(
             kind=vpng.RouteType.BLACKHOLE,
@@ -308,9 +310,9 @@ COMMIT
             kind=vpng.RouteType.UNICAST,
             proto=vpng.BLACKHOLE_ROUTE_PROTO,
             metric=vpng.BLACKHOLE_METRIC,
-            via="172.20.130.6",
+            via=None,
             interface="vpns0",
-            onlink=True,
+            onlink=False,
         )
 
         kernel = mock.Mock()
@@ -445,10 +447,46 @@ COMMIT
             daemon.profiles["primary"].owned_routes,
             frozenset(kernel.routes),
         )
-        self.assertIs(
-            daemon.profiles["primary"].committed_resolution_state,
-            vpng.InterfaceResolutionState.BOUND,
+        self.assertEqual(
+            daemon.profiles["primary"].committed_active_bindings,
+            (vpng.InterfaceBinding("vpns0", 7),),
         )
+        self.assertIs(daemon.state, vpng.DaemonState.ACTIVE)
+
+
+    def test_apply_allows_verified_zero_path_and_enters_degraded(self):
+        class FakeKernel:
+            def __init__(self):
+                self.forwarding = False
+                self.routes = set()
+
+            def get_ipv6_all_forwarding(self): return False
+            def get_ipv6_default_forwarding(self): return False
+            def get_ipv6_default_disabled(self): return True
+            def list_interfaces(self): return ()
+            def list_routes(self): return frozenset(self.routes)
+            def add_route(self, item): self.routes.add(item)
+            def delete_route(self, item): self.routes.remove(item)
+            def replace_route(self, item): self.routes.add(item)
+            def set_ip_forward(self, enabled): self.forwarding = enabled
+            def get_ip_forward(self): return self.forwarding
+
+        kernel = FakeKernel()
+        daemon = make_daemon(kernel)
+        with (
+            mock.patch.object(daemon, "_restore_filter_policy"),
+            mock.patch.object(daemon, "_restore_nat_policy"),
+            mock.patch.object(
+                daemon,
+                "_check_firewall_nat_policy",
+                return_value=vpng.FirewallCheck(vpng.FirewallSafety.SAFE, None),
+            ),
+        ):
+            daemon.apply()
+
+        self.assertIs(daemon.state, vpng.DaemonState.DEGRADED)
+        self.assertEqual(daemon.profiles["primary"].committed_active_bindings, ())
+        self.assertTrue(kernel.forwarding)
 
 
 if __name__ == "__main__":

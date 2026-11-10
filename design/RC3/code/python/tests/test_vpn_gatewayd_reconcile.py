@@ -23,7 +23,6 @@ def make_config():
         interface=vpng.InterfaceSelector.parse("vpns+"),
         network=IPv4Network("172.20.130.0/29"),
         local_address=IPv4Address("172.20.130.1"),
-        peers=(IPv4Address("172.20.130.6"),),
         routes=(IPv4Network("10.0.0.0/8"),),
         allowed_sources=(),
     )
@@ -61,16 +60,17 @@ def success_results():
 
 
 class SnapshotTests(unittest.TestCase):
-    def test_policy_transition_detects_ifindex_and_ambiguous_change(self):
+    def test_policy_transition_tracks_active_identity_not_candidate_only_change(self):
         daemon = make_daemon()
         first = daemon._build_reconciliation_snapshot((ready_record(7),))
         state = first.interface_state_by_profile["primary"]
         daemon.profiles["primary"].commit_verified_state(
             routes=frozenset(),
-            binding=state.binding,
-            ready=state.ready,
-            resolution_state=state.resolution.state,
-            match_count=len(state.resolution.matches),
+            candidates=tuple(
+                vpng.InterfaceBinding.from_record(record)
+                for record in state.candidates
+            ),
+            active_bindings=state.active_bindings,
         )
 
         self.assertFalse(daemon._snapshot_changes_policy(first))
@@ -79,16 +79,26 @@ class SnapshotTests(unittest.TestCase):
                 daemon._build_reconciliation_snapshot((ready_record(8),))
             )
         )
-        self.assertTrue(
-            daemon._snapshot_changes_policy(
-                daemon._build_reconciliation_snapshot(
-                    (
-                        ready_record(7),
-                        vpng.InterfaceRecord("vpns1", 8, frozenset()),
-                    )
-                )
+
+        candidate_only = daemon._build_reconciliation_snapshot(
+            (
+                ready_record(7),
+                vpng.InterfaceRecord("vpns1", 8, frozenset()),
             )
         )
+        self.assertFalse(daemon._snapshot_changes_policy(candidate_only))
+
+        second_active = daemon._build_reconciliation_snapshot(
+            (
+                ready_record(7),
+                vpng.InterfaceRecord(
+                    "vpns1",
+                    8,
+                    frozenset({IPv4Address("172.20.130.1")}),
+                ),
+            )
+        )
+        self.assertTrue(daemon._snapshot_changes_policy(second_active))
 
     def test_ipv6_check_covers_every_prefix_match_before_resolution(self):
         kernel = mock.Mock()
@@ -114,6 +124,10 @@ class ReconcileTests(unittest.TestCase):
     def setUp(self):
         self.kernel = mock.Mock()
         self.kernel.list_interfaces.return_value = (ready_record(),)
+        self.kernel.get_ipv6_all_forwarding.return_value = False
+        self.kernel.get_ipv6_default_forwarding.return_value = False
+        self.kernel.get_ipv6_default_disabled.return_value = True
+        self.kernel.get_interface_ipv6_disabled.return_value = True
         self.daemon = make_daemon(self.kernel)
 
     def test_input_only_drift_repairs_without_disabling_forwarding(self):
@@ -163,6 +177,48 @@ class ReconcileTests(unittest.TestCase):
         self.assertTrue(restore_filter.called)
         self.assertTrue(restore_filter.call_args.kwargs["input_only"])
         self.assertIs(self.daemon.state, vpng.DaemonState.ACTIVE)
+
+    def test_runtime_ipv6_violation_latches_isolation_until_restart(self):
+        self.kernel.get_ipv6_all_forwarding.return_value = True
+        with (
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_disable_forwarding",
+                return_value=None,
+            ) as disable,
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_apply_isolation_filter",
+                return_value=None,
+            ) as isolation,
+        ):
+            self.daemon.reconcile()
+
+        self.assertIs(self.daemon.state, vpng.DaemonState.ISOLATED)
+        self.assertTrue(self.daemon._host_prerequisite_latched)
+        disable.assert_called_once()
+        isolation.assert_called_once()
+
+        self.kernel.get_ipv6_all_forwarding.return_value = False
+        with (
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_disable_forwarding",
+                return_value=None,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_apply_isolation_filter",
+                return_value=None,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_build_reconciliation_snapshot",
+            ) as snapshot,
+        ):
+            self.daemon.reconcile()
+        snapshot.assert_not_called()
+        self.assertIs(self.daemon.state, vpng.DaemonState.ISOLATED)
 
     def test_transit_drift_uses_barrier_repair(self):
         unsafe = vpng.FirewallCheck(

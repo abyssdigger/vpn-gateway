@@ -7,7 +7,6 @@ import unittest
 from ipaddress import IPv4Address
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -15,56 +14,41 @@ import vpn_gatewayd as vpng
 
 
 class InterfaceSelectorTests(unittest.TestCase):
-    def test_exact_selector_parse_and_match(self):
-        selector = vpng.InterfaceSelector.parse("wg0")
+    def test_exact_prefix_and_explicit_list_parse(self):
+        exact = vpng.InterfaceSelector.parse("wg0")
+        prefix = vpng.InterfaceSelector.parse("vpns+")
+        explicit = vpng.InterfaceSelector.parse(["vpnA", "vpnB", "vpnC"])
 
-        self.assertIs(selector.kind, vpng.InterfaceSelectorKind.EXACT)
-        self.assertEqual(str(selector), "wg0")
-        self.assertTrue(selector.matches("wg0"))
-        self.assertFalse(selector.matches("wg01"))
+        self.assertIs(exact.kind, vpng.InterfaceSelectorKind.EXACT)
+        self.assertEqual(exact.values, ("wg0",))
+        self.assertIs(prefix.kind, vpng.InterfaceSelectorKind.PREFIX)
+        self.assertEqual(prefix.values, ("vpns",))
+        self.assertIs(explicit.kind, vpng.InterfaceSelectorKind.EXACT_LIST)
+        self.assertEqual(explicit.values, ("vpnA", "vpnB", "vpnC"))
+        self.assertEqual(prefix.guard_interfaces(), ("vpns+",))
+        self.assertEqual(explicit.guard_interfaces(), explicit.values)
 
-    def test_prefix_selector_matches_bare_prefix_and_suffixes(self):
-        selector = vpng.InterfaceSelector.parse("vpns+")
-
-        self.assertIs(
-            selector.kind,
-            vpng.InterfaceSelectorKind.PREFIX_FAMILY,
-        )
-        self.assertEqual(selector.value, "vpns")
-        self.assertEqual(str(selector), "vpns+")
-        self.assertTrue(selector.matches("vpns"))
-        self.assertTrue(selector.matches("vpns0"))
-        self.assertTrue(selector.matches("vpnsX"))
-        self.assertFalse(selector.matches("other0"))
-
-    def test_selector_validation(self):
-        for value in ("", "+", "1tun", "vpns++", "abcdefghijklmnop"):
+    def test_selector_validation_rejects_legacy_percent_and_bad_lists(self):
+        for value in ("", "+", "1tun", "vpns++", "vpns%", "abcdefghijklmnop"):
             with self.subTest(value=value):
                 with self.assertRaises((TypeError, ValueError)):
                     vpng.InterfaceSelector.parse(value)
 
-        for value in ("lo", "ANY", "Default", "all"):
+        for value in ([], ["vpnA", "vpnA"], ["vpnA", 3], ["lo"]):
             with self.subTest(value=value):
-                with self.assertRaises(ValueError):
+                with self.assertRaises((TypeError, ValueError)):
                     vpng.InterfaceSelector.parse(value)
 
-    def test_prefix_max_length_is_fourteen(self):
-        value = "a" * 14 + "+"
-        self.assertEqual(str(vpng.InterfaceSelector.parse(value)), value)
-
-        with self.assertRaises(ValueError):
-            vpng.InterfaceSelector.parse("a" * 15 + "+")
-
-    def test_selector_overlap(self):
+    def test_selector_overlap_covers_prefix_and_explicit_list(self):
         cases = (
             ("vpns+", "vpns0", True),
             ("vpns+", "vpns1+", True),
-            ("vpns1+", "vpns12+", True),
             ("vpns1+", "vpns2+", False),
-            ("wg0", "wg0", True),
-            ("wg0", "wg1", False),
+            (["tunA", "tunB"], "tunA", True),
+            (["tunA", "tunB"], ["tunB", "tunC"], True),
+            (["tunA", "tunB"], "wg0", False),
+            (["vpns9", "tun0"], "vpns+", True),
         )
-
         for left, right, expected in cases:
             with self.subTest(left=left, right=right):
                 first = vpng.InterfaceSelector.parse(left)
@@ -73,12 +57,18 @@ class InterfaceSelectorTests(unittest.TestCase):
                 self.assertEqual(second.overlaps(first), expected)
 
 
-class InterfaceRecordTests(unittest.TestCase):
+class InterfaceStateTests(unittest.TestCase):
+    def record(self, name, ifindex, *addresses):
+        return vpng.InterfaceRecord(
+            name,
+            ifindex,
+            frozenset(IPv4Address(item) for item in addresses),
+        )
+
     def test_record_is_frozen_and_defensively_freezes_ipv4(self):
         addresses = {IPv4Address("172.20.130.1")}
         record = vpng.InterfaceRecord("vpns0", 7, addresses)
         addresses.clear()
-
         self.assertEqual(
             record.ipv4,
             frozenset({IPv4Address("172.20.130.1")}),
@@ -86,143 +76,76 @@ class InterfaceRecordTests(unittest.TestCase):
         with self.assertRaises(dataclasses.FrozenInstanceError):
             record.ifindex = 8
 
-    def test_resolution_cardinality_and_binding(self):
-        one = vpng.InterfaceRecord("vpns0", 7, frozenset())
-        two = vpng.InterfaceRecord("vpns1", 8, frozenset())
-
-        absent = vpng.InterfaceResolution.absent()
-        self.assertIs(
-            absent.state,
-            vpng.InterfaceResolutionState.ABSENT,
-        )
-        self.assertIsNone(absent.binding)
-
-        bound = vpng.InterfaceResolution.bound(one)
-        self.assertIs(
-            bound.state,
-            vpng.InterfaceResolutionState.BOUND,
-        )
-        self.assertEqual(
-            bound.binding,
-            vpng.InterfaceBinding("vpns0", 7),
-        )
-        self.assertEqual(bound.bound_record, one)
-
-        ambiguous = vpng.InterfaceResolution.ambiguous((one, two))
-        self.assertIs(
-            ambiguous.state,
-            vpng.InterfaceResolutionState.AMBIGUOUS,
-        )
-        self.assertIsNone(ambiguous.binding)
-
-        with self.assertRaises(ValueError):
-            vpng.InterfaceResolution(
-                vpng.InterfaceResolutionState.BOUND,
-                (),
-            )
-
-        with self.assertRaises(ValueError):
-            vpng.InterfaceResolution.ambiguous((one,))
-
-
-class InterfaceResolutionFunctionTests(unittest.TestCase):
-    def test_resolve_absent_bound_ambiguous(self):
-        selector = vpng.InterfaceSelector.parse("vpns+")
-        vpns0 = vpng.InterfaceRecord(
-            "vpns0",
-            7,
-            frozenset({IPv4Address("172.20.130.1")}),
-        )
-        vpns1 = vpng.InterfaceRecord("vpns1", 8, frozenset())
-        other = vpng.InterfaceRecord("wg0", 9, frozenset())
-
-        absent = vpng.resolve_interface_selector(selector, [other])
-        self.assertIs(
-            absent.state,
-            vpng.InterfaceResolutionState.ABSENT,
-        )
-
-        bound = vpng.resolve_interface_selector(
-            selector,
-            [other, vpns0],
-        )
-        self.assertIs(
-            bound.state,
-            vpng.InterfaceResolutionState.BOUND,
-        )
-        self.assertEqual(bound.bound_record, vpns0)
-
-        ambiguous = vpng.resolve_interface_selector(
-            selector,
-            [vpns1, other, vpns0],
-        )
-        self.assertIs(
-            ambiguous.state,
-            vpng.InterfaceResolutionState.AMBIGUOUS,
-        )
-        self.assertEqual(
-            tuple(record.name for record in ambiguous.matches),
-            ("vpns0", "vpns1"),
-        )
-
-    def test_readiness_uses_bound_record_and_expected_local_address(self):
+    def test_prefix_allows_multiple_active_and_uses_bytewise_name_order(self):
         expected = IPv4Address("172.20.130.1")
-        ready = vpng.InterfaceRecord(
-            "vpns0",
-            7,
-            frozenset({expected}),
-        )
-        wrong = vpng.InterfaceRecord(
-            "vpns0",
-            7,
-            frozenset({IPv4Address("172.20.130.2")}),
-        )
-
-        self.assertTrue(
-            vpng.interface_resolution_ready(
-                vpng.InterfaceResolution.bound(ready),
-                expected,
-            )
-        )
-        self.assertFalse(
-            vpng.interface_resolution_ready(
-                vpng.InterfaceResolution.bound(wrong),
-                expected,
-            )
-        )
-        self.assertFalse(
-            vpng.interface_resolution_ready(
-                vpng.InterfaceResolution.absent(),
-                expected,
-            )
-        )
-
-
-class ProfileInterfaceStateTests(unittest.TestCase):
-    def test_state_combines_resolution_and_readiness(self):
-        expected = IPv4Address("172.20.130.1")
-        record = vpng.InterfaceRecord(
-            "vpns0",
-            7,
-            frozenset({expected}),
-        )
         state = vpng.resolve_profile_interface_state(
             vpng.InterfaceSelector.parse("vpns+"),
-            [record],
+            (
+                self.record("vpns9", 9, "172.20.130.1"),
+                self.record("vpns10", 10, "172.20.130.1"),
+                self.record("other0", 11, "172.20.130.1"),
+            ),
             expected,
         )
-
-        self.assertTrue(state.ready)
         self.assertEqual(
-            state.binding,
-            vpng.InterfaceBinding("vpns0", 7),
+            tuple(record.name for record in state.candidates),
+            ("vpns10", "vpns9"),
+        )
+        self.assertEqual(
+            state.active_bindings,
+            (
+                vpng.InterfaceBinding("vpns10", 10),
+                vpng.InterfaceBinding("vpns9", 9),
+            ),
         )
 
-    def test_ready_requires_bound_resolution(self):
+    def test_matching_candidate_without_local_address_remains_inactive(self):
+        expected = IPv4Address("172.20.130.1")
+        state = vpng.resolve_profile_interface_state(
+            vpng.InterfaceSelector.parse("vpns+"),
+            (
+                self.record("vpns0", 7, "172.20.130.1"),
+                self.record("vpns1", 8, "172.20.130.2"),
+            ),
+            expected,
+        )
+        self.assertEqual(
+            tuple(record.name for record in state.candidates),
+            ("vpns0", "vpns1"),
+        )
+        self.assertEqual(
+            state.active_bindings,
+            (vpng.InterfaceBinding("vpns0", 7),),
+        )
+
+    def test_explicit_list_preserves_config_order_and_missing_holes(self):
+        expected = IPv4Address("172.20.140.1")
+        state = vpng.resolve_profile_interface_state(
+            vpng.InterfaceSelector.parse(["vpnB", "vpnA", "vpnC"]),
+            (
+                self.record("vpnA", 1, "172.20.140.1"),
+                self.record("vpnC", 3, "172.20.140.1"),
+            ),
+            expected,
+        )
+        self.assertEqual(
+            tuple(record.name for record in state.candidates),
+            ("vpnA", "vpnC"),
+        )
+        self.assertEqual(
+            state.active_bindings,
+            (
+                vpng.InterfaceBinding("vpnA", 1),
+                vpng.InterfaceBinding("vpnC", 3),
+            ),
+        )
+
+    def test_duplicate_name_with_conflicting_ifindex_is_rejected(self):
         with self.assertRaises(ValueError):
-            vpng.ProfileInterfaceState(
-                vpng.InterfaceResolution.absent(),
-                True,
+            vpng.resolve_profile_interface_state(
+                vpng.InterfaceSelector.parse("vpns+"),
+                (self.record("vpns0", 7), self.record("vpns0", 8)),
+                IPv4Address("172.20.130.1"),
             )
 
 

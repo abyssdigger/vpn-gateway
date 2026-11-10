@@ -24,7 +24,6 @@ VALID_PRIMARY = """
 interface = "vpns0"
 network = "172.20.130.0/29"
 local_address = "172.20.130.1"
-peers = ["172.20.130.6"]
 routes = ["10.0.0.0/8"]
 allowed_sources = ["10.200.201.0/24"]
 """
@@ -59,7 +58,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns0"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["10.0.0.0/8"]
             allowed_sources = ["10.200.201.0/24"]
 
@@ -67,7 +65,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "wg0"
             network = "172.20.126.0/29"
             local_address = "172.20.126.1"
-            peers = ["172.20.126.2", "172.20.126.3"]
             routes = ["100.64.0.0/10", "192.168.0.0/16"]
             allowed_sources = []
             """
@@ -102,7 +99,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns+"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             """
@@ -114,7 +110,7 @@ class ConfigTestCase(unittest.TestCase):
         selector = cfg.vpns["primary"].interface
         self.assertIs(
             selector.kind,
-            vpng.InterfaceSelectorKind.PREFIX_FAMILY,
+            vpng.InterfaceSelectorKind.PREFIX,
         )
         self.assertEqual(str(selector), "vpns+")
 
@@ -146,33 +142,6 @@ class ConfigTestCase(unittest.TestCase):
             any("profile ID must match" in issue.message for issue in warnings)
         )
 
-    def test_managed_empty_peers_is_note_not_error(self):
-        td, path = self.write_config(
-            """
-            managed_vpns = ["primary"]
-            common_allowed_sources = []
-
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
-            peers = []
-            routes = ["10.0.0.0/8"]
-            allowed_sources = []
-            """
-        )
-        self.addCleanup(td.cleanup)
-
-        loader = NoSecurityLoader()
-        cfg = loader.load_runtime(path)
-        self.assertEqual(cfg.vpns["primary"].peers, ())
-
-        result = loader.check(path)
-        self.assertFalse(result.has_errors)
-        notes = self.issues(result, vpng.ConfigIssueLevel.NOTE)
-        self.assertEqual(len(notes), 1)
-        self.assertIn("no UNICAST VPN routes", notes[0].message)
-
     def test_managed_route_transport_overlap_is_error(self):
         td, path = self.write_config(
             """
@@ -183,7 +152,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns0"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["172.20.126.0/29"]
             allowed_sources = []
 
@@ -191,7 +159,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "wg0"
             network = "172.20.126.0/29"
             local_address = "172.20.126.1"
-            peers = ["172.20.126.2"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             """
@@ -223,7 +190,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "wg0"
             network = "10.20.0.0/16"
             local_address = "10.20.0.1"
-            peers = ["10.20.0.2"]
             routes = ["192.168.0.0/16"]
             allowed_sources = []
             """
@@ -257,7 +223,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns0"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["10.0.0.0/8", "10.0.0.0/8"]
             allowed_sources = [
                 "10.200.201.1",
@@ -290,7 +255,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns0"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
@@ -298,7 +262,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "wg0"
             network = "172.20.126.0/29"
             local_address = "172.20.126.1"
-            peers = ["172.20.126.2"]
             routes = ["192.168.0.0/16"]
             allowed_sources = []
             """
@@ -320,7 +283,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "tun0"
             network = "172.20.140.0/29"
             local_address = "172.20.140.1"
-            peers = ["172.20.140.2"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
@@ -328,7 +290,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns0"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["192.168.0.0/16"]
             allowed_sources = []
 
@@ -336,7 +297,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "wg0"
             network = "172.20.126.0/29"
             local_address = "172.20.126.1"
-            peers = ["172.20.126.2"]
             routes = ["100.64.0.0/10"]
             allowed_sources = []
             """
@@ -358,60 +318,98 @@ class ConfigTestCase(unittest.TestCase):
             )
         )
 
-    def test_duplicate_peers_managed_error_unmanaged_warning(self):
-        td1, path1 = self.write_config(
+    def test_runtime_accepts_ordered_explicit_interface_list(self):
+        td, path = self.write_config(
             """
             managed_vpns = ["primary"]
             common_allowed_sources = []
 
             [vpn.primary]
-            interface = "vpns0"
+            interface = ["vpnB", "vpnA", "vpnC"]
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6", "172.20.130.6"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             """
         )
-        self.addCleanup(td1.cleanup)
-        loader = NoSecurityLoader()
-        with self.assertRaises(vpng.ConfigError):
-            loader.load_runtime(path1)
+        self.addCleanup(td.cleanup)
 
-        td2, path2 = self.write_config(
+        selector = NoSecurityLoader().load_runtime(path).vpns["primary"].interface
+        self.assertIs(selector.kind, vpng.InterfaceSelectorKind.EXACT_LIST)
+        self.assertEqual(selector.values, ("vpnB", "vpnA", "vpnC"))
+
+    def test_legacy_peers_key_is_unknown_managed_key(self):
+        td, path = self.write_config(
             """
-            managed_vpns = ["other"]
+            managed_vpns = ["primary"]
             common_allowed_sources = []
 
-            [vpn.other]
-            interface = "tun0"
-            network = "172.20.140.0/29"
-            local_address = "172.20.140.1"
-            peers = ["172.20.140.2"]
+            [vpn.primary]
+            interface = "wg0"
+            network = "172.20.130.0/29"
+            local_address = "172.20.130.1"
+            peers = ["172.20.130.2"]
+            routes = ["10.0.0.0/8"]
+            allowed_sources = []
+            """
+        )
+        self.addCleanup(td.cleanup)
+
+        loader = NoSecurityLoader()
+        with self.assertRaises(vpng.ConfigError):
+            loader.load_runtime(path)
+        result = loader.check(path)
+        self.assertTrue(result.has_errors)
+        self.assertTrue(any(
+            issue.location == "vpn.primary.peers"
+            and "unknown profile key" in issue.message
+            for issue in result.issues
+        ))
+
+    def test_explicit_interface_list_duplicates_are_error(self):
+        td, path = self.write_config(
+            """
+            managed_vpns = ["primary"]
+            common_allowed_sources = []
+
+            [vpn.primary]
+            interface = ["vpnA", "vpnA"]
+            network = "172.20.130.0/29"
+            local_address = "172.20.130.1"
+            routes = ["10.0.0.0/8"]
+            allowed_sources = []
+            """
+        )
+        self.addCleanup(td.cleanup)
+
+        with self.assertRaises(vpng.ConfigError):
+            NoSecurityLoader().load_runtime(path)
+
+    def test_prefix_and_explicit_list_namespace_overlap_is_error(self):
+        td, path = self.write_config(
+            """
+            managed_vpns = ["primary", "backup"]
+            common_allowed_sources = []
+
+            [vpn.primary]
+            interface = "vpns+"
+            network = "172.20.130.0/29"
+            local_address = "172.20.130.1"
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
-            [vpn.primary]
-            interface = "vpns0"
-            network = "172.20.130.0/29"
-            local_address = "172.20.130.1"
-            peers = ["172.20.130.6", "172.20.130.6"]
+            [vpn.backup]
+            interface = ["vpns9", "tun0"]
+            network = "172.20.126.0/29"
+            local_address = "172.20.126.1"
             routes = ["192.168.0.0/16"]
             allowed_sources = []
             """
         )
-        self.addCleanup(td2.cleanup)
+        self.addCleanup(td.cleanup)
 
-        result = loader.check(path2)
-        self.assertFalse(result.has_errors)
-        self.assertTrue(
-            any(
-                "duplicate peer" in issue.message
-                for issue in self.issues(
-                    result, vpng.ConfigIssueLevel.WARNING
-                )
-            )
-        )
+        with self.assertRaises(vpng.ConfigError):
+            NoSecurityLoader().load_runtime(path)
 
     def test_noncanonical_cidr_is_rejected(self):
         td, path = self.write_config(
@@ -423,7 +421,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns0"
             network = "172.20.130.1/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["10.1.2.3/8"]
             allowed_sources = []
             """
@@ -461,7 +458,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "tun0"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
@@ -469,7 +465,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "tun0"
             network = "172.20.126.0/29"
             local_address = "172.20.126.1"
-            peers = ["172.20.126.2"]
             routes = ["192.168.0.0/16"]
             allowed_sources = []
             """
@@ -491,7 +486,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns0"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["10.0.0.0/8", "10.20.0.0/16"]
             allowed_sources = []
             """
@@ -512,7 +506,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns0"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
 
@@ -520,7 +513,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "wg0"
             network = "172.20.126.0/29"
             local_address = "172.20.126.1"
-            peers = ["172.20.126.2"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             """
@@ -538,7 +530,7 @@ class ConfigTestCase(unittest.TestCase):
             )
         )
 
-    def test_slash31_and_endpoint_addresses_are_valid(self):
+    def test_slash31_and_local_endpoint_address_are_valid(self):
         td, path = self.write_config(
             """
             managed_vpns = ["primary"]
@@ -548,7 +540,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "tun0"
             network = "172.20.130.0/31"
             local_address = "172.20.130.0"
-            peers = ["172.20.130.1"]
             routes = ["10.0.0.1/32"]
             allowed_sources = []
             """
@@ -558,7 +549,6 @@ class ConfigTestCase(unittest.TestCase):
         cfg = NoSecurityLoader().load_runtime(path)
         self.assertEqual(str(cfg.vpns["primary"].network), "172.20.130.0/31")
         self.assertEqual(str(cfg.vpns["primary"].local_address), "172.20.130.0")
-        self.assertEqual(str(cfg.vpns["primary"].peers[0]), "172.20.130.1")
 
     def test_unknown_top_level_key_is_error(self):
         td, path = self.write_config(
@@ -586,7 +576,6 @@ class ConfigTestCase(unittest.TestCase):
             interface = "vpns0"
             network = "172.20.130.0/29"
             local_address = "172.20.130.1"
-            peers = ["172.20.130.6"]
             routes = ["10.0.0.0/8"]
             allowed_sources = []
             surprise = true
