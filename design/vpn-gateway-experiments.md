@@ -30,15 +30,15 @@ EXP-011 заменяет dummy listener реальным ocserv и провер�
 
 OpenConnect использует TCP/TLS как control + backup data channel, а UDP/DTLS как primary
 data channel. Сервер предоставляет DTLS endpoint после установления TLS session, поэтому
-первый proof использует одинаковый published/internal port 45443 для обоих протоколов.
+первый proof использует одинаковый published/internal port 44443 для обоих протоколов.
 
 ### Топология
 
     remote OpenConnect client
              |
-             | TCP 45443 + UDP 45443
+             | TCP 44443 + UDP 44443
              v
-       host :45443
+       host :44443
              |
        ROU relay
        TCP + UDP
@@ -53,10 +53,10 @@ data channel. Сервер предоставляет DTLS endpoint после �
              |
         ROU netns
              |
-      ocserv :45443
+      ocserv :44443
       TCP + UDP/DTLS
 
-Рабочий host-side ocserv на 44443 не изменяется.
+Штатный test ocserv на 44443 перед опытом останавливается; его конфигурация не изменяется. ROU relay временно занимает тот же внешний TCP/UDP endpoint, поэтому конфигурация клиентов не меняется.
 
 ### Гипотезы
 
