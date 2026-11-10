@@ -1,3 +1,37 @@
+## 2026-11-10 — RC3 binding-specific networks and heterogeneous failover
+
+The post-EXP-009 profile model was corrected after live-test design exposed that one
+profile-level transport network cannot describe independent failover interfaces such as
+`wg0` and `wg1` on different VPN subnets.
+
+Current model:
+
+- profile-level `interface` and `network` are removed;
+- enabled profile contains ordered `bindings[]`;
+- each `BindingSpec` owns `interface = exact|prefix+` and its own IPv4 `network`;
+- old LIST selector domain form is removed;
+- exact BindingSpec rank defines stable fixed metrics and natural failback;
+- all prefix BindingSpec of a profile share one cyclic dynamic allocator starting after
+  the exact metric range;
+- prefix survivors keep order/metrics; removed metrics stay reserved until verified commit;
+- top-level/profile `enabled` use staged parsing; disabled profile bodies are ignored;
+- top-level disabled mode is an intentional `DISABLED` lifecycle state with forwarding off;
+- selector namespace safety now rejects prefix guards that would include forbidden exact
+  interface names;
+- verified process-local state uses prepare-then-commit semantics;
+- structural route verification failure escalates to `INIT/PANIC`, while verified
+  zero-path availability remains `DEGRADED`.
+
+Normal ADD/REMOVE/INIT-PANIC runtime procedures remain unchanged; the primary implementation
+change is config/domain/snapshot projection and metric derivation.
+
+The permanent GitHub Actions workflow now validates Python 3.13 compileall and the complete
+unit suite on every push/PR to `main`.
+
+This entry supersedes earlier same-day descriptions of profile-level `network`, LIST
+selectors and a prefix allocator starting unconditionally at metric 10; those entries are
+retained below as historical development record.
+
 ## 2026-11-10 — RC3 stable prefix order and metric allocator implemented
 
 Python implementation now matches the revised prefix ordering/metric architecture.
