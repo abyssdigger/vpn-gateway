@@ -39,7 +39,7 @@ def state():
     resolved = vpng.resolve_profile_interface_state(
         vpng.InterfaceSelector.parse("vpns+"),
         (record,),
-        IPv4Address("172.20.130.1"),
+        IPv4Network("172.20.130.0/29"),
     )
     return MappingProxyType({"primary": resolved})
 
