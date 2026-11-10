@@ -1189,6 +1189,16 @@ allowing state.
 Проверка плана маршрутов сохраняет определяющую семантику точного префикса и запрет
 изменения `proto kernel`.
 
+Route-only drift при уже verified `SAFE` firewall/NAT не требует глобального
+`INIT/PANIC` до попытки исправления. Verified filter разрешает protected destination
+только через exact active egress, а исполнитель маршрутов сначала materialize недостающий
+BLACKHOLE и лишь затем выполняет разрушительные route operations.
+
+Если обычный route repair/apply/verification **не завершился успешно**, полное managed
+route state больше нельзя считать verified. Такой failure переводит текущий pass в
+`INIT/PANIC`: forwarding закрывается, managed state пересобирается и routes проверяются
+заново до возможного повторного открытия forwarding.
+
 
 ### 8.8. OWNED и фиксация binding state
 
@@ -2628,7 +2638,9 @@ may retain adds/deletes/replaces.
 44. Отсутствующие BLACKHOLE добавляются раньше любых разрушительных операций с маршрутами.
 
 45. Исполнитель маршрутов: добавить BLACKHOLE -> удалить конкурирующие точные маршруты ->
-    выполнить замены -> добавить оставшиеся маршруты.
+    выполнить замены -> добавить оставшиеся маршруты. Route-only drift при verified SAFE
+    filter сначала исправляется этим локальным исполнителем; failure apply/verification
+    переводит pass в `INIT/PANIC`.
 
 46. Daemon является определяющим владельцем маршрутов только для точных защищаемых
     префиксов `profile.routes`.
