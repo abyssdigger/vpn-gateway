@@ -18,15 +18,22 @@ import vpn_gatewayd as vpng
 def config():
     profile = vpng.VpnProfileConfig(
         profile_id="primary",
-        interface=vpng.InterfaceSelector.parse("vpns+"),
-        network=IPv4Network("172.20.130.0/29"),
         routes=(IPv4Network("10.0.0.0/8"),),
+        bindings=(
+            vpng.BindingSpec(
+                vpng.InterfaceSelector.parse("vpns+"),
+                IPv4Network("172.20.130.0/29"),
+                0,
+                None,
+            ),
+        ),
         allowed_sources=(),
     )
     return vpng.GatewayConfig(
+        enabled=True,
         reconcile_interval=10.0,
         common_allowed_sources=(IPv4Network("10.200.200.8/32"),),
-        vpns=MappingProxyType({"primary": profile}),
+        profiles=MappingProxyType({"primary": profile}),
     )
 
 
@@ -37,9 +44,8 @@ def state():
         frozenset({IPv4Address("172.20.130.1")}),
     )
     resolved = vpng.resolve_profile_interface_state(
-        vpng.InterfaceSelector.parse("vpns+"),
+        config().profiles["primary"].bindings,
         (record,),
-        IPv4Network("172.20.130.0/29"),
     )
     return MappingProxyType({"primary": resolved})
 
@@ -54,9 +60,8 @@ def state_for(*names):
         for index, name in enumerate(names, start=7)
     )
     resolved = vpng.resolve_profile_interface_state(
-        vpng.InterfaceSelector.parse("vpns+"),
+        config().profiles["primary"].bindings,
         records,
-        IPv4Network("172.20.130.0/29"),
     )
     return MappingProxyType({"primary": resolved})
 
