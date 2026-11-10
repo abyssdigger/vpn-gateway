@@ -991,9 +991,8 @@ binding state: она одной транзакцией восстанавлив
 binding-specific contributions, а все непрерывно существующие bindings сохраняют identity,
 metric и relative order. Перед локальной мутацией daemon обязан подтвердить, что
 фактическое source state соответствует последнему committed state; отсутствие именно тех
-ресурсов, которые новая binding должна добавить, не считается drift. Процедура не
-ограничена формой `prefix+`: exact и explicit-list появления используют тот же протокол,
-если изменение доказуемо insertion-only.
+ресурсов, которые новая binding должна добавить, не считается drift. Процедура не зависит от selector class owning BindingSpec: появление exact либо prefix
+concrete binding использует тот же протокол, если изменение доказуемо insertion-only.
 
 `ip_forward` не изменяется. Старые verified paths продолжают работать.
 
@@ -1174,14 +1173,18 @@ Process-local OWNED routes, последнее подтвержденное со
 недостаточная наблюдаемость interfaces/policy/ip_forward -> ISOLATED
 firewall/NAT != SAFE                                     -> ISOLATED
 
+config.enabled == false
+  И startup cleanup confirmed
+  И ip_forward == 0                                      -> DISABLED
+
 firewall/NAT == SAFE
-  И все managed profiles SUCCESS
+  И все enabled profiles SUCCESS
   И ip_forward == 1                                      -> ACTIVE
 
 firewall/NAT == SAFE
-  И остальные проверки завершены
+  И structural route verification complete
   И (
-       хотя бы один profile FAIL
+       хотя бы один enabled profile availability FAIL
        ИЛИ confirmed ip_forward == 0
     )                                                    -> DEGRADED
 ```
@@ -1199,12 +1202,13 @@ Profile result формируется после проверки full desired f
 У множественного selector не требуется присутствие всех paths. Один verified active
 interface для каждого protected destination достаточен для `SUCCESS`.
 
-`FAIL` означает либо verified availability loss (нет ни одного desired UNICAST path
-хотя бы для одного protected destination), либо profile-level route/policy mismatch,
-который удалось достоверно классифицировать при сохраненном fail-closed state.
+`FAIL` означает только verified functional availability loss: для хотя бы одного
+protected destination нет ни одного verified desired UNICAST path при structurally exact
+route state.
 
-Ошибка наблюдаемости уровня всего pass не превращается в набор `FAIL`; она приводит к
-`ISOLATED`.
+Structural route/policy mismatch не кодируется как `ProfileResult=FAIL`: failed ordinary
+route build/apply/verification эскалирует в `INIT/PANIC`, а недостаточная наблюдаемость
+уровня всего pass приводит к `ISOLATED`.
 
 `ACTIVE` и `ProfileResult=SUCCESS` подтверждают desired kernel configuration, но не
 end-to-end transport reachability. Ping, handshake и transport peer health не входят в
@@ -1213,9 +1217,9 @@ end-to-end transport reachability. Ping, handshake и transport peer health не
 Операционный status профиля сообщает как минимум:
 
 - `ProfileResult=SUCCESS|FAIL` и стабильную reason code при `FAIL`;
-- selector form;
-- candidates;
-- active concrete bindings;
+- configured BindingSpec entries;
+- candidates с owning BindingSpec;
+- active concrete bindings с owning BindingSpec;
 - desired/verified direct `UNICAST RouteSpec` с interface/metric;
 - exact BindingSpec и их fixed config-derived exact_rank/metric;
 - для prefix BindingSpec — process-local active_order и текущие binding -> metric allocations;
@@ -1332,9 +1336,8 @@ block новой binding располагается после уже приня
 После цепочек профилей `VPNG-INPUT-GUARD` блокирует входящий traffic защитных пространств
 имен, который не был завершен более ранним exact block:
 
-- exact selector — exact interface rule;
-- `prefix+` — `-i prefix+`;
-- explicit exact list — exact deny rule для каждого элемента.
+- exact BindingSpec — exact interface rule;
+- prefix BindingSpec — `-i prefix+`.
 
 Prefix matching никогда не используется для `ACCEPT` или NAT.
 
@@ -1360,9 +1363,9 @@ ctstate ESTABLISHED,RELATED
     REJECT --reject-with icmp-host-prohibited
 ```
 
-После exact blocks идут deny guards всех managed selectors в детерминированном порядке
-профилей. Для `prefix+` guard использует `-i prefix+`; explicit exact list
-materialize как набор exact guards. Затем следует `RETURN`.
+После exact blocks идут deny guards всех enabled BindingSpec в детерминированном
+config order профилей/bindings. Prefix guard использует `-i prefix+`, exact guard —
+exact interface rule. Затем следует `RETURN`.
 
 `VPNG-RESERVED` всегда выполняет `REJECT` для назначения в любую managed
 enabled `BindingSpec.network`.
@@ -1494,12 +1497,14 @@ VPNG-<PROFILE>-NAT
 
 Если active egress interfaces отсутствуют, цепочка содержит только `RETURN`.
 
-Ни explicit-list selector, ни строка `prefix+` никогда не используются как условие
-интерфейса в NAT.
+Ни exact, ни prefix selector не используются как условие интерфейса в NAT; NAT всегда
+materialize только по exact active concrete interface names.
 
-При переходе, меняющем политику, daemon отключает пересылку до повторного применения и
-проверки binding-specific firewall/NAT. NAT должен быть проверен до добавления или
-восстановления `proto 202` routes через новые exact interface names.
+Штатные local `ADD`/`REMOVE` не изменяют `ip_forward` и применяют только доказанную
+binding-local delta. Глобальный forwarding barrier используется только `INIT/PANIC`.
+Для `ADD` NAT новой binding обязан быть применен и verified до allowing filter и до
+добавления `proto 202` route; для `REMOVE` allowing filter снимается раньше route и
+NAT.
 
 Сторонние правила `POSTROUTING` не удаляются. Если профильная NAT-chain не совпала с
 traffic, ее `RETURN` передает обработку последующим сторонним правилам.
@@ -2180,7 +2185,7 @@ DiagnosticFact:
 
 ### 23.9. Результат профиля
 
-Завершенный reconciliation формирует для каждого managed profile:
+Завершенный reconciliation формирует для каждого enabled profile:
 
 ```text
 SUCCESS
@@ -2195,9 +2200,9 @@ FAIL
   path через active concrete interface;
 - BLACKHOLE и остальные required resources соответствуют desired.
 
-Для multiple-binding selector присутствие всех потенциальных paths не требуется. Partial
-availability остается `SUCCESS`, если хотя бы один active path существует для каждого
-protected destination.
+Для profile с несколькими BindingSpec присутствие всех потенциальных paths не требуется.
+Partial binding availability остается `SUCCESS`, если хотя бы один verified desired
+UNICAST path существует для каждого protected destination.
 
 `FAIL` возникает, если после completed verification хотя бы один protected destination
 не имеет desired UNICAST path либо profile route/policy state не соответствует desired.
