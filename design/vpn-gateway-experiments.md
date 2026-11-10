@@ -10,6 +10,80 @@
 `Architecture baseline`, указанному в самой записи. При выпуске последующих RC такие ссылки
 не перенумеровываются задним числом.
 
+## EXP-011 — NG1: ocserv/OpenConnect transport publication
+
+**Статус:** PREPARED — live run pending  
+**Architecture baseline:** NG1 Draft 1 + EXP-010 PASS  
+**Тип:** real-protocol transport publication proof (TCP/TLS/CSTP + UDP/DTLS)  
+**Artifacts:**  
+- [experiment design](experiments/EXP-011%20NG1%20ocserv%20transport%20publication/README.md)  
+- [TCP+UDP relay](experiments/EXP-011%20NG1%20ocserv%20transport%20publication/vpn-gateway-exp-011-oc-relay.py)  
+- [live harness](experiments/EXP-011%20NG1%20ocserv%20transport%20publication/vpn-gateway-exp-011-harness.sh)
+
+### Мотивация
+
+EXP-010 доказал generic UDP publication/relay через отдельный ROU netns.
+EXP-011 заменяет dummy listener реальным ocserv и проверяет оба транспорта OpenConnect:
+
+- TCP/TLS/CSTP;
+- UDP/DTLS.
+
+OpenConnect использует TCP/TLS как control + backup data channel, а UDP/DTLS как primary
+data channel. Сервер предоставляет DTLS endpoint после установления TLS session, поэтому
+первый proof использует одинаковый published/internal port 45443 для обоих протоколов.
+
+### Топология
+
+    remote OpenConnect client
+             |
+             | TCP 45443 + UDP 45443
+             v
+       host :45443
+             |
+       ROU relay
+       TCP + UDP
+             |
+          exp11h
+      192.0.2.1/30
+             |
+           veth
+             |
+           host0
+      192.0.2.2/30
+             |
+        ROU netns
+             |
+      ocserv :45443
+      TCP + UDP/DTLS
+
+Рабочий host-side ocserv на 44443 не изменяется.
+
+### Гипотезы
+
+- **H1:** клиент устанавливает TLS/CSTP через TCP publication relay.
+- **H2:** клиент устанавливает DTLS через UDP publication relay.
+- **H3:** ocserv-created VPN interface существует только внутри ROU netns.
+- **H4:** production ocserv/config на host 44443 остаются нетронутыми.
+- **H5:** cleanup удаляет experiment processes/netns/veth без изменения production config.
+
+### PASS criterion
+
+EXP-011 закрывается PASS только если client log явно подтверждает оба канала:
+
+    SSL/TLS connected
+    DTLS connected
+
+и relay log показывает bidirectional TCP и UDP traffic через publication boundary.
+
+### Отдельно отложенный вопрос
+
+Произвольная port-number translation для протокола, который сообщает клиенту transport
+endpoint на application level, не считается автоматически прозрачной. EXP-011 сначала
+проверяет same-port real-protocol publication; translation semantics при необходимости
+будут отдельным экспериментом.
+
+---
+
 ## EXP-010 — NG1: ROU transport publication relay
 
 **Статус:** COMPLETE — PASS  
