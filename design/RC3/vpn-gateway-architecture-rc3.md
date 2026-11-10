@@ -19,9 +19,12 @@ VPN Gateway — локальный IPv4-шлюз, который:
 - использует защитные blackhole-маршруты для отказа с запретом;
 - отслеживает появление и исчезновение VPN-интерфейсов через Netlink.
 
-Конфигурация может содержать произвольный каталог описанных VPN-профилей. Во время исполнения
-daemon отслеживает и обслуживает только профили, перечисленные в поле верхнего уровня
-`managed_vpns`. Автоматического failover между профилями нет.
+Конфигурация содержит именованные VPN-профили. В исполнение попадают только профили с
+`enabled=true` (значение по умолчанию); профиль с `enabled=false` отбрасывается до
+разбора его содержимого. Верхнеуровневый `enabled=false` отключает gateway целиком:
+после startup cleanup daemon не разбирает профили, не materialize сетевые ресурсы и
+оставляет `ip_forward=0`. Автоматического failover между разными профилями нет;
+primary/secondary/fallback bindings одного routing profile задаются внутри его `bindings[]`.
 
 IPv6-маршрутизация проектом не поддерживается.
 
@@ -181,9 +184,9 @@ net.ipv6.conf.<interface>.disable_ipv6 = 1
 ```
 
 Проверяется именно защитное пространство имен, а не только множество active bindings.
-Для префиксного селектора проверка охватывает весь textual prefix, закрываемый deny-only
-правилом `-i prefix+`; для explicit list — каждое перечисленное exact name. Только после
-этой проверки строятся candidates, active bindings и policy.
+Для каждого exact BindingSpec проверяется его exact name; для prefix BindingSpec —
+весь textual prefix, закрываемый deny-only правилом `-i prefix+`. Только после этой
+проверки строятся candidates, active bindings и policy.
 
 Значение `default.disable_ipv6=1` обеспечивает выключенный IPv6 для создаваемых позднее
 интерфейсов по умолчанию.
@@ -242,53 +245,59 @@ Daemon пишет обычные текстовые сообщения в `stder
 в journal. Структурированное логирование/JSON не требуется.
 
 
+
 ## 4. Мониторинг VPN-интерфейсов и привязки во время исполнения
 
-Для мониторинга используется Linux Netlink через стандартный Python `socket`:
-
-```text
-AF_NETLINK
-NETLINK_ROUTE
-```
-
 Сервис реагирует как минимум на `RTM_NEWLINK`, `RTM_DELLINK`, `RTM_NEWADDR` и
-`RTM_DELADDR`. При запуске daemon выполняет полный snapshot интерфейсов и адресов.
-Netlink-событие является только сигналом к reconciliation; решение всегда выводится из
-заново прочитанного полного snapshot. При `ENOBUFS` и периодически по
+`RTM_DELADDR`. Netlink-событие является только wakeup hint; решение всегда выводится
+из заново прочитанного полного snapshot. При `ENOBUFS` и периодически по
 `reconcile_interval` выполняется полная пересверка.
 
-### 4.1. Формы селектора и защитное пространство имен
+### 4.1. BindingSpec и защитное пространство имен
 
-Поле `interface` задает selector union из трех форм:
+Enabled profile содержит непустой ordered `bindings[]`. Каждый элемент — отдельный
+`BindingSpec`:
 
 ```text
-"wg0"                    -> точный селектор
-"vpns+"                  -> префиксный множественный селектор
-["vpnA","vpnB","vpnC"]   -> явный упорядоченный список точных имен
+BindingSpec:
+    interface = exact-name | prefix+
+    network   = canonical IPv4 CIDR
 ```
 
-Селектор определяет:
+Пример:
 
-1. множество candidate runtime-интерфейсов;
-2. защитное пространство имен для deny-only firewall guard;
-3. форму назначения метрик UNICAST-маршрутам.
+```toml
+bindings = [
+    { interface = "wg0",    network = "172.20.126.0/29" },
+    { interface = "wg1",    network = "172.20.127.0/29" },
+    { interface = "ocvpn+", network = "172.20.130.0/29" },
+]
+```
 
-Нормативная семантика:
+`network` является свойством конкретного BindingSpec, а не профиля. Поэтому один
+routing profile может объединять independent VPN interfaces с разными transport
+address spaces.
 
-| Форма | Candidates | Защитный guard | Семантика метрик |
-|---|---|---|---|
-| exact `name` | только `name` | exact `name` | единственный active interface получает metric 10 |
-| `prefix+` | все имена с началом `prefix`, включая exact `prefix` | `-i prefix+` | уникальные технические metrics выделяются динамически; приоритет между interfaces не гарантируется |
-| explicit list | перечисленные exact names | exact guard каждого имени | порядок элементов конфигурации задает стабильный route preference |
+Поле `interface` BindingSpec имеет только две формы:
+
+- exact: `wg0`;
+- textual prefix: `ocvpn+`.
+
+Старая форма «массив exact names как один selector» отсутствует: ordered
+`bindings[]` полностью заменяет её.
+
+Каждый enabled BindingSpec резервирует selector namespace для deny-only firewall guard.
+Selector namespaces **всех enabled BindingSpec** попарно не пересекаются, в том числе
+между profiles. Поэтому любой kernel interface может принадлежать не более чем одному
+enabled BindingSpec.
 
 Завершающий `+` использует подтвержденную EXP-005 textual-prefix семантику iptables.
-Оператор `%` больше не является частью конфигурационной грамматики RC3.
+`%`, glob и regex не поддерживаются.
 
-Ни строка селектора, ни массив имен не используются как разрешающее условие
-`ACCEPT`, NAT или route. Разрешающие ресурсы всегда содержат только exact interface
-name текущей active concrete binding.
+Selector никогда не используется как разрешающее условие `ACCEPT`, NAT или route.
+Разрешающие ресурсы всегда содержат exact interface name active concrete binding.
 
-### 4.2. Инвентаризация интерфейсов
+### 4.2. Инвентаризация и concrete identity
 
 Один snapshot интерфейсов сохраняет как минимум:
 
@@ -298,10 +307,9 @@ ifindex
 IPv4 local addresses
 ```
 
-Point-to-point remote endpoint может присутствовать в данных iproute2 и сохраняться для
-диагностики, но **не участвует** в selector resolution, route derivation или
-transport-peer association. EXP-009 показал, что transport peer не является
-универсальной route-next-hop abstraction для VPN-GATE.
+Point-to-point remote endpoint может сохраняться для диагностики, но не участвует в
+binding applicability, route derivation или transport-peer association. EXP-009 показал,
+что transport peer не является универсальной Linux route-next-hop abstraction.
 
 Идентичность concrete binding:
 
@@ -309,72 +317,53 @@ transport-peer association. EXP-009 показал, что transport peer не �
 ConcreteBinding = exact name + ifindex
 ```
 
-Повторное создание того же имени с новым ifindex является новой binding.
+Повторное создание того же имени с новым ifindex является новой concrete binding.
+Если один inventory содержит одно exact name с несовместимыми ifindex, snapshot
+некорректен; daemon не выбирает запись произвольно.
 
-Если один inventory содержит одно exact name с несовместимыми ifindex, inventory
-некорректна и весь reconciliation pass не выбирает одну запись произвольно.
+### 4.3. Candidates, applicability и active order
 
-### 4.3. Candidates и active concrete bindings
+Candidate определяется конкретным BindingSpec:
 
-Candidate определяется только формой селектора:
+- exact BindingSpec дает существующий interface с этим exact name;
+- prefix BindingSpec дает все существующие interfaces с textual prefix.
 
-- exact — существующий interface с указанным именем;
-- `prefix+` — все существующие interfaces с textual prefix;
-- explicit list — существующие interfaces, чьи exact names перечислены в списке.
+Candidate становится active concrete binding только если на нем есть хотя бы один
+local IPv4 address, принадлежащий **network owning BindingSpec**.
 
-Candidate становится **active concrete binding**, только если на нем присутствует хотя бы
-один local IPv4 address, принадлежащий `profile.network`.
+Candidate без подходящего local IPv4:
 
-Несколько candidates/active bindings для `prefix+` и explicit list являются штатным
-состоянием. Понятие selector `AMBIGUOUS` для этого больше не требуется.
+- остается видимым в status вместе с owning BindingSpec;
+- не получает binding-specific `ACCEPT`, NAT или `proto 202` route;
+- остается закрыт selector guard.
 
-Candidate без local IPv4 address из `profile.network`:
+Это явная trust boundary: daemon не доказывает происхождение адреса. Администратор и
+transport configuration обязаны не назначать address из BindingSpec.network постороннему
+interface внутри selector namespace этого BindingSpec.
 
-- остается видимым в status;
-- не получает exact `ACCEPT`, NAT или `proto 202` route;
-- остается закрыт guard-правилом селектора.
+`operstate`, `LOWER_UP`, ping, handshake, transport peer и endpoint reachability не
+являются binding truth.
 
-Точный селектор естественно дает 0 или 1 candidate. Для explicit list route preference
-определяется позицией exact name в конфигурации. Для `prefix+` приоритет между active
-interfaces архитектура не задает.
+Profile-level order active bindings состоит из двух классов:
 
-`operstate`, `LOWER_UP`, ping, handshake и transport-specific peer state не являются
-источником binding truth.
+1. active exact bindings — в порядке exact BindingSpec в config, игнорируя prefix entries;
+2. active prefix bindings — в process-local порядке первого принятия текущим daemon.
 
-Для детерминированного построения и сравнения binding-specific policy используется
-нормативный `active_order`:
+Для prefix класса непрерывно active binding сохраняет relative order. Новая binding
+добавляется в конец, исчезнувшая удаляется без перестановки survivors. Если несколько
+новых prefix bindings впервые обнаружены в одном snapshot, они принимаются в порядке
+interface inventory этого snapshot; дополнительная сортировка имен запрещена.
 
-- exact — единственный active interface;
-- `prefix+` — process-local порядок первого принятия active binding текущим daemon;
-- explicit list — config order, отфильтрованный до currently active elements.
+Этот порядок используется для binding-specific firewall/NAT/status serialization.
+Появление exact binding может вставить ее block в fixed exact position без удаления или
+повторного создания survivor blocks. Prefix order диагностический и не является
+route-priority contract.
 
-Для `prefix+` непрерывно active binding сохраняет свою позицию. Новая binding
-добавляется в конец, исчезнувшая удаляется без перестановки остальных. Если несколько новых bindings впервые обнаружены в одном snapshot, они добавляются
-в том порядке, в котором встретились в interface inventory этого snapshot. Дополнительная
-сортировка или канонизация этой группы не выполняется.
+### 4.4. Метрики и materialization маршрутов
 
-`active_order` используется для INPUT/FORWARD exact blocks, `VPNG-INGRESS`, NAT,
-status output и обхода новых prefix-bindings при выделении метрик. Поэтому появление
-нового prefix-interface не меняет относительный порядок существующих exact blocks/rules
-в требуемой policy. Штатное появление binding обслуживается локальной процедурой `ADD` §8.6, которая
-существующие binding-specific rules не удаляет и не пересоздает. Штатное исчезновение
-binding обслуживается локальной процедурой `REMOVE`. Глобальная пересборка применяется
-только через `INIT/PANIC`, когда локальный переход нельзя доказать безопасным или
-локальная процедура завершилась ошибкой.
+Для каждого protected destination профиля всегда существует config-derived BLACKHOLE.
 
-Для `prefix+` этот порядок не является гарантией route preference. Он также не является
-персистентной историей создания interfaces: после restart daemon строит новый process-local
-order из первого доступного snapshot. Поэтому наблюдавшийся до restart относительный route
-preference между prefix-bindings не переносится через restart и может измениться.
-Во время непрерывной работы порядок полезен диагностически как порядок первого принятия
-bindings daemon'ом.
-
-### 4.4. Materialization маршрутов по active binding set
-
-Для каждого protected destination всегда существует config-derived `BLACKHOLE`.
-
-Для каждого active concrete binding также materialize direct UNICAST route **без
-transport next-hop**:
+Для каждого active concrete binding materialize direct UNICAST route:
 
 ```text
 destination = profile.route
@@ -384,148 +373,129 @@ proto       = 202
 onlink      = false
 ```
 
-Для всех daemon-owned UNICAST действует общий инвариант:
+Общие constants:
 
 ```text
-0 < metric < BLACKHOLE_METRIC
-BLACKHOLE_METRIC = 65536
-ROUTE_METRIC_STEP = 10
 FIRST_UNICAST_METRIC = 10
+ROUTE_METRIC_STEP    = 10
+BLACKHOLE_METRIC     = 65536
+0 < UNICAST metric < BLACKHOLE_METRIC
 ```
 
-Тем самым любой требуемый UNICAST-маршрут имеет меньшую metric, чем защитный BLACKHOLE.
-
-Exact:
+Пусть `E` — количество **exact BindingSpec** профиля. Exact rank — позиция exact entry
+среди exact entries, а не абсолютная позиция в `bindings[]`.
 
 ```text
-единственный active interface -> metric 10
+exact_metric(rank) = FIRST_UNICAST_METRIC + rank * ROUTE_METRIC_STEP
+rank = 0 .. E-1
 ```
 
-Explicit list:
+Отсутствующий exact interface не сдвигает metrics следующих exact BindingSpec.
+Повторное создание exact name с новым ifindex получает ту же config-derived metric:
+это обеспечивает failback к fixed primary/secondary priority.
+
+Все prefix BindingSpec профиля используют **один общий dynamic allocator**:
 
 ```text
-interface[0] -> FIRST_UNICAST_METRIC
-interface[N] -> FIRST_UNICAST_METRIC + N * ROUTE_METRIC_STEP
-при текущих constants: 10,20,30...
-
+dynamic_metric_min =
+    FIRST_UNICAST_METRIC + E * ROUTE_METRIC_STEP
 ```
 
-Отсутствующий элемент списка не сдвигает metric следующих элементов. Конфигурация
-недопустима, если metric любого slot будет `>= BLACKHOLE_METRIC`.
+Следовательно все exact routes профиля имеют меньшую metric, чем любой dynamic prefix
+route. Положение prefix entry внутри `bindings[]` route priority не задает.
 
-Для `prefix+` metric является техническим уникальным идентификатором одновременного
-UNICAST-маршрута, а не гарантированным приоритетом interface.
-
-Daemon хранит только во время жизни процесса подтвержденное распределение:
+Dynamic allocator рассматривает только значения:
 
 ```text
-ConcreteBinding(name, ifindex) -> metric
-next_metric_cursor
+dynamic_metric_min + N * ROUTE_METRIC_STEP < BLACKHOLE_METRIC
 ```
 
-Правила allocator:
+и работает циклически:
 
-1. непрерывно active binding сохраняет выделенную metric;
-2. исчезнувшая binding освобождает metric после успешной фиксации нового состояния;
-3. новая binding получает следующее свободное значение начиная с `next_metric_cursor`;
-4. рассматриваются только значения `FIRST_UNICAST_METRIC + N * ROUTE_METRIC_STEP`,
-   строго меньшие `BLACKHOLE_METRIC`;
-5. при достижении верхней границы поиск циклически продолжается с
-   `FIRST_UNICAST_METRIC`;
-6. уже занятая metric пропускается; немедленное заполнение более ранней «дырки» не
-   требуется;
-7. если полный цикл не нашел свободного значения, распределение метрик завершается
-   ошибкой;
-8. новая binding с тем же именем, но новым `ifindex`, не имеет гарантии наследования
-   прежней metric и проходит обычное allocation; случайное получение того же свободного
-   численного значения допустимо;
-9. после restart распределение начинается заново и прежние metrics не гарантируются.
+1. непрерывно active prefix binding сохраняет metric;
+2. исчезнувшая binding освобождает metric только после verified-state commit;
+3. новая prefix binding получает следующее свободное значение от cursor;
+4. занятые значения пропускаются;
+5. при верхней границе поиск возвращается к `dynamic_metric_min`;
+6. ранняя свободная «дырка» не заполняется специально;
+7. полный цикл без свободного slot завершает snapshot projection ошибкой;
+8. same-name/new-ifindex prefix binding является новой и проходит обычное allocation;
+9. allocator mapping/cursor process-local и после restart строятся заново.
 
-Порядок перечисления `RouteSpec` не является частью desired route semantics. Route
-reconciliation сравнивает маршруты по их полной идентичности/множеству; изменение
-порядка сериализации или обхода само по себе не является drift и не должно вызывать
-удаление, повторное добавление или переназначение metric существующего desired route.
+При текущих constants существует 6553 допустимых UNICAST slots: 10..65530.
+Если профиль содержит хотя бы один prefix BindingSpec, config validation должна оставить
+минимум один dynamic slot. Если prefix BindingSpec нет, exact BindingSpec могут занимать
+все допустимые slots.
 
-Если в одном snapshot одновременно появились несколько новых prefix-bindings, они
-добавляются в конец текущего prefix active_order и получают metrics в порядке появления
-в interface inventory этого snapshot. Уже принятые bindings не переставляются.
-Никакая дополнительная сортировка имен не выполняется, и этот порядок не является
-обещанным route preference.
+Появление/исчезновение prefix binding не переметрирует exact routes и prefix survivors.
+Порядок перечисления RouteSpec не является desired semantics и не вызывает churn.
 
-Предварительно рассчитанное распределение и новый cursor входят в snapshot согласования,
-но process-local allocator state фиксируется только после успешной проверки полного
-требуемого состояния. При неуспешном применении/verification прежнее подтвержденное
-распределение и cursor не изменяются.
+Provisional allocator mapping/cursor входит в immutable reconciliation snapshot, но
+process-local state меняется только после successful verification.
 
-EXP-009 подтвердил:
-
-- исчезновение concrete interface автоматически удаляет зависимый route;
-- возвращение interface само route не восстанавливает;
-- reconciliation обязан rematerialize current desired direct route;
-- Linux metric участвует в выборе предпочтительного существующего route, но не является
-  end-to-end health-check; для explicit list VPN-GATE гарантирует configured priority, а
-  для `prefix+` относительный preference interfaces не является контрактом;
-- OpenConnect path работает с direct `dev vpns00 proto 202 metric 10` без `via`;
-- WireGuard peer selection внутри `wg0` принадлежит самому transport и не должна
-  моделироваться Linux next-hop внутри VPN-GATE.
+EXP-009 подтверждает direct-`dev` routing для OpenConnect и WireGuard. WireGuard peer
+selection внутри одного WG interface принадлежит `AllowedIPs`; VPN-GATE не реализует
+failover между peers одного interface. Управляемый VPN-GATE failover/failback строится
+из нескольких independent concrete interfaces/BindingSpec.
 
 ### 4.5. Смена привязок и остаточное окно реакции
 
-Изменение candidate set всегда будит reconciliation и отражается в status.
+Policy-changing transition возникает при появлении/исчезновении active concrete binding,
+same-name/new-ifindex replacement или изменении address membership относительно owning
+BindingSpec.network.
 
-**Переходом, меняющим политику**, является как минимум:
+Штатный transition раскладывается на локальные `ADD`/`REMOVE` §8.6; replacement —
+`REMOVE old -> ADD new`. Exact binding возвращается со своей config-derived metric.
+Prefix binding проходит dynamic allocation.
 
-- появление или исчезновение active concrete binding;
-- замена `name + ifindex` active binding;
-- добавление/удаление local IPv4, меняющее принадлежность candidate к `profile.network`
-  и тем самым active set;
-- изменение metric, назначенной существующей active binding, если такое изменение
-  вообще требуется корректирующим согласованием.
+Candidate-only change без изменения active resources не требует глобальной процедуры
+после successful IPv6 prerequisite verification.
 
-Сам по себе такой переход не требует глобального изменения `ip_forward`.
-Штатные изменения active binding state раскладываются на локальные `ADD` и `REMOVE`
-§8.6; replacement `name + ifindex` выполняется как `REMOVE old -> ADD new`.
-Глобальное выключение forwarding и полная пересборка требуются только для
-`INIT/PANIC`.
+Selector guard существует из config независимо от активности candidate. Exact active
+blocks выполняются раньше guard; prefix syntax разрешен только в deny-only guard rules.
 
-Появление matching candidate без local IPv4 из `profile.network` само по себе не
-открывает разрешающий path: guard уже существует из config, а binding-specific resources
-для candidate отсутствуют.
-
-Для `prefix+` guard использует `-i prefix+`. Для explicit list guard содержит
-отдельное exact deny-правило каждого имени. Exact active blocks выполняются раньше guard.
-Prefix matching разрешен только в deny-only guard rules и никогда не используется для
-`ACCEPT`, NAT или route.
-
-Между kernel event и reconciliation существует остаточное окно реакции. Если событие
-потеряно, периодический цикл остается резервным механизмом.
-
-Граница модели угроз остается прежней: недоверенные локальные процессы не имеют
-`CAP_NET_ADMIN`; жизненным циклом interfaces управляют доверенное VPN-ПО, ядро и
-администратор. ifindex позволяет обнаружить повторное создание имени, но iptables rule по
-имени не может быть задним числом привязано к историческому ifindex.
+Между kernel event и reconciliation остается остаточное окно реакции. Потерянное событие
+компенсируется периодической пересверкой. Threat model неизменен: недоверенные процессы
+не имеют `CAP_NET_ADMIN`; interface lifecycle принадлежит доверенному VPN-ПО, ядру и
+администратору.
 
 ## 5. Жизненный цикл сервиса
+
 
 ### 5.1. Запуск
 
 Базовая модель:
 
 ```text
-START
-  ↓
-LOCK
-  ↓
-CLEANUP
-  ↓
-LOAD + VALIDATE CONFIG
-  ↓
-APPLY
-  ↓
-RUN
+START -> LOCK -> CLEANUP -> LOAD TOP-LEVEL ENVELOPE
 ```
 
-Любая ошибка до перехода в `RUN` является фатальной.
+После cleanup TOML syntactically parses и читается top-level `enabled`.
+
+Если `enabled=false`:
+
+- profile bodies не разбираются и не валидируются;
+- daemon не materialize firewall/NAT/routes;
+- `ip_forward` остается 0;
+- daemon входит в штатное состояние `DISABLED` и может сообщить READY;
+- изменение режима требует restart, как и любое изменение config.
+
+Если `enabled=true`:
+
+```text
+PARSE ENABLED PROFILES
+  -> VALIDATE
+  -> BUILD SNAPSHOT
+  -> APPLY FAIL-CLOSED STATE
+  -> VERIFY
+  -> COMMIT
+  -> ip_forward=1
+  -> ACTIVE | DEGRADED
+```
+
+Startup error до завершенного verified apply оставляет `ip_forward=0` и завершает
+процесс ненулевым кодом. Verified zero-path profile не является startup error:
+структурно корректный fail-closed state commit-ится и дает `DEGRADED`.
 
 ### 5.2. Runtime-каталог и блокировка экземпляра
 
@@ -764,86 +734,65 @@ Debian 13 / iptables-nft 1.8.11: повторяющиеся `-D`, затем `-F
 Точные защищаемые префиксы остаются отдельной областью ответственности daemon при обычном
 согласовании; универсальная очистка этим исключением не пользуется.
 
+
 ## 7. Загрузка и проверка конфигурации
 
-### 7.1. Проекция конфигурации для исполнения
+### 7.1. Staged parsing
 
-После успешной `cleanup()` daemon разбирает TOML-документ и строит проекцию конфигурации для исполнения,
-содержащую только профили из `managed_vpns`.
+После cleanup daemon всегда сначала выполняет TOML syntax parse и разбирает минимальный
+top-level envelope.
 
-На обычный запуск влияют:
-
-1. синтаксическая корректность TOML;
-2. схема верхнего уровня конфигурации для исполнения
-   (`managed_vpns`, `common_allowed_sources`, `reconcile_interval`);
-3. возможность однозначно разрешить каждую ссылку из `managed_vpns` к
-   `[vpn.<profile>]`;
-4. полная проверка схемы, значений и семантики только выбранных управляемых описаний
-   профилей;
-5. конфликты, зависящие от выбора, только внутри набора управляемых профилей.
-
-Тела неуправляемых `[vpn.*]` не создают состояния во время исполнения и **не проходят проверку значений
-и схемы при обычном запуске**. Ошибочный IP, отсутствующее поле, неизвестный ключ профиля
-или иной дефект неуправляемого описания не должен останавливать работающий шлюз.
-
-Это сознательно разделяет:
+Нормативный порядок:
 
 ```text
-TOML-документ + выбор управляемых профилей
-        ↓
-проверенная проекция конфигурации управляемых профилей для исполнения
+1. TOML syntax
+2. top-level key set + config.enabled
+3. if config.enabled=false -> stop profile/body parsing
+4. for each profile: inspect profile.enabled
+5. discard disabled profiles before body parsing
+6. fully parse/validate enabled profile bodies
+7. cross-profile validation only over enabled profiles
 ```
 
-`VpnGatewayDaemon` получает только проверенную проекцию конфигурации управляемых профилей для исполнения.
+`enabled` на обоих уровнях optional и default=true.
 
-### 7.2. Проверка вне запуска: `--check-config`
+Disabled profile **не участвует в init-time config parsing** кроме чтения его
+`enabled=false`. Его `routes`, `bindings`, `allowed_sources`, неизвестные ключи и
+значения не проходят schema/value/semantic validation и не создают runtime state.
 
-`--check-config` дополнительно анализирует весь каталог описаний профилей.
+Если top-level `enabled=false`, profile bodies и ACL не разбираются вообще. Это
+intentional administrative off-switch, а не DEGRADED configuration.
 
-Для набора управляемых профилей он выдает те же `ERROR`, которые сделали бы обычный
-запуск невалидным.
+Top-level key names остаются closed-schema даже в disabled config; содержимое полей,
+кроме необходимого для disabled envelope, не проецируется в runtime.
 
-Для неуправляемых описаний и конфликтов, возникающих только при их возможной будущей
-совместной активации, он выдает `WARNING`, например:
+При top-level `enabled=true` должен существовать хотя бы один enabled profile.
 
-- некорректное значение поля;
-- отсутствующее или неизвестное поле профиля;
-- некорректный идентификатор профиля;
-- конфликт интерфейсов;
-- пересечение маршрутов;
-- пересечение `routes` с `vpn.network`;
-- неоднозначные без учета регистра описания профилей;
-- безвредные точные дубликаты в списках с семантикой множества.
+### 7.2. Enabled projection
 
-Наличие только `WARNING` не меняет код завершения 0.
+Runtime config содержит только enabled profiles. Для каждого enabled profile обязательны
+валидные non-empty `routes[]` и `bindings[]`; `allowed_sources[]` optional и default
+empty. `common_allowed_sources[]` также optional и default empty.
 
-`NOTE` используется для валидных, но операционно значимых состояний конфигурации,
-которые полезно явно показать оператору. `NOTE` не меняет код завершения 0. Текущая
-RC3 schema не имеет обязательного NOTE, завязанного на transport peer list.
+Все selector conflicts, protected-route overlaps, route-vs-binding-network conflicts и
+metric capacity checks считаются только по enabled profiles/BindingSpec.
 
-### 7.3. Критерии введения ограничений конфигурации
+Неизвестный key в enabled profile или BindingSpec является fatal config error.
+Disabled profile body не рассматривается как schema instance и потому таких ошибок не
+порождает.
 
-Новое правило проверки конфигурации во время исполнения должно иметь явную цель:
+### 7.3. `--check-config`
 
-1. проекцию конфигурации для исполнения невозможно однозначно построить;
-2. состояние управляемых ресурсов во время исполнения становится неоднозначным или небезопасным.
+`--check-config` использует ту же staged projection, что normal startup, но не берет
+instance lock и не изменяет kernel state.
 
-Потенциальная проблема только неуправляемого описания профиля относится к проверке вне
-запуска, а не к ошибке запуска.
+Следовательно disabled profile намеренно не lint-ится. Чтобы проверить его body,
+оператор должен включить профиль в копии config и запустить `--check-config`.
 
-Безвредная избыточность входных данных с семантикой множества не является фатальной
-ошибкой и нормализуется: например, дубликаты в `managed_vpns`, точные дубликаты
-`routes` одного управляемого профиля и дубликаты ACL.
+### 7.4. Критерии ограничений
 
-Explicit interface list является упорядоченным списком, а не множеством: duplicate exact
-name запрещен, потому что одна concrete interface не может занимать два route-priority
-slot.
-
-Отдельной фазы `preflight()` нет. Проверки безопасности, зависящие от состояния ядра,
-входят в построение и проверку начального плана согласования. В частности,
-`_validate_plan()` запрещает удаление `proto kernel`; точный защищаемый префикс,
-совпадающий с подключенным маршрутом `proto kernel` хоста, приводит к ошибке, блокирующей
-запуск до любых побочных изменений маршрутов.
+Ограничение вводится только если оно выводится из kernel/tool limit, безопасности либо
+конечного пространства метрик. Произвольные лимиты «для удобства» не вводятся.
 
 ## 8. Применение и согласование во время исполнения
 
@@ -852,29 +801,24 @@ slot.
 `DEGRADED` или `ISOLATED`.
 
 
+
 ### 8.1. Неизменяемый snapshot согласования
 
-Каждый завершенный цикл использует одну неизменяемую интерпретацию одной свежей
-инвентаризации:
+Один reconciliation pass строит immutable projection из:
 
-```text
-ReconciliationSnapshot
-    interfaces
-    selector_candidates_by_profile
-    active_bindings_by_profile
-    prefix_metric_allocations_by_profile
-    prefix_metric_cursor_by_profile
-    desired_routes_by_profile
-    desired_full_policy
-```
+- current interface inventory;
+- enabled ProfileConfig/BindingSpec;
+- candidates каждого BindingSpec;
+- active concrete bindings и owning BindingSpec;
+- fixed exact ranks/metrics;
+- process-local prefix active_order;
+- provisional shared prefix allocator mapping/cursor каждого profile;
+- desired routes;
+- desired firewall/NAT policy.
 
-Point-to-point remote endpoints и transport peer state не являются входом route
-derivation.
-
-Из snapshot daemon один раз строит full desired firewall/NAT policy и routes. Candidates,
-active bindings, предварительное распределение prefix metrics и desired state не
-пересчитываются между построением, применением и проверкой одного цикла. Snapshot не означает атомарность kernel operations; он
-гарантирует внутреннюю согласованность оркестрации.
+Applicability candidate проверяется по network **его owning BindingSpec**.
+Один и тот же snapshot используется для policy/routes, локальных delta и verification.
+Provisional allocator state не commit-ится до завершенной verification.
 
 ### 8.2. Применение при запуске
 
@@ -885,7 +829,7 @@ active bindings, предварительное распределение prefi
 3. проверить `disable_ipv6=1` на всех существующих interfaces защитных пространств
    имен управляемых селекторов;
 4. построить candidates и active concrete bindings по membership local IPv4 в
-   `profile.network`, а для `prefix+` также provisional metric allocation/cursor;
+   owning `BindingSpec.network`, а для `prefix+` также provisional metric allocation/cursor;
 5. построить full desired firewall/NAT policy;
 6. применить и проверить `filter`, затем `nat`;
 7. прочитать строгий route snapshot, построить и проверить route plan;
@@ -1002,27 +946,19 @@ namespace**. После этой
 проверки allowing IPv4 policy действительно не меняется; status обновляется из нового
 snapshot.
 
-### 8.5. Частичная доступность множественного селектора
 
-Для `prefix+` и explicit list несколько active concrete bindings являются нормальным
-состоянием. Daemon не требует наличия всех потенциальных или перечисленных paths, чтобы
-профиль был `SUCCESS`.
+### 8.5. Частичная доступность bindings профиля
 
-Если active bindings остались хотя бы в количестве одного и required routes/policy
-успешно применены и verified, profile остается `SUCCESS`.
+Несколько BindingSpec и несколько concrete bindings являются штатным состоянием.
 
-Если active binding отсутствует полностью:
+ProfileResult зависит не от количества candidates, а от verified route availability для
+каждого protected destination. Если хотя бы один desired UNICAST path verified для
+каждого destination, profile может быть `SUCCESS`; отсутствие всех UNICAST path дает
+functional `FAIL` при структурно verified fail-closed state.
 
-- binding-specific exact `ACCEPT`/NAT отсутствуют;
-- direct `proto 202` routes отсутствуют;
-- selector guards, protected-destination `REJECT` и BLACKHOLE сохраняются;
-- после успешной verification profile = `FAIL`;
-- при global `SAFE` policy daemon = `DEGRADED`, а не `ISOLATED`.
-
-Понятие runtime selector ambiguity в новой модели не используется: multiplicity является
-свойством supported selector forms, а exact interface name в Linux уникально. Конфликт
-между managed selector namespaces является config error, а некорректная inventory с одним
-именем и разными ifindex — error уровня reconciliation pass.
+Exact BindingSpec реализуют config-defined priority/failback. Prefix BindingSpec дают
+dynamic fallback pool без гарантированного взаимного preference. Отдельного
+`AMBIGUOUS` state нет.
 
 ### 8.6. Три процедуры изменения состояния: ADD, REMOVE и INIT/PANIC
 
@@ -1281,9 +1217,9 @@ end-to-end transport reachability. Ping, handshake и transport peer health не
 - candidates;
 - active concrete bindings;
 - desired/verified direct `UNICAST RouteSpec` с interface/metric;
-- для explicit list — configured order;
-- для prefix — process-local active_order и текущие binding -> metric allocations;
-  порядок route priority не обещается; active_order может использоваться как
+- exact BindingSpec и их fixed config-derived exact_rank/metric;
+- для prefix BindingSpec — process-local active_order и текущие binding -> metric allocations;
+  взаимный prefix route priority не обещается; active_order может использоваться как
   диагностический порядок первого принятия bindings текущим daemon.
 
 Ручной `sysctl -w net.ipv4.ip_forward=0` не является административной паузой; чистый
@@ -1429,7 +1365,7 @@ ctstate ESTABLISHED,RELATED
 materialize как набор exact guards. Затем следует `RETURN`.
 
 `VPNG-RESERVED` всегда выполняет `REJECT` для назначения в любую managed
-`vpn.network`.
+enabled `BindingSpec.network`.
 
 Цепочка `FORWARD` профиля для каждого protected destination обходит active egress
 interfaces в нормативном `active_order` §4.3 и для каждого содержит:
@@ -1594,96 +1530,84 @@ reconciliation новый candidate interface не получает `proto 202` 
 доверенного хоста и обнаруживается по изменению ifindex на ближайшем Netlink event или
 полной пересверке.
 
+
 ## 12. Конфигурация
 
-Конфигурационный файл по умолчанию:
+Основной файл:
 
 ```text
 /etc/vpn-gateway/vpn-gateway.toml
 ```
 
-Формат — TOML. Файл и его родительский каталог принадлежат `root`, не writable для
-group/other; последний компонент файла не symlink. Эти security requirements проверяются
-как startup, так и `--check-config`.
+Формат — TOML. Файл и parent directory сохраняют ранее определенные ownership/mode
+requirements.
 
 Пример:
 
 ```toml
+enabled = true
 reconcile_interval = 10.0
 
-managed_vpns = ["primary", "backup"]
-
 common_allowed_sources = [
-    "10.200.200.8",
-    "10.200.200.9",
+    "10.200.200.8/32",
 ]
 
-[vpn.primary]
-interface = "vpns+"
-network = "172.20.130.0/29"
-routes = ["10.0.0.0/8"]
-allowed_sources = ["10.200.201.0/24"]
-
-[vpn.backup]
-interface = "wg0"
-network = "172.20.126.0/29"
+[profiles.primary]
+enabled = true
 routes = [
-    "100.64.0.0/10",
+    "10.0.0.0/8",
     "192.168.0.0/16",
 ]
-allowed_sources = []
+allowed_sources = ["10.200.201.0/24"]
+
+bindings = [
+    { interface = "wg0",    network = "172.20.126.0/29" },
+    { interface = "wg1",    network = "172.20.127.0/29" },
+    { interface = "ocvpn+", network = "172.20.130.0/29" },
+]
+
+[profiles.future]
+enabled = false
+# Остальное содержимое normal startup/--check-config не разбирает.
 ```
 
-Explicit ordered multi-interface profile:
+`reconcile_interval` остается ортогональным operational parameter и не участвует в
+routing priority.
 
-```toml
-[vpn.explicit]
-interface = ["vpnA", "vpnB", "vpnC"]
-network = "172.20.140.0/29"
-routes = ["172.21.0.0/16"]
-allowed_sources = []
-```
-
-Каждая `[vpn.<profile>]` является описанием профиля. Только `managed_vpns` выбирает
-profiles, которыми daemon управляет. Порядок `managed_vpns` приоритета не задает.
-
-Transport-specific peer configuration в VPN-GATE отсутствует. WireGuard `AllowedIPs`,
-OpenConnect session identity и аналогичные transport details принадлежат самому VPN
-transport и настраиваются вне `vpn-gatewayd`.
+Transport peer configuration в VPN-GATE отсутствует. WireGuard `AllowedIPs`,
+OpenConnect session identity, endpoint и credentials принадлежат transport configuration
+вне VPN-GATE.
 
 ## 13. Закрытая схема конфигурации
 
-Неизвестные top-level keys являются fatal startup error. Ошибки profile schema/value
-фатальны только для managed profile; для unmanaged описаний они выдаются как `WARNING`
-в `--check-config`.
+Для enabled config:
 
 ```text
-reconcile_interval          float, optional, default 10.0, range [1.0, 60.0]
-managed_vpns                array[string], required, non-empty
-common_allowed_sources      array[string], required
+enabled                       bool, optional, default true
+reconcile_interval            float, optional, default 10.0, range [1.0, 60.0]
+common_allowed_sources        array[IPv4|IPv4CIDR], optional, default []
 
-[vpn.<profile>]
-interface                   string | array[string], required; exact / prefix+ / ordered exact list
-network                     string, required
-routes                      array[string], required
-allowed_sources             array[string], required
+[profiles.<profile>]
+enabled                       bool, optional, default true
+routes                        non-empty array[IPv4CIDR], required when enabled
+bindings                      non-empty array[BindingSpec], required when enabled
+allowed_sources               array[IPv4|IPv4CIDR], optional, default []
+
+BindingSpec inline table:
+interface                     string, required; exact | trailing-prefix+
+network                       canonical IPv4 CIDR, required
 ```
 
-Ключи `peers` и `local_address` больше не входят в RC3 schema и являются unknown
-profile keys. Селектор `prefix%` больше не поддерживается и является invalid interface
-selector.
+Top-level unknown keys fatal. Для enabled profile/BindingSpec unknown keys fatal.
+Disabled profile body исключен до schema parsing.
 
-Profile id:
+Profile id валидируется только для enabled profile:
 
 ```text
 [A-Za-z][A-Za-z0-9_-]{0,14}
 ```
 
-Имена profiles уникальны case-insensitively. `managed_vpns` должен после нормализации
-быть непустым; его exact/case-insensitive duplicates нормализуются как set-like input, а
-`--check-config` сообщает warning.
-
-Daemon-owned chain names:
+Chain names:
 
 ```text
 VPNG-<PROFILE>-INPUT
@@ -1691,42 +1615,27 @@ VPNG-<PROFILE>-FORWARD
 VPNG-<PROFILE>-NAT
 ```
 
-Profile-name length 15 сохраняет longest chain name короче iptables-nft limit.
+## 14. Enabled и пустые значения
 
-Unknown key внутри managed profile фатален. Неожиданная nested TOML structure обрабатывается
-по тем же managed/unmanaged projection rules §7.
+`config.enabled=false` является валидным intentional disabled state; profile bodies при
+этом не разбираются.
 
-## 14. Пустые списки и количество профилей
+При `config.enabled=true`:
 
-Для managed configuration:
+- должен существовать хотя бы один enabled profile;
+- enabled `profile.routes` non-empty;
+- enabled `profile.bindings` non-empty;
+- missing/empty `common_allowed_sources` допустим;
+- missing/empty `profile.allowed_sources` допустим.
 
-```text
-managed_vpns = []               -> запрещено
-profile.routes = []             -> запрещено
-common_allowed_sources = []     -> разрешено
-profile.allowed_sources = []    -> разрешено
-interface = []                  -> запрещено
-```
+Disabled profile может быть неполным или содержать значения будущей schema: они не
+участвуют в startup projection.
 
-Отдельный лимит общего количества profiles не требуется. Для explicit interface list
-число элементов ограничивается валидностью имен и тем, что каждая вычисляемая
-`FIRST_UNICAST_METRIC + index*ROUTE_METRIC_STEP` UNICAST metric строго меньше `BLACKHOLE_METRIC`;
-это проверяется config validator.
-Для prefix selector runtime active count проверяется отдельно при desired-route derivation.
+## 15. Binding selectors и priority classes
 
-## 15. Селекторы интерфейсов
+### 15.1. Exact
 
-`interface` имеет тип:
-
-```text
-string | array[string]
-```
-
-Поддерживаются только exact string, trailing-`+` prefix и непустой ordered exact list.
-
-### 15.1. Точный селектор
-
-Exact name:
+Exact interface name:
 
 ```text
 [A-Za-z][A-Za-z0-9_.-]{0,14}
@@ -1741,10 +1650,16 @@ default
 all
 ```
 
-Exact selector имеет не более одного candidate. При наличии хотя бы одного local IPv4 из
-`profile.network` candidate становится active и получает metric 10.
+Каждый exact BindingSpec имеет fixed `exact_rank`: ordinal среди exact BindingSpec
+профиля в config order. Его metric всегда:
 
-### 15.2. Префиксный селектор `+`
+```text
+FIRST_UNICAST_METRIC + exact_rank * ROUTE_METRIC_STEP
+```
+
+Prefix entries между exact entries rank не занимают.
+
+### 15.2. Prefix `+`
 
 Форма:
 
@@ -1756,284 +1671,141 @@ Prefix начинается с ASCII letter, использует exact-name gra
 `+` допустим только последним символом.
 
 Candidates — все interface names, начинающиеся с prefix, включая exact `prefix`.
-Несколько candidates/active bindings являются штатным состоянием.
+Guard использует только deny semantics `-i prefix+`.
 
-Deny-only guard использует проверенную EXP-005 форму:
+Все prefix BindingSpec одного профиля используют общий dynamic allocator §4.4.
+Позиция prefix BindingSpec в `bindings[]` не задает route preference.
 
-```text
--i prefix+
-```
+### 15.3. Namespace conflicts
 
-Active exact names идут в нормативном `active_order` §4.3. Для `prefix+`
-непрерывно active bindings сохраняют относительный порядок первого принятия текущим
-daemon, а новые bindings добавляются в конец в порядке их появления в interface inventory
-текущего snapshot.
-Этот порядок используется при построении policy/status и при обходе новых bindings
-allocator'ом, но не задает гарантированный route preference. Для профиля, которому нужен
-стабильный route preference между interfaces (например primary/secondary), следует
-использовать explicit ordered list §15.3, а не `prefix+`.
-Уже существующие firewall/NAT rules и UNICAST routes не переставляются, не пересоздаются
-и не получают новые metrics только ради канонизации порядка; metrics prefix-bindings
-выделяются по правилам §4.4.
-
-### 15.3. Явный упорядоченный список точных имен
-
-Пример:
-
-```toml
-interface = ["vpnA", "vpnB", "vpnC"]
-```
-
-Список непустой, каждый элемент валиден как exact name, duplicates запрещены.
-
-Порядок **имеет нормативную семантику route preference**:
-
-```text
-vpnA -> metric 10
-vpnB -> metric 20
-vpnC -> metric 30
-```
-
-Если `vpnB` отсутствует, `vpnC` сохраняет metric 30. Для каждого элемента
-существует exact deny guard.
-
-### 15.4. Конфликты защитных пространств имен
-
-Managed selectors попарно не пересекаются по guard namespace.
+Selector namespaces **всех enabled BindingSpec** попарно не пересекаются, включая
+BindingSpec разных enabled profiles.
 
 Fatal examples:
 
 ```text
-vpns+                  + vpns0
-vpns+                  + ["vpns9","tun0"]
-["tun-a","tun-b"]     + tun-a
-["vpnA","vpnB"]       + ["vpnB","vpnC"]
+vpns+     + vpns0
+vpns+     + vpnsA+
+wg0       + wg0
 ```
 
-Non-overlap examples:
+Если два enabled selectors могут matched одно exact interface name, config invalid.
+Disabled profile/BindingSpec в conflict set не входят.
 
-```text
-vpnsA+ + vpnsB+
-wg0    + ["tun-a","tun-b"]
-```
+`%`, wildcard/glob/regex кроме завершающего `+` запрещены.
 
-Если два managed selectors могут охватить одно exact interface name, runtime projection
-invalid. Conflict только с unmanaged description не блокирует startup и диагностируется
-`--check-config`.
+## 16. Binding networks и адреса
 
-Оператор `%` запрещен; wildcard/glob/regex кроме завершающего `+` не поддерживаются.
+Каждый BindingSpec имеет собственный `network`:
 
-## 16. VPN-сети и адреса
-
-Для каждого profile:
-
-- `network` — canonical IPv4 CIDR transport address space;
+- canonical IPv4 CIDR;
 - `/32` запрещен, минимально допустима `/31`;
-- selector namespaces managed profiles не пересекаются;
-- protected `routes` не пересекаются с managed `network`.
+- network используется как active applicability predicate и как reserved transport
+  address space;
+- конкретный host address отдельно в VPN-GATE не задается.
 
-`network` имеет две связанные функции:
+Matching candidate active, если inventory содержит хотя бы один local IPv4 member
+BindingSpec.network. Проверяется host membership, а не prefix length адреса на interface;
+tunnel endpoint может быть представлен как /32.
 
-1. structural fail-closed protection, включая `VPNG-RESERVED`;
-2. transport-agnostic interface applicability predicate.
+Binding networks разных BindingSpec могут совпадать или пересекаться: это допустимо,
+поскольку interface ownership определяется непересекающимися selector namespaces.
+Protected routes любого enabled profile не должны пересекаться ни с одной enabled
+BindingSpec.network.
 
-Matching candidate считается active concrete binding, если в его kernel inventory есть
-хотя бы один local IPv4 address, принадлежащий `profile.network`.
-
-Это является явной границей модели доверия: transport configuration и администратор
-обязаны не назначать адрес из `profile.network` постороннему interface, имя которого
-попадает под selector этого профиля. Такой matching interface будет корректно по правилам
-VPN-GATE квалифицирован как active binding и получит binding-specific policy/routes.
-Это предположение модели эксплуатации, а не отдельная попытка VPN-GATE доказать
-происхождение адреса или принадлежность interface конкретному transport process.
-
-Проверяется **host IPv4 membership**, а не фактическая prefix length адреса на interface.
-P2P/tunnel transport может представить local endpoint как /32 даже при более широкой
-логической `profile.network`; это не делает candidate inactive.
-
-Конкретный host address внутри transport network является ответственностью transport
-configuration и отдельно в VPN-GATE не задается.
-
-Remote point-to-point address, peer address и handshake в config отсутствуют и не
-участвуют в active binding resolution.
-
-Адрес сети и broadcast address не объявляются отдельно запрещенными для tunnel semantics;
-валидность конкретного transport addressing остается ответственностью transport config.
+Remote P2P address, peer address и handshake не участвуют в applicability.
 
 ## 17. ACL источников
 
-ACL имеет два уровня:
+`common_allowed_sources` и `profile.allowed_sources` optional и default empty.
+Они принимают single IPv4 либо canonical IPv4 CIDR; single IPv4 normalizes to /32.
+
+Effective ACL enabled profile:
 
 ```text
-common_allowed_sources
-vpn.<profile>.allowed_sources
+set(common_allowed_sources) UNION set(profile.allowed_sources)
 ```
 
-Оба списка разрешают:
-
-- одиночный IPv4;
-- IPv4 CIDR.
-
-Одиночный адрес внутри модели нормализуется в `/32`.
-
-CIDR должен быть каноническим сетевым префиксом. Неканонический CIDR, например
-`10.200.200.8/24`, является ошибкой и не нормализуется молча в более широкую сеть.
-
-Списки ACL имеют семантику множества: точные дубликаты после нормализации удаляются.
-`--check-config` сообщает их как предупреждение; ошибка во время исполнения не требуется, потому что
-политика от дубликата не меняется.
-
-Пересечения разрешены. Например, допустимо одновременно иметь:
-
-```text
-10.200.200.8/32
-10.200.200.9/32
-10.200.200.0/24
-```
-
-Эффективный ACL конкретного VPN-профиля:
-
-```text
-effective_allowed_sources(profile)
-    = common_allowed_sources
-      ∪ profile.allowed_sources
-```
-
-Профильный ACL только расширяет общий. Отрицательных правил, исключений и семантики
-запрета нет.
-
-Эта семантика намеренно отличается от `routes`: ACL является набором разрешающих
-предикатов, а не описанием маршрутного пространства.
+Exact duplicates после normalization удаляются. Пересечения разрешены. Отрицательных
+правил и исключений нет.
 
 
 ## 18. Маршруты защищаемых сетей
 
-Managed protected routes:
+`profile.routes` enabled профиля — непустой набор canonical IPv4 network prefixes.
 
-- только canonical IPv4 CIDR;
-- `0.0.0.0/0` запрещен;
-- `routes=[]` запрещен;
-- exact duplicates внутри profile нормализуются;
-- нетождественные overlaps/nesting внутри и между managed profiles запрещены;
-- один exact protected prefix принадлежит одному managed profile;
-- overlap с любой managed `vpn.network` запрещен.
+Запрещены:
 
-Для каждого protected destination daemon всегда требует BLACKHOLE proto 201 metric 65536.
+- default route;
+- duplicate routes после normalization;
+- нетождественные overlap/nesting между protected routes enabled profiles;
+- overlap protected route с любой enabled BindingSpec.network.
 
-UNICAST proto 202 создается как direct route на каждый active concrete interface.
+Для каждого protected destination daemon всегда требует BLACKHOLE
+`proto 201 metric 65536`.
 
-Metric contract:
+UNICAST routes materialize по каждой active concrete binding:
 
 ```text
-для всех UNICAST:
-    0 < metric < BLACKHOLE_METRIC
-
-exact:
-    active interface -> 10
-
-prefix+:
-    unique metric from cyclic process-local allocator
-    continuous binding keeps its metric
-    route preference between interfaces is not guaranteed
-
-explicit ordered list:
-    config index N
-    -> FIRST_UNICAST_METRIC + N * ROUTE_METRIC_STEP
-    при текущих constants -> 10,20,30...
-    absent list element не сдвигает следующие metrics
+dev exact-interface
+via None
+proto 202
+metric according to BindingSpec class
 ```
 
-Для exact и explicit list диапазон проверяется при config validation; любой вычисляемый
-UNICAST metric обязан быть строго меньше `BLACKHOLE_METRIC`.
+Exact class:
 
-Для `prefix+` capacity определяется текущими `BLACKHOLE_METRIC`,
-`FIRST_UNICAST_METRIC` и `ROUTE_METRIC_STEP`. При значениях 65536/10/10 доступны
-6553 одновременных metric slots. Это не архитектурный предел: изменение констант может
-расширить пространство без изменения модели allocator.
+```text
+10,20,30... по exact_rank config
+```
 
-Allocator не перенумеровывает непрерывно active bindings при появлении/исчезновении
-соседних interfaces. Освобожденные slots могут быть использованы после циклического
-возврата cursor. Исчерпание всех допустимых slots является ошибкой построения требуемого
-маршрутного состояния: на startup это hard failure, во время исполнения daemon не
-открывает новый путь и использует обычный fail-closed/isolation path.
+Prefix class:
 
-Metric сама по себе не является health-check и для `prefix+` не является обещанием
-семантического приоритета между interfaces.
+```text
+dynamic_metric_min = 10 + exact_count * 10
+shared cyclic allocator from dynamic_metric_min
+```
 
-EXP-009 подтвердил interface lifecycle, direct OpenConnect route без `via` и отсутствие
-health-aware failover только по metric. Transport-specific peer health не входит в route
-truth.
+При исчезновении exact primary следующий exact metric либо dynamic prefix route
+естественно становится предпочтительным Linux route. При возврате exact primary его
+fixed lower metric восстанавливает failback. Это interface-availability failover, а не
+health-check удаленной стороны.
+
 
 ## 19. Состояние VPN и сетевых правил
 
-Structural guards и BLACKHOLE не зависят от transport connectivity.
+Lifecycle states:
 
-Binding-specific resources строятся только из active concrete interfaces текущего
-snapshot:
+- `STARTING`;
+- `DISABLED` — intentional `config.enabled=false`, `ip_forward=0`, profiles не
+  parsed/materialized;
+- `ACTIVE` — full policy SAFE, все enabled profiles functional SUCCESS, `ip_forward=1`;
+- `DEGRADED` — structurally verified fail-closed state, но хотя бы один enabled profile
+  не имеет verified UNICAST path либо forwarding временно OFF;
+- `ISOLATED` — policy/prerequisite state нельзя считать обычным verified service state;
+- `STOPPING`.
 
-- exact `INPUT`/`FORWARD` rules;
-- exact `MASQUERADE`;
-- direct `UNICAST proto 202 dev <exact-interface>`.
+ProfileResult относится только к enabled profiles и остается отдельной осью от lifecycle.
+`SUCCESS` означает наличие хотя бы одного verified desired UNICAST path для каждого
+protected destination, но не end-to-end reachability.
 
-Для multiple selector временная потеря части active interfaces удаляет только их
-contribution. Остальные paths продолжают быть desired и после safe reconciliation
-профиль может оставаться `SUCCESS`.
+`DISABLED` не является ошибкой/DEGRADED и не включает forwarding.
 
-Изменение candidate set отражается в status. Изменение active binding identity/set либо
-изменение metric уже существующей active binding является policy-changing transition.
-Обычное добавление новой prefix-binding получает новую свободную metric без
-перенумерации существующих bindings.
-
-Transport peer inventory, handshake, remote endpoint reachability и internal transport
-routing не входят в VPN-GATE state model.
 
 ## 20. Проверка конфигурации без запуска
 
-Сервис обязан поддерживать режим:
+`vpn-gatewayd --check-config`:
 
-```bash
-vpn-gatewayd --check-config
-```
+- не получает instance lock;
+- не изменяет kernel state;
+- выполняет ту же staged parsing/projection §7;
+- при top-level `enabled=false` не разбирает profile bodies;
+- у profile `enabled=false` не разбирает ничего кроме disabled flag;
+- полностью валидирует enabled profiles, BindingSpec, selectors, routes, ACL,
+  cross-profile conflicts и metric capacity;
+- exit 0 означает, что enabled projection валидна.
 
-Он:
-
-- читает TOML;
-- проверяет права и владельца конфигурационного файла;
-- проверяет закрытую схему;
-- выполняет ту же проверку конфигурации для исполнения для `managed_vpns`;
-- отдельно проверяет схему, значения и семантику неуправляемых описаний, а также их
-  потенциальные перекрестные конфликты;
-- агрегирует доступные `ERROR`, `WARNING` и `NOTE` за один прогон;
-- не получает блокировку экземпляра;
-- не изменяет маршруты;
-- не изменяет iptables;
-- не изменяет `ip_forward`;
-- не выполняет `cleanup()`;
-- завершается с кодом 0, если нет `ERROR`; наличие только `WARNING` код не меняет.
-  При `ERROR` код ненулевой.
-
-`--check-config` читает файл без синхронизации с работающим сервисом. Для согласованного
-административного обновления конфигурация должна публиковаться атомарной заменой готового
-файла (`rename`/`mv` из временного файла).
-
-Рекомендуемый административный порядок:
-
-```bash
-vpn-gatewayd --check-config &&
-systemctl restart vpn-gateway.service
-```
-
-Настоящий запуск сервиса все равно повторно проверяет конфигурацию.
-
-CLI поддерживает:
-
-```text
---config PATH
-```
-
-По умолчанию используется `/etc/vpn-gateway/vpn-gateway.toml`.
-
-`--check-config` проверяет выбранный путь конфигурации и не затрагивает состояние ядра.
+Для проверки disabled profile оператор должен временно включить его в копии config.
 
 ## 21. Административный интерфейс
 
@@ -2095,53 +1867,57 @@ vpn_gateway/
 метапрограммной техники.
 
 
+
 ### 23.1. Модель конфигурации и предметной области
 
-Runtime config содержит только typed managed profiles.
-
-`interface` разбирается в:
+Нормативная предметная модель:
 
 ```text
+GatewayConfig:
+    enabled: bool
+    reconcile_interval: float
+    common_allowed_sources: tuple[IPv4Network, ...]
+    profiles: Mapping[ProfileId, VpnProfileConfig]   # only enabled profiles
+
+VpnProfileConfig:
+    profile_id: str
+    routes: tuple[IPv4Network, ...]
+    bindings: tuple[BindingSpec, ...]
+    allowed_sources: tuple[IPv4Network, ...]
+
+BindingSpec:
+    interface: InterfaceSelector
+    network: IPv4Network
+    config_index: int
+    exact_rank: int | None
+
 InterfaceSelector:
     EXACT(name)
-    PREFIX(prefix)              # prefix+
-    EXACT_LIST(tuple[name,...]) # ordered
+    PREFIX(prefix)
 ```
 
-Selector value не распространяется в allowing rule как wildcard.
+LIST selector как отдельный domain type отсутствует.
+
+Runtime projection связывает candidate/active concrete binding с owning BindingSpec.
+Concrete identity остается:
 
 ```text
-InterfaceRecord:
-    name: str
-    ifindex: int
-    ipv4_local: frozenset[IPv4Address]
-
-ConcreteBinding:
-    name: str
-    ifindex: int
-
-ProfileInterfaceState:
-    candidates: tuple[InterfaceRecord,...]
-    active_bindings: tuple[ConcreteBinding,...]
+InterfaceBinding(name, ifindex)
 ```
 
-Point-to-point peer evidence может быть сохранено диагностически, но не является
-domain input для route derivation.
+Поскольку enabled selector namespaces не пересекаются, concrete interface имеет не более
+одного owning BindingSpec.
 
-Exact active set содержит максимум одну binding. Prefix/list допускают несколько.
-Active predicate: candidate содержит хотя бы один local IPv4 address внутри configured
-`network`.
+Для каждого profile process-local verified state содержит:
 
-`VpnProfile` хранит immutable config и process-local verified OWNED/binding state; для
-`prefix+` рядом хранится verified metric allocator mapping/cursor. Kernel самостоятельно
-эту модель не читает.
+- owned routes;
+- committed active exact bindings;
+- committed process-local prefix active_order;
+- shared prefix metric mapping/cursor, если profile имеет prefix BindingSpec.
 
-`BLACKHOLE` выводится из config. `UNICAST` выводится из protected destination +
-active concrete binding + metric semantics соответствующей формы selector. Для
-`prefix+` metric зависит также от подтвержденного process-local allocator state.
-
-Один immutable `ReconciliationSnapshot` содержит inventory, candidates, active bindings,
-предварительное распределение prefix metrics/cursor, desired routes и full desired policy.
+Verified-state commit должен быть two-phase: вся preparation/validation prospective state
+для всех profiles завершается **до первой мутации** process-local committed state.
+Commit stage после preparation не содержит validation, способной породить partial commit.
 
 ### 23.2. Модель маршрутов
 
@@ -2317,9 +2093,10 @@ NAT и полного фильтра может открыть путь к за�
 delta между двумя состояниями этой же модели; `INIT/PANIC` пересобирает полное
 daemon-owned состояние.
 
-Ни префиксный селектор, ни explicit list не применяются непосредственно в allowing
-`ACCEPT` или NAT; там используются только exact active interface names. Сопоставление
-`-i prefix+` допустимо только в проверенных deny-only guard rules `INPUT`/`FORWARD`.
+Ни exact, ни prefix selector не применяются непосредственно как allowing predicate
+`ACCEPT` или NAT; там используются только exact active concrete interface names.
+Сопоставление `-i prefix+` допустимо только в проверенных deny-only guard rules
+`INPUT`/`FORWARD`.
 
 ### 23.6. Политика владения маршрутами
 
@@ -2418,7 +2195,7 @@ FAIL
   path через active concrete interface;
 - BLACKHOLE и остальные required resources соответствуют desired.
 
-Для prefix/list selector присутствие всех потенциальных paths не требуется. Partial
+Для multiple-binding selector присутствие всех потенциальных paths не требуется. Partial
 availability остается `SUCCESS`, если хотя бы один active path существует для каждого
 protected destination.
 
@@ -2471,41 +2248,27 @@ reconciliation pass целиком и дает `ISOLATED`.
 - IPv6 prerequisites §2.6 remain mandatory.
 - Python implementation may be a package but keeps one daemon entry point.
 
-### 24.1. Несовместимые изменения относительно текущей Python-реализации до EXP-009
 
-Implementation update must include at least:
+### 24.1. Несовместимые изменения относительно реализации до binding-specific networks
 
-- `InterfaceSelector = EXACT | PREFIX | EXACT_LIST`; `%` removed;
-- explicit list preserves configured order;
-- prefix/list may resolve to multiple simultaneous active bindings;
-- no `AMBIGUOUS` selector state for normal multiplicity;
-- `peers` removed from config/domain model;
-- `local_address` removed from config/domain model; interface applicability derives from
-  local IPv4 membership in `network`;
-- transport peer-association domain object removed;
-- point-to-point remote endpoint removed from route association;
-- desired UNICAST is direct `dev exact-interface proto 202`, `via=None`,
-  `onlink=False`;
-- prefix active_order is process-local and append-only for surviving bindings: new
-  bindings append in snapshot inventory order, removed bindings disappear, and a clean
-  additive transition does not reorder/recreate existing firewall/NAT rules;
-- prefix metrics use a cyclic process-local allocator; continuous bindings retain
-  allocated metrics, all UNICAST metrics remain below BLACKHOLE_METRIC, and no prefix
-  route-priority order is guaranteed;
-- explicit-list metrics derive from stable configured slots and must remain below
-  BLACKHOLE_METRIC;
-- full policy/NAT derives from all active exact interfaces;
-- snapshot stores candidates + active bindings + provisional prefix metric allocations/cursor;
-  committed transition state stores verified active bindings together with verified
-  prefix allocator mapping/cursor;
-- `ProfileResult` checks verified UNICAST path existence, not merely exact desired-set
-  equality;
-- successful startup may enter `RUN/DEGRADED` when no active path exists but fail-closed
-  desired state is verified;
-- Netlink remains wakeup-only; snapshot decides.
+Следующий implementation package обязан синхронизировать код с текущей архитектурой:
 
-Generic `RouteSpec.via/onlink` may remain for foreign-route inventory. `ReconciliationPlan`
-may retain adds/deletes/replaces.
+- удалить старый selection через `managed_vpns`; enabled profiles определяются
+  `profile.enabled`;
+- добавить top-level/profile `enabled` с staged parsing §7;
+- убрать profile-level `interface` и `network`;
+- добавить ordered `bindings[]` из `BindingSpec{interface, network}`;
+- удалить LIST selector domain form; BindingSpec selector только EXACT/PREFIX;
+- active qualification использовать owning BindingSpec.network;
+- fixed exact metrics считать по exact_rank среди exact BindingSpec;
+- для всех prefix BindingSpec профиля использовать общий allocator с
+  `dynamic_metric_min = FIRST + exact_count*STEP`;
+- reserved transport networks выводить из всех enabled BindingSpec.network;
+- selector conflict validation выполнять по всем enabled BindingSpec;
+- добавить lifecycle `DISABLED` для top-level `enabled=false`;
+- сохранить ADD/REMOVE/INIT-PANIC без глобального churn survivors;
+- structural route verification failure обязан эскалировать в INIT/PANIC;
+- verified-state commit обязан быть two-phase/non-partial.
 
 ## 25. Открытые решения
 
@@ -2523,296 +2286,143 @@ may retain adds/deletes/replaces.
 6. Пороги «шторма восстановления» и защелкивания состояния не вводятся без наблюдаемых
    данных.
 
+
 ## 26. Ключевые инварианты
 
-Ниже используется компактная техническая запись. Именованные состояния, поля конфигурации,
-имена цепочек, классов, методов и команд сохраняются без перевода; обычные понятия
-формулируются по-русски.
-
-```text
-1. Один daemon-процесс владеет всеми ресурсами VPN-GATE в ядре.
-
-2. Конфигурация читается один раз за время жизни процесса; изменения применяются только
-   перезапуском.
-
-3. Запуск: обработчики сигналов -> runtime-каталог/LOCK -> CLEANUP -> LOAD/VALIDATE -> APPLY -> RUN.
-
-4. Ошибка запуска никогда не переводит сервис в DEGRADED; IPv4-пересылка не должна
-   остаться включенной, а обязательные IPv6-условия §2.6 проверяются до перехода в RUN.
-
-5. Очистка не зависит от конфигурации и опирается на маркеры владения.
-
-6. Маркер владения BLACKHOLE: proto 201 + type BLACKHOLE + metric 65536.
-
-7. Маркер владения VPN UNICAST: proto 202.
-
-8. При очистке маршруты читаются выборочными запросами по proto 201/202, а не полной
-   инвентаризацией основной таблицы.
-
-9. При обычном согласовании полная инвентаризация маршрутов остается строгой и не
-   пропускает молча неподдерживаемые multipath/nhid формы.
-
-10. `ip_forward` находится в исключительном управлении daemon и read-after-write verified. IPv6 daemon не маршрутизирует/не фильтрует: global prerequisites и `disable_ipv6=1` для всех current guard-namespace interfaces проверяются startup и на каждом полном RUN reconciliation до allowing policy. Runtime violation блокирует ordinary apply и оставляет IPv4 state ISOLATED; это не считается IPv6 protection.
-
-11. Эксклюзивное управление `ip_forward` архитектурно связано с эксклюзивной ответственностью
-    daemon за окончательное решение для каждого IPv4-пакета FORWARD.
-
-12. В проверенном состоянии сторонние правила `FORWARD` физически находятся после
-    daemon-owned префикса и недостижимы из-за VPNG-FORWARD-DENY; правило, вставленное перед
-    префиксом, является рассогласованием UNSAFE до следующего цикла согласования.
-
-13. В проверенном состоянии daemon-owned префикс `INPUT` находится с позиции 1, а
-    сторонние правила `INPUT` — после `VPNG-INPUT-GUARD`. Подтвержденное рассогласование,
-    ограниченное только `INPUT`, восстанавливается точечно без изменения `ip_forward`.
-    `OUTPUT` не изменяется daemon и полностью остается политикой администратора хоста;
-    локальный OUTPUT не проходит ACL источников FORWARD.
-
-14. Поле `interface` является selector union: exact string, trailing-`+` prefix либо непустой ordered explicit exact list.
-
-15. Exact selector имеет не более одной candidate binding; `prefix+` и explicit list допускают несколько simultaneous candidates/active bindings без состояния ambiguity.
-
-16. `prefix+` discovery охватывает весь textual prefix, включая exact name `prefix`; process-local active_order сохраняет относительный порядок непрерывно active bindings, новые bindings добавляются в конец в порядке их появления в interface inventory текущего snapshot, исчезнувшие удаляются без перестановки остальных. Дополнительная сортировка новых bindings не выполняется.
-
-17. Explicit list непустой, содержит уникальные valid exact names и сохраняет config order как route-priority slots; отсутствующий элемент не сдвигает metrics следующих; каждая вычисляемая UNICAST metric обязана быть < BLACKHOLE_METRIC.
-
-18. Managed selectors попарно не пересекаются по guard namespace; overlap является fatal config error.
-
-19. Candidate становится active concrete binding только при наличии хотя бы одного local IPv4 address внутри configured `profile.network`; multiple active bindings у prefix/list являются штатными. Trust model предполагает, что администратор/transport configuration не назначает адрес из `profile.network` постороннему interface, имя которого попадает под selector этого профиля; VPN-GATE не доказывает происхождение такого адреса.
-
-20. Transport peer address, handshake, endpoint reachability и point-to-point remote evidence не являются route/binding truth VPN-GATE. Failover между несколькими WireGuard peers одного interface не является функцией VPN-GATE: peer selection принадлежит WireGuard `AllowedIPs`; управляемый VPN-GATE preference требует отдельных concrete interfaces либо transport-level механизма.
-
-21. Идентичность concrete binding включает exact name + ifindex; повторное создание имени с новым ifindex является binding transition.
-
-22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Для binding-specific policy применяется active_order: exact single; prefix process-local append-only order surviving bindings; explicit list config order filtered to active. Штатные additions/removals используют локальные `ADD`/`REMOVE` без изменения `ip_forward`; surviving exact firewall/NAT blocks и desired routes не удаляются, не пересоздаются, не переставляются и не переметрируются. Prefix route metrics от active_order не определяют гарантированный priority.
-
-23. `operstate`/`LOWER_UP`, ping и handshake не определяют active binding; interface applicability определяется local IPv4 membership в `profile.network`.
-
-24. Daemon-owned UNICAST route является direct `dev <exact-interface>` route с `via=None`, `onlink=False`, `proto=202`; transport peer selection находится вне route model.
-
-25. BLACKHOLE и REJECT защищаемого назначения не зависят от текущего binding state или
-    наличия UNICAST path.
-
-26. Точный `INPUT` block active concrete interface разрешает только ESTABLISHED,RELATED и
-    запрещает остальное; общего NEW ACCEPT с VPN-стороны нет. Незавершенный traffic
-    защитного пространства имен закрывает VPNG-INPUT-GUARD.
-
-27. Сопоставление семейства по префиксу допустимо только как проверенное запрещающее
-    защитное правило; префиксные ACCEPT/NAT запрещены.
-
-28. Порядок FORWARD: VPNG-INGRESS -> VPNG-RESERVED -> цепочки профилей ->
-    VPNG-FORWARD-DENY -> сторонние правила.
-
-29. Динамический ACCEPT в цепочке FORWARD профиля требует source + protected destination
-    + exact active egress interface.
-
-30. В каждом отдельном блоке защищаемого назначения после динамических ACCEPT всегда
-    существует безусловный REJECT.
-
-31. `VPNG-FORWARD-DENY` выдает окончательный `DROP`/`REJECT` для всего оставшегося IPv4-транзита.
-
-32. `FORWARD` к управляемой транспортной `vpn.network` получает `REJECT` до ACL профиля.
-
-33. VPNG-INGRESS содержит exact block для каждого active concrete interface:
-    INVALID -> DROP, ESTABLISHED/RELATED -> ACCEPT, остальное -> REJECT; traffic
-    защитного пространства имен, не завершенный exact block, получает REJECT до ACL.
-
-34. NAT-chain существует структурно для каждого managed profile; один MASQUERADE
-    materialize для каждого unique active egress interface; foreign POSTROUTING rules
-    сохраняются и остаются достижимыми после RETURN для unmanaged outgoing traffic.
-
-35. `ADD` соблюдает `NAT -> filter -> route`: новый proto 202 route не появляется раньше verified NAT и verified allowing filter. `REMOVE` соблюдает `filter -> route -> NAT`: после закрытия allowing filter route удаляется раньше NAT, поэтому допустимо только временное состояние NAT без route, но не route без NAT для удаляемой binding.
-
-36. Изменение active binding set/identity классифицируется как `ADD`, `REMOVE`,
-    композиция `REMOVE -> ADD` либо `INIT/PANIC`. Для `prefix+` новая binding
-    добавляется в конец process-local active_order и получает свободную metric без
-    перестановки/перенумерации непрерывно active bindings. Изменение metric или relative
-    order surviving binding не является штатной локальной delta и требует
-    `INIT/PANIC`. Candidate-only change без active-resource change не требует
-    глобальной процедуры после successful current IPv6 prerequisite verification.
-
-37. Остаточное окно «событие ядра -> реакция daemon» существует и документировано;
-    запрещающие правила селекторов закрывают входящий трафик нового непривязанного
-    интерфейса семейства, но ограничение «то же имя / новый `ifindex`» в iptables остается
-    границей модели.
-
-38. Netlink-событие является сигналом пробуждения/необходимости пересверки; достоверное
-    состояние заново читается из snapshot.
-
-39. Событие имени, потенциально соответствующего управляемому селектору, инициирует полную
-    пересверку.
-
-40. Периодическое согласование обязательно как страховка; `reconcile_interval` имеет диапазон
-    [1.0, 60.0] и не может быть отключен значением 0.
-
-41. Один immutable snapshot interfaces/candidates/active bindings/provisional prefix metric allocations повторно используется на всех фазах построения, применения и проверки одного цикла; provisional allocator mapping/cursor не меняется внутри цикла.
-
-42. BLACKHOLE RouteSpec выводится только из config. UNICAST RouteSpec выводится из protected destination + active concrete binding + metric semantics selector form; для `prefix+` используется verified process-local allocator state.
-
-43. `RouteSpec.interface` для desired UNICAST содержит exact active interface name; `via=None`, `onlink=False`; selector value туда не попадает.
-
-44. Отсутствующие BLACKHOLE добавляются раньше любых разрушительных операций с маршрутами.
-
-45. Исполнитель маршрутов: добавить BLACKHOLE -> удалить конкурирующие точные маршруты ->
-    выполнить замены -> добавить оставшиеся маршруты. Route-only drift при verified SAFE
-    filter сначала исправляется этим локальным исполнителем; failure apply/verification
-    переводит pass в `INIT/PANIC`.
-
-46. Daemon является определяющим владельцем маршрутов только для точных защищаемых
-    префиксов `profile.routes`.
-
-47. Конкурирующие сторонние точные маршруты могут удаляться; `proto kernel` никогда не
-    удаляется и не заменяется.
-
-48. Пересечения с более или менее специфичными маршрутами автоматически не удаляются.
-
-49. Маршрут по умолчанию не считается ресурсом диагностики пересечений.
-
-50. OWNED routes, подтвержденный active binding state/order и prefix allocator mapping/cursor process-local, после restart начинаются заново и меняются только после verification. Current candidates заново выводятся из каждого snapshot и отдельно не commit-ятся. Verified state commit не зависит от functional ProfileResult SUCCESS: verified zero-path FAIL также commit-ится.
-
-51. Process-local фиксация OWNED/active binding order/prefix allocator state выполняется одной verified-state commit boundary после verification и до final enable forwarding; failed apply/verification не изменяет verified active_order, allocator mapping/cursor, availability FAIL не блокирует commit verified fail-closed state.
-
-52. Само по себе фактическое состояние ядра не означает принятия ресурса во владение.
-
-53. `desired_full_policy` и `desired_isolation_filter` являются двумя производными формами
-    одной модели политики; сравнение и восстановление не имеют независимых источников
-    политики.
-
-54. Состояние безопасности firewall/NAT = `SAFE`/`UNSAFE`/`UNKNOWN`; `UNKNOWN` не восстанавливается
-    вслепую. Для подтвержденного `UNSAFE` daemon также определяет, ограничено ли
-    рассогласование только `INPUT` либо затрагивает транзитную политику.
-
-55. Подтвержденное `INPUT`-only `UNSAFE` без binding transition восстанавливается
-    точечно одной транзакцией `filter` без изменения `ip_forward`, `FORWARD`, NAT
-    и маршрутов. Штатные binding changes используют локальные `ADD`/`REMOVE`.
-    `FORWARD`/NAT `UNSAFE`, `UNKNOWN`, неразложимый transition либо failure
-    локальной процедуры используют `INIT/PANIC`.
-
-56. `INIT/PANIC` сначала требует подтвержденный защитный барьер: `ip_forward=0` либо,
-    если sysctl нельзя подтвердить, verified isolation filter. При втором варианте полный
-    allowing filter не применяется раньше verified NAT.
-
-57. Ошибка interface inventory/parsing либо невозможность построить полный ReconciliationSnapshot, включая exhausted prefix metric allocator, на уровне цикла -> ISOLATED; partial desired state и provisional allocator state не принимаются. Отсутствие active path при достоверном snapshot -> profile FAIL / DEGRADED.
-
-58. При ошибке инвентаризации интерфейсов слепое восстановление политики, зависящей от
-    привязки, запрещено; изолирующий фильтр, выводимый только из конфигурации, допустим как
-    безопасный барьер при читаемом состоянии фильтрации.
-
-59. После `INIT/PANIC` пересылка возвращается только после SAFE полной политики,
-    verified exact protected-prefix routes и commit verified state.
-
-60. Desired policy профиля без active bindings не содержит binding-specific ACCEPT/NAT/UNICAST, сохраняя blackhole, selector guards и protected-destination REJECT.
-
-61. Profile `SUCCESS` требует как минимум один verified desired UNICAST RouteSpec для каждого protected destination. Partial prefix/list availability остается `SUCCESS`, если такой path существует; zero paths -> functional `FAIL`, а при SAFE verified fail-closed state -> DEGRADED. Verification success и functional ProfileResult являются разными осями.
-
-62. Multiple candidates/active bindings у prefix/list не являются ошибкой. Конфликт managed selector namespaces является config error; duplicate interface name with conflicting ifindex is inventory error.
-
-63. `ACTIVE` = политика `SAFE` + результаты всех профилей `SUCCESS` + `ip_forward=1`;
-    ни `ACTIVE`, ни profile `SUCCESS` не означают доказанную end-to-end связность VPN.
-
-64. В завершенном `RUN` при `SAFE` policy подтвержденный `ip_forward=0` либо хотя бы
-    один profile `FAIL` -> `DEGRADED`; `ACTIVE` требует все profiles `SUCCESS` и
-    `ip_forward=1`. Не-`SAFE` policy либо недостаточная наблюдаемость policy/ip_forward
-    -> `ISOLATED`.
-
-65. Очистка не переходит к разрушительным операциям, пока не подтверждено `ip_forward=0`;
-    затем: `proto 202` -> `filter`/NAT -> `proto 201` blackhole -> проверка.
-
-66. Blackhole снимается только после подтвержденной очистки остальных принадлежащих daemon
-    ресурсов.
-
-67. Очистка iptables точная; глобальная очистка таблиц запрещена.
-
-68. Пространство имен `VPNG-*` полностью зарезервировано daemon'ом.
-
-69. Атомарность iptables-restore в пределах одной таблицы не считается атомарностью между
-    таблицами.
-
-70. Последний компонент runtime-каталога: не символическая ссылка, каталог, режим 0700,
-    ожидаемый владелец сервиса.
-
-71. Отсутствующий runtime-каталог daemon может создать сам при достаточных правах.
-
-72. Неправильные владелец/режим существующего runtime-каталога не исправляются молча.
-
-73. Файл блокировки открывается с `O_NOFOLLOW`; эксклюзивная блокировка `flock` удерживается
-    все время жизни процесса, а попытка ее получения выполняется без ожидания.
-
-74. Конфигурационный файл: обычный файл, не символическая ссылка, принадлежит `root`;
-    родительский каталог защищен от записи группы и остальных пользователей (`group`/`other`).
-
-75. `--check-config` не получает блокировку экземпляра и не меняет состояние ядра.
-
-76. Неизвестные ключи конфигурации фатальны для проекции конфигурации управляемых профилей для исполнения.
-
-77. Некорректные неуправляемые описания профилей не блокируют запуск; `--check-config`
-    выдает `WARNING`.
-
-78. Защищаемые маршруты управляемых профилей глобально не пересекаются и не пересекают
-    управляемые vpn.network.
-
-79. Metrics: все daemon-owned UNICAST имеют 0 < metric < BLACKHOLE_METRIC. Exact = FIRST_UNICAST_METRIC. Explicit list slot N использует FIRST_UNICAST_METRIC + N*ROUTE_METRIC_STEP без сдвига отсутствующих элементов; config validator запрещает любой slot с metric >= BLACKHOLE_METRIC. Prefix использует то же допустимое пространство метрик и циклический process-local allocator: непрерывно active binding сохраняет metric, занятые значения пропускаются, при верхней границе поиск возвращается к FIRST_UNICAST_METRIC, при полном исчерпании slots построение snapshot завершается ошибкой; гарантированного route preference между prefix-bindings нет и наблюдавшийся preference не переносится через restart. Профиль, которому нужен стабильный primary/secondary route preference, обязан использовать explicit ordered list, а не `prefix+`.
-
-80. `common_allowed_sources` объединяется с `profile.allowed_sources`; отрицательных правил
-    и исключений нет.
-
-81. Обратная доступность со стороны VPN не входит в текущий контракт: новый INPUT с
-    управляемого VPN-интерфейса запрещен, а NEW FORWARD закрыт ingress-политикой. Локальный
-    OUTPUT самого доверенного шлюза регулируется отдельно администратором.
-
-82. Python-реализация может быть пакетом из нескольких файлов, но имеет одну точку входа
-    daemon.
-
-83. Границы предметных областей должны переноситься в будущие Rust-модули, `struct` и `enum`;
-    развертывание Rust ориентировано на один исполняемый файл.
-
-84. Один цикл обработки событий сериализует Netlink, таймер, IPC и завершение; параллельное
-    согласование запрещено.
-
-85. Обработчики сигналов не выполняют работу с ядром; завершение проходит через
-    сериализованную очистку жизненного цикла.
-
-86. SIGHUP не перезагружает конфигурацию.
-
-87. Формы внешних CLI-команд, влияющие на безопасность, проверяются на целевой Debian до
-    закрепления в адаптере.
-
-88. Исключения из-за ошибок программирования и нарушения внутренних контрактов не
-    маскируются как ожидаемые эксплуатационные `UNKNOWN`/`DEGRADED`.
-
-89. Машинная идентичность диагностической причины задается стабильным кодом; полный каталог
-    кодов является контрактом реализации/интерфейса после публикации, а свободный текст
-    `detail` не участвует в идентичности/дедупликации.
-
-90. Префиксный селектор резервирует весь textual prefix namespace deny-only guard; matching interface без local IPv4 из `profile.network` остается guard-blocked и не становится active.
-
-91. Остаточное окно «событие -> реакция» является явной границей модели угроз доверенного
-    хоста: недоверенные процессы не имеют `CAP_NET_ADMIN` и не управляют жизненным циклом
-    сетевых интерфейсов.
-
-92. Замена «то же имя / новый `ifindex`» обнаруживается при согласовании snapshot, но
-    существующее сопоставление имени в iptables нельзя задним числом привязать к прежнему
-    `ifindex`.
-
-93. Дублирующееся имя интерфейса с конфликтующими ifindex является некорректной
-    инвентаризацией ядра и возвращает KernelError; адаптер не выбирает одну запись и не
-    объединяет конфликт молча.
-
-94. Выборочная по протоколу очистка остается строгой для зарезервированных `proto 201/202`;
-    неподдерживаемые формы выбранных маршрутов фатальны и не пропускаются молча.
-
-95. `desired_isolation_filter` выводится только из конфигурации и не содержит `ACCEPT`,
-    зависящих от привязки.
-
-96. В `INIT/PANIC`, когда защитным барьером служит isolation filter, его применение
-    заменяет/канонизирует полное требуемое daemon-owned состояние таблицы `filter` на
-    этой стадии; устаревшие binding-specific `ACCEPT` не должны оставаться достижимыми.
-
-97. Проверка isolation filter является отдельным результатом защитного барьера
-    `INIT/PANIC` и никогда не удовлетворяет состоянию `SAFE` полной политики
-    firewall/NAT.
-
-98. `SAFE` полной политики требует проверки требуемого NAT и полного требуемого фильтра для
-    одного и того же неизменяемого snapshot согласования.
-
-99. Операционный status сообщает selector form, candidates, active concrete bindings, interface/metric для desired/verified UNICAST и ProfileResult отдельно от lifecycle state ACTIVE; для `prefix+` status также показывает process-local active_order как диагностический порядок первого принятия bindings текущим daemon, но не трактует его как гарантированный route priority.
-```
+1. Daemon владеет своими IPv4 firewall/NAT rules, proto 201/202 routes и
+   `net.ipv4.ip_forward`; внешний конкурентный owner этих ресурсов не поддерживается.
+2. Startup выполняет `LOCK -> CLEANUP -> CONFIG PROJECTION -> APPLY -> VERIFY -> COMMIT`
+   и только затем разрешает forwarding.
+3. `config.enabled=false` после cleanup дает intentional `DISABLED`: profiles не
+   разбираются, managed network state не materialize, `ip_forward=0`.
+4. `profile.enabled=false` читается как gate до body parsing; остальное тело disabled
+   profile не участвует в schema/value/semantic validation.
+5. При enabled config runtime projection содержит только enabled profiles.
+6. При enabled config должен существовать хотя бы один enabled profile.
+7. Enabled profile имеет non-empty `routes[]` и `bindings[]`; ACL lists optional и
+   default empty.
+8. Один BindingSpec содержит `interface` selector и собственную `network`.
+9. BindingSpec selector имеет только EXACT или PREFIX; LIST selector отсутствует.
+10. Selector namespaces всех enabled BindingSpec попарно не пересекаются.
+11. Concrete binding identity = exact interface name + ifindex.
+12. Candidate становится active только при наличии local IPv4 внутри owning
+    BindingSpec.network.
+13. BindingSpec.network является trust boundary applicability, а не доказательством
+    transport process identity.
+14. Binding networks разных specs могут пересекаться; interface ownership задается
+    selector namespace.
+15. Protected route не пересекается ни с одной enabled BindingSpec.network.
+16. Protected routes enabled profiles глобально не имеют нетождественных overlap/nesting.
+17. Point-to-point remote address, peer, handshake, operstate и LOWER_UP не являются
+    binding truth.
+18. Allowing INPUT/FORWARD, NAT и UNICAST route используют только exact active interface
+    names; prefix syntax допустим только в deny guards.
+19. Candidate-only interface остается guard-blocked и не получает allowing resources.
+20. IPv6 host prerequisites проверяются до allowing projection; violation в RUN latch-ит
+    ISOLATED до restart.
+21. IPv6 disable check охватывает selector namespace каждого enabled BindingSpec, а не
+    только active bindings.
+22. Для каждого protected destination всегда существует desired BLACKHOLE proto 201
+    metric 65536.
+23. Каждый desired UNICAST route direct: `via=None`, exact `dev`, proto 202,
+    `onlink=false`.
+24. Все daemon-owned UNICAST metrics строго меньше BLACKHOLE_METRIC.
+25. Exact rank считается только среди exact BindingSpec профиля в config order.
+26. Exact metric = FIRST_UNICAST_METRIC + exact_rank*ROUTE_METRIC_STEP.
+27. Missing exact binding не сдвигает metrics остальных exact specs.
+28. Same-name/new-ifindex exact binding является новой concrete identity, но получает ту
+    же config-derived exact metric.
+29. Все prefix BindingSpec профиля используют один shared dynamic allocator.
+30. `dynamic_metric_min = FIRST_UNICAST_METRIC + exact_count*ROUTE_METRIC_STEP`.
+31. Любой exact route профиля имеет меньшую metric, чем любой dynamic prefix route.
+32. Позиция prefix BindingSpec внутри `bindings[]` route priority не задает.
+33. Непрерывно active prefix binding сохраняет metric.
+34. Исчезнувшая prefix binding освобождает metric только после verified-state commit.
+35. Новая prefix binding получает следующий свободный aligned metric от process-local
+    cursor; allocator циклически wrap-ится к dynamic_metric_min.
+36. Prefix allocator не заполняет ранние holes специально и пропускает occupied metrics.
+37. Exhausted prefix metric space делает snapshot projection failed/ISOLATED; partial
+    desired state не принимается.
+38. Если profile имеет prefix BindingSpec, config оставляет минимум один dynamic slot.
+39. Prefix active_order process-local: survivors сохраняют relative order, new append в
+    interface-inventory encounter order, дополнительная сортировка запрещена.
+40. Prefix active_order диагностический; route preference между prefix bindings не
+    гарантируется и после restart может измениться.
+41. Profile active serialization order: active exact bindings по exact rank, затем
+    process-local prefix active_order.
+42. Existing survivor firewall/NAT rules и routes не удаляются/пересоздаются только ради
+    canonical reordering.
+43. RouteSpec traversal/serialization order не является route semantics и не вызывает
+    churn unchanged routes.
+44. EXP-009: transport peer не является route-next-hop abstraction; WireGuard peer
+    selection принадлежит AllowedIPs.
+45. VPN-GATE failover/failback основывается на independent concrete interfaces, а не на
+    нескольких peers одного WG interface.
+46. Failover по metric является interface-availability mechanism, не remote health-check.
+47. Netlink event — wakeup hint; source of truth — fresh full snapshot.
+48. Потеря Netlink events компенсируется periodic reconciliation.
+49. Same-name/new-ifindex replacement = REMOVE old -> ADD new.
+50. Штатный ADD: NAT -> verify -> filter -> verify -> route -> verify -> commit.
+51. Штатный REMOVE: filter -> verify -> route -> verify -> NAT -> verify -> commit.
+52. Normal ADD/REMOVE не изменяет `ip_forward`.
+53. Mixed safely decomposable transition выполняет все REMOVE до ADD.
+54. Survivor identity/order/metric должны сохраняться; если локальность нельзя доказать,
+    используется INIT/PANIC.
+55. Source firewall/NAT и route state проверяются до первой local mutation.
+56. Для REMOVE допускается kernel-side disappearance route удаленной binding; missing
+    survivor route не допускается.
+57. INIT/PANIC использует confirmed `ip_forward=0` либо verified isolation filter как
+    global barrier.
+58. При confirmed forwarding OFF isolation stage не требуется перед full rebuild.
+59. При isolation barrier allowing filter не применяется раньше verified NAT.
+60. INPUT-only confirmed drift может ремонтироваться точечно без изменения FORWARD/NAT/routes.
+61. FORWARD/NAT drift, UNKNOWN, non-decomposable transition или local procedure failure
+    используют INIT/PANIC.
+62. Ordinary route-only drift при SAFE filter сначала исправляется route executor.
+63. Любой failed route build/apply/**structural verification** эскалирует в INIT/PANIC.
+64. Functional zero-path `ProfileResult=FAIL` при exact structural verification не
+    является route verification failure.
+65. Verification success и functional availability — разные оси.
+66. Verified zero-path fail-closed state commit-ится и дает DEGRADED, а не PANIC.
+67. Profile SUCCESS требует хотя бы один verified desired UNICAST path для каждого
+    protected destination.
+68. ACTIVE требует SAFE policy, все enabled profiles SUCCESS и `ip_forward=1`.
+69. DISABLED является intentional state, не ACTIVE/DEGRADED/ISOLATED.
+70. ISOLATED используется при недостаточной наблюдаемости/неверифицируемом safety state.
+71. OWNED routes, verified binding state, prefix active_order и allocator state
+    process-local и после restart строятся заново.
+72. Prospective verified-state commit готовится и полностью валидируется до первой
+    мутации committed process-local state.
+73. Commit stage после successful preparation не должен иметь validation path, способный
+    создать partial multi-profile commit.
+74. Failed apply/verification не изменяет committed binding/allocator state.
+75. Само наличие ресурса в kernel не означает принятия его daemon во владение.
+76. desired_full_policy и desired_isolation_filter выводятся из одной config/domain model.
+77. VPNG-RESERVED закрывает destinations всех enabled BindingSpec.network до profile ACL.
+78. VPNG-INGRESS exact block: INVALID DROP; ESTABLISHED,RELATED ACCEPT; остальное REJECT.
+79. Для каждого protected destination после dynamic ACCEPT существует unconditional REJECT.
+80. VPNG-FORWARD-DENY окончательно закрывает оставшийся transit IPv4.
+81. NAT profile chain содержит MASQUERADE для каждого unique active egress interface и
+    terminal RETURN; foreign POSTROUTING остается достижим для unmanaged traffic.
+82. Cleanup сначала подтверждает `ip_forward=0`, затем удаляет proto 202,
+    daemon-owned firewall/NAT, затем proto 201, после чего проверяет отсутствие owned state.
+83. Blackhole не снимается до подтвержденной очистки остальных owned resources.
+84. Cleanup не flush-ит целиком routing/filter/nat tables.
+85. Reserved namespace `VPNG-*` полностью принадлежит daemon.
+86. Config file security, runtime directory 0700, O_NOFOLLOW lock и lifetime flock
+    остаются обязательными.
+87. `--check-config` использует ту же staged enabled projection, но не берет instance
+    lock и не меняет kernel.
+88. Disabled profile намеренно не lint-ится; для проверки его body его включают в копии config.
+89. SIGHUP не reload-ит config; config changes применяются только restart.
+90. Reconciliation/event handling serialized; параллельные reconciliation запрещены.
+91. Programming errors/internal contract violations не маскируются как ожидаемые
+    UNKNOWN/DEGRADED.
+92. Diagnostic reason code является stable machine identity; free-form detail не участвует
+    в идентичности.
+93. Threat model: untrusted local processes не имеют CAP_NET_ADMIN и не управляют interface
+    lifecycle.
+94. Остаточное окно event->reaction и невозможность iptables привязать name rule к
+    historical ifindex являются явными границами модели.
+95. Current Python package decomposition не является архитектурным API; domain boundaries
+    должны переноситься в будущие Rust struct/enum/modules.
