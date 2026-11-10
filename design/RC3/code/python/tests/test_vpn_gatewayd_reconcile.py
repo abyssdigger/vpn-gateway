@@ -235,6 +235,24 @@ class SnapshotTests(unittest.TestCase):
 
 
 class ReconcileTests(unittest.TestCase):
+    def test_disabled_reconcile_forces_forwarding_off(self):
+        kernel = mock.Mock()
+        kernel.get_ip_forward.side_effect = (True, False)
+        daemon = make_daemon(kernel)
+        daemon._install_config(
+            vpng.GatewayConfig(
+                enabled=False,
+                reconcile_interval=10.0,
+                common_allowed_sources=(),
+                profiles=MappingProxyType({}),
+            )
+        )
+
+        daemon.reconcile()
+
+        kernel.set_ip_forward.assert_called_once_with(False)
+        self.assertIs(daemon.state, vpng.DaemonState.DISABLED)
+
     def setUp(self):
         self.kernel = mock.Mock()
         self.kernel.list_interfaces.return_value = (ready_record(),)
