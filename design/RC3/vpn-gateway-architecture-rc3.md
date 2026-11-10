@@ -2577,9 +2577,9 @@ may retain adds/deletes/replaces.
 
 18. Managed selectors попарно не пересекаются по guard namespace; overlap является fatal config error.
 
-19. Candidate становится active concrete binding только при наличии хотя бы одного local IPv4 address внутри configured `profile.network`; multiple active bindings у prefix/list являются штатными.
+19. Candidate становится active concrete binding только при наличии хотя бы одного local IPv4 address внутри configured `profile.network`; multiple active bindings у prefix/list являются штатными. Trust model предполагает, что администратор/transport configuration не назначает адрес из `profile.network` постороннему interface, имя которого попадает под selector этого профиля; VPN-GATE не доказывает происхождение такого адреса.
 
-20. Transport peer address, handshake, endpoint reachability и point-to-point remote evidence не являются route/binding truth VPN-GATE.
+20. Transport peer address, handshake, endpoint reachability и point-to-point remote evidence не являются route/binding truth VPN-GATE. Failover между несколькими WireGuard peers одного interface не является функцией VPN-GATE: peer selection принадлежит WireGuard `AllowedIPs`; управляемый VPN-GATE preference требует отдельных concrete interfaces либо transport-level механизма.
 
 21. Идентичность concrete binding включает exact name + ifindex; повторное создание имени с новым ifindex является binding transition.
 
@@ -2750,7 +2750,7 @@ may retain adds/deletes/replaces.
 78. Защищаемые маршруты управляемых профилей глобально не пересекаются и не пересекают
     управляемые vpn.network.
 
-79. Metrics: все daemon-owned UNICAST имеют 0 < metric < BLACKHOLE_METRIC. Exact = FIRST_UNICAST_METRIC. Explicit list slot N использует FIRST_UNICAST_METRIC + N*ROUTE_METRIC_STEP без сдвига отсутствующих элементов; config validator запрещает любой slot с metric >= BLACKHOLE_METRIC. Prefix использует то же допустимое пространство метрик и циклический process-local allocator: непрерывно active binding сохраняет metric, занятые значения пропускаются, при верхней границе поиск возвращается к FIRST_UNICAST_METRIC, при полном исчерпании slots построение snapshot завершается ошибкой; гарантированного route preference между prefix-bindings нет.
+79. Metrics: все daemon-owned UNICAST имеют 0 < metric < BLACKHOLE_METRIC. Exact = FIRST_UNICAST_METRIC. Explicit list slot N использует FIRST_UNICAST_METRIC + N*ROUTE_METRIC_STEP без сдвига отсутствующих элементов; config validator запрещает любой slot с metric >= BLACKHOLE_METRIC. Prefix использует то же допустимое пространство метрик и циклический process-local allocator: непрерывно active binding сохраняет metric, занятые значения пропускаются, при верхней границе поиск возвращается к FIRST_UNICAST_METRIC, при полном исчерпании slots построение snapshot завершается ошибкой; гарантированного route preference между prefix-bindings нет и наблюдавшийся preference не переносится через restart. Профиль, которому нужен стабильный primary/secondary route preference, обязан использовать explicit ordered list, а не `prefix+`.
 
 80. `common_allowed_sources` объединяется с `profile.allowed_sources`; отрицательных правил
     и исключений нет.
