@@ -1,6 +1,6 @@
 # EXP-011 — NG1 ROU transport publication with ocserv/OpenConnect
 
-Status: **PREPARED — live run pending**
+Status: **COMPLETE — PASS (2026-11-11)**
 
 ## Objective
 
@@ -154,6 +154,9 @@ The normal ocserv service is stopped, but `/etc/ocserv/ocserv.conf` is not modif
 ### H5 — cleanup
 
 Stopping EXP-011 removes experiment relay/processes, veth and network namespace without modifying the original ocserv configuration. The normal ocserv service can then be started again on 44443.
+
+
+Result: [`EXP-011-result-20261111.md`](EXP-011-result-20261111.md).
 
 ## PASS criterion
 
