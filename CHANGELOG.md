@@ -1,3 +1,23 @@
+## 2026-11-10 — RC3 prefix bindings keep stable process-local order
+
+The prefix metric allocator simplification is extended to firewall/NAT/status ordering.
+
+For `prefix+`:
+
+- continuous active bindings keep their relative process-local order;
+- a newly accepted binding is appended after existing bindings;
+- a removed binding disappears without reordering survivors;
+- if several new bindings are first observed in one snapshot, only that new group uses
+  bytewise ASCII as a deterministic tie-breaker;
+- INPUT/FORWARD exact blocks, VPNG-INGRESS and NAT follow this stable process-local order;
+- a lexically earlier new interface therefore does not cause existing exact rules to move;
+- status exposes the order as useful diagnostic evidence of first acceptance by the
+  current daemon process;
+- the order is not persisted across restart and is not a route-priority guarantee.
+
+The verified prefix active order and metric allocator mapping/cursor share the same
+commit boundary after successful verification.
+
 ## 2026-11-10 — RC3 prefix metrics become a cyclic technical allocator
 
 The architecture no longer derives `prefix+` route priority from ASCII interface-name

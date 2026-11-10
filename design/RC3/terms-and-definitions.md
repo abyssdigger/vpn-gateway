@@ -30,11 +30,11 @@
 | daemon | — | Долгоживущий процесс `vpn-gatewayd`, управляющий ресурсами VPN Gateway. |
 | selector | селектор | Правило построения candidate runtime-интерфейсов, active binding set и защитного пространства имен; форма selector также определяет семантику назначения UNICAST metrics. |
 | exact selector | точный селектор | Строковая форма одного конкретного exact interface name; candidate set имеет размер 0..1. |
-| prefix selector | префиксный селектор | Форма `prefix+`: textual prefix discovery с 0..N simultaneous candidates. UNICAST metrics выделяются циклическим process-local allocator; гарантированный route preference между interfaces отсутствует. |
+| prefix selector | префиксный селектор | Форма `prefix+`: textual prefix discovery с 0..N simultaneous candidates. Непрерывно active bindings сохраняют process-local порядок первого принятия daemon; новые добавляются в конец. UNICAST metrics выделяются циклическим process-local allocator; гарантированный route preference между interfaces отсутствует. |
 | explicit exact list | явный упорядоченный список точных имен | Непустой массив уникальных exact interface names. Порядок элементов задает стабильные route-priority slots; все вычисляемые UNICAST metrics должны быть меньше BLACKHOLE_METRIC. |
 | guard namespace | защитное пространство имен | Множество interface names, которое selector заранее закрывает deny-only firewall guard: exact name, textual prefix либо exact elements списка. |
 | concrete binding | точная привязка интерфейса | Идентичность active concrete interface как пары exact `name + ifindex`; applicability дополнительно требует хотя бы один local IPv4 address внутри `profile.network`. |
-| binding set | множество привязок | Совокупность active concrete bindings профиля в одном reconciliation snapshot. |
+| binding set | множество привязок | Совокупность active concrete bindings профиля в одном reconciliation snapshot. Для `prefix+` verified process-local order surviving bindings сохраняется между циклами текущего процесса. |
 | binding transition | смена привязок | Изменение candidate/active binding identity или set; active-set/identity change может быть policy-changing transition. |
 | policy-changing transition | переход, меняющий политику | Смена binding set, меняющая набор binding-specific resources ядра. |
 | absent | отсутствует | Состояние, при котором candidate или active concrete binding сейчас отсутствует; transport peer semantics в термин не входит. |
