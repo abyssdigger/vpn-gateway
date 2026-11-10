@@ -968,11 +968,11 @@ runtime interface name.
 2. построить один immutable `ReconciliationSnapshot`, включая provisional prefix
    metric allocation/cursor;
 3. сравнить candidates и active concrete binding identities с последним verified state;
-4. при policy-changing transition по возможности привести `ip_forward=0`;
-5. прочитать firewall/NAT и классифицировать `SAFE/UNSAFE/UNKNOWN`;
-6. `UNKNOWN` либо неопределимая область drift -> `ISOLATED`;
-7. INPUT-only `UNSAFE` без policy transition -> narrow INPUT repair;
-8. FORWARD/NAT `UNSAFE` либо policy transition -> protective barrier §8.6;
+4. прочитать firewall/NAT и классифицировать `SAFE/UNSAFE/UNKNOWN`;
+5. `UNKNOWN` либо неопределимая область drift -> `ISOLATED`;
+6. INPUT-only `UNSAFE` без policy transition -> narrow INPUT repair;
+7. чистый additive `prefix+` transition при исходном `SAFE` -> incremental binding-add path §8.6;
+8. FORWARD/NAT `UNSAFE` либо иной policy-changing transition -> protective barrier §8.6;
 9. после `SAFE` полной policy прочитать strict route snapshot;
 10. построить, проверить, применить и повторно проверить route plan из того же snapshot;
 11. materialize отсутствующие direct routes для всех active bindings;
@@ -1066,8 +1066,41 @@ daemon-owned `FORWARD`-цепочками и переходами из встр�
 fail-closed пути `ISOLATED`; неуспешное точечное восстановление не считается успешной
 оптимизацией.
 
+Чистое добавление одной или нескольких новых active bindings к `prefix+` имеет отдельный
+инкрементальный путь, если исходная полная firewall/NAT policy подтверждена как `SAFE`,
+ни одна ранее verified active binding не исчезла и не изменила identity/metric/order, а
+новый desired state отличается только contribution новых bindings.
+
+На этом пути daemon:
+
+```text
+1. по возможности ip_forward=0
+2. добавить только новые MASQUERADE rules в конец binding-specific части NAT chain,
+   перед существующим RETURN; существующие NAT rules не удалять и не переставлять
+3. проверить NAT
+4. добавить только новые exact INPUT/FORWARD blocks в позиции, определяемые append-only
+   active_order; относительный порядок и текст существующих blocks не изменять
+5. проверить полный filter
+6. добавить только отсутствующие direct proto-202 routes новых bindings
+7. проверить exact protected-prefix route state
+8. commit binding/allocator state
+9. включить и подтвердить ip_forward
+```
+
+Инкрементальный apply может сдвинуть числовые позиции последующих terminal
+`RETURN`/`REJECT` правил вследствие вставки перед ними, но **не удаляет, не пересоздает и
+не меняет относительный порядок уже существующих binding-specific rules**. Аналогично,
+существующие desired UNICAST routes не удаляются, не заменяются и не получают новые
+metrics. Порядок новых bindings определяется только порядком их появления в interface
+inventory snapshot.
+
+Если предусловия этого узкого additive path не выполнены либо его применение/verification
+не удалось, он не деградирует в слепую частичную правку: daemon переходит к обычному
+fail-closed protective path.
+
 Для `UNSAFE`, затрагивающего `FORWARD` или NAT, для неопределенной области
-рассогласования либо для перехода, меняющего политику, применяется последовательность с
+рассогласования либо для любого policy-changing transition, который не является
+подтвержденным чистым additive `prefix+` transition, применяется последовательность с
 первоначальным запретом:
 
 ```text
@@ -2372,8 +2405,12 @@ reconciliation pass целиком и дает `ISOLATED`.
     prefix не создает primary/secondary Linux routes;
   - peer health не переводит destination ownership между WireGuard peers.
 - Allowing rules/NAT/routes используют только exact active interface names.
-- Policy-changing active-binding transitions используют protective barrier:
-  isolation filter -> verify -> NAT -> verify -> full filter -> verify -> routes -> verify.
+- Чистое additive расширение active binding set для `prefix+` при исходном SAFE использует
+  incremental path: ip_forward=0 -> append-only NAT contribution -> verify -> append-only
+  filter contribution -> verify -> new routes -> verify; существующие binding-specific
+  rules/routes не пересобираются. Остальные policy-changing active-binding transitions
+  используют protective barrier: isolation filter -> verify -> NAT -> verify -> full
+  filter -> verify -> routes -> verify.
 - Confirmed INPUT-only drift without policy transition uses narrow repair.
 - Interface inventory failure forbids blind binding-specific repair and leads to isolation.
 - `ip_forward` remains daemon-owned and read-after-write verified.
@@ -2492,7 +2529,7 @@ may retain adds/deletes/replaces.
 
 21. Идентичность concrete binding включает exact name + ifindex; повторное создание имени с новым ifindex является binding transition.
 
-22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Для binding-specific policy применяется active_order: exact single; prefix process-local append-only order surviving bindings; explicit list config order filtered to active. Появление нового prefix-interface не меняет relative desired order существующих exact firewall/NAT blocks; full protective restore может технически пересобрать chain целиком. Prefix route metrics от active_order не определяют гарантированный priority.
+22. Allowing `INPUT`/`FORWARD`, NAT и UNICAST routes используют только exact active interfaces. Для binding-specific policy применяется active_order: exact single; prefix process-local append-only order surviving bindings; explicit list config order filtered to active. Чистое появление нового prefix-interface при исходном SAFE использует incremental additive apply: существующие exact firewall/NAT blocks не удаляются, не пересоздаются и не меняют relative order; существующие desired routes и их metrics также не изменяются. Full protective restore допускается только когда narrow additive preconditions не выполнены. Prefix route metrics от active_order не определяют гарантированный priority.
 
 23. `operstate`/`LOWER_UP`, ping и handshake не определяют active binding; interface applicability определяется local IPv4 membership в `profile.network`.
 
