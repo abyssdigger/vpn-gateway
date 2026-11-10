@@ -37,6 +37,16 @@ class InterfaceSelector:
                     "prefix interface selector must have a 1..14 character "
                     "prefix matching [A-Za-z][A-Za-z0-9_.-]*"
                 )
+            forbidden = tuple(
+                name
+                for name in _FORBIDDEN_EXACT_INTERFACES
+                if name.startswith(value.casefold())
+            )
+            if forbidden:
+                raise ValueError(
+                    "prefix selector namespace includes forbidden exact "
+                    f"interface name(s): {sorted(forbidden)!r}"
+                )
             return
         if self.kind is not InterfaceSelectorKind.EXACT:
             raise ValueError(f"unknown interface selector kind: {self.kind!r}")
