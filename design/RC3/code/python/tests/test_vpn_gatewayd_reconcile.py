@@ -97,6 +97,49 @@ class SnapshotTests(unittest.TestCase):
         )
         self.assertTrue(daemon._snapshot_changes_policy(second_active))
 
+    def test_same_name_new_ifindex_builds_remove_then_add_gap(self):
+        daemon = make_daemon()
+        previous = daemon._build_reconciliation_snapshot((ready_record(7),))
+        previous_state = previous.interface_state_by_profile["primary"]
+        daemon.profiles["primary"].commit_verified_state(
+            routes=previous.desired_routes_by_profile["primary"],
+            active_bindings=previous_state.active_bindings,
+            prefix_metrics=previous.prefix_metric_allocations_by_profile["primary"],
+            prefix_metric_cursor=previous.prefix_metric_cursor_by_profile["primary"],
+        )
+
+        current = daemon._build_reconciliation_snapshot((ready_record(8),))
+        (
+            previous_policy,
+            intermediate_policy,
+            previous_routes,
+            intermediate_routes,
+            has_remove,
+            has_add,
+        ) = daemon._build_local_transition(current)
+
+        self.assertTrue(has_remove)
+        self.assertTrue(has_add)
+        self.assertNotEqual(
+            previous_routes["primary"],
+            intermediate_routes["primary"],
+        )
+
+        previous_filter = "\n".join(
+            rule
+            for chain in previous_policy.filter.chains
+            for rule in chain.rules
+        )
+        intermediate_filter = "\n".join(
+            rule
+            for chain in intermediate_policy.filter.chains
+            for rule in chain.rules
+        )
+        self.assertIn("-i vpns0", previous_filter)
+        self.assertIn("-o vpns0", previous_filter)
+        self.assertNotIn("-i vpns0 -m conntrack", intermediate_filter)
+        self.assertNotIn("-o vpns0 -j ACCEPT", intermediate_filter)
+
     def test_ipv6_check_covers_every_prefix_match_before_resolution(self):
         kernel = mock.Mock()
         kernel.get_interface_ipv6_disabled.side_effect = (
