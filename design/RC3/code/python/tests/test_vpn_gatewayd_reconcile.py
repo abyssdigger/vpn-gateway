@@ -297,13 +297,18 @@ class ReconcileTests(unittest.TestCase):
         repair.assert_called_once()
         self.assertIs(self.daemon.state, vpng.DaemonState.ACTIVE)
 
-    def test_policy_transition_uses_barrier_even_when_policy_is_safe(self):
+    def test_policy_transition_with_safe_policy_skips_rebuild(self):
         safe = vpng.FirewallCheck(vpng.FirewallSafety.SAFE, None)
         with (
             mock.patch.object(
                 self.daemon,
                 "_snapshot_changes_policy",
                 return_value=True,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_snapshot_is_clean_prefix_addition",
+                return_value=False,
             ),
             mock.patch.object(
                 self.daemon,
@@ -333,7 +338,72 @@ class ReconcileTests(unittest.TestCase):
             self.daemon.reconcile()
 
         disable.assert_called_once()
-        repair.assert_called_once()
+        repair.assert_not_called()
+
+    def test_clean_prefix_addition_uses_incremental_apply(self):
+        unsafe = vpng.FirewallCheck(
+            vpng.FirewallSafety.UNSAFE,
+            vpng.DiagnosticFact(
+                vpng.RuntimeReasonCode.FIREWALL_DRIFT,
+                "new binding contribution absent",
+            ),
+            vpng.FirewallDriftScope.TRANSIT,
+        )
+        safe = vpng.FirewallCheck(vpng.FirewallSafety.SAFE, None)
+        previous = self.daemon._build_reconciliation_snapshot(
+            (ready_record(),)
+        ).desired_full_policy
+
+        with (
+            mock.patch.object(
+                self.daemon,
+                "_snapshot_changes_policy",
+                return_value=True,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_snapshot_is_clean_prefix_addition",
+                return_value=True,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_check_firewall_nat_policy",
+                side_effect=(unsafe, safe),
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_committed_full_policy",
+                return_value=previous,
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_apply_clean_prefix_addition",
+            ) as additive,
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_disable_forwarding",
+                return_value=None,
+            ) as disable,
+            mock.patch.object(
+                self.daemon,
+                "_repair_firewall_nat_with_barrier",
+            ) as repair,
+            mock.patch.object(
+                self.daemon,
+                "_reconcile_routes_snapshot",
+                return_value=success_results(),
+            ),
+            mock.patch.object(
+                self.daemon,
+                "_best_effort_enable_forwarding",
+                return_value=(True, None),
+            ),
+        ):
+            self.daemon.reconcile()
+
+        disable.assert_called_once()
+        additive.assert_called_once()
+        repair.assert_not_called()
 
     def test_barrier_repair_orders_isolation_nat_full(self):
         snapshot = self.daemon._build_reconciliation_snapshot(
