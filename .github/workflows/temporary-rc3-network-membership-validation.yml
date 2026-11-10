@@ -1,0 +1,20 @@
+name: temporary-rc3-network-membership-validation
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile RC3 Python
+        run: python -m compileall -q design/RC3/code/python
+      - name: Run RC3 unit tests
+        run: python -m unittest discover -s design/RC3/code/python/tests -p 'test_*.py' -v
