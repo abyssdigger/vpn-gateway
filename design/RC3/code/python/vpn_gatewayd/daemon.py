@@ -1035,27 +1035,6 @@ class VpnGatewayDaemon:
             has_add,
         )
 
-    def _committed_full_policy(
-        self,
-        snapshot: ReconciliationSnapshot,
-    ) -> FirewallNatPolicy:
-        """Build the last verified binding-specific policy for delta checks."""
-        if self.config is None:
-            raise RuntimeError("config not installed")
-
-        previous: dict[str, ProfileInterfaceState] = {}
-        for profile_id, state in snapshot.interface_state_by_profile.items():
-            committed = self.profiles[profile_id].committed_active_bindings
-            if committed is None:
-                raise ReconciliationError(
-                    f"{profile_id}: no committed binding state for additive transition"
-                )
-            previous[profile_id] = ProfileInterfaceState(
-                candidates=state.candidates,
-                active_bindings=committed,
-            )
-        return desired_full_policy(self.config, MappingProxyType(previous))
-
     # ---- Route plan ------------------------------------------------------
 
     def _resolve_profile_interfaces(
