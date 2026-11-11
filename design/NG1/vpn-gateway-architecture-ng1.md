@@ -1,6 +1,6 @@
-# VPN-GATE NG1 — Architecture Draft 3
+# VPN-GATE NG1 — Architecture Draft 4
 
-Status: **Draft 3 — routing direction, Device firewall ownership and production deployment semantics clarified; EXP-013 passed and unavailable-path materialization is approved.**
+Status: **Draft 4 — explicit NEW verdict materialization for overlapping Profile prefixes; EXP-013 passed and unavailable-path materialization is approved.**
 
 Companion documents:
 
@@ -410,6 +410,19 @@ The values mean:
   side;
 - **BIDIRECTIONAL** — either side may initiate `NEW`.
 
+Materialization of NEW-flow policy is **explicit**, not omission-based. For every enabled
+`(Profile, Device)` pair and every Profile remote prefix, the generated direction guard
+contains a NEW-flow verdict for each relevant direction:
+
+- host -> Device: `ACCEPT` for OUTBOUND/BIDIRECTIONAL, otherwise explicit `DROP`;
+- Device -> host: `ACCEPT` for INBOUND/BIDIRECTIONAL, otherwise explicit `DROP`.
+
+Generated NEW-flow rules are ordered by remote-prefix length descending, then network
+address, consistently with Profile dispatch/classification. Omitting an ACCEPT rule is
+**not** a sufficient representation of a non-allowing direction because a broader
+overlapping Profile on the same Device could otherwise accept traffic classified to a
+more-specific denying Profile.
+
 Profile classification is directional:
 
 - host -> Device: match the packet **destination** against Profile remote prefixes;
@@ -423,6 +436,24 @@ shadow a less-specific valid Profile for the actual ingress Device.
 
 Both directions use the same longest-prefix ordering within their respective eligible
 candidate sets.
+
+This ordering must also be preserved in the generated explicit NEW verdict rules. For
+example, with both Profiles on `oc-main`:
+
+    Profile restricted:
+        direction = OUTBOUND
+        destinations = 10.20.0.0/16
+        device_order = [oc-main]
+
+    Profile broad:
+        direction = BIDIRECTIONAL
+        destinations = 10.0.0.0/8
+        device_order = [oc-main]
+
+Device -> host `NEW` from `10.20.5.5` is classified as `restricted` and must hit an
+explicit `10.20.0.0/16 DROP` before the broader `10.0.0.0/8 ACCEPT`. The symmetric
+host -> Device case uses the same rule-ordering principle. This prevents overlap from
+turning a more-specific deny into fail-open behavior.
 
 This matters when one Device is shared:
 
@@ -871,10 +902,27 @@ functionally dead while its interface remains present, Linux does not retry the 
 through another healthy equal-cost member. This is intentional last-resort semantics and
 must not be described as ordered failover.
 
+Operationally, disappearance of any member of a materialized multipath fallback requires a
+full Profile-route reprojection under the protective barrier because the kernel removes the
+whole multipath route rather than shrinking it to survivors. Traffic therefore fails
+closed during that transition even when another fallback member remains healthy.
+
 EXP-013 A3 also confirmed that disappearance of one member interface causes Linux to remove
 the whole direct-device multipath route rather than shrink it to surviving members.
 TrafficEngine therefore rebuilds fallback membership from a fresh binding snapshot after
 such a change; the transient absence is fail-closed.
+
+Example for one destination with three bound interfaces, all UNKNOWN:
+
+    metric 1      -> direct route via member A
+    metric 2      -> direct route via member B
+    metric 3      -> direct route via member C
+    metric 65535  -> one shadow ECMP fallback with members A+B+C
+    metric 65536  -> terminal blackhole
+
+The same persistent shadow fallback exists while the paths are AVAILABLE; an UNAVAILABLE
+classification removes only that member's normal-tier route and leaves its shadow
+membership unchanged.
 
 UNKNOWN availability does not terminate a bound-interface lifetime and does not demote a
 path. Future Device-specific detectors may move an interface between UNKNOWN, AVAILABLE
@@ -1372,9 +1420,9 @@ ROU does not seize or rewrite unrelated host VPN routes.
 29. Duplicate remote prefixes are forbidden globally across enabled Profiles; overlap at different prefix lengths is allowed.
 30. Host -> Device Profile dispatch matches remote destination prefix; Device -> host NEW-flow classification first filters enabled Profiles by ingress-Device membership and then longest-prefix matches the remote source within that filtered set.
 31. Host-side RPDB dispatch is longest-prefix-first and ends with a terminal iif-host0 fail-closed action so unmatched forwarded host traffic cannot fall through to main default.
-32. ROU-owned FORWARD is default-DROP; canonical stateful ordering rejects INVALID, accepts ESTABLISHED/RELATED admitted-flow traffic, and allows NEW only from configured Profile side(s).
+32. ROU-owned FORWARD is default-DROP; canonical stateful ordering rejects INVALID, accepts ESTABLISHED/RELATED admitted-flow traffic, and materializes an explicit ACCEPT-or-DROP NEW verdict for every enabled (Profile, Device, remote-prefix) pair in each relevant direction.
 33. Device traffic_envelope is separate administrator-authored Device/tunnel firewall policy; it applies to all Profiles sharing that Device.
-34. Generated Profile direction and Device envelope are cumulative; neither may widen the other, and restrictive Device-envelope rules precede generated direction ACCEPT rules.
+34. Generated Profile direction and Device envelope are cumulative; neither may widen the other, restrictive Device-envelope rules precede generated direction verdicts, and explicit NEW direction verdicts are longest-prefix-first so a broader Profile cannot override a more-specific deny.
 35. Each enabled Profile owns one fail-closed routing table with one terminal blackhole default.
 36. Per-destination blackholes are not part of the production model.
 37. device_order[] contains only Device identifiers and defines Profile-local Device preference.
@@ -1401,3 +1449,5 @@ ROU does not seize or rewrite unrelated host VPN routes.
 58. RC2/RC3 and ROU v0/EXP-012 remain evidence and implementation-history sources; superseded BindingSpec/capacity terminology is not normative for production NG1.
 59. The first production payload model disables IPv6 on ROU-owned payload interfaces rather than relying only on disabled IPv6 forwarding.
 60. Higher-priority local-table delivery of host0 traffic addressed to ROU-owned local endpoints is intentional and is not an escape from the forwarded-payload fail-closed guard.
+61. NEW-flow direction policy is never omission-only: each enabled (Profile, Device, remote-prefix) pair materializes an explicit ACCEPT or DROP verdict for each relevant direction, ordered longest-prefix-first.
+62. Multipath fallback member disappearance triggers full Profile-route reprojection under the protective barrier; traffic fails closed during the transition even when surviving members are healthy.
