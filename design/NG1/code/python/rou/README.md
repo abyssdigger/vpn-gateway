@@ -19,7 +19,10 @@ Current implemented slice:
 - TrafficRuntimeState projection for stable Profile-local normal metric slots;
 - verified-removal barrier: a disappeared interface's committed metric is not reused until a later verified commit;
 - strict parser for ordered `ip -j link show` interface observations;
-- Profile destination dispatch projection in normative `prefixlen DESC, network ASC` order.
+- Profile destination dispatch projection in normative `prefixlen DESC, network ASC` order;
+- kernel-independent per-Profile direct-route intent for UNKNOWN/AVAILABLE normal-tier paths;
+- terminal Profile blackhole intent even when no usable path exists;
+- explicit production gate that rejects UNAVAILABLE route materialization until EXP-013 closes.
 
 The current runtime code is deliberately a pure projection layer. It does not mutate kernel
 state and therefore cannot accidentally bypass the architecture's
@@ -34,7 +37,7 @@ Intentionally not implemented yet:
 - numeric routing-table/RPDB allocation in production code;
 - PlannerEngine transition execution;
 - routing/RPDB/firewall/NAT kernel apply/verify;
-- unavailable direct-dev multipath materialization is blocked on EXP-013; no runtime unavailable-path projector is added before that gate passes.
+- unavailable direct-dev multipath materialization remains blocked on EXP-013.
 
 Run rootless tests:
 

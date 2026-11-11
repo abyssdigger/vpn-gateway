@@ -23,6 +23,12 @@ from .domain import (
     Profile,
 )
 from .environment import EnvironmentParseError, EnvironmentSnapshot, parse_ip_link_json
+from .route_intent import (
+    DirectRouteIntent,
+    ProfileRouteIntent,
+    UnavailablePathProjectionBlocked,
+    compile_profile_route_intents,
+)
 from .traffic_state import (
     MetricAssignment,
     TrafficProjection,
@@ -40,6 +46,7 @@ __all__ = [
     "DeviceBindingSnapshot",
     "DeviceBindingState",
     "DeviceReconcileResult",
+    "DirectRouteIntent",
     "Direction",
     "DispatchEntry",
     "EnvironmentInterface",
@@ -52,10 +59,13 @@ __all__ = [
     "MatchKind",
     "MetricAssignment",
     "Profile",
+    "ProfileRouteIntent",
     "TrafficProjection",
     "TrafficRuntimeState",
+    "UnavailablePathProjectionBlocked",
     "committed_state_from_verified",
     "compile_profile_dispatch",
+    "compile_profile_route_intents",
     "load_active_config",
     "parse_active_config",
     "parse_ip_link_json",
