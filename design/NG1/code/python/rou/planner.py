@@ -82,6 +82,7 @@ AvailabilityProvider = Callable[
     [EnvironmentSnapshot],
     Mapping[InterfaceIdentity, Availability],
 ]
+VerifiedStatePersister = Callable[[PlannerRuntimeState], None]
 
 
 def default_snapshot_collector(
@@ -193,12 +194,17 @@ def reconcile_once(
     *,
     availability_provider: AvailabilityProvider | None = None,
     collect_snapshot: SnapshotCollector = default_snapshot_collector,
+    persist_verified_state: VerifiedStatePersister | None = None,
 ) -> PlannerResult:
     """Run one complete observe->plan->apply->observe->verify->commit cycle.
 
     Interface churn during a barriered transition is not hidden by retries inside this
     function. It returns PlannerRetryRequired with forwarding left closed; the outer event
     loop can immediately reconcile again from a fresh snapshot.
+
+    When a persistence callback is supplied, verified runtime history is durably recorded
+    before forwarding is opened. Persistence failure is therefore fail-closed and prevents
+    exposure of kernel state whose stable metric/binding history was not committed.
     """
 
     ns = NamespaceBackend(namespace, host_backend)
@@ -220,8 +226,11 @@ def reconcile_once(
             forwarding=True,
         )
         if not current_errors_open:
+            next_state = _commit(projection)
+            if persist_verified_state is not None:
+                persist_verified_state(next_state)
             return PlannerResult(
-                state=_commit(projection),
+                state=next_state,
                 projection=projection,
                 changed_kernel=False,
                 needs_immediate_reconcile=bool(projection.metrics.waiting_for_slot),
@@ -236,6 +245,9 @@ def reconcile_once(
             forwarding=False,
         )
         if not current_errors_closed:
+            next_state = _commit(projection)
+            if persist_verified_state is not None:
+                persist_verified_state(next_state)
             ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=1"))
             final = collect_snapshot(namespace, host_backend)
             if final.interfaces != initial.interfaces:
@@ -255,7 +267,7 @@ def reconcile_once(
                     "post-reopen verification failed: " + "; ".join(final_errors)
                 )
             return PlannerResult(
-                state=_commit(projection),
+                state=next_state,
                 projection=projection,
                 changed_kernel=True,
                 needs_immediate_reconcile=bool(projection.metrics.waiting_for_slot),
@@ -319,6 +331,10 @@ def reconcile_once(
                 + "; ".join(applied_errors)
             )
 
+        next_state = _commit(barrier_projection)
+        if persist_verified_state is not None:
+            persist_verified_state(next_state)
+
         ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=1"))
         final = collect_snapshot(namespace, host_backend)
         if final.interfaces != barrier_snapshot.interfaces:
@@ -340,7 +356,7 @@ def reconcile_once(
             )
 
         return PlannerResult(
-            state=_commit(barrier_projection),
+            state=next_state,
             projection=barrier_projection,
             changed_kernel=True,
             needs_immediate_reconcile=bool(
