@@ -43,6 +43,10 @@ def classify_device_to_host_profile(
     Candidate Profiles are first restricted to enabled Profiles that reference the
     ingress Device. Longest-prefix matching is then performed only inside that filtered
     candidate set.
+
+    This helper is exported for diagnostics/status and policy explanation. Kernel firewall
+    materialization uses the equivalent ordered prefix-match rules directly; packets are
+    not classified by calling this function at runtime.
     """
 
     candidates: list[tuple[IPv4Network, str]] = []
