@@ -113,6 +113,7 @@ class EnvironmentLiveTests(unittest.TestCase):
             ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv4.conf.default.rp_filter"): "0\n",
             ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv6.conf.all.forwarding"): "0\n",
             ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv6.conf.default.forwarding"): "0\n",
+            ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv6.conf.default.disable_ipv6"): "1\n",
             ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv4/conf/lo/rp_filter"): "0\n",
             ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv6/conf/lo/disable_ipv6"): "1\n",
             ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv4/conf/host0/rp_filter"): "0\n",
@@ -129,7 +130,7 @@ class EnvironmentLiveTests(unittest.TestCase):
         self.assertEqual(snap.sysctl_map["net.ipv4.ip_forward"], "1")
         self.assertEqual(snap.sysctl_map["net.ipv4.conf.host0.rp_filter"], "0")
         self.assertEqual(snap.sysctl_map["net.ipv6.conf.host0.disable_ipv6"], "1")
-        self.assertEqual(len(seen), 14)
+        self.assertEqual(len(seen), 15)
 
     def test_addr_rejects_same_name_new_ifindex_mismatch(self):
         interfaces = (EnvironmentInterface(InterfaceIdentity("vpns00", 9)),)
@@ -161,6 +162,7 @@ class EnvironmentLiveTests(unittest.TestCase):
                 ("sysctl", "-n", "net.ipv4.conf.default.rp_filter"),
                 ("sysctl", "-n", "net.ipv6.conf.all.forwarding"),
                 ("sysctl", "-n", "net.ipv6.conf.default.forwarding"),
+                ("sysctl", "-n", "net.ipv6.conf.default.disable_ipv6"),
             }:
                 return "0\n"
             if command[-2] == "cat":
