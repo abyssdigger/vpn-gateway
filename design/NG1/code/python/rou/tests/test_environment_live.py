@@ -109,6 +109,10 @@ class EnvironmentLiveTests(unittest.TestCase):
                 '[{"priority":0,"table":"local"},{"priority":32766,"table":"main"},{"priority":32767,"table":"default"}]',
             ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv4.ip_forward"): "1\n",
             ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv6.conf.all.forwarding"): "0\n",
+            ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv4/conf/lo/rp_filter"): "0\n",
+            ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv6/conf/lo/disable_ipv6"): "1\n",
+            ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv4/conf/host0/rp_filter"): "0\n",
+            ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv6/conf/host0/disable_ipv6"): "1\n",
         }
         seen = []
 
@@ -119,7 +123,44 @@ class EnvironmentLiveTests(unittest.TestCase):
         snap = collect_environment_snapshot("rou0", run)
         self.assertEqual([x.identity.ifname for x in snap.interfaces], ["lo", "host0"])
         self.assertEqual(snap.sysctl_map["net.ipv4.ip_forward"], "1")
-        self.assertEqual(len(seen), 6)
+        self.assertEqual(snap.sysctl_map["net.ipv4.conf.host0.rp_filter"], "0")
+        self.assertEqual(snap.sysctl_map["net.ipv6.conf.host0.disable_ipv6"], "1")
+        self.assertEqual(len(seen), 11)
+
+    def test_addr_rejects_same_name_new_ifindex_mismatch(self):
+        interfaces = (EnvironmentInterface(InterfaceIdentity("vpns00", 9)),)
+        with self.assertRaisesRegex(EnvironmentParseError, "identity mismatch"):
+            parse_ip_addr_json(
+                '[{"ifindex":10,"ifname":"vpns00","addr_info":[]}]',
+                interfaces,
+            )
+
+    def test_collect_rejects_interface_churn(self):
+        link_calls = 0
+
+        def run(command):
+            nonlocal link_calls
+            if command[-4:] == ("ip", "-j", "link", "show"):
+                link_calls += 1
+                if link_calls == 1:
+                    return '[{"ifindex":1,"ifname":"lo"},{"ifindex":7,"ifname":"host0"}]'
+                return '[{"ifindex":1,"ifname":"lo"},{"ifindex":8,"ifname":"host0"}]'
+            if command[-5:] == ("ip", "-j", "-4", "addr", "show"):
+                return '[{"ifindex":1,"ifname":"lo","addr_info":[]},{"ifindex":7,"ifname":"host0","addr_info":[]}]'
+            if command[-7:] == ("ip", "-j", "-4", "route", "show", "table", "all"):
+                return '[]'
+            if command[-5:] == ("ip", "-j", "-4", "rule", "show"):
+                return '[]'
+            if command[-3:] == ("sysctl", "-n", "net.ipv4.ip_forward"):
+                return "0\n"
+            if command[-3:] == ("sysctl", "-n", "net.ipv6.conf.all.forwarding"):
+                return "0\n"
+            if command[-2] == "cat":
+                return "0\n"
+            raise AssertionError(command)
+
+        with self.assertRaisesRegex(EnvironmentCollectError, "unstable"):
+            collect_environment_snapshot("rou0", run)
 
     def test_collect_wraps_runner_failure(self):
         def run(_command):
