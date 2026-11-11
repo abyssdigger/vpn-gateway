@@ -6,7 +6,20 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
-from rou.domain import ActiveConfig, Availability, Device, NatMode, Direction, Profile
+from rou.domain import (
+    ActiveConfig,
+    Availability,
+    Device,
+    Direction,
+    EnvelopeAction,
+    EnvelopeDirection,
+    EnvelopeProtocol,
+    NatMode,
+    PortRange,
+    Profile,
+    TrafficEnvelope,
+    TrafficEnvelopeRule,
+)
 from rou.firewall_state import compile_filter_state
 
 
@@ -129,6 +142,149 @@ class FirewallStateTests(unittest.TestCase):
         )
         self.assertNotIn("-j ACCEPT", state.restore_text)
         self.assertIn(":FORWARD DROP [0:0]", state.restore_text)
+
+    def test_envelope_jump_precedes_state_accept_and_allow_returns(self):
+        envelope = TrafficEnvelope(
+            default_action=EnvelopeAction.ALLOW,
+            rules=(
+                TrafficEnvelopeRule(
+                    direction=EnvelopeDirection.FROM_DEVICE,
+                    action=EnvelopeAction.DROP,
+                    source=ipaddress.IPv4Network("10.20.0.0/16"),
+                    protocol=EnvelopeProtocol.TCP,
+                    destination_ports=(PortRange(8007, 8007),),
+                ),
+                TrafficEnvelopeRule(
+                    direction=EnvelopeDirection.FROM_DEVICE,
+                    action=EnvelopeAction.ALLOW,
+                    source=ipaddress.IPv4Network("10.0.0.0/8"),
+                ),
+            ),
+        )
+        config = ActiveConfig(
+            devices={
+                "oc": Device(
+                    "oc",
+                    True,
+                    nat=NatMode.NONE,
+                    traffic_envelope=envelope,
+                )
+            },
+            profiles={
+                "corp": Profile(
+                    "corp",
+                    True,
+                    Direction.BIDIRECTIONAL,
+                    (ipaddress.IPv4Network("10.0.0.0/8"),),
+                    ("oc",),
+                )
+            },
+        )
+        bindings = DeviceBindingSnapshot(
+            (
+                BoundInterface(
+                    "oc",
+                    0,
+                    InterfaceIdentity("vpns00", 10),
+                    Availability.UNKNOWN,
+                ),
+            ),
+            (),
+        )
+
+        lines = compile_filter_state(config, bindings).restore_text.splitlines()
+        jump = lines.index(
+            "-A FORWARD -i vpns00 -o host0 -j VPNG-E1-F"
+        )
+        established = lines.index(
+            "-A FORWARD -i vpns00 -o host0 -m conntrack "
+            "--ctstate ESTABLISHED,RELATED -j ACCEPT"
+        )
+        self.assertLess(jump, established)
+
+        drop = lines.index(
+            "-A VPNG-E1-F -s 10.20.0.0/16 -p tcp -m tcp "
+            "--dport 8007 -j DROP"
+        )
+        allow = lines.index(
+            "-A VPNG-E1-F -s 10.0.0.0/8 -j RETURN"
+        )
+        terminal = lines.index("-A VPNG-E1-F -j RETURN")
+        self.assertLess(drop, allow)
+        self.assertLess(allow, terminal)
+        self.assertNotIn("-A VPNG-E1-F -j ACCEPT", lines)
+
+    def test_envelope_default_drop_is_materialized_for_both_directions(self):
+        config = ActiveConfig(
+            devices={
+                "oc": Device(
+                    "oc",
+                    True,
+                    nat=NatMode.NONE,
+                    traffic_envelope=TrafficEnvelope(
+                        default_action=EnvelopeAction.DROP,
+                    ),
+                )
+            },
+            profiles={
+                "corp": Profile(
+                    "corp",
+                    True,
+                    Direction.BIDIRECTIONAL,
+                    (ipaddress.IPv4Network("10.0.0.0/8"),),
+                    ("oc",),
+                )
+            },
+        )
+        state = compile_filter_state(
+            config,
+            DeviceBindingSnapshot((), ()),
+        )
+        self.assertIn("-A VPNG-E1-F -j DROP", state.restore_text)
+        self.assertIn("-A VPNG-E1-T -j DROP", state.restore_text)
+
+    def test_envelope_port_lists_expand_without_multiport_limit(self):
+        rule = TrafficEnvelopeRule(
+            direction=EnvelopeDirection.TO_DEVICE,
+            action=EnvelopeAction.DROP,
+            protocol=EnvelopeProtocol.UDP,
+            source_ports=(PortRange(1000, 1001), PortRange(2000, 2000)),
+            destination_ports=(PortRange(53, 53), PortRange(5353, 5355)),
+        )
+        config = ActiveConfig(
+            devices={
+                "oc": Device(
+                    "oc",
+                    True,
+                    nat=NatMode.NONE,
+                    traffic_envelope=TrafficEnvelope(
+                        default_action=EnvelopeAction.ALLOW,
+                        rules=(rule,),
+                    ),
+                )
+            },
+            profiles={
+                "corp": Profile(
+                    "corp",
+                    True,
+                    Direction.OUTBOUND,
+                    (ipaddress.IPv4Network("10.0.0.0/8"),),
+                    ("oc",),
+                )
+            },
+        )
+        text = compile_filter_state(
+            config,
+            DeviceBindingSnapshot((), ()),
+        ).restore_text
+        generated = [
+            line
+            for line in text.splitlines()
+            if line.startswith("-A VPNG-E1-T -p udp")
+            and line.endswith("-j DROP")
+        ]
+        self.assertEqual(len(generated), 4)
+        self.assertTrue(all("-m udp" in line for line in generated))
 
 
 if __name__ == "__main__":
