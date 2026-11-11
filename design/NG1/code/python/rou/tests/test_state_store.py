@@ -159,6 +159,50 @@ class StateStoreTests(unittest.TestCase):
             with self.assertRaises(StateStoreError):
                 JsonRuntimeStateStore(path).load(make_config())
 
+    def test_group_writable_parent_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            parent = Path(td) / "runtime"
+            parent.mkdir(mode=0o700)
+            path = parent / "state.json"
+            store = JsonRuntimeStateStore(path)
+            store.save(make_state())
+            parent.chmod(0o720)
+
+            with self.assertRaisesRegex(StateStoreError, "group/world writable"):
+                store.load(make_config())
+
+    def test_symlink_state_file_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            parent = Path(td) / "runtime"
+            parent.mkdir(mode=0o700)
+            target = parent / "real.json"
+            target.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "device_expectations": [],
+                        "traffic_metrics": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            target.chmod(0o600)
+            link = parent / "state.json"
+            link.symlink_to(target)
+
+            with self.assertRaisesRegex(StateStoreError, "symlink"):
+                JsonRuntimeStateStore(link).load(make_config())
+
+    def test_permissive_state_file_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "state.json"
+            store = JsonRuntimeStateStore(path)
+            store.save(make_state())
+            path.chmod(0o640)
+
+            with self.assertRaisesRegex(StateStoreError, "group/other"):
+                store.load(make_config())
+
     def test_unknown_version_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "state.json"
