@@ -237,9 +237,11 @@ class JsonRuntimeStateStore:
     def _validate_parent(self) -> None:
         parent = self.path.parent
         try:
-            info = parent.stat()
+            info = parent.lstat()
         except OSError as exc:
             raise StateStoreError(f"cannot stat runtime state directory: {exc}") from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise StateStoreError("runtime state directory must not be a symlink")
         if not stat.S_ISDIR(info.st_mode):
             raise StateStoreError("runtime state parent is not a directory")
         if info.st_uid != os.geteuid():
@@ -251,24 +253,30 @@ class JsonRuntimeStateStore:
                 "runtime state directory must not be group/world writable"
             )
 
+    def _validate_existing_file(self) -> None:
+        try:
+            info = self.path.lstat()
+        except OSError as exc:
+            raise StateStoreError(f"cannot stat runtime state file: {exc}") from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise StateStoreError("runtime state file must not be a symlink")
+        if not stat.S_ISREG(info.st_mode):
+            raise StateStoreError("runtime state path is not a regular file")
+        if info.st_uid != os.geteuid():
+            raise StateStoreError(
+                "runtime state file is not owned by the current effective user"
+            )
+        if stat.S_IMODE(info.st_mode) & 0o077:
+            raise StateStoreError(
+                "runtime state file must not grant group/other permissions"
+            )
+
     def load(self, config: ActiveConfig) -> StateLoadResult:
-        if not self.path.exists():
+        if not os.path.lexists(self.path):
             return StateLoadResult(PlannerRuntimeState.empty(), 0)
         self._validate_parent()
         try:
-            info = self.path.lstat()
-            if stat.S_ISLNK(info.st_mode):
-                raise StateStoreError("runtime state file must not be a symlink")
-            if not stat.S_ISREG(info.st_mode):
-                raise StateStoreError("runtime state path is not a regular file")
-            if info.st_uid != os.geteuid():
-                raise StateStoreError(
-                    "runtime state file is not owned by the current effective user"
-                )
-            if stat.S_IMODE(info.st_mode) & 0o077:
-                raise StateStoreError(
-                    "runtime state file must not grant group/other permissions"
-                )
+            self._validate_existing_file()
             raw = json.loads(self.path.read_text(encoding="utf-8"))
         except StateStoreError:
             raise
@@ -280,6 +288,8 @@ class JsonRuntimeStateStore:
         parent = self.path.parent
         parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._validate_parent()
+        if os.path.lexists(self.path):
+            self._validate_existing_file()
 
         payload = json.dumps(
             _serialize(state),
