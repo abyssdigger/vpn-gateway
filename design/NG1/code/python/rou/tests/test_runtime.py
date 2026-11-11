@@ -12,6 +12,7 @@ from rou.device_engine import (
     reconcile_devices,
 )
 from rou.domain import (
+    NatMode,
     ActiveConfig,
     Availability,
     Device,
@@ -32,6 +33,7 @@ def make_config(quota: int = 2) -> ActiveConfig:
     device = Device(
         name="oc",
         enabled=True,
+        nat=NatMode.NONE,
         expected_interfaces=(
             ExpectedInterface(InterfaceMatch(MatchKind.PREFIX, "vpns"), quota),
         ),
