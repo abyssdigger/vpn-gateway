@@ -23,6 +23,7 @@ from .domain import (
     Profile,
 )
 from .environment import EnvironmentParseError, EnvironmentSnapshot, parse_ip_link_json
+from .firewall_intent import FlowDirection, NewFlowRuleIntent, Verdict, compile_new_flow_intents
 from .route_intent import (
     DirectRouteIntent,
     FallbackRouteIntent,
@@ -53,18 +54,22 @@ __all__ = [
     "EnvironmentInterface",
     "EnvironmentParseError",
     "EnvironmentSnapshot",
+    "FlowDirection",
     "ExpectedBindingState",
     "ExpectedInterface",
     "InterfaceIdentity",
     "InterfaceMatch",
     "MatchKind",
     "MetricAssignment",
+    "NewFlowRuleIntent",
     "Profile",
     "ProfileRouteIntent",
     "TrafficProjection",
     "TrafficRuntimeState",
+    "Verdict",
     "classify_device_to_host_profile",
     "committed_state_from_verified",
+    "compile_new_flow_intents",
     "compile_profile_dispatch",
     "compile_profile_route_intents",
     "load_active_config",
