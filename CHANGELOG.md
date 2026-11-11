@@ -1,3 +1,21 @@
+## 2026-11-11 — NG1 production config/domain implementation begins
+
+The first production NG1 implementation slice now exists under
+`design/NG1/code/python/rou/`.
+
+- immutable Device/Profile/ExpectedInterface domain objects;
+- TOML -> ActiveConfig loader for the agreed configuration surface;
+- disabled placeholder semantics;
+- strict IPv4 destination and Device-reference validation;
+- active ExpectedInterface overlap validation;
+- pure Profile metric-layout compiler with device_order -> expected_interfaces priority;
+- disabled Devices consume no current metric range;
+- reserved metric tail: normal < UNAVAILABLE_METRIC < BLACKHOLE_METRIC;
+- unresolved publication/traffic-envelope TOML fields are rejected rather than guessed;
+- dedicated NG1 Python GitHub Actions validation was added.
+
+Rootless validation before commit: Python compileall PASS; **27/27 unit tests PASS**.
+
 ## 2026-11-11 — NG1 production model and initial TOML configuration contract
 
 The first production-capable NG1 domain/runtime model is frozen before implementation.
