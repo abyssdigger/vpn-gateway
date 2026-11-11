@@ -17,7 +17,9 @@ Current implemented slice:
 - observable over-quota candidates that are not exported as bound TrafficEngine inputs;
 - normalized UNKNOWN/AVAILABLE/UNAVAILABLE availability attached to bound interfaces;
 - TrafficRuntimeState projection for stable Profile-local normal metric slots;
-- verified-removal barrier: a disappeared interface's committed metric is not reused until a later verified commit.
+- verified-removal barrier: a disappeared interface's committed metric is not reused until a later verified commit;
+- strict parser for ordered `ip -j link show` interface observations;
+- Profile destination dispatch projection in normative `prefixlen DESC, network ASC` order.
 
 The current runtime code is deliberately a pure projection layer. It does not mutate kernel
 state and therefore cannot accidentally bypass the architecture's
@@ -27,8 +29,9 @@ Intentionally not implemented yet:
 
 - publication TOML syntax;
 - traffic-envelope TOML syntax;
-- live kernel EnvironmentSnapshot collection;
+- live subprocess/netlink EnvironmentSnapshot collection;
 - publication supervision in the production package;
+- numeric routing-table/RPDB allocation in production code;
 - PlannerEngine transition execution;
 - routing/RPDB/firewall/NAT kernel apply/verify;
 - unavailable direct-dev multipath materialization is blocked on EXP-013; no runtime unavailable-path projector is added before that gate passes.
