@@ -102,12 +102,43 @@ multipath membership. Восстановление должно оставать
 
 ## Phase B — real VPN interfaces and payload
 
-Phase B выполняется на dedicated Debian 13 gateway при двух одновременно существующих
-реальных VPN interfaces, обычно `vpns00` и `vpns01`.
+Harness: `vpn-gateway-exp-013-phase-b.sh`.
 
-Она использует отдельную test routing table, отдельный source netns/veth и узкие temporary
-FORWARD/NAT rules только для experiment source -> test target. Production/main routing не
-заменяется.
+Phase B выполняется на той же dedicated Debian 13 gateway с двумя реальными OpenConnect
+interfaces (`vpnsXX`).
+
+Для transport/appliance scaffolding используется уже live-verified ROU v0. После появления
+двух DTLS bindings замораживается **только controller process** через SIGSTOP; ocserv и
+publication relay продолжают работать. Это исключает v0 drift repair из измерений.
+
+Экспериментальные routing objects изолированы:
+
+- отдельная table 313;
+- RPDB priority 50 только для test target;
+- production/v0 table 100 не меняется;
+- существующие v0 FORWARD/NAT rules используются как уже проверенная payload plumbing;
+- B4 добавляет только одну временную узкую DROP rule.
+
+### Phase B candidate: persistent shadow fallback
+
+Phase A показала, что normal route, common-metric multipath и blackhole route могут
+одновременно существовать для одного prefix с разными metrics.
+
+Поэтому Phase B проверяет более простую production-кандидатуру:
+
+- для всех **bound** interfaces постоянно существует shadow fallback на
+  `UNAVAILABLE_METRIC`;
+- UNKNOWN/AVAILABLE interface дополнительно имеет свой normal route;
+- AVAILABLE/UNKNOWN -> UNAVAILABLE удаляет только normal route;
+- UNAVAILABLE -> AVAILABLE/UNKNOWN возвращает normal route на прежний stable metric;
+- availability change не меняет membership shadow fallback;
+- binding ADD/REMOVE перестраивает shadow fallback membership;
+- один bound interface может быть представлен обычным direct-dev fallback route;
+- два и более — одним direct-dev multipath fallback route.
+
+A3 отдельно показала: при исчезновении одного member-interface kernel удаляет весь
+direct-dev multipath route, а не автоматически сокращает его до survivors. Это безопасное
+fail-closed transient state; reconcile обязан собрать fallback заново из fresh binding set.
 
 ### B1 — normal priorities
 
