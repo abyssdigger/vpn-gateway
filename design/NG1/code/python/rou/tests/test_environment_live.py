@@ -109,7 +109,10 @@ class EnvironmentLiveTests(unittest.TestCase):
             ("ip", "netns", "exec", "rou0", "ip", "-j", "-4", "rule", "show"):
                 '[{"priority":0,"table":"local"},{"priority":32766,"table":"main"},{"priority":32767,"table":"default"}]',
             ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv4.ip_forward"): "1\n",
+            ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv4.conf.all.rp_filter"): "0\n",
+            ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv4.conf.default.rp_filter"): "0\n",
             ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv6.conf.all.forwarding"): "0\n",
+            ("ip", "netns", "exec", "rou0", "sysctl", "-n", "net.ipv6.conf.default.forwarding"): "0\n",
             ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv4/conf/lo/rp_filter"): "0\n",
             ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv6/conf/lo/disable_ipv6"): "1\n",
             ("ip", "netns", "exec", "rou0", "cat", "/proc/sys/net/ipv4/conf/host0/rp_filter"): "0\n",
@@ -126,7 +129,7 @@ class EnvironmentLiveTests(unittest.TestCase):
         self.assertEqual(snap.sysctl_map["net.ipv4.ip_forward"], "1")
         self.assertEqual(snap.sysctl_map["net.ipv4.conf.host0.rp_filter"], "0")
         self.assertEqual(snap.sysctl_map["net.ipv6.conf.host0.disable_ipv6"], "1")
-        self.assertEqual(len(seen), 11)
+        self.assertEqual(len(seen), 14)
 
     def test_addr_rejects_same_name_new_ifindex_mismatch(self):
         interfaces = (EnvironmentInterface(InterfaceIdentity("vpns00", 9)),)
@@ -152,9 +155,13 @@ class EnvironmentLiveTests(unittest.TestCase):
                 return '[]'
             if command[-5:] == ("ip", "-j", "-4", "rule", "show"):
                 return '[]'
-            if command[-3:] == ("sysctl", "-n", "net.ipv4.ip_forward"):
-                return "0\n"
-            if command[-3:] == ("sysctl", "-n", "net.ipv6.conf.all.forwarding"):
+            if command[-3:] in {
+                ("sysctl", "-n", "net.ipv4.ip_forward"),
+                ("sysctl", "-n", "net.ipv4.conf.all.rp_filter"),
+                ("sysctl", "-n", "net.ipv4.conf.default.rp_filter"),
+                ("sysctl", "-n", "net.ipv6.conf.all.forwarding"),
+                ("sysctl", "-n", "net.ipv6.conf.default.forwarding"),
+            }:
                 return "0\n"
             if command[-2] == "cat":
                 return "0\n"
