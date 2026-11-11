@@ -1,12 +1,13 @@
-# VPN-GATE NG1 — Architecture Draft 4
+# VPN-GATE NG1 — Architecture Draft 5
 
-Status: **Draft 4 — explicit NEW verdict materialization for overlapping Profile prefixes; EXP-013 passed and unavailable-path materialization is approved.**
+Status: **Draft 5 — production configuration surfaces resolved; explicit NAT, publication, traffic-envelope and instance/bootstrap contracts are normative.**
 
 Companion documents:
 
 - `design/NG1/rou-concept.md`
 - `design/NG1/rou-config.md`
 - `design/NG1/NG1-2026-11-11-config-brainstorm-brief.md`
+- `design/NG1/NG1-2026-11-11-production-config-resolution.md`
 
 NG1 is a next-generation design, not an incremental RC3 revision. The base abstraction changes from a host-integrated VPN gateway to a self-contained virtual VPN router appliance.
 
@@ -690,16 +691,35 @@ The minimum capability surface is:
 - explicit allow/drop action;
 - explicit/default terminal policy.
 
-Exact TOML grammar, convenient shorthands and rule-order syntax remain a separate config
-design step. This section fixes ownership and capabilities, not syntax.
+Draft 5 fixes the schema-version-1 TOML grammar in the reviewed production configuration
+contract. The envelope is optional. If present, it contains ordered first-match rules and
+an explicit terminal default. Rule matches may constrain Device-relative direction,
+source/destination IPv4 prefixes, protocol and TCP/UDP source/destination ports.
+
+Envelope `allow` materializes as RETURN to the generated Profile guard, never as FORWARD
+ACCEPT. Envelope `drop` materializes as DROP. The envelope is traversed before
+ESTABLISHED/RELATED and generated NEW verdicts, so it can restrict existing flows while
+never widening Profile.direction.
 
 A Profile may use a Device only under this hard envelope. Sharing a Device does not create
 a per-Profile copy of the administrator firewall; the same Device policy applies to all of
 its bound interfaces and Profiles.
 
+Every enabled Device also explicitly selects schema-v1 payload NAT mode `none` or
+`masquerade`. NAT is Device-scoped. MASQUERADE is emitted only on currently bound
+interfaces and only for remote prefixes of enabled Profiles that reference that Device.
+There is no implicit NAT default and explicit SNAT is not part of schema version 1.
+
 ## 8. Device transport publication
 
 A Device may publish zero or more TCP/UDP transport endpoints.
+
+Schema version 1 uses the reviewed mapping grammar:
+
+    <external-port-or-range>/<tcp|udp>[><internal-port-or-range>]
+
+Omitting the internal side means equal external/internal ports. Range bounds are inclusive
+and external/internal cardinality must match.
 
 Conceptually a publication maps:
 
@@ -719,6 +739,11 @@ needed by the relay/listener path. Publication never implies a blanket INPUT all
 Publication workers/sockets follow the supervision contract in §3.4.
 
 A Device not required by any enabled Profile has no publication sockets.
+
+Across active Devices, same-protocol external endpoint ranges are disjoint. Internal target
+ranges on the common host0 IPv4 address are also disjoint across different active Devices;
+multiple external aliases may intentionally target the same internal endpoint within one
+Device. The host-side publication bind IPv4 address belongs to instance configuration.
 
 ## 9. Profile model
 
@@ -1451,3 +1476,10 @@ ROU does not seize or rewrite unrelated host VPN routes.
 60. Higher-priority local-table delivery of host0 traffic addressed to ROU-owned local endpoints is intentional and is not an escape from the forwarded-payload fail-closed guard.
 61. NEW-flow direction policy is never omission-only: each enabled (Profile, Device, remote-prefix) pair materializes an explicit ACCEPT or DROP verdict for each relevant direction, ordered longest-prefix-first.
 62. Multipath fallback member disappearance triggers full Profile-route reprojection under the protective barrier; traffic fails closed during the transition even when surviving members are healthy.
+63. Router and instance human-facing TOML require schema_version=1; unknown or missing versions are rejected.
+64. Every enabled Device explicitly selects payload NAT mode none or masquerade; NAT is Device-scoped and MASQUERADE is restricted to bound interfaces plus remote prefixes of enabled Profiles referencing that Device.
+65. Device publications use the schema-v1 ext-port-or-range/protocol[>internal-port-or-range] grammar; active external endpoints may not overlap for one protocol, and internal endpoints may not overlap across different active Devices.
+66. Device traffic_envelope is optional; when present it has ordered first-match rules and an explicit terminal default. Envelope allow materializes as RETURN rather than ACCEPT so it cannot widen generated Profile policy.
+67. Traffic-envelope traversal precedes ESTABLISHED/RELATED and generated NEW verdicts for the relevant bound Device interface, allowing Device restrictions to terminate existing flows.
+68. Instance schema version 1 fixes the internal peer name to host0, requires explicit stable IPv4 link addresses plus publication bind address, and uses absolute router-config/state-file paths.
+69. Instance identifiers use the same opaque [a-z0-9][a-z0-9-]* grammar as Device/Profile IDs.
