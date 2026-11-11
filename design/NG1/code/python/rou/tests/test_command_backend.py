@@ -5,10 +5,12 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.command_backend import (
+    BackendLaunchError,
     CommandExecutionError,
     CommandResult,
     KernelApplyError,
     NamespaceBackend,
+    SubprocessBackend,
     execute_kernel_mutation_plan,
 )
 from rou.kernel_mutation import KernelMutation, KernelMutationPlan
@@ -71,6 +73,21 @@ class CommandBackendTests(unittest.TestCase):
             execute_kernel_mutation_plan(plan, ns)
 
         self.assertEqual(len(host.calls), 2)
+
+    def test_command_error_string_does_not_echo_full_argv(self):
+        result = CommandResult(
+            ("tool", "--password", "super-secret"),
+            2,
+            "",
+            "failed",
+        )
+        exc = CommandExecutionError(result)
+        self.assertNotIn("super-secret", str(exc))
+        self.assertIn("'tool'", str(exc))
+
+    def test_subprocess_launch_failure_is_typed(self):
+        with self.assertRaises(BackendLaunchError):
+            SubprocessBackend().run(("/definitely/not/a/real/executable",))
 
     def test_namespace_must_be_nonempty(self):
         with self.assertRaisesRegex(ValueError, "namespace"):
