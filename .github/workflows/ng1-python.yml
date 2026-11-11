@@ -1,0 +1,28 @@
+name: NG1 Python validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Compile NG1 ROU Python tree
+        run: python -m compileall -q design/NG1/code/python/rou
+
+      - name: Run NG1 ROU unit tests
+        run: python -m unittest discover -s design/NG1/code/python/rou/tests -p 'test_*.py' -v
