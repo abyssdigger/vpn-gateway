@@ -1,3 +1,33 @@
+## 2026-11-11 — NG1 Architecture Draft 3: direction/envelope/routing clarification
+
+External concept/architecture review exposed missing production semantics around unmatched
+host0 traffic, shared Devices, Profile direction, Device firewall ownership, lifecycle and
+bootstrap prerequisites.
+
+Draft 3 now defines:
+
+- host0-scoped RPDB dispatch plus terminal host-ingress fail-closed action;
+- Profile `destinations[]` as remote/VPN-side prefixes;
+- stateful generated Profile-direction guard with NEW / ESTABLISHED,RELATED / INVALID
+  semantics;
+- Device -> host Profile classification by remote source prefix + Device membership;
+- separate administrator-authored Device `traffic_envelope` firewall;
+- shared-Device example demonstrating different Profile directions on one concrete tunnel;
+- no mandatory conntrack-mark requirement for return routing;
+- over-quota/unbound interface payload isolation;
+- deterministic first-observed quota promotion without lexical interface reordering;
+- Device-process startup sequence inside the already-created ROU namespace;
+- publication supervision;
+- bootstrap-owned stable link addressing and required namespace forwarding/rp_filter state;
+- v0 -> production migration boundary, production test layers, representability/scale
+  policy and host-VPN coexistence guidance.
+
+The external review and clarification dialogue are preserved verbatim in
+`design/reviews/NG1-2026-11-11-concept-architecture-review.md`; disposition is recorded
+in the matching response document.
+
+EXP-013 remains the implementation gate for unavailable common-metric projection.
+
 ## 2026-11-11 — NG1 production config/domain implementation begins
 
 The first production NG1 implementation slice now exists under
