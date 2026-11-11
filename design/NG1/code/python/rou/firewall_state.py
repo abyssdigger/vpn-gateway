@@ -208,7 +208,10 @@ def compile_filter_state(
     # determines evaluation order, not their textual definition position.
     for device_name in sorted(chains):
         envelope = config.devices[device_name].traffic_envelope
-        assert envelope is not None
+        if envelope is None:
+            raise ValueError(
+                f"missing traffic envelope for compiled chain Device {device_name!r}"
+            )
         from_chain, to_chain = chains[device_name]
 
         for rule in envelope.rules:
