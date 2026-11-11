@@ -63,6 +63,47 @@ def compile_publication_endpoints(
                         target_port=publication.internal.start + offset,
                     )
                 )
+
+    seen_external: dict[
+        tuple[IPv4Address, TransportProtocol, int],
+        str,
+    ] = {}
+    seen_internal: dict[
+        tuple[IPv4Address, TransportProtocol, int],
+        str,
+    ] = {}
+    for endpoint in endpoints:
+        external_key = (
+            endpoint.listen_address,
+            endpoint.protocol,
+            endpoint.external_port,
+        )
+        previous_external = seen_external.get(external_key)
+        if previous_external is not None:
+            raise PublicationError(
+                "duplicate active external publication endpoint "
+                f"{endpoint.listen_address}:{endpoint.external_port}/"
+                f"{endpoint.protocol.value}"
+            )
+        seen_external[external_key] = endpoint.device_name
+
+        internal_key = (
+            endpoint.target_address,
+            endpoint.protocol,
+            endpoint.target_port,
+        )
+        previous_internal = seen_internal.get(internal_key)
+        if (
+            previous_internal is not None
+            and previous_internal != endpoint.device_name
+        ):
+            raise PublicationError(
+                "internal publication endpoint is owned by multiple Devices: "
+                f"{endpoint.target_address}:{endpoint.target_port}/"
+                f"{endpoint.protocol.value}"
+            )
+        seen_internal[internal_key] = endpoint.device_name
+
     return tuple(endpoints)
 
 
