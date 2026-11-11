@@ -44,5 +44,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y iproute2 iptables
 
+      - name: Run disposable-netns instance lifecycle
+        run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_instance_lifecycle.py
+
       - name: Run disposable-netns filter round-trip
         run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_firewall_roundtrip.py
