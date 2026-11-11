@@ -4,10 +4,16 @@ from dataclasses import dataclass
 import re
 
 from .device_engine import DeviceBindingSnapshot
-from .domain import ActiveConfig
+from .domain import (
+    ActiveConfig,
+    EnvelopeAction,
+    EnvelopeDirection,
+    EnvelopeProtocol,
+    PortRange,
+    TrafficEnvelopeRule,
+)
 from .firewall_intent import (
     FlowDirection,
-    Verdict,
     compile_new_flow_intents,
 )
 
@@ -33,7 +39,7 @@ def normalize_iptables_save(text: str) -> str:
     return "\n".join(lines).strip()
 
 
-def _rule(
+def _forward_state_rule(
     *,
     ingress: str,
     egress: str,
@@ -51,29 +57,103 @@ def _rule(
     return " ".join(parts)
 
 
+def _port_text(port_range: PortRange) -> str:
+    if port_range.start == port_range.end:
+        return str(port_range.start)
+    return f"{port_range.start}:{port_range.end}"
+
+
+def _envelope_rule_lines(
+    chain: str,
+    rule: TrafficEnvelopeRule,
+) -> tuple[str, ...]:
+    sources = rule.source_ports or (None,)
+    destinations = rule.destination_ports or (None,)
+    verdict = (
+        "RETURN"
+        if rule.action is EnvelopeAction.ALLOW
+        else "DROP"
+    )
+
+    lines: list[str] = []
+    for source_port in sources:
+        for destination_port in destinations:
+            parts = ["-A", chain]
+            if rule.source is not None:
+                parts.extend(["-s", rule.source.with_prefixlen])
+            if rule.destination is not None:
+                parts.extend(["-d", rule.destination.with_prefixlen])
+            if rule.protocol is not EnvelopeProtocol.ANY:
+                parts.extend(["-p", rule.protocol.value])
+                if rule.protocol in {
+                    EnvelopeProtocol.TCP,
+                    EnvelopeProtocol.UDP,
+                }:
+                    parts.extend(["-m", rule.protocol.value])
+            if source_port is not None:
+                parts.extend(["--sport", _port_text(source_port)])
+            if destination_port is not None:
+                parts.extend(["--dport", _port_text(destination_port)])
+            parts.extend(["-j", verdict])
+            lines.append(" ".join(parts))
+    return tuple(lines)
+
+
+def _envelope_chains(
+    config: ActiveConfig,
+) -> dict[str, tuple[str, str]]:
+    device_names = [
+        name
+        for name in sorted(config.active_device_names)
+        if config.devices[name].traffic_envelope is not None
+    ]
+    return {
+        device_name: (
+            f"VPNG-E{index}-F",
+            f"VPNG-E{index}-T",
+        )
+        for index, device_name in enumerate(device_names, start=1)
+    }
+
+
 def compile_filter_state(
     config: ActiveConfig,
     bindings: DeviceBindingSnapshot,
 ) -> FirewallDesiredState:
     """Compile the complete ROU-owned IPv4 filter table.
 
-    Device traffic-envelope syntax/materialization is intentionally not invented here.
-    The reserved insertion point is after INVALID rejection and before every generated
-    ACCEPT. Until envelope syntax is agreed, that block is empty.
-
-    ESTABLISHED/RELATED acceptance is scoped to currently bound Device interfaces rather
-    than being global, preserving over-quota/unbound isolation.
+    Device-envelope chains are traversed before any generated state/profile acceptance.
+    Envelope allow returns to FORWARD; it never accepts traffic directly.
+    ESTABLISHED/RELATED acceptance is scoped to currently bound Device interfaces.
     """
+
+    chains = _envelope_chains(config)
 
     lines = [
         "*filter",
         ":INPUT ACCEPT [0:0]",
         ":FORWARD DROP [0:0]",
         ":OUTPUT ACCEPT [0:0]",
-        "-A FORWARD -m conntrack --ctstate INVALID -j DROP",
     ]
+    for from_chain, to_chain in chains.values():
+        lines.append(f":{from_chain} - [0:0]")
+        lines.append(f":{to_chain} - [0:0]")
 
-    # Reserved order point for future Device-envelope DROP/reject rules.
+    lines.append("-A FORWARD -m conntrack --ctstate INVALID -j DROP")
+
+    by_device = bindings.by_device
+
+    # Device envelope is cumulative with Profile policy and must precede every ACCEPT.
+    for device_name in sorted(chains):
+        from_chain, to_chain = chains[device_name]
+        for binding in by_device.get(device_name, ()):
+            ifname = binding.identity.ifname
+            lines.append(
+                f"-A FORWARD -i {HOST_INTERFACE} -o {ifname} -j {to_chain}"
+            )
+            lines.append(
+                f"-A FORWARD -i {ifname} -o {HOST_INTERFACE} -j {from_chain}"
+            )
 
     seen_ifnames: set[str] = set()
     for binding in bindings.bound:
@@ -82,7 +162,7 @@ def compile_filter_state(
             continue
         seen_ifnames.add(ifname)
         lines.append(
-            _rule(
+            _forward_state_rule(
                 ingress=HOST_INTERFACE,
                 egress=ifname,
                 state="ESTABLISHED,RELATED",
@@ -90,7 +170,7 @@ def compile_filter_state(
             )
         )
         lines.append(
-            _rule(
+            _forward_state_rule(
                 ingress=ifname,
                 egress=HOST_INTERFACE,
                 state="ESTABLISHED,RELATED",
@@ -98,7 +178,6 @@ def compile_filter_state(
             )
         )
 
-    by_device = bindings.by_device
     for intent in compile_new_flow_intents(config):
         for binding in by_device.get(intent.device_name, ()):
             prefix = intent.remote_prefix.with_prefixlen
@@ -106,7 +185,7 @@ def compile_filter_state(
 
             if intent.direction is FlowDirection.HOST_TO_DEVICE:
                 lines.append(
-                    _rule(
+                    _forward_state_rule(
                         ingress=HOST_INTERFACE,
                         egress=binding.identity.ifname,
                         destination=prefix,
@@ -116,7 +195,7 @@ def compile_filter_state(
                 )
             else:
                 lines.append(
-                    _rule(
+                    _forward_state_rule(
                         ingress=binding.identity.ifname,
                         egress=HOST_INTERFACE,
                         source=prefix,
@@ -124,6 +203,27 @@ def compile_filter_state(
                         verdict=verdict,
                     )
                 )
+
+    # User-defined chains may be serialized after callers; their jump position above
+    # determines evaluation order, not their textual definition position.
+    for device_name in sorted(chains):
+        envelope = config.devices[device_name].traffic_envelope
+        assert envelope is not None
+        from_chain, to_chain = chains[device_name]
+
+        for rule in envelope.rules:
+            if rule.direction is EnvelopeDirection.FROM_DEVICE:
+                lines.extend(_envelope_rule_lines(from_chain, rule))
+            else:
+                lines.extend(_envelope_rule_lines(to_chain, rule))
+
+        terminal = (
+            "RETURN"
+            if envelope.default_action is EnvelopeAction.ALLOW
+            else "DROP"
+        )
+        lines.append(f"-A {from_chain} -j {terminal}")
+        lines.append(f"-A {to_chain} -j {terminal}")
 
     lines.extend(["COMMIT", ""])
     restore_text = "\n".join(lines)
