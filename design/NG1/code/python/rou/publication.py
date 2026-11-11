@@ -156,6 +156,7 @@ class _TcpWorker(_Worker):
         self._track(upstream)
         try:
             upstream.settimeout(10)
+            upstream.bind((str(self.endpoint.source_address), 0))
             upstream.connect(
                 (
                     str(self.endpoint.target_address),
@@ -311,7 +312,11 @@ class _UdpWorker(_Worker):
                                 now,
                             )
                         association.last_seen = now
-                        association.sock.send(data)
+                        try:
+                            association.sock.send(data)
+                        except OSError:
+                            self._drop_association(selector, association)
+                            continue
                     else:
                         association = key.data
                         try:
@@ -320,7 +325,11 @@ class _UdpWorker(_Worker):
                             self._drop_association(selector, association)
                             continue
                         association.last_seen = now
-                        self.external.sendto(data, association.peer)
+                        try:
+                            self.external.sendto(data, association.peer)
+                        except OSError:
+                            self._drop_association(selector, association)
+                            continue
                 self._expire(selector, now)
         finally:
             for association in tuple(self._associations.values()):
@@ -389,6 +398,7 @@ class PublicationSupervisor:
         if self._started:
             raise PublicationError("publication supervisor already started")
 
+        self._stop = threading.Event()
         workers: list[_Worker] = []
         try:
             for endpoint in self.endpoints:
@@ -416,8 +426,21 @@ class PublicationSupervisor:
 
         self._workers = workers
         self._started = True
-        for worker in self._workers:
-            worker.start()
+        try:
+            for worker in self._workers:
+                worker.start()
+        except Exception as exc:
+            self._stop.set()
+            for worker in self._workers:
+                worker.close()
+            for worker in self._workers:
+                if worker.thread.ident is not None:
+                    worker.join(3.0)
+            self._workers = []
+            self._started = False
+            raise PublicationError(
+                f"cannot start publication worker: {exc}"
+            ) from exc
 
     def check_health(self) -> None:
         if not self._started:
