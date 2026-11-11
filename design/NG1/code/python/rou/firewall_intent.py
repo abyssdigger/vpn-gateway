@@ -19,6 +19,13 @@ class Verdict(str, Enum):
 
 @dataclass(frozen=True)
 class NewFlowRuleIntent:
+    """Device-scoped NEW-flow policy intent.
+
+    Kernel materialization expands this intent to every currently bound interface of the
+    referenced Device. No rule is emitted for absent, over-quota or otherwise unbound
+    interfaces.
+    """
+
     profile_name: str
     device_name: str
     remote_prefix: IPv4Network
@@ -46,7 +53,8 @@ def compile_new_flow_intents(config: ActiveConfig) -> tuple[NewFlowRuleIntent, .
     for profile in config.profiles.values():
         if not profile.enabled:
             continue
-        assert profile.direction is not None
+        if profile.direction is None:
+            raise ValueError(f"enabled Profile {profile.name!r} has no direction")
 
         for device_name in profile.device_order:
             device = config.devices.get(device_name)

@@ -65,7 +65,14 @@ def project_normal_metrics(
     projection. This forces route removal to be verified and committed before a later
     reconcile may reuse the slot.
 
-    UNAVAILABLE fallback materialization is deliberately excluded pending EXP-013.
+    Promotion is intentionally multi-step: disappearance is first projected while the old
+    metric remains reserved; verified removal is committed; only a later reconcile may
+    assign the freed slot to the promoted/new candidate, which itself then requires normal
+    apply/verify/commit. This prevents metric reuse before the kernel state that owned the
+    old slot is proven absent.
+
+    UNAVAILABLE fallback is projected separately by route_intent.py; this function owns
+    only stable normal-tier metric allocation.
     """
 
     grouped: dict[tuple[str, int], list] = {}

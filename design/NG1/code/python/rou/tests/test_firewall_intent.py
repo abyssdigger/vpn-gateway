@@ -118,6 +118,72 @@ class FirewallIntentTests(unittest.TestCase):
             ],
         )
 
+    def test_three_level_overlap_has_complete_longest_prefix_order(self):
+        config = ActiveConfig(
+            devices={"oc-main": enabled_device("oc-main")},
+            profiles={
+                "specific": Profile(
+                    "specific",
+                    True,
+                    Direction.OUTBOUND,
+                    (ipaddress.IPv4Network("10.20.0.0/16"),),
+                    ("oc-main",),
+                ),
+                "broad": Profile(
+                    "broad",
+                    True,
+                    Direction.BIDIRECTIONAL,
+                    (ipaddress.IPv4Network("10.0.0.0/8"),),
+                    ("oc-main",),
+                ),
+                "default": Profile(
+                    "default",
+                    True,
+                    Direction.OUTBOUND,
+                    (ipaddress.IPv4Network("0.0.0.0/0"),),
+                    ("oc-main",),
+                ),
+            },
+        )
+
+        rules = [
+            rule
+            for rule in compile_new_flow_intents(config)
+            if rule.direction is FlowDirection.DEVICE_TO_HOST
+        ]
+
+        self.assertEqual(
+            [
+                (str(rule.remote_prefix), rule.verdict)
+                for rule in rules
+            ],
+            [
+                ("10.20.0.0/16", Verdict.DROP),
+                ("10.0.0.0/8", Verdict.ACCEPT),
+                ("0.0.0.0/0", Verdict.DROP),
+            ],
+        )
+
+    def test_enabled_profile_without_direction_is_rejected(self):
+        config = ActiveConfig(
+            devices={"oc-main": enabled_device("oc-main")},
+            profiles={
+                "broken": Profile(
+                    "broken",
+                    True,
+                    None,
+                    (ipaddress.IPv4Network("10.0.0.0/8"),),
+                    ("oc-main",),
+                )
+            },
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "enabled Profile 'broken' has no direction",
+        ):
+            compile_new_flow_intents(config)
+
     def test_bidirectional_is_accept_on_both_sides(self):
         config = ActiveConfig(
             devices={"oc-main": enabled_device("oc-main")},
