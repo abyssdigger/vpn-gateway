@@ -38,6 +38,11 @@ class StopPredicate(Protocol):
         ...
 
 
+class HealthCheck(Protocol):
+    def __call__(self) -> None:
+        ...
+
+
 @dataclass(frozen=True)
 class RuntimeLoopConfig:
     retry_delay_seconds: float = 1.0
@@ -84,6 +89,7 @@ def run_runtime_loop(
     loop_config: RuntimeLoopConfig = RuntimeLoopConfig(),
     should_stop: StopPredicate = lambda: False,
     sleep: Callable[[float], None] = time.sleep,
+    health_check: HealthCheck | None = None,
 ) -> RuntimeLoopResult:
     """Run the long-lived production reconciliation loop.
 
@@ -95,6 +101,10 @@ def run_runtime_loop(
     without waiting for a netlink/event wakeup. Ordinary steady state waits for either an
     event or the periodic audit deadline; the event payload is never used as decision
     input.
+
+    An optional service health check (for example PublicationSupervisor.check_health) runs
+    before every reconcile. Health failure escapes the loop and the containment finally
+    closes forwarding.
     """
 
     if not namespace:
@@ -131,6 +141,9 @@ def run_runtime_loop(
                     event_wakeups += 1
                 else:
                     audit_wakeups += 1
+
+            if health_check is not None:
+                health_check()
 
             immediate = False
             try:
