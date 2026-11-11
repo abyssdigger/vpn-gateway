@@ -1,6 +1,6 @@
 # VPN-GATE NG1 — ROU concept
 
-Status: **working concept; ROU v0 live-verified and first production-capable domain/runtime model agreed.**
+Status: **working concept; ROU v0 live-verified and production routing/direction/envelope semantics clarified.**
 
 This document captures the top-level NG1 model before implementation details are frozen in the architecture.
 
@@ -67,9 +67,15 @@ Inside ROU:
         -> profile routing table
         -> selected bound Device interface
 
-Return payload from a bound Device interface follows ROU routing back through host0/rouvpn0 and then ordinary host routing.
+Return payload from a bound Device interface follows ROU routing back through
+host0/rouvpn0 and then ordinary host routing.
 
-ROU does not decide which host/LAN sources are allowed to use it. That is a host-side policy concern.
+Host-originated forwarded payload is dispatched only when its remote destination belongs
+to an enabled Profile. A final host0 ingress guard prevents unmatched forwarded traffic
+from falling through to the ROU main default and looping back to the host.
+
+ROU does not decide which host/LAN sources are allowed to use it. That is a host-side
+policy concern.
 
 ## 4. VPN transport path
 
@@ -190,6 +196,56 @@ consumes only normalized bound-interface state and materializes Profile routing.
 
 Publication belongs to Device binding, not to Profile routing.
 
+Publication workers are supervised ROU-owned lifecycle state; loss of a relay/listener
+must be observable and must not silently leave status healthy.
+
+## 8.1 Profile direction versus Device firewall
+
+These are deliberately different policy layers.
+
+**Profile.direction** is generated stateful ROU transit policy over the Profile's
+remote/VPN-side prefixes:
+
+- OUTBOUND: host may initiate NEW flows toward the remote prefix;
+- INBOUND: remote side may initiate NEW flows through a bound Device toward the host;
+- BIDIRECTIONAL: either side may initiate NEW flows;
+- ESTABLISHED/RELATED return traffic is accepted for admitted flows;
+- INVALID is rejected.
+
+On host -> Device traffic, Profile is classified by remote destination prefix.
+On Device -> host traffic, Profile is classified by remote source prefix plus Device
+membership. This makes shared Devices with Profiles of different directions unambiguous.
+
+**Device.traffic_envelope** is the administrator's tunnel firewall. It applies to the
+Device as a whole and can restrict from-device/to-device source/destination prefixes,
+protocols and ports.
+
+Example intent:
+
+    dev-01: from remote side accept only a trusted remote network today
+    dev-02: toward remote side temporarily drop TCP dport 8007 today
+
+That policy cannot reliably be delegated to the host because Device identity and
+post-decap tunnel context are available only inside ROU.
+
+The generated direction guard and Device envelope are cumulative: both must allow the
+packet.
+
+## 8.2 Return-path model
+
+The namespace main table may keep its ordinary `default -> host0` because only host0
+forwarded payload is forced through Profile dispatch plus a terminal host0 fail-closed
+rule.
+
+Thus:
+
+- Device -> host reply/INBOUND payload can use main -> host0 after stateful admission;
+- host -> Device traffic to a remote Profile prefix uses Profile RPDB/table dispatch;
+- unmatched forwarded host0 payload is dropped before it can use main.
+
+The architecture therefore does not require conntrack marks merely to implement return
+routing, although an implementation may use marks internally if useful.
+
 ## 9. BOU
 
 BOU is optional host-side integration.
@@ -254,5 +310,8 @@ The next-generation production model is now defined around:
 - metric ordering normal < UNAVAILABLE_METRIC < BLACKHOLE_METRIC, including /0 Profiles.
 
 The initial human-facing TOML configuration contract is recorded in
-`design/NG1/rou-config.md`. Direct-device multipath for the common unavailable fallback
-metric remains a dedicated live-test requirement.
+`design/NG1/rou-config.md`. Device traffic-envelope grammar remains to be designed, but
+its ownership/capability boundary is fixed in the architecture.
+
+Direct-device multipath for the common unavailable fallback metric remains gated by
+EXP-013.
