@@ -11,6 +11,7 @@ from .device_engine import (
     InterfaceIdentity,
     reconcile_devices,
 )
+from .dispatch import DispatchEntry, compile_profile_dispatch
 from .domain import (
     ActiveConfig,
     Availability,
@@ -21,6 +22,7 @@ from .domain import (
     MatchKind,
     Profile,
 )
+from .environment import EnvironmentParseError, EnvironmentSnapshot, parse_ip_link_json
 from .traffic_state import (
     MetricAssignment,
     TrafficProjection,
@@ -39,7 +41,10 @@ __all__ = [
     "DeviceBindingState",
     "DeviceReconcileResult",
     "Direction",
+    "DispatchEntry",
     "EnvironmentInterface",
+    "EnvironmentParseError",
+    "EnvironmentSnapshot",
     "ExpectedBindingState",
     "ExpectedInterface",
     "InterfaceIdentity",
@@ -50,8 +55,10 @@ __all__ = [
     "TrafficProjection",
     "TrafficRuntimeState",
     "committed_state_from_verified",
+    "compile_profile_dispatch",
     "load_active_config",
     "parse_active_config",
+    "parse_ip_link_json",
     "project_normal_metrics",
     "reconcile_devices",
 ]
