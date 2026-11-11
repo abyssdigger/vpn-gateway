@@ -5,6 +5,7 @@
 **Тип:** Linux FIB / direct-dev multipath / real VPN fallback gate  
 **Design:** [EXP-013 README](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/README.md)  
 **Phase A harness:** [vpn-gateway-exp-013-phase-a.sh](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/vpn-gateway-exp-013-phase-a.sh)  
+**Phase B harness:** [vpn-gateway-exp-013-phase-b.sh](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/vpn-gateway-exp-013-phase-b.sh)  
 **Attempt 1:** [EXP-013-phase-A-attempt-1.md](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/EXP-013-phase-A-attempt-1.md)  
 **Phase A PASS:** [EXP-013-phase-A-result.md](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/EXP-013-phase-A-result.md)
 
