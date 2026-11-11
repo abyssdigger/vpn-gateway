@@ -25,8 +25,8 @@ from .domain import (
 from .environment import EnvironmentParseError, EnvironmentSnapshot, parse_ip_link_json
 from .route_intent import (
     DirectRouteIntent,
+    FallbackRouteIntent,
     ProfileRouteIntent,
-    UnavailablePathProjectionBlocked,
     compile_profile_route_intents,
 )
 from .traffic_state import (
@@ -47,6 +47,7 @@ __all__ = [
     "DeviceBindingState",
     "DeviceReconcileResult",
     "DirectRouteIntent",
+    "FallbackRouteIntent",
     "Direction",
     "DispatchEntry",
     "EnvironmentInterface",
@@ -62,7 +63,6 @@ __all__ = [
     "ProfileRouteIntent",
     "TrafficProjection",
     "TrafficRuntimeState",
-    "UnavailablePathProjectionBlocked",
     "committed_state_from_verified",
     "compile_profile_dispatch",
     "compile_profile_route_intents",
