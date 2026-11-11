@@ -21,6 +21,8 @@ Current implemented slice:
 - strict parser for ordered `ip -j link show` interface observations;
 - Profile destination dispatch projection in normative `prefixlen DESC, network ASC` order;
 - Device→host NEW-flow Profile classification with filter-by-Device first, then longest-prefix match;
+- explicit ACCEPT-or-DROP NEW-flow intent for every enabled Profile/Device/prefix pair;
+- longest-prefix-first NEW verdict ordering that prevents broader overlapping Profiles from bypassing a more-specific deny;
 - kernel-independent per-Profile direct-route intent for UNKNOWN/AVAILABLE normal-tier paths;
 - terminal Profile blackhole intent even when no usable path exists;
 - persistent shadow fallback route intent at `UNAVAILABLE_METRIC` for every bound Profile path;

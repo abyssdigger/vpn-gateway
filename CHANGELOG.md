@@ -1,3 +1,23 @@
+## 2026-11-11 — NG1 Draft 4: explicit NEW verdicts; EXP-013 closed
+
+Final Draft 3 + EXP-013 review found one materialization ambiguity in overlapping Profile
+prefixes on a shared Device. Draft 4 resolves it by making NEW-flow direction policy
+explicit rather than omission-based.
+
+- every enabled (Profile, Device, remote-prefix) pair materializes an explicit ACCEPT or
+  DROP verdict for each relevant direction;
+- generated NEW-flow verdicts are longest-prefix-first, preventing a broader allowing
+  Profile from bypassing a more-specific deny;
+- Device-envelope restrictive rules still precede generated direction verdicts;
+- rootless firewall-intent projection now covers both overlap counterexamples;
+- EXP-013 is recorded as PASS and the unavailable-path persistent shadow fallback is no
+  longer implementation-gated;
+- multipath member disappearance is documented as a full Profile-route reprojection under
+  the protective fail-closed barrier;
+- a three-member persistent-shadow route example was added for operator clarity.
+
+NG1 Draft 4 is the implementation baseline for broader production routing/firewall work.
+
 ## 2026-11-11 — NG1 Architecture Draft 3: direction/envelope/routing clarification
 
 External concept/architecture review exposed missing production semantics around unmatched

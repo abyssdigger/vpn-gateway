@@ -233,8 +233,14 @@ post-decap tunnel context are available only inside ROU.
 
 The generated direction guard and Device envelope are cumulative: both must allow the
 packet. ROU-owned FORWARD is default-DROP. Restrictive Device-envelope DROP/reject rules
-precede generated direction ACCEPT rules; canonical state handling rejects INVALID first
-and accepts ESTABLISHED/RELATED admitted-flow traffic before NEW-flow policy.
+precede generated direction verdicts; canonical state handling rejects INVALID first and
+accepts ESTABLISHED/RELATED admitted-flow traffic before NEW-flow policy.
+
+NEW-flow direction policy is materialized explicitly for every enabled
+(Profile, Device, remote-prefix) pair: each side receives ACCEPT or DROP according to
+Profile.direction, and those verdict rules are ordered longest-prefix-first. A broader
+BIDIRECTIONAL Profile therefore cannot accidentally accept traffic classified to a
+more-specific Profile that denies initiation from that side.
 
 ## 8.2 Return-path model
 
