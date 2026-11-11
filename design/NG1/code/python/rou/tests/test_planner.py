@@ -219,6 +219,88 @@ class PlannerTests(unittest.TestCase):
         self.assertGreaterEqual(writes.count("net.ipv4.ip_forward=0"), 1)
         self.assertEqual(writes[-1], "net.ipv4.ip_forward=1")
 
+    def test_verified_state_is_persisted_before_forwarding_open(self):
+        _, _, kernel, firewall, nat = expected_for(interfaces())
+        initial = EnvironmentSnapshot(
+            interfaces=interfaces(),
+            routes=(),
+            rules=(),
+            sysctls=sysctls(True),
+        )
+        barrier = EnvironmentSnapshot(
+            interfaces=interfaces(),
+            routes=(),
+            rules=(),
+            sysctls=sysctls(False),
+        )
+        applied = observed_kernel_snapshot(kernel, forwarding=False)
+        final = observed_kernel_snapshot(kernel, forwarding=True)
+        backend = FakeHostBackend(firewall.canonical_save, nat.canonical_save)
+        queue = SnapshotQueue([initial, barrier, barrier, applied, final])
+        events = []
+
+        def persist(state):
+            events.append(("persist", state))
+
+        original_run = backend.run
+        def recording_run(argv, *, input_text=None, check=True):
+            if "net.ipv4.ip_forward=1" in argv:
+                events.append(("open", argv))
+            return original_run(argv, input_text=input_text, check=check)
+        backend.run = recording_run
+
+        reconcile_once(
+            config(),
+            "rou0",
+            PlannerRuntimeState.empty(),
+            backend,
+            ExplicitNoNatProvider(),
+            collect_snapshot=queue,
+            persist_verified_state=persist,
+        )
+
+        self.assertEqual(events[0][0], "persist")
+        self.assertEqual(events[1][0], "open")
+
+    def test_persistence_failure_prevents_forwarding_open(self):
+        _, _, _kernel, firewall, nat = expected_for(interfaces())
+        initial = EnvironmentSnapshot(
+            interfaces=interfaces(),
+            routes=(),
+            rules=(),
+            sysctls=sysctls(True),
+        )
+        barrier = EnvironmentSnapshot(
+            interfaces=interfaces(),
+            routes=(),
+            rules=(),
+            sysctls=sysctls(False),
+        )
+        backend = FakeHostBackend(firewall.canonical_save, nat.canonical_save)
+        queue = SnapshotQueue([initial, barrier, barrier])
+
+        def fail_persist(_state):
+            raise OSError("disk full")
+
+        with self.assertRaisesRegex(PlannerError, "disk full"):
+            reconcile_once(
+                config(),
+                "rou0",
+                PlannerRuntimeState.empty(),
+                backend,
+                ExplicitNoNatProvider(),
+                collect_snapshot=queue,
+                persist_verified_state=fail_persist,
+            )
+
+        writes = [
+            arg
+            for call, _stdin, _check in backend.calls
+            for arg in call
+            if arg.startswith("net.ipv4.ip_forward=")
+        ]
+        self.assertNotIn("net.ipv4.ip_forward=1", writes)
+
     def test_interface_churn_during_preparation_requests_retry_and_stays_closed(self):
         _, _, _kernel, firewall, nat = expected_for(interfaces())
         initial = EnvironmentSnapshot(
