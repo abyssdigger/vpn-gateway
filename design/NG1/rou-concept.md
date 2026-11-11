@@ -94,7 +94,7 @@ ROU therefore provides **transport publication**.
 
 A publication maps a host-side TCP/UDP endpoint owned by ROU to an internal transport endpoint inside the ROU namespace.
 
-Compact configuration syntax:
+Conceptual mapping notation only (the TOML publication grammar is still open):
 
     5678/udp>7890
     44443/tcp>44443
@@ -119,13 +119,7 @@ means:
     ...
     4900 -> 55400
 
-A future shorthand may allow:
-
-    44443/tcp
-
-to mean:
-
-    44443/tcp>44443
+A future human-facing syntax may choose a shorthand for equal external/internal ports; that syntax is intentionally not fixed here.
 
 ## 6. Publication is relay, not BOU DNAT
 
@@ -256,7 +250,8 @@ The next-generation production model is now defined around:
 - DeviceBindingState and TrafficRuntimeState with independent commit boundaries;
 - strict destinations and ordered Profile device references;
 - ordered Device expected-interface selectors, per-selector quotas and Profile-local stable metric assignments;
-- normalized availability with an unavailable fallback tier.
+- normalized availability where UNKNOWN/AVAILABLE stay in the normal tier and positive UNAVAILABLE moves to a lower fallback tier;
+- metric ordering normal < UNAVAILABLE_METRIC < BLACKHOLE_METRIC, including /0 Profiles.
 
 The initial human-facing TOML configuration contract is recorded in
 `design/NG1/rou-config.md`. Direct-device multipath for the common unavailable fallback
