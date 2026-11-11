@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import stat
 import tempfile
 from typing import Any
 
@@ -233,11 +234,44 @@ class JsonRuntimeStateStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
 
+    def _validate_parent(self) -> None:
+        parent = self.path.parent
+        try:
+            info = parent.stat()
+        except OSError as exc:
+            raise StateStoreError(f"cannot stat runtime state directory: {exc}") from exc
+        if not stat.S_ISDIR(info.st_mode):
+            raise StateStoreError("runtime state parent is not a directory")
+        if info.st_uid != os.geteuid():
+            raise StateStoreError(
+                "runtime state directory is not owned by the current effective user"
+            )
+        if stat.S_IMODE(info.st_mode) & 0o022:
+            raise StateStoreError(
+                "runtime state directory must not be group/world writable"
+            )
+
     def load(self, config: ActiveConfig) -> StateLoadResult:
         if not self.path.exists():
             return StateLoadResult(PlannerRuntimeState.empty(), 0)
+        self._validate_parent()
         try:
+            info = self.path.lstat()
+            if stat.S_ISLNK(info.st_mode):
+                raise StateStoreError("runtime state file must not be a symlink")
+            if not stat.S_ISREG(info.st_mode):
+                raise StateStoreError("runtime state path is not a regular file")
+            if info.st_uid != os.geteuid():
+                raise StateStoreError(
+                    "runtime state file is not owned by the current effective user"
+                )
+            if stat.S_IMODE(info.st_mode) & 0o077:
+                raise StateStoreError(
+                    "runtime state file must not grant group/other permissions"
+                )
             raw = json.loads(self.path.read_text(encoding="utf-8"))
+        except StateStoreError:
+            raise
         except (OSError, json.JSONDecodeError) as exc:
             raise StateStoreError(f"cannot load runtime state: {exc}") from exc
         return _load_payload(raw, config)
@@ -245,6 +279,7 @@ class JsonRuntimeStateStore:
     def save(self, state: PlannerRuntimeState) -> None:
         parent = self.path.parent
         parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self._validate_parent()
 
         payload = json.dumps(
             _serialize(state),
