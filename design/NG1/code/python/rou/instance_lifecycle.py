@@ -12,7 +12,7 @@ from .namespace_prereq import verify_namespace_prerequisites
 
 
 _IFNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
-_NAMESPACE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
+_NAMESPACE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 class InstanceConfigError(ValueError):
