@@ -290,9 +290,23 @@ def normalize_save(text: str) -> str:
     return "\n".join(lines).strip()
 
 
+def flush_profile_table() -> None:
+    p = run(["ip", "route", "flush", "table", str(PROFILE_TABLE)], ns=True, check=False)
+    if p.returncode == 0:
+        return
+    if p.returncode == 2 and "FIB table does not exist" in p.stderr:
+        return
+    raise RouError(
+        f"command failed ({p.returncode}): ip netns exec {NS} ip route flush table {PROFILE_TABLE}"
+        f"\nstdout: {p.stdout}\nstderr: {p.stderr}"
+    )
+
+
 def install_full_state(admitted: tuple[Assignment, ...]) -> None:
-    # ROU owns table 100 and its own RPDB namespace. Rebuild only the profile table/rule.
-    run(["ip", "route", "flush", "table", str(PROFILE_TABLE)], ns=True)
+    # On a brand-new namespace the dedicated table does not exist until its first route
+    # is installed. That specific absence is a valid empty baseline; every other flush
+    # failure remains fatal.
+    flush_profile_table()
     for cmd in desired_routes(admitted):
         run(cmd, ns=True)
     run(["ip", "rule", "del", "priority", str(PROFILE_RULE_PRIORITY)], ns=True, check=False)
