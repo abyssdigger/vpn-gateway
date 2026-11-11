@@ -116,7 +116,8 @@ def cmd_down(
     instance_file: Path,
     backend: CommandBackend,
 ) -> dict[str, object]:
-    instance, _router = _load_pair(instance_id, instance_file)
+    validate_instance_id(instance_id)
+    instance = load_instance_file_config(instance_file)
     service = _service_name(instance_id)
 
     _systemctl(backend, "stop", service, check=False)
@@ -175,7 +176,11 @@ def cmd_show(
     backend: CommandBackend,
 ) -> dict[str, object]:
     instance, router = _load_pair(instance_id, instance_file)
-    verification = verify_instance(instance.instance, backend)
+    verification = verify_instance(
+        instance.instance,
+        backend,
+        forwarding=None,
+    )
 
     result: dict[str, object] = {
         "instance_id": instance_id,
