@@ -32,7 +32,10 @@ Object identifiers use:
 The same identifier rules apply to Device and Profile IDs.
 
 This deliberately excludes dots, underscores, whitespace and uppercase characters so
-identifiers remain unquoted, shell/CLI-friendly and unambiguous in TOML dotted tables.
+identifiers remain unquoted and unambiguous in TOML dotted tables.
+
+A leading digit is intentionally allowed. IDs are opaque strings; consumers must not
+reinterpret them as numbers, shell identifiers or raw/unescaped systemd unit fragments.
 
 ## 2. enabled and placeholders
 
@@ -66,9 +69,9 @@ Example:
 [device.oc-main]
 enabled = true
 expected_interfaces = [
-    "vpns-main",
+    "oc-main",
     "vpns*/3",
-    "vpns-backup",
+    "oc-backup",
 ]
 ```
 
@@ -152,6 +155,9 @@ device_order = ["oc-main"]
 
 `direction` is mandatory for enabled Profiles and has no default.
 
+It controls **which side may initiate a flow** for the Profile's remote prefixes. It is
+ROU-generated stateful transit policy, not the administrator-authored Device firewall.
+
 Allowed values are exactly:
 
 ```text
@@ -162,9 +168,21 @@ bidirectional
 
 No abbreviations are defined.
 
+Operational meaning:
+
+- `outbound`: host side may initiate NEW flows toward the Profile remote prefixes;
+- `inbound`: remote side may initiate NEW flows through a bound Device toward the host;
+- `bidirectional`: either side may initiate NEW flows;
+- admitted ESTABLISHED/RELATED return traffic is allowed in both directions.
+
+The independent Device `traffic_envelope` may restrict any of these flows further.
+
 ### 4.2 destinations
 
-`destinations` is a non-empty list of strict IPv4 CIDR prefixes.
+`destinations` is a non-empty list of strict **remote/VPN-side** IPv4 CIDR prefixes.
+
+The field name reflects the host -> VPN routing view. For Device -> host NEW-flow
+classification the same prefixes are matched as remote source prefixes.
 
 Rules:
 
@@ -220,6 +238,30 @@ enabled = false
 
 This example intentionally demonstrates that an enabled Profile may reference an
 incomplete disabled Device placeholder.
+
+## 6. Device traffic-envelope capability boundary
+
+The human-facing grammar is **not yet fixed**, but the architecture now fixes what the
+future Device envelope must be able to express.
+
+It is Device-scoped, not Profile-scoped, and applies to every bound interface/Profile
+sharing that Device.
+
+Required capability surface:
+
+- direction relative to the Device: from-device / to-device;
+- source IPv4 prefix;
+- destination IPv4 prefix;
+- protocol at least TCP / UDP / ICMP;
+- TCP/UDP source and destination ports where applicable;
+- allow/drop action;
+- explicit/default terminal policy.
+
+Canonical admin use cases include temporary source-network restriction on one Device and
+temporary destination-port blocking (for example TCP/8007) on another.
+
+This is a capability contract only. The parser must continue to reject guessed
+`traffic_envelope` syntax until the TOML grammar is separately agreed.
 
 ## 6. Deliberately unresolved configuration surface
 
