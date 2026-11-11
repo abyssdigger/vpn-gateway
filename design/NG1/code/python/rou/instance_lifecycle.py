@@ -173,6 +173,8 @@ def _namespace_link_snapshot(
 def verify_instance(
     config: InstanceConfig,
     host: CommandBackend,
+    *,
+    forwarding: bool | None = False,
 ) -> InstanceVerification:
     errors: list[str] = []
 
@@ -275,10 +277,23 @@ def verify_instance(
     except Exception as exc:
         errors.append(f"cannot collect namespace prerequisite snapshot: {exc}")
     else:
+        expected_forwarding = forwarding
+        if expected_forwarding is None:
+            observed_forwarding = snapshot.sysctl_map.get(
+                "net.ipv4.ip_forward"
+            )
+            if observed_forwarding not in {"0", "1"}:
+                errors.append(
+                    "namespace IPv4 forwarding state is not observable"
+                )
+                expected_forwarding = False
+            else:
+                expected_forwarding = observed_forwarding == "1"
+
         prereq = verify_namespace_prerequisites(
             snapshot,
             DeviceBindingSnapshot((), ()),
-            forwarding=False,
+            forwarding=expected_forwarding,
         )
         errors.extend(prereq.errors)
 
