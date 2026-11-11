@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
-from rou.domain import ActiveConfig, Availability, Device, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
+from rou.domain import ActiveConfig, Availability, Device, NatMode, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
 from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule, RouteNexthop
 from rou.kernel_allocation import compile_kernel_allocation
 from rou.kernel_state import (
