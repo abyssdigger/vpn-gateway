@@ -6,14 +6,14 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
-from rou.domain import ActiveConfig, Availability, Device, Direction, Profile
+from rou.domain import ActiveConfig, Availability, Device, NatMode, Direction, Profile
 from rou.firewall_state import compile_filter_state
 
 
 class FirewallStateTests(unittest.TestCase):
     def test_filter_is_default_drop_and_scoped_to_bound_interfaces(self):
         config = ActiveConfig(
-            devices={"oc": Device("oc", True)},
+            devices={"oc": Device("oc", True, nat=NatMode.NONE)},
             profiles={
                 "corp": Profile(
                     "corp",
@@ -69,7 +69,7 @@ class FirewallStateTests(unittest.TestCase):
 
     def test_specific_drop_precedes_broad_accept_after_interface_expansion(self):
         config = ActiveConfig(
-            devices={"oc": Device("oc", True)},
+            devices={"oc": Device("oc", True, nat=NatMode.NONE)},
             profiles={
                 "specific": Profile(
                     "specific",
@@ -112,7 +112,7 @@ class FirewallStateTests(unittest.TestCase):
 
     def test_no_bound_interfaces_means_no_forward_accept(self):
         config = ActiveConfig(
-            devices={"oc": Device("oc", True)},
+            devices={"oc": Device("oc", True, nat=NatMode.NONE)},
             profiles={
                 "corp": Profile(
                     "corp",
