@@ -14,7 +14,7 @@ from rou.device_engine import (
     ExpectedBindingState,
     InterfaceIdentity,
 )
-from rou.domain import ActiveConfig, Device, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
+from rou.domain import ActiveConfig, Device, NatMode, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
 from rou.planner import PlannerRuntimeState
 from rou.state_store import JsonRuntimeStateStore, StateStoreError
 from rou.traffic_state import TrafficRuntimeState
@@ -32,6 +32,7 @@ def make_config(*, direction=Direction.OUTBOUND, quota=2, destination="10.0.0.0/
                         quota,
                     ),
                 ),
+                nat=NatMode.NONE,
             )
         },
         {
@@ -132,6 +133,7 @@ class StateStoreTests(unittest.TestCase):
                                 2,
                             ),
                         ),
+                        nat=NatMode.NONE,
                     )
                 },
                 {
