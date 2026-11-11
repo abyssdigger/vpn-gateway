@@ -180,9 +180,24 @@ def _parse_table(value: object, what: str) -> int:
     if type(value) is int and value >= 0:
         return value
     aliases = {"local": 255, "main": 254, "default": 253, "unspec": 0}
-    if isinstance(value, str) and value in aliases:
-        return aliases[value]
+    if isinstance(value, str):
+        if value in aliases:
+            return aliases[value]
+        if value.isdecimal():
+            return int(value)
     raise EnvironmentParseError(f"{what} has unsupported table {value!r}")
+
+
+def _parse_protocol(value: object, what: str) -> str | int | None:
+    if value is None:
+        return None
+    if type(value) is int and value >= 0:
+        return value
+    if isinstance(value, str) and value:
+        if value.isdecimal():
+            return int(value)
+        return value
+    raise EnvironmentParseError(f"{what} has unsupported protocol {value!r}")
 
 
 def _parse_network(value: object, *, default: str, what: str) -> IPv4Network:
@@ -250,7 +265,10 @@ def parse_ip_route_json(text: str) -> tuple[KernelRoute, ...]:
                 table=table,
                 destination=destination,
                 route_type=route_type,
-                protocol=item.get("protocol"),
+                protocol=_parse_protocol(
+                    item.get("protocol"),
+                    f"route[{position}].protocol",
+                ),
                 metric=metric,
                 ifname=ifname,
                 nexthops=tuple(nexthops),
