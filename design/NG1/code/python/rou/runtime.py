@@ -121,49 +121,51 @@ def run_runtime_loop(
     audit_wakeups = 0
     immediate = True
 
-    while not should_stop():
-        if not immediate:
-            woke = wakeups.wait(loop_config.audit_interval_seconds)
-            if should_stop():
-                break
-            if woke:
-                event_wakeups += 1
-            else:
-                audit_wakeups += 1
+    try:
+        while not should_stop():
+            if not immediate:
+                woke = wakeups.wait(loop_config.audit_interval_seconds)
+                if should_stop():
+                    break
+                if woke:
+                    event_wakeups += 1
+                else:
+                    audit_wakeups += 1
 
-        immediate = False
-        try:
-            result = reconcile_once(
-                config,
-                namespace,
-                committed,
-                host_backend,
-                nat_provider,
-                availability_provider=availability_provider,
-                collect_snapshot=collect_snapshot,
-                persist_verified_state=state_store.save,
-            )
-        except PlannerRetryRequired as exc:
-            planner_failures += 1
-            LOG.info("planner requested immediate retry: %s", exc)
-            immediate = True
-            continue
-        except PlannerError as exc:
-            planner_failures += 1
-            LOG.error("planner reconciliation failed: %s", exc)
-            _close_forwarding_best_effort(namespace, host_backend)
-            if loop_config.retry_delay_seconds:
-                sleep(loop_config.retry_delay_seconds)
-            immediate = True
-            continue
+            immediate = False
+            try:
+                result = reconcile_once(
+                    config,
+                    namespace,
+                    committed,
+                    host_backend,
+                    nat_provider,
+                    availability_provider=availability_provider,
+                    collect_snapshot=collect_snapshot,
+                    persist_verified_state=state_store.save,
+                )
+            except PlannerRetryRequired as exc:
+                planner_failures += 1
+                LOG.info("planner requested immediate retry: %s", exc)
+                immediate = True
+                continue
+            except PlannerError as exc:
+                planner_failures += 1
+                LOG.error("planner reconciliation failed: %s", exc)
+                _close_forwarding_best_effort(namespace, host_backend)
+                if loop_config.retry_delay_seconds:
+                    sleep(loop_config.retry_delay_seconds)
+                immediate = True
+                continue
 
-        reconciliations += 1
-        committed = result.state
-        immediate = result.needs_immediate_reconcile
+            reconciliations += 1
+            committed = result.state
+            immediate = result.needs_immediate_reconcile
 
-    _close_forwarding_best_effort(namespace, host_backend)
+        _close_forwarding_best_effort(namespace, host_backend)
 
-    return RuntimeLoopResult(
+    finally:
+        return RuntimeLoopResult(
         reconciliations=reconciliations,
         planner_failures=planner_failures,
         event_wakeups=event_wakeups,
