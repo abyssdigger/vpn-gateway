@@ -70,6 +70,11 @@ Publications are Device-scoped and materialized only for active Devices. Within 
 Device set, external ranges for the same transport protocol must not overlap. TCP and UDP
 may use the same numeric port.
 
+Across different active Devices, internal target ranges for the same protocol must also
+not overlap because schema version 1 targets one common `host0` IPv4 address and Device
+ownership of the listener must remain unambiguous. Within one Device, multiple external
+aliases may intentionally map to the same internal endpoint.
+
 The instance configuration supplies one explicit host-side IPv4 publication bind address.
 Internal relay target address is the instance's `host0` IPv4 address. Publications map
 ports/protocol only; they do not duplicate infrastructure addressing in Device config.
@@ -160,7 +165,13 @@ Rules:
 - no automatic address generation is implemented in schema version 1.
 
 The instance identifier remains the CLI/systemd template identifier and is not duplicated
-inside the file.
+inside the file. It uses the same safe grammar as Device/Profile IDs:
+
+```text
+[a-z0-9][a-z0-9-]*
+```
+
+This keeps instance paths and systemd template arguments opaque and shell-independent.
 
 ## 6. Disabled placeholders
 
