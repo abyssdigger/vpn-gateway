@@ -235,15 +235,7 @@ def reconcile_once(
             ns,
             forwarding=False,
         )
-        routing_filter_nat_errors = (
-            verify_kernel_desired_state(projection.kernel, initial).errors
-        )
-        if (
-            not routing_filter_nat_errors
-            and verify_filter_state(projection.firewall, ns).ok
-            and verify_nat_state(projection.nat, ns).ok
-            and not current_errors_closed
-        ):
+        if not current_errors_closed:
             ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=1"))
             final = collect_snapshot(namespace, host_backend)
             if final.interfaces != initial.interfaces:
