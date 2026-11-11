@@ -33,20 +33,34 @@ Artifacts: vpn-gateway-exp-013-20261111-154610Z
   `ifindex 2 -> ifindex 4`.
 - Phase A completed cleanly.
 
-## Still to extract from Phase A artifacts
+## A3 interpretation
 
-A3 is intentionally an observation rather than a yes/no assertion. Before Phase B is
-finalized, inspect:
+The uploaded A3 artifacts establish the tested kernel behavior precisely.
 
-- `a3-after-delete-routes.txt`
-- `a3-after-delete-routes.json`
-- `a3-after-delete-lookup.txt`
-- `a3-after-delete-fibmatch.txt`
-- corresponding return-code files
+After deleting `path-a`:
 
-The exact kernel behavior after one multipath nexthop interface disappears determines the
-TrafficEngine reconciliation expectation.
+- `path-b` remained present and UP with ifindex 3;
+- the entire common-metric multipath route disappeared from table 313;
+- the only route left for the target was the terminal blackhole at metric 65536;
+- ordinary and `fibmatch` lookups both returned rc=2 / `Invalid argument`, consistent
+  with the blackhole being the terminal result.
+
+Therefore this kernel does **not** automatically shrink the direct-dev multipath route to
+its surviving nexthop when one member interface disappears.
+
+TrafficEngine must treat that disappearance as a safe binding-lifecycle transition:
+temporary blackhole-only state is fail-closed, and reconciliation must rebuild fallback
+membership from the fresh surviving binding set.
+
+The candidate production shape for Phase B is consequently:
+
+- maintain one **shadow fallback** at `UNAVAILABLE_METRIC` for all currently bound
+  interfaces;
+- availability changes add/remove only each interface's normal route;
+- binding ADD/REMOVE rebuilds fallback membership;
+- one bound interface uses a plain direct-dev fallback route;
+- two or more bound interfaces use one direct-dev multipath fallback route.
 
 Phase A closes the **kernel/FIB construction and metric-tail** prerequisite. It does not
-close the full EXP-013 gate: Phase B still has to prove the real-VPN/payload semantics,
-especially a dead path whose interface remains present.
+close the full EXP-013 gate: Phase B still has to prove this shadow-fallback model on real
+VPN interfaces/payload, especially a dead path whose interface remains present.
