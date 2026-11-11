@@ -41,3 +41,13 @@ in `route_intent.py`.
 ## Baseline
 
 No architecture change was required. **NG1 Draft 4 remains the implementation baseline.**
+
+## Follow-up verification verdict
+
+The reviewer re-checked all five cleanup items plus the stale EXP-013 commentary removal and confirmed that all six changes were applied correctly, with no semantic change to Draft 4 and no observed side effects.
+
+The verification verdict is archived in:
+
+`design/reviews/NG1-2026-11-11-draft4-implementation-cleanup-verdict.md`
+
+**Baseline remains NG1 Draft 4.** The next implementation stage remains the kernel materialization slice, beginning with live EnvironmentSnapshot collection and routing-table/RPDB allocation.
