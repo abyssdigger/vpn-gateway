@@ -46,3 +46,9 @@ A future design pass must fix:
 5. verification representation.
 
 After that, the provider becomes a normal TrafficEngine projection rather than a gate.
+
+## Resolution
+
+NG1 Draft 5 adopts the reviewed production configuration contract in
+`design/NG1/NG1-2026-11-11-production-config-resolution.md`. This document remains as
+history of the implementation gate; it is no longer an open blocker.
