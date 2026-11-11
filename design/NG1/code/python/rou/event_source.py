@@ -60,7 +60,7 @@ class IpMonitorWakeupSource:
                 argv,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=False,
                 close_fds=True,
             )
@@ -80,18 +80,12 @@ class IpMonitorWakeupSource:
         self._process = process
         self._selector = selector
 
-    def _exit_error(self) -> EventSourceError:
+    def _exit_error(self, detail_bytes: bytes = b"") -> EventSourceError:
         process = self._process
         if process is None:
             return EventSourceError("ip monitor is not running")
         returncode = process.poll()
-        stderr = b""
-        if returncode is not None and process.stderr is not None:
-            try:
-                stderr = process.stderr.read() or b""
-            except OSError:
-                stderr = b""
-        detail = stderr.decode("utf-8", errors="replace").strip()
+        detail = detail_bytes.decode("utf-8", errors="replace").strip()
         if detail:
             return EventSourceError(
                 f"ip monitor exited with return code {returncode}: {detail}"
@@ -128,6 +122,8 @@ class IpMonitorWakeupSource:
             ) from exc
 
         if data:
+            if self._process.poll() is not None:
+                raise self._exit_error(data)
             return True
 
         raise self._exit_error()
@@ -154,8 +150,6 @@ class IpMonitorWakeupSource:
 
         if process.stdout is not None:
             process.stdout.close()
-        if process.stderr is not None:
-            process.stderr.close()
 
     def __enter__(self) -> "IpMonitorWakeupSource":
         self._start()
