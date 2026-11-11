@@ -134,6 +134,12 @@ def parse_ip_addr_json(
             raise EnvironmentParseError(
                 f"address-interface[{position}] references unobserved interface {ifname!r}"
             )
+        ifindex = item.get("ifindex")
+        if ifindex is not None and ifindex != by_name[ifname].ifindex:
+            raise EnvironmentParseError(
+                f"address-interface[{position}] identity mismatch for {ifname!r}: "
+                f"link ifindex={by_name[ifname].ifindex}, addr ifindex={ifindex!r}"
+            )
         addr_info = item.get("addr_info", [])
         if not isinstance(addr_info, list):
             raise EnvironmentParseError(
@@ -326,10 +332,46 @@ def collect_environment_snapshot(
             _ns_command(namespace, ("ip", "-j", "-4", "route", "show", "table", "all"))
         )
         rule_text = run(_ns_command(namespace, ("ip", "-j", "-4", "rule", "show")))
-        sysctls = (
-            ("net.ipv4.ip_forward", run(_ns_command(namespace, ("sysctl", "-n", "net.ipv4.ip_forward"))).strip()),
-            ("net.ipv6.conf.all.forwarding", run(_ns_command(namespace, ("sysctl", "-n", "net.ipv6.conf.all.forwarding"))).strip()),
-        )
+        sysctls: list[tuple[str, str]] = [
+            (
+                "net.ipv4.ip_forward",
+                run(_ns_command(namespace, ("sysctl", "-n", "net.ipv4.ip_forward"))).strip(),
+            ),
+            (
+                "net.ipv6.conf.all.forwarding",
+                run(
+                    _ns_command(
+                        namespace,
+                        ("sysctl", "-n", "net.ipv6.conf.all.forwarding"),
+                    )
+                ).strip(),
+            ),
+        ]
+        for interface in link_snapshot.interfaces:
+            ifname = interface.identity.ifname
+            for key, proc_path in (
+                (
+                    f"net.ipv4.conf.{ifname}.rp_filter",
+                    f"/proc/sys/net/ipv4/conf/{ifname}/rp_filter",
+                ),
+                (
+                    f"net.ipv6.conf.{ifname}.disable_ipv6",
+                    f"/proc/sys/net/ipv6/conf/{ifname}/disable_ipv6",
+                ),
+            ):
+                sysctls.append(
+                    (
+                        key,
+                        run(_ns_command(namespace, ("cat", proc_path))).strip(),
+                    )
+                )
+
+        final_link_text = run(_ns_command(namespace, ("ip", "-j", "link", "show")))
+        final_link_snapshot = parse_ip_link_json(final_link_text)
+        if final_link_snapshot.interfaces != link_snapshot.interfaces:
+            raise EnvironmentCollectError(
+                "environment changed during collection: interface identity/order is unstable"
+            )
     except EnvironmentParseError:
         raise
     except Exception as exc:
@@ -340,5 +382,5 @@ def collect_environment_snapshot(
         ipv4_addresses=parse_ip_addr_json(addr_text, link_snapshot.interfaces),
         routes=parse_ip_route_json(route_text),
         rules=parse_ip_rule_json(rule_text),
-        sysctls=sysctls,
+        sysctls=tuple(sysctls),
     )
