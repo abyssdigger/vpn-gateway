@@ -305,7 +305,7 @@ run_ns ip route add table "$TABLE" "$TARGET_CIDR" dev "$A" proto "$ROUTE_PROTO" 
 route_snapshot b5-a-promoted
 [[ "$(lookup_dev)" == "$A" ]] || fail "B5 promoted A did not regain normal priority"
 ping_ok || fail "B5 payload failed after A promotion"
-say "PASS B5: promotion restores normal A above unchanged shado fallback"
+say "PASS B5: promotion restores normal A above unchanged shadow fallback"
 
 # B6: same ordering with default routes on the two real VPN interfaces.
 run_ns ip route flush table "$TABLE"
@@ -331,7 +331,8 @@ selected_default="$(lookup_dev)"
 if [[ "$selected_default" != "$A" && "$selected_default" != "$B" ]]; then
     fail "B6 default fallback did not select a VPN member: $selected_default"
 fi
-ping_ok || fail "B6 payload failed through healthy default common fallback
+ping_ok || fail "B6 payload failed through healthy default common fallback"
+
 run_ns ip route del table "$TABLE" default proto "$ROUTE_PROTO" metric "$UNAVAILABLE_METRIC"
 route_snapshot b6-default-blackhole
 if ping_ok; then
