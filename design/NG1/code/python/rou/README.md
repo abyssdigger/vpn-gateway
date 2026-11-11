@@ -21,7 +21,7 @@ Intentionally not implemented yet:
 - TrafficEngine stable live-interface slot state;
 - PlannerEngine transitions;
 - kernel apply/verify;
-- unavailable direct-dev multipath materialization pending its live experiment.
+- unavailable direct-dev multipath materialization is blocked on EXP-013; no runtime unavailable-path projector should be added before that gate passes.
 
 Run rootless tests:
 
