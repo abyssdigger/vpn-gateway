@@ -15,11 +15,16 @@ class CommandResult:
     stderr: str
 
 
+class BackendLaunchError(RuntimeError):
+    pass
+
+
 class CommandExecutionError(RuntimeError):
     def __init__(self, result: CommandResult):
         self.result = result
+        executable = result.argv[0] if result.argv else "<empty>"
         super().__init__(
-            f"command failed ({result.returncode}): {' '.join(result.argv)}"
+            f"command {executable!r} failed with return code {result.returncode}"
             f"\nstdout: {result.stdout}\nstderr: {result.stderr}"
         )
 
@@ -45,14 +50,20 @@ class SubprocessBackend:
         input_text: str | None = None,
         check: bool = True,
     ) -> CommandResult:
-        completed = subprocess.run(
-            argv,
-            input=input_text,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                argv,
+                input=input_text,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+        except OSError as exc:
+            executable = argv[0] if argv else "<empty>"
+            raise BackendLaunchError(
+                f"failed to execute {executable!r}: {exc}"
+            ) from exc
         result = CommandResult(
             argv=argv,
             returncode=completed.returncode,
@@ -110,7 +121,7 @@ def execute_kernel_mutation_plan(
     for mutation in plan.commands:
         try:
             result = backend.run(mutation.argv)
-        except CommandExecutionError as exc:
+        except (CommandExecutionError, BackendLaunchError) as exc:
             raise KernelApplyError(
                 f"kernel mutation phase {mutation.phase!r} failed: {exc}"
             ) from exc
