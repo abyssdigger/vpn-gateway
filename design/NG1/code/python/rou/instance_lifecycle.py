@@ -41,6 +41,10 @@ class InstanceConfig:
                 raise InstanceConfigError(
                     f"{field_name} is not a valid Linux interface name: {value!r}"
                 )
+        if self.inner_if != "host0":
+            raise InstanceConfigError(
+                "current production model requires inner_if='host0'"
+            )
         if self.host_if == self.inner_if:
             raise InstanceConfigError("host_if and inner_if must differ")
         if self.host_address.ip == self.inner_address.ip:
@@ -81,12 +85,73 @@ def _namespace_names(host: CommandBackend) -> tuple[str, ...]:
     return tuple(names)
 
 
-def _host_link_exists(host: CommandBackend, ifname: str) -> bool:
+def _json_array(text: str, what: str) -> list[dict]:
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise InstanceLifecycleError(
+            f"invalid {what} JSON: {exc}"
+        ) from None
+    if not isinstance(raw, list) or not all(isinstance(item, dict) for item in raw):
+        raise InstanceLifecycleError(f"{what} JSON must be an array of objects")
+    return raw
+
+
+def _missing_link_error(stderr: str) -> bool:
+    lowered = stderr.lower()
+    return (
+        "does not exist" in lowered
+        or "cannot find device" in lowered
+        or "device not found" in lowered
+    )
+
+
+def _host_link_detail(
+    host: CommandBackend,
+    ifname: str,
+) -> dict | None:
     result = host.run(
-        ("ip", "-j", "link", "show", "dev", ifname),
+        ("ip", "-j", "-d", "link", "show", "dev", ifname),
         check=False,
     )
-    return result.returncode == 0
+    if result.returncode != 0:
+        if _missing_link_error(result.stderr):
+            return None
+        raise InstanceLifecycleError(
+            f"cannot inspect host interface {ifname!r}: {result.stderr.strip()}"
+        )
+    raw = _json_array(result.stdout, f"host interface {ifname!r}")
+    if len(raw) != 1:
+        raise InstanceLifecycleError(
+            f"host interface {ifname!r} snapshot is ambiguous"
+        )
+    return raw[0]
+
+
+def _host_link_exists(host: CommandBackend, ifname: str) -> bool:
+    return _host_link_detail(host, ifname) is not None
+
+
+def _namespace_link_detail(
+    ns: NamespaceBackend,
+    ifname: str,
+) -> dict | None:
+    result = ns.run(
+        ("ip", "-j", "-d", "link", "show", "dev", ifname),
+        check=False,
+    )
+    if result.returncode != 0:
+        if _missing_link_error(result.stderr):
+            return None
+        raise InstanceLifecycleError(
+            f"cannot inspect inner interface {ifname!r}: {result.stderr.strip()}"
+        )
+    raw = _json_array(result.stdout, f"inner interface {ifname!r}")
+    if len(raw) != 1:
+        raise InstanceLifecycleError(
+            f"inner interface {ifname!r} snapshot is ambiguous"
+        )
+    return raw[0]
 
 
 def _namespace_link_snapshot(
@@ -99,17 +164,7 @@ def _namespace_link_snapshot(
     )
     if result.returncode != 0:
         return []
-    try:
-        raw = json.loads(result.stdout)
-    except json.JSONDecodeError as exc:
-        raise InstanceLifecycleError(
-            f"invalid link snapshot JSON for {ifname!r}: {exc}"
-        ) from None
-    if not isinstance(raw, list):
-        raise InstanceLifecycleError(
-            f"link snapshot for {ifname!r} is not an array"
-        )
-    return raw
+    return _json_array(result.stdout, f"address snapshot for {ifname!r}")
 
 
 def verify_instance(
@@ -123,22 +178,40 @@ def verify_instance(
         errors.append(f"namespace {config.namespace!r} is missing")
         return InstanceVerification(False, tuple(errors))
 
-    if not _host_link_exists(host, config.host_if):
+    host_detail = _host_link_detail(host, config.host_if)
+    if host_detail is None:
         errors.append(f"host interface {config.host_if!r} is missing")
+    else:
+        if host_detail.get("linkinfo", {}).get("info_kind") != "veth":
+            errors.append(f"host interface {config.host_if!r} is not a veth")
+        if "UP" not in host_detail.get("flags", []):
+            errors.append(f"host interface {config.host_if!r} is not UP")
 
     ns = NamespaceBackend(config.namespace, host)
+    inner_detail = _namespace_link_detail(ns, config.inner_if)
+    if inner_detail is None:
+        errors.append(f"inner interface {config.inner_if!r} is missing")
+    else:
+        if inner_detail.get("linkinfo", {}).get("info_kind") != "veth":
+            errors.append(f"inner interface {config.inner_if!r} is not a veth")
+        if "UP" not in inner_detail.get("flags", []):
+            errors.append(f"inner interface {config.inner_if!r} is not UP")
+
     inner = _namespace_link_snapshot(ns, config.inner_if)
     if len(inner) != 1:
-        errors.append(f"inner interface {config.inner_if!r} is missing or ambiguous")
+        errors.append(f"inner interface {config.inner_if!r} address snapshot is invalid")
     else:
         addresses = {
-            item.get("local")
+            (item.get("local"), item.get("prefixlen"))
             for item in inner[0].get("addr_info", [])
             if item.get("family") == "inet"
         }
-        if str(config.inner_address.ip) not in addresses:
+        if (
+            str(config.inner_address.ip),
+            config.inner_address.network.prefixlen,
+        ) not in addresses:
             errors.append(
-                f"inner IPv4 address {config.inner_address.ip} is missing"
+                f"inner IPv4 interface {config.inner_address.with_prefixlen} is missing"
             )
 
     host_result = host.run(
@@ -156,13 +229,16 @@ def verify_instance(
             errors.append(f"host interface {config.host_if!r} snapshot is ambiguous")
         else:
             addresses = {
-                item.get("local")
+                (item.get("local"), item.get("prefixlen"))
                 for item in host_raw[0].get("addr_info", [])
                 if item.get("family") == "inet"
             }
-            if str(config.host_address.ip) not in addresses:
+            if (
+                str(config.host_address.ip),
+                config.host_address.network.prefixlen,
+            ) not in addresses:
                 errors.append(
-                    f"host IPv4 address {config.host_address.ip} is missing"
+                    f"host IPv4 interface {config.host_address.with_prefixlen} is missing"
                 )
 
     main = ns.run(
@@ -283,11 +359,10 @@ def create_instance(
                 ("ip", "netns", "del", config.namespace),
                 check=False,
             )
-        if _host_link_exists(host, config.host_if):
-            host.run(
-                ("ip", "link", "del", config.host_if),
-                check=False,
-            )
+        host.run(
+            ("ip", "link", "del", config.host_if),
+            check=False,
+        )
         raise
 
 
@@ -309,11 +384,10 @@ def destroy_instance(
             check=False,
         )
 
-    if _host_link_exists(host, config.host_if):
-        host.run(
-            ("ip", "link", "del", config.host_if),
-            check=False,
-        )
+    host.run(
+        ("ip", "link", "del", config.host_if),
+        check=False,
+    )
 
     if config.namespace in _namespace_names(host):
         raise InstanceLifecycleError(
