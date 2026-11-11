@@ -585,9 +585,9 @@ for the fallback tier. Multiple unavailable paths for one destination are expect
 materialized as one equal-cost direct-device multipath route at that metric.
 
 The architectural semantics are accepted, but the exact Linux FIB mechanism remains
-**pending live verification**. A dedicated real-life experiment must verify direct-dev
-multipath across actual VPN interfaces, interface disappearance/return and relevant
-conntrack/NAT behavior before this implementation becomes normative.
+**pending live verification in EXP-013**. EXP-013 must verify direct-dev multipath,
+interface disappearance/return, /0 competition with terminal blackhole and real payload
+across actual VPN interfaces before the unavailable-path projector may be implemented.
 
 UNKNOWN availability does not terminate a bound-interface lifetime and does not demote a
 path. Future Device-specific detectors may move an interface between UNKNOWN, AVAILABLE
@@ -1012,7 +1012,7 @@ Primary source material includes the existing experiment log under design/vpn-ga
 38. Metric assignment belongs to (Profile, ifname, ifindex) and remains stable for the continuous bound lifetime within one ActiveConfig generation.
 39. Availability changes do not change the normal metric slot.
 40. Removed metric assignments are not reusable before verified commit of the removal.
-41. UNAVAILABLE paths share one final fallback metric; direct-device multipath materialization is pending dedicated live verification.
+41. UNAVAILABLE paths share one final fallback metric; direct-device multipath materialization is gated by EXP-013 and unavailable-path projection must not be implemented before that gate closes.
 42. DeviceEngine owns Device binding/discovery/quota/publication state; TrafficEngine owns Profile routing/firewall/NAT state.
 43. PlannerEngine coordinates desired state and transitions without merging Engine ownership domains.
 44. Runtime decisions are based on fresh EnvironmentSnapshot observations; events are wakeups only.
