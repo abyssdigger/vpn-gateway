@@ -12,10 +12,11 @@
 
 ## EXP-012 — NG1: ROU v0 lifecycle and integrity
 
-**Статус:** PREPARED — live run pending  
+**Статус:** COMPLETE — PASS  
 **Architecture baseline:** NG1 Draft 1 + EXP-010/011 PASS + executable ROU v0  
 **Тип:** first complete appliance lifecycle / fail-closed / drift-recovery gate  
 **Design:** [EXP-012 README](experiments/EXP-012%20NG1%20ROU%20v0%20lifecycle%20integrity/README.md)  
+**Result:** [EXP-012-result-20261111.md](experiments/EXP-012%20NG1%20ROU%20v0%20lifecycle%20integrity/EXP-012-result-20261111.md)  
 **Implementation:** [ROU v0](NG1/code/python/rou_v0/README.md)
 
 ### Цель
@@ -49,8 +50,19 @@ Live harness:
 - multi-peer UDP relay smoke;
 - `bash -n` live harness.
 
-Доступная sandbox-среда не разрешает `ip netns`, поэтому kernel/netns lifecycle
-намеренно остаётся неподтверждённым до живого прогона.
+Живой прогон на dedicated Debian 13 завершён `OVERALL=PASS`.
+
+Подтверждены все H1-H10: создание/teardown appliance, два одновременных реальных OC
+клиента с DTLS, двухпутевая materialization, реальный payload, failover без survivor
+metric churn, fresh reconnect, zero-path fail-closed, repair route/firewall drift под
+`ip_forward=0` barrier и fatal teardown при structural loss `host0`.
+
+По ходу live-gate были исправлены три реальные ошибки без ослабления критериев:
+bootstrap flush отсутствующей table 100, chroot-visible socket path ocserv sec-mod и
+ошибка harness H8, первоначально удалявшего route не из table 100.
+
+**Решение:** EXP-012 COMPLETE — PASS. Hard-coded ROU v0 считается live-verified
+executable reference boundary; следующий этап — обобщение NG1 configuration/domain model.
 
 ---
 
