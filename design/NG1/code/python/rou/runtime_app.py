@@ -9,7 +9,7 @@ import signal
 import threading
 from typing import Callable
 
-from .command_backend import CommandBackend, SubprocessBackend
+from .command_backend import CommandBackend, NamespaceBackend, SubprocessBackend
 from .config import load_active_config
 from .event_source import IpMonitorWakeupSource
 from .instance_config import (
@@ -157,6 +157,14 @@ def run_instance_runtime(
     backend = host_backend or SubprocessBackend()
     paths = runtime_paths or RuntimePaths.for_instance(instance_id)
 
+    # Crash recovery must not depend on the previous process having executed its finally.
+    # Close forwarding before appliance verification so SIGKILL/power-loss restart can
+    # safely recover an otherwise intact namespace.
+    NamespaceBackend(instance_cfg.instance.namespace, backend).run(
+        ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+        check=False,
+    )
+
     verification = verify_instance(instance_cfg.instance, backend)
     if not verification.ok:
         raise RuntimeAppError(
@@ -178,7 +186,7 @@ def run_instance_runtime(
         try:
             with IpMonitorWakeupSource(instance_cfg.instance.namespace) as wakeups:
                 with SignalStop() as stop:
-                    return run_runtime_loop(
+                    result = run_runtime_loop(
                         router_cfg,
                         instance_cfg.instance.namespace,
                         backend,
@@ -189,5 +197,14 @@ def run_instance_runtime(
                         should_stop=stop.should_stop,
                         health_check=supervisor.check_health,
                     )
-        finally:
+        except BaseException:
+            try:
+                supervisor.close()
+            except Exception:
+                LOG.exception(
+                    "publication teardown also failed while propagating runtime failure"
+                )
+            raise
+        else:
             supervisor.close()
+            return result
