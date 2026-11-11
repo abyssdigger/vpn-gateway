@@ -1,10 +1,11 @@
 ## EXP-013 — NG1: unavailable-path common-metric fallback
 
-**Статус:** PLANNED — implementation gate  
+**Статус:** IN PROGRESS — Phase A attempt 1 harness false negative; rerun required  
 **Architecture baseline:** NG1 Draft 2 after production-model review cycle  
 **Тип:** Linux FIB / direct-dev multipath / real VPN fallback gate  
 **Design:** [EXP-013 README](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/README.md)  
-**Phase A harness:** [vpn-gateway-exp-013-phase-a.sh](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/vpn-gateway-exp-013-phase-a.sh)
+**Phase A harness:** [vpn-gateway-exp-013-phase-a.sh](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/vpn-gateway-exp-013-phase-a.sh)  
+**Attempt 1:** [EXP-013-phase-A-attempt-1.md](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/EXP-013-phase-A-attempt-1.md)
 
 ### Цель
 
