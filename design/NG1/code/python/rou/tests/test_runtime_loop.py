@@ -144,6 +144,36 @@ class RuntimeLoopTests(unittest.TestCase):
         ]
         self.assertGreaterEqual(len(close_commands), 2)
 
+    def test_service_health_failure_escapes_and_closes_forwarding(self):
+        backend = FakeHostBackend()
+        store = FakeStore()
+        wakeups = FakeWakeups()
+
+        def fail_health():
+            raise RuntimeError("publication worker died")
+
+        with self.assertRaisesRegex(RuntimeError, "publication worker died"):
+            run_runtime_loop(
+                ActiveConfig({}, {}),
+                "rou0",
+                backend,
+                ExplicitNoNatProvider(),
+                store,
+                wakeups,
+                loop_config=RuntimeLoopConfig(
+                    retry_delay_seconds=0,
+                    audit_interval_seconds=10,
+                ),
+                health_check=fail_health,
+            )
+
+        close_commands = [
+            argv
+            for argv in backend.calls
+            if "net.ipv4.ip_forward=0" in argv
+        ]
+        self.assertGreaterEqual(len(close_commands), 2)
+
     def test_normal_stop_closes_forwarding(self):
         backend = FakeHostBackend()
         store = FakeStore()
