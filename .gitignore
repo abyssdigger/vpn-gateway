@@ -3,3 +3,6 @@
 *:Zone.Identifier
 __pycache__/
 *.py[cod]
+vpn-gateway-smoke-*/
+# Legacy ROU v0 smoke output name from pre-prefix runs
+rou-v0-live-*/
