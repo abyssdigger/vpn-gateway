@@ -1,3 +1,25 @@
+## 2026-11-11 — NG1 production model and initial TOML configuration contract
+
+The first production-capable NG1 domain/runtime model is frozen before implementation.
+
+- Device/Profile are separate global policy entities;
+- PlannerEngine, DeviceEngine and TrafficEngine define the primary processing boundaries;
+- Engine-related runtime/diagnostic artifacts use planner-*, device-* and traffic-* subject prefixes;
+- Device discovery now uses ordered `expected_interfaces[]` entries with typed EXACT/PREFIX matching and per-entry `interface_quota`;
+- the aggregate Device quota is derived from ExpectedInterface quotas;
+- Profile priority is `device_order[]` followed by Device `expected_interfaces[]` order;
+- bound interface identity remains `(ifname, ifindex)`, with stable Profile-local metric assignment for the continuous bound lifetime;
+- normalized AVAILABLE/UNAVAILABLE state is separated from binding lifetime;
+- disabled Device/Profile declarations may be minimal placeholders;
+- the initial human-facing format is TOML with named `[device.<id>]` and `[profile.<id>]` tables;
+- enabled Profiles require explicit direction, non-empty destinations and non-empty device_order;
+- enabled Devices require non-empty expected_interfaces;
+- prefix selector syntax is `<prefix>*/<quota>`; exact selectors have implicit quota 1;
+- detailed DEBUG decision logging is required for all Engines.
+
+ROU v0/EXP-012 remains historical executable evidence; its BindingSpec/capacity terminology
+is not normative for the production NG1 model.
+
 ## 2026-11-10 — RC3 binding-specific networks and heterogeneous failover
 
 The post-EXP-009 profile model was corrected after live-test design exposed that one
