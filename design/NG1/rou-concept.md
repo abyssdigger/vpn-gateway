@@ -213,8 +213,11 @@ remote/VPN-side prefixes:
 - INVALID is rejected.
 
 On host -> Device traffic, Profile is classified by remote destination prefix.
-On Device -> host traffic, Profile is classified by remote source prefix plus Device
-membership. This makes shared Devices with Profiles of different directions unambiguous.
+On Device -> host traffic, classification first filters enabled Profiles to those
+referencing the ingress Device, then longest-prefix matches the remote source within that
+filtered set. A more-specific prefix owned only by another Device cannot shadow a valid
+less-specific Profile for the actual ingress Device. This makes shared Devices and
+cross-Device prefix overlaps unambiguous.
 
 **Device.traffic_envelope** is the administrator's tunnel firewall. It applies to the
 Device as a whole and can restrict from-device/to-device source/destination prefixes,
@@ -229,7 +232,9 @@ That policy cannot reliably be delegated to the host because Device identity and
 post-decap tunnel context are available only inside ROU.
 
 The generated direction guard and Device envelope are cumulative: both must allow the
-packet.
+packet. ROU-owned FORWARD is default-DROP. Restrictive Device-envelope DROP/reject rules
+precede generated direction ACCEPT rules; canonical state handling rejects INVALID first
+and accepts ESTABLISHED/RELATED admitted-flow traffic before NEW-flow policy.
 
 ## 8.2 Return-path model
 

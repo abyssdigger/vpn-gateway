@@ -20,6 +20,7 @@ Current implemented slice:
 - verified-removal barrier: a disappeared interface's committed metric is not reused until a later verified commit;
 - strict parser for ordered `ip -j link show` interface observations;
 - Profile destination dispatch projection in normative `prefixlen DESC, network ASC` order;
+- Device→host NEW-flow Profile classification with filter-by-Device first, then longest-prefix match;
 - kernel-independent per-Profile direct-route intent for UNKNOWN/AVAILABLE normal-tier paths;
 - terminal Profile blackhole intent even when no usable path exists;
 - persistent shadow fallback route intent at `UNAVAILABLE_METRIC` for every bound Profile path;

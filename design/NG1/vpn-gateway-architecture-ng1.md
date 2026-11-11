@@ -312,8 +312,10 @@ ROU owns and verifies at least these namespace prerequisites:
   default for this model; a proven equivalent loose policy may be substituted later);
 - a newly appearing Device interface is not admitted for payload forwarding until required
   per-interface sysctl state is verified;
-- IPv6 forwarding remains disabled; IPv6 is not part of the Profile payload contract in
-  this production version.
+- IPv6 is disabled on ROU-owned payload interfaces in the first production model,
+  including `disable_ipv6=1` where supported/required; merely disabling IPv6 forwarding
+  is not sufficient because link-local/local IPv6 traffic would otherwise exist outside
+  the IPv4 Profile/firewall contract.
 
 Failure to establish or verify required namespace sysctls is fail-closed.
 
@@ -372,8 +374,11 @@ matching enabled Profile cannot fall through to the main `default -> host0` and 
 back to the host.
 
 Local delivery to ROU itself remains governed by the higher-priority local table and is
-not blocked by this forwarded-payload guard. Locally generated VPN transport has no
-`iif host0` and also continues to use the main table.
+not blocked by this forwarded-payload guard. This bypass is intentional: traffic from
+`host0` addressed to a ROU-owned local address (for example a transport listener/relay
+endpoint) must remain eligible for INPUT/local delivery and must not be captured by the
+forwarded-payload terminal action. Locally generated VPN transport has no `iif host0` and
+also continues to use the main table.
 
 Packets entering from Device interfaces are not sent through the host0 destination
 dispatch chain. Once admitted by ROU transit policy, they may use the main route toward
@@ -392,10 +397,11 @@ This is stateful ROU transit policy, not administrator-authored tunnel ACL.
 
 Conntrack-equivalent semantics are normative:
 
-- `INVALID` payload is rejected;
-- `ESTABLISHED,RELATED` traffic belonging to an admitted flow is accepted in both
-  directions;
-- `NEW` is accepted only from the side(s) allowed by the Profile direction.
+- the ROU-owned FORWARD policy is `DROP`;
+- canonical owned-chain order begins with `INVALID` rejection, then
+  `ESTABLISHED,RELATED` acceptance for admitted flows, then policy for `NEW`;
+- `NEW` is accepted only from the side(s) allowed by the Profile direction;
+- no generated ACCEPT exists merely because an interface or route exists.
 
 The values mean:
 
@@ -407,10 +413,16 @@ The values mean:
 Profile classification is directional:
 
 - host -> Device: match the packet **destination** against Profile remote prefixes;
-- Device -> host: match the packet **source** against Profile remote prefixes and only
-  Profiles that reference that Device.
+- Device -> host: first restrict the candidate set to enabled Profiles that reference the
+  Device owning the packet's bound ingress interface, then perform longest-prefix matching
+  of the packet **source** within that filtered set.
 
-Both directions use the same longest-prefix ordering.
+Thus Device -> host classification is explicitly **filter-by-Device first, then
+longest-prefix match**. A more-specific prefix belonging only to another Device must not
+shadow a less-specific valid Profile for the actual ingress Device.
+
+Both directions use the same longest-prefix ordering within their respective eligible
+candidate sets.
 
 This matters when one Device is shared:
 
@@ -468,6 +480,11 @@ only inside ROU.
 The Profile-direction guard and Device envelope are cumulative. A packet must satisfy both.
 The Device envelope may restrict Profile traffic further; it can never widen a Profile
 direction, binding-state or fail-closed decision.
+
+When materialized as ordered firewall rules, **Device-envelope DROP/reject rules precede
+generated Profile-direction ACCEPT rules** for the same transit path. This ordering is
+normative: a restrictive Device envelope must never be bypassed by an earlier generated
+direction ACCEPT.
 
 ### 5.5 Unbound and over-quota interface isolation
 
@@ -1353,11 +1370,11 @@ ROU does not seize or rewrite unrelated host VPN routes.
 27. Profile contains name, enabled, direction, destinations[] and device_order[]; runtime interface details are absent from Profile config.
 28. destinations[] denotes strict canonical remote/VPN-side IPv4 prefixes; host-bit correction is never implicit.
 29. Duplicate remote prefixes are forbidden globally across enabled Profiles; overlap at different prefix lengths is allowed.
-30. Host -> Device Profile dispatch matches remote destination prefix; Device -> host NEW-flow classification matches remote source prefix plus Device membership.
+30. Host -> Device Profile dispatch matches remote destination prefix; Device -> host NEW-flow classification first filters enabled Profiles by ingress-Device membership and then longest-prefix matches the remote source within that filtered set.
 31. Host-side RPDB dispatch is longest-prefix-first and ends with a terminal iif-host0 fail-closed action so unmatched forwarded host traffic cannot fall through to main default.
-32. Profile direction is generated stateful transit policy: INVALID drops, ESTABLISHED/RELATED returns are allowed, and NEW is allowed only from configured side(s).
+32. ROU-owned FORWARD is default-DROP; canonical stateful ordering rejects INVALID, accepts ESTABLISHED/RELATED admitted-flow traffic, and allows NEW only from configured Profile side(s).
 33. Device traffic_envelope is separate administrator-authored Device/tunnel firewall policy; it applies to all Profiles sharing that Device.
-34. Generated Profile direction and Device envelope are cumulative; neither may widen the other.
+34. Generated Profile direction and Device envelope are cumulative; neither may widen the other, and restrictive Device-envelope rules precede generated direction ACCEPT rules.
 35. Each enabled Profile owns one fail-closed routing table with one terminal blackhole default.
 36. Per-destination blackholes are not part of the production model.
 37. device_order[] contains only Device identifiers and defines Profile-local Device preference.
@@ -1382,3 +1399,5 @@ ROU does not seize or rewrite unrelated host VPN routes.
 56. Future DeviceManager may change Device lifecycle/configuration but is independent of DeviceEngine.
 57. Future warm reservation is Profile demand aggregated globally across shared Devices.
 58. RC2/RC3 and ROU v0/EXP-012 remain evidence and implementation-history sources; superseded BindingSpec/capacity terminology is not normative for production NG1.
+59. The first production payload model disables IPv6 on ROU-owned payload interfaces rather than relying only on disabled IPv6 forwarding.
+60. Higher-priority local-table delivery of host0 traffic addressed to ROU-owned local endpoints is intentional and is not an escape from the forwarded-payload fail-closed guard.

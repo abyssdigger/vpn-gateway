@@ -11,7 +11,7 @@ from .device_engine import (
     InterfaceIdentity,
     reconcile_devices,
 )
-from .dispatch import DispatchEntry, compile_profile_dispatch
+from .dispatch import DispatchEntry, classify_device_to_host_profile, compile_profile_dispatch
 from .domain import (
     ActiveConfig,
     Availability,
@@ -63,6 +63,7 @@ __all__ = [
     "ProfileRouteIntent",
     "TrafficProjection",
     "TrafficRuntimeState",
+    "classify_device_to_host_profile",
     "committed_state_from_verified",
     "compile_profile_dispatch",
     "compile_profile_route_intents",
