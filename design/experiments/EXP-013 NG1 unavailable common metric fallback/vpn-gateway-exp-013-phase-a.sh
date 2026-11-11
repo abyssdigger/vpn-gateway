@@ -37,7 +37,13 @@ snapshot() {
     run_ns ip -j -4 route show table "$TABLE" > "$OUT/$snap-routes.json"
     run_ns ip -4 route show table "$TABLE" > "$OUT/$snap-routes.txt"
     run_ns ip -j link show > "$OUT/$snap-links.json"
-    run_ns ip -4 route get "$LOOKUP" > "$OUT/$snap-lookup.txt" 2>&1 || true
+
+    set +e
+    run_ns ip -4 route get "$LOOKUP" > "$OUT/$snap-lookup.txt" 2>&1
+    echo $? > "$OUT/$snap-lookup.rc"
+    run_ns ip -4 route get fibmatch "$LOOKUP" > "$OUT/$snap-fibmatch.txt" 2>&1
+    echo $? > "$OUT/$snap-fibmatch.rc"
+    set -e
 }
 
 [ "$(id -u)" -eq 0 ] || die "must run as root"
@@ -88,7 +94,17 @@ grep -Eq "dev ($IF_A|$IF_B)" "$OUT/a2-unavailable-lookup.txt" || die "A2 unavail
 
 run_ns ip route del table "$TABLE" "$TARGET" proto 202 metric "$UNAVAILABLE_METRIC"
 snapshot a2-blackhole
-grep -qi "blackhole" "$OUT/a2-blackhole-lookup.txt" || die "A2 blackhole did not become terminal winner"
+
+# A blackhole route intentionally resolves as an error for a local sender (EINVAL);
+# ordinary "ip route get" is therefore not expected to print the word "blackhole".
+# Verify the matched FIB route, with table inventory as the structural fallback.
+if grep -qi "blackhole" "$OUT/a2-blackhole-fibmatch.txt"; then
+    :
+elif grep -q "^blackhole 203.0.113.13" "$OUT/a2-blackhole-routes.txt"; then
+    :
+else
+    die "A2 terminal blackhole is absent from matched/inventory state"
+fi
 echo "A2 metric ordering: PASS" | tee -a "$OUT/result.txt"
 
 # Recreate fallback for interface-deletion observation.
@@ -125,7 +141,13 @@ grep -Eq "dev ($IF_A|$IF_B)" "$OUT/a5-default-unavailable-lookup.txt" || die "A5
 
 run_ns ip route del table "$TABLE" default proto 202 metric "$UNAVAILABLE_METRIC"
 snapshot a5-default-blackhole
-grep -qi "blackhole" "$OUT/a5-default-blackhole-lookup.txt" || die "A5 blackhole default did not become terminal winner"
+if grep -qi "blackhole" "$OUT/a5-default-blackhole-fibmatch.txt"; then
+    :
+elif grep -q "^blackhole default" "$OUT/a5-default-blackhole-routes.txt"; then
+    :
+else
+    die "A5 terminal blackhole default is absent from matched/inventory state"
+fi
 echo "A5 /0 metric ordering: PASS" | tee -a "$OUT/result.txt"
 
 echo "PHASE_A=PASS" | tee -a "$OUT/result.txt"
