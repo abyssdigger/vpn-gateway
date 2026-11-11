@@ -53,12 +53,12 @@ class InstanceConfig:
             raise InstanceConfigError(
                 "host and inner addresses must belong to the same IPv4 network"
             )
-        if self.host_address.ip in {
+        if self.host_address.network.prefixlen <= 30 and self.host_address.ip in {
             self.host_address.network.network_address,
             self.host_address.network.broadcast_address,
         }:
             raise InstanceConfigError("host address is not usable in its subnet")
-        if self.inner_address.ip in {
+        if self.inner_address.network.prefixlen <= 30 and self.inner_address.ip in {
             self.inner_address.network.network_address,
             self.inner_address.network.broadcast_address,
         }:
