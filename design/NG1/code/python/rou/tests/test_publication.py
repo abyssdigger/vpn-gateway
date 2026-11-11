@@ -160,6 +160,81 @@ class PublicationTests(unittest.TestCase):
             [(4000, 5000), (4001, 5001), (4002, 5002)],
         )
 
+    def test_projection_rejects_external_collision_even_without_parser(self):
+        publication = Publication(
+            TransportProtocol.TCP,
+            PortRange(4000, 4000),
+            PortRange(5000, 5000),
+        )
+        config = ActiveConfig(
+            devices={
+                "a": Device("a", True, nat=NatMode.NONE, publications=(publication,)),
+                "b": Device("b", True, nat=NatMode.NONE, publications=(publication,)),
+            },
+            profiles={
+                "corp": Profile(
+                    "corp",
+                    True,
+                    Direction.OUTBOUND,
+                    (),
+                    ("a", "b"),
+                ),
+            },
+        )
+        with self.assertRaisesRegex(PublicationError, "duplicate active external"):
+            compile_publication_endpoints(
+                config,
+                listen_address=LOOPBACK,
+                source_address=LOOPBACK,
+                target_address=LOOPBACK,
+            )
+
+    def test_projection_rejects_cross_device_internal_collision(self):
+        config = ActiveConfig(
+            devices={
+                "a": Device(
+                    "a",
+                    True,
+                    nat=NatMode.NONE,
+                    publications=(
+                        Publication(
+                            TransportProtocol.UDP,
+                            PortRange(4000, 4000),
+                            PortRange(5000, 5000),
+                        ),
+                    ),
+                ),
+                "b": Device(
+                    "b",
+                    True,
+                    nat=NatMode.NONE,
+                    publications=(
+                        Publication(
+                            TransportProtocol.UDP,
+                            PortRange(4001, 4001),
+                            PortRange(5000, 5000),
+                        ),
+                    ),
+                ),
+            },
+            profiles={
+                "corp": Profile(
+                    "corp",
+                    True,
+                    Direction.OUTBOUND,
+                    (),
+                    ("a", "b"),
+                ),
+            },
+        )
+        with self.assertRaisesRegex(PublicationError, "multiple Devices"):
+            compile_publication_endpoints(
+                config,
+                listen_address=LOOPBACK,
+                source_address=LOOPBACK,
+                target_address=LOOPBACK,
+            )
+
     def test_tcp_relay_round_trip(self):
         target_port = free_port(socket.SOCK_STREAM)
         external_port = free_port(socket.SOCK_STREAM)
