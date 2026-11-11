@@ -1,3 +1,33 @@
+## EXP-013 — NG1: unavailable-path common-metric fallback
+
+**Статус:** PLANNED — implementation gate  
+**Architecture baseline:** NG1 Draft 2 after production-model review cycle  
+**Тип:** Linux FIB / direct-dev multipath / real VPN fallback gate  
+**Design:** [EXP-013 README](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/README.md)  
+**Phase A harness:** [vpn-gateway-exp-013-phase-a.sh](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/vpn-gateway-exp-013-phase-a.sh)
+
+### Цель
+
+Проверить принятую NG1 семантику:
+
+```text
+normal metric < UNAVAILABLE_METRIC < BLACKHOLE_METRIC
+```
+
+и особенно несколько `UNAVAILABLE` paths, опущенных на один общий
+`UNAVAILABLE_METRIC`.
+
+Phase A проверяет direct-`dev` multipath, JSON inventory, `/0` competition с terminal
+blackhole и interface disappearance/return в disposable netns.
+
+Phase B будет проверять те же transitions на двух реальных VPN interfaces с payload,
+включая случай «interface существует, но path фактически мертв».
+
+**Gate:** unavailable-path projector TrafficEngine не реализуется до live-результата
+EXP-013. Если kernel semantics расходится с моделью, сначала меняется архитектура.
+
+---
+
 # VPN-GATE — журнал экспериментов
 
 **Терминология:** [RC3 — термины и определения](RC3/terms-and-definitions.md).
