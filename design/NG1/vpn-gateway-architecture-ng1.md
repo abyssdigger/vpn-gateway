@@ -642,19 +642,36 @@ peer has its own connected internal UDP socket and return-path association.
 Rootless checks completed before the first live run:
 
 - Python bytecode compilation;
-- 8 unit tests covering binding projection, capacity/overflow, delayed metric reuse,
-  same-name/new-ifindex identity and fail-closed route/firewall projection;
+- unit tests covering binding projection, capacity/overflow, delayed metric reuse,
+  same-name/new-ifindex identity, fail-closed route/firewall projection and bootstrap
+  handling of an absent profile table;
 - two-peer UDP relay smoke;
 - shell syntax validation of the live harness.
 
-The available execution sandbox does not permit creation of Linux network namespaces.
-Therefore no claim is made yet for the complete kernel control loop. EXP-012 is the
-first live lifecycle/integrity gate on the dedicated Debian test VM.
+EXP-012 then completed the full live lifecycle/integrity gate on the dedicated Debian 13
+test VM with `OVERALL=PASS`.
 
-The live harness exercises startup, simultaneous DTLS for both real OC clients, payload
-routing, preferred-binding disappearance, fresh return, zero-path state, route drift,
-firewall drift and structural `host0` loss. No generic configuration work should begin
-until this gate is closed.
+The successful live run proved:
+
+- clean namespace/veth creation and teardown;
+- real ocserv startup inside ROU;
+- simultaneous DTLS for both real OpenConnect clients through independent UDP peer
+  associations;
+- two-path profile materialization and real payload forwarding;
+- preferred-binding disappearance with survivor metric preservation and payload failover;
+- fresh binding return without survivor churn;
+- explicit zero-path fail-closed routing;
+- route and firewall drift repair under an observable `ip_forward=0` barrier;
+- fatal isolation/teardown after structural `host0` loss.
+
+Three defects discovered during the live gate were corrected without weakening the
+hypotheses: bootstrap flushing of a not-yet-created profile table, ocserv sec-mod
+chroot-visible runtime socket placement, and an H8 harness command that initially targeted
+the wrong routing table.
+
+EXP-012 therefore closes the hard-coded ROU v0 verification boundary. Generic
+configuration/domain-model work may proceed from this implementation while preserving the
+verified lifecycle, fail-closed, allocation and integrity semantics.
 
 ## 21. Inheritance from RC2/RC3
 
