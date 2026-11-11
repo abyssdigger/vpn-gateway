@@ -78,6 +78,10 @@ class PlannerResult:
 
 
 SnapshotCollector = Callable[[str, CommandBackend], EnvironmentSnapshot]
+AvailabilityProvider = Callable[
+    [EnvironmentSnapshot],
+    Mapping[InterfaceIdentity, Availability],
+]
 
 
 def default_snapshot_collector(
@@ -95,8 +99,13 @@ def _project(
     committed: PlannerRuntimeState,
     snapshot: EnvironmentSnapshot,
     nat_provider: NatProvider,
-    availability: Mapping[InterfaceIdentity, Availability] | None,
+    availability_provider: AvailabilityProvider | None,
 ) -> PlannerProjection:
+    availability = (
+        availability_provider(snapshot)
+        if availability_provider is not None
+        else {}
+    )
     devices = reconcile_devices(
         config,
         committed.devices,
@@ -182,7 +191,7 @@ def reconcile_once(
     host_backend: CommandBackend,
     nat_provider: NatProvider,
     *,
-    availability: Mapping[InterfaceIdentity, Availability] | None = None,
+    availability_provider: AvailabilityProvider | None = None,
     collect_snapshot: SnapshotCollector = default_snapshot_collector,
 ) -> PlannerResult:
     """Run one complete observe->plan->apply->observe->verify->commit cycle.
@@ -201,7 +210,7 @@ def reconcile_once(
             committed,
             initial,
             nat_provider,
-            availability,
+            availability_provider,
         )
 
         current_errors_open = _verify_all(
@@ -269,7 +278,7 @@ def reconcile_once(
             committed,
             barrier_snapshot,
             nat_provider,
-            availability,
+            availability_provider,
         )
 
         apply_namespace_prerequisites(
