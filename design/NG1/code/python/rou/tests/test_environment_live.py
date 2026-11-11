@@ -50,8 +50,8 @@ class EnvironmentLiveTests(unittest.TestCase):
             """[
               {
                 "dst":"172.21.201.19/32",
-                "table":313,
-                "protocol":202,
+                "table":"313",
+                "protocol":"202",
                 "metric":65535,
                 "multipath":[
                   {"dev":"vpns00","weight":1},
@@ -68,6 +68,7 @@ class EnvironmentLiveTests(unittest.TestCase):
             ]"""
         )
         self.assertEqual(routes[0].table, 313)
+        self.assertEqual(routes[0].protocol, 202)
         self.assertEqual(str(routes[0].destination), "172.21.201.19/32")
         self.assertEqual(
             [(n.ifname, n.weight) for n in routes[0].nexthops],
