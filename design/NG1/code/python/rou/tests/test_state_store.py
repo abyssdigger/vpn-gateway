@@ -171,6 +171,17 @@ class StateStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(StateStoreError, "group/world writable"):
                 store.load(make_config())
 
+    def test_symlink_parent_directory_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            real_parent = root / "real"
+            real_parent.mkdir(mode=0o700)
+            link_parent = root / "runtime"
+            link_parent.symlink_to(real_parent, target_is_directory=True)
+
+            with self.assertRaisesRegex(StateStoreError, "directory must not be a symlink"):
+                JsonRuntimeStateStore(link_parent / "state.json").save(make_state())
+
     def test_symlink_state_file_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             parent = Path(td) / "runtime"
@@ -189,6 +200,16 @@ class StateStoreTests(unittest.TestCase):
             target.chmod(0o600)
             link = parent / "state.json"
             link.symlink_to(target)
+
+            with self.assertRaisesRegex(StateStoreError, "symlink"):
+                JsonRuntimeStateStore(link).load(make_config())
+
+    def test_dangling_symlink_state_file_is_not_treated_as_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            parent = Path(td) / "runtime"
+            parent.mkdir(mode=0o700)
+            link = parent / "state.json"
+            link.symlink_to(parent / "missing-target")
 
             with self.assertRaisesRegex(StateStoreError, "symlink"):
                 JsonRuntimeStateStore(link).load(make_config())
