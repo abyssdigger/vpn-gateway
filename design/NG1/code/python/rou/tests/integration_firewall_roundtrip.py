@@ -26,6 +26,8 @@ from rou.domain import (
 )
 from rou.firewall_kernel import apply_filter_state, verify_filter_state
 from rou.firewall_state import compile_filter_state
+from rou.nat_kernel import apply_nat_state, verify_nat_state
+from rou.nat_state import ConfigNatProvider
 
 
 NS = "vpn-gate-ng1-ci-fw"
@@ -63,7 +65,7 @@ def main() -> int:
                 "oc": Device(
                     "oc",
                     True,
-                    nat=NatMode.NONE,
+                    nat=NatMode.MASQUERADE,
                     traffic_envelope=TrafficEnvelope(
                         default_action=EnvelopeAction.ALLOW,
                         rules=(
@@ -112,13 +114,24 @@ def main() -> int:
         apply_filter_state(desired, backend)
         result = verify_filter_state(desired, backend)
         if not result.ok:
-            print("EXPECTED:")
+            print("FILTER EXPECTED:")
             print(result.expected)
-            print("ACTUAL:")
+            print("FILTER ACTUAL:")
             print(result.actual)
             return 1
 
+        nat = ConfigNatProvider().compile(config, bindings)
+        apply_nat_state(nat, backend)
+        nat_result = verify_nat_state(nat, backend)
+        if not nat_result.ok:
+            print("NAT EXPECTED:")
+            print(nat_result.expected)
+            print("NAT ACTUAL:")
+            print(nat_result.actual)
+            return 1
+
         print("NG1_FIREWALL_ROUNDTRIP=PASS")
+        print("NG1_NAT_ROUNDTRIP=PASS")
         return 0
     finally:
         cleanup()
