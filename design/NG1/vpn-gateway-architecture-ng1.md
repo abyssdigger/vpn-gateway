@@ -1,6 +1,6 @@
-# VPN-GATE NG1 — Architecture Draft 1
+# VPN-GATE NG1 — Architecture Draft 2
 
-Status: **Draft 1 with executable ROU v0 ready for live gate (EXP-012)**.
+Status: **Draft 2 — first production-capable domain/runtime model agreed; human-facing configuration syntax pending.**
 
 Companion concept: `design/NG1/rou-concept.md`.
 
@@ -103,9 +103,9 @@ Locally generated VPN transport uses the ROU namespace main table, typically wit
 
 This deliberately mirrors conventional Linux VPN operation: one ordinary network interface may carry both routed payload and the outer VPN transport.
 
-### 2.4 Binding transport publication
+### 2.4 Device transport publication
 
-ROU may publish TCP/UDP transport endpoints for a BindingSpec.
+ROU may publish TCP/UDP transport endpoints for a Device.
 
 Publication allows a stable internal VPN configuration to remain unchanged while the host-facing port is changed in ROU configuration.
 
@@ -119,7 +119,7 @@ Conceptual compact syntax:
 A mapping means:
 
     host-facing ROU transport port/protocol
-        -> internal transport endpoint associated with the binding
+        -> internal transport endpoint associated with the Device
 
 For equal external/internal ports the right side may later be made optional as shorthand.
 
@@ -266,202 +266,388 @@ A profile table contains:
 
 ROU owns the complete table. Foreign state inside a profile table is not part of the supported model.
 
-## 6. Profile model
+## 6. Static domain model
+
+ROU receives one normalized **ActiveConfig**. Human-facing file syntax and parsing are
+outside the runtime model and are defined separately.
+
+ActiveConfig contains two primary domain collections:
+
+    ActiveConfig
+    ├── Devices[]
+    └── Profiles[]
+
+A Device describes an external networking/VPN device that ROU may bind to itself. A
+Profile describes a network-service requirement and the ordered Devices that may satisfy
+it.
+
+Device configuration and Profile configuration are deliberately separate. Device
+configuration contains device/transport knowledge; Profile configuration contains network
+policy. Runtime interface details never belong in Profile configuration.
+
+A future reload path may introduce **CandidateConfig**. CandidateConfig becomes
+ActiveConfig only after the new configuration has been safely materialized and verified.
+
+## 7. Device model
+
+Conceptually:
+
+    Device:
+        name
+        enabled
+        interface_match
+        interface_quota
+        publications[]
+        traffic_envelope
+
+name is the stable identifier referenced by Profiles.
+
+enabled is an administrative state owned by the Device side. A disabled Device is not
+bound, monitored, published or otherwise processed by ROU. An enabled Profile may refer to
+a disabled Device; this is normal operational state, not a configuration warning or error.
+
+A minimally valid disabled Device therefore needs only:
+
+    name
+    enabled = false
+
+The remaining Device fields are not deeply validated while the Device is disabled.
+
+An enabled Device is bound to ROU only when at least one enabled Profile references it.
+An enabled Device referenced by no enabled Profile remains inert.
+
+### 7.1 Interface discovery
+
+interface_match is an internally typed selector:
+
+    EXACT
+    PREFIX
+
+It identifies runtime interfaces belonging to the Device. Selector namespaces of active
+Devices must not overlap: one concrete runtime interface must not ambiguously belong to
+multiple Devices.
+
+DeviceEngine discovers runtime interfaces mapping to enabled Devices required by at least
+one enabled Profile.
+
+Runtime interface identity is:
+
+    (ifname, ifindex)
+
+Same-name/new-ifindex is a fresh runtime interface.
+
+Tunnel-local IP addresses, peer addresses and transport internals are Device concerns.
+Traffic routing uses direct-device routes and does not require tunnel peer IPs.
+
+### 7.2 Interface quota
+
+interface_quota is the maximum number of simultaneously observed matching interfaces that
+ROU is prepared to bind for the Device. It is a ROU quota, not a statement about the
+physical or protocol maximum supported by the Device.
+
+DeviceEngine observes all matching interfaces for diagnosis but exports no more than
+interface_quota as bound interfaces. Existing bound survivors are not displaced by newly
+observed over-quota interfaces.
+
+The sum of Device interface_quota values used by each enabled Profile must fit that
+Profile's normal metric space. A static metric-space overflow is a configuration error.
+
+### 7.3 Device availability
+
+A bound interface may carry normalized availability information independent of kernel
+link presence:
+
+    UNKNOWN
+    AVAILABLE
+    UNAVAILABLE
+
+This exists specifically for cases such as WireGuard, where an interface may remain
+present and administratively healthy while the remote side is unreachable.
+
+How remote availability is determined is a future feature and may be Device-specific.
+Publication state, transport-specific observations and other raw evidence remain internal
+to DeviceEngine; downstream components receive only normalized availability.
+
+Availability does not break the bound-interface lifetime.
+
+### 7.4 Device traffic envelope
+
+Device configuration may constrain traffic that is permitted through the tunnel itself,
+including remote endpoints/networks and protocol/service restrictions.
+
+This is a Device-side hard envelope, not BOU policy. BOU cannot enforce policy on traffic
+after VPN decapsulation inside the ROU namespace.
+
+A Profile may use only traffic semantics compatible with the Device envelope. Exact
+human-facing syntax is deferred to the configuration design.
+
+## 8. Device transport publication
+
+A Device may publish zero or more TCP/UDP transport endpoints.
+
+Conceptually a publication maps:
+
+    host-side ROU port/protocol
+        -> internal Device transport listener inside the ROU namespace
+
+Publication belongs to Device binding, not to Profile routing. It is a ROU-owned host-side
+socket/relay resource. What the host or BOU permits, blocks or further publishes outside
+that socket is outside ROU responsibility.
+
+For UDP, publication must preserve independent per-peer return-path associations. TCP
+publication is connection-oriented relay.
+
+A Device not required by any enabled Profile has no publication sockets.
+
+## 9. Profile model
 
 Conceptually:
 
     Profile:
         enabled
-        routes[]
-        bindings[]
         direction
-        routing_table
-        metric_step
-        metric_capacity
+        destinations[]
+        device_order[]
 
-A profile defines one logical VPN connectivity domain.
+Profile describes a network-service requirement. It contains no runtime interface names,
+ifindex values, tunnel addresses, peer addresses, metrics or Device discovery rules.
 
-Future profile policy may additionally include protocol, port and service filtering.
+enabled and direction are separate properties with separate meanings.
 
-## 7. Profile routes and default route
-
-routes[] defines the destinations served by the profile.
-
-A profile may serve ordinary prefixes such as 10.0.0.0/8 and 192.168.0.0/16, or 0.0.0.0/0.
-
-In NG1, 0.0.0.0/0 is an ordinary destination inside a dedicated profile routing table and acts as the catch-all profile during profile selection.
-
-More-specific profile selection must precede the catch-all.
-
-## 8. Profile direction
-
-Direction is a **per-profile** property.
-
-Conceptual values:
+direction values are:
 
 - OUTBOUND — new flows may start from host0 toward VPN; return traffic is allowed.
 - INBOUND — new flows may start from VPN toward host0; return traffic is allowed.
 - BIDIRECTIONAL — new flows may start in either direction.
-- DISABLED — no new connectivity in either direction.
 
-Exact handling of established conntrack state during policy changes is deferred.
+Disabled Profiles are not deeply validated or materialized. They may be retained as
+incomplete future configuration.
 
-## 9. BindingSpec
+## 10. Destinations and profile dispatch
 
-Conceptually:
+destinations[] is the non-empty set of IPv4 destination prefixes served by the Profile.
 
-    BindingSpec:
-        interface
-        network
-        capacity
-        publish[]         # optional TCP/UDP transport publication
-        launch_command    # optional future feature
+The term destination is intentionally distinct from kernel route: a destination expresses
+network policy; routes are runtime materialization.
 
-interface is either an exact interface name or a trailing-prefix selector.
+For enabled Profiles:
 
-network is the applicability trust boundary.
+- only IPv4 CIDR is accepted;
+- host bits are forbidden rather than silently canonicalized;
+- 0.0.0.0/0 and /32 are both valid;
+- duplicate destinations are forbidden globally across all enabled Profiles, including
+  duplicates within one Profile;
+- overlap between different prefix lengths is allowed.
 
-A concrete interface is eligible only if:
+ROU builds global dispatch entries from all:
 
-1. its name matches the selector;
-2. it owns at least one local IPv4 address belonging to that BindingSpec network.
+    (destination, Profile)
 
-## 10. Binding priority and metric pools
+and serializes them deterministically by:
 
-The order of bindings[] defines profile priority independently of selector type.
+    prefix length descending
+    network address ascending
 
-For example:
+Thus /32 entries naturally precede /0 without making Profile file order semantically
+significant.
 
-    wg0
-    vpns+ capacity=2
-    wg1
+Each enabled Profile owns one routing table. Every active Profile table contains a
+terminal fail-closed:
 
-means that wg0 outranks every admitted vpns+ interface, and every admitted vpns+ interface outranks wg1.
+    blackhole default
 
-EXACT and PREFIX do not form separate priority classes.
+Per-destination blackholes are no longer part of the production model; terminal blackhole
+default is sufficient to prevent fall-through from a dispatched Profile table.
 
-Conceptual defaults remain:
+## 11. Profile Device order and metric allocation
 
-    FIRST_UNICAST_METRIC = 10
-    metric_step = 10
-    BLACKHOLE_METRIC = 65536
+device_order[] is an ordered list of Device identifiers and contains no additional
+Profile-local Device parameters.
 
-An exact BindingSpec has implicit capacity 1.
+A Device may be shared by any number of enabled Profiles. Its use is explicit in each
+Profile through device_order[].
 
-A prefix BindingSpec with positive capacity receives a deterministic reserved metric pool in its declared position.
+All bound interfaces of an earlier Device are preferred to all bound interfaces of a
+later Device within that Profile.
 
-capacity means the maximum number of simultaneously admitted concrete interfaces for which ROU guarantees that BindingSpec's deterministic priority range. It is not a lifetime allocation limit.
+Metric allocation is internal to ROU:
 
-If eligible interfaces exceed capacity, excess interfaces remain OVERFLOW/unadmitted rather than invalidating the whole profile.
+    FIRST_NORMAL_METRIC = 1
+    METRIC_STEP = 1
 
-A prefix BindingSpec with capacity=-1 does not receive a dedicated deterministic priority range. All such BindingSpecs share one dynamic tail pool and must appear after deterministic-capacity BindingSpecs. Stable priority among shared-tail bindings is intentionally not guaranteed.
+For each enabled Profile, every Device receives a Profile-local metric range whose width is
+Device.interface_quota. Ranges are allocated in device_order order.
 
-Within a reserved prefix pool or shared tail:
+Because every Profile has its own routing table, metric namespaces are independent between
+Profiles. The same bound interface may therefore have different metrics in different
+Profiles.
 
-- an admitted survivor keeps its metric;
-- a new interface gets the next available slot;
-- the cursor wraps inside its pool;
-- holes need not be eagerly filled;
-- same-name/new-ifindex is a fresh binding instance;
-- overflow never evicts a survivor;
-- a removed binding's metric remains reserved until verified removal commits.
+Metric assignment belongs to:
 
-## 11. Fail-closed profile routing
+    (Profile, ifname, ifindex)
 
-Each protected destination retains its own explicit blackhole route.
+not to Device or interface globally.
 
-This explicitly represents zero-path state, distinguishes an unavailable managed route from an accidentally missing route, strengthens verification, and improves diagnostics.
+The assignment is stable for the whole continuous period in which the same runtime
+interface remains bound and the Profile continues to use that Device. Availability changes
+do not change its normal slot. A removed assignment is not reusable until the removal has
+been verified and committed.
 
-Additionally, every profile table has a terminal fail-closed route, conceptually blackhole default.
+## 12. Unavailable-path fallback
 
-A packet already dispatched into a profile routing table must never fall through into the namespace main table.
+Availability is planner input.
 
-## 12. Profile selection and RPDB
+Any AVAILABLE path uses its stable normal metric. A path declared UNAVAILABLE must be
+demoted below every normal path regardless of Device order.
 
-Forwarded payload entering through host0 is dispatched to profile routing tables through the namespace RPDB.
+The agreed model reserves one common:
 
-ROU fully owns that RPDB; it does not need to coexist with unrelated host policy-routing state.
+    UNAVAILABLE_METRIC
 
-Destination-specific profile selection precedes a possible 0.0.0.0/0 catch-all profile.
+for the fallback tier. Multiple unavailable paths for one destination are expected to be
+materialized as one equal-cost direct-device multipath route at that metric.
 
-Routing-table IDs and rule priorities are allocated deterministically at startup and remain stable for the lifetime of the instance.
+The architectural semantics are accepted, but the exact Linux FIB mechanism remains
+**pending live verification**. A dedicated real-life experiment must verify direct-dev
+multipath across actual VPN interfaces, interface disappearance/return and relevant
+conntrack/NAT behavior before this implementation becomes normative.
 
-Because the namespace is owned by ROU, compact low IDs/priorities can be used rather than reserving large host-global ranges.
+UNKNOWN availability does not itself terminate a bound-interface lifetime. Exact policy
+for future availability detectors is intentionally deferred.
 
-The exact allocation scheme remains to be finalized experimentally.
+## 13. DeviceEngine
 
-## 13. Firewall and NAT inside ROU
+**DeviceEngine** owns the ROU-side mechanisms that make existing Devices usable:
 
-ROU firewalling does not perform host-side admission control.
+- determine which enabled Devices are required by enabled Profiles;
+- bind/unbind those Devices to ROU;
+- discover and monitor their runtime interfaces;
+- enforce interface_quota;
+- maintain DeviceBindingState;
+- maintain publication sockets/relay;
+- normalize Device-specific evidence into bound-interface availability;
+- publish an immutable DeviceBindingSnapshot to downstream logic.
 
-It enforces internal appliance semantics:
+DeviceEngine does not manage the Device itself. In particular the first production model
+does not require it to start, stop, restart, configure or repair a VPN transport.
 
-- profile direction;
-- use of admitted bindings only;
-- isolation of overflow/unadmitted interfaces;
-- return traffic;
-- profile isolation;
-- fail-closed behavior when usable paths disappear.
+DeviceEngine may update its binding state because of ordinary system/environment changes
+or, in the future, changes caused by DeviceManager. It does not depend on DeviceManager.
 
-Future per-profile policy may add protocol/port/service restrictions.
+## 14. TrafficEngine
 
-Payload NAT belongs to ROU where required by a VPN transport/profile.
+**TrafficEngine** consumes network policy and bound Device interfaces. It owns:
 
-VPN underlay traffic exits through host0/rouvpn0 as ordinary locally generated ROU traffic. Any further host-side routing or NAT is an external host/BOU concern and does not belong to profile payload NAT.
+- Profile-local path construction;
+- stable Profile/interface metric assignments;
+- per-Profile routing tables;
+- RPDB destination dispatch;
+- payload firewall/NAT policy;
+- fail-closed Profile routing.
 
-## 14. VPN transport ownership
+TrafficEngine does not discover Device interfaces itself and does not consume raw
+Device-specific transport/publication state.
 
-All VPN transport processes should run inside the ROU namespace.
+ROU firewalling does not replace host-side BOU admission control. BOU governs who may use
+the ROU external interface; TrafficEngine governs payload semantics after traffic has
+entered ROU.
 
-This includes WireGuard configuration/runtime, OpenConnect clients, ocserv and future VPN implementations.
+## 15. PlannerEngine and runtime state
 
-NG1 deliberately avoids a special WireGuard ownership model where the UDP socket remains outside while the interface moves inside.
+**PlannerEngine** coordinates desired runtime state without collapsing ownership boundaries
+between DeviceEngine and TrafficEngine.
 
-Preferred invariant:
+The main runtime concepts are:
 
-> VPN transport process and the tunnel interfaces it creates belong to the ROU namespace.
+    ActiveConfig
+    EnvironmentSnapshot
+    DeviceBindingState
+    DeviceBindingSnapshot
+    TrafficRuntimeState
+    DesiredState
+    TransitionPlan
 
-## 15. Managed bindings — future direction
+EnvironmentSnapshot is a fresh observation of relevant real state. It may include kernel,
+process, socket, sysctl and other runtime facts; it is intentionally broader than a kernel
+snapshot.
 
-The initial ROU may only observe externally created VPN interfaces.
+Events are wakeups only. Decisions are made from fresh observations.
 
-The architecture must nevertheless allow BindingSpec to gain an optional process-launch definition.
+DeviceBindingState is DeviceEngine's committed history needed to preserve survivor binding
+and quota semantics. DeviceBindingSnapshot is the normalized immutable view exported from
+DeviceEngine.
 
-If launch_command is absent, ROU only observes the binding.
+TrafficRuntimeState stores historical allocations that cannot be reconstructed safely from
+one observation alone, principally stable:
 
-If present, ROU may own the lifecycle of the VPN transport that materializes the binding.
+    (Profile, ifname, ifindex) -> normal metric slot
 
-Process lifecycle and binding admission remain separate concepts: process started does not mean binding admitted. A created interface still must pass normal selector/network/capacity/verification rules.
+PlannerEngine combines ActiveConfig, current normalized Device state, TrafficRuntimeState
+and fresh environment observations to derive complete DesiredState and an ordered
+TransitionPlan.
 
-### 15.1 Warm-capacity operation
+DesiredState describes what complete owned state must exist. TransitionPlan describes how
+to reach it safely.
 
-Managed bindings make it possible to support cold standby, hot standby and arbitrary warm capacity.
+The commit rule is:
 
-For example, with five possible VPN paths a profile may request that the two highest-priority usable managed bindings remain alive.
+    observe
+      -> plan
+      -> apply
+      -> fresh observe
+      -> verify complete desired state
+      -> commit
 
-If one live path disappears, ROU can start the next eligible managed binding, wait for its interface, verify it and admit it.
+Apply success is not commit. Historical allocations are changed only after verification.
 
-On failback ROU can restore the preferred path and then restore configured warm capacity, optionally stopping excess lower-priority transports.
+DeviceEngine has an analogous independent observe/apply/verify/commit boundary for the
+state it owns.
 
-The routing semantics do not change depending on whether a binding was created externally or launched by ROU.
+## 16. Engine conventions and future DeviceManager
 
-## 16. Reference implementation strategy
+The first production-capable runtime has three named processing components:
 
-The first ROU implementation is Python, but it should be treated as an executable reference specification for a future production core in a systems language.
+    PlannerEngine
+    DeviceEngine
+    TrafficEngine
 
-Priorities:
+Detailed DEBUG logging is required for **all Engines**. Debug output should expose inputs,
+relevant configuration projection, previous committed state, decision path, desired result,
+transition/apply/verification results and commit outcome while never logging credentials,
+private keys, passwords or other secrets.
 
-- strict typed domain model;
-- pure projection/planning functions where practical;
-- deterministic behavior;
-- minimal hidden mutable state;
-- explicit observe / desired / plan / apply / verify / commit stages;
-- fake kernel backend;
-- rootless planner tests;
-- extensive regression tests;
-- golden tests for desired kernel state.
+Each Engine defines a short subject-area prefix for related runtime and diagnostic
+artifacts:
 
-The later production implementation should reproduce the same semantics against the same behavioral tests.
+    PlannerEngine -> planner-*
+    DeviceEngine  -> device-*
+    TrafficEngine -> traffic-*
+
+The artifact need not be an implementation object owned by the Engine; the prefix denotes
+the subject/ownership namespace.
+
+### 16.1 Future DeviceManager
+
+A future **DeviceManager** may change the actual state of Devices:
+
+- start / stop / restart;
+- health and recovery actions;
+- generate Device configuration;
+- reconfigure a Device.
+
+DeviceManager is independent of DeviceEngine. PlannerEngine may request Device actions;
+DeviceEngine then observes the resulting environment normally. A command to start or
+reconfigure a Device never substitutes for observation that a usable interface actually
+appeared.
+
+### 16.2 Future warm reservation
+
+Warm/hot reservation is a future Profile capability expressing how many preferred usable
+paths a Profile wants to keep ready.
+
+PlannerEngine must aggregate demand across all Profiles sharing Devices before asking a
+future DeviceManager to create or remove Device capacity. One Profile ceasing to need a
+path must not cause a Device/interface still required by another Profile to be removed.
 
 ## 17. BOU concept
 
@@ -706,40 +892,49 @@ In short:
 
 Primary source material includes the existing experiment log under design/vpn-gateway-experiments.md, the RC2/RC3 architecture documents, reviews and the RC3 Python implementation.
 
-## 22. Initial NG1 invariants
+## 22. NG1 production-model invariants
 
-1. ROU owns its network namespace.
-2. ROU creates and removes its own namespace/veth infrastructure.
-3. ROU exposes one conventional host-facing L3 interface.
-4. The default external interface name is rouvpn0 and is configurable.
-5. Payload and VPN transport share rouvpn0 using ordinary Linux local/forwarded routing semantics.
-6. No dedicated transport/underlay interface is required.
-7. All VPN transport processes and tunnel interfaces live inside the ROU namespace.
-8. Inbound VPN transport is delivered to local ROU endpoints before profile payload dispatch.
-9. Locally generated VPN transport uses namespace main routing via host0.
-10. Forwarded payload entering through host0 is selected into profile routing tables.
-11. ROU may publish binding-specific TCP/UDP transport endpoints through host-side relay sockets.
-12. Published host-side sockets are explicit ROU-owned lifecycle resources even though they exist in the main namespace.
-13. VPN listeners/processes themselves remain inside the ROU namespace.
-14. Binding transport publication belongs to ROU, not BOU.
-15. Every enabled profile owns a dedicated routing table.
-16. Profile tables are fail-closed routing domains.
-17. Every protected destination retains an explicit blackhole.
-18. Every profile table has a terminal fail-closed route.
-19. Profile direction is per-profile policy.
-20. Binding priority follows bindings[] order independently of selector type.
-21. Deterministic prefix bindings reserve capacity-sized metric pools.
-22. capacity=-1 prefix bindings share a tail pool without guaranteed mutual priority.
-23. Capacity overflow isolates only excess concrete interfaces; it does not automatically invalidate the whole profile.
-24. Managed binding lifecycle must not alter BindingSpec routing semantics.
-25. ROU may later maintain configurable live/warm binding capacity.
-26. BOU is outside ROU routing semantics and may be replaced by another firewall/router.
-27. PEACEFUL protects the remote VPN side from unauthorized transit through ROU.
-28. AGGRESSIVE additionally protects VPN-managed traffic from leaking around ROU.
-29. ROU and BOU require no safety-critical runtime RPC.
-30. RC2/RC3 are reusable evidence/design sources, but not normative NG1 topology.
-31. Same-port TCP/TLS/CSTP and UDP/DTLS publication through a private ROU namespace is experimentally proven by EXP-011.
-32. A production UDP publication relay must maintain independent per-peer association state.
-33. ROU-owned structural state may be repaired under a forwarding barrier; forwarding is restored only after verification.
-34. Normal VPN binding disappearance is a lifecycle event, not structural corruption.
-35. With zero admitted bindings, profile routing remains explicitly fail-closed rather than falling through to namespace main routing.
+1. ROU owns its private network namespace and host-facing veth infrastructure.
+2. ROU exposes one conventional host-facing L3 interface; payload and VPN transport share it using ordinary Linux routing semantics.
+3. All VPN transport listeners/processes and tunnel interfaces live inside the ROU namespace.
+4. BOU remains an independent host-side admission/routing concern; ROU and BOU require no safety-critical runtime RPC.
+5. ActiveConfig contains Devices and Profiles; human-facing file syntax is outside the runtime model.
+6. Device describes how ROU can use an external networking/VPN device; Profile describes network-service policy.
+7. Device and Profile each have independent enabled state.
+8. A disabled Device may be minimally described by name plus enabled=false and is not deeply validated.
+9. An enabled Profile may reference a known disabled Device without error or warning.
+10. An unknown Device reference is a configuration error.
+11. An enabled Device is bound only if referenced by at least one enabled Profile.
+12. DeviceEngine discovers interfaces only for enabled Devices required by enabled Profiles.
+13. Concrete runtime interface identity is (ifname, ifindex); same-name/new-ifindex is a fresh interface.
+14. Active Device selector namespaces do not overlap.
+15. Device.interface_quota is the maximum number of matching interfaces ROU binds for that Device.
+16. Over-quota interfaces remain observable for diagnosis but are not exported to TrafficEngine as bound interfaces.
+17. Device publication belongs to Device binding and ROU, not to Profile routing or BOU.
+18. Device-specific raw publication/transport evidence does not cross into TrafficEngine; DeviceEngine exports normalized interface availability.
+19. Bound-interface availability supports UNKNOWN, AVAILABLE and UNAVAILABLE independently of interface presence.
+20. Profile contains enabled, direction, destinations[] and device_order[]; runtime interface details are absent from Profile configuration.
+21. destinations[] contains strict canonical IPv4 network prefixes; host-bit correction is never implicit.
+22. Duplicate destinations are forbidden globally across enabled Profiles; overlap across different prefix lengths is allowed.
+23. Destination dispatch is deterministically ordered by prefix length descending, then network address ascending.
+24. Each enabled Profile owns one fail-closed routing table with terminal blackhole default.
+25. Per-destination blackholes are not required by the production model.
+26. device_order[] contains only Device identifiers and defines Profile-local Device preference.
+27. A Device may be shared by multiple Profiles; its interfaces may receive different metrics in each Profile.
+28. Metric allocation begins at 1 with step 1 and is internal to ROU.
+29. Each Device receives a Profile-local metric range sized by Device.interface_quota.
+30. For every enabled Profile, the sum of referenced Device interface quotas must fit the available normal metric space or configuration is rejected.
+31. Metric assignment belongs to (Profile, ifname, ifindex) and remains stable for the continuous bound lifetime.
+32. Availability changes do not change the normal metric slot.
+33. Removed metric assignments are not reusable before verified commit of the removal.
+34. Every AVAILABLE path outranks every UNAVAILABLE path.
+35. UNAVAILABLE paths share one final fallback metric; direct-device multipath materialization is pending dedicated live verification.
+36. DeviceEngine owns Device binding/discovery/quota/publication state; TrafficEngine owns Profile routing/firewall/NAT state.
+37. PlannerEngine coordinates desired state and transitions without merging Engine ownership domains.
+38. Runtime decisions are based on fresh EnvironmentSnapshot observations; events are wakeups only.
+39. Apply success is not commit; fresh observation and complete verification precede committed-state changes.
+40. Detailed DEBUG decision logging is required for all Engines and must never expose secrets.
+41. Runtime/diagnostic artifacts use subject-area prefixes planner-*, device-* and traffic-*.
+42. Future DeviceManager may change Device lifecycle/configuration but is independent of DeviceEngine.
+43. Future warm reservation is Profile demand aggregated globally across shared Devices.
+44. RC2/RC3 and ROU v0/EXP-012 remain evidence and implementation-history sources; superseded BindingSpec/capacity terminology is not normative for the production NG1 model.
