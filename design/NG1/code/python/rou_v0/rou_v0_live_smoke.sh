@@ -9,7 +9,7 @@ RUNTIME="/run/vpn-gateway-rou-v0"
 OCCTL_SOCKET="$RUNTIME/occtl.sock"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROU="$SCRIPT_DIR/rou_v0.py"
-OUTDIR="rou-v0-live-$(date -u +%Y%m%d-%H%M%SZ)"
+OUTDIR="vpn-gateway-smoke-rou-v0-$(date -u +%Y%m%d-%H%M%SZ)"
 mkdir -p "$OUTDIR"
 OUTDIR="$(cd "$OUTDIR" && pwd)"
 LOG="$OUTDIR/rou.log"
@@ -38,8 +38,6 @@ trap cleanup EXIT INT TERM
 
 [[ "$(id -u)" -eq 0 ]] || fail "run as root"
 for x in ip ss ping python3 occtl systemctl iptables-legacy; do command -v "$x" >/dev/null || fail "missing $x"; done
-[[ -x "$ROU" ]] || chmod 700 "$ROU"
-
 systemctl is-active --quiet ocserv.service && fail "stop normal ocserv.service before this harness"
 ss -H -ltn "sport = :$PORT" | grep -q . && fail "TCP $PORT busy"
 ss -H -lun "sport = :$PORT" | grep -q . && fail "UDP $PORT busy"
