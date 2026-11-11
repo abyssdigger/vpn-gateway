@@ -173,9 +173,9 @@ ROU understands TCP/UDP publication, not the application protocol carried inside
 
 The production model separates Device description from network policy.
 
-A **Device** describes an external networking/VPN device: how its runtime interfaces are
-recognized, how many ROU is prepared to bind, which transport endpoints are published,
-and Device-side traffic constraints.
+A **Device** describes an external networking/VPN device: an ordered set of expected
+runtime-interface selectors with per-selector quotas, transport publication, and
+Device-side traffic constraints.
 
 A **Profile** describes a network need:
 
@@ -189,9 +189,10 @@ A Device may be shared by multiple Profiles. Profile configuration contains no r
 interface names, tunnel addresses or metrics.
 
 A Device is bound to ROU only when it is enabled and referenced by at least one enabled
-Profile. DeviceEngine discovers and maintains the resulting Device-to-ROU bindings.
-TrafficEngine consumes only normalized bound-interface state and materializes Profile
-routing.
+Profile. DeviceEngine discovers only the configured `expected_interfaces` of such Devices
+and maintains the resulting Device-to-ROU bindings. `expected_interfaces` is ordered; each
+entry is EXACT with quota 1 or PREFIX with an explicit positive quota. TrafficEngine
+consumes only normalized bound-interface state and materializes Profile routing.
 
 Publication belongs to Device binding, not to Profile routing.
 
@@ -254,8 +255,9 @@ The next-generation production model is now defined around:
 - ActiveConfig and fresh EnvironmentSnapshot observation;
 - DeviceBindingState and TrafficRuntimeState with independent commit boundaries;
 - strict destinations and ordered Profile device references;
-- Device interface_quota and Profile-local stable metric assignments;
+- ordered Device expected-interface selectors, per-selector quotas and Profile-local stable metric assignments;
 - normalized availability with an unavailable fallback tier.
 
-Human-facing configuration-file syntax is the next design step. Direct-device multipath
-for the common unavailable fallback metric remains a dedicated live-test requirement.
+The initial human-facing TOML configuration contract is recorded in
+`design/NG1/rou-config.md`. Direct-device multipath for the common unavailable fallback
+metric remains a dedicated live-test requirement.
