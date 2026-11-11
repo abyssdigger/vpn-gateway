@@ -1,8 +1,11 @@
 from ipaddress import IPv4Address, IPv4Interface
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.command_backend import CommandResult
 from rou.domain import ActiveConfig
@@ -186,7 +189,7 @@ class RuntimeAppTests(unittest.TestCase):
                         ),
                     )
 
-            self.assertEqual(FakeSupervisor.instances, ())
+            self.assertEqual(FakeSupervisor.instances, [])
 
 
 if __name__ == "__main__":
