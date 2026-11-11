@@ -313,5 +313,7 @@ The initial human-facing TOML configuration contract is recorded in
 `design/NG1/rou-config.md`. Device traffic-envelope grammar remains to be designed, but
 its ownership/capability boundary is fixed in the architecture.
 
-Direct-device multipath for the common unavailable fallback metric remains gated by
-EXP-013.
+EXP-013 passed. The common unavailable fallback uses persistent shadow membership: one
+bound member materializes as a direct-device route, while multiple bound members use one
+equal-cost direct-device multipath route at UNAVAILABLE_METRIC. This fallback is ECMP/hash
+selection, not sequential failover.
