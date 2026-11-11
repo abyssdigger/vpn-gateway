@@ -137,6 +137,15 @@ def cmd_down(
         raise CliError(
             f"refusing teardown while {service} remains active"
         )
+    if active.returncode not in {3, 4}:
+        NamespaceBackend(instance.instance.namespace, backend).run(
+            ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+            check=False,
+        )
+        raise CliError(
+            f"cannot prove {service} inactive: systemctl is-active "
+            f"returned {active.returncode}"
+        )
 
     destroy_instance(instance.instance, backend)
     return {
