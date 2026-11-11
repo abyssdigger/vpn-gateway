@@ -11,17 +11,27 @@ Current implemented slice:
 - Device reference and selector-overlap validation;
 - ordered `device_order -> expected_interfaces` metric-range compilation;
 - disabled Devices consume no current metric range;
-- reserved metric tail with `normal < UNAVAILABLE_METRIC < BLACKHOLE_METRIC`.
+- reserved metric tail with `normal < UNAVAILABLE_METRIC < BLACKHOLE_METRIC`;
+- rootless DeviceEngine binding projection over fresh ordered interface snapshots;
+- stable `(ifname, ifindex)` identity and survivor-preserving per-selector quota admission;
+- observable over-quota candidates that are not exported as bound TrafficEngine inputs;
+- normalized UNKNOWN/AVAILABLE/UNAVAILABLE availability attached to bound interfaces;
+- TrafficRuntimeState projection for stable Profile-local normal metric slots;
+- verified-removal barrier: a disappeared interface's committed metric is not reused until a later verified commit.
+
+The current runtime code is deliberately a pure projection layer. It does not mutate kernel
+state and therefore cannot accidentally bypass the architecture's
+`observe -> plan -> apply -> fresh observe -> verify -> commit` boundary.
 
 Intentionally not implemented yet:
 
 - publication TOML syntax;
 - traffic-envelope TOML syntax;
-- DeviceEngine runtime discovery/binding;
-- TrafficEngine stable live-interface slot state;
-- PlannerEngine transitions;
-- kernel apply/verify;
-- unavailable direct-dev multipath materialization is blocked on EXP-013; no runtime unavailable-path projector should be added before that gate passes.
+- live kernel EnvironmentSnapshot collection;
+- publication supervision in the production package;
+- PlannerEngine transition execution;
+- routing/RPDB/firewall/NAT kernel apply/verify;
+- unavailable direct-dev multipath materialization is blocked on EXP-013; no runtime unavailable-path projector is added before that gate passes.
 
 Run rootless tests:
 
