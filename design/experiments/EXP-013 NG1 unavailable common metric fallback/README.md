@@ -1,6 +1,6 @@
 # EXP-013 — NG1 unavailable-path common-metric fallback
 
-Status: **IN PROGRESS — Phase A PASS; A3 artifact interpretation and Phase B remain**
+Status: **PASS — Phase A PASS; Phase B PASS; NG1 unavailable-path implementation gate closed**
 
 Architecture baseline: **NG1 Draft 3**
 
@@ -15,7 +15,7 @@ normal metric < UNAVAILABLE_METRIC < BLACKHOLE_METRIC
 и конкретно материализацию нескольких `UNAVAILABLE` paths на одном общем
 `UNAVAILABLE_METRIC`.
 
-Эксперимент обязателен до реализации unavailable-path projector в TrafficEngine.
+Эксперимент завершён. Его результат разрешает реализацию unavailable-path projector в TrafficEngine по persistent-shadow модели, зафиксированной ниже.
 
 Первый live-прогон Phase A подтвердил A1 и дошёл до terminal части A2, где старый
 harness ошибочно ожидал текст `blackhole` от обычного `ip route get`. Для blackhole
@@ -37,15 +37,15 @@ multipath nexthop.
 - terminal `blackhole default` должен проигрывать fallback даже для Profile с
   `0.0.0.0/0`.
 
-Но еще не доказаны kernel details:
+EXP-013 закрыл следующие kernel details:
 
-1. допускает ли целевая Debian/iproute2 связка direct-`dev` multipath без gateway;
-2. как такой route представлен в `ip -j route`;
-3. что происходит с multipath route при исчезновении одного interface;
-4. корректно ли normal -> common fallback -> normal меняется без survivor priority churn;
-5. как common fallback конкурирует с `blackhole default` для `/0`;
-6. что реально происходит с payload, когда один из equal-cost fallback paths фактически
-   мертв, но interface остается существовать.
+1. целевая Debian/iproute2 связка принимает direct-`dev` multipath без gateway;
+2. route корректно инвентаризируется через `ip -j route`;
+3. при исчезновении одного member-interface kernel удаляет весь multipath route;
+4. normal -> common fallback -> normal работает без survivor priority churn;
+5. common fallback выигрывает у terminal `blackhole default` для `/0`;
+6. при функционально мёртвом выбранном equal-cost member Linux не делает sequential retry
+   через другой member для того же flow.
 
 Последний пункт особенно важен: common metric не должен молча трактоваться как
 последовательный failover, если Linux фактически дает ECMP/hash selection.
@@ -221,11 +221,18 @@ experiment resources. Штатные VPN interfaces не удаляются и �
 
 ## Architecture decision gate
 
-После live run возможны только два результата:
+**CLOSED: PASS.**
 
-1. **PASS:** common `UNAVAILABLE_METRIC` materialization подтверждена и TrafficEngine
-   может реализовать ее по наблюденной kernel форме.
-2. **ARCHITECTURE FOLLOW-UP:** kernel/FIB semantics требуют изменить projector или саму
-   unavailable-tier модель.
+Phase A и Phase B подтвердили production-кандидатуру:
 
-До этого gate runtime unavailable-path projector считается **не разрешенным к реализации**.
+- persistent shadow fallback существует для всех bound Profile paths;
+- UNKNOWN/AVAILABLE path имеет normal route плюс shadow fallback membership;
+- UNAVAILABLE удаляет только normal route;
+- один fallback member материализуется direct-device route;
+- два и более — одним equal-cost direct-device multipath route;
+- fallback ECMP является hash selection, а не sequential failover;
+- terminal blackhole остаётся последней ступенью, включая `default`.
+
+TrafficEngine может реализовывать unavailable-path projector по этой форме.
+
+Итог Phase B записан в `EXP-013-phase-B-result.md`.
