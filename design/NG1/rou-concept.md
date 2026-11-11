@@ -1,6 +1,6 @@
 # VPN-GATE NG1 — ROU concept
 
-Status: **working concept; publication proven, executable ROU v0 prepared**.
+Status: **working concept; ROU v0 live-verified and first production-capable domain/runtime model agreed.**
 
 This document captures the top-level NG1 model before implementation details are frozen in the architecture.
 
@@ -32,7 +32,7 @@ ROU does not need separate payload and VPN-underlay interfaces.
 
 The same rouvpn0/host0 link carries three ordinary Linux traffic classes:
 
-1. forwarded payload from the host/LAN toward VPN bindings;
+1. forwarded payload from the host/LAN toward bound Device interfaces;
 2. locally generated VPN transport from ROU toward remote VPN peers;
 3. transport traffic delivered to ROU-managed published TCP/UDP endpoints.
 
@@ -51,7 +51,7 @@ Conceptually:
                         ROU NETWORK NAMESPACE
                           /       |       \
                          /        |        \
-               local transport  profiles   VPN bindings
+               local transport  profiles   Device interfaces
                   endpoints      routing    wg0/vpns0/...
 
 ## 3. Payload path
@@ -65,9 +65,9 @@ Inside ROU:
         -> forwarded packet
         -> profile selection
         -> profile routing table
-        -> admitted VPN binding
+        -> selected bound Device interface
 
-Return payload from a VPN binding follows ROU routing back through host0/rouvpn0 and then ordinary host routing.
+Return payload from a bound Device interface follows ROU routing back through host0/rouvpn0 and then ordinary host routing.
 
 ROU does not decide which host/LAN sources are allowed to use it. That is a host-side policy concern.
 
@@ -169,24 +169,31 @@ The same principle applies to ocserv/OpenConnect and future TCP/UDP based transp
 
 ROU understands TCP/UDP publication, not the application protocol carried inside it.
 
-## 8. Relationship to bindings
+## 8. Devices, Profiles and binding to ROU
 
-Transport publication is attached to the binding model because it exposes transport associated with that VPN path.
+The production model separates Device description from network policy.
 
-Conceptually:
+A **Device** describes an external networking/VPN device: how its runtime interfaces are
+recognized, how many ROU is prepared to bind, which transport endpoints are published,
+and Device-side traffic constraints.
 
-    BindingSpec:
-        interface
-        network
-        capacity
-        publish[]
-        launch_command
+A **Profile** describes a network need:
 
-Publication and binding admission are separate concerns.
+    Profile:
+        enabled
+        direction
+        destinations[]
+        device_order[]
 
-A VPN process may be running and its transport may be published while the resulting tunnel interface is not yet admitted for payload routing.
+A Device may be shared by multiple Profiles. Profile configuration contains no runtime
+interface names, tunnel addresses or metrics.
 
-Exact allocation semantics for PREFIX BindingSpecs with multiple simultaneously materialized concrete bindings are intentionally deferred until the publication relay model is validated.
+A Device is bound to ROU only when it is enabled and referenced by at least one enabled
+Profile. DeviceEngine discovers and maintains the resulting Device-to-ROU bindings.
+TrafficEngine consumes only normalized bound-interface state and materializes Profile
+routing.
+
+Publication belongs to Device binding, not to Profile routing.
 
 ## 9. BOU
 
@@ -211,8 +218,13 @@ ROU owns:
 - its network namespace;
 - rouvpn0/host0;
 - internal routing/firewall/NAT;
-- managed VPN processes;
-- published TCP/UDP sockets and their relay state.
+- Device binding/discovery state;
+- published TCP/UDP sockets and relay state.
+
+VPN transport processes and tunnel interfaces reside inside the ROU namespace. In the
+first production model their lifecycle may still be managed externally. A future
+DeviceManager may start, stop, health-check and reconfigure Devices without changing the
+DeviceEngine/TrafficEngine ownership boundary.
 
 ROU does not own:
 
@@ -226,22 +238,24 @@ This keeps ROU self-contained without turning it into the host firewall.
 
 ## 11. Implementation status
 
-The original publication proof obligation is closed:
+Transport publication is proven by EXP-010 and EXP-011.
 
-- EXP-010 proved the generic host-socket -> relay -> private-netns listener topology;
-- EXP-011 proved the same boundary with real ocserv/OpenConnect TCP/TLS/CSTP and UDP/DTLS.
-
-The first executable ROU prototype now lives under:
+ROU v0 under:
 
     design/NG1/code/python/rou_v0/
 
-ROU v0 intentionally hard-codes one ocserv-backed OUTBOUND profile. It is used to prove
-the complete appliance lifecycle and integrity model before a generic configuration layer
-is introduced.
+then completed EXP-012 with `OVERALL=PASS`, proving the hard-coded lifecycle/integrity
+boundary against real ocserv/OpenConnect clients.
 
-The v0 UDP relay already advances beyond EXP-011 by maintaining an independent internal
-UDP socket/association for each external peer, allowing simultaneous DTLS clients.
+The next-generation production model is now defined around:
 
-The next proof obligation is EXP-012: a live end-to-end run of the v0 controller including
-binding disappearance/reappearance, zero-path fail-closed behavior, owned-state drift
-repair under the forwarding barrier and non-repairable namespace-infrastructure loss.
+- Device / Profile separation;
+- DeviceEngine / TrafficEngine / PlannerEngine;
+- ActiveConfig and fresh EnvironmentSnapshot observation;
+- DeviceBindingState and TrafficRuntimeState with independent commit boundaries;
+- strict destinations and ordered Profile device references;
+- Device interface_quota and Profile-local stable metric assignments;
+- normalized availability with an unavailable fallback tier.
+
+Human-facing configuration-file syntax is the next design step. Direct-device multipath
+for the common unavailable fallback metric remains a dedicated live-test requirement.
