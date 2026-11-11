@@ -163,7 +163,7 @@ s=json.load(open('/run/vpn-gateway-rou-v0/state.json'))
 print(min(s['admitted'], key=lambda x:x['metric'])['ifname'])
 PY
 )"
-ip -n "$NS" route del "$TARGET/32" dev "$pref_if" proto 202 metric 10
+ip -n "$NS" route del table 100 "$TARGET/32" dev "$pref_if" proto 202 metric 10
 route_repaired() { ip -n "$NS" route show table 100 | grep -q "^$TARGET dev $pref_if .*proto 202 .*metric 10"; }
 wait_until 8 route_repaired || fail "deleted owned route was not repaired"
 sleep 0.1
