@@ -12,7 +12,7 @@ from rou.device_engine import (
     InterfaceIdentity,
     reconcile_devices,
 )
-from rou.domain import ActiveConfig, Device, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
+from rou.domain import ActiveConfig, Device, NatMode, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
 from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule
 from rou.firewall_state import compile_filter_state
 from rou.kernel_allocation import compile_kernel_allocation
@@ -55,6 +55,7 @@ def config():
                         2,
                     ),
                 ),
+                nat=NatMode.NONE,
             )
         },
         {
