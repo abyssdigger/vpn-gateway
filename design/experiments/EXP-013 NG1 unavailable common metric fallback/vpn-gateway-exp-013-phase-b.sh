@@ -114,7 +114,18 @@ snapshot() {
 }
 
 drop_count() {
-    ns iptables-legacy -L FORWARD 1 -v -n -x | awk 'NR==3 {print $1}'
+    ns iptables-legacy -L FORWARD -v -n -x --line-numbers |
+        awk -v in_if="$ROU_IF" -v out_if="$dead_if" -v dst="$TARGET" '
+            $4 == "DROP" && $7 == in_if && $8 == out_if && $10 == dst {
+                print $2
+                found=1
+                exit
+            }
+            END {
+                if (!found)
+                    print "RULE_NOT_FOUND"
+            }
+        '
 }
 
 install_shadow() {
@@ -203,7 +214,7 @@ drop_added=1
 
 ping_ok && fail "B4 selected blocked member $dead_if was transparently bypassed"
 c1="$(drop_count)"
-[[ "$c1" =~ ^[0-9]+$ && "$c1" -gt 0 ]] || fail "B4 DROP counter stayed zero"
+[[ "$c1" =~ ^[0-9]+$ && "$c1" -gt 0 ]] || fail "B4 DROP counter invalid or stayed zero: $c1"
 say "PASS B4a: fixed flow hits blocked fallback member $dead_if and is not retried"
 
 ns ip route add table "$TABLE" "$TARGET_CIDR" dev "$healthy_if" proto "$PROTO" metric 1
@@ -214,7 +225,7 @@ ns ip route del table "$TABLE" "$TARGET_CIDR" dev "$healthy_if" proto "$PROTO" m
 [[ "$(lookup_dev)" == "$dead_if" ]] || fail "B4 fallback hash changed for fixed flow"
 ping_ok && fail "B4 fixed flow succeeded after returning to blocked common fallback"
 c2="$(drop_count)"
-[[ "$c2" =~ ^[0-9]+$ && "$c2" -gt "$c1" ]] || fail "B4 DROP counter did not increase"
+[[ "$c2" =~ ^[0-9]+$ && "$c2" -gt "$c1" ]] || fail "B4 DROP counter did not increase: before=$c1 after=$c2"
 
 ns iptables-legacy -D FORWARD -i "$ROU_IF" -o "$dead_if" -d "$TARGET_CIDR" -j DROP
 drop_added=0

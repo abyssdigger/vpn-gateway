@@ -107,6 +107,16 @@ Harness: `vpn-gateway-exp-013-phase-b.sh`.
 Phase B выполняется на той же dedicated Debian 13 gateway с двумя реальными OpenConnect
 interfaces (`vpnsXX`).
 
+Обязательные предусловия стенда:
+
+- оба OpenConnect-клиента `pri` и `sec` запущены и могут дойти до test gateway;
+- test target `172.21.201.19` включен;
+- target отвечает на ICMP через оба VPN path;
+- любой внешний/межсетевой firewall между OpenConnect-клиентами и target разрешает
+  experiment ICMP traffic. Harness использует `ping` как payload oracle, поэтому
+  недоступный target или внешний DROP делает B1 и последующие payload checks
+  неинформативными.
+
 Для transport/appliance scaffolding используется уже live-verified ROU v0. После появления
 двух DTLS bindings замораживается **только controller process** через SIGSTOP; ocserv и
 publication relay продолжают работать. Это исключает v0 drift repair из измерений.
@@ -145,16 +155,16 @@ fail-closed transient state; reconcile обязан собрать fallback за
 Два direct-dev routes:
 
 ```text
-path A metric 1
-path B metric 2
+path A metric 10
+path B metric 20
 ```
 
 PASS: lookup выбирает A и test payload проходит.
 
 ### B2 — preferred path demoted
 
-Удалить normal route A и добавить A в fallback tier на `UNAVAILABLE_METRIC`, оставив B
-normal.
+Удалить normal route A, оставив A членом уже существующего persistent shadow fallback на
+`UNAVAILABLE_METRIC`, а B — normal.
 
 PASS: lookup выбирает B, payload продолжает проходить, B route/metric не меняется.
 
