@@ -144,9 +144,13 @@ class Device:
     name: str
     enabled: bool
     expected_interfaces: tuple[ExpectedInterface, ...] = ()
-    nat: NatMode = NatMode.NONE
+    nat: NatMode | None = None
     publications: tuple[Publication, ...] = ()
     traffic_envelope: TrafficEnvelope | None = None
+
+    def __post_init__(self) -> None:
+        if self.enabled and self.nat is None:
+            raise ValueError("enabled Device requires explicit NatMode")
 
     @property
     def interface_quota(self) -> int:
