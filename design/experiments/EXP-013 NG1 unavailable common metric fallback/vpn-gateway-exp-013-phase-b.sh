@@ -147,7 +147,13 @@ rou_ready() {
     [[ -S "$OCCTL" ]]
 }
 wait_for 15 rou_ready || fail "ROU did not become ready"
-wait_for 40 both_clients || fail "pri/sec did not reach DTLS"
+if ! wait_for 120 both_clients; then
+    occtl -s "$OCCTL" show users >"$OUT/users-failed.txt" 2>&1 || true
+    ss -H -ltn 'sport = :44443' >"$OUT/listeners-tcp-failed.txt" 2>&1 || true
+    ss -H -lun 'sport = :44443' >"$OUT/listeners-udp-failed.txt" 2>&1 || true
+    tail -n 200 "$ROU_LOG" >"$OUT/rou-v0-tail-failed.txt" 2>&1 || true
+    fail "pri/sec did not reach DTLS within 120s; inspect users-failed.txt and rou-v0-tail-failed.txt"
+fi
 wait_for 10 two_bindings || fail "two vpnsXX bindings not admitted"
 
 cp "$STATE" "$OUT/state-before-freeze.json"
