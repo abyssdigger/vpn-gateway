@@ -1,8 +1,8 @@
 # EXP-013 — NG1 unavailable-path common-metric fallback
 
-Status: **IN PROGRESS — Phase A attempt 1 exposed a harness false negative; clean rerun required**
+Status: **IN PROGRESS — Phase A PASS; A3 artifact interpretation and Phase B remain**
 
-Architecture baseline: **NG1 Draft 2 after production-model review cycle**
+Architecture baseline: **NG1 Draft 3**
 
 ## Цель
 
@@ -21,6 +21,11 @@ normal metric < UNAVAILABLE_METRIC < BLACKHOLE_METRIC
 harness ошибочно ожидал текст `blackhole` от обычного `ip route get`. Для blackhole
 локальный lookup возвращает ошибку; assertion исправлен через `fibmatch` + table
 inventory. Подробности: `EXP-013-phase-A-attempt-1.md`.
+
+Исправленный rerun завершился `PHASE_A=PASS`; результат сохранён в
+`EXP-013-phase-A-result.md`. Перед финализацией Phase B требуется разобрать A3 artifacts,
+поскольку A3 намеренно фиксирует фактическое kernel behavior после удаления одного
+multipath nexthop.
 
 ## Почему нужен отдельный live gate
 
