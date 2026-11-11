@@ -161,11 +161,10 @@ def run_runtime_loop(
             reconciliations += 1
             committed = result.state
             immediate = result.needs_immediate_reconcile
-
+    finally:
         _close_forwarding_best_effort(namespace, host_backend)
 
-    finally:
-        return RuntimeLoopResult(
+    return RuntimeLoopResult(
         reconciliations=reconciliations,
         planner_failures=planner_failures,
         event_wakeups=event_wakeups,
