@@ -1,6 +1,6 @@
 # EXP-012 — NG1 ROU v0 lifecycle and integrity live smoke
 
-Status: **PREPARED — live run pending**
+Status: **COMPLETE — PASS**
 
 ## Objective
 
@@ -145,6 +145,13 @@ All H1-H10 must pass and the harness must print:
 A failure is evidence for the next v0 correction; it must not be papered over by weakening
 the hypothesis.
 
+## Live result
+
+The dedicated Debian 13 live run on 2026-11-11 completed all H1-H10 successfully and
+printed `OVERALL=PASS`.
+
+Result: [EXP-012-result-20261111.md](EXP-012-result-20261111.md)
+
 ## Rootless evidence before live run
 
 Before EXP-012 registration the implementation passed:
@@ -155,5 +162,7 @@ Before EXP-012 registration the implementation passed:
 - `bash -n` for the live harness.
 
 The available sandbox did not permit `ip netns`
-(`mount --make-shared /run/netns: Operation not permitted`), therefore namespace/kernel
-behavior remains intentionally unclaimed until this live experiment.
+(`mount --make-shared /run/netns: Operation not permitted`). The dedicated Debian 13 live
+run subsequently closed that evidence gap: namespace/kernel lifecycle, two-client DTLS,
+payload failover, zero-path fail-closed behavior, drift repair barriers and structural
+teardown all passed.
