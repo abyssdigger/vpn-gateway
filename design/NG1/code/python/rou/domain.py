@@ -105,6 +105,16 @@ class TrafficEnvelopeRule:
             raise ValueError(
                 "traffic-envelope ports require tcp or udp protocol"
             )
+        for label, ranges in (
+            ("source_ports", self.source_ports),
+            ("destination_ports", self.destination_ports),
+        ):
+            for left_index, left in enumerate(ranges):
+                for right in ranges[left_index + 1:]:
+                    if left.overlaps(right):
+                        raise ValueError(
+                            f"traffic-envelope {label} contains overlapping ranges"
+                        )
 
 
 @dataclass(frozen=True)
