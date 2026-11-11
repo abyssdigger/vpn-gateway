@@ -1,6 +1,6 @@
 # VPN-GATE NG1 — Architecture Draft 3
 
-Status: **Draft 3 — routing direction, Device firewall ownership and production deployment semantics clarified; EXP-013 remains the unavailable-path implementation gate.**
+Status: **Draft 3 — routing direction, Device firewall ownership and production deployment semantics clarified; EXP-013 passed and unavailable-path materialization is approved.**
 
 Companion documents:
 
@@ -832,13 +832,32 @@ The agreed model reserves one common:
 
     UNAVAILABLE_METRIC
 
-for the fallback tier. Multiple unavailable paths for one destination are expected to be
-materialized as one equal-cost direct-device multipath route at that metric.
+for the fallback tier.
 
-The architectural semantics are accepted, but the exact Linux FIB mechanism remains
-**pending live verification in EXP-013**. EXP-013 must verify direct-dev multipath,
-interface disappearance/return, /0 competition with terminal blackhole and real payload
-across actual VPN interfaces before the unavailable-path projector may be implemented.
+**EXP-013 completed with Phase A PASS and Phase B PASS.** The production materialization
+model is therefore fixed as a persistent shadow fallback:
+
+- every bound interface used by a Profile is continuously represented in the Profile's
+  fallback route at UNAVAILABLE_METRIC;
+- UNKNOWN and AVAILABLE paths additionally have their stable normal route;
+- transition to UNAVAILABLE removes only that path's normal route;
+- transition from UNAVAILABLE back to UNKNOWN/AVAILABLE restores its normal route at the
+  same stable normal metric;
+- one fallback member is represented as a direct-device route;
+- two or more fallback members are represented as one equal-cost direct-device multipath
+  route at UNAVAILABLE_METRIC;
+- the terminal blackhole remains below the fallback tier, including for 0.0.0.0/0.
+
+The equal-cost fallback is **ECMP/hash selection, not sequential failover**. EXP-013 B4
+confirmed with real OpenConnect payload that if the selected fallback member is
+functionally dead while its interface remains present, Linux does not retry the same flow
+through another healthy equal-cost member. This is intentional last-resort semantics and
+must not be described as ordered failover.
+
+EXP-013 A3 also confirmed that disappearance of one member interface causes Linux to remove
+the whole direct-device multipath route rather than shrink it to surviving members.
+TrafficEngine therefore rebuilds fallback membership from a fresh binding snapshot after
+such a change; the transient absence is fail-closed.
 
 UNKNOWN availability does not terminate a bound-interface lifetime and does not demote a
 path. Future Device-specific detectors may move an interface between UNKNOWN, AVAILABLE
@@ -1266,8 +1285,8 @@ Production evidence is layered:
 1. rootless unit tests for config/domain/selector/quota/rule/metric/transition projection;
 2. privileged disposable-netns integration tests for RPDB, routes, sysctls, firewall/NAT
    and namespace lifecycle without a real VPN;
-3. target-kernel experiments for uncertain Linux behavior — currently EXP-013 gates
-   unavailable common-metric materialization;
+3. target-kernel experiments for uncertain Linux behavior — EXP-013 has closed the
+   unavailable common-metric materialization gate;
 4. real-VPN live gates for protocol/end-to-end behavior that dummy interfaces cannot prove.
 
 Rootless CI runs on every PR/push. Kernel/live gates remain explicit experiment procedures
@@ -1352,7 +1371,7 @@ ROU does not seize or rewrite unrelated host VPN routes.
 45. Metric assignment belongs to (Profile, ifname, ifindex) and remains stable for the continuous bound lifetime within one ActiveConfig generation.
 46. Availability changes do not change the normal metric slot.
 47. Removed metric assignments are not reusable before verified commit of removal.
-48. UNAVAILABLE paths share one final fallback metric; direct-device multipath materialization is gated by EXP-013 and must not be implemented before that gate closes.
+48. UNAVAILABLE paths share one final fallback metric; EXP-013 proved persistent shadow direct-device fallback materialization, with one member as a direct route and multiple members as equal-cost ECMP multipath.
 49. DeviceEngine owns Device binding/discovery/quota/publication state; TrafficEngine owns Profile routing, generated direction guard, Device envelope materialization, firewall/NAT and fail-closed transit state.
 50. PlannerEngine coordinates desired state and transitions without merging Engine ownership domains.
 51. Runtime decisions use fresh EnvironmentSnapshot observations; events are wakeups only.

@@ -22,7 +22,10 @@ Current implemented slice:
 - Profile destination dispatch projection in normative `prefixlen DESC, network ASC` order;
 - kernel-independent per-Profile direct-route intent for UNKNOWN/AVAILABLE normal-tier paths;
 - terminal Profile blackhole intent even when no usable path exists;
-- explicit production gate that rejects UNAVAILABLE route materialization until EXP-013 closes.
+- persistent shadow fallback route intent at `UNAVAILABLE_METRIC` for every bound Profile path;
+- UNKNOWN/AVAILABLE keep normal routes while UNAVAILABLE removes only the normal route;
+- one-member direct fallback and multi-member equal-cost fallback are represented explicitly;
+- terminal Profile blackhole remains below the fallback tier.
 
 The current runtime code is deliberately a pure projection layer. It does not mutate kernel
 state and therefore cannot accidentally bypass the architecture's
@@ -37,7 +40,7 @@ Intentionally not implemented yet:
 - numeric routing-table/RPDB allocation in production code;
 - PlannerEngine transition execution;
 - routing/RPDB/firewall/NAT kernel apply/verify;
-- unavailable direct-dev multipath materialization remains blocked on EXP-013.
+- kernel materialization of the now-approved shadow fallback route intent.
 
 Run rootless tests:
 
