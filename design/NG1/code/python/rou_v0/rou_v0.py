@@ -467,7 +467,7 @@ def start_processes() -> tuple[subprocess.Popen[str], subprocess.Popen[str], obj
     stamp = time.strftime("%Y%m%d-%H%M%S")
     oc_log = (LOG_DIR / f"ocserv-{stamp}.log").open("a", buffering=1)
     relay_log = (LOG_DIR / f"relay-{stamp}.log").open("a", buffering=1)
-    oc = subprocess.Popen(["ip", "netns", "exec", NS, "ocserv", "-f", "-e", "-c", str(DERIVED_CONFIG)], stdout=oc_log, stderr=subprocess.STDOUT, text=True)
+    oc = subprocess.Popen(["ip", "netns", "exec", NS, "ocserv", "-f", "-c", str(DERIVED_CONFIG)], stdout=oc_log, stderr=subprocess.STDOUT, text=True)
     time.sleep(0.8)
     if oc.poll() is not None:
         raise RouError(f"ocserv exited during startup rc={oc.returncode}; see {oc_log.name}")
