@@ -5,7 +5,10 @@ from ipaddress import IPv4Interface, IPv4Network
 import json
 import re
 
-from .command_backend import CommandBackend, CommandExecutionError, NamespaceBackend
+from .command_backend import CommandBackend, NamespaceBackend
+from .device_engine import DeviceBindingSnapshot
+from .environment import collect_environment_snapshot
+from .namespace_prereq import verify_namespace_prerequisites
 
 
 _IFNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
@@ -264,12 +267,20 @@ def verify_instance(
         if not default_ok:
             errors.append("namespace underlay default route is missing")
 
-    forwarding = ns.run(
-        ("sysctl", "-n", "net.ipv4.ip_forward"),
-        check=False,
-    )
-    if forwarding.returncode != 0 or forwarding.stdout.strip() != "0":
-        errors.append("namespace IPv4 forwarding is not fail-closed")
+    try:
+        snapshot = collect_environment_snapshot(
+            config.namespace,
+            lambda argv: host.run(argv).stdout,
+        )
+    except Exception as exc:
+        errors.append(f"cannot collect namespace prerequisite snapshot: {exc}")
+    else:
+        prereq = verify_namespace_prerequisites(
+            snapshot,
+            DeviceBindingSnapshot((), ()),
+            forwarding=False,
+        )
+        errors.extend(prereq.errors)
 
     return InstanceVerification(not errors, tuple(errors))
 
