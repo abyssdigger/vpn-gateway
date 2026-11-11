@@ -184,7 +184,8 @@ Rules:
 - order is semantically significant;
 - duplicate Device IDs inside one Profile are rejected;
 - unknown Device IDs are rejected;
-- known `enabled = false` Devices are valid references and are skipped operationally.
+- known `enabled = false` Devices are valid references and are skipped operationally;
+- disabled Device references consume no current metric range; enabling one later is a new configuration transition.
 
 Device priority from this list is followed by the order of that Device's
 `expected_interfaces`.
