@@ -53,6 +53,28 @@ class ProjectionTests(unittest.TestCase):
         self.assertEqual(p.overflow, ())
 
 
+class BootstrapTests(unittest.TestCase):
+    def test_absent_profile_table_flush_is_benign_only_for_known_kernel_error(self):
+        calls = []
+        original = r.run
+
+        class P:
+            def __init__(self, rc, stderr):
+                self.returncode = rc
+                self.stdout = ""
+                self.stderr = stderr
+
+        try:
+            r.run = lambda *a, **kw: P(2, "Error: ipv4: FIB table does not exist.\nFlush terminated\n")
+            r.flush_profile_table()
+
+            r.run = lambda *a, **kw: P(2, "RTNETLINK answers: Operation not permitted\n")
+            with self.assertRaises(r.RouError):
+                r.flush_profile_table()
+        finally:
+            r.run = original
+
+
 class DesiredStateTests(unittest.TestCase):
     def test_zero_binding_routes_are_fail_closed(self):
         cmds = r.desired_routes(())
