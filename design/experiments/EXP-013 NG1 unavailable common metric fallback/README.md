@@ -1,6 +1,6 @@
 # EXP-013 — NG1 unavailable-path common-metric fallback
 
-Status: **PLANNED — implementation gate for unavailable-path routing**
+Status: **IN PROGRESS — Phase A attempt 1 exposed a harness false negative; clean rerun required**
 
 Architecture baseline: **NG1 Draft 2 after production-model review cycle**
 
@@ -16,6 +16,11 @@ normal metric < UNAVAILABLE_METRIC < BLACKHOLE_METRIC
 `UNAVAILABLE_METRIC`.
 
 Эксперимент обязателен до реализации unavailable-path projector в TrafficEngine.
+
+Первый live-прогон Phase A подтвердил A1 и дошёл до terminal части A2, где старый
+harness ошибочно ожидал текст `blackhole` от обычного `ip route get`. Для blackhole
+локальный lookup возвращает ошибку; assertion исправлен через `fibmatch` + table
+inventory. Подробности: `EXP-013-phase-A-attempt-1.md`.
 
 ## Почему нужен отдельный live gate
 
