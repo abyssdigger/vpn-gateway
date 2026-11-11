@@ -94,7 +94,7 @@ direction = "outbound"
 destinations = ["10.0.0.0/8", "192.168.100.1/32"]
 device_order = ["oc"]
 ''')
-        p = cfg.Profiles['corp']
+        p = cfg.profiles['corp']
         self.assertEqual(p.direction, Direction.OUTBOUND)
         self.assertEqual(p.destinations, (
             ipaddress.IPv4Network('10.0.0.0/8'),
