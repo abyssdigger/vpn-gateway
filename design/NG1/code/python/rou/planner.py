@@ -74,6 +74,7 @@ class PlannerResult:
     state: PlannerRuntimeState
     projection: PlannerProjection
     changed_kernel: bool
+    needs_immediate_reconcile: bool
 
 
 SnapshotCollector = Callable[[str, CommandBackend], EnvironmentSnapshot]
@@ -214,6 +215,7 @@ def reconcile_once(
                 state=_commit(projection),
                 projection=projection,
                 changed_kernel=False,
+                needs_immediate_reconcile=bool(projection.metrics.waiting_for_slot),
             )
 
         # Crash/restart recovery: complete state may already be correct with forwarding
@@ -255,6 +257,7 @@ def reconcile_once(
                 state=_commit(projection),
                 projection=projection,
                 changed_kernel=True,
+                needs_immediate_reconcile=bool(projection.metrics.waiting_for_slot),
             )
 
         # From this point on, all structural repair runs behind a closed barrier.
@@ -339,6 +342,9 @@ def reconcile_once(
             state=_commit(barrier_projection),
             projection=barrier_projection,
             changed_kernel=True,
+            needs_immediate_reconcile=bool(
+                barrier_projection.metrics.waiting_for_slot
+            ),
         )
 
     except PlannerError:
