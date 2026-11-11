@@ -350,20 +350,19 @@ def collect_environment_snapshot(
             _ns_command(namespace, ("ip", "-j", "-4", "route", "show", "table", "all"))
         )
         rule_text = run(_ns_command(namespace, ("ip", "-j", "-4", "rule", "show")))
+        global_sysctl_keys = (
+            "net.ipv4.ip_forward",
+            "net.ipv4.conf.all.rp_filter",
+            "net.ipv4.conf.default.rp_filter",
+            "net.ipv6.conf.all.forwarding",
+            "net.ipv6.conf.default.forwarding",
+        )
         sysctls: list[tuple[str, str]] = [
             (
-                "net.ipv4.ip_forward",
-                run(_ns_command(namespace, ("sysctl", "-n", "net.ipv4.ip_forward"))).strip(),
-            ),
-            (
-                "net.ipv6.conf.all.forwarding",
-                run(
-                    _ns_command(
-                        namespace,
-                        ("sysctl", "-n", "net.ipv6.conf.all.forwarding"),
-                    )
-                ).strip(),
-            ),
+                key,
+                run(_ns_command(namespace, ("sysctl", "-n", key))).strip(),
+            )
+            for key in global_sysctl_keys
         ]
         for interface in link_snapshot.interfaces:
             ifname = interface.identity.ifname
