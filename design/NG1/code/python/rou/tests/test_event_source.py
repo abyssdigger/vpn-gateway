@@ -45,8 +45,12 @@ class FakeProcess:
         os.write(self.write_fd, payload)
 
     def exit(self, returncode=1, stderr=b"failed"):
+        if stderr:
+            try:
+                os.write(self.write_fd, stderr)
+            except OSError:
+                pass
         self.returncode = returncode
-        self.stderr = io.BytesIO(stderr)
         try:
             os.close(self.write_fd)
         except OSError:
