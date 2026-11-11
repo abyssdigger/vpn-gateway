@@ -85,6 +85,11 @@ class IpMonitorWakeupSource:
         if process is None:
             return EventSourceError("ip monitor is not running")
         returncode = process.poll()
+        if not detail_bytes and process.stdout is not None:
+            try:
+                detail_bytes = os.read(process.stdout.fileno(), 65536)
+            except (BlockingIOError, OSError):
+                detail_bytes = b""
         detail = detail_bytes.decode("utf-8", errors="replace").strip()
         if detail:
             return EventSourceError(
