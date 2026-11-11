@@ -6,6 +6,7 @@ set -euo pipefail
 
 NS="vg-exp013"
 TABLE=313
+RULE_PRIORITY=313
 TARGET="203.0.113.13/32"
 LOOKUP="203.0.113.13"
 IF_A="path-a"
@@ -36,7 +37,7 @@ snapshot() {
     run_ns ip -j -4 route show table "$TABLE" > "$OUT/$snap-routes.json"
     run_ns ip -4 route show table "$TABLE" > "$OUT/$snap-routes.txt"
     run_ns ip -j link show > "$OUT/$snap-links.json"
-    run_ns ip -4 route get "$LOOKUP" table "$TABLE" > "$OUT/$snap-lookup.txt" 2>&1 || true
+    run_ns ip -4 route get "$LOOKUP" > "$OUT/$snap-lookup.txt" 2>&1 || true
 }
 
 [ "$(id -u)" -eq 0 ] || die "must run as root"
@@ -56,6 +57,8 @@ run_ns ip link add "$IF_A" type dummy
 run_ns ip link add "$IF_B" type dummy
 run_ns ip link set "$IF_A" up
 run_ns ip link set "$IF_B" up
+run_ns ip rule add priority "$RULE_PRIORITY" to "$TARGET" lookup "$TABLE"
+run_ns ip -4 rule show > "$OUT/rules.txt"
 
 # A1: direct-dev multipath at one metric.
 run_ns ip route add table "$TABLE" "$TARGET" proto 202 metric "$UNAVAILABLE_METRIC"     nexthop dev "$IF_A" weight 1     nexthop dev "$IF_B" weight 1
