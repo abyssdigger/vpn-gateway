@@ -146,7 +146,9 @@ def run_runtime_loop(
                 )
             except PlannerRetryRequired as exc:
                 planner_failures += 1
-                LOG.info("planner requested immediate retry: %s", exc)
+                LOG.info("planner requested fresh retry: %s", exc)
+                if loop_config.retry_delay_seconds:
+                    sleep(loop_config.retry_delay_seconds)
                 immediate = True
                 continue
             except PlannerError as exc:
