@@ -165,6 +165,7 @@ class _TcpWorker(_Worker):
     ):
         super().__init__(endpoint, external, stop)
         self._sessions: set[socket.socket] = set()
+        self._session_threads: set[threading.Thread] = set()
         self._sessions_lock = threading.Lock()
 
     def _track(self, sock: socket.socket) -> None:
@@ -174,6 +175,18 @@ class _TcpWorker(_Worker):
     def _untrack(self, sock: socket.socket) -> None:
         with self._sessions_lock:
             self._sessions.discard(sock)
+
+    def _track_thread(self, thread: threading.Thread) -> None:
+        with self._sessions_lock:
+            self._session_threads.add(thread)
+
+    def _prune_threads(self) -> None:
+        with self._sessions_lock:
+            self._session_threads = {
+                thread
+                for thread in self._session_threads
+                if thread.is_alive()
+            }
 
     @staticmethod
     def _pump(src: socket.socket, dst: socket.socket) -> None:
@@ -245,11 +258,14 @@ class _TcpWorker(_Worker):
                 if self.stop.is_set():
                     return
                 raise
-            threading.Thread(
+            thread = threading.Thread(
                 target=self._session,
                 args=(client,),
                 daemon=True,
-            ).start()
+            )
+            self._track_thread(thread)
+            thread.start()
+            self._prune_threads()
 
     def close(self) -> None:
         super().close()
@@ -264,6 +280,22 @@ class _TcpWorker(_Worker):
                 sock.close()
             except OSError:
                 pass
+
+        deadline = time.monotonic() + 3.0
+        while True:
+            with self._sessions_lock:
+                threads = tuple(self._session_threads)
+            alive = [thread for thread in threads if thread.is_alive()]
+            if not alive:
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise PublicationError(
+                    "TCP publication session threads did not stop during teardown"
+                )
+            for thread in alive:
+                thread.join(min(0.2, remaining))
+        self._prune_threads()
 
 
 @dataclass
@@ -506,13 +538,34 @@ class PublicationSupervisor:
     def close(self) -> None:
         if not self._started:
             return
+
         self._stop.set()
+        errors: list[str] = []
+
         for worker in self._workers:
-            worker.close()
+            try:
+                worker.close()
+            except Exception as exc:
+                errors.append(
+                    f"close failed for {worker.endpoint.protocol.value}/"
+                    f"{worker.endpoint.external_port}: {exc}"
+                )
+
         for worker in self._workers:
-            worker.join(3.0)
+            if worker.thread.ident is not None:
+                worker.join(3.0)
+            if worker.thread.is_alive():
+                errors.append(
+                    "worker thread did not stop: "
+                    f"{worker.endpoint.protocol.value}/"
+                    f"{worker.endpoint.external_port}"
+                )
+
         self._workers = []
         self._started = False
+
+        if errors:
+            raise PublicationError("; ".join(errors))
 
     def __enter__(self) -> "PublicationSupervisor":
         self.start()
