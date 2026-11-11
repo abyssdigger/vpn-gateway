@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.command_backend import NamespaceBackend, SubprocessBackend
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
-from rou.domain import ActiveConfig, Availability, Device, Direction, Profile
+from rou.domain import ActiveConfig, Availability, Device, NatMode, Direction, Profile
 from rou.firewall_kernel import apply_filter_state, verify_filter_state
 from rou.firewall_state import compile_filter_state
 
@@ -46,7 +46,7 @@ def main() -> int:
         run("ip", "-n", NS, "link", "set", "vpns00", "up")
 
         config = ActiveConfig(
-            devices={"oc": Device("oc", True)},
+            devices={"oc": Device("oc", True, nat=NatMode.NONE)},
             profiles={
                 "specific": Profile(
                     "specific",
