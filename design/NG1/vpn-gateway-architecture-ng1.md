@@ -1285,8 +1285,8 @@ Production evidence is layered:
 1. rootless unit tests for config/domain/selector/quota/rule/metric/transition projection;
 2. privileged disposable-netns integration tests for RPDB, routes, sysctls, firewall/NAT
    and namespace lifecycle without a real VPN;
-3. target-kernel experiments for uncertain Linux behavior — currently EXP-013 gates
-   unavailable common-metric materialization;
+3. target-kernel experiments for uncertain Linux behavior — EXP-013 has closed the
+   unavailable common-metric materialization gate;
 4. real-VPN live gates for protocol/end-to-end behavior that dummy interfaces cannot prove.
 
 Rootless CI runs on every PR/push. Kernel/live gates remain explicit experiment procedures
