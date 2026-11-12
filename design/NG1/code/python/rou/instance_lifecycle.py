@@ -9,9 +9,14 @@ from .command_backend import CommandBackend, NamespaceBackend
 from .device_engine import DeviceBindingSnapshot
 from .domain import ActiveConfig
 from .environment import collect_environment_snapshot
-from .firewall_kernel import apply_filter_state, observe_filter_state
-from .firewall_state import compile_filter_state
 from .namespace_prereq import apply_namespace_prerequisites, verify_namespace_prerequisites
+from .nft_policy import (
+    apply_nft_table,
+    compile_nft_filter_state,
+    compile_nft_nat_state,
+    delete_foreign_nft_tables,
+    observe_nft_ruleset_inventory,
+)
 
 
 _IFNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
@@ -273,23 +278,34 @@ def verify_instance(
             errors.append("namespace underlay default route is missing")
 
 
-    try:
-        filter_text = observe_filter_state(ns)
-    except Exception as exc:
-        errors.append(f"cannot observe namespace filter table: {exc}")
+    nft_filter = ns.run(
+        ("nft", "-j", "-n", "list", "table", "ip", "vpng_filter"),
+        check=False,
+    )
+    if nft_filter.returncode != 0:
+        errors.append("namespace nft filter table is missing or unobservable")
     else:
-        required_policies = {
-            ":INPUT DROP [0:0]",
-            ":FORWARD DROP [0:0]",
-            ":OUTPUT DROP [0:0]",
-        }
-        filter_lines = set(filter_text.splitlines())
-        missing_policies = sorted(required_policies - filter_lines)
-        if missing_policies:
-            errors.append(
-                "namespace filter default policies are not fail-closed: "
-                + ", ".join(missing_policies)
-            )
+        try:
+            nft_root = json.loads(nft_filter.stdout)
+        except json.JSONDecodeError as exc:
+            errors.append(f"invalid namespace nft filter JSON: {exc}")
+        else:
+            policies: dict[str, str] = {}
+            for item in nft_root.get("nftables", []):
+                chain = item.get("chain") if isinstance(item, dict) else None
+                if not isinstance(chain, dict):
+                    continue
+                if (
+                    chain.get("family") == "ip"
+                    and chain.get("table") == "vpng_filter"
+                    and chain.get("name") in {"input", "forward", "output"}
+                ):
+                    policies[str(chain["name"])] = str(chain.get("policy"))
+            for chain_name in ("input", "forward", "output"):
+                if policies.get(chain_name) != "drop":
+                    errors.append(
+                        f"namespace nft {chain_name} base-chain policy is not DROP"
+                    )
 
     try:
         snapshot = collect_environment_snapshot(
@@ -396,11 +412,16 @@ def create_instance(
         )
 
 
-        bootstrap_filter = compile_filter_state(
-            ActiveConfig({}, {}),
-            DeviceBindingSnapshot((), ()),
+        bootstrap_bindings = DeviceBindingSnapshot((), ())
+        bootstrap_config = ActiveConfig({}, {})
+        apply_nft_table(
+            compile_nft_nat_state(bootstrap_config, bootstrap_bindings),
+            ns,
         )
-        apply_filter_state(bootstrap_filter, ns)
+        apply_nft_table(
+            compile_nft_filter_state(bootstrap_config, bootstrap_bindings),
+            ns,
+        )
 
         verified = verify_instance(config, host)
         if not verified.ok:
@@ -459,11 +480,19 @@ def ensure_instance(
         DeviceBindingSnapshot((), ()),
         ns,
     )
-    bootstrap_filter = compile_filter_state(
-        ActiveConfig({}, {}),
-        DeviceBindingSnapshot((), ()),
+    inventory = observe_nft_ruleset_inventory(ns)
+    delete_foreign_nft_tables(inventory, ns)
+
+    bootstrap_bindings = DeviceBindingSnapshot((), ())
+    bootstrap_config = ActiveConfig({}, {})
+    apply_nft_table(
+        compile_nft_nat_state(bootstrap_config, bootstrap_bindings),
+        ns,
     )
-    apply_filter_state(bootstrap_filter, ns)
+    apply_nft_table(
+        compile_nft_filter_state(bootstrap_config, bootstrap_bindings),
+        ns,
+    )
 
     verified = verify_instance(config, host, forwarding=False)
     if not verified.ok:
