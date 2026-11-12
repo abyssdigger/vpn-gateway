@@ -107,9 +107,9 @@ class NatStateTests(unittest.TestCase):
         self.assertEqual(
             rules,
             [
-                "-A POSTROUTING -o vpns00 -d 10.20.0.0/16 "
+                "-A POSTROUTING -d 10.20.0.0/16 -o vpns00 "
                 "-m addrtype ! --dst-type LOCAL -j MASQUERADE",
-                "-A POSTROUTING -o vpns00 -d 10.0.0.0/8 "
+                "-A POSTROUTING -d 10.0.0.0/8 -o vpns00 "
                 "-m addrtype ! --dst-type LOCAL -j MASQUERADE",
             ],
         )
