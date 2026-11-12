@@ -88,7 +88,10 @@ def _advance_one(
         return previous
 
     if outcome is ProbeOutcome.SUCCESS:
-        success_streak = previous.success_streak + 1
+        success_streak = min(
+            previous.success_streak + 1,
+            policy.recovery_threshold,
+        )
         availability = previous.availability
         if success_streak >= policy.recovery_threshold:
             availability = Availability.AVAILABLE
@@ -98,7 +101,10 @@ def _advance_one(
             failure_streak=0,
         )
 
-    failure_streak = previous.failure_streak + 1
+    failure_streak = min(
+        previous.failure_streak + 1,
+        policy.failure_threshold,
+    )
     availability = previous.availability
     if failure_streak >= policy.failure_threshold:
         availability = Availability.UNAVAILABLE
@@ -121,8 +127,13 @@ def reconcile_availability(
     same-name/new-ifindex starts UNKNOWN. Missing evidence is equivalent to INDETERMINATE
     and never creates positive AVAILABLE/UNAVAILABLE evidence.
 
+    INDETERMINATE freezes the previous hysteresis state; it represents "no decisive path
+    evidence in this sample", not a failed/stalled detector. A future DeviceManager must
+    supervise detector freshness separately and must not feed an indefinitely silent
+    detector through this API as harmless INDETERMINATE evidence.
+
     This is pure normalized state logic. It does not choose how a Device is probed, how
-    often probes run, or what target is used.
+    often probes run, what target is used, or how detector-staleness is supervised.
     """
 
     observed = tuple(observed_interfaces)
