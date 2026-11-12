@@ -61,7 +61,21 @@ fi
 echo "PASS B: bound probe fails on broken B while unbound probe still succeeds via A"
 
 ip -n "$B" link set bR up
-ip netns exec "$R" ping -I rB -c 1 -W 1 198.18.21.1 >/dev/null
+RECOVERED=0
+i=0
+while [ "$i" -lt 5 ]; do
+    if ip netns exec "$R" ping -I rB -c 1 -W 1 198.18.21.1 >/dev/null 2>&1; then
+        RECOVERED=1
+        break
+    fi
+    i=$((i + 1))
+    sleep 1
+done
+if [ "$RECOVERED" -ne 1 ]; then
+    echo "FAIL: B-bound probe did not recover after peer link restore" >&2
+    exit 1
+fi
+echo "PASS C0: B-bound probe recovered after peer link restore"
 
 HOST_PING_GROUP_RANGE_BEFORE=$(sysctl -n net.ipv4.ping_group_range)
 NS_PING_GROUP_RANGE_BEFORE=$(ip netns exec "$R" sysctl -n net.ipv4.ping_group_range)
