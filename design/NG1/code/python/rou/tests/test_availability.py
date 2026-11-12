@@ -102,6 +102,38 @@ class AvailabilityTests(unittest.TestCase):
             Availability.UNAVAILABLE,
         )
 
+    def test_streaks_saturate_at_policy_thresholds(self):
+        available = AvailabilityTrackerState({
+            self.identity: InterfaceAvailabilityState(
+                availability=Availability.AVAILABLE,
+                success_streak=self.policy.recovery_threshold,
+            )
+        })
+        still_available = self.step(available, ProbeOutcome.SUCCESS)
+        self.assertEqual(
+            still_available.next_state.by_interface[
+                self.identity
+            ].success_streak,
+            self.policy.recovery_threshold,
+        )
+
+        unavailable = AvailabilityTrackerState({
+            self.identity: InterfaceAvailabilityState(
+                availability=Availability.UNAVAILABLE,
+                failure_streak=self.policy.failure_threshold,
+            )
+        })
+        still_unavailable = self.step(
+            unavailable,
+            ProbeOutcome.FAILURE,
+        )
+        self.assertEqual(
+            still_unavailable.next_state.by_interface[
+                self.identity
+            ].failure_streak,
+            self.policy.failure_threshold,
+        )
+
     def test_indeterminate_preserves_state_and_streaks(self):
         previous = AvailabilityTrackerState({
             self.identity: InterfaceAvailabilityState(
