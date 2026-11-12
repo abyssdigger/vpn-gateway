@@ -523,8 +523,10 @@ def reconcile_once(
                 len(lifecycle_plan.commands),
             )
             execute_kernel_mutation_plan(lifecycle_plan, ns)
-            apply_filter_state(projection.firewall, ns)
+            # Admission is installed last. A newly routable masqueraded path must never
+            # become FORWARD-acceptable before its NAT state exists.
             apply_nat_state(projection.nat, ns)
+            apply_filter_state(projection.firewall, ns)
 
             applied = collect_snapshot(namespace, host_backend)
             if applied.interfaces != initial.interfaces:
