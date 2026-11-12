@@ -18,6 +18,7 @@ from .instance_config import (
     validate_instance_id,
 )
 from .instance_lifecycle import verify_instance
+from .planner import AvailabilityProvider
 from .publication import PublicationSupervisor, compile_publication_endpoints
 from .runtime import RuntimeLoopConfig, RuntimeLoopResult, run_runtime_loop
 from .state_store import JsonRuntimeStateStore
@@ -143,11 +144,17 @@ def run_instance_runtime(
     host_backend: CommandBackend | None = None,
     runtime_paths: RuntimePaths | None = None,
     loop_config: RuntimeLoopConfig = RuntimeLoopConfig(),
+    availability_provider: AvailabilityProvider | None = None,
 ) -> RuntimeLoopResult:
     """Compose and run one complete production ROU runtime.
 
     The instance must already exist. This function never creates/adopts network namespace
     infrastructure; lifecycle remains the responsibility of `rou up/down`.
+
+    Availability policy is injected as a normalized provider. Schema-v1 production passes
+    None, so every bound interface remains UNKNOWN unless a future DeviceManager supplies
+    independently reviewed evidence. This composition point deliberately does not invent
+    probe targets, cadence, thresholds or user-facing configuration.
     """
 
     validate_instance_id(instance_id)
@@ -192,6 +199,7 @@ def run_instance_runtime(
                         store,
                         wakeups,
                         loop_config=loop_config,
+                        availability_provider=availability_provider,
                         should_stop=stop.should_stop,
                         health_check=supervisor.check_health,
                         local_publication_address=(
