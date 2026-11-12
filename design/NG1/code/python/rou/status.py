@@ -5,6 +5,7 @@ from ipaddress import IPv4Address
 
 from .command_backend import NamespaceBackend
 from .config import validate_active_config
+from .device_engine import reconcile_devices
 from .domain import ActiveConfig
 from .environment import EnvironmentSnapshot
 from .kernel_state import verify_kernel_desired_state
@@ -46,11 +47,15 @@ def inspect_runtime_status(
             f"backend is {backend.namespace!r}"
         )
 
+    devices = reconcile_devices(
+        config,
+        committed.devices,
+        snapshot.interfaces,
+    )
     projection = compile_planner_projection(
         config,
         committed,
-        snapshot,
-        None,
+        devices,
         local_publication_address,
     )
     errors: list[str] = []
