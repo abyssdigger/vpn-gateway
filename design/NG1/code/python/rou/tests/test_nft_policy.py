@@ -2,7 +2,6 @@ import ipaddress
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -25,6 +24,7 @@ from rou.domain import (
 )
 from rou.nft_policy import (
     _numeric_interface_refs_from_json,
+    NftObservedState,
     NftRulesetInventory,
     compile_nft_filter_state,
     compile_nft_nat_state,
@@ -167,17 +167,13 @@ class NftPolicyTests(unittest.TestCase):
             for kind, value in desired.numeric_interface_refs
         )
 
-        with (
-            patch(
-                "rou.nft_policy.observe_nft_table",
-                return_value=desired.canonical,
+        result = verify_nft_observation(
+            desired,
+            NftObservedState(
+                canonical=desired.canonical,
+                numeric_interface_refs=stale_refs,
             ),
-            patch(
-                "rou.nft_policy.observe_nft_numeric_interface_refs",
-                return_value=stale_refs,
-            ),
-        ):
-            result = verify_nft_table(desired, object())
+        )
 
         self.assertFalse(result.ok)
         self.assertIn("numeric-interface-refs", result.actual)
