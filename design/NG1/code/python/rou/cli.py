@@ -116,6 +116,33 @@ def cmd_check(
 
 
 
+
+def _disable_and_prove_inactive(
+    instance: InstanceFileConfig,
+    service: str,
+    backend: CommandBackend,
+) -> None:
+    _systemctl(backend, "disable", "--now", service, check=False)
+    active = _systemctl(
+        backend,
+        "is-active",
+        "--quiet",
+        service,
+        check=False,
+    )
+    if active.returncode == 0:
+        contain_instance(instance.instance, backend)
+        raise CliError(
+            f"refusing teardown while {service} remains active"
+        )
+    if active.returncode not in {3, 4}:
+        contain_instance(instance.instance, backend)
+        raise CliError(
+            f"cannot prove {service} inactive: systemctl is-active "
+            f"returned {active.returncode}"
+        )
+
+
 def _wait_up_verified(
     instance_id: str,
     instance_file: Path,
@@ -207,9 +234,18 @@ def cmd_up(
                 f"{service} did not become active after start"
             )
         _wait_up_verified(instance_id, instance_file, backend)
-    except Exception:
-        # Failed up must not leave a half-created appliance behind.
-        _systemctl(backend, "disable", "--now", service, check=False)
+    except Exception as original_error:
+        # Failed up may delete the appliance only after proving that the supervised
+        # runtime is no longer active. If service shutdown itself is uncertain, retain
+        # the namespace and surface both failures rather than tearing it out from under
+        # a possibly live supervisor.
+        try:
+            _disable_and_prove_inactive(instance, service, backend)
+        except Exception as rollback_error:
+            raise CliError(
+                f"rou up failed: {original_error}; "
+                f"rollback could not prove service inactive: {rollback_error}"
+            ) from original_error
         destroy_instance(instance.instance, backend)
         raise
 
@@ -230,33 +266,7 @@ def cmd_down(
     instance = load_instance_file_config(instance_file)
     service = _service_name(instance_id)
 
-    _systemctl(backend, "disable", "--now", service, check=False)
-    active = _systemctl(
-        backend,
-        "is-active",
-        "--quiet",
-        service,
-        check=False,
-    )
-    if active.returncode == 0:
-        # Never tear the namespace out from under a live host-side supervisor.
-        NamespaceBackend(instance.instance.namespace, backend).run(
-            ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
-            check=False,
-        )
-        raise CliError(
-            f"refusing teardown while {service} remains active"
-        )
-    if active.returncode not in {3, 4}:
-        NamespaceBackend(instance.instance.namespace, backend).run(
-            ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
-            check=False,
-        )
-        raise CliError(
-            f"cannot prove {service} inactive: systemctl is-active "
-            f"returned {active.returncode}"
-        )
-
+    _disable_and_prove_inactive(instance, service, backend)
     destroy_instance(instance.instance, backend)
     return {
         "ok": True,
