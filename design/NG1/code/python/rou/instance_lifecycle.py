@@ -11,7 +11,7 @@ from .domain import ActiveConfig
 from .environment import collect_environment_snapshot
 from .firewall_kernel import apply_filter_state, observe_filter_state
 from .firewall_state import compile_filter_state
-from .namespace_prereq import verify_namespace_prerequisites
+from .namespace_prereq import apply_namespace_prerequisites, verify_namespace_prerequisites
 
 
 _IFNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
@@ -455,6 +455,16 @@ def ensure_instance(
         ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
         check=False,
     )
+    apply_namespace_prerequisites(
+        DeviceBindingSnapshot((), ()),
+        ns,
+    )
+    bootstrap_filter = compile_filter_state(
+        ActiveConfig({}, {}),
+        DeviceBindingSnapshot((), ()),
+    )
+    apply_filter_state(bootstrap_filter, ns)
+
     verified = verify_instance(config, host, forwarding=False)
     if not verified.ok:
         raise InstanceLifecycleError(
