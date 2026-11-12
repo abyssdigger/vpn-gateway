@@ -44,8 +44,10 @@ done
     exit 2
 }
 
+echo "STAGE 1: prepare temporary state"
 mkdir -m 0700 "$TMP"
 
+echo "STAGE 2: create disposable namespaces"
 ip netns del "$CLI" 2>/dev/null || true
 ip netns del "$SRV" 2>/dev/null || true
 ip link del "$SIF" 2>/dev/null || true
@@ -63,10 +65,12 @@ ip -n "$CLI" addr add 192.0.2.2/30 dev "$CIF"
 ip -n "$SRV" link set "$SIF" up
 ip -n "$CLI" link set "$CIF" up
 
+echo "STAGE 3: configure probe target"
 ip -n "$SRV" link add probe0 type dummy
 ip -n "$SRV" addr add 10.99.0.1/32 dev probe0
 ip -n "$SRV" link set probe0 up
 
+echo "STAGE 4: generate ephemeral credentials"
 openssl req -x509 -newkey rsa:2048 -nodes \
     -keyout "$KEY" -out "$CERT" -days 1 \
     -subj "/CN=192.0.2.1" \
@@ -74,9 +78,11 @@ openssl req -x509 -newkey rsa:2048 -nodes \
     >/dev/null 2>&1
 chmod 0600 "$KEY" "$CERT"
 
+echo "STAGE 5: create ocserv password database"
 printf '%s\n%s\n' "$PASS" "$PASS" | ocpasswd -c "$PASSFILE" "$USER" >/dev/null
 chmod 0600 "$PASSFILE"
 
+echo "STAGE 6: write ocserv configuration"
 cat >"$CONF" <<EOF
 auth = "plain[passwd=$PASSFILE]"
 tcp-port = $PORT
@@ -100,6 +106,7 @@ mobile-dpd = 5
 route = 10.99.0.1/255.255.255.255
 EOF
 
+echo "STAGE 7: start ocserv"
 ip netns exec "$SRV" ocserv -f -c "$CONF" >"$OCSERV_LOG" 2>&1 &
 OCSERV_PID=$!
 
@@ -110,11 +117,13 @@ if ! kill -0 "$OCSERV_PID" 2>/dev/null; then
     exit 1
 fi
 
+echo "STAGE 8: compute certificate pin"
 PIN=$(openssl x509 -in "$CERT" -pubkey -noout |
     openssl pkey -pubin -outform DER 2>/dev/null |
     openssl dgst -sha256 -binary |
     base64 | tr -d '\n')
 
+echo "STAGE 9: start OpenConnect client"
 (
     printf '%s\n' "$PASS" |
     ip netns exec "$CLI" openconnect \
@@ -128,6 +137,7 @@ PIN=$(openssl x509 -in "$CERT" -pubkey -noout |
         https://192.0.2.1:$PORT/
 ) >"$OC_LOG" 2>&1
 
+echo "STAGE 10: wait for initial tunnel"
 for _ in $(seq 1 30); do
     if ip -n "$CLI" link show oc0 >/dev/null 2>&1 &&
        ip netns exec "$CLI" ping -c 1 -W 1 10.99.0.1 >/dev/null 2>&1; then
