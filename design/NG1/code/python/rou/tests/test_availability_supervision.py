@@ -247,6 +247,99 @@ class AvailabilitySupervisionTests(unittest.TestCase):
             "unknown",
         )
 
+    def test_reused_sample_id_must_be_bitwise_same_evidence(self):
+        availability_policy = AvailabilityPolicy(
+            failure_threshold=2,
+            recovery_threshold=2,
+        )
+        first_sample = self.sample(
+            ProbeOutcome.FAILURE,
+            9.0,
+            sample_id=7,
+        )
+        first = reconcile_supervised_availability(
+            SupervisedAvailabilityState.empty(),
+            (self.identity,),
+            {self.identity: first_sample},
+            now_monotonic=10.0,
+            freshness_policy=self.policy,
+            availability_policy=availability_policy,
+        )
+
+        with self.assertRaisesRegex(
+            DetectorEvidenceRegression,
+            "reused sample id",
+        ):
+            reconcile_supervised_availability(
+                first.next_state,
+                (self.identity,),
+                {
+                    self.identity: self.sample(
+                        ProbeOutcome.FAILURE,
+                        9.5,
+                        sample_id=7,
+                    )
+                },
+                now_monotonic=10.0,
+                freshness_policy=self.policy,
+                availability_policy=availability_policy,
+            )
+
+    def test_new_sample_id_may_not_move_monotonic_time_backward(self):
+        availability_policy = AvailabilityPolicy(
+            failure_threshold=2,
+            recovery_threshold=2,
+        )
+        first = reconcile_supervised_availability(
+            SupervisedAvailabilityState.empty(),
+            (self.identity,),
+            {
+                self.identity: self.sample(
+                    ProbeOutcome.SUCCESS,
+                    9.0,
+                    sample_id=7,
+                )
+            },
+            now_monotonic=10.0,
+            freshness_policy=self.policy,
+            availability_policy=availability_policy,
+        )
+
+        with self.assertRaisesRegex(
+            DetectorEvidenceRegression,
+            "sample time regressed",
+        ):
+            reconcile_supervised_availability(
+                first.next_state,
+                (self.identity,),
+                {
+                    self.identity: self.sample(
+                        ProbeOutcome.SUCCESS,
+                        8.0,
+                        sample_id=8,
+                    )
+                },
+                now_monotonic=10.0,
+                freshness_policy=self.policy,
+                availability_policy=availability_policy,
+            )
+
+    def test_supervised_state_requires_matching_tracker_and_sample_keys(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "identical interface generations",
+        ):
+            SupervisedAvailabilityState(
+                AvailabilityTrackerState.empty(),
+                {
+                    self.identity: self.sample(
+                        ProbeOutcome.SUCCESS,
+                        1.0,
+                        sample_id=1,
+                    )
+                },
+            )
+
     def test_sample_id_regression_is_explicit_error(self):
         availability_policy = AvailabilityPolicy(
             failure_threshold=2,
