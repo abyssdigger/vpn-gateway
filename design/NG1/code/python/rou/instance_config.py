@@ -59,6 +59,10 @@ def _absolute_path(
     path = Path(value)
     if not path.is_absolute():
         raise InstanceFileConfigError(f"{where} must be absolute")
+    if ".." in path.parts:
+        raise InstanceFileConfigError(
+            f"{where} must not contain parent-directory traversal"
+        )
     if required_root is not None:
         try:
             path.relative_to(required_root)
