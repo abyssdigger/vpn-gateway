@@ -12,7 +12,18 @@ from rou.device_engine import (
     InterfaceIdentity,
     reconcile_devices,
 )
-from rou.domain import ActiveConfig, Device, NatMode, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
+from rou.domain import (
+    ActiveConfig,
+    Device,
+    Direction,
+    EnvelopeAction,
+    ExpectedInterface,
+    InterfaceMatch,
+    MatchKind,
+    NatMode,
+    Profile,
+    TrafficEnvelope,
+)
 from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule
 from rou.firewall_state import compile_filter_state
 from rou.kernel_allocation import compile_kernel_allocation
@@ -477,6 +488,59 @@ class PlannerTests(unittest.TestCase):
         ]
         self.assertIn("net.ipv4.ip_forward=0", writes)
         self.assertNotIn("net.ipv4.ip_forward=1", writes)
+
+
+    def test_programmatic_invalid_remote_profile_is_rejected_before_snapshot(self):
+        invalid = ActiveConfig(
+            {
+                "oc": Device(
+                    "oc",
+                    True,
+                    (
+                        ExpectedInterface(
+                            InterfaceMatch(MatchKind.PREFIX, "vpns"),
+                            2,
+                        ),
+                    ),
+                    nat=NatMode.NONE,
+                    traffic_envelope=TrafficEnvelope(
+                        default_action=EnvelopeAction.DROP,
+                    ),
+                )
+            },
+            {
+                "support": Profile(
+                    "support",
+                    True,
+                    Direction.INBOUND,
+                    (ipaddress.IPv4Network("10.0.0.0/8"),),
+                    ("oc",),
+                )
+            },
+        )
+        backend = FakeHostBackend("", "")
+        queue = SnapshotQueue([])
+
+        with self.assertRaisesRegex(
+            PlannerError,
+            "requires active interface capacity exactly 1",
+        ):
+            reconcile_once(
+                invalid,
+                "rou0",
+                PlannerRuntimeState.empty(),
+                backend,
+                ExplicitNoNatProvider(),
+                collect_snapshot=queue,
+            )
+
+        self.assertEqual(queue.calls, 0)
+        self.assertTrue(
+            any(
+                "net.ipv4.ip_forward=0" in call[0]
+                for call in backend.calls
+            )
+        )
 
     def test_unresolved_nat_policy_fails_closed(self):
         initial = EnvironmentSnapshot(
