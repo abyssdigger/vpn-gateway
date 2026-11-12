@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from types import MappingProxyType
 from typing import Mapping
 
 from .device_engine import DeviceBindingSnapshot, InterfaceIdentity
 from .domain import ActiveConfig
 from .metrics import compile_profile_metric_layout
+
+
+LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -75,6 +79,17 @@ def project_normal_metrics(
     only stable normal-tier metric allocation.
     """
 
+    LOG.debug(
+        "traffic-project-start bound=%d committed_metrics=%d enabled_profiles=%s",
+        len(bindings.bound),
+        len(committed.normal_metrics),
+        sorted(
+            profile.name
+            for profile in config.profiles.values()
+            if profile.enabled
+        ),
+    )
+
     grouped: dict[tuple[str, int], list] = {}
     for binding in bindings.bound:
         grouped.setdefault((binding.device_name, binding.expected_index), []).append(binding)
@@ -114,6 +129,18 @@ def project_normal_metrics(
                     )
                     assigned_keys.add(key)
 
+            LOG.debug(
+                "traffic-range-state profile=%s device=%s expected_index=%d range=%d-%d "
+                "members=%s reserved=%s",
+                profile.name,
+                metric_range.device_name,
+                metric_range.expected_index,
+                metric_range.start,
+                metric_range.end,
+                [(item.identity.ifname, item.identity.ifindex) for item in members],
+                sorted(reserved),
+            )
+
             free = [
                 metric
                 for metric in range(metric_range.start, metric_range.end + 1)
@@ -140,4 +167,23 @@ def project_normal_metrics(
                 )
                 assigned_keys.add(key)
 
-    return TrafficProjection(tuple(assignments), tuple(waiting))
+    result = TrafficProjection(tuple(assignments), tuple(waiting))
+    LOG.debug(
+        "traffic-project-result assignments=%s waiting=%s",
+        [
+            (
+                item.profile_name,
+                item.device_name,
+                item.expected_index,
+                item.identity.ifname,
+                item.identity.ifindex,
+                item.metric,
+            )
+            for item in result.assignments
+        ],
+        [
+            (profile, identity.ifname, identity.ifindex)
+            for profile, identity in result.waiting_for_slot
+        ],
+    )
+    return result
