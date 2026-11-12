@@ -9,14 +9,22 @@ from .device_engine import (
     DeviceBindingSnapshot,
     DeviceBindingState,
     InterfaceIdentity,
+    binding_snapshot_from_state,
     reconcile_devices,
 )
 from .domain import ActiveConfig, Availability
 from .environment import EnvironmentSnapshot, collect_environment_snapshot
-from .firewall_kernel import apply_filter_state, verify_filter_state
+from .firewall_kernel import (
+    apply_filter_state,
+    observe_filter_state,
+    verify_filter_state,
+)
 from .firewall_state import FirewallDesiredState, compile_filter_state
 from .kernel_allocation import KernelAllocation, compile_kernel_allocation
-from .kernel_mutation import compile_kernel_mutation_plan
+from .kernel_mutation import (
+    compile_kernel_mutation_plan,
+    compile_lifecycle_route_rebuild_plan,
+)
 from .kernel_state import (
     KernelDesiredState,
     compile_kernel_desired_state,
@@ -27,7 +35,11 @@ from .namespace_prereq import (
     apply_namespace_prerequisites,
     verify_namespace_prerequisites,
 )
-from .nat_kernel import apply_nat_state, verify_nat_state
+from .nat_kernel import (
+    apply_nat_state,
+    observe_nat_state,
+    verify_nat_state,
+)
 from .nat_state import NatDesiredState, NatProvider
 from .traffic_state import (
     TrafficProjection,
@@ -35,6 +47,7 @@ from .traffic_state import (
     committed_state_from_verified,
     project_normal_metrics,
 )
+from .transition import TransitionKind, assess_binding_lifecycle
 
 
 class PlannerError(RuntimeError):
@@ -144,6 +157,70 @@ def _project(
     )
 
 
+
+
+def _project_committed_generation(
+    config: ActiveConfig,
+    committed: PlannerRuntimeState,
+    nat_provider: NatProvider,
+    local_publication_address: IPv4Address | None,
+) -> PlannerProjection:
+    """Reconstruct the previous verified generation from durable runtime history."""
+
+    bindings = binding_snapshot_from_state(
+        config,
+        committed.devices,
+    )
+    metrics = project_normal_metrics(
+        config,
+        bindings,
+        committed.traffic,
+    )
+    allocation = compile_kernel_allocation(config)
+    return PlannerProjection(
+        device_state=committed.devices,
+        bindings=bindings,
+        metrics=metrics,
+        allocation=allocation,
+        kernel=compile_kernel_desired_state(
+            config,
+            bindings,
+            metrics,
+            allocation,
+        ),
+        firewall=compile_filter_state(
+            config,
+            bindings,
+            local_publication_address=local_publication_address,
+        ),
+        nat=nat_provider.compile(config, bindings),
+    )
+
+
+def _surviving_previous_bindings(
+    previous: DeviceBindingSnapshot,
+    current: DeviceBindingSnapshot,
+) -> DeviceBindingSnapshot:
+    current_keys = {
+        (
+            item.device_name,
+            item.expected_index,
+            item.identity,
+        )
+        for item in current.bound
+    }
+    survivors = tuple(
+        item
+        for item in previous.bound
+        if (
+            item.device_name,
+            item.expected_index,
+            item.identity,
+        ) in current_keys
+    )
+    return DeviceBindingSnapshot(survivors, ())
+
+
 def _best_effort_close(backend: NamespaceBackend) -> None:
     try:
         backend.run(
@@ -205,9 +282,14 @@ def reconcile_once(
 ) -> PlannerResult:
     """Run one complete observe->plan->apply->observe->verify->commit cycle.
 
-    Interface churn during a barriered transition is not hidden by retries inside this
-    function. It returns PlannerRetryRequired with forwarding left closed; the outer event
-    loop can immediately reconcile again from a fresh snapshot.
+    Proven ordinary binding lifecycle is repaired incrementally while forwarding remains
+    open and RPDB fail-close stays installed. Structural/unknown drift uses the global
+    forwarding barrier.
+
+    Interface churn during an apply transition is not hidden by retries inside this
+    function. It returns PlannerRetryRequired; the outer event loop immediately reconciles
+    again from a fresh snapshot. Any transition that ceases to be provably incremental is
+    contained fail-closed by the Planner error boundary.
 
     When a persistence callback is supplied, verified runtime history is durably recorded
     before forwarding is opened. Persistence failure is therefore fail-closed and prevents
@@ -279,6 +361,125 @@ def reconcile_once(
                 projection=projection,
                 changed_kernel=True,
                 needs_immediate_reconcile=bool(projection.metrics.waiting_for_slot),
+            )
+
+
+        # Ordinary binding lifecycle may be repaired without a global forwarding barrier,
+        # but only after proving the observed state is exactly the previous/new verified
+        # generations and owned RPDB state is unchanged.
+        previous_projection = _project_committed_generation(
+            config,
+            committed,
+            nat_provider,
+            local_publication_address,
+        )
+        observed_filter = observe_filter_state(ns)
+        observed_nat = observe_nat_state(ns)
+        assessment = assess_binding_lifecycle(
+            previous_projection.kernel,
+            projection.kernel,
+            previous_projection.firewall,
+            projection.firewall,
+            previous_projection.nat,
+            projection.nat,
+            previous_projection.bindings,
+            projection.bindings,
+            initial,
+            observed_filter,
+            observed_nat,
+        )
+
+        survivors = _surviving_previous_bindings(
+            previous_projection.bindings,
+            projection.bindings,
+        )
+        survivor_prereq = verify_namespace_prerequisites(
+            initial,
+            survivors,
+            forwarding=True,
+        )
+
+        if (
+            assessment.kind is TransitionKind.BINDING_LIFECYCLE
+            and survivor_prereq.ok
+        ):
+            apply_namespace_prerequisites(
+                projection.bindings,
+                ns,
+            )
+            prepared = collect_snapshot(namespace, host_backend)
+            if prepared.interfaces != initial.interfaces:
+                raise PlannerRetryRequired(
+                    "interface set changed while preparing lifecycle transition"
+                )
+
+            prepared_prereq = verify_namespace_prerequisites(
+                prepared,
+                projection.bindings,
+                forwarding=True,
+            )
+            if not prepared_prereq.ok:
+                raise PlannerVerificationError(
+                    "lifecycle prerequisites failed: "
+                    + "; ".join(prepared_prereq.errors)
+                )
+
+            reassessment = assess_binding_lifecycle(
+                previous_projection.kernel,
+                projection.kernel,
+                previous_projection.firewall,
+                projection.firewall,
+                previous_projection.nat,
+                projection.nat,
+                previous_projection.bindings,
+                projection.bindings,
+                prepared,
+                observe_filter_state(ns),
+                observe_nat_state(ns),
+            )
+            if reassessment.kind is not TransitionKind.BINDING_LIFECYCLE:
+                raise PlannerRetryRequired(
+                    "state ceased to be a proven lifecycle transition: "
+                    + "; ".join(reassessment.reasons)
+                )
+
+            lifecycle_plan = compile_lifecycle_route_rebuild_plan(
+                projection.kernel,
+                prepared,
+            )
+            execute_kernel_mutation_plan(lifecycle_plan, ns)
+            apply_filter_state(projection.firewall, ns)
+            apply_nat_state(projection.nat, ns)
+
+            applied = collect_snapshot(namespace, host_backend)
+            if applied.interfaces != initial.interfaces:
+                raise PlannerRetryRequired(
+                    "interface set changed during lifecycle apply"
+                )
+
+            applied_errors = _verify_all(
+                projection,
+                applied,
+                ns,
+                forwarding=True,
+            )
+            if applied_errors:
+                raise PlannerVerificationError(
+                    "lifecycle verification failed: "
+                    + "; ".join(applied_errors)
+                )
+
+            next_state = _commit(projection)
+            if persist_verified_state is not None:
+                persist_verified_state(next_state)
+
+            return PlannerResult(
+                state=next_state,
+                projection=projection,
+                changed_kernel=True,
+                needs_immediate_reconcile=bool(
+                    projection.metrics.waiting_for_slot
+                ),
             )
 
         # From this point on, all structural repair runs behind a closed barrier.
