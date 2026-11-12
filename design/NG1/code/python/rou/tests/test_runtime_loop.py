@@ -127,7 +127,6 @@ class RuntimeLoopTests(unittest.TestCase):
                     ActiveConfig({}, {}),
                     "rou0",
                     backend,
-                    ExplicitNoNatProvider(),
                     store,
                     wakeups,
                     loop_config=RuntimeLoopConfig(
