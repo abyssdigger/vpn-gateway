@@ -126,6 +126,7 @@ def cmd_up(
         check=False,
     )
     if already_active.returncode == 0:
+        _systemctl(backend, "enable", service)
         return {
             "ok": True,
             "instance_id": instance_id,
