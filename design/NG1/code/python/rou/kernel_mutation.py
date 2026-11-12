@@ -144,6 +144,49 @@ def _rule_argv(rule: KernelRuleSpec) -> tuple[str, ...]:
     return tuple(out)
 
 
+
+def compile_lifecycle_route_rebuild_plan(
+    desired: KernelDesiredState,
+    observed: EnvironmentSnapshot,
+) -> KernelMutationPlan:
+    """Compile an incremental Profile-table rebuild for proven binding lifecycle.
+
+    RPDB rules and IPv4 forwarding are intentionally untouched. The caller may use this
+    only after proving that owned RPDB state is exactly desired and that observed routes
+    are limited to the previous/new verified generations.
+
+    During a table flush/rebuild the still-installed Profile dispatch rule cannot fall
+    through to main because the subsequent terminal host0 RPDB action remains in place.
+    The transient effect is therefore Profile-local fail-closed, not fail-open.
+    """
+
+    commands: list[KernelMutation] = []
+    desired_tables = set(desired.owned_tables)
+
+    observed_tables = {
+        route.table
+        for route in observed.routes
+        if route.table in desired_tables
+    }
+    for table in sorted(observed_tables):
+        commands.append(
+            KernelMutation(
+                ("ip", "route", "flush", "table", str(table)),
+                "lifecycle-route-clear",
+            )
+        )
+
+    for route in desired.routes:
+        commands.append(
+            KernelMutation(
+                _route_argv(route),
+                "lifecycle-route-install",
+            )
+        )
+
+    return KernelMutationPlan(tuple(commands))
+
+
 def compile_kernel_mutation_plan(
     desired: KernelDesiredState,
     observed: EnvironmentSnapshot,
