@@ -590,18 +590,21 @@ It receives:
 Inbound payload from such an interface is rejected by the owned transit policy. Its
 existence cannot create an alternate forwarding path.
 
-**Backend proof boundary.** The normalized identity is `(ifname,ifindex)`, but the current
-Python iptables-legacy materializer matches interfaces by reusable name. Consequently, a
-same-name/new-ifindex generation that appears before the controller observes the old
-generation's disappearance may transiently match old name-based rules. Observed
-same-name/new-ifindex replacement is treated as structural drift and repaired under the
-global barrier, but that does not prove absence of the pre-observation window.
+**Production backend identity boundary.** EXP-017 proves that nftables numeric
+`meta iif/oif` matches the concrete interface generation, not the reusable interface
+name. The production filter/NAT materializer therefore uses numeric ifindex for dynamic
+Device interfaces and name matching only for stable infrastructure interfaces such as
+`host0` and `lo`.
 
-Strict production isolation for dynamically reusable interface names is therefore gated by
-EXP-017. The preferred resolution is an ifindex-aware firewall materialization (for
-example nftables numeric `meta iif/oif`) or an equivalently strong proven lifecycle
-serialization. This gate does not weaken the domain invariant; it identifies the remaining
-backend evidence required to enforce it without a timing window.
+Production verification combines complete canonical nft policy semantics with a separate
+`nft -j -n` observation of the exact numeric iif/oif reference multiset. A
+same-name/new-ifindex replacement is consequently a fresh lifecycle generation and does
+not inherit policy from the retired interface. If the observed nft policy cannot be proven
+to be either the previous or desired verified generation, the transition is structural and
+uses the global barrier.
+
+Legacy iptables materialization remains historical/regression evidence only; it is not a
+production NG1 backend.
 
 ## 6. Static domain model
 
@@ -1620,5 +1623,5 @@ ROU does not seize or rewrite unrelated host VPN routes.
 74. The persistent shadow fallback is implemented before its production availability trigger; positive UNAVAILABLE classification is intentionally deferred to future DeviceManager/Device-specific detector work.
 75. net.ipv4.fib_multipath_hash_policy is an observed/owned namespace prerequisite and may not be silently inherited when ECMP fallback can become effective.
 76. Incremental lifecycle route repair never flushes a Profile table or removes its terminal blackhole; the blackhole remains continuously installed so a temporarily missing more-specific route cannot fall through to a broader overlapping Profile rule.
-77. With the current iptables interface-name backend, same-name/new-ifindex replacement is treated as structural/unknown drift and uses the global barrier because old name-based rules could otherwise match the fresh interface generation before verification.
+77. Production nft policy matches dynamic bound interfaces by numeric ifindex and verifies the exact numeric iif/oif generation references; same-name/new-ifindex is a fresh lifecycle generation, while an unprovable policy generation remains structural/unknown drift.
 78. Incremental binding admission installs route state first, required NAT second, and generated FORWARD admission last; a newly routable MASQUERADE Device is never intentionally admitted before translation state exists.
