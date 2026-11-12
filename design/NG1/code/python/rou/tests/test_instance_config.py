@@ -93,6 +93,18 @@ class InstanceFileConfigTests(unittest.TestCase):
                 )
             )
 
+    def test_router_config_must_stay_under_hardened_config_root(self):
+        with self.assertRaisesRegex(
+            InstanceFileConfigError,
+            "must be below /etc/vpn-gateway/routers",
+        ):
+            parse_instance_file_config(
+                VALID.replace(
+                    "/etc/vpn-gateway/routers/rou0.toml",
+                    "/home/admin/rou0.toml",
+                )
+            )
+
     def test_state_file_must_stay_under_hardened_state_root(self):
         with self.assertRaisesRegex(
             InstanceFileConfigError,
