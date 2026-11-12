@@ -32,6 +32,7 @@ class PolicyGenerationObservation:
     filter_matches_desired: bool
     nat_matches_previous: bool
     nat_matches_desired: bool
+    ruleset_owned: bool = True
 
     @property
     def filter_known(self) -> bool:
@@ -159,6 +160,9 @@ def assess_binding_lifecycle(
             "terminal Profile blackhole is missing; lifecycle repair cannot "
             "safely preserve Profile-local fail-close"
         )
+
+    if not policy_generation.ruleset_owned:
+        reasons.append("nft ruleset contains foreign tables")
 
     if not policy_generation.filter_known:
         reasons.append(
