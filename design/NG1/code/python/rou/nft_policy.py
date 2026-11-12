@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from ipaddress import IPv4Address
+import json
+import re
 
 from .command_backend import NamespaceBackend
 from .device_engine import DeviceBindingSnapshot
@@ -33,6 +35,7 @@ class NftTableDesiredState:
     definition: str
     canonical: str
     interface_identities: tuple[tuple[int, str], ...] = ()
+    numeric_interface_refs: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,87 @@ class NftVerification:
     actual: str
     expected: str
 
+
+
+def _numeric_interface_refs_from_definition(
+    definition: str,
+) -> tuple[tuple[str, int], ...]:
+    refs = [
+        (match.group(1), int(match.group(2)))
+        for match in re.finditer(
+            r"\b(iif|oif)\s+([0-9]+)\b",
+            definition,
+        )
+    ]
+    return tuple(sorted(refs))
+
+
+def _numeric_interface_refs_from_json(
+    text: str,
+) -> tuple[tuple[str, int], ...]:
+    try:
+        root = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise NftPolicyError(f"invalid nft JSON output: {exc}") from None
+
+    items = root.get("nftables")
+    if not isinstance(items, list):
+        raise NftPolicyError("nft JSON root lacks nftables array")
+
+    refs: list[tuple[str, int]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        rule = item.get("rule")
+        if not isinstance(rule, dict):
+            continue
+        exprs = rule.get("expr", ())
+        if not isinstance(exprs, list):
+            raise NftPolicyError("nft JSON rule expr is not an array")
+        for expr in exprs:
+            if not isinstance(expr, dict):
+                continue
+            match = expr.get("match")
+            if not isinstance(match, dict) or match.get("op") != "==":
+                continue
+            left = match.get("left")
+            if not isinstance(left, dict):
+                continue
+            meta = left.get("meta")
+            if not isinstance(meta, dict):
+                continue
+            key = meta.get("key")
+            if key not in {"iif", "oif"}:
+                continue
+            right = match.get("right")
+            if type(right) is int:
+                value = right
+            elif isinstance(right, str) and right.isdecimal():
+                value = int(right)
+            else:
+                raise NftPolicyError(
+                    f"nft JSON {key} comparison is not numeric: {right!r}"
+                )
+            refs.append((key, value))
+
+    return tuple(sorted(refs))
+
+
+def observe_nft_numeric_interface_refs(
+    desired: NftTableDesiredState,
+    backend: NamespaceBackend,
+) -> tuple[tuple[str, int], ...]:
+    result = backend.run(
+        (
+            "nft",
+            "-j",
+            "list",
+            "table",
+            desired.family,
+            desired.name,
+        )
+    )
+    return _numeric_interface_refs_from_json(result.stdout)
 
 def normalize_nft_list(
     text: str,
@@ -329,6 +413,9 @@ def compile_nft_filter_state(
         definition=definition,
         canonical=normalize_nft_list(definition, identities),
         interface_identities=identities,
+        numeric_interface_refs=_numeric_interface_refs_from_definition(
+            definition
+        ),
     )
 
 
@@ -391,6 +478,9 @@ def compile_nft_nat_state(
         definition=definition,
         canonical=normalize_nft_list(definition, identities),
         interface_identities=identities,
+        numeric_interface_refs=_numeric_interface_refs_from_definition(
+            definition
+        ),
     )
 
 
@@ -447,8 +537,21 @@ def verify_nft_table(
     backend: NamespaceBackend,
 ) -> NftVerification:
     actual = observe_nft_table(desired, backend)
+    actual_refs = observe_nft_numeric_interface_refs(desired, backend)
+    refs_ok = actual_refs == desired.numeric_interface_refs
+    if not refs_ok:
+        actual = (
+            actual
+            + "\n# numeric-interface-refs="
+            + repr(actual_refs)
+        )
     return NftVerification(
-        ok=actual == desired.canonical,
+        ok=actual.split("\n# numeric-interface-refs=", 1)[0] == desired.canonical
+        and refs_ok,
         actual=actual,
-        expected=desired.canonical,
+        expected=(
+            desired.canonical
+            + "\n# numeric-interface-refs="
+            + repr(desired.numeric_interface_refs)
+        ),
     )
