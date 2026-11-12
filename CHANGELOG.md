@@ -1,3 +1,29 @@
+## 2026-11-12 — EXP-019 PASS: WireGuard raw availability evidence
+
+Future DeviceManager research established that WireGuard interface presence and
+latest-handshake age are insufficient as prompt liveness indicators.
+
+A disposable two-namespace WireGuard experiment proved:
+
+- wg0 remains present with the same ifindex while its UDP underlay is broken;
+- an active path probe fails during the outage and recovers after underlay restoration;
+- the same wg0 generation survives the full loss/recovery cycle;
+- latest-successful-handshake timestamp remained unchanged across the short outage and
+  successful payload recovery.
+
+Consequence: a future WireGuard positive UNAVAILABLE detector must not rely solely on
+interface presence or handshake age. Active path probing is viable raw evidence, but probe
+target/cadence/threshold semantics are intentionally left for a human-approved
+DeviceManager design.
+
+Attempts 1–3 are preserved as harness/environment false negatives; attempt 4 is PASS.
+
+EXP-019 is archived evidence rather than a permanent dependency of the completed core NG1
+CI. A DeviceManager implementation that relies on this behavior will add its own permanent
+integration coverage.
+
+---
+
 ## 2026-11-12 — EXP-016 PASS: production ECMP hash policy fixed to 1
 
 EXP-016 closed the future availability prerequisite for ECMP fallback.
