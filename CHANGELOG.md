@@ -1,3 +1,154 @@
+## 2026-11-12 — EXP-019 PASS: WireGuard raw availability evidence
+
+Future DeviceManager research established that WireGuard interface presence and
+latest-handshake age are insufficient as prompt liveness indicators.
+
+A disposable two-namespace WireGuard experiment proved:
+
+- wg0 remains present with the same ifindex while its UDP underlay is broken;
+- an active path probe fails during the outage and recovers after underlay restoration;
+- the same wg0 generation survives the full loss/recovery cycle;
+- latest-successful-handshake timestamp remained unchanged across the short outage and
+  successful payload recovery.
+
+Consequence: a future WireGuard positive UNAVAILABLE detector must not rely solely on
+interface presence or handshake age. Active path probing is viable raw evidence, but probe
+target/cadence/threshold semantics are intentionally left for a human-approved
+DeviceManager design.
+
+Attempts 1–3 are preserved as harness/environment false negatives; attempt 4 is PASS.
+
+EXP-019 is archived evidence rather than a permanent dependency of the completed core NG1
+CI. A DeviceManager implementation that relies on this behavior will add its own permanent
+integration coverage.
+
+---
+
+## 2026-11-12 — EXP-016 PASS: production ECMP hash policy fixed to 1
+
+EXP-016 closed the future availability prerequisite for ECMP fallback.
+
+Privileged disposable-netns evidence proved:
+
+- target kernel accepts fib_multipath_hash_policy values 0, 1, 2 and 3;
+- policy 1 keeps one repeated TCP 5-tuple on a stable nexthop;
+- policy 0 ignores L4-only variation for a fixed L3 pair;
+- policy 1 uses L4 variation across both ECMP members;
+- the sysctl is namespace-isolated.
+
+NG1 now owns and exactly verifies:
+
+```text
+net.ipv4.fib_multipath_hash_policy=1
+```
+
+Fresh instance creation and restart/ensure use the same shared prerequisite compiler, so
+bootstrap and runtime no longer duplicate sysctl policy.
+
+The hash-policy gate is closed. Positive UNAVAILABLE classification and DeviceManager
+availability semantics remain future work.
+
+---
+
+## 2026-11-12 — NG1 production nft baseline and full disposable cycle PASS
+
+The current NG1 Python production baseline now uses nftables as its only production
+filter/NAT backend.
+
+Completed and verified:
+
+- EXP-017 PASS: numeric nft iif/oif rules preserve concrete interface-generation identity
+  across same-name/new-ifindex replacement;
+- generation-safe nft verification uses complete policy semantics plus stable
+  compiler-owned generation markers;
+- legacy iptables remains regression/historical evidence only;
+- Planner supports both ordinary binding lifecycle and proven ROUTE_ADDITIVE incremental
+  transitions without unnecessary global ip_forward=0;
+- post-prerequisite reassessment accepts the same proven incremental transition set as
+  initial assessment;
+- disposable privileged production cycle passes:
+  initial reconcile, same-name/new-ifindex replacement, metric promotion, ordinary member
+  disappearance, structural foreign-nft barrier repair and durable runtime-state verify;
+- rootless NG1 and RC3 suites and privileged kernel integration are green on the reviewed
+  baseline.
+
+Future-gated work remains intentionally separate:
+
+- EXP-014 multi-interface remote-initiated flow pinning — postponed until after the first
+  working production release;
+- EXP-015 real TCP MTU/MSS signoff;
+- EXP-016 ECMP hash-policy prerequisite before enabling a real UNAVAILABLE trigger;
+- DeviceManager availability/process lifecycle work after the core baseline is otherwise
+  complete.
+
+---
+
+## 2026-11-12 — NG1 Draft 5 correction implementation and kernel proof
+
+Implemented the accepted safety-correction review across the production Python ROU:
+
+- remote-initiated Profiles are rejected unless active capacity is exactly 1 and every
+  active Device has restrictive envelope `default=drop`;
+- INPUT/FORWARD/OUTPUT are all default-DROP with explicit local/transit admissions;
+- ordinary binding lifecycle is classified separately from structural drift;
+- lifecycle route repair is a semantic diff and continuously preserves each Profile
+  table's terminal blackhole;
+- full owned RPDB priority window 1..32765 is verified, not merely current rule range;
+- local publication address is carried through runtime -> Planner -> INPUT materialization;
+- iptables save/restore verification now normalizes counters, chain serialization and
+  canonical state/match ordering instead of comparing fragile raw text;
+- bootstrap installs/verifies default-DROP filter before runtime/publications;
+- boot-time `ensure_instance`, containment commands, persistent systemd instance lifecycle
+  and hardened state path were added;
+- runtime state rejects symlink ancestors;
+- `rou show` now uses the production projectors/verifiers for full desired-vs-live status.
+
+Additional whole-code review finding:
+
+- legacy iptables interface admission is name-based and cannot by itself prove zero-window
+  isolation across same-name/new-ifindex replacement. EXP-017 was prepared as the strict
+  dynamic-generation firewall backend gate.
+
+GitHub validation at commit `958aec8dff27d1042755883626ff74e0480de54c` passed both
+rootless and privileged kernel-integration jobs.
+
+---
+
+## 2026-11-12 — NG1 Draft 5 correction: remote-init safety, local firewall, barrier scope
+
+External whole-model review found three material safety gaps and one over-conservative
+transition rule. The review and independent analysis are archived verbatim in
+`design/reviews/`; the project response is separate.
+
+Accepted corrections:
+
+- INBOUND/BIDIRECTIONAL Profiles are production-valid only at active interface capacity 1;
+- remote-initiated Profiles additionally require restrictive Device envelopes with
+  terminal `default=drop`;
+- multi-interface remote-initiated return steering is deferred behind EXP-014 connmark/
+  fwmark evidence;
+- ESTABLISHED/RELATED state acceptance is explicitly bound-interface <-> host0 only;
+- ROU INPUT and OUTPUT are both default-DROP with narrow local/underlay admissions;
+- persistent shadow fallback is retained, while its positive UNAVAILABLE trigger remains
+  deliberately deferred to future DeviceManager/availability work;
+- ordinary binding/availability lifecycle transitions no longer require global
+  `ip_forward=0`; the global barrier is reserved for structural/unknown drift and
+  unverified recovery;
+- rou-up ordering now establishes and verifies fail-closed state before publications;
+- `fib_multipath_hash_policy` is made an explicit future prerequisite (EXP-016);
+- real TCP MTU/MSS behavior is gated by EXP-015 instead of guessed TCPMSS policy;
+- PROJECT-CONVENTIONS now names NG1 as current normative architecture and permits the
+  existing English NG1 baseline.
+
+Prepared experiments:
+
+- EXP-014 — remote-initiated flow pinning;
+- EXP-015 — real TCP MTU/MSS;
+- EXP-016 — ECMP hash-policy prerequisite.
+
+The pre-correction implementation is preserved on branch
+`ng1-production-draft5-pre-expert-review-20261112`.
+
 ## 2026-11-11 — NG1 Draft 4: explicit NEW verdicts; EXP-013 closed
 
 Final Draft 3 + EXP-013 review found one materialization ambiguity in overlapping Profile

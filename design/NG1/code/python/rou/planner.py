@@ -1,0 +1,788 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from ipaddress import IPv4Address
+import logging
+from typing import Callable
+
+from .availability import AvailabilityCollector, annotate_bindings
+from .command_backend import CommandBackend, NamespaceBackend
+from .config import validate_active_config
+from .device_engine import (
+    DeviceBindingSnapshot,
+    DeviceBindingState,
+    DeviceReconcileResult,
+    InterfaceIdentity,
+    binding_snapshot_from_state,
+    reconcile_devices,
+)
+from .domain import ActiveConfig
+from .environment import EnvironmentSnapshot, collect_environment_snapshot
+from .kernel_allocation import KernelAllocation, compile_kernel_allocation
+from .kernel_mutation import (
+    compile_kernel_mutation_plan,
+    compile_lifecycle_route_rebuild_plan,
+)
+from .kernel_state import (
+    KernelDesiredState,
+    compile_kernel_desired_state,
+    verify_kernel_desired_state,
+)
+from .command_backend import execute_kernel_mutation_plan
+from .namespace_prereq import (
+    apply_namespace_prerequisites,
+    verify_namespace_prerequisites,
+)
+from .nft_policy import (
+    NftTableDesiredState,
+    apply_nft_table,
+    compile_nft_filter_state,
+    compile_nft_nat_state,
+    delete_foreign_nft_tables,
+    observe_nft_ruleset_inventory,
+    observe_nft_state,
+    verify_nft_observation,
+    verify_nft_ruleset_ownership,
+    verify_nft_table,
+)
+from .traffic_state import (
+    TrafficProjection,
+    TrafficRuntimeState,
+    committed_state_from_verified,
+    project_normal_metrics,
+)
+from .transition import (
+    PolicyGenerationObservation,
+    TransitionKind,
+    assess_binding_lifecycle,
+)
+
+
+LOG = logging.getLogger(__name__)
+
+
+class PlannerError(RuntimeError):
+    pass
+
+
+class PlannerRetryRequired(PlannerError):
+    pass
+
+
+class PlannerVerificationError(PlannerError):
+    pass
+
+
+@dataclass(frozen=True)
+class PlannerRuntimeState:
+    devices: DeviceBindingState
+    traffic: TrafficRuntimeState
+
+    @classmethod
+    def empty(cls) -> "PlannerRuntimeState":
+        return cls(DeviceBindingState.empty(), TrafficRuntimeState.empty())
+
+
+@dataclass(frozen=True)
+class PlannerProjection:
+    device_state: DeviceBindingState
+    bindings: DeviceBindingSnapshot
+    metrics: TrafficProjection
+    allocation: KernelAllocation
+    kernel: KernelDesiredState
+    firewall: NftTableDesiredState
+    nat: NftTableDesiredState
+
+
+@dataclass(frozen=True)
+class PlannerResult:
+    state: PlannerRuntimeState
+    projection: PlannerProjection
+    changed_kernel: bool
+    needs_immediate_reconcile: bool
+
+
+SnapshotCollector = Callable[[str, CommandBackend], EnvironmentSnapshot]
+VerifiedStatePersister = Callable[[PlannerRuntimeState], None]
+
+
+def default_snapshot_collector(
+    namespace: str,
+    host_backend: CommandBackend,
+) -> EnvironmentSnapshot:
+    return collect_environment_snapshot(
+        namespace,
+        lambda argv: host_backend.run(argv).stdout,
+    )
+
+
+def compile_planner_projection(
+    config: ActiveConfig,
+    committed: PlannerRuntimeState,
+    devices: DeviceReconcileResult,
+    local_publication_address: IPv4Address | None,
+) -> PlannerProjection:
+    LOG.debug(
+        "planner-projection-start interfaces=%d committed_expectations=%d "
+        "committed_metrics=%d",
+        len(devices.snapshot.bound) + len(devices.snapshot.over_quota),
+        len(committed.devices.expectations),
+        len(committed.traffic.normal_metrics),
+    )
+    metrics = project_normal_metrics(
+        config,
+        devices.snapshot,
+        committed.traffic,
+    )
+    allocation = compile_kernel_allocation(config)
+    kernel = compile_kernel_desired_state(
+        config,
+        devices.snapshot,
+        metrics,
+        allocation,
+    )
+    firewall = compile_nft_filter_state(
+        config,
+        devices.snapshot,
+        local_publication_address=local_publication_address,
+    )
+    nat = compile_nft_nat_state(config, devices.snapshot)
+    result = PlannerProjection(
+        device_state=devices.next_state,
+        bindings=devices.snapshot,
+        metrics=metrics,
+        allocation=allocation,
+        kernel=kernel,
+        firewall=firewall,
+        nat=nat,
+    )
+    LOG.debug(
+        "planner-projection-result bound=%d over_quota=%d assignments=%d "
+        "waiting=%d tables=%d rules=%d routes=%d",
+        len(result.bindings.bound),
+        len(result.bindings.over_quota),
+        len(result.metrics.assignments),
+        len(result.metrics.waiting_for_slot),
+        len(result.allocation.profile_tables),
+        len(result.kernel.rules),
+        len(result.kernel.routes),
+    )
+    return result
+
+
+
+def _compile_live_projection(
+    config: ActiveConfig,
+    committed: PlannerRuntimeState,
+    snapshot: EnvironmentSnapshot,
+    namespace: str,
+    host_backend: CommandBackend,
+    availability_collector: AvailabilityCollector | None,
+    local_publication_address: IPv4Address | None,
+) -> PlannerProjection:
+    devices = reconcile_devices(
+        config,
+        committed.devices,
+        snapshot.interfaces,
+    )
+    if availability_collector is not None:
+        raw = availability_collector(
+            namespace,
+            host_backend,
+            snapshot,
+            devices.snapshot,
+        )
+        devices = DeviceReconcileResult(
+            next_state=devices.next_state,
+            snapshot=annotate_bindings(devices.snapshot, raw),
+        )
+    return compile_planner_projection(
+        config,
+        committed,
+        devices,
+        local_publication_address,
+    )
+
+
+def _project_committed_generation(
+    config: ActiveConfig,
+    committed: PlannerRuntimeState,
+    local_publication_address: IPv4Address | None,
+) -> PlannerProjection:
+    """Reconstruct the previous verified generation from durable runtime history."""
+
+    bindings = binding_snapshot_from_state(
+        config,
+        committed.devices,
+    )
+    metrics = project_normal_metrics(
+        config,
+        bindings,
+        committed.traffic,
+    )
+    allocation = compile_kernel_allocation(config)
+    return PlannerProjection(
+        device_state=committed.devices,
+        bindings=bindings,
+        metrics=metrics,
+        allocation=allocation,
+        kernel=compile_kernel_desired_state(
+            config,
+            bindings,
+            metrics,
+            allocation,
+        ),
+        firewall=compile_nft_filter_state(
+            config,
+            bindings,
+            local_publication_address=local_publication_address,
+        ),
+        nat=compile_nft_nat_state(config, bindings),
+    )
+
+
+def _surviving_previous_bindings(
+    previous: DeviceBindingSnapshot,
+    current: DeviceBindingSnapshot,
+) -> DeviceBindingSnapshot:
+    current_keys = {
+        (
+            item.device_name,
+            item.expected_index,
+            item.identity,
+        )
+        for item in current.bound
+    }
+    survivors = tuple(
+        item
+        for item in previous.bound
+        if (
+            item.device_name,
+            item.expected_index,
+            item.identity,
+        ) in current_keys
+    )
+    return DeviceBindingSnapshot(survivors, ())
+
+
+def _best_effort_close(backend: NamespaceBackend) -> None:
+    try:
+        backend.run(
+            ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+            check=False,
+        )
+    except Exception:
+        pass
+
+
+def _verify_all(
+    projection: PlannerProjection,
+    snapshot: EnvironmentSnapshot,
+    backend: NamespaceBackend,
+    *,
+    forwarding: bool,
+) -> tuple[str, ...]:
+    errors: list[str] = []
+
+    kernel = verify_kernel_desired_state(projection.kernel, snapshot)
+    errors.extend(kernel.errors)
+
+    prereq = verify_namespace_prerequisites(
+        snapshot,
+        projection.bindings,
+        forwarding=forwarding,
+    )
+    errors.extend(prereq.errors)
+
+    ownership = verify_nft_ruleset_ownership(
+        observe_nft_ruleset_inventory(backend)
+    )
+    if not ownership.ok:
+        errors.append(
+            "foreign nft tables present: "
+            + repr(ownership.foreign_tables)
+        )
+
+    firewall = verify_nft_table(projection.firewall, backend)
+    if not firewall.ok:
+        errors.append("nft filter table mismatch")
+
+    nat = verify_nft_table(projection.nat, backend)
+    if not nat.ok:
+        errors.append("nft NAT table mismatch")
+
+    return tuple(errors)
+
+
+def _commit(projection: PlannerProjection) -> PlannerRuntimeState:
+    return PlannerRuntimeState(
+        devices=projection.device_state,
+        traffic=committed_state_from_verified(projection.metrics),
+    )
+
+
+def reconcile_once(
+    config: ActiveConfig,
+    namespace: str,
+    committed: PlannerRuntimeState,
+    host_backend: CommandBackend,
+    *,
+    availability_collector: AvailabilityCollector | None = None,
+    collect_snapshot: SnapshotCollector = default_snapshot_collector,
+    persist_verified_state: VerifiedStatePersister | None = None,
+    local_publication_address: IPv4Address | None = None,
+) -> PlannerResult:
+    """Run one complete observe->plan->apply->observe->verify->commit cycle.
+
+    Proven ordinary binding lifecycle is repaired incrementally while forwarding remains
+    open and RPDB fail-close stays installed. Structural/unknown drift uses the global
+    forwarding barrier.
+
+    Interface churn during an apply transition is not hidden by retries inside this
+    function. It returns PlannerRetryRequired; the outer event loop immediately reconciles
+    again from a fresh snapshot. Any transition that ceases to be provably incremental is
+    contained fail-closed by the Planner error boundary.
+
+    When a persistence callback is supplied, verified runtime history is durably recorded
+    before forwarding is opened. Persistence failure is therefore fail-closed and prevents
+    exposure of kernel state whose stable metric/binding history was not committed.
+    """
+
+    ns = NamespaceBackend(namespace, host_backend)
+
+    try:
+        validate_active_config(config)
+        LOG.debug(
+            "planner-reconcile-start namespace=%s profiles=%s active_devices=%s "
+            "committed_expectations=%d committed_metrics=%d",
+            namespace,
+            sorted(
+                profile.name
+                for profile in config.profiles.values()
+                if profile.enabled
+            ),
+            sorted(config.active_device_names),
+            len(committed.devices.expectations),
+            len(committed.traffic.normal_metrics),
+        )
+        initial = collect_snapshot(namespace, host_backend)
+        LOG.debug(
+            "planner-observe-initial interfaces=%s routes=%d rules=%d ip_forward=%r",
+            [
+                (item.identity.ifname, item.identity.ifindex)
+                for item in initial.interfaces
+            ],
+            len(initial.routes),
+            len(initial.rules),
+            initial.sysctl_map.get("net.ipv4.ip_forward"),
+        )
+        projection = _compile_live_projection(
+            config,
+            committed,
+            initial,
+            namespace,
+            host_backend,
+            availability_collector,
+            local_publication_address,
+        )
+
+        current_errors_open = _verify_all(
+            projection,
+            initial,
+            ns,
+            forwarding=True,
+        )
+        if not current_errors_open:
+            LOG.debug("planner-decision steady-verified-open")
+            next_state = _commit(projection)
+            if persist_verified_state is not None:
+                persist_verified_state(next_state)
+            LOG.debug(
+                "planner-commit steady changed_kernel=false waiting=%d",
+                len(projection.metrics.waiting_for_slot),
+            )
+            return PlannerResult(
+                state=next_state,
+                projection=projection,
+                changed_kernel=False,
+                needs_immediate_reconcile=bool(projection.metrics.waiting_for_slot),
+            )
+
+        # Crash/restart recovery: complete state may already be correct with forwarding
+        # intentionally closed. Reopen only after proving that exact condition.
+        current_errors_closed = _verify_all(
+            projection,
+            initial,
+            ns,
+            forwarding=False,
+        )
+        if not current_errors_closed:
+            LOG.debug("planner-decision verified-closed-reopen")
+            next_state = _commit(projection)
+            if persist_verified_state is not None:
+                persist_verified_state(next_state)
+            ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=1"))
+            final = collect_snapshot(namespace, host_backend)
+            if final.interfaces != initial.interfaces:
+                _best_effort_close(ns)
+                raise PlannerRetryRequired(
+                    "interface set changed while reopening verified state"
+                )
+            final_errors = _verify_all(
+                projection,
+                final,
+                ns,
+                forwarding=True,
+            )
+            if final_errors:
+                LOG.debug(
+                    "planner-verify reopen-failed errors=%s",
+                    final_errors,
+                )
+                _best_effort_close(ns)
+                raise PlannerVerificationError(
+                    "post-reopen verification failed: " + "; ".join(final_errors)
+                )
+            LOG.debug(
+                "planner-commit reopened changed_kernel=true waiting=%d",
+                len(projection.metrics.waiting_for_slot),
+            )
+            return PlannerResult(
+                state=next_state,
+                projection=projection,
+                changed_kernel=True,
+                needs_immediate_reconcile=bool(projection.metrics.waiting_for_slot),
+            )
+
+
+        # Ordinary binding lifecycle may be repaired without a global forwarding barrier,
+        # but only after proving the observed state is exactly the previous/new verified
+        # generations and owned RPDB state is unchanged.
+        previous_projection = _project_committed_generation(
+            config,
+            committed,
+            local_publication_address,
+        )
+        observed_filter_policy = observe_nft_state(
+            projection.firewall,
+            ns,
+        )
+        observed_nat_policy = observe_nft_state(
+            projection.nat,
+            ns,
+        )
+        ruleset_ownership = verify_nft_ruleset_ownership(
+            observe_nft_ruleset_inventory(ns)
+        )
+        policy_generation = PolicyGenerationObservation(
+            filter_matches_previous=verify_nft_observation(
+                previous_projection.firewall,
+                observed_filter_policy,
+            ).ok,
+            filter_matches_desired=verify_nft_observation(
+                projection.firewall,
+                observed_filter_policy,
+            ).ok,
+            nat_matches_previous=verify_nft_observation(
+                previous_projection.nat,
+                observed_nat_policy,
+            ).ok,
+            nat_matches_desired=verify_nft_observation(
+                projection.nat,
+                observed_nat_policy,
+            ).ok,
+            ruleset_owned=ruleset_ownership.ok,
+        )
+        assessment = assess_binding_lifecycle(
+            previous_projection.kernel,
+            projection.kernel,
+            policy_generation,
+            previous_projection.bindings,
+            projection.bindings,
+            initial,
+        )
+
+        LOG.debug(
+            "planner-transition-assessment kind=%s reasons=%s",
+            assessment.kind.value,
+            assessment.reasons,
+        )
+
+        survivors = _surviving_previous_bindings(
+            previous_projection.bindings,
+            projection.bindings,
+        )
+        survivor_prereq = verify_namespace_prerequisites(
+            initial,
+            survivors,
+            forwarding=True,
+        )
+
+        if (
+            assessment.kind in {
+                TransitionKind.BINDING_LIFECYCLE,
+                TransitionKind.ROUTE_ADDITIVE,
+            }
+            and survivor_prereq.ok
+        ):
+            LOG.debug(
+                "planner-decision lifecycle-incremental survivors=%d new_bound=%d",
+                len(survivors.bound),
+                len(projection.bindings.bound),
+            )
+            apply_namespace_prerequisites(
+                projection.bindings,
+                ns,
+            )
+            prepared = collect_snapshot(namespace, host_backend)
+            if prepared.interfaces != initial.interfaces:
+                raise PlannerRetryRequired(
+                    "interface set changed while preparing lifecycle transition"
+                )
+
+            prepared_prereq = verify_namespace_prerequisites(
+                prepared,
+                projection.bindings,
+                forwarding=True,
+            )
+            if not prepared_prereq.ok:
+                raise PlannerVerificationError(
+                    "lifecycle prerequisites failed: "
+                    + "; ".join(prepared_prereq.errors)
+                )
+
+            observed_filter_policy = observe_nft_state(
+                projection.firewall,
+                ns,
+            )
+            observed_nat_policy = observe_nft_state(
+                projection.nat,
+                ns,
+            )
+            ruleset_ownership = verify_nft_ruleset_ownership(
+                observe_nft_ruleset_inventory(ns)
+            )
+            reassessment_policy = PolicyGenerationObservation(
+                filter_matches_previous=verify_nft_observation(
+                    previous_projection.firewall,
+                    observed_filter_policy,
+                ).ok,
+                filter_matches_desired=verify_nft_observation(
+                    projection.firewall,
+                    observed_filter_policy,
+                ).ok,
+                nat_matches_previous=verify_nft_observation(
+                    previous_projection.nat,
+                    observed_nat_policy,
+                ).ok,
+                nat_matches_desired=verify_nft_observation(
+                    projection.nat,
+                    observed_nat_policy,
+                ).ok,
+                ruleset_owned=ruleset_ownership.ok,
+            )
+            reassessment = assess_binding_lifecycle(
+                previous_projection.kernel,
+                projection.kernel,
+                reassessment_policy,
+                previous_projection.bindings,
+                projection.bindings,
+                prepared,
+            )
+            if reassessment.kind not in {
+                TransitionKind.BINDING_LIFECYCLE,
+                TransitionKind.ROUTE_ADDITIVE,
+            }:
+                raise PlannerRetryRequired(
+                    "state ceased to be a proven incremental transition "
+                    f"({reassessment.kind.value}): "
+                    + "; ".join(reassessment.reasons)
+                )
+
+            lifecycle_plan = compile_lifecycle_route_rebuild_plan(
+                projection.kernel,
+                prepared,
+            )
+            LOG.debug(
+                "planner-apply lifecycle commands=%d",
+                len(lifecycle_plan.commands),
+            )
+            execute_kernel_mutation_plan(lifecycle_plan, ns)
+            # Admission is installed last. A newly routable masqueraded path must never
+            # become FORWARD-acceptable before its NAT state exists.
+            apply_nft_table(projection.nat, ns)
+            apply_nft_table(projection.firewall, ns)
+
+            applied = collect_snapshot(namespace, host_backend)
+            if applied.interfaces != initial.interfaces:
+                raise PlannerRetryRequired(
+                    "interface set changed during lifecycle apply"
+                )
+
+            applied_errors = _verify_all(
+                projection,
+                applied,
+                ns,
+                forwarding=True,
+            )
+            if applied_errors:
+                LOG.debug(
+                    "planner-verify lifecycle-failed errors=%s",
+                    applied_errors,
+                )
+                raise PlannerVerificationError(
+                    "lifecycle verification failed: "
+                    + "; ".join(applied_errors)
+                )
+
+            next_state = _commit(projection)
+            if persist_verified_state is not None:
+                persist_verified_state(next_state)
+
+            LOG.debug(
+                "planner-commit lifecycle changed_kernel=true waiting=%d",
+                len(projection.metrics.waiting_for_slot),
+            )
+            return PlannerResult(
+                state=next_state,
+                projection=projection,
+                changed_kernel=True,
+                needs_immediate_reconcile=bool(
+                    projection.metrics.waiting_for_slot
+                ),
+            )
+
+        LOG.debug(
+            "planner-decision structural-barrier assessment=%s survivor_prereq=%s",
+            assessment.reasons,
+            survivor_prereq.errors,
+        )
+
+        # From this point on, all structural repair runs behind a closed barrier.
+        ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"))
+
+        barrier_snapshot = collect_snapshot(namespace, host_backend)
+        barrier_projection = _compile_live_projection(
+            config,
+            committed,
+            barrier_snapshot,
+            namespace,
+            host_backend,
+            availability_collector,
+            local_publication_address,
+        )
+
+        apply_namespace_prerequisites(
+            barrier_projection.bindings,
+            ns,
+        )
+        prepared = collect_snapshot(namespace, host_backend)
+        if prepared.interfaces != barrier_snapshot.interfaces:
+            raise PlannerRetryRequired(
+                "interface set changed while preparing namespace prerequisites"
+            )
+
+        prereq = verify_namespace_prerequisites(
+            prepared,
+            barrier_projection.bindings,
+            forwarding=False,
+        )
+        if not prereq.ok:
+            raise PlannerVerificationError(
+                "closed-barrier prerequisites failed: " + "; ".join(prereq.errors)
+            )
+
+        inventory = observe_nft_ruleset_inventory(ns)
+        delete_foreign_nft_tables(inventory, ns)
+
+        mutation_plan = compile_kernel_mutation_plan(
+            barrier_projection.kernel,
+            prepared,
+        )
+        LOG.debug(
+            "planner-apply structural commands=%d",
+            len(mutation_plan.commands),
+        )
+        execute_kernel_mutation_plan(mutation_plan, ns)
+        apply_nft_table(barrier_projection.nat, ns)
+        apply_nft_table(barrier_projection.firewall, ns)
+
+        applied = collect_snapshot(namespace, host_backend)
+        if applied.interfaces != barrier_snapshot.interfaces:
+            raise PlannerRetryRequired(
+                "interface set changed during kernel apply"
+            )
+
+        applied_errors = _verify_all(
+            barrier_projection,
+            applied,
+            ns,
+            forwarding=False,
+        )
+        if applied_errors:
+            LOG.debug(
+                "planner-verify structural-closed-failed errors=%s",
+                applied_errors,
+            )
+            raise PlannerVerificationError(
+                "closed-barrier verification failed: "
+                + "; ".join(applied_errors)
+            )
+
+        next_state = _commit(barrier_projection)
+        if persist_verified_state is not None:
+            persist_verified_state(next_state)
+
+        ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=1"))
+        final = collect_snapshot(namespace, host_backend)
+        if final.interfaces != barrier_snapshot.interfaces:
+            _best_effort_close(ns)
+            raise PlannerRetryRequired(
+                "interface set changed while opening forwarding"
+            )
+
+        final_errors = _verify_all(
+            barrier_projection,
+            final,
+            ns,
+            forwarding=True,
+        )
+        if final_errors:
+            LOG.debug(
+                "planner-verify final-open-failed errors=%s",
+                final_errors,
+            )
+            _best_effort_close(ns)
+            raise PlannerVerificationError(
+                "final verification failed: " + "; ".join(final_errors)
+            )
+
+        LOG.debug(
+            "planner-commit structural changed_kernel=true waiting=%d",
+            len(barrier_projection.metrics.waiting_for_slot),
+        )
+        return PlannerResult(
+            state=next_state,
+            projection=barrier_projection,
+            changed_kernel=True,
+            needs_immediate_reconcile=bool(
+                barrier_projection.metrics.waiting_for_slot
+            ),
+        )
+
+    except PlannerError as exc:
+        LOG.debug(
+            "planner-reconcile-failed type=%s message=%s",
+            type(exc).__name__,
+            exc,
+        )
+        _best_effort_close(ns)
+        raise
+    except Exception as exc:
+        LOG.debug(
+            "planner-reconcile-unexpected-failure type=%s message=%s",
+            type(exc).__name__,
+            exc,
+        )
+        _best_effort_close(ns)
+        raise PlannerError(f"reconciliation failed: {exc}") from exc
