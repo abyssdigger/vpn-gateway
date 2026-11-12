@@ -49,6 +49,10 @@ def classify_device_to_host_profile(
     not classified by calling this function at runtime.
     """
 
+    device = config.devices.get(device_name)
+    if device is None or not device.enabled:
+        return None
+
     candidates: list[tuple[IPv4Network, str]] = []
 
     for profile in config.profiles.values():
