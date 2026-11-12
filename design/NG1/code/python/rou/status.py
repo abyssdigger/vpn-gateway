@@ -9,7 +9,11 @@ from .domain import ActiveConfig
 from .environment import EnvironmentSnapshot
 from .kernel_state import verify_kernel_desired_state
 from .namespace_prereq import verify_namespace_prerequisites
-from .nft_policy import verify_nft_table
+from .nft_policy import (
+    observe_nft_ruleset_inventory,
+    verify_nft_ruleset_ownership,
+    verify_nft_table,
+)
 from .planner import (
     PlannerProjection,
     PlannerRuntimeState,
@@ -66,6 +70,15 @@ def inspect_runtime_status(
             forwarding=forwarding_text == "1",
         )
         errors.extend(prereq.errors)
+
+    ownership = verify_nft_ruleset_ownership(
+        observe_nft_ruleset_inventory(backend)
+    )
+    if not ownership.ok:
+        errors.append(
+            "foreign nft tables present: "
+            + repr(ownership.foreign_tables)
+        )
 
     firewall = verify_nft_table(projection.firewall, backend)
     if not firewall.ok:
