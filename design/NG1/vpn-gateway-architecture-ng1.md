@@ -1292,6 +1292,12 @@ This is required because Profiles may overlap: if a more-specific Profile table 
 temporarily empty, RPDB lookup could continue to a later broader Profile rule and cross a
 policy boundary. Preserving the table-local terminal blackhole prevents that fall-through.
 
+For an additive/new binding, mutation order is route projection -> NAT projection ->
+FORWARD admission. Admission is last so a Device requiring MASQUERADE cannot transmit a
+newly admitted payload packet before its NAT rule exists. Removal starts by deleting stale
+routes, after which stale interface-specific filter/NAT rules are harmless until their
+atomic table replacements.
+
 Filter/NAT owned tables are atomically replaced from fresh binding state. These ordinary
 transitions do not require global `ip_forward=0`.
 
@@ -1615,3 +1621,4 @@ ROU does not seize or rewrite unrelated host VPN routes.
 75. net.ipv4.fib_multipath_hash_policy is an observed/owned namespace prerequisite and may not be silently inherited when ECMP fallback can become effective.
 76. Incremental lifecycle route repair never flushes a Profile table or removes its terminal blackhole; the blackhole remains continuously installed so a temporarily missing more-specific route cannot fall through to a broader overlapping Profile rule.
 77. With the current iptables interface-name backend, same-name/new-ifindex replacement is treated as structural/unknown drift and uses the global barrier because old name-based rules could otherwise match the fresh interface generation before verification.
+78. Incremental binding admission installs route state first, required NAT second, and generated FORWARD admission last; a newly routable MASQUERADE Device is never intentionally admitted before translation state exists.
