@@ -13,8 +13,11 @@ TARGET_LAN=exp15wt
 TCP_PORT=18081
 TARGET_A=172.31.16.2
 TARGET_B=172.31.16.3
+TARGET_C=172.31.16.4
+TARGET_D=172.31.16.5
 TMP=/run/vpn-gate-exp015-wg-$$
 CAPTURE="$TMP/tcpdump.txt"
+CLAMP_CAPTURE="$TMP/clamp-tcpdump.txt"
 TCP_LOG="$TMP/tcp-server.log"
 
 cleanup() {
@@ -75,6 +78,8 @@ ip link set "$TARGET_LAN" netns "$TARGET"
 ip -n "$REMOTE" addr add 172.31.16.1/29 dev "$REMOTE_LAN"
 ip -n "$TARGET" addr add "$TARGET_A"/29 dev "$TARGET_LAN"
 ip -n "$TARGET" addr add "$TARGET_B"/32 dev "$TARGET_LAN"
+ip -n "$TARGET" addr add "$TARGET_C"/32 dev "$TARGET_LAN"
+ip -n "$TARGET" addr add "$TARGET_D"/32 dev "$TARGET_LAN"
 ip -n "$REMOTE" link set "$REMOTE_LAN" up
 ip -n "$TARGET" link set "$TARGET_LAN" up
 ip -n "$TARGET" route add default via 172.31.16.1 dev "$TARGET_LAN"
@@ -95,6 +100,8 @@ ip -n "$ROU" link set wg0 up
 ip -n "$REMOTE" link set wg0 up
 ip -n "$ROU" route add "$TARGET_A"/32 dev wg0
 ip -n "$ROU" route add "$TARGET_B"/32 dev wg0
+ip -n "$ROU" route add "$TARGET_C"/32 dev wg0
+ip -n "$ROU" route add "$TARGET_D"/32 dev wg0
 
 ip netns exec "$ROU" ping -I wg0 -c 2 -W 2 10.23.16.2 >/dev/null
 
@@ -133,6 +140,8 @@ EOF
 
 ip route replace "$TARGET_A"/32 via 198.18.16.2 dev "$HIF"
 ip route replace "$TARGET_B"/32 via 198.18.16.2 dev "$HIF"
+ip route replace "$TARGET_C"/32 via 198.18.16.2 dev "$HIF"
+ip route replace "$TARGET_D"/32 via 198.18.16.2 dev "$HIF"
 
 cat >"$TMP/tcp-server.py" <<'PY'
 import socket, struct, sys
@@ -234,8 +243,10 @@ done
 echo "DF_MAX_ICMP_PAYLOAD=$low"
 echo "DF_MAX_IP_PACKET=$((low + 28))"
 
-python3 "$TMP/tcp-client.py" "$TARGET_B" "$TCP_PORT" 128 5 >/dev/null
-echo "PASS PREFLIGHT: WireGuard TARGET_B small TCP is reachable before PMTU suppression"
+for target in "$TARGET_B" "$TARGET_C" "$TARGET_D"; do
+    python3 "$TMP/tcp-client.py" "$target" "$TCP_PORT" 128 5 >/dev/null
+done
+echo "PASS PREFLIGHT: WireGuard mitigation targets are reachable before PMTU suppression"
 
 ip netns exec "$ROU" nft add rule ip exp15wg output     oifname "$RIF" ip protocol icmp drop
 ip netns exec "$REMOTE" nft add rule ip exp15wgremote output     oifname "$REMOTE_LAN" ip protocol icmp drop
@@ -247,17 +258,61 @@ set -e
 
 echo "PMTU_FEEDBACK_BLOCKED_TCP_RC=$BLOCKED_RC"
 if [ "$BLOCKED_RC" -eq 0 ]; then
-    echo "OBSERVATION: production-like WireGuard TCP completed with PMTU feedback blocked"
-    echo "EXP_015_WIREGUARD_PRODUCTION_PATH=PASS_NO_BLACKHOLE"
+    echo "FAIL: WireGuard production-like path did not reproduce the expected PMTU black-hole" >&2
+    exit 1
+fi
+echo "PASS B: WireGuard PMTU black-hole reproduced with ICMP feedback suppressed"
+cat "$TMP/blocked-client.log"
+
+# Variant 1: standard route-MTU clamp on every forwarded SYN/SYNACK.
+ip netns exec "$ROU" nft add rule ip exp15wg forward \
+    tcp flags syn tcp option maxseg size set rt mtu
+set +e
+timeout 12 python3 "$TMP/tcp-client.py" "$TARGET_C" "$TCP_PORT" 8388608 8 \
+    >"$TMP/rtmtu-client.log" 2>&1
+RTMTU_RC=$?
+set -e
+echo "RT_MTU_CLAMP_TCP_RC=$RTMTU_RC"
+if [ "$RTMTU_RC" -eq 0 ]; then
+    echo "OBSERVATION: nft rt-mtu clamp prevents WireGuard black-hole"
 else
-    echo "OBSERVATION: production-like WireGuard TCP failed with PMTU feedback blocked"
-    cat "$TMP/blocked-client.log"
-    echo "EXP_015_WIREGUARD_PRODUCTION_PATH=PASS_BLACKHOLE_REPRODUCED"
+    echo "OBSERVATION: nft rt-mtu clamp is insufficient for WireGuard asymmetric forwarded path"
+    cat "$TMP/rtmtu-client.log"
 fi
 
-# Remove only the experiment's PMTU-feedback suppression before normal baseline TCP.
+# Variant 2: symmetric clamp to the concrete Device MTU in both directions.
+ip netns exec "$ROU" nft flush chain ip exp15wg forward
+DEVICE_MSS=$((ROU_WG_MTU - 40))
+ip netns exec "$ROU" nft add rule ip exp15wg forward \
+    iifname "$RIF" oifname "wg0" tcp flags syn \
+    tcp option maxseg size set "$DEVICE_MSS"
+ip netns exec "$ROU" nft add rule ip exp15wg forward \
+    iifname "wg0" oifname "$RIF" tcp flags syn \
+    tcp option maxseg size set "$DEVICE_MSS"
+
+timeout 12 tcpdump -i "$HIF" -nn -vvv -s 0 -c 2 \
+    "host $TARGET_D and tcp port $TCP_PORT and (tcp[tcpflags] & tcp-syn != 0)" \
+    >"$CLAMP_CAPTURE" 2>&1 &
+CLAMP_TCPDUMP_PID=$!
+sleep 0.2
+python3 "$TMP/tcp-client.py" "$TARGET_D" "$TCP_PORT" 8388608 15
+wait "$CLAMP_TCPDUMP_PID" || true
+echo "DEVICE_MTU_CLAMP_MSS=$DEVICE_MSS"
+echo "DEVICE_MTU_CLAMP_CAPTURE_BEGIN"
+cat "$CLAMP_CAPTURE"
+echo "DEVICE_MTU_CLAMP_CAPTURE_END"
+CLAMP_MSS_VALUES=$(grep -o 'mss [0-9][0-9]*' "$CLAMP_CAPTURE" | awk '{print $2}' | tr '\n' ' ')
+echo "DEVICE_MTU_CLAMP_MSS_VALUES=$CLAMP_MSS_VALUES"
+[ -n "$CLAMP_MSS_VALUES" ] || {
+    echo "FAIL: no WireGuard clamp MSS values captured" >&2
+    exit 1
+}
+echo "PASS C: symmetric Device-MTU clamp carries large WireGuard TCP without PMTU feedback"
+
+# Remove experiment suppression/clamp before normal baseline capture.
 ip netns exec "$ROU" nft flush chain ip exp15wg output
 ip netns exec "$REMOTE" nft flush chain ip exp15wgremote output
+ip netns exec "$ROU" nft flush chain ip exp15wg forward
 
 timeout 12 tcpdump -i "$HIF" -nn -vvv -s 0 -c 2     "tcp port $TCP_PORT and (tcp[tcpflags] & tcp-syn != 0)"     >"$CAPTURE" 2>&1 &
 TCPDUMP_PID=$!
