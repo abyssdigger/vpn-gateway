@@ -1055,10 +1055,19 @@ path.
 
 The fallback mechanism is implemented in the first production code intentionally, while
 the **trigger** that positively classifies a bound interface as UNAVAILABLE is deliberately
-deferred to future DeviceManager/Device-specific detector work. Until such a detector is
-implemented, ordinary bound interfaces remain UNKNOWN unless an explicit test/provider
-injects stronger evidence. Future detectors may move an interface between UNKNOWN,
-AVAILABLE and UNAVAILABLE without changing its normal metric assignment.
+deferred to future DeviceManager/Device-specific detector work.
+
+The production composition already exposes a generation-safe availability-collector
+boundary, but schema version 1 does not instantiate a real collector. DeviceEngine first
+selects concrete bound generations using its normal history/quota rules; only those bound
+identities may then receive normalized availability evidence. Over-quota candidates remain
+UNKNOWN until promoted. A collector may use active/protocol-specific observation, as
+required by EXP-019/020, but it may not change binding order or quota.
+
+Until DeviceManager defines reviewed probe target, cadence, failure/recovery thresholds and
+durable availability-history semantics, ordinary bound interfaces remain UNKNOWN unless an
+explicit test injection supplies stronger evidence. Future detectors may move an interface
+between UNKNOWN, AVAILABLE and UNAVAILABLE without changing its normal metric assignment.
 
 ## 13. DeviceEngine
 
