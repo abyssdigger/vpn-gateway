@@ -41,8 +41,9 @@ This package implements the ROU control plane after the ROU v0 / EXP-010..013 ev
 
 ## Deliberately deferred / experimentally gated
 
-- positive production `UNAVAILABLE` trigger: routing mechanism exists now; DeviceManager
-  health detection is intentionally deferred;
+- positive production `UNAVAILABLE` trigger: routing mechanism and a generation-safe
+  bound-interface availability-collector injection boundary exist now; schema-v1 runtime
+  intentionally instantiates no real collector until DeviceManager policy is reviewed;
 - multi-interface INBOUND/BIDIRECTIONAL flow pinning: EXP-014;
 - real payload MTU/MSS policy: EXP-015;
 - DeviceManager VPN process lifecycle/configuration and positive production
