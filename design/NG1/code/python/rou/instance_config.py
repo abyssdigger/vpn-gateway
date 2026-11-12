@@ -46,7 +46,12 @@ def validate_instance_id(instance_id: str) -> str:
     return instance_id
 
 
-def _absolute_path(value: Any, where: str) -> Path:
+def _absolute_path(
+    value: Any,
+    where: str,
+    *,
+    required_root: Path | None = None,
+) -> Path:
     if not isinstance(value, str) or not value:
         raise InstanceFileConfigError(
             f"{where} must be a non-empty absolute path string"
@@ -54,6 +59,13 @@ def _absolute_path(value: Any, where: str) -> Path:
     path = Path(value)
     if not path.is_absolute():
         raise InstanceFileConfigError(f"{where} must be absolute")
+    if required_root is not None:
+        try:
+            path.relative_to(required_root)
+        except ValueError:
+            raise InstanceFileConfigError(
+                f"{where} must be below {required_root}"
+            ) from None
     return path
 
 
@@ -152,6 +164,7 @@ def parse_instance_file_config(text: str) -> InstanceFileConfig:
     state_file = _absolute_path(
         body["state_file"],
         "instance.state_file",
+        required_root=Path("/var/lib/vpn-gateway"),
     )
     if router_config == state_file:
         raise InstanceFileConfigError(
