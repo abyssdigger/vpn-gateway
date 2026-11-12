@@ -219,7 +219,6 @@ def cmd_up(
             "already_active": True,
         }
 
-    ensure_instance(instance.instance, backend)
     try:
         _systemctl(backend, "enable", "--now", service)
         active = _systemctl(

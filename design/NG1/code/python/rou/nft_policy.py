@@ -134,23 +134,6 @@ def _numeric_interface_refs_from_json(
 
     return tuple(sorted(refs))
 
-def observe_nft_generation_refs(
-    desired: NftTableDesiredState,
-    backend: NamespaceBackend,
-) -> tuple[tuple[str, int], ...]:
-    result = backend.run(
-        (
-            "nft",
-            "-j",
-            "-n",
-            "list",
-            "table",
-            desired.family,
-            desired.name,
-        )
-    )
-    return _numeric_interface_refs_from_json(result.stdout)
-
 def observe_nft_ruleset_inventory(
     backend: NamespaceBackend,
 ) -> NftRulesetInventory:

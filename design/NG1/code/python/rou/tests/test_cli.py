@@ -79,10 +79,6 @@ class CliTests(unittest.TestCase):
         with (
             patch("rou.cli._load_pair", return_value=(config(), object())),
             patch(
-                "rou.cli.ensure_instance",
-                side_effect=lambda *_: events.append("ensure"),
-            ),
-            patch(
                 "rou.cli.destroy_instance",
                 side_effect=lambda *_: events.append("destroy"),
             ),
@@ -94,7 +90,7 @@ class CliTests(unittest.TestCase):
                     backend,
                 )
 
-        self.assertEqual(events, ["ensure", "destroy"])
+        self.assertEqual(events, ["destroy"])
         self.assertIn(
             ("systemctl", "disable", "--now", "rouvpn@rou0.service"),
             backend.calls,
@@ -106,7 +102,6 @@ class CliTests(unittest.TestCase):
 
         with (
             patch("rou.cli._load_pair", return_value=(config(), object())),
-            patch("rou.cli.ensure_instance") as ensure,
             patch("rou.cli.destroy_instance") as destroy,
             patch("rou.cli._wait_up_verified") as verify_up,
         ):
@@ -117,7 +112,6 @@ class CliTests(unittest.TestCase):
             )
 
         self.assertTrue(result["already_active"])
-        ensure.assert_not_called()
         destroy.assert_not_called()
         verify_up.assert_called_once()
         self.assertFalse(
@@ -166,10 +160,6 @@ class CliTests(unittest.TestCase):
         with (
             patch("rou.cli._load_pair", return_value=(config(), object())),
             patch(
-                "rou.cli.ensure_instance",
-                side_effect=lambda *_: events.append("ensure"),
-            ),
-            patch(
                 "rou.cli.destroy_instance",
                 side_effect=lambda *_: events.append("destroy"),
             ),
@@ -185,7 +175,7 @@ class CliTests(unittest.TestCase):
                     backend,
                 )
 
-        self.assertEqual(events, ["ensure", "destroy"])
+        self.assertEqual(events, ["destroy"])
         self.assertIn(
             ("systemctl", "disable", "--now", "rouvpn@rou0.service"),
             backend.calls,
@@ -197,7 +187,6 @@ class CliTests(unittest.TestCase):
 
         with (
             patch("rou.cli._load_pair", return_value=(config(), object())),
-            patch("rou.cli.ensure_instance"),
             patch(
                 "rou.cli.destroy_instance",
                 side_effect=lambda *_: destroyed.append(True),

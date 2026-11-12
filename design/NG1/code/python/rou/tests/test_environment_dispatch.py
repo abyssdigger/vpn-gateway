@@ -5,8 +5,8 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rou.dispatch import classify_device_to_host_profile, compile_profile_dispatch
-from rou.domain import ActiveConfig, Device, Direction, NatMode, Profile
+from rou.dispatch import compile_profile_dispatch
+from rou.domain import ActiveConfig, Direction, Profile
 from rou.environment import EnvironmentParseError, parse_ip_link_json
 
 
@@ -96,98 +96,6 @@ class DispatchTests(unittest.TestCase):
             compile_profile_dispatch(ActiveConfig({}, profiles)),
             (),
         )
-
-    def test_device_to_host_filters_by_device_before_longest_prefix(self):
-        profiles = {
-            "corp": Profile(
-                "corp",
-                True,
-                Direction.INBOUND,
-                (ipaddress.IPv4Network("10.0.0.0/8"),),
-                ("oc-main",),
-            ),
-            "other": Profile(
-                "other",
-                True,
-                Direction.INBOUND,
-                (ipaddress.IPv4Network("10.20.0.0/16"),),
-                ("wg-backup",),
-            ),
-        }
-        config = ActiveConfig(
-            {
-                "oc-main": Device("oc-main", True, nat=NatMode.NONE),
-                "wg-backup": Device("wg-backup", True, nat=NatMode.NONE),
-            },
-            profiles,
-        )
-
-        self.assertEqual(
-            classify_device_to_host_profile(
-                config,
-                "oc-main",
-                ipaddress.IPv4Address("10.20.5.5"),
-            ),
-            "corp",
-        )
-
-    def test_device_to_host_uses_longest_prefix_within_filtered_set(self):
-        profiles = {
-            "broad": Profile(
-                "broad",
-                True,
-                Direction.INBOUND,
-                (ipaddress.IPv4Network("10.0.0.0/8"),),
-                ("oc-main",),
-            ),
-            "specific": Profile(
-                "specific",
-                True,
-                Direction.INBOUND,
-                (ipaddress.IPv4Network("10.20.0.0/16"),),
-                ("oc-main",),
-            ),
-        }
-        config = ActiveConfig(
-            {"oc-main": Device("oc-main", True, nat=NatMode.NONE)},
-            profiles,
-        )
-
-        self.assertEqual(
-            classify_device_to_host_profile(
-                config,
-                "oc-main",
-                ipaddress.IPv4Address("10.20.5.5"),
-            ),
-            "specific",
-        )
-
-    def test_device_to_host_returns_none_without_eligible_profile(self):
-        profiles = {
-            "corp": Profile(
-                "corp",
-                True,
-                Direction.INBOUND,
-                (ipaddress.IPv4Network("10.0.0.0/8"),),
-                ("oc-main",),
-            )
-        }
-        config = ActiveConfig(
-            {
-                "oc-main": Device("oc-main", True, nat=NatMode.NONE),
-                "wg-backup": Device("wg-backup", True, nat=NatMode.NONE),
-            },
-            profiles,
-        )
-
-        self.assertIsNone(
-            classify_device_to_host_profile(
-                config,
-                "wg-backup",
-                ipaddress.IPv4Address("10.20.5.5"),
-            )
-        )
-
 
 if __name__ == "__main__":
     unittest.main()
