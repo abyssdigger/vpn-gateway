@@ -66,8 +66,7 @@ def cmd_prepare(
     instance_file: Path,
     backend: CommandBackend,
 ) -> dict[str, object]:
-    validate_instance_id(instance_id)
-    instance = load_instance_file_config(instance_file)
+    instance, _router = _load_pair(instance_id, instance_file)
     ensure_instance(instance.instance, backend)
     return {
         "ok": True,
@@ -118,6 +117,22 @@ def cmd_up(
 ) -> dict[str, object]:
     instance, _router = _load_pair(instance_id, instance_file)
     service = _service_name(instance_id)
+
+    already_active = _systemctl(
+        backend,
+        "is-active",
+        "--quiet",
+        service,
+        check=False,
+    )
+    if already_active.returncode == 0:
+        return {
+            "ok": True,
+            "instance_id": instance_id,
+            "service": service,
+            "namespace": instance.instance.namespace,
+            "already_active": True,
+        }
 
     ensure_instance(instance.instance, backend)
     try:
