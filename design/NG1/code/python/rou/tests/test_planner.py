@@ -356,9 +356,16 @@ class PlannerTests(unittest.TestCase):
             if arg.startswith("net.ipv4.ip_forward=")
         ]
         self.assertEqual(forwarding_writes, [])
+        self.assertFalse(
+            any(
+                len(call) >= 4
+                and call[-4:] == ("ip", "route", "flush", "table")
+                for call, _stdin, _check in backend.calls
+            )
+        )
         self.assertTrue(
             any(
-                call[-5:] == ("ip", "route", "flush", "table", "1")
+                "route" in call and "add" in call and "65535" in call
                 for call, _stdin, _check in backend.calls
             )
         )
@@ -414,7 +421,7 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(events[1][0], "open")
 
     def test_persistence_failure_prevents_forwarding_open(self):
-        _, _, _kernel, firewall, nat = expected_for(interfaces())
+        _, _, kernel, firewall, nat = expected_for(interfaces())
         initial = EnvironmentSnapshot(
             interfaces=interfaces(),
             routes=(),
@@ -428,7 +435,11 @@ class PlannerTests(unittest.TestCase):
             sysctls=sysctls(False),
         )
         backend = FakeHostBackend(firewall.canonical_save, nat.canonical_save)
-        queue = SnapshotQueue([initial, barrier, barrier])
+        applied = observed_kernel_snapshot(
+            kernel,
+            forwarding=False,
+        )
+        queue = SnapshotQueue([initial, barrier, barrier, applied])
 
         def fail_persist(_state):
             raise OSError("disk full")
