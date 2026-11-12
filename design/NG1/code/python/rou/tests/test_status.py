@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.command_backend import NamespaceBackend
-from rou.device_engine import EnvironmentInterface, InterfaceIdentity
+from rou.device_engine import EnvironmentInterface, InterfaceIdentity, reconcile_devices
 from rou.domain import (
     ActiveConfig,
     Device,
@@ -111,11 +111,16 @@ class RuntimeStatusTests(unittest.TestCase):
             interfaces=interfaces(),
             sysctls=sysctls(True),
         )
+        committed = PlannerRuntimeState.empty()
+        devices = reconcile_devices(
+            cfg,
+            committed.devices,
+            seed.interfaces,
+        )
         projection = compile_planner_projection(
             cfg,
-            PlannerRuntimeState.empty(),
-            seed,
-            None,
+            committed,
+            devices,
             None,
         )
         return cfg, projection
