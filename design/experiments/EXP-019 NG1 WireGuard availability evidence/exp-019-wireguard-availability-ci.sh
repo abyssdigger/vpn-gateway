@@ -3,17 +3,24 @@ set -eu
 
 A=vpng-wga
 B=vpng-wgb
-TMP=$(mktemp -d)
+TMP=""
 
-cleanup() {
+cleanup_netns() {
     ip netns del "$A" 2>/dev/null || true
     ip netns del "$B" 2>/dev/null || true
-    rm -rf "$TMP"
+}
+
+cleanup() {
+    cleanup_netns
+    if [ -n "$TMP" ]; then
+        rm -rf "$TMP"
+    fi
 }
 trap cleanup EXIT HUP INT TERM
-cleanup
+cleanup_netns
 
 umask 077
+TMP=$(mktemp -d)
 wg genkey >"$TMP/a.key"
 wg genkey >"$TMP/b.key"
 wg pubkey <"$TMP/a.key" >"$TMP/a.pub"
