@@ -76,3 +76,6 @@ jobs:
 
       - name: Run EXP-020 OpenConnect availability evidence
         run: sudo sh "design/experiments/EXP-020 NG1 OpenConnect availability evidence/exp-020-openconnect-availability-ci.sh"
+
+      - name: Run EXP-021 bound active-probe isolation
+        run: sudo sh "design/experiments/EXP-021 NG1 bound active probe isolation/exp-021-bound-probe-ci.sh"
