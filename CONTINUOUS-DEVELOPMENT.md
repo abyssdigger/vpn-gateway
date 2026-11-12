@@ -169,6 +169,13 @@ At the start of a cycle:
 The code-cycle branch is the authoritative externally observable activity trail. Chat/UI
 availability is not used to infer whether autonomous work is still running.
 
+Repository CI should provide cheap feedback on that trail:
+
+- every `code-cycle-*` push runs rootless production/regression checks;
+- privileged kernel integration is not required for every micro-commit;
+- privileged integration is run at a review/integration boundary when kernel semantics
+  changed, and before production merge/acceptance, using the PR/main workflow boundary.
+
 When `CHECKPOINT_PENDING=true`:
 
 - do not start another review unit;
