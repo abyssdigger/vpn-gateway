@@ -421,6 +421,62 @@ def create_instance(
         raise
 
 
+
+def ensure_instance(
+    config: InstanceConfig,
+    host: CommandBackend,
+) -> None:
+    """Ensure the owned instance exists in verified fail-closed form.
+
+    This is intended for systemd ExecStartPre and boot recovery:
+
+    - fully absent namespace+host-veth -> create a fresh instance;
+    - fully present -> close forwarding, then verify exact owned structure/prerequisites;
+    - partially present -> structural error; never guess/adopt/repair ownership.
+    """
+
+    namespaces = _namespace_names(host)
+    namespace_exists = config.namespace in namespaces
+    host_link_exists = _host_link_exists(host, config.host_if)
+
+    if not namespace_exists and not host_link_exists:
+        create_instance(config, host)
+        return
+
+    if namespace_exists != host_link_exists:
+        raise InstanceLifecycleError(
+            "instance infrastructure is partially present; "
+            f"namespace_exists={namespace_exists} "
+            f"host_link_exists={host_link_exists}"
+        )
+
+    ns = NamespaceBackend(config.namespace, host)
+    ns.run(
+        ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+        check=False,
+    )
+    verified = verify_instance(config, host, forwarding=False)
+    if not verified.ok:
+        raise InstanceLifecycleError(
+            "existing instance failed fail-closed verification: "
+            + "; ".join(verified.errors)
+        )
+
+
+def contain_instance(
+    config: InstanceConfig,
+    host: CommandBackend,
+) -> None:
+    """Best-effort containment used by service stop/crash hooks."""
+
+    if config.namespace not in _namespace_names(host):
+        return
+    NamespaceBackend(config.namespace, host).run(
+        ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+        check=False,
+    )
+
+
 def destroy_instance(
     config: InstanceConfig,
     host: CommandBackend,
