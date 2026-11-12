@@ -169,15 +169,14 @@ At minimum it:
 1. validates bootstrap and router configuration;
 2. creates the network namespace;
 3. creates rouvpn0 <-> host0;
-4. configures link addressing;
-5. prepares configured transport publications and their host-side sockets;
-6. brings up loopback;
-7. configures required namespace-local sysctls;
-8. installs initial fail-closed internal state;
-9. creates/starts the supervised ROU runtime;
-10. observes VPN interfaces;
-11. materializes profile routing/firewall state;
-12. performs final verification.
+4. configures link addressing and brings up loopback;
+5. configures required namespace-local sysctls;
+6. installs and verifies initial fail-closed internal state;
+7. creates/starts the supervised ROU runtime and configured transport publications;
+8. observes VPN interfaces;
+9. materializes Profile routing/firewall/NAT state;
+10. performs fresh complete verification;
+11. only after successful verification permits payload forwarding.
 
 Successful rou up means the appliance exists and its internal safety invariants are verified. It does not mean the host is already routing payload traffic to rouvpn0.
 
@@ -311,6 +310,10 @@ ROU owns and verifies at least these namespace prerequisites:
 - strict reverse-path filtering must not invalidate policy-routed/asymmetric VPN traffic:
   ROU-owned payload interfaces use an explicitly safe `rp_filter` policy (disabled by
   default for this model; a proven equivalent loose policy may be substituted later);
+- `net.ipv4.fib_multipath_hash_policy` is ROU-owned and verified rather than inherited
+  silently from the host/kernel default. The concrete production value is gated by the
+  dedicated target-kernel ECMP prerequisite experiment; until then no availability
+  detector may make the ECMP fallback tier operationally effective;
 - a newly appearing Device interface is not admitted for payload forwarding until required
   per-interface sysctl state is verified;
 - IPv6 is disabled on ROU-owned payload interfaces in the first production model,
@@ -399,8 +402,11 @@ This is stateful ROU transit policy, not administrator-authored tunnel ACL.
 Conntrack-equivalent semantics are normative:
 
 - the ROU-owned FORWARD policy is `DROP`;
-- canonical owned-chain order begins with `INVALID` rejection, then
-  `ESTABLISHED,RELATED` acceptance for admitted flows, then policy for `NEW`;
+- `INVALID` is rejected first;
+- `ESTABLISHED,RELATED` acceptance exists only for each currently bound interface `I`
+  in the ordered pairs `I -> host0` and `host0 -> I`;
+- no state-based ACCEPT exists for Device-to-Device transit, over-quota/unbound
+  interfaces, or selector matches that are not verified bindings;
 - `NEW` is accepted only from the side(s) allowed by the Profile direction;
 - no generated ACCEPT exists merely because an interface or route exists.
 
@@ -479,14 +485,38 @@ So the reviewer concern “firewall cannot know Profile on a shared Device” is
 for an interface-only rule set. ROU's **generated direction guard** classifies the Profile
 from remote prefix + traffic direction + Device membership.
 
-Return routing needs no architecture-mandated conntrack mark:
+Return steering differs by flow-initiation direction.
 
-- Device -> host return traffic is accepted as `ESTABLISHED` and follows main
-  `default -> host0`;
-- host -> Device return traffic has a destination inside the remote prefix and is
-  dispatched back to the Profile table.
+For OUTBOUND, no architecture-mandated conntrack mark is required:
 
-An implementation may use marks internally, but they are not required by the model.
+- Device -> host return traffic is accepted only on the same currently bound
+  Device-interface/host0 pair and follows main `default -> host0`;
+- host -> Device traffic is destination-dispatched back to the Profile table.
+
+For INBOUND/BIDIRECTIONAL, destination dispatch alone cannot preserve the tunnel that
+admitted the remote-initiated flow when more than one egress interface is possible.
+Therefore schema version 1 admits an enabled remote-initiated Profile only when:
+
+    capacity(Profile) == 1
+
+where capacity is the sum of `interface_quota` for enabled Devices in that Profile's
+`device_order`. Disabled Device references do not count. A configuration transition
+that would make the capacity greater than one is rejected before kernel mutation.
+
+In addition, every active Device referenced by an INBOUND/BIDIRECTIONAL Profile must have
+a `traffic_envelope` with terminal `default = "drop"`. The Profile constrains the
+remote source prefix; the restrictive Device envelope is the mandatory administrator
+boundary that explicitly states which host-side destinations/protocols/ports may be
+reached by remote-initiated traffic.
+
+Capacity greater than one is a future flow-pinning extension, not part of schema version
+1. It requires dedicated kernel evidence for connmark restore before routing, fwmark RPDB
+return steering, retired-mark blackhole behavior, rp_filter interaction and conntrack
+cleanup. Until that extension is proven, no implementation may silently relax the
+capacity-one rule.
+
+Residual tuple matching across two bound interfaces is consequently excluded for
+remote-initiated schema-v1 Profiles by the capacity-one rule.
 
 #### B. Device traffic envelope — authored by the administrator
 
@@ -517,6 +547,34 @@ When materialized as ordered firewall rules, **Device-envelope DROP/reject rules
 generated Profile-direction ACCEPT rules** for the same transit path. This ordering is
 normative: a restrictive Device envelope must never be bypassed by an earlier generated
 direction ACCEPT.
+
+
+### 5.4.1 ROU-local INPUT and OUTPUT policy
+
+ROU owns local firewall policy as well as transit FORWARD policy.
+
+`INPUT` is default `DROP`. It accepts only:
+
+- loopback;
+- `ESTABLISHED,RELATED` traffic for ROU-local connections;
+- from `host0`, `NEW` traffic to the configured internal publication endpoints
+  (ROU-local address + protocol + internal port/range).
+
+Traffic arriving from any Device interface toward a ROU-local address is dropped,
+including traffic targeting a Device's own transport listener/publication endpoint. This
+is defense-in-depth and does not block the publication relay: the host-side relay reaches
+the internal listener through `host0`.
+
+`OUTPUT` is default `DROP`. Schema version 1 accepts only:
+
+- loopback;
+- `ESTABLISHED,RELATED` ROU-local traffic;
+- locally initiated traffic whose egress is `host0`.
+
+No locally generated OUTPUT is implicitly accepted through Device interfaces. The first
+production schema deliberately leaves the underlay destination unrestricted once egress is
+`host0`; future DeviceManager transport configuration may narrow NEW underlay traffic to
+explicit transport endpoints without changing routing semantics.
 
 ### 5.5 Unbound and over-quota interface isolation
 
@@ -733,8 +791,10 @@ that socket is outside ROU responsibility.
 For UDP, publication must preserve independent per-peer return-path associations. TCP
 publication is connection-oriented relay.
 
-ROU local INPUT policy must explicitly admit the configured internal publication endpoints
-needed by the relay/listener path. Publication never implies a blanket INPUT allow.
+ROU local INPUT is default-DROP. Publication admits only host0-originated traffic to the
+configured internal local address/protocol/port endpoints needed by the relay/listener
+path. Publication never implies blanket INPUT permission and never permits Device-interface
+traffic to ROU-local listeners.
 
 Publication workers/sockets follow the supervision contract in §3.4.
 
@@ -927,15 +987,23 @@ functionally dead while its interface remains present, Linux does not retry the 
 through another healthy equal-cost member. This is intentional last-resort semantics and
 must not be described as ordered failover.
 
-Operationally, disappearance of any member of a materialized multipath fallback requires a
-full Profile-route reprojection under the protective barrier because the kernel removes the
-whole multipath route rather than shrinking it to survivors. Traffic therefore fails
-closed during that transition even when another fallback member remains healthy.
-
-EXP-013 A3 also confirmed that disappearance of one member interface causes Linux to remove
-the whole direct-device multipath route rather than shrink it to surviving members.
+EXP-013 A3 confirmed that disappearance of one member interface causes Linux to remove the
+whole direct-device multipath route rather than shrink it to surviving members.
 TrafficEngine therefore rebuilds fallback membership from a fresh binding snapshot after
-such a change; the transient absence is fail-closed.
+such a change.
+
+This ordinary binding lifecycle transition does **not** require the global protective
+forwarding barrier. Surviving normal routes remain, and while the shadow fallback is
+absent/rebuilt the terminal Profile fail-close plus terminal host0 RPDB action prevent
+fall-through to main. The transition may cause a brief Profile-local outage but not a
+fail-open path.
+
+Likewise, ordinary binding appearance and normalized availability transitions are
+incremental reconciliation events and do not require global `ip_forward=0`.
+
+The global protective barrier is reserved for structural/unknown owned-state drift, crash
+recovery from unverified state, and policy transitions that cannot be proven safe as an
+incremental update.
 
 Example for one destination with three bound interfaces, all UNKNOWN:
 
@@ -950,8 +1018,14 @@ classification removes only that member's normal-tier route and leaves its shado
 membership unchanged.
 
 UNKNOWN availability does not terminate a bound-interface lifetime and does not demote a
-path. Future Device-specific detectors may move an interface between UNKNOWN, AVAILABLE
-and UNAVAILABLE without changing its normal metric assignment.
+path.
+
+The fallback mechanism is implemented in the first production code intentionally, while
+the **trigger** that positively classifies a bound interface as UNAVAILABLE is deliberately
+deferred to future DeviceManager/Device-specific detector work. Until such a detector is
+implemented, ordinary bound interfaces remain UNKNOWN unless an explicit test/provider
+injects stronger evidence. Future detectors may move an interface between UNKNOWN,
+AVAILABLE and UNAVAILABLE without changing its normal metric assignment.
 
 ## 13. DeviceEngine
 
@@ -1187,6 +1261,36 @@ advertise transport endpoints remains protocol-specific and is not implied by EX
 The EXP-011 proof relay intentionally supported only one UDP peer association. This is
 sufficient for the topology/protocol proof but not for production: a general ROU UDP relay
 must maintain independent per-peer association state.
+
+## 19.1 Production protective-barrier scope
+
+Production reconciliation distinguishes **ordinary lifecycle transition** from
+**structural/unknown drift**.
+
+Ordinary lifecycle transitions include verified binding appearance/disappearance and
+normalized availability changes. They are repaired incrementally with RPDB dispatch and
+terminal fail-close retained. Profile tables may be rebuilt while their dispatch rule and
+terminal host0 fail-close remain installed; a temporarily empty/incomplete Profile table
+therefore fails closed rather than falling through to main. Filter/NAT owned tables are
+atomically replaced from fresh binding state. These transitions do not require global
+`ip_forward=0`.
+
+Structural/unknown drift includes unexpected owned RPDB state, foreign/unrepresentable
+state in owned routing domains, firewall/NAT drift not attributable to a verified binding
+transition, appliance-infrastructure loss, crash recovery from unverified state, and
+policy transitions whose incremental safety cannot be proven. These use the global
+protective barrier:
+
+    ip_forward=0
+        -> project complete owned state
+        -> apply/repair
+        -> fresh observe
+        -> verify complete desired state
+        -> durable commit
+        -> ip_forward=1
+
+This global barrier is intentionally conservative for unknown state, not a normal response
+to every Device connection/disconnection.
 
 ## 20. First executable ROU prototype boundary
 
@@ -1445,7 +1549,7 @@ ROU does not seize or rewrite unrelated host VPN routes.
 29. Duplicate remote prefixes are forbidden globally across enabled Profiles; overlap at different prefix lengths is allowed.
 30. Host -> Device Profile dispatch matches remote destination prefix; Device -> host NEW-flow classification first filters enabled Profiles by ingress-Device membership and then longest-prefix matches the remote source within that filtered set.
 31. Host-side RPDB dispatch is longest-prefix-first and ends with a terminal iif-host0 fail-closed action so unmatched forwarded host traffic cannot fall through to main default.
-32. ROU-owned FORWARD is default-DROP; canonical stateful ordering rejects INVALID, accepts ESTABLISHED/RELATED admitted-flow traffic, and materializes an explicit ACCEPT-or-DROP NEW verdict for every enabled (Profile, Device, remote-prefix) pair in each relevant direction.
+32. ROU-owned FORWARD is default-DROP; INVALID is rejected first; ESTABLISHED/RELATED ACCEPT exists only for currently bound interface<->host0 pairs; and an explicit ACCEPT-or-DROP NEW verdict is materialized for every enabled (Profile, Device, remote-prefix) pair in each relevant direction.
 33. Device traffic_envelope is separate administrator-authored Device/tunnel firewall policy; it applies to all Profiles sharing that Device.
 34. Generated Profile direction and Device envelope are cumulative; neither may widen the other, restrictive Device-envelope rules precede generated direction verdicts, and explicit NEW direction verdicts are longest-prefix-first so a broader Profile cannot override a more-specific deny.
 35. Each enabled Profile owns one fail-closed routing table with one terminal blackhole default.
@@ -1475,7 +1579,7 @@ ROU does not seize or rewrite unrelated host VPN routes.
 59. The first production payload model disables IPv6 on ROU-owned payload interfaces rather than relying only on disabled IPv6 forwarding.
 60. Higher-priority local-table delivery of host0 traffic addressed to ROU-owned local endpoints is intentional and is not an escape from the forwarded-payload fail-closed guard.
 61. NEW-flow direction policy is never omission-only: each enabled (Profile, Device, remote-prefix) pair materializes an explicit ACCEPT or DROP verdict for each relevant direction, ordered longest-prefix-first.
-62. Multipath fallback member disappearance triggers full Profile-route reprojection under the protective barrier; traffic fails closed during the transition even when surviving members are healthy.
+62. Ordinary binding appearance/disappearance and normalized availability changes are incremental lifecycle transitions and do not require the global protective barrier; structural/unknown owned-state drift and unverified recovery do.
 63. Router and instance human-facing TOML require schema_version=1; unknown or missing versions are rejected.
 64. Every enabled Device explicitly selects payload NAT mode none or masquerade; NAT is Device-scoped and MASQUERADE is restricted to bound interfaces plus remote prefixes of enabled Profiles referencing that Device.
 65. Device publications use the schema-v1 ext-port-or-range/protocol[>internal-port-or-range] grammar; active external endpoints may not overlap for one protocol, and internal endpoints may not overlap across different active Devices.
@@ -1483,3 +1587,9 @@ ROU does not seize or rewrite unrelated host VPN routes.
 67. Traffic-envelope traversal precedes ESTABLISHED/RELATED and generated NEW verdicts for the relevant bound Device interface, allowing Device restrictions to terminate existing flows.
 68. Instance schema version 1 fixes the internal peer name to host0, requires explicit stable IPv4 link addresses plus publication bind address, and uses absolute router-config/state-file paths.
 69. Instance identifiers use the same opaque [a-z0-9][a-z0-9-]* grammar as Device/Profile IDs.
+70. INBOUND/BIDIRECTIONAL Profiles are valid in schema version 1 only when active interface capacity is exactly one and every active referenced Device has a traffic_envelope with default=drop.
+71. Capacity greater than one for remote-initiated Profiles requires a separately proven flow-pinning extension; destination dispatch alone is insufficient return steering.
+72. ROU-owned INPUT is default-DROP and admits only loopback, local ESTABLISHED/RELATED, and host0 to configured internal publication endpoints; Device interfaces have no implicit ROU-local access.
+73. ROU-owned OUTPUT is default-DROP and admits only loopback, local ESTABLISHED/RELATED, and locally generated traffic whose egress is host0.
+74. The persistent shadow fallback is implemented before its production availability trigger; positive UNAVAILABLE classification is intentionally deferred to future DeviceManager/Device-specific detector work.
+75. net.ipv4.fib_multipath_hash_policy is an observed/owned namespace prerequisite and may not be silently inherited when ECMP fallback can become effective.
