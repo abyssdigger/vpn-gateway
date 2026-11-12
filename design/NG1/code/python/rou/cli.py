@@ -20,7 +20,6 @@ from .instance_lifecycle import (
     ensure_instance,
     verify_instance,
 )
-from .nat_state import ConfigNatProvider
 from .runtime_app import run_instance_runtime
 from .status import inspect_runtime_status
 from .state_store import JsonRuntimeStateStore, StateStoreError
@@ -288,7 +287,6 @@ def cmd_show(
         loaded.state,
         snapshot,
         ns,
-        ConfigNatProvider(),
         local_publication_address=instance.instance.inner_address.ip,
     )
 
