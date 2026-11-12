@@ -200,6 +200,18 @@ Values:
 
 ESTABLISHED/RELATED return traffic is admitted subject to Device envelope.
 
+Production schema-v1 restrictions for `inbound` and `bidirectional`:
+
+- active interface capacity must be exactly 1, where capacity is the sum of
+  `interface_quota` for enabled Devices in `device_order`;
+- every active referenced Device must have `traffic_envelope` with
+  `default = "drop"`.
+
+The capacity-one rule guarantees deterministic return steering without connmark/fwmark.
+The restrictive envelope is the mandatory administrator boundary that explicitly permits
+host-side destinations/protocols/ports for remote-initiated traffic. Capacity greater than
+one is a future EXP-014-gated flow-pinning extension.
+
 ### 4.2 Destinations
 
 Strict remote-side IPv4 CIDRs:
