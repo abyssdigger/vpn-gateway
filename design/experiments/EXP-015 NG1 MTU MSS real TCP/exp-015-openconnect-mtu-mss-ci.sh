@@ -249,7 +249,7 @@ print(f"TCP_ROUNDTRIP_BYTES={length}")
 print(f"TCP_ROUNDTRIP_SHA256={actual}")
 PY
 
-ip netns exec "$SRV" python3 "$TMP/tcp-server.py" "$TARGET_A" "$TCP_PORT"     >"$TCP_LOG" 2>&1 &
+ip netns exec "$SRV" python3 "$TMP/tcp-server.py" "0.0.0.0" "$TCP_PORT"     >"$TCP_LOG" 2>&1 &
 TCP_PID=$!
 for _ in $(seq 1 20); do
     grep -q '^READY$' "$TCP_LOG" 2>/dev/null && break
