@@ -45,6 +45,12 @@ class NftVerification:
     expected: str
 
 
+@dataclass(frozen=True)
+class NftObservedState:
+    canonical: str
+    numeric_interface_refs: tuple[tuple[str, int], ...]
+
+
 
 def _numeric_interface_refs_from_definition(
     definition: str,
@@ -532,26 +538,52 @@ def observe_nft_table(
     )
 
 
+def observe_nft_state(
+    desired: NftTableDesiredState,
+    backend: NamespaceBackend,
+) -> NftObservedState:
+    """Observe one owned nft table through the production verification boundary.
+
+    Textual canonicalization verifies complete policy/order semantics. JSON observation
+    independently preserves numeric iif/oif generation identity even when the text renderer
+    resolves a live ifindex back to an interface name.
+
+    The two reads are intentionally encapsulated here. The runtime serializes its own nft
+    mutations; foreign concurrent mutation can only make this observation stale, never make
+    an unverified numeric generation satisfy the exact ref multiset.
+    """
+
+    return NftObservedState(
+        canonical=observe_nft_table(desired, backend),
+        numeric_interface_refs=observe_nft_numeric_interface_refs(
+            desired,
+            backend,
+        ),
+    )
+
+
 def verify_nft_table(
     desired: NftTableDesiredState,
     backend: NamespaceBackend,
 ) -> NftVerification:
-    actual = observe_nft_table(desired, backend)
-    actual_refs = observe_nft_numeric_interface_refs(desired, backend)
-    refs_ok = actual_refs == desired.numeric_interface_refs
-    if not refs_ok:
-        actual = (
-            actual
-            + "\n# numeric-interface-refs="
-            + repr(actual_refs)
-        )
+    observed = observe_nft_state(desired, backend)
+    text_ok = observed.canonical == desired.canonical
+    refs_ok = (
+        observed.numeric_interface_refs
+        == desired.numeric_interface_refs
+    )
+    actual = (
+        observed.canonical
+        + "\n# numeric-interface-refs="
+        + repr(observed.numeric_interface_refs)
+    )
+    expected = (
+        desired.canonical
+        + "\n# numeric-interface-refs="
+        + repr(desired.numeric_interface_refs)
+    )
     return NftVerification(
-        ok=actual.split("\n# numeric-interface-refs=", 1)[0] == desired.canonical
-        and refs_ok,
+        ok=text_ok and refs_ok,
         actual=actual,
-        expected=(
-            desired.canonical
-            + "\n# numeric-interface-refs="
-            + repr(desired.numeric_interface_refs)
-        ),
+        expected=expected,
     )
