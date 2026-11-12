@@ -90,6 +90,14 @@ class ProbeEvidenceStoreTests(unittest.TestCase):
         self.assertNotIn(self.a, snapshot)
         self.assertEqual(snapshot[self.b], fresh)
 
+    def test_retain_requires_interface_identity_values(self):
+        store = ProbeEvidenceStore()
+        with self.assertRaisesRegex(
+            ValueError,
+            "InterfaceIdentity",
+        ):
+            store.retain(("vpns00",))  # type: ignore[arg-type]
+
     def test_duplicate_retain_identity_is_rejected(self):
         store = ProbeEvidenceStore()
         with self.assertRaisesRegex(ValueError, "duplicate"):
