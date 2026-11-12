@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rou.command_backend import CommandResult, NamespaceBackend
+from rou.command_backend import NamespaceBackend
 from rou.device_engine import EnvironmentInterface, InterfaceIdentity
 from rou.domain import (
     ActiveConfig,
@@ -18,9 +18,9 @@ from rou.domain import (
     Profile,
 )
 from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule
-from rou.nat_state import ConfigNatProvider
 from rou.planner import PlannerRuntimeState, compile_planner_projection
 from rou.status import inspect_runtime_status
+from _nft_fake import FakeNftBackend
 
 
 def config():
@@ -73,20 +73,6 @@ def sysctls(forwarding=True):
     )
 
 
-class FakeHostBackend:
-    def __init__(self, filter_text: str, nat_text: str):
-        self.filter_text = filter_text
-        self.nat_text = nat_text
-
-    def run(self, argv, *, input_text=None, check=True):
-        stdout = ""
-        if argv[-4:] == ("iptables-legacy-save", "-c", "-t", "filter"):
-            stdout = self.filter_text
-        elif argv[-4:] == ("iptables-legacy-save", "-c", "-t", "nat"):
-            stdout = self.nat_text
-        return CommandResult(argv, 0, stdout, "")
-
-
 def observed_from_projection(projection, *, extra_routes=()):
     routes = tuple(
         KernelRoute(
@@ -129,7 +115,6 @@ class RuntimeStatusTests(unittest.TestCase):
             cfg,
             PlannerRuntimeState.empty(),
             seed,
-            ConfigNatProvider(),
             None,
             None,
         )
@@ -138,9 +123,9 @@ class RuntimeStatusTests(unittest.TestCase):
     def test_complete_live_state_is_verified(self):
         cfg, projection = self.make_projection()
         observed = observed_from_projection(projection)
-        host = FakeHostBackend(
-            projection.firewall.canonical_save,
-            projection.nat.canonical_save,
+        host = FakeNftBackend(
+            projection.firewall,
+            projection.nat,
         )
         result = inspect_runtime_status(
             cfg,
@@ -148,7 +133,6 @@ class RuntimeStatusTests(unittest.TestCase):
             PlannerRuntimeState.empty(),
             observed,
             NamespaceBackend("rou0", host),
-            ConfigNatProvider(),
         )
         self.assertTrue(result.ok, result.errors)
         self.assertEqual(
@@ -171,9 +155,9 @@ class RuntimeStatusTests(unittest.TestCase):
             projection,
             extra_routes=(foreign,),
         )
-        host = FakeHostBackend(
-            projection.firewall.canonical_save,
-            projection.nat.canonical_save,
+        host = FakeNftBackend(
+            projection.firewall,
+            projection.nat,
         )
         result = inspect_runtime_status(
             cfg,
@@ -181,7 +165,6 @@ class RuntimeStatusTests(unittest.TestCase):
             PlannerRuntimeState.empty(),
             observed,
             NamespaceBackend("rou0", host),
-            ConfigNatProvider(),
         )
         self.assertFalse(result.ok)
         self.assertTrue(
@@ -198,12 +181,11 @@ class RuntimeStatusTests(unittest.TestCase):
                 observed_from_projection(projection),
                 NamespaceBackend(
                     "other",
-                    FakeHostBackend(
-                        projection.firewall.canonical_save,
-                        projection.nat.canonical_save,
+                    FakeNftBackend(
+                        projection.firewall,
+                        projection.nat,
                     ),
                 ),
-                ConfigNatProvider(),
             )
 
 
