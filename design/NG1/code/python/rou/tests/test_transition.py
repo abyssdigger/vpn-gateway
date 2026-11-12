@@ -193,5 +193,37 @@ class TransitionTests(unittest.TestCase):
         )
 
 
+    def test_foreign_rule_above_terminal_is_structural(self):
+        previous = desired("vpns00")
+        current = desired(None)
+        rules = list(rule_observed())
+        rules.append(
+            KernelRule(
+                1000,
+                254,
+                "to_tbl",
+                destination=ipaddress.IPv4Network("203.0.113.0/24"),
+                iif="host0",
+            )
+        )
+        result = assess_binding_lifecycle(
+            previous,
+            current,
+            FirewallDesiredState("", "old-filter"),
+            FirewallDesiredState("", "new-filter"),
+            NatDesiredState("", "old-nat"),
+            NatDesiredState("", "new-nat"),
+            bindings(10),
+            bindings(None),
+            observed_from((), tuple(rules)),
+            "old-filter",
+            "old-nat",
+        )
+        self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
+        self.assertTrue(
+            any("RPDB" in reason for reason in result.reasons)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
