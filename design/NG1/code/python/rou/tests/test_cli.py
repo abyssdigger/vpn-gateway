@@ -54,8 +54,8 @@ class CliTests(unittest.TestCase):
         with (
             patch("rou.cli._load_pair", return_value=(config(), object())),
             patch(
-                "rou.cli.create_instance",
-                side_effect=lambda *_: events.append("create"),
+                "rou.cli.ensure_instance",
+                side_effect=lambda *_: events.append("ensure"),
             ),
             patch(
                 "rou.cli.destroy_instance",
@@ -69,10 +69,35 @@ class CliTests(unittest.TestCase):
                     backend,
                 )
 
-        self.assertEqual(events, ["create", "destroy"])
+        self.assertEqual(events, ["ensure", "destroy"])
         self.assertIn(
-            ("systemctl", "stop", "rouvpn@rou0.service"),
+            ("systemctl", "disable", "--now", "rouvpn@rou0.service"),
             backend.calls,
+        )
+
+
+    def test_up_is_non_disruptive_when_service_already_active(self):
+        backend = FakeBackend(active_returncode=0)
+
+        with (
+            patch("rou.cli._load_pair", return_value=(config(), object())),
+            patch("rou.cli.ensure_instance") as ensure,
+            patch("rou.cli.destroy_instance") as destroy,
+        ):
+            result = cmd_up(
+                "rou0",
+                Path("/etc/instance.toml"),
+                backend,
+            )
+
+        self.assertTrue(result["already_active"])
+        ensure.assert_not_called()
+        destroy.assert_not_called()
+        self.assertFalse(
+            any(
+                "net.ipv4.ip_forward=0" in argv
+                for argv in backend.calls
+            )
         )
 
     def test_down_does_not_require_router_policy_to_parse(self):
