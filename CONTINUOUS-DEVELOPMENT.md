@@ -134,28 +134,46 @@ checkpoint.
 
 ## Session-safety cadence
 
-Long development sessions are expected to be interrupted by the execution environment
-after roughly 45 minutes. To avoid losing an unreviewed tail, use **30 minutes as the
-checkpoint trigger**, deliberately leaving margin for the current iteration to finish.
+Long development sessions may be interrupted by the execution environment after roughly
+45 minutes. Do not rely on subjective wall-clock tracking.
 
-The 30-minute mark does **not** interrupt an in-progress review unit. After it is reached:
+Each autonomous development cycle uses **Git commit timestamps as the checkpoint clock**:
 
-1. finish the current iteration completely: implementation, required tests/evidence,
-   expert review and accepted fixes for that review unit;
-2. push a Git checkpoint/branch state;
-3. stop before starting the next review unit;
-4. post a brief human-facing checkpoint containing:
-   - what was completed;
-   - what evidence/tests/reviews passed or failed;
-   - the exact current blocker or unfinished review unit, if any;
-   - decisions that genuinely require human agreement;
-   - the next intended review unit.
+1. the first commit created in the cycle becomes `CYCLE_START_COMMIT`;
+2. record its commit timestamp `T0`;
+3. after every subsequent commit in that cycle, read that commit's timestamp `Tn`;
+4. compute `Tn - T0`;
+5. if the elapsed time is **30 minutes or more**, set
+   `CHECKPOINT_PENDING=true`.
 
-The 30-minute checkpoint is a session-preservation trigger, not a hard execution limit and
-not a review boundary. The intentional safety margin is consumed by finishing the current
-iteration cleanly. Do not start another review unit after the trigger has fired.
+When `CHECKPOINT_PENDING=true`:
 
-Do not manufacture extra review documents merely because the timer expired.
+- do not start another review unit;
+- finish the **current review unit completely**:
+  implementation, required tests/evidence, expert review and accepted fixes;
+- create/push the final checkpoint commit for that unit;
+- post a brief human-facing checkpoint/discussion;
+- stop autonomous development until the next user turn.
+
+The 30-minute threshold is deliberately lower than the expected execution cutoff so the
+remaining margin is available to finish the current iteration cleanly.
+
+The checkpoint message must include:
+
+- `CYCLE_START_COMMIT` and its timestamp;
+- final checkpoint commit and timestamp;
+- elapsed cycle time;
+- what was completed;
+- tests/experiments/reviews that passed or failed;
+- the exact unfinished or blocked item, if any;
+- decisions that genuinely require human agreement;
+- the next intended review unit.
+
+A new autonomous cycle starts only after the next user turn, with a new
+`CYCLE_START_COMMIT`.
+
+This is a session-preservation mechanism, not a reason to create extra review documents or
+to interrupt a review unit halfway through.
 
 ## Completion criteria
 
