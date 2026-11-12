@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from types import MappingProxyType
 from typing import Iterable, Mapping
 
 from .domain import ActiveConfig, Availability
+
+
+LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, order=True)
@@ -136,6 +140,12 @@ def reconcile_devices(
 
     availability = availability or {}
     observed = tuple(interfaces)
+    LOG.debug(
+        "device-reconcile-start observed=%s previous_expectations=%d active_devices=%s",
+        [(item.identity.ifname, item.identity.ifindex) for item in observed],
+        len(previous.expectations),
+        sorted(config.active_device_names),
+    )
     present = {item.identity for item in observed}
     active_devices = config.active_device_names
 
@@ -167,6 +177,13 @@ def reconcile_devices(
 
             state = ExpectedBindingState(device_name, expected_index, tuple(candidates))
             next_expectations[key] = state
+            LOG.debug(
+                "device-selector-projection device=%s expected_index=%d quota=%d candidates=%s",
+                device_name,
+                expected_index,
+                expected.interface_quota,
+                [(item.ifname, item.ifindex) for item in candidates],
+            )
 
             for position, identity in enumerate(candidates):
                 item = BoundInterface(
@@ -180,7 +197,30 @@ def reconcile_devices(
                 else:
                     over_quota.append(item)
 
-    return DeviceReconcileResult(
+    result = DeviceReconcileResult(
         next_state=DeviceBindingState(next_expectations),
         snapshot=DeviceBindingSnapshot(tuple(bound), tuple(over_quota)),
     )
+    LOG.debug(
+        "device-reconcile-result bound=%s over_quota=%s",
+        [
+            (
+                item.device_name,
+                item.expected_index,
+                item.identity.ifname,
+                item.identity.ifindex,
+                item.availability.value,
+            )
+            for item in result.snapshot.bound
+        ],
+        [
+            (
+                item.device_name,
+                item.expected_index,
+                item.identity.ifname,
+                item.identity.ifindex,
+            )
+            for item in result.snapshot.over_quota
+        ],
+    )
+    return result
