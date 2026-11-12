@@ -95,6 +95,7 @@ class NamespacePrereqTests(unittest.TestCase):
             ("net.ipv4.ip_forward", "0"),
             ("net.ipv4.conf.all.rp_filter", "0"),
             ("net.ipv4.conf.default.rp_filter", "0"),
+            ("net.ipv4.fib_multipath_hash_policy", "0"),
             ("net.ipv6.conf.all.forwarding", "0"),
             ("net.ipv6.conf.default.forwarding", "0"),
             ("net.ipv6.conf.default.disable_ipv6", "1"),
@@ -124,6 +125,7 @@ class NamespacePrereqTests(unittest.TestCase):
             ("net.ipv4.ip_forward", "0"),
             ("net.ipv4.conf.all.rp_filter", "1"),
             ("net.ipv4.conf.default.rp_filter", "0"),
+            ("net.ipv4.fib_multipath_hash_policy", "0"),
             ("net.ipv6.conf.all.forwarding", "0"),
             ("net.ipv6.conf.default.forwarding", "0"),
             ("net.ipv6.conf.default.disable_ipv6", "1"),
@@ -139,6 +141,31 @@ class NamespacePrereqTests(unittest.TestCase):
         )
         self.assertFalse(result.ok)
         self.assertTrue(any("all.rp_filter" in error for error in result.errors))
+
+
+    def test_verify_requires_observable_ecmp_hash_policy(self):
+        bindings = self.make_bindings()
+        sysctls = (
+            ("net.ipv4.ip_forward", "0"),
+            ("net.ipv4.conf.all.rp_filter", "0"),
+            ("net.ipv4.conf.default.rp_filter", "0"),
+            ("net.ipv6.conf.all.forwarding", "0"),
+            ("net.ipv6.conf.default.forwarding", "0"),
+            ("net.ipv6.conf.default.disable_ipv6", "1"),
+            ("net.ipv4.conf.host0.rp_filter", "0"),
+            ("net.ipv6.conf.host0.disable_ipv6", "1"),
+            ("net.ipv4.conf.vpns00.rp_filter", "0"),
+            ("net.ipv6.conf.vpns00.disable_ipv6", "1"),
+        )
+        result = verify_namespace_prerequisites(
+            EnvironmentSnapshot((), sysctls=sysctls),
+            bindings,
+            forwarding=False,
+        )
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("fib_multipath_hash_policy" in error for error in result.errors)
+        )
 
 
 if __name__ == "__main__":
