@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from types import MappingProxyType
 from typing import Mapping, Protocol
 
@@ -61,3 +62,29 @@ def normalize_availability(
             )
         normalized[identity] = availability
     return MappingProxyType(normalized)
+
+
+def annotate_bindings(
+    bindings: DeviceBindingSnapshot,
+    values: Mapping[InterfaceIdentity, Availability],
+) -> DeviceBindingSnapshot:
+    """Return the same binding generations/order with normalized availability attached."""
+
+    normalized = normalize_availability(bindings, values)
+
+    def annotate(items):
+        return tuple(
+            replace(
+                item,
+                availability=normalized.get(
+                    item.identity,
+                    Availability.UNKNOWN,
+                ),
+            )
+            for item in items
+        )
+
+    return DeviceBindingSnapshot(
+        bound=annotate(bindings.bound),
+        over_quota=annotate(bindings.over_quota),
+    )
