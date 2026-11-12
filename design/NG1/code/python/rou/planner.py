@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Address
 from typing import Callable, Mapping
 
 from .command_backend import CommandBackend, NamespaceBackend
@@ -101,6 +102,7 @@ def _project(
     snapshot: EnvironmentSnapshot,
     nat_provider: NatProvider,
     availability_provider: AvailabilityProvider | None,
+    local_publication_address: IPv4Address | None,
 ) -> PlannerProjection:
     availability = (
         availability_provider(snapshot)
@@ -125,7 +127,11 @@ def _project(
         metrics,
         allocation,
     )
-    firewall = compile_filter_state(config, devices.snapshot)
+    firewall = compile_filter_state(
+        config,
+        devices.snapshot,
+        local_publication_address=local_publication_address,
+    )
     nat = nat_provider.compile(config, devices.snapshot)
     return PlannerProjection(
         device_state=devices.next_state,
@@ -195,6 +201,7 @@ def reconcile_once(
     availability_provider: AvailabilityProvider | None = None,
     collect_snapshot: SnapshotCollector = default_snapshot_collector,
     persist_verified_state: VerifiedStatePersister | None = None,
+    local_publication_address: IPv4Address | None = None,
 ) -> PlannerResult:
     """Run one complete observe->plan->apply->observe->verify->commit cycle.
 
@@ -217,6 +224,7 @@ def reconcile_once(
             initial,
             nat_provider,
             availability_provider,
+            local_publication_address,
         )
 
         current_errors_open = _verify_all(
@@ -283,6 +291,7 @@ def reconcile_once(
             barrier_snapshot,
             nat_provider,
             availability_provider,
+            local_publication_address,
         )
 
         apply_namespace_prerequisites(
