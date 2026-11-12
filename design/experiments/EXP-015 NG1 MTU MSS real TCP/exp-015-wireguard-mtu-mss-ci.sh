@@ -252,6 +252,7 @@ echo "TCP_MSS_VALUES=$MSS_VALUES"
 echo "PASS A: production-like WireGuard large TCP round-trip succeeds"
 
 ip netns exec "$ROU" nft add rule ip exp15wg output     oifname "$RIF" ip protocol icmp drop
+ip netns exec "$REMOTE" nft add rule ip exp15wgremote output     oifname "$REMOTE_LAN" ip protocol icmp drop
 
 set +e
 timeout 12 python3 "$TMP/tcp-client.py" "$TARGET_B" "$TCP_PORT" 8388608 8     >"$TMP/blocked-client.log" 2>&1
