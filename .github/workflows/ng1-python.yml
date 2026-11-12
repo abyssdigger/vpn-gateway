@@ -2,7 +2,9 @@ name: NG1 Python validation
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'code-cycle-*'
   pull_request:
     branches: [ main ]
 
