@@ -38,11 +38,16 @@ table ip vpng_exp17 {
         type filter hook input priority filter; policy drop;
         meta iif $OLD_INDEX ip protocol icmp counter accept
     }
+    chain output {
+        type filter hook output priority filter; policy drop;
+        meta oif $OLD_INDEX ip protocol icmp counter accept
+    }
 }
 EOF
 
 ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null
-echo "PASS A: numeric iif=$OLD_INDEX admits original generation"
+ip netns exec "$ROU" ping -c 1 -W 1 198.18.17.1 >/dev/null
+echo "PASS A: numeric iif/oif=$OLD_INDEX admit original generation"
 
 # Deleting either veth endpoint removes the pair. Recreate the same interface names.
 ip -n "$SRC" link del "$SRC_HOST"
@@ -58,13 +63,24 @@ if ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
     echo "FAIL: fresh same-name generation matched old numeric iif rule" >&2
     exit 1
 fi
-echo "PASS B: same-name/new-ifindex=$NEW_INDEX does not inherit iif=$OLD_INDEX rule"
+echo "PASS B: same-name/new-ifindex=$NEW_INDEX does not inherit old iif/oif rules"
 
+# Update only ingress generation. SRC -> ROU must work again, while ROU -> SRC must still
+# fail because OUTPUT remains pinned to old oif.
 ip netns exec "$ROU" nft add rule ip vpng_exp17 input \
     meta iif "$NEW_INDEX" ip protocol icmp counter accept
 
 ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null
-echo "PASS C: explicit rule for fresh ifindex restores admission"
+if ip netns exec "$ROU" ping -c 1 -W 1 198.18.17.1 >/dev/null 2>&1; then
+    echo "FAIL: fresh same-name generation matched old numeric oif rule" >&2
+    exit 1
+fi
+echo "PASS C: new iif alone does not bypass stale oif generation rule"
 
-ip netns exec "$ROU" nft -n list chain ip vpng_exp17 input
-echo "EXP_017_PRELIMINARY_IIF=PASS"
+ip netns exec "$ROU" nft add rule ip vpng_exp17 output \
+    meta oif "$NEW_INDEX" ip protocol icmp counter accept
+ip netns exec "$ROU" ping -c 1 -W 1 198.18.17.1 >/dev/null
+echo "PASS D: explicit new oif restores local egress"
+
+ip netns exec "$ROU" nft -n list table ip vpng_exp17
+echo "EXP_017_PRELIMINARY_IIF_OIF=PASS"
