@@ -27,10 +27,18 @@ cp -a "$SRC_ROU" "$STAGE/rou"
 
 OLD="$LIB_ROOT/.rou-old"
 rm -rf "$OLD"
+HAD_OLD=0
 if [ -e "$TARGET_ROU" ]; then
     mv "$TARGET_ROU" "$OLD"
+    HAD_OLD=1
 fi
-mv "$STAGE/rou" "$TARGET_ROU"
+if ! mv "$STAGE/rou" "$TARGET_ROU"; then
+    if [ "$HAD_OLD" -eq 1 ] && [ -e "$OLD" ]; then
+        mv "$OLD" "$TARGET_ROU"
+    fi
+    echo "ERROR: failed to activate staged ROU package" >&2
+    exit 1
+fi
 rm -rf "$OLD"
 rmdir "$STAGE"
 trap - EXIT HUP INT TERM
