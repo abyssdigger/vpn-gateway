@@ -1064,6 +1064,14 @@ identities may then receive normalized availability evidence. Over-quota candida
 UNKNOWN until promoted. A collector may use active/protocol-specific observation, as
 required by EXP-019/020, but it may not change binding order or quota.
 
+EXP-021 additionally proves that active evidence in a multi-path ROU must be explicitly
+interface-bound: an unbound probe can succeed through a different healthy Device, while an
+interface-bound probe fails with the selected path. Source-address-only binding was not a
+reliable substitute in the tested competing-route topology. The tested hosted runner did
+not require widening effective capabilities for interface-bound ping, so CAP_NET_RAW is
+not added by assumption; real systemd/target capability behavior remains a deployment
+evidence gate.
+
 Until DeviceManager defines reviewed probe target, cadence, failure/recovery thresholds and
 durable availability-history semantics, ordinary bound interfaces remain UNKNOWN unless an
 explicit test injection supplies stronger evidence. Future detectors may move an interface
