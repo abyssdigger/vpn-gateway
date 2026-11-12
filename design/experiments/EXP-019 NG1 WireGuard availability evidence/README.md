@@ -80,3 +80,13 @@ failed with `fopen: Permission denied` for a root-owned mode-0600 key below a te
 No tunnel was established, so the availability hypothesis was still not exercised.
 Attempt 3 moves ephemeral keys to a private directory under `/run` and first checks file
 readability from each namespace without logging key contents.
+
+### Attempt 3 — WG TOOL FILE-OPEN RESTRICTION
+
+Moving the key files to a private directory under `/run` did not change the failure.
+Generic `test -r` from inside each network namespace succeeded, but `wg set ...
+private-key <path>` still returned `fopen: Permission denied` on the hosted runner.
+
+This isolates the issue to the WireGuard userspace file-open path in that CI environment,
+not generic namespace visibility. Attempt 4 feeds the ephemeral private key through stdin
+(`private-key /dev/stdin`) so the experiment no longer depends on that path behavior.
