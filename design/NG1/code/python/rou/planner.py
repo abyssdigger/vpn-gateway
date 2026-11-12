@@ -3,13 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 import logging
-from typing import Callable, Mapping
+from typing import Callable
 
+from .availability import AvailabilityCollector, annotate_bindings
 from .command_backend import CommandBackend, NamespaceBackend
 from .config import validate_active_config
 from .device_engine import (
     DeviceBindingSnapshot,
     DeviceBindingState,
+    DeviceReconcileResult,
     InterfaceIdentity,
     binding_snapshot_from_state,
     reconcile_devices,
@@ -101,10 +103,6 @@ class PlannerResult:
 
 
 SnapshotCollector = Callable[[str, CommandBackend], EnvironmentSnapshot]
-AvailabilityProvider = Callable[
-    [EnvironmentSnapshot],
-    Mapping[InterfaceIdentity, Availability],
-]
 VerifiedStatePersister = Callable[[PlannerRuntimeState], None]
 
 
@@ -121,27 +119,15 @@ def default_snapshot_collector(
 def compile_planner_projection(
     config: ActiveConfig,
     committed: PlannerRuntimeState,
-    snapshot: EnvironmentSnapshot,
-    availability_provider: AvailabilityProvider | None,
+    devices: DeviceReconcileResult,
     local_publication_address: IPv4Address | None,
 ) -> PlannerProjection:
     LOG.debug(
         "planner-projection-start interfaces=%d committed_expectations=%d "
         "committed_metrics=%d",
-        len(snapshot.interfaces),
+        len(devices.snapshot.bound) + len(devices.snapshot.over_quota),
         len(committed.devices.expectations),
         len(committed.traffic.normal_metrics),
-    )
-    availability = (
-        availability_provider(snapshot)
-        if availability_provider is not None
-        else {}
-    )
-    devices = reconcile_devices(
-        config,
-        committed.devices,
-        snapshot.interfaces,
-        availability,
     )
     metrics = project_normal_metrics(
         config,
@@ -182,6 +168,40 @@ def compile_planner_projection(
         len(result.kernel.routes),
     )
     return result
+
+
+
+def _compile_live_projection(
+    config: ActiveConfig,
+    committed: PlannerRuntimeState,
+    snapshot: EnvironmentSnapshot,
+    namespace: str,
+    host_backend: CommandBackend,
+    availability_collector: AvailabilityCollector | None,
+    local_publication_address: IPv4Address | None,
+) -> PlannerProjection:
+    devices = reconcile_devices(
+        config,
+        committed.devices,
+        snapshot.interfaces,
+    )
+    if availability_collector is not None:
+        raw = availability_collector(
+            namespace,
+            host_backend,
+            snapshot,
+            devices.snapshot,
+        )
+        devices = DeviceReconcileResult(
+            next_state=devices.next_state,
+            snapshot=annotate_bindings(devices.snapshot, raw),
+        )
+    return compile_planner_projection(
+        config,
+        committed,
+        devices,
+        local_publication_address,
+    )
 
 
 def _project_committed_generation(
@@ -307,7 +327,7 @@ def reconcile_once(
     committed: PlannerRuntimeState,
     host_backend: CommandBackend,
     *,
-    availability_provider: AvailabilityProvider | None = None,
+    availability_collector: AvailabilityCollector | None = None,
     collect_snapshot: SnapshotCollector = default_snapshot_collector,
     persist_verified_state: VerifiedStatePersister | None = None,
     local_publication_address: IPv4Address | None = None,
@@ -356,11 +376,13 @@ def reconcile_once(
             len(initial.rules),
             initial.sysctl_map.get("net.ipv4.ip_forward"),
         )
-        projection = compile_planner_projection(
+        projection = _compile_live_projection(
             config,
             committed,
             initial,
-            availability_provider,
+            namespace,
+            host_backend,
+            availability_collector,
             local_publication_address,
         )
 
@@ -640,11 +662,13 @@ def reconcile_once(
         ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"))
 
         barrier_snapshot = collect_snapshot(namespace, host_backend)
-        barrier_projection = compile_planner_projection(
+        barrier_projection = _compile_live_projection(
             config,
             committed,
             barrier_snapshot,
-            availability_provider,
+            namespace,
+            host_backend,
+            availability_collector,
             local_publication_address,
         )
 
