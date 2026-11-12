@@ -81,7 +81,31 @@ class FakeNftBackend:
             self.tables[table] = (canonical, refs)
             return CommandResult(argv, 0, "", "")
 
-        # Existence probe.
+        if argv[-4:] == ("nft", "-j", "-n", "list") or (
+            "nft" in argv and "list" in argv and "ruleset" in argv
+        ):
+            items = [
+                {"metainfo": {"json_schema_version": 1}}
+            ]
+            for name in sorted(self.tables):
+                items.append(
+                    {"table": {"family": "ip", "name": name}}
+                )
+            return CommandResult(
+                argv,
+                0,
+                json.dumps({"nftables": items}),
+                "",
+            )
+
+        if "nft" in argv and "delete" in argv and "table" in argv:
+            table = self._table_name(argv)
+            if table in self.tables:
+                del self.tables[table]
+                return CommandResult(argv, 0, "", "")
+            return CommandResult(argv, 1, "", "No such file or directory")
+
+        # Existence probe / table observation.
         if "nft" in argv and "list" in argv and "table" in argv:
             table = self._table_name(argv)
             if table not in self.tables:
