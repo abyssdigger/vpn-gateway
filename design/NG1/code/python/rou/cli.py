@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from pathlib import Path
 
 from .command_backend import CommandBackend, NamespaceBackend, SubprocessBackend
@@ -333,6 +334,15 @@ def main(
             if args.instance_file is not None
             else default_instance_file(args.instance_id)
         )
+        if (
+            backend is None
+            and args.command in {"prepare", "contain", "up", "down", "show", "run"}
+            and os.geteuid() != 0
+        ):
+            raise CliError(
+                f"rou {args.command} requires root privileges; use sudo"
+            )
+
         host = backend or SubprocessBackend()
 
         if args.command == "check":
