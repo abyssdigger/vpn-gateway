@@ -6,6 +6,7 @@ from enum import Enum
 from .device_engine import DeviceBindingSnapshot
 from .environment import EnvironmentSnapshot, KernelRoute, KernelRule
 from .firewall_state import FirewallDesiredState
+from .kernel_allocation import MAX_OWNED_RULE_PRIORITY
 from .kernel_state import (
     BLACKHOLE_PROTOCOL,
     ROUTE_PROTOCOL,
@@ -115,11 +116,10 @@ def assess_binding_lifecycle(
             break
 
     expected_rules = {_rule_key(item) for item in desired_kernel.rules}
-    max_priority = max((item.priority for item in desired_kernel.rules), default=0)
     observed_rules = {
         _rule_key(item)
         for item in observed.rules
-        if 1 <= item.priority <= max_priority
+        if 1 <= item.priority <= MAX_OWNED_RULE_PRIORITY
     }
     if observed_rules != expected_rules:
         reasons.append("owned RPDB state is not exactly desired")
