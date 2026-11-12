@@ -354,6 +354,7 @@ def collect_environment_snapshot(
             "net.ipv4.ip_forward",
             "net.ipv4.conf.all.rp_filter",
             "net.ipv4.conf.default.rp_filter",
+            "net.ipv4.fib_multipath_hash_policy",
             "net.ipv6.conf.all.forwarding",
             "net.ipv6.conf.default.forwarding",
             "net.ipv6.conf.default.disable_ipv6",
