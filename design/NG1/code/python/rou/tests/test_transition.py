@@ -250,6 +250,75 @@ class TransitionTests(unittest.TestCase):
         )
         self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
 
+    def test_missing_desired_normal_route_is_proven_route_additive(self):
+        kernel = desired("vpns00")
+        result = assess_binding_lifecycle(
+            kernel,
+            kernel,
+            PolicyGenerationObservation(True, True, True, True),
+            bindings(10),
+            bindings(10),
+            observed_from(
+                (
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("0.0.0.0/0"),
+                        "blackhole",
+                        201,
+                        65536,
+                        None,
+                        (),
+                    ),
+                ),
+                rule_observed(),
+            ),
+        )
+        self.assertEqual(result.kind, TransitionKind.ROUTE_ADDITIVE)
+        self.assertEqual(result.reasons, ())
+
+    def test_same_bindings_with_extra_owned_route_is_structural(self):
+        kernel = desired("vpns00")
+        result = assess_binding_lifecycle(
+            kernel,
+            kernel,
+            PolicyGenerationObservation(True, True, True, True),
+            bindings(10),
+            bindings(10),
+            observed_from(
+                (
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("10.0.0.0/8"),
+                        "unicast",
+                        202,
+                        1,
+                        "vpns00",
+                        (),
+                    ),
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("192.0.2.0/24"),
+                        "unicast",
+                        202,
+                        9,
+                        "vpns00",
+                        (),
+                    ),
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("0.0.0.0/0"),
+                        "blackhole",
+                        201,
+                        65536,
+                        None,
+                        (),
+                    ),
+                ),
+                rule_observed(),
+            ),
+        )
+        self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
+
     def test_foreign_rule_above_terminal_is_structural(self):
         rules = list(rule_observed())
         rules.append(
