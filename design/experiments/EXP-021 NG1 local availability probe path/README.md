@@ -98,3 +98,33 @@ before production probe wiring.
 
 This experiment does not choose probe target/cadence/threshold configuration and does not
 approve the detector-readiness proposal.
+
+
+## Attempt history
+
+### Attempt 1 — HARNESS FALSE NEGATIVE
+
+The first privileged run reached the intended disposable topology and proved baseline
+default-DROP behavior:
+
+```text
+PASS A: default-DROP local policy blocks Device-bound probe
+```
+
+It then stopped before exercising probe routing/generation behavior because the harness
+serialized the nft probe rule with `comment` before `counter`. The runner's nft parser
+rejected that statement ordering:
+
+```text
+syntax error, unexpected counter
+```
+
+No EXP-021 routing or same-name/new-ifindex hypothesis beyond baseline PASS A was exercised.
+
+The harness was corrected to use the statement ordering already proven by EXP-017:
+
+```text
+... counter accept comment "..."
+```
+
+Topology, policy hypothesis and PASS criteria are unchanged.
