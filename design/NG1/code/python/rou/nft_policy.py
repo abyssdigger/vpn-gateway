@@ -32,6 +32,7 @@ class NftTableDesiredState:
     name: str
     definition: str
     canonical: str
+    interface_identities: tuple[tuple[int, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -41,14 +42,49 @@ class NftVerification:
     expected: str
 
 
-def normalize_nft_list(text: str) -> str:
-    """Normalize nft textual listing while preserving rule/chain order."""
+def normalize_nft_list(
+    text: str,
+    interface_identities: tuple[tuple[int, str], ...] = (),
+) -> str:
+    """Normalize nft textual listing to generation-aware semantic form.
 
-    return "\n".join(
-        line.strip()
-        for line in text.splitlines()
-        if line.strip()
-    )
+    nft list renders conntrack states as numeric bit values in numeric mode and may resolve
+    an existing numeric iif/oif back to its current interface name. Desired policy is
+    generation-specific, so current bound names are mapped back to their desired ifindex.
+    A stale rule referring to a disappeared old ifindex remains numeric and therefore does
+    not collapse onto a fresh same-name generation.
+    """
+
+    lines: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+
+        line = line.replace(
+            "ct state established,related",
+            "ct state 0x2,0x4",
+        )
+        line = line.replace(
+            "ct state related,established",
+            "ct state 0x2,0x4",
+        )
+        line = line.replace("ct state invalid", "ct state 0x1")
+        line = line.replace("ct state new", "ct state 0x8")
+
+        for ifindex, ifname in interface_identities:
+            line = line.replace(
+                f'iif "{ifname}"',
+                f"iif {ifindex}",
+            )
+            line = line.replace(
+                f'oif "{ifname}"',
+                f"oif {ifindex}",
+            )
+
+        lines.append(line)
+
+    return "\n".join(lines)
 
 
 def _quote(value: str) -> str:
@@ -279,11 +315,20 @@ def compile_nft_filter_state(
     )
 
     definition = "\n".join(lines)
+    identities = tuple(
+        sorted(
+            {
+                (item.identity.ifindex, item.identity.ifname)
+                for item in bindings.bound
+            }
+        )
+    )
     return NftTableDesiredState(
         family="ip",
         name=FILTER_TABLE,
         definition=definition,
-        canonical=normalize_nft_list(definition),
+        canonical=normalize_nft_list(definition, identities),
+        interface_identities=identities,
     )
 
 
@@ -332,11 +377,20 @@ def compile_nft_nat_state(
 
     lines.extend(["}", "}", ""])
     definition = "\n".join(lines)
+    identities = tuple(
+        sorted(
+            {
+                (item.identity.ifindex, item.identity.ifname)
+                for item in bindings.bound
+            }
+        )
+    )
     return NftTableDesiredState(
         family="ip",
         name=NAT_TABLE,
         definition=definition,
-        canonical=normalize_nft_list(definition),
+        canonical=normalize_nft_list(definition, identities),
+        interface_identities=identities,
     )
 
 
@@ -382,7 +436,10 @@ def observe_nft_table(
             desired.name,
         )
     )
-    return normalize_nft_list(result.stdout)
+    return normalize_nft_list(
+        result.stdout,
+        desired.interface_identities,
+    )
 
 
 def verify_nft_table(
