@@ -51,6 +51,25 @@ class NftObservedState:
     numeric_interface_refs: tuple[tuple[str, int], ...]
 
 
+@dataclass(frozen=True)
+class NftRulesetInventory:
+    tables: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class NftOwnershipVerification:
+    ok: bool
+    foreign_tables: tuple[tuple[str, str], ...]
+
+
+OWNED_NFT_TABLES = frozenset(
+    {
+        ("ip", FILTER_TABLE),
+        ("ip", NAT_TABLE),
+    }
+)
+
+
 
 def _numeric_interface_refs_from_definition(
     definition: str,
@@ -132,6 +151,72 @@ def observe_nft_numeric_interface_refs(
         )
     )
     return _numeric_interface_refs_from_json(result.stdout)
+
+def observe_nft_ruleset_inventory(
+    backend: NamespaceBackend,
+) -> NftRulesetInventory:
+    result = backend.run(("nft", "-j", "-n", "list", "ruleset"))
+    try:
+        root = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise NftPolicyError(
+            f"invalid nft ruleset JSON output: {exc}"
+        ) from None
+
+    items = root.get("nftables")
+    if not isinstance(items, list):
+        raise NftPolicyError("nft ruleset JSON root lacks nftables array")
+
+    tables: set[tuple[str, str]] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        table = item.get("table")
+        if not isinstance(table, dict):
+            continue
+        family = table.get("family")
+        name = table.get("name")
+        if not isinstance(family, str) or not family:
+            raise NftPolicyError("nft table family is not a non-empty string")
+        if not isinstance(name, str) or not name:
+            raise NftPolicyError("nft table name is not a non-empty string")
+        key = (family, name)
+        if key in tables:
+            raise NftPolicyError(f"duplicate nft table in inventory: {key!r}")
+        tables.add(key)
+
+    return NftRulesetInventory(tuple(sorted(tables)))
+
+
+def verify_nft_ruleset_ownership(
+    inventory: NftRulesetInventory,
+) -> NftOwnershipVerification:
+    foreign = tuple(
+        table
+        for table in inventory.tables
+        if table not in OWNED_NFT_TABLES
+    )
+    return NftOwnershipVerification(
+        ok=not foreign,
+        foreign_tables=foreign,
+    )
+
+
+def delete_foreign_nft_tables(
+    inventory: NftRulesetInventory,
+    backend: NamespaceBackend,
+) -> None:
+    """Delete all non-ROU nft tables in the dedicated namespace.
+
+    This is structural-repair behavior and must only be called behind the global forwarding
+    barrier. Each delete is argv-based so even an unusual foreign table name cannot become
+    nft script injection.
+    """
+
+    ownership = verify_nft_ruleset_ownership(inventory)
+    for family, name in ownership.foreign_tables:
+        backend.run(("nft", "delete", "table", family, name))
+
 
 def normalize_nft_list(
     text: str,
