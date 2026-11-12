@@ -1,3 +1,16 @@
+## EXP-018 — NG1: systemd deployment lifecycle
+
+**Статус:** PREPARED — live Debian 13 deployment gate  
+**Architecture baseline:** NG1 Draft 5 after 2026-11-12 safety correction  
+**Design:** [EXP-018 README](experiments/EXP-018%20NG1%20systemd%20deployment%20lifecycle/README.md)
+
+Цель: на disposable Debian 13 с systemd PID1 доказать реальный
+`prepare -> run -> contain` lifecycle hardened unit, normal restart, SIGKILL
+`Restart=on-failure`, boot recreation и финальный `rou down`. GitHub CI проверяет
+unit syntax и kernel/netns plumbing, но не считается заменой target-systemd proof.
+
+---
+
 ## EXP-017 — NG1: ifindex-aware firewall admission
 
 **Статус:** PREPARED — strict dynamic-generation firewall gate  
