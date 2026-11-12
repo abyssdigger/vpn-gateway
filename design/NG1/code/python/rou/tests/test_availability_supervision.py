@@ -142,6 +142,49 @@ class AvailabilitySupervisionTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     DetectorFreshnessPolicy(value)
 
+    def test_nonfinite_numeric_values_are_rejected(self):
+        for value in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(policy=value):
+                with self.assertRaises(ValueError):
+                    DetectorFreshnessPolicy(value)
+            with self.subTest(sample=value):
+                with self.assertRaises(ValueError):
+                    TimedProbeSample(
+                        ProbeOutcome.SUCCESS,
+                        monotonic_time=value,
+                    )
+            with self.subTest(now=value):
+                with self.assertRaises(ValueError):
+                    require_fresh_evidence(
+                        (),
+                        {},
+                        now_monotonic=value,
+                        policy=self.policy,
+                    )
+
+    def test_boolean_numeric_values_are_rejected(self):
+        with self.assertRaises(ValueError):
+            DetectorFreshnessPolicy(True)
+        with self.assertRaises(ValueError):
+            TimedProbeSample(
+                ProbeOutcome.SUCCESS,
+                monotonic_time=False,
+            )
+        with self.assertRaises(ValueError):
+            require_fresh_evidence(
+                (),
+                {},
+                now_monotonic=True,
+                policy=self.policy,
+            )
+
+    def test_probe_sample_requires_typed_outcome(self):
+        with self.assertRaisesRegex(ValueError, "ProbeOutcome"):
+            TimedProbeSample(
+                "success",  # type: ignore[arg-type]
+                monotonic_time=1.0,
+            )
+
     def test_negative_monotonic_values_are_rejected(self):
         with self.assertRaises(ValueError):
             TimedProbeSample(
