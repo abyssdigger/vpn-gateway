@@ -567,9 +567,13 @@ def reconcile_once(
                 projection.bindings,
                 prepared,
             )
-            if reassessment.kind is not TransitionKind.BINDING_LIFECYCLE:
+            if reassessment.kind not in {
+                TransitionKind.BINDING_LIFECYCLE,
+                TransitionKind.ROUTE_ADDITIVE,
+            }:
                 raise PlannerRetryRequired(
-                    "state ceased to be a proven lifecycle transition: "
+                    "state ceased to be a proven incremental transition "
+                    f"({reassessment.kind.value}): "
                     + "; ".join(reassessment.reasons)
                 )
 
