@@ -418,6 +418,118 @@ protocol = "tcp"
 destination_ports = ["80-90", "90-100"]
 """)
 
+    def test_remote_initiated_capacity_two_is_rejected(self):
+        with self.assertRaisesRegex(
+            ConfigError,
+            "requires active interface capacity exactly 1",
+        ):
+            parse("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpns*/2"]
+nat = "none"
+
+[device.oc.traffic_envelope]
+default = "drop"
+
+[profile.support]
+enabled = true
+direction = "inbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+
+    def test_remote_initiated_capacity_one_with_restrictive_envelope_is_allowed(self):
+        cfg = parse("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpns0"]
+nat = "none"
+
+[device.oc.traffic_envelope]
+default = "drop"
+
+[[device.oc.traffic_envelope.rules]]
+direction = "from-device"
+action = "allow"
+source = "10.0.0.0/8"
+destination = "192.168.50.10/32"
+protocol = "tcp"
+destination_ports = ["22"]
+
+[profile.support]
+enabled = true
+direction = "bidirectional"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+        self.assertEqual(
+            cfg.profiles["support"].direction,
+            Direction.BIDIRECTIONAL,
+        )
+
+    def test_remote_initiated_requires_restrictive_envelope(self):
+        with self.assertRaisesRegex(
+            ConfigError,
+            "traffic_envelope default='drop'",
+        ):
+            parse("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpns0"]
+nat = "none"
+
+[profile.support]
+enabled = true
+direction = "inbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+
+        with self.assertRaisesRegex(
+            ConfigError,
+            "traffic_envelope default='drop'",
+        ):
+            parse("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpns0"]
+nat = "none"
+
+[device.oc.traffic_envelope]
+default = "allow"
+
+[profile.support]
+enabled = true
+direction = "inbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+
+    def test_disabled_device_does_not_count_toward_remote_initiated_capacity(self):
+        cfg = parse("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpns0"]
+nat = "none"
+
+[device.oc.traffic_envelope]
+default = "drop"
+
+[device.wg-future]
+enabled = false
+
+[profile.support]
+enabled = true
+direction = "inbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc", "wg-future"]
+""")
+        self.assertEqual(
+            cfg.profiles["support"].direction,
+            Direction.INBOUND,
+        )
+
     def test_disabled_device_does_not_deep_validate_new_fields(self):
         cfg = parse("""
 [device.future]
