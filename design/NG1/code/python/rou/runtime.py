@@ -7,9 +7,9 @@ import time
 from typing import Callable, Protocol
 
 from .command_backend import CommandBackend, NamespaceBackend
+from .availability import AvailabilityCollector
 from .domain import ActiveConfig
 from .planner import (
-    AvailabilityProvider,
     PlannerError,
     PlannerRetryRequired,
     PlannerRuntimeState,
@@ -83,7 +83,7 @@ def run_runtime_loop(
     state_store: JsonRuntimeStateStore,
     wakeups: WakeupSource,
     *,
-    availability_provider: AvailabilityProvider | None = None,
+    availability_collector: AvailabilityCollector | None = None,
     collect_snapshot: SnapshotCollector = default_snapshot_collector,
     loop_config: RuntimeLoopConfig = RuntimeLoopConfig(),
     should_stop: StopPredicate = lambda: False,
@@ -152,7 +152,7 @@ def run_runtime_loop(
                     namespace,
                     committed,
                     host_backend,
-                    availability_provider=availability_provider,
+                    availability_collector=availability_collector,
                     collect_snapshot=collect_snapshot,
                     persist_verified_state=state_store.save,
                     local_publication_address=local_publication_address,
