@@ -44,6 +44,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y iproute2 iptables
 
+      - name: Validate deployment shell and systemd unit
+        run: |
+          sh -n design/NG1/deploy/install.sh
+          sh -n design/NG1/deploy/rou
+          sudo install -d -m 0700 /var/lib/vpn-gateway
+          sudo install -m 0755 /bin/true /usr/local/sbin/rou
+          systemd-analyze verify design/NG1/deploy/rouvpn@.service
+          sudo rm -f /usr/local/sbin/rou
+
       - name: Run disposable-netns instance lifecycle
         run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_instance_lifecycle.py
 
