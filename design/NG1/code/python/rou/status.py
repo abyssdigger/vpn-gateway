@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from ipaddress import IPv4Address
 
 from .command_backend import NamespaceBackend
+from .config import validate_active_config
 from .domain import ActiveConfig
 from .environment import EnvironmentSnapshot
 from .firewall_kernel import verify_filter_state
@@ -36,6 +37,13 @@ def inspect_runtime_status(
     local_publication_address: IPv4Address | None = None,
 ) -> RuntimeStatus:
     """Read-only full desired-vs-observed status using production projectors/verifiers."""
+
+    validate_active_config(config)
+    if backend.namespace != namespace:
+        raise ValueError(
+            f"status namespace mismatch: requested {namespace!r}, "
+            f"backend is {backend.namespace!r}"
+        )
 
     projection = compile_planner_projection(
         config,
