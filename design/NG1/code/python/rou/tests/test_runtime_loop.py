@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from rou.command_backend import CommandResult
 from rou.device_engine import DeviceBindingState
 from rou.domain import ActiveConfig
-from rou.nat_state import ExplicitNoNatProvider
 from rou.planner import PlannerProjection, PlannerResult, PlannerRuntimeState
 from rou.runtime import RuntimeLoopConfig, run_runtime_loop
 from rou.state_store import StateLoadResult
@@ -94,7 +93,6 @@ class RuntimeLoopTests(unittest.TestCase):
                 ActiveConfig({}, {}),
                 "rou0",
                 backend,
-                ExplicitNoNatProvider(),
                 store,
                 wakeups,
                 loop_config=RuntimeLoopConfig(
@@ -158,7 +156,6 @@ class RuntimeLoopTests(unittest.TestCase):
                 ActiveConfig({}, {}),
                 "rou0",
                 backend,
-                ExplicitNoNatProvider(),
                 store,
                 wakeups,
                 loop_config=RuntimeLoopConfig(
@@ -200,7 +197,6 @@ class RuntimeLoopTests(unittest.TestCase):
                 ActiveConfig({}, {}),
                 "rou0",
                 backend,
-                ExplicitNoNatProvider(),
                 store,
                 wakeups,
                 loop_config=RuntimeLoopConfig(
@@ -234,7 +230,6 @@ class RuntimeLoopTests(unittest.TestCase):
                 ActiveConfig({}, {}),
                 "rou0",
                 backend,
-                ExplicitNoNatProvider(),
                 store,
                 wakeups,
                 loop_config=RuntimeLoopConfig(
