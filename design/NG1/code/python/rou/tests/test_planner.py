@@ -401,6 +401,82 @@ class PlannerTests(unittest.TestCase):
         )
         self.assertLess(nat_index, filter_index)
 
+
+    def test_route_additive_reassessment_remains_incremental(self):
+        cfg = config()
+        devices, metrics, kernel, firewall, nat = expected_for(interfaces())
+        committed = PlannerRuntimeState(
+            devices.next_state,
+            committed_state_from_verified(metrics),
+        )
+
+        observed_routes = tuple(
+            KernelRoute(
+                r.table,
+                r.destination,
+                r.route_type,
+                r.protocol,
+                r.metric,
+                r.ifname,
+                r.nexthops,
+            )
+            for r in kernel.routes
+            if not (
+                r.route_type == "unicast"
+                and r.metric is not None
+                and r.metric < 65535
+            )
+        )
+        observed_rules = tuple(
+            KernelRule(
+                r.priority,
+                r.table,
+                r.action,
+                destination=r.destination,
+                iif=r.iif,
+            )
+            for r in kernel.rules
+        )
+        initial = EnvironmentSnapshot(
+            interfaces=interfaces(),
+            routes=observed_routes,
+            rules=observed_rules,
+            sysctls=sysctls(True),
+        )
+        applied = observed_kernel_snapshot(
+            kernel,
+            forwarding=True,
+        )
+
+        backend = FakeNftBackend(firewall, nat)
+        queue = SnapshotQueue([initial, initial, applied])
+
+        result = reconcile_once(
+            cfg,
+            "rou0",
+            committed,
+            backend,
+            collect_snapshot=queue,
+        )
+
+        self.assertTrue(result.changed_kernel)
+        self.assertEqual(queue.calls, 3)
+        self.assertFalse(
+            any(
+                "net.ipv4.ip_forward=0" in call[0]
+                for call in backend.calls
+            )
+        )
+        self.assertTrue(
+            any(
+                "route" in call
+                and "add" in call
+                and "10.0.0.0/8" in call
+                for call, _stdin, _check in backend.calls
+            )
+        )
+
+
     def test_verified_state_is_persisted_before_forwarding_open(self):
         _, _, kernel, firewall, nat = expected_for(interfaces())
         initial = EnvironmentSnapshot(
