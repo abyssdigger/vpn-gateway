@@ -140,6 +140,31 @@ class RuntimeStatusTests(unittest.TestCase):
             ["vpns00"],
         )
 
+    def test_foreign_nft_table_makes_policy_unverified(self):
+        cfg, projection = self.make_projection()
+        observed = observed_from_projection(projection)
+        host = FakeNftBackend(
+            projection.firewall,
+            projection.nat,
+        )
+        host.tables["foreign"] = (
+            "table ip foreign {\n}",
+            (),
+        )
+
+        result = inspect_runtime_status(
+            cfg,
+            "rou0",
+            PlannerRuntimeState.empty(),
+            observed,
+            NamespaceBackend("rou0", host),
+        )
+
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("foreign nft tables" in error for error in result.errors)
+        )
+
     def test_route_drift_is_reported(self):
         cfg, projection = self.make_projection()
         foreign = KernelRoute(
