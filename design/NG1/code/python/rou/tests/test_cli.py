@@ -160,7 +160,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(show.call_count, 2)
 
     def test_up_rolls_back_if_service_active_but_policy_never_verifies(self):
-        backend = FakeBackend(active_returncodes=[3, 0])
+        backend = FakeBackend(active_returncodes=[3, 0, 3])
         events = []
 
         with (
