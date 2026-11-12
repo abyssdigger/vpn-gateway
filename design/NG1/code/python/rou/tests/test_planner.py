@@ -377,6 +377,23 @@ class PlannerTests(unittest.TestCase):
             )
         )
 
+        restore_calls = [
+            (index, stdin)
+            for index, (_call, stdin, _check) in enumerate(backend.calls)
+            if stdin is not None and stdin.startswith(("*nat", "*filter"))
+        ]
+        nat_index = next(
+            index
+            for index, stdin in restore_calls
+            if stdin.startswith("*nat")
+        )
+        filter_index = next(
+            index
+            for index, stdin in restore_calls
+            if stdin.startswith("*filter")
+        )
+        self.assertLess(nat_index, filter_index)
+
     def test_verified_state_is_persisted_before_forwarding_open(self):
         _, _, kernel, firewall, nat = expected_for(interfaces())
         initial = EnvironmentSnapshot(
