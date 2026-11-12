@@ -15,7 +15,8 @@ class AvailabilityCollector(Protocol):
 
     DeviceEngine remains the sole owner of binding selection, historical candidate order
     and quota. A collector may perform active/protocol-specific observation, but it may
-    classify only identities presented in `bindings`.
+    classify only identities in `bindings.bound`. Over-quota candidates are observable
+    but are not availability inputs until DeviceEngine actually promotes them.
 
     The collector boundary is deliberately richer than a pure EnvironmentSnapshot
     function because EXP-019/020 proved that useful liveness evidence may require active
@@ -47,13 +48,13 @@ def normalize_availability(
 
     allowed = {
         item.identity
-        for item in (*bindings.bound, *bindings.over_quota)
+        for item in bindings.bound
     }
     normalized: dict[InterfaceIdentity, Availability] = {}
     for identity, availability in values.items():
         if identity not in allowed:
             raise ValueError(
-                "availability result references non-current binding identity "
+                "availability result references non-bound/current identity "
                 f"{identity.ifname}@{identity.ifindex}"
             )
         if not isinstance(availability, Availability):
