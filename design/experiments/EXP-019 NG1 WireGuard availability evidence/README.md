@@ -70,3 +70,13 @@ directory. Key generation therefore failed with `Directory nonexistent`.
 No kernel/WireGuard hypothesis was exercised. The procedure was corrected by separating
 pre-run namespace cleanup from final temp-directory cleanup; the hypothesis and topology
 are unchanged.
+
+### Attempt 2 — ENVIRONMENT/HARNESS BLOCK BEFORE HYPOTHESIS
+
+The corrected harness reached WireGuard configuration but `wg set ... private-key`
+failed with `fopen: Permission denied` for a root-owned mode-0600 key below a temporary
+`/tmp` directory when invoked through `ip netns exec` on the hosted runner.
+
+No tunnel was established, so the availability hypothesis was still not exercised.
+Attempt 3 moves ephemeral keys to a private directory under `/run` and first checks file
+readability from each namespace without logging key contents.
