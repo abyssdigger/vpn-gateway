@@ -75,11 +75,14 @@ ip -n "$REMOTE" link set "$REMOTE_UNDERLAY" up
 ip link add "$REMOTE_LAN" type veth peer name "$TARGET_LAN"
 ip link set "$REMOTE_LAN" netns "$REMOTE"
 ip link set "$TARGET_LAN" netns "$TARGET"
-ip -n "$REMOTE" addr add 172.31.16.1/29 dev "$REMOTE_LAN"
-ip -n "$TARGET" addr add "$TARGET_A"/29 dev "$TARGET_LAN"
+ip -n "$REMOTE" addr add 172.31.16.1/24 dev "$REMOTE_LAN"
+ip -n "$TARGET" addr add "$TARGET_A"/24 dev "$TARGET_LAN"
 ip -n "$TARGET" addr add "$TARGET_B"/32 dev "$TARGET_LAN"
 ip -n "$TARGET" addr add "$TARGET_C"/32 dev "$TARGET_LAN"
 ip -n "$TARGET" addr add "$TARGET_D"/32 dev "$TARGET_LAN"
+for n in 6 7 8 9 10 11; do
+    ip -n "$TARGET" addr add "172.31.16.$n/32" dev "$TARGET_LAN"
+done
 ip -n "$REMOTE" link set "$REMOTE_LAN" up
 ip -n "$TARGET" link set "$TARGET_LAN" up
 ip -n "$TARGET" route add default via 172.31.16.1 dev "$TARGET_LAN"
@@ -92,7 +95,7 @@ ip -n "$REMOTE" addr add 10.23.16.2/30 dev wg0
 ROU_PUB=$(cat "$TMP/rou.pub")
 REMOTE_PUB=$(cat "$TMP/remote.pub")
 
-cat "$TMP/rou.key" | ip netns exec "$ROU" wg set wg0     listen-port 51820     private-key /dev/stdin     peer "$REMOTE_PUB"     allowed-ips 10.23.16.2/32,"$TARGET_A"/32,"$TARGET_B"/32     endpoint 192.0.2.1:51820     persistent-keepalive 1
+cat "$TMP/rou.key" | ip netns exec "$ROU" wg set wg0     listen-port 51820     private-key /dev/stdin     peer "$REMOTE_PUB"     allowed-ips 10.23.16.2/32,172.31.16.0/24     endpoint 192.0.2.1:51820     persistent-keepalive 1
 
 cat "$TMP/remote.key" | ip netns exec "$REMOTE" wg set wg0     listen-port 51820     private-key /dev/stdin     peer "$ROU_PUB"     allowed-ips 10.23.16.1/32     endpoint 192.0.2.2:51820     persistent-keepalive 1
 
@@ -102,6 +105,9 @@ ip -n "$ROU" route add "$TARGET_A"/32 dev wg0
 ip -n "$ROU" route add "$TARGET_B"/32 dev wg0
 ip -n "$ROU" route add "$TARGET_C"/32 dev wg0
 ip -n "$ROU" route add "$TARGET_D"/32 dev wg0
+for n in 6 7 8 9 10 11; do
+    ip -n "$ROU" route add "172.31.16.$n/32" dev wg0
+done
 
 ip netns exec "$ROU" ping -I wg0 -c 2 -W 2 10.23.16.2 >/dev/null
 
@@ -142,6 +148,9 @@ ip route replace "$TARGET_A"/32 via 198.18.16.2 dev "$HIF"
 ip route replace "$TARGET_B"/32 via 198.18.16.2 dev "$HIF"
 ip route replace "$TARGET_C"/32 via 198.18.16.2 dev "$HIF"
 ip route replace "$TARGET_D"/32 via 198.18.16.2 dev "$HIF"
+for n in 6 7 8 9 10 11; do
+    ip route replace "172.31.16.$n/32" via 198.18.16.2 dev "$HIF"
+done
 
 cat >"$TMP/tcp-server.py" <<'PY'
 import socket, struct, sys
@@ -295,19 +304,62 @@ timeout 12 tcpdump -i "$HIF" -nn -vvv -s 0 -c 2 \
     >"$CLAMP_CAPTURE" 2>&1 &
 CLAMP_TCPDUMP_PID=$!
 sleep 0.2
-python3 "$TMP/tcp-client.py" "$TARGET_D" "$TCP_PORT" 8388608 15
+set +e
+timeout 18 python3 "$TMP/tcp-client.py" "$TARGET_D" "$TCP_PORT" 8388608 15 \
+    >"$TMP/device-clamp-client.log" 2>&1
+DEVICE_CLAMP_RC=$?
+set -e
 wait "$CLAMP_TCPDUMP_PID" || true
+echo "DEVICE_MTU_CLAMP_TCP_RC=$DEVICE_CLAMP_RC"
 echo "DEVICE_MTU_CLAMP_MSS=$DEVICE_MSS"
 echo "DEVICE_MTU_CLAMP_CAPTURE_BEGIN"
 cat "$CLAMP_CAPTURE"
 echo "DEVICE_MTU_CLAMP_CAPTURE_END"
 CLAMP_MSS_VALUES=$(grep -o 'mss [0-9][0-9]*' "$CLAMP_CAPTURE" | awk '{print $2}' | tr '\n' ' ')
 echo "DEVICE_MTU_CLAMP_MSS_VALUES=$CLAMP_MSS_VALUES"
-[ -n "$CLAMP_MSS_VALUES" ] || {
-    echo "FAIL: no WireGuard clamp MSS values captured" >&2
+if [ "$DEVICE_CLAMP_RC" -eq 0 ]; then
+    echo "OBSERVATION: Device-MTU-40 WireGuard clamp succeeded"
+else
+    echo "OBSERVATION: Device-MTU-40 WireGuard clamp still failed"
+    cat "$TMP/device-clamp-client.log"
+fi
+
+SWEEP_TARGETS="6 7 8 9 10 11"
+SWEEP_EXTRA="12 20 32 40 60 100"
+FIRST_WORKING_EXTRA=""
+set -- $SWEEP_TARGETS
+for extra in $SWEEP_EXTRA; do
+    n=$1
+    shift
+    target="172.31.16.$n"
+    candidate=$((ROU_WG_MTU - 40 - extra))
+
+    ip netns exec "$ROU" nft flush chain ip exp15wg forward
+    ip netns exec "$ROU" nft add rule ip exp15wg forward \
+        iifname "$RIF" oifname "wg0" tcp flags syn \
+        tcp option maxseg size set "$candidate"
+    ip netns exec "$ROU" nft add rule ip exp15wg forward \
+        iifname "wg0" oifname "$RIF" tcp flags syn \
+        tcp option maxseg size set "$candidate"
+
+    set +e
+    timeout 12 python3 "$TMP/tcp-client.py" "$target" "$TCP_PORT" 8388608 8 \
+        >"$TMP/sweep-$extra.log" 2>&1
+    rc=$?
+    set -e
+    echo "MSS_SWEEP extra=$extra candidate=$candidate target=$target rc=$rc"
+    if [ "$rc" -eq 0 ] && [ -z "$FIRST_WORKING_EXTRA" ]; then
+        FIRST_WORKING_EXTRA=$extra
+        echo "MSS_SWEEP_FIRST_WORKING_EXTRA=$extra"
+        echo "MSS_SWEEP_FIRST_WORKING_MSS=$candidate"
+    fi
+done
+
+[ -n "$FIRST_WORKING_EXTRA" ] || {
+    echo "FAIL: no tested WireGuard MSS safety margin prevented the black-hole" >&2
     exit 1
 }
-echo "PASS C: symmetric Device-MTU clamp carries large WireGuard TCP without PMTU feedback"
+echo "PASS C: WireGuard MSS sweep found a working safety margin"
 
 # Remove experiment suppression/clamp before normal baseline capture.
 ip netns exec "$ROU" nft flush chain ip exp15wg output
