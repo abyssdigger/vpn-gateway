@@ -25,8 +25,11 @@ from rou.domain import (
 )
 from rou.nft_policy import (
     _numeric_interface_refs_from_json,
+    NftRulesetInventory,
     compile_nft_filter_state,
     compile_nft_nat_state,
+    verify_nft_observation,
+    verify_nft_ruleset_ownership,
     verify_nft_table,
 )
 
@@ -191,6 +194,32 @@ class NftPolicyTests(unittest.TestCase):
                 value == 10
                 for _kind, value in desired.numeric_interface_refs
             )
+        )
+
+    def test_absent_owned_table_is_mismatch_not_backend_error(self):
+        desired = compile_nft_filter_state(
+            config(),
+            self.bindings(),
+            local_publication_address=ipaddress.IPv4Address("192.0.2.2"),
+        )
+        result = verify_nft_observation(desired, None)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.actual, "<absent>")
+
+    def test_foreign_nft_table_breaks_exclusive_ownership(self):
+        result = verify_nft_ruleset_ownership(
+            NftRulesetInventory(
+                (
+                    ("ip", "vpng_filter"),
+                    ("ip", "vpng_nat"),
+                    ("inet", "foreign"),
+                )
+            )
+        )
+        self.assertFalse(result.ok)
+        self.assertEqual(
+            result.foreign_tables,
+            (("inet", "foreign"),),
         )
 
 
