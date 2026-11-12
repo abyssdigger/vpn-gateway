@@ -158,6 +158,7 @@ def run_runtime_loop(
                     availability_provider=availability_provider,
                     collect_snapshot=collect_snapshot,
                     persist_verified_state=state_store.save,
+                    local_publication_address=local_publication_address,
                 )
             except PlannerRetryRequired as exc:
                 planner_failures += 1
