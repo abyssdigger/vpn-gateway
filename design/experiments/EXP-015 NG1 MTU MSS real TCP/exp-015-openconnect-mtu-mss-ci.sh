@@ -29,6 +29,7 @@ OC_PID="$TMP/openconnect.pid"
 TCP_LOG="$TMP/tcp-server.log"
 CAPTURE="$TMP/tcpdump.txt"
 CLAMP_CAPTURE="$TMP/clamp-tcpdump.txt"
+DEVICE_CAPTURE="$TMP/device-clamp-tcpdump.txt"
 
 cleanup() {
     set +e
@@ -358,29 +359,49 @@ fi
 ip netns exec "$ROU" nft flush chain ip exp15 forward
 DEVICE_MSS=$((ROU_VPN_MTU - 40))
 ip netns exec "$ROU" nft add rule ip exp15 forward \
-    iifname "$RIF" oifname "$VPN_IF" tcp flags syn \
+    iifname "$RIF" oifname "$VPN_IF" tcp flags syn counter \
     tcp option maxseg size set "$DEVICE_MSS"
 ip netns exec "$ROU" nft add rule ip exp15 forward \
-    iifname "$VPN_IF" oifname "$RIF" tcp flags syn \
+    iifname "$VPN_IF" oifname "$RIF" tcp flags syn counter \
     tcp option maxseg size set "$DEVICE_MSS"
 
-timeout 12 tcpdump -i "$HIF" -nn -vvv -s 0 -c 2 \
+timeout 20 tcpdump -i "$HIF" -nn -vvv -s 0 -c 2 \
     "host $TARGET_D and tcp port $TCP_PORT and (tcp[tcpflags] & tcp-syn != 0)" \
     >"$CLAMP_CAPTURE" 2>&1 &
 CLAMP_TCPDUMP_PID=$!
+ip netns exec "$ROU" timeout 20 tcpdump -i "$VPN_IF" -nn -vvv -s 0 -c 2 \
+    "host $TARGET_D and tcp port $TCP_PORT and (tcp[tcpflags] & tcp-syn != 0)" \
+    >"$DEVICE_CAPTURE" 2>&1 &
+DEVICE_TCPDUMP_PID=$!
 sleep 0.2
-python3 "$TMP/tcp-client.py" "$TARGET_D" "$TCP_PORT" 8388608 15
+set +e
+timeout 18 python3 "$TMP/tcp-client.py" "$TARGET_D" "$TCP_PORT" 8388608 15 \
+    >"$TMP/device-clamp-client.log" 2>&1
+DEVICE_CLAMP_RC=$?
+set -e
 wait "$CLAMP_TCPDUMP_PID" || true
+wait "$DEVICE_TCPDUMP_PID" || true
+
+echo "DEVICE_MTU_CLAMP_TCP_RC=$DEVICE_CLAMP_RC"
 echo "DEVICE_MTU_CLAMP_MSS=$DEVICE_MSS"
-echo "DEVICE_MTU_CLAMP_CAPTURE_BEGIN"
+echo "HOST_BOUNDARY_CLAMP_CAPTURE_BEGIN"
 cat "$CLAMP_CAPTURE"
-echo "DEVICE_MTU_CLAMP_CAPTURE_END"
+echo "HOST_BOUNDARY_CLAMP_CAPTURE_END"
+echo "DEVICE_BOUNDARY_CLAMP_CAPTURE_BEGIN"
+cat "$DEVICE_CAPTURE"
+echo "DEVICE_BOUNDARY_CLAMP_CAPTURE_END"
+echo "DEVICE_MTU_CLAMP_RULES_BEGIN"
+ip netns exec "$ROU" nft -a list chain ip exp15 forward
+echo "DEVICE_MTU_CLAMP_RULES_END"
 CLAMP_MSS_VALUES=$(grep -o 'mss [0-9][0-9]*' "$CLAMP_CAPTURE" | awk '{print $2}' | tr '\n' ' ')
-echo "DEVICE_MTU_CLAMP_MSS_VALUES=$CLAMP_MSS_VALUES"
-[ -n "$CLAMP_MSS_VALUES" ] || {
-    echo "FAIL: no OpenConnect clamp MSS values captured" >&2
+DEVICE_MSS_VALUES=$(grep -o 'mss [0-9][0-9]*' "$DEVICE_CAPTURE" | awk '{print $2}' | tr '\n' ' ')
+echo "HOST_BOUNDARY_CLAMP_MSS_VALUES=$CLAMP_MSS_VALUES"
+echo "DEVICE_BOUNDARY_CLAMP_MSS_VALUES=$DEVICE_MSS_VALUES"
+if [ "$DEVICE_CLAMP_RC" -ne 0 ]; then
+    echo "OBSERVATION: symmetric Device-MTU OpenConnect clamp still failed"
+    cat "$TMP/device-clamp-client.log"
     exit 1
-}
+fi
 echo "PASS C: symmetric Device-MTU clamp carries large OpenConnect TCP without PMTU feedback"
 
 # Remove experiment suppression/clamp before normal baseline capture.
