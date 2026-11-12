@@ -311,10 +311,10 @@ ROU owns and verifies at least these namespace prerequisites:
 - strict reverse-path filtering must not invalidate policy-routed/asymmetric VPN traffic:
   ROU-owned payload interfaces use an explicitly safe `rp_filter` policy (disabled by
   default for this model; a proven equivalent loose policy may be substituted later);
-- `net.ipv4.fib_multipath_hash_policy` is ROU-owned and verified rather than inherited
-  silently from the host/kernel default. The concrete production value is gated by the
-  dedicated target-kernel ECMP prerequisite experiment; until then no availability
-  detector may make the ECMP fallback tier operationally effective;
+- `net.ipv4.fib_multipath_hash_policy=1` is ROU-owned, applied and exactly verified
+  rather than inherited from the host/kernel default. EXP-016 proved on the target kernel
+  class used by CI that policy 1 is namespace-isolated, deterministic for one 5-tuple and
+  uses L4 flow variation across ECMP members;
 - a newly appearing Device interface is not admitted for payload forwarding until required
   per-interface sysctl state is verified;
 - IPv6 is disabled on ROU-owned payload interfaces in the first production model,
@@ -1623,7 +1623,7 @@ ROU does not seize or rewrite unrelated host VPN routes.
 72. ROU-owned INPUT is default-DROP and admits only loopback, local ESTABLISHED/RELATED, and host0 to configured internal publication endpoints; Device interfaces have no implicit ROU-local access.
 73. ROU-owned OUTPUT is default-DROP and admits only loopback, local ESTABLISHED/RELATED, and locally generated traffic whose egress is host0.
 74. The persistent shadow fallback is implemented before its production availability trigger; positive UNAVAILABLE classification is intentionally deferred to future DeviceManager/Device-specific detector work.
-75. net.ipv4.fib_multipath_hash_policy is an observed/owned namespace prerequisite and may not be silently inherited when ECMP fallback can become effective.
+75. net.ipv4.fib_multipath_hash_policy=1 is an applied/verified namespace prerequisite, proven by EXP-016; it must not be silently inherited from the host/kernel default.
 76. Incremental lifecycle route repair never flushes a Profile table or removes its terminal blackhole; the blackhole remains continuously installed so a temporarily missing more-specific route cannot fall through to a broader overlapping Profile rule.
 77. Production nft policy matches dynamic bound interfaces by numeric ifindex and verifies compiler-owned generation markers for those numeric references; same-name/new-ifindex is a fresh lifecycle generation, while an unprovable policy generation remains structural/unknown drift.
 78. Incremental binding admission installs route state first, required NAT second, and generated FORWARD admission last; a newly routable MASQUERADE Device is never intentionally admitted before translation state exists.
