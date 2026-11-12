@@ -26,6 +26,7 @@ def make_config():
                 "oc",
                 True,
                 (ExpectedInterface(InterfaceMatch(MatchKind.PREFIX, "vpns"), 2),),
+                nat=NatMode.NONE,
             )
         },
         {
