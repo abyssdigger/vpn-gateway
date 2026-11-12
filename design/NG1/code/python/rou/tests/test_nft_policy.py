@@ -143,12 +143,14 @@ class NftPolicyTests(unittest.TestCase):
         self.assertNotIn("vpns00", state.definition)
         self.assertNotIn("vpns01", state.definition)
 
-    def test_json_interface_refs_preserve_numeric_generation_identity(self):
+    def test_json_generation_markers_preserve_identity_despite_symbolic_meta(self):
         sample = (
             '{"nftables":['
-            '{"rule":{"expr":['
-            '{"match":{"op":"==","left":{"meta":{"key":"iif"}},"right":"2"}},'
-            '{"match":{"op":"==","left":{"meta":{"key":"oif"}},"right":"7"}}'
+            '{"rule":{"comment":"vpng-ifref:iif:2","expr":['
+            '{"match":{"op":"==","left":{"meta":{"key":"iif"}},"right":"vpn0"}}'
+            ']}},'
+            '{"rule":{"comment":"vpng-ifref:oif:7","expr":['
+            '{"match":{"op":"==","left":{"meta":{"key":"oif"}},"right":"vpn1"}}'
             ']}}]}'
         )
         self.assertEqual(
