@@ -36,8 +36,11 @@ from .nft_policy import (
     apply_nft_table,
     compile_nft_filter_state,
     compile_nft_nat_state,
+    delete_foreign_nft_tables,
+    observe_nft_ruleset_inventory,
     observe_nft_state,
     verify_nft_observation,
+    verify_nft_ruleset_ownership,
     verify_nft_table,
 )
 from .traffic_state import (
@@ -271,6 +274,15 @@ def _verify_all(
     )
     errors.extend(prereq.errors)
 
+    ownership = verify_nft_ruleset_ownership(
+        observe_nft_ruleset_inventory(backend)
+    )
+    if not ownership.ok:
+        errors.append(
+            "foreign nft tables present: "
+            + repr(ownership.foreign_tables)
+        )
+
     firewall = verify_nft_table(projection.firewall, backend)
     if not firewall.ok:
         errors.append("nft filter table mismatch")
@@ -437,6 +449,9 @@ def reconcile_once(
             projection.nat,
             ns,
         )
+        ruleset_ownership = verify_nft_ruleset_ownership(
+            observe_nft_ruleset_inventory(ns)
+        )
         policy_generation = PolicyGenerationObservation(
             filter_matches_previous=verify_nft_observation(
                 previous_projection.firewall,
@@ -454,6 +469,7 @@ def reconcile_once(
                 projection.nat,
                 observed_nat_policy,
             ).ok,
+            ruleset_owned=ruleset_ownership.ok,
         )
         assessment = assess_binding_lifecycle(
             previous_projection.kernel,
@@ -518,6 +534,9 @@ def reconcile_once(
                 projection.nat,
                 ns,
             )
+            ruleset_ownership = verify_nft_ruleset_ownership(
+                observe_nft_ruleset_inventory(ns)
+            )
             reassessment_policy = PolicyGenerationObservation(
                 filter_matches_previous=verify_nft_observation(
                     previous_projection.firewall,
@@ -535,6 +554,7 @@ def reconcile_once(
                     projection.nat,
                     observed_nat_policy,
                 ).ok,
+                ruleset_owned=ruleset_ownership.ok,
             )
             reassessment = assess_binding_lifecycle(
                 previous_projection.kernel,
@@ -640,6 +660,9 @@ def reconcile_once(
             raise PlannerVerificationError(
                 "closed-barrier prerequisites failed: " + "; ".join(prereq.errors)
             )
+
+        inventory = observe_nft_ruleset_inventory(ns)
+        delete_foreign_nft_tables(inventory, ns)
 
         mutation_plan = compile_kernel_mutation_plan(
             barrier_projection.kernel,
