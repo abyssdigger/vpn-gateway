@@ -71,8 +71,8 @@ echo "JSON_AFTER_B_END"
 # Update only ingress generation. SRC -> ROU must work again, while ROU -> SRC must still
 # fail because OUTPUT remains pinned to old oif.
 ip netns exec "$ROU" nft add rule ip vpng_exp17 input \
-    meta iif "$NEW_INDEX" ip protocol icmp counter \
-    comment '"exp17-new-iif"' accept
+    meta iif "$NEW_INDEX" ip protocol icmp \
+    comment '"exp17-new-iif"' counter accept
 
 # The echo request should now reach INPUT, but the echo reply must still be blocked by
 # stale OUTPUT. Therefore end-to-end ping remains unsuccessful; prove ingress admission
