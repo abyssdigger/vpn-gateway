@@ -590,6 +590,19 @@ It receives:
 Inbound payload from such an interface is rejected by the owned transit policy. Its
 existence cannot create an alternate forwarding path.
 
+**Backend proof boundary.** The normalized identity is `(ifname,ifindex)`, but the current
+Python iptables-legacy materializer matches interfaces by reusable name. Consequently, a
+same-name/new-ifindex generation that appears before the controller observes the old
+generation's disappearance may transiently match old name-based rules. Observed
+same-name/new-ifindex replacement is treated as structural drift and repaired under the
+global barrier, but that does not prove absence of the pre-observation window.
+
+Strict production isolation for dynamically reusable interface names is therefore gated by
+EXP-017. The preferred resolution is an ifindex-aware firewall materialization (for
+example nftables numeric `meta iif/oif`) or an equivalently strong proven lifecycle
+serialization. This gate does not weaken the domain invariant; it identifies the remaining
+backend evidence required to enforce it without a timing window.
+
 ## 6. Static domain model
 
 ROU receives one normalized **ActiveConfig**. Human-facing file syntax and parsing are
