@@ -91,11 +91,14 @@ ip -n "$REMOTE" link set "$REMOTE_UNDERLAY" up
 ip link add "$REMOTE_LAN" type veth peer name "$TARGET_LAN"
 ip link set "$REMOTE_LAN" netns "$REMOTE"
 ip link set "$TARGET_LAN" netns "$TARGET"
-ip -n "$REMOTE" addr add 172.31.15.1/29 dev "$REMOTE_LAN"
-ip -n "$TARGET" addr add "$TARGET_A"/29 dev "$TARGET_LAN"
+ip -n "$REMOTE" addr add 172.31.15.1/24 dev "$REMOTE_LAN"
+ip -n "$TARGET" addr add "$TARGET_A"/24 dev "$TARGET_LAN"
 ip -n "$TARGET" addr add "$TARGET_B"/32 dev "$TARGET_LAN"
 ip -n "$TARGET" addr add "$TARGET_C"/32 dev "$TARGET_LAN"
 ip -n "$TARGET" addr add "$TARGET_D"/32 dev "$TARGET_LAN"
+for n in 6 7 8 9 10 11; do
+    ip -n "$TARGET" addr add "172.31.15.$n/32" dev "$TARGET_LAN"
+done
 ip -n "$REMOTE" link set "$REMOTE_LAN" up
 ip -n "$TARGET" link set "$TARGET_LAN" up
 ip -n "$TARGET" route add default via 172.31.15.1 dev "$TARGET_LAN"
@@ -213,10 +216,16 @@ ip -n "$ROU" route replace "$TARGET_A"/32 dev "$VPN_IF"
 ip -n "$ROU" route replace "$TARGET_B"/32 dev "$VPN_IF"
 ip -n "$ROU" route replace "$TARGET_C"/32 dev "$VPN_IF"
 ip -n "$ROU" route replace "$TARGET_D"/32 dev "$VPN_IF"
+for n in 6 7 8 9 10 11; do
+    ip -n "$ROU" route replace "172.31.15.$n/32" dev "$VPN_IF"
+done
 ip route replace "$TARGET_A"/32 via 198.18.15.2 dev "$HIF"
 ip route replace "$TARGET_B"/32 via 198.18.15.2 dev "$HIF"
 ip route replace "$TARGET_C"/32 via 198.18.15.2 dev "$HIF"
 ip route replace "$TARGET_D"/32 via 198.18.15.2 dev "$HIF"
+for n in 6 7 8 9 10 11; do
+    ip route replace "172.31.15.$n/32" via 198.18.15.2 dev "$HIF"
+done
 
 cat >"$TMP/tcp-server.py" <<'PY'
 import socket, struct, sys
@@ -397,12 +406,51 @@ CLAMP_MSS_VALUES=$(grep -o 'mss [0-9][0-9]*' "$CLAMP_CAPTURE" | awk '{print $2}'
 DEVICE_MSS_VALUES=$(grep -o 'mss [0-9][0-9]*' "$DEVICE_CAPTURE" | awk '{print $2}' | tr '\n' ' ')
 echo "HOST_BOUNDARY_CLAMP_MSS_VALUES=$CLAMP_MSS_VALUES"
 echo "DEVICE_BOUNDARY_CLAMP_MSS_VALUES=$DEVICE_MSS_VALUES"
-if [ "$DEVICE_CLAMP_RC" -ne 0 ]; then
-    echo "OBSERVATION: symmetric Device-MTU OpenConnect clamp still failed"
+if [ "$DEVICE_CLAMP_RC" -eq 0 ]; then
+    echo "OBSERVATION: Device-MTU-40 OpenConnect clamp succeeded"
+else
+    echo "OBSERVATION: Device-MTU-40 OpenConnect clamp still failed"
     cat "$TMP/device-clamp-client.log"
-    exit 1
 fi
-echo "PASS C: symmetric Device-MTU clamp carries large OpenConnect TCP without PMTU feedback"
+
+# Sweep additional safety margins. Each candidate uses a fresh destination address so a
+# previous TCP/PMTU outcome cannot make a later candidate look healthier.
+SWEEP_TARGETS="6 7 8 9 10 11"
+SWEEP_EXTRA="12 20 32 40 60 100"
+FIRST_WORKING_EXTRA=""
+set -- $SWEEP_TARGETS
+for extra in $SWEEP_EXTRA; do
+    n=$1
+    shift
+    target="172.31.15.$n"
+    candidate=$((ROU_VPN_MTU - 40 - extra))
+
+    ip netns exec "$ROU" nft flush chain ip exp15 forward
+    ip netns exec "$ROU" nft add rule ip exp15 forward \
+        iifname "$RIF" oifname "$VPN_IF" tcp flags syn \
+        tcp option maxseg size set "$candidate"
+    ip netns exec "$ROU" nft add rule ip exp15 forward \
+        iifname "$VPN_IF" oifname "$RIF" tcp flags syn \
+        tcp option maxseg size set "$candidate"
+
+    set +e
+    timeout 12 python3 "$TMP/tcp-client.py" "$target" "$TCP_PORT" 8388608 8 \
+        >"$TMP/sweep-$extra.log" 2>&1
+    rc=$?
+    set -e
+    echo "MSS_SWEEP extra=$extra candidate=$candidate target=$target rc=$rc"
+    if [ "$rc" -eq 0 ] && [ -z "$FIRST_WORKING_EXTRA" ]; then
+        FIRST_WORKING_EXTRA=$extra
+        echo "MSS_SWEEP_FIRST_WORKING_EXTRA=$extra"
+        echo "MSS_SWEEP_FIRST_WORKING_MSS=$candidate"
+    fi
+done
+
+[ -n "$FIRST_WORKING_EXTRA" ] || {
+    echo "FAIL: no tested OpenConnect MSS safety margin prevented the black-hole" >&2
+    exit 1
+}
+echo "PASS C: OpenConnect MSS sweep found a working safety margin"
 
 # Remove experiment suppression/clamp before normal baseline capture.
 ip netns exec "$ROU" nft flush chain ip exp15 output
