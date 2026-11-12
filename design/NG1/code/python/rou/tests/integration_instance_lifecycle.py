@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ipaddress import IPv4Interface
 import os
+import subprocess
 from pathlib import Path
 import sys
 
@@ -42,9 +43,13 @@ def main() -> int:
 
         # Simulate safe-repairable bootstrap drift while forwarding remains a containment
         # concern: wrong rp_filter plus fail-open local filter policies.
-        run(
-            "ip", "netns", "exec", CONFIG.namespace,
-            "sysctl", "-q", "-w", "net.ipv4.conf.all.rp_filter=1",
+        subprocess.run(
+            (
+                "ip", "netns", "exec", CONFIG.namespace,
+                "sysctl", "-q", "-w", "net.ipv4.conf.all.rp_filter=1",
+            ),
+            text=True,
+            check=True,
         )
         bad_filter = (
             "*filter\n"
