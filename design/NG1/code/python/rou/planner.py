@@ -5,6 +5,7 @@ from ipaddress import IPv4Address
 from typing import Callable, Mapping
 
 from .command_backend import CommandBackend, NamespaceBackend
+from .config import validate_active_config
 from .device_engine import (
     DeviceBindingSnapshot,
     DeviceBindingState,
@@ -299,6 +300,7 @@ def reconcile_once(
     ns = NamespaceBackend(namespace, host_backend)
 
     try:
+        validate_active_config(config)
         initial = collect_snapshot(namespace, host_backend)
         projection = _project(
             config,
