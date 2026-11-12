@@ -400,7 +400,6 @@ def create_instance(
         )
 
         bootstrap_config = ActiveConfig({}, {})
-        bootstrap_config = ActiveConfig({}, {})
         apply_nft_table(
             compile_nft_nat_state(bootstrap_config, bootstrap_bindings),
             ns,
