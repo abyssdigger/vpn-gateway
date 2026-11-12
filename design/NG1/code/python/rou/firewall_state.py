@@ -214,7 +214,7 @@ def _publication_input_lines(
     for protocol, start, end in sorted(endpoints):
         port = str(start) if start == end else f"{start}:{end}"
         lines.append(
-            f"-A INPUT -i {HOST_INTERFACE} -d {local_address}/32 "
+            f"-A INPUT -d {local_address}/32 -i {HOST_INTERFACE} "
             f"-p {protocol} -m {protocol} --dport {port} "
             "-m conntrack --ctstate NEW -j ACCEPT"
         )
