@@ -63,13 +63,47 @@ echo "PASS B: bound probe fails on broken B while unbound probe still succeeds v
 ip -n "$B" link set bR up
 ip netns exec "$R" ping -I rB -c 1 -W 1 198.18.21.1 >/dev/null
 
-PING_GROUP_RANGE=$(ip netns exec "$R" sysctl -n net.ipv4.ping_group_range)
-echo "PING_GROUP_RANGE=$PING_GROUP_RANGE"
+HOST_PING_GROUP_RANGE_BEFORE=$(sysctl -n net.ipv4.ping_group_range)
+NS_PING_GROUP_RANGE_BEFORE=$(ip netns exec "$R" sysctl -n net.ipv4.ping_group_range)
+echo "HOST_PING_GROUP_RANGE_BEFORE=$HOST_PING_GROUP_RANGE_BEFORE"
+echo "NS_PING_GROUP_RANGE_BEFORE=$NS_PING_GROUP_RANGE_BEFORE"
 
-if ip netns exec "$R" setpriv     --no-new-privs     --bounding-set=-net_raw     --inh-caps=-all     --ambient-caps=-all     ping -I rB -c 1 -W 1 198.18.21.1 >/dev/null 2>&1; then
-    echo "REDUCED_PRIVILEGE_BOUND_PING=PASS"
+run_unprivileged_bound_ping() {
+    ip netns exec "$R" setpriv \
+        --reuid 65534 \
+        --regid 65534 \
+        --clear-groups \
+        --no-new-privs \
+        --bounding-set=-all \
+        --inh-caps=-all \
+        --ambient-caps=-all \
+        ping -I rB -c 1 -W 1 198.18.21.1 >/dev/null 2>&1
+}
+
+if run_unprivileged_bound_ping; then
+    echo "UNPRIVILEGED_BOUND_PING_INITIAL=PASS"
 else
-    echo "REDUCED_PRIVILEGE_BOUND_PING=FAIL"
+    echo "UNPRIVILEGED_BOUND_PING_INITIAL=FAIL"
+fi
+
+ip netns exec "$R" sysctl -q -w "net.ipv4.ping_group_range=0 2147483647"
+NS_PING_GROUP_RANGE_AFTER=$(ip netns exec "$R" sysctl -n net.ipv4.ping_group_range)
+HOST_PING_GROUP_RANGE_AFTER=$(sysctl -n net.ipv4.ping_group_range)
+echo "NS_PING_GROUP_RANGE_AFTER=$NS_PING_GROUP_RANGE_AFTER"
+echo "HOST_PING_GROUP_RANGE_AFTER=$HOST_PING_GROUP_RANGE_AFTER"
+
+if [ "$HOST_PING_GROUP_RANGE_AFTER" = "$HOST_PING_GROUP_RANGE_BEFORE" ]; then
+    echo "PASS C: ping_group_range change stayed inside probe namespace"
+else
+    sysctl -q -w "net.ipv4.ping_group_range=$HOST_PING_GROUP_RANGE_BEFORE" || true
+    echo "FAIL: ping_group_range change escaped network namespace" >&2
+    exit 1
+fi
+
+if run_unprivileged_bound_ping; then
+    echo "UNPRIVILEGED_BOUND_PING_PERMISSIVE_RANGE=PASS"
+else
+    echo "UNPRIVILEGED_BOUND_PING_PERMISSIVE_RANGE=FAIL"
 fi
 
 echo "EXP_021_BOUND_PROBE_ISOLATION=PASS"
