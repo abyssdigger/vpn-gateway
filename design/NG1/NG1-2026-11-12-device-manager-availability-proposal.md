@@ -177,25 +177,32 @@ loss.
 
 ### New binding and restart behavior
 
-For a detector-enabled newly bound generation:
+For a detector-enabled newly bound generation with no durable stable availability:
 
 1. binding is visible to DeviceEngine;
 2. readiness begins PENDING;
 3. no payload state is generated for it;
-4. probe worker establishes fresh supervised evidence;
-5. readiness becomes READY;
-6. current normalized Availability then selects normal/fallback tier.
+4. fresh supervised probe samples advance hysteresis;
+5. while normalized Availability remains UNKNOWN, readiness remains PENDING;
+6. the first stable AVAILABLE or UNAVAILABLE decision establishes READY;
+7. READY then selects the existing normal/fallback tier.
+
+This prevents a brand-new monitored path from entering the normal tier merely because one
+fresh failure sample has not yet reached a configured failure threshold.
 
 On controller/runtime restart:
 
-- durable last stable Availability may seed surviving concrete generations for hysteresis
-  continuity;
+- durable last stable AVAILABLE/UNAVAILABLE may seed surviving concrete generations for
+  hysteresis continuity;
 - probe ids/timestamps/streaks reset;
-- monitored generations begin PENDING regardless of durable Availability;
-- they remain payload-quarantined until fresh evidence re-establishes READY.
+- monitored generations begin PENDING regardless of the durable seed;
+- a fresh supervised sample confirms the new controller lifecycle and may re-establish
+  READY while retaining the seeded stable Availability until hysteresis changes it;
+- a durable UNKNOWN seed is not sufficient for READY: the generation remains PENDING until
+  a stable AVAILABLE/UNAVAILABLE decision is reached.
 
-Thus persisted Availability reconstructs history; it never substitutes for fresh detector
-readiness.
+Thus persisted Availability reconstructs stable history; it never substitutes for fresh
+detector readiness.
 
 ### Recommendation
 
