@@ -152,7 +152,7 @@ class RuntimeAppTests(unittest.TestCase):
             self.assertTrue(FakeSupervisor.instances[-1].closed)
             loop.assert_called_once()
 
-    def test_runtime_passes_injected_availability_provider_to_loop(self):
+    def test_runtime_passes_injected_availability_collector_to_loop(self):
         with tempfile.TemporaryDirectory() as td:
             backend = FakeBackend()
             cfg = instance_file_config(Path(td) / "state.json")
@@ -193,11 +193,11 @@ class RuntimeAppTests(unittest.TestCase):
                     runtime_paths=RuntimePaths(
                         Path(td) / "runtime" / "rou0.lock"
                     ),
-                    availability_provider=provider,
+                    availability_collector=provider,
                 )
 
             self.assertIs(
-                loop.call_args.kwargs["availability_provider"],
+                loop.call_args.kwargs["availability_collector"],
                 provider,
             )
 
