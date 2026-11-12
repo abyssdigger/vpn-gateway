@@ -542,7 +542,7 @@ def observe_nft_table(
 def observe_nft_state(
     desired: NftTableDesiredState,
     backend: NamespaceBackend,
-) -> NftObservedState:
+) -> NftObservedState | None:
     """Observe one owned nft table through the production verification boundary.
 
     Textual canonicalization verifies complete policy/order semantics. JSON observation
@@ -554,19 +554,52 @@ def observe_nft_state(
     an unverified numeric generation satisfy the exact ref multiset.
     """
 
+    probe = backend.run(
+        (
+            "nft",
+            "-j",
+            "-n",
+            "list",
+            "table",
+            desired.family,
+            desired.name,
+        ),
+        check=False,
+    )
+    if probe.returncode != 0:
+        stderr = probe.stderr.lower()
+        if (
+            "no such file or directory" in stderr
+            or "does not exist" in stderr
+        ):
+            return None
+        raise NftPolicyError(
+            f"cannot observe nft table {desired.family} {desired.name}: "
+            f"returncode={probe.returncode} stderr={probe.stderr.strip()!r}"
+        )
+
+    refs = _numeric_interface_refs_from_json(probe.stdout)
     return NftObservedState(
         canonical=observe_nft_table(desired, backend),
-        numeric_interface_refs=observe_nft_numeric_interface_refs(
-            desired,
-            backend,
-        ),
+        numeric_interface_refs=refs,
     )
 
 
 def verify_nft_observation(
     desired: NftTableDesiredState,
-    observed: NftObservedState,
+    observed: NftObservedState | None,
 ) -> NftVerification:
+    if observed is None:
+        return NftVerification(
+            ok=False,
+            actual="<absent>",
+            expected=(
+                desired.canonical
+                + "\n# numeric-interface-refs="
+                + repr(desired.numeric_interface_refs)
+            ),
+        )
+
     text_ok = observed.canonical == desired.canonical
     refs_ok = (
         observed.numeric_interface_refs
