@@ -20,7 +20,9 @@ from .instance_lifecycle import (
     ensure_instance,
     verify_instance,
 )
+from .nat_state import ConfigNatProvider
 from .runtime_app import run_instance_runtime
+from .status import inspect_runtime_status
 from .state_store import JsonRuntimeStateStore, StateStoreError
 
 
@@ -209,29 +211,6 @@ def cmd_down(
     }
 
 
-def _safe_state_summary(
-    instance: InstanceFileConfig,
-    router,
-) -> dict[str, object]:
-    try:
-        loaded = JsonRuntimeStateStore(instance.state_file).load(router)
-    except StateStoreError as exc:
-        return {
-            "state_ok": False,
-            "state_error": str(exc),
-        }
-    return {
-        "state_ok": True,
-        "dropped_state_entries": loaded.dropped_entries,
-        "remembered_metric_count": len(
-            loaded.state.traffic.normal_metrics
-        ),
-        "remembered_expectation_count": len(
-            loaded.state.devices.expectations
-        ),
-    }
-
-
 def cmd_show(
     instance_id: str,
     instance_file: Path,
@@ -249,8 +228,8 @@ def cmd_show(
         "instance_file": str(instance_file),
         "namespace": instance.instance.namespace,
         "host_interface": instance.instance.host_if,
-        "verified": verification.ok,
-        "verification_errors": list(verification.errors),
+        "appliance_verified": verification.ok,
+        "appliance_errors": list(verification.errors),
         "active_devices": sorted(router.active_device_names),
         "enabled_profiles": sorted(
             name
@@ -258,28 +237,99 @@ def cmd_show(
             if profile.enabled
         ),
     }
-    result.update(_safe_state_summary(instance, router))
 
-    if verification.ok:
-        snapshot = collect_environment_snapshot(
-            instance.instance.namespace,
-            lambda argv: backend.run(argv).stdout,
-        )
-        result["interfaces"] = [
+    try:
+        loaded = JsonRuntimeStateStore(instance.state_file).load(router)
+    except StateStoreError as exc:
+        result.update(
             {
-                "ifname": item.identity.ifname,
-                "ifindex": item.identity.ifindex,
+                "state_ok": False,
+                "state_error": str(exc),
+                "policy_verified": False,
+                "policy_errors": [
+                    "runtime state is not trustworthy; policy projection skipped"
+                ],
             }
-            for item in snapshot.interfaces
-        ]
-        result["route_count"] = len(snapshot.routes)
-        result["rule_count"] = len(snapshot.rules)
-        result["ip_forward"] = snapshot.sysctl_map.get(
-            "net.ipv4.ip_forward"
         )
+        return result
 
+    result.update(
+        {
+            "state_ok": True,
+            "dropped_state_entries": loaded.dropped_entries,
+            "remembered_metric_count": len(
+                loaded.state.traffic.normal_metrics
+            ),
+            "remembered_expectation_count": len(
+                loaded.state.devices.expectations
+            ),
+        }
+    )
+
+    if not verification.ok:
+        result.update(
+            {
+                "policy_verified": False,
+                "policy_errors": [
+                    "instance/appliance verification failed; policy projection skipped"
+                ],
+            }
+        )
+        return result
+
+    snapshot = collect_environment_snapshot(
+        instance.instance.namespace,
+        lambda argv: backend.run(argv).stdout,
+    )
+    ns = NamespaceBackend(instance.instance.namespace, backend)
+    status = inspect_runtime_status(
+        router,
+        instance.instance.namespace,
+        loaded.state,
+        snapshot,
+        ns,
+        ConfigNatProvider(),
+        local_publication_address=instance.instance.inner_address.ip,
+    )
+
+    result.update(
+        {
+            "policy_verified": status.ok,
+            "policy_errors": list(status.errors),
+            "interfaces": [
+                {
+                    "ifname": item.identity.ifname,
+                    "ifindex": item.identity.ifindex,
+                }
+                for item in snapshot.interfaces
+            ],
+            "bound_interfaces": [
+                {
+                    "device": item.device_name,
+                    "expected_index": item.expected_index,
+                    "ifname": item.identity.ifname,
+                    "ifindex": item.identity.ifindex,
+                    "availability": item.availability.value,
+                }
+                for item in status.projection.bindings.bound
+            ],
+            "over_quota_interfaces": [
+                {
+                    "device": item.device_name,
+                    "expected_index": item.expected_index,
+                    "ifname": item.identity.ifname,
+                    "ifindex": item.identity.ifindex,
+                }
+                for item in status.projection.bindings.over_quota
+            ],
+            "route_count": len(snapshot.routes),
+            "rule_count": len(snapshot.rules),
+            "ip_forward": snapshot.sysctl_map.get(
+                "net.ipv4.ip_forward"
+            ),
+        }
+    )
     return result
-
 
 def cmd_run(
     instance_id: str,
