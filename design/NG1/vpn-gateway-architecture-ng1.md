@@ -753,6 +753,20 @@ to DeviceEngine; downstream components receive only normalized availability.
 
 Availability does not break the bound-interface lifetime.
 
+EXP-019 provides WireGuard-specific raw evidence for future DeviceManager work:
+
+- a WireGuard interface can remain present/up with the same `(ifname,ifindex)` while its
+  remote underlay path is unusable;
+- an active probe bound to the WireGuard path can distinguish loss and recovery without
+  replacing the interface generation;
+- latest-successful-handshake age alone is not a sufficient prompt liveness trigger:
+  short path loss and successful payload recovery were observed with the same recorded
+  latest-handshake timestamp.
+
+This evidence does not define the production detector. Probe target, cadence, failure/
+recovery thresholds and any Device-specific configuration belong to future DeviceManager
+design. DeviceEngine continues to export only normalized UNKNOWN/AVAILABLE/UNAVAILABLE.
+
 ### 7.4 Device traffic envelope
 
 `traffic_envelope` is the administrator-authored firewall policy of a Device/tunnel, as
