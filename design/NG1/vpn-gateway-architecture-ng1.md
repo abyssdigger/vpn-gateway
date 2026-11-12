@@ -597,8 +597,10 @@ Device interfaces and name matching only for stable infrastructure interfaces su
 `host0` and `lo`.
 
 Production verification combines complete canonical nft policy semantics with a separate
-`nft -j -n` observation of the exact numeric iif/oif reference multiset. A
-same-name/new-ifindex replacement is consequently a fresh lifecycle generation and does
+JSON observation of compiler-owned generation markers
+`vpng-ifref:iif:<ifindex>` / `vpng-ifref:oif:<ifindex>`. The kernel match itself is
+numeric iif/oif; the marker avoids relying on nft's symbolic rendering of a live interface.
+A same-name/new-ifindex replacement is consequently a fresh lifecycle generation and does
 not inherit policy from the retired interface. If the observed nft policy cannot be proven
 to be either the previous or desired verified generation, the transition is structural and
 uses the global barrier.
@@ -1623,5 +1625,5 @@ ROU does not seize or rewrite unrelated host VPN routes.
 74. The persistent shadow fallback is implemented before its production availability trigger; positive UNAVAILABLE classification is intentionally deferred to future DeviceManager/Device-specific detector work.
 75. net.ipv4.fib_multipath_hash_policy is an observed/owned namespace prerequisite and may not be silently inherited when ECMP fallback can become effective.
 76. Incremental lifecycle route repair never flushes a Profile table or removes its terminal blackhole; the blackhole remains continuously installed so a temporarily missing more-specific route cannot fall through to a broader overlapping Profile rule.
-77. Production nft policy matches dynamic bound interfaces by numeric ifindex and verifies the exact numeric iif/oif generation references; same-name/new-ifindex is a fresh lifecycle generation, while an unprovable policy generation remains structural/unknown drift.
+77. Production nft policy matches dynamic bound interfaces by numeric ifindex and verifies compiler-owned generation markers for those numeric references; same-name/new-ifindex is a fresh lifecycle generation, while an unprovable policy generation remains structural/unknown drift.
 78. Incremental binding admission installs route state first, required NAT second, and generated FORWARD admission last; a newly routable MASQUERADE Device is never intentionally admitted before translation state exists.
