@@ -68,7 +68,8 @@ echo "PASS B: same-name/new-ifindex=$NEW_INDEX does not inherit old iif/oif rule
 # Update only ingress generation. SRC -> ROU must work again, while ROU -> SRC must still
 # fail because OUTPUT remains pinned to old oif.
 ip netns exec "$ROU" nft add rule ip vpng_exp17 input \
-    meta iif "$NEW_INDEX" ip protocol icmp counter accept
+    meta iif "$NEW_INDEX" ip protocol icmp counter \
+    comment '"exp17-new-iif"' accept
 
 # The echo request should now reach INPUT, but the echo reply must still be blocked by
 # stale OUTPUT. Therefore end-to-end ping remains unsuccessful; prove ingress admission
@@ -78,9 +79,9 @@ if ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
     exit 1
 fi
 
-NEW_IIF_PKTS=$(ip netns exec "$ROU" nft -n -a list chain ip vpng_exp17 input |
-    awk -v idx="$NEW_INDEX" '
-        $0 ~ ("meta iif " idx " ") && $0 ~ /counter packets/ {
+NEW_IIF_PKTS=$(ip netns exec "$ROU" nft -a list chain ip vpng_exp17 input |
+    awk '
+        /comment "exp17-new-iif"/ && /counter packets/ {
             for (i = 1; i <= NF; i++) {
                 if ($i == "packets") {
                     print $(i + 1)
