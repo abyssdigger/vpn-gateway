@@ -16,12 +16,6 @@ from .device_engine import (
 )
 from .domain import ActiveConfig, Availability
 from .environment import EnvironmentSnapshot, collect_environment_snapshot
-from .firewall_kernel import (
-    apply_filter_state,
-    observe_filter_state,
-    verify_filter_state,
-)
-from .firewall_state import FirewallDesiredState, compile_filter_state
 from .kernel_allocation import KernelAllocation, compile_kernel_allocation
 from .kernel_mutation import (
     compile_kernel_mutation_plan,
@@ -37,19 +31,24 @@ from .namespace_prereq import (
     apply_namespace_prerequisites,
     verify_namespace_prerequisites,
 )
-from .nat_kernel import (
-    apply_nat_state,
-    observe_nat_state,
-    verify_nat_state,
+from .nft_policy import (
+    NftTableDesiredState,
+    apply_nft_table,
+    compile_nft_filter_state,
+    compile_nft_nat_state,
+    verify_nft_table,
 )
-from .nat_state import NatDesiredState, NatProvider
 from .traffic_state import (
     TrafficProjection,
     TrafficRuntimeState,
     committed_state_from_verified,
     project_normal_metrics,
 )
-from .transition import TransitionKind, assess_binding_lifecycle
+from .transition import (
+    PolicyGenerationObservation,
+    TransitionKind,
+    assess_binding_lifecycle,
+)
 
 
 LOG = logging.getLogger(__name__)
@@ -84,8 +83,8 @@ class PlannerProjection:
     metrics: TrafficProjection
     allocation: KernelAllocation
     kernel: KernelDesiredState
-    firewall: FirewallDesiredState
-    nat: NatDesiredState
+    firewall: NftTableDesiredState
+    nat: NftTableDesiredState
 
 
 @dataclass(frozen=True)
@@ -118,7 +117,6 @@ def compile_planner_projection(
     config: ActiveConfig,
     committed: PlannerRuntimeState,
     snapshot: EnvironmentSnapshot,
-    nat_provider: NatProvider,
     availability_provider: AvailabilityProvider | None,
     local_publication_address: IPv4Address | None,
 ) -> PlannerProjection:
@@ -152,12 +150,12 @@ def compile_planner_projection(
         metrics,
         allocation,
     )
-    firewall = compile_filter_state(
+    firewall = compile_nft_filter_state(
         config,
         devices.snapshot,
         local_publication_address=local_publication_address,
     )
-    nat = nat_provider.compile(config, devices.snapshot)
+    nat = compile_nft_nat_state(config, devices.snapshot)
     result = PlannerProjection(
         device_state=devices.next_state,
         bindings=devices.snapshot,
@@ -184,7 +182,6 @@ def compile_planner_projection(
 def _project_committed_generation(
     config: ActiveConfig,
     committed: PlannerRuntimeState,
-    nat_provider: NatProvider,
     local_publication_address: IPv4Address | None,
 ) -> PlannerProjection:
     """Reconstruct the previous verified generation from durable runtime history."""
@@ -210,12 +207,12 @@ def _project_committed_generation(
             metrics,
             allocation,
         ),
-        firewall=compile_filter_state(
+        firewall=compile_nft_filter_state(
             config,
             bindings,
             local_publication_address=local_publication_address,
         ),
-        nat=nat_provider.compile(config, bindings),
+        nat=compile_nft_nat_state(config, bindings),
     )
 
 
@@ -272,13 +269,13 @@ def _verify_all(
     )
     errors.extend(prereq.errors)
 
-    firewall = verify_filter_state(projection.firewall, backend)
+    firewall = verify_nft_table(projection.firewall, backend)
     if not firewall.ok:
-        errors.append("filter table mismatch")
+        errors.append("nft filter table mismatch")
 
-    nat = verify_nat_state(projection.nat, backend)
+    nat = verify_nft_table(projection.nat, backend)
     if not nat.ok:
-        errors.append("nat table mismatch")
+        errors.append("nft NAT table mismatch")
 
     return tuple(errors)
 
@@ -295,7 +292,6 @@ def reconcile_once(
     namespace: str,
     committed: PlannerRuntimeState,
     host_backend: CommandBackend,
-    nat_provider: NatProvider,
     *,
     availability_provider: AvailabilityProvider | None = None,
     collect_snapshot: SnapshotCollector = default_snapshot_collector,
@@ -350,7 +346,6 @@ def reconcile_once(
             config,
             committed,
             initial,
-            nat_provider,
             availability_provider,
             local_publication_address,
         )
@@ -430,23 +425,33 @@ def reconcile_once(
         previous_projection = _project_committed_generation(
             config,
             committed,
-            nat_provider,
             local_publication_address,
         )
-        observed_filter = observe_filter_state(ns)
-        observed_nat = observe_nat_state(ns)
+        policy_generation = PolicyGenerationObservation(
+            filter_matches_previous=verify_nft_table(
+                previous_projection.firewall,
+                ns,
+            ).ok,
+            filter_matches_desired=verify_nft_table(
+                projection.firewall,
+                ns,
+            ).ok,
+            nat_matches_previous=verify_nft_table(
+                previous_projection.nat,
+                ns,
+            ).ok,
+            nat_matches_desired=verify_nft_table(
+                projection.nat,
+                ns,
+            ).ok,
+        )
         assessment = assess_binding_lifecycle(
             previous_projection.kernel,
             projection.kernel,
-            previous_projection.firewall,
-            projection.firewall,
-            previous_projection.nat,
-            projection.nat,
+            policy_generation,
             previous_projection.bindings,
             projection.bindings,
             initial,
-            observed_filter,
-            observed_nat,
         )
 
         LOG.debug(
@@ -495,18 +500,31 @@ def reconcile_once(
                     + "; ".join(prepared_prereq.errors)
                 )
 
+            reassessment_policy = PolicyGenerationObservation(
+                filter_matches_previous=verify_nft_table(
+                    previous_projection.firewall,
+                    ns,
+                ).ok,
+                filter_matches_desired=verify_nft_table(
+                    projection.firewall,
+                    ns,
+                ).ok,
+                nat_matches_previous=verify_nft_table(
+                    previous_projection.nat,
+                    ns,
+                ).ok,
+                nat_matches_desired=verify_nft_table(
+                    projection.nat,
+                    ns,
+                ).ok,
+            )
             reassessment = assess_binding_lifecycle(
                 previous_projection.kernel,
                 projection.kernel,
-                previous_projection.firewall,
-                projection.firewall,
-                previous_projection.nat,
-                projection.nat,
+                reassessment_policy,
                 previous_projection.bindings,
                 projection.bindings,
                 prepared,
-                observe_filter_state(ns),
-                observe_nat_state(ns),
             )
             if reassessment.kind is not TransitionKind.BINDING_LIFECYCLE:
                 raise PlannerRetryRequired(
@@ -525,8 +543,8 @@ def reconcile_once(
             execute_kernel_mutation_plan(lifecycle_plan, ns)
             # Admission is installed last. A newly routable masqueraded path must never
             # become FORWARD-acceptable before its NAT state exists.
-            apply_nat_state(projection.nat, ns)
-            apply_filter_state(projection.firewall, ns)
+            apply_nft_table(projection.nat, ns)
+            apply_nft_table(projection.firewall, ns)
 
             applied = collect_snapshot(namespace, host_backend)
             if applied.interfaces != initial.interfaces:
@@ -581,7 +599,6 @@ def reconcile_once(
             config,
             committed,
             barrier_snapshot,
-            nat_provider,
             availability_provider,
             local_publication_address,
         )
@@ -615,8 +632,8 @@ def reconcile_once(
             len(mutation_plan.commands),
         )
         execute_kernel_mutation_plan(mutation_plan, ns)
-        apply_filter_state(barrier_projection.firewall, ns)
-        apply_nat_state(barrier_projection.nat, ns)
+        apply_nft_table(barrier_projection.nat, ns)
+        apply_nft_table(barrier_projection.firewall, ns)
 
         applied = collect_snapshot(namespace, host_backend)
         if applied.interfaces != barrier_snapshot.interfaces:
