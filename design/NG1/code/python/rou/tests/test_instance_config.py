@@ -53,7 +53,7 @@ class InstanceFileConfigTests(unittest.TestCase):
                 VALID.replace("schema_version = 1", "schema_version = 2")
             )
 
-    def test_paths_must_be_absolute_and_distinct(self):
+    def test_paths_must_be_absolute(self):
         with self.assertRaisesRegex(InstanceFileConfigError, "must be absolute"):
             parse_instance_file_config(
                 VALID.replace(
