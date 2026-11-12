@@ -2,14 +2,17 @@
 set -eu
 
 ROU=vg-exp015-wgr
-SRV=vg-exp015-wgs
+REMOTE=vg-exp015-wgp
+TARGET=vg-exp015-wgt
 HIF=exp15wh
 RIF=host0
 RUS=exp15wr
-SIF=exp15ws
+REMOTE_UNDERLAY=exp15ws
+REMOTE_LAN=exp15wlan
+TARGET_LAN=exp15wt
 TCP_PORT=18081
-TARGET_A=10.99.16.1
-TARGET_B=10.99.16.2
+TARGET_A=172.31.16.2
+TARGET_B=172.31.16.3
 TMP=/run/vpn-gate-exp015-wg-$$
 CAPTURE="$TMP/tcpdump.txt"
 TCP_LOG="$TMP/tcp-server.log"
@@ -18,8 +21,9 @@ cleanup() {
     set +e
     [ -n "${TCP_PID:-}" ] && kill "$TCP_PID" 2>/dev/null
     [ -n "${TCP_PID:-}" ] && wait "$TCP_PID" 2>/dev/null
+    ip netns del "$TARGET" 2>/dev/null
+    ip netns del "$REMOTE" 2>/dev/null
     ip netns del "$ROU" 2>/dev/null
-    ip netns del "$SRV" 2>/dev/null
     ip link del "$HIF" 2>/dev/null
     rm -rf "$TMP"
 }
@@ -31,7 +35,6 @@ for cmd in ip nft wg awk grep timeout tcpdump python3; do
         exit 2
     }
 done
-
 [ "$(id -u)" -eq 0 ] || {
     echo "FAIL: EXP-015 WireGuard requires root" >&2
     exit 2
@@ -40,16 +43,16 @@ done
 umask 077
 mkdir -m 0700 "$TMP"
 wg genkey >"$TMP/rou.key"
-wg genkey >"$TMP/srv.key"
+wg genkey >"$TMP/remote.key"
 wg pubkey <"$TMP/rou.key" >"$TMP/rou.pub"
-wg pubkey <"$TMP/srv.key" >"$TMP/srv.pub"
+wg pubkey <"$TMP/remote.key" >"$TMP/remote.pub"
 
-ip netns del "$ROU" 2>/dev/null || true
-ip netns del "$SRV" 2>/dev/null || true
+for ns in "$ROU" "$REMOTE" "$TARGET"; do
+    ip netns del "$ns" 2>/dev/null || true
+    ip netns add "$ns"
+    ip -n "$ns" link set lo up
+done
 ip link del "$HIF" 2>/dev/null || true
-
-ip netns add "$ROU"
-ip netns add "$SRV"
 
 ip link add "$HIF" type veth peer name "$RIF"
 ip link set "$RIF" netns "$ROU"
@@ -57,42 +60,47 @@ ip addr add 198.18.16.1/30 dev "$HIF"
 ip link set "$HIF" up
 ip -n "$ROU" addr add 198.18.16.2/30 dev "$RIF"
 ip -n "$ROU" link set "$RIF" up
-ip -n "$ROU" link set lo up
 
-ip link add "$RUS" type veth peer name "$SIF"
+ip link add "$RUS" type veth peer name "$REMOTE_UNDERLAY"
 ip link set "$RUS" netns "$ROU"
-ip link set "$SIF" netns "$SRV"
+ip link set "$REMOTE_UNDERLAY" netns "$REMOTE"
 ip -n "$ROU" addr add 192.0.2.2/30 dev "$RUS"
-ip -n "$SRV" addr add 192.0.2.1/30 dev "$SIF"
+ip -n "$REMOTE" addr add 192.0.2.1/30 dev "$REMOTE_UNDERLAY"
 ip -n "$ROU" link set "$RUS" up
-ip -n "$SRV" link set "$SIF" up
-ip -n "$SRV" link set lo up
+ip -n "$REMOTE" link set "$REMOTE_UNDERLAY" up
 
-ip -n "$SRV" link add probe0 type dummy
-ip -n "$SRV" addr add "$TARGET_A"/32 dev probe0
-ip -n "$SRV" addr add "$TARGET_B"/32 dev probe0
-ip -n "$SRV" link set probe0 up
+ip link add "$REMOTE_LAN" type veth peer name "$TARGET_LAN"
+ip link set "$REMOTE_LAN" netns "$REMOTE"
+ip link set "$TARGET_LAN" netns "$TARGET"
+ip -n "$REMOTE" addr add 172.31.16.1/29 dev "$REMOTE_LAN"
+ip -n "$TARGET" addr add "$TARGET_A"/29 dev "$TARGET_LAN"
+ip -n "$TARGET" addr add "$TARGET_B"/32 dev "$TARGET_LAN"
+ip -n "$REMOTE" link set "$REMOTE_LAN" up
+ip -n "$TARGET" link set "$TARGET_LAN" up
+ip -n "$TARGET" route add default via 172.31.16.1 dev "$TARGET_LAN"
 
 ip -n "$ROU" link add wg0 type wireguard
-ip -n "$SRV" link add wg0 type wireguard
+ip -n "$REMOTE" link add wg0 type wireguard
 ip -n "$ROU" addr add 10.23.16.1/30 dev wg0
-ip -n "$SRV" addr add 10.23.16.2/30 dev wg0
+ip -n "$REMOTE" addr add 10.23.16.2/30 dev wg0
 
 ROU_PUB=$(cat "$TMP/rou.pub")
-SRV_PUB=$(cat "$TMP/srv.pub")
+REMOTE_PUB=$(cat "$TMP/remote.pub")
 
-cat "$TMP/rou.key" | ip netns exec "$ROU" wg set wg0     listen-port 51820     private-key /dev/stdin     peer "$SRV_PUB"     allowed-ips 10.23.16.2/32,"$TARGET_A"/32,"$TARGET_B"/32     endpoint 192.0.2.1:51820     persistent-keepalive 1
+cat "$TMP/rou.key" | ip netns exec "$ROU" wg set wg0     listen-port 51820     private-key /dev/stdin     peer "$REMOTE_PUB"     allowed-ips 10.23.16.2/32,"$TARGET_A"/32,"$TARGET_B"/32     endpoint 192.0.2.1:51820     persistent-keepalive 1
 
-cat "$TMP/srv.key" | ip netns exec "$SRV" wg set wg0     listen-port 51820     private-key /dev/stdin     peer "$ROU_PUB"     allowed-ips 10.23.16.1/32     endpoint 192.0.2.2:51820     persistent-keepalive 1
+cat "$TMP/remote.key" | ip netns exec "$REMOTE" wg set wg0     listen-port 51820     private-key /dev/stdin     peer "$ROU_PUB"     allowed-ips 10.23.16.1/32     endpoint 192.0.2.2:51820     persistent-keepalive 1
 
 ip -n "$ROU" link set wg0 up
-ip -n "$SRV" link set wg0 up
+ip -n "$REMOTE" link set wg0 up
 ip -n "$ROU" route add "$TARGET_A"/32 dev wg0
 ip -n "$ROU" route add "$TARGET_B"/32 dev wg0
 
 ip netns exec "$ROU" ping -I wg0 -c 2 -W 2 10.23.16.2 >/dev/null
 
 ip netns exec "$ROU" sysctl -q -w net.ipv4.ip_forward=1
+ip netns exec "$REMOTE" sysctl -q -w net.ipv4.ip_forward=1
+
 ip netns exec "$ROU" nft -f - <<'EOF'
 table ip exp15wg {
     chain forward {
@@ -104,6 +112,21 @@ table ip exp15wg {
     chain postrouting {
         type nat hook postrouting priority srcnat; policy accept;
         oifname "wg0" masquerade
+    }
+}
+EOF
+
+ip netns exec "$REMOTE" nft -f - <<EOF
+table ip exp15wgremote {
+    chain forward {
+        type filter hook forward priority filter; policy accept;
+    }
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        oifname "$REMOTE_LAN" masquerade
     }
 }
 EOF
@@ -175,24 +198,28 @@ print(f"TCP_ROUNDTRIP_BYTES={length}")
 print(f"TCP_ROUNDTRIP_SHA256={actual}")
 PY
 
-ip netns exec "$SRV" python3 "$TMP/tcp-server.py" "$TCP_PORT" >"$TCP_LOG" 2>&1 &
+ip netns exec "$TARGET" python3 "$TMP/tcp-server.py" "$TCP_PORT" >"$TCP_LOG" 2>&1 &
 TCP_PID=$!
 for _ in $(seq 1 20); do
     grep -q '^READY$' "$TCP_LOG" 2>/dev/null && break
     sleep 0.1
 done
 grep -q '^READY$' "$TCP_LOG" || {
-    echo "FAIL: WireGuard TCP server did not become ready" >&2
+    echo "FAIL: WireGuard target TCP server did not become ready" >&2
     cat "$TCP_LOG" >&2
     exit 1
 }
 
 H_MTU=$(cat "/sys/class/net/$HIF/mtu")
 HOST0_MTU=$(ip netns exec "$ROU" cat /sys/class/net/"$RIF"/mtu)
-WG_MTU=$(ip netns exec "$ROU" cat /sys/class/net/wg0/mtu)
+ROU_WG_MTU=$(ip netns exec "$ROU" cat /sys/class/net/wg0/mtu)
+REMOTE_WG_MTU=$(ip netns exec "$REMOTE" cat /sys/class/net/wg0/mtu)
+TARGET_MTU=$(ip netns exec "$TARGET" cat /sys/class/net/"$TARGET_LAN"/mtu)
 echo "MTU_HOST_VETH=$H_MTU"
 echo "MTU_ROU_HOST0=$HOST0_MTU"
-echo "MTU_WIREGUARD=$WG_MTU"
+echo "MTU_ROU_WIREGUARD=$ROU_WG_MTU"
+echo "MTU_REMOTE_WIREGUARD=$REMOTE_WG_MTU"
+echo "MTU_REMOTE_TARGET_LAN=$TARGET_MTU"
 
 low=0
 high=1472
@@ -222,7 +249,7 @@ echo "TCP_MSS_VALUES=$MSS_VALUES"
     echo "FAIL: no WireGuard MSS values captured" >&2
     exit 1
 }
-echo "PASS A: WireGuard baseline large TCP round-trip succeeds"
+echo "PASS A: production-like WireGuard large TCP round-trip succeeds"
 
 ip netns exec "$ROU" nft add rule ip exp15wg output     oifname "$RIF" ip protocol icmp drop
 
@@ -233,10 +260,10 @@ set -e
 
 echo "PMTU_FEEDBACK_BLOCKED_TCP_RC=$BLOCKED_RC"
 if [ "$BLOCKED_RC" -eq 0 ]; then
-    echo "OBSERVATION: WireGuard large TCP completed with ROU->host ICMP feedback blocked"
-    echo "EXP_015_WIREGUARD_BASELINE=PASS_NO_BLACKHOLE"
+    echo "OBSERVATION: production-like WireGuard TCP completed with PMTU feedback blocked"
+    echo "EXP_015_WIREGUARD_PRODUCTION_PATH=PASS_NO_BLACKHOLE"
 else
-    echo "OBSERVATION: WireGuard large TCP failed with ROU->host ICMP feedback blocked"
+    echo "OBSERVATION: production-like WireGuard TCP failed with PMTU feedback blocked"
     cat "$TMP/blocked-client.log"
-    echo "EXP_015_WIREGUARD_BASELINE=PASS_BLACKHOLE_REPRODUCED"
+    echo "EXP_015_WIREGUARD_PRODUCTION_PATH=PASS_BLACKHOLE_REPRODUCED"
 fi
