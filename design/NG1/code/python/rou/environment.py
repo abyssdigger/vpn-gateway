@@ -302,22 +302,29 @@ def _parse_rule_network(
         raise EnvironmentParseError(f"{what}.{field} must be an IPv4 address")
 
     raw_len = item.get(len_field)
-    if raw_len is None:
-        # iproute2 omits host-length /32. Accept an explicitly prefixed value as well for
-        # forward compatibility with alternate renderings.
-        if "/" in raw:
-            return _parse_network(raw, default="0.0.0.0/0", what=f"{what}.{field}")
-        prefixlen = 32
-    else:
-        if type(raw_len) is not int or not 0 <= raw_len <= 32:
-            raise EnvironmentParseError(
-                f"{what}.{len_field} must be an integer 0..32"
-            )
-        prefixlen = raw_len
+    if raw_len is not None and (
+        type(raw_len) is not int or not 0 <= raw_len <= 32
+    ):
+        raise EnvironmentParseError(
+            f"{what}.{len_field} must be an integer 0..32"
+        )
 
-    address = raw.split("/", 1)[0]
+    if "/" in raw:
+        network = _parse_network(
+            raw,
+            default="0.0.0.0/0",
+            what=f"{what}.{field}",
+        )
+        if raw_len is not None and raw_len != network.prefixlen:
+            raise EnvironmentParseError(
+                f"{what}.{field} prefix length {network.prefixlen} "
+                f"conflicts with {len_field}={raw_len}"
+            )
+        return network
+
+    prefixlen = 32 if raw_len is None else raw_len
     try:
-        return IPv4Network(f"{address}/{prefixlen}", strict=True)
+        return IPv4Network(f"{raw}/{prefixlen}", strict=True)
     except Exception:
         raise EnvironmentParseError(
             f"{what}.{field}/{len_field} is not a strict IPv4 prefix: "
