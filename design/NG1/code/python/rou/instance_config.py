@@ -164,6 +164,7 @@ def parse_instance_file_config(text: str) -> InstanceFileConfig:
     router_config = _absolute_path(
         body["router_config"],
         "instance.router_config",
+        required_root=Path("/etc/vpn-gateway/routers"),
     )
     state_file = _absolute_path(
         body["state_file"],
