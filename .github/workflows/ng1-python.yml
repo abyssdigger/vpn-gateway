@@ -49,3 +49,6 @@ jobs:
 
       - name: Run disposable-netns filter round-trip
         run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_firewall_roundtrip.py
+
+      - name: Run lifecycle route-diff proof with overlapping Profiles
+        run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_lifecycle_route_diff.py
