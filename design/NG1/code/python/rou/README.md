@@ -1,53 +1,96 @@
 # VPN-GATE NG1 ROU production reference
 
-This directory starts the first production-capable NG1 implementation after ROU v0 / EXP-012.
+Status: **active Python production implementation of NG1 Draft 5**
 
-Current implemented slice:
+This package implements the ROU control plane after the ROU v0 / EXP-010..013 evidence.
 
-- immutable Device/Profile/ExpectedInterface domain objects;
-- TOML -> `ActiveConfig` parsing for the agreed config surface;
-- disabled placeholder semantics;
-- strict IPv4 destination validation;
-- Device reference and selector-overlap validation;
-- ordered `device_order -> expected_interfaces` metric-range compilation;
-- disabled Devices consume no current metric range;
-- reserved metric tail with `normal < UNAVAILABLE_METRIC < BLACKHOLE_METRIC`;
-- rootless DeviceEngine binding projection over fresh ordered interface snapshots;
-- stable `(ifname, ifindex)` identity and survivor-preserving per-selector quota admission;
-- observable over-quota candidates that are not exported as bound TrafficEngine inputs;
-- normalized UNKNOWN/AVAILABLE/UNAVAILABLE availability attached to bound interfaces;
-- TrafficRuntimeState projection for stable Profile-local normal metric slots;
-- verified-removal barrier: a disappeared interface's committed metric is not reused until a later verified commit;
-- strict parser for ordered `ip -j link show` interface observations;
-- Profile destination dispatch projection in normative `prefixlen DESC, network ASC` order;
-- Device→host NEW-flow Profile classification with filter-by-Device first, then longest-prefix match;
-- explicit ACCEPT-or-DROP NEW-flow intent for every enabled Profile/Device/prefix pair;
-- longest-prefix-first NEW verdict ordering that prevents broader overlapping Profiles from bypassing a more-specific deny;
-- kernel-independent per-Profile direct-route intent for UNKNOWN/AVAILABLE normal-tier paths;
-- terminal Profile blackhole intent even when no usable path exists;
-- persistent shadow fallback route intent at `UNAVAILABLE_METRIC` for every bound Profile path;
-- UNKNOWN/AVAILABLE keep normal routes while UNAVAILABLE removes only the normal route;
-- one-member direct fallback and multi-member equal-cost fallback are represented explicitly;
-- terminal Profile blackhole remains below the fallback tier.
+## Implemented
 
-The current runtime code is deliberately a pure projection layer. It does not mutate kernel
-state and therefore cannot accidentally bypass the architecture's
-`observe -> plan -> apply -> fresh observe -> verify -> commit` boundary.
+- strict schema-v1 router and instance TOML parsing;
+- immutable typed Device/Profile/NAT/publication/envelope domain model;
+- disabled-placeholder and active cross-object validation;
+- INBOUND/BIDIRECTIONAL production guard: active capacity exactly 1 plus restrictive
+  Device envelopes with terminal `default=drop`;
+- DeviceEngine binding by stable `(ifname,ifindex)` identity, survivor order and quota;
+- durable candidate/metric history with atomic validated state persistence;
+- deterministic Profile metric ranges and RPDB/table allocation;
+- Profile dispatch longest-prefix ordering;
+- normal, persistent shadow fallback and terminal blackhole route projection;
+- complete live EnvironmentSnapshot collection with churn detection;
+- default-DROP INPUT/FORWARD/OUTPUT filter projection;
+- bound-interface-only state acceptance;
+- cumulative Device traffic envelopes;
+- config-derived Device NAT;
+- TCP/UDP publication range projection and supervised relay workers;
+- semantic kernel desired-state verification;
+- production nftables filter/NAT materialization with numeric ifindex generation markers;
+- generation-safe nft verification using complete policy semantics plus compiler-owned
+  interface-generation markers;
+- structural fail-closed route/RPDB/nft repair;
+- incremental ordinary binding lifecycle and route-additive repair that preserve each
+  Profile table's terminal blackhole continuously;
+- namespace prerequisite apply/verify, including EXP-016-proven
+  `net.ipv4.fib_multipath_hash_policy=1`;
+- Planner `observe -> plan -> apply -> fresh observe -> verify -> durable commit`;
+- long-running event/audit reconcile loop;
+- RTNETLINK `ip monitor` wakeup source;
+- normalized namespace/veth instance lifecycle;
+- crash-recoverable runtime composition and single-instance locking;
+- `rou check|prepare|contain|up|down|show|run` CLI;
+- reference installer and hardened `rouvpn@.service`.
 
-Intentionally not implemented yet:
+## Deliberately deferred / experimentally gated
 
-- publication TOML syntax;
-- traffic-envelope TOML syntax;
-- live subprocess/netlink EnvironmentSnapshot collection;
-- publication supervision in the production package;
-- numeric routing-table/RPDB allocation in production code;
-- PlannerEngine transition execution;
-- routing/RPDB/firewall/NAT kernel apply/verify;
-- kernel materialization of the now-approved shadow fallback route intent.
+- positive production `UNAVAILABLE` trigger: routing mechanism exists now; DeviceManager
+  health detection is intentionally deferred;
+- multi-interface INBOUND/BIDIRECTIONAL flow pinning: EXP-014;
+- real payload MTU/MSS policy: EXP-015;
+- DeviceManager VPN process lifecycle/configuration and positive production
+  `UNAVAILABLE` trigger;
+- live config reload/CandidateConfig protocol;
+- explicit SNAT and IPv6 payload policy.
 
-Run rootless tests:
+## Tests
+
+Rootless:
 
 ```sh
 python3 -m compileall -q design/NG1/code/python/rou
 python3 -m unittest discover -s design/NG1/code/python/rou/tests -p 'test_*.py' -v
 ```
+
+GitHub kernel integration additionally exercises disposable namespaces for:
+
+- instance create/verify/repair/destroy;
+- legacy iptables filter/NAT round-trip as regression evidence only;
+- lifecycle route diff with overlapping Profiles and persistent table-local blackhole;
+- EXP-017 numeric-ifindex same-name/new-ifindex isolation;
+- production nft policy round-trip;
+- full production reconcile cycle:
+  initial reconcile -> same-name/new-ifindex replacement -> metric promotion ->
+  ordinary member disappearance -> structural foreign-nft repair -> durable-state verify.
+
+Current CI baseline reports `NG1_PRODUCTION_CYCLE=PASS` on the production nft backend.
+
+## Reference deployment
+
+```sh
+sudo design/NG1/deploy/install.sh
+sudoedit /etc/vpn-gateway/routers/rou0.toml
+sudoedit /etc/vpn-gateway/instances/rou0.toml
+
+rou check rou0
+sudo rou up rou0
+rou show rou0
+```
+
+`rou up` enables the corresponding `rouvpn@rou0.service`; `rou down` disables it and
+removes the owned appliance after proving the service inactive.
+
+## Backend status
+
+nftables is the only production packet-policy backend for NG1. Legacy iptables modules and
+integration tests remain temporarily as regression/historical evidence and do not define
+new production semantics.
+
+EXP-017 is PASS and closed the ifindex-generation backend gate.

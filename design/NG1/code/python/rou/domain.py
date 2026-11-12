@@ -24,6 +24,105 @@ class Availability(str, Enum):
     UNAVAILABLE = "unavailable"
 
 
+class NatMode(str, Enum):
+    NONE = "none"
+    MASQUERADE = "masquerade"
+
+
+class TransportProtocol(str, Enum):
+    TCP = "tcp"
+    UDP = "udp"
+
+
+class EnvelopeDirection(str, Enum):
+    FROM_DEVICE = "from-device"
+    TO_DEVICE = "to-device"
+
+
+class EnvelopeAction(str, Enum):
+    ALLOW = "allow"
+    DROP = "drop"
+
+
+class EnvelopeProtocol(str, Enum):
+    ANY = "any"
+    TCP = "tcp"
+    UDP = "udp"
+    ICMP = "icmp"
+
+
+@dataclass(frozen=True, order=True)
+class PortRange:
+    start: int
+    end: int
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.start <= 65535:
+            raise ValueError("port range start must be 1..65535")
+        if not 1 <= self.end <= 65535:
+            raise ValueError("port range end must be 1..65535")
+        if self.start > self.end:
+            raise ValueError("port range start must not exceed end")
+
+    @property
+    def size(self) -> int:
+        return self.end - self.start + 1
+
+    def overlaps(self, other: "PortRange") -> bool:
+        return self.start <= other.end and other.start <= self.end
+
+
+@dataclass(frozen=True)
+class Publication:
+    protocol: TransportProtocol
+    external: PortRange
+    internal: PortRange
+
+    def __post_init__(self) -> None:
+        if self.external.size != self.internal.size:
+            raise ValueError(
+                "publication external/internal ranges must have equal cardinality"
+            )
+
+
+@dataclass(frozen=True)
+class TrafficEnvelopeRule:
+    direction: EnvelopeDirection
+    action: EnvelopeAction
+    source: IPv4Network | None = None
+    destination: IPv4Network | None = None
+    protocol: EnvelopeProtocol = EnvelopeProtocol.ANY
+    source_ports: tuple[PortRange, ...] = ()
+    destination_ports: tuple[PortRange, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            self.source_ports or self.destination_ports
+        ) and self.protocol not in {
+            EnvelopeProtocol.TCP,
+            EnvelopeProtocol.UDP,
+        }:
+            raise ValueError(
+                "traffic-envelope ports require tcp or udp protocol"
+            )
+        for label, ranges in (
+            ("source_ports", self.source_ports),
+            ("destination_ports", self.destination_ports),
+        ):
+            for left_index, left in enumerate(ranges):
+                for right in ranges[left_index + 1:]:
+                    if left.overlaps(right):
+                        raise ValueError(
+                            f"traffic-envelope {label} contains overlapping ranges"
+                        )
+
+
+@dataclass(frozen=True)
+class TrafficEnvelope:
+    default_action: EnvelopeAction
+    rules: tuple[TrafficEnvelopeRule, ...] = ()
+
+
 @dataclass(frozen=True)
 class InterfaceMatch:
     kind: MatchKind
@@ -55,6 +154,13 @@ class Device:
     name: str
     enabled: bool
     expected_interfaces: tuple[ExpectedInterface, ...] = ()
+    nat: NatMode | None = None
+    publications: tuple[Publication, ...] = ()
+    traffic_envelope: TrafficEnvelope | None = None
+
+    def __post_init__(self) -> None:
+        if self.enabled and self.nat is None:
+            raise ValueError("enabled Device requires explicit NatMode")
 
     @property
     def interface_quota(self) -> int:
