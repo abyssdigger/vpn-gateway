@@ -567,8 +567,18 @@ def _validate_remote_initiated_profiles(config: ActiveConfig) -> None:
 def validate_active_config(config: ActiveConfig) -> ActiveConfig:
     """Validate normalized production configuration independent of TOML parsing."""
 
-    return validate_active_config(config)
+    _validate_references(config)
+    _validate_global_destinations(config)
+    _validate_active_selector_overlap(config)
+    _validate_publication_collisions(config)
+    _validate_remote_initiated_profiles(config)
 
+    try:
+        compile_all_metric_layouts(config)
+    except MetricLayoutError as exc:
+        raise _error(str(exc)) from None
+
+    return config
 
 def parse_active_config(text: str) -> ActiveConfig:
     try:
@@ -599,19 +609,7 @@ def parse_active_config(text: str) -> ActiveConfig:
     }
     config = ActiveConfig(devices=devices, profiles=profiles)
 
-    _validate_references(config)
-    _validate_global_destinations(config)
-    _validate_active_selector_overlap(config)
-    _validate_publication_collisions(config)
-    _validate_remote_initiated_profiles(config)
-
-    try:
-        compile_all_metric_layouts(config)
-    except MetricLayoutError as exc:
-        raise _error(str(exc)) from None
-
-    return config
-
+    return validate_active_config(config)
 
 def load_active_config(path: str | Path) -> ActiveConfig:
     return parse_active_config(Path(path).read_text(encoding="utf-8"))
