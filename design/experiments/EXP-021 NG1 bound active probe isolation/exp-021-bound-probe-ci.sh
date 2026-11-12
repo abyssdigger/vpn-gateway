@@ -74,7 +74,6 @@ run_unprivileged_bound_ping() {
         --regid 65534 \
         --clear-groups \
         --no-new-privs \
-        --bounding-set=-all \
         --inh-caps=-all \
         --ambient-caps=-all \
         ping -I rB -c 1 -W 1 198.18.21.1 >/dev/null 2>&1
@@ -112,11 +111,17 @@ run_unprivileged_ping() {
         --regid 65534 \
         --clear-groups \
         --no-new-privs \
-        --bounding-set=-all \
         --inh-caps=-all \
         --ambient-caps=-all \
         "$@"
 }
+
+CAP_EFF=$(run_unprivileged_ping sh -c 'awk "/^CapEff:/ { print \\$2 }" /proc/self/status')
+echo "UNPRIVILEGED_CAP_EFF=$CAP_EFF"
+if [ "$CAP_EFF" != "0000000000000000" ]; then
+    echo "FAIL: privilege harness retained effective capabilities" >&2
+    exit 1
+fi
 
 if ! run_unprivileged_ping ping -c 1 -W 1 198.18.21.1 >/dev/null 2>&1; then
     echo "FAIL: permissive ping_group_range did not enable ordinary unprivileged ping" >&2
