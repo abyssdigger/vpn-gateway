@@ -29,7 +29,8 @@ This package implements the ROU control plane after the ROU v0 / EXP-010..013 ev
 - structural fail-closed route/RPDB/nft repair;
 - incremental ordinary binding lifecycle and route-additive repair that preserve each
   Profile table's terminal blackhole continuously;
-- namespace prerequisite apply/verify;
+- namespace prerequisite apply/verify, including EXP-016-proven
+  `net.ipv4.fib_multipath_hash_policy=1`;
 - Planner `observe -> plan -> apply -> fresh observe -> verify -> durable commit`;
 - long-running event/audit reconcile loop;
 - RTNETLINK `ip monitor` wakeup source;
@@ -44,9 +45,8 @@ This package implements the ROU control plane after the ROU v0 / EXP-010..013 ev
   health detection is intentionally deferred;
 - multi-interface INBOUND/BIDIRECTIONAL flow pinning: EXP-014;
 - real payload MTU/MSS policy: EXP-015;
-- concrete `fib_multipath_hash_policy` production value before availability-triggered
-  ECMP becomes effective: EXP-016;
-- DeviceManager VPN process lifecycle/configuration;
+- DeviceManager VPN process lifecycle/configuration and positive production
+  `UNAVAILABLE` trigger;
 - live config reload/CandidateConfig protocol;
 - explicit SNAT and IPv6 payload policy.
 
