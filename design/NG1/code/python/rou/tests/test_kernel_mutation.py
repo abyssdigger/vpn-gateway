@@ -188,7 +188,14 @@ class KernelMutationTests(unittest.TestCase):
         )
 
 
-    def test_lifecycle_rebuild_keeps_forwarding_and_rpdb_untouched(self):
+    def test_lifecycle_diff_preserves_blackhole_and_rpdb(self):
+        blackhole = KernelRouteSpec(
+            table=1,
+            destination=ipaddress.IPv4Network("0.0.0.0/0"),
+            route_type="blackhole",
+            protocol=201,
+            metric=65536,
+        )
         desired = KernelDesiredState(
             routes=(
                 KernelRouteSpec(
@@ -199,13 +206,7 @@ class KernelMutationTests(unittest.TestCase):
                     metric=2,
                     ifname="vpns01",
                 ),
-                KernelRouteSpec(
-                    table=1,
-                    destination=ipaddress.IPv4Network("0.0.0.0/0"),
-                    route_type="blackhole",
-                    protocol=201,
-                    metric=65536,
-                ),
+                blackhole,
             ),
             rules=(
                 KernelRuleSpec(
@@ -233,8 +234,17 @@ class KernelMutationTests(unittest.TestCase):
                     ipaddress.IPv4Network("10.0.0.0/8"),
                     "unicast",
                     202,
-                    2,
-                    "vpns01",
+                    1,
+                    "vpns00",
+                    (),
+                ),
+                KernelRoute(
+                    1,
+                    ipaddress.IPv4Network("0.0.0.0/0"),
+                    "blackhole",
+                    201,
+                    65536,
+                    None,
                     (),
                 ),
             ),
@@ -253,11 +263,55 @@ class KernelMutationTests(unittest.TestCase):
         plan = compile_lifecycle_route_rebuild_plan(desired, observed)
         argv = [item.argv for item in plan.commands]
 
-        self.assertIn(("ip", "route", "flush", "table", "1"), argv)
-        self.assertFalse(any(command[0] == "sysctl" for command in argv))
         self.assertFalse(
-            any(command[:2] == ("ip", "rule") for command in argv)
+            any(command[:4] == ("ip", "route", "flush", "table") for command in argv)
         )
+        self.assertIn(
+            (
+                "ip", "route", "del", "table", "1", "10.0.0.0/8",
+                "dev", "vpns00", "proto", "202", "metric", "1",
+            ),
+            argv,
+        )
+        self.assertIn(
+            (
+                "ip", "route", "add", "table", "1", "10.0.0.0/8",
+                "dev", "vpns01", "proto", "202", "metric", "2",
+            ),
+            argv,
+        )
+        self.assertFalse(any(command[0] == "sysctl" for command in argv))
+        self.assertFalse(any(command[:2] == ("ip", "rule") for command in argv))
+        self.assertFalse(
+            any(
+                "blackhole" in command and command[2] == "del"
+                for command in argv
+                if len(command) > 2
+            )
+        )
+
+    def test_lifecycle_diff_refuses_missing_terminal_blackhole(self):
+        desired = KernelDesiredState(
+            routes=(
+                KernelRouteSpec(
+                    1,
+                    ipaddress.IPv4Network("0.0.0.0/0"),
+                    "blackhole",
+                    201,
+                    65536,
+                ),
+            ),
+            rules=(),
+            owned_tables=(1,),
+        )
+        with self.assertRaisesRegex(
+            KernelMutationPlanError,
+            "terminal Profile blackhole",
+        ):
+            compile_lifecycle_route_rebuild_plan(
+                desired,
+                EnvironmentSnapshot((), routes=()),
+            )
 
 
 if __name__ == "__main__":
