@@ -87,6 +87,22 @@ def _numeric_interface_refs_from_definition(
 def _numeric_interface_refs_from_json(
     text: str,
 ) -> tuple[tuple[str, int], ...]:
+    """Read compiler-owned generation markers from nft JSON rule comments.
+
+    nft may render a live numeric meta iif/oif as the current interface name even in
+    numeric JSON mode. The kernel match remains generation-specific, but observation must
+    not reconstruct identity from that symbolic rendering.
+
+    Every production rule containing a dynamic numeric iif/oif therefore carries exactly
+    one stable comment:
+
+        vpng-ifref:iif:<ifindex>
+        vpng-ifref:oif:<ifindex>
+
+    EXP-017 proves that the comment survives same-name/new-ifindex replacement while the
+    underlying numeric rule continues to match only its original generation.
+    """
+
     try:
         root = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -97,43 +113,26 @@ def _numeric_interface_refs_from_json(
         raise NftPolicyError("nft JSON root lacks nftables array")
 
     refs: list[tuple[str, int]] = []
+    marker = re.compile(r"^vpng-ifref:(iif|oif):([1-9][0-9]*)$")
     for item in items:
         if not isinstance(item, dict):
             continue
         rule = item.get("rule")
         if not isinstance(rule, dict):
             continue
-        exprs = rule.get("expr", ())
-        if not isinstance(exprs, list):
-            raise NftPolicyError("nft JSON rule expr is not an array")
-        for expr in exprs:
-            if not isinstance(expr, dict):
-                continue
-            match = expr.get("match")
-            if not isinstance(match, dict) or match.get("op") != "==":
-                continue
-            left = match.get("left")
-            if not isinstance(left, dict):
-                continue
-            meta = left.get("meta")
-            if not isinstance(meta, dict):
-                continue
-            key = meta.get("key")
-            if key not in {"iif", "oif"}:
-                continue
-            right = match.get("right")
-            if type(right) is int:
-                value = right
-            elif isinstance(right, str) and right.isdecimal():
-                value = int(right)
-            else:
-                raise NftPolicyError(
-                    f"nft JSON {key} comparison is not numeric: {right!r}"
-                )
-            refs.append((key, value))
+        comment = rule.get("comment")
+        if not isinstance(comment, str):
+            continue
+        if not comment.startswith("vpng-ifref:"):
+            continue
+        match = marker.fullmatch(comment)
+        if match is None:
+            raise NftPolicyError(
+                f"invalid ROU nft generation marker {comment!r}"
+            )
+        refs.append((match.group(1), int(match.group(2))))
 
     return tuple(sorted(refs))
-
 
 def observe_nft_numeric_interface_refs(
     desired: NftTableDesiredState,
@@ -267,6 +266,14 @@ def _quote(value: str) -> str:
     if not value or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-" for ch in value):
         raise ValueError(f"unsupported nft interface/table token {value!r}")
     return f'"{value}"'
+
+
+def _ifref_comment(kind: str, ifindex: int) -> str:
+    if kind not in {"iif", "oif"}:
+        raise ValueError(f"unsupported nft interface-ref kind {kind!r}")
+    if ifindex <= 0:
+        raise ValueError("nft interface-ref ifindex must be positive")
+    return f'comment "vpng-ifref:{kind}:{ifindex}"'
 
 
 def _port_text(port_range: PortRange) -> str:
@@ -440,21 +447,25 @@ def compile_nft_filter_state(
         for binding in by_device.get(device_name, ()):
             ifindex = binding.identity.ifindex
             lines.append(
-                f'iifname "{HOST_INTERFACE}" oif {ifindex} jump {to_chain}'
+                f'iifname "{HOST_INTERFACE}" oif {ifindex} jump {to_chain} '
+                f'{_ifref_comment("oif", ifindex)}'
             )
             lines.append(
-                f'iif {ifindex} oifname "{HOST_INTERFACE}" jump {from_chain}'
+                f'iif {ifindex} oifname "{HOST_INTERFACE}" jump {from_chain} '
+                f'{_ifref_comment("iif", ifindex)}'
             )
 
     for binding in bindings.bound:
         ifindex = binding.identity.ifindex
         lines.append(
             f'iifname "{HOST_INTERFACE}" oif {ifindex} '
-            "ct state established,related accept"
+            "ct state established,related accept "
+            f'{_ifref_comment("oif", ifindex)}'
         )
         lines.append(
             f'iif {ifindex} oifname "{HOST_INTERFACE}" '
-            "ct state established,related accept"
+            "ct state established,related accept "
+            f'{_ifref_comment("iif", ifindex)}'
         )
 
     for intent in compile_new_flow_intents(config):
@@ -466,12 +477,14 @@ def compile_nft_filter_state(
                 lines.append(
                     f"ip daddr {prefix} "
                     f'iifname "{HOST_INTERFACE}" oif {ifindex} '
-                    f"ct state new {verdict}"
+                    f"ct state new {verdict} "
+                    f'{_ifref_comment("oif", ifindex)}'
                 )
             else:
                 lines.append(
                     f"ip saddr {prefix} iif {ifindex} "
-                    f'oifname "{HOST_INTERFACE}" ct state new {verdict}'
+                    f'oifname "{HOST_INTERFACE}" ct state new {verdict} '
+                    f'{_ifref_comment("iif", ifindex)}'
                 )
 
     lines.append("}")
@@ -551,7 +564,8 @@ def compile_nft_nat_state(
             for prefix in prefixes:
                 lines.append(
                     f"ip daddr {prefix.with_prefixlen} "
-                    f"oif {binding.identity.ifindex} masquerade"
+                    f"oif {binding.identity.ifindex} masquerade "
+                    f'{_ifref_comment("oif", binding.identity.ifindex)}'
                 )
 
     lines.extend(["}", "}", ""])
