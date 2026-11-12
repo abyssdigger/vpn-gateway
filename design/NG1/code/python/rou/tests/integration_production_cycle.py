@@ -9,8 +9,16 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.command_backend import CommandBackend, CommandResult, SubprocessBackend
-from rou.device_engine import ExpectedInterface, InterfaceMatch, MatchKind
-from rou.domain import ActiveConfig, Device, Direction, NatMode, Profile
+from rou.domain import (
+    ActiveConfig,
+    Device,
+    Direction,
+    ExpectedInterface,
+    InterfaceMatch,
+    MatchKind,
+    NatMode,
+    Profile,
+)
 from rou.instance_lifecycle import InstanceConfig, destroy_instance, ensure_instance
 from rou.planner import PlannerRuntimeState, reconcile_once
 from rou.state_store import JsonRuntimeStateStore
