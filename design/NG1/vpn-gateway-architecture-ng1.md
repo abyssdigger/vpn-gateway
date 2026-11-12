@@ -113,7 +113,7 @@ ROU may publish TCP/UDP transport endpoints for a Device.
 
 Publication allows a stable internal VPN configuration to remain unchanged while the host-facing port is changed in ROU configuration.
 
-Conceptual mapping notation only (not the human-facing TOML grammar):
+Schema-version-1 publication mapping notation (also used by the human-facing TOML grammar):
 
     5678/udp>7890
     44443/tcp>44443
@@ -125,7 +125,8 @@ A mapping means:
     host-facing ROU transport port/protocol
         -> internal transport endpoint associated with the Device
 
-For equal external/internal ports the right side may later be made optional as shorthand.
+For equal external/internal ports the right side is optional shorthand in schema version 1;
+for example `44443/tcp` is equivalent to `44443/tcp>44443`.
 
 For ranges:
 
