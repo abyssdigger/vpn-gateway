@@ -141,6 +141,31 @@ The status fixture now follows the same explicit sequence as production projecti
 
 This adds another regression against re-coupling binding discovery to availability policy.
 
+
+## Finding F7 — read-only status retained the old projector boundary
+
+Severity: medium production-consistency.
+
+After F6 fixed the status test fixture, the next exact-head CI run exposed the same stale
+call shape inside `inspect_runtime_status()` itself. The read-only status path was still
+passing EnvironmentSnapshot directly into `compile_planner_projection`.
+
+### Disposition
+
+Accepted and fixed.
+
+Status now follows the same ownership sequence as Planner:
+
+1. validate config;
+2. DeviceEngine reconciles binding generations from the observed interfaces and committed
+   binding history;
+3. the resulting DeviceReconcileResult is passed into the pure planner projector;
+4. status performs kernel/prerequisite/nft verification on that projection.
+
+Status deliberately does not activate an availability collector. Schema-v1 read-only
+status therefore represents ordinary bound generations as UNKNOWN unless/ until a future
+DeviceManager status contract explicitly includes persisted availability evidence.
+
 ## Rust-alignment review
 
 The new boundary is preferable for a Rust port:
@@ -162,8 +187,9 @@ Added rootless coverage for:
 - collector receiving DeviceEngine-selected bound/over-quota generations;
 - runtime composition forwarding the injected collector.
 
-The first exact-head CI attempt exposed F6 and was corrected. The corrected exact-head
-GitHub CI run is the acceptance gate for this review unit.
+Exact-head CI attempt 1 exposed F6; attempt 2 exposed F7. Both stale callsites were
+corrected. A subsequent exact-head GitHub CI run is the acceptance gate for this review
+unit.
 
 ## Verdict
 
