@@ -124,6 +124,7 @@ PIN=$(openssl x509 -in "$CERT" -pubkey -noout |
     base64 | tr -d '\n')
 
 echo "STAGE 9: start OpenConnect client"
+set +e
 (
     printf '%s\n' "$PASS" |
     ip netns exec "$CLI" openconnect \
@@ -136,6 +137,13 @@ echo "STAGE 9: start OpenConnect client"
         --pid-file="$OC_PID" \
         https://192.0.2.1:$PORT/
 ) >"$OC_LOG" 2>&1
+OPENCONNECT_RC=$?
+set -e
+if [ "$OPENCONNECT_RC" -ne 0 ]; then
+    echo "FAIL: OpenConnect startup returned $OPENCONNECT_RC" >&2
+    cat "$OC_LOG" >&2
+    exit 1
+fi
 
 echo "STAGE 10: wait for initial tunnel"
 for _ in $(seq 1 30); do
