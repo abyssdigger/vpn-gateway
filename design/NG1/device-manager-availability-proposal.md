@@ -163,6 +163,12 @@ Costs:
 selection explicit and transport-neutral. Transport-derived convenience can be added later
 without changing normalized Availability semantics.
 
+For schema version 1 the target is Device-scoped, not ExpectedInterface-scoped. This means
+all concurrently bound interface generations of one Device must represent paths for which
+the same probe target is meaningful. If two selector/binding groups require different
+health targets, they are modeled as separate Devices. This keeps ExpectedInterface focused
+on discovery/quota and keeps one Device equal to one availability/trust domain.
+
 ## 5. Cadence and hysteresis alternatives
 
 Availability must avoid both slow failover and flap-induced route churn.
