@@ -17,6 +17,7 @@ from .kernel_state import (
 
 class TransitionKind(str, Enum):
     BINDING_LIFECYCLE = "binding-lifecycle"
+    ROUTE_ADDITIVE = "route-additive"
     STRUCTURAL = "structural"
 
 
@@ -87,7 +88,8 @@ def assess_binding_lifecycle(
 ) -> TransitionAssessment:
     """Prove whether drift is an ordinary binding lifecycle transition.
 
-    This intentionally recognizes only binding-set changes in schema version 1.
+    This recognizes proven binding-set changes and route-only additive repair in schema
+    version 1.
     Availability transitions remain architecturally incremental, but the production
     availability trigger is deferred; future DeviceManager work must persist enough
     availability history to prove that transition equivalently.
@@ -108,8 +110,10 @@ def assess_binding_lifecycle(
     if set(previous_kernel.owned_tables) != set(desired_kernel.owned_tables):
         reasons.append("owned routing-table allocation changed")
 
-    if _binding_key(previous_bindings) == _binding_key(desired_bindings):
-        reasons.append("bound interface generation did not change")
+    binding_changed = (
+        _binding_key(previous_bindings)
+        != _binding_key(desired_bindings)
+    )
 
     expected_rules = {_rule_key(item) for item in desired_kernel.rules}
     observed_rules = {
@@ -149,6 +153,10 @@ def assess_binding_lifecycle(
         for route in observed.routes
         if route.table in desired_tables
     }
+    desired_route_keys = {
+        _route_key(route)
+        for route in desired_kernel.routes
+    }
     required_blackholes = {
         _route_key(route)
         for route in desired_kernel.routes
@@ -157,7 +165,7 @@ def assess_binding_lifecycle(
     missing_blackholes = required_blackholes - observed_route_keys
     if missing_blackholes:
         reasons.append(
-            "terminal Profile blackhole is missing; lifecycle repair cannot "
+            "terminal Profile blackhole is missing; incremental repair cannot "
             "safely preserve Profile-local fail-close"
         )
 
@@ -180,7 +188,45 @@ def assess_binding_lifecycle(
             tuple(reasons),
         )
 
+    if binding_changed:
+        return TransitionAssessment(
+            TransitionKind.BINDING_LIFECYCLE,
+            (),
+        )
+
+    # A verified removal commit deliberately releases a normal metric slot. On the next
+    # reconcile the same binding generation may gain a newly available normal route.
+    # More generally, an unexpectedly missing desired unicast route is safe to restore
+    # without a global barrier when the entire observed owned route set is a strict subset
+    # of the unchanged desired generation, RPDB/policy are already exact desired, and the
+    # terminal blackholes remain continuously installed.
+    previous_route_keys = {
+        _route_key(route)
+        for route in previous_kernel.routes
+    }
+    previous_rule_keys = {
+        _rule_key(rule)
+        for rule in previous_kernel.rules
+    }
+    desired_rule_keys = {
+        _rule_key(rule)
+        for rule in desired_kernel.rules
+    }
+    route_additive = (
+        previous_route_keys == desired_route_keys
+        and previous_rule_keys == desired_rule_keys
+        and observed_route_keys < desired_route_keys
+        and observed_route_keys <= desired_route_keys
+        and policy_generation.filter_matches_desired
+        and policy_generation.nat_matches_desired
+    )
+    if route_additive:
+        return TransitionAssessment(
+            TransitionKind.ROUTE_ADDITIVE,
+            (),
+        )
+
     return TransitionAssessment(
-        TransitionKind.BINDING_LIFECYCLE,
-        (),
+        TransitionKind.STRUCTURAL,
+        ("no binding change and transition is not proven route-additive",),
     )
