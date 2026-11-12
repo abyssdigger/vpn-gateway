@@ -393,26 +393,13 @@ def create_instance(
         )
 
         ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"))
-        ns.run(("sysctl", "-q", "-w", "net/ipv4/conf/all/rp_filter=0"))
-        ns.run(("sysctl", "-q", "-w", "net/ipv4/conf/default/rp_filter=0"))
-        ns.run(
-            (
-                "sysctl", "-q", "-w",
-                f"net/ipv4/conf/{config.inner_if}/rp_filter=0",
-            )
-        )
-        ns.run(("sysctl", "-q", "-w", "net/ipv6/conf/all/forwarding=0"))
-        ns.run(("sysctl", "-q", "-w", "net/ipv6/conf/default/forwarding=0"))
-        ns.run(("sysctl", "-q", "-w", "net/ipv6/conf/default/disable_ipv6=1"))
-        ns.run(
-            (
-                "sysctl", "-q", "-w",
-                f"net/ipv6/conf/{config.inner_if}/disable_ipv6=1",
-            )
-        )
-
-
         bootstrap_bindings = DeviceBindingSnapshot((), ())
+        apply_namespace_prerequisites(
+            bootstrap_bindings,
+            ns,
+        )
+
+        bootstrap_config = ActiveConfig({}, {})
         bootstrap_config = ActiveConfig({}, {})
         apply_nft_table(
             compile_nft_nat_state(bootstrap_config, bootstrap_bindings),
