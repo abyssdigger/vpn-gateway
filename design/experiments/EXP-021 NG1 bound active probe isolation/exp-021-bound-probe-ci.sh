@@ -106,4 +106,40 @@ else
     echo "UNPRIVILEGED_BOUND_PING_PERMISSIVE_RANGE=FAIL"
 fi
 
+run_unprivileged_ping() {
+    ip netns exec "$R" setpriv \
+        --reuid 65534 \
+        --regid 65534 \
+        --clear-groups \
+        --no-new-privs \
+        --bounding-set=-all \
+        --inh-caps=-all \
+        --ambient-caps=-all \
+        "$@"
+}
+
+if ! run_unprivileged_ping ping -c 1 -W 1 198.18.21.1 >/dev/null 2>&1; then
+    echo "FAIL: permissive ping_group_range did not enable ordinary unprivileged ping" >&2
+    exit 1
+fi
+echo "PASS D: ordinary unprivileged ping works with permissive ping_group_range"
+
+if run_unprivileged_ping ping -I 192.0.2.5 -c 1 -W 1 198.18.21.1 >/dev/null 2>&1; then
+    echo "UNPRIVILEGED_SOURCE_BOUND_PING_HEALTHY=PASS"
+
+    ip -n "$B" link set bR down
+    if ! run_unprivileged_ping ping -c 1 -W 1 198.18.21.1 >/dev/null 2>&1; then
+        echo "FAIL: ordinary unprivileged probe lost healthy A path" >&2
+        exit 1
+    fi
+    if run_unprivileged_ping ping -I 192.0.2.5 -c 1 -W 1 198.18.21.1 >/dev/null 2>&1; then
+        echo "UNPRIVILEGED_SOURCE_BOUND_PING_BROKEN_B=UNEXPECTED_PASS"
+    else
+        echo "UNPRIVILEGED_SOURCE_BOUND_PING_BROKEN_B=FAIL_AS_DESIRED"
+    fi
+    ip -n "$B" link set bR up
+else
+    echo "UNPRIVILEGED_SOURCE_BOUND_PING_HEALTHY=FAIL"
+fi
+
 echo "EXP_021_BOUND_PROBE_ISOLATION=PASS"
