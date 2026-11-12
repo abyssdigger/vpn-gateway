@@ -110,7 +110,7 @@ def default_snapshot_collector(
     )
 
 
-def _project(
+def compile_planner_projection(
     config: ActiveConfig,
     committed: PlannerRuntimeState,
     snapshot: EnvironmentSnapshot,
@@ -302,7 +302,7 @@ def reconcile_once(
     try:
         validate_active_config(config)
         initial = collect_snapshot(namespace, host_backend)
-        projection = _project(
+        projection = compile_planner_projection(
             config,
             committed,
             initial,
@@ -488,7 +488,7 @@ def reconcile_once(
         ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"))
 
         barrier_snapshot = collect_snapshot(namespace, host_backend)
-        barrier_projection = _project(
+        barrier_projection = compile_planner_projection(
             config,
             committed,
             barrier_snapshot,
