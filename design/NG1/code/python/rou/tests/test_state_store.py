@@ -239,6 +239,7 @@ class StateStoreTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            path.chmod(0o600)
             with self.assertRaisesRegex(StateStoreError, "version"):
                 JsonRuntimeStateStore(path).load(make_config())
 
