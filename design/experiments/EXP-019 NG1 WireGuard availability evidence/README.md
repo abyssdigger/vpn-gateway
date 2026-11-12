@@ -58,3 +58,15 @@ decision and human agreement because that changes user-facing configuration.
 ## Artifact
 
 `exp-019-wireguard-availability-ci.sh`
+
+## Attempt history
+
+### Attempt 1 — HARNESS FALSE NEGATIVE
+
+The first GitHub run did not reach WireGuard setup. The harness created a temporary key
+directory and then called its initial cleanup routine, which also removed that fresh
+directory. Key generation therefore failed with `Directory nonexistent`.
+
+No kernel/WireGuard hypothesis was exercised. The procedure was corrected by separating
+pre-run namespace cleanup from final temp-directory cleanup; the hypothesis and topology
+are unchanged.
