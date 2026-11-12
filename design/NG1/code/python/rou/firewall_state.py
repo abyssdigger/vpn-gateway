@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Address
 import re
 
 from .device_engine import DeviceBindingSnapshot
@@ -116,30 +117,102 @@ def _envelope_chains(
     }
 
 
+
+def _publication_input_lines(
+    config: ActiveConfig,
+    local_address: IPv4Address | None,
+) -> tuple[str, ...]:
+    endpoints: set[tuple[str, int, int]] = set()
+    for device_name in sorted(config.active_device_names):
+        for publication in config.devices[device_name].publications:
+            endpoints.add(
+                (
+                    publication.protocol.value,
+                    publication.internal.start,
+                    publication.internal.end,
+                )
+            )
+
+    if endpoints and local_address is None:
+        raise ValueError(
+            "active publications require the ROU-local publication address "
+            "for INPUT materialization"
+        )
+
+    if local_address is None:
+        return ()
+
+    lines: list[str] = []
+    for protocol, start, end in sorted(endpoints):
+        port = str(start) if start == end else f"{start}:{end}"
+        lines.append(
+            f"-A INPUT -i {HOST_INTERFACE} -d {local_address} "
+            f"-p {protocol} -m {protocol} --dport {port} "
+            "-m conntrack --ctstate NEW -j ACCEPT"
+        )
+    return tuple(lines)
+
+
 def compile_filter_state(
     config: ActiveConfig,
     bindings: DeviceBindingSnapshot,
+    *,
+    local_publication_address: IPv4Address | None = None,
 ) -> FirewallDesiredState:
     """Compile the complete ROU-owned IPv4 filter table.
 
-    Device-envelope chains are traversed before any generated state/profile acceptance.
-    Envelope allow returns to FORWARD; it never accepts traffic directly.
-    ESTABLISHED/RELATED acceptance is scoped to currently bound Device interfaces.
+    INPUT/FORWARD/OUTPUT are all default-DROP.
+
+    INPUT admits loopback, host0 return traffic for locally originated connections, and
+    host0 NEW traffic only to configured internal publication endpoints. Device interfaces
+    have no local INPUT admission.
+
+    OUTPUT admits loopback plus local traffic whose egress is host0. There is no implicit
+    local OUTPUT through Device interfaces.
+
+    Device-envelope chains are traversed before any generated FORWARD state/profile
+    acceptance. Envelope allow returns to FORWARD; it never accepts traffic directly.
+    ESTABLISHED/RELATED FORWARD acceptance is scoped to currently bound Device interfaces.
     """
 
     chains = _envelope_chains(config)
 
     lines = [
         "*filter",
-        ":INPUT ACCEPT [0:0]",
+        ":INPUT DROP [0:0]",
         ":FORWARD DROP [0:0]",
-        ":OUTPUT ACCEPT [0:0]",
+        ":OUTPUT DROP [0:0]",
     ]
     for from_chain, to_chain in chains.values():
         lines.append(f":{from_chain} - [0:0]")
         lines.append(f":{to_chain} - [0:0]")
 
-    lines.append("-A FORWARD -m conntrack --ctstate INVALID -j DROP")
+    lines.extend(
+        [
+            "-A INPUT -m conntrack --ctstate INVALID -j DROP",
+            "-A INPUT -i lo -j ACCEPT",
+            f"-A INPUT -i {HOST_INTERFACE} -m conntrack "
+            "--ctstate ESTABLISHED,RELATED -j ACCEPT",
+        ]
+    )
+    lines.extend(
+        _publication_input_lines(
+            config,
+            local_publication_address,
+        )
+    )
+
+    lines.extend(
+        [
+            "-A OUTPUT -m conntrack --ctstate INVALID -j DROP",
+            "-A OUTPUT -o lo -j ACCEPT",
+            f"-A OUTPUT -o {HOST_INTERFACE} -m conntrack "
+            "--ctstate ESTABLISHED,RELATED -j ACCEPT",
+            f"-A OUTPUT -o {HOST_INTERFACE} -m conntrack "
+            "--ctstate NEW -j ACCEPT",
+            "-A FORWARD -m conntrack --ctstate INVALID -j DROP",
+        ]
+    )
 
     by_device = bindings.by_device
 
