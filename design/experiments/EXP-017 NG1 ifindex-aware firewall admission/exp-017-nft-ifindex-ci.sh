@@ -81,6 +81,10 @@ if ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
     exit 1
 fi
 
+echo "JSON_AFTER_C_REQUEST_BEGIN"
+ip netns exec "$ROU" nft -j -n list chain ip vpng_exp17 input
+echo "JSON_AFTER_C_REQUEST_END"
+
 NEW_IIF_PKTS=$(ip netns exec "$ROU" nft -j -n list chain ip vpng_exp17 input |
     python3 -c '
 import json
