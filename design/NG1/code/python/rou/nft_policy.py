@@ -562,11 +562,10 @@ def observe_nft_state(
     )
 
 
-def verify_nft_table(
+def verify_nft_observation(
     desired: NftTableDesiredState,
-    backend: NamespaceBackend,
+    observed: NftObservedState,
 ) -> NftVerification:
-    observed = observe_nft_state(desired, backend)
     text_ok = observed.canonical == desired.canonical
     refs_ok = (
         observed.numeric_interface_refs
@@ -586,4 +585,14 @@ def verify_nft_table(
         ok=text_ok and refs_ok,
         actual=actual,
         expected=expected,
+    )
+
+
+def verify_nft_table(
+    desired: NftTableDesiredState,
+    backend: NamespaceBackend,
+) -> NftVerification:
+    return verify_nft_observation(
+        desired,
+        observe_nft_state(desired, backend),
     )
