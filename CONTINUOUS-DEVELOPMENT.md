@@ -135,14 +135,15 @@ checkpoint.
 ## Session-safety cadence
 
 Long development sessions are expected to be interrupted by the execution environment
-after roughly 45 minutes. To avoid losing an unreviewed tail, work is intentionally divided
-into **30-minute implementation intervals**.
+after roughly 45 minutes. To avoid losing an unreviewed tail, use **30 minutes as the
+checkpoint trigger**, deliberately leaving margin for the current iteration to finish.
 
-At the end of each 30-minute interval:
+The 30-minute mark does **not** interrupt an in-progress review unit. After it is reached:
 
-1. finish the current smallest coherent operation if it is safe to do so;
+1. finish the current iteration completely: implementation, required tests/evidence,
+   expert review and accepted fixes for that review unit;
 2. push a Git checkpoint/branch state;
-3. stop implementation work;
+3. stop before starting the next review unit;
 4. post a brief human-facing checkpoint containing:
    - what was completed;
    - what evidence/tests/reviews passed or failed;
@@ -150,12 +151,11 @@ At the end of each 30-minute interval:
    - decisions that genuinely require human agreement;
    - the next intended review unit.
 
-The 30-minute checkpoint is a session-preservation mechanism, not a review boundary.
-Do not manufacture extra review documents merely because the timer expired.
+The 30-minute checkpoint is a session-preservation trigger, not a hard execution limit and
+not a review boundary. The intentional safety margin is consumed by finishing the current
+iteration cleanly. Do not start another review unit after the trigger has fired.
 
-If a review unit completes earlier, its normal review/fix cycle proceeds immediately.
-If the 30-minute boundary arrives mid-unit, preserve the state and resume from that exact
-unit after the checkpoint discussion.
+Do not manufacture extra review documents merely because the timer expired.
 
 ## Completion criteria
 
