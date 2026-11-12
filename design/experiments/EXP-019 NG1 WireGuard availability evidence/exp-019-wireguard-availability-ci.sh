@@ -48,18 +48,21 @@ ip -n "$B" addr add 10.23.0.2/30 dev wg0
 A_PUB=$(cat "$TMP/a.pub")
 B_PUB=$(cat "$TMP/b.pub")
 
-ip netns exec "$A" test -r "$TMP/a.key" || {
-    echo "FAIL: namespace A cannot read ephemeral private-key file" >&2
-    exit 1
-}
-ip netns exec "$B" test -r "$TMP/b.key" || {
-    echo "FAIL: namespace B cannot read ephemeral private-key file" >&2
-    exit 1
-}
+cat "$TMP/a.key" | ip netns exec "$A" wg set wg0 \
+    listen-port 51820 \
+    private-key /dev/stdin \
+    peer "$B_PUB" \
+    allowed-ips 10.23.0.2/32 \
+    endpoint 192.0.2.2:51820 \
+    persistent-keepalive 1
 
-ip netns exec "$A" wg set wg0     listen-port 51820     private-key "$TMP/a.key"     peer "$B_PUB"     allowed-ips 10.23.0.2/32     endpoint 192.0.2.2:51820     persistent-keepalive 1
-
-ip netns exec "$B" wg set wg0     listen-port 51820     private-key "$TMP/b.key"     peer "$A_PUB"     allowed-ips 10.23.0.1/32     endpoint 192.0.2.1:51820     persistent-keepalive 1
+cat "$TMP/b.key" | ip netns exec "$B" wg set wg0 \
+    listen-port 51820 \
+    private-key /dev/stdin \
+    peer "$A_PUB" \
+    allowed-ips 10.23.0.1/32 \
+    endpoint 192.0.2.1:51820 \
+    persistent-keepalive 1
 
 ip -n "$A" link set wg0 up
 ip -n "$B" link set wg0 up
