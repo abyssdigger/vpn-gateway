@@ -36,6 +36,8 @@ from .nft_policy import (
     apply_nft_table,
     compile_nft_filter_state,
     compile_nft_nat_state,
+    observe_nft_state,
+    verify_nft_observation,
     verify_nft_table,
 )
 from .traffic_state import (
@@ -427,22 +429,30 @@ def reconcile_once(
             committed,
             local_publication_address,
         )
+        observed_filter_policy = observe_nft_state(
+            projection.firewall,
+            ns,
+        )
+        observed_nat_policy = observe_nft_state(
+            projection.nat,
+            ns,
+        )
         policy_generation = PolicyGenerationObservation(
-            filter_matches_previous=verify_nft_table(
+            filter_matches_previous=verify_nft_observation(
                 previous_projection.firewall,
-                ns,
+                observed_filter_policy,
             ).ok,
-            filter_matches_desired=verify_nft_table(
+            filter_matches_desired=verify_nft_observation(
                 projection.firewall,
-                ns,
+                observed_filter_policy,
             ).ok,
-            nat_matches_previous=verify_nft_table(
+            nat_matches_previous=verify_nft_observation(
                 previous_projection.nat,
-                ns,
+                observed_nat_policy,
             ).ok,
-            nat_matches_desired=verify_nft_table(
+            nat_matches_desired=verify_nft_observation(
                 projection.nat,
-                ns,
+                observed_nat_policy,
             ).ok,
         )
         assessment = assess_binding_lifecycle(
@@ -500,22 +510,30 @@ def reconcile_once(
                     + "; ".join(prepared_prereq.errors)
                 )
 
+            observed_filter_policy = observe_nft_state(
+                projection.firewall,
+                ns,
+            )
+            observed_nat_policy = observe_nft_state(
+                projection.nat,
+                ns,
+            )
             reassessment_policy = PolicyGenerationObservation(
-                filter_matches_previous=verify_nft_table(
+                filter_matches_previous=verify_nft_observation(
                     previous_projection.firewall,
-                    ns,
+                    observed_filter_policy,
                 ).ok,
-                filter_matches_desired=verify_nft_table(
+                filter_matches_desired=verify_nft_observation(
                     projection.firewall,
-                    ns,
+                    observed_filter_policy,
                 ).ok,
-                nat_matches_previous=verify_nft_table(
+                nat_matches_previous=verify_nft_observation(
                     previous_projection.nat,
-                    ns,
+                    observed_nat_policy,
                 ).ok,
-                nat_matches_desired=verify_nft_table(
+                nat_matches_desired=verify_nft_observation(
                     projection.nat,
-                    ns,
+                    observed_nat_policy,
                 ).ok,
             )
             reassessment = assess_binding_lifecycle(
