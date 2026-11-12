@@ -133,6 +133,33 @@ The first production baseline remains suitable for migration:
 No Python-only architectural dependency was found that should be removed before the first
 working baseline is exercised on a real Debian/VPN stand.
 
+## Post-review correction and revalidation
+
+The review found one documentation-only drift in `design/NG1/rou-concept.md`:
+
+- publication/envelope grammar was still described as open;
+- return-path wording still implied marks were unnecessary without stating the
+  schema-v1 remote-initiation capacity restriction.
+
+The concept document was aligned to the already normative Draft 5 implementation:
+
+- schema-v1 publication and traffic-envelope grammar are fixed;
+- OUTBOUND requires no flow pinning;
+- INBOUND/BIDIRECTIONAL require active capacity exactly 1 plus restrictive envelope;
+- capacity>1 remains gated by EXP-014.
+
+No executable source or policy semantics changed. The corrected baseline was reviewed again
+against the architecture and current passing production-cycle evidence. No further finding
+was produced.
+
+Human product decisions recorded after the review:
+
+- legacy iptables remains regression/historical evidence only;
+- EXP-014 / capacity>1 remote-initiation is POSTPONED until after the first production
+  baseline is exercised and a practical need appears;
+- future DeviceManager/availability experimentation may proceed after completion of the
+  first baseline.
+
 ## Verdict
 
 **FIRST PRODUCTION IMPLEMENTATION SOURCE BASELINE: CLEAN.**
