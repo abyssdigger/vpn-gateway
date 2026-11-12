@@ -1,6 +1,6 @@
 # EXP-016 — NG1 ECMP hash-policy prerequisite
 
-**Status:** PREPARED — kernel prerequisite gate  
+**Status:** PASS  
 **Architecture baseline:** NG1 Draft 5 after 2026-11-12 correction review  
 **Type:** namespace sysctl / Linux FIB ECMP behavior
 
@@ -9,34 +9,64 @@
 Fix an explicit production value for `net.ipv4.fib_multipath_hash_policy` instead of
 inheriting a kernel/host default.
 
-The persistent shadow fallback is already implemented, but its production availability
-trigger is intentionally deferred. Therefore EXP-016 does not block ordinary UNKNOWN-tier
-routing; it blocks making ECMP fallback operationally effective through a future
-UNAVAILABLE detector.
+The persistent shadow fallback was already implemented while its real UNAVAILABLE trigger
+remained deferred. EXP-016 therefore gates future DeviceManager availability activation,
+not ordinary UNKNOWN-tier routing.
 
 ## Procedure
 
-In a disposable network namespace on the target Debian 13 kernel:
+The privileged GitHub kernel-integration runner created a disposable namespace with a
+two-member direct-device IPv4 ECMP route and:
 
-1. record kernel and iproute2 versions;
-2. record the initial `fib_multipath_hash_policy`;
-3. enumerate values accepted by the target kernel without assuming upstream-version
-   support;
-4. create a two-member direct-device IPv4 multipath route;
-5. for each accepted candidate policy, sample deterministic route selection for:
-   - repeated same flow;
-   - changed source/destination addresses;
-   - changed L4 ports where applicable;
-6. confirm namespace isolation of the sysctl;
-7. restore the original value.
+1. recorded host/namespace hash-policy state;
+2. enumerated candidate values 0..4 accepted by the running kernel;
+3. repeated one fixed TCP 5-tuple under policy 1;
+4. varied only the TCP source port for 64 flows under policy 0 and policy 1;
+5. confirmed namespace isolation of the sysctl;
+6. restored the original namespace value.
+
+Harness:
+
+`exp-016-ecmp-hash-ci.sh`
+
+## Result
+
+PASS.
+
+Observed:
+
+```text
+ACCEPTED_POLICIES: 0 1 2 3
+PASS A: policy 1 keeps repeated 5-tuple on one nexthop
+PASS B: policy 0 ignores L4-only variation for fixed L3 tuple
+PASS C: policy 1 uses L4 flow variation across both nexthops
+PASS D: fib_multipath_hash_policy is namespace-isolated
+SELECTED_PRODUCTION_CANDIDATE=1
+EXP_016_ECMP_HASH_POLICY=PASS
+```
 
 ## Decision
 
-Select one explicit production value and document the intended hash inputs. Add it to
-namespace prerequisite apply/observe/verify before enabling a DeviceManager availability
-trigger.
+Production NG1 owns:
 
-## Gate
+```text
+net.ipv4.fib_multipath_hash_policy=1
+```
 
-Future production code that can classify a member UNAVAILABLE may not be enabled until
-EXP-016 is PASS and a concrete value is normative.
+Reason:
+
+- one flow remains deterministic;
+- different L4 flows sharing one L3 pair can spread across fallback ECMP members;
+- this is preferable to policy 0 for a fallback tier that may carry multiple concurrent
+  TCP/UDP flows between the same endpoint addresses;
+- the value is namespace-local and therefore does not impose host-global ECMP policy.
+
+The value is now part of namespace prerequisite apply/observe/verify.
+
+## Gate consequence
+
+The ECMP hash-policy prerequisite gate is closed.
+
+Future positive UNAVAILABLE classification is no longer blocked by hash-policy ambiguity.
+DeviceManager/availability semantics remain future work and still require their own
+review/implementation cycle.
