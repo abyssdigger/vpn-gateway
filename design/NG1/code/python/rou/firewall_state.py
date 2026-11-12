@@ -39,6 +39,7 @@ def normalize_iptables_save(text: str) -> str:
     Rule order *within one chain* remains significant and is preserved.
     """
 
+    table_name: str | None = None
     declarations: list[str] = []
     declaration_order: list[str] = []
     rules_by_chain: dict[str, list[str]] = {}
@@ -50,6 +51,10 @@ def normalize_iptables_save(text: str) -> str:
 
         line = raw.strip()
         if not line:
+            continue
+
+        if line in {"*filter", "*nat"}:
+            table_name = line
             continue
 
         line = re.sub(r"^\[[0-9]+:[0-9]+\]\s+", "", line)
@@ -90,7 +95,9 @@ def normalize_iptables_save(text: str) -> str:
 
     normalized: list[str] = []
     if declarations:
-        normalized.append("*filter" if "*filter" in text else "*nat")
+        if table_name is None:
+            raise ValueError("iptables serialization has chain declarations without table")
+        normalized.append(table_name)
         normalized.extend(declarations)
         for chain in declaration_order:
             normalized.extend(rules_by_chain.get(chain, ()))
