@@ -121,6 +121,26 @@ Collector implementation errors remain ordinary Planner/runtime failures and the
 fail closed. A valid collector should express uncertain evidence as normalized UNKNOWN,
 not by throwing an exception.
 
+
+## Finding F6 — status test fixture still used the pre-refactor projector signature
+
+Severity: low test-maintenance.
+
+The first exact-head CI run failed four status tests because their helper called the old
+`compile_planner_projection(config, committed, environment, provider, address)` shape.
+Production status code itself was not implicated.
+
+### Disposition
+
+Accepted and fixed.
+
+The status fixture now follows the same explicit sequence as production projection:
+
+1. DeviceEngine reconciles bindings from the environment;
+2. the resulting DeviceReconcileResult is passed to `compile_planner_projection`.
+
+This adds another regression against re-coupling binding discovery to availability policy.
+
 ## Rust-alignment review
 
 The new boundary is preferable for a Rust port:
@@ -142,11 +162,13 @@ Added rootless coverage for:
 - collector receiving DeviceEngine-selected bound/over-quota generations;
 - runtime composition forwarding the injected collector.
 
-GitHub CI on the exact code-cycle branch is the acceptance gate for this review unit.
+The first exact-head CI attempt exposed F6 and was corrected. The corrected exact-head
+GitHub CI run is the acceptance gate for this review unit.
 
 ## Verdict
 
-All source findings are resolved.
+All source and test findings are resolved.
 
-The review unit is approved subject to green rootless and privileged CI. Production
+The review unit is approved subject to green rootless and privileged CI on the corrected
+head. Production
 DeviceManager availability policy remains deliberately outside this unit.
