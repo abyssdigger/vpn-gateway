@@ -14,6 +14,7 @@ from rou.device_engine import (
 )
 from rou.domain import (
     ActiveConfig,
+    Availability,
     Device,
     Direction,
     EnvelopeAction,
@@ -32,6 +33,7 @@ from rou.planner import (
     PlannerError,
     PlannerRetryRequired,
     PlannerRuntimeState,
+    _compile_live_projection,
     reconcile_once,
 )
 from rou.traffic_state import committed_state_from_verified, project_normal_metrics
@@ -170,6 +172,75 @@ class SnapshotQueue:
 
 
 class PlannerTests(unittest.TestCase):
+    def test_availability_collector_receives_selected_binding_generations(self):
+        cfg = ActiveConfig(
+            {
+                "oc": Device(
+                    "oc",
+                    True,
+                    (
+                        ExpectedInterface(
+                            InterfaceMatch(MatchKind.PREFIX, "vpns"),
+                            1,
+                        ),
+                    ),
+                    nat=NatMode.NONE,
+                )
+            },
+            {
+                "corp": Profile(
+                    "corp",
+                    True,
+                    Direction.OUTBOUND,
+                    (ipaddress.IPv4Network("10.0.0.0/8"),),
+                    ("oc",),
+                )
+            },
+        )
+        environment = EnvironmentSnapshot(
+            interfaces=interfaces_two(),
+            routes=(),
+            rules=(),
+            sysctls=(),
+        )
+        observed = []
+
+        def collector(namespace, backend, snapshot, bindings):
+            observed.append((namespace, snapshot, bindings))
+            return {
+                bindings.bound[0].identity:
+                Availability.UNAVAILABLE,
+            }
+
+        projection = _compile_live_projection(
+            cfg,
+            PlannerRuntimeState.empty(),
+            environment,
+            "rou0",
+            object(),
+            collector,
+            None,
+        )
+
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0][0], "rou0")
+        self.assertEqual(
+            [item.identity for item in observed[0][2].bound],
+            [InterfaceIdentity("vpns00", 10)],
+        )
+        self.assertEqual(
+            [item.identity for item in observed[0][2].over_quota],
+            [InterfaceIdentity("vpns01", 11)],
+        )
+        self.assertEqual(
+            projection.bindings.bound[0].availability,
+            Availability.UNAVAILABLE,
+        )
+        self.assertEqual(
+            projection.bindings.over_quota[0].availability,
+            Availability.UNKNOWN,
+        )
+
     def test_verified_open_state_commits_without_mutation(self):
         _, _, kernel, firewall, nat = expected_for(interfaces())
         snap = observed_kernel_snapshot(kernel, forwarding=True)
