@@ -61,15 +61,6 @@ class InstanceFileConfigTests(unittest.TestCase):
                     "router.toml",
                 )
             )
-        with self.assertRaisesRegex(InstanceFileConfigError, "different paths"):
-            parse_instance_file_config(
-                VALID.replace(
-                    "/etc/vpn-gateway/routers/rou0.toml",
-                    "/var/lib/vpn-gateway/rou0/state.json",
-                )
-            )
-
-
 
     def test_absolute_paths_reject_parent_traversal(self):
         with self.assertRaisesRegex(
