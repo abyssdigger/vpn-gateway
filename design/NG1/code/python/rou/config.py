@@ -527,6 +527,42 @@ def _validate_publication_collisions(config: ActiveConfig) -> None:
                 )
 
 
+
+def _validate_remote_initiated_profiles(config: ActiveConfig) -> None:
+    for profile in config.profiles.values():
+        if not profile.enabled or profile.direction is Direction.OUTBOUND:
+            continue
+
+        active_devices = [
+            config.devices[name]
+            for name in profile.device_order
+            if config.devices[name].enabled
+        ]
+        capacity = sum(device.interface_quota for device in active_devices)
+        if capacity != 1:
+            raise _error(
+                f"profile.{profile.name} direction={profile.direction.value!r} "
+                "requires active interface capacity exactly 1; "
+                f"got {capacity}"
+            )
+
+        missing_restrictive_envelope = [
+            device.name
+            for device in active_devices
+            if (
+                device.traffic_envelope is None
+                or device.traffic_envelope.default_action
+                is not EnvelopeAction.DROP
+            )
+        ]
+        if missing_restrictive_envelope:
+            raise _error(
+                f"profile.{profile.name} direction={profile.direction.value!r} "
+                "requires traffic_envelope default='drop' on every active "
+                "referenced Device; missing/restrictive-default violation: "
+                + ", ".join(sorted(missing_restrictive_envelope))
+            )
+
 def parse_active_config(text: str) -> ActiveConfig:
     try:
         root = tomllib.loads(text)
@@ -560,6 +596,7 @@ def parse_active_config(text: str) -> ActiveConfig:
     _validate_global_destinations(config)
     _validate_active_selector_overlap(config)
     _validate_publication_collisions(config)
+    _validate_remote_initiated_profiles(config)
 
     try:
         compile_all_metric_layouts(config)
