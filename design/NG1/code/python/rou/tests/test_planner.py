@@ -92,7 +92,7 @@ def sysctls(forwarding: bool, ifname="vpns00"):
         ("net.ipv4.ip_forward", "1" if forwarding else "0"),
         ("net.ipv4.conf.all.rp_filter", "0"),
         ("net.ipv4.conf.default.rp_filter", "0"),
-        ("net.ipv4.fib_multipath_hash_policy", "0"),
+        ("net.ipv4.fib_multipath_hash_policy", "1"),
         ("net.ipv6.conf.all.forwarding", "0"),
         ("net.ipv6.conf.default.forwarding", "0"),
         ("net.ipv6.conf.default.disable_ipv6", "1"),
