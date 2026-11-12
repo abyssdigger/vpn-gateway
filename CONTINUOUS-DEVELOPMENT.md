@@ -140,8 +140,8 @@ Long development sessions may be interrupted by the execution environment after 
 Each autonomous development cycle uses **Git commit timestamps as the checkpoint clock**:
 
 1. the first commit created in the cycle becomes `CYCLE_START_COMMIT`;
-2. record its commit timestamp `T0`;
-3. after every subsequent commit in that cycle, read that commit's timestamp `Tn`;
+2. record its **committer timestamp** `T0`;
+3. after every subsequent commit in that cycle, read that commit's **committer timestamp** `Tn`;
 4. compute `Tn - T0`;
 5. if the elapsed time is **30 minutes or more**, set
    `CHECKPOINT_PENDING=true`.
