@@ -23,9 +23,12 @@ This package implements the ROU control plane after the ROU v0 / EXP-010..013 ev
 - config-derived Device NAT;
 - TCP/UDP publication range projection and supervised relay workers;
 - semantic kernel desired-state verification;
-- structural fail-closed route/RPDB repair;
-- incremental ordinary binding lifecycle route diff that preserves each Profile table's
-  terminal blackhole continuously;
+- production nftables filter/NAT materialization with numeric ifindex generation markers;
+- generation-safe nft verification using complete policy semantics plus compiler-owned
+  interface-generation markers;
+- structural fail-closed route/RPDB/nft repair;
+- incremental ordinary binding lifecycle and route-additive repair that preserve each
+  Profile table's terminal blackhole continuously;
 - namespace prerequisite apply/verify;
 - Planner `observe -> plan -> apply -> fresh observe -> verify -> durable commit`;
 - long-running event/audit reconcile loop;
@@ -43,8 +46,6 @@ This package implements the ROU control plane after the ROU v0 / EXP-010..013 ev
 - real payload MTU/MSS policy: EXP-015;
 - concrete `fib_multipath_hash_policy` production value before availability-triggered
   ECMP becomes effective: EXP-016;
-- strict ifindex-generation firewall admission for rapidly reused dynamic interface names:
-  EXP-017;
 - DeviceManager VPN process lifecycle/configuration;
 - live config reload/CandidateConfig protocol;
 - explicit SNAT and IPv6 payload policy.
@@ -61,8 +62,15 @@ python3 -m unittest discover -s design/NG1/code/python/rou/tests -p 'test_*.py' 
 GitHub kernel integration additionally exercises disposable namespaces for:
 
 - instance create/verify/repair/destroy;
-- iptables filter + config-derived NAT round-trip;
-- lifecycle route diff with overlapping Profiles and persistent table-local blackhole.
+- legacy iptables filter/NAT round-trip as regression evidence only;
+- lifecycle route diff with overlapping Profiles and persistent table-local blackhole;
+- EXP-017 numeric-ifindex same-name/new-ifindex isolation;
+- production nft policy round-trip;
+- full production reconcile cycle:
+  initial reconcile -> same-name/new-ifindex replacement -> metric promotion ->
+  ordinary member disappearance -> structural foreign-nft repair -> durable-state verify.
+
+Current CI baseline reports `NG1_PRODUCTION_CYCLE=PASS` on the production nft backend.
 
 ## Reference deployment
 
@@ -78,3 +86,11 @@ rou show rou0
 
 `rou up` enables the corresponding `rouvpn@rou0.service`; `rou down` disables it and
 removes the owned appliance after proving the service inactive.
+
+## Backend status
+
+nftables is the only production packet-policy backend for NG1. Legacy iptables modules and
+integration tests remain temporarily as regression/historical evidence and do not define
+new production semantics.
+
+EXP-017 is PASS and closed the ifindex-generation backend gate.
