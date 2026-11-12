@@ -6,7 +6,9 @@ on:
       - main
       - 'code-cycle-*'
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - ng1-production-full-implementation
 
 permissions:
   contents: read
