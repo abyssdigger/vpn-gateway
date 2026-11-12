@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 import time
 
-from .command_backend import CommandBackend, SubprocessBackend
+from .command_backend import CommandBackend, NamespaceBackend, SubprocessBackend
 from .config import load_active_config
 from .environment import collect_environment_snapshot
 from .instance_config import (
