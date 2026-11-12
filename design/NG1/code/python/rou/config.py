@@ -563,6 +563,13 @@ def _validate_remote_initiated_profiles(config: ActiveConfig) -> None:
                 + ", ".join(sorted(missing_restrictive_envelope))
             )
 
+
+def validate_active_config(config: ActiveConfig) -> ActiveConfig:
+    """Validate normalized production configuration independent of TOML parsing."""
+
+    return validate_active_config(config)
+
+
 def parse_active_config(text: str) -> ActiveConfig:
     try:
         root = tomllib.loads(text)
