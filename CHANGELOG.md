@@ -1,3 +1,24 @@
+## 2026-11-12 — NG1 autonomous dead-code and CI cleanup
+
+Post-implementation audit cleanup completed without changing production routing/firewall
+semantics:
+
+- removed the unused legacy iptables filter/NAT modules and their dedicated unit/integration
+  tests from the production ROU package;
+- removed dead `observe_nft_generation_refs()` and
+  `classify_device_to_host_profile()` helpers and collapsed the package-level export facade;
+- `rou up` now leaves appliance preparation to systemd `ExecStartPre=rou prepare`
+  instead of running the same preparation twice;
+- public documentation now distinguishes administrator commands from the
+  systemd-internal `prepare|contain|run` hooks;
+- core NG1 CI no longer installs legacy/VPN experiment packages or runs EXP-020;
+  EXP-020 remains archived experiment evidence;
+- pushes to `code-cycle-*` branches now trigger NG1 CI automatically;
+- ROU v0 and RC2/RC3 migration/inheritance history moved from the normative architecture
+  to `design/NG1/ng1-history.md`.
+
+---
+
 ## 2026-11-12 — EXP-019 PASS: WireGuard raw availability evidence
 
 Future DeviceManager research established that WireGuard interface presence and

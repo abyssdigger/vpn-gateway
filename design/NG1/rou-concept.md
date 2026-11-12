@@ -311,14 +311,10 @@ This keeps ROU self-contained without turning it into the host firewall.
 
 Transport publication is proven by EXP-010 and EXP-011.
 
-ROU v0 under:
+Historical prototype evidence, including ROU v0 and EXP-012, is maintained in
+[ng1-history.md](ng1-history.md) rather than in the normative architecture.
 
-    design/NG1/code/python/rou_v0/
-
-then completed EXP-012 with `OVERALL=PASS`, proving the hard-coded lifecycle/integrity
-boundary against real ocserv/OpenConnect clients.
-
-The next-generation production model is now defined around:
+The production model is defined around:
 
 - Device / Profile separation;
 - DeviceEngine / TrafficEngine / PlannerEngine;
