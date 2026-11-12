@@ -95,6 +95,25 @@ def assess_binding_lifecycle(
     if _binding_key(previous_bindings) == _binding_key(desired_bindings):
         reasons.append("bound interface generation did not change")
 
+
+    previous_by_name = {
+        (item.device_name, item.expected_index, item.identity.ifname):
+        item.identity.ifindex
+        for item in previous_bindings.bound
+    }
+    desired_by_name = {
+        (item.device_name, item.expected_index, item.identity.ifname):
+        item.identity.ifindex
+        for item in desired_bindings.bound
+    }
+    for key in previous_by_name.keys() & desired_by_name.keys():
+        if previous_by_name[key] != desired_by_name[key]:
+            reasons.append(
+                "same-name/new-ifindex replacement requires structural barrier "
+                "with the current interface-name firewall backend"
+            )
+            break
+
     expected_rules = {_rule_key(item) for item in desired_kernel.rules}
     max_priority = max((item.priority for item in desired_kernel.rules), default=0)
     observed_rules = {
