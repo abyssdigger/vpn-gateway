@@ -377,11 +377,21 @@ def main(
     )
 
     try:
+        default_file = default_instance_file(args.instance_id)
         instance_file = (
             args.instance_file
             if args.instance_file is not None
-            else default_instance_file(args.instance_id)
+            else default_file
         )
+        if (
+            args.instance_file is not None
+            and args.command in {"up", "down"}
+            and instance_file != default_file
+        ):
+            raise CliError(
+                "rou up/down are systemd-owned lifecycle commands and require "
+                f"the conventional instance file {default_file}"
+            )
         if (
             backend is None
             and args.command in {"prepare", "contain", "up", "down", "show", "run"}
