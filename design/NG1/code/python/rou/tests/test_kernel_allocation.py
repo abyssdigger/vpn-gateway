@@ -24,7 +24,7 @@ class KernelAllocationTests(unittest.TestCase):
                 f"p{i:03d}",
                 True,
                 Direction.OUTBOUND,
-                (ipaddress.IPv4Network(f"10.{i % 250}.0.0/16"),),
+                (ipaddress.IPv4Network((0x0A000000 + i, 32)),),
                 (),
             )
             for i in range(1, 260)
