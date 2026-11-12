@@ -16,7 +16,7 @@ from .device_engine import (
     binding_snapshot_from_state,
     reconcile_devices,
 )
-from .domain import ActiveConfig, Availability
+from .domain import ActiveConfig
 from .environment import EnvironmentSnapshot, collect_environment_snapshot
 from .kernel_allocation import KernelAllocation, compile_kernel_allocation
 from .kernel_mutation import (
