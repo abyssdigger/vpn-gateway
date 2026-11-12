@@ -309,9 +309,9 @@ class PlannerTests(unittest.TestCase):
             ifs=interfaces_survivor(),
         )
 
-        backend = FakeHostBackend(
-            previous_firewall.canonical_save,
-            previous_nat.canonical_save,
+        backend = FakeNftBackend(
+            previous_firewall,
+            previous_nat,
         )
         queue = SnapshotQueue([initial, initial, applied])
 
