@@ -4,13 +4,18 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rou.availability import ProbeOutcome
+from rou.availability import (
+    AvailabilityPolicy,
+    AvailabilityTrackerState,
+    ProbeOutcome,
+)
 from rou.availability_supervision import (
     DetectorEvidenceMissing,
     DetectorEvidenceStale,
     DetectorFreshnessPolicy,
     DetectorSupervisionError,
     TimedProbeSample,
+    reconcile_supervised_availability,
     require_fresh_evidence,
 )
 from rou.device_engine import InterfaceIdentity
@@ -141,6 +146,93 @@ class AvailabilitySupervisionTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     DetectorFreshnessPolicy(value)
+
+    def test_supervised_reconcile_advances_only_from_fresh_evidence(self):
+        availability_policy = AvailabilityPolicy(
+            failure_threshold=2,
+            recovery_threshold=2,
+        )
+        first = reconcile_supervised_availability(
+            AvailabilityTrackerState.empty(),
+            (self.identity,),
+            {
+                self.identity: TimedProbeSample(
+                    ProbeOutcome.FAILURE,
+                    monotonic_time=9.0,
+                )
+            },
+            now_monotonic=10.0,
+            freshness_policy=self.policy,
+            availability_policy=availability_policy,
+        )
+        second = reconcile_supervised_availability(
+            first.next_state,
+            (self.identity,),
+            {
+                self.identity: TimedProbeSample(
+                    ProbeOutcome.FAILURE,
+                    monotonic_time=10.0,
+                )
+            },
+            now_monotonic=10.0,
+            freshness_policy=self.policy,
+            availability_policy=availability_policy,
+        )
+
+        self.assertEqual(
+            first.availability[self.identity].value,
+            "unknown",
+        )
+        self.assertEqual(
+            second.availability[self.identity].value,
+            "unavailable",
+        )
+
+    def test_supervised_reconcile_rejects_stale_before_hysteresis(self):
+        availability_policy = AvailabilityPolicy(
+            failure_threshold=1,
+            recovery_threshold=1,
+        )
+        previous = AvailabilityTrackerState.empty()
+
+        with self.assertRaises(DetectorEvidenceStale):
+            reconcile_supervised_availability(
+                previous,
+                (self.identity,),
+                {
+                    self.identity: TimedProbeSample(
+                        ProbeOutcome.FAILURE,
+                        monotonic_time=0.0,
+                    )
+                },
+                now_monotonic=10.0,
+                freshness_policy=self.policy,
+                availability_policy=availability_policy,
+            )
+
+        self.assertEqual(dict(previous.by_interface), {})
+
+    def test_supervised_reconcile_requires_current_generation_sample(self):
+        availability_policy = AvailabilityPolicy(
+            failure_threshold=1,
+            recovery_threshold=1,
+        )
+        fresh = InterfaceIdentity("vpns00", 11)
+
+        with self.assertRaises(DetectorEvidenceMissing):
+            reconcile_supervised_availability(
+                AvailabilityTrackerState.empty(),
+                (fresh,),
+                {
+                    self.identity: TimedProbeSample(
+                        ProbeOutcome.SUCCESS,
+                        monotonic_time=10.0,
+                    )
+                },
+                now_monotonic=10.0,
+                freshness_policy=self.policy,
+                availability_policy=availability_policy,
+            )
 
     def test_nonfinite_numeric_values_are_rejected(self):
         for value in (float("nan"), float("inf"), float("-inf")):
