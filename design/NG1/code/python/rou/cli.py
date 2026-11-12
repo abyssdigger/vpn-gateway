@@ -13,7 +13,12 @@ from .instance_config import (
     load_instance_file_config,
     validate_instance_id,
 )
-from .instance_lifecycle import create_instance, destroy_instance, verify_instance
+from .instance_lifecycle import (
+    contain_instance,
+    destroy_instance,
+    ensure_instance,
+    verify_instance,
+)
 from .runtime_app import run_instance_runtime
 from .state_store import JsonRuntimeStateStore, StateStoreError
 
@@ -55,6 +60,37 @@ def _systemctl(
     return backend.run(("systemctl", *args), check=check)
 
 
+
+def cmd_prepare(
+    instance_id: str,
+    instance_file: Path,
+    backend: CommandBackend,
+) -> dict[str, object]:
+    validate_instance_id(instance_id)
+    instance = load_instance_file_config(instance_file)
+    ensure_instance(instance.instance, backend)
+    return {
+        "ok": True,
+        "instance_id": instance_id,
+        "prepared": True,
+    }
+
+
+def cmd_contain(
+    instance_id: str,
+    instance_file: Path,
+    backend: CommandBackend,
+) -> dict[str, object]:
+    validate_instance_id(instance_id)
+    instance = load_instance_file_config(instance_file)
+    contain_instance(instance.instance, backend)
+    return {
+        "ok": True,
+        "instance_id": instance_id,
+        "contained": True,
+    }
+
+
 def cmd_check(
     instance_id: str,
     instance_file: Path,
@@ -83,9 +119,9 @@ def cmd_up(
     instance, _router = _load_pair(instance_id, instance_file)
     service = _service_name(instance_id)
 
-    create_instance(instance.instance, backend)
+    ensure_instance(instance.instance, backend)
     try:
-        _systemctl(backend, "start", service)
+        _systemctl(backend, "enable", "--now", service)
         active = _systemctl(
             backend,
             "is-active",
@@ -99,7 +135,7 @@ def cmd_up(
             )
     except Exception:
         # Failed up must not leave a half-created appliance behind.
-        _systemctl(backend, "stop", service, check=False)
+        _systemctl(backend, "disable", "--now", service, check=False)
         destroy_instance(instance.instance, backend)
         raise
 
@@ -120,7 +156,7 @@ def cmd_down(
     instance = load_instance_file_config(instance_file)
     service = _service_name(instance_id)
 
-    _systemctl(backend, "stop", service, check=False)
+    _systemctl(backend, "disable", "--now", service, check=False)
     active = _systemctl(
         backend,
         "is-active",
@@ -257,7 +293,7 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for name in ("check", "up", "down", "show", "run"):
+    for name in ("check", "prepare", "contain", "up", "down", "show", "run"):
         sub = subparsers.add_parser(name)
         sub.add_argument("instance_id")
     return parser
@@ -285,6 +321,10 @@ def main(
 
         if args.command == "check":
             output = cmd_check(args.instance_id, instance_file)
+        elif args.command == "prepare":
+            output = cmd_prepare(args.instance_id, instance_file, host)
+        elif args.command == "contain":
+            output = cmd_contain(args.instance_id, instance_file, host)
         elif args.command == "up":
             output = cmd_up(args.instance_id, instance_file, host)
         elif args.command == "down":
