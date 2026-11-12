@@ -1,0 +1,83 @@
+# EXP-021 — NG1 ICMP probe admission and interface-generation boundary
+
+**Status:** READY FOR TARGET RUN  
+**Architecture baseline:** NG1 Draft 5 production source baseline  
+**Type:** disposable-netns kernel/mechanism experiment
+
+## Purpose
+
+Establish the kernel/mechanism facts required before production availability policy is
+fixed.
+
+EXP-021 deliberately does **not** choose probe cadence, timeout, failure threshold,
+recovery threshold, or persistence policy. It tests whether the proposed ICMP mechanism can
+be narrow, unprivileged and bound to the intended Device path, and where numeric ifindex
+identity stops being a sufficient generation discriminator.
+
+## Questions
+
+1. Can ICMP echo run with every process capability, including CAP_NET_RAW, removed when a
+   namespace-local `net.ipv4.ping_group_range` admits the probe gid?
+2. Before probe-specific nft admission is installed and verified, does default-DROP keep
+   the detector effectively unarmed?
+3. Can admission be limited to exactly:
+   - OUTPUT: selected numeric oif + one destination + ICMP echo-request;
+   - INPUT: selected numeric iif + the same remote source + ICMP echo-reply?
+4. Do other remote addresses and non-ICMP local traffic remain blocked?
+5. If an alternate Device/path can reach the same target, can the probe avoid silently
+   escaping through it?
+6. Does same-name/new-ifindex replacement fail closed against stale numeric nft rules?
+7. If Linux is explicitly asked to recreate the interface with the **same ifindex**, do the
+   stale numeric nft rules admit the new interface generation?
+8. Are the tested direct-device routing semantics suitable for the WG/OC-shaped active path
+   evidence established by EXP-019/020?
+
+## Safety boundary
+
+The script uses only disposable network namespaces and veth interfaces. It does not modify
+host routes, host nftables, host sysctls, ocserv/OpenConnect, or WireGuard configuration.
+
+The only sysctl changed is `net.ipv4.ping_group_range` inside the disposable ROU namespace.
+
+## Topology
+
+```text
+                    primary Device
+             198.18.21.0/30
+  exp21-pri <----------------> exp21-rou
+  target=203.0.113.21/32       vpn0
+
+                    alternate Device
+             198.18.22.0/30
+  exp21-alt <----------------> exp21-rou
+  target=203.0.113.21/32       alt0
+```
+
+The same target exists behind both disposable peers. ROU normally has an explicit /32
+route through `vpn0`; after that route is removed, ordinary lookup resolves through
+`alt0`. This makes alternate-path escape observable without touching the host network.
+
+## Probe privilege model under test
+
+The probe runs as uid/gid 65534 with:
+
+- empty effective/permitted/inheritable/ambient capability sets;
+- empty capability bounding set;
+- `no_new_privs`;
+- namespace-local `ping_group_range = 65534 65534`.
+
+A successful echo in that state is evidence that CAP_NET_RAW is not required for this
+mechanism on the target kernel/userspace combination.
+
+## Exact-ifindex reuse interpretation
+
+The exact-ifindex phase is diagnostic, not a preselected PASS/FAIL expectation.
+
+If a newly created interface with the same numeric ifindex immediately matches stale nft
+rules, EXP-021 records that fact explicitly. Such a result means numeric ifindex is a
+routing/firewall generation discriminator only while the kernel index is not reused; H8
+must then account for restart/missed-lifecycle reuse separately.
+
+## Artifact
+
+`exp-021-icmp-generation-boundary.sh`
