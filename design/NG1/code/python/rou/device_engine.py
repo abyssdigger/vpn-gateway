@@ -64,6 +64,59 @@ class DeviceReconcileResult:
     snapshot: DeviceBindingSnapshot
 
 
+
+def binding_snapshot_from_state(
+    config: ActiveConfig,
+    state: DeviceBindingState,
+    availability: Mapping[InterfaceIdentity, Availability] | None = None,
+) -> DeviceBindingSnapshot:
+    """Reconstruct the previously committed binding snapshot.
+
+    Candidate history is committed only after complete verification. Reconstructing the
+    previous bound/over-quota split lets Planner prove whether observed policy is the old
+    verified generation during an ordinary interface lifecycle transition.
+
+    Availability is not persisted in schema version 1 because the production trigger is
+    deliberately deferred; callers may inject explicit historical availability later when
+    DeviceManager owns that state.
+    """
+
+    availability = availability or {}
+    active_devices = config.active_device_names
+    bound: list[BoundInterface] = []
+    over_quota: list[BoundInterface] = []
+
+    for device_name, device in config.devices.items():
+        if device_name not in active_devices:
+            continue
+        for expected_index, expected in enumerate(device.expected_interfaces):
+            previous = state.expectations.get((device_name, expected_index))
+            if previous is None:
+                continue
+
+            candidates = [
+                identity
+                for identity in previous.candidate_order
+                if expected.match.matches(identity.ifname)
+            ]
+            for position, identity in enumerate(candidates):
+                item = BoundInterface(
+                    device_name=device_name,
+                    expected_index=expected_index,
+                    identity=identity,
+                    availability=availability.get(
+                        identity,
+                        Availability.UNKNOWN,
+                    ),
+                )
+                if position < expected.interface_quota:
+                    bound.append(item)
+                else:
+                    over_quota.append(item)
+
+    return DeviceBindingSnapshot(tuple(bound), tuple(over_quota))
+
+
 def reconcile_devices(
     config: ActiveConfig,
     previous: DeviceBindingState,
