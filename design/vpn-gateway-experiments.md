@@ -1,3 +1,19 @@
+## EXP-017 — NG1: ifindex-aware firewall admission
+
+**Статус:** PREPARED — strict dynamic-generation firewall gate  
+**Architecture baseline:** NG1 Draft 5 after 2026-11-12 safety correction  
+**Design:** [EXP-017 README](experiments/EXP-017%20NG1%20ifindex-aware%20firewall%20admission/README.md)
+
+Цель: доказать firewall materialization, привязанный к конкретной interface generation
+`(ifname,ifindex)`, а не только к переиспользуемому имени интерфейса. Текущий
+iptables-legacy backend матчится по имени, поэтому same-name/new-ifindex replacement может
+получить краткое pre-observation окно старых правил.
+
+Предпочтительный кандидат проверки — nftables numeric `meta iif/oif` или эквивалентный
+target-kernel primitive.
+
+---
+
 ## EXP-016 — NG1: ECMP hash-policy prerequisite
 
 **Статус:** PREPARED — future availability-trigger gate  
