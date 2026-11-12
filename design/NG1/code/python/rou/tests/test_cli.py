@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rou.cli import CliError, cmd_down, cmd_show, cmd_up, default_instance_file
+from rou.cli import CliError, cmd_down, cmd_show, cmd_up, default_instance_file, main
 from rou.command_backend import CommandResult
 from rou.instance_config import InstanceFileConfig
 from rou.device_engine import DeviceBindingSnapshot
@@ -256,6 +256,20 @@ class CliTests(unittest.TestCase):
         self.assertFalse(result["policy_verified"])
         self.assertIn("state integrity failure", result["state_error"])
         inspect.assert_not_called()
+
+    def test_up_rejects_nonconventional_instance_file_override(self):
+        backend = FakeBackend()
+        rc = main(
+            [
+                "--instance-file",
+                "/tmp/other.toml",
+                "up",
+                "rou0",
+            ],
+            backend=backend,
+        )
+        self.assertEqual(rc, 1)
+        self.assertEqual(backend.calls, [])
 
 
 if __name__ == "__main__":
