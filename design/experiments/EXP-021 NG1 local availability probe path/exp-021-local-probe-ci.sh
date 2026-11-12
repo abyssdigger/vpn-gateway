@@ -99,6 +99,11 @@ rou ip route add default via "$HOST_GW" dev "$HOST_IF"
 create_device_link
 ip -n "$REMOTE" addr add "$TARGET/32" dev lo
 
+rou sysctl -q -w net.ipv4.conf.all.rp_filter=0
+rou sysctl -q -w net.ipv4.conf.default.rp_filter=0
+rou sysctl -q -w "net.ipv4.conf.$HOST_IF.rp_filter=0"
+rou sysctl -q -w "net.ipv4.conf.$DEV_IF.rp_filter=0"
+
 rou nft -f - <<'EOF'
 table ip exp021 {
     chain input {
@@ -149,6 +154,7 @@ echo "PASS C: narrow numeric nft admission + oif probe table passes off-link pro
 
 ip -n "$ROU" link del "$DEV_IF"
 create_device_link
+rou sysctl -q -w "net.ipv4.conf.$DEV_IF.rp_filter=0"
 NEW_IFINDEX="$(link_ifindex "$ROU" "$DEV_IF")"
 
 if [ "$NEW_IFINDEX" = "$OLD_IFINDEX" ]; then
