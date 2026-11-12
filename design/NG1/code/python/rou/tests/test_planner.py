@@ -230,6 +230,37 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(writes[-1], "net.ipv4.ip_forward=1")
 
 
+    def test_foreign_nft_table_forces_structural_repair_and_is_deleted(self):
+        _, _, kernel, firewall, nat = expected_for(interfaces())
+        initial = observed_kernel_snapshot(kernel, forwarding=True)
+        barrier = observed_kernel_snapshot(kernel, forwarding=False)
+        final = observed_kernel_snapshot(kernel, forwarding=True)
+        backend = FakeNftBackend(firewall, nat)
+        backend.tables["foreign"] = (
+            "table ip foreign {\n}",
+            (),
+        )
+        queue = SnapshotQueue([initial, barrier, barrier, barrier, final])
+
+        result = reconcile_once(
+            config(),
+            "rou0",
+            PlannerRuntimeState.empty(),
+            backend,
+            collect_snapshot=queue,
+        )
+
+        self.assertTrue(result.changed_kernel)
+        self.assertNotIn("foreign", backend.tables)
+        writes = [
+            arg
+            for call, _stdin, _check in backend.calls
+            for arg in call
+            if arg.startswith("net.ipv4.ip_forward=")
+        ]
+        self.assertIn("net.ipv4.ip_forward=0", writes)
+        self.assertEqual(writes[-1], "net.ipv4.ip_forward=1")
+
     def test_bound_member_disappearance_repairs_without_global_barrier(self):
         cfg = config()
 
