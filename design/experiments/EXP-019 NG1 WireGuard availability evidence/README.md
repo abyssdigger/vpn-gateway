@@ -1,6 +1,6 @@
 # EXP-019 — NG1 WireGuard availability evidence
 
-**Status:** PREPARED — future DeviceManager evidence  
+**Status:** PASS — raw WireGuard availability evidence  
 **Architecture baseline:** NG1 Draft 5 + EXP-016  
 **Type:** real WireGuard-in-netns liveness experiment
 
@@ -90,3 +90,43 @@ private-key <path>` still returned `fopen: Permission denied` on the hosted runn
 This isolates the issue to the WireGuard userspace file-open path in that CI environment,
 not generic namespace visibility. Attempt 4 feeds the ephemeral private key through stdin
 (`private-key /dev/stdin`) so the experiment no longer depends on that path behavior.
+
+## Attempt 4 — PASS
+
+The stdin-key variant reached the intended WireGuard experiment and passed on the GitHub
+privileged kernel runner.
+
+Observed:
+
+```text
+PASS A: WireGuard tunnel established ifindex=2 handshake=1794480627
+PASS B: wg0 remains same generation while active tunnel probe fails
+HANDSHAKE_BEFORE=1794480627
+HANDSHAKE_DURING_OUTAGE=1794480627
+PASS C: active tunnel probe recovered on the same wg0 generation
+HANDSHAKE_AFTER_RECOVERY=1794480627
+OBSERVATION: outage did not create a new successful handshake
+OBSERVATION: recovered data path did not require a new successful handshake
+EXP_019_WIREGUARD_AVAILABILITY_EVIDENCE=PASS
+```
+
+## Result and architectural consequence
+
+The experiment establishes three useful facts for future WireGuard DeviceManager work:
+
+1. interface presence/admin-up is not liveness evidence: `wg0` remained present with the
+   same ifindex while its remote path was unusable;
+2. an active probe bound to that tunnel path distinguished live -> unavailable -> live
+   without replacing the interface generation;
+3. latest-successful-handshake age is **not** a sufficient prompt liveness trigger. A
+   short underlay failure and successful data-path recovery occurred with the recorded
+   latest-handshake timestamp unchanged throughout.
+
+Therefore a future positive WireGuard `UNAVAILABLE` detector must not classify solely from
+interface presence or latest-handshake age. Active/protocol-specific path evidence is a
+viable basis, but choosing probe target, cadence, failure threshold and admission semantics
+is a DeviceManager product/configuration decision and is deliberately not invented by this
+experiment.
+
+The experiment closes the raw-evidence question only; it does not yet define normalized
+availability policy.
