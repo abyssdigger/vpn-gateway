@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import time
 
 from .command_backend import CommandBackend, NamespaceBackend, SubprocessBackend
 from .config import load_active_config
@@ -28,6 +29,8 @@ from .state_store import JsonRuntimeStateStore, StateStoreError
 LOG = logging.getLogger(__name__)
 DEFAULT_INSTANCE_DIR = Path("/etc/vpn-gateway/instances")
 SERVICE_TEMPLATE = "rouvpn@{instance}.service"
+UP_VERIFY_TIMEOUT_SECONDS = 15.0
+UP_VERIFY_POLL_SECONDS = 0.2
 
 
 class CliError(RuntimeError):
@@ -112,6 +115,57 @@ def cmd_check(
     }
 
 
+
+def _wait_up_verified(
+    instance_id: str,
+    instance_file: Path,
+    backend: CommandBackend,
+    *,
+    timeout_seconds: float = UP_VERIFY_TIMEOUT_SECONDS,
+    poll_seconds: float = UP_VERIFY_POLL_SECONDS,
+    monotonic=time.monotonic,
+    sleep=time.sleep,
+) -> dict[str, object]:
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be positive")
+    if poll_seconds <= 0:
+        raise ValueError("poll_seconds must be positive")
+
+    deadline = monotonic() + timeout_seconds
+    last_status: dict[str, object] | None = None
+    last_error: Exception | None = None
+
+    while True:
+        try:
+            status = cmd_show(instance_id, instance_file, backend)
+        except Exception as exc:
+            last_error = exc
+        else:
+            last_status = status
+            last_error = None
+            if (
+                status.get("appliance_verified") is True
+                and status.get("state_ok") is True
+                and status.get("policy_verified") is True
+                and status.get("ip_forward") == "1"
+            ):
+                return status
+
+        if monotonic() >= deadline:
+            if last_error is not None:
+                detail = f"last verification error: {last_error}"
+            else:
+                detail = (
+                    "last verification status: "
+                    + repr(last_status)
+                )
+            raise CliError(
+                "ROU runtime did not reach verified forwarding state; "
+                + detail
+            )
+        sleep(poll_seconds)
+
+
 def cmd_up(
     instance_id: str,
     instance_file: Path,
@@ -129,6 +183,7 @@ def cmd_up(
     )
     if already_active.returncode == 0:
         _systemctl(backend, "enable", service)
+        _wait_up_verified(instance_id, instance_file, backend)
         return {
             "ok": True,
             "instance_id": instance_id,
@@ -151,6 +206,7 @@ def cmd_up(
             raise CliError(
                 f"{service} did not become active after start"
             )
+        _wait_up_verified(instance_id, instance_file, backend)
     except Exception:
         # Failed up must not leave a half-created appliance behind.
         _systemctl(backend, "disable", "--now", service, check=False)
