@@ -191,6 +191,36 @@ class CliTests(unittest.TestCase):
             backend.calls,
         )
 
+    def test_up_rollback_does_not_destroy_if_service_stop_is_unproven(self):
+        backend = FakeBackend(active_returncodes=[3, 0, 0])
+        destroyed = []
+
+        with (
+            patch("rou.cli._load_pair", return_value=(config(), object())),
+            patch("rou.cli.ensure_instance"),
+            patch(
+                "rou.cli.destroy_instance",
+                side_effect=lambda *_: destroyed.append(True),
+            ),
+            patch("rou.cli.contain_instance") as contain,
+            patch(
+                "rou.cli._wait_up_verified",
+                side_effect=CliError("policy not verified"),
+            ),
+        ):
+            with self.assertRaisesRegex(
+                CliError,
+                "rollback could not prove service inactive",
+            ):
+                cmd_up(
+                    "rou0",
+                    Path("/etc/instance.toml"),
+                    backend,
+                )
+
+        self.assertEqual(destroyed, [])
+        contain.assert_called_once()
+
     def test_down_does_not_require_router_policy_to_parse(self):
         backend = FakeBackend(active_returncode=3)
         destroyed = []
@@ -227,6 +257,7 @@ class CliTests(unittest.TestCase):
                 return_value=config(),
             ),
             patch("rou.cli.destroy_instance") as destroy,
+            patch("rou.cli.contain_instance") as contain,
         ):
             with self.assertRaisesRegex(CliError, "remains active"):
                 cmd_down(
@@ -236,12 +267,7 @@ class CliTests(unittest.TestCase):
                 )
 
         destroy.assert_not_called()
-        self.assertTrue(
-            any(
-                "net.ipv4.ip_forward=0" in argv
-                for argv in backend.calls
-            )
-        )
+        contain.assert_called_once()
 
     def test_down_refuses_on_indeterminate_systemd_status(self):
         backend = FakeBackend(active_returncode=1)
@@ -252,6 +278,7 @@ class CliTests(unittest.TestCase):
                 return_value=config(),
             ),
             patch("rou.cli.destroy_instance") as destroy,
+            patch("rou.cli.contain_instance") as contain,
         ):
             with self.assertRaisesRegex(CliError, "cannot prove"):
                 cmd_down(
@@ -261,6 +288,7 @@ class CliTests(unittest.TestCase):
                 )
 
         destroy.assert_not_called()
+        contain.assert_called_once()
 
 
     def test_show_reports_full_policy_verification(self):
