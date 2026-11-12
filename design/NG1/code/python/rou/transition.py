@@ -147,6 +147,24 @@ def assess_binding_lifecycle(
             reasons.append("ROU-tagged route exists outside desired Profile tables")
             break
 
+
+    observed_route_keys = {
+        _route_key(route)
+        for route in observed.routes
+        if route.table in desired_tables
+    }
+    required_blackholes = {
+        _route_key(route)
+        for route in desired_kernel.routes
+        if route.route_type == "blackhole"
+    }
+    missing_blackholes = required_blackholes - observed_route_keys
+    if missing_blackholes:
+        reasons.append(
+            "terminal Profile blackhole is missing; lifecycle repair cannot "
+            "safely preserve Profile-local fail-close"
+        )
+
     if observed_filter not in {
         previous_firewall.canonical_save,
         desired_firewall.canonical_save,
