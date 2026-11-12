@@ -1,3 +1,34 @@
+## 2026-11-12 — NG1 Draft 5 correction implementation and kernel proof
+
+Implemented the accepted safety-correction review across the production Python ROU:
+
+- remote-initiated Profiles are rejected unless active capacity is exactly 1 and every
+  active Device has restrictive envelope `default=drop`;
+- INPUT/FORWARD/OUTPUT are all default-DROP with explicit local/transit admissions;
+- ordinary binding lifecycle is classified separately from structural drift;
+- lifecycle route repair is a semantic diff and continuously preserves each Profile
+  table's terminal blackhole;
+- full owned RPDB priority window 1..32765 is verified, not merely current rule range;
+- local publication address is carried through runtime -> Planner -> INPUT materialization;
+- iptables save/restore verification now normalizes counters, chain serialization and
+  canonical state/match ordering instead of comparing fragile raw text;
+- bootstrap installs/verifies default-DROP filter before runtime/publications;
+- boot-time `ensure_instance`, containment commands, persistent systemd instance lifecycle
+  and hardened state path were added;
+- runtime state rejects symlink ancestors;
+- `rou show` now uses the production projectors/verifiers for full desired-vs-live status.
+
+Additional whole-code review finding:
+
+- legacy iptables interface admission is name-based and cannot by itself prove zero-window
+  isolation across same-name/new-ifindex replacement. EXP-017 was prepared as the strict
+  dynamic-generation firewall backend gate.
+
+GitHub validation at commit `958aec8dff27d1042755883626ff74e0480de54c` passed both
+rootless and privileged kernel-integration jobs.
+
+---
+
 ## 2026-11-12 — NG1 Draft 5 correction: remote-init safety, local firewall, barrier scope
 
 External whole-model review found three material safety gaps and one over-conservative
