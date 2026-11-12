@@ -12,6 +12,7 @@ from rou.instance_lifecycle import (
     InstanceConfig,
     create_instance,
     destroy_instance,
+    ensure_instance,
     verify_instance,
 )
 
@@ -38,6 +39,36 @@ def main() -> int:
             print("VERIFY FAIL:", "; ".join(verified.errors))
             return 1
         print("NG1_INSTANCE_CREATE_VERIFY=PASS")
+
+        # Simulate safe-repairable bootstrap drift while forwarding remains a containment
+        # concern: wrong rp_filter plus fail-open local filter policies.
+        run(
+            "ip", "netns", "exec", CONFIG.namespace,
+            "sysctl", "-q", "-w", "net.ipv4.conf.all.rp_filter=1",
+        )
+        bad_filter = (
+            "*filter\n"
+            ":INPUT ACCEPT [0:0]\n"
+            ":FORWARD ACCEPT [0:0]\n"
+            ":OUTPUT ACCEPT [0:0]\n"
+            "COMMIT\n"
+        )
+        subprocess.run(
+            (
+                "ip", "netns", "exec", CONFIG.namespace,
+                "iptables-legacy-restore",
+            ),
+            input=bad_filter,
+            text=True,
+            check=True,
+        )
+
+        ensure_instance(CONFIG, host)
+        repaired = verify_instance(CONFIG, host, forwarding=False)
+        if not repaired.ok:
+            print("ENSURE REPAIR FAIL:", "; ".join(repaired.errors))
+            return 1
+        print("NG1_INSTANCE_ENSURE_REPAIR=PASS")
     finally:
         destroy_instance(CONFIG, host)
 
