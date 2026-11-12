@@ -5,7 +5,6 @@ from enum import Enum
 
 from .device_engine import DeviceBindingSnapshot
 from .environment import EnvironmentSnapshot, KernelRoute, KernelRule
-from .firewall_state import FirewallDesiredState
 from .kernel_allocation import MAX_OWNED_RULE_PRIORITY
 from .kernel_state import (
     BLACKHOLE_PROTOCOL,
@@ -14,7 +13,6 @@ from .kernel_state import (
     KernelRouteSpec,
     KernelRuleSpec,
 )
-from .nat_state import NatDesiredState
 
 
 class TransitionKind(str, Enum):
@@ -26,6 +24,22 @@ class TransitionKind(str, Enum):
 class TransitionAssessment:
     kind: TransitionKind
     reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PolicyGenerationObservation:
+    filter_matches_previous: bool
+    filter_matches_desired: bool
+    nat_matches_previous: bool
+    nat_matches_desired: bool
+
+    @property
+    def filter_known(self) -> bool:
+        return self.filter_matches_previous or self.filter_matches_desired
+
+    @property
+    def nat_known(self) -> bool:
+        return self.nat_matches_previous or self.nat_matches_desired
 
 
 def _route_key(route: KernelRoute | KernelRouteSpec) -> tuple:
@@ -65,15 +79,10 @@ def _binding_key(snapshot: DeviceBindingSnapshot) -> tuple:
 def assess_binding_lifecycle(
     previous_kernel: KernelDesiredState,
     desired_kernel: KernelDesiredState,
-    previous_firewall: FirewallDesiredState,
-    desired_firewall: FirewallDesiredState,
-    previous_nat: NatDesiredState,
-    desired_nat: NatDesiredState,
+    policy_generation: PolicyGenerationObservation,
     previous_bindings: DeviceBindingSnapshot,
     desired_bindings: DeviceBindingSnapshot,
     observed: EnvironmentSnapshot,
-    observed_filter: str,
-    observed_nat: str,
 ) -> TransitionAssessment:
     """Prove whether drift is an ordinary binding lifecycle transition.
 
@@ -81,6 +90,11 @@ def assess_binding_lifecycle(
     Availability transitions remain architecturally incremental, but the production
     availability trigger is deferred; future DeviceManager work must persist enough
     availability history to prove that transition equivalently.
+
+    Firewall/NAT backend details are deliberately outside this classifier. The caller
+    supplies proof that observed policy is exactly a previous or desired verified
+    generation. With the production ifindex-aware nft backend, same-name/new-ifindex is
+    therefore an ordinary old-generation removal plus fresh-generation addition.
 
     Anything not proven here is structural/unknown and therefore uses the global barrier.
     """
@@ -95,25 +109,6 @@ def assess_binding_lifecycle(
 
     if _binding_key(previous_bindings) == _binding_key(desired_bindings):
         reasons.append("bound interface generation did not change")
-
-
-    previous_by_name = {
-        (item.device_name, item.expected_index, item.identity.ifname):
-        item.identity.ifindex
-        for item in previous_bindings.bound
-    }
-    desired_by_name = {
-        (item.device_name, item.expected_index, item.identity.ifname):
-        item.identity.ifindex
-        for item in desired_bindings.bound
-    }
-    for key in previous_by_name.keys() & desired_by_name.keys():
-        if previous_by_name[key] != desired_by_name[key]:
-            reasons.append(
-                "same-name/new-ifindex replacement requires structural barrier "
-                "with the current interface-name firewall backend"
-            )
-            break
 
     expected_rules = {_rule_key(item) for item in desired_kernel.rules}
     observed_rules = {
@@ -165,17 +160,15 @@ def assess_binding_lifecycle(
             "safely preserve Profile-local fail-close"
         )
 
-    if observed_filter not in {
-        previous_firewall.canonical_save,
-        desired_firewall.canonical_save,
-    }:
-        reasons.append("filter table is neither previous nor desired verified generation")
+    if not policy_generation.filter_known:
+        reasons.append(
+            "filter policy is neither previous nor desired verified generation"
+        )
 
-    if observed_nat not in {
-        previous_nat.canonical_save,
-        desired_nat.canonical_save,
-    }:
-        reasons.append("NAT table is neither previous nor desired verified generation")
+    if not policy_generation.nat_known:
+        reasons.append(
+            "NAT policy is neither previous nor desired verified generation"
+        )
 
     if reasons:
         return TransitionAssessment(
