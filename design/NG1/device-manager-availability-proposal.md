@@ -228,16 +228,23 @@ Proposed behavior:
 - first positive evidence may normalize it to AVAILABLE;
 - only the configured failure threshold moves it to UNAVAILABLE;
 - inability to execute the detector itself (missing binary, permission error, malformed
-  response, provider exception) produces UNKNOWN, not UNAVAILABLE.
+  response, provider exception) does **not** produce a new availability transition;
+- a new binding with no successful detector observation remains at its initial UNKNOWN;
+- after a binding has reached AVAILABLE or UNAVAILABLE, detector malfunction preserves the
+  last normalized availability until fresh valid evidence supports another transition.
 
-This preserves the distinction between "path proved bad" and "detector cannot decide".
+This avoids the unsafe case where a detector failure converts an already proven
+UNAVAILABLE path to UNKNOWN, which would restore that path to the normal routing tier under
+the current architecture.
 
-A persistent detector malfunction is operationally visible and should be surfaced in status
-and logs.
+Detector health is therefore orthogonal to normalized path availability. A persistent
+detector malfunction is operationally visible and must be surfaced in status/logs, but it
+does not itself claim either path success or path failure.
 
 ## 7. Failure/recovery counters and event timing
 
-Counters are scoped to `AvailabilityKey` and reset on generation change.
+Counters and detector health are scoped to `AvailabilityKey` and reset on generation
+change.
 
 Suggested semantics:
 
@@ -350,7 +357,7 @@ For the first production availability slice:
 - ICMP echo;
 - all timing/hysteresis values explicit;
 - generation-scoped narrow OUTPUT admission;
-- detector failures -> UNKNOWN;
+- detector failures preserve the last normalized availability and are reported separately;
 - Device process lifecycle remains a separate future provider.
 
 This is intentionally simple, visible in configuration and compatible with a later Rust
