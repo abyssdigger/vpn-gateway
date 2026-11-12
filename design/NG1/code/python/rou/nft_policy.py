@@ -124,6 +124,7 @@ def observe_nft_numeric_interface_refs(
         (
             "nft",
             "-j",
+            "-n",
             "list",
             "table",
             desired.family,
