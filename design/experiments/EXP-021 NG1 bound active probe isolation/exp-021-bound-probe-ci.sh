@@ -116,7 +116,7 @@ run_unprivileged_ping() {
         "$@"
 }
 
-CAP_EFF=$(run_unprivileged_ping sh -c 'awk "/^CapEff:/ { print \\$2 }" /proc/self/status')
+CAP_EFF=$(run_unprivileged_ping sh -c "sed -n 's/^CapEff:[[:space:]]*//p' /proc/self/status")
 echo "UNPRIVILEGED_CAP_EFF=$CAP_EFF"
 if [ "$CAP_EFF" != "0000000000000000" ]; then
     echo "FAIL: privilege harness retained effective capabilities" >&2
