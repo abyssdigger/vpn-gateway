@@ -69,6 +69,19 @@ class InstanceFileConfigTests(unittest.TestCase):
                 )
             )
 
+
+    def test_state_file_must_stay_under_hardened_state_root(self):
+        with self.assertRaisesRegex(
+            InstanceFileConfigError,
+            "must be below /var/lib/vpn-gateway",
+        ):
+            parse_instance_file_config(
+                VALID.replace(
+                    "/var/lib/vpn-gateway/rou0/state.json",
+                    "/srv/rou0/state.json",
+                )
+            )
+
     def test_ipv6_publication_bind_rejected(self):
         with self.assertRaisesRegex(InstanceFileConfigError, "must be IPv4"):
             parse_instance_file_config(
