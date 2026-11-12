@@ -1268,12 +1268,18 @@ Production reconciliation distinguishes **ordinary lifecycle transition** from
 **structural/unknown drift**.
 
 Ordinary lifecycle transitions include verified binding appearance/disappearance and
-normalized availability changes. They are repaired incrementally with RPDB dispatch and
-terminal fail-close retained. Profile tables may be rebuilt while their dispatch rule and
-terminal host0 fail-close remain installed; a temporarily empty/incomplete Profile table
-therefore fails closed rather than falling through to main. Filter/NAT owned tables are
-atomically replaced from fresh binding state. These transitions do not require global
-`ip_forward=0`.
+normalized availability changes. They are repaired incrementally with RPDB dispatch
+retained.
+
+Lifecycle route mutation is a semantic diff, **not a full Profile-table flush**. The
+terminal blackhole default in every affected Profile table must remain continuously
+installed while stale normal/fallback routes are deleted and missing routes are added.
+This is required because Profiles may overlap: if a more-specific Profile table were
+temporarily empty, RPDB lookup could continue to a later broader Profile rule and cross a
+policy boundary. Preserving the table-local terminal blackhole prevents that fall-through.
+
+Filter/NAT owned tables are atomically replaced from fresh binding state. These ordinary
+transitions do not require global `ip_forward=0`.
 
 Structural/unknown drift includes unexpected owned RPDB state, foreign/unrepresentable
 state in owned routing domains, firewall/NAT drift not attributable to a verified binding
@@ -1593,3 +1599,5 @@ ROU does not seize or rewrite unrelated host VPN routes.
 73. ROU-owned OUTPUT is default-DROP and admits only loopback, local ESTABLISHED/RELATED, and locally generated traffic whose egress is host0.
 74. The persistent shadow fallback is implemented before its production availability trigger; positive UNAVAILABLE classification is intentionally deferred to future DeviceManager/Device-specific detector work.
 75. net.ipv4.fib_multipath_hash_policy is an observed/owned namespace prerequisite and may not be silently inherited when ECMP fallback can become effective.
+76. Incremental lifecycle route repair never flushes a Profile table or removes its terminal blackhole; the blackhole remains continuously installed so a temporarily missing more-specific route cannot fall through to a broader overlapping Profile rule.
+77. With the current iptables interface-name backend, same-name/new-ifindex replacement is treated as structural/unknown drift and uses the global barrier because old name-based rules could otherwise match the fresh interface generation before verification.
