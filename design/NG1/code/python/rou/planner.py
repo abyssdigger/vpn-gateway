@@ -320,22 +320,21 @@ def reconcile_once(
 
     ns = NamespaceBackend(namespace, host_backend)
 
-    LOG.debug(
-        "planner-reconcile-start namespace=%s profiles=%s active_devices=%s "
-        "committed_expectations=%d committed_metrics=%d",
-        namespace,
-        sorted(
-            profile.name
-            for profile in config.profiles.values()
-            if profile.enabled
-        ),
-        sorted(config.active_device_names),
-        len(committed.devices.expectations),
-        len(committed.traffic.normal_metrics),
-    )
-
     try:
         validate_active_config(config)
+        LOG.debug(
+            "planner-reconcile-start namespace=%s profiles=%s active_devices=%s "
+            "committed_expectations=%d committed_metrics=%d",
+            namespace,
+            sorted(
+                profile.name
+                for profile in config.profiles.values()
+                if profile.enabled
+            ),
+            sorted(config.active_device_names),
+            len(committed.devices.expectations),
+            len(committed.traffic.normal_metrics),
+        )
         initial = collect_snapshot(namespace, host_backend)
         LOG.debug(
             "planner-observe-initial interfaces=%s routes=%d rules=%d ip_forward=%r",
