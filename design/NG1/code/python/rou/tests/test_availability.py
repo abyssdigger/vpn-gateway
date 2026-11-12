@@ -35,13 +35,26 @@ class AvailabilityBoundaryTests(unittest.TestCase):
     def test_stale_same_name_generation_is_rejected(self):
         with self.assertRaisesRegex(
             ValueError,
-            "non-current binding identity vpns00@9",
+            "non-bound/current identity vpns00@9",
         ):
             normalize_availability(
                 self.bindings(),
                 {
                     InterfaceIdentity("vpns00", 9):
                     Availability.UNAVAILABLE,
+                },
+            )
+
+    def test_over_quota_identity_is_not_availability_input(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "non-bound/current identity vpns01@11",
+        ):
+            normalize_availability(
+                self.bindings(),
+                {
+                    InterfaceIdentity("vpns01", 11):
+                    Availability.AVAILABLE,
                 },
             )
 
