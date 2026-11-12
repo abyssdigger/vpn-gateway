@@ -1,3 +1,36 @@
+## 2026-11-12 — NG1 production nft baseline and full disposable cycle PASS
+
+The current NG1 Python production baseline now uses nftables as its only production
+filter/NAT backend.
+
+Completed and verified:
+
+- EXP-017 PASS: numeric nft iif/oif rules preserve concrete interface-generation identity
+  across same-name/new-ifindex replacement;
+- generation-safe nft verification uses complete policy semantics plus stable
+  compiler-owned generation markers;
+- legacy iptables remains regression/historical evidence only;
+- Planner supports both ordinary binding lifecycle and proven ROUTE_ADDITIVE incremental
+  transitions without unnecessary global ip_forward=0;
+- post-prerequisite reassessment accepts the same proven incremental transition set as
+  initial assessment;
+- disposable privileged production cycle passes:
+  initial reconcile, same-name/new-ifindex replacement, metric promotion, ordinary member
+  disappearance, structural foreign-nft barrier repair and durable runtime-state verify;
+- rootless NG1 and RC3 suites and privileged kernel integration are green on the reviewed
+  baseline.
+
+Future-gated work remains intentionally separate:
+
+- EXP-014 multi-interface remote-initiated flow pinning — postponed until after the first
+  working production release;
+- EXP-015 real TCP MTU/MSS signoff;
+- EXP-016 ECMP hash-policy prerequisite before enabling a real UNAVAILABLE trigger;
+- DeviceManager availability/process lifecycle work after the core baseline is otherwise
+  complete.
+
+---
+
 ## 2026-11-12 — NG1 Draft 5 correction implementation and kernel proof
 
 Implemented the accepted safety-correction review across the production Python ROU:
