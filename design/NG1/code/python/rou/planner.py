@@ -497,7 +497,10 @@ def reconcile_once(
         )
 
         if (
-            assessment.kind is TransitionKind.BINDING_LIFECYCLE
+            assessment.kind in {
+                TransitionKind.BINDING_LIFECYCLE,
+                TransitionKind.ROUTE_ADDITIVE,
+            }
             and survivor_prereq.ok
         ):
             LOG.debug(
