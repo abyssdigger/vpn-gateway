@@ -64,6 +64,9 @@ if ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
     exit 1
 fi
 echo "PASS B: same-name/new-ifindex=$NEW_INDEX does not inherit old iif/oif rules"
+echo "JSON_AFTER_B_BEGIN"
+ip netns exec "$ROU" nft -j list table ip vpng_exp17
+echo "JSON_AFTER_B_END"
 
 # Update only ingress generation. SRC -> ROU must work again, while ROU -> SRC must still
 # fail because OUTPUT remains pinned to old oif.
