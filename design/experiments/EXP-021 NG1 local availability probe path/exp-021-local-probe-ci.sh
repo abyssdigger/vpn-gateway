@@ -46,14 +46,14 @@ install_probe_nft_rules() {
     rou nft add rule ip exp021 output \
         oif "$ifindex" ip daddr "$TARGET" \
         ip protocol icmp icmp type echo-request \
-        ct state new,established \
-        comment "\"exp021-$label-oif\"" counter accept
+        ct state new,established counter accept \
+        comment "\"exp021-$label-oif\""
 
     rou nft add rule ip exp021 input \
         iif "$ifindex" ip saddr "$TARGET" \
         ip protocol icmp icmp type echo-reply \
-        ct state established,related \
-        comment "\"exp021-$label-iif\"" counter accept
+        ct state established,related counter accept \
+        comment "\"exp021-$label-iif\""
 }
 
 install_probe_route() {
