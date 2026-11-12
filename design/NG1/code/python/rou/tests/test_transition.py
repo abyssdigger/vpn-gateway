@@ -31,10 +31,9 @@ def bindings(ifindex: int | None):
 
 
 def desired(ifname: str | None):
-    routes = (
-        ()
-        if ifname is None
-        else (
+    routes = []
+    if ifname is not None:
+        routes.append(
             KernelRouteSpec(
                 1,
                 ipaddress.IPv4Network("10.0.0.0/8"),
@@ -43,9 +42,20 @@ def desired(ifname: str | None):
                 1,
                 ifname,
                 (),
-            ),
+            )
+        )
+    routes.append(
+        KernelRouteSpec(
+            1,
+            ipaddress.IPv4Network("0.0.0.0/0"),
+            "blackhole",
+            201,
+            65536,
+            None,
+            (),
         )
     )
+    routes = tuple(routes)
     rules = (
         KernelRuleSpec(
             1,
@@ -108,7 +118,20 @@ class TransitionTests(unittest.TestCase):
             NatDesiredState("", "new-nat"),
             bindings(10),
             bindings(None),
-            observed_from((), rule_observed()),
+            observed_from(
+                (
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("0.0.0.0/0"),
+                        "blackhole",
+                        201,
+                        65536,
+                        None,
+                        (),
+                    ),
+                ),
+                rule_observed(),
+            ),
             "old-filter",
             "old-nat",
         )
@@ -135,7 +158,21 @@ class TransitionTests(unittest.TestCase):
             NatDesiredState("", "new-nat"),
             bindings(10),
             bindings(None),
-            observed_from((foreign,), rule_observed()),
+            observed_from(
+                (
+                    foreign,
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("0.0.0.0/0"),
+                        "blackhole",
+                        201,
+                        65536,
+                        None,
+                        (),
+                    ),
+                ),
+                rule_observed(),
+            ),
             "old-filter",
             "old-nat",
         )
@@ -181,6 +218,15 @@ class TransitionTests(unittest.TestCase):
                         "vpns00",
                         (),
                     ),
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("0.0.0.0/0"),
+                        "blackhole",
+                        201,
+                        65536,
+                        None,
+                        (),
+                    ),
                 ),
                 rule_observed(),
             ),
@@ -222,6 +268,26 @@ class TransitionTests(unittest.TestCase):
         self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
         self.assertTrue(
             any("RPDB" in reason for reason in result.reasons)
+        )
+
+
+    def test_missing_terminal_blackhole_is_structural(self):
+        result = assess_binding_lifecycle(
+            desired("vpns00"),
+            desired(None),
+            FirewallDesiredState("", "old-filter"),
+            FirewallDesiredState("", "new-filter"),
+            NatDesiredState("", "old-nat"),
+            NatDesiredState("", "new-nat"),
+            bindings(10),
+            bindings(None),
+            observed_from((), rule_observed()),
+            "old-filter",
+            "old-nat",
+        )
+        self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
+        self.assertTrue(
+            any("terminal Profile blackhole" in reason for reason in result.reasons)
         )
 
 
