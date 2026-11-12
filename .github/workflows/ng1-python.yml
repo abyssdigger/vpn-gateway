@@ -64,3 +64,6 @@ jobs:
 
       - name: Run EXP-017 preliminary numeric-iif proof
         run: sudo sh "design/experiments/EXP-017 NG1 ifindex-aware firewall admission/exp-017-nft-ifindex-ci.sh"
+
+      - name: Run nft policy backend round-trip
+        run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_nft_policy_roundtrip.py
