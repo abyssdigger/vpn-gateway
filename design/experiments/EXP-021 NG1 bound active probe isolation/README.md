@@ -1,6 +1,6 @@
 # EXP-021 — bound active-probe isolation and privilege envelope
 
-**Status:** PREPARED  
+**Status:** PASS  
 **Architecture baseline:** NG1 Draft 5 + EXP-019/020  
 **Type:** disposable kernel/userspace probe-path experiment
 
@@ -78,3 +78,76 @@ This experiment does **not** choose probe target, cadence or failure/recovery th
 ## Artifact
 
 `exp-021-bound-probe-ci.sh`
+
+
+## Attempt history
+
+### Attempt 1 — PASS for path isolation, privilege result ambiguous
+
+Observed:
+
+```text
+PASS A: ordinary and B-bound probes succeed while both paths are healthy
+PASS B: bound probe fails on broken B while unbound probe still succeeds via A
+PING_GROUP_RANGE=1 0
+REDUCED_PRIVILEGE_BOUND_PING=FAIL
+EXP_021_BOUND_PROBE_ISOLATION=PASS
+```
+
+The routing hypothesis passed. The privilege result was not yet interpretable because the
+first harness also manipulated the capability bounding set and did not prove that the
+wrapped command itself reached ping.
+
+### Attempt 2 — HARNESS RECOVERY RACE
+
+The privilege harness was simplified and a namespace-local permissive ping_group_range
+check was added. The run then failed immediately after restoring B because the harness
+required one instant recovery ping. No privilege conclusion was drawn.
+
+A bounded recovery wait replaced that single probe.
+
+### Attempt 3 — PASS
+
+Final observed result:
+
+```text
+PASS A: ordinary and B-bound probes succeed while both paths are healthy
+PASS B: bound probe fails on broken B while unbound probe still succeeds via A
+PASS C0: B-bound probe recovered after peer link restore
+HOST_PING_GROUP_RANGE_BEFORE=1 0
+NS_PING_GROUP_RANGE_BEFORE=1 0
+UNPRIVILEGED_BOUND_PING_INITIAL=PASS
+NS_PING_GROUP_RANGE_AFTER=0 2147483647
+HOST_PING_GROUP_RANGE_AFTER=1 0
+PASS C: ping_group_range change stayed inside probe namespace
+UNPRIVILEGED_BOUND_PING_PERMISSIVE_RANGE=PASS
+UNPRIVILEGED_CAP_EFF=0000000000000000
+PASS D: ordinary unprivileged ping works with permissive ping_group_range
+UNPRIVILEGED_SOURCE_BOUND_PING_HEALTHY=FAIL
+EXP_021_BOUND_PROBE_ISOLATION=PASS
+```
+
+## Result and architectural consequence
+
+EXP-021 establishes:
+
+1. interface-bound active probing can test one concrete path without silently borrowing a
+   different healthy lower-metric route;
+2. an ordinary unbound probe is unsuitable as Device availability evidence in a
+   multi-path ROU because it can succeed through another Device;
+3. source-address-only binding is not a reliable substitute for interface binding in the
+   tested competing-route topology;
+4. on the hosted runner, interface-bound ping executed successfully from a wrapper with
+   zero effective capabilities and no-new-privs;
+5. net.ipv4.ping_group_range is namespace-local on the tested kernel.
+
+The experiment therefore does **not** justify adding CAP_NET_RAW to the production service.
+The exact target Debian/systemd sandbox must still prove whichever probe implementation is
+selected; EXP-018 remains the deployment capability gate.
+
+Future DeviceManager active evidence should bind explicitly to the concrete interface and
+must verify that the interface generation observed before and after probing is still the
+generation being classified.
+
+Probe target, cadence, timeout and failure/recovery thresholds remain product-policy
+questions and are not selected by this experiment.
