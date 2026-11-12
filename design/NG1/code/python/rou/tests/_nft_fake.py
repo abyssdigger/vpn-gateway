@@ -52,15 +52,16 @@ class FakeNftBackend:
             items.append(
                 {
                     "rule": {
+                        "comment": f"vpng-ifref:{kind}:{value}",
                         "expr": [
                             {
                                 "match": {
                                     "op": "==",
                                     "left": {"meta": {"key": kind}},
-                                    "right": str(value),
+                                    "right": "symbolic-live-name",
                                 }
                             }
-                        ]
+                        ],
                     }
                 }
             )
