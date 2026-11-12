@@ -1,6 +1,6 @@
 # EXP-020 — NG1 OpenConnect availability evidence
 
-**Status:** PREPARED — raw OpenConnect availability evidence  
+**Status:** PASS — raw OpenConnect availability evidence  
 **Architecture baseline:** NG1 Draft 5 + first production source baseline  
 **Type:** real ocserv/OpenConnect-in-netns liveness experiment
 
@@ -72,3 +72,75 @@ Possible outcomes:
 EXP-020 closes only the raw OpenConnect evidence question. Choosing probe target, cadence,
 failure threshold or user-visible DeviceManager configuration remains a separate product
 decision requiring human agreement.
+
+
+## Attempt history
+
+### Attempt 1 — HARNESS DIAGNOSTIC GAP
+
+The first GitHub run failed while starting OpenConnect, but the harness used `set -e` and
+redirected the client log, so it exited before printing the actual failure.
+
+No availability hypothesis was exercised. Safe stage markers and explicit client-start
+error reporting were added.
+
+### Attempt 2 — CI OCSERV WORKER/TLS ENVIRONMENT ISSUE
+
+The instrumented run reached ocserv and TCP connect, then OpenConnect failed TLS with:
+
+```text
+Connected to 192.0.2.1:44443
+SSL negotiation with 192.0.2.1
+SSL connection failure: Error in the pull function.
+```
+
+ocserv was listening, but the disposable runtime used a root-private temporary directory
+and default worker isolation. The hypothesis had still not been exercised.
+
+For this liveness-only experiment the harness:
+
+- made the ephemeral runtime directory traversable by the configured daemon group;
+- made ephemeral credential material readable where required;
+- disabled ocserv worker isolation to remove an unrelated hosted-runner/seccomp variable;
+- enabled detailed ocserv logging.
+
+This does not change production ROU or ocserv hardening policy.
+
+### Attempt 3 — PASS
+
+The corrected disposable topology reached the intended experiment.
+
+Observed:
+
+```text
+PASS A: OpenConnect tunnel established ifindex=2 pid=4935
+OUTAGE_CLIENT_ALIVE=1
+OUTAGE_INTERFACE_PRESENT=1
+OUTAGE_OLD_IFINDEX=2
+OUTAGE_CURRENT_IFINDEX=2
+PASS B: tunnel-bound active probe failed during outer outage
+RECOVERY_IFINDEX=2
+OBSERVATION: recovery reused the same OpenConnect interface generation
+PASS C: active tunnel probe recovered
+EXP_020_OPENCONNECT_AVAILABILITY_EVIDENCE=PASS
+```
+
+## Result and architectural consequence
+
+The experiment establishes for the tested OpenConnect reconnect behavior:
+
+1. OpenConnect process presence is not positive path-liveness evidence;
+2. tunnel-interface presence is not positive path-liveness evidence;
+3. a short outer-transport outage can leave the same concrete `(ifname,ifindex)`
+   generation bound while the payload path is unusable;
+4. the same interface generation can recover when outer transport returns;
+5. a tunnel-bound active path probe distinguished live -> unavailable -> live in exactly
+   that retained-generation window.
+
+Together with EXP-019, both current first-class transports therefore demonstrate the same
+architectural need: normalized availability is logically independent from binding
+presence.
+
+Neither experiment chooses production cadence, timeout, failure threshold, recovery
+threshold or probe target. Those are DeviceManager product-policy/configuration semantics
+and require a separate reviewed decision.
