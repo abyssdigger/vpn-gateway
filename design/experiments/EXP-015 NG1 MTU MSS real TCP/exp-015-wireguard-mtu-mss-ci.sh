@@ -234,23 +234,6 @@ done
 echo "DF_MAX_ICMP_PAYLOAD=$low"
 echo "DF_MAX_IP_PACKET=$((low + 28))"
 
-timeout 12 tcpdump -i "$HIF" -nn -vvv -s 0 -c 2     "tcp port $TCP_PORT and (tcp[tcpflags] & tcp-syn != 0)"     >"$CAPTURE" 2>&1 &
-TCPDUMP_PID=$!
-sleep 0.2
-python3 "$TMP/tcp-client.py" "$TARGET_A" "$TCP_PORT" 8388608 15
-wait "$TCPDUMP_PID" || true
-
-echo "TCP_MSS_CAPTURE_BEGIN"
-cat "$CAPTURE"
-echo "TCP_MSS_CAPTURE_END"
-MSS_VALUES=$(grep -o 'mss [0-9][0-9]*' "$CAPTURE" | awk '{print $2}' | tr '\n' ' ')
-echo "TCP_MSS_VALUES=$MSS_VALUES"
-[ -n "$MSS_VALUES" ] || {
-    echo "FAIL: no WireGuard MSS values captured" >&2
-    exit 1
-}
-echo "PASS A: production-like WireGuard large TCP round-trip succeeds"
-
 ip netns exec "$ROU" nft add rule ip exp15wg output     oifname "$RIF" ip protocol icmp drop
 ip netns exec "$REMOTE" nft add rule ip exp15wgremote output     oifname "$REMOTE_LAN" ip protocol icmp drop
 
@@ -268,3 +251,25 @@ else
     cat "$TMP/blocked-client.log"
     echo "EXP_015_WIREGUARD_PRODUCTION_PATH=PASS_BLACKHOLE_REPRODUCED"
 fi
+
+# Remove only the experiment's PMTU-feedback suppression before normal baseline TCP.
+ip netns exec "$ROU" nft flush chain ip exp15wg output
+ip netns exec "$REMOTE" nft flush chain ip exp15wgremote output
+
+timeout 12 tcpdump -i "$HIF" -nn -vvv -s 0 -c 2     "tcp port $TCP_PORT and (tcp[tcpflags] & tcp-syn != 0)"     >"$CAPTURE" 2>&1 &
+TCPDUMP_PID=$!
+sleep 0.2
+python3 "$TMP/tcp-client.py" "$TARGET_A" "$TCP_PORT" 8388608 15
+wait "$TCPDUMP_PID" || true
+
+echo "TCP_MSS_CAPTURE_BEGIN"
+cat "$CAPTURE"
+echo "TCP_MSS_CAPTURE_END"
+MSS_VALUES=$(grep -o 'mss [0-9][0-9]*' "$CAPTURE" | awk '{print $2}' | tr '\n' ' ')
+echo "TCP_MSS_VALUES=$MSS_VALUES"
+[ -n "$MSS_VALUES" ] || {
+    echo "FAIL: no WireGuard MSS values captured" >&2
+    exit 1
+}
+echo "PASS A: production-like WireGuard large TCP round-trip succeeds"
+
