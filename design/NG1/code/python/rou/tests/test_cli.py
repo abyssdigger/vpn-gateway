@@ -8,7 +8,15 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rou.cli import CliError, cmd_down, cmd_show, cmd_up, default_instance_file, main
+from rou.cli import (
+    CliError,
+    _wait_up_verified,
+    cmd_down,
+    cmd_show,
+    cmd_up,
+    default_instance_file,
+    main,
+)
 from rou.command_backend import CommandResult
 from rou.instance_config import InstanceFileConfig
 from rou.device_engine import DeviceBindingSnapshot
@@ -20,14 +28,25 @@ from rou.state_store import StateLoadResult, StateStoreError
 
 
 class FakeBackend:
-    def __init__(self, active_returncode=3):
+    def __init__(self, active_returncode=3, active_returncodes=None):
         self.calls = []
         self.active_returncode = active_returncode
+        self.active_returncodes = (
+            list(active_returncodes)
+            if active_returncodes is not None
+            else None
+        )
 
     def run(self, argv, *, input_text=None, check=True):
         self.calls.append(argv)
         if argv[:3] == ("systemctl", "is-active", "--quiet"):
-            return CommandResult(argv, self.active_returncode, "", "")
+            if self.active_returncodes is not None:
+                if not self.active_returncodes:
+                    raise AssertionError("unexpected systemctl is-active")
+                returncode = self.active_returncodes.pop(0)
+            else:
+                returncode = self.active_returncode
+            return CommandResult(argv, returncode, "", "")
         return CommandResult(argv, 0, "", "")
 
 
@@ -89,6 +108,7 @@ class CliTests(unittest.TestCase):
             patch("rou.cli._load_pair", return_value=(config(), object())),
             patch("rou.cli.ensure_instance") as ensure,
             patch("rou.cli.destroy_instance") as destroy,
+            patch("rou.cli._wait_up_verified") as verify_up,
         ):
             result = cmd_up(
                 "rou0",
@@ -99,11 +119,76 @@ class CliTests(unittest.TestCase):
         self.assertTrue(result["already_active"])
         ensure.assert_not_called()
         destroy.assert_not_called()
+        verify_up.assert_called_once()
         self.assertFalse(
             any(
                 "net.ipv4.ip_forward=0" in argv
                 for argv in backend.calls
             )
+        )
+
+    def test_wait_up_verified_requires_policy_and_forwarding_open(self):
+        backend = FakeBackend()
+        statuses = [
+            {
+                "appliance_verified": True,
+                "state_ok": True,
+                "policy_verified": True,
+                "ip_forward": "0",
+            },
+            {
+                "appliance_verified": True,
+                "state_ok": True,
+                "policy_verified": True,
+                "ip_forward": "1",
+            },
+        ]
+        clock = iter((0.0, 0.1))
+
+        with patch("rou.cli.cmd_show", side_effect=statuses) as show:
+            result = _wait_up_verified(
+                "rou0",
+                Path("/etc/instance.toml"),
+                backend,
+                timeout_seconds=1.0,
+                poll_seconds=0.01,
+                monotonic=lambda: next(clock),
+                sleep=lambda _seconds: None,
+            )
+
+        self.assertEqual(result["ip_forward"], "1")
+        self.assertEqual(show.call_count, 2)
+
+    def test_up_rolls_back_if_service_active_but_policy_never_verifies(self):
+        backend = FakeBackend(active_returncodes=[3, 0])
+        events = []
+
+        with (
+            patch("rou.cli._load_pair", return_value=(config(), object())),
+            patch(
+                "rou.cli.ensure_instance",
+                side_effect=lambda *_: events.append("ensure"),
+            ),
+            patch(
+                "rou.cli.destroy_instance",
+                side_effect=lambda *_: events.append("destroy"),
+            ),
+            patch(
+                "rou.cli._wait_up_verified",
+                side_effect=CliError("policy not verified"),
+            ),
+        ):
+            with self.assertRaisesRegex(CliError, "policy not verified"):
+                cmd_up(
+                    "rou0",
+                    Path("/etc/instance.toml"),
+                    backend,
+                )
+
+        self.assertEqual(events, ["ensure", "destroy"])
+        self.assertIn(
+            ("systemctl", "disable", "--now", "rouvpn@rou0.service"),
+            backend.calls,
         )
 
     def test_down_does_not_require_router_policy_to_parse(self):
