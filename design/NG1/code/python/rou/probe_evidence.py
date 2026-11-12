@@ -68,6 +68,13 @@ class ProbeEvidenceStore:
         The global sample sequence is deliberately not rewound or reused.
         """
 
+        if any(
+            not isinstance(identity, InterfaceIdentity)
+            for identity in identities
+        ):
+            raise ValueError(
+                "identities must contain only InterfaceIdentity values"
+            )
         if len(set(identities)) != len(identities):
             raise ValueError("identities contains duplicate interface generation")
         keep = set(identities)
