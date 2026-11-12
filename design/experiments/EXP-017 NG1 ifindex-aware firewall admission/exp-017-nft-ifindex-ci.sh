@@ -65,7 +65,7 @@ if ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
 fi
 echo "PASS B: same-name/new-ifindex=$NEW_INDEX does not inherit old iif/oif rules"
 echo "JSON_AFTER_B_BEGIN"
-ip netns exec "$ROU" nft -j list table ip vpng_exp17
+ip netns exec "$ROU" nft -j -n list table ip vpng_exp17
 echo "JSON_AFTER_B_END"
 
 # Update only ingress generation. SRC -> ROU must work again, while ROU -> SRC must still
@@ -81,7 +81,7 @@ if ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
     exit 1
 fi
 
-NEW_IIF_PKTS=$(ip netns exec "$ROU" nft -j list chain ip vpng_exp17 input |
+NEW_IIF_PKTS=$(ip netns exec "$ROU" nft -j -n list chain ip vpng_exp17 input |
     python3 -c '
 import json
 import sys
