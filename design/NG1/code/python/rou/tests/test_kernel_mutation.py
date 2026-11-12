@@ -9,6 +9,7 @@ from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule, RouteN
 from rou.kernel_mutation import (
     KernelMutationPlanError,
     compile_kernel_mutation_plan,
+    compile_lifecycle_route_rebuild_plan,
 )
 from rou.kernel_state import KernelDesiredState, KernelRouteSpec, KernelRuleSpec
 
@@ -184,6 +185,78 @@ class KernelMutationTests(unittest.TestCase):
                 ("ip", "rule", "del", "priority", "1"),
                 ("ip", "rule", "del", "priority", "17"),
             ],
+        )
+
+
+    def test_lifecycle_rebuild_keeps_forwarding_and_rpdb_untouched(self):
+        desired = KernelDesiredState(
+            routes=(
+                KernelRouteSpec(
+                    table=1,
+                    destination=ipaddress.IPv4Network("10.0.0.0/8"),
+                    route_type="unicast",
+                    protocol=202,
+                    metric=2,
+                    ifname="vpns01",
+                ),
+                KernelRouteSpec(
+                    table=1,
+                    destination=ipaddress.IPv4Network("0.0.0.0/0"),
+                    route_type="blackhole",
+                    protocol=201,
+                    metric=65536,
+                ),
+            ),
+            rules=(
+                KernelRuleSpec(
+                    1,
+                    "host0",
+                    ipaddress.IPv4Network("10.0.0.0/8"),
+                    1,
+                    "to_tbl",
+                ),
+                KernelRuleSpec(
+                    2,
+                    "host0",
+                    None,
+                    None,
+                    "unreachable",
+                ),
+            ),
+            owned_tables=(1,),
+        )
+        observed = EnvironmentSnapshot(
+            (),
+            routes=(
+                KernelRoute(
+                    1,
+                    ipaddress.IPv4Network("10.0.0.0/8"),
+                    "unicast",
+                    202,
+                    2,
+                    "vpns01",
+                    (),
+                ),
+            ),
+            rules=(
+                KernelRule(
+                    1,
+                    1,
+                    "to_tbl",
+                    destination=ipaddress.IPv4Network("10.0.0.0/8"),
+                    iif="host0",
+                ),
+                KernelRule(2, None, "unreachable", iif="host0"),
+            ),
+        )
+
+        plan = compile_lifecycle_route_rebuild_plan(desired, observed)
+        argv = [item.argv for item in plan.commands]
+
+        self.assertIn(("ip", "route", "flush", "table", "1"), argv)
+        self.assertFalse(any(command[0] == "sysctl" for command in argv))
+        self.assertFalse(
+            any(command[:2] == ("ip", "rule") for command in argv)
         )
 
 
