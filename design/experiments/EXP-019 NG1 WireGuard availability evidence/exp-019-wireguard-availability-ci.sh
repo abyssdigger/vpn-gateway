@@ -20,7 +20,7 @@ trap cleanup EXIT HUP INT TERM
 cleanup_netns
 
 umask 077
-TMP=$(mktemp -d)
+TMP=$(mktemp -d /run/vpng-exp019.XXXXXX)
 wg genkey >"$TMP/a.key"
 wg genkey >"$TMP/b.key"
 wg pubkey <"$TMP/a.key" >"$TMP/a.pub"
@@ -47,6 +47,15 @@ ip -n "$B" addr add 10.23.0.2/30 dev wg0
 
 A_PUB=$(cat "$TMP/a.pub")
 B_PUB=$(cat "$TMP/b.pub")
+
+ip netns exec "$A" test -r "$TMP/a.key" || {
+    echo "FAIL: namespace A cannot read ephemeral private-key file" >&2
+    exit 1
+}
+ip netns exec "$B" test -r "$TMP/b.key" || {
+    echo "FAIL: namespace B cannot read ephemeral private-key file" >&2
+    exit 1
+}
 
 ip netns exec "$A" wg set wg0     listen-port 51820     private-key "$TMP/a.key"     peer "$B_PUB"     allowed-ips 10.23.0.2/32     endpoint 192.0.2.2:51820     persistent-keepalive 1
 
