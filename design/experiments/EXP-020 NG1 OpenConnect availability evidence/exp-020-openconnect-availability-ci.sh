@@ -141,7 +141,10 @@ OPENCONNECT_RC=$?
 set -e
 if [ "$OPENCONNECT_RC" -ne 0 ]; then
     echo "FAIL: OpenConnect startup returned $OPENCONNECT_RC" >&2
+    echo "--- openconnect log ---" >&2
     cat "$OC_LOG" >&2
+    echo "--- ocserv log ---" >&2
+    cat "$OCSERV_LOG" >&2
     exit 1
 fi
 
