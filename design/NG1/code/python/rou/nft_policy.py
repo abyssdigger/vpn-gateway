@@ -134,7 +134,7 @@ def _numeric_interface_refs_from_json(
 
     return tuple(sorted(refs))
 
-def observe_nft_numeric_interface_refs(
+def observe_nft_generation_refs(
     desired: NftTableDesiredState,
     backend: NamespaceBackend,
 ) -> tuple[tuple[str, int], ...]:
@@ -645,12 +645,13 @@ def observe_nft_state(
     """Observe one owned nft table through the production verification boundary.
 
     Textual canonicalization verifies complete policy/order semantics. JSON observation
-    independently preserves numeric iif/oif generation identity even when the text renderer
-    resolves a live ifindex back to an interface name.
+    independently reads compiler-owned `vpng-ifref:...` rule comments that encode the
+    numeric generation used by each dynamic iif/oif kernel match, even when nft renders the
+    live meta-match itself as an interface name.
 
     The two reads are intentionally encapsulated here. The runtime serializes its own nft
     mutations; foreign concurrent mutation can only make this observation stale, never make
-    an unverified numeric generation satisfy the exact ref multiset.
+    an unverified interface generation satisfy the exact marker multiset.
     """
 
     probe = backend.run(
