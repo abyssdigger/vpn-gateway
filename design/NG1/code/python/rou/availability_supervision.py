@@ -95,13 +95,18 @@ class FreshEvidence:
 @dataclass(frozen=True)
 class SupervisedAvailabilityState:
     tracker: AvailabilityTrackerState
-    last_sample_ids: Mapping[InterfaceIdentity, int]
+    last_samples: Mapping[InterfaceIdentity, TimedProbeSample]
 
     def __post_init__(self) -> None:
+        samples = dict(self.last_samples)
+        if set(samples) != set(self.tracker.by_interface):
+            raise ValueError(
+                "last_samples and tracker must contain identical interface generations"
+            )
         object.__setattr__(
             self,
-            "last_sample_ids",
-            MappingProxyType(dict(self.last_sample_ids)),
+            "last_samples",
+            MappingProxyType(samples),
         )
 
     @classmethod
@@ -199,8 +204,11 @@ def reconcile_supervised_availability(
     consumed id for that concrete interface generation:
 
     - larger id: consume one new evidence outcome;
-    - equal id: reuse current normalized availability without advancing hysteresis;
+    - equal id: accept only an identical sample and do not advance hysteresis;
     - smaller id: explicit detector evidence regression error.
+
+    A new id may not carry an older monotonic timestamp. This prevents a detector from
+    refreshing stale evidence by mutating/reissuing an old sample identity.
 
     The caller still owns the policy consequence of DetectorSupervisionError. This helper
     deliberately does not stop forwarding, demote a path, retry a detector or persist
@@ -215,22 +223,36 @@ def reconcile_supervised_availability(
     )
 
     evidence_to_consume: dict[InterfaceIdentity, ProbeOutcome] = {}
-    next_sample_ids: dict[InterfaceIdentity, int] = {}
+    next_samples: dict[InterfaceIdentity, TimedProbeSample] = {}
 
     for identity in tracked_interfaces:
         sample = samples[identity]
-        previous_id = previous.last_sample_ids.get(identity)
-        if previous_id is not None and sample.sample_id < previous_id:
-            raise DetectorEvidenceRegression(
-                "detector sample id regressed for "
-                f"{identity!r}: previous={previous_id} "
-                f"current={sample.sample_id}"
-            )
-        if previous_id is None or sample.sample_id > previous_id:
-            evidence_to_consume[identity] = fresh.outcomes[identity]
-        else:
-            evidence_to_consume[identity] = ProbeOutcome.INDETERMINATE
-        next_sample_ids[identity] = sample.sample_id
+        previous_sample = previous.last_samples.get(identity)
+        if previous_sample is not None:
+            if sample.sample_id < previous_sample.sample_id:
+                raise DetectorEvidenceRegression(
+                    "detector sample id regressed for "
+                    f"{identity!r}: previous={previous_sample.sample_id} "
+                    f"current={sample.sample_id}"
+                )
+            if sample.sample_id == previous_sample.sample_id:
+                if sample != previous_sample:
+                    raise DetectorEvidenceRegression(
+                        "detector reused sample id with different content for "
+                        f"{identity!r}: sample_id={sample.sample_id}"
+                    )
+                evidence_to_consume[identity] = ProbeOutcome.INDETERMINATE
+                next_samples[identity] = previous_sample
+                continue
+            if sample.monotonic_time < previous_sample.monotonic_time:
+                raise DetectorEvidenceRegression(
+                    "detector sample time regressed for "
+                    f"{identity!r}: previous={previous_sample.monotonic_time:.6f} "
+                    f"current={sample.monotonic_time:.6f}"
+                )
+
+        evidence_to_consume[identity] = fresh.outcomes[identity]
+        next_samples[identity] = sample
 
     update: AvailabilityUpdate = reconcile_availability(
         previous.tracker,
@@ -241,7 +263,7 @@ def reconcile_supervised_availability(
     return SupervisedAvailabilityUpdate(
         next_state=SupervisedAvailabilityState(
             tracker=update.next_state,
-            last_sample_ids=next_sample_ids,
+            last_samples=next_samples,
         ),
         availability=update.availability,
     )
