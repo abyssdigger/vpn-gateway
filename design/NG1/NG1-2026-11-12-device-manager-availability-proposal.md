@@ -108,72 +108,102 @@ route/policy drift remains barriered.
 EXP-013 already provides the relevant kernel behavior evidence; additional unit/integration
 coverage is required, but no new kernel hypothesis is currently identified.
 
-## 5. Detector missing/stale policy — human decision
+## 5. Detector readiness and local quarantine — human decision
 
-A stale/missing detector sample means the **control-plane detector is unhealthy**. It is
-not positive evidence that the VPN path itself is unavailable.
+The first draft considered global runtime failure when detector evidence becomes
+missing/stale. Internal review rejected that as unnecessarily broad when the failure can be
+scoped to one concrete monitored binding.
 
-Three possible policies:
+### Proposed separate readiness axis
 
-### A. Fatal detector health — recommended first production policy
+Availability retains its current meaning:
 
-On DetectorSupervisionError for any currently bound generation:
+    UNKNOWN | AVAILABLE | UNAVAILABLE
 
-- availability controller reports unhealthy;
-- ROU runtime treats DeviceManager health failure like another supervised control-plane
-  failure;
-- forwarding is contained fail-closed;
-- systemd restart policy attempts recovery;
-- runtime does not silently reuse stale availability.
+Add an orthogonal detector-readiness state for monitored bindings:
 
-Pros:
-- strongest invariant;
-- never invents UNAVAILABLE;
-- stale control-plane state cannot steer traffic indefinitely;
-- consistent with existing fatal supervised-service health behavior.
+    UNMONITORED
+    PENDING
+    READY
+    FAILED
 
-Cons:
-- one failed availability worker can temporarily stop all ROU forwarding;
-- bad probe configuration can create a restart loop, which must be diagnosable.
+Meaning:
 
-### B. Freeze last stable normalized availability
+- UNMONITORED: no availability detector is configured for the Device; current schema-v1
+  UNKNOWN behavior is unchanged;
+- PENDING: detector is configured, but this concrete generation does not yet have trusted
+  fresh evidence in the current controller lifecycle;
+- READY: supervised evidence is fresh and normalized Availability is meaningful;
+- FAILED: previously monitored evidence is missing/stale or the per-binding detector is
+  unhealthy.
 
-On detector supervision failure:
+### Payload eligibility
 
-- keep last verified normalized Availability;
-- mark DeviceManager/status degraded;
-- continue forwarding.
+For TrafficEngine:
 
-Pros:
-- control-plane detector failure does not cause total outage.
+- UNMONITORED -> payload-eligible using existing UNKNOWN semantics;
+- READY -> payload-eligible using existing UNKNOWN/AVAILABLE/UNAVAILABLE tiers;
+- PENDING -> no payload route/ACCEPT/fallback membership;
+- FAILED -> no payload route/ACCEPT/fallback membership.
 
-Cons:
-- a dead path may remain AVAILABLE/preferred indefinitely;
-- failure detection silently stops working;
-- stale state can outlive the condition it described.
+PENDING/FAILED bindings remain DeviceEngine-visible. Probe/transport recovery may continue;
+only payload eligibility is quarantined.
 
-Not recommended as the default first policy.
+This gives local fail-closed behavior without claiming the VPN path itself is
+UNAVAILABLE and without stopping unrelated Devices/Profiles.
 
-### C. Treat detector failure as UNAVAILABLE
+### Why not map detector failure to UNAVAILABLE
 
-On detector supervision failure, demote the affected interface.
+UNAVAILABLE means positive path evidence justified demotion. Detector failure is evidence
+about the control plane, not the VPN path.
 
-Pros:
-- localizes impact to one path.
+Mapping detector failure to UNAVAILABLE would:
 
-Cons:
-- violates the current "positive path evidence" meaning of UNAVAILABLE;
-- conflates detector failure with network failure;
-- a broken detector can change routing even when the VPN path is healthy.
+- weaken that semantic distinction;
+- keep the binding in persistent fallback;
+- allow last-resort payload to use a path whose evidence is not trustworthy.
 
-Not recommended.
+Local quarantine is therefore preferred.
+
+### Why not globally stop ROU
+
+A single per-binding detector failure is scopeable. Global ip_forward=0 would interrupt
+unrelated verified Profiles/Devices and would reintroduce the broad-barrier behavior the
+project deliberately removed from ordinary lifecycle transitions.
+
+Global runtime containment remains appropriate for failures that cannot be scoped safely,
+for example corruption of the DeviceManager/controller itself or owned-state integrity
+loss.
+
+### New binding and restart behavior
+
+For a detector-enabled newly bound generation:
+
+1. binding is visible to DeviceEngine;
+2. readiness begins PENDING;
+3. no payload state is generated for it;
+4. probe worker establishes fresh supervised evidence;
+5. readiness becomes READY;
+6. current normalized Availability then selects normal/fallback tier.
+
+On controller/runtime restart:
+
+- durable last stable Availability may seed surviving concrete generations for hysteresis
+  continuity;
+- probe ids/timestamps/streaks reset;
+- monitored generations begin PENDING regardless of durable Availability;
+- they remain payload-quarantined until fresh evidence re-establishes READY.
+
+Thus persisted Availability reconstructs history; it never substitutes for fresh detector
+readiness.
 
 ### Recommendation
 
-Adopt **A — fatal detector health** for the first integrated DeviceManager.
+Adopt this separate readiness/local-quarantine model for the first integrated
+DeviceManager.
 
-A later independently supervised per-Device worker-restart model could reduce blast radius
-without redefining Availability semantics.
+This recommendation changes product semantics and therefore requires human agreement
+before normative architecture or production Planner changes.
 
 ## 6. User-facing active-probe policy — human decision
 
@@ -204,26 +234,35 @@ Open questions:
 Recommended simplest first slice:
 
 - availability detection optional;
-- when absent: existing UNKNOWN behavior, no detector;
-- when present: one explicit ICMP target, interval, timeout, failure threshold and recovery
-  threshold;
-- freshness limit derived and validated from the scheduling contract only after its formula
-  is explicitly agreed.
+- when absent: readiness UNMONITORED and existing UNKNOWN behavior;
+- when present: one explicit ICMP target, interval, timeout, failure threshold, recovery
+  threshold and freshness limit;
+- no hidden/default timing values in the first schema.
+
+An explicit freshness limit is preferred over a derived magic formula in schema version 1.
+A later schema may add safe shorthands once operating evidence supports them.
 
 This is deliberately a proposal, not normative TOML syntax.
 
 ## 7. Required implementation sequence after agreement
 
-1. extend durable Planner state with last verified normalized Availability;
-2. split DeviceEngine binding projection from availability decoration;
-3. seed AvailabilityController from durable normalized state on restart;
-4. add one supervised availability provider consuming only bound generations;
-5. implement chosen detector-health policy;
-6. add user-facing Device availability schema;
-7. implement protocol-specific active probe worker(s);
-8. rootless review;
-9. privileged availability-transition integration;
-10. real WireGuard/OpenConnect target validation.
+1. add detector-readiness domain state without changing Availability semantics;
+2. extend durable Planner state with last verified normalized Availability only;
+3. split DeviceEngine binding projection from availability/readiness decoration;
+4. seed AvailabilityController from durable normalized state while forcing monitored
+   generations to PENDING after restart;
+5. make TrafficEngine consume only payload-eligible binding generations;
+6. classify readiness/availability-only route changes as proven incremental transitions
+   when previous generation is known;
+7. add user-facing Device availability schema;
+8. implement protocol-specific active probe worker(s);
+9. add status/diagnostics for UNMONITORED/PENDING/READY/FAILED;
+10. rootless expert review;
+11. privileged availability/readiness transition integration;
+12. real WireGuard/OpenConnect target validation.
+
+No production Planner/runtime wiring occurs before human approval of the readiness model
+and first user-facing probe policy.
 
 ## 8. What remains deliberately postponed
 
