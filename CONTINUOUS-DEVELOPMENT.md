@@ -137,23 +137,33 @@ checkpoint.
 Long development sessions may be interrupted by the execution environment after roughly
 45 minutes. Do not rely on subjective wall-clock tracking.
 
+Each autonomous development cycle has a **cycle interval**:
+
+- if the user explicitly specifies an interval when starting that cycle, use that value;
+- otherwise the default cycle interval is **30 minutes**.
+
+Call the selected value `CYCLE_INTERVAL`. After it is chosen for the cycle, all cadence
+logic below refers only to `CYCLE_INTERVAL`; do not substitute the default value back into
+later decisions.
+
 Each autonomous development cycle uses **Git commit timestamps as the checkpoint clock**
 and a dedicated GitHub-visible **code-cycle branch** as the external activity record.
 
 At the start of a cycle:
 
-1. create or select a dedicated branch for that autonomous cycle, named clearly enough to
+1. determine and record `CYCLE_INTERVAL`;
+2. create or select a dedicated branch for that autonomous cycle, named clearly enough to
    identify the current code cycle;
-2. all implementation, test, review and fix commits for the cycle are written to that
+3. all implementation, test, review and fix commits for the cycle are written to that
    branch;
-3. **every commit must be present on GitHub immediately after it is created**; do not keep
+4. **every commit must be present on GitHub immediately after it is created**; do not keep
    a local-only sequence of commits for later batch push;
-4. the first commit created in the cycle becomes `CYCLE_START_COMMIT`;
-5. record its **committer timestamp** `T0`;
-6. after every subsequent commit in that cycle, read that commit's **committer timestamp**
+5. the first commit created in the cycle becomes `CYCLE_START_COMMIT`;
+6. record its **committer timestamp** `T0`;
+7. after every subsequent commit in that cycle, read that commit's **committer timestamp**
    `Tn` from GitHub;
-7. compute `Tn - T0`;
-8. if the elapsed time is **30 minutes or more**, set
+8. compute `Tn - T0`;
+9. if the elapsed time is greater than or equal to `CYCLE_INTERVAL`, set
    `CHECKPOINT_PENDING=true`.
 
 The code-cycle branch is the authoritative externally observable activity trail. Chat/UI
@@ -168,11 +178,12 @@ When `CHECKPOINT_PENDING=true`:
 - post a brief human-facing checkpoint/discussion;
 - stop autonomous development until the next user turn.
 
-The 30-minute threshold is deliberately lower than the expected execution cutoff so the
-remaining margin is available to finish the current iteration cleanly.
+The selected `CYCLE_INTERVAL` is a checkpoint trigger, not a hard execution limit. The
+remaining execution margin is used to finish the current iteration cleanly.
 
 The checkpoint message must include:
 
+- `CYCLE_INTERVAL`;
 - `CYCLE_START_COMMIT` and its timestamp;
 - final checkpoint commit and timestamp;
 - elapsed cycle time;
@@ -183,8 +194,8 @@ The checkpoint message must include:
 - the next intended review unit.
 
 A new autonomous cycle starts only after the next user turn, with a new code-cycle branch
-(or a clearly reset cycle branch when explicitly chosen) and a new
-`CYCLE_START_COMMIT`.
+(or a clearly reset cycle branch when explicitly chosen), a newly selected
+`CYCLE_INTERVAL`, and a new `CYCLE_START_COMMIT`.
 
 This is a session-preservation mechanism, not a reason to create extra review documents or
 to interrupt a review unit halfway through.
