@@ -196,7 +196,7 @@ class StateStoreTests(unittest.TestCase):
             link_parent = root / "runtime"
             link_parent.symlink_to(real_parent, target_is_directory=True)
 
-            with self.assertRaisesRegex(StateStoreError, "directory must not be a symlink"):
+            with self.assertRaisesRegex(StateStoreError, "ancestor.*symlink"):
                 JsonRuntimeStateStore(link_parent / "state.json").save(make_state())
 
     def test_symlink_state_file_is_rejected(self):
