@@ -45,7 +45,8 @@ done
 }
 
 echo "STAGE 1: prepare temporary state"
-mkdir -m 0700 "$TMP"
+mkdir -m 0750 "$TMP"
+chgrp daemon "$TMP"
 
 echo "STAGE 2: create disposable namespaces"
 ip netns del "$CLI" 2>/dev/null || true
@@ -76,11 +77,13 @@ openssl req -x509 -newkey rsa:2048 -nodes \
     -subj "/CN=192.0.2.1" \
     -addext "subjectAltName=IP:192.0.2.1" \
     >/dev/null 2>&1
-chmod 0600 "$KEY" "$CERT"
+chgrp daemon "$KEY" "$CERT"
+chmod 0640 "$KEY" "$CERT"
 
 echo "STAGE 5: create ocserv password database"
 printf '%s\n%s\n' "$PASS" "$PASS" | ocpasswd -c "$PASSFILE" "$USER" >/dev/null
-chmod 0600 "$PASSFILE"
+chgrp daemon "$PASSFILE"
+chmod 0640 "$PASSFILE"
 
 echo "STAGE 6: write ocserv configuration"
 cat >"$CONF" <<EOF
@@ -90,6 +93,8 @@ udp-port = $PORT
 listen-host = 192.0.2.1
 run-as-user = nobody
 run-as-group = daemon
+isolate-workers = false
+log-level = 9
 socket-file = $TMP/ocserv.sock
 occtl-socket-file = $TMP/occtl.sock
 pid-file = $TMP/ocserv.pid
