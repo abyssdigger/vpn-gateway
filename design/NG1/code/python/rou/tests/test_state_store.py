@@ -173,6 +173,21 @@ class StateStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(StateStoreError, "group/world writable"):
                 store.load(make_config())
 
+
+    def test_symlink_ancestor_above_direct_parent_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            real = root / "real"
+            real.mkdir(mode=0o700)
+            nested = real / "nested"
+            nested.mkdir(mode=0o700)
+            alias = root / "alias"
+            alias.symlink_to(real, target_is_directory=True)
+            path = alias / "nested" / "state.json"
+
+            with self.assertRaisesRegex(StateStoreError, "ancestor.*symlink"):
+                JsonRuntimeStateStore(path).save(make_state())
+
     def test_symlink_parent_directory_is_rejected(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
