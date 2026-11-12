@@ -234,6 +234,9 @@ done
 echo "DF_MAX_ICMP_PAYLOAD=$low"
 echo "DF_MAX_IP_PACKET=$((low + 28))"
 
+python3 "$TMP/tcp-client.py" "$TARGET_B" "$TCP_PORT" 128 5 >/dev/null
+echo "PASS PREFLIGHT: WireGuard TARGET_B small TCP is reachable before PMTU suppression"
+
 ip netns exec "$ROU" nft add rule ip exp15wg output     oifname "$RIF" ip protocol icmp drop
 ip netns exec "$REMOTE" nft add rule ip exp15wgremote output     oifname "$REMOTE_LAN" ip protocol icmp drop
 
