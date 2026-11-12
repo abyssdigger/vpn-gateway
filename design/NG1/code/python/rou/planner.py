@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from ipaddress import IPv4Address
+import logging
 from typing import Callable, Mapping
 
 from .command_backend import CommandBackend, NamespaceBackend
@@ -49,6 +50,9 @@ from .traffic_state import (
     project_normal_metrics,
 )
 from .transition import TransitionKind, assess_binding_lifecycle
+
+
+LOG = logging.getLogger(__name__)
 
 
 class PlannerError(RuntimeError):
@@ -118,6 +122,13 @@ def compile_planner_projection(
     availability_provider: AvailabilityProvider | None,
     local_publication_address: IPv4Address | None,
 ) -> PlannerProjection:
+    LOG.debug(
+        "planner-projection-start interfaces=%d committed_expectations=%d "
+        "committed_metrics=%d",
+        len(snapshot.interfaces),
+        len(committed.devices.expectations),
+        len(committed.traffic.normal_metrics),
+    )
     availability = (
         availability_provider(snapshot)
         if availability_provider is not None
@@ -147,7 +158,7 @@ def compile_planner_projection(
         local_publication_address=local_publication_address,
     )
     nat = nat_provider.compile(config, devices.snapshot)
-    return PlannerProjection(
+    result = PlannerProjection(
         device_state=devices.next_state,
         bindings=devices.snapshot,
         metrics=metrics,
@@ -156,8 +167,18 @@ def compile_planner_projection(
         firewall=firewall,
         nat=nat,
     )
-
-
+    LOG.debug(
+        "planner-projection-result bound=%d over_quota=%d assignments=%d "
+        "waiting=%d tables=%d rules=%d routes=%d",
+        len(result.bindings.bound),
+        len(result.bindings.over_quota),
+        len(result.metrics.assignments),
+        len(result.metrics.waiting_for_slot),
+        len(result.allocation.profile_tables),
+        len(result.kernel.rules),
+        len(result.kernel.routes),
+    )
+    return result
 
 
 def _project_committed_generation(
@@ -299,9 +320,33 @@ def reconcile_once(
 
     ns = NamespaceBackend(namespace, host_backend)
 
+    LOG.debug(
+        "planner-reconcile-start namespace=%s profiles=%s active_devices=%s "
+        "committed_expectations=%d committed_metrics=%d",
+        namespace,
+        sorted(
+            profile.name
+            for profile in config.profiles.values()
+            if profile.enabled
+        ),
+        sorted(config.active_device_names),
+        len(committed.devices.expectations),
+        len(committed.traffic.normal_metrics),
+    )
+
     try:
         validate_active_config(config)
         initial = collect_snapshot(namespace, host_backend)
+        LOG.debug(
+            "planner-observe-initial interfaces=%s routes=%d rules=%d ip_forward=%r",
+            [
+                (item.identity.ifname, item.identity.ifindex)
+                for item in initial.interfaces
+            ],
+            len(initial.routes),
+            len(initial.rules),
+            initial.sysctl_map.get("net.ipv4.ip_forward"),
+        )
         projection = compile_planner_projection(
             config,
             committed,
@@ -318,9 +363,14 @@ def reconcile_once(
             forwarding=True,
         )
         if not current_errors_open:
+            LOG.debug("planner-decision steady-verified-open")
             next_state = _commit(projection)
             if persist_verified_state is not None:
                 persist_verified_state(next_state)
+            LOG.debug(
+                "planner-commit steady changed_kernel=false waiting=%d",
+                len(projection.metrics.waiting_for_slot),
+            )
             return PlannerResult(
                 state=next_state,
                 projection=projection,
@@ -337,6 +387,7 @@ def reconcile_once(
             forwarding=False,
         )
         if not current_errors_closed:
+            LOG.debug("planner-decision verified-closed-reopen")
             next_state = _commit(projection)
             if persist_verified_state is not None:
                 persist_verified_state(next_state)
@@ -354,10 +405,18 @@ def reconcile_once(
                 forwarding=True,
             )
             if final_errors:
+                LOG.debug(
+                    "planner-verify reopen-failed errors=%s",
+                    final_errors,
+                )
                 _best_effort_close(ns)
                 raise PlannerVerificationError(
                     "post-reopen verification failed: " + "; ".join(final_errors)
                 )
+            LOG.debug(
+                "planner-commit reopened changed_kernel=true waiting=%d",
+                len(projection.metrics.waiting_for_slot),
+            )
             return PlannerResult(
                 state=next_state,
                 projection=projection,
@@ -391,6 +450,12 @@ def reconcile_once(
             observed_nat,
         )
 
+        LOG.debug(
+            "planner-transition-assessment kind=%s reasons=%s",
+            assessment.kind.value,
+            assessment.reasons,
+        )
+
         survivors = _surviving_previous_bindings(
             previous_projection.bindings,
             projection.bindings,
@@ -405,6 +470,11 @@ def reconcile_once(
             assessment.kind is TransitionKind.BINDING_LIFECYCLE
             and survivor_prereq.ok
         ):
+            LOG.debug(
+                "planner-decision lifecycle-incremental survivors=%d new_bound=%d",
+                len(survivors.bound),
+                len(projection.bindings.bound),
+            )
             apply_namespace_prerequisites(
                 projection.bindings,
                 ns,
@@ -449,6 +519,10 @@ def reconcile_once(
                 projection.kernel,
                 prepared,
             )
+            LOG.debug(
+                "planner-apply lifecycle commands=%d",
+                len(lifecycle_plan.commands),
+            )
             execute_kernel_mutation_plan(lifecycle_plan, ns)
             apply_filter_state(projection.firewall, ns)
             apply_nat_state(projection.nat, ns)
@@ -466,6 +540,10 @@ def reconcile_once(
                 forwarding=True,
             )
             if applied_errors:
+                LOG.debug(
+                    "planner-verify lifecycle-failed errors=%s",
+                    applied_errors,
+                )
                 raise PlannerVerificationError(
                     "lifecycle verification failed: "
                     + "; ".join(applied_errors)
@@ -475,6 +553,10 @@ def reconcile_once(
             if persist_verified_state is not None:
                 persist_verified_state(next_state)
 
+            LOG.debug(
+                "planner-commit lifecycle changed_kernel=true waiting=%d",
+                len(projection.metrics.waiting_for_slot),
+            )
             return PlannerResult(
                 state=next_state,
                 projection=projection,
@@ -483,6 +565,12 @@ def reconcile_once(
                     projection.metrics.waiting_for_slot
                 ),
             )
+
+        LOG.debug(
+            "planner-decision structural-barrier assessment=%s survivor_prereq=%s",
+            assessment.reasons,
+            survivor_prereq.errors,
+        )
 
         # From this point on, all structural repair runs behind a closed barrier.
         ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"))
@@ -521,6 +609,10 @@ def reconcile_once(
             barrier_projection.kernel,
             prepared,
         )
+        LOG.debug(
+            "planner-apply structural commands=%d",
+            len(mutation_plan.commands),
+        )
         execute_kernel_mutation_plan(mutation_plan, ns)
         apply_filter_state(barrier_projection.firewall, ns)
         apply_nat_state(barrier_projection.nat, ns)
@@ -538,6 +630,10 @@ def reconcile_once(
             forwarding=False,
         )
         if applied_errors:
+            LOG.debug(
+                "planner-verify structural-closed-failed errors=%s",
+                applied_errors,
+            )
             raise PlannerVerificationError(
                 "closed-barrier verification failed: "
                 + "; ".join(applied_errors)
@@ -562,11 +658,19 @@ def reconcile_once(
             forwarding=True,
         )
         if final_errors:
+            LOG.debug(
+                "planner-verify final-open-failed errors=%s",
+                final_errors,
+            )
             _best_effort_close(ns)
             raise PlannerVerificationError(
                 "final verification failed: " + "; ".join(final_errors)
             )
 
+        LOG.debug(
+            "planner-commit structural changed_kernel=true waiting=%d",
+            len(barrier_projection.metrics.waiting_for_slot),
+        )
         return PlannerResult(
             state=next_state,
             projection=barrier_projection,
@@ -576,9 +680,19 @@ def reconcile_once(
             ),
         )
 
-    except PlannerError:
+    except PlannerError as exc:
+        LOG.debug(
+            "planner-reconcile-failed type=%s message=%s",
+            type(exc).__name__,
+            exc,
+        )
         _best_effort_close(ns)
         raise
     except Exception as exc:
+        LOG.debug(
+            "planner-reconcile-unexpected-failure type=%s message=%s",
+            type(exc).__name__,
+            exc,
+        )
         _best_effort_close(ns)
         raise PlannerError(f"reconciliation failed: {exc}") from exc
