@@ -5,7 +5,13 @@ import math
 from types import MappingProxyType
 from typing import Mapping
 
-from .availability import ProbeOutcome
+from .availability import (
+    AvailabilityPolicy,
+    AvailabilityTrackerState,
+    AvailabilityUpdate,
+    ProbeOutcome,
+    reconcile_availability,
+)
 from .device_engine import InterfaceIdentity
 
 
@@ -134,3 +140,37 @@ def require_fresh_evidence(
         outcomes[identity] = sample.outcome
 
     return FreshEvidence(outcomes)
+
+
+def reconcile_supervised_availability(
+    previous: AvailabilityTrackerState,
+    observed_interfaces: tuple[InterfaceIdentity, ...],
+    samples: Mapping[InterfaceIdentity, TimedProbeSample],
+    *,
+    now_monotonic: float,
+    freshness_policy: DetectorFreshnessPolicy,
+    availability_policy: AvailabilityPolicy,
+) -> AvailabilityUpdate:
+    """Compose freshness proof with protocol-neutral availability hysteresis.
+
+    Freshness is checked first. Missing/stale detector evidence therefore cannot advance or
+    preserve normalized availability silently through this function: supervision failure
+    is surfaced to the caller before hysteresis runs.
+
+    The caller still owns the policy consequence of DetectorSupervisionError. This helper
+    deliberately does not stop forwarding, demote a path, retry a detector or persist
+    detector state.
+    """
+
+    fresh = require_fresh_evidence(
+        observed_interfaces,
+        samples,
+        now_monotonic=now_monotonic,
+        policy=freshness_policy,
+    )
+    return reconcile_availability(
+        previous,
+        observed_interfaces,
+        fresh.outcomes,
+        availability_policy,
+    )
