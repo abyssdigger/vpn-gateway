@@ -42,7 +42,7 @@ jobs:
       - name: Install kernel networking tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y iproute2 iptables nftables ocserv openconnect openssl
+          sudo apt-get install -y iproute2 iptables nftables ocserv openconnect openssl tcpdump
 
       - name: Validate deployment shell and systemd unit
         run: |
@@ -76,3 +76,6 @@ jobs:
 
       - name: Run EXP-020 OpenConnect availability evidence
         run: sudo sh "design/experiments/EXP-020 NG1 OpenConnect availability evidence/exp-020-openconnect-availability-ci.sh"
+
+      - name: Run EXP-015 OpenConnect MTU/MSS baseline
+        run: sudo sh "design/experiments/EXP-015 NG1 MTU MSS real TCP/exp-015-openconnect-mtu-mss-ci.sh"
