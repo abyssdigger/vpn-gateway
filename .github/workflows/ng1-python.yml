@@ -2,7 +2,7 @@ name: NG1 Python validation
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, 'code-cycle-*' ]
   pull_request:
     branches: [ main ]
 
@@ -29,6 +29,7 @@ jobs:
 
 
   kernel-integration:
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
