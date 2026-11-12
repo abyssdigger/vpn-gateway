@@ -189,7 +189,7 @@ device_order = ["oc"]
 
 [profile.b]
 enabled = true
-direction = "inbound"
+direction = "outbound"
 destinations = ["10.1.0.0/16"]
 device_order = ["oc"]
 """)
