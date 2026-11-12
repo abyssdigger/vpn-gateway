@@ -73,12 +73,12 @@ class FirewallStateTests(unittest.TestCase):
             state.restore_text,
         )
         self.assertIn(
-            "-A FORWARD -i host0 -o vpns00 -d 10.0.0.0/8 "
+            "-A FORWARD -d 10.0.0.0/8 -i host0 -o vpns00 "
             "-m conntrack --ctstate NEW -j ACCEPT",
             state.restore_text,
         )
         self.assertIn(
-            "-A FORWARD -i vpns00 -o host0 -s 10.0.0.0/8 "
+            "-A FORWARD -s 10.0.0.0/8 -i vpns00 -o host0 "
             "-m conntrack --ctstate NEW -j DROP",
             state.restore_text,
         )
@@ -118,11 +118,11 @@ class FirewallStateTests(unittest.TestCase):
 
         lines = compile_filter_state(config, bindings).restore_text.splitlines()
         specific = lines.index(
-            "-A FORWARD -i vpns00 -o host0 -s 10.20.0.0/16 "
+            "-A FORWARD -s 10.20.0.0/16 -i vpns00 -o host0 "
             "-m conntrack --ctstate NEW -j DROP"
         )
         broad = lines.index(
-            "-A FORWARD -i vpns00 -o host0 -s 10.0.0.0/8 "
+            "-A FORWARD -s 10.0.0.0/8 -i vpns00 -o host0 "
             "-m conntrack --ctstate NEW -j ACCEPT"
         )
         self.assertLess(specific, broad)
@@ -342,12 +342,12 @@ class FirewallStateTests(unittest.TestCase):
             lines,
         )
         self.assertIn(
-            "-A INPUT -i host0 -d 192.0.2.2/32 -p tcp -m tcp "
+            "-A INPUT -d 192.0.2.2/32 -i host0 -p tcp -m tcp "
             "--dport 44443 -m conntrack --ctstate NEW -j ACCEPT",
             lines,
         )
         self.assertIn(
-            "-A INPUT -i host0 -d 192.0.2.2/32 -p udp -m udp "
+            "-A INPUT -d 192.0.2.2/32 -i host0 -p udp -m udp "
             "--dport 55200:55202 -m conntrack --ctstate NEW -j ACCEPT",
             lines,
         )
