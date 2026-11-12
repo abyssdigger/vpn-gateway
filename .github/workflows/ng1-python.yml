@@ -67,3 +67,6 @@ jobs:
 
       - name: Run nft policy backend round-trip
         run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_nft_policy_roundtrip.py
+
+      - name: Run full NG1 production reconcile cycle
+        run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_production_cycle.py
