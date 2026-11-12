@@ -7,7 +7,10 @@ import re
 
 from .command_backend import CommandBackend, NamespaceBackend
 from .device_engine import DeviceBindingSnapshot
+from .domain import ActiveConfig
 from .environment import collect_environment_snapshot
+from .firewall_kernel import apply_filter_state, observe_filter_state
+from .firewall_state import compile_filter_state
 from .namespace_prereq import verify_namespace_prerequisites
 
 
@@ -269,6 +272,25 @@ def verify_instance(
         if not default_ok:
             errors.append("namespace underlay default route is missing")
 
+
+    try:
+        filter_text = observe_filter_state(ns)
+    except Exception as exc:
+        errors.append(f"cannot observe namespace filter table: {exc}")
+    else:
+        required_policies = {
+            ":INPUT DROP [0:0]",
+            ":FORWARD DROP [0:0]",
+            ":OUTPUT DROP [0:0]",
+        }
+        filter_lines = set(filter_text.splitlines())
+        missing_policies = sorted(required_policies - filter_lines)
+        if missing_policies:
+            errors.append(
+                "namespace filter default policies are not fail-closed: "
+                + ", ".join(missing_policies)
+            )
+
     try:
         snapshot = collect_environment_snapshot(
             config.namespace,
@@ -372,6 +394,13 @@ def create_instance(
                 f"net/ipv6/conf/{config.inner_if}/disable_ipv6=1",
             )
         )
+
+
+        bootstrap_filter = compile_filter_state(
+            ActiveConfig({}, {}),
+            DeviceBindingSnapshot((), ()),
+        )
+        apply_filter_state(bootstrap_filter, ns)
 
         verified = verify_instance(config, host)
         if not verified.ok:
