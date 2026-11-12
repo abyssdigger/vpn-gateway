@@ -308,6 +308,28 @@ done
 echo "DF_MAX_ICMP_PAYLOAD=$low"
 echo "DF_MAX_IP_PACKET=$((low + 28))"
 
+ip netns exec "$ROU" nft add rule ip exp15 output     oifname "$RIF" ip protocol icmp drop
+ip netns exec "$REMOTE" nft add rule ip exp15remote output     oifname "$REMOTE_LAN" ip protocol icmp drop
+
+set +e
+timeout 12 python3 "$TMP/tcp-client.py" "$TARGET_B" "$TCP_PORT" 8388608 8     >"$TMP/blocked-client.log" 2>&1
+BLOCKED_RC=$?
+set -e
+
+echo "PMTU_FEEDBACK_BLOCKED_TCP_RC=$BLOCKED_RC"
+if [ "$BLOCKED_RC" -eq 0 ]; then
+    echo "OBSERVATION: production-like OpenConnect TCP completed with PMTU feedback blocked"
+    echo "EXP_015_OPENCONNECT_PRODUCTION_PATH=PASS_NO_BLACKHOLE"
+else
+    echo "OBSERVATION: production-like OpenConnect TCP failed with PMTU feedback blocked"
+    cat "$TMP/blocked-client.log"
+    echo "EXP_015_OPENCONNECT_PRODUCTION_PATH=PASS_BLACKHOLE_REPRODUCED"
+fi
+
+# Remove only the experiment's PMTU-feedback suppression before normal baseline TCP.
+ip netns exec "$ROU" nft flush chain ip exp15 output
+ip netns exec "$REMOTE" nft flush chain ip exp15remote output
+
 timeout 12 tcpdump -i "$HIF" -nn -vvv -s 0 -c 2     "tcp port $TCP_PORT and (tcp[tcpflags] & tcp-syn != 0)"     >"$CAPTURE" 2>&1 &
 TCPDUMP_PID=$!
 sleep 0.2
@@ -327,20 +349,3 @@ echo "PASS A: production-like OpenConnect large TCP round-trip succeeds"
 
 # Fresh target address and no prior transport to it. Suppress ROU-generated ICMP feedback
 # toward the host to expose any dependence on PMTUD for host -> remote-LAN TCP.
-ip netns exec "$ROU" nft add rule ip exp15 output     oifname "$RIF" ip protocol icmp drop
-ip netns exec "$REMOTE" nft add rule ip exp15remote output     oifname "$REMOTE_LAN" ip protocol icmp drop
-
-set +e
-timeout 12 python3 "$TMP/tcp-client.py" "$TARGET_B" "$TCP_PORT" 8388608 8     >"$TMP/blocked-client.log" 2>&1
-BLOCKED_RC=$?
-set -e
-
-echo "PMTU_FEEDBACK_BLOCKED_TCP_RC=$BLOCKED_RC"
-if [ "$BLOCKED_RC" -eq 0 ]; then
-    echo "OBSERVATION: production-like OpenConnect TCP completed with PMTU feedback blocked"
-    echo "EXP_015_OPENCONNECT_PRODUCTION_PATH=PASS_NO_BLACKHOLE"
-else
-    echo "OBSERVATION: production-like OpenConnect TCP failed with PMTU feedback blocked"
-    cat "$TMP/blocked-client.log"
-    echo "EXP_015_OPENCONNECT_PRODUCTION_PATH=PASS_BLACKHOLE_REPRODUCED"
-fi
