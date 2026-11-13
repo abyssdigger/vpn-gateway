@@ -9,7 +9,6 @@ from .network_rules import (
     DispatchRuleSpec,
     FlowInitiationAllowSpec,
     NetworkEndpoint,
-    NetworkRulesError,
     NetworkRulesSpec,
     PortRange,
     PredicateKind,
