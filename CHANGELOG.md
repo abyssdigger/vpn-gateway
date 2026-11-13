@@ -1,3 +1,21 @@
+## 2026-11-14 — NG2 first executable network-rules slice
+
+Started the NG2 Python reference under `design/NG2/code/python/rou`:
+
+- introduced `NetworkRulesSpec` routing/dispatch contracts;
+- kept Adapter ownership/context as a separate `NetworkRulesScope` method argument rather
+  than embedding caller usage into the common rules structure;
+- added generation-aware interface references and explicit Adapter state/result contracts;
+- added the first `PayloadRulesCalculator` routing slice with ordered paths,
+  longest-prefix dispatch, zero-path terminal blackhole, and duplicate-destination
+  ambiguity rejection;
+- added 11 rootless unit tests across the two new modules.
+
+Filtering, NAT and the Linux Adapter implementation remain intentionally deferred to the
+next slices rather than being copied wholesale from NG1.
+
+---
+
 ## 2026-11-14 — NG2 PayloadTrafficManager contracts
 
 Defined `design/NG2/payload-traffic-manager.md`:
