@@ -1,370 +1,176 @@
-# NG1 DeviceManager availability policy proposal
+# NG1 Profile-binding availability/control — design reset
 
-Status: **HUMAN DESIGN DECISION REQUIRED BEFORE IMPLEMENTATION**
+Status: **SEMANTIC MODEL AGREED; PROBE-PLANE MECHANISM PENDING EXP-022**
 
-Evidence baseline:
+> The filename is retained for link stability. Availability is no longer modeled as a
+> DeviceManager-owned global interface state.
 
-- EXP-016: ECMP hash policy prerequisite PASS; production owns
-  `net.ipv4.fib_multipath_hash_policy=1`.
-- EXP-019: WireGuard can remain bound on the same `(ifname,ifindex)` while the payload
-  path is unavailable and later recover without a new generation.
-- EXP-020: OpenConnect shows the same retained-generation outage/recovery behavior.
-- Therefore binding identity and process/interface presence are not positive availability
-  evidence for either first-class transport.
+## 1. Core abstraction
 
-This proposal deliberately stops before changing schema or production code.
+Availability answers one question:
 
-## 1. Normalized ownership boundary
+    is concrete interface A available in Profile B right now?
 
-Availability belongs to one concrete bound interface generation:
+The runtime key is conceptually:
 
-```text
-AvailabilityKey = (device_name, ifname, ifindex)
-```
+    (Profile, concrete bound interface)
 
-The provider returns only the normalized enum already used by the routing core:
+and the control result is:
 
-```text
-UNKNOWN
-AVAILABLE
-UNAVAILABLE
-```
+    ON | OFF
 
-Transport/probe/process details never enter TrafficEngine/route projection.
+`ON` means that binding may participate in that Profile's payload materialization.
+`OFF` means it may not.
 
-A new generation always begins at UNKNOWN. Availability evidence from a retired generation
-is never inherited by a same-name/new-ifindex replacement.
+Availability is therefore Profile-local. The same `vpns0` may be ON in `profile1` and OFF
+in `profile2` at the same time.
 
-## 2. Safety semantics
+## 2. Ownership boundary
 
-Positive UNAVAILABLE changes routing behavior and can make the persistent shadow fallback
-effective. Therefore it requires **positive path-failure evidence** rather than absence of
-recent success metadata.
+DeviceEngine owns Device discovery, binding, quota and publication. It reports which
+concrete interfaces are bound to each Device and does not own Profile availability.
 
-Proposed state machine:
+An external Profile-binding control layer combines:
 
-```text
-new binding
-    -> UNKNOWN
+- administrator intent from configuration;
+- current Device bindings;
+- current condition results;
 
-UNKNOWN
-    -- sufficient consecutive successes --> AVAILABLE
-    -- sufficient consecutive failures  --> UNAVAILABLE
+and produces ON/OFF for each relevant `(Profile, binding)` pair.
 
-AVAILABLE
-    -- sufficient consecutive failures  --> UNAVAILABLE
+TrafficEngine consumes the pair result, not the detector mechanics or reason strings.
 
-UNAVAILABLE
-    -- sufficient consecutive successes --> AVAILABLE
+## 3. Conditions
 
-binding generation disappears
-    -> state discarded
-```
+Availability is not synonymous with ping. It is the conjunction of the conditions selected
+for a pair by configuration and runtime policy.
 
-No timeout based solely on interface/process presence, WireGuard handshake age or
-OpenConnect process state may produce AVAILABLE or UNAVAILABLE.
+Possible conditions include:
 
-## 3. Proposed evidence primitive for schema version 1
+- interface exists and is administratively usable;
+- endpoint A is reachable through this concrete interface;
+- no manual administrative inhibit is active;
+- current time is inside an allowed schedule;
+- future Profile/interface-specific predicates.
 
-The smallest cross-transport primitive proven by both EXP-019 and EXP-020 is an active
-IPv4 path probe forced through the concrete bound interface.
+An ICMP echo check is merely the first active condition with useful experimental evidence.
 
-Candidate schema:
+When no additional control is configured, ordinary baseline interface usability is enough
+for ON. When additional conditions are configured, a fresh pair starts OFF and becomes ON
+only after all required conditions are positively satisfied.
 
-```toml
-[device.oc-main.availability]
-mode = "icmp"
-target = "172.20.130.1"
-interval = "2s"
-timeout = "750ms"
-failures = 3
-successes = 2
-```
+## 4. State lifetime
 
-Equivalent WireGuard example:
+ON/OFF is **never persisted**.
 
-```toml
-[device.wg-backup.availability]
-mode = "icmp"
-target = "172.20.126.1"
-interval = "2s"
-timeout = "750ms"
-failures = 3
-successes = 2
-```
+Availability describes now. After restart every condition is evaluated again from current
+evidence. Retrospective availability history belongs in journald/logs, including transition
+reason and relevant condition diagnostics.
 
-The exact values above are examples only and are **not proposed defaults**.
+Device binding history and deterministic metric history remain separate existing concerns.
 
-### Probe routing requirement
+## 5. Metrics and payload state
 
-A probe must be tied to the concrete interface generation being evaluated, not merely to a
-destination that ordinary routing might send through another Device.
+Metric allocation depends on configuration plus Device bindings, not ON/OFF.
 
-Implementation must therefore use an interface-bound probe mechanism proven to select the
-intended generation. For Python this may be iputils `ping -I <ifname>`, a socket using
-SO_BINDTODEVICE, or a protocol-specific equivalent, but the exact mechanism is an
-implementation experiment rather than schema semantics.
+For example:
 
-If the probe mechanism cannot prove generation-specific egress, availability remains
-UNKNOWN.
+    vpns0 -> metric 1
+    vpns1 -> metric 2
 
-## 4. Target ownership alternatives
+remains the metric projection while `(profile1, vpns0)` is OFF. Returning that pair to ON
+restores its Profile-specific materialization at metric 1; no availability-specific metric
+slot is created or retained.
 
-### Option A — explicit administrator target per Device
+There is no `UNAVAILABLE_METRIC` and no shadow payload fallback. If all pairs usable by a
+Profile are OFF, the Profile's terminal blackhole is the routing result.
 
-The administrator provides one IPv4 target known to represent the remote path.
+## 6. Complete TrafficEngine effect
 
-Advantages:
+OFF is broader than deleting one route. A future implementation must suppress every
+Profile-specific payload permission associated with that pair consistently, including:
 
-- transport-neutral;
-- explicit trust/operational semantics;
-- easy to explain and diagnose;
-- no need for DeviceManager to infer protocol-specific peer addresses.
+- its normal Profile route;
+- generated Profile direction policy for that concrete binding;
+- Profile-derived NAT contribution where applicable.
 
-Costs:
+Device-scoped state such as the binding itself and the Device traffic envelope remains
+separate. This is why ON/OFF must not be implemented as an availability field inside
+`BoundInterface`.
 
-- another required configuration field;
-- target availability may fail independently of the tunnel;
-- operator must choose a stable target.
+## 7. Probe/control plane
 
-### Option B — transport-derived target
+A condition that is responsible for turning a pair back ON must continue operating while
+the payload pair is OFF. Therefore active probes require routing and firewall state
+isolated from Profile payload tables.
 
-DeviceManager derives a natural peer/tunnel endpoint:
+Desired shape, subject to EXP-022:
 
-- WireGuard: selected peer tunnel address;
-- OpenConnect: server-side tunnel/local address.
+- dedicated probe identity/UID;
+- socket bound to the concrete interface;
+- RPDB selection restricted by probe identity, target, protocol and bound output device;
+- dedicated probe routing table;
+- fail-closed terminal action in that table;
+- separate narrow nft admission for probe request/reply;
+- no probe route in a Profile payload table.
 
-Advantages:
+## 8. Evidence already established
 
-- less configuration;
-- directly tied to transport topology.
+EXP-019 (WireGuard) and EXP-020 (OpenConnect) prove that process/interface presence can
+survive while the payload path is unusable, and that an active path probe can distinguish
+loss/recovery without ending the binding lifetime.
 
-Costs:
+EXP-021 proves on the target Debian 13 system that:
 
-- transport-specific inference rules;
-- WireGuard Device may eventually have multiple peers;
-- OpenConnect server-side probe address may not always be discoverable or reachable in the
-  same way;
-- introduces hidden policy into DeviceManager.
+- ICMP ping sockets work with empty capability sets and `NoNewPrivs=1` when a narrow
+  namespace-local `ping_group_range` admits the probe gid;
+- nft admission can be restricted to concrete ifindex, exact target and echo request/reply;
+- an interface-bound ping does not silently follow an alternate ordinary route;
+- same-name/new-ifindex does not inherit stale numeric nft admission;
+- exact numeric ifindex reuse is possible and stale numeric nft admission matches the new
+  interface if the same ifindex is deliberately reused.
 
-### Option C — explicit target with optional transport-derived default
+The last result means `(ifname,ifindex)` is useful during continuously observed lifetime
+but cannot prove continuity across a missed lifecycle/restart. This is another reason
+current availability/control state is never restored from durable storage.
 
-Advantages:
+EXP-013 and EXP-016 remain valid evidence about Linux ECMP/fallback behavior, but their old
+persistent-shadow production use is superseded by the present model.
 
-- convenient for common cases;
-- operator can override.
+## 9. Current implementation gap
 
-Costs:
+The production core has been returned to the deterministic baseline: Device bindings,
+stable metric projection, normal routes and terminal blackholes. Old global
+`UNKNOWN/AVAILABLE/UNAVAILABLE`, `UNAVAILABLE_METRIC` and shadow fallback code have been
+removed.
 
-- schema semantics become more complex immediately;
-- inferred defaults can be surprising and harder to keep Rust/backend-independent.
+The current `EnvironmentInterface` model still records identity only, not administrative
+`UP` state. That is intentional for now: Device binding must not be redefined as Profile
+availability. The future Profile-binding control layer will need current link usability
+evidence without changing DeviceEngine ownership.
 
-**Recommendation:** Option A for the first availability implementation. Keep target
-selection explicit and transport-neutral. Transport-derived convenience can be added later
-without changing normalized Availability semantics.
+## 10. Next gate — EXP-022
 
-For schema version 1 the target is Device-scoped, not ExpectedInterface-scoped. This means
-all concurrently bound interface generations of one Device must represent paths for which
-the same probe target is meaningful. If two selector/binding groups require different
-health targets, they are modeled as separate Devices. This keeps ExpectedInterface focused
-on discovery/quota and keeps one Device equal to one availability/trust domain.
+Before choosing the production condition scheduler or configuration grammar, prove that an
+active probe can live in an isolated control plane while the corresponding Profile payload
+path is absent.
 
-## 5. Cadence and hysteresis alternatives
+EXP-022 must establish at least:
 
-Availability must avoid both slow failover and flap-induced route churn.
+1. combined RPDB selectors can steer only the intended locally generated bound probe into
+   a dedicated table;
+2. ordinary payload and unrelated local traffic cannot consume the probe table;
+3. the probe remains functional with no Profile payload route for that interface;
+4. alternate paths cannot turn the probe into a false positive;
+5. interface deletion/recreation and ifindex reuse have understood fail-closed semantics;
+6. narrow nft probe admission remains sufficient.
 
-Candidate configuration concepts:
+## 11. Decisions deliberately left open
 
-- `interval`: time between probe rounds;
-- `timeout`: maximum time for one probe;
-- `failures`: consecutive failed rounds required for UNAVAILABLE;
-- `successes`: consecutive successful rounds required for AVAILABLE/recovery.
+After EXP-022, human review still needs to choose:
 
-No values should be guessed from EXP-019/020 because those experiments prove only the raw
-signal, not production timing.
-
-Two possible product directions:
-
-### Direction 1 — all values explicit
-
-No production defaults.
-
-Advantages:
-
-- no hidden operational policy;
-- exact behavior visible in config.
-
-Costs:
-
-- verbose configuration;
-- operator must understand four timing parameters.
-
-### Direction 2 — named policy presets plus optional overrides
-
-Example:
-
-```toml
-policy = "normal"
-target = "172.20.130.1"
-```
-
-with documented preset timing.
-
-Advantages:
-
-- simpler common configuration.
-
-Costs:
-
-- presets are user-visible product policy and require their own evidence/maintenance;
-- harder to change later without compatibility implications.
-
-**Recommendation:** explicit values in the first implementation unless the maintainer
-prefers a deliberately opinionated default policy.
-
-## 6. UNKNOWN semantics
-
-UNKNOWN is not failure.
-
-Proposed behavior:
-
-- a newly bound interface immediately participates in the normal tier, matching the current
-  architecture;
-- probes begin asynchronously;
-- first positive evidence may normalize it to AVAILABLE;
-- only the configured failure threshold moves it to UNAVAILABLE;
-- inability to execute the detector itself (missing binary, permission error, malformed
-  response, provider exception) does **not** produce a new availability transition;
-- a new binding with no successful detector observation remains at its initial UNKNOWN;
-- after a binding has reached AVAILABLE or UNAVAILABLE, detector malfunction preserves the
-  last normalized availability until fresh valid evidence supports another transition.
-
-This avoids the unsafe case where a detector failure converts an already proven
-UNAVAILABLE path to UNKNOWN, which would restore that path to the normal routing tier under
-the current architecture.
-
-Detector health is therefore orthogonal to normalized path availability. A persistent
-detector malfunction is operationally visible and must be surfaced in status/logs, but it
-does not itself claim either path success or path failure.
-
-## 7. Failure/recovery counters and event timing
-
-Counters and detector health are scoped to `AvailabilityKey` and reset on generation
-change.
-
-Suggested semantics:
-
-- success resets failure counter;
-- failure resets success counter;
-- transition occurs only when the relevant threshold is reached;
-- after transition, counters reset to zero;
-- event timing is monotonic-clock based;
-- probe scheduler must not use wall-clock time for thresholds.
-
-Availability changes wake Planner, but Planner still collects fresh environment state and
-does not treat the probe event payload itself as authoritative kernel state.
-
-## 8. Probe admission and firewall
-
-A locally generated probe exits through a Device interface.
-
-Current ROU OUTPUT policy intentionally denies locally generated Device-interface traffic.
-
-Therefore implementing active probes requires one explicit generated OUTPUT admission
-limited to the availability probe itself:
-
-```text
--o <bound-ifindex>
--d <target>/32
--p icmp
-ICMP echo-request
--> ACCEPT
-```
-
-This rule is generation-scoped and exists only while that binding is under availability
-management.
-
-No broad Device-interface OUTPUT allowance is introduced.
-
-This is a security-boundary change and must be approved together with the availability
-schema.
-
-## 9. Status/diagnostics
-
-For each bound interface status should expose at least:
-
-- normalized availability;
-- last probe result;
-- consecutive success/failure counters;
-- last successful probe monotonic age / human-readable elapsed duration;
-- last failed probe elapsed duration;
-- detector health/error text, without secrets;
-- configured target and timing policy.
-
-Routing/status consumers use only normalized Availability; detailed evidence remains
-diagnostic.
-
-## 10. DeviceManager execution boundary
-
-First implementation should keep process lifecycle and availability as two separable
-providers under DeviceManager:
-
-```text
-DeviceProcessProvider
-AvailabilityProvider
-```
-
-A transport can initially use only AvailabilityProvider against an externally supervised
-VPN process. This avoids making VPN process launching a prerequisite for availability
-work.
-
-Later DeviceManager can compose both without changing Planner/TrafficEngine contracts.
-
-## 11. Required implementation experiment
-
-Before production code commits to the generic ICMP provider, prove on a disposable
-namespace that the selected probe primitive:
-
-1. sends through the specified concrete interface;
-2. does not escape through an alternate route when the intended path is down;
-3. handles same-name/new-ifindex replacement without transferring probe ownership;
-4. behaves correctly with current OUTPUT default-DROP policy plus the narrow generated
-   admission;
-5. returns bounded success/failure within the configured timeout.
-
-This should become EXP-021 if the design is approved.
-
-## 12. Human decisions required
-
-Implementation should not proceed past the normalized provider skeleton until the
-maintainer chooses:
-
-1. **target ownership**
-   - A: explicit per-Device target;
-   - B: transport-derived target;
-   - C: explicit target with inferred default.
-
-2. **timing policy**
-   - explicit interval/timeout/failure/success values;
-   - or named presets/defaults.
-
-3. **probe protocol for first implementation**
-   - ICMP echo as the common primitive proposed here;
-   - or another deliberately selected protocol.
-
-4. **security policy**
-   - approve the narrow generation-scoped OUTPUT exception for availability probes.
-
-## Recommendation
-
-For the first production availability slice:
-
-- explicit per-Device IPv4 target;
-- ICMP echo;
-- all timing/hysteresis values explicit;
-- generation-scoped narrow OUTPUT admission;
-- detector failures preserve the last normalized availability and are reported separately;
-- Device process lifecycle remains a separate future provider.
-
-This is intentionally simple, visible in configuration and compatible with a later Rust
-trait/provider implementation.
+- the exact router-config grammar and schema-version transition;
+- condition composition grammar beyond the initial all-required/AND model;
+- ICMP timing, timeout and failure/recovery hysteresis;
+- APIs/grammar for future manual inhibits and schedules;
+- the final runtime component name and ownership boundary for the control evaluator.

@@ -259,7 +259,26 @@ device_order = ["oc-main", "wg-backup"]
 ## 6. Explicitly outside schema version 1
 
 - DeviceManager process lifecycle/configuration;
+- Profile-binding availability/control conditions and ON/OFF runtime state;
 - Profile warm reservation;
 - live reload/CandidateConfig administrative protocol;
 - explicit SNAT;
 - IPv6 payload policy.
+
+### Future availability/control configuration
+
+Conceptual examples such as `profile.availability = ...` are **not schema-version-1
+syntax**. Schema version 1 rejects unknown Profile fields.
+
+A future version may let an administrator request additional conditions for a
+`(Profile, concrete binding)` pair. The agreed semantic boundary is already fixed:
+
+- the configured Profile expresses intent, not detector state;
+- the pair is `ON` only when all required conditions for that pair are currently satisfied;
+- current ON/OFF state is never persisted;
+- the same concrete binding may be ON in one Profile and OFF in another;
+- metric allocation remains independent of ON/OFF;
+- probe/control routes must not be placed in Profile payload tables.
+
+The exact grammar and schema-version transition remain undecided until the isolated probe
+plane is proven by EXP-022.

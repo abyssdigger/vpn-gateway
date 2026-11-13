@@ -266,6 +266,35 @@ Capacity > 1 for remote-initiated Profiles is deliberately postponed. Any future
 requires proven flow pinning (EXP-014) so replies are steered to the concrete interface
 generation that admitted the flow.
 
+## 8.3 Profile-binding availability/control
+
+Availability is Profile-local rather than a property of a Device or interface.
+
+The useful statement is:
+
+    vpns0 IS AVAILABLE IN profile1
+
+when the externally evaluated conditions for that `(Profile, concrete binding)` pair are
+currently satisfied. The runtime pair result is `ON` or `OFF`.
+
+DeviceEngine still reports the concrete bindings of each Device. A separate control layer
+combines those bindings with administrator intent and current conditions. Conditions may
+include simple interface usability, an active endpoint probe through that interface, a
+manual inhibit, a schedule, or future Profile/interface-specific predicates.
+
+Profile itself does not know the mechanics. TrafficEngine ultimately consumes only whether
+a concrete binding is `ON` or `OFF` for that Profile.
+
+Metric projection is independent of ON/OFF. A continuously bound interface retains the
+same deterministic Profile-local metric while temporarily `OFF`; only Profile-specific
+payload materialization is suppressed.
+
+Control state is current only and is never persisted. Historical transitions and reasons
+belong in logs.
+
+Active probes are service/control traffic and must remain possible while the corresponding
+payload pair is `OFF`. Therefore their routes and admission belong to an isolated control
+plane, not to Profile payload routing tables.
 ## 9. BOU
 
 BOU is optional host-side integration.
@@ -314,7 +343,7 @@ Transport publication is proven by EXP-010 and EXP-011.
 Historical prototype evidence, including ROU v0 and EXP-012, is maintained in
 [ng1-history.md](ng1-history.md) rather than in the normative architecture.
 
-The production model is defined around:
+The production baseline is defined around:
 
 - Device / Profile separation;
 - DeviceEngine / TrafficEngine / PlannerEngine;
@@ -322,14 +351,19 @@ The production model is defined around:
 - DeviceBindingState and TrafficRuntimeState with independent commit boundaries;
 - strict destinations and ordered Profile device references;
 - ordered Device expected-interface selectors, per-selector quotas and Profile-local stable metric assignments;
-- normalized availability where UNKNOWN/AVAILABLE stay in the normal tier and positive UNAVAILABLE moves to a lower fallback tier;
-- metric ordering normal < UNAVAILABLE_METRIC < BLACKHOLE_METRIC, including /0 Profiles.
+- deterministic normal Profile routes plus one terminal blackhole;
+- no persistent shadow payload fallback and no availability-specific metric tier.
 
 The normative schema-v1 router and instance configuration contracts are recorded in
 `design/NG1/rou-config.md` and `design/NG1/rou-instance-config.md`, including Device
 NAT, publications and traffic-envelope grammar.
 
-EXP-013 passed. The common unavailable fallback uses persistent shadow membership: one
-bound member materializes as a direct-device route, while multiple bound members use one
-equal-cost direct-device multipath route at UNAVAILABLE_METRIC. This fallback is ECMP/hash
-selection, not sequential failover.
+Profile-binding availability/control is the next optional runtime overlay, not part of
+schema version 1 or the current production core. Its agreed abstraction is `(Profile,
+concrete binding) -> ON|OFF`; the exact configuration grammar remains gated by EXP-022 and
+subsequent design review.
+
+EXP-013 and EXP-016 remain valid Linux/FIB evidence, but the old persistent-shadow
+production decision they supported has been superseded. EXP-019/020 prove that tunnel
+presence can outlive path liveness, and EXP-021 proves the first narrow unprivileged ICMP
+condition mechanism plus the exact-ifindex-reuse boundary.
