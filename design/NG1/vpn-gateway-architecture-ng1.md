@@ -1297,13 +1297,16 @@ must maintain independent per-peer association state.
 Production reconciliation distinguishes **ordinary lifecycle transition** from
 **structural/unknown drift**.
 
-Ordinary lifecycle transitions include verified binding appearance/disappearance and
-normalized availability changes. They are repaired incrementally with RPDB dispatch
-retained.
+Ordinary lifecycle transitions include verified binding appearance/disappearance. They are
+repaired incrementally with RPDB dispatch retained.
+
+Future Profile-binding ON/OFF changes are a distinct Profile-local control transition and
+may use the same incremental path only after complete previous/new route and packet-policy
+generations can be proven.
 
 Lifecycle route mutation is a semantic diff, **not a full Profile-table flush**. The
 terminal blackhole default in every affected Profile table must remain continuously
-installed while stale normal/fallback routes are deleted and missing routes are added.
+installed while stale normal routes are deleted and missing routes are added.
 This is required because Profiles may overlap: if a more-specific Profile table were
 temporarily empty, RPDB lookup could continue to a later broader Profile rule and cross a
 policy boundary. Preserving the table-local terminal blackhole prevents that fall-through.
