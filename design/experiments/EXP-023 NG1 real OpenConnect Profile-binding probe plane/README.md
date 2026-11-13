@@ -22,7 +22,7 @@ Relevant EXP-011 baseline:
 - ocserv host `testing` = `192.168.201.107`;
 - external endpoint TCP/UDP `44443`;
 - `pri` = remote `192.168.201.108`, VPN peer `172.20.130.6`;
-- `sec` = remote `192.168.201.199`, VPN peer `172.20.130.5`;
+- `sec` = remote `192.168.201.199` in the historical EXP-011 run; current EXP-023 stand uses `192.168.201.109`, VPN peer `172.20.130.5`;
 - with normal host ocserv, the two server-side interfaces materialize as current `vpns*`
   bindings.
 
