@@ -13,6 +13,8 @@ from .network_rules import (
     PortRange,
     PredicateKind,
     RoutingDomainSpec,
+    SourceNatSpec,
+    SourceNatTarget,
     TerminalDisposition,
     TrafficAllowSpec,
     TrafficPredicate,
@@ -35,6 +37,11 @@ class PayloadProtocol(str, Enum):
     TCP = "tcp"
     UDP = "udp"
     ICMP = "icmp"
+
+
+class PayloadNatMode(str, Enum):
+    NONE = "none"
+    MASQUERADE = "masquerade"
 
 
 @dataclass(frozen=True, order=True)
@@ -105,6 +112,7 @@ class TrafficEnvelope:
 class PayloadPath:
     identity: InterfaceIdentity
     traffic_envelope: TrafficEnvelope | None = None
+    nat_mode: PayloadNatMode = PayloadNatMode.NONE
 
 
 @dataclass(frozen=True)
@@ -270,6 +278,7 @@ class PayloadRulesCalculator:
         dispatch_rules: list[DispatchRuleSpec] = []
         traffic_allows: list[TrafficAllowSpec] = []
         flow_allows: list[FlowInitiationAllowSpec] = []
+        source_nat: list[SourceNatSpec] = []
 
         for profile in request.profiles:
             routing_domains.append(
@@ -361,6 +370,20 @@ class PayloadRulesCalculator:
                                 )
                             )
 
+                    if path.nat_mode is PayloadNatMode.MASQUERADE:
+                        source_nat.append(
+                            SourceNatSpec(
+                                source=LOCAL_NETWORK,
+                                egress=path_endpoint,
+                                predicate=_destination_predicate(
+                                    destination,
+                                    destination_space,
+                                    EnvelopeDirection.TO_PATH,
+                                ),
+                                target=SourceNatTarget.EGRESS_ADDRESS,
+                            )
+                        )
+
         dispatch_rules.sort(
             key=lambda rule: (
                 -rule.destination.prefixlen,
@@ -374,4 +397,5 @@ class PayloadRulesCalculator:
             dispatch_rules=tuple(dispatch_rules),
             traffic_allows=tuple(traffic_allows),
             flow_initiation_allows=tuple(flow_allows),
+            source_nat=tuple(source_nat),
         )
