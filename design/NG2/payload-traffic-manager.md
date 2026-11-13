@@ -399,12 +399,16 @@ Adapter обязан сам корректно реализовать собст
 Минимальный контракт:
 
 ```text
-apply(spec: NetworkRulesSpec) -> ActionResult
+apply(scope, spec: NetworkRulesSpec) -> ActionResult
 
-renewState() -> ActionResult
+renewState(scope) -> ActionResult
 
-getLastState() -> NetworkRulesState
+getLastState(scope) -> NetworkRulesState
 ```
+
+`scope` задает принадлежащий caller'у участок network-rules domain и является параметром
+операции Adapter, а не частью `NetworkRulesSpec`. `NetworkRulesSpec` описывает только
+требуемые правила и не содержит нюансов конкретного использования Adapter.
 
 Дополнительные методы допустимы только при отдельной смысловой необходимости.
 
@@ -422,7 +426,7 @@ FAILURE + diagnostic
 #### apply()
 
 ```text
-apply(spec) -> SUCCESS
+apply(scope, spec) -> SUCCESS
 ```
 
 означает:
@@ -453,7 +457,7 @@ fresh verification.
 #### renewState()
 
 ```text
-renewState() -> SUCCESS
+renewState(scope) -> SUCCESS
 ```
 
 означает:
@@ -474,7 +478,7 @@ authoritative fresh observation.
 
 #### getLastState()
 
-`getLastState()`:
+`getLastState(scope)`:
 
 - не выполняет внешнего I/O;
 - возвращает последнюю явно поддерживаемую Adapter projection;
