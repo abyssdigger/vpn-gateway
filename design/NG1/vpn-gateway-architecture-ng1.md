@@ -1030,16 +1030,19 @@ Conditions that must continue operating while a pair is `OFF` cannot depend on t
 Profile payload route they control. Active probes therefore require a service/control
 plane isolated from Profile payload tables.
 
-EXP-021 proves the basic ICMP mechanism but does not establish the final routing isolation.
-The next gate, EXP-022, must prove a dedicated availability probe plane using separate
-routing/RPDB and narrow firewall state, including:
+EXP-022 proves the dedicated availability probe plane using separate routing/RPDB and
+narrow firewall state. The proven properties include:
 
 - probe traffic cannot escape through another Device;
 - payload traffic cannot consume probe-only routes;
 - a probe continues while the corresponding Profile pair is `OFF`;
-- deletion/recreation and ifindex reuse do not transfer current control state.
+- same-name/new-ifindex does not inherit a working stale probe plane;
+- exact numeric ifindex reuse can reactivate stale RPDB+nft selectors once the missing
+  probe route is recreated, so numeric ifindex is not a durable generation identity.
 
-No probe/control-plane routes are placed in Profile payload tables.
+No probe/control-plane routes are placed in Profile payload tables. After any observation
+continuity break or binding recreation, the current probe-plane generation must be rebuilt
+and verified as a whole rather than inferred from matching `(ifname,ifindex)`.
 
 ### 12.2 State and transition semantics
 
@@ -1467,6 +1470,6 @@ ROU does not seize or rewrite unrelated host VPN routes.
 74. Availability conditions are optional external Profile-binding controls. Ping is one possible condition, not the definition of availability; no availability state or result is persisted.
 75. EXP-016 remains evidence for Linux ECMP behavior, but fib_multipath_hash_policy is not a production prerequisite while NG1 has no ECMP shadow payload fallback.
 76. Incremental lifecycle route repair never flushes a Profile table or removes its terminal blackhole; the blackhole remains continuously installed so a temporarily missing more-specific route cannot fall through to a broader overlapping Profile rule.
-77. Production nft policy matches dynamic bound interfaces by numeric ifindex and verifies compiler-owned markers during continuous observation. EXP-021 proves exact numeric ifindex reuse is possible; after an unobserved lifetime boundary, matching (ifname,ifindex) is not proof that the old interface generation survived.
+77. Production nft policy matches dynamic bound interfaces by numeric ifindex and verifies compiler-owned markers during continuous observation. EXP-021 proves exact numeric ifindex reuse is possible, and EXP-022 proves stale RPDB+nft selectors can become effective again after such reuse if a missing route is restored. After an unobserved lifetime boundary, matching (ifname,ifindex) is not proof that the old interface generation survived; current control-plane state must be rebuilt and verified.
 78. Incremental binding admission installs route state first, required NAT second, and generated FORWARD admission last; a newly routable MASQUERADE Device is never intentionally admitted before translation state exists.
 79. With unchanged bindings/RPDB/policy, an observed owned-route set that is a strict subset of the unchanged desired route generation may be repaired additively without the global barrier only when every terminal Profile blackhole remains installed; any extra/stale owned route remains structural drift.

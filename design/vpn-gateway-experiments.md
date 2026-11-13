@@ -1,13 +1,13 @@
 ## EXP-022 — NG1: isolated Profile-binding probe plane
 
-**Статус:** READY FOR TARGET RUN  
+**Статус:** COMPLETE — PASS на target Debian 13  
 **Architecture baseline:** NG1 Profile-binding availability/control reset after EXP-021  
 **Design:** [EXP-022 README](experiments/EXP-022%20NG1%20isolated%20availability%20probe%20plane/README.md)
 
-Цель: доказать отдельный service/control routing plane для active availability condition:
+Результат: доказан отдельный service/control routing plane для active availability condition:
 комбинированный `uidrange + ipproto + to + oif` RPDB selector, отдельную probe table с
 fail-closed terminal route и узкий nft admission. Profile payload route через проверяемый
-интерфейс при этом отсутствует.
+интерфейс при этом отсутствует. Дополнительно доказано, что exact-ifindex reuse способен реактивировать stale RPDB+nft selectors после восстановления probe-route; numeric ifindex не является durable generation identity.
 
 ---
 

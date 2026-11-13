@@ -1,6 +1,6 @@
 # EXP-022 — NG1 isolated Profile-binding probe plane
 
-**Status:** READY FOR TARGET RUN  
+**Status:** PASS — target Debian 13  
 **Architecture baseline:** NG1 Profile-binding availability/control reset after EXP-021  
 **Type:** disposable-netns RPDB / routing-table / nft isolation experiment
 
@@ -106,3 +106,15 @@ It proves or rejects the isolated control-plane primitive first.
 ## Artifact
 
 `exp-022-isolated-probe-plane.sh`
+
+
+## Target result
+
+The final target run completed with `EXP_022_ISOLATED_PROBE_PLANE=PASS`.
+
+See [EXP-022-result-20261113.md](EXP-022-result-20261113.md).
+
+The strongest boundary result is exact-ifindex reuse: stale RPDB+nft selectors can become
+effective again if a recreated interface reuses the same numeric ifindex and the missing
+probe route is restored. Therefore exact numeric ifindex must never be treated as a durable
+interface-generation identity across a missed lifecycle boundary or daemon restart.

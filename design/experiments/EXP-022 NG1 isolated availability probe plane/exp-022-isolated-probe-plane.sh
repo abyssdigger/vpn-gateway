@@ -41,6 +41,17 @@ fail() {
     exit 1
 }
 
+diag_fail() {
+    message=$1
+    shift
+    echo "FAIL_DIAGNOSTIC_BEGIN" >&2
+    if [ "$#" -gt 0 ]; then
+        "$@" >&2 2>&1 || true
+    fi
+    echo "FAIL_DIAGNOSTIC_END" >&2
+    fail "$message"
+}
+
 for cmd in ip nft ping setpriv grep awk; do
     command -v "$cmd" >/dev/null 2>&1 || fail "missing command $cmd"
 done
@@ -184,7 +195,7 @@ echo "STAGE 2: prove ordinary payload path is alt0"
 ROUTE_GET=$(ip -n "$ROU" route get "$TARGET")
 printf 'ORDINARY_ROUTE_GET=%s\n' "$ROUTE_GET"
 printf '%s\n' "$ROUTE_GET" | grep -q "dev $ALT_IF" ||
-    fail "ordinary route does not select alt0"
+    diag_fail "ordinary route does not select alt0" printf '%s\n' "$ROUTE_GET"
 ip netns exec "$HOST" ping -n -c 1 -W 1 "$TARGET" >/dev/null ||
     fail "forwarded ordinary payload cannot reach target through alt0"
 echo "PASS A: ordinary/main payload path reaches target through alt0"
@@ -222,7 +233,7 @@ PROBE_ROUTE_GET=$(ip -n "$ROU" route get "$TARGET" \
     uid "$PROBE_UID" ipproto icmp oif "$VPN_IF")
 printf 'PROBE_ROUTE_GET=%s\n' "$PROBE_ROUTE_GET"
 printf '%s\n' "$PROBE_ROUTE_GET" | grep -q "via 198.18.221.1 dev $VPN_IF" ||
-    fail "probe-selector route lookup did not use dedicated vpn0 route"
+    diag_fail "probe-selector route lookup did not use dedicated vpn0 route" printf '%s\n' "$PROBE_ROUTE_GET"
 echo "PASS B1: selector-specific route lookup resolves through dedicated probe table"
 
 echo "STAGE 5: prove bound dedicated probe uses vpn0, not ordinary alt0"
