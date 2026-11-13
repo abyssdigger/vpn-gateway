@@ -14,6 +14,8 @@ from rou.network_rules import (
     PortRange,
     PredicateKind,
     RoutingDomainSpec,
+    SourceNatSpec,
+    SourceNatTarget,
     StateKnowledge,
     TerminalDisposition,
     TrafficPredicate,
@@ -109,6 +111,15 @@ class NetworkRulesContractTests(unittest.TestCase):
             ).kind,
             PredicateKind.ALWAYS,
         )
+
+    def test_source_nat_requires_concrete_egress_path(self):
+        with self.assertRaises(NetworkRulesError):
+            SourceNatSpec(
+                source=NetworkEndpoint.local_network(),
+                egress=NetworkEndpoint.local_network(),
+                predicate=TrafficPredicate.always(),
+                target=SourceNatTarget.EGRESS_ADDRESS,
+            )
 
     def test_unknown_state_cannot_claim_rules(self):
         with self.assertRaises(NetworkRulesError):
