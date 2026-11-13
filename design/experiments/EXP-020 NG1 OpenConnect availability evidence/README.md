@@ -1,5 +1,10 @@
 # EXP-020 — NG1 OpenConnect availability evidence
 
+> **Current interpretation:** this experiment proves that OpenConnect process/interface
+> presence is insufficient as a path-liveness condition. It does not define global
+> interface availability. In the current model an active probe may be one condition used
+> to decide whether a concrete OpenConnect binding is AVAILABLE in a particular Profile.
+
 **Status:** PASS — raw OpenConnect availability evidence  
 **Architecture baseline:** NG1 Draft 5 + first production source baseline  
 **Type:** real ocserv/OpenConnect-in-netns liveness experiment

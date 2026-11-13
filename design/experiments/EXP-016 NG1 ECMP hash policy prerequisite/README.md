@@ -1,5 +1,10 @@
 # EXP-016 — NG1 ECMP hash-policy prerequisite
 
+> **Current architecture note:** the PASS remains valid ECMP/hash evidence. Because the
+> persistent shadow payload fallback has been removed, `fib_multipath_hash_policy=1` is no
+> longer a production NG1 namespace prerequisite. Keep this result as evidence for any
+> future feature that deliberately introduces ECMP.
+
 **Status:** PASS  
 **Architecture baseline:** NG1 Draft 5 after 2026-11-12 correction review  
 **Type:** namespace sysctl / Linux FIB ECMP behavior

@@ -1,5 +1,11 @@
 # EXP-021 — NG1 ICMP probe admission and interface-generation boundary
 
+> **Current interpretation:** ICMP is a proven candidate availability *condition*, not the
+> definition of availability. Availability is the current ON/OFF result for a
+> `(Profile, concrete binding)` pair. That result is never persisted. Exact ifindex reuse
+> therefore constrains control-plane generation handling, but never licenses restoration
+> of an old availability result.
+
 **Status:** PASS — target Debian 13 kernel/mechanism evidence  
 **Architecture baseline:** NG1 Draft 5 production source baseline  
 **Type:** disposable-netns kernel/mechanism experiment
