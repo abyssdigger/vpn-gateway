@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from ipaddress import IPv4Network
 
 from .device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
-from .domain import ActiveConfig, Availability
-from .metrics import BLACKHOLE_METRIC, UNAVAILABLE_METRIC
+from .domain import ActiveConfig
+from .metrics import BLACKHOLE_METRIC
 from .traffic_state import TrafficProjection
 
 
@@ -17,21 +17,15 @@ class DirectRouteIntent:
 
 
 @dataclass(frozen=True)
-class FallbackRouteIntent:
-    destination: IPv4Network
-    members: tuple[InterfaceIdentity, ...]
-    metric: int = UNAVAILABLE_METRIC
-
-
-@dataclass(frozen=True)
 class ProfileRouteIntent:
     profile_name: str
     normal_routes: tuple[DirectRouteIntent, ...]
-    fallback_routes: tuple[FallbackRouteIntent, ...]
     terminal_blackhole_metric: int = BLACKHOLE_METRIC
 
 
-def _binding_index(bindings: DeviceBindingSnapshot) -> dict[InterfaceIdentity, BoundInterface]:
+def _binding_index(
+    bindings: DeviceBindingSnapshot,
+) -> dict[InterfaceIdentity, BoundInterface]:
     out: dict[InterfaceIdentity, BoundInterface] = {}
     for binding in bindings.bound:
         if binding.identity in out:
@@ -40,46 +34,20 @@ def _binding_index(bindings: DeviceBindingSnapshot) -> dict[InterfaceIdentity, B
     return out
 
 
-def _profile_bound_members(
-    config: ActiveConfig,
-    profile_name: str,
-    bindings: DeviceBindingSnapshot,
-) -> tuple[InterfaceIdentity, ...]:
-    profile = config.profiles[profile_name]
-    members: list[InterfaceIdentity] = []
-
-    for device_name in profile.device_order:
-        device = config.devices[device_name]
-        if not device.enabled:
-            continue
-
-        for expected_index in range(len(device.expected_interfaces)):
-            for binding in bindings.bound:
-                if (
-                    binding.device_name == device_name
-                    and binding.expected_index == expected_index
-                ):
-                    members.append(binding.identity)
-
-    return tuple(members)
-
-
 def compile_profile_route_intents(
     config: ActiveConfig,
     bindings: DeviceBindingSnapshot,
     metrics: TrafficProjection,
 ) -> tuple[ProfileRouteIntent, ...]:
-    """Compile kernel-independent Profile route intent.
+    """Compile the baseline Profile payload-route intent.
 
-    EXP-013 established the persistent-shadow model:
+    The baseline is deliberately independent of future availability mechanics: every
+    metric-assigned bound interface contributes its deterministic normal route, and every
+    Profile retains one terminal blackhole.
 
-    - every bound interface of a Profile is always a member of its fallback route at
-      UNAVAILABLE_METRIC;
-    - UNKNOWN and AVAILABLE paths additionally receive their stable normal route;
-    - UNAVAILABLE removes only the normal route, leaving fallback membership unchanged;
-    - one fallback member materializes as a direct-device route, while two or more
-      members materialize as one equal-cost direct-device multipath route;
-    - equal-cost fallback is ECMP/hash selection, not sequential retry.
+    A future Profile-binding control layer may suppress Profile-specific materialization
+    for a concrete (Profile, binding) pair, but it must do so outside DeviceEngine and
+    without introducing a shadow payload fallback tier.
     """
 
     binding_by_identity = _binding_index(bindings)
@@ -123,14 +91,8 @@ def compile_profile_route_intents(
             continue
 
         normal_routes: list[DirectRouteIntent] = []
-        fallback_routes: list[FallbackRouteIntent] = []
-        fallback_members = _profile_bound_members(config, profile.name, bindings)
-
         for destination in profile.destinations:
             for assignment in assignments_by_profile.get(profile.name, []):
-                binding = binding_by_identity[assignment.identity]
-                if binding.availability is Availability.UNAVAILABLE:
-                    continue
                 normal_routes.append(
                     DirectRouteIntent(
                         destination=destination,
@@ -139,19 +101,10 @@ def compile_profile_route_intents(
                     )
                 )
 
-            if fallback_members:
-                fallback_routes.append(
-                    FallbackRouteIntent(
-                        destination=destination,
-                        members=fallback_members,
-                    )
-                )
-
         out.append(
             ProfileRouteIntent(
                 profile_name=profile.name,
                 normal_routes=tuple(normal_routes),
-                fallback_routes=tuple(fallback_routes),
             )
         )
 

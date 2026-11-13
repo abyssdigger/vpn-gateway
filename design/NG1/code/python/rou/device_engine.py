@@ -5,7 +5,7 @@ import logging
 from types import MappingProxyType
 from typing import Iterable, Mapping
 
-from .domain import ActiveConfig, Availability
+from .domain import ActiveConfig
 
 
 LOG = logging.getLogger(__name__)
@@ -27,7 +27,6 @@ class BoundInterface:
     device_name: str
     expected_index: int
     identity: InterfaceIdentity
-    availability: Availability = Availability.UNKNOWN
 
 
 @dataclass(frozen=True)
@@ -68,11 +67,9 @@ class DeviceReconcileResult:
     snapshot: DeviceBindingSnapshot
 
 
-
 def binding_snapshot_from_state(
     config: ActiveConfig,
     state: DeviceBindingState,
-    availability: Mapping[InterfaceIdentity, Availability] | None = None,
 ) -> DeviceBindingSnapshot:
     """Reconstruct the previously committed binding snapshot.
 
@@ -80,12 +77,11 @@ def binding_snapshot_from_state(
     previous bound/over-quota split lets Planner prove whether observed policy is the old
     verified generation during an ordinary interface lifecycle transition.
 
-    Availability is not persisted in schema version 1 because the production trigger is
-    deliberately deferred; callers may inject explicit historical availability later when
-    DeviceManager owns that state.
+    Profile-specific availability/control is intentionally not DeviceEngine state. It is
+    evaluated outside the Device binding model and must never be reconstructed from this
+    durable history.
     """
 
-    availability = availability or {}
     active_devices = config.active_device_names
     bound: list[BoundInterface] = []
     over_quota: list[BoundInterface] = []
@@ -108,10 +104,6 @@ def binding_snapshot_from_state(
                     device_name=device_name,
                     expected_index=expected_index,
                     identity=identity,
-                    availability=availability.get(
-                        identity,
-                        Availability.UNKNOWN,
-                    ),
                 )
                 if position < expected.interface_quota:
                     bound.append(item)
@@ -125,7 +117,6 @@ def reconcile_devices(
     config: ActiveConfig,
     previous: DeviceBindingState,
     interfaces: Iterable[EnvironmentInterface],
-    availability: Mapping[InterfaceIdentity, Availability] | None = None,
 ) -> DeviceReconcileResult:
     """Project DeviceEngine binding state from one fresh ordered environment snapshot.
 
@@ -134,11 +125,13 @@ def reconcile_devices(
     the first N candidates for an ExpectedInterface; excess candidates remain observable
     but do not become TrafficEngine inputs.
 
+    DeviceEngine answers only which concrete interfaces are bound to Devices. It does not
+    decide whether a bound interface is currently available to any particular Profile.
+
     This function is deliberately mutation-free. The caller owns the
     observe/apply/fresh-observe/verify/commit boundary.
     """
 
-    availability = availability or {}
     observed = tuple(interfaces)
     LOG.debug(
         "device-reconcile-start observed=%s previous_expectations=%d active_devices=%s",
@@ -190,7 +183,6 @@ def reconcile_devices(
                     device_name=device_name,
                     expected_index=expected_index,
                     identity=identity,
-                    availability=availability.get(identity, Availability.UNKNOWN),
                 )
                 if position < expected.interface_quota:
                     bound.append(item)
@@ -209,7 +201,6 @@ def reconcile_devices(
                 item.expected_index,
                 item.identity.ifname,
                 item.identity.ifindex,
-                item.availability.value,
             )
             for item in result.snapshot.bound
         ],

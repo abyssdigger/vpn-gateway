@@ -5,9 +5,8 @@ from dataclasses import dataclass
 from .domain import ActiveConfig, Profile
 
 FIRST_NORMAL_METRIC = 1
-UNAVAILABLE_METRIC = 65535
 BLACKHOLE_METRIC = 65536
-MAX_NORMAL_METRIC = UNAVAILABLE_METRIC - 1
+MAX_NORMAL_METRIC = BLACKHOLE_METRIC - 1
 
 
 class MetricLayoutError(ValueError):
@@ -26,7 +25,10 @@ class ExpectedMetricRange:
         return self.end - self.start + 1
 
 
-def compile_profile_metric_layout(config: ActiveConfig, profile: Profile) -> tuple[ExpectedMetricRange, ...]:
+def compile_profile_metric_layout(
+    config: ActiveConfig,
+    profile: Profile,
+) -> tuple[ExpectedMetricRange, ...]:
     if not profile.enabled:
         return ()
 
@@ -42,7 +44,7 @@ def compile_profile_metric_layout(config: ActiveConfig, profile: Profile) -> tup
             if end > MAX_NORMAL_METRIC:
                 raise MetricLayoutError(
                     f"profile {profile.name!r} requires normal metric {end}, "
-                    f"but normal metrics must be < {UNAVAILABLE_METRIC}"
+                    f"but normal metrics must be < {BLACKHOLE_METRIC}"
                 )
             out.append(ExpectedMetricRange(device_name, index, cursor, end))
             cursor = end + 1
@@ -50,7 +52,9 @@ def compile_profile_metric_layout(config: ActiveConfig, profile: Profile) -> tup
     return tuple(out)
 
 
-def compile_all_metric_layouts(config: ActiveConfig) -> dict[str, tuple[ExpectedMetricRange, ...]]:
+def compile_all_metric_layouts(
+    config: ActiveConfig,
+) -> dict[str, tuple[ExpectedMetricRange, ...]]:
     return {
         profile.name: compile_profile_metric_layout(config, profile)
         for profile in config.profiles.values()

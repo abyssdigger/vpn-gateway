@@ -7,7 +7,6 @@ from .device_engine import DeviceBindingSnapshot
 from .domain import ActiveConfig
 from .environment import EnvironmentSnapshot, KernelRoute, KernelRule, RouteNexthop
 from .kernel_allocation import KernelAllocation, MAX_OWNED_RULE_PRIORITY
-from .metrics import BLACKHOLE_METRIC
 from .route_intent import compile_profile_route_intents
 from .traffic_state import TrafficProjection
 
@@ -80,33 +79,6 @@ def compile_kernel_desired_state(
                     ifname=item.identity.ifname,
                 )
             )
-
-        for item in profile_intent.fallback_routes:
-            if len(item.members) == 1:
-                routes.append(
-                    KernelRouteSpec(
-                        table=table,
-                        destination=item.destination,
-                        route_type="unicast",
-                        protocol=ROUTE_PROTOCOL,
-                        metric=item.metric,
-                        ifname=item.members[0].ifname,
-                    )
-                )
-            elif len(item.members) > 1:
-                routes.append(
-                    KernelRouteSpec(
-                        table=table,
-                        destination=item.destination,
-                        route_type="unicast",
-                        protocol=ROUTE_PROTOCOL,
-                        metric=item.metric,
-                        nexthops=tuple(
-                            RouteNexthop(member.ifname, 1)
-                            for member in item.members
-                        ),
-                    )
-                )
 
         routes.append(
             KernelRouteSpec(
