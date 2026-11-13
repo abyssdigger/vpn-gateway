@@ -1,3 +1,33 @@
+## 2026-11-13 — NG2 Engines/Machinery taxonomy and runtime boundary correction
+
+The reusable component model was refined into two component families:
+
+- `Engines` are asynchronous event-space participants: `Manager` and `Agent`;
+- `Machinery` is invoked from another execution flow: `Calculator`, `Adapter`,
+  and `Driver`;
+- Machinery is additionally classified as `Direct` or `Indirect` depending on whether
+  the requested result returns through the call or arrives later through event space;
+- Machinery is externally stateless to its caller even when its hidden implementation is
+  internally stateful;
+- `Adapter` now denotes a semantic/domain boundary and may hide an arbitrarily complex
+  lower subsystem;
+- `Driver` denotes the direct technical boundary to an external mechanism;
+- the complete synchronous dependency graph inside each visible domain must be a DAG, and
+  an adapted lower domain must not establish an independent synchronous back-edge into the
+  caller's domain.
+
+The NG2 runtime model was corrected accordingly:
+
+- future VPN process/device lifecycle management is no longer modeled as a current
+  `DeviceManager`;
+- active path checks are owned by `AvailabilityProbeManager`, whose managed domain is the
+  probe subsystem rather than endpoint availability itself;
+- `TrafficManager` is narrowed/named `PayloadTrafficManager`;
+- probe, payload-traffic and publication domains remain separate even when they reuse the
+  same lower network-rule Machinery.
+
+---
+
 ## 2026-11-13 — NG2 component and runtime event model
 
 VPN-GATE enters NG2 as a component-architecture redesign rather than a mechanical NG1
