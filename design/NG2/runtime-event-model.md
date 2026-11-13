@@ -109,7 +109,9 @@ InfoEvents.
 
 ### 2.4. PayloadTrafficManager
 
-`PayloadTrafficManager` управляет payload network policy VPN-GATE.
+`PayloadTrafficManager` управляет payload network policy VPN-GATE. Его внутренняя
+декомпозиция и Machinery contracts зафиксированы в
+`design/NG2/payload-traffic-manager.md`.
 
 Его предметная область включает только правила, определяющие payload forwarding:
 
