@@ -63,7 +63,7 @@ create_primary() {
 
     ip -n "$ROU" addr add "$ROU_PRI_ADDR" dev "$VPN_IF"
     ip -n "$PRI" addr add "$PRI_ADDR" dev "$PRI_IF"
-    ip -n "$PRI" addr add "$TARGET/32" dev "$PRI_IF"
+    ip -n "$PRI" addr replace "$TARGET/32" dev lo
     ip -n "$ROU" link set "$VPN_IF" up
     ip -n "$PRI" link set "$PRI_IF" up
 }
@@ -93,7 +93,7 @@ unbound_probe() {
 }
 
 install_probe_route() {
-    ip -n "$ROU" route replace table "$PROBE_TABLE" "$TARGET/32" dev "$VPN_IF"
+    ip -n "$ROU" route replace table "$PROBE_TABLE" "$TARGET/32" via 198.18.221.1 dev "$VPN_IF"
     if ! ip -n "$ROU" route show table "$PROBE_TABLE" | grep -q '^unreachable default'; then
         ip -n "$ROU" route add table "$PROBE_TABLE" unreachable default metric 42760
     fi
@@ -157,7 +157,7 @@ create_primary
 ip -n "$ROU" link add name "$ALT_IF" type veth peer name "$ALT_PEER_IF" netns "$ALT"
 ip -n "$ROU" addr add "$ROU_ALT_ADDR" dev "$ALT_IF"
 ip -n "$ALT" addr add "$ALT_ADDR" dev "$ALT_PEER_IF"
-ip -n "$ALT" addr add "$TARGET/32" dev "$ALT_PEER_IF"
+ip -n "$ALT" addr add "$TARGET/32" dev lo
 ip -n "$ROU" link set "$ALT_IF" up
 ip -n "$ALT" link set "$ALT_PEER_IF" up
 
@@ -167,7 +167,7 @@ ip -n "$HOST" addr add "$HOST_ADDR" dev "$HOST_IF"
 ip -n "$ROU" link set "$LAN_IF" up
 ip -n "$HOST" link set "$HOST_IF" up
 
-ip -n "$ROU" route replace "$TARGET/32" dev "$ALT_IF"
+ip -n "$ROU" route replace "$TARGET/32" via 198.18.222.1 dev "$ALT_IF"
 ip -n "$HOST" route replace "$TARGET/32" via 198.18.223.2 dev "$HOST_IF"
 ip -n "$ALT" route replace 198.18.223.0/30 via 198.18.222.2 dev "$ALT_PEER_IF"
 ip netns exec "$ROU" sysctl -q -w net.ipv4.ip_forward=1
@@ -183,7 +183,13 @@ ip netns exec "$HOST" ping -n -c 1 -W 1 "$TARGET" >/dev/null ||
     fail "forwarded ordinary payload cannot reach target through alt0"
 echo "PASS A: ordinary/main payload path reaches target through alt0"
 
-echo "STAGE 3: install isolated probe plane"
+echo "STAGE 3: prove bound probe has no usable vpn0 route before control plane"
+if probe >/dev/null 2>&1; then
+    fail "bound probe unexpectedly reached routed target before probe plane existed"
+fi
+echo "PASS B0: bound probe cannot reach routed target before probe plane exists"
+
+echo "STAGE 4: install isolated probe plane"
 OLD_INDEX=$(ip netns exec "$ROU" cat "/sys/class/net/$VPN_IF/ifindex")
 refresh_probe_plane "$OLD_INDEX"
 show_probe_plane
@@ -200,13 +206,20 @@ printf '%s\n' "$RULE_TEXT" | grep -q "oif $VPN_IF" ||
     fail "probe rule does not show oif selector"
 echo "PASS B: combined probe-only RPDB selector installed"
 
-echo "STAGE 4: prove bound dedicated probe uses vpn0, not ordinary alt0"
+PROBE_ROUTE_GET=$(ip -n "$ROU" route get "$TARGET" \
+    uid "$PROBE_UID" ipproto icmp oif "$VPN_IF")
+printf 'PROBE_ROUTE_GET=%s\n' "$PROBE_ROUTE_GET"
+printf '%s\n' "$PROBE_ROUTE_GET" | grep -q "via 198.18.221.1 dev $VPN_IF" ||
+    fail "probe-selector route lookup did not use dedicated vpn0 route"
+echo "PASS B1: selector-specific route lookup resolves through dedicated probe table"
+
+echo "STAGE 5: prove bound dedicated probe uses vpn0, not ordinary alt0"
 if ! probe >/dev/null 2>&1; then
     fail "dedicated bound probe did not reach target through vpn0"
 fi
 echo "PASS C: dedicated uid + bound interface probe succeeds through isolated table"
 
-echo "STAGE 5: prove selector and firewall isolation"
+echo "STAGE 6: prove selector and firewall isolation"
 if unbound_probe >/dev/null 2>&1; then
     fail "unbound probe unexpectedly consumed probe plane or escaped through alt0"
 fi
@@ -218,7 +231,7 @@ if ! ip netns exec "$HOST" ping -n -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
 fi
 echo "PASS D: unbound/wrong-uid local traffic cannot use probe plane; forwarded payload is unaffected"
 
-echo "STAGE 6: prove probe works with no payload route through vpn0"
+echo "STAGE 7: prove probe works with no payload route through vpn0"
 ROUTE_GET=$(ip -n "$ROU" route get "$TARGET")
 printf 'PAYLOAD_ROUTE_WHILE_PROBING=%s\n' "$ROUTE_GET"
 printf '%s\n' "$ROUTE_GET" | grep -q "dev $ALT_IF" ||
@@ -227,7 +240,7 @@ probe >/dev/null 2>&1 ||
     fail "probe depends on ordinary payload route through vpn0"
 echo "PASS E: probe remains functional while ordinary payload routing has no vpn0 path"
 
-echo "STAGE 7: break only primary condition path"
+echo "STAGE 8: break only primary condition path"
 ip -n "$PRI" link set "$PRI_IF" down
 if probe >/dev/null 2>&1; then
     fail "bound probe escaped through alternate path during primary outage"
@@ -239,7 +252,7 @@ ip -n "$PRI" link set "$PRI_IF" up
 probe >/dev/null 2>&1 || fail "probe did not recover after primary path restore"
 echo "PASS G: condition recovers on the same concrete interface"
 
-echo "STAGE 8: same-name/new-ifindex recreation"
+echo "STAGE 9: same-name/new-ifindex recreation"
 ip -n "$ROU" link del "$VPN_IF"
 echo "AFTER_DELETE_RULES_BEGIN"
 ip -n "$ROU" rule show
@@ -263,7 +276,7 @@ probe >/dev/null 2>&1 ||
     fail "refreshed probe plane did not admit new interface generation"
 echo "PASS I: refreshed probe plane admits new interface generation"
 
-echo "STAGE 9: characterize exact-ifindex reuse"
+echo "STAGE 10: characterize exact-ifindex reuse"
 ip -n "$ROU" link del "$VPN_IF"
 echo "EXACT_REUSE_AFTER_DELETE_RULES_BEGIN"
 ip -n "$ROU" rule show
@@ -312,7 +325,7 @@ else
     echo "PASS K: full refresh produces a working current probe plane"
 fi
 
-echo "STAGE 10: final isolation dump"
+echo "STAGE 11: final isolation dump"
 show_probe_plane
 echo "ORDINARY_ROUTE_FINAL=$(ip -n "$ROU" route get "$TARGET")"
 echo "EXP_022_ISOLATED_PROBE_PLANE=PASS"

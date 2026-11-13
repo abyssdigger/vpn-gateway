@@ -28,12 +28,17 @@ uidrange <probe-uid>
     -> lookup <dedicated-probe-table>
 ```
 
-The dedicated table contains only:
+The dedicated table contains only a routed path through the selected peer plus a terminal
+failure route:
 
 ```text
-<target>/32 dev <concrete-interface>
+<target>/32 via <selected-peer> dev <concrete-interface>
 unreachable default
 ```
+
+The target is deliberately **not directly connected** to the tested interface. This is
+important: the experiment must prove that the RPDB/table supplies the route, rather than
+merely prove that `ping -I` can reach a directly attached peer.
 
 Probe nft admission is separate and narrow:
 
@@ -50,12 +55,13 @@ kernel rather than treating the documentation as sufficient evidence.
 ```text
                          primary condition path
                     198.18.221.0/30
+ target 203.0.113.22/32 on lo
             pri0 <--------------------> vpn0
- target 203.0.113.22/32                 |
+                                        |
                                         |  exp22-rou
                                         |
+ target 203.0.113.22/32 on lo
             altp0 <-------------------> alt0
- target 203.0.113.22/32
                     198.18.222.0/30
                          ordinary/main path
 
