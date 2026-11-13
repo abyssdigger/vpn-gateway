@@ -196,9 +196,9 @@ Operation failure сам по себе не является state category.
 ```text
 1. stores latest request
 2. PayloadRulesCalculator.calculate(request)
-3. NetworkRulesAdapter.apply(desired_rules)
+3. NetworkRulesAdapter.apply(self, desired_rules)
 4. inspects action result
-5. obtains authoritative last Adapter state
+5. obtains authoritative last Adapter state for self
 6. PayloadStateCalculator.calculate(request, desired_rules, network_state)
 7. publishes changed PayloadTrafficStateInfo
 8. schedules retry/audit if current state does not satisfy request
@@ -209,9 +209,9 @@ Operation failure сам по себе не является state category.
 Обычная реакция:
 
 ```text
-apply() -> FAILURE
-renewState()
-getLastState()
+apply(self, ...) -> FAILURE
+renewState(self)
+getLastState(self)
 PayloadStateCalculator(...)
 publish actual state
 retry according to local policy
@@ -226,9 +226,9 @@ Adapter failure не является implicit command для RuntimeStateManage
 Manager периодически или по локальному trigger проверяет managed domain:
 
 ```text
-renewState()
+renewState(self)
     |
-getLastState()
+getLastState(self)
     |
 compare/interpret against current desired rules
     |
@@ -321,12 +321,13 @@ NetworkRulesSpec
 
     dispatch_policy
 
-    flow_policy
-        directions
-        prefixes
-        protocols/ports where applicable
-        allow/deny intent
-        concrete interface identities
+    traffic_allows
+        source/destination semantic endpoints
+        effective packet predicates
+
+    flow_initiation_allows
+        source/destination semantic endpoints
+        effective packet predicates
 
     nat_policy
         none / masquerade intent
@@ -335,7 +336,29 @@ NetworkRulesSpec
     forwarding_requirement
 ```
 
-Concrete interface identity остается generation-aware:
+Filtering contract является allow-only: отсутствие разрешения означает deny. Явные deny
+rules из payload domain в Adapter не передаются.
+
+Два набора разрешений имеют разный смысл:
+
+- `traffic_allows` описывает, какие байты вообще допустимы между semantic endpoints;
+- `flow_initiation_allows` дополнительно описывает, какой допустимый трафик может
+  инициировать новый stateful flow.
+
+Новый flow должен удовлетворять обоим наборам. Обратный трафик уже разрешенного flow не
+моделируется верхней предметной областью отдельно: conntrack/stateful realization,
+`ESTABLISHED/RELATED`, invalid-state handling и порядок firewall rules принадлежат
+network-stack domain за Adapter.
+
+Device traffic envelope полностью разрешается в `PayloadRulesCalculator` до Adapter.
+В том числе first-match `allow/drop + default` политика преобразуется в effective
+allow-predicate; Adapter не знает понятий Profile direction и Device envelope.
+
+Верхний контракт также не называет инфраструктурный Linux-интерфейс вроде `host0`.
+Host-facing сторона представляется semantic endpoint `LOCAL_NETWORK`, а ее конкретная
+Linux materialization принадлежит Adapter.
+
+Concrete VPN-path interface identity остается generation-aware:
 
 ```text
 (ifname, ifindex)
@@ -399,16 +422,31 @@ Adapter обязан сам корректно реализовать собст
 Минимальный контракт:
 
 ```text
-apply(scope, spec: NetworkRulesSpec) -> ActionResult
+apply(owner, spec: NetworkRulesSpec) -> ActionResult
 
-renewState(scope) -> ActionResult
+renewState(owner) -> ActionResult
 
-getLastState(scope) -> NetworkRulesState
+getLastState(owner) -> NetworkRulesState
+
+cleanup(owner) -> ActionResult
 ```
 
-`scope` задает принадлежащий caller'у участок network-rules domain и является параметром
-операции Adapter, а не частью `NetworkRulesSpec`. `NetworkRulesSpec` описывает только
-требуемые правила и не содержит нюансов конкретного использования Adapter.
+`owner` — opaque identity экземпляра caller. Обычный caller передает собственную identity
+(`self` / `&self` в терминах реализации). Adapter использует ее только для разделения
+ownership и не интерпретирует имя, тип или предметный смысл caller.
+
+Нормативно:
+
+- тот же instance identity означает тот же owned scope;
+- другой instance identity означает другой owned scope;
+- identity действует только в пределах lifetime caller instance;
+- `NetworkRulesSpec` не содержит owner/scope и описывает только требуемые правила;
+- один owner не может удалить или перезаписать effective state другого owner.
+
+`cleanup(owner)` является lifecycle-operation, а не удалением ссылки из cache. Она
+идемпотентна. SUCCESS означает, что Adapter больше не имеет effective state или ресурсов
+данного owner, способных влиять на внешнюю среду; при необходимости Adapter пересобирает
+общую physical policy без удаленного owner.
 
 Дополнительные методы допустимы только при отдельной смысловой необходимости.
 
@@ -426,7 +464,7 @@ FAILURE + diagnostic
 #### apply()
 
 ```text
-apply(scope, spec) -> SUCCESS
+apply(owner, spec) -> SUCCESS
 ```
 
 означает:
@@ -457,7 +495,7 @@ fresh verification.
 #### renewState()
 
 ```text
-renewState(scope) -> SUCCESS
+renewState(owner) -> SUCCESS
 ```
 
 означает:
@@ -478,7 +516,7 @@ authoritative fresh observation.
 
 #### getLastState()
 
-`getLastState(scope)`:
+`getLastState(owner)`:
 
 - не выполняет внешнего I/O;
 - возвращает последнюю явно поддерживаемую Adapter projection;
@@ -572,6 +610,20 @@ desired.
 
 Если Adapter не может надежно представить или классифицировать observed state, он сообщает
 UNKNOWN через `NetworkRulesState`.
+
+### 8.6. Owner isolation и physical composition
+
+Semantic state разных owners хранится и наблюдается раздельно.
+
+Если Linux backend требует общий enforcement point, Adapter самостоятельно композитит
+актуальные allow rules всех owners в physical policy. Типовая materialization может иметь
+отдельные owner chains, возвращающие управление для чужого трафика, и общий terminal deny.
+
+Это backend mechanics. PayloadTrafficManager, AvailabilityProbeManager и другие callers
+не знают друг о друге и не передают в `NetworkRulesSpec` сведения о соседних owners.
+
+`apply(owner, ...)`, `renewState(owner)` и `cleanup(owner)` обязаны сохранять state
+остальных owners.
 
 ## 9. PayloadStateCalculator
 
