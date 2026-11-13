@@ -30,11 +30,12 @@ Implemented:
   - Device traffic-envelope first-match/default policy resolved to effective predicates
     before the Adapter;
   - more-specific Profile destinations exclude broader allows so overlapping Profiles do
-    not widen each other's policy.
+    not widen each other's policy;
+  - `PayloadNatMode.MASQUERADE` maps to semantic `EGRESS_ADDRESS` source translation;
+  - broad source-NAT intents exclude more-specific Profile destinations.
 
 Not implemented yet:
 
-- NAT contract and NAT slice of `PayloadRulesCalculator`;
 - Linux `NetworkRulesAdapter` implementation;
 - owner-composition backend materialization;
 - Drivers and transition/materialization logic.
