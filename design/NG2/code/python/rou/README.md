@@ -5,7 +5,7 @@ Current status: routing/dispatch plus effective payload-filtering contract slice
 Implemented:
 
 - generic network-rules routing/dispatch data contract;
-- generation-aware concrete VPN-path interface identities;
+- canonical generation-aware `InterfaceIdentity` in a neutral cross-domain module;
 - semantic `LOCAL_NETWORK` endpoint instead of leaking the infrastructure `host0` name;
 - Direct `NetworkRulesAdapter` protocol with opaque caller-instance ownership:
   - `apply(owner, spec)`;
@@ -13,7 +13,7 @@ Implemented:
   - `get_last_state(owner)`;
   - idempotent `cleanup(owner)` is part of the contract;
 - explicit known/unknown Adapter state contract;
-- zero-path routing domain as valid fail-closed intent;
+- zero-path routing domain as semantic `DROP` fail-close intent;
 - allow-only filtering contract:
   - `traffic_allows` describes effective byte-level permission;
   - `flow_initiation_allows` additionally describes which permitted traffic may create a
@@ -25,6 +25,8 @@ Implemented:
   - longest-prefix-first dispatch;
   - duplicate-destination ambiguity rejection;
   - Profile direction resolved before the Adapter;
+  - payload-domain selector/protocol/port types are explicitly converted to network-rules
+    types;
   - Device traffic-envelope first-match/default policy resolved to effective predicates
     before the Adapter;
   - more-specific Profile destinations exclude broader allows so overlapping Profiles do
