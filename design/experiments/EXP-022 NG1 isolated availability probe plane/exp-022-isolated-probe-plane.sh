@@ -169,6 +169,7 @@ ip -n "$HOST" link set "$HOST_IF" up
 
 ip -n "$ROU" route replace "$TARGET/32" dev "$ALT_IF"
 ip -n "$HOST" route replace "$TARGET/32" via 198.18.223.2 dev "$HOST_IF"
+ip -n "$ALT" route replace 198.18.223.0/30 via 198.18.222.2 dev "$ALT_PEER_IF"
 ip netns exec "$ROU" sysctl -q -w net.ipv4.ip_forward=1
 ip netns exec "$ROU" sh -c \
     "printf '%s %s\n' '$PROBE_GID' '$PROBE_GID' > /proc/sys/net/ipv4/ping_group_range"
