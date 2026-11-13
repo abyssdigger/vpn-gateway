@@ -115,7 +115,6 @@ class RuntimeStatusTests(unittest.TestCase):
             PlannerRuntimeState.empty(),
             seed,
             None,
-            None,
         )
         return cfg, projection
 
