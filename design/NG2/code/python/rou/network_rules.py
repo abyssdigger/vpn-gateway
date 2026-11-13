@@ -317,6 +317,24 @@ class FlowInitiationAllowSpec:
     predicate: TrafficPredicate
 
 
+class SourceNatTarget(str, Enum):
+    EGRESS_ADDRESS = "egress-address"
+
+
+@dataclass(frozen=True)
+class SourceNatSpec:
+    source: NetworkEndpoint
+    egress: NetworkEndpoint
+    predicate: TrafficPredicate
+    target: SourceNatTarget
+
+    def __post_init__(self) -> None:
+        if self.egress.kind is not EndpointKind.INTERFACE:
+            raise NetworkRulesError(
+                "source NAT requires a concrete egress interface endpoint"
+            )
+
+
 @dataclass(frozen=True)
 class NetworkRulesSpec:
     """Semantic desired network rules.
@@ -330,6 +348,7 @@ class NetworkRulesSpec:
     dispatch_rules: tuple[DispatchRuleSpec, ...] = ()
     traffic_allows: tuple[TrafficAllowSpec, ...] = ()
     flow_initiation_allows: tuple[FlowInitiationAllowSpec, ...] = ()
+    source_nat: tuple[SourceNatSpec, ...] = ()
 
     def __post_init__(self) -> None:
         domain_names = [item.name for item in self.routing_domains]
