@@ -12,13 +12,18 @@ Implemented:
   - `renew_state(scope)`;
   - `get_last_state(scope)`;
 - explicit known/unknown Adapter state contract;
-- zero-path routing domain as valid fail-closed intent.
+- zero-path routing domain as valid fail-closed intent;
+- first `PayloadRulesCalculator` slice:
+  - Profile -> logical routing domain;
+  - ordered generation-aware paths;
+  - longest-prefix-first dispatch;
+  - duplicate-destination ambiguity rejection.
 
 Not implemented yet:
 
 - packet filtering contract;
 - NAT contract;
-- payload-to-network `PayloadRulesCalculator`;
+- packet-filtering and NAT slices of `PayloadRulesCalculator`;
 - Linux `NetworkRulesAdapter` implementation;
 - Drivers and transition/materialization logic.
 
