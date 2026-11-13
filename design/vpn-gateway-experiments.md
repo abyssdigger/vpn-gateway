@@ -1,3 +1,16 @@
+## EXP-023 — NG1: real OpenConnect Profile-binding probe plane
+
+**Статус:** READY FOR TARGET RUN  
+**Architecture baseline:** NG1 Profile-binding availability/control + EXP-022 PASS  
+**Design:** [EXP-023 README](experiments/EXP-023%20NG1%20real%20OpenConnect%20Profile-binding%20probe%20plane/README.md)
+
+Цель: проверить уже доказанный isolated probe plane на двух реальных OpenConnect bindings,
+достигающих одного endpoint. Data-path primary ломается на удалённом клиенте без остановки
+OpenConnect; primary condition должен FAIL, secondary path остаться PASS, затем primary
+восстановиться на том же binding.
+
+---
+
 ## EXP-022 — NG1: isolated Profile-binding probe plane
 
 **Статус:** COMPLETE — PASS на target Debian 13  

@@ -1,6 +1,6 @@
 # NG1 Profile-binding availability/control — design reset
 
-Status: **SEMANTIC MODEL AGREED; PROBE-PLANE MECHANISM PENDING EXP-022**
+Status: **SEMANTIC MODEL AGREED; EXP-022 PROBE PLANE PASSED; REAL-OC VALIDATION PENDING EXP-023**
 
 > The filename is retained for link stability. Availability is no longer modeled as a
 > DeviceManager-owned global interface state.
@@ -104,7 +104,7 @@ A condition that is responsible for turning a pair back ON must continue operati
 the payload pair is OFF. Therefore active probes require routing and firewall state
 isolated from Profile payload tables.
 
-Desired shape, subject to EXP-022:
+Proven by EXP-022:
 
 - dedicated probe identity/UID;
 - socket bound to the concrete interface;
@@ -149,21 +149,17 @@ The current `EnvironmentInterface` model still records identity only, not admini
 availability. The future Profile-binding control layer will need current link usability
 evidence without changing DeviceEngine ownership.
 
-## 10. Next gate — EXP-022
+## 10. EXP-022 result and next gate — EXP-023
 
-Before choosing the production condition scheduler or configuration grammar, prove that an
-active probe can live in an isolated control plane while the corresponding Profile payload
-path is absent.
+EXP-022 passed on target Debian 13. It proved isolated RPDB/table routing, alternate-path
+non-escape, narrow probe admission, same-name/new-ifindex behavior and the exact-ifindex
+reuse boundary.
 
-EXP-022 must establish at least:
-
-1. combined RPDB selectors can steer only the intended locally generated bound probe into
-   a dedicated table;
-2. ordinary payload and unrelated local traffic cannot consume the probe table;
-3. the probe remains functional with no Profile payload route for that interface;
-4. alternate paths cannot turn the probe into a false positive;
-5. interface deletion/recreation and ifindex reuse have understood fail-closed semantics;
-6. narrow nft probe admission remains sufficient.
+EXP-023 is the next validation gate: apply that already-proven control-plane primitive to
+two real OpenConnect bindings reaching the same endpoint, then create a data-path-only
+failure behind one remote client while leaving both OpenConnect sessions alive. The primary
+condition must fail, the secondary path must remain live, and the primary condition must
+recover on the same binding.
 
 ## 11. Decisions deliberately left open
 

@@ -50,6 +50,7 @@ jobs:
           sh -n design/NG1/deploy/rou
           sh -n "design/experiments/EXP-021 NG1 ICMP probe generation boundary/exp-021-icmp-generation-boundary.sh"
           sh -n "design/experiments/EXP-022 NG1 isolated availability probe plane/exp-022-isolated-probe-plane.sh"
+          sh -n "design/experiments/EXP-023 NG1 real OpenConnect Profile-binding probe plane/exp-023-real-openconnect-probe-plane.sh"
           sudo install -d -m 0700 /var/lib/vpn-gateway
           sudo install -m 0755 /bin/true /usr/local/sbin/rou
           systemd-analyze verify design/NG1/deploy/rouvpn@.service
