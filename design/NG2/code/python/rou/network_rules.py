@@ -46,10 +46,9 @@ class NetworkEndpoint:
         return cls(EndpointKind.INTERFACE, identity)
 
 
-class TerminalAction(str, Enum):
-    BLACKHOLE = "blackhole"
-    UNREACHABLE = "unreachable"
-    PROHIBIT = "prohibit"
+class TerminalDisposition(str, Enum):
+    DROP = "drop"
+    REJECT = "reject"
 
 
 @dataclass(frozen=True)
@@ -57,7 +56,7 @@ class RoutingDomainSpec:
     name: str
     destinations: tuple[IPv4Network, ...]
     ordered_paths: tuple[InterfaceIdentity, ...]
-    terminal_action: TerminalAction
+    terminal_disposition: TerminalDisposition
 
     def __post_init__(self) -> None:
         if not self.name:
