@@ -1,22 +1,22 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
+from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     EndpointKind,
-    InterfaceIdentity,
-    NetworkRulesError,
     PacketView,
-    PortRange,
     TrafficProtocol,
-    TrafficSelector,
 )
 from rou.payload_rules import (
     EnvelopeAction,
     EnvelopeDirection,
     PayloadDirection,
     PayloadPath,
+    PayloadPortRange,
     PayloadProfileRequest,
+    PayloadProtocol,
     PayloadRulesCalculator,
+    PayloadTrafficSelector,
     PayloadTrafficStateRequest,
     TrafficEnvelope,
     TrafficEnvelopeRule,
@@ -104,7 +104,7 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
             (),
         )
 
-        with self.assertRaises(NetworkRulesError):
+        with self.assertRaises(ValueError):
             self._calculate(first, second)
 
     def test_outbound_allows_return_traffic_but_not_remote_initiation(self):
@@ -130,10 +130,12 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
                 TrafficEnvelopeRule(
                     EnvelopeDirection.FROM_PATH,
                     EnvelopeAction.DROP,
-                    TrafficSelector(
+                    PayloadTrafficSelector(
                         source=IPv4Network("10.20.0.0/16"),
-                        protocol=TrafficProtocol.TCP,
-                        destination_ports=(PortRange(8007, 8007),),
+                        protocol=PayloadProtocol.TCP,
+                        destination_ports=(
+                            PayloadPortRange(8007, 8007),
+                        ),
                     ),
                 ),
             ),
@@ -182,10 +184,10 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
                 TrafficEnvelopeRule(
                     EnvelopeDirection.TO_PATH,
                     EnvelopeAction.ALLOW,
-                    TrafficSelector(
+                    PayloadTrafficSelector(
                         destination=IPv4Network("10.0.0.0/8"),
-                        protocol=TrafficProtocol.UDP,
-                        destination_ports=(PortRange(53, 53),),
+                        protocol=PayloadProtocol.UDP,
+                        destination_ports=(PayloadPortRange(53, 53),),
                     ),
                 ),
             ),
