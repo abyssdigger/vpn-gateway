@@ -1,6 +1,6 @@
 # EXP-021 — NG1 ICMP probe admission and interface-generation boundary
 
-**Status:** READY FOR TARGET RUN  
+**Status:** PASS — target Debian 13 kernel/mechanism evidence  
 **Architecture baseline:** NG1 Draft 5 production source baseline  
 **Type:** disposable-netns kernel/mechanism experiment
 
@@ -81,3 +81,96 @@ must then account for restart/missed-lifecycle reuse separately.
 ## Artifact
 
 `exp-021-icmp-generation-boundary.sh`
+
+
+## Attempt history
+
+### Attempt 1 — HARNESS WHITESPACE BUG
+
+The first target run reached namespace-local `ping_group_range` configuration, then the
+harness compared the procfs rendering literally. The kernel rendered the two numeric fields
+with tab/expanded whitespace, so the test rejected a correct value.
+
+The comparison was corrected to parse exactly two numeric fields. No experiment hypothesis
+was exercised by this failure.
+
+### Attempt 2 — HARNESS EXPECTATION BUG IN ALTERNATE-PATH PHASE
+
+The second target run proved unprivileged ICMP and narrow nft admission, then reported:
+
+```text
+ALTERNATE_ROUTE_GET=203.0.113.21 dev alt0 ...
+FAIL: Device-bound probe escaped through alternate path
+```
+
+The failure was in the harness interpretation. `ping -I vpn0` remained bound to the
+intended Device even though an ordinary unbound route lookup selected `alt0`. The narrow
+nft policy also admitted only the concrete `vpn0` ifindex.
+
+Stage 7 was corrected to require the bound probe to keep succeeding through `vpn0`, while
+an otherwise identical unbound probe follows `alt0` and is rejected.
+
+### Attempt 3 — PASS ON TARGET
+
+Observed on the target Debian 13 system:
+
+```text
+PASS A: primary and alternate paths both reach the same target
+PASS B: default-DROP prevents evidence before probe admission exists
+
+PROBE_POLICY_VERIFIED_IFINDEX=2
+CapInh: 0000000000000000
+CapPrm: 0000000000000000
+CapEff: 0000000000000000
+CapBnd: 0000000000000000
+CapAmb: 0000000000000000
+NoNewPrivs:     1
+
+PASS C: ICMP echo succeeds with empty capability sets; CAP_NET_RAW not required in this setup
+PASS D: other destination and TCP traffic remain blocked
+
+ALTERNATE_ROUTE_GET=203.0.113.21 dev alt0 src 198.18.22.2 uid 0
+PASS E1: bound probe remains on vpn0 while ordinary route lookup selects alt0
+PASS E2: unbound probe follows alt0 and is rejected by narrow nft admission
+
+PASS F: same-name/new-ifindex=4 does not inherit stale rules for 2
+PASS G: refreshed verified policy arms the new interface generation
+
+EXACT_IFINDEX_REUSE_SUPPORTED=1
+EXACT_IFINDEX_REUSED=4
+EXACT_IFINDEX_STALE_NFT_MATCH=1
+OBSERVATION: a fresh interface with the same numeric ifindex matches stale probe admission
+
+EXP_021_ICMP_GENERATION_BOUNDARY=PASS
+```
+
+## Result and architectural consequence
+
+EXP-021 establishes the following mechanism facts for production availability design:
+
+1. **CAP_NET_RAW is not required for the tested ICMP probe mechanism.** A ping socket works
+   as uid/gid 65534 with empty inheritable, permitted, effective, bounding and ambient
+   capability sets, `NoNewPrivs=1`, and a namespace-local `ping_group_range` admitting
+   only the probe gid.
+2. **Probe admission can be narrow.** Default-DROP keeps the detector unarmed until the
+   probe rules exist; the tested rules admit only one destination, echo request/reply and
+   one concrete numeric interface generation. A second destination and TCP remained
+   blocked.
+3. **The probe can be bound to the intended Device path.** Even when ordinary routing
+   selected another Device capable of reaching the same target, the interface-bound probe
+   remained on the intended Device. The equivalent unbound probe followed the alternate
+   route and was rejected by the narrow nft policy.
+4. **Same name with a different ifindex fails closed against stale numeric rules.** This
+   confirms the production same-name/new-ifindex lifecycle treatment.
+5. **Numeric ifindex is not a globally unique interface-generation identifier.** Linux on
+   the target allowed explicit recreation of a fresh interface with the same ifindex, and
+   the stale numeric nft admission immediately matched that new interface.
+
+The fifth result is the important H8 boundary. Numeric ifindex remains a useful
+kernel-facing selector while a generation is continuously observed, but persisted
+availability or persisted assumptions about generation identity must not treat a reused
+ifindex as proof that the old interface generation survived a restart or missed lifecycle
+event.
+
+EXP-021 does not choose persistence semantics, probe cadence, timeout or hysteresis. Those
+remain architecture/configuration decisions.
