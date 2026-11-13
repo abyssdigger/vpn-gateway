@@ -1,3 +1,47 @@
+## EXP-022 — NG1: isolated Profile-binding probe plane
+
+**Статус:** READY FOR TARGET RUN  
+**Architecture baseline:** NG1 Profile-binding availability/control reset after EXP-021  
+**Design:** [EXP-022 README](experiments/EXP-022%20NG1%20isolated%20availability%20probe%20plane/README.md)
+
+Цель: доказать отдельный service/control routing plane для active availability condition:
+комбинированный `uidrange + ipproto + to + oif` RPDB selector, отдельную probe table с
+fail-closed terminal route и узкий nft admission. Profile payload route через проверяемый
+интерфейс при этом отсутствует.
+
+---
+
+## EXP-021 — NG1: ICMP probe generation boundary
+
+**Статус:** COMPLETE — PASS на target Debian 13  
+**Design:** [EXP-021 README](experiments/EXP-021%20NG1%20ICMP%20probe%20generation%20boundary/README.md)
+
+Доказаны unprivileged ping socket без CAP_NET_RAW, narrow nft admission, interface-bound
+probe без escape в alternate Device, same-name/new-ifindex isolation и exact-ifindex reuse.
+ICMP теперь трактуется только как один возможный availability condition.
+
+---
+
+## EXP-020 — NG1: OpenConnect availability evidence
+
+**Статус:** COMPLETE — PASS  
+**Design:** [EXP-020 README](experiments/EXP-020%20NG1%20OpenConnect%20availability%20evidence/README.md)
+
+Доказано, что OpenConnect interface/process presence не гарантирует path liveness; active
+probe может быть condition для Profile-binding availability.
+
+---
+
+## EXP-019 — NG1: WireGuard availability evidence
+
+**Статус:** COMPLETE — PASS  
+**Design:** [EXP-019 README](experiments/EXP-019%20NG1%20WireGuard%20availability%20evidence/README.md)
+
+Доказано, что WireGuard interface presence и latest-handshake age не дают prompt path
+liveness; active probe может быть condition для Profile-binding availability.
+
+---
+
 ## EXP-018 — NG1: systemd deployment lifecycle
 
 **Статус:** PREPARED — live Debian 13 deployment gate  
@@ -13,7 +57,7 @@ unit syntax и kernel/netns plumbing, но не считается замено�
 
 ## EXP-017 — NG1: ifindex-aware firewall admission
 
-**Статус:** PREPARED — strict dynamic-generation firewall gate  
+**Статус:** COMPLETE — PASS  
 **Architecture baseline:** NG1 Draft 5 after 2026-11-12 safety correction  
 **Design:** [EXP-017 README](experiments/EXP-017%20NG1%20ifindex-aware%20firewall%20admission/README.md)
 
@@ -29,7 +73,7 @@ target-kernel primitive.
 
 ## EXP-016 — NG1: ECMP hash-policy prerequisite
 
-**Статус:** PREPARED — future availability-trigger gate  
+**Статус:** COMPLETE — PASS; historical ECMP evidence  
 **Architecture baseline:** NG1 Draft 5 after 2026-11-12 correction review  
 **Design:** [EXP-016 README](experiments/EXP-016%20NG1%20ECMP%20hash%20policy%20prerequisite/README.md)
 
@@ -91,9 +135,9 @@ blackhole и interface disappearance/return в disposable netns.
 Phase B проверила те же transitions на двух реальных OpenConnect interfaces с payload,
 включая случай «interface существует, но path фактически мертв».
 
-**Решение:** EXP-013 COMPLETE — PASS. Persistent shadow fallback разрешен к production
-materialization. Его availability trigger сознательно отложен до будущего
-DeviceManager/Device-specific detector; это не отменяет доказанную routing-механику.
+**Текущее решение:** EXP-013 COMPLETE — PASS как доказательство Linux/FIB mechanics. Старое
+решение о persistent shadow fallback позднее superseded: текущий NG1 не материализует
+shadow payload tier и не имеет UNAVAILABLE_METRIC.
 
 ---
 

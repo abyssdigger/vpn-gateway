@@ -49,6 +49,7 @@ jobs:
           sh -n design/NG1/deploy/install.sh
           sh -n design/NG1/deploy/rou
           sh -n "design/experiments/EXP-021 NG1 ICMP probe generation boundary/exp-021-icmp-generation-boundary.sh"
+          sh -n "design/experiments/EXP-022 NG1 isolated availability probe plane/exp-022-isolated-probe-plane.sh"
           sudo install -d -m 0700 /var/lib/vpn-gateway
           sudo install -m 0755 /bin/true /usr/local/sbin/rou
           systemd-analyze verify design/NG1/deploy/rouvpn@.service
@@ -65,9 +66,6 @@ jobs:
 
       - name: Run nft policy backend round-trip
         run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_nft_policy_roundtrip.py
-
-      - name: Run EXP-016 ECMP hash-policy proof
-        run: sudo sh "design/experiments/EXP-016 NG1 ECMP hash policy prerequisite/exp-016-ecmp-hash-ci.sh"
 
       - name: Run full NG1 production reconcile cycle
         run: sudo -E "$(command -v python)" design/NG1/code/python/rou/tests/integration_production_cycle.py
