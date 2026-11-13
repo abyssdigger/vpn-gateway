@@ -1,6 +1,6 @@
 ## EXP-023 — NG1: real OpenConnect Profile-binding probe plane
 
-**Статус:** READY FOR TARGET RUN  
+**Статус:** COMPLETE — PASS на real dual-OpenConnect stand  
 **Architecture baseline:** NG1 Profile-binding availability/control + EXP-022 PASS  
 **Design:** [EXP-023 README](experiments/EXP-023%20NG1%20real%20OpenConnect%20Profile-binding%20probe%20plane/README.md)
 

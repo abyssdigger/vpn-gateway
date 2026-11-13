@@ -1,6 +1,6 @@
 # EXP-023 — NG1 real OpenConnect Profile-binding probe plane
 
-**Status:** READY FOR TARGET RUN  
+**Status:** COMPLETE — PASS (2026-11-13)  
 **Architecture baseline:** NG1 Profile-binding availability/control + EXP-022 PASS  
 **Type:** real dual-OpenConnect path / isolated availability-condition validation
 
@@ -137,9 +137,41 @@ Only after these outputs are reviewed should the experiment harness be run.
 EXP-021/022 already prove the unprivileged ping and narrow nft mechanisms. EXP-023 does not
 modify production firewall policy; it focuses on the real OpenConnect path.
 
+## Operator actions known before launch
+
+EXP-023 contains two polling windows that require a manual action on `pri`. The operator
+must know both commands before starting the harness.
+
+During the outage window on `pri`:
+
+```sh
+sudo /usr/sbin/iptables -I FORWARD 1 \
+    -d 172.21.201.19/32 \
+    -m comment --comment VPNG-EXP023 \
+    -j DROP
+```
+
+During the recovery window on `pri`:
+
+```sh
+sudo /usr/sbin/iptables -D FORWARD \
+    -d 172.21.201.19/32 \
+    -m comment --comment VPNG-EXP023 \
+    -j DROP
+```
+
+Each polling window is bounded to 180 seconds. If the experiment is interrupted while the
+DROP exists, remove it manually with the recovery command above.
 ## Experimental run
 
-After the interactive stand diagnosis/restoration/verification has been reviewed:
+After the interactive stand diagnosis/restoration/verification has been reviewed, separate
+this run from prior terminal output first:
+
+```sh
+clear
+```
+
+Then run:
 
 Generic form:
 
@@ -199,3 +231,13 @@ does not yet choose:
 - probe cadence, timeout or hysteresis;
 - general condition composition;
 - manual inhibit/schedule APIs.
+
+## Target result
+
+EXP-023 completed with `EXP_023_REAL_OPENCONNECT_PROBE_PLANE=PASS` on 2026-11-13.
+
+See [EXP-023-result-20261113.md](EXP-023-result-20261113.md).
+
+The real result confirms that a failed condition on one live OpenConnect binding does not
+escape through another live OpenConnect binding and recovers on the same binding after the
+primary data path is restored.
