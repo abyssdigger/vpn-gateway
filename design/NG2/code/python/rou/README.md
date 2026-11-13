@@ -13,6 +13,8 @@ Implemented:
   - `get_last_state(owner)`;
   - idempotent `cleanup(owner)` is part of the contract;
 - explicit known/unknown Adapter state contract;
+- Adapter-internal `DesiredRulesByOwner` registry keyed strictly by caller object identity,
+  with explicit-lifetime strong ownership and no semantic owner names/priorities;
 - zero-path routing domain as semantic `DROP` fail-close intent;
 - allow-only filtering contract:
   - `traffic_allows` describes effective byte-level permission;
