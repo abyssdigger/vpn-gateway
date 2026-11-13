@@ -40,6 +40,8 @@ The target is deliberately **not directly connected** to the tested interface. L
 weak IPv4 host by default, so a peer with the target on `lo` would otherwise answer ARP for
 that local address on its veth. The harness therefore sets `arp_ignore=1` in the peer
 namespaces. This makes the target genuinely routed and prevents a false direct-L2 success.
+A failed ARP attempt may still leave an `INCOMPLETE` or `FAILED` neighbour-cache entry on
+`vpn0`; cache-entry presence alone is therefore diagnostic, not evidence of reachability.
 
 Probe nft admission is separate and narrow:
 
