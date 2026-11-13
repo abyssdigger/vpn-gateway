@@ -59,6 +59,45 @@ When no additional control is configured, ordinary baseline interface usability 
 for ON. When additional conditions are configured, a fresh pair starts OFF and becomes ON
 only after all required conditions are positively satisfied.
 
+### 3.1 Profile-facing `interface_balancing` direction
+
+The current user-facing configuration direction is a Profile option provisionally named
+`interface_balancing`. It describes the active condition used to decide whether a concrete
+binding is useful **for that Profile**; it is not Device-global health.
+
+Illustrative forms:
+
+```toml
+interface_balancing = "icmp/172.21.201.19"
+interface_balancing = "tcp/172.21.201.19:443"
+interface_balancing = "tcp/google.com:443"
+```
+
+The target expresses the administrator's actual need: a host in the remote network, a
+specific service, or an Internet endpoint whose reachability proves that the current path
+provides what this Profile needs.
+
+This semantics deliberately allows one multi-peer WireGuard interface to be ON in one
+Profile and OFF in another. For example, `wg0` may remain `IFF_UP` and carry nine healthy
+peers while the peer serving the tenth Profile's destination is unusable. That Profile must
+be able to reject `wg0` without globally rejecting the interface for unrelated Profiles.
+
+A target-less shorthand is also reserved conceptually:
+
+```toml
+interface_balancing = "icmp"
+interface_balancing = "tcp"
+```
+
+Its intended meaning is still Profile-local: derive an appropriate path-specific probe
+target from information ROU already has about Devices, interfaces, peers and Profile routes.
+The exact derivation algorithm is deliberately **not decided yet**. It is future design work,
+not a reason to expose transport endpoint details to the Profile administrator.
+
+The exact grammar, supported probe types, hostname/DNS semantics, timing and hysteresis
+remain open. The examples above record the configuration direction and semantic boundary,
+not a finalized schema.
+
 ## 4. State lifetime
 
 ON/OFF is **never persisted**.
@@ -165,8 +204,10 @@ question for the isolated active-condition plane.
 
 With EXP-022 and EXP-023 complete, human review still needs to choose:
 
-- the exact router-config grammar and schema-version transition;
+- the exact router-config grammar and schema-version transition for `interface_balancing`;
 - condition composition grammar beyond the initial all-required/AND model;
-- ICMP timing, timeout and failure/recovery hysteresis;
+- supported explicit probe types/targets plus ICMP/TCP timing, timeout and failure/recovery hysteresis;
 - APIs/grammar for future manual inhibits and schedules;
+- the derivation algorithm for target-less `probetype` forms such as `interface_balancing = "icmp"`;
+- hostname/DNS resolution semantics for explicit probe targets;
 - the final runtime component name and ownership boundary for the control evaluator.

@@ -267,11 +267,31 @@ device_order = ["oc-main", "wg-backup"]
 
 ### Future availability/control configuration
 
-Conceptual examples such as `profile.availability = ...` are **not schema-version-1
-syntax**. Schema version 1 rejects unknown Profile fields.
+`interface_balancing` is the current provisional Profile-facing name for this future
+configuration surface. It is **not schema-version-1 syntax**; schema version 1 still rejects
+unknown Profile fields.
 
-A future version may let an administrator request additional conditions for a
-`(Profile, concrete binding)` pair. The agreed semantic boundary is already fixed:
+Illustrative, non-final forms:
+
+```toml
+interface_balancing = "icmp/172.21.201.19"
+interface_balancing = "tcp/172.21.201.19:443"
+interface_balancing = "tcp/google.com:443"
+interface_balancing = "icmp"
+```
+
+The option expresses whether a concrete binding actually provides what this Profile needs.
+It is not global Device/interface health. Therefore the same concrete interface may pass
+the condition for one Profile and fail it for another, including a multi-peer WireGuard
+interface whose peer serving one Profile is down while other peers remain healthy.
+
+For an explicit target, the Profile administrator chooses the host/service whose
+reachability proves path usefulness. For a target-less form such as `"icmp"`, ROU is
+expected eventually to derive a path-specific target from Device/interface/peer/Profile
+information already available locally. The derivation algorithm is intentionally deferred;
+the Profile administrator should not be required to know transport endpoint internals.
+
+The agreed semantic boundary remains:
 
 - the configured Profile expresses intent, not detector state;
 - the pair is `ON` only when all required conditions for that pair are currently satisfied;
@@ -280,5 +300,6 @@ A future version may let an administrator request additional conditions for a
 - metric allocation remains independent of ON/OFF;
 - probe/control routes must not be placed in Profile payload tables.
 
-The exact grammar and schema-version transition remain undecided until the isolated probe
-plane is proven by EXP-022.
+EXP-022 and EXP-023 have proven the isolated probe-plane mechanism. Still open are the exact
+grammar/schema-version transition, supported probe types, target-less derivation,
+hostname/DNS semantics, timing and hysteresis.

@@ -1,3 +1,16 @@
+## 2026-11-13 — NG1 Profile-facing interface balancing direction
+
+The availability/control design now records `interface_balancing` as the provisional
+Profile-facing configuration direction. Explicit forms such as
+`icmp/172.21.201.19` or `tcp/172.21.201.19:443` express whether a concrete binding
+actually provides what that Profile needs; the result remains Profile-local rather than
+global Device/interface health.
+
+Target-less forms such as `interface_balancing = "icmp"` are reserved conceptually for
+future path-specific target derivation from already-known Device/interface/peer/Profile
+information. That derivation algorithm, exact grammar, DNS semantics and timing/hysteresis
+remain intentionally undecided.
+
 ## 2026-11-13 — NG1 Profile-binding availability model reset
 
 Availability semantics were generalized before implementing the production detector:
