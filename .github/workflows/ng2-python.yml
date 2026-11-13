@@ -1,0 +1,29 @@
+name: NG2 Python
+
+on:
+  push:
+    paths:
+      - "design/NG2/code/python/**"
+      - ".github/workflows/ng2-python.yml"
+  pull_request:
+    paths:
+      - "design/NG2/code/python/**"
+      - ".github/workflows/ng2-python.yml"
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile
+        run: python3 -m compileall -q design/NG2/code/python/rou
+      - name: Unit tests
+        env:
+          PYTHONPATH: design/NG2/code/python
+        run: >-
+          python3 -m unittest discover
+          -s design/NG2/code/python/rou/tests
+          -p 'test_*.py' -v
