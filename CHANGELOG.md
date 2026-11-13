@@ -1,3 +1,37 @@
+## 2026-11-13 — NG2 component and runtime event model
+
+VPN-GATE enters NG2 as a component-architecture redesign rather than a mechanical NG1
+refactor.
+
+The reusable architecture vocabulary is now defined independently in
+`design/component-model.md`:
+
+- `Manager` is a semantic boundary over a managed domain and publishes its current
+  externally relevant state;
+- `Agent` is the observe-only specialization of Manager;
+- `Adapter` is a synchronous technical boundary and never participates in the event graph
+  by itself;
+- `Calculator` is an explicit pure data transformation;
+- internal communication uses `InfoEvent` and `RequestEvent` over an abstract Event
+  Delivery Environment;
+- statefulness is an implementation property of Agent/Manager rather than a separate
+  architectural `Engine` role;
+- synchronous Adapter dependencies must form a DAG; feedback cycles are closed through
+  asynchronous event boundaries.
+
+A non-normative comparison with established pub/sub EDA, Kubernetes controllers/operators,
+MAPE-K, Event-Carried State Transfer and Ports & Adapters is recorded in
+`design/component-model-analogues.md`.
+
+The first NG2 normative runtime contract is in `design/NG2/runtime-event-model.md`. It
+covers steady-state runtime only, defines `RuntimeStateManager`, the top-level Agents and
+Managers, the current-snapshot/calculator flow, event envelope and the initial event
+catalog. Bootstrap, shutdown and internal Manager decomposition are intentionally deferred.
+
+NG1 remains historical architecture/evidence and is not rewritten to match NG2.
+
+---
+
 ## 2026-11-13 — NG1 Profile-facing interface balancing direction
 
 The availability/control design now records `interface_balancing` as the provisional
