@@ -6,7 +6,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.command_backend import CommandResult, NamespaceBackend
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
-from rou.domain import Availability
 from rou.environment import EnvironmentSnapshot
 from rou.namespace_prereq import (
     apply_namespace_prerequisites,
@@ -32,10 +31,23 @@ class NamespacePrereqTests(unittest.TestCase):
                     "oc",
                     0,
                     InterfaceIdentity("vpns00", 10),
-                    Availability.UNKNOWN,
                 ),
             ),
             (),
+        )
+
+    def good_sysctls(self):
+        return (
+            ("net.ipv4.ip_forward", "0"),
+            ("net.ipv4.conf.all.rp_filter", "0"),
+            ("net.ipv4.conf.default.rp_filter", "0"),
+            ("net.ipv6.conf.all.forwarding", "0"),
+            ("net.ipv6.conf.default.forwarding", "0"),
+            ("net.ipv6.conf.default.disable_ipv6", "1"),
+            ("net.ipv4.conf.host0.rp_filter", "0"),
+            ("net.ipv6.conf.host0.disable_ipv6", "1"),
+            ("net.ipv4.conf.vpns00.rp_filter", "0"),
+            ("net.ipv6.conf.vpns00.disable_ipv6", "1"),
         )
 
     def test_commands_cover_global_defaults_host0_and_bound_interfaces(self):
@@ -50,15 +62,6 @@ class NamespacePrereqTests(unittest.TestCase):
             commands,
         )
         self.assertIn(
-            (
-                "sysctl",
-                "-q",
-                "-w",
-                "net/ipv4/fib_multipath_hash_policy=1",
-            ),
-            commands,
-        )
-        self.assertIn(
             ("sysctl", "-q", "-w", "net/ipv6/conf/default/disable_ipv6=1"),
             commands,
         )
@@ -70,6 +73,9 @@ class NamespacePrereqTests(unittest.TestCase):
             ("sysctl", "-q", "-w", "net/ipv6/conf/vpns00/disable_ipv6=1"),
             commands,
         )
+        self.assertFalse(
+            any("fib_multipath_hash_policy" in arg for cmd in commands for arg in cmd)
+        )
 
     def test_interface_name_with_dot_uses_slash_form_without_shell(self):
         bindings = DeviceBindingSnapshot(
@@ -78,7 +84,6 @@ class NamespacePrereqTests(unittest.TestCase):
                     "oc",
                     0,
                     InterfaceIdentity("eth0.100", 10),
-                    Availability.UNKNOWN,
                 ),
             ),
             (),
@@ -100,19 +105,7 @@ class NamespacePrereqTests(unittest.TestCase):
 
     def test_verify_requires_closed_or_open_forwarding_as_requested(self):
         bindings = self.make_bindings()
-        sysctls = (
-            ("net.ipv4.ip_forward", "0"),
-            ("net.ipv4.conf.all.rp_filter", "0"),
-            ("net.ipv4.conf.default.rp_filter", "0"),
-            ("net.ipv4.fib_multipath_hash_policy", "1"),
-            ("net.ipv6.conf.all.forwarding", "0"),
-            ("net.ipv6.conf.default.forwarding", "0"),
-            ("net.ipv6.conf.default.disable_ipv6", "1"),
-            ("net.ipv4.conf.host0.rp_filter", "0"),
-            ("net.ipv6.conf.host0.disable_ipv6", "1"),
-            ("net.ipv4.conf.vpns00.rp_filter", "0"),
-            ("net.ipv6.conf.vpns00.disable_ipv6", "1"),
-        )
+        sysctls = self.good_sysctls()
         closed = verify_namespace_prerequisites(
             EnvironmentSnapshot((), sysctls=sysctls),
             bindings,
@@ -130,18 +123,9 @@ class NamespacePrereqTests(unittest.TestCase):
 
     def test_verify_detects_global_rp_filter_even_when_per_interface_is_zero(self):
         bindings = self.make_bindings()
-        sysctls = (
-            ("net.ipv4.ip_forward", "0"),
-            ("net.ipv4.conf.all.rp_filter", "1"),
-            ("net.ipv4.conf.default.rp_filter", "0"),
-            ("net.ipv4.fib_multipath_hash_policy", "1"),
-            ("net.ipv6.conf.all.forwarding", "0"),
-            ("net.ipv6.conf.default.forwarding", "0"),
-            ("net.ipv6.conf.default.disable_ipv6", "1"),
-            ("net.ipv4.conf.host0.rp_filter", "0"),
-            ("net.ipv6.conf.host0.disable_ipv6", "1"),
-            ("net.ipv4.conf.vpns00.rp_filter", "0"),
-            ("net.ipv6.conf.vpns00.disable_ipv6", "1"),
+        sysctls = tuple(
+            (key, "1" if key == "net.ipv4.conf.all.rp_filter" else value)
+            for key, value in self.good_sysctls()
         )
         result = verify_namespace_prerequisites(
             EnvironmentSnapshot((), sysctls=sysctls),
@@ -150,56 +134,6 @@ class NamespacePrereqTests(unittest.TestCase):
         )
         self.assertFalse(result.ok)
         self.assertTrue(any("all.rp_filter" in error for error in result.errors))
-
-
-    def test_verify_rejects_wrong_ecmp_hash_policy(self):
-        bindings = self.make_bindings()
-        sysctls = (
-            ("net.ipv4.ip_forward", "0"),
-            ("net.ipv4.conf.all.rp_filter", "0"),
-            ("net.ipv4.conf.default.rp_filter", "0"),
-            ("net.ipv4.fib_multipath_hash_policy", "0"),
-            ("net.ipv6.conf.all.forwarding", "0"),
-            ("net.ipv6.conf.default.forwarding", "0"),
-            ("net.ipv6.conf.default.disable_ipv6", "1"),
-            ("net.ipv4.conf.host0.rp_filter", "0"),
-            ("net.ipv6.conf.host0.disable_ipv6", "1"),
-            ("net.ipv4.conf.vpns00.rp_filter", "0"),
-            ("net.ipv6.conf.vpns00.disable_ipv6", "1"),
-        )
-        result = verify_namespace_prerequisites(
-            EnvironmentSnapshot((), sysctls=sysctls),
-            bindings,
-            forwarding=False,
-        )
-        self.assertFalse(result.ok)
-        self.assertTrue(
-            any("fib_multipath_hash_policy" in error for error in result.errors)
-        )
-
-    def test_verify_requires_exact_ecmp_hash_policy(self):
-        bindings = self.make_bindings()
-        sysctls = (
-            ("net.ipv4.ip_forward", "0"),
-            ("net.ipv4.conf.all.rp_filter", "0"),
-            ("net.ipv4.conf.default.rp_filter", "0"),
-            ("net.ipv6.conf.all.forwarding", "0"),
-            ("net.ipv6.conf.default.forwarding", "0"),
-            ("net.ipv6.conf.default.disable_ipv6", "1"),
-            ("net.ipv4.conf.host0.rp_filter", "0"),
-            ("net.ipv6.conf.host0.disable_ipv6", "1"),
-            ("net.ipv4.conf.vpns00.rp_filter", "0"),
-            ("net.ipv6.conf.vpns00.disable_ipv6", "1"),
-        )
-        result = verify_namespace_prerequisites(
-            EnvironmentSnapshot((), sysctls=sysctls),
-            bindings,
-            forwarding=False,
-        )
-        self.assertFalse(result.ok)
-        self.assertTrue(
-            any("fib_multipath_hash_policy" in error for error in result.errors)
-        )
 
 
 if __name__ == "__main__":

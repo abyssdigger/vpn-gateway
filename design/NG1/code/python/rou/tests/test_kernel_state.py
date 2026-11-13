@@ -6,8 +6,8 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
-from rou.domain import ActiveConfig, Availability, Device, NatMode, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
-from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule, RouteNexthop
+from rou.domain import ActiveConfig, Device, NatMode, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
+from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule
 from rou.kernel_allocation import compile_kernel_allocation
 from rou.kernel_state import (
     BLACKHOLE_PROTOCOL,
@@ -41,15 +41,19 @@ def make_config():
     )
 
 
+def one_binding(identity):
+    return DeviceBindingSnapshot((BoundInterface("oc", 0, identity),), ())
+
+
 class KernelStateTests(unittest.TestCase):
-    def test_compile_materializes_normal_shadow_blackhole_and_rules(self):
+    def test_compile_materializes_normal_routes_blackhole_and_rules(self):
         config = make_config()
         first = InterfaceIdentity("vpns00", 10)
         second = InterfaceIdentity("vpns01", 11)
         bindings = DeviceBindingSnapshot(
             (
-                BoundInterface("oc", 0, first, Availability.AVAILABLE),
-                BoundInterface("oc", 0, second, Availability.UNAVAILABLE),
+                BoundInterface("oc", 0, first),
+                BoundInterface("oc", 0, second),
             ),
             (),
         )
@@ -60,20 +64,22 @@ class KernelStateTests(unittest.TestCase):
             ),
             (),
         )
-        allocation = compile_kernel_allocation(config)
-        desired = compile_kernel_desired_state(config, bindings, metrics, allocation)
+        desired = compile_kernel_desired_state(
+            config,
+            bindings,
+            metrics,
+            compile_kernel_allocation(config),
+        )
 
         self.assertEqual(len(desired.routes), 3)
-        normal = [r for r in desired.routes if r.metric == 1][0]
-        fallback = [r for r in desired.routes if r.metric == 65535][0]
+        normal = [r for r in desired.routes if r.route_type == "unicast"]
         blackhole = [r for r in desired.routes if r.route_type == "blackhole"][0]
 
-        self.assertEqual(normal.ifname, "vpns00")
-        self.assertEqual(normal.protocol, ROUTE_PROTOCOL)
         self.assertEqual(
-            [(n.ifname, n.weight) for n in fallback.nexthops],
-            [("vpns00", 1), ("vpns01", 1)],
+            [(r.ifname, r.metric, r.nexthops) for r in normal],
+            [("vpns00", 1, ()), ("vpns01", 2, ())],
         )
+        self.assertTrue(all(r.protocol == ROUTE_PROTOCOL for r in normal))
         self.assertEqual(blackhole.protocol, BLACKHOLE_PROTOCOL)
         self.assertEqual(str(blackhole.destination), "0.0.0.0/0")
 
@@ -82,43 +88,16 @@ class KernelStateTests(unittest.TestCase):
         self.assertEqual(desired.rules[-1].action, "unreachable")
         self.assertIsNone(desired.rules[-1].table)
 
-    def test_single_member_shadow_is_direct_route(self):
-        config = make_config()
-        identity = InterfaceIdentity("vpns00", 10)
-        bindings = DeviceBindingSnapshot(
-            (BoundInterface("oc", 0, identity, Availability.UNAVAILABLE),),
-            (),
-        )
-        metrics = TrafficProjection(
-            (MetricAssignment("corp", "oc", 0, identity, 1),),
-            (),
-        )
-        desired = compile_kernel_desired_state(
-            config,
-            bindings,
-            metrics,
-            compile_kernel_allocation(config),
-        )
-        fallback = [r for r in desired.routes if r.metric == 65535][0]
-        self.assertEqual(fallback.ifname, "vpns00")
-        self.assertEqual(fallback.nexthops, ())
-        self.assertFalse(any(r.metric == 1 for r in desired.routes))
-
     def test_verify_requires_exact_owned_tables_and_priority_window(self):
         config = make_config()
         identity = InterfaceIdentity("vpns00", 10)
-        bindings = DeviceBindingSnapshot(
-            (BoundInterface("oc", 0, identity, Availability.AVAILABLE),),
-            (),
-        )
-        metrics = TrafficProjection(
-            (MetricAssignment("corp", "oc", 0, identity, 1),),
-            (),
-        )
         desired = compile_kernel_desired_state(
             config,
-            bindings,
-            metrics,
+            one_binding(identity),
+            TrafficProjection(
+                (MetricAssignment("corp", "oc", 0, identity, 1),),
+                (),
+            ),
             compile_kernel_allocation(config),
         )
 
@@ -174,10 +153,7 @@ class KernelStateTests(unittest.TestCase):
         identity = InterfaceIdentity("vpns00", 10)
         desired = compile_kernel_desired_state(
             config,
-            DeviceBindingSnapshot(
-                (BoundInterface("oc", 0, identity, Availability.AVAILABLE),),
-                (),
-            ),
+            one_binding(identity),
             TrafficProjection(
                 (MetricAssignment("corp", "oc", 0, identity, 1),),
                 (),
@@ -219,16 +195,12 @@ class KernelStateTests(unittest.TestCase):
         )
         self.assertTrue(result.ok, result.errors)
 
-
     def test_verify_rejects_foreign_rule_anywhere_in_owned_priority_window(self):
         config = make_config()
         identity = InterfaceIdentity("vpns00", 10)
         desired = compile_kernel_desired_state(
             config,
-            DeviceBindingSnapshot(
-                (BoundInterface("oc", 0, identity, Availability.AVAILABLE),),
-                (),
-            ),
+            one_binding(identity),
             TrafficProjection(
                 (MetricAssignment("corp", "oc", 0, identity, 1),),
                 (),
@@ -276,9 +248,7 @@ class KernelStateTests(unittest.TestCase):
             ),
         )
         self.assertFalse(result.ok)
-        self.assertTrue(
-            any("unexpected rules" in error for error in result.errors)
-        )
+        self.assertTrue(any("unexpected rules" in error for error in result.errors))
 
 
 if __name__ == "__main__":

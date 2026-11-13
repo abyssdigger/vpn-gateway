@@ -92,7 +92,6 @@ def sysctls(forwarding: bool, ifname="vpns00"):
         ("net.ipv4.ip_forward", "1" if forwarding else "0"),
         ("net.ipv4.conf.all.rp_filter", "0"),
         ("net.ipv4.conf.default.rp_filter", "0"),
-        ("net.ipv4.fib_multipath_hash_policy", "1"),
         ("net.ipv6.conf.all.forwarding", "0"),
         ("net.ipv6.conf.default.forwarding", "0"),
         ("net.ipv6.conf.default.disable_ipv6", "1"),
@@ -316,7 +315,6 @@ class PlannerTests(unittest.TestCase):
                 r.nexthops,
             )
             for r in current_kernel.routes
-            if r.metric != 65535
         )
         observed_rules = tuple(
             KernelRule(
@@ -370,9 +368,9 @@ class PlannerTests(unittest.TestCase):
                 for call, _stdin, _check in backend.calls
             )
         )
-        self.assertTrue(
+        self.assertFalse(
             any(
-                "route" in call and "add" in call and "65535" in call
+                "route" in call and ("add" in call or "del" in call)
                 for call, _stdin, _check in backend.calls
             )
         )
@@ -421,11 +419,7 @@ class PlannerTests(unittest.TestCase):
                 r.nexthops,
             )
             for r in kernel.routes
-            if not (
-                r.route_type == "unicast"
-                and r.metric is not None
-                and r.metric < 65535
-            )
+            if r.route_type != "unicast"
         )
         observed_rules = tuple(
             KernelRule(

@@ -6,7 +6,6 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
-from rou.domain import Availability
 from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule
 from rou.kernel_state import KernelDesiredState, KernelRouteSpec, KernelRuleSpec
 from rou.transition import (
@@ -25,7 +24,6 @@ def bindings(ifindex: int | None):
                 "oc",
                 0,
                 InterfaceIdentity("vpns00", ifindex),
-                Availability.UNKNOWN,
             ),
         ),
         (),
