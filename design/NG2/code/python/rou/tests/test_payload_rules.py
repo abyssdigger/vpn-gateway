@@ -5,12 +5,14 @@ from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     EndpointKind,
     PacketView,
+    SourceNatTarget,
     TrafficProtocol,
 )
 from rou.payload_rules import (
     EnvelopeAction,
     EnvelopeDirection,
     PayloadDirection,
+    PayloadNatMode,
     PayloadPath,
     PayloadPortRange,
     PayloadProfileRequest,
@@ -316,6 +318,69 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
         self.assertFalse(
             any(rule.predicate.matches(narrow_packet) for rule in outbound_rules)
         )
+
+    def test_nat_none_emits_no_source_translation(self):
+        profile = PayloadProfileRequest(
+            "profile-a",
+            PayloadDirection.OUTBOUND,
+            (IPv4Network("10.0.0.0/8"),),
+            (PayloadPath(InterfaceIdentity("vpns00", 10)),),
+        )
+
+        spec = self._calculate(profile)
+
+        self.assertEqual(spec.source_nat, ())
+
+    def test_masquerade_maps_to_egress_address_translation(self):
+        profile = PayloadProfileRequest(
+            "profile-a",
+            PayloadDirection.OUTBOUND,
+            (IPv4Network("10.0.0.0/8"),),
+            (
+                PayloadPath(
+                    InterfaceIdentity("vpns00", 10),
+                    nat_mode=PayloadNatMode.MASQUERADE,
+                ),
+            ),
+        )
+
+        spec = self._calculate(profile)
+
+        self.assertEqual(len(spec.source_nat), 1)
+        rule = spec.source_nat[0]
+        self.assertIs(rule.target, SourceNatTarget.EGRESS_ADDRESS)
+        self.assertEqual(rule.egress.interface, InterfaceIdentity("vpns00", 10))
+
+    def test_broad_nat_does_not_capture_more_specific_profile(self):
+        broad = PayloadProfileRequest(
+            "broad",
+            PayloadDirection.OUTBOUND,
+            (IPv4Network("10.0.0.0/8"),),
+            (
+                PayloadPath(
+                    InterfaceIdentity("vpns00", 10),
+                    nat_mode=PayloadNatMode.MASQUERADE,
+                ),
+            ),
+        )
+        narrow = PayloadProfileRequest(
+            "narrow",
+            PayloadDirection.OUTBOUND,
+            (IPv4Network("10.1.0.0/16"),),
+            (PayloadPath(InterfaceIdentity("vpns01", 11)),),
+        )
+
+        spec = self._calculate(broad, narrow)
+        packet = PacketView(
+            IPv4Address("192.168.1.10"),
+            IPv4Address("10.1.2.3"),
+            TrafficProtocol.TCP,
+            source_port=50000,
+            destination_port=443,
+        )
+
+        self.assertEqual(len(spec.source_nat), 1)
+        self.assertFalse(spec.source_nat[0].predicate.matches(packet))
 
     def test_same_name_new_ifindex_remains_distinct(self):
         profile = PayloadProfileRequest(
