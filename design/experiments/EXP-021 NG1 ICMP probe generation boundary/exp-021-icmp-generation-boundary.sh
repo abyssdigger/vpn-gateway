@@ -244,16 +244,24 @@ then
 fi
 echo "PASS D: other destination and TCP traffic remain blocked"
 
-echo "STAGE 7: prove no silent escape through alternate Device"
+echo "STAGE 7: prove Device binding defeats alternate ordinary route"
 ip -n "$ROU" route del "$TARGET/32" dev "$VPN_IF"
 ROUTE_GET=$(ip -n "$ROU" route get "$TARGET")
 printf 'ALTERNATE_ROUTE_GET=%s\n' "$ROUTE_GET"
 printf '%s\n' "$ROUTE_GET" | grep -q "dev $ALT_IF" ||
     fail "ordinary route lookup did not move to alternate Device"
 
-if probe >/dev/null 2>&1; then
-    fail "Device-bound probe escaped through alternate path"
+# The ordinary FIB now selects alt0, but ping -I vpn0 binds the probe to the
+# intended Device. Because nft OUTPUT admits only oif=vpn0 and INPUT admits
+# only iif=vpn0, end-to-end success here also proves that the probe did not
+# escape through alt0.
+if ! probe >/dev/null 2>&1; then
+    fail "Device-bound probe did not remain on vpn0 after ordinary FIB moved to alt0"
 fi
+echo "PASS E1: bound probe remains on vpn0 while ordinary route lookup selects alt0"
+
+# Without the Device binding, the same destination follows the ordinary FIB
+# to alt0 and must be rejected by the narrow generation-scoped nft policy.
 if ip netns exec "$ROU" setpriv \
     --reuid "$PROBE_UID" --regid "$PROBE_GID" --clear-groups \
     --bounding-set=-all --inh-caps=-all --ambient-caps=-all --no-new-privs \
@@ -261,7 +269,7 @@ if ip netns exec "$ROU" setpriv \
 then
     fail "unbound probe escaped through alternate Device despite narrow nft admission"
 fi
-echo "PASS E: alternate path exists, but probe evidence cannot escape through it"
+echo "PASS E2: unbound probe follows alt0 and is rejected by narrow nft admission"
 ip -n "$ROU" route replace "$TARGET/32" dev "$VPN_IF"
 
 echo "STAGE 8: same-name/new-ifindex replacement must not inherit stale admission"
