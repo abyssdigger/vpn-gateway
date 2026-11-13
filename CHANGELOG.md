@@ -1,3 +1,27 @@
+## 2026-11-14 — NG2 payload filtering and Adapter ownership boundary
+
+Completed the first reviewed payload-filtering contract slice:
+
+- `NetworkRulesAdapter` ownership is now opaque caller-instance identity rather than a
+  semantic `NetworkRulesScope`; the contract includes idempotent `cleanup(owner)`;
+- independent owner policies remain semantically isolated and may be physically composed
+  only inside the Adapter backend;
+- `host0` no longer leaks into the payload/network-rules contract; `LOCAL_NETWORK` is
+  used as the semantic host-facing endpoint;
+- payload traffic-envelope types are independent from network-rules selector types and are
+  explicitly converted by `PayloadRulesCalculator`;
+- filtering is allow-only with separate effective `traffic_allows` and
+  `flow_initiation_allows` semantics;
+- first-match Device envelope behavior, default allow/drop, and overlapping Profile
+  precedence are preserved before the Adapter boundary;
+- terminal routing policy is semantic `DROP | REJECT`; Linux blackhole/unreachable route
+  types remain Adapter implementation details;
+- canonical `InterfaceIdentity` moved to a neutral cross-domain module;
+- internal review `NG2-2026-11-14-payload-filtering-review.md` passed after accepted
+  boundary-cleanup findings were fixed.
+
+---
+
 ## 2026-11-14 — NG2 first executable network-rules slice
 
 Started the NG2 Python reference under `design/NG2/code/python/rou`:
