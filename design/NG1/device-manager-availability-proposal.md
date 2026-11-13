@@ -1,6 +1,6 @@
 # NG1 Profile-binding availability/control — design reset
 
-Status: **SEMANTIC MODEL AGREED; EXP-022 PROBE PLANE PASSED; REAL-OC VALIDATION PENDING EXP-023**
+Status: **SEMANTIC MODEL AGREED; EXP-022 AND EXP-023 PROBE-PLANE VALIDATION PASSED**
 
 > The filename is retained for link stability. Availability is no longer modeled as a
 > DeviceManager-owned global interface state.
@@ -155,15 +155,15 @@ EXP-022 passed on target Debian 13. It proved isolated RPDB/table routing, alter
 non-escape, narrow probe admission, same-name/new-ifindex behavior and the exact-ifindex
 reuse boundary.
 
-EXP-023 is the next validation gate: apply that already-proven control-plane primitive to
-two real OpenConnect bindings reaching the same endpoint, then create a data-path-only
-failure behind one remote client while leaving both OpenConnect sessions alive. The primary
-condition must fail, the secondary path must remain live, and the primary condition must
-recover on the same binding.
+EXP-023 passed on the real dual-OpenConnect stand. A data-path-only failure behind `pri`
+made the primary condition fail while the `vpns00` binding remained present, `IFF_UP` and
+at the same ifindex; `vpns01` still reached the same endpoint. Removing the failure restored
+the primary condition on the same binding. This closes the real-OpenConnect feasibility
+question for the isolated active-condition plane.
 
 ## 11. Decisions deliberately left open
 
-After EXP-022, human review still needs to choose:
+With EXP-022 and EXP-023 complete, human review still needs to choose:
 
 - the exact router-config grammar and schema-version transition;
 - condition composition grammar beyond the initial all-required/AND model;
