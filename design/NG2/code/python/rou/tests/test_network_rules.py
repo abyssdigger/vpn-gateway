@@ -15,7 +15,7 @@ from rou.network_rules import (
     PredicateKind,
     RoutingDomainSpec,
     StateKnowledge,
-    TerminalAction,
+    TerminalDisposition,
     TrafficPredicate,
     TrafficProtocol,
     TrafficSelector,
@@ -52,7 +52,7 @@ class NetworkRulesContractTests(unittest.TestCase):
                     "profile-a",
                     (IPv4Network("10.0.0.0/8"),),
                     (),
-                    TerminalAction.BLACKHOLE,
+                    TerminalDisposition.DROP,
                 ),
             ),
             dispatch_rules=(
