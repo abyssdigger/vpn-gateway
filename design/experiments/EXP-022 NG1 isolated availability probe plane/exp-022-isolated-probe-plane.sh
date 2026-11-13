@@ -154,6 +154,12 @@ done
 
 create_primary
 
+# Linux is a weak IPv4 host by default: with arp_ignore=0 a peer may answer ARP
+# for TARGET even though TARGET is assigned only to lo. Make the peer behave as
+# a router for this experiment so TARGET is genuinely off-link.
+ip netns exec "$PRI" sysctl -q -w net.ipv4.conf.all.arp_ignore=1
+ip netns exec "$ALT" sysctl -q -w net.ipv4.conf.all.arp_ignore=1
+
 ip -n "$ROU" link add name "$ALT_IF" type veth peer name "$ALT_PEER_IF" netns "$ALT"
 ip -n "$ROU" addr add "$ROU_ALT_ADDR" dev "$ALT_IF"
 ip -n "$ALT" addr add "$ALT_ADDR" dev "$ALT_PEER_IF"
@@ -185,7 +191,13 @@ echo "PASS A: ordinary/main payload path reaches target through alt0"
 
 echo "STAGE 3: prove bound probe has no usable vpn0 route before control plane"
 if probe >/dev/null 2>&1; then
+    echo "UNEXPECTED_NEIGHBOR_STATE_BEGIN"
+    ip -n "$ROU" neigh show dev "$VPN_IF" || true
+    echo "UNEXPECTED_NEIGHBOR_STATE_END"
     fail "bound probe unexpectedly reached routed target before probe plane existed"
+fi
+if ip -n "$ROU" neigh show dev "$VPN_IF" | grep -q "$TARGET"; then
+    fail "routed target unexpectedly became a direct vpn0 neighbor"
 fi
 echo "PASS B0: bound probe cannot reach routed target before probe plane exists"
 

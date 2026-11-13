@@ -36,9 +36,10 @@ failure route:
 unreachable default
 ```
 
-The target is deliberately **not directly connected** to the tested interface. This is
-important: the experiment must prove that the RPDB/table supplies the route, rather than
-merely prove that `ping -I` can reach a directly attached peer.
+The target is deliberately **not directly connected** to the tested interface. Linux is a
+weak IPv4 host by default, so a peer with the target on `lo` would otherwise answer ARP for
+that local address on its veth. The harness therefore sets `arp_ignore=1` in the peer
+namespaces. This makes the target genuinely routed and prevents a false direct-L2 success.
 
 Probe nft admission is separate and narrow:
 
