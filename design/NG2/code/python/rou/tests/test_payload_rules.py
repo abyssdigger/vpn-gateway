@@ -225,6 +225,54 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
         self.assertTrue(flow.predicate.matches(dns))
         self.assertFalse(flow.predicate.matches(other))
 
+    def test_envelope_rules_preserve_first_match_order(self):
+        envelope = TrafficEnvelope(
+            EnvelopeAction.DROP,
+            (
+                TrafficEnvelopeRule(
+                    EnvelopeDirection.TO_PATH,
+                    EnvelopeAction.ALLOW,
+                    PayloadTrafficSelector(
+                        destination=IPv4Network("10.0.0.0/8"),
+                        protocol=PayloadProtocol.TCP,
+                        destination_ports=(PayloadPortRange(443, 443),),
+                    ),
+                ),
+                TrafficEnvelopeRule(
+                    EnvelopeDirection.TO_PATH,
+                    EnvelopeAction.DROP,
+                    PayloadTrafficSelector(
+                        destination=IPv4Network("10.1.0.0/16"),
+                        protocol=PayloadProtocol.TCP,
+                        destination_ports=(PayloadPortRange(443, 443),),
+                    ),
+                ),
+            ),
+        )
+        profile = PayloadProfileRequest(
+            "profile-a",
+            PayloadDirection.OUTBOUND,
+            (IPv4Network("10.0.0.0/8"),),
+            (
+                PayloadPath(
+                    InterfaceIdentity("vpns00", 10),
+                    envelope,
+                ),
+            ),
+        )
+
+        spec = self._calculate(profile)
+        flow = spec.flow_initiation_allows[0]
+        packet = PacketView(
+            IPv4Address("192.168.1.10"),
+            IPv4Address("10.1.2.3"),
+            TrafficProtocol.TCP,
+            source_port=50000,
+            destination_port=443,
+        )
+
+        self.assertTrue(flow.predicate.matches(packet))
+
     def test_narrow_profile_prevents_broad_allow_from_widening_policy(self):
         path = PayloadPath(InterfaceIdentity("vpns00", 10))
         broad = PayloadProfileRequest(
