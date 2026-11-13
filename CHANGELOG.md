@@ -1,3 +1,20 @@
+## 2026-11-14 — NG2 Adapter owner identity registry
+
+Added and reviewed the first Adapter-internal owner-lifecycle utility:
+
+- `DesiredRulesByOwner` keys ownership by Python object identity, not semantic names,
+  equality or hashes;
+- registered owners are kept strongly alive until explicit removal, preventing `id()`
+  reuse while a scope exists;
+- registry removal is idempotent and is only the internal registration step of the broader
+  Adapter `cleanup(owner)` contract;
+- the registry deliberately does not merge policies, assign owner priority or interpret
+  caller type/domain;
+- NG2 Python CI was added and passed on Python 3.13;
+- internal review `NG2-2026-11-14-adapter-owner-registry-review.md` passed.
+
+---
+
 ## 2026-11-14 — NG2 semantic payload NAT contract
 
 Completed and reviewed the payload NAT projection:
