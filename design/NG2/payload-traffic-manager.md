@@ -317,7 +317,7 @@ NetworkRulesSpec
         logical_domain_id
         destinations
         ordered_paths
-        terminal_action
+        terminal_disposition
 
     dispatch_policy
 
@@ -344,6 +344,10 @@ rules из payload domain в Adapter не передаются.
 - `traffic_allows` описывает, какие байты вообще допустимы между semantic endpoints;
 - `flow_initiation_allows` дополнительно описывает, какой допустимый трафик может
   инициировать новый stateful flow.
+
+Routing fail-close также выражается семантически: `DROP` / `REJECT`, а не Linux route
+types. В частности, payload zero-path использует `DROP`; конкретный `blackhole` route,
+его metric и прочая materialization принадлежат Adapter.
 
 Новый flow должен удовлетворять обоим наборам. Обратный трафик уже разрешенного flow не
 моделируется верхней предметной областью отдельно: conntrack/stateful realization,
