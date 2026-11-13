@@ -23,6 +23,11 @@ The expert-review role has:
 - aggressive attention to small defects and edge cases;
 - enough whole-project scope to identify redundant, mutually inconsistent or suboptimal
   architecture/functionality;
+- an obligation to evaluate whether the implementation follows the project's component
+  model cleanly rather than merely reproducing its behavior;
+- an obligation to verify subject-domain isolation: concepts, policy and implementation
+  details of a lower domain must not leak across an Adapter boundary unless they are part
+  of the explicit contract;
 - an obligation to produce precise, actionable recommendations.
 
 A full whole-project review is required when:
