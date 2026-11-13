@@ -1,3 +1,24 @@
+## 2026-11-14 — NG2 PayloadTrafficManager contracts
+
+Defined `design/NG2/payload-traffic-manager.md`:
+
+- `PayloadTrafficManager` remains the payload-domain Engine;
+- `PayloadRulesCalculator` maps payload intent to abstract `NetworkRulesSpec`;
+- `PayloadStateCalculator` maps observed network-rules state back to payload semantics;
+- `NetworkRulesAdapter` is a Direct semantic boundary with explicit
+  `apply/renewState/getLastState` contracts;
+- Adapter action result is separated from observed state;
+- Linux numeric allocation, safe transition/barrier logic, mutation ordering and fresh
+  verification are hidden behind the Adapter boundary;
+- legacy NG1 metric-history and central Planner responsibilities are assigned to their NG2
+  domains instead of being preserved as PayloadTrafficManager state.
+
+The generic component model was also refined: Machinery is expected to be Direct by
+default; Indirect semantics are exceptional, explicitly marked and treated as a design
+review warning.
+
+---
+
 ## 2026-11-13 — NG2 Engines/Machinery taxonomy and runtime boundary correction
 
 The reusable component model was refined into two component families:
