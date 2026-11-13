@@ -231,6 +231,7 @@ echo "PASS B: real primary OC probe is routed through the isolated table"
 
 cat <<EOF
 STAGE 3: create a data-path-only outage on the PRIMARY REMOTE client
+ACTION REQUIRED NOW: create primary outage on pri
 
 In another terminal on the machine that owns $PRIMARY_IF's OpenConnect session, block only
 forwarded traffic to the endpoint while leaving OpenConnect running.
@@ -285,6 +286,7 @@ echo "PASS D: alternate real OC binding still reached the endpoint"
 
 cat <<EOF
 STAGE 4: restore the PRIMARY REMOTE data path
+ACTION REQUIRED NOW: restore primary data path on pri
 
 Remove the temporary remote rule now:
   sudo iptables -D FORWARD -d $TARGET/32 -m comment --comment VPNG-EXP023 -j DROP

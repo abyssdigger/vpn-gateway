@@ -142,7 +142,13 @@ modify production firewall policy; it focuses on the real OpenConnect path.
 EXP-023 contains two polling windows that require a manual action on `pri`. The operator
 must know both commands before starting the harness.
 
-During the outage window on `pri`:
+Wait for this exact harness marker:
+
+```text
+ACTION REQUIRED NOW: create primary outage on pri
+```
+
+Then, on `pri`:
 
 ```sh
 sudo /usr/sbin/iptables -I FORWARD 1 \
@@ -151,7 +157,13 @@ sudo /usr/sbin/iptables -I FORWARD 1 \
     -j DROP
 ```
 
-During the recovery window on `pri`:
+Later wait for this exact marker:
+
+```text
+ACTION REQUIRED NOW: restore primary data path on pri
+```
+
+Then, on `pri`:
 
 ```sh
 sudo /usr/sbin/iptables -D FORWARD \
