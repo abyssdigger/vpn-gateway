@@ -1,30 +1,40 @@
 # VPN-GATE NG2 Python reference
 
-Current status: first executable NG2 contract slice.
+Current status: routing/dispatch plus effective payload-filtering contract slice.
 
 Implemented:
 
 - generic network-rules routing/dispatch data contract;
-- generation-aware concrete interface references;
-- caller-owned `NetworkRulesScope` kept outside `NetworkRulesSpec`;
-- Direct `NetworkRulesAdapter` protocol:
-  - `apply(scope, spec)`;
-  - `renew_state(scope)`;
-  - `get_last_state(scope)`;
+- generation-aware concrete VPN-path interface identities;
+- semantic `LOCAL_NETWORK` endpoint instead of leaking the infrastructure `host0` name;
+- Direct `NetworkRulesAdapter` protocol with opaque caller-instance ownership:
+  - `apply(owner, spec)`;
+  - `renew_state(owner)`;
+  - `get_last_state(owner)`;
+  - idempotent `cleanup(owner)` is part of the contract;
 - explicit known/unknown Adapter state contract;
 - zero-path routing domain as valid fail-closed intent;
-- first `PayloadRulesCalculator` slice:
+- allow-only filtering contract:
+  - `traffic_allows` describes effective byte-level permission;
+  - `flow_initiation_allows` additionally describes which permitted traffic may create a
+    new stateful flow;
+  - conntrack / established-related realization is intentionally below the Adapter boundary;
+- `PayloadRulesCalculator` routing/filtering slice:
   - Profile -> logical routing domain;
   - ordered generation-aware paths;
   - longest-prefix-first dispatch;
-  - duplicate-destination ambiguity rejection.
+  - duplicate-destination ambiguity rejection;
+  - Profile direction resolved before the Adapter;
+  - Device traffic-envelope first-match/default policy resolved to effective predicates
+    before the Adapter;
+  - more-specific Profile destinations exclude broader allows so overlapping Profiles do
+    not widen each other's policy.
 
 Not implemented yet:
 
-- packet filtering contract;
-- NAT contract;
-- packet-filtering and NAT slices of `PayloadRulesCalculator`;
+- NAT contract and NAT slice of `PayloadRulesCalculator`;
 - Linux `NetworkRulesAdapter` implementation;
+- owner-composition backend materialization;
 - Drivers and transition/materialization logic.
 
 Rootless tests:
