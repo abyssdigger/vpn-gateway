@@ -12,6 +12,7 @@ SECONDARY_IF=
 PRIMARY_PEER=
 SECONDARY_PEER=
 TARGET=
+PREFLIGHT_ONLY=0
 
 TMP=/run/vpn-gate-exp023-$$
 
@@ -21,9 +22,12 @@ Usage:
   exp-023-real-openconnect-probe-plane.sh \
       [--primary-if IF | --primary-peer IPv4] \
       [--secondary-if IF | --secondary-peer IPv4] \
-      --target IPv4
+      --target IPv4 \
+      [--preflight-only]
 
-The script changes only local RPDB/table state. It does not modify either remote client.
+With --preflight-only the script performs no RPDB/table changes and only verifies the
+stand prerequisites. Without it, the experiment changes only temporary local RPDB/table
+state. It never modifies either remote client automatically.
 EOF
 }
 
@@ -88,6 +92,10 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -ge 2 ] || fail "--target requires a value"
             TARGET=$2
             shift 2
+            ;;
+        --preflight-only)
+            PREFLIGHT_ONLY=1
+            shift
             ;;
         -h|--help)
             usage
@@ -159,17 +167,20 @@ probe_capture() {
     return "$rc"
 }
 
-rule_collision=$(ip rule show | awk -F: -v p="$PROBE_RULE_PRIORITY" '
-    ($1 + 0) == p { print; exit }
-')
-[ -z "$rule_collision" ] ||
-    fail "RPDB priority $PROBE_RULE_PRIORITY is already occupied: $rule_collision"
+echo "PREFLIGHT: expected stand"
+cat <<EOF
+  server:
+    primary OpenConnect binding -> peer ${PRIMARY_PEER:-resolved-by-interface}
+    secondary OpenConnect binding -> peer ${SECONDARY_PEER:-resolved-by-interface}
+    both paths must reach target $TARGET
+  outage point:
+    remote client behind PRIMARY only; OpenConnect session itself remains running
+  experiment-local state when not in --preflight-only mode:
+    RPDB priority $PROBE_RULE_PRIORITY
+    routing table $PROBE_TABLE
+EOF
 
-table_state=$(ip route show table "$PROBE_TABLE" 2>/dev/null || true)
-[ -z "$table_state" ] ||
-    fail "routing table $PROBE_TABLE is not empty: $table_state"
-
-echo "STAGE 1: resolve and validate real OpenConnect bindings"
+echo "PREFLIGHT: resolve and validate real OpenConnect bindings"
 echo "PRIMARY_IF=$PRIMARY_IF"
 echo "SECONDARY_IF=$SECONDARY_IF"
 [ -n "$PRIMARY_PEER" ] && echo "PRIMARY_PEER=$PRIMARY_PEER"
@@ -186,16 +197,31 @@ echo "PRIMARY_LINK=$(ip -o link show dev "$PRIMARY_IF")"
 echo "SECONDARY_LINK=$(ip -o link show dev "$SECONDARY_IF")"
 echo "ORDINARY_ROUTE=$(ip route get "$TARGET" 2>&1 || true)"
 
-echo "STAGE 2: prove both real OC paths can reach the endpoint"
+echo "PREFLIGHT: prove both real OC paths can reach the endpoint"
 if ! probe_capture initial-primary "$PRIMARY_IF"; then
     fail_capture "initial endpoint probe through $PRIMARY_IF failed" initial-primary
 fi
 if ! probe_capture initial-secondary "$SECONDARY_IF"; then
     fail_capture "initial endpoint probe through $SECONDARY_IF failed" initial-secondary
 fi
-echo "PASS A: endpoint is reachable through both real OpenConnect bindings"
+echo "PREFLIGHT_PASS: endpoint is reachable through both real OpenConnect bindings"
 
-echo "STAGE 3: install isolated probe route and RPDB selector for primary binding"
+if [ "$PREFLIGHT_ONLY" -eq 1 ]; then
+    echo "EXP_023_PREFLIGHT=PASS"
+    exit 0
+fi
+
+rule_collision=$(ip rule show | awk -F: -v p="$PROBE_RULE_PRIORITY" '
+    ($1 + 0) == p { print; exit }
+')
+[ -z "$rule_collision" ] ||
+    fail "RPDB priority $PROBE_RULE_PRIORITY is already occupied: $rule_collision"
+
+table_state=$(ip route show table "$PROBE_TABLE" 2>/dev/null || true)
+[ -z "$table_state" ] ||
+    fail "routing table $PROBE_TABLE is not empty: $table_state"
+
+echo "STAGE 1: install isolated probe route and RPDB selector for primary binding"
 ip route add table "$PROBE_TABLE" "$TARGET/32" dev "$PRIMARY_IF"
 ip route add table "$PROBE_TABLE" unreachable default metric "$TERMINAL_METRIC"
 ip rule add \
