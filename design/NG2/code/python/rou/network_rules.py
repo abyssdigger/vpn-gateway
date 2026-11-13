@@ -5,23 +5,11 @@ from enum import Enum
 from ipaddress import IPv4Address, IPv4Network
 from typing import Protocol
 
+from .interface_identity import InterfaceIdentity
+
 
 class NetworkRulesError(ValueError):
     pass
-
-
-@dataclass(frozen=True, order=True)
-class InterfaceIdentity:
-    ifname: str
-    ifindex: int
-
-    def __post_init__(self) -> None:
-        if not self.ifname:
-            raise NetworkRulesError("ifname must be non-empty")
-        if len(self.ifname.encode("utf-8")) > 15:
-            raise NetworkRulesError("ifname exceeds Linux IFNAMSIZ-1")
-        if type(self.ifindex) is not int or self.ifindex <= 0:
-            raise NetworkRulesError("ifindex must be a positive integer")
 
 
 class EndpointKind(str, Enum):
