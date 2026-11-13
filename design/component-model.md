@@ -197,13 +197,24 @@ Agent может иметь timers, retries, debounce, hysteresis и другу�
 
 ## 6. Machinery: Direct и Indirect
 
-Direct/Indirect — независимая характеристика Machinery и может применяться к Calculator,
-Adapter и Driver.
+Direct/Indirect — характеристика completion semantics Machinery.
+
+**Machinery is expected to be Direct by default.** Обычный контракт должен быть
+сформулирован так, чтобы синхронный return являлся завершенным результатом именно той
+операции, которую caller запросил.
+
+Например внешний асинхронный механизм не делает Adapter автоматически Indirect:
+
+```text
+submit(job) -> submitted / not submitted
+```
+
+остается Direct-вызовом, если контракт метода — именно постановка задания.
 
 ### 6.1. Direct Machinery
 
-Для **Direct Machinery** синхронный return является тем результатом, ради которого
-механизм был вызван:
+Для **Direct Machinery** синхронный return является завершенным результатом заявленной
+операции:
 
 ```text
 input
@@ -217,7 +228,13 @@ result
 
 Caller вправе использовать returned value как результат данного обращения.
 
+Немаркированные Calculator, Adapter и Driver предполагают Direct semantics.
+
 ### 6.2. Indirect Machinery
+
+**Indirect** — исключительная и явно маркируемая semantics, а также design-review warning.
+Она используется, когда вызываемая операция действительно не может быть естественно
+сформулирована как Direct.
 
 Для **Indirect Machinery** синхронный вызов только инициирует, передает или ставит работу:
 
@@ -234,9 +251,16 @@ accepted / rejected / delivered / handle
 Интересующий предметный результат появляется позже и возвращается в рассматриваемую
 систему через event space.
 
-Нормативное правило:
+Нормативные правила:
 
 > return Indirect Machinery не является доказательством результата инициированной работы.
+
+> Если Indirect-контракт можно естественно переформулировать как Direct-операцию
+> (`submit`, `enqueue`, `request` и т. п.), следует предпочесть Direct.
+
+> Смешение Direct и Indirect completion semantics в одном Machinery-компоненте следует
+> избегать; `MixedAdapter` и аналогичные конструкции требуют отдельного архитектурного
+> обоснования.
 
 Типичная схема:
 
@@ -309,7 +333,19 @@ Adapter может быть Direct или Indirect.
 
 ### 8.1. Direct Adapter
 
-Caller получает интересующий результат через тот же синхронный вызов.
+Caller получает завершенный результат заявленной операции через тот же синхронный вызов.
+
+Adapter может иметь несколько методов с различным назначением. Например stateful
+реализация может явно предоставлять:
+
+```text
+apply(desired)   -> SUCCESS | FAILURE
+renewState()     -> SUCCESS | FAILURE
+getLastState()   -> State
+```
+
+Это не нарушает externally-stateless contract: caller зависит только от явно объявленного
+state contract, а не от скрытой истории предыдущих вызовов.
 
 ### 8.2. Indirect Adapter
 
@@ -376,12 +412,14 @@ submit long database job -> accepted/job_id
 Для рассматриваемой предметной области Calculator, Adapter и Driver считаются externally
 stateless независимо от их внутренней реализации.
 
-Это означает:
+Это означает прежде всего отсутствие зависимости от **неявной** истории вызовов:
 
-- caller не опирается на неявную историю вызовов;
-- скрытый cache не является частью контракта;
+- caller не опирается на скрытую последовательность прошлых обращений;
 - скрытая нижняя система может помнить сколько угодно;
-- если caller должен знать token/generation/handle, он передается явно;
+- явно экспонированный state contract (`renewState/getLastState`, token, generation,
+  handle и т. п.) допустим;
+- если предыдущий результат нужен следующему вызову, эта зависимость должна быть видна в
+  API;
 - восстановление caller после restart не должно требовать знания внутренней истории
   Machinery сверх явного контракта.
 
