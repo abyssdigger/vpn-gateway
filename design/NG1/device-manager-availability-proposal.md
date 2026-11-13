@@ -98,6 +98,32 @@ The exact grammar, supported probe types, hostname/DNS semantics, timing and hys
 remain open. The examples above record the configuration direction and semantic boundary,
 not a finalized schema.
 
+### 3.2 Relation to future warm reserve
+
+Profile-binding availability is an input to future DeviceManager capacity decisions, not a
+Device lifecycle state by itself.
+
+The intended direction is:
+
+```text
+Profile policy / desired redundancy
+        +
+current (Profile, binding) ON/OFF results
+        +
+current Device/binding inventory
+        ->
+DeviceManager decides how many Devices should be kept running
+```
+
+For example, a Profile may eventually request one usable path plus one warm spare. If one
+currently usable binding turns OFF, another already-running binding may become the active
+path while DeviceManager starts or retains another Device to restore the requested reserve.
+
+The exact Profile parameters, counting rules, startup ordering and lifecycle API are not
+decided here. This section records only the dependency direction: warm-reserve logic may
+consume Profile requirements and current Profile-local availability; availability itself
+does not start or stop Devices.
+
 ## 4. State lifetime
 
 ON/OFF is **never persisted**.
