@@ -16,6 +16,7 @@ from .network_rules import (
     TrafficAllowSpec,
     TrafficPredicate,
     TrafficSelector,
+    PredicateKind,
 )
 
 
@@ -246,7 +247,7 @@ class PayloadRulesCalculator:
                         envelope_from,
                     )
 
-                    if to_path.kind.value != "never":
+                    if to_path.kind is not PredicateKind.NEVER:
                         traffic_allows.append(
                             TrafficAllowSpec(
                                 LOCAL_NETWORK,
@@ -266,7 +267,7 @@ class PayloadRulesCalculator:
                                 )
                             )
 
-                    if from_path.kind.value != "never":
+                    if from_path.kind is not PredicateKind.NEVER:
                         traffic_allows.append(
                             TrafficAllowSpec(
                                 path_endpoint,
