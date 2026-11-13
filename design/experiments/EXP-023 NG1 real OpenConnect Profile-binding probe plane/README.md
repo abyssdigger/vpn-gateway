@@ -12,12 +12,24 @@ both reach the same remote endpoint.
 This experiment does **not** redefine availability as ping. It validates one active
 availability condition on a production-like VPN path.
 
-## Stand description
+## Stand
 
-This experiment changes stand relative to the preceding synthetic netns experiment.
-Before any experiment mutation, verify the following real topology.
+EXP-023 reuses the real dual-client OpenConnect stand already described and validated in
+**EXP-011**. It does not define a new stand.
 
-The server has two simultaneously bound OpenConnect interfaces:
+Relevant EXP-011 baseline:
+
+- ocserv host `testing` = `192.168.201.107`;
+- external endpoint TCP/UDP `44443`;
+- `pri` = remote `192.168.201.108`, VPN peer `172.20.130.6`;
+- `sec` = remote `192.168.201.199`, VPN peer `172.20.130.5`;
+- with normal host ocserv, the two server-side interfaces materialize as current `vpns*`
+  bindings.
+
+EXP-023 difference: both normal OpenConnect sessions remain alive while only endpoint
+forwarding behind `pri` is temporarily blocked.
+
+The expected live topology is:
 
 ```text
              real OC path A
@@ -32,70 +44,84 @@ Both paths must initially reach the same IPv4 endpoint.
 The script may identify the two interfaces either by interface name or by their fixed
 OpenConnect peer IPv4 addresses.
 
-## Mandatory preflight
+## Stand diagnosis, restoration and verification
 
-Do **not** start the mutating experiment first.
+Perform these interactively before running the harness.
 
-For the current stand the expected roles are:
+### 1. Diagnose current server state
 
-| Role | Expected value |
-| --- | --- |
-| primary OC user/peer | `pri` / `172.20.130.6` |
-| secondary OC user/peer | `sec` / `172.20.130.5` |
-| server-side interfaces | two current `vpns*` bindings, resolved from peer addresses |
-| common endpoint | `172.21.201.19` |
-| outage location | remote `pri` client, forwarding to the endpoint only |
-| must remain alive during outage | both OpenConnect sessions and both server-side bindings |
-
-First update the repository and run **preflight only**:
+Do not start services first:
 
 ```sh
-git pull --ff-only
-
-cd "design/experiments/EXP-023 NG1 real OpenConnect Profile-binding probe plane"
-
-sudo ./exp-023-real-openconnect-probe-plane.sh \
-    --primary-peer 172.20.130.6 \
-    --secondary-peer 172.20.130.5 \
-    --target 172.21.201.19 \
-    --preflight-only
+hostname
+systemctl is-active ocserv
+systemctl status ocserv --no-pager -l
+pgrep -a ocserv
+ss -lntup | grep ':44443' || true
+ip -br link
+ip -o -4 addr show
 ```
 
-This mode performs no RPDB/table changes. It must show:
+If the normal ocserv service is intentionally stopped from a previous experiment, that is
+a diagnosed stand state rather than an experiment failure.
 
-- two different concrete interfaces;
-- both interfaces contain `IFF_UP`;
-- their current ifindexes and raw `ip -o link` lines;
-- the ordinary route to the endpoint;
-- successful endpoint probe through **each** concrete OC interface;
-- final marker:
+### 2. Restore only what is missing
+
+For the known post-EXP-011 stopped-service state:
+
+```sh
+sudo systemctl start ocserv
+sleep 0.1
+sudo ss -lntup | grep ':44443'
+```
+
+The short delay is an interactive readiness allowance observed on this stand; automated
+readiness checks should use polling instead.
+
+### 3. Verify both OpenConnect clients reconnected
+
+```sh
+sudo watch -n1 occtl show users
+```
+
+Expected mapping:
 
 ```text
-EXP_023_PREFLIGHT=PASS
+pri  -> 172.20.130.6 -> vpns00 (current interface name may be reallocated)
+sec  -> 172.20.130.5 -> vpns01 (current interface name may be reallocated)
 ```
 
-On each remote OC client, before the experiment, verify forwarding/NAT and endpoint
-reachability using the existing operational configuration. At minimum on **pri**:
+Then record the actual interfaces:
 
 ```sh
+ip -o -4 addr show
+```
+
+### 4. Diagnose each remote client
+
+On `pri`, then on `sec`, without changing anything:
+
+```sh
+hostname
 ip -br addr
 ip route
 sysctl net.ipv4.ip_forward
+iptables -S FORWARD
 iptables -t nat -S
-ping -c 1 172.21.201.19
+ping -c 1 -W 1 172.21.201.19
 ```
 
-Run the same checks on **sec**. There must be no leftover `VPNG-EXP023` DROP rule:
+Also confirm that no EXP-023 blocking rule is already present:
 
 ```sh
 sudo iptables -C FORWARD -d 172.21.201.19/32 \
     -m comment --comment VPNG-EXP023 -j DROP
 ```
 
-That command is expected to return non-zero before the experiment.
+That last command must return non-zero before the experiment.
 
-Only after the server preflight and both remote-client checks match this description should
-the mutating run begin.
+Only after these outputs are reviewed should the experiment harness be run.
+
 ## What is being proved
 
 1. both real OC bindings can initially reach the endpoint;
@@ -113,7 +139,7 @@ modify production firewall policy; it focuses on the real OpenConnect path.
 
 ## Experimental run
 
-After the mandatory preflight has been reviewed, run without `--preflight-only`.
+After the interactive stand diagnosis/restoration/verification has been reviewed:
 
 Generic form:
 

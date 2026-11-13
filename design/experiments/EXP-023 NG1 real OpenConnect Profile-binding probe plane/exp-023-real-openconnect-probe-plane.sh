@@ -12,8 +12,6 @@ SECONDARY_IF=
 PRIMARY_PEER=
 SECONDARY_PEER=
 TARGET=
-PREFLIGHT_ONLY=0
-
 TMP=/run/vpn-gate-exp023-$$
 
 usage() {
@@ -22,12 +20,11 @@ Usage:
   exp-023-real-openconnect-probe-plane.sh \
       [--primary-if IF | --primary-peer IPv4] \
       [--secondary-if IF | --secondary-peer IPv4] \
-      --target IPv4 \
-      [--preflight-only]
+      --target IPv4
 
-With --preflight-only the script performs no RPDB/table changes and only verifies the
-stand prerequisites. Without it, the experiment changes only temporary local RPDB/table
-state. It never modifies either remote client automatically.
+The experiment changes only temporary local RPDB/table state. It never modifies either
+remote client automatically. Stand diagnosis/restoration is intentionally documented as
+interactive commands in README.md rather than implemented here.
 EOF
 }
 
@@ -92,10 +89,6 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -ge 2 ] || fail "--target requires a value"
             TARGET=$2
             shift 2
-            ;;
-        --preflight-only)
-            PREFLIGHT_ONLY=1
-            shift
             ;;
         -h|--help)
             usage
@@ -167,20 +160,7 @@ probe_capture() {
     return "$rc"
 }
 
-echo "PREFLIGHT: expected stand"
-cat <<EOF
-  server:
-    primary OpenConnect binding -> peer ${PRIMARY_PEER:-resolved-by-interface}
-    secondary OpenConnect binding -> peer ${SECONDARY_PEER:-resolved-by-interface}
-    both paths must reach target $TARGET
-  outage point:
-    remote client behind PRIMARY only; OpenConnect session itself remains running
-  experiment-local state when not in --preflight-only mode:
-    RPDB priority $PROBE_RULE_PRIORITY
-    routing table $PROBE_TABLE
-EOF
-
-echo "PREFLIGHT: resolve and validate real OpenConnect bindings"
+echo "STAGE 1: validate supplied live bindings before mutation"
 echo "PRIMARY_IF=$PRIMARY_IF"
 echo "SECONDARY_IF=$SECONDARY_IF"
 [ -n "$PRIMARY_PEER" ] && echo "PRIMARY_PEER=$PRIMARY_PEER"
@@ -193,23 +173,14 @@ PRIMARY_INDEX=$(cat "/sys/class/net/$PRIMARY_IF/ifindex")
 SECONDARY_INDEX=$(cat "/sys/class/net/$SECONDARY_IF/ifindex")
 echo "PRIMARY_IFINDEX=$PRIMARY_INDEX"
 echo "SECONDARY_IFINDEX=$SECONDARY_INDEX"
-echo "PRIMARY_LINK=$(ip -o link show dev "$PRIMARY_IF")"
-echo "SECONDARY_LINK=$(ip -o link show dev "$SECONDARY_IF")"
-echo "ORDINARY_ROUTE=$(ip route get "$TARGET" 2>&1 || true)"
 
-echo "PREFLIGHT: prove both real OC paths can reach the endpoint"
 if ! probe_capture initial-primary "$PRIMARY_IF"; then
     fail_capture "initial endpoint probe through $PRIMARY_IF failed" initial-primary
 fi
 if ! probe_capture initial-secondary "$SECONDARY_IF"; then
     fail_capture "initial endpoint probe through $SECONDARY_IF failed" initial-secondary
 fi
-echo "PREFLIGHT_PASS: endpoint is reachable through both real OpenConnect bindings"
-
-if [ "$PREFLIGHT_ONLY" -eq 1 ]; then
-    echo "EXP_023_PREFLIGHT=PASS"
-    exit 0
-fi
+echo "PASS A: supplied live bindings both reach endpoint"
 
 rule_collision=$(ip rule show | awk -F: -v p="$PROBE_RULE_PRIORITY" '
     ($1 + 0) == p { print; exit }
@@ -221,7 +192,7 @@ table_state=$(ip route show table "$PROBE_TABLE" 2>/dev/null || true)
 [ -z "$table_state" ] ||
     fail "routing table $PROBE_TABLE is not empty: $table_state"
 
-echo "STAGE 1: install isolated probe route and RPDB selector for primary binding"
+echo "STAGE 2: install isolated probe route and RPDB selector for primary binding"
 ip route add table "$PROBE_TABLE" "$TARGET/32" dev "$PRIMARY_IF"
 ip route add table "$PROBE_TABLE" unreachable default metric "$TERMINAL_METRIC"
 ip rule add \
@@ -259,7 +230,7 @@ fi
 echo "PASS B: real primary OC probe is routed through the isolated table"
 
 cat <<EOF
-STAGE 4: create a data-path-only outage on the PRIMARY REMOTE client
+STAGE 3: create a data-path-only outage on the PRIMARY REMOTE client
 
 In another terminal on the machine that owns $PRIMARY_IF's OpenConnect session, block only
 forwarded traffic to the endpoint while leaving OpenConnect running.
@@ -313,7 +284,7 @@ echo "PASS C: primary condition failed while binding stayed IFF_UP with ifindex=
 echo "PASS D: alternate real OC binding still reached the endpoint"
 
 cat <<EOF
-STAGE 5: restore the PRIMARY REMOTE data path
+STAGE 4: restore the PRIMARY REMOTE data path
 
 Remove the temporary remote rule now:
   sudo iptables -D FORWARD -d $TARGET/32 -m comment --comment VPNG-EXP023 -j DROP
