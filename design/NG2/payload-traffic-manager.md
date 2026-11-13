@@ -329,9 +329,11 @@ NetworkRulesSpec
         source/destination semantic endpoints
         effective packet predicates
 
-    nat_policy
-        none / masquerade intent
-        applicable paths/destinations
+    source_nat
+        source semantic endpoint
+        egress semantic endpoint
+        effective packet predicate
+        translation target = EGRESS_ADDRESS
 
     forwarding_requirement
 ```
@@ -357,6 +359,20 @@ network-stack domain за Adapter.
 Device traffic envelope полностью разрешается в `PayloadRulesCalculator` до Adapter.
 В том числе first-match `allow/drop + default` политика преобразуется в effective
 allow-predicate; Adapter не знает понятий Profile direction и Device envelope.
+
+Payload NAT policy также разрешается до Adapter. Текущее payload-понятие
+`MASQUERADE` преобразуется в semantic source translation:
+
+```text
+source = LOCAL_NETWORK
+egress = concrete path
+target = EGRESS_ADDRESS
+predicate = effective Profile destination
+```
+
+Adapter не получает nft `postrouting`/ `masquerade` vocabulary. Он обязан реализовать
+семантику source translation выбранным backend mechanism. `NONE` представлен отсутствием
+source-NAT intent.
 
 Верхний контракт также не называет инфраструктурный Linux-интерфейс вроде `host0`.
 Host-facing сторона представляется semantic endpoint `LOCAL_NETWORK`, а ее конкретная
