@@ -1,3 +1,18 @@
+## 2026-11-14 — NG2 semantic payload NAT contract
+
+Completed and reviewed the payload NAT projection:
+
+- `PayloadNatMode.NONE` emits no source-translation intent;
+- `PayloadNatMode.MASQUERADE` becomes network-rules
+  `SourceNatTarget.EGRESS_ADDRESS`;
+- Linux/nft `postrouting` and `masquerade` mechanics remain below the Adapter boundary;
+- source NAT is bound to concrete generation-aware egress identity;
+- more-specific Profile destinations are excluded from broader NAT intents;
+- NAT projection stays independent from traffic-envelope filtering semantics;
+- internal review `NG2-2026-11-14-payload-nat-review.md` passed.
+
+---
+
 ## 2026-11-14 — NG2 payload filtering and Adapter ownership boundary
 
 Completed the first reviewed payload-filtering contract slice:
