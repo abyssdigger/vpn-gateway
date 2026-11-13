@@ -5,262 +5,245 @@
 **Область:** steady-state runtime после успешного startup и до начала shutdown  
 **Общая компонентная модель:** `design/component-model.md`
 
-Документ описывает событийные контракты верхнего уровня VPN-GATE NG2 до границ
-Managers. Внутренняя декомпозиция Managers, конкретные Adapters и способы реализации их
-локальных control loops намеренно не рассматриваются: это следующий архитектурный шаг.
+Документ описывает события и Engines верхнего уровня VPN-GATE NG2. Внутренняя
+декомпозиция Managers и их Machinery рассматривается отдельными документами.
 
-Bootstrap, startup и shutdown также находятся вне текущего scope. Предполагается, что
-runtime уже получил готовую нормализованную конфигурацию и все участники, необходимые для
-steady-state работы, запущены.
+Bootstrap/startup/shutdown пока находятся вне scope.
 
-## 1. Цель runtime
+## 1. Основная петля
 
-Runtime должен непрерывно поддерживать соответствие между:
+Runtime сопоставляет:
 
-- нормализованной внешней конфигурацией;
-- текущими наблюдениями внешней среды;
-- текущими состояниями управляемых Managers;
-- встроенными policy/invariants VPN-GATE;
-- желаемым состоянием управляемых предметных областей.
+- нормализованную конфигурацию;
+- текущие наблюдения внешней среды;
+- текущие состояния Managers;
+- встроенную policy VPN-GATE.
 
-Runtime не строится вокруг процедурного общего reconciliation pass. Его основной механизм
-— обмен Events через Event Delivery Environment.
-
-Общая петля:
+Общий поток:
 
 ```text
-InfoEvents from observed/managed domains
-        |
-        v
+InfoEvents
+    |
+    v
 RuntimeStateManager
-        |
-        v
+    |
+    v
 CurrentRuntimeSnapshot
-        |
-        v
+    |
+    v
 Calculators(config, policy, snapshot)
-        |
-        +--> RequestEvents --> Managers / Agents
-        |
-        +--> InfoEvents ----> status/diagnostic subscribers
-                                |
-                                v
-                  environment changes / observations
-                                |
-                                +---- InfoEvents ----+
-                                                   |
-                                                   v
-                                         RuntimeStateManager
+    |
+    +--> RequestEvents --> Managers
+    |
+    +--> InfoEvents ----> status/diagnostics
+                            |
+                            v
+                  environment changes
+                            |
+                            +--> InfoEvents
 ```
 
-## 2. Участники верхнего уровня
+Runtime не требует единого процедурного global reconcile call.
+
+## 2. Engines верхнего уровня
 
 ### 2.1. RuntimeStateManager
 
-`RuntimeStateManager` — верхнеуровневый Manager состояния runtime-стакана.
-
-Его управляемая предметная среда — совокупность остальных runtime domains, представленная
-через их опубликованные состояния.
+`RuntimeStateManager` — Manager общей runtime-проекции VPN-GATE.
 
 Он:
 
-1. подписывается на системно значимые InfoEvents Agents и Managers;
-2. хранит latest known projection каждого необходимого источника;
-3. собирает из них `CurrentRuntimeSnapshot`;
-4. прогоняет snapshot через Calculators;
-5. публикует RequestEvents только при изменении соответствующего desired projection;
-6. публикует системные InfoEvents, например вычисленное состояние Profiles;
-7. не управляет низкоуровневыми ресурсами непосредственно;
-8. не знает внутренние retry/state-machine/Adapter механизмы нижних Managers.
+1. подписывается на системно значимые InfoEvents;
+2. хранит latest known projections текущего runtime epoch;
+3. собирает `CurrentRuntimeSnapshot`;
+4. применяет Calculators к snapshot + config + policy;
+5. публикует изменившиеся RequestEvents;
+6. публикует вычисленные системные InfoEvents;
+7. не управляет Linux networking или probe machinery непосредственно.
 
-Накопление latest known projections является технологическим способом построения текущего
-snapshot и не является историческим журналом.
+Latest-value storage является cache текущего мира, а не историческим журналом.
 
 ### 2.2. InterfaceObservationAgent
 
-`InterfaceObservationAgent` представляет runtime текущую сетевую interface environment.
+`InterfaceObservationAgent` наблюдает runtime network interfaces.
 
-Он наблюдает интерфейсы и публикует актуальную проекцию их состояния. Источником wakeup
-может быть netlink, audit timer или другой механизм, но содержание event должно описывать
-актуальное наблюдение, а не доверять сырому wakeup как состоянию.
+Он публикует актуальную проекцию релевантных интерфейсов, включая как минимум:
 
-В исходную проекцию могут входить, как минимум:
+- ifname;
+- ifindex;
+- kernel flags/properties, необходимые policy;
+- адресные данные, если они реально нужны runtime policy.
 
-- concrete interface identity;
-- имя и ifindex;
-- kernel flags;
-- адресные данные, если они требуются policy;
-- иные проверенные текущие свойства интерфейса.
-
-Точная техника чтения kernel state относится к внутренней реализации Agent/Adapters.
-
-### 2.3. ProbeAgent
-
-`ProbeAgent` — логическая роль одного или нескольких Agents активного наблюдения
-доступности.
-
-RuntimeStateManager публикует, какие probes сейчас требуются. ProbeAgent не изменяет
-проверяемую внешнюю среду, выполняет заданные наблюдения и публикует текущие результаты.
-
-Конкретные реализации могут быть разделены по механизмам, например ICMP и TCP, но
-верхнеуровневая event model от этого не меняется.
-
-### 2.4. DeviceManager
-
-`DeviceManager` представляет runtime управляемую область Device lifecycle/capacity.
-
-Он принимает желаемое состояние Device domain, самостоятельно наблюдает фактическое
-состояние своей среды, воздействует на нее и публикует актуальную системно значимую
-проекцию.
-
-RuntimeStateManager не должен знать, какие процессы, unit'ы, конфигурационные файлы,
-retries или transport-specific операции используются DeviceManager.
-
-### 2.5. TrafficManager
-
-`TrafficManager` представляет runtime всю управляемую traffic domain.
-
-Он получает семантическое желаемое traffic state, а внутри своей границы сам отвечает за
-необходимые network resources, безопасные переходы, verification, fail-closed behavior и
-локальную convergence policy.
-
-RuntimeStateManager не должен оперировать route/rule/firewall/NAT operations как
-управляющими действиями. В event contract передается требуемая семантика traffic domain,
-а не последовательность низкоуровневых команд.
-
-### 2.6. PublicationManager
-
-`PublicationManager` представляет runtime управляемую область transport publication.
-
-Он получает желаемую publication projection и публикует фактическое состояние этой
-области. Socket workers, relay implementation и прочая механика скрыты внутри Manager.
-
-## 3. Event Delivery Environment
-
-Все перечисленные участники связаны через общую абстрактную Event Delivery Environment.
-
-Она обеспечивает:
+Concrete interface identity:
 
 ```text
-publish(Event)
-
-subscribe(EventType, optional scope, Subscriber)
-
-publication
-    -> delivery to every matching active subscriber
+(ifname, ifindex)
 ```
 
-Среда доставки:
+Same-name/new-ifindex означает новую concrete interface identity.
 
+Agent не выполняет Device admission и не определяет Profile binding.
+
+### 2.3. AvailabilityProbeManager
+
+`AvailabilityProbeManager` управляет подсистемой активных availability probes.
+
+Он не управляет доступностью удаленного endpoint. Его managed domain — собственная probe
+subsystem:
+
+- набор активных probe tasks;
+- необходимая probe-specific network environment;
+- lifecycle и исполнение probes;
+- получение фактических probe results.
+
+Manager получает желаемый набор probes как RequestEvent и публикует текущие результаты как
+InfoEvents.
+
+Итоговая семантика:
+
+```text
+(Profile, concrete interface) -> ON/OFF
+```
+
+ему не принадлежит. Probe result является только одним из входов `BindingCalculator`.
+
+### 2.4. PayloadTrafficManager
+
+`PayloadTrafficManager` управляет payload network policy VPN-GATE.
+
+Его предметная область включает только правила, определяющие payload forwarding:
+
+- Profile routing/RPDB;
+- payload filtering;
+- payload NAT;
+- payload forwarding safety;
+- необходимые payload-related network prerequisites.
+
+Он не управляет:
+
+- VPN-процессами;
+- availability probe subsystem;
+- transport publication workers;
+- Profile satisfaction.
+
+Внутренняя безопасная материализация rules, verification, barriers и работа с Linux
+networking скрыты внутри Manager/Machinery и не входят в event contract верхнего уровня.
+
+### 2.5. PublicationManager
+
+`PublicationManager` управляет transport publication subsystem:
+
+- published TCP/UDP endpoints;
+- relay/listener workers;
+- соответствующий lifecycle;
+- фактическое состояние publication.
+
+Он не владеет payload routing и не определяет Profile policy.
+
+Если публикации требуется kernel network admission, это отдельная network-rules
+ответственность, а не причина считать relay machinery частью PayloadTrafficManager.
+
+## 3. Отсутствие DeviceManager в текущем runtime
+
+Текущий NG2 runtime **не управляет VPN Device processes/adapters**.
+
+VPN machinery запускается и поддерживается внешними механизмами/администратором. Runtime
+наблюдает результат через InterfaceObservationAgent.
+
+Поэтому в текущем scope отсутствуют:
+
+```text
+DeviceManager
+DeviceStateRequest
+DeviceStateInfo
+DeviceCapacityCalculator
+```
+
+`Device` остается конфигурационным понятием, связывающим ожидаемые interfaces и
+traffic/publication policy.
+
+Future Device lifecycle management может ввести отдельный Manager, когда daemon реально
+получит actuator mechanisms для создания/остановки/масштабирования VPN machinery.
+
+## 4. Event Delivery Environment
+
+Все Engines связаны через Event Delivery Environment.
+
+Она:
+
+- доставляет Events согласно subscriptions;
 - не интерпретирует domain semantics;
-- не вычисляет desired state;
 - не выполняет policy;
 - не является source of truth;
-- не обязана хранить event history между запусками daemon.
+- не превращает RequestEvent в RPC.
 
-Runtime correctness не должен зависеть от exactly-once semantics. Subscribers должны
-переносить повторную доставку одной и той же актуальной проекции.
+Повторная доставка одинаковой текущей проекции должна быть безопасна.
 
-Для защиты от stale/out-of-order state publications каждый stateful event stream имеет
-логическую revision.
-
-## 4. Общий event envelope
-
-Каждый Event верхнего уровня должен иметь метаданные, достаточные для маршрутизации,
-дедупликации и диагностики.
+## 5. Event envelope
 
 Концептуально:
 
 ```text
 EventEnvelope
     kind            INFO | REQUEST
-    type            stable event type
-    publisher       stable participant identity
-    subject         domain-specific scope/key
-    runtime_epoch   identity of this daemon/runtime generation
-    revision        monotonic revision within publisher+type+subject+epoch
-    event_id        unique diagnostic identifier
-    caused_by       optional event_id/request identifier
-    published_at    diagnostic timestamp
-    payload         event-specific data
+    type
+    publisher
+    subject
+    runtime_epoch
+    revision
+    event_id
+    caused_by       optional
+    published_at    diagnostic only
+    payload
 ```
 
-Нормативные свойства:
+Правила:
 
-1. `runtime_epoch` не связывает независимые daemon runs; новый запуск является новой
-   runtime generation.
-2. `revision` используется для определения последней публикации одной проекции, а не как
-   исторический номер domain state.
-3. Subscriber игнорирует publication с revision старше уже принятой для того же stream.
-4. `caused_by` является optional diagnostic/correlation metadata и не заменяет наблюдение
-   фактической среды.
-5. `published_at` не используется как единственный механизм ordering.
+1. новый daemon run получает новый `runtime_epoch`;
+2. `revision` монотонна в пределах publisher + type + subject + epoch;
+3. более старая revision одной state projection игнорируется;
+4. `caused_by` используется для диагностики/correlation, но не заменяет observation;
+5. timestamp не является единственным ordering mechanism.
 
-Конкретная serialized representation будет определена при проектировании реализации.
+## 6. RequestEvent semantics
 
-## 5. Семантика RequestEvent
+RequestEvent выражает актуальное управляющее намерение.
 
-RequestEvent в NG2 означает актуальное управляющее намерение, а не одноразовую procedure
-call.
-
-Для одного request subject:
+Для одного subject:
 
 ```text
-revision 10: desired = A
-revision 11: desired = B
+revision 10 -> desired A
+revision 11 -> desired B
 ```
 
 означает, что B заменяет A.
 
-Manager, принявший актуальный RequestEvent:
+Manager:
 
-- сохраняет его как текущий управляющий input своей области;
-- пытается поддерживать/достигать соответствующее состояние согласно локальной policy;
+- принимает latest request как текущий управляющий input;
+- сам отвечает за локальную convergence policy;
 - не требует повторного request для каждого retry;
-- прекращает следовать старому request после принятия более новой revision;
-- публикует актуальное состояние области как InfoEvent.
+- публикует текущую managed-domain projection как InfoEvent.
 
-RequestEvent не требует непосредственного response event.
+RequestEvent не требует непосредственного response.
 
-InfoEvent Manager может содержать `caused_by` или accepted request revision для
-диагностики, но системная корректность должна определяться текущей наблюдаемой проекцией
-Manager, а не фактом получения "успешного ответа" на request.
+## 7. InfoEvent semantics
 
-## 6. Семантика InfoEvent
+InfoEvent сообщает актуальную системно значимую проекцию publisher.
 
-InfoEvent верхнего уровня сообщает текущую системно значимую проекцию publisher'а.
-
-Для state projections предпочтительна семантика:
+Для current-state streams обычно действует:
 
 ```text
-newer publication supersedes older publication of same subject
+newer publication supersedes older publication
+for same publisher/type/subject/epoch
 ```
 
-RuntimeStateManager хранит только актуальную публикацию, необходимую для текущего snapshot.
+Низкоуровневый operation failure не обязан становиться системным event, если Manager может
+выразить его через более содержательное текущее состояние своей области.
 
-Failure конкретной низкоуровневой операции не обязан становиться отдельным системным event,
-если наружу можно опубликовать более содержательное текущее состояние предметной области.
+## 8. Каталог событий
 
-Например, предпочтительно:
-
-```text
-DeviceStateInfo:
-    requested capacity = 5
-    actual capacity    = 4
-    effective limit    = 4
-    state              = LIMITED
-    reason             = ...
-```
-
-вместо того, чтобы верхний уровень строил policy вокруг последовательности
-`StartFailed`, `RetryFailed`, `RetrySucceeded`.
-
-## 7. Нормативный каталог событий
-
-Имена являются NG2 architectural names. Поля payload могут уточняться при проектировании
-Managers, но семантика event types фиксируется этим документом.
-
-### 7.1. InterfaceInventoryInfo
+### 8.1. InterfaceInventoryInfo
 
 **Kind:** InfoEvent  
 **Publisher:** InterfaceObservationAgent  
@@ -268,32 +251,26 @@ Managers, но семантика event types фиксируется этим д
 **Subject:** runtime interface inventory  
 **Publication mode:** full snapshot
 
-Содержит актуальный набор релевантных runtime interfaces и свойства, необходимые
+Содержит актуальный набор релевантных concrete interfaces и свойства, необходимые
 Calculators.
 
-Нормативная identity concrete interface:
+Не содержит:
 
-```text
-(ifname, ifindex)
-```
+- admission;
+- Profile binding;
+- availability verdict.
 
-Same-name/new-ifindex является новой concrete interface identity.
-
-`InterfaceInventoryInfo` не содержит понятия Profile binding или admission: это
-наблюдение внешней среды.
-
-### 7.2. ProbeSetRequest
+### 8.2. AvailabilityProbeSetRequest
 
 **Kind:** RequestEvent  
 **Publisher:** RuntimeStateManager  
-**Subscribers:** ProbeAgent implementations  
-**Subject:** runtime probe set  
+**Subscribers:** AvailabilityProbeManager  
+**Subject:** availability probe set  
 **Publication mode:** full desired snapshot
 
 Определяет полный набор probes, которые runtime сейчас требует поддерживать.
 
-Каждый probe имеет stable `probe_id` в пределах runtime epoch и содержит достаточное
-описание observation task, например:
+Концептуальный probe:
 
 ```text
 probe_id
@@ -301,200 +278,124 @@ mechanism
 concrete interface identity
 target
 mechanism-specific parameters
-semantic owner/scope
+semantic scope/correlation
 ```
 
-ProbeAgent не обязан понимать Profile policy; `semantic owner/scope` может оставаться
-opaque correlation data.
+Новая revision заменяет предыдущий desired set.
 
-Новая revision полного ProbeSetRequest заменяет предыдущий desired probe set.
-
-### 7.3. ProbeStateInfo
+### 8.3. AvailabilityProbeStateInfo
 
 **Kind:** InfoEvent  
-**Publisher:** ProbeAgent  
+**Publisher:** AvailabilityProbeManager  
 **Subscribers:** RuntimeStateManager  
-**Subject:** `probe_id`  
+**Subject:** probe_id  
 **Publication mode:** current state per probe
 
-Публикует актуальный результат probe:
+Содержит текущий probe result:
 
 ```text
 probe_id
 state
-reason/details where useful
+reason/details
 observation generation
 ```
 
-Полный enum probe state определяется контрактом probe mechanism. Runtime policy не должна
-делать вывод из отсутствия publication там, где требуется явное UNKNOWN/UNAVAILABLE
-состояние.
+Отсутствие publication не должно автоматически означать failure. До подтвержденного
+наблюдения состояние трактуется как UNKNOWN.
 
-### 7.4. DeviceStateRequest
-
-**Kind:** RequestEvent  
-**Publisher:** RuntimeStateManager  
-**Subscribers:** DeviceManager  
-**Subject:** managed Device domain  
-**Publication mode:** desired state snapshot
-
-Описывает требуемое состояние Device domain в предметных терминах.
-
-В первоначальной NG2 модели ключевая часть — desired capacity по configured Device /
-ExpectedInterface scope. Концептуально:
-
-```text
-device
-expected-interface scope
-desired capacity
-relevant normalized Device configuration generation
-```
-
-Request не должен содержать команды вида `start process X` или `restart unit Y`.
-
-### 7.5. DeviceStateInfo
-
-**Kind:** InfoEvent  
-**Publisher:** DeviceManager  
-**Subscribers:** RuntimeStateManager  
-**Subject:** managed Device domain or Device scope  
-**Publication mode:** current state snapshot
-
-Содержит системно значимую текущую проекцию Device domain, достаточную верхнему уровню для
-следующего policy calculation.
-
-Она может включать:
-
-```text
-current managed capacity
-effective current limit if known
-current availability/readiness of managed capacity
-reason/constraint information
-accepted request revision for diagnostics
-```
-
-Точный contract будет уточнен при декомпозиции DeviceManager.
-
-Критическое правило: RuntimeStateManager не должен выводить фактическое появление network
-interface только из успешного DeviceManager action. Concrete interfaces подтверждаются
-`InterfaceInventoryInfo`.
-
-### 7.6. TrafficStateRequest
+### 8.4. PayloadTrafficStateRequest
 
 **Kind:** RequestEvent  
 **Publisher:** RuntimeStateManager  
-**Subscribers:** TrafficManager  
-**Subject:** complete managed traffic domain  
+**Subscribers:** PayloadTrafficManager  
+**Subject:** complete payload traffic domain  
 **Publication mode:** full desired snapshot
 
-Передает семантическое желаемое traffic state целиком, чтобы TrafficManager мог обеспечить
-согласованный переход между поколениями политики.
-
-Request содержит данные уровня:
+Содержит семантическое желаемое payload traffic state:
 
 ```text
-Profiles participating in traffic
-current selected/bound concrete interfaces per Profile
-Profile direction/destination requirements
-Device traffic-policy references needed by TrafficManager
-other semantic traffic requirements
+Profiles participating in payload
+selected/bound concrete interfaces per Profile
+Profile directions
+Profile destinations
+Device traffic-policy references
+required payload forwarding intent
 ```
 
-Он **не** содержит:
+Не содержит технических command sequences:
 
 ```text
-route add/del commands
-RPDB command sequence
+ip route add/del
+ip rule add/del
 nft command sequence
-metric renumbering operations
 sysctl command sequence
+transaction phases
+verification phases
 ```
 
-Эти детали принадлежат TrafficManager.
+Все это принадлежит внутренней реализации PayloadTrafficManager и его Machinery.
 
-Стабильные technical metrics, transition barriers, fail-closed ordering и verification
-также являются внутренней ответственностью TrafficManager и не входят в верхний event
-contract.
-
-### 7.7. TrafficStateInfo
+### 8.5. PayloadTrafficStateInfo
 
 **Kind:** InfoEvent  
-**Publisher:** TrafficManager  
-**Subscribers:** RuntimeStateManager; diagnostic/status subscribers  
-**Subject:** managed traffic domain  
+**Publisher:** PayloadTrafficManager  
+**Subscribers:** RuntimeStateManager; diagnostics/status  
+**Subject:** payload traffic domain  
 **Publication mode:** current state snapshot
 
-Публикует текущее системно значимое состояние traffic domain.
+Публикует системно значимое состояние payload traffic domain.
 
-Минимально различимы состояния, позволяющие верхнему policy layer понять, соответствует ли
-traffic domain актуальному request и безопасна ли она.
+Минимально требуются состояния, позволяющие понять:
 
-Например:
+- соответствует ли domain текущему request;
+- доказана ли безопасная payload policy;
+- находится ли domain в защитно ограниченном состоянии.
+
+Рабочие названия:
 
 ```text
 READY
 CONVERGING
 ISOLATED
-LIMITED/DEGRADED   # если такое состояние будет реально необходимо
+UNKNOWN/FAILED    # точный enum будет зафиксирован в decomposition document
 ```
 
-Полный enum фиксируется при проектировании TrafficManager.
+Manager вправе локально fail-close при недоказанной безопасности и затем опубликовать
+фактическое состояние.
 
-Если TrafficManager обнаруживает состояние, безопасность которого не может доказать, его
-локальная policy имеет право немедленно сделать managed domain более ограниченной
-(fail closed) и затем опубликовать фактическое состояние. Для этого не требуется отдельный
-верхнеуровневый failure workflow.
-
-Пока актуальный TrafficStateRequest не заменен, TrafficManager сам отвечает за локальную
-convergence/recovery policy своей области.
-
-### 7.8. PublicationStateRequest
+### 8.6. PublicationStateRequest
 
 **Kind:** RequestEvent  
 **Publisher:** RuntimeStateManager  
 **Subscribers:** PublicationManager  
-**Subject:** managed publication domain  
+**Subject:** publication domain  
 **Publication mode:** full desired snapshot
 
-Определяет полный желаемый набор publication endpoints в предметных терминах.
+Определяет желаемые publication endpoints в предметных терминах.
 
-### 7.9. PublicationStateInfo
+### 8.7. PublicationStateInfo
 
 **Kind:** InfoEvent  
 **Publisher:** PublicationManager  
-**Subscribers:** RuntimeStateManager; diagnostic/status subscribers  
-**Subject:** managed publication domain  
+**Subscribers:** RuntimeStateManager; diagnostics/status  
+**Subject:** publication domain  
 **Publication mode:** current state snapshot
 
-Публикует фактическое системно значимое состояние publication domain.
+Публикует фактическое системно значимое состояние transport publication.
 
-Низкоуровневые socket/session/worker details не должны выходить на верхний уровень, кроме
-случаев, где они действительно являются частью системной policy.
-
-### 7.10. ProfileStateInfo
+### 8.8. ProfileStateInfo
 
 **Kind:** InfoEvent  
 **Publisher:** RuntimeStateManager  
-**Subscribers:** status/log/UI/diagnostic subscribers  
+**Subscribers:** status/log/UI/diagnostics  
 **Subject:** Profile  
 **Publication mode:** current state per Profile
 
-Публикует вычисленное текущее состояние Profile после применения runtime policy к
-CurrentRuntimeSnapshot.
+Публикует вычисленное текущее состояние Profile.
 
-Например, архитектурно уже различимы ситуации:
+Полный status/severity model фиксируется отдельно.
 
-```text
-SATISFIED
-MINOR_DEGRADED   # основной service path есть, требуемый reserve не полностью выполнен
-```
-
-Полный Profile state enum и severity policy должны быть отдельно зафиксированы в NG2
-policy model; этот документ не изобретает остальные состояния заранее.
-
-## 8. CurrentRuntimeSnapshot
-
-RuntimeStateManager поддерживает materialized current view.
+## 9. CurrentRuntimeSnapshot
 
 Концептуально:
 
@@ -503,53 +404,45 @@ CurrentRuntimeSnapshot
     normalized_config
 
     interface_inventory
-    probe_states
+    availability_probe_states
 
-    device_state
-    traffic_state
+    payload_traffic_state
     publication_state
 
-    derived/current policy projections required for recalculation
+    derived/current policy projections
 ```
 
-Snapshot содержит только latest accepted projections текущего runtime epoch.
+Каждая projection до первой корректной публикации имеет состояние UNKNOWN.
 
-Для каждого source projection состояние до первой корректной публикации является
-`UNKNOWN`, а не пустым множеством.
+UNKNOWN нельзя молча трактовать как:
 
-`UNKNOWN` нельзя молча интерпретировать как:
-
-- отсутствие interfaces;
+- пустой interface set;
 - probe failure;
-- нулевую Device capacity;
-- successful empty traffic state.
+- успешный empty payload state;
+- успешную publication absence.
 
-Политика работы с UNKNOWN должна быть fail-closed там, где неопределенность может расширить
-traffic exposure.
+Неопределенность, способная расширить payload exposure, обрабатывается fail-closed.
 
-## 9. Calculators внутри RuntimeStateManager
+## 10. Calculators RuntimeStateManager
 
-Calculators не являются участниками Event Delivery Environment.
+Calculators являются Machinery, а не Engines.
 
-На текущем уровне NG2 ожидаются как минимум следующие логические вычисления.
-
-### 9.1. InterfaceSelectionCalculator
+### 10.1. InterfaceSelectionCalculator
 
 Вход:
 
-- normalized Device configuration;
+- Device expected-interface configuration;
 - current interface inventory;
-- текущие системно наблюдаемые сведения, необходимые для survivor preservation;
-- quotas/selectors.
+- current selection, если она нужна для survivor preservation внутри одного daemon run;
+- selector quotas.
 
 Выход:
 
-- текущий selected/admitted set interfaces по Device/ExpectedInterface.
+- selected/admitted concrete interfaces.
 
-Persisted candidate history между daemon runs не используется. Независимые запуски daemon
-не наследуют admission history предыдущего запуска.
+Независимые daemon runs не наследуют persisted candidate history.
 
-### 9.2. BindingCalculator
+### 10.2. BindingCalculator
 
 Вход:
 
@@ -563,20 +456,14 @@ Persisted candidate history между daemon runs не используется
 IsBound(concrete_interface, Profile) -> bool
 ```
 
-Базовое условие — применимость selected interface к Profile через configured Device
-relation.
-
-При отсутствии дополнительных `interface_balancing` conditions подходящий selected
-interface считается bound.
+Без дополнительных `interface_balancing` conditions применимый selected interface
+считается usable для Profile.
 
 Дополнительные conditions образуют AND.
 
-Условие `online` вычисляется из текущих interface properties/flags. Active probes
-используют `ProbeStateInfo`.
+Active availability evidence поступает через `AvailabilityProbeStateInfo`.
 
-Binding matrix является derived projection и не является отдельной event-driven subsystem.
-
-### 9.3. ProbeDemandCalculator
+### 10.3. AvailabilityProbeDemandCalculator
 
 Вход:
 
@@ -586,94 +473,68 @@ Binding matrix является derived projection и не является от
 
 Выход:
 
-- полный desired probe set для `ProbeSetRequest`.
+- полный desired set для `AvailabilityProbeSetRequest`.
 
-### 9.4. DeviceCapacityCalculator
-
-Вход:
-
-- Profile reserve requirements;
-- binding matrix;
-- current DeviceStateInfo;
-- sharing of Devices between Profiles;
-- normalized Device configuration.
-
-Выход:
-
-- desired Device domain state для `DeviceStateRequest`.
-
-Calculator обязан агрегировать требования всех Profiles, использующих общие Devices.
-
-Один Profile не может заставить удалить capacity, которая все еще требуется другому
-Profile.
-
-### 9.5. TrafficIntentCalculator
+### 10.4. PayloadTrafficIntentCalculator
 
 Вход:
 
 - config;
 - binding matrix;
-- current semantic runtime facts.
+- текущие системно значимые runtime facts.
 
 Выход:
 
-- полный semantic desired traffic projection для `TrafficStateRequest`.
+- semantic desired payload projection для `PayloadTrafficStateRequest`.
 
-Низкоуровневое kernel/network materialization не является частью Calculator.
+Linux/kernel materialization в Calculator не входит.
 
-### 9.6. PublicationIntentCalculator
+### 10.5. PublicationIntentCalculator
 
 Вход:
 
 - normalized configuration;
-- runtime facts, если они влияют на publication policy.
+- runtime facts, реально влияющие на publication policy.
 
 Выход:
 
-- полный desired publication projection.
+- desired publication projection.
 
-Если publication policy в конкретной версии полностью статична, Calculator вырождается в
-простую projection конфигурации.
-
-### 9.7. ProfileStateCalculator
+### 10.6. ProfileStateCalculator
 
 Вход:
 
 - Profile requirements;
 - binding matrix;
-- current Device state;
-- current Traffic state;
-- иные system-level facts, реально влияющие на fulfillment.
+- current payload traffic state;
+- current publication state, если она влияет на конкретный Profile contract;
+- другие реальные system-level facts.
 
 Выход:
 
-- текущее Profile status и диагностические причины.
+- текущее Profile state и diagnostic reasons.
 
-## 10. Recalculation и publication policy RuntimeStateManager
+## 11. Recalculation RuntimeStateManager
 
-При принятии нового InfoEvent RuntimeStateManager:
+При новом InfoEvent:
 
 ```text
-1. validates epoch/revision/subject
-2. replaces corresponding latest projection
-3. rebuilds affected CurrentRuntimeSnapshot view
-4. runs affected Calculators
-5. compares derived outputs with last published outputs
-6. publishes only semantically changed RequestEvents/InfoEvents
-7. updates diagnostic/log cache
+1. validate epoch/revision/subject
+2. replace latest projection
+3. rebuild affected CurrentRuntimeSnapshot view
+4. run affected Calculators
+5. compare with last published outputs
+6. publish only semantically changed Events
+7. update diagnostic cache
 ```
 
-Полный пересчет всех Calculators допустим как реализация, если он достаточно дешев.
-Dependency-based partial recalculation является оптимизацией и не меняет semantics.
+Полный пересчет допустим; partial dependency recalculation — оптимизация.
 
-Повторный одинаковый input не должен создавать бесконечный event storm.
+Повторный одинаковый input не должен создавать event storm.
 
-RuntimeStateManager может хранить last-published outputs для deduplication. Это
-технологический cache, а не исторический source of truth.
+## 12. Основные feedback loops
 
-## 11. Основные feedback loops
-
-### 11.1. Появление интерфейса
+### 12.1. Появление интерфейса
 
 ```text
 external interface change
@@ -681,217 +542,154 @@ external interface change
         v
 InterfaceObservationAgent
         |
-        +-- InterfaceInventoryInfo -->
-                RuntimeStateManager
-                    |
-                    +-- interface selection
-                    +-- binding
-                    +-- probe demand
-                    +-- device capacity
-                    +-- traffic intent
-                    |
-                    +-- ProbeSetRequest ------> ProbeAgent
-                    +-- DeviceStateRequest ---> DeviceManager
-                    +-- TrafficStateRequest --> TrafficManager
+        +-- InterfaceInventoryInfo
+                |
+                v
+        RuntimeStateManager
+                |
+                +-- selection
+                +-- binding
+                +-- availability probe demand
+                +-- payload traffic intent
+                |
+                +-- AvailabilityProbeSetRequest
+                |       -> AvailabilityProbeManager
+                |
+                +-- PayloadTrafficStateRequest
+                        -> PayloadTrafficManager
 ```
 
-Публикуются только реально изменившиеся outputs.
-
-### 11.2. Probe failure для одного Profile path
+### 12.2. Availability probe failure
 
 ```text
-ProbeAgent
-   |
-   +-- ProbeStateInfo(UNREACHABLE)
+AvailabilityProbeManager
+    |
+    +-- AvailabilityProbeStateInfo(UNREACHABLE)
             |
             v
     RuntimeStateManager
             |
-         binding matrix changes
+         BindingCalculator
             |
-            +-- TrafficStateRequest
-            +-- maybe DeviceStateRequest
+       binding matrix changes
+            |
+            +-- PayloadTrafficStateRequest
             +-- ProfileStateInfo
 ```
 
-Один concrete interface может остаться bound в другом Profile, если условия того Profile
-выполнены.
+Один concrete interface может остаться usable для другого Profile.
 
-### 11.3. Device capacity меньше требуемой
-
-```text
-RuntimeStateManager
-    |
-    +-- DeviceStateRequest(desired capacity = 5)
-            |
-            v
-       DeviceManager
-            |
-        managed environment settles at 4
-            |
-            +-- DeviceStateInfo(actual=4, effective_limit=4)
-                        |
-                        v
-                RuntimeStateManager
-                        |
-                    recalculate
-                        |
-                        +-- Profile A = SATISFIED
-                        +-- Profile B = MINOR_DEGRADED
-```
-
-RuntimeStateManager не обязан получать отдельный `StartFailed` response. Системно
-значимым фактом является наблюдаемое состояние Device domain.
-
-Если desired DeviceStateRequest остается тем же, RuntimeStateManager не спамит Manager
-одинаковыми requests. Дальнейшая локальная реакция на изменения Device environment
-принадлежит DeviceManager.
-
-### 11.4. TrafficManager fail-closed
+### 12.3. PayloadTrafficManager fail-close
 
 ```text
-TrafficManager detects unsafe/unknown local state
+PayloadTrafficManager
+    detects unsafe/unknown local rules state
         |
-        +-- locally moves managed domain to safe restriction
+        +-- locally restricts payload domain
         |
-        +-- TrafficStateInfo(ISOLATED)
+        +-- PayloadTrafficStateInfo(ISOLATED)
                     |
                     v
             RuntimeStateManager
                     |
-                recalculate Profile/system state
-                    |
-                publish changed outputs
+                    +-- ProfileStateInfo
+                    +-- other changed outputs
 ```
 
-Отдельные Guard/Recovery components не требуются, пока recovery является применением
-обычной policy к новой текущей реальности.
+Recovery является тем же обычным control loop, если отдельная policy не требует другого.
 
-TrafficManager не обязан получать новый TrafficStateRequest для каждого retry: текущий
-request остается его управляющим input до superseding revision.
+## 13. Correlation
 
-## 12. Correlation и causality
-
-Event graph может образовывать длинные feedback chains.
-
-Например:
+Пример causal chain:
 
 ```text
-DeviceStateRequest R17
-    -> DeviceManager
-    -> external changes
-    -> InterfaceInventoryInfo I44
+AvailabilityProbeStateInfo
     -> RuntimeStateManager
-    -> TrafficStateRequest R23
-    -> TrafficManager
-    -> TrafficStateInfo I51
+    -> PayloadTrafficStateRequest R23
+    -> PayloadTrafficManager
+    -> lower Machinery
+    -> observed payload rules/state changes
+    -> PayloadTrafficStateInfo I51
+    -> RuntimeStateManager
     -> ProfileStateInfo I52
 ```
 
-Не требуется, чтобы каждый последующий event нес прямую транзитивную ссылку на R17.
+Не требуется переносить транзитивный correlation identifier через всю цепочку.
 
-`caused_by` используется там, где correlation действительно помогает диагностике или
-локальному contract.
+Корректность определяется текущими projections, а не восстановлением causal history.
 
-Корректность верхнего уровня определяется CurrentRuntimeSnapshot, а не восстановлением
-полного causal history.
+## 14. Что не является верхнеуровневым event contract
 
-## 13. Что не является event contract верхнего уровня
+В верхний runtime contract не входят:
 
-Следующие детали намеренно не должны протекать в этот документ:
-
-- systemd unit start/stop operations;
-- process identifiers;
-- concrete socket worker lifecycle;
 - route/RPDB command sequences;
-- nft rule command sequences;
+- nft command sequences;
 - sysctl invocation;
-- metric allocator mechanics;
-- probe socket mechanics;
+- transaction phases;
 - retry counters;
-- hysteresis implementation;
-- local Manager transaction phases;
-- Adapter method names.
+- probe socket mechanics;
+- relay worker internals;
+- Driver APIs;
+- Adapter internal topology;
+- metric allocator implementation.
 
-Если такая деталь потребуется RuntimeStateManager для принятия policy decision, сначала
-следует проверить, не протекла ли внутренняя ответственность Manager через его границу.
+Если RuntimeStateManager начинает требовать эти детали, следует проверить границу
+соответствующего Manager.
 
-## 14. Event dependency graph
-
-Верхнеуровневый steady-state graph:
+## 15. Event graph
 
 ```text
-                         +----------------------+
-                         | InterfaceObservation |
-                         |        Agent         |
-                         +----------+-----------+
-                                    |
-                         InterfaceInventoryInfo
-                                    |
-                                    v
-+-------------+  ProbeStateInfo  +---------------------+
-| ProbeAgent  +----------------->| RuntimeStateManager |
-+------+------+                  +----+-----+-----+----+
-       ^                              |     |     |
-       | ProbeSetRequest              |     |     |
-       +------------------------------+     |     |
-                                            |     |
-                              DeviceStateRequest   |
-                                            |     |
-                                            v     |
-                                     +------+-----+--+
-                                     | DeviceManager |
-                                     +------+--------+
-                                            |
-                                     DeviceStateInfo
-                                            |
-                                            +-----------> RuntimeStateManager
-
-                              TrafficStateRequest
-                                      |
-                                      v
-                               +------+-------+
-                               | TrafficManager|
-                               +------+-------+
-                                      |
-                               TrafficStateInfo
-                                      |
-                                      +-----------> RuntimeStateManager
-
-                           PublicationStateRequest
-                                      |
-                                      v
-                             +--------+----------+
-                             | PublicationManager|
-                             +--------+----------+
-                                      |
-                           PublicationStateInfo
-                                      |
-                                      +-----------> RuntimeStateManager
++---------------------------+
+| InterfaceObservationAgent |
++-------------+-------------+
+              |
+     InterfaceInventoryInfo
+              |
+              v
+      +---------------------+
+      | RuntimeStateManager |
+      +---+-------------+---+
+          |             |
+          |             +--------------------+
+          |                                  |
+AvailabilityProbeSetRequest       PayloadTrafficStateRequest
+          |                                  |
+          v                                  v
++-------------------------+       +------------------------+
+| AvailabilityProbeManager|       | PayloadTrafficManager  |
++------------+------------+       +-----------+------------+
+             |                                |
+AvailabilityProbeStateInfo         PayloadTrafficStateInfo
+             |                                |
+             +--------------->+<---------------+
+                              |
+                    RuntimeStateManager
 
 RuntimeStateManager
-    |
-    +-- ProfileStateInfo --> status/log/UI/diagnostic subscribers
+        |
+        +-- PublicationStateRequest --> PublicationManager
+        |                               |
+        |                        PublicationStateInfo
+        |                               |
+        +<------------------------------+
+        |
+        +-- ProfileStateInfo --> status/log/UI
 ```
 
-Все циклы верхнего уровня замыкаются Events. Синхронные Adapter dependencies остаются
-внутри границ Agents/Managers и будут проектироваться отдельно.
+Все feedback cycles верхнего уровня замыкаются Events.
 
-## 15. Открытые вопросы следующего шага
+## 16. Следующая декомпозиция
 
-Этот документ намеренно оставляет следующему этапу:
+Отдельно проектируются:
 
-1. внутреннюю декомпозицию DeviceManager;
-2. внутреннюю декомпозицию TrafficManager;
-3. внутреннюю декомпозицию PublicationManager;
-4. конкретные Adapters каждого Manager/Agent;
-5. точные state enums и reason codes Manager outputs;
-6. timing/retry/hysteresis probes;
-7. конкретный transport Event Delivery Environment;
-8. serialization и schema-versioning Events;
-9. manager restart/resubscription/state-refresh protocol;
-10. исчерпывающий Profile status/severity model.
+1. PayloadTrafficManager и его Machinery;
+2. AvailabilityProbeManager и его Machinery;
+3. PublicationManager и его Machinery;
+4. точные state enums/reason codes;
+5. Event Delivery Environment implementation;
+6. serialization/schema versioning;
+7. restart/resubscription/state-refresh protocol;
+8. Profile status model.
 
-До решения этих вопросов верхнеуровневый event contract должен оставаться стабильным:
-верхний runtime оперирует только предметными Events и не зависит от внутренней механики
-Managers.
+Future Device lifecycle management остается отдельным будущим расширением и не является
+частью текущего NG2 runtime.
