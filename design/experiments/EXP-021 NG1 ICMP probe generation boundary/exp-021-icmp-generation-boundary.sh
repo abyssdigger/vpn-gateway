@@ -100,7 +100,10 @@ echo "STAGE 3: configure unprivileged ping-socket admission inside ROU namespace
 ip netns exec "$ROU" sh -c \
     "printf '%s %s\n' '$PROBE_GID' '$PROBE_GID' > /proc/sys/net/ipv4/ping_group_range"
 PING_RANGE=$(ip netns exec "$ROU" cat /proc/sys/net/ipv4/ping_group_range)
-[ "$PING_RANGE" = "$PROBE_GID $PROBE_GID" ] ||
+set -- $PING_RANGE
+[ "$#" -eq 2 ] ||
+    fail "unexpected ping_group_range field count: $PING_RANGE"
+[ "$1" = "$PROBE_GID" ] && [ "$2" = "$PROBE_GID" ] ||
     fail "unexpected ping_group_range: $PING_RANGE"
 
 probe() {
