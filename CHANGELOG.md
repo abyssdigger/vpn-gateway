@@ -1,3 +1,30 @@
+## 2026-11-13 — NG1 Profile-binding availability model reset
+
+Availability semantics were generalized before implementing the production detector:
+
+- availability is now a current relation between one Profile and one concrete bound
+  interface; the runtime result is ON/OFF rather than global
+  UNKNOWN/AVAILABLE/UNAVAILABLE on a Device binding;
+- DeviceEngine owns binding only. Availability/control conditions are external and may
+  include link usability, active endpoint probes, manual inhibits, schedules or future
+  Profile/interface-specific predicates;
+- availability/control state is never persisted; retrospective state belongs in logs;
+- deterministic metric projection remains independent of ON/OFF;
+- the old UNAVAILABLE_METRIC and persistent shadow payload fallback were removed from the
+  production code and tests;
+- the former ECMP hash-policy production prerequisite was removed with that fallback;
+  EXP-013 and EXP-016 remain historical Linux/FIB evidence;
+- EXP-019/020 are retained as path-liveness evidence and EXP-021 passed on target Debian 13,
+  proving a narrow unprivileged ICMP condition plus the exact-ifindex-reuse boundary;
+- EXP-022 is prepared to prove an isolated RPDB/routing/nft probe plane before any
+  user-facing availability configuration grammar is frozen.
+
+The current production core is therefore again the deterministic baseline: Device
+bindings, stable Profile-local metrics, normal routes and terminal blackholes. Generic
+Profile-binding ON/OFF materialization remains future work after EXP-022.
+
+---
+
 ## 2026-11-12 — NG1 autonomous dead-code and CI cleanup
 
 Post-implementation audit cleanup completed without changing production routing/firewall
