@@ -3,18 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 import logging
-from typing import Callable, Mapping
+from typing import Callable
 
 from .command_backend import CommandBackend, NamespaceBackend
 from .config import validate_active_config
 from .device_engine import (
     DeviceBindingSnapshot,
     DeviceBindingState,
-    InterfaceIdentity,
     binding_snapshot_from_state,
     reconcile_devices,
 )
-from .domain import ActiveConfig, Availability
+from .domain import ActiveConfig
 from .environment import EnvironmentSnapshot, collect_environment_snapshot
 from .kernel_allocation import KernelAllocation, compile_kernel_allocation
 from .kernel_mutation import (
@@ -101,10 +100,6 @@ class PlannerResult:
 
 
 SnapshotCollector = Callable[[str, CommandBackend], EnvironmentSnapshot]
-AvailabilityProvider = Callable[
-    [EnvironmentSnapshot],
-    Mapping[InterfaceIdentity, Availability],
-]
 VerifiedStatePersister = Callable[[PlannerRuntimeState], None]
 
 
@@ -122,7 +117,6 @@ def compile_planner_projection(
     config: ActiveConfig,
     committed: PlannerRuntimeState,
     snapshot: EnvironmentSnapshot,
-    availability_provider: AvailabilityProvider | None,
     local_publication_address: IPv4Address | None,
 ) -> PlannerProjection:
     LOG.debug(
@@ -132,16 +126,10 @@ def compile_planner_projection(
         len(committed.devices.expectations),
         len(committed.traffic.normal_metrics),
     )
-    availability = (
-        availability_provider(snapshot)
-        if availability_provider is not None
-        else {}
-    )
     devices = reconcile_devices(
         config,
         committed.devices,
         snapshot.interfaces,
-        availability,
     )
     metrics = project_normal_metrics(
         config,
@@ -307,7 +295,6 @@ def reconcile_once(
     committed: PlannerRuntimeState,
     host_backend: CommandBackend,
     *,
-    availability_provider: AvailabilityProvider | None = None,
     collect_snapshot: SnapshotCollector = default_snapshot_collector,
     persist_verified_state: VerifiedStatePersister | None = None,
     local_publication_address: IPv4Address | None = None,
@@ -360,7 +347,6 @@ def reconcile_once(
             config,
             committed,
             initial,
-            availability_provider,
             local_publication_address,
         )
 
@@ -644,7 +630,6 @@ def reconcile_once(
             config,
             committed,
             barrier_snapshot,
-            availability_provider,
             local_publication_address,
         )
 

@@ -50,7 +50,6 @@ def inspect_runtime_status(
         config,
         committed,
         snapshot,
-        None,
         local_publication_address,
     )
     errors: list[str] = []

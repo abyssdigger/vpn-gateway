@@ -372,7 +372,6 @@ def cmd_show(
                     "expected_index": item.expected_index,
                     "ifname": item.identity.ifname,
                     "ifindex": item.identity.ifindex,
-                    "availability": item.availability.value,
                 }
                 for item in status.projection.bindings.bound
             ],
