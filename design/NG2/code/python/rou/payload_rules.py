@@ -13,7 +13,7 @@ from .network_rules import (
     PortRange,
     PredicateKind,
     RoutingDomainSpec,
-    TerminalAction,
+    TerminalDisposition,
     TrafficAllowSpec,
     TrafficPredicate,
     TrafficProtocol,
@@ -279,7 +279,7 @@ class PayloadRulesCalculator:
                     ordered_paths=tuple(
                         path.identity for path in profile.ordered_paths
                     ),
-                    terminal_action=TerminalAction.BLACKHOLE,
+                    terminal_disposition=TerminalDisposition.DROP,
                 )
             )
 
