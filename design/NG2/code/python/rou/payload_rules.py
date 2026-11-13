@@ -4,19 +4,21 @@ from dataclasses import dataclass
 from enum import Enum
 from ipaddress import IPv4Network
 
+from .interface_identity import InterfaceIdentity
 from .network_rules import (
     DispatchRuleSpec,
     FlowInitiationAllowSpec,
-    InterfaceIdentity,
     NetworkEndpoint,
     NetworkRulesError,
     NetworkRulesSpec,
+    PortRange,
+    PredicateKind,
     RoutingDomainSpec,
     TerminalAction,
     TrafficAllowSpec,
     TrafficPredicate,
+    TrafficProtocol,
     TrafficSelector,
-    PredicateKind,
 )
 
 
@@ -27,6 +29,54 @@ class PayloadDirection(str, Enum):
     OUTBOUND = "outbound"
     INBOUND = "inbound"
     BIDIRECTIONAL = "bidirectional"
+
+
+class PayloadProtocol(str, Enum):
+    ANY = "any"
+    TCP = "tcp"
+    UDP = "udp"
+    ICMP = "icmp"
+
+
+@dataclass(frozen=True, order=True)
+class PayloadPortRange:
+    start: int
+    end: int
+
+    def __post_init__(self) -> None:
+        if not 1 <= self.start <= 65535:
+            raise ValueError("payload port range start must be 1..65535")
+        if not 1 <= self.end <= 65535:
+            raise ValueError("payload port range end must be 1..65535")
+        if self.start > self.end:
+            raise ValueError("payload port range start must not exceed end")
+
+
+@dataclass(frozen=True)
+class PayloadTrafficSelector:
+    source: IPv4Network | None = None
+    destination: IPv4Network | None = None
+    protocol: PayloadProtocol = PayloadProtocol.ANY
+    source_ports: tuple[PayloadPortRange, ...] = ()
+    destination_ports: tuple[PayloadPortRange, ...] = ()
+
+    def __post_init__(self) -> None:
+        if (
+            self.source_ports or self.destination_ports
+        ) and self.protocol not in {
+            PayloadProtocol.TCP,
+            PayloadProtocol.UDP,
+        }:
+            raise ValueError(
+                "payload traffic-envelope ports require tcp or udp protocol"
+            )
+        for ranges in (self.source_ports, self.destination_ports):
+            for index, left in enumerate(ranges):
+                for right in ranges[index + 1 :]:
+                    if left.start <= right.end and right.start <= left.end:
+                        raise ValueError(
+                            "payload traffic-envelope port ranges must not overlap"
+                        )
 
 
 class EnvelopeDirection(str, Enum):
@@ -43,7 +93,7 @@ class EnvelopeAction(str, Enum):
 class TrafficEnvelopeRule:
     direction: EnvelopeDirection
     action: EnvelopeAction
-    selector: TrafficSelector
+    selector: PayloadTrafficSelector
 
 
 @dataclass(frozen=True)
@@ -67,15 +117,15 @@ class PayloadProfileRequest:
 
     def __post_init__(self) -> None:
         if not self.name:
-            raise NetworkRulesError("payload profile name must be non-empty")
+            raise ValueError("payload profile name must be non-empty")
         if len(set(self.destinations)) != len(self.destinations):
-            raise NetworkRulesError(
+            raise ValueError(
                 f"profile {self.name!r} contains duplicate destinations"
             )
 
         identities = [item.identity for item in self.ordered_paths]
         if len(set(identities)) != len(identities):
-            raise NetworkRulesError(
+            raise ValueError(
                 f"profile {self.name!r} contains duplicate concrete paths"
             )
 
@@ -87,7 +137,30 @@ class PayloadTrafficStateRequest:
     def __post_init__(self) -> None:
         names = [item.name for item in self.profiles]
         if len(set(names)) != len(names):
-            raise NetworkRulesError("duplicate payload profile name")
+            raise ValueError("duplicate payload profile name")
+
+
+def _to_network_selector(
+    selector: PayloadTrafficSelector,
+) -> TrafficSelector:
+    protocol = (
+        None
+        if selector.protocol is PayloadProtocol.ANY
+        else TrafficProtocol(selector.protocol.value)
+    )
+    return TrafficSelector(
+        source=selector.source,
+        destination=selector.destination,
+        protocol=protocol,
+        source_ports=tuple(
+            PortRange(item.start, item.end)
+            for item in selector.source_ports
+        ),
+        destination_ports=tuple(
+            PortRange(item.start, item.end)
+            for item in selector.destination_ports
+        ),
+    )
 
 
 def _envelope_allowed_predicate(
@@ -103,7 +176,9 @@ def _envelope_allowed_predicate(
     for rule in envelope.rules:
         if rule.direction is not direction:
             continue
-        matched = TrafficPredicate.match(rule.selector)
+        matched = TrafficPredicate.match(
+            _to_network_selector(rule.selector)
+        )
         selected = TrafficPredicate.all_of(remaining, matched)
         if rule.action is EnvelopeAction.ALLOW:
             allowed.append(selected)
@@ -184,7 +259,7 @@ class PayloadRulesCalculator:
             for destination in profile.destinations:
                 previous = seen_destinations.get(destination)
                 if previous is not None:
-                    raise NetworkRulesError(
+                    raise ValueError(
                         f"payload destination {destination} is claimed by both "
                         f"{previous!r} and {profile.name!r}"
                     )
