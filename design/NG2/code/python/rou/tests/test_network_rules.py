@@ -1,10 +1,10 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
+from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     DispatchRuleSpec,
     EndpointKind,
-    InterfaceIdentity,
     NetworkEndpoint,
     NetworkRulesAdapter,
     NetworkRulesError,
