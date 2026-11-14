@@ -320,20 +320,8 @@ class PayloadTrafficIntentCalculatorTests(unittest.TestCase):
                 frozenset(("not-an-interface",)),
             )
 
-    def test_mismatched_current_effective_shape_forces_rebase(self):
-        current = PayloadTrafficStateRequest(
-            (
-                PayloadProfileRequest(
-                    "corp",
-                    PayloadDirection.INBOUND,
-                    (IPv4Network("10.0.0.0/8"),),
-                    tuple(
-                        PayloadPath(identity)
-                        for identity in (B, C, A, D)
-                    ),
-                ),
-            )
-        )
+    def test_current_effective_membership_mismatch_forces_rebase(self):
+        current = request((B, C, A))
 
         effective = self.calc.calculate(
             self.configured,
@@ -343,6 +331,35 @@ class PayloadTrafficIntentCalculatorTests(unittest.TestCase):
         )
 
         self.assertEqual(identities(effective), (A, B, C, D))
+
+    def test_non_order_profile_change_preserves_current_bubble_order(self):
+        current = request((B, C, A, D))
+        changed = PayloadTrafficStateRequest(
+            (
+                PayloadProfileRequest(
+                    "corp",
+                    PayloadDirection.INBOUND,
+                    (IPv4Network("10.0.0.0/8"),),
+                    tuple(
+                        PayloadPath(identity)
+                        for identity in (A, B, C, D)
+                    ),
+                ),
+            )
+        )
+
+        effective = self.calc.calculate(
+            changed,
+            previous_configured=self.configured,
+            current_effective=current,
+            availability=self.evidence(),
+        )
+
+        self.assertEqual(identities(effective), (B, C, A, D))
+        self.assertIs(
+            effective.profiles[0].direction,
+            PayloadDirection.INBOUND,
+        )
 
     def test_noneligible_live_evidence_is_rejected(self):
         foreign = InterfaceIdentity("foreign0", 99)
