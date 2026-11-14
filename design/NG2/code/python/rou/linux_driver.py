@@ -123,13 +123,18 @@ _RESERVED_TABLE_IDS = frozenset(
 def verify_linux_network(
     desired: LinuxNetworkDesired,
     observed: LinuxNetworkObservation,
+    *,
+    expected_ip_forward: bool | None = None,
 ) -> LinuxNetworkVerification:
     errors: list[str] = []
+
+    if expected_ip_forward is None:
+        expected_ip_forward = desired.ip_forward_required
 
     routing = verify_linux_routing(
         desired.routing,
         observed.routing,
-        expected_ip_forward=desired.ip_forward_required,
+        expected_ip_forward=expected_ip_forward,
     )
     errors.extend(routing.errors)
 
@@ -396,9 +401,10 @@ class LinuxNetworkDriver:
             )
 
             closed = self.observe(desired)
-            closed_verification = self._verify_closed(
+            closed_verification = verify_linux_network(
                 desired,
                 closed,
+                expected_ip_forward=False,
             )
             if not closed_verification.ok:
                 raise LinuxDriverError(
@@ -432,57 +438,6 @@ class LinuxNetworkDriver:
                     + str(close_exc)
                 )
             return LinuxDriverResult(False, diagnostic)
-
-    def _verify_closed(
-        self,
-        desired: LinuxNetworkDesired,
-        observed: LinuxNetworkObservation,
-    ) -> LinuxNetworkVerification:
-        closed_routing = verify_linux_routing(
-            desired.routing,
-            observed.routing,
-            expected_ip_forward=False,
-        )
-        errors = list(closed_routing.errors)
-
-        if desired.filter is None:
-            if observed.filter is not None:
-                errors.append("owned nft filter table should be absent")
-        else:
-            errors.extend(
-                verify_nft_table(
-                    desired.filter,
-                    observed.filter,
-                ).errors
-            )
-
-        if desired.nat is None:
-            if observed.nat is not None:
-                errors.append("owned nft NAT table should be absent")
-        else:
-            errors.extend(
-                verify_nft_table(
-                    desired.nat,
-                    observed.nat,
-                ).errors
-            )
-
-        expected_tables = set()
-        if desired.filter is not None:
-            expected_tables.add(
-                NftTableIdentity(desired.filter.family, desired.filter.table)
-            )
-        if desired.nat is not None:
-            expected_tables.add(
-                NftTableIdentity(desired.nat.family, desired.nat.table)
-            )
-        if set(observed.nft_tables) != expected_tables:
-            errors.append("nft table inventory differs in closed state")
-
-        return LinuxNetworkVerification(
-            not errors,
-            tuple(errors),
-        )
 
     def _set_forwarding(self, enabled: bool) -> None:
         self._runner.run(
