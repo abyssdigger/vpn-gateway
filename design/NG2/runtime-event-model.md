@@ -279,15 +279,14 @@ ICMP mechanism
 concrete InterfaceIdentity
 IPv4 target
 enabled
-optional AvailabilityWindowPolicy
+AvailabilityWindowPolicy
     interval_seconds
     failure_intervals
 ```
 
 `enabled=false` сохраняет настроенный logical probe, но запрещает автономное probing.
 Enable/disable является logical-only изменением и не требует перестройки неизменного
-physical ProbeRules plane. `policy=None` остается только внутренним/manual transition
-state.
+physical ProbeRules plane. Policy обязателен для каждого normalized logical probe; policy-less manual mode удален.
 
 `ProbeRulesCalculator` дедуплицирует physical plane по
 `(mechanism, InterfaceIdentity, target)`. Timing/enable policy не является physical
