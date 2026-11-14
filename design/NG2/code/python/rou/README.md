@@ -106,17 +106,23 @@ Not implemented yet:
 
 - richer predicate implication only where future use justifies it;
 - RuntimeStateManager Profile-state mapping;
-- Linux instance infrastructure lifecycle and full fail-closed instance -> Adapter
-  startup composition;
+- AvailabilityProbeManager cadence/retry/hysteresis and Event publication;
+- target confirmation of the intended Debian 13 production ping executable for the
+  single-shot ICMP executor;
 - persistent technical allocation across daemon restart;
 - richer interface-origin dispatch;
 - incremental transition optimizer, only after a separate review/evidence unit.
 
-ProbeRules now has a reviewed pure ICMP semantic calculator over LOCAL_PROCESS rules.
-Linux LOCAL_PROCESS materialization remains intentionally fail-closed pending Debian 13
-confirmation of EXP-024; ProbeRulesState remains deferred until physical apply/renew
-observation exists. RuntimeStateManager and other upper-domain assembly remain separate
-review units. Incremental transition optimization remains deferred.
+Implemented lower/runtime slices now include:
+
+- Linux instance namespace/veth lifecycle and fail-closed instance -> Adapter startup
+  composition;
+- target-confirmed LOCAL_PROCESS ICMP routing/nft materialization;
+- ProbeRulesCalculator and ProbeRulesStateCalculator;
+- separate PayloadRulesState and ProbeRulesState after mandatory comparison review;
+- single-shot capability-free Linux ICMP probe executor, green in privileged CI.
+
+RuntimeStateManager and remaining upper-domain assembly stay separate review units.
 
 Rootless tests:
 
