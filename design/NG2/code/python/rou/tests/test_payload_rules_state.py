@@ -104,6 +104,56 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
             ),
         )
 
+    def test_semantically_unordered_collections_do_not_fake_divergence(self):
+        second = InterfaceIdentity("vpns01", 11)
+        desired = NetworkRulesSpec(
+            routing_domains=(
+                _domain("a", self.path),
+                RoutingDomainSpec(
+                    name="b",
+                    destinations=(
+                        IPv4Network("192.168.0.0/16"),
+                        IPv4Network("172.16.0.0/12"),
+                    ),
+                    ordered_paths=(second,),
+                    terminal_disposition=TerminalDisposition.DROP,
+                ),
+            ),
+            traffic_allows=(
+                _allow(self.path),
+                _allow(second),
+            ),
+        )
+        actual = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    name="b",
+                    destinations=(
+                        IPv4Network("172.16.0.0/12"),
+                        IPv4Network("192.168.0.0/16"),
+                    ),
+                    ordered_paths=(second,),
+                    terminal_disposition=TerminalDisposition.DROP,
+                ),
+                _domain("a", self.path),
+            ),
+            traffic_allows=(
+                _allow(second),
+                _allow(self.path),
+            ),
+        )
+        observed = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            actual,
+            fresh=True,
+        )
+
+        state = self.calc.calculate(desired, observed)
+
+        self.assertIs(state.convergence, Convergence.MATCHED)
+        self.assertIs(state.safety, Safety.SAFE)
+        self.assertIs(state.service, Service.READY)
+
     def test_exact_zero_path_rules_are_matched_safe_isolated(self):
         desired = NetworkRulesSpec(
             routing_domains=(_domain("a"),),
