@@ -257,7 +257,7 @@ class PayloadRulesStateCalculator:
                 knowledge=Knowledge.KNOWN,
                 convergence=Convergence.DIVERGED,
                 safety=Safety.SAFE,
-                service=Service.DEGRADED,
+                service=Service.UNKNOWN,
             )
 
         if _provably_permission_widened(actual, desired):
