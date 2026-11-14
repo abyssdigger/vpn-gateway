@@ -3,29 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from .interface_identity import InterfaceIdentity
-from .linux_adapter import LinuxNetworkRulesAdapter
-from .linux_driver import LinuxDriverResult, LinuxNetworkVerification
-from .linux_network import LinuxNetworkDesired
+from .linux_adapter import LinuxNetworkBackend, LinuxNetworkRulesAdapter
+from .linux_driver import LinuxDriverResult
 
 
-class LinuxRuntimeBootstrapBackend(Protocol):
+class LinuxRuntimeBootstrapBackend(LinuxNetworkBackend, Protocol):
     def close_forwarding_verified(self) -> LinuxDriverResult:
-        ...
-
-    def observe_interfaces(self) -> tuple[InterfaceIdentity, ...]:
-        ...
-
-    def materialize_structural(
-        self,
-        desired: LinuxNetworkDesired,
-    ) -> LinuxDriverResult:
-        ...
-
-    def verify_current(
-        self,
-        desired: LinuxNetworkDesired,
-    ) -> LinuxNetworkVerification:
         ...
 
 
