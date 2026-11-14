@@ -13,16 +13,20 @@ from rou.linux_nft import (
     verify_nft_table,
 )
 from rou.network_rules import (
+    DispatchRuleSpec,
     FlowInitiationAllowSpec,
+    IcmpType,
     NetworkEndpoint,
     NetworkRulesSpec,
     PortRange,
+    RoutingDomainSpec,
     SourceNatSpec,
     SourceNatTarget,
     TrafficAllowSpec,
     TrafficPredicate,
     TrafficProtocol,
     TrafficSelector,
+    TerminalDisposition,
 )
 from rou.network_rules_composition import (
     OwnedNetworkRules,
@@ -237,14 +241,14 @@ class LinuxNftFilterTests(unittest.TestCase):
             TrafficSelector(
                 destination=IPv4Network("203.0.113.24/32"),
                 protocol=TrafficProtocol.ICMP,
-                icmp_types=(__import__("rou.network_rules", fromlist=["IcmpType"]).IcmpType.ECHO_REQUEST,),
+                icmp_types=(IcmpType.ECHO_REQUEST,),
             )
         )
         reply = TrafficPredicate.match(
             TrafficSelector(
                 source=IPv4Network("203.0.113.24/32"),
                 protocol=TrafficProtocol.ICMP,
-                icmp_types=(__import__("rou.network_rules", fromlist=["IcmpType"]).IcmpType.ECHO_REPLY,),
+                icmp_types=(IcmpType.ECHO_REPLY,),
             )
         )
         owned = _owned(
@@ -302,12 +306,16 @@ class LinuxNftFilterTests(unittest.TestCase):
         owned = OwnedNetworkRules(
             OwnerToken(1),
             NetworkRulesSpec(
-                routing_domains=(),
+                routing_domains=(
+                    RoutingDomainSpec(
+                        "probe",
+                        (target,),
+                        (path.interface,),
+                        TerminalDisposition.DROP,
+                    ),
+                ),
                 dispatch_rules=(
-                    __import__(
-                        "rou.network_rules",
-                        fromlist=["DispatchRuleSpec"],
-                    ).DispatchRuleSpec(
+                    DispatchRuleSpec(
                         target,
                         "probe",
                         source=LOCAL_PROCESS,
@@ -315,32 +323,6 @@ class LinuxNftFilterTests(unittest.TestCase):
                         protocol=TrafficProtocol.ICMP,
                     ),
                 ),
-            ),
-        )
-        composed = __import__(
-            "rou.network_rules_composition",
-            fromlist=["ComposedNetworkRules", "OwnedDispatchRule"],
-        )
-        # The nft compiler receives composed rules after semantic composition.
-        # Build through compose_network_rules only after adding the referenced domain.
-        owned = OwnedNetworkRules(
-            OwnerToken(1),
-            NetworkRulesSpec(
-                routing_domains=(
-                    __import__(
-                        "rou.network_rules",
-                        fromlist=["RoutingDomainSpec", "TerminalDisposition"],
-                    ).RoutingDomainSpec(
-                        "probe",
-                        (target,),
-                        (path.interface,),
-                        __import__(
-                            "rou.network_rules",
-                            fromlist=["TerminalDisposition"],
-                        ).TerminalDisposition.DROP,
-                    ),
-                ),
-                dispatch_rules=owned.rules.dispatch_rules,
             ),
         )
 
