@@ -30,6 +30,8 @@ from .linux_routing import (
     RT_TABLE_LOCAL,
     RT_TABLE_MAIN,
     RT_TABLE_UNSPEC,
+    TERMINAL_ROUTE_PROTOCOL,
+    UNICAST_ROUTE_PROTOCOL,
     LinuxRouteKind,
 )
 
@@ -249,7 +251,8 @@ class LinuxNetworkDriver:
             tagged_tables = {
                 item.table_id
                 for item in before.routing.routes
-                if item.protocol in {201, 202}
+                if item.protocol
+                in {TERMINAL_ROUTE_PROTOCOL, UNICAST_ROUTE_PROTOCOL}
             }
             tables_to_flush = (
                 set(desired.routing.verification_tables)
