@@ -346,8 +346,27 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
         self.assertTrue(self.adapter.apply(first, NetworkRulesSpec()).success)
         self.assertTrue(self.adapter.apply(second, NetworkRulesSpec()).success)
 
+        network = IPv4Network("10.0.0.0/8")
+        mutation = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "corp",
+                    (network,),
+                    (),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+            dispatch_rules=(
+                DispatchRuleSpec(
+                    network,
+                    "corp",
+                    source=NetworkEndpoint.local_network(),
+                ),
+            ),
+        )
+
         self.backend.materialize_success = False
-        result = self.adapter.apply(first, NetworkRulesSpec())
+        result = self.adapter.apply(first, mutation)
 
         self.assertFalse(result.success)
         self.assertIs(
