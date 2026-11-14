@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_driver import (
     CommandResult,
-    LinuxNetworkDriver,
+    LinuxNetworkExecutor,
     NetworkNamespaceLinuxRunner,
 )
 from rou.runtime_bootstrap import bootstrap_linux_network_rules_adapter
@@ -206,7 +206,7 @@ def main() -> int:
     make_namespace()
     host_runner = RecordingHostRunner()
     runner = NetworkNamespaceLinuxRunner(host_runner, NS)
-    driver = LinuxNetworkDriver(runner)
+    driver = LinuxNetworkExecutor(runner)
 
     # Simulate process restart with stale physical policy and forwarding still open.
     host(
