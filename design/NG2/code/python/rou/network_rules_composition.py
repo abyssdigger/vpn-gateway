@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Network
 
 from .network_rules import (
     DispatchRuleSpec,
@@ -47,7 +48,7 @@ class OwnedNetworkRules:
 class OwnedDispatchRule:
     owner: OwnerToken
     source: NetworkEndpoint
-    destination: object
+    destination: IPv4Network
     routing_domain: OwnedRoutingDomainRef
 
 
@@ -126,7 +127,7 @@ def _endpoint_key(endpoint: NetworkEndpoint) -> tuple:
 
 def _dispatch_selector_key(
     rule: DispatchRuleSpec,
-) -> tuple[NetworkEndpoint, object]:
+) -> tuple[NetworkEndpoint, IPv4Network]:
     return (rule.source, rule.destination)
 
 
@@ -156,7 +157,7 @@ def compose_network_rules(
     )
 
     dispatch: list[OwnedDispatchRule] = []
-    selectors: dict[tuple[NetworkEndpoint, object], OwnerToken] = {}
+    selectors: dict[tuple[NetworkEndpoint, IPv4Network], OwnerToken] = {}
 
     for owned in ordered_owners:
         for rule in owned.rules.dispatch_rules:
@@ -164,7 +165,7 @@ def compose_network_rules(
             previous = selectors.get(selector)
             if previous is not None:
                 raise NetworkRulesCompositionError(
-                    "ambiguous dispatch selector "
+                    "duplicate dispatch selector "
                     f"{rule.source!r} -> {rule.destination}: "
                     f"owners {previous.value} and {owned.owner.value}"
                 )
