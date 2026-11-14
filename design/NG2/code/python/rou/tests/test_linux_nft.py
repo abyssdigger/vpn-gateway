@@ -6,12 +6,15 @@ from rou.linux_nft import (
     InterfaceRefKind,
     LinuxNftError,
     compile_nft_filter_desired,
+    compile_nft_nat_desired,
 )
 from rou.network_rules import (
     FlowInitiationAllowSpec,
     NetworkEndpoint,
     NetworkRulesSpec,
     PortRange,
+    SourceNatSpec,
+    SourceNatTarget,
     TrafficAllowSpec,
     TrafficPredicate,
     TrafficProtocol,
@@ -253,6 +256,119 @@ class LinuxNftFilterTests(unittest.TestCase):
             "chain traffic_bytes {", 1
         )[1].split("}", 1)[0]
         self.assertNotIn("return", traffic_section)
+
+
+
+class LinuxNftNatTests(unittest.TestCase):
+    def test_masquerade_uses_local_ingress_and_numeric_egress(self):
+        path = _path("vpns00", 10)
+        nat = SourceNatSpec(
+            source=LOCAL,
+            egress=path,
+            predicate=TrafficPredicate.match(
+                TrafficSelector(
+                    destination=IPv4Network("10.0.0.0/8"),
+                )
+            ),
+            target=SourceNatTarget.EGRESS_ADDRESS,
+        )
+        owned = OwnedNetworkRules(
+            OwnerToken(7),
+            NetworkRulesSpec(source_nat=(nat,)),
+        )
+
+        desired = compile_nft_nat_desired(
+            compose_network_rules((owned,)),
+            local_interface="host0",
+        )
+
+        self.assertIn(
+            'iifname "host0" oif 10 ip daddr 10.0.0.0/8 masquerade',
+            desired.definition,
+        )
+        self.assertEqual(len(desired.markers), 1)
+        self.assertEqual(desired.markers[0].owner, OwnerToken(7))
+        self.assertIs(
+            desired.markers[0].interface_ref.kind,
+            InterfaceRefKind.OIF,
+        )
+
+    def test_nat_predicate_negation_is_preserved(self):
+        path = _path("vpns00", 10)
+        predicate = TrafficPredicate.all_of(
+            TrafficPredicate.match(
+                TrafficSelector(
+                    destination=IPv4Network("10.0.0.0/8"),
+                )
+            ),
+            TrafficPredicate.negate(
+                TrafficPredicate.match(
+                    TrafficSelector(
+                        destination=IPv4Network("10.1.0.0/16"),
+                    )
+                )
+            ),
+        )
+        nat = SourceNatSpec(
+            source=LOCAL,
+            egress=path,
+            predicate=predicate,
+            target=SourceNatTarget.EGRESS_ADDRESS,
+        )
+        owned = OwnedNetworkRules(
+            OwnerToken(1),
+            NetworkRulesSpec(source_nat=(nat,)),
+        )
+
+        desired = compile_nft_nat_desired(
+            compose_network_rules((owned,)),
+            local_interface="host0",
+        )
+
+        self.assertIn("ip daddr 10.0.0.0/8", desired.definition)
+        self.assertIn("ip daddr != 10.1.0.0/16", desired.definition)
+
+    def test_nat_from_dynamic_interface_is_explicitly_unsupported(self):
+        path = _path("vpns00", 10)
+        nat = SourceNatSpec(
+            source=path,
+            egress=path,
+            predicate=TrafficPredicate.always(),
+            target=SourceNatTarget.EGRESS_ADDRESS,
+        )
+        owned = OwnedNetworkRules(
+            OwnerToken(1),
+            NetworkRulesSpec(source_nat=(nat,)),
+        )
+
+        with self.assertRaises(LinuxNftError):
+            compile_nft_nat_desired(
+                compose_network_rules((owned,)),
+                local_interface="host0",
+            )
+
+    def test_never_nat_predicate_emits_no_rule(self):
+        path = _path("vpns00", 10)
+        nat = SourceNatSpec(
+            source=LOCAL,
+            egress=path,
+            predicate=TrafficPredicate.never(),
+            target=SourceNatTarget.EGRESS_ADDRESS,
+        )
+        owned = OwnedNetworkRules(
+            OwnerToken(1),
+            NetworkRulesSpec(source_nat=(nat,)),
+        )
+
+        desired = compile_nft_nat_desired(
+            compose_network_rules((owned,)),
+            local_interface="host0",
+        )
+
+        postrouting = desired.definition.split(
+            "chain postrouting {", 1
+        )[1].split("}", 1)[0]
+        self.assertNotIn("masquerade", postrouting)
 
 
 if __name__ == "__main__":
