@@ -11,6 +11,7 @@ from .network_rules import (
     PredicateKind,
     TrafficAllowSpec,
     TrafficPredicate,
+    SourceNatTarget,
     TrafficProtocol,
     TrafficSelector,
 )
@@ -22,6 +23,7 @@ from .network_rules_composition import (
 
 
 FILTER_TABLE = "vpng2_filter"
+NAT_TABLE = "vpng2_nat"
 MAX_DNF_CLAUSES = 4096
 
 
@@ -54,6 +56,14 @@ class NftRuleMarker:
 
 @dataclass(frozen=True)
 class NftFilterDesired:
+    family: str
+    table: str
+    definition: str
+    markers: tuple[NftRuleMarker, ...]
+
+
+@dataclass(frozen=True)
+class NftNatDesired:
     family: str
     table: str
     definition: str
@@ -480,6 +490,79 @@ def compile_nft_filter_desired(
     return NftFilterDesired(
         family="ip",
         table=FILTER_TABLE,
+        definition="\n".join(lines),
+        markers=tuple(markers),
+    )
+
+
+def compile_nft_nat_desired(
+    composed: ComposedNetworkRules,
+    *,
+    local_interface: str,
+) -> NftNatDesired:
+    """Compile semantic source NAT into one owner-provenance nft table."""
+
+    local = _quote_token(local_interface)
+    lines = [
+        f"table ip {NAT_TABLE} {",
+        "chain postrouting {",
+        "type nat hook postrouting priority 100; policy accept;",
+    ]
+    markers: list[NftRuleMarker] = []
+
+    for owned in composed.owners:
+        for rule_index, rule in enumerate(owned.rules.source_nat):
+            if rule.source.kind is not EndpointKind.LOCAL_NETWORK:
+                raise LinuxNftError(
+                    "current nft NAT backend supports source NAT only from "
+                    "LOCAL_NETWORK"
+                )
+            if rule.egress.kind is not EndpointKind.INTERFACE:
+                raise LinuxNftError(
+                    "source NAT requires concrete interface egress"
+                )
+            if rule.target is not SourceNatTarget.EGRESS_ADDRESS:
+                raise LinuxNftError(
+                    f"unsupported source NAT target {rule.target!r}"
+                )
+
+            assert rule.egress.interface is not None
+            ref = NftInterfaceRef(
+                InterfaceRefKind.OIF,
+                rule.egress.interface.ifindex,
+            )
+
+            for clause_index, clause in enumerate(
+                _predicate_dnf(rule.predicate)
+            ):
+                comment = _comment(
+                    owned.owner,
+                    "nat",
+                    str(rule_index),
+                    clause_index,
+                    ref,
+                )
+                terms = [
+                    f"iifname {local}",
+                    f"oif {ref.ifindex}",
+                    *(item.text for item in clause),
+                    "masquerade",
+                    f'comment "{comment}"',
+                ]
+                lines.append(" ".join(terms))
+                markers.append(
+                    NftRuleMarker(
+                        comment,
+                        owned.owner,
+                        "nat",
+                        ref,
+                    )
+                )
+
+    lines.extend(["}", "}", ""])
+    return NftNatDesired(
+        family="ip",
+        table=NAT_TABLE,
         definition="\n".join(lines),
         markers=tuple(markers),
     )
