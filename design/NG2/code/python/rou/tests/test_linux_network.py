@@ -230,6 +230,7 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
                     (network,),
                     (old,),
                     TerminalDisposition.DROP,
+                    confirmed_live_prefix_length=1,
                 ),
             ),
             dispatch_rules=(
@@ -259,6 +260,10 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
         self.assertEqual(
             actual.routing_domains[0].ordered_paths,
             (),
+        )
+        self.assertEqual(
+            actual.routing_domains[0].confirmed_live_prefix_length,
+            0,
         )
         self.assertEqual(actual.traffic_allows, ())
         self.assertEqual(actual.flow_initiation_allows, ())
