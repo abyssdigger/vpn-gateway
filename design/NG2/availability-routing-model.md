@@ -112,26 +112,42 @@ else:
 
 ## 5. Ошибка probe machinery
 
-Локальная ошибка probing не доказывает недоступность удаленного канала.
+Локальная ошибка probing не доказывает недоступность удаленного канала и не является
+отдельным routing transition.
 
-Для routing preference она эквивалентна отсутствию подтвержденной живости:
-
-```text
-ERROR -> NOT_CONFIRMED_LIVE for preference purposes
-```
-
-Но это не означает:
+Для routing preference ERROR означает только:
 
 ```text
-ERROR -> remove path
-ERROR -> disable binding
-ERROR -> prohibit payload
+в этом observation window не получено good news
 ```
 
-Если есть подтвержденный живой обход, он может стать предпочтительнее path с ошибкой
-probe machinery. Если обхода нет, существующий payload order сохраняется.
+Поэтому уже подтвержденный живой path **не** теряет `CONFIRMED_LIVE` от единичного ERROR.
+Ошибка участвует в том же integral времени без good news:
 
-Диагностический state/reason для ERROR остается отдельным от remote unreachability.
+```text
+ERROR in one window
+    -> missed_intervals += 1 at window boundary
+    -> retain CONFIRMED_LIVE while below failure_intervals
+
+continued windows without good news
+    -> threshold reached
+    -> NOT_CONFIRMED_LIVE
+```
+
+Если другой path тем временем имеет подтвержденную живость, после достижения общего
+negative threshold он может подняться выше. Если подтвержденной альтернативы нет,
+probing не создает новый outage и текущий payload order сохраняется.
+
+ERROR никогда не означает:
+
+```text
+remove path
+disable binding
+prohibit payload
+```
+
+Диагностический state/reason для локальной ошибки остается отдельным от remote
+unreachability; routing policy использует только накопленное отсутствие good news.
 
 ## 6. Базовый configured order
 
