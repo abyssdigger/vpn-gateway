@@ -30,6 +30,8 @@ implementation order:
 - `NG2-2026-11-14-semantic-slice-whole-code-audit.md`
 - `NG2-2026-11-14-linux-network-rules-adapter-review.md`
 - `NG2-2026-11-14-linux-lower-domain-whole-code-audit.md`
+- `NG2-2026-11-14-runtime-bootstrap-review.md`
+- `NG2-2026-11-14-runtime-namespace-assembly-review.md`
 
 The whole-slice audit is authoritative for current implementation presence; earlier focused
 reviews remain evidence for the design decisions they examined even when a candidate helper
