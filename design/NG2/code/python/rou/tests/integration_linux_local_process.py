@@ -15,8 +15,8 @@ from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_probe_driver import (
     LinuxIcmpProbeDriver,
     LinuxIcmpProbeDriverConfig,
-    ProbeAttemptOutcome,
 )
+from rou.probe_attempt import ProbeAttemptOutcome
 from rou.linux_driver import (
     LinuxNetworkExecutor,
     NetworkNamespaceLinuxRunner,
