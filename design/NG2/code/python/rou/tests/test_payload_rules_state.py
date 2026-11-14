@@ -4,6 +4,7 @@ import unittest
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     NetworkEndpoint,
+    FlowInitiationAllowSpec,
     NetworkRulesSpec,
     NetworkRulesState,
     RoutingDomainSpec,
@@ -181,6 +182,167 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
                 Service.ISOLATED,
             ),
         )
+
+    def test_removed_backup_path_is_provably_safe_degradation(self):
+        backup = InterfaceIdentity("vpns01", 11)
+        desired = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    name="a",
+                    destinations=(IPv4Network("10.0.0.0/8"),),
+                    ordered_paths=(self.path, backup),
+                    terminal_disposition=TerminalDisposition.DROP,
+                ),
+            ),
+            traffic_allows=(_allow(self.path),),
+        )
+        actual = NetworkRulesSpec(
+            routing_domains=(_domain("a", self.path),),
+            traffic_allows=(_allow(self.path),),
+        )
+        observed = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            actual,
+            fresh=True,
+        )
+
+        state = self.calc.calculate(desired, observed)
+
+        self.assertEqual(
+            state,
+            state.__class__(
+                Knowledge.KNOWN,
+                Convergence.DIVERGED,
+                Safety.SAFE,
+                Service.DEGRADED,
+            ),
+        )
+
+    def test_removed_allow_is_provably_safe_degradation(self):
+        second = InterfaceIdentity("vpns01", 11)
+        desired = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    name="a",
+                    destinations=(IPv4Network("10.0.0.0/8"),),
+                    ordered_paths=(self.path, second),
+                    terminal_disposition=TerminalDisposition.DROP,
+                ),
+            ),
+            traffic_allows=(
+                _allow(self.path),
+                _allow(second),
+            ),
+        )
+        actual = NetworkRulesSpec(
+            routing_domains=desired.routing_domains,
+            traffic_allows=(_allow(self.path),),
+        )
+        observed = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            actual,
+            fresh=True,
+        )
+
+        state = self.calc.calculate(desired, observed)
+
+        self.assertIs(state.safety, Safety.SAFE)
+        self.assertIs(state.service, Service.DEGRADED)
+
+    def test_reordered_paths_are_not_assumed_restrictive(self):
+        backup = InterfaceIdentity("vpns01", 11)
+        desired = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    name="a",
+                    destinations=(IPv4Network("10.0.0.0/8"),),
+                    ordered_paths=(self.path, backup),
+                    terminal_disposition=TerminalDisposition.DROP,
+                ),
+            ),
+            traffic_allows=(_allow(self.path),),
+        )
+        actual = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    name="a",
+                    destinations=(IPv4Network("10.0.0.0/8"),),
+                    ordered_paths=(backup, self.path),
+                    terminal_disposition=TerminalDisposition.DROP,
+                ),
+            ),
+            traffic_allows=(_allow(self.path),),
+        )
+        observed = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            actual,
+            fresh=True,
+        )
+
+        state = self.calc.calculate(desired, observed)
+
+        self.assertIs(state.safety, Safety.UNKNOWN)
+        self.assertIs(state.service, Service.UNKNOWN)
+
+    def test_new_endpoint_pair_is_provably_unsafe(self):
+        desired = NetworkRulesSpec(
+            routing_domains=(_domain("a", self.path),),
+            traffic_allows=(_allow(self.path),),
+        )
+        foreign_path = InterfaceIdentity("vpns01", 11)
+        actual = NetworkRulesSpec(
+            routing_domains=desired.routing_domains,
+            traffic_allows=(
+                _allow(self.path),
+                _allow(foreign_path),
+            ),
+        )
+        observed = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            actual,
+            fresh=True,
+        )
+
+        state = self.calc.calculate(desired, observed)
+
+        self.assertIs(state.safety, Safety.UNSAFE)
+        self.assertIs(state.service, Service.UNKNOWN)
+
+    def test_extra_allow_on_existing_endpoint_pair_remains_unknown(self):
+        local = NetworkEndpoint.local_network()
+        path = NetworkEndpoint.interface_path(self.path)
+        desired_allow = TrafficAllowSpec(
+            source=local,
+            destination=path,
+            predicate=TrafficPredicate.match(
+                __import__("rou.network_rules", fromlist=["TrafficSelector"]).TrafficSelector(
+                    destination=IPv4Network("10.0.0.0/8")
+                )
+            ),
+        )
+        actual_allow = TrafficAllowSpec(
+            source=local,
+            destination=path,
+            predicate=TrafficPredicate.always(),
+        )
+        desired = NetworkRulesSpec(
+            routing_domains=(_domain("a", self.path),),
+            traffic_allows=(desired_allow,),
+        )
+        actual = NetworkRulesSpec(
+            routing_domains=desired.routing_domains,
+            traffic_allows=(desired_allow, actual_allow),
+        )
+        observed = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            actual,
+            fresh=True,
+        )
+
+        state = self.calc.calculate(desired, observed)
+
+        self.assertIs(state.safety, Safety.UNKNOWN)
+        self.assertIs(state.service, Service.UNKNOWN)
 
     def test_diverged_nonisolated_rules_are_not_guessed_safe_or_unsafe(self):
         desired = NetworkRulesSpec(
