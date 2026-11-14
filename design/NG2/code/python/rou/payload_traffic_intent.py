@@ -30,11 +30,16 @@ class ProfileAvailabilityEvidence:
     def __post_init__(self) -> None:
         if not self.profile_name:
             raise ValueError("availability evidence requires profile_name")
-        if self.confirmed_live is not None and not isinstance(
-            self.confirmed_live,
-            frozenset,
-        ):
-            raise ValueError("confirmed_live must be frozenset or None")
+        if self.confirmed_live is not None:
+            if not isinstance(self.confirmed_live, frozenset):
+                raise ValueError("confirmed_live must be frozenset or None")
+            if any(
+                not isinstance(path, InterfaceIdentity)
+                for path in self.confirmed_live
+            ):
+                raise ValueError(
+                    "confirmed_live must contain InterfaceIdentity values"
+                )
 
 
 @dataclass(frozen=True)
@@ -199,15 +204,22 @@ class PayloadTrafficIntentCalculator:
         }
         configured_order = tuple(configured_paths)
 
+        current_matches_configured_shape = (
+            current_effective is not None
+            and current_effective.name == configured.name
+            and current_effective.direction is configured.direction
+            and current_effective.destinations == configured.destinations
+            and {
+                path.identity: path
+                for path in current_effective.ordered_paths
+            }
+            == configured_paths
+        )
+
         rebase = (
             previous_configured is None
             or previous_configured != configured
-            or current_effective is None
-            or {
-                path.identity
-                for path in current_effective.ordered_paths
-            }
-            != set(configured_order)
+            or not current_matches_configured_shape
         )
 
         if rebase:
