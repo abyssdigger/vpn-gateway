@@ -88,7 +88,14 @@ The latest executable artifact remains da5474f74fd993161f2212572bc80db111d926eb.
 
 ## Still open
 
-- Debian 13 EXP-026 target result;
+- Debian 13 EXP-026 target result. Reproduction from repository root:
+
+  clear
+
+  sudo python3 \
+    design/NG2/code/python/rou/tests/integration_probe_conntrack_cleanup.py
+
+  Required: PASS K1..K4 and EXP_026_PROBE_CLASS_CLEANUP=PASS;
 - explicit architecture acceptance of class-wide probe conntrack invalidation;
 - production integration of cleanup into structural transition;
 - naming refactor Driver/Executor;
