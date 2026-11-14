@@ -23,12 +23,12 @@ mutation. Этого недостаточно для startup: после restart
 
 ## 2. Граница ответственности
 
-Bootstrap assembly находится ниже runtime event model и выше concrete Linux Driver.
+Bootstrap assembly находится ниже runtime event model и выше concrete Linux network Executor.
 
 Он не является новым Manager и не публикует Events. Это синхронная startup assembly,
 которая:
 
-1. получает concrete Linux Driver;
+1. получает concrete Linux network Executor;
 2. выполняет protective forwarding close;
 3. требует fresh verification закрытого forwarding;
 4. только после успеха создает/возвращает concrete `LinuxNetworkRulesAdapter`.
@@ -46,9 +46,9 @@ Bootstrap не:
 Stale physical resources остаются закрыты forwarding barrier и будут классифицированы /
 пересобраны первым обычным Adapter reconcile.
 
-## 3. Driver contract
+## 3. Executor contract
 
-Concrete Linux Driver предоставляет Direct operation:
+Concrete `LinuxNetworkExecutor` предоставляет Direct convergence operation:
 
 ```text
 close_forwarding_verified() -> LinuxDriverResult
@@ -64,7 +64,12 @@ SUCCESS означает, что:
 FAILURE означает, что protective close не доказан. В этом случае bootstrap не возвращает
 рабочий Adapter.
 
-Эта операция техническая и не знает owner/payload semantics, поэтому принадлежит Driver.
+Эта операция техническая и не знает owner/payload semantics, но по компонентной модели
+принадлежит Executor: она не просто передает отдельное воздействие, а устанавливает
+protective postcondition и свежим наблюдением доказывает его достижение.
+
+Внутри Executor допустимо непосредственное использование `LinuxCommandRunner`; отдельный
+однострочный sysctl Driver для этой операции не требуется.
 
 ## 4. Bootstrap result
 
