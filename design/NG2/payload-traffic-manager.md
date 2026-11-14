@@ -889,9 +889,13 @@ identity. В текущей NG2 модели это влияет на priority �
 Подтверждает route-slot materialization для availability-driven priority permutation:
 
 - ordinary prefix и `default`;
-- fixed metrics 10/20/30/40;
-- top-down `ip route replace`;
-- временные duplicate paths допустимы;
+- один path может временно существовать на двух metrics;
+- каждый move выполняется make-before-break:
+  `add duplicate -> delete old copy`;
+- полный eligible path set присутствует на каждом промежуточном шаге;
+- незанятый metric перемещается автоматически на место старой copy;
+- all-live не требует persistent gap: первым scratch становится следующий свободный
+  ordinary metric;
 - terminal blackhole сохраняется;
 - staging routing table для обычной permutation не требуется.
 
@@ -946,6 +950,11 @@ NG1 planner.py
 13. Синхронный dependency graph payload domain ацикличен.
 14. Нижняя domain за NetworkRulesAdapter не имеет independent synchronous back-edge в
     payload domain.
+15. `confirmed_live_prefix_length` является transient runtime routing intent, а не
+    пользовательской configuration и не persistent gap state.
+16. Для одного Profile/routing-domain одновременно выполняется не более одной
+    route-priority transaction; superseding availability state меняет только pending/latest
+    desired state и не вмешивается в текущий move plan.
 
 ## 14. Пока открыто
 
@@ -958,9 +967,13 @@ NG1 planner.py
    RuntimeStateManager;
 2. audit/retry scheduling policy вокруг уже реализованного deterministic `audit()` pass;
 3. richer divergent predicate implication только там, где появится реальная необходимость;
-4. runtime wiring availability bubble policy в `ordered_paths`; Linux route-only
-   materialization уже подтверждена EXP-027 и реализована как verified fast path;
-5. remaining runtime assembly above the implemented protective startup gate; forwarding
+4. runtime wiring availability bubble policy в `ordered_paths` +
+   transient `confirmed_live_prefix_length`; Linux route-only materialization уже
+   подтверждена EXP-027 и поддерживает implicit boundary gap;
+5. runtime queue/coalescing implementation, которая обеспечивает per-Profile serialization
+   route-priority transactions и запускает следующий plan только от freshly verified
+   результата предыдущего;
+6. remaining runtime assembly above the implemented protective startup gate; forwarding
    closure до первого owner reconcile зафиксирован в `runtime-bootstrap.md`.
 
 Adapter boundary остается фиксированной: Linux transaction machinery не должна снова
