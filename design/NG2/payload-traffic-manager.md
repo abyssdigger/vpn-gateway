@@ -273,22 +273,38 @@ Adapter failure не является implicit command для RuntimeStateManage
 
 Пока текущий request не superseded, он остается управляющим intent.
 
-Manager периодически или по локальному trigger проверяет managed domain:
+Один audit/reconcile pass:
 
 ```text
-renewState(self)
-    |
-getLastState(self)
-    |
-compare/interpret against current desired rules
-    |
-if drift:
-    apply(current desired rules)
-    |
-publish changed semantic state
+1. renewState(self)
+2. getLastState(self)
+3. PayloadRulesStateCalculator(current desired, observed)
+4. if convergence != MATCHED:
+       apply(self, current desired)
+       if apply failed:
+           renewState(self)
+       getLastState(self)
+       recalculate PayloadRulesState
+5. project PayloadTrafficStateInfo
+6. publish only if semantic state changed
 ```
 
+Repair определяется **convergence**, а не service severity.
+
+Поэтому:
+
+- `MATCHED + READY` — repair не нужен;
+- `MATCHED + DEGRADED` — repair не нужен;
+- `MATCHED + ISOLATED` — repair не нужен;
+- `DIVERGED` или `convergence=UNKNOWN` — выполняется попытка materialize current desired.
+
+Это критично для zero-path request: защитная изоляция может быть полностью корректной
+materialization текущего intent и не должна сама по себе запускать бесконечный repair loop.
+
 Для repair не требуется новый RequestEvent.
+
+Scheduler/cadence audit loop находится вне этого review unit: `audit()` реализует только
+один deterministic reconcile pass.
 
 ## 4. PayloadRulesCalculator
 
