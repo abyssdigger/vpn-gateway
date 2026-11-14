@@ -1,43 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import Enum
-
 from .linux_driver import LinuxCommandRunner
 from .linux_local_process import LinuxLocalProcessConfig
 from .linux_observation import parse_link_json
+from .probe_attempt import ProbeAttemptOutcome, ProbeAttemptResult
 from .probe_rules import AvailabilityProbeRequest, ProbeMechanism
 
 
 class LinuxProbeDriverError(ValueError):
     pass
-
-
-class ProbeAttemptOutcome(str, Enum):
-    REPLY = "reply"
-    NO_REPLY = "no-reply"
-    ERROR = "error"
-
-
-@dataclass(frozen=True)
-class ProbeAttemptResult:
-    outcome: ProbeAttemptOutcome
-    diagnostic: str | None = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.outcome, ProbeAttemptOutcome):
-            raise LinuxProbeDriverError(
-                "probe attempt outcome must be ProbeAttemptOutcome"
-            )
-        if self.outcome is ProbeAttemptOutcome.ERROR:
-            if not self.diagnostic:
-                raise LinuxProbeDriverError(
-                    "probe execution error requires diagnostic"
-                )
-        elif self.diagnostic is not None:
-            raise LinuxProbeDriverError(
-                "non-error probe result must not carry diagnostic"
-            )
 
 
 @dataclass(frozen=True)
