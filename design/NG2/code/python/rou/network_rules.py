@@ -14,6 +14,7 @@ class NetworkRulesError(ValueError):
 
 class EndpointKind(str, Enum):
     LOCAL_NETWORK = "local-network"
+    LOCAL_PROCESS = "local-process"
     INTERFACE = "interface"
 
 
@@ -23,10 +24,13 @@ class NetworkEndpoint:
     interface: InterfaceIdentity | None = None
 
     def __post_init__(self) -> None:
-        if self.kind is EndpointKind.LOCAL_NETWORK:
+        if self.kind in {
+            EndpointKind.LOCAL_NETWORK,
+            EndpointKind.LOCAL_PROCESS,
+        }:
             if self.interface is not None:
                 raise NetworkRulesError(
-                    "local-network endpoint must not carry interface identity"
+                    f"{self.kind.value} endpoint must not carry interface identity"
                 )
             return
         if self.kind is EndpointKind.INTERFACE:
@@ -40,6 +44,10 @@ class NetworkEndpoint:
     @classmethod
     def local_network(cls) -> "NetworkEndpoint":
         return cls(EndpointKind.LOCAL_NETWORK)
+
+    @classmethod
+    def local_process(cls) -> "NetworkEndpoint":
+        return cls(EndpointKind.LOCAL_PROCESS)
 
     @classmethod
     def interface_path(cls, identity: InterfaceIdentity) -> "NetworkEndpoint":
@@ -71,21 +79,39 @@ class RoutingDomainSpec:
             )
 
 
+class TrafficProtocol(str, Enum):
+    TCP = "tcp"
+    UDP = "udp"
+    ICMP = "icmp"
+
+
 @dataclass(frozen=True)
 class DispatchRuleSpec:
     destination: IPv4Network
     routing_domain: str
     source: NetworkEndpoint
+    bound_output: NetworkEndpoint | None = None
+    protocol: TrafficProtocol | None = None
 
     def __post_init__(self) -> None:
         if not self.routing_domain:
             raise NetworkRulesError("dispatch routing_domain must be non-empty")
 
+        if self.bound_output is not None:
+            if self.bound_output.kind is not EndpointKind.INTERFACE:
+                raise NetworkRulesError(
+                    "dispatch bound_output requires a concrete interface endpoint"
+                )
 
-class TrafficProtocol(str, Enum):
-    TCP = "tcp"
-    UDP = "udp"
-    ICMP = "icmp"
+        if self.source.kind is EndpointKind.LOCAL_PROCESS:
+            if self.bound_output is None:
+                raise NetworkRulesError(
+                    "local-process dispatch requires bound output interface"
+                )
+            if self.protocol is None:
+                raise NetworkRulesError(
+                    "local-process dispatch requires explicit protocol"
+                )
 
 
 @dataclass(frozen=True, order=True)
