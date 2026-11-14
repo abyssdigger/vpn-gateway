@@ -23,7 +23,14 @@ temporarily removed during a permutation:
   is superseded as the production transition strategy;
 - availability failover intentionally does not pin existing flows to a path already
   demoted by availability policy; flow-affinity remains a separate feature for other
-  modes.
+  modes;
+- added explicit single-flight payload mutation: request handling, audit and shutdown cannot
+  overlap one lower-domain materialize/verify/commit transaction;
+- reserved metric capacity now includes the EMPTY working slot itself, so an all-live
+  maximum-size domain cannot silently consume the last metric below terminal blackhole;
+- EXP-027 additionally covers recovery with another dead path before the recovered path:
+  `ABGD.EVJ -> ABVGD.EJ`, proving the dead-tail cleanup phase returns EMPTY to the
+  live/non-confirmed boundary.
 
 ## 2026-11-14 — NG2 availability de-complexification and route-priority bubble
 
