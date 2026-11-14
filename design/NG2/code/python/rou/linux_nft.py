@@ -504,7 +504,7 @@ def compile_nft_nat_desired(
 
     local = _quote_token(local_interface)
     lines = [
-        f"table ip {NAT_TABLE} {",
+        f"table ip {NAT_TABLE} {{",
         "chain postrouting {",
         "type nat hook postrouting priority 100; policy accept;",
     ]
