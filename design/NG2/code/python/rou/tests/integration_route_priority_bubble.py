@@ -30,8 +30,6 @@ def ns(*argv: str, check: bool = True) -> subprocess.CompletedProcess[str]:
 
 def cleanup() -> None:
     run("ip", "netns", "del", NS, check=False)
-    for name in PATHS:
-        run("ip", "link", "del", name, check=False)
 
 
 def setup() -> None:
@@ -40,7 +38,6 @@ def setup() -> None:
     ns("ip", "link", "set", "lo", "up")
     for name in PATHS:
         peer = "peer-" + name
-        run("ip", "link", "del", peer, check=False)
         run("ip", "link", "add", name, "type", "veth", "peer", "name", peer)
         run("ip", "link", "set", name, "netns", NS)
         run("ip", "link", "set", peer, "netns", NS)
@@ -76,8 +73,7 @@ def route_map(table: int, destination: str) -> dict[int, str]:
             continue
         if metric in out:
             raise RuntimeError(
-                f"multiple unicast routes occupy metric {metric} in table {table}: "
-                f"{routes(table)!r}"
+                f"multiple owned routes occupy metric {metric}: {routes(table)!r}"
             )
         out[metric] = dev
     return out
@@ -90,6 +86,8 @@ def terminal_present(table: int, destination: str) -> bool:
         if item.get("type") != "blackhole":
             continue
         if item.get("metric") != TERMINAL_METRIC:
+            continue
+        if str(item.get("protocol")) not in {TERMINAL_PROTO, "201"}:
             continue
         return True
     return False
@@ -158,7 +156,7 @@ def reset_routes(
     assert_steady(table, destination, mapping, "reset")
 
 
-def move_empty(
+def move_gap(
     table: int,
     destination: str,
     *,
@@ -170,13 +168,15 @@ def move_empty(
     before = route_map(table, destination)
     if target_metric in before:
         raise RuntimeError(
-            f"{label}: target metric {target_metric} is not EMPTY: {before!r}"
+            f"{label}: target metric {target_metric} is not free: {before!r}"
         )
     if before.get(source_metric) != dev:
         raise RuntimeError(
-            f"{label}: source slot mismatch: {before!r}"
+            f"{label}: source metric does not contain {dev}: {before!r}"
         )
 
+    # Make: the complete eligible set remains present and the moved path is the
+    # only temporary duplicate.
     ns(
         "ip",
         "route",
@@ -196,8 +196,7 @@ def move_empty(
     counts = Counter(duplicated.values())
     if len(duplicated) != len(PATHS) + 1:
         raise RuntimeError(
-            f"{label}: add phase did not create exactly one extra route: "
-            f"{duplicated!r}"
+            f"{label}: add phase did not create one extra route: {duplicated!r}"
         )
     if set(duplicated.values()) != set(PATHS):
         raise RuntimeError(
@@ -205,12 +204,12 @@ def move_empty(
         )
     if counts[dev] != 2 or sum(value == 2 for value in counts.values()) != 1:
         raise RuntimeError(
-            f"{label}: add phase must contain exactly one duplicated path: "
-            f"{duplicated!r}"
+            f"{label}: add phase must have exactly one duplicate: {duplicated!r}"
         )
     if not terminal_present(table, destination):
         raise RuntimeError(f"{label}: terminal disappeared during add phase")
 
+    # Break only the old copy. Its metric automatically becomes the new free slot.
     ns(
         "ip",
         "route",
@@ -237,7 +236,7 @@ def move_empty(
         )
     if source_metric in after:
         raise RuntimeError(
-            f"{label}: old metric did not become EMPTY: {after!r}"
+            f"{label}: old metric did not become free: {after!r}"
         )
     if after.get(target_metric) != dev:
         raise RuntimeError(
@@ -247,19 +246,89 @@ def move_empty(
         raise RuntimeError(f"{label}: terminal disappeared during delete phase")
 
 
+def apply_moves(
+    table: int,
+    destination: str,
+    label: str,
+    moves: tuple[tuple[str, int, int], ...],
+) -> None:
+    for index, (dev, source_metric, target_metric) in enumerate(moves, 1):
+        move_gap(
+            table,
+            destination,
+            dev=dev,
+            source_metric=source_metric,
+            target_metric=target_metric,
+            label=f"{label}-{index}-{dev}",
+        )
+
+
 def exercise(table: int, destination: str, label: str) -> None:
-    # "." below is the technical EMPTY metric slot, not the availability
-    # live/non-confirmed boundary. Production keeps it canonical at the tail.
-    recovery_start = {
+    # Recovery with a real steady-state gap before the first non-confirmed path:
+    # A B G D . V E J -> A B V G D . E J
+    middle_dead = {
         10: "patha",
         20: "pathb",
         30: "pathg",
         40: "pathd",
-        50: "pathv",
-        60: "pathe",
-        70: "pathj",
+        60: "pathv",
+        70: "pathe",
+        80: "pathj",
     }
-    recovery_target = {
+    middle_live = {
+        10: "patha",
+        20: "pathb",
+        30: "pathv",
+        40: "pathg",
+        50: "pathd",
+        70: "pathe",
+        80: "pathj",
+    }
+    reset_routes(table, destination, middle_dead)
+    apply_moves(
+        table,
+        destination,
+        f"{label}-recover-middle",
+        (
+            ("pathd", 40, 50),
+            ("pathg", 30, 40),
+            ("pathv", 60, 30),
+        ),
+    )
+    assert_steady(table, destination, middle_live, f"{label} recovery middle")
+    print(
+        f"PASS {label}1: ABGD.VEJ -> ABVGD.EJ kept the full eligible set"
+    )
+
+    # Demotion is the same primitive in the other direction:
+    # A B V G D . E J -> A B G D . V E J
+    apply_moves(
+        table,
+        destination,
+        f"{label}-demote-middle",
+        (
+            ("pathv", 30, 60),
+            ("pathg", 40, 30),
+            ("pathd", 50, 40),
+        ),
+    )
+    assert_steady(table, destination, middle_dead, f"{label} demotion middle")
+    print(
+        f"PASS {label}2: ABVGD.EJ -> ABGD.VEJ kept the full eligible set"
+    )
+
+    # Recovery when the recovered path is the last non-confirmed path:
+    # A B G D E J . V -> A B V G D E J
+    tail_dead = {
+        10: "patha",
+        20: "pathb",
+        30: "pathg",
+        40: "pathd",
+        50: "pathe",
+        60: "pathj",
+        80: "pathv",
+    }
+    all_live = {
         10: "patha",
         20: "pathb",
         30: "pathv",
@@ -268,75 +337,42 @@ def exercise(table: int, destination: str, label: str) -> None:
         60: "pathe",
         70: "pathj",
     }
-    reset_routes(table, destination, recovery_start)
-    for dev, source_metric, target_metric in (
-        ("pathg", 30, 80),
-        ("pathv", 50, 30),
-        ("pathd", 40, 50),
-        ("pathg", 80, 40),
-    ):
-        move_empty(
-            table,
-            destination,
-            dev=dev,
-            source_metric=source_metric,
-            target_metric=target_metric,
-            label=f"{label} recovery-{dev}",
-        )
-    assert_steady(table, destination, recovery_target, f"{label} recovery")
+    reset_routes(table, destination, tail_dead)
+    apply_moves(
+        table,
+        destination,
+        f"{label}-recover-tail",
+        (
+            ("pathj", 60, 70),
+            ("pathe", 50, 60),
+            ("pathd", 40, 50),
+            ("pathg", 30, 40),
+            ("pathv", 80, 30),
+        ),
+    )
+    assert_steady(table, destination, all_live, f"{label} all live")
     print(
-        f"PASS {label}1: recovery ABGDVEJ. -> ABVGDEJ. kept every path"
+        f"PASS {label}3: ABGDEJ.V -> ABVGDEJ used the free N+1 metric only as scratch"
     )
 
-    for dev, source_metric, target_metric in (
-        ("pathv", 30, 80),
-        ("pathg", 40, 30),
-        ("pathd", 50, 40),
-        ("pathv", 80, 50),
-    ):
-        move_empty(
-            table,
-            destination,
-            dev=dev,
-            source_metric=source_metric,
-            target_metric=target_metric,
-            label=f"{label} demotion-{dev}",
-        )
-    assert_steady(table, destination, recovery_start, f"{label} demotion")
-    print(
-        f"PASS {label}2: demotion ABVGDEJ. -> ABGDVEJ. kept every path"
+    # Death from all-live has no steady-state gap initially. The next metric is
+    # simply unused and can receive the newly non-confirmed path first:
+    # A B V G D E J -> A B G D E J . V
+    apply_moves(
+        table,
+        destination,
+        f"{label}-demote-from-all-live",
+        (
+            ("pathv", 30, 80),
+            ("pathg", 40, 30),
+            ("pathd", 50, 40),
+            ("pathe", 60, 50),
+            ("pathj", 70, 60),
+        ),
     )
-
-    end_start = {
-        10: "patha",
-        20: "pathb",
-        30: "pathg",
-        40: "pathd",
-        50: "pathe",
-        60: "pathj",
-        70: "pathv",
-    }
-    end_target = recovery_target
-    reset_routes(table, destination, end_start)
-    for dev, source_metric, target_metric in (
-        ("pathg", 30, 80),
-        ("pathv", 70, 30),
-        ("pathj", 60, 70),
-        ("pathe", 50, 60),
-        ("pathd", 40, 50),
-        ("pathg", 80, 40),
-    ):
-        move_empty(
-            table,
-            destination,
-            dev=dev,
-            source_metric=source_metric,
-            target_metric=target_metric,
-            label=f"{label} tail-{dev}",
-        )
-    assert_steady(table, destination, end_target, f"{label} tail recovery")
+    assert_steady(table, destination, tail_dead, f"{label} death from all-live")
     print(
-        f"PASS {label}3: recovery ABGDEJV. -> ABVGDEJ. kept every path"
+        f"PASS {label}4: ABVGDEJ -> ABGDEJ.V created the boundary gap without route loss"
     )
 
 
