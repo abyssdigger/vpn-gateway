@@ -101,6 +101,7 @@ class PortRange:
         if self.start > self.end:
             raise NetworkRulesError("port range start must not exceed end")
 
+
 @dataclass(frozen=True)
 class TrafficSelector:
     source: IPv4Network | None = None
@@ -134,6 +135,7 @@ class TrafficSelector:
             and not self.source_ports
             and not self.destination_ports
         )
+
 
 class PredicateKind(str, Enum):
     ALWAYS = "always"
@@ -240,6 +242,7 @@ class TrafficPredicate:
         if item.kind is PredicateKind.NOT:
             return item.children[0]
         return cls(PredicateKind.NOT, children=(item,))
+
 
 @dataclass(frozen=True)
 class TrafficAllowSpec:
