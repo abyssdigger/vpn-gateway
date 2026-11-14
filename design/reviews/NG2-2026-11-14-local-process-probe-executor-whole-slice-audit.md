@@ -278,6 +278,22 @@ Not introduced:
 - timing/hysteresis configuration;
 - reverse parser for synthetic probe routing-domain names.
 
+## Green implementation baseline
+
+Code/test commit:
+
+```text
+70ebd870b22b41782c0c6bef55ce18adfc0f25ef
+```
+
+GitHub gates on that commit:
+
+- NG2 rootless unit/compile: PASS;
+- NG2 privileged Linux integration: PASS;
+- production LOCAL_PROCESS integration including LP1..LP7: PASS;
+- existing NG2 payload dataplane integration: PASS;
+- NG1 Python validation/regression: PASS.
+
 ## Remaining evidence/product gates
 
 ### External evidence gate
