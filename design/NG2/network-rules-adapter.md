@@ -340,8 +340,25 @@ Fast path обязан:
 две копии. После delete phase старый metric становится новым EMPTY. Ни live, ни degraded
 eligible route не вытесняется из FIB как временный scratch.
 
-Fast path является внутренней оптимизацией Adapter/Executor. Caller по-прежнему вызывает
-тот же `apply(owner, spec)` и не выбирает transition kind.
+Fast path является внутренней оптимизацией нижнего Adapter/Executor.
+`LinuxNetworkExecutor` отвечает за kernel convergence и fresh verification; он не является
+caller-visible Profile transaction boundary.
+
+Выше Adapter pure payload priority change проходит через отдельный
+`ProfileRouteOrderExecutor` соответствующего Profile. Этот Direct Executor удерживает
+single-flight до возврата `apply(owner, spec)`, то есть до завершения нижнего
+materialize/verify/commit. Тем самым:
+
+```text
+ProfileRouteOrderExecutor
+    -> NetworkRulesAdapter
+        -> LinuxNetworkExecutor
+            -> Runner/kernel
+```
+
+Caller не выбирает Linux transition kind. Многошаговая Linux mutation не объявляется
+atomic; transactional semantics Profile Executor относится к completion, наблюдаемой его
+caller'ом.
 
 Текущий classifier разрешает fast path только если pure planner доказывает такую
 EMPTY-slot permutation. Изменение membership, destination, dispatch, nft policy,
