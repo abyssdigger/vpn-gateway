@@ -128,3 +128,10 @@ The first action of the next autonomous implementation cycle should therefore be
 the Debian 13 EXP-024 result if target access/output is available. If it is not available,
 select a different independent review unit rather than weakening or bypassing that evidence
 gate.
+
+
+## Checkpoint closure validation
+
+The checkpoint/recovery amendments themselves passed the branch NG1 validation workflow,
+including its kernel-integration job. No code or test failure remains hidden behind the
+documentation-only closure commits.
