@@ -46,6 +46,7 @@ class LogicalProbeWindow:
         if (
             isinstance(self.interval_seconds, bool)
             or not isinstance(self.interval_seconds, (int, float))
+            or not isfinite(float(self.interval_seconds))
             or self.interval_seconds <= 0
         ):
             raise ValueError("logical probe window interval must be positive")
@@ -68,8 +69,22 @@ class ProbeExecutionPlan:
     def __post_init__(self) -> None:
         if not isinstance(self.generation, ProbeObservationGeneration):
             raise ValueError("execution plan requires ProbeObservationGeneration")
-        if len(set(self.planes)) != len(self.planes):
+        for item in self.planes:
+            if not isinstance(item, PhysicalProbePlane):
+                raise ValueError(
+                    "execution plan planes must contain PhysicalProbePlane"
+                )
+        plane_keys = [
+            (item.mechanism, item.path, item.target)
+            for item in self.planes
+        ]
+        if len(set(plane_keys)) != len(plane_keys):
             raise ValueError("execution plan contains duplicate physical planes")
+        for item in self.windows:
+            if not isinstance(item, LogicalProbeWindow):
+                raise ValueError(
+                    "execution plan windows must contain LogicalProbeWindow"
+                )
         probe_ids = [item.probe_id for item in self.windows]
         if len(set(probe_ids)) != len(probe_ids):
             raise ValueError("execution plan contains duplicate logical windows")
