@@ -260,7 +260,20 @@ confirmed_live_prefix_length
 
 Это **не normalized configuration** и не отдельный gap object. Значение вычисляется из
 актуального availability snapshot; Linux projection только выводит из него незанятый
-metric position. При `K == N` gap не материализуется вообще.
+metric position.
+
+Семантика значения:
+
+```text
+None -> availability-derived boundary для Profile не активна;
+0    -> boundary активна, confirmed-live paths нет;
+K    -> первые K paths подтверждены живыми;
+N    -> все N paths подтверждены живыми.
+```
+
+`None` и `0` не эквивалентны. В частности, отключение probing не должно притворяться
+состоянием «все paths мертвы». При `None` routes остаются contiguous. При `K == N`
+gap также физически не материализуется.
 
 Новая отдельная Calculator abstraction для этого пока не требуется. Если логика
 effective order перестанет быть малой частью PayloadTrafficIntentCalculator, граница может
