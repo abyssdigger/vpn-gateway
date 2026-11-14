@@ -240,6 +240,11 @@ ICMP probe shape: exact /32 echo-request outward and exact /32 echo-reply inward
 matching owner-scoped isolated dispatch plane. Broader predicates and other protocols fail
 closed pending separate evidence.
 
+This proves the selected routing/filter mechanism, but not yet the complete lifetime
+isolation of conntrack-carried flow identity across rules/interface generations. A focused
+stale conntrack-mark generation experiment remains mandatory before claiming that stronger
+generation property.
+
 ### 9.2. Source NAT
 
 Current source NAT support is LOCAL_NETWORK to concrete INTERFACE with target
