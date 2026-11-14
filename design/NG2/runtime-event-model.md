@@ -65,6 +65,22 @@ Runtime не требует единого процедурного global recon
 
 Latest-value storage является cache текущего мира, а не историческим журналом.
 
+Первый executable slice уже реализует availability-driven payload priority. Он хранит:
+
+```text
+current configured payload snapshot
+current AvailabilityProbeSetRequest
+latest AvailabilityProbeStateInfo by probe_id
+runtime-derived ProfileProbeAssignment
+current effective PayloadTrafficStateRequest
+```
+
+`ProfileProbeAssignment(profile_name, probe_ids)` является runtime-derived association,
+а не полем physical ProbeRules и не Linux policy. Один logical probe может быть источником
+evidence для нескольких Profiles. Assignment валидируется до публикации: каждый probe
+должен существовать и его concrete path должен входить в eligible set соответствующего
+Profile.
+
 ### 2.2. InterfaceObservationAgent
 
 `InterfaceObservationAgent` наблюдает runtime network interfaces.
@@ -546,7 +562,37 @@ Binding исчезает по структурной/административ�
 
 - semantic desired payload projection для `PayloadTrafficStateRequest`.
 
-Для каждого Profile availability влияет только на `ordered_paths` уже bound paths.
+Для каждого Profile availability влияет только на `ordered_paths` уже bound paths и
+derived `confirmed_live_prefix_length`.
+
+Executable decomposition:
+
+```text
+AvailabilityProbeStateInfo[]
+        +
+AvailabilityProbeSetRequest
+        +
+ProfileProbeAssignment[]
+        |
+        v
+ProbeProfileEvidenceCalculator
+        |
+        v
+ProfileAvailabilityEvidence[]
+        |
+        + configured payload snapshot
+        + previous configured snapshot
+        + current effective payload snapshot
+        |
+        v
+PayloadTrafficIntentCalculator
+        |
+        v
+PayloadTrafficStateRequest
+```
+
+Calculators остаются externally stateless: previous/current snapshots являются explicit
+input, а их latest-value storage принадлежит RuntimeStateManager.
 
 На startup, при изменении binding membership или configured priority базой становится
 новый configured eligible order. Probe history не переопределяет новое административное
@@ -556,7 +602,11 @@ Binding исчезает по структурной/административ�
 
 - подтвержденно живые paths всплывают наверх в configured priority;
 - остальные paths сохраняются;
-- если подтвержденно живой альтернативы нет, текущий order не меняется.
+- если подтвержденно живой альтернативы нет, текущий order не меняется;
+- если availability-derived boundary для Profile не активна, используется configured
+  order и `confirmed_live_prefix_length=None`;
+- active boundary без positive evidence дает
+  `confirmed_live_prefix_length=0`, но не удаляет ни одного path.
 
 Linux/kernel materialization в Calculator не входит.
 
@@ -633,19 +683,24 @@ InterfaceObservationAgent
 ### 12.2. Availability evidence changes
 
 ```text
+valid generation-bound physical reply
+        |
+        v
 AvailabilityProbeManager
-    |
-    +-- AvailabilityProbeStateInfo
-            |
-            v
-    RuntimeStateManager
-            |
-    PayloadTrafficIntentCalculator
-            |
-      ordered_paths changes
-            |
-            +-- PayloadTrafficStateRequest
-            +-- ProfileStateInfo
+        |
+        +-- AvailabilityProbeStateInfo
+                |
+                v
+        RuntimeStateManager
+                |
+        ProbeProfileEvidenceCalculator
+                |
+        PayloadTrafficIntentCalculator
+                |
+      ordered_paths / live-prefix changes
+                |
+                +-- PayloadTrafficStateRequest
+                +-- ProfileStateInfo
 ```
 
 Binding matrix при этом не меняется.
@@ -756,16 +811,27 @@ RuntimeStateManager
 
 ## 16. Следующая декомпозиция
 
-Отдельно проектируются:
+Уже исполняются:
 
-1. PayloadTrafficManager и его Machinery;
-2. AvailabilityProbeManager и его Machinery;
-3. PublicationManager и его Machinery;
-4. точные state enums/reason codes;
-5. Event Delivery Environment implementation;
-6. serialization/schema versioning;
-7. restart/resubscription/state-refresh protocol;
-8. Profile status model.
+- AvailabilityProbeManager good-news/window state;
+- RuntimeStateManager availability -> payload priority slice;
+- PayloadTrafficIntentCalculator;
+- thread-safe single-executor serialization в PayloadTrafficManager.
+
+Следующие отдельные units:
+
+1. production probe sender/receiver transport + ownership interval triggers;
+2. PublicationManager и его Machinery;
+3. точные remaining state/reason codes;
+4. Event Delivery Environment implementation с epoch/revision ordering;
+5. serialization/schema versioning;
+6. restart/resubscription/state-refresh protocol;
+7. Profile status model.
+
+Текущий прямой unit/integration harness доставляет callbacks упорядоченно и доказывает
+semantic flow, но не заменяет будущий EventEnvelope revision filter. Именно envelope
+обязан защищать RuntimeStateManager от поздней доставки старого InfoEvent после
+superseding revision/generation.
 
 Future Device lifecycle management остается отдельным будущим расширением и не является
 частью текущего NG2 runtime.
