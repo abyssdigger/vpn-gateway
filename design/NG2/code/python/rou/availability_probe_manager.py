@@ -102,22 +102,32 @@ class AvailabilityProbeManager:
         )
 
         if changed:
+            previous_request = self._latest_request
             previous_desired = self._latest_desired
-            self._invalidate_generation()
+            physical_changed = (
+                previous_desired is None
+                or not network_rules_semantically_equal(
+                    previous_desired,
+                    desired,
+                )
+            )
+
+            if physical_changed:
+                self._invalidate_generation()
+            else:
+                self._invalidate_changed_logical_probes(
+                    previous_request,
+                    request,
+                )
+
             self._publish_removed_invalidations(request)
             self._latest_request = request
             self._latest_desired = desired
 
-            if (
-                previous_desired is not None
-                and network_rules_semantically_equal(
-                    previous_desired,
-                    desired,
-                )
-            ):
-                rules_state = self._audit_rules(desired)
-            else:
+            if physical_changed:
                 rules_state = self._apply_desired_and_observe(desired)
+            else:
+                rules_state = self._audit_rules(desired)
         else:
             assert self._latest_desired is not None
             rules_state = self._audit_rules(self._latest_desired)
@@ -189,9 +199,9 @@ class AvailabilityProbeManager:
     ) -> AvailabilityProbeStateInfo | None:
         """Run one valid attempt and project its raw result into current availability.
 
-        This is deliberately a one-attempt policy boundary only:
+        This is deliberately the direct one-attempt policy boundary:
         REPLY -> REACHABLE, NO_REPLY -> UNREACHABLE, ERROR -> UNKNOWN.
-        Retry, cadence, hysteresis and stale-time semantics remain outside this slice.
+        It bypasses scheduled thresholds; run_due() owns cadence/hysteresis.
         """
 
         observation = self.attempt_once(
@@ -465,6 +475,33 @@ class AvailabilityProbeManager:
     def _invalidate_generation(self) -> None:
         self._active_generation = None
         self._schedule_state.clear()
+
+    def _invalidate_changed_logical_probes(
+        self,
+        previous: AvailabilityProbeSetRequest | None,
+        current: AvailabilityProbeSetRequest,
+    ) -> None:
+        if previous is None:
+            return
+
+        previous_by_id = {
+            item.probe_id: item
+            for item in previous.probes
+        }
+        current_by_id = {
+            item.probe_id: item
+            for item in current.probes
+        }
+
+        changed_ids = (
+            previous_by_id.keys()
+            & current_by_id.keys()
+        )
+        for probe_id in changed_ids:
+            if previous_by_id[probe_id] == current_by_id[probe_id]:
+                continue
+            self._latest_published.pop(probe_id, None)
+            self._schedule_state.pop(probe_id, None)
 
     def _publish_removed_invalidations(
         self,
