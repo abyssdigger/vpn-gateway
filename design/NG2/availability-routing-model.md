@@ -59,6 +59,28 @@ NOT_CONFIRMED_LIVE
 machinery и отсутствие еще достаточного наблюдения. Эти причины не должны превращаться в
 разные правила удаления payload path.
 
+### 2.3. Configured enable/disable
+
+Logical probe configuration survives disable/re-enable.
+
+```text
+enabled = false
+```
+
+означает:
+
+- autonomous probing не выполняется;
+- накопленное current evidence этого logical probe не используется;
+- target/path/timing configuration сохраняется;
+- повторное включение не требует заново конструировать logical probe configuration.
+
+Physical ProbeRules materialized только для enabled consumers. Если несколько logical
+probes разделяют один physical `(mechanism, InterfaceIdentity, target)` plane, отключение
+одного consumer не закрывает plane. Отключение последнего enabled consumer закрывает его.
+
+Disable не означает удаление payload path: eligibility payload path и probe lifecycle
+остаются независимыми.
+
 ## 3. Положительное evidence
 
 Любой валидный reply через нужный concrete path является хорошей новостью.
