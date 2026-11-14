@@ -1,4 +1,4 @@
-# NG2 probe conntrack remediation — 40-minute cycle checkpoint (draft)
+# NG2 probe conntrack remediation — 40-minute cycle checkpoint
 
 Date: 2026-11-14
 Branch: code-cycle-20261114-probe-conntrack-remediation-40m
@@ -108,3 +108,17 @@ If Debian 13 returns EXP_026_PROBE_CLASS_CLEANUP=PASS:
 3. classify zero-match selective delete as idempotent success;
 4. add production regression proving stale inheritance cannot cross the Adapter structural transition;
 5. only then return to AvailabilityProbeManager timing/retry/hysteresis policy.
+## Final closure
+
+Cycle threshold: 2026-11-14T13:25:25Z.
+
+The final checkpoint commit timestamp is the authoritative cycle-end timestamp.
+
+Closure state:
+
+- executable baseline remains f37ac016ca83e96e219b2bbfdf2deef4e1dd56bb and is fully green;
+- every later change is documentation/model/review only;
+- general component-model section numbering and review rules are internally consistent after adding Executor and Runner;
+- active NG2 contracts use LinuxIcmpProbeDriver and LinuxNetworkExecutor consistently;
+- EXP-026 Debian 13 target confirmation remains the only external mechanism gate;
+- production conntrack remediation remains intentionally unimplemented pending that gate.
