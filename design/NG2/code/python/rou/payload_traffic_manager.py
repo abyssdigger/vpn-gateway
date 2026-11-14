@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from threading import Lock
 from typing import Protocol
 
 from .network_rules import ActionResult, NetworkRulesAdapter, NetworkRulesSpec
@@ -43,6 +44,7 @@ class PayloadTrafficManager:
 
         self._latest_desired: NetworkRulesSpec | None = None
         self._latest_published: PayloadTrafficStateInfo | None = None
+        self._transaction_lock = Lock()
 
     def handle_request(self, request: PayloadTrafficStateRequest) -> None:
         """Handle one full desired payload snapshot.
@@ -51,35 +53,38 @@ class PayloadTrafficManager:
         injected Event Delivery Environment port.
         """
 
-        desired = self._rules_calculator.calculate(request)
+        with self._transaction_lock:
+            desired = self._rules_calculator.calculate(request)
 
-        # Accept the derived desired projection only after pure calculation succeeds.
-        # If calculation rejects the request, the previous managed intent remains intact
-        # and no lower-domain mutation is attempted.
-        self._latest_desired = desired
+            # Accept the derived desired projection only after pure calculation succeeds.
+            # If calculation rejects the request, the previous managed intent remains
+            # intact and no lower-domain mutation is attempted.
+            self._latest_desired = desired
 
-        info = self._apply_desired_and_observe(desired)
-        self._publish_if_changed(info)
+            info = self._apply_desired_and_observe(desired)
+            self._publish_if_changed(info)
 
     def audit(self) -> None:
         """Run one drift/reconcile pass for the current accepted intent."""
 
-        desired = self._latest_desired
-        if desired is None:
-            return
+        with self._transaction_lock:
+            desired = self._latest_desired
+            if desired is None:
+                return
 
-        self._adapter.renew_state(self)
-        info = self._current_info(desired)
+            self._adapter.renew_state(self)
+            info = self._current_info(desired)
 
-        if info.rules_state.convergence is not Convergence.MATCHED:
-            info = self._apply_desired_and_observe(desired)
+            if info.rules_state.convergence is not Convergence.MATCHED:
+                info = self._apply_desired_and_observe(desired)
 
-        self._publish_if_changed(info)
+            self._publish_if_changed(info)
 
     def shutdown(self) -> ActionResult:
         """Release all Adapter state/resources owned by this Manager instance."""
 
-        return self._adapter.cleanup(self)
+        with self._transaction_lock:
+            return self._adapter.cleanup(self)
 
     def _apply_desired_and_observe(
         self,
