@@ -195,20 +195,20 @@ def normalize_nft_text(
         line = line.replace("ct state invalid", "ct state 0x1")
         line = line.replace("ct state new", "ct state 0x8")
         line = re.sub(
-            r"\\bct mark set 0x0*([0-9a-fA-F]+)\\b",
-            r"ct mark set 0x\\1",
+            r"\bct mark set 0x0*([0-9a-fA-F]+)\b",
+            r"ct mark set 0x\1",
             line,
         )
         line = re.sub(
-            r"\\bct mark 0x0*([0-9a-fA-F]+)\\b",
-            r"ct mark 0x\\1",
+            r"\bct mark 0x0*([0-9a-fA-F]+)\b",
+            r"ct mark 0x\1",
             line,
         )
         if "icmp type " in line:
             line = line.replace("ip protocol icmp ", "")
         line = re.sub(
-            r"\\b((?:[0-9]{1,3}\\.){3}[0-9]{1,3})/32\\b",
-            r"\\1",
+            r"\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})/32\b",
+            r"\1",
             line,
         )
 
