@@ -1018,14 +1018,15 @@ NG1 planner.py
    RuntimeStateManager;
 2. audit/retry scheduling policy вокруг уже реализованного deterministic `audit()` pass;
 3. richer divergent predicate implication только там, где появится реальная необходимость;
-4. runtime wiring availability bubble policy в `ordered_paths` +
-   transient `confirmed_live_prefix_length`; Linux route-only materialization уже
-   подтверждена EXP-027 и поддерживает implicit boundary gap;
-5. runtime queue/coalescing implementation, которая обеспечивает per-Profile serialization
-   route-priority transactions и запускает следующий plan только от freshly verified
-   результата предыдущего;
+4. Event Delivery Environment epoch/revision ordering вокруг уже исполняемого
+   availability -> payload latest-value flow;
+5. production availability sender/receiver transport и ownership interval triggers;
 6. remaining runtime assembly above the implemented protective startup gate; forwarding
    closure до первого owner reconcile зафиксирован в `runtime-bootstrap.md`.
+
+Availability bubble wiring, transient `confirmed_live_prefix_length`, runtime
+probe-to-Profile evidence projection и single-executor payload queue/coalescing уже
+реализованы. Linux route-only materialization подтверждена EXP-027.
 
 Adapter boundary остается фиксированной: Linux transaction machinery не должна снова
 протекать в PayloadTrafficManager.
