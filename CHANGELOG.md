@@ -1,3 +1,25 @@
+## 2026-11-14 — NG2 Linux instance infrastructure lifecycle
+
+Migrated the proven NG1 namespace/veth infrastructure boundary into NG2 without restoring
+NG1 policy machinery:
+
+- schema-v1 topology remains namespace + host veth + fixed inner `host0` with explicit
+  IPv4 addresses and namespace default route;
+- existing namespaces are dual-stack protectively closed before structural verification;
+- fresh creation owns only namespace/veth/address/main-route infrastructure and creates no
+  nft policy;
+- partial instance state and structural drift fail closed rather than being silently
+  adopted/repaired;
+- existing-instance verification now proves reciprocal cross-namespace veth peer identity
+  from kernel `ifindex/link_index` metadata;
+- destroy closes forwarding best effort, removes owned infrastructure and freshly verifies
+  absence;
+- privileged CI covers fresh create, no-nft ownership, restart containment, drift rejection,
+  teardown and partial-state rejection;
+- focused review `NG2-2026-11-14-runtime-instance-lifecycle-review.md` passed.
+
+---
+
 ## 2026-11-14 — NG2 protective runtime bootstrap and namespace assembly
 
 Closed the startup forwarding window above the structural Linux Adapter and added the
