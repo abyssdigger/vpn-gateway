@@ -146,6 +146,10 @@ class OwnerRulesRegistry:
     def has_identity(self, owner: object) -> bool:
         return self._find(owner) is not None
 
+    def token(self, owner: object) -> OwnerToken | None:
+        entry = self._find(owner)
+        return None if entry is None else entry.token
+
     def _find(self, owner: object) -> _OwnerEntry | None:
         for entry in self._entries:
             if entry.identity is owner:
