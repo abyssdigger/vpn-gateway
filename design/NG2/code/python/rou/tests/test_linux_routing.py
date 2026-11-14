@@ -455,6 +455,35 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                 metric=TERMINAL_METRIC - 1,
             )
 
+    def test_empty_slot_capacity_is_reserved_below_terminal_metric(self):
+        # 6553 route metrics fit, but an availability-managed domain also needs
+        # one additional EMPTY working slot below terminal metric 65536.
+        paths = tuple(
+            InterfaceIdentity(f"e{i % 10000}", i + 1)
+            for i in range(6553)
+        )
+        rules = OwnedNetworkRules(
+            OwnerToken(1),
+            NetworkRulesSpec(
+                routing_domains=(
+                    RoutingDomainSpec(
+                        "a",
+                        (IPv4Network("10.0.0.0/8"),),
+                        paths,
+                        TerminalDisposition.DROP,
+                        priority_prefix_length=len(paths),
+                    ),
+                ),
+            ),
+        )
+
+        with self.assertRaises(LinuxRoutingError):
+            compile_linux_routing_desired(
+                compose_network_rules((rules,)),
+                LinuxRoutingAllocationState(),
+                local_interface="host0",
+            )
+
     def test_metric_space_exhaustion_fails_before_partial_result(self):
         # 6553 metrics are available: 10..65530. The next one would cross terminal 65536.
         paths = tuple(
