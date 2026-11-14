@@ -406,6 +406,7 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
 
         self.manager.close_interval("primary", generation)
         self.manager.close_interval("primary", generation)
+        self.manager.close_interval("primary", generation)
         self.assertEqual(self.publisher.events, [])
         self.manager.close_interval("primary", generation)
 
