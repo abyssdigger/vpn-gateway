@@ -203,19 +203,30 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         self.assertIsNone(self.manager.observation_generation)
         self.assertEqual(self.publisher.events, [])
 
-    def test_removed_probe_publication_is_forgotten_for_future_readd(self):
+    def test_removed_probe_is_invalidated_then_forgotten_for_future_readd(self):
         primary = probe("primary", self.path, "203.0.113.24")
 
         self.manager.handle_request(request(primary))
         self.assertEqual(len(self.publisher.events), 1)
 
         self.manager.handle_request(request())
-        self.manager.handle_request(request(primary))
 
         self.assertEqual(len(self.publisher.events), 2)
+        removed = self.publisher.events[-1]
+        self.assertEqual(removed.probe_id, "primary")
+        self.assertIs(removed.state, AvailabilityProbeState.UNKNOWN)
+        self.assertEqual(removed.reason, "probe no longer requested")
+
+        self.manager.handle_request(request(primary))
+
+        self.assertEqual(len(self.publisher.events), 3)
         self.assertEqual(
             [item.probe_id for item in self.publisher.events],
-            ["primary", "primary"],
+            ["primary", "primary", "primary"],
+        )
+        self.assertIn(
+            "no authoritative probe evidence",
+            self.publisher.events[-1].reason,
         )
 
     def test_audit_before_first_request_is_noop(self):
