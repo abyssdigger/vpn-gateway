@@ -136,6 +136,27 @@ evidence boundary:
 If future AvailabilityProbeManager semantics become per-plane, cleanup granularity can be
 revisited together with that state-model change. It should not be introduced preemptively.
 
+## Transition concurrency boundary
+
+The initial remediation assumes the current synchronous control model:
+
+- one structural NetworkRules transition is executed to completion before another managed
+  operation runs in that control path;
+- LinuxIcmpProbeDriver is a single-shot blocking operation;
+- AvailabilityProbeManager does not start a new probe while its rules transition is in
+  progress / not READY.
+
+Under that model no probe packet can race between stale-state cleanup and physical commit.
+
+Do not add a temporary nft transition barrier solely for hypothetical parallel probe
+execution. Parallelism/cancellation is already an intentionally open AvailabilityProbeManager
+policy.
+
+If future runtime permits concurrent probe execution with NetworkRules mutation, that
+change must add an explicit cancellation/barrier contract before enabling concurrency.
+
+Cleanup failure remains a structural transition failure; rules state is not published READY.
+
 ## Ownership requirement
 
 For mark-filtered cleanup to be safe, LinuxLocalProcessConfig.ct_mark must be exclusive to
