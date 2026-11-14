@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from .network_rules import NetworkRulesSpec, NetworkRulesState, StateKnowledge
+from .network_rules import (
+    NetworkRulesSpec,
+    NetworkRulesState,
+    PredicateKind,
+    RoutingDomainSpec,
+    StateKnowledge,
+    TrafficPredicate,
+)
 
 
 class Knowledge(str, Enum):
@@ -65,6 +72,112 @@ def _matched_service(rules: NetworkRulesSpec) -> Service:
     return Service.READY
 
 
+def _ordered_subsequence[T](actual: tuple[T, ...], desired: tuple[T, ...]) -> bool:
+    if not actual:
+        return True
+
+    wanted = iter(desired)
+    for item in actual:
+        for candidate in wanted:
+            if candidate == item:
+                break
+        else:
+            return False
+    return True
+
+
+def _routing_is_restrictive(
+    actual: tuple[RoutingDomainSpec, ...],
+    desired: tuple[RoutingDomainSpec, ...],
+) -> bool:
+    actual_by_name = {item.name: item for item in actual}
+    desired_by_name = {item.name: item for item in desired}
+
+    if actual_by_name.keys() != desired_by_name.keys():
+        return False
+
+    for name, wanted in desired_by_name.items():
+        observed = actual_by_name[name]
+        if observed.destinations != wanted.destinations:
+            return False
+        if observed.terminal_disposition is not wanted.terminal_disposition:
+            return False
+        if not _ordered_subsequence(
+            observed.ordered_paths,
+            wanted.ordered_paths,
+        ):
+            return False
+
+    return True
+
+
+def _provably_restrictive(
+    actual: NetworkRulesSpec,
+    desired: NetworkRulesSpec,
+) -> bool:
+    """Prove a narrow class of conservative divergence.
+
+    This intentionally does not attempt general predicate implication.
+    """
+
+    if not _routing_is_restrictive(
+        actual.routing_domains,
+        desired.routing_domains,
+    ):
+        return False
+
+    if actual.dispatch_rules != desired.dispatch_rules:
+        # Missing/changing dispatch may fall through to unrelated routing, so it is not
+        # safe to interpret as a restriction.
+        return False
+
+    if not set(actual.traffic_allows).issubset(desired.traffic_allows):
+        return False
+
+    if not set(actual.flow_initiation_allows).issubset(
+        desired.flow_initiation_allows
+    ):
+        return False
+
+    if set(actual.source_nat) != set(desired.source_nat):
+        # Removing/changing translation may alter externally visible traffic semantics.
+        # Keep this outside the initial safe-subset proof.
+        return False
+
+    return True
+
+
+def _predicate_provably_nonempty(predicate: TrafficPredicate) -> bool:
+    if predicate.kind in {PredicateKind.ALWAYS, PredicateKind.MATCH}:
+        return True
+    if predicate.kind is PredicateKind.ANY:
+        return any(_predicate_provably_nonempty(item) for item in predicate.children)
+    return False
+
+
+def _provably_permission_widened(
+    actual: NetworkRulesSpec,
+    desired: NetworkRulesSpec,
+) -> bool:
+    """Prove only endpoint-pair permission widening.
+
+    If desired has no byte-level allow at all for an endpoint pair and actual has a
+    provably non-empty allow there, actual permits behavior desired forbids. More subtle
+    predicate widening is deliberately left UNKNOWN.
+    """
+
+    desired_pairs = {
+        (item.source, item.destination)
+        for item in desired.traffic_allows
+    }
+
+    return any(
+        (item.source, item.destination) not in desired_pairs
+        and _predicate_provably_nonempty(item.predicate)
+        for item in actual.traffic_allows
+    )
+
+
 class PayloadRulesStateCalculator:
     """Conservatively assess observed rules against desired payload rules."""
 
@@ -100,9 +213,22 @@ class PayloadRulesStateCalculator:
                 service=Service.ISOLATED,
             )
 
-        # A syntactic difference is not enough to prove semantic permission widening or
-        # a conservative subset. Keep the independent axes unknown until a relation
-        # algorithm can prove them.
+        if _provably_restrictive(actual, desired):
+            return PayloadRulesState(
+                knowledge=Knowledge.KNOWN,
+                convergence=Convergence.DIVERGED,
+                safety=Safety.SAFE,
+                service=Service.DEGRADED,
+            )
+
+        if _provably_permission_widened(actual, desired):
+            return PayloadRulesState(
+                knowledge=Knowledge.KNOWN,
+                convergence=Convergence.DIVERGED,
+                safety=Safety.UNSAFE,
+                service=Service.UNKNOWN,
+            )
+
         return PayloadRulesState(
             knowledge=Knowledge.KNOWN,
             convergence=Convergence.DIVERGED,
