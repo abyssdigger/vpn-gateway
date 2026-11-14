@@ -186,6 +186,21 @@ full materialize+verify convergence transaction, should be reviewed for possible
 reclassification as an Executor. This naming cleanup is orthogonal to EXP-026 and must not
 change the conntrack mechanism evidence.
 
+## Cleanup idempotence
+
+Production cleanup must be idempotent.
+
+A structural generation may have no matching probe conntrack entries at all. The
+conntrack-tools CLI may report `0 flow entries have been deleted` with a non-zero status
+for that no-match case.
+
+The production implementation must distinguish that benign no-op from command/selector/
+kernel failure. Re-running the same cleanup on an already-clean probe class must succeed.
+
+This is an implementation/error-classification invariant; EXP-026 does not need to create
+an artificial missing-entry failure because its purpose is to prove selective deletion and
+state isolation.
+
 ## Gate
 
 Do not implement remediation until EXP-026 is confirmed on Debian 13.
