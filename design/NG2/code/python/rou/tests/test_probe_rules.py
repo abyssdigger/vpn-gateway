@@ -51,11 +51,19 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         self.assertIs(outbound.source.kind, EndpointKind.LOCAL_PROCESS)
         self.assertEqual(outbound.destination.interface, path)
         self.assertEqual(
+            outbound.predicate.selector.destination,
+            IPv4Network("172.21.201.19/32"),
+        )
+        self.assertEqual(
             outbound.predicate.selector.icmp_types,
             (IcmpType.ECHO_REQUEST,),
         )
         self.assertEqual(inbound.source.interface, path)
         self.assertIs(inbound.destination.kind, EndpointKind.LOCAL_PROCESS)
+        self.assertEqual(
+            inbound.predicate.selector.source,
+            IPv4Network("172.21.201.19/32"),
+        )
         self.assertEqual(
             inbound.predicate.selector.icmp_types,
             (IcmpType.ECHO_REPLY,),
