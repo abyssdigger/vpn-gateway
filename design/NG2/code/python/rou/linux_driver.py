@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import subprocess
 from typing import Protocol
 
+from .interface_identity import InterfaceIdentity
 from .linux_network import LinuxNetworkDesired
 from .linux_nft import (
     FILTER_TABLE,
@@ -182,7 +183,7 @@ class LinuxNetworkDriver:
     def __init__(self, runner: LinuxCommandRunner) -> None:
         self._runner = runner
 
-    def observe_interfaces(self) -> tuple:
+    def observe_interfaces(self) -> tuple[InterfaceIdentity, ...]:
         first_links = self._runner.run(
             ("ip", "-j", "link", "show")
         ).stdout
