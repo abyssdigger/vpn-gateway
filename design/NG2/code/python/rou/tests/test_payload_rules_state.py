@@ -44,6 +44,42 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
         self.calc = PayloadRulesStateCalculator()
         self.path = InterfaceIdentity("vpns00", 10)
 
+    def test_state_rejects_dependent_axes_when_knowledge_unknown(self):
+        with self.assertRaises(ValueError):
+            __import__(
+                "rou.payload_rules_state",
+                fromlist=["PayloadRulesState"],
+            ).PayloadRulesState(
+                Knowledge.UNKNOWN,
+                Convergence.DIVERGED,
+                Safety.UNKNOWN,
+                Service.UNKNOWN,
+            )
+
+    def test_state_rejects_unknown_convergence_when_knowledge_known(self):
+        with self.assertRaises(ValueError):
+            __import__(
+                "rou.payload_rules_state",
+                fromlist=["PayloadRulesState"],
+            ).PayloadRulesState(
+                Knowledge.KNOWN,
+                Convergence.UNKNOWN,
+                Safety.UNKNOWN,
+                Service.UNKNOWN,
+            )
+
+    def test_state_rejects_matched_but_unsafe(self):
+        with self.assertRaises(ValueError):
+            __import__(
+                "rou.payload_rules_state",
+                fromlist=["PayloadRulesState"],
+            ).PayloadRulesState(
+                Knowledge.KNOWN,
+                Convergence.MATCHED,
+                Safety.UNSAFE,
+                Service.UNKNOWN,
+            )
+
     def test_stale_known_observation_is_not_authoritative(self):
         desired = NetworkRulesSpec(
             routing_domains=(_domain("a", self.path),),
