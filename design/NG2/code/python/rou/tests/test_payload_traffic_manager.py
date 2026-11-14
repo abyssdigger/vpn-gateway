@@ -91,6 +91,30 @@ class PayloadTrafficManagerTests(unittest.TestCase):
             self.publisher,
         )
 
+    def test_invalid_request_does_not_mutate_adapter(self):
+        invalid = PayloadTrafficStateRequest(
+            (
+                PayloadProfileRequest(
+                    "a",
+                    PayloadDirection.OUTBOUND,
+                    (IPv4Network("10.0.0.0/8"),),
+                    (PayloadPath(self.path),),
+                ),
+                PayloadProfileRequest(
+                    "b",
+                    PayloadDirection.OUTBOUND,
+                    (IPv4Network("10.0.0.0/8"),),
+                    (PayloadPath(self.path),),
+                ),
+            )
+        )
+
+        with self.assertRaises(ValueError):
+            self.manager.handle_request(invalid)
+
+        self.assertEqual(self.adapter.apply_owners, [])
+        self.assertEqual(self.publisher.events, [])
+
     def test_request_uses_manager_instance_as_adapter_owner(self):
         result = self.manager.handle_request(_request(self.path))
 
