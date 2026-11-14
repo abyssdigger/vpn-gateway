@@ -190,7 +190,7 @@ Profile:
 
 Эти paths не являются самостоятельным verdict о здоровье Profile. RuntimeStateManager
 комбинирует их с `rules_state`, binding/availability и другими system-level facts в
-`ProfileStateCalculator`.
+`ProfileStateCalculator`. Availability уже учтена upstream в desired `ordered_paths`; она не превращает observed path в binding ON/OFF внутри PayloadTrafficManager.
 
 Foreign observed routing domains не публикуются как requested Profiles; их наличие
 отражается через divergence/safety rules-state assessment.
@@ -939,9 +939,9 @@ NG1 planner.py
    RuntimeStateManager;
 2. audit/retry scheduling policy вокруг уже реализованного deterministic `audit()` pass;
 3. richer divergent predicate implication только там, где появится реальная необходимость;
-4. AvailabilityProbeManager execution/timing policy above the implemented probe
-   rules/state and single-shot executor;
-5. remaining runtime assembly above the implemented protective startup gate; forwarding
+4. route-only materialization для перестановки `ordered_paths` без полного forwarding barrier;
+5. отделение NAT semantic ordering от route priority, чтобы permutation paths не выглядела как изменение NAT policy;
+6. remaining runtime assembly above the implemented protective startup gate; forwarding
    closure до первого owner reconcile зафиксирован в `runtime-bootstrap.md`.
 
 Adapter boundary остается фиксированной: Linux transaction machinery не должна снова

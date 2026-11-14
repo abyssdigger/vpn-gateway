@@ -2,30 +2,89 @@
 
 **Status:** active NG2 design  
 **Date:** 2026-11-14  
-**Scope:** active availability-probe managed domain
+**Scope:** active availability-probe managed domain  
+**Routing policy:** `design/NG2/availability-routing-model.md`
 
 ## 1. Responsibility
 
-AvailabilityProbeManager owns the active probe subsystem.
+`AvailabilityProbeManager` owns the active probe subsystem:
 
-It owns:
-
-- the latest accepted `AvailabilityProbeSetRequest`;
-- probe-specific NetworkRules ownership through the common NetworkRulesAdapter;
-- interpretation of ProbeRulesState;
-- probe-attempt lifecycle;
-- current probe evidence for each logical `probe_id`;
-- publication of AvailabilityProbeStateInfo.
+- latest accepted `AvailabilityProbeSetRequest`;
+- probe-specific `NetworkRules` ownership;
+- probe-rules observation and repair;
+- concrete-interface/rules readiness generation;
+- execution-side probe evidence;
+- publication of `AvailabilityProbeStateInfo`.
 
 It does not own:
 
-- Profile binding decisions;
-- payload routing/NAT/filtering;
+- Profile binding membership;
+- payload route membership;
+- payload route metrics;
+- selection of the last surviving payload path;
 - VPN process lifecycle;
-- NetworkRules physical allocation;
-- user-facing timing configuration parsing.
+- user-facing configuration parsing.
 
-## 2. Network rules machinery
+Availability is an input to payload **priority**, not an admission gate.
+
+## 2. Minimal routing semantics
+
+The normative availability/routing model is intentionally small:
+
+```text
+eligible paths
+    +
+configured priority
+    +
+confirmed-live evidence
+    +
+current effective order
+        |
+        v
+bubble promotion
+        |
+        v
+PayloadProfileRequest.ordered_paths
+```
+
+Probe evidence never removes an eligible path.
+
+For routing preference only two classes matter:
+
+```text
+CONFIRMED_LIVE
+NOT_CONFIRMED_LIVE
+```
+
+`UNREACHABLE`, local probing error and absence of sufficient current evidence may remain
+different diagnostic conditions, but none of them means "delete this payload path".
+
+## 3. Probe request
+
+The current normalized request remains:
+
+```text
+probe_id
+mechanism
+concrete InterfaceIdentity
+IPv4 target
+optional AvailabilityWindowPolicy
+    interval_seconds
+    failure_intervals
+    enabled
+```
+
+`enabled=false` disables autonomous probing without deleting the configured logical probe.
+Its target, path association and timing configuration therefore remain available for later
+re-enable.
+
+`policy=None` is retained only as an internal/manual transition state while runtime
+assembly is incomplete. It is not the preferred user-facing way to disable a configured
+probe.
+
+Timing policy is not part of physical `ProbeRulesCalculator` output.
+
+## 4. Probe NetworkRules
 
 Pure machinery:
 
@@ -39,110 +98,141 @@ ProbeRulesCalculator
 NetworkRulesSpec
 ```
 
-The Manager uses itself as one opaque owner of the shared NetworkRulesAdapter.
-
-Observed rules are interpreted through:
+The physical plane is keyed by:
 
 ```text
-ProbeRulesStateCalculator(
-    desired NetworkRulesSpec,
-    observed NetworkRulesState
-)
-    -> ProbeRulesState
+(mechanism, InterfaceIdentity, target)
 ```
 
-ProbeRulesState is intentionally distinct from PayloadRulesState:
+Several logical `probe_id` values may share one physical plane.
+
+The Manager uses itself as one opaque owner of the shared `NetworkRulesAdapter`.
+
+## 5. Rules readiness and interface generation
+
+Probe evidence is authoritative only while probe rules are freshly:
 
 ```text
-knowledge
-convergence
-usability
+KNOWN + MATCHED + READY
 ```
-
-Only `KNOWN + MATCHED + READY` permits active probe evidence to be authoritative.
-
-## 3. Rules-before-execution invariant
-
-A probe attempt may contribute current availability evidence only after fresh rules
-observation proves the desired probe plane READY.
-
-An Adapter action SUCCESS alone is insufficient.
-
-If rules become UNKNOWN or DIVERGED/INVALID:
-
-- current probe evidence for that rules generation is no longer authoritative;
-- the Manager must not reinterpret an execution failure as remote UNREACHABLE;
-- the Manager must reconcile/refresh rules before accepting new evidence.
-
-This prevents both:
-
-- false negative from a restrictive local plane;
-- false positive from alternate-path escape or widened local policy.
-
-## 4. Interface generation
 
 Every request names a concrete `InterfaceIdentity(ifname, ifindex)`.
 
-Same-name/new-ifindex is a new generation.
+Same-name/new-ifindex is a new concrete generation. Evidence from an older generation must
+not be reused.
 
-Probe execution independently rechecks the concrete generation immediately before the
-attempt. NetworkRules observation and Driver generation checking are complementary:
-neither is replaced by the other.
+The Manager keeps an owner-wide rules-readiness epoch:
 
-Probe evidence must not survive a concrete-generation change.
+- no epoch exists before fresh READY;
+- physical desired-rules change invalidates the epoch;
+- loss of READY invalidates the epoch;
+- later fresh READY starts a new epoch;
+- logical-only request change with physically identical rules preserves the epoch and
+  invalidates only the changed logical probe evidence.
 
-The Manager represents this with an owner-wide **rules-readiness epoch**. The epoch is
-Manager-local and opaque to NetworkRulesSpec/Linux technical identity:
+This epoch is Manager-local. It is not encoded into routing tables, uid, conntrack mark or
+nft objects.
 
-- no epoch exists before fresh `KNOWN + MATCHED + READY`;
-- leaving READY invalidates all evidence from the current epoch;
-- a later fresh transition back to READY starts a new epoch;
-- changing the physical desired `NetworkRulesSpec` invalidates the previous epoch;
-- a same-name/new-ifindex request therefore cannot reuse old evidence;
-- logical-only request changes that leave the physical probe plane unchanged preserve the
-  rules-readiness epoch and invalidate evidence/scheduling only for changed `probe_id`
-  entries.
+## 6. Good-news model
 
-The epoch is not a kernel/network generation identifier and is not encoded into uid,
-conntrack mark, routing tables or nft rules.
+Production availability semantics are **not attempt-oriented**.
 
-A physical backend rebuild that leaves the Manager's semantic rules observation continuously
-fresh READY does not by itself invalidate already completed evidence. Future attempt safety
-remains the responsibility of the verified probe plane plus its lower-domain generation
-mechanism.
-
-## 5. Single-shot ICMP Driver
-
-The first executable worker is `LinuxIcmpProbeDriver`.
-
-It performs one bound attempt and returns:
+The routing-relevant positive input is only:
 
 ```text
-REPLY
-NO_REPLY
-ERROR
+good_news(probe_id)
 ```
 
-These are raw attempt outcomes.
+Any valid reply through the current concrete probe plane is good news regardless of which
+send caused it.
 
-The first explicit verdict baseline is intentionally minimal and lives above this Driver:
+No routing-policy contract requires:
+
+- attempt id;
+- matching reply to a semantic attempt object;
+- per-attempt `NO_REPLY`;
+- recovery streak;
+- retry cadence;
+- verdict timeout attached to one send.
+
+A valid good-news event immediately confirms the path live and resets accumulated missed
+intervals.
+
+## 7. Negative integral
+
+Negative evidence is accumulated at observation-window boundaries.
+
+For one logical probe the minimal state is:
 
 ```text
-REPLY    -> REACHABLE
-NO_REPLY -> UNREACHABLE
-ERROR    -> UNKNOWN
+confirmed_live
+missed_intervals
+good_news_since_boundary
 ```
 
-This is a one-attempt baseline, not a hidden retry/hysteresis contract.
+At a boundary:
 
-Local failures such as generation mismatch, process prerequisite failure or ping execution
-error return ERROR, not NO_REPLY. ERROR therefore never becomes remote UNREACHABLE.
+```text
+good news seen:
+    missed_intervals = 0
+    confirmed_live = true
 
-## 6. Linux technical identity
+no good news:
+    missed_intervals += 1
+    if missed_intervals >= failure_intervals:
+        confirmed_live = false
+```
 
-Linux runtime assembly supplies one authoritative technical process identity.
+One positive reply is sufficient for recovery. There is no `recovery_threshold`.
 
-Network policy receives:
+A local probing error does not prove remote unreachability. For routing preference it
+simply fails to provide positive evidence; diagnostics may retain the local error reason.
+The same interval integral prevents a transient local fault from becoming an immediate
+persistent negative conclusion.
+
+## 8. Routing consequence
+
+`AvailabilityProbeStateInfo` is consumed by runtime priority calculation, not by
+`BindingCalculator`.
+
+The current routing rule is:
+
+- confirmed-live paths may bubble above paths without confirmed live evidence;
+- live paths preserve configured priority;
+- paths without confirmed-live evidence are retained;
+- if no confirmed-live alternative exists, probing does not perturb the current payload
+  order.
+
+The exact algorithm and route-transition requirements are normative in
+`availability-routing-model.md`.
+
+## 9. Current executable split
+
+The clean pure policy core is implemented in:
+
+```text
+availability_routing.py
+    AvailabilityWindowPolicy
+    AvailabilityWindowState
+    calculate_effective_path_order()
+```
+
+The old autonomous scheduler has been removed.
+
+The current `AvailabilityProbeManager.attempt_once()` and `evaluate_once()` remain only as
+explicit diagnostic/verification primitives over the already proven lower boundary. They
+must not be used as production routing policy.
+
+Likewise, `LinuxIcmpProbeDriver` is currently a verified synchronous single-shot worker.
+It proves generation binding, capability-free execution and result classification, but its
+blocking attempt API does not define the final sender/receiver runtime architecture.
+
+A later execution integration may replace this worker contract without changing the
+good-news/window routing semantics.
+
+## 10. Linux technical identity
+
+Linux runtime assembly supplies one authoritative process identity:
 
 ```text
 LinuxLocalProcessConfig
@@ -150,327 +240,63 @@ LinuxLocalProcessConfig
     ct_mark
 ```
 
-Probe execution receives the same `LinuxLocalProcessConfig` plus process-only values such
-as gid and executable path.
+Probe execution additionally receives process-only values such as gid and executable path.
 
-The semantic AvailabilityProbeSetRequest contains none of these Linux values.
+The semantic probe request contains none of those Linux values.
 
-The uid must not be independently duplicated in Adapter and Driver configuration.
+## 11. ping socket prerequisite
 
-## 7. ping socket prerequisite
+The current Linux single-shot worker uses capability-free ping sockets and idempotently
+writes/verifies namespace-local `net.ipv4.ping_group_range` for its gid.
 
-The first Linux Driver uses capability-free ping sockets.
+This remains execution machinery, not `NetworkRulesAdapter` policy.
 
-Before each single-shot attempt it idempotently writes and freshly verifies the
-namespace-local `net.ipv4.ping_group_range` for its configured gid.
+Shutdown cleanup of this process prerequisite remains open until the final execution
+lifecycle is selected.
 
-This prerequisite belongs to process execution, not NetworkRulesAdapter.
+## 12. Removed policy
 
-The current Driver does not restore an unknown previous value after each attempt.
-Shutdown ownership can be added when the complete Manager lifecycle is implemented.
-
-## 8. Logical probes and physical planes
-
-Logical identity:
+The following are no longer part of NG2 availability routing semantics:
 
 ```text
-probe_id
-```
-
-Network plane identity used by ProbeRulesCalculator:
-
-```text
-(mechanism, InterfaceIdentity, target)
-```
-
-Several logical probes may therefore share one physical network plane.
-
-Timing/hysteresis is explicitly per logical `probe_id`, not per physical plane.
-`AvailabilityProbeRequest.policy` therefore does not participate in
-`ProbeRulesCalculator` output. Two logical probes sharing one plane may have different
-cadence, timeout and thresholds.
-
-Execution deduplication remains a future optimization only if it preserves each logical
-probe contract.
-
-## 9. Implemented rules-control slice
-
-The first executable AvailabilityProbeManager slice is implemented independently of
-scheduling cadence.
-
-It owns:
-
-- latest accepted full AvailabilityProbeSetRequest;
-- semantic idempotence of repeated equivalent snapshots;
-- current desired ProbeRulesCalculator output;
-- NetworkRulesAdapter owner lifecycle;
-- ProbeRulesState calculation;
-- owner-wide rules-readiness epoch;
-- UNKNOWN publication while no authoritative probe evidence exists;
-- deterministic rules audit/repair;
-- fail-closed invalidation when a probe_id leaves the desired set.
-
-A deterministic rules audit pass is defined independently of scheduling cadence:
-
-```text
-renew NetworkRules
-        |
-        v
-calculate ProbeRulesState
-        |
-        +-- READY ----------------------> rules usable
-        |
-        +-- UNKNOWN / INVALID
-                |
-                v
-        apply current desired rules
-                |
-                v
-        obtain fresh state again
-```
-
-Probe execution consumes only the READY branch.
-
-Rules audit is also performed as part of each attempted probe validity envelope.
-
-The Manager also exposes `evaluate_once()` as the minimal direct policy-bearing boundary. It reuses
-`attempt_once()` and materializes only the minimal one-attempt verdict mapping. The raw
-`attempt_once()` API remains policy-free and independently testable.
-
-Equivalent full snapshots are order-insensitive by probe_id and do not create a new
-readiness epoch or force structural reapply when the current rules remain READY.
-
-When a probe_id is removed from the desired full snapshot, the Manager publishes one final
-UNKNOWN state with no observation generation before forgetting that probe locally. This
-prevents a latest-value subscriber from retaining stale REACHABLE/UNREACHABLE evidence for
-a probe that is no longer requested.
-
-## 10. Event publication
-
-Executable payload types:
-
-```text
-AvailabilityProbeState
-    UNKNOWN | REACHABLE | UNREACHABLE
-
-ProbeObservationGeneration
-    opaque Manager-local positive sequence
-
-AvailabilityProbeStateInfo
-    probe_id
-    state
-    reason/details
-    observation_generation
-```
-
-AvailabilityProbeStateInfo is current state per logical `probe_id`.
-
-Until both conditions hold:
-
-1. matching READY probe rules generation;
-2. valid current probe evidence for that generation;
-
-the published availability state is UNKNOWN rather than inferred failure.
-
-A result collected under an older rules/interface generation is stale evidence.
-
-UNKNOWN carries no authoritative observation generation.
-REACHABLE/UNREACHABLE must carry the ProbeObservationGeneration under which their evidence
-was accepted.
-
-
-## 11. Single-attempt validity envelope
-
-The generic lower semantic Driver contract is:
-
-```text
-ProbeDriver.execute(
-    AvailabilityProbeRequest,
-    explicit timeout_seconds
-) -> ProbeAttemptResult
-
-ProbeAttemptOutcome
-    REPLY | NO_REPLY | ERROR
-```
-
-`LinuxIcmpProbeDriver` is the first concrete implementation.
-
-The implemented `attempt_once(probe_id, timeout_seconds=...)` path does not feed a raw
-outcome into result/hysteresis policy based only on a pre-attempt READY observation.
-
-Implemented order:
-
-```text
-fresh READY epoch
-    -> capture current ProbeObservationGeneration
-    -> ProbeDriver.execute(...)
-    -> NetworkRulesAdapter.renew_state(self)
-    -> ProbeRulesStateCalculator
-    -> require rules still READY for the captured epoch
-    -> only then pass REPLY / NO_REPLY to result policy
-```
-
-If the post-attempt observation is UNKNOWN/INVALID, the current epoch ends and
-`attempt_once()` returns no `ProbeAttemptObservation`. Later repair cannot retroactively
-validate that attempt.
-
-When both checks remain READY in the same epoch, the method returns a
-`ProbeAttemptObservation` containing the raw `ProbeAttemptResult`.
-
-`evaluate_once()` is layered strictly above that raw boundary:
-
-```text
-attempt_once()
-    |
-    +-- no valid observation ---------> keep/publish UNKNOWN
-    |
-    +-- REPLY ------------------------> REACHABLE
-    +-- NO_REPLY ---------------------> UNREACHABLE
-    +-- ERROR ------------------------> UNKNOWN
-```
-
-A READY rules audit preserves an already authoritative REACHABLE/UNREACHABLE publication
-when its `observation_generation` is still the current Manager epoch. Audit must not create
-a transient UNKNOWN before every new attempt.
-
-ProbeAttemptOutcome.ERROR is a local execution failure and is never directly equivalent to
-remote UNREACHABLE.
-
-## 12. Minimal verdict baseline
-
-The current executable baseline deliberately chooses no counters and no timers.
-
-One valid attempt is enough to publish one current verdict for the active readiness epoch:
-
-- REPLY publishes REACHABLE with the current ProbeObservationGeneration;
-- NO_REPLY publishes UNREACHABLE with the current ProbeObservationGeneration;
-- ERROR publishes UNKNOWN without an observation generation;
-- an attempt discarded by the validity envelope publishes no remote verdict.
-
-Repeated semantically identical verdicts are publication-idempotent.
-
-Any physical rules transition that opens a new readiness epoch invalidates older
-REACHABLE/UNREACHABLE publications for the Manager. A logical-only request change invalidates
-only the affected `probe_id` publication while unchanged logical probes retain evidence
-from the still-current rules epoch.
-
-This baseline is intentionally replaceable by a later retry/hysteresis policy without
-changing ProbeDriver or ProbeAttemptObservation.
-
-## 13. Per-probe cadence and hysteresis
-
-The next executable layer is a normalized optional `AvailabilityProbePolicy` attached to
-each logical `AvailabilityProbeRequest`:
-
-```text
-interval_seconds
 retry_interval_seconds
-timeout_seconds
-failure_threshold
+timeout_seconds as verdict policy
 recovery_threshold
+serial run_due() scheduler
+per-attempt NO_REPLY hysteresis
+ERROR -> immediate routing UNKNOWN transition
+availability-driven BindingCalculator removal
+UNAVAILABLE_METRIC / shadow fallback tier
 ```
 
-`policy=None` means that the logical probe is not autonomously scheduled by the Manager.
-It remains available to explicit `evaluate_once()` callers. This is useful for staged
-assembly and tests; production runtime assembly may require policy for probes that are
-expected to run autonomously.
+Historical reviews/checkpoints that contain those concepts remain evidence of the design
+path and are not rewritten as though the later simplification had always existed.
 
-Threshold defaults are 1/1, preserving the already-agreed single-attempt verdict baseline.
-No arbitrary default wall-clock values are invented: interval, retry interval and timeout
-must be supplied explicitly by the normalized policy producer.
+## 13. Evidence
 
-The Manager owns only deterministic scheduling state. It does not sleep and does not own a
-thread or event loop. The outer runtime calls:
+Still-valid lower evidence:
 
-```text
-run_due(monotonic_now)
-```
+- EXP-024: selective LOCAL_PROCESS routing/filtering PASS on Debian 13;
+- EXP-025: same-name/new-ifindex stale conntrack generation demonstrated;
+- EXP-026: selective probe-class conntrack cleanup PASS in privileged CI;
+- Linux LOCAL_PROCESS Adapter integration PASS;
+- Linux ICMP selector/nft integration PASS;
+- target `/usr/bin/ping` generation-bound execution evidence remains valid.
 
-and the Manager executes all currently due probes serially in deterministic `probe_id`
-order.
+These experiments prove probe-plane safety properties. They do not require the removed
+per-attempt routing policy.
 
-AvailabilityProbeManager has a single-threaded control-loop contract: its public mutation
-methods are not intended for concurrent invocation. The outer runtime serializes request,
-audit and cadence calls. No internal lock/thread model is introduced.
+## 14. Open implementation units
 
-The supplied `monotonic_now` is the dispatch timestamp for the whole pass. The next due
-deadline is anchored to that dispatch timestamp, not to wall-clock completion of the
-possibly blocking Driver call. A probe is attempted at most once per `run_due()` call, so
-missed deadlines never cause an internal catch-up loop.
+The remaining work is deliberately narrow:
 
-Scheduling semantics:
+1. integrate a non-attempt-correlated good-news source with `AvailabilityWindowState`;
+2. define diagnostic publication of persistent local probing errors without changing
+   routing safety;
+3. feed confirmed-live evidence into effective payload ordering, not binding membership;
+4. prove the route-slot bubble transition on Linux and implement the route-only fast path;
+5. separate NAT semantic ordering from route priority so a path permutation does not
+   masquerade as NAT policy change.
 
-- a newly scheduled probe is immediately due;
-- after a stable valid verdict/check, the next attempt uses `interval_seconds`;
-- while contrary evidence has not yet reached its transition threshold, the next attempt
-  uses `retry_interval_seconds`;
-- local ERROR or an attempt rejected by the validity envelope also uses
-  `retry_interval_seconds`;
-- matching evidence cancels an incomplete opposite streak;
-- a new Manager readiness epoch resets all threshold streaks and due-state.
-
-Hysteresis is verdict retention, not UNKNOWN insertion:
-
-```text
-REACHABLE
-    +-- NO_REPLY x (failure_threshold - 1) --> remain REACHABLE
-    +-- NO_REPLY x failure_threshold       --> UNREACHABLE
-
-UNREACHABLE
-    +-- REPLY x (recovery_threshold - 1)   --> remain UNREACHABLE
-    +-- REPLY x recovery_threshold         --> REACHABLE
-```
-
-From UNKNOWN, the corresponding threshold must also be satisfied before publishing an
-authoritative REACHABLE/UNREACHABLE verdict.
-
-A local Driver ERROR remains exceptional evidence and immediately publishes UNKNOWN,
-clearing pending streaks. It is never counted toward remote failure hysteresis.
-
-A policy-only or other logical-only change invalidates current evidence, streaks and due
-state only for the changed `probe_id`. If the physical `NetworkRulesSpec` is unchanged,
-the Manager preserves the current rules-readiness epoch and freshly audits the existing plane
-rather than forcing a structural apply.
-
-A physical probe-plane change still invalidates the owner-wide rules epoch and therefore all
-authoritative probe evidence carried by that epoch.
-
-No jitter, parallel attempts, in-flight cancellation or stale-verdict time-to-live is
-defined by this slice.
-
-## 14. Still intentionally open
-
-The remaining lower-domain evidence gate before production conntrack remediation is
-EXP-026 Debian 13 target confirmation. EXP-025 is already target-confirmed
-STALE-INHERITANCE, and the intended Debian 13 `/usr/bin/ping` executable is confirmed.
-
-The following still require an explicit later contract:
-
-- user-facing timing/policy grammar and normalization;
-- jitter;
-- outer runtime tick/event-loop integration;
-- parallel attempt policy, if any;
-- cancellation on a superseding request while a synchronous Driver call is already in flight;
-- stale-verdict time-to-live, if any beyond active cadence;
-- shutdown cleanup of process runtime prerequisites.
-
-The observation-generation representation is no longer open at the semantic level:
-AvailabilityProbeManager uses an owner-wide rules-readiness epoch as described above.
-
-These timing/result-policy choices are not inferred from payload policy or from EXP-024.
-
-## 15. Evidence
-
-Current evidence:
-
-- EXP-024: selective local-process routing/filter mechanism PASS on Debian 13;
-- production LOCAL_PROCESS NetworkRules backend: apply/renew/dataplane PASS;
-- EXP-025: Debian 13 target-confirmed STALE-INHERITANCE across same-name/new-ifindex
-  replacement;
-- EXP-026: privileged-CI probe-class selective conntrack cleanup PASS; Debian 13 target
-  confirmation pending;
-- projected generation loss retains dedicated uid guard across another owner's structural
-  reconcile;
-- ProbeRulesStateCalculator: unit PASS;
-- LinuxIcmpProbeDriver: unit + privileged CI integration PASS;
-- LinuxIcmpProbeDriver with `/usr/bin/ping`: Debian 13 target LP1..LP7 PASS.
+No retry scheduler, recovery threshold or shadow fallback tier should be reintroduced
+without a new concrete requirement.

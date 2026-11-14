@@ -90,24 +90,21 @@ Agent не выполняет Device admission и не определяет Prof
 
 `AvailabilityProbeManager` управляет подсистемой активных availability probes.
 
-Он не управляет доступностью удаленного endpoint. Его managed domain — собственная probe
-subsystem:
+Его managed domain:
 
-- набор активных probe tasks;
-- необходимая probe-specific network environment;
-- lifecycle и исполнение probes;
-- получение фактических probe results.
+- desired logical probe set;
+- probe-specific network environment;
+- execution-side probe evidence;
+- rules/interface-generation validity;
+- публикация текущего availability evidence.
 
-Manager получает желаемый набор probes как RequestEvent и публикует текущие результаты как
-InfoEvents.
+Он **не** определяет Profile binding membership и не удаляет payload path по результату
+probe.
 
-Итоговая семантика:
-
-```text
-(Profile, concrete interface) -> ON/OFF
-```
-
-ему не принадлежит. Probe result является только одним из входов `BindingCalculator`.
+Routing-level смысл evidence зафиксирован отдельно в
+`design/NG2/availability-routing-model.md`: подтвержденно живой path может получить более
+высокий приоритет среди уже bound/eligible paths, а отсутствие подтверждения не является
+командой удалить последний путь.
 
 ### 2.4. PayloadTrafficManager
 
@@ -272,38 +269,31 @@ Calculators.
 **Subject:** availability probe set  
 **Publication mode:** full desired snapshot
 
-Определяет полный набор probes, которые runtime сейчас требует поддерживать.
+Определяет полный набор logical probes, которые runtime сейчас требует поддерживать.
 
-Текущий normalized machinery contract для ICMP:
+Текущий normalized contract:
 
 ```text
 probe_id
 ICMP mechanism
 concrete InterfaceIdentity
 IPv4 target
-optional per-probe AvailabilityProbePolicy
+optional AvailabilityWindowPolicy
     interval_seconds
-    retry_interval_seconds
-    timeout_seconds
-    failure_threshold
-    recovery_threshold
+    failure_intervals
+    enabled
 ```
 
-`probe_id` остается logical correlation identity верхнего availability domain. Чистый
-`ProbeRulesCalculator` дедуплицирует network plane по физическому
-`(mechanism, InterfaceIdentity, target)` и не включает timing policy в physical
-`NetworkRulesSpec`.
+`enabled=false` сохраняет настроенный logical probe, но запрещает автономное probing.
+`policy=None` остается только внутренним/manual transition state.
 
-Timing/hysteresis относится к logical probe и исполняется AvailabilityProbeManager.
-Два logical probes могут использовать один physical probe plane и иметь разные policy.
+`ProbeRulesCalculator` дедуплицирует physical plane по
+`(mechanism, InterfaceIdentity, target)`. Timing/enable policy не является physical
+NetworkRules semantics.
 
-`policy=None` означает отсутствие автономного cadence для данного normalized request;
-явный `evaluate_once()` остается допустим. RuntimeStateManager/его Calculator позже
-должен выдавать policy для probes, которые должны исполняться автоматически.
-
-Это не user-facing config grammar. Разбор и defaulting пользовательской timing policy
-остаются выше AvailabilityProbeManager. Будущие mechanisms добавляют свои normalized
-параметры отдельным review unit.
+Production availability policy не коррелирует reply с semantic attempt id. Любая валидная
+good news для текущего probe plane сбрасывает negative integral; отсутствие good news
+накапливается по observation intervals.
 
 Новая revision заменяет предыдущий desired set.
 
@@ -315,7 +305,7 @@ Timing/hysteresis относится к logical probe и исполняется 
 **Subject:** probe_id  
 **Publication mode:** current state per probe
 
-Содержит текущий probe result:
+Содержит текущую диагностическую projection:
 
 ```text
 probe_id
@@ -324,19 +314,18 @@ reason/details
 observation generation
 ```
 
-Отсутствие publication не должно автоматически означать failure. До подтвержденного
-наблюдения состояние трактуется как UNKNOWN.
+`REACHABLE` означает актуальное положительное evidence для текущей concrete
+interface/probe-rules generation.
 
-Активный probe result является текущим evidence только для той concrete interface /
-probe-rules generation, в которой он был получен. Если probe NetworkRules имеют
-`knowledge=UNKNOWN` или `usability!=READY`, либо concrete interface generation
-изменилась, прежний REACHABLE/UNREACHABLE result не переносится в текущую projection и
-availability state остается UNKNOWN до нового валидного evidence.
+`UNREACHABLE` и `UNKNOWN` различаются для диагностики, но для payload priority оба
+означают отсутствие подтвержденной живости. Ни одно из этих состояний само по себе не
+удаляет binding и не запрещает последний eligible payload path.
 
-Если `probe_id` удален из нового полного `AvailabilityProbeSetRequest`, Manager публикует
-для него финальную `UNKNOWN` invalidation без observation generation перед локальным
-удалением state. Это не означает probe failure; цель — не оставить у latest-value
-subscriber старое REACHABLE/UNREACHABLE evidence для уже неактивного probe.
+Если probe rules перестают быть READY либо concrete interface generation меняется,
+предыдущее положительное evidence не переносится в новую generation.
+
+Если `probe_id` удален из полного desired snapshot, Manager публикует финальную UNKNOWN
+invalidation перед локальным удалением state.
 
 ### 8.4. PayloadTrafficStateRequest
 
@@ -493,7 +482,7 @@ Calculators являются Machinery, а не Engines.
 
 - selected interfaces;
 - Profiles;
-- current condition state.
+- обязательные non-probe eligibility conditions.
 
 Выход:
 
@@ -501,12 +490,11 @@ Calculators являются Machinery, а не Engines.
 IsBound(concrete_interface, Profile) -> bool
 ```
 
-Без дополнительных `interface_balancing` conditions применимый selected interface
-считается usable для Profile.
+Availability probe evidence **не** является условием binding membership.
 
-Дополнительные conditions образуют AND.
-
-Active availability evidence поступает через `AvailabilityProbeStateInfo`.
+Binding исчезает по структурной/административной причине, а не потому, что active probe
+не подтвердил достижимость. Это гарантирует, что probing не может самостоятельно удалить
+последний настроенный путь.
 
 ### 10.3. AvailabilityProbeDemandCalculator
 
@@ -524,13 +512,23 @@ Active availability evidence поступает через `AvailabilityProbeSta
 
 Вход:
 
-- config;
+- config и configured path priority;
 - binding matrix;
-- текущие системно значимые runtime facts.
+- availability probe states;
+- current effective/observed path order;
+- другие системно значимые runtime facts.
 
 Выход:
 
 - semantic desired payload projection для `PayloadTrafficStateRequest`.
+
+Для каждого Profile availability влияет только на `ordered_paths` уже bound paths.
+
+Нормативная policy — bubble promotion:
+
+- подтвержденно живые paths всплывают наверх в configured priority;
+- остальные paths сохраняются;
+- если подтвержденно живой альтернативы нет, текущий order не меняется.
 
 Linux/kernel materialization в Calculator не входит.
 
@@ -604,25 +602,29 @@ InterfaceObservationAgent
                         -> PayloadTrafficManager
 ```
 
-### 12.2. Availability probe failure
+### 12.2. Availability evidence changes
 
 ```text
 AvailabilityProbeManager
     |
-    +-- AvailabilityProbeStateInfo(UNREACHABLE)
+    +-- AvailabilityProbeStateInfo
             |
             v
     RuntimeStateManager
             |
-         BindingCalculator
+    PayloadTrafficIntentCalculator
             |
-       binding matrix changes
+      ordered_paths changes
             |
             +-- PayloadTrafficStateRequest
             +-- ProfileStateInfo
 ```
 
-Один concrete interface может остаться usable для другого Profile.
+Binding matrix при этом не меняется.
+
+Если существует подтвержденно живой альтернативный path, он может подняться выше paths
+без положительного evidence. Если такой альтернативы нет, probing не создает новый outage
+и текущий payload order сохраняется.
 
 ### 12.3. PayloadTrafficManager fail-close
 
