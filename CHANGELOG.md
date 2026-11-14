@@ -1,3 +1,16 @@
+## 2026-11-15 — NG2 probing route-membership invariant
+
+Clarified the normative availability model after route-priority runtime wiring:
+
+- probing never adds or removes payload paths/routes; it changes only availability state,
+  desired order and the confirmed-live prefix boundary;
+- the older special-case wording that protected only the last/sole path was removed as
+  weaker and misleading;
+- a sole or last confirmed-live path follows the same rule as every other path: its route
+  remains materialized and only its priority state may change.
+
+---
+
 ## 2026-11-14 — NG2 availability runtime wiring and serialized payload transactions
 
 Completed the first executable runtime path from generation-bound availability evidence to
