@@ -40,7 +40,6 @@ def _owner_rules(
     paths=(),
     *,
     source=None,
-    priority_prefix_length=None,
 ) -> OwnedNetworkRules:
     network = IPv4Network(destination)
     if source is None:
@@ -54,7 +53,6 @@ def _owner_rules(
                     destinations=(network,),
                     ordered_paths=tuple(paths),
                     terminal_disposition=TerminalDisposition.DROP,
-                    priority_prefix_length=priority_prefix_length,
                 ),
             ),
             dispatch_rules=(
@@ -177,22 +175,14 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
         )
         self.assertTrue(all(item.metric < TERMINAL_METRIC for item in normal))
 
-    def test_priority_prefix_projects_one_persistent_empty_slot(self):
+    def test_routing_projection_reserves_one_implicit_trailing_empty_slot(self):
         paths = tuple(
             InterfaceIdentity(f"vpns0{index}", 10 + index)
             for index in range(4)
         )
         desired = compile_linux_routing_desired(
             compose_network_rules(
-                (
-                    _owner_rules(
-                        1,
-                        "a",
-                        "10.0.0.0/8",
-                        paths,
-                        priority_prefix_length=2,
-                    ),
-                )
+                (_owner_rules(1, "a", "10.0.0.0/8", paths),)
             ),
             LinuxRoutingAllocationState(),
             local_interface="host0",
@@ -208,44 +198,28 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
             [
                 (10, paths[0]),
                 (20, paths[1]),
-                (40, paths[2]),
-                (50, paths[3]),
+                (30, paths[2]),
+                (40, paths[3]),
             ],
         )
         self.assertEqual(len(desired.route_slot_gaps), 1)
-        self.assertEqual(desired.route_slot_gaps[0].metric, 30)
+        self.assertEqual(desired.route_slot_gaps[0].metric, 50)
 
-    def test_empty_slot_planner_moves_only_boundary_when_order_is_unchanged(self):
+    def test_empty_slot_planner_breaks_cycle_with_implicit_trailing_gap(self):
         a = InterfaceIdentity("patha", 40)
         b = InterfaceIdentity("pathb", 41)
         c = InterfaceIdentity("pathc", 42)
 
         current = compile_linux_routing_desired(
             compose_network_rules(
-                (
-                    _owner_rules(
-                        1,
-                        "a",
-                        "10.0.0.0/8",
-                        (a, b, c),
-                        priority_prefix_length=2,
-                    ),
-                )
+                (_owner_rules(1, "a", "10.0.0.0/8", (a, b, c)),)
             ),
             LinuxRoutingAllocationState(),
             local_interface="host0",
         )
         desired = compile_linux_routing_desired(
             compose_network_rules(
-                (
-                    _owner_rules(
-                        1,
-                        "a",
-                        "10.0.0.0/8",
-                        (a, b, c),
-                        priority_prefix_length=1,
-                    ),
-                )
+                (_owner_rules(1, "a", "10.0.0.0/8", (b, a, c)),)
             ),
             current.allocation,
             local_interface="host0",
@@ -258,7 +232,11 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                 (move.source.path, move.source.metric, move.target_metric)
                 for move in moves
             ],
-            [(b, 20, 30)],
+            [
+                (a, 10, 40),
+                (b, 20, 10),
+                (a, 40, 20),
+            ],
         )
 
     def test_empty_slot_planner_recovers_path_from_dead_tail(self):
@@ -271,30 +249,14 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
 
         current = compile_linux_routing_desired(
             compose_network_rules(
-                (
-                    _owner_rules(
-                        1,
-                        "a",
-                        "10.0.0.0/8",
-                        (a, b, g, d, v, e, j),
-                        priority_prefix_length=4,
-                    ),
-                )
+                (_owner_rules(1, "a", "10.0.0.0/8", (a, b, g, d, v, e, j)),)
             ),
             LinuxRoutingAllocationState(),
             local_interface="host0",
         )
         desired = compile_linux_routing_desired(
             compose_network_rules(
-                (
-                    _owner_rules(
-                        1,
-                        "a",
-                        "10.0.0.0/8",
-                        (a, b, v, g, d, e, j),
-                        priority_prefix_length=5,
-                    ),
-                )
+                (_owner_rules(1, "a", "10.0.0.0/8", (a, b, v, g, d, e, j)),)
             ),
             current.allocation,
             local_interface="host0",
@@ -304,21 +266,18 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
 
         self.assertEqual(
             [
-                (
-                    move.source.path,
-                    move.source.metric,
-                    move.target_metric,
-                )
+                (move.source.path, move.source.metric, move.target_metric)
                 for move in moves
             ],
             [
+                (g, 30, 80),
+                (v, 50, 30),
                 (d, 40, 50),
-                (g, 30, 40),
-                (v, 60, 30),
+                (g, 80, 40),
             ],
         )
 
-    def test_empty_slot_planner_handles_recovery_from_last_slot(self):
+    def test_empty_slot_planner_handles_recovery_from_last_path(self):
         a, b, v, g, d, e, j = tuple(
             InterfaceIdentity(name, 20 + index)
             for index, name in enumerate(
@@ -327,30 +286,14 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
         )
         current = compile_linux_routing_desired(
             compose_network_rules(
-                (
-                    _owner_rules(
-                        1,
-                        "a",
-                        "10.0.0.0/8",
-                        (a, b, g, d, e, j, v),
-                        priority_prefix_length=6,
-                    ),
-                )
+                (_owner_rules(1, "a", "10.0.0.0/8", (a, b, g, d, e, j, v)),)
             ),
             LinuxRoutingAllocationState(),
             local_interface="host0",
         )
         desired = compile_linux_routing_desired(
             compose_network_rules(
-                (
-                    _owner_rules(
-                        1,
-                        "a",
-                        "10.0.0.0/8",
-                        (a, b, v, g, d, e, j),
-                        priority_prefix_length=7,
-                    ),
-                )
+                (_owner_rules(1, "a", "10.0.0.0/8", (a, b, v, g, d, e, j)),)
             ),
             current.allocation,
             local_interface="host0",
@@ -364,15 +307,16 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                 for move in moves
             ],
             [
+                (g, 30, 80),
+                (v, 70, 30),
                 (j, 60, 70),
                 (e, 50, 60),
                 (d, 40, 50),
-                (g, 30, 40),
-                (v, 80, 30),
+                (g, 80, 40),
             ],
         )
 
-    def test_empty_slot_planner_demotes_dead_path_without_dropping_membership(self):
+    def test_empty_slot_planner_demotes_without_dropping_membership(self):
         a, b, v, g, d, e, j = tuple(
             InterfaceIdentity(name, 30 + index)
             for index, name in enumerate(
@@ -381,30 +325,14 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
         )
         current = compile_linux_routing_desired(
             compose_network_rules(
-                (
-                    _owner_rules(
-                        1,
-                        "a",
-                        "10.0.0.0/8",
-                        (a, b, v, g, d, e, j),
-                        priority_prefix_length=5,
-                    ),
-                )
+                (_owner_rules(1, "a", "10.0.0.0/8", (a, b, v, g, d, e, j)),)
             ),
             LinuxRoutingAllocationState(),
             local_interface="host0",
         )
         desired = compile_linux_routing_desired(
             compose_network_rules(
-                (
-                    _owner_rules(
-                        1,
-                        "a",
-                        "10.0.0.0/8",
-                        (a, b, g, d, v, e, j),
-                        priority_prefix_length=4,
-                    ),
-                )
+                (_owner_rules(1, "a", "10.0.0.0/8", (a, b, g, d, v, e, j)),)
             ),
             current.allocation,
             local_interface="host0",
@@ -418,9 +346,10 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                 for move in moves
             ],
             [
-                (v, 30, 60),
+                (v, 30, 80),
                 (g, 40, 30),
                 (d, 50, 40),
+                (v, 80, 50),
             ],
         )
 
