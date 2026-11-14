@@ -8,6 +8,16 @@
 **Latest tested executable:** `414637f9412ff361137922242b0130aec71073c9`  
 **Final documentation head before checkpoint:** `11b015ce3ca5636c37c89c749bb97034d3dde231`
 
+## Post-checkpoint correction
+
+A later audit found that this checkpoint's phrase “single-flight payload transaction”
+described an over-broad implementation: one global `PayloadTrafficManager` lock. The
+agreed boundary is narrower and stronger semantically: **one Direct route-order Executor
+per Profile**. The correction is implemented and reviewed on
+`code-cycle-20261114-empty-slot-executor-audit`.
+
+The EMPTY-slot algorithm and kernel evidence recorded below are unchanged.
+
 ## Completed
 
 - replaced top-down route replacement with persistent EMPTY-slot moves;
@@ -15,7 +25,8 @@
 - made live-prefix boundary explicit as `priority_prefix_length`;
 - implemented one generic route-slot permutation planner;
 - verified recovery, demotion, far-right recovery and recovery through an existing dead tail;
-- added single-flight payload transaction serialization;
+- originally added over-broad global payload serialization; superseded by the
+  post-checkpoint per-Profile Executor correction above;
 - reserved metric capacity for the EMPTY working slot;
 - aligned EXP-027, architecture docs, runtime model and changelog;
 - corrected the earlier per-flow pinning caveat.
@@ -42,9 +53,10 @@ After delete, the old slot is the new EMPTY.
 
 ## Transaction invariant
 
-Only one payload mutation transaction may be inside lower-domain
-materialize/verify/commit at a time in the current Manager. A newer availability request
-does not interleave with a transition already in progress.
+For route priority, one Profile has one Direct Executor. While that Executor is inside its
+lower-domain apply/materialize/verify/commit operation, a newer route-order target for the
+same Profile waits. Shared lower-domain serialization may additionally constrain physical
+commits, but is not the caller-visible Profile transaction.
 
 ## Next natural unit
 
