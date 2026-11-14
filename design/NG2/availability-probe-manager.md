@@ -389,6 +389,15 @@ run_due(monotonic_now)
 and the Manager executes all currently due probes serially in deterministic `probe_id`
 order.
 
+AvailabilityProbeManager has a single-threaded control-loop contract: its public mutation
+methods are not intended for concurrent invocation. The outer runtime serializes request,
+audit and cadence calls. No internal lock/thread model is introduced.
+
+The supplied `monotonic_now` is the dispatch timestamp for the whole pass. The next due
+deadline is anchored to that dispatch timestamp, not to wall-clock completion of the
+possibly blocking Driver call. A probe is attempted at most once per `run_due()` call, so
+missed deadlines never cause an internal catch-up loop.
+
 Scheduling semantics:
 
 - a newly scheduled probe is immediately due;
