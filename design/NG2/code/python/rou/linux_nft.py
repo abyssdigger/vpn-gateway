@@ -237,6 +237,46 @@ def parse_nft_rule_comments(text: str) -> tuple[str, ...]:
     return tuple(sorted(comments))
 
 
+@dataclass(frozen=True, order=True)
+class NftTableIdentity:
+    family: str
+    name: str
+
+    def __post_init__(self) -> None:
+        if not self.family or not self.name:
+            raise LinuxNftError("nft table identity must be non-empty")
+
+
+def parse_nft_tables(text: str) -> tuple[NftTableIdentity, ...]:
+    try:
+        root = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LinuxNftError(
+            f"invalid nft table-list JSON: {exc}"
+        ) from None
+
+    items = root.get("nftables")
+    if not isinstance(items, list):
+        raise LinuxNftError("nft table-list JSON lacks nftables array")
+
+    out: list[NftTableIdentity] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        table = item.get("table")
+        if not isinstance(table, dict):
+            continue
+        family = table.get("family")
+        name = table.get("name")
+        if not isinstance(family, str) or not isinstance(name, str):
+            raise LinuxNftError("invalid nft table identity in JSON")
+        out.append(NftTableIdentity(family, name))
+
+    if len(set(out)) != len(out):
+        raise LinuxNftError("duplicate nft table identity in JSON")
+    return tuple(sorted(out))
+
+
 @dataclass(frozen=True)
 class NftTableObservation:
     canonical: str
