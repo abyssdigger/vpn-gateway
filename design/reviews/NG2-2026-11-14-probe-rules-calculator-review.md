@@ -110,8 +110,18 @@ A real `ProbeRulesStateCalculator` requires apply/renew observation from the phy
 LOCAL_PROCESS backend. Only then should PayloadRulesState and ProbeRulesState be compared
 for a possible common type.
 
+## Evidence gate
+
+Post-review branch evidence:
+
+- NG2 unit suite: PASS;
+- NG1 regression suite: PASS;
+- privileged Linux integration: PASS;
+- production nft compiler output with exact and negated ICMP message-type selectors:
+  kernel `nft -c` PASS.
+
 ## Final verdict
 
-**PASS for the pure ProbeRulesCalculator semantic slice**, subject to the branch unit gate.
+**PASS for the pure ProbeRulesCalculator semantic slice.**
 
 No user-policy decision is required by this unit.
