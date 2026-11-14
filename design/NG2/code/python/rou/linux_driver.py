@@ -398,8 +398,8 @@ class LinuxNetworkDriver:
                 self._runner.run(self._route_add_argv(route))
 
             for rule in desired.routing.dispatch_rules:
-                self._runner.run(
-                    (
+                if rule.source_ifname is not None:
+                    argv = (
                         "ip",
                         "rule",
                         "add",
@@ -412,7 +412,29 @@ class LinuxNetworkDriver:
                         "lookup",
                         str(rule.table_id),
                     )
-                )
+                else:
+                    assert rule.local_process_uid is not None
+                    assert rule.protocol is not None
+                    assert rule.bound_output is not None
+                    uid = str(rule.local_process_uid)
+                    argv = (
+                        "ip",
+                        "rule",
+                        "add",
+                        "priority",
+                        str(rule.priority),
+                        "uidrange",
+                        f"{uid}-{uid}",
+                        "ipproto",
+                        rule.protocol.value,
+                        "to",
+                        rule.destination.with_prefixlen,
+                        "oif",
+                        rule.bound_output.ifname,
+                        "lookup",
+                        str(rule.table_id),
+                    )
+                self._runner.run(argv)
 
             terminal_rule = desired.routing.terminal_rule
             if terminal_rule is not None:
