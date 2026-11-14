@@ -27,8 +27,19 @@ def run(*argv: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     )
 
 
-def ns(namespace: str, *argv: str, check: bool = True):
-    return run("ip", "netns", "exec", namespace, *argv, check=check)
+def ns(
+    namespace: str,
+    *argv: str,
+    check: bool = True,
+    input_text: str | None = None,
+):
+    return subprocess.run(
+        ("ip", "netns", "exec", namespace, *argv),
+        input=input_text,
+        text=True,
+        capture_output=True,
+        check=check,
+    )
 
 
 def cleanup() -> None:
