@@ -182,8 +182,13 @@ Network plane identity used by ProbeRulesCalculator:
 
 Several logical probes may therefore share one physical network plane.
 
-This does not imply shared timing/hysteresis semantics. Execution deduplication is a future
-optimization only if it preserves each logical probe contract.
+Timing/hysteresis is explicitly per logical `probe_id`, not per physical plane.
+`AvailabilityProbeRequest.policy` therefore does not participate in
+`ProbeRulesCalculator` output. Two logical probes sharing one plane may have different
+cadence, timeout and thresholds.
+
+Execution deduplication remains a future optimization only if it preserves each logical
+probe contract.
 
 ## 9. Implemented rules-control slice
 
@@ -223,9 +228,9 @@ calculate ProbeRulesState
 
 Probe execution consumes only the READY branch.
 
-The cadence that invokes rules audit is not fixed here.
+Rules audit is also performed as part of each attempted probe validity envelope.
 
-The Manager also exposes `evaluate_once()` as the first policy-bearing boundary. It reuses
+The Manager also exposes `evaluate_once()` as the minimal direct policy-bearing boundary. It reuses
 `attempt_once()` and materializes only the minimal one-attempt verdict mapping. The raw
 `attempt_once()` API remains policy-free and independently testable.
 
@@ -348,22 +353,88 @@ evidence exists.
 This baseline is intentionally replaceable by a later retry/hysteresis policy without
 changing ProbeDriver or ProbeAttemptObservation.
 
-## 13. Still intentionally open
+## 13. Per-probe cadence and hysteresis
+
+The next executable layer is a normalized optional `AvailabilityProbePolicy` attached to
+each logical `AvailabilityProbeRequest`:
+
+```text
+interval_seconds
+retry_interval_seconds
+timeout_seconds
+failure_threshold
+recovery_threshold
+```
+
+`policy=None` means that the logical probe is not autonomously scheduled by the Manager.
+It remains available to explicit `evaluate_once()` callers. This is useful for staged
+assembly and tests; production runtime assembly may require policy for probes that are
+expected to run autonomously.
+
+Threshold defaults are 1/1, preserving the already-agreed single-attempt verdict baseline.
+No arbitrary default wall-clock values are invented: interval, retry interval and timeout
+must be supplied explicitly by the normalized policy producer.
+
+The Manager owns only deterministic scheduling state. It does not sleep and does not own a
+thread or event loop. The outer runtime calls:
+
+```text
+run_due(monotonic_now)
+```
+
+and the Manager executes all currently due probes serially in deterministic `probe_id`
+order.
+
+Scheduling semantics:
+
+- a newly scheduled probe is immediately due;
+- after a stable valid verdict/check, the next attempt uses `interval_seconds`;
+- while contrary evidence has not yet reached its transition threshold, the next attempt
+  uses `retry_interval_seconds`;
+- local ERROR or an attempt rejected by the validity envelope also uses
+  `retry_interval_seconds`;
+- matching evidence cancels an incomplete opposite streak;
+- a new Manager readiness epoch resets all threshold streaks and due-state.
+
+Hysteresis is verdict retention, not UNKNOWN insertion:
+
+```text
+REACHABLE
+    +-- NO_REPLY x (failure_threshold - 1) --> remain REACHABLE
+    +-- NO_REPLY x failure_threshold       --> UNREACHABLE
+
+UNREACHABLE
+    +-- REPLY x (recovery_threshold - 1)   --> remain UNREACHABLE
+    +-- REPLY x recovery_threshold         --> REACHABLE
+```
+
+From UNKNOWN, the corresponding threshold must also be satisfied before publishing an
+authoritative REACHABLE/UNREACHABLE verdict.
+
+A local Driver ERROR remains exceptional evidence and immediately publishes UNKNOWN,
+clearing pending streaks. It is never counted toward remote failure hysteresis.
+
+A semantic request change, including policy-only change, invalidates current evidence and
+starts a new readiness epoch. If its physical `NetworkRulesSpec` is unchanged, the Manager
+freshly audits the existing plane rather than forcing a structural apply.
+
+No jitter, parallel attempts, in-flight cancellation or stale-verdict time-to-live is
+defined by this slice.
+
+## 14. Still intentionally open
 
 The remaining lower-domain evidence gate before production conntrack remediation is
 EXP-026 Debian 13 target confirmation. EXP-025 is already target-confirmed
 STALE-INHERITANCE, and the intended Debian 13 `/usr/bin/ping` executable is confirmed.
 
-The following require an explicit later contract:
+The following still require an explicit later contract:
 
-- attempt interval;
-- per-attempt timeout policy;
-- retry count;
-- success/failure thresholds;
-- hysteresis;
+- user-facing timing/policy grammar and normalization;
 - jitter;
-- concurrency/serialization;
-- cancellation on superseding request;
+- outer runtime tick/event-loop integration;
+- parallel attempt policy, if any;
+- cancellation on a superseding request while a synchronous Driver call is already in flight;
+- stale-verdict time-to-live, if any beyond active cadence;
 - shutdown cleanup of process runtime prerequisites.
 
 The observation-generation representation is no longer open at the semantic level:
@@ -371,7 +442,7 @@ AvailabilityProbeManager uses an owner-wide rules-readiness epoch as described a
 
 These timing/result-policy choices are not inferred from payload policy or from EXP-024.
 
-## 14. Evidence
+## 15. Evidence
 
 Current evidence:
 
