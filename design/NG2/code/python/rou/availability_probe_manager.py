@@ -8,7 +8,12 @@ from .availability_probe_state import (
     ProbeAttemptObservation,
     ProbeObservationGeneration,
 )
-from .network_rules import ActionResult, NetworkRulesAdapter, NetworkRulesSpec
+from .network_rules import (
+    ActionResult,
+    NetworkRulesAdapter,
+    NetworkRulesSpec,
+    network_rules_semantically_equal,
+)
 from .probe_attempt import ProbeDriver
 from .probe_rules import (
     AvailabilityProbeSetRequest,
@@ -56,7 +61,6 @@ class AvailabilityProbeManager:
 
         self._latest_request: AvailabilityProbeSetRequest | None = None
         self._latest_desired: NetworkRulesSpec | None = None
-        self._latest_rules_state: ProbeRulesState | None = None
         self._latest_published: dict[str, AvailabilityProbeStateInfo] = {}
 
         self._generation_sequence = 0
@@ -82,16 +86,26 @@ class AvailabilityProbeManager:
         )
 
         if changed:
+            previous_desired = self._latest_desired
             self._invalidate_generation()
             self._publish_removed_invalidations(request)
             self._latest_request = request
             self._latest_desired = desired
-            rules_state = self._apply_desired_and_observe(desired)
+
+            if (
+                previous_desired is not None
+                and network_rules_semantically_equal(
+                    previous_desired,
+                    desired,
+                )
+            ):
+                rules_state = self._audit_rules(desired)
+            else:
+                rules_state = self._apply_desired_and_observe(desired)
         else:
             assert self._latest_desired is not None
             rules_state = self._audit_rules(self._latest_desired)
 
-        self._latest_rules_state = rules_state
         self._synchronize_generation(rules_state)
         self._publish_unknown_current(rules_state)
 
@@ -161,7 +175,6 @@ class AvailabilityProbeManager:
             return
 
         rules_state = self._audit_rules(desired)
-        self._latest_rules_state = rules_state
         self._synchronize_generation(rules_state)
         self._publish_unknown_current(rules_state)
 
