@@ -1,6 +1,6 @@
 # EXP-027 — NG2 route-priority bubble
 
-**Status:** RUNNING — attempt 1 harness failure, route hypothesis not reached  
+**Status:** COMPLETE — PASS  
 **Date:** 2026-11-14  
 **Architecture baseline:** NG2 availability bubble candidate  
 **Environment:** disposable privileged Linux network namespace in GitHub CI
@@ -85,3 +85,35 @@ this is **not** evidence for or against the routing hypothesis.
 
 Disposition: replace dummy links with veth pairs. Veth is already exercised successfully by
 the existing NG2 privileged integration suite on the same runner class.
+
+
+## Successful run
+
+Privileged GitHub CI completed the veth-based second attempt:
+
+```text
+PASS P1: metric-10 slot replaced A->B while B metric-20 survived
+PASS P2: metric-20 slot replaced B->C while C metric-30 survived
+PASS P3: bubble transition converged A,B,C,D -> B,C,A,D
+PASS D1: metric-10 slot replaced A->B while B metric-20 survived
+PASS D2: metric-20 slot replaced B->C while C metric-30 survived
+PASS D3: bubble transition converged A,B,C,D -> B,C,A,D
+EXP027=PASS
+```
+
+`P` is the ordinary-prefix table and `D` is the default-route table.
+
+The terminal blackhole remained present after every checked transition because every
+intermediate projection was validated before the next replacement.
+
+## Result
+
+**PASS.**
+
+For the tested Linux/iproute2 environment, fixed metric positions can be treated as route
+slots for a pure path-order permutation. `ip route replace` changes one slot without
+removing the same interface from another metric, so the bubble transition needs neither a
+staging routing table nor delete-before-add of the promoted path.
+
+Production code still requires fresh pre/post verification and must fall back to the
+structural fail-closed path when the requested change is not a pure path-order permutation.

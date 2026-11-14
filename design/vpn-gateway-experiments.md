@@ -1,3 +1,26 @@
+## EXP-027 — NG2 route-priority bubble
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** NG2 minimal availability routing model  
+**Тип:** Linux FIB / fixed-metric route-slot replacement  
+**Design:** [EXP-027 README](experiments/EXP-027%20NG2%20route%20priority%20bubble/README.md)  
+**Result:** [EXP-027 result](experiments/EXP-027%20NG2%20route%20priority%20bubble/EXP-027-result.md)
+
+Подтверждено в privileged CI для обычного prefix и `default`:
+
+```text
+A B C D
+B B C D
+B C C D
+B C A D
+```
+
+`ip route replace` заменяет fixed-metric slot, не удаляя тот же interface на другом
+metric. Terminal blackhole сохраняется. Это разрешает узкий route-priority fast path без
+staging table; broader changes по-прежнему идут через structural fail-closed rebuild.
+
+---
+
 ## EXP-023 — NG1: real OpenConnect Profile-binding probe plane
 
 **Статус:** COMPLETE — PASS на real dual-OpenConnect stand  
