@@ -313,6 +313,12 @@ observation generation
 Отсутствие publication не должно автоматически означать failure. До подтвержденного
 наблюдения состояние трактуется как UNKNOWN.
 
+Активный probe result является текущим evidence только для той concrete interface /
+probe-rules generation, в которой он был получен. Если probe NetworkRules имеют
+`knowledge=UNKNOWN` или `usability!=READY`, либо concrete interface generation
+изменилась, прежний REACHABLE/UNREACHABLE result не переносится в текущую projection и
+availability state остается UNKNOWN до нового валидного evidence.
+
 ### 8.4. PayloadTrafficStateRequest
 
 **Kind:** RequestEvent  
