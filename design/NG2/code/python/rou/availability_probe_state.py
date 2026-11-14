@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from .probe_attempt import ProbeAttemptResult
+
 
 class AvailabilityProbeState(str, Enum):
     UNKNOWN = "unknown"
@@ -57,4 +59,28 @@ class AvailabilityProbeStateInfo:
         if self.observation_generation is None:
             raise ValueError(
                 "reachable/unreachable probe state requires observation generation"
+            )
+
+
+@dataclass(frozen=True)
+class ProbeAttemptObservation:
+    """Raw attempt observation accepted inside one rules-readiness epoch."""
+
+    probe_id: str
+    observation_generation: ProbeObservationGeneration
+    result: ProbeAttemptResult
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.probe_id, str) or not self.probe_id:
+            raise ValueError("probe attempt observation requires non-empty probe_id")
+        if not isinstance(
+            self.observation_generation,
+            ProbeObservationGeneration,
+        ):
+            raise ValueError(
+                "probe attempt observation requires ProbeObservationGeneration"
+            )
+        if not isinstance(self.result, ProbeAttemptResult):
+            raise ValueError(
+                "probe attempt observation requires ProbeAttemptResult"
             )
