@@ -63,27 +63,7 @@ class PayloadTrafficManager:
             self._pending_desired = desired
             return
 
-        self._reconciling = True
-        try:
-            next_desired: NetworkRulesSpec | None = desired
-
-            while next_desired is not None:
-                # Accept the derived desired projection only after pure calculation
-                # succeeds. A later re-entrant request may replace _pending_desired,
-                # but cannot alter this already-started reconcile.
-                self._latest_desired = next_desired
-                self._pending_desired = None
-
-                info = self._apply_desired_and_observe(next_desired)
-                self._publish_if_changed(info)
-
-                next_desired = self._pending_desired
-
-            if self._audit_pending:
-                self._audit_pending = False
-                self._audit_once()
-        finally:
-            self._reconciling = False
+        self._run_serialized(initial_desired=desired)
 
     def audit(self) -> None:
         """Run one drift/reconcile pass for the current accepted intent."""
@@ -95,20 +75,44 @@ class PayloadTrafficManager:
             self._audit_pending = True
             return
 
+        self._run_serialized(audit_requested=True)
+
+    def _run_serialized(
+        self,
+        *,
+        initial_desired: NetworkRulesSpec | None = None,
+        audit_requested: bool = False,
+    ) -> None:
         self._reconciling = True
         try:
-            self._audit_once()
+            next_desired = initial_desired
+            audit_due = audit_requested
 
-            # A re-entrant RequestEvent always outranks a queued audit because it is
-            # newer desired intent. Coalesce to the latest one and converge only after
-            # the audit call stack has completed.
-            next_desired = self._pending_desired
-            while next_desired is not None:
-                self._pending_desired = None
-                self._latest_desired = next_desired
-                info = self._apply_desired_and_observe(next_desired)
-                self._publish_if_changed(info)
-                next_desired = self._pending_desired
+            while next_desired is not None or audit_due:
+                if next_desired is not None:
+                    desired = next_desired
+                    next_desired = None
+
+                    # Accept the derived desired projection only after pure calculation
+                    # succeeds. Re-entrant requests can replace _pending_desired but
+                    # cannot alter this already-started reconcile.
+                    self._latest_desired = desired
+                    self._pending_desired = None
+
+                    info = self._apply_desired_and_observe(desired)
+                    self._publish_if_changed(info)
+                else:
+                    audit_due = False
+                    self._audit_pending = False
+                    self._audit_once()
+
+                if self._pending_desired is not None:
+                    next_desired = self._pending_desired
+                    self._pending_desired = None
+
+                if self._audit_pending:
+                    audit_due = True
+                    self._audit_pending = False
         finally:
             self._reconciling = False
 
