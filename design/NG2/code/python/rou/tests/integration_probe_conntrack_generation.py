@@ -95,6 +95,11 @@ def setup_namespaces() -> None:
         "-w",
         f"net.ipv4.ping_group_range={PROBE_GID} {PROBE_GID}",
     )
+    for key in (
+        "net.ipv4.conf.all.rp_filter",
+        "net.ipv4.conf.default.rp_filter",
+    ):
+        ns(ROU, "sysctl", "-q", "-w", f"{key}=0")
 
 
 def ifindex(namespace: str, ifname: str) -> int:
@@ -162,6 +167,20 @@ def create_generation(peer_namespace: str) -> int:
 
     ns(ROU, "ip", "link", "set", "vpn0", "up")
     ns(peer_namespace, "ip", "link", "set", "peer0", "up")
+    ns(
+        ROU,
+        "sysctl",
+        "-q",
+        "-w",
+        "net.ipv4.conf.vpn0.rp_filter=0",
+    )
+    ns(
+        peer_namespace,
+        "sysctl",
+        "-q",
+        "-w",
+        "net.ipv4.conf.peer0.rp_filter=0",
+    )
 
     ns(
         peer_namespace,
@@ -443,6 +462,52 @@ def main() -> int:
             )
 
         ifindex_a = create_generation(PEER_A)
+        ns(
+            ROU,
+            "ip",
+            "route",
+            "replace",
+            f"{TARGET}/32",
+            "via",
+            PEER_ADDR,
+            "dev",
+            "vpn0",
+        )
+        baseline = ns(
+            ROU,
+            "ping",
+            "-n",
+            "-c",
+            "1",
+            "-W",
+            "1",
+            TARGET,
+            check=False,
+        )
+        if baseline.returncode != 0:
+            raise RuntimeError(
+                "generation A topology baseline ping failed:\n"
+                + baseline.stdout
+                + baseline.stderr
+                + "\nPEER ROUTE:\n"
+                + ns(
+                    PEER_A,
+                    "ip",
+                    "route",
+                    "get",
+                    ROU_ADDR,
+                    check=False,
+                ).stdout
+            )
+        ns(
+            ROU,
+            "ip",
+            "route",
+            "del",
+            f"{TARGET}/32",
+            check=False,
+        )
+
         configure_routing(PEER_A)
         install_policy(ifindex_a)
 
