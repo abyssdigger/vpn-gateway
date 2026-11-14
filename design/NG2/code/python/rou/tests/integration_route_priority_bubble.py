@@ -248,16 +248,14 @@ def move_empty(
 
 
 def exercise(table: int, destination: str, label: str) -> None:
-    # "." below is the technical EMPTY metric slot, not the availability
-    # live/non-confirmed boundary. Production keeps it canonical at the tail.
     recovery_start = {
         10: "patha",
         20: "pathb",
         30: "pathg",
         40: "pathd",
-        50: "pathv",
-        60: "pathe",
-        70: "pathj",
+        60: "pathv",
+        70: "pathe",
+        80: "pathj",
     }
     recovery_target = {
         10: "patha",
@@ -265,46 +263,66 @@ def exercise(table: int, destination: str, label: str) -> None:
         30: "pathv",
         40: "pathg",
         50: "pathd",
-        60: "pathe",
-        70: "pathj",
+        70: "pathe",
+        80: "pathj",
     }
     reset_routes(table, destination, recovery_start)
-    for dev, source_metric, target_metric in (
-        ("pathg", 30, 80),
-        ("pathv", 50, 30),
-        ("pathd", 40, 50),
-        ("pathg", 80, 40),
-    ):
-        move_empty(
-            table,
-            destination,
-            dev=dev,
-            source_metric=source_metric,
-            target_metric=target_metric,
-            label=f"{label} recovery-{dev}",
-        )
+    move_empty(
+        table,
+        destination,
+        dev="pathd",
+        source_metric=40,
+        target_metric=50,
+        label=f"{label} recovery-D",
+    )
+    move_empty(
+        table,
+        destination,
+        dev="pathg",
+        source_metric=30,
+        target_metric=40,
+        label=f"{label} recovery-G",
+    )
+    move_empty(
+        table,
+        destination,
+        dev="pathv",
+        source_metric=60,
+        target_metric=30,
+        label=f"{label} recovery-V",
+    )
     assert_steady(table, destination, recovery_target, f"{label} recovery")
     print(
-        f"PASS {label}1: recovery ABGDVEJ. -> ABVGDEJ. kept every path"
+        f"PASS {label}1: recovery ABGD.VEJ -> ABVGD.EJ kept every path"
     )
 
-    for dev, source_metric, target_metric in (
-        ("pathv", 30, 80),
-        ("pathg", 40, 30),
-        ("pathd", 50, 40),
-        ("pathv", 80, 50),
-    ):
-        move_empty(
-            table,
-            destination,
-            dev=dev,
-            source_metric=source_metric,
-            target_metric=target_metric,
-            label=f"{label} demotion-{dev}",
-        )
+    move_empty(
+        table,
+        destination,
+        dev="pathv",
+        source_metric=30,
+        target_metric=60,
+        label=f"{label} demotion-V",
+    )
+    move_empty(
+        table,
+        destination,
+        dev="pathg",
+        source_metric=40,
+        target_metric=30,
+        label=f"{label} demotion-G",
+    )
+    move_empty(
+        table,
+        destination,
+        dev="pathd",
+        source_metric=50,
+        target_metric=40,
+        label=f"{label} demotion-D",
+    )
     assert_steady(table, destination, recovery_start, f"{label} demotion")
     print(
-        f"PASS {label}2: demotion ABVGDEJ. -> ABGDVEJ. kept every path"
+        f"PASS {label}2: demotion ABVGD.EJ -> ABGD.VEJ kept every path"
     )
 
     end_start = {
@@ -314,17 +332,24 @@ def exercise(table: int, destination: str, label: str) -> None:
         40: "pathd",
         50: "pathe",
         60: "pathj",
-        70: "pathv",
+        80: "pathv",
     }
-    end_target = recovery_target
+    end_target = {
+        10: "patha",
+        20: "pathb",
+        30: "pathv",
+        40: "pathg",
+        50: "pathd",
+        60: "pathe",
+        70: "pathj",
+    }
     reset_routes(table, destination, end_start)
     for dev, source_metric, target_metric in (
-        ("pathg", 30, 80),
-        ("pathv", 70, 30),
         ("pathj", 60, 70),
         ("pathe", 50, 60),
         ("pathd", 40, 50),
-        ("pathg", 80, 40),
+        ("pathg", 30, 40),
+        ("pathv", 80, 30),
     ):
         move_empty(
             table,
@@ -336,7 +361,7 @@ def exercise(table: int, destination: str, label: str) -> None:
         )
     assert_steady(table, destination, end_target, f"{label} tail recovery")
     print(
-        f"PASS {label}3: recovery ABGDEJV. -> ABVGDEJ. kept every path"
+        f"PASS {label}3: recovery ABGDEJ.V -> ABVGDEJ. kept every path"
     )
 
 
