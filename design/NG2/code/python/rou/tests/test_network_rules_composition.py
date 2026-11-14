@@ -87,7 +87,10 @@ class OwnerRulesRegistryTests(unittest.TestCase):
 
         self.assertEqual(token, OwnerToken(1))
         self.assertTrue(registry.has_identity(owner))
-        self.assertIsNone(registry.get(owner))
+        self.assertEqual(
+            registry.registered_rules(),
+            ((token, None),),
+        )
         self.assertEqual(registry.snapshot(), ())
 
     def test_preview_replace_does_not_commit_candidate_rules(self):
