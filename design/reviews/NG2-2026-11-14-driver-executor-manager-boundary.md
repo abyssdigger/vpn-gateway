@@ -1,8 +1,75 @@
-# NG2 — Driver / Executor / Manager component boundary
+# NG2 — Runner / Driver / Executor / Manager component boundary
 
 Date: 2026-11-14
 Status: agreed terminology boundary
 Scope: NG2 component roles
+
+## Runner
+
+A Runner is an implementation-level execution / transport primitive below the Driver role.
+
+It mechanically executes one external invocation and returns its raw transport-level result.
+It has no semantic model of the managed object.
+
+Typical shape:
+
+```text
+argv + stdin + execution options
+    ->
+return code + stdout + stderr
+```
+
+A Runner therefore does not know whether a command means “add a route”, “send a probe”,
+“change forwarding state”, or “delete conntrack state”.
+
+Current examples:
+
+- `LinuxCommandRunner`;
+- `SubprocessLinuxRunner`;
+- `NetworkNamespaceLinuxRunner`.
+
+Runner is intentionally **not** a peer architectural role beside Driver / Executor /
+Manager. It is reusable implementation machinery under those roles.
+
+### Runner / Driver boundary
+
+The boundary is semantic, not based on whether both eventually execute external commands.
+
+A Runner transports a raw invocation.
+
+A Driver exposes a meaningful operation over an external managed object or environment.
+For example, “perform one ICMP probe and return REPLY | NO_REPLY | ERROR” is a Driver
+operation even if its implementation ultimately executes `setpriv` and `ping` through a
+Runner.
+
+NG2 must not promote raw command wrappers into Drivers merely to preserve a formal layer.
+
+### Who may use Runner directly
+
+A Driver will commonly use a Runner to implement its external interaction.
+
+An Executor may use Drivers **and/or Runner directly**. Direct Runner usage is appropriate
+when extracting a separate Driver would create a single-use wrapper without a reusable
+semantic boundary.
+
+A Manager should normally use Executor / Driver abstractions rather than Runner directly.
+Direct Manager -> Runner interaction would mix lifecycle/policy ownership with raw
+transport mechanics and therefore requires an explicit architectural reason.
+
+The intended dependency shape is:
+
+```text
+Manager
+    |
+    v
+Executor
+    |
+    +--> Driver --> Runner --> OS / external environment
+    |
+    +------------> Runner --> OS / external environment
+```
+
+This is not a requirement to instantiate every layer for every operation.
 
 ## Driver
 
@@ -33,6 +100,7 @@ A Manager may delegate physical convergence to an Executor and raw observations/
 
 ## Practical hierarchy
 
+```text
 Manager
     chooses / owns desired lifecycle
         |
@@ -41,10 +109,18 @@ Executor
     reaches + verifies desired postcondition
         |
         +--> Driver
+        |      |
+        |      v
+        |    Runner
         |
-        +--> direct driver-level interaction
+        +--> Runner directly
+```
 
-The second branch is intentional. NG2 does not require artificial one-command Driver objects merely to preserve a formal layer.
+The direct Executor -> Runner branch is intentional. NG2 does not require artificial
+one-command Driver objects merely to preserve a formal layer.
+
+Runner is implementation machinery; Driver / Executor / Manager remain the architectural
+responsibility roles.
 
 ## Consequences for current names
 
