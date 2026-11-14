@@ -136,6 +136,9 @@ Final peer-identity implementation is additionally exercised by fresh live verif
 
 ## Final verdict
 
-**PASS pending final peer-identity live gate.**
+**PASS.**
+
+Post-fix `6e6406336887fc972445065b0982429d3d705ae7` passed the complete NG2 unit and
+privileged Linux integration workflow, including reciprocal live veth peer verification.
 
 No architecture decision remains unresolved in this review unit.
