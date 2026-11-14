@@ -16,7 +16,9 @@ from .linux_routing import (
     LinuxRouteKind,
     LinuxRoutingAllocationState,
     LinuxRoutingDesired,
+    LinuxRoutingError,
     compile_linux_routing_desired,
+    plan_linux_route_priority_moves,
 )
 from .network_rules import (
     EndpointKind,
@@ -80,41 +82,15 @@ def linux_network_route_priority_only_change(
     if current_terminal != desired_terminal:
         return False
 
-    def slots(routing: LinuxRoutingDesired):
-        out = {}
-        groups: dict[tuple, set[InterfaceIdentity]] = {}
-        for route in routing.routes:
-            if route.kind is not LinuxRouteKind.UNICAST:
-                continue
-            assert route.path is not None
-            slot = (
-                route.domain,
-                route.table_id,
-                route.destination,
-                route.protocol,
-                route.metric,
-            )
-            if slot in out:
-                return None, None
-            out[slot] = route.path
-            group = (
-                route.domain,
-                route.table_id,
-                route.destination,
-            )
-            groups.setdefault(group, set()).add(route.path)
-        return out, groups
-
-    current_slots, current_groups = slots(current.routing)
-    desired_slots, desired_groups = slots(desired.routing)
-    if current_slots is None or desired_slots is None:
-        return False
-    if current_slots.keys() != desired_slots.keys():
-        return False
-    if current_groups != desired_groups:
+    try:
+        moves = plan_linux_route_priority_moves(
+            current.routing,
+            desired.routing,
+        )
+    except LinuxRoutingError:
         return False
 
-    return current_slots != desired_slots
+    return bool(moves)
 
 
 def _register(
