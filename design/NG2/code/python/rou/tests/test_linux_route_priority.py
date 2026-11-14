@@ -72,6 +72,18 @@ class RouteSlotPlannerTests(unittest.TestCase):
             ),
         )
 
+    def test_recovery_shifts_dead_path_left_of_recovered_path_down(self):
+        self.assert_plan(
+            ("A", "B", "G", "D", None, "E", "V", "J"),
+            ("A", "B", "V", "G", "D", None, "E", "J"),
+            (
+                ("D", 3, 4),
+                ("G", 2, 3),
+                ("V", 6, 2),
+                ("E", 5, 6),
+            ),
+        )
+
     def test_last_dead_path_recovery_uses_trailing_working_position(self):
         self.assert_plan(
             ("A", "B", "G", "D", "E", "J", None, "V"),
