@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -16,6 +17,7 @@ PRI_P = "198.18.24.1"
 ALT_R = "198.18.25.2"
 ALT_P = "198.18.25.1"
 TABLE = "6024"
+PING_COPY = Path("/tmp/vpng2-ping-nocap")
 
 
 def run(*argv: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -45,10 +47,21 @@ def ns(
 def cleanup() -> None:
     for namespace in (ROU, PRI, ALT):
         run("ip", "netns", "del", namespace, check=False)
+    PING_COPY.unlink(missing_ok=True)
 
 
 def setup() -> None:
     cleanup()
+
+    ping = shutil.which("ping")
+    if ping is None:
+        raise RuntimeError("ping binary is missing")
+    # A plain copy intentionally drops file capabilities/xattrs that can make
+    # exec fail after the capability bounding set is emptied. ping_group_range
+    # is the mechanism under test, not ping's packaged file capability.
+    shutil.copyfile(ping, PING_COPY)
+    PING_COPY.chmod(0o755)
+
     for namespace in (ROU, PRI, ALT):
         run("ip", "netns", "add", namespace)
         ns(namespace, "ip", "link", "set", "lo", "up")
@@ -157,7 +170,7 @@ def probe(*ping_args: str) -> subprocess.CompletedProcess[str]:
         "--clear-groups",
         "--bounding-set=-all",
         "--no-new-privs",
-        "ping",
+        str(PING_COPY),
         "-n",
         "-c",
         "1",
