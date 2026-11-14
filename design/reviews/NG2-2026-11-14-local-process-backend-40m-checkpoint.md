@@ -26,6 +26,10 @@ This file is the recovery anchor. Final closure commit/time is recorded when the
 - Single-shot LinuxIcmpProbeExecutor implemented and used by privileged production LOCAL_PROCESS integration.
 - AvailabilityProbeManager executable boundary and normative design document added without inventing scheduler/hysteresis.
 
+## Already closed target mechanism gate
+
+EXP-024 already passed on the real Debian GNU/Linux 13 (trixie) target, kernel 6.12.116+deb13-amd64. All P1..P5 and NG2_SELECTIVE_PROBE_PROCESS_ISOLATION=PASS were observed. That proves the selected OUTPUT-process-identity / conntrack-mark reverse-path mechanism on the target. Do not confuse this closed gate with the still-open production /usr/bin/ping executor confirmation or the newly discovered stale-conntrack generation-lifetime question.
+
 ## Green evidence
 
 Green implementation baseline 70ebd870b22b41782c0c6bef55ce18adfc0f25ef:
