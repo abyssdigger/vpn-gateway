@@ -172,6 +172,10 @@ class LinuxDispatchRuleSpec:
             raise LinuxRoutingError(
                 "local-process dispatch requires protocol"
             )
+        if self.protocol is not TrafficProtocol.ICMP:
+            raise LinuxRoutingError(
+                "current Linux local-process backend is target-proven only for ICMP"
+            )
         if self.bound_output is None:
             raise LinuxRoutingError(
                 "local-process dispatch requires bound output generation"
