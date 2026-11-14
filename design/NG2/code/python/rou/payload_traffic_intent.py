@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .availability_routing import calculate_effective_path_order
+from .availability_probe_state import (
+    AvailabilityProbeState,
+    AvailabilityProbeStateInfo,
+)
 from .interface_identity import InterfaceIdentity
+from .probe_rules import AvailabilityProbeSetRequest
 from .payload_rules import (
     PayloadProfileRequest,
     PayloadTrafficStateRequest,
@@ -30,6 +35,94 @@ class ProfileAvailabilityEvidence:
             frozenset,
         ):
             raise ValueError("confirmed_live must be frozenset or None")
+
+
+@dataclass(frozen=True)
+class ProfileProbeAssignment:
+    """Runtime-derived association between one Profile and logical probes."""
+
+    profile_name: str
+    probe_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.profile_name:
+            raise ValueError("probe assignment requires profile_name")
+        if len(set(self.probe_ids)) != len(self.probe_ids):
+            raise ValueError("probe assignment contains duplicate probe_id")
+        if any(not probe_id for probe_id in self.probe_ids):
+            raise ValueError("probe assignment requires non-empty probe_id")
+
+
+class ProbeProfileEvidenceCalculator:
+    """Project logical probe states into routing evidence per Profile."""
+
+    def calculate(
+        self,
+        probe_request: AvailabilityProbeSetRequest,
+        probe_states: tuple[AvailabilityProbeStateInfo, ...],
+        assignments: tuple[ProfileProbeAssignment, ...],
+    ) -> tuple[ProfileAvailabilityEvidence, ...]:
+        probes_by_id = {
+            probe.probe_id: probe
+            for probe in probe_request.probes
+        }
+        states_by_id = {
+            info.probe_id: info
+            for info in probe_states
+        }
+        if len(states_by_id) != len(probe_states):
+            raise ValueError("duplicate probe state for probe_id")
+
+        profile_names = [item.profile_name for item in assignments]
+        if len(set(profile_names)) != len(profile_names):
+            raise ValueError("duplicate Profile probe assignment")
+
+        result = []
+        for assignment in assignments:
+            missing = [
+                probe_id
+                for probe_id in assignment.probe_ids
+                if probe_id not in probes_by_id
+            ]
+            if missing:
+                raise ValueError(
+                    f"Profile {assignment.profile_name!r} references "
+                    "unknown probe_id: "
+                    + ", ".join(sorted(missing))
+                )
+
+            enabled = [
+                probes_by_id[probe_id]
+                for probe_id in assignment.probe_ids
+                if probes_by_id[probe_id].enabled
+            ]
+
+            if not enabled:
+                result.append(
+                    ProfileAvailabilityEvidence(
+                        assignment.profile_name,
+                        None,
+                    )
+                )
+                continue
+
+            confirmed_live = frozenset(
+                probe.path
+                for probe in enabled
+                if (
+                    states_by_id.get(probe.probe_id) is not None
+                    and states_by_id[probe.probe_id].state
+                    is AvailabilityProbeState.REACHABLE
+                )
+            )
+            result.append(
+                ProfileAvailabilityEvidence(
+                    assignment.profile_name,
+                    confirmed_live,
+                )
+            )
+
+        return tuple(result)
 
 
 class PayloadTrafficIntentCalculator:
