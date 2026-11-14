@@ -869,9 +869,11 @@ same-name/new-ifindex.
 
 ### EXP-014
 
-Multi-path inbound flow pinning не считается production-proven capability.
+Multi-path inbound flow pinning остается отдельной future capability для тех режимов,
+которым действительно нужна flow-affinity semantics.
 
-Текущая декомпозиция не вводит новый flow-pinning mechanism.
+Availability-driven failover такой capability не требует и намеренно не pin'ит existing
+flow к path, который availability policy уже demoted.
 
 ### EXP-015
 
