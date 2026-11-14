@@ -877,6 +877,7 @@ def compile_nft_filter_desired(
     *,
     local_interface: str,
     local_process: LinuxLocalProcessConfig | None = None,
+    local_process_guard_required: bool = False,
 ) -> NftFilterDesired:
     """Compile owner-composed allow policy into one stateful nft filter table."""
 
@@ -887,7 +888,7 @@ def compile_nft_filter_desired(
     local_output_lines: list[str] = []
     local_input_lines: list[str] = []
     markers: list[NftRuleMarker] = []
-    local_process_present = any(
+    local_process_present = local_process_guard_required or any(
         rule.source.kind is EndpointKind.LOCAL_PROCESS
         for rule in composed.dispatch_rules
     ) or any(
