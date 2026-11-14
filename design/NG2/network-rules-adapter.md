@@ -303,7 +303,28 @@ Current automated gates include:
 Existing EXP-012 and EXP-017 remain supporting architecture evidence; the NG2 live gates
 exercise the new compiler and Driver directly.
 
-## 13. Deferred work
+## 13. Local-process semantic extension
+
+The semantic NetworkRules contract also admits `LOCAL_PROCESS` endpoints for future
+AvailabilityProbeManager ownership.
+
+A local-process dispatch is intentionally stricter than host-ingress dispatch and requires:
+
+- destination;
+- explicit protocol;
+- concrete bound output interface.
+
+This preserves the isolated probe-plane property established by EXP-022/023.
+
+The first Linux backend does **not** materialize this endpoint yet. It rejects
+`LOCAL_PROCESS` dispatch explicitly until EXP-024 is confirmed on the Debian 13 target
+and routing/nft observation are extended as one physical-policy unit.
+
+The intended lower-domain mapping uses process identity only at local OUTPUT, carries the
+admitted flow identity through conntrack state and matches the reverse INPUT flow by that
+technical state. Numeric uid/conntrack mark do not belong to the semantic spec.
+
+## 14. Deferred work
 
 Not part of the current structural baseline:
 
