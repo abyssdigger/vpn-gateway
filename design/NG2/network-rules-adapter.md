@@ -312,8 +312,8 @@ close and returns FAILURE.
 There is no speculative rollback to a guessed prior state. Recovery is driven by the next
 fresh observation/reconcile.
 
-Incremental optimization is intentionally deferred until this exact structural path is
-stable.
+Other incremental optimizations remain deferred. The one accepted narrow exception is the
+verified route-priority fast path in §12.
 
 ## 12. Route-priority fast path
 
@@ -382,7 +382,8 @@ The current executable Adapter:
 - builds the fail-closed realisable owner projection;
 - composes owner-scoped semantic rules;
 - allocates and compiles concrete Linux desired state;
-- invokes the structural Executor;
+- selects verified physical no-op, route-priority fast path or structural Executor
+  according to the compiled diff;
 - commits owner generation and routing allocation only on verified SUCCESS;
 - publishes per-owner last state as the freshly verified projected semantic rules;
 - keeps getLastState() I/O-free;
