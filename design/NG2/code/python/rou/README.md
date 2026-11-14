@@ -112,10 +112,11 @@ Not implemented yet:
 - richer interface-origin dispatch;
 - incremental transition optimizer, only after a separate review/evidence unit.
 
-Next implementation boundary is above the reviewed runtime lower assembly. Add only a
-runtime/config/event component with a concrete consumer; RuntimeStateManager and other
-upper-domain assembly remain separate review units. Incremental transition optimization
-remains deferred.
+ProbeRules now has a reviewed pure ICMP semantic calculator over LOCAL_PROCESS rules.
+Linux LOCAL_PROCESS materialization remains intentionally fail-closed pending Debian 13
+confirmation of EXP-024; ProbeRulesState remains deferred until physical apply/renew
+observation exists. RuntimeStateManager and other upper-domain assembly remain separate
+review units. Incremental transition optimization remains deferred.
 
 Rootless tests:
 
