@@ -1,3 +1,4 @@
+from itertools import permutations
 import unittest
 
 from rou.linux_route_priority import (
@@ -128,6 +129,42 @@ class RouteSlotPlannerTests(unittest.TestCase):
                 ("A", None, "B"),
                 ("A", None, "C"),
             )
+
+    def test_exhaustive_small_permutations_preserve_full_path_set(self):
+        for path_count in range(1, 5):
+            items = tuple(range(path_count)) + (None,)
+            layouts = tuple(permutations(items))
+            expected_paths = set(range(path_count))
+
+            for current in layouts:
+                for desired in layouts:
+                    work = list(current)
+                    moves = plan_route_slot_moves(current, desired)
+
+                    for move in moves:
+                        self.assertIsNone(work[move.target_slot])
+                        self.assertEqual(work[move.source_slot], move.path)
+
+                        work[move.target_slot] = move.path
+                        materialized = [
+                            item for item in work
+                            if item is not None
+                        ]
+                        self.assertEqual(set(materialized), expected_paths)
+                        self.assertEqual(len(materialized), path_count + 1)
+                        self.assertEqual(
+                            sum(materialized.count(path) == 2 for path in expected_paths),
+                            1,
+                        )
+
+                        work[move.source_slot] = None
+                        self.assertEqual(
+                            set(item for item in work if item is not None),
+                            expected_paths,
+                        )
+                        self.assertEqual(work.count(None), 1)
+
+                    self.assertEqual(tuple(work), desired)
 
 
 if __name__ == "__main__":
