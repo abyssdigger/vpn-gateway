@@ -300,6 +300,38 @@ class PayloadTrafficManagerTests(unittest.TestCase):
             Service.ISOLATED,
         )
 
+    def test_recovery_after_failed_audit_publishes_ready_transition(self):
+        request = _request(self.path)
+        self.manager.handle_request(request)
+        self.publisher.events.clear()
+
+        self.adapter.state = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            NetworkRulesSpec(),
+            fresh=True,
+        )
+        self.adapter.apply_success = False
+        self.manager.audit()
+
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[-1].rules_state.service,
+            Service.ISOLATED,
+        )
+
+        self.adapter.apply_success = True
+        self.manager.audit()
+
+        self.assertEqual(len(self.publisher.events), 2)
+        self.assertIs(
+            self.publisher.events[-1].rules_state.service,
+            Service.READY,
+        )
+        self.assertIs(
+            self.publisher.events[-1].rules_state.convergence,
+            Convergence.MATCHED,
+        )
+
     def test_unknown_audit_attempts_repair(self):
         request = _request(self.path)
         self.manager.handle_request(request)
