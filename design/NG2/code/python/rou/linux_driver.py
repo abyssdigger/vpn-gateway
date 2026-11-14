@@ -40,6 +40,7 @@ from .linux_routing import (
     RT_TABLE_LOCAL,
     RT_TABLE_MAIN,
     RT_TABLE_UNSPEC,
+    TERMINAL_METRIC,
     TERMINAL_ROUTE_PROTOCOL,
     UNICAST_ROUTE_PROTOCOL,
     LinuxRouteKind,
