@@ -330,6 +330,43 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                 ).uid,
             )
 
+    def test_local_process_routing_rejects_root_uid_even_on_internal_api(self):
+        target = IPv4Network("203.0.113.24/32")
+        identity = InterfaceIdentity("vpns00", 10)
+        path = NetworkEndpoint.interface_path(identity)
+        rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "probe",
+                    (target,),
+                    (identity,),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+            dispatch_rules=(
+                DispatchRuleSpec(
+                    target,
+                    "probe",
+                    source=NetworkEndpoint.local_process(),
+                    bound_output=path,
+                    protocol=TrafficProtocol.ICMP,
+                ),
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            LinuxRoutingError,
+            "non-root 32-bit uid",
+        ):
+            compile_linux_routing_desired(
+                compose_network_rules(
+                    (OwnedNetworkRules(OwnerToken(1), rules),)
+                ),
+                LinuxRoutingAllocationState(),
+                local_interface="host0",
+                local_process_uid=0,
+            )
+
     def test_interface_dispatch_source_is_explicitly_unsupported(self):
         path = NetworkEndpoint.interface_path(
             InterfaceIdentity("vpns00", 10)
