@@ -299,6 +299,17 @@ good news для текущего probe plane сбрасывает negative inte
 
 Новая revision заменяет предыдущий desired set.
 
+Для payload priority changes event delivery не является разрешением на параллельную
+mutation. Пока предыдущий `PayloadTrafficStateRequest` находится внутри
+materialize/verify/commit, следующий request того же managed payload domain не должен
+начать lower-domain transaction. Текущая реализация `PayloadTrafficManager` сериализует
+request handling, drift audit и shutdown одним single-flight transaction boundary.
+
+Если runtime позже будет шардирован по Profile, минимальное требование сохраняется:
+две route-priority transitions одного Profile никогда не interleave. Более новая
+availability projection может ждать завершения предыдущей transaction; следующий target
+вычисляется уже от committed order, а не от промежуточной FIB-картинки.
+
 ### 8.3. AvailabilityProbeStateInfo
 
 **Kind:** InfoEvent  
