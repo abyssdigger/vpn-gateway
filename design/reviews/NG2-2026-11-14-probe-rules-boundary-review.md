@@ -167,7 +167,7 @@ target-confirmed.
 
 ## 8. Rules-state follow-up completed
 
-This review does **not** create `ProbeRulesState` yet.
+This original boundary review did **not** create `ProbeRulesState` at that stage.
 
 At the time of this review a state calculator was intentionally deferred because no real
 ProbeRules materialization existed. That evidence gate is now closed: the production
@@ -183,9 +183,9 @@ comparison rejected a common RulesState because the domain semantics differ.
 
 Do not introduce a second Linux policy reconciler.
 
-The common NetworkRules semantic contract may now be extended with local-process traffic
-and bound-output/protocol dispatch semantics. Linux uid and conntrack mark remain technical
-lower-domain state.
+The common NetworkRules semantic contract has since been extended with local-process
+traffic and bound-output/protocol dispatch semantics. Linux uid and conntrack mark remain
+technical lower-domain state.
 
 The completed PayloadRulesState / ProbeRulesState comparison was based on the real
 ProbeRules state calculator.
