@@ -185,6 +185,31 @@ The result is strong enough to remove the architecture ambiguity. Before product
 materialization is declared target-proven, run the same artifact on the Debian 13 target.
 
 
+## Debian 13 stand preflight
+
+Before target confirmation, run the read-only preflight:
+
+```bash
+sudo sh 'design/experiments/EXP-024 NG2 selective shared-namespace probe process/preflight-exp024-target.sh'
+```
+
+Do not run EXP-024 unless the preflight ends with:
+
+```text
+EXP_024_TARGET_PREFLIGHT=PASS
+```
+
+A WARN/FAIL result must be reviewed first. The preflight does not mutate network state.
+
+Because yesterday's EXP-023 outage was created on the remote `pri` client, also verify
+there:
+
+```bash
+sudo iptables -S FORWARD | grep -F VPNG-EXP023 || true
+```
+
+Expected: no output.
+
 ## Debian 13 target confirmation
 
 Run from the repository root as root (or through sudo):
