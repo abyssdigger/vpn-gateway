@@ -101,16 +101,32 @@ class LinuxRouteSpec:
                 raise LinuxRoutingError(
                     "unicast route requires concrete path identity"
                 )
-        elif self.kind is LinuxRouteKind.BLACKHOLE:
+            if self.protocol != UNICAST_ROUTE_PROTOCOL:
+                raise LinuxRoutingError(
+                    "unicast route must use owned unicast protocol"
+                )
+            if not 0 < self.metric < TERMINAL_METRIC:
+                raise LinuxRoutingError(
+                    "unicast route metric must be below terminal metric"
+                )
+            return
+
+        if self.kind is LinuxRouteKind.BLACKHOLE:
             if self.path is not None:
                 raise LinuxRoutingError(
                     "blackhole route must not carry path identity"
                 )
-        else:
-            raise LinuxRoutingError(f"unsupported route kind {self.kind!r}")
+            if self.protocol != TERMINAL_ROUTE_PROTOCOL:
+                raise LinuxRoutingError(
+                    "terminal blackhole must use owned terminal protocol"
+                )
+            if self.metric != TERMINAL_METRIC:
+                raise LinuxRoutingError(
+                    "terminal blackhole must use terminal metric"
+                )
+            return
 
-        if not 0 < self.metric <= TERMINAL_METRIC:
-            raise LinuxRoutingError("route metric is out of owned range")
+        raise LinuxRoutingError(f"unsupported route kind {self.kind!r}")
 
 
 @dataclass(frozen=True)
