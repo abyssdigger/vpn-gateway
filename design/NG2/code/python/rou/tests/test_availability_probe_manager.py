@@ -170,9 +170,43 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             "first",
             timeout_seconds=1,
         )
-        self.assertGreater(
-            second_observation.observation_generation.sequence,
-            first_observation.observation_generation.sequence,
+        self.assertEqual(
+            second_observation.observation_generation,
+            first_observation.observation_generation,
+        )
+
+    def test_added_logical_probe_on_same_plane_preserves_existing_verdict(self):
+        first = probe("first", self.path, "203.0.113.24")
+        second = probe("second", self.path, "203.0.113.24")
+
+        self.manager.handle_request(request(first))
+        first_info = self.manager.evaluate_once(
+            "first",
+            timeout_seconds=1,
+        )
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        self.manager.handle_request(request(first, second))
+
+        self.assertEqual(
+            self.manager.observation_generation,
+            generation,
+        )
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertEqual(self.publisher.events[0].probe_id, "second")
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNKNOWN,
+        )
+        self.publisher.events.clear()
+
+        self.manager.audit()
+
+        self.assertEqual(self.publisher.events, [])
+        self.assertEqual(
+            self.manager._latest_published["first"],
+            first_info,
         )
 
     def test_semantically_changed_snapshot_starts_new_ready_epoch(self):
