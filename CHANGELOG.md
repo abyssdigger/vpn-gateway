@@ -1,3 +1,31 @@
+## 2026-11-14 — NG2 Linux lower-domain whole-code audit
+
+Completed the post-implementation audit of the structural Linux Adapter lower domain:
+
+- rejected rules that reference unavailable concrete generations no longer become a
+  physical-but-uncommitted candidate generation; the Adapter reconciles the last committed
+  fail-closed projection and returns FAILURE;
+- closed-state and final verification now share one exact verifier with an explicit
+  forwarding expectation;
+- Adapter/Driver Protocol types and interface-generation observations were tightened;
+- test-only OwnerRulesRegistry lookup/length surfaces were removed;
+- defensive duplicate generation checks in independently callable compiler layers were
+  retained intentionally;
+- the bounded boolean nft predicate compiler was retained as justified semantic
+  materialization rather than moved above the Adapter boundary;
+- the existing exact-ifindex-reuse limitation remains explicit and no history heuristic was
+  invented;
+- no Linux allocation, nft syntax, conntrack realization or transition phase leaks above
+  NetworkRulesAdapter;
+- audit-clean code baseline `d56feb60d3e0b0cf7efe0686059e87044975cfcf`
+  passed NG2 unit + privileged Linux integration and NG1 validation;
+- whole-code review `NG2-2026-11-14-linux-lower-domain-whole-code-audit.md` passed.
+
+Next implementation boundary is runtime/bootstrap assembly; incremental transition
+optimization remains intentionally deferred.
+
+---
+
 ## 2026-11-14 — NG2 structural Linux NetworkRulesAdapter
 
 Implemented and live-validated the first concrete Linux lower domain behind
