@@ -25,6 +25,7 @@ from .linux_observation import (
     parse_rule_json,
     verify_linux_routing,
 )
+from .linux_prerequisites import verify_linux_namespace_prerequisites
 from .linux_routing import (
     FIRST_RULE_PRIORITY,
     MAX_RULE_PRIORITY,
@@ -118,6 +119,7 @@ class NetworkNamespaceLinuxRunner:
 
 @dataclass(frozen=True)
 class LinuxNetworkObservation:
+    prerequisites: tuple[tuple[str, str], ...]
     routing: LinuxRoutingObservation
     filter: NftTableObservation | None
     nat: NftTableObservation | None
@@ -157,6 +159,13 @@ def verify_linux_network(
 
     if expected_ip_forward is None:
         expected_ip_forward = desired.ip_forward_required
+
+    errors.extend(
+        verify_linux_namespace_prerequisites(
+            desired.prerequisites,
+            observed.prerequisites,
+        )
+    )
 
     routing = verify_linux_routing(
         desired.routing,
@@ -259,6 +268,13 @@ class LinuxNetworkDriver:
         )
 
         forwarding = self._observe_forwarding()
+        prerequisites = tuple(
+            (
+                key,
+                self._runner.run(("sysctl", "-n", key)).stdout.strip(),
+            )
+            for key, _expected in desired.prerequisites.expected_sysctls
+        )
 
         nft_tables = parse_nft_tables(
             self._runner.run(
@@ -284,6 +300,7 @@ class LinuxNetworkDriver:
             )
 
         return LinuxNetworkObservation(
+            prerequisites=prerequisites,
             routing=LinuxRoutingObservation(
                 interfaces=interfaces,
                 routes=routes,
@@ -329,6 +346,8 @@ class LinuxNetworkDriver:
 
         try:
             self._set_forwarding(False)
+            for command in desired.prerequisites.apply_commands:
+                self._runner.run(command)
             before = self.observe(desired)
 
             tagged_tables = {
