@@ -14,6 +14,9 @@ from .linux_nft import (
 )
 from .linux_prerequisites import LinuxNamespacePrerequisites
 from .linux_routing import (
+    FIRST_PATH_METRIC,
+    PATH_METRIC_STEP,
+    TERMINAL_METRIC,
     LinuxRouteKind,
     LinuxRoutingAllocationState,
     LinuxRoutingDesired,
