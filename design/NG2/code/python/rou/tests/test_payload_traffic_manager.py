@@ -1,4 +1,5 @@
 from ipaddress import IPv4Network
+from threading import Event, Lock, Thread
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
@@ -81,6 +82,35 @@ def _request(path: InterfaceIdentity) -> PayloadTrafficStateRequest:
     )
 
 
+class BlockingAdapter(FakeAdapter):
+    def __init__(self):
+        super().__init__()
+        self.first_entered = Event()
+        self.second_entered = Event()
+        self.release = Event()
+        self._guard = Lock()
+        self._entered_count = 0
+        self.max_active = 0
+        self._active = 0
+
+    def apply(self, owner, spec: NetworkRulesSpec) -> ActionResult:
+        with self._guard:
+            self._entered_count += 1
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+            entered = self._entered_count
+        if entered == 1:
+            self.first_entered.set()
+        else:
+            self.second_entered.set()
+        self.release.wait(timeout=2)
+        try:
+            return super().apply(owner, spec)
+        finally:
+            with self._guard:
+                self._active -= 1
+
+
 class PayloadTrafficManagerTests(unittest.TestCase):
     def setUp(self):
         self.path = InterfaceIdentity("vpns00", 10)
@@ -114,6 +144,43 @@ class PayloadTrafficManagerTests(unittest.TestCase):
 
         self.assertEqual(self.adapter.apply_owners, [])
         self.assertEqual(self.publisher.events, [])
+
+    def test_requests_do_not_overlap_lower_domain_transactions(self):
+        blocking = BlockingAdapter()
+        manager = PayloadTrafficManager(blocking, RecordingPublisher())
+        second_called = Event()
+
+        first = Thread(
+            target=manager.handle_request,
+            args=(_request(InterfaceIdentity("vpns00", 10)),),
+        )
+
+        def run_second():
+            second_called.set()
+            manager.handle_request(
+                _request(InterfaceIdentity("vpns01", 11))
+            )
+
+        second = Thread(target=run_second)
+
+        first.start()
+        self.assertTrue(blocking.first_entered.wait(timeout=1))
+        second.start()
+        self.assertTrue(second_called.wait(timeout=1))
+
+        self.assertFalse(
+            blocking.second_entered.wait(timeout=0.1),
+            "second request entered Adapter before first transaction completed",
+        )
+
+        blocking.release.set()
+        first.join(timeout=2)
+        second.join(timeout=2)
+
+        self.assertFalse(first.is_alive())
+        self.assertFalse(second.is_alive())
+        self.assertTrue(blocking.second_entered.is_set())
+        self.assertEqual(blocking.max_active, 1)
 
     def test_request_uses_manager_instance_as_adapter_owner(self):
         result = self.manager.handle_request(_request(self.path))
