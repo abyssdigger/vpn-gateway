@@ -8,7 +8,6 @@ from .interface_identity import InterfaceIdentity
 from .network_rules import (
     EndpointKind,
     FlowInitiationAllowSpec,
-    IcmpType,
     NetworkEndpoint,
     PortRange,
     PredicateKind,
