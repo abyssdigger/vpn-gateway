@@ -44,6 +44,35 @@ class PayloadRulesState:
     safety: Safety
     service: Service
 
+    def __post_init__(self) -> None:
+        if self.knowledge is Knowledge.UNKNOWN:
+            if (
+                self.convergence is not Convergence.UNKNOWN
+                or self.safety is not Safety.UNKNOWN
+                or self.service is not Service.UNKNOWN
+            ):
+                raise ValueError(
+                    "unknown payload-rules knowledge requires unknown dependent axes"
+                )
+            return
+
+        if self.convergence is Convergence.UNKNOWN:
+            raise ValueError(
+                "known payload-rules knowledge requires convergence assessment"
+            )
+
+        if (
+            self.convergence is Convergence.MATCHED
+            and self.safety is not Safety.SAFE
+        ):
+            raise ValueError("matched payload rules must be safe")
+
+        if (
+            self.safety is Safety.UNSAFE
+            and self.convergence is not Convergence.DIVERGED
+        ):
+            raise ValueError("unsafe payload rules must be divergent")
+
 
 def _authoritative(observed: NetworkRulesState) -> bool:
     return (
