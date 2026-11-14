@@ -1,7 +1,7 @@
 # VPN-GATE NG2 Python reference
 
-Current status: executable NG2 payload semantic control loop, reviewed structural
-Linux NetworkRulesAdapter baseline and protective runtime bootstrap gate.
+Current status: executable NG2 payload semantic control loop plus reviewed Linux
+network-policy and fail-closed runtime lower assembly baseline.
 
 Semantic whole-slice review: **PASS** —
 `design/reviews/NG2-2026-11-14-semantic-slice-whole-code-audit.md`.
@@ -106,14 +106,16 @@ Not implemented yet:
 
 - richer predicate implication only where future use justifies it;
 - RuntimeStateManager Profile-state mapping;
-- remaining runtime assembly above the protective Linux bootstrap gate;
+- Linux instance infrastructure lifecycle and full fail-closed instance -> Adapter
+  startup composition;
 - persistent technical allocation across daemon restart;
 - richer interface-origin dispatch;
 - incremental transition optimizer, only after a separate review/evidence unit.
 
-Next implementation boundary: runtime assembly above the reviewed protective Linux
-bootstrap gate. Namespace/transport lifecycle and RuntimeStateManager assembly remain
-separate review units. Incremental transition optimization remains deferred.
+Next implementation boundary is above the reviewed runtime lower assembly. Add only a
+runtime/config/event component with a concrete consumer; RuntimeStateManager and other
+upper-domain assembly remain separate review units. Incremental transition optimization
+remains deferred.
 
 Rootless tests:
 
