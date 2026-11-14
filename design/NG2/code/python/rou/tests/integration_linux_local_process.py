@@ -266,7 +266,7 @@ def main() -> int:
                 check=False,
             )
             raise RuntimeError(
-                "production LOCAL_PROCESS executor probe failed: "
+                "production LOCAL_PROCESS probe Driver failed: "
                 f"{attempt}\nRULES:\n"
                 + rules.stdout
                 + rules.stderr
@@ -275,7 +275,7 @@ def main() -> int:
                 + nft.stderr
             )
         print(
-            "PASS LP4: production executor runs capability-free bound probe "
+            "PASS LP4: production probe Driver runs capability-free bound probe "
             "through production probe plane"
         )
 
