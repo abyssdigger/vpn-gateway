@@ -1,3 +1,16 @@
+## 2026-11-15 — NG2 probing route-membership invariant
+
+Clarified the normative availability model after persistent-route priority materialization:
+
+- probing never adds or removes payload paths/routes; it changes only availability state,
+  desired order and the live-prefix boundary;
+- the older special-case wording that protected only the last/sole path was removed as
+  weaker and misleading;
+- a sole or last confirmed-live path follows the same rule as every other path: its route
+  remains materialized and only its priority state may change.
+
+---
+
 ## 2026-11-14 — NG2 persistent EMPTY-slot route transitions
 
 Strengthened availability-driven route-priority materialization so no eligible route is
