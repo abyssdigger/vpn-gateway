@@ -48,7 +48,7 @@ Comparison from pre-cycle baseline ec1ee1e056cd9cb112d94d7279c3072bf5d03ba5 show
 
 ## Closure integrity
 
-From green executable baseline 9a95384b7b43121b2914e1df7b903c6da5e20518 through documentation head b80a9393db9d7bcef047661cd76c999a7a32d98a, the branch contains only documentation changes; no Python/workflow code changed after the green run. Therefore the current executable baseline is exactly the tested 9a95384b state.
+From green executable baseline 9a95384b7b43121b2914e1df7b903c6da5e20518 through documentation head 713520609ae4e4788231e15332cdff3520aa8191, the branch contains only documentation changes; no Python/workflow code changed after the green run. Therefore the current executable baseline is exactly the tested 9a95384b state.
 
 ## Reviews
 
