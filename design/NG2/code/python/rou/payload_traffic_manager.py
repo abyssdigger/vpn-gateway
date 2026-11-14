@@ -186,10 +186,7 @@ class PayloadTrafficManager:
 
         for target in priority_targets:
             executor = self._profile_route_executor(target.name)
-            executor.execute(
-                target,
-                self._apply_profile_priority_target,
-            )
+            executor.execute(target)
 
         # Publish only after all Profile transactions requested by this full
         # snapshot have completed (successfully or otherwise).
@@ -226,7 +223,10 @@ class PayloadTrafficManager:
         with self._executor_registry_lock:
             executor = self._profile_route_executors.get(profile_name)
             if executor is None:
-                executor = ProfileRouteOrderExecutor(profile_name)
+                executor = ProfileRouteOrderExecutor(
+                    profile_name,
+                    self._apply_profile_priority_target,
+                )
                 self._profile_route_executors[profile_name] = executor
             return executor
 
