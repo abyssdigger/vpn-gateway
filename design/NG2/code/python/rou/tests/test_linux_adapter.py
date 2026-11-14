@@ -1,0 +1,227 @@
+import unittest
+
+from rou.linux_adapter import LinuxNetworkRulesAdapter
+from rou.linux_driver import LinuxDriverResult, LinuxNetworkVerification
+from rou.network_rules import (
+    NetworkRulesSpec,
+    StateKnowledge,
+)
+
+
+class EqualOwner:
+    def __eq__(self, other):
+        return isinstance(other, EqualOwner)
+
+    def __hash__(self):
+        return 1
+
+
+class FakeBackend:
+    def __init__(self):
+        self.materialize_success = True
+        self.verify_ok = True
+        self.materialize_calls = []
+        self.verify_calls = []
+
+    def materialize_structural(self, desired):
+        self.materialize_calls.append(desired)
+        if self.materialize_success:
+            return LinuxDriverResult(True)
+        return LinuxDriverResult(False, "injected materialization failure")
+
+    def verify_current(self, desired):
+        self.verify_calls.append(desired)
+        if self.verify_ok:
+            return LinuxNetworkVerification(True, ())
+        return LinuxNetworkVerification(False, ("injected drift",))
+
+
+class LinuxNetworkRulesAdapterTests(unittest.TestCase):
+    def setUp(self):
+        self.backend = FakeBackend()
+        self.adapter = LinuxNetworkRulesAdapter(
+            self.backend,
+            local_interface="host0",
+        )
+
+    def test_successful_apply_commits_fresh_known_owner_state(self):
+        owner = object()
+        rules = NetworkRulesSpec()
+
+        result = self.adapter.apply(owner, rules)
+        state = self.adapter.get_last_state(owner)
+
+        self.assertTrue(result.success)
+        self.assertIs(state.knowledge, StateKnowledge.KNOWN)
+        self.assertIs(state.rules, rules)
+        self.assertTrue(state.fresh)
+
+    def test_equal_but_distinct_owners_remain_separate(self):
+        first = EqualOwner()
+        second = EqualOwner()
+        first_rules = NetworkRulesSpec()
+        second_rules = NetworkRulesSpec()
+
+        self.assertTrue(self.adapter.apply(first, first_rules).success)
+        self.assertTrue(self.adapter.apply(second, second_rules).success)
+
+        self.assertIs(self.adapter.get_last_state(first).rules, first_rules)
+        self.assertIs(self.adapter.get_last_state(second).rules, second_rules)
+
+    def test_failed_first_apply_registers_owner_but_does_not_commit_candidate(self):
+        owner = object()
+        candidate = NetworkRulesSpec()
+        self.backend.materialize_success = False
+
+        result = self.adapter.apply(owner, candidate)
+        state = self.adapter.get_last_state(owner)
+
+        self.assertFalse(result.success)
+        self.assertIs(state.knowledge, StateKnowledge.UNKNOWN)
+
+        # Physical verification of the unchanged committed empty composition can later
+        # prove this owner's empty owned scope.
+        self.backend.verify_ok = True
+        renewed = self.adapter.renew_state(owner)
+        state = self.adapter.get_last_state(owner)
+
+        self.assertTrue(renewed.success)
+        self.assertIs(state.knowledge, StateKnowledge.KNOWN)
+        self.assertEqual(state.rules, NetworkRulesSpec())
+
+    def test_failed_replacement_keeps_previous_committed_generation(self):
+        owner = object()
+        old = NetworkRulesSpec()
+        self.assertTrue(self.adapter.apply(owner, old).success)
+
+        # Use a distinct object with equivalent semantic content: if replacement were
+        # committed on failure get_last_state after renew would expose this candidate
+        # object rather than the old committed generation.
+        candidate = NetworkRulesSpec()
+        self.backend.materialize_success = False
+
+        result = self.adapter.apply(owner, candidate)
+        self.assertFalse(result.success)
+        self.assertIs(
+            self.adapter.get_last_state(owner).knowledge,
+            StateKnowledge.UNKNOWN,
+        )
+
+        self.backend.materialize_success = True
+        self.assertTrue(self.adapter.renew_state(owner).success)
+        self.assertIs(self.adapter.get_last_state(owner).rules, old)
+
+    def test_failed_shared_mutation_marks_other_owner_unknown(self):
+        first = object()
+        second = object()
+        self.assertTrue(self.adapter.apply(first, NetworkRulesSpec()).success)
+        self.assertTrue(self.adapter.apply(second, NetworkRulesSpec()).success)
+
+        self.backend.materialize_success = False
+        result = self.adapter.apply(first, NetworkRulesSpec())
+
+        self.assertFalse(result.success)
+        self.assertIs(
+            self.adapter.get_last_state(first).knowledge,
+            StateKnowledge.UNKNOWN,
+        )
+        self.assertIs(
+            self.adapter.get_last_state(second).knowledge,
+            StateKnowledge.UNKNOWN,
+        )
+
+    def test_renew_exact_committed_physical_state_refreshes_all_owners(self):
+        first = object()
+        second = object()
+        self.assertTrue(self.adapter.apply(first, NetworkRulesSpec()).success)
+        self.assertTrue(self.adapter.apply(second, NetworkRulesSpec()).success)
+
+        self.backend.verify_ok = False
+        self.assertFalse(self.adapter.renew_state(first).success)
+        self.assertIs(
+            self.adapter.get_last_state(second).knowledge,
+            StateKnowledge.UNKNOWN,
+        )
+
+        self.backend.verify_ok = True
+        self.assertTrue(self.adapter.renew_state(first).success)
+        self.assertIs(
+            self.adapter.get_last_state(first).knowledge,
+            StateKnowledge.KNOWN,
+        )
+        self.assertIs(
+            self.adapter.get_last_state(second).knowledge,
+            StateKnowledge.KNOWN,
+        )
+
+    def test_cleanup_rebuilds_without_removed_owner_then_forgets_identity(self):
+        first = object()
+        second = object()
+        self.assertTrue(self.adapter.apply(first, NetworkRulesSpec()).success)
+        self.assertTrue(self.adapter.apply(second, NetworkRulesSpec()).success)
+        before = len(self.backend.materialize_calls)
+
+        result = self.adapter.cleanup(first)
+
+        self.assertTrue(result.success)
+        self.assertEqual(len(self.backend.materialize_calls), before + 1)
+        self.assertIs(
+            self.adapter.get_last_state(first).knowledge,
+            StateKnowledge.UNKNOWN,
+        )
+        self.assertIs(
+            self.adapter.get_last_state(second).knowledge,
+            StateKnowledge.KNOWN,
+        )
+
+    def test_cleanup_of_failed_first_apply_repairs_committed_composition(self):
+        owner = object()
+        self.backend.materialize_success = False
+        self.assertFalse(self.adapter.apply(owner, NetworkRulesSpec()).success)
+
+        self.backend.materialize_success = True
+        before = len(self.backend.materialize_calls)
+        result = self.adapter.cleanup(owner)
+
+        self.assertTrue(result.success)
+        self.assertEqual(len(self.backend.materialize_calls), before + 1)
+
+    def test_failed_cleanup_keeps_owner_committed_and_unknown(self):
+        owner = object()
+        rules = NetworkRulesSpec()
+        self.assertTrue(self.adapter.apply(owner, rules).success)
+
+        self.backend.materialize_success = False
+        result = self.adapter.cleanup(owner)
+
+        self.assertFalse(result.success)
+        self.assertIs(
+            self.adapter.get_last_state(owner).knowledge,
+            StateKnowledge.UNKNOWN,
+        )
+
+        self.backend.materialize_success = True
+        self.assertTrue(self.adapter.renew_state(owner).success)
+        self.assertIs(self.adapter.get_last_state(owner).rules, rules)
+
+    def test_cleanup_unknown_owner_is_idempotent_without_physical_mutation(self):
+        before = len(self.backend.materialize_calls)
+
+        result = self.adapter.cleanup(object())
+
+        self.assertTrue(result.success)
+        self.assertEqual(len(self.backend.materialize_calls), before)
+
+    def test_get_last_state_unknown_owner_has_no_io(self):
+        before_materialize = len(self.backend.materialize_calls)
+        before_verify = len(self.backend.verify_calls)
+
+        state = self.adapter.get_last_state(object())
+
+        self.assertIs(state.knowledge, StateKnowledge.UNKNOWN)
+        self.assertEqual(len(self.backend.materialize_calls), before_materialize)
+        self.assertEqual(len(self.backend.verify_calls), before_verify)
+
+
+if __name__ == "__main__":
+    unittest.main()
