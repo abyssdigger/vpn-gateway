@@ -1,7 +1,11 @@
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
-from rou.linux_driver import LinuxDriverResult, LinuxNetworkVerification
+from rou.linux_driver import (
+    CommandResult,
+    LinuxDriverResult,
+    LinuxNetworkVerification,
+)
 from rou.runtime_bootstrap import (
     LinuxRuntimeBootstrapResult,
     bootstrap_linux_network_rules_adapter,
@@ -38,10 +42,8 @@ class NamespaceBootstrapHostRunner:
         prefix = ("ip", "netns", "exec", "rou0")
         if argv == (*prefix, "sysctl", "-q", "-w", "net.ipv4.ip_forward=0"):
             self.forwarding = False
-            from rou.linux_driver import CommandResult
             return CommandResult(0, "", "")
         if argv == (*prefix, "sysctl", "-n", "net.ipv4.ip_forward"):
-            from rou.linux_driver import CommandResult
             return CommandResult(0, "1\n" if self.forwarding else "0\n", "")
         raise AssertionError(f"unexpected host command: {argv!r}")
 
