@@ -37,7 +37,7 @@ Linux route/RPDB/nft/sysctl mechanics не являются частью payload
                                sync  |              | hidden lower domain
                                      |              v
           +------------------+       |        network stack / drivers
-          | PayloadState     |<------+
+          | PayloadRulesState     |<------+
           | Calculator       |
           +------------------+
                        |
@@ -55,7 +55,7 @@ Linux route/RPDB/nft/sysctl mechanics не являются частью payload
 ```text
 PayloadTrafficManager
     -> PayloadRulesCalculator
-    -> PayloadStateCalculator
+    -> PayloadRulesStateCalculator
     -> NetworkRulesAdapter
 ```
 
@@ -171,23 +171,40 @@ InfoEvent отражает фактически установленную paylo
 - находится ли payload domain в защитно ограниченном состоянии;
 - известно ли вообще текущее состояние с достаточной уверенностью.
 
-Рабочие категории состояния:
+Payload rules не сводятся к одному enum. Их состояние оценивается по независимым осям:
 
 ```text
-READY
-DEGRADED
-ISOLATED
-UNKNOWN
+PayloadRulesState
+    knowledge
+        KNOWN | UNKNOWN
+
+    convergence
+        MATCHED | DIVERGED | UNKNOWN
+
+    safety
+        SAFE | UNSAFE | UNKNOWN
+
+    service
+        READY | DEGRADED | ISOLATED | UNKNOWN
 ```
 
-Точный serialization enum может быть уточнен отдельно, но семантика различий нормативна:
+Смыслы осей:
 
-- **READY** — запрошенная payload policy полностью материализована и подтверждена;
-- **DEGRADED** — подтверждена безопасная, но неполная относительно request payload policy;
-- **ISOLATED** — payload forwarding фактически защитно закрыт;
-- **UNKNOWN** — Manager не может доказать текущее состояние с достаточной полнотой.
+- **knowledge** — имеется ли достаточно авторитетное текущее наблюдение ruleset;
+- **convergence** — совпадает ли observed ruleset с desired ruleset;
+- **safety** — доказано ли, что observed ruleset не разрешает запрещенное desired policy
+  поведение;
+- **service** — какой уровень payload service доказан observed ruleset.
 
-Operation failure сам по себе не является state category.
+Оси намеренно независимы. В частности, `KNOWN + DIVERGED + UNSAFE` является нормальным
+представимым состоянием; физическая работоспособность трафика не превращает unsafe ruleset
+в `READY`.
+
+`DEGRADED` допускается только для доказанно safe, но неполной service projection.
+`ISOLATED` означает доказанно закрытый payload service. Когда требуемое свойство нельзя
+доказать из observed semantic rules, соответствующая ось принимает `UNKNOWN`.
+
+Operation failure сам по себе не является значением ни одной из этих осей.
 
 ### 3.5. Request handling
 
@@ -199,7 +216,7 @@ Operation failure сам по себе не является state category.
 3. NetworkRulesAdapter.apply(self, desired_rules)
 4. inspects action result
 5. obtains authoritative last Adapter state for self
-6. PayloadStateCalculator.calculate(request, desired_rules, network_state)
+6. PayloadRulesStateCalculator.calculate(desired_rules, network_state)
 7. publishes changed PayloadTrafficStateInfo
 8. schedules retry/audit if current state does not satisfy request
 ```
@@ -212,7 +229,7 @@ Operation failure сам по себе не является state category.
 apply(self, ...) -> FAILURE
 renewState(self)
 getLastState(self)
-PayloadStateCalculator(...)
+PayloadRulesStateCalculator(desired_rules, network_state)
 publish actual state
 retry according to local policy
 ```
@@ -645,45 +662,79 @@ Semantic state разных owners хранится и наблюдается р
 `apply(owner, ...)`, `renewState(owner)` и `cleanup(owner)` обязаны сохранять state
 остальных owners.
 
-## 9. PayloadStateCalculator
+## 9. PayloadRulesStateCalculator
 
 ### 9.1. Тип
 
-`PayloadStateCalculator` — Direct Calculator.
+`PayloadRulesStateCalculator` — Direct Calculator.
+
+Он оценивает **состояние правил обработки payload**, а не состояние payload data plane
+вообще.
 
 ### 9.2. Contract
 
 ```text
 calculate(
-    request: PayloadTrafficStateRequest,
     desired: NetworkRulesSpec,
     observed: NetworkRulesState
-) -> PayloadTrafficState
+) -> PayloadRulesState
 ```
+
+Исходный `PayloadTrafficStateRequest` не является входом этого Calculator. Все
+payload-domain требования, нужные для оценки ruleset, уже выражены
+`PayloadRulesCalculator` в desired `NetworkRulesSpec`.
 
 ### 9.3. Responsibility
 
-Calculator переводит фактическую network-rules projection обратно в payload semantics.
+Calculator переводит normalized network-rules observation обратно в payload-rules
+semantics и независимо оценивает:
 
-Он определяет:
+```text
+knowledge
+convergence
+safety
+service
+```
 
-- полностью ли request materialized;
-- какие Profile paths/capabilities подтверждены;
-- является ли наблюдаемая policy безопасной, но неполной;
-- закрыт ли payload forwarding;
-- достаточно ли данных для authoritative state.
+Он не выполняет I/O, не вызывает Adapter и не исправляет drift.
 
-### 9.4. Rules
+### 9.4. Conservative proof rule
 
-Если `NetworkRulesState.knowledge == UNKNOWN`, Calculator не имеет права вывести READY.
+Calculator не имеет права выводить `SAFE`, `DEGRADED` или `ISOLATED` по
+недоказанному предположению.
 
-READY требует semantic equivalence observed rules и desired spec.
+Минимальные правила:
 
-DEGRADED допустим только если Calculator способен доказать безопасную неполную payload
-projection.
+- неавторитетное observation -> `knowledge = UNKNOWN`;
+- authoritative semantic equality -> `MATCHED + SAFE + READY`;
+- authoritative semantic inequality -> `DIVERGED`;
+- `UNSAFE` требует доказанного расширения разрешений относительно desired;
+- `SAFE` при divergence требует доказательства, что observed policy является только
+  ограничением desired policy;
+- `DEGRADED` требует доказанного safe partial service;
+- `ISOLATED` требует доказанного отсутствия payload service;
+- если отношение rulesets нельзя доказать, соответствующие `safety/service` остаются
+  `UNKNOWN`.
 
-ISOLATED означает доказанное отсутствие payload forwarding capability, а не просто
-operation failure.
+Такой conservative contract позволяет начать с узкого доказуемого классификатора и
+расширять его только вместе с тестами/evidence, не превращая syntactic difference в
+необоснованную semantic оценку.
+
+### 9.5. Future common state-type review
+
+Для `AvailabilityProbeManager` ожидается симметричная пара:
+
+```text
+ProbeRulesCalculator
+ProbeRulesStateCalculator
+```
+
+и собственный `ProbeRulesState`.
+
+После появления обеих реальных state-моделей обязателен отдельный review: если их оси и
+семантика окажутся принципиально одинаковыми, следует вынести общий тип состояния rules.
+До этого момента общий `RulesState` не вводится, чтобы не обобщать совпадение формы раньше
+доказанного совпадения предметной семантики.
 
 ## 10. Error semantics
 
@@ -815,11 +866,16 @@ NG1 planner.py
 2. `NetworkRulesState`:
    - степень normalization observed state;
    - representation unrepresentable/foreign state;
-3. `PayloadTrafficStateInfo`:
+3. точную доказуемую классификацию divergent `PayloadRulesState`:
+   - conservative subset / safe degradation;
+   - proven isolation;
+   - proven permission widening / unsafe;
+4. `PayloadTrafficStateInfo`:
    - точный per-Profile payload;
-   - окончательные enum/reason codes;
-4. audit/retry timing policy PayloadTrafficManager;
-5. внутреннюю декомпозицию `NetworkRulesAdapter` в его собственной предметной области.
+   - mapping из `PayloadRulesState`;
+5. audit/retry timing policy PayloadTrafficManager;
+6. внутреннюю декомпозицию `NetworkRulesAdapter` в его собственной предметной области;
+7. после реализации `ProbeRulesState` — review на предмет общего rules-state type.
 
 До этого момента Adapter boundary считается фиксированной: Linux transaction machinery не
 должна снова протекать в PayloadTrafficManager.
