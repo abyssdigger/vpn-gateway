@@ -124,22 +124,26 @@ responsibility roles.
 
 ## Consequences for current names
 
-### LinuxIcmpProbeExecutor
+### LinuxIcmpProbeDriver
 
-The current component executes one observation-producing ICMP operation and returns REPLY | NO_REPLY | ERROR.
+The component executes one observation-producing ICMP operation and returns REPLY | NO_REPLY | ERROR.
 It does not own a desired external state and does not converge an endpoint toward REACHABLE.
 
-Under the agreed terminology its architectural role is Driver.
-The current class name should therefore be reviewed for rename to LinuxIcmpProbeDriver after the active conntrack experiments are closed.
+Its architectural role is Driver. The former `LinuxIcmpProbeExecutor` name was corrected
+to `LinuxIcmpProbeDriver` without changing behavior.
 
-### LinuxNetworkDriver
+### LinuxNetworkExecutor
 
-The current class performs a full structural desired-state transaction: protective close, materialization, fresh verification, optional reopen, final verification.
+The component performs a full structural desired-state transaction: protective close,
+materialization, fresh verification, optional reopen, final verification.
 
-That behavior is Executor-like under the agreed definition even though the implementation also performs direct driver-level commands itself.
+Its architectural role is Executor even though it also performs driver-level commands
+directly through Runner. The former `LinuxNetworkDriver` class name was corrected to
+`LinuxNetworkExecutor` without introducing one-command Driver wrappers.
 
-Its current name should be reviewed separately after the conntrack remediation is fixed.
-No rename is performed as part of EXP-025/026 because mechanism evidence and terminology refactor should remain separate units.
+The implementation remains in `linux_driver.py` for now because that module also owns the
+shared Linux Runner primitives and lower execution result/error types. No module split is
+required merely to satisfy naming symmetry.
 
 ## Conntrack cleanup placement
 
