@@ -9,6 +9,9 @@ from rou.probe_rules import (
     AvailabilityProbeSetRequest,
 )
 from rou.probe_transport import (
+    LogicalProbeWindow,
+    PhysicalProbePlane,
+    ProbeExecutionPlan,
     ProbeExecutionPlanCalculator,
     ProbeGoodNewsInfo,
     ProbeWindowBoundaryInfo,
@@ -77,6 +80,30 @@ class ProbeExecutionPlanTests(unittest.TestCase):
 
         self.assertEqual(plan.planes, ())
         self.assertEqual(plan.windows, ())
+
+    def test_plan_rejects_duplicate_physical_identity_with_different_interval(self):
+        mechanism = AvailabilityProbeSetRequest(
+            (probe("a", A, "203.0.113.10", 10),)
+        ).probes[0].mechanism
+        with self.assertRaisesRegex(ValueError, "duplicate physical planes"):
+            ProbeExecutionPlan(
+                self.generation,
+                (
+                    PhysicalProbePlane(
+                        mechanism,
+                        A,
+                        IPv4Address("203.0.113.10"),
+                        10,
+                    ),
+                    PhysicalProbePlane(
+                        mechanism,
+                        A,
+                        IPv4Address("203.0.113.10"),
+                        20,
+                    ),
+                ),
+                (LogicalProbeWindow("a", 10),),
+            )
 
     def test_events_require_generation_bound_typed_subjects(self):
         good = ProbeGoodNewsInfo(
