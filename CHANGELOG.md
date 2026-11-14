@@ -1,3 +1,32 @@
+## 2026-11-14 — NG2 ProbeRules semantic boundary and EXP-024
+
+Extended the common NetworkRules semantic layer far enough to represent the proven active
+probe plane without introducing a second Linux policy reconciler:
+
+- ProbeRules boundary review confirmed that a separate physical Adapter would conflict with
+  the structural NetworkRulesAdapter's exclusive nft ownership;
+- EXP-024 tested selective shared-namespace probe-process isolation while unrelated local
+  traffic remained on ordinary routing;
+- direct INPUT socket-owner matching was rejected experimentally: the reply reached the
+  exact INPUT candidate rule but `meta skuid` did not identify the receiving ping socket;
+- carrying admitted OUTPUT process identity through a conntrack mark passed privileged CI:
+  bound probe success, unbound alternate-path rejection, wrong-target rejection and
+  unaffected unrelated local traffic;
+- `NetworkEndpoint.LOCAL_PROCESS` and bound-output/protocol dispatch semantics were added
+  without exposing Linux uid/mark in the semantic contract;
+- the concrete Linux compiler deliberately still rejects LOCAL_PROCESS until EXP-024 is
+  confirmed on the Debian 13 target;
+- common TrafficSelector gained exact ICMP message types; production nft output is
+  kernel-syntax checked in privileged CI;
+- `ProbeRulesCalculator` now derives exact ICMP echo request/reply policy and deduplicates
+  logical probes that share one physical target/interface/mechanism plane;
+- same target on different concrete interface generations remains distinct;
+- ProbeRulesState remains deferred until physical LOCAL_PROCESS apply/renew observation
+  exists, after which the mandatory comparison with PayloadRulesState must be performed;
+- focused reviews and whole-slice audit passed.
+
+---
+
 ## 2026-11-14 — NG2 Linux instance infrastructure lifecycle
 
 Migrated the proven NG1 namespace/veth infrastructure boundary into NG2 without restoring
