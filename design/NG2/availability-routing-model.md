@@ -418,10 +418,33 @@ Executor:
 
 Caller не выбирает transition kind.
 
-Route-priority transition является single-flight transaction для managed payload domain.
-Новый availability event может изменить следующий desired target, но не может запустить
-второй move plan до завершения текущего `materialize -> verify -> commit`. Промежуточные
-duplicate/EMPTY states никогда не являются входом следующего semantic calculation.
+Caller-visible route-order transaction принадлежит **Profile**, а не всему payload domain.
+
+Для каждого Profile `PayloadTrafficManager` держит один Direct
+`ProfileRouteOrderExecutor`. Pure priority diff одного Profile проходит через этот
+Executor целиком:
+
+```text
+target order/live-prefix
+    -> lower-domain apply
+    -> materialize
+    -> fresh verify
+    -> Adapter commit
+    -> return
+```
+
+Пока этот вызов не завершен, следующий route-order target **того же Profile** не начинает
+обработку: второй `execute()` ждет single-flight gate. Поэтому новый план всегда строится
+от уже завершенного semantic state, а не от промежуточного duplicate/EMPTY состояния.
+
+У другого Profile другой Executor и другой gate. Текущий общий NetworkRules owner и
+shared lower-domain Adapter могут дополнительно сериализовать фактический physical commit;
+это implementation constraint общей нижней domain, а не семантика Profile transaction и
+не требование Linux/kernel atomicity.
+
+Сама Linux-перестановка по-прежнему состоит из нескольких обычных команд. Transactional
+гарантия здесь предназначена **caller'у**: Direct Executor не возвращает управление до
+завершения всего apply/verify/commit результата.
 
 Availability failover намеренно не реализует per-flow pinning к demoted path. Если policy
 признала path достаточно плохим для понижения приоритета, последующие routing lookups не
