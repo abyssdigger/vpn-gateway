@@ -161,15 +161,37 @@ PayloadTrafficStateInfo
 
 Только при семантически значимом изменении.
 
-InfoEvent отражает фактически установленную payload policy, а не историю внутренних
+InfoEvent отражает фактически наблюдаемую payload policy, а не историю внутренних
 операций.
 
-Минимально проекция должна позволять верхнему runtime установить:
+Точный текущий payload:
 
-- соответствует ли фактическая payload policy текущему request;
-- какие Profile capabilities фактически доступны;
-- находится ли payload domain в защитно ограниченном состоянии;
-- известно ли вообще текущее состояние с достаточной уверенностью.
+```text
+PayloadTrafficStateInfo
+    rules_state: PayloadRulesState
+
+    profiles[]
+        profile_name
+        observed_paths: tuple[InterfaceIdentity, ...] | UNKNOWN
+```
+
+`rules_state` сообщает aggregate состояние правил по независимым осям.
+
+Per-Profile `observed_paths` сообщает только фактическую routing projection requested
+Profile:
+
+- при authoritative observation — concrete ordered paths;
+- authoritative отсутствие logical domain — пустой tuple;
+- неизвестное/stale observation — UNKNOWN.
+
+Эти paths не являются самостоятельным verdict о здоровье Profile. RuntimeStateManager
+комбинирует их с `rules_state`, binding/availability и другими system-level facts в
+`ProfileStateCalculator`.
+
+Foreign observed routing domains не публикуются как requested Profiles; их наличие
+отражается через divergence/safety rules-state assessment.
+
+Raw `NetworkRulesState` и Linux-specific representation через event boundary не проходят.
 
 Payload rules не сводятся к одному enum. Их состояние оценивается по независимым осям:
 
@@ -887,9 +909,8 @@ NG1 planner.py
    - conservative subset / safe degradation;
    - proven isolation;
    - proven permission widening / unsafe;
-4. `PayloadTrafficStateInfo`:
-   - точный per-Profile payload;
-   - mapping из `PayloadRulesState`;
+4. mapping `PayloadTrafficStateInfo` в окончательный `ProfileStateInfo` внутри
+   RuntimeStateManager;
 5. audit/retry timing policy PayloadTrafficManager;
 6. внутреннюю декомпозицию `NetworkRulesAdapter` в его собственной предметной области;
 7. после реализации `ProbeRulesState` — review на предмет общего rules-state type.
