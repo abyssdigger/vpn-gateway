@@ -35,6 +35,7 @@ class FakeBackend:
         self.materialize_success = True
         self.verify_ok = True
         self.materialize_calls = []
+        self.route_priority_calls = []
         self.verify_calls = []
         self.interfaces = ()
 
@@ -46,6 +47,12 @@ class FakeBackend:
         if self.materialize_success:
             return LinuxDriverResult(True)
         return LinuxDriverResult(False, "injected materialization failure")
+
+    def materialize_route_priority(self, current, desired):
+        self.route_priority_calls.append((current, desired))
+        if self.materialize_success:
+            return LinuxDriverResult(True)
+        return LinuxDriverResult(False, "injected route-priority failure")
 
     def verify_current(self, desired):
         self.verify_calls.append(desired)
@@ -118,6 +125,73 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
 
         self.assertEqual(self.adapter.get_last_state(first).rules, first_rules)
         self.assertEqual(self.adapter.get_last_state(second).rules, second_rules)
+
+    def test_pure_path_reorder_uses_route_priority_fast_path(self):
+        owner = object()
+        first = InterfaceIdentity("vpns00", 10)
+        second = InterfaceIdentity("vpns01", 11)
+        self.backend.interfaces = (first, second)
+        network = IPv4Network("10.0.0.0/8")
+        local = NetworkEndpoint.local_network()
+
+        def rules(order):
+            return NetworkRulesSpec(
+                routing_domains=(
+                    RoutingDomainSpec(
+                        "corp",
+                        (network,),
+                        order,
+                        TerminalDisposition.DROP,
+                    ),
+                ),
+                dispatch_rules=(
+                    DispatchRuleSpec(network, "corp", source=local),
+                ),
+                traffic_allows=tuple(
+                    TrafficAllowSpec(
+                        local,
+                        NetworkEndpoint.interface_path(identity),
+                        TrafficPredicate.always(),
+                    )
+                    for identity in (first, second)
+                ),
+            )
+
+        initial = rules((first, second))
+        reordered = rules((second, first))
+
+        self.assertTrue(self.adapter.apply(owner, initial).success)
+        structural_count = len(self.backend.materialize_calls)
+
+        result = self.adapter.apply(owner, reordered)
+
+        self.assertTrue(result.success, result.diagnostic)
+        self.assertEqual(
+            len(self.backend.materialize_calls),
+            structural_count,
+        )
+        self.assertEqual(len(self.backend.route_priority_calls), 1)
+        current, desired = self.backend.route_priority_calls[0]
+        self.assertEqual(
+            [
+                route.path
+                for route in current.routing.routes
+                if route.path is not None
+            ],
+            [first, second],
+        )
+        self.assertEqual(
+            [
+                route.path
+                for route in desired.routing.routes
+                if route.path is not None
+            ],
+            [second, first],
+        )
+        self.assertEqual(
+            self.adapter.get_last_state(owner).rules,
+            reordered,
+        )
 
     def test_unavailable_first_candidate_reconciles_empty_committed_state(self):
         owner = object()

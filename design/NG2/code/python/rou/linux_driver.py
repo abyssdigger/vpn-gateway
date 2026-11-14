@@ -5,7 +5,10 @@ import subprocess
 from typing import Protocol
 
 from .interface_identity import InterfaceIdentity
-from .linux_network import LinuxNetworkDesired
+from .linux_network import (
+    LinuxNetworkDesired,
+    linux_network_route_priority_only_change,
+)
 from .linux_nft import (
     FILTER_TABLE,
     NAT_TABLE,
@@ -348,6 +351,96 @@ class LinuxNetworkExecutor:
                 f"cannot prove protective forwarding close: {exc}",
             )
 
+    def materialize_route_priority(
+        self,
+        current: LinuxNetworkDesired,
+        desired: LinuxNetworkDesired,
+    ) -> LinuxDriverResult:
+        """Apply a verified fixed-metric path permutation without closing forwarding.
+
+        Any failed precondition, mutation or final verification falls back immediately to
+        the structural fail-closed materializer.
+        """
+
+        try:
+            if not linux_network_route_priority_only_change(current, desired):
+                raise LinuxDriverError(
+                    "requested fast path is not a pure route-priority permutation"
+                )
+
+            before = self.observe(current)
+            precondition = verify_linux_network(current, before)
+            if not precondition.ok:
+                raise LinuxDriverError(
+                    "route-priority precondition verification failed: "
+                    + "; ".join(precondition.errors)
+                )
+
+            current_slots = {
+                (
+                    route.domain,
+                    route.table_id,
+                    route.destination,
+                    route.protocol,
+                    route.metric,
+                ): route
+                for route in current.routing.routes
+                if route.kind is LinuxRouteKind.UNICAST
+            }
+
+            wanted = sorted(
+                (
+                    route
+                    for route in desired.routing.routes
+                    if route.kind is LinuxRouteKind.UNICAST
+                ),
+                key=lambda route: (
+                    route.table_id,
+                    int(route.destination.network_address),
+                    route.destination.prefixlen,
+                    route.metric,
+                ),
+            )
+            for route in wanted:
+                slot = (
+                    route.domain,
+                    route.table_id,
+                    route.destination,
+                    route.protocol,
+                    route.metric,
+                )
+                previous = current_slots[slot]
+                if previous.path == route.path:
+                    continue
+                self._runner.run(self._route_replace_argv(route))
+
+            final = self.observe(desired)
+            verification = verify_linux_network(desired, final)
+            if not verification.ok:
+                raise LinuxDriverError(
+                    "route-priority final verification failed: "
+                    + "; ".join(verification.errors)
+                )
+
+            return LinuxDriverResult(True)
+
+        except Exception as exc:
+            fast_diagnostic = str(exc)
+            fallback = self.materialize_structural(desired)
+            if fallback.success:
+                return LinuxDriverResult(
+                    True,
+                    "route-priority fast path fell back to structural rebuild: "
+                    + fast_diagnostic,
+                )
+            return LinuxDriverResult(
+                False,
+                "route-priority fast path failed: "
+                + fast_diagnostic
+                + "; structural fallback failed: "
+                + str(fallback.diagnostic),
+            )
+
     def materialize_structural(
         self,
         desired: LinuxNetworkDesired,
@@ -611,6 +704,26 @@ class LinuxNetworkExecutor:
         assert route.path is not None
         return (
             *base,
+            route.destination.with_prefixlen,
+            "dev",
+            route.path.ifname,
+            "proto",
+            str(route.protocol),
+            "metric",
+            str(route.metric),
+        )
+
+    def _route_replace_argv(self, route) -> tuple[str, ...]:
+        if route.kind is not LinuxRouteKind.UNICAST or route.path is None:
+            raise LinuxDriverError(
+                "route-priority replacement requires a unicast path route"
+            )
+        return (
+            "ip",
+            "route",
+            "replace",
+            "table",
+            str(route.table_id),
             route.destination.with_prefixlen,
             "dev",
             route.path.ifname,

@@ -6,6 +6,7 @@ from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_network import (
     LinuxNetworkDesiredError,
     compile_linux_network_desired,
+    linux_network_route_priority_only_change,
     project_network_rules_to_interfaces,
 )
 from rou.linux_routing import LinuxRoutingAllocationState
@@ -38,6 +39,84 @@ LOCAL = NetworkEndpoint.local_network()
 
 
 class LinuxNetworkDesiredTests(unittest.TestCase):
+    def test_route_priority_only_change_accepts_pure_path_permutation(self):
+        first = InterfaceIdentity("vpns00", 10)
+        second = InterfaceIdentity("vpns01", 11)
+        network = IPv4Network("10.0.0.0/8")
+        local = NetworkEndpoint.local_network()
+
+        def desired(order):
+            rules = NetworkRulesSpec(
+                routing_domains=(
+                    RoutingDomainSpec(
+                        "corp",
+                        (network,),
+                        order,
+                        TerminalDisposition.DROP,
+                    ),
+                ),
+                dispatch_rules=(
+                    DispatchRuleSpec(network, "corp", source=local),
+                ),
+                traffic_allows=tuple(
+                    TrafficAllowSpec(
+                        local,
+                        NetworkEndpoint.interface_path(identity),
+                        TrafficPredicate.always(),
+                    )
+                    for identity in (first, second)
+                ),
+                flow_initiation_allows=tuple(
+                    FlowInitiationAllowSpec(
+                        local,
+                        NetworkEndpoint.interface_path(identity),
+                        TrafficPredicate.always(),
+                    )
+                    for identity in (first, second)
+                ),
+            )
+            return compile_linux_network_desired(
+                compose_network_rules(
+                    (OwnedNetworkRules(OwnerToken(1), rules),)
+                ),
+                LinuxRoutingAllocationState(),
+                local_interface="host0",
+            )
+
+        current = desired((first, second))
+        reordered = desired((second, first))
+
+        self.assertTrue(
+            linux_network_route_priority_only_change(
+                current,
+                reordered,
+            )
+        )
+
+        changed_rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "corp",
+                    (IPv4Network("192.0.2.0/24"),),
+                    (second, first),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+        )
+        broader = compile_linux_network_desired(
+            compose_network_rules(
+                (OwnedNetworkRules(OwnerToken(1), changed_rules),)
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+        self.assertFalse(
+            linux_network_route_priority_only_change(
+                current,
+                broader,
+            )
+        )
+
     def test_no_owners_means_no_nft_tables_and_forwarding_off(self):
         desired = compile_linux_network_desired(
             compose_network_rules(()),
