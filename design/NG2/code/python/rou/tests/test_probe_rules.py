@@ -11,6 +11,7 @@ from rou.probe_rules import (
     AvailabilityProbeRequest,
     AvailabilityProbeSetRequest,
     ProbeRulesCalculator,
+    availability_probe_sets_semantically_equal,
 )
 
 
@@ -118,6 +119,49 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         self.assertEqual(len(first_rules.dispatch_rules), 1)
         self.assertEqual(len(first_rules.traffic_allows), 2)
         self.assertEqual(len(first_rules.flow_initiation_allows), 1)
+
+
+    def test_probe_set_semantic_equality_ignores_tuple_order(self):
+        target = IPv4Address("172.21.201.19")
+        first_path = InterfaceIdentity("vpns00", 43)
+        second_path = InterfaceIdentity("vpns01", 45)
+
+        first = AvailabilityProbeSetRequest(
+            (
+                AvailabilityProbeRequest("pri", first_path, target),
+                AvailabilityProbeRequest("sec", second_path, target),
+            )
+        )
+        reordered = AvailabilityProbeSetRequest(tuple(reversed(first.probes)))
+
+        self.assertTrue(
+            availability_probe_sets_semantically_equal(first, reordered)
+        )
+
+    def test_probe_set_semantic_equality_detects_logical_change(self):
+        path = InterfaceIdentity("vpns00", 43)
+        first = AvailabilityProbeSetRequest(
+            (
+                AvailabilityProbeRequest(
+                    "probe",
+                    path,
+                    IPv4Address("192.0.2.1"),
+                ),
+            )
+        )
+        changed = AvailabilityProbeSetRequest(
+            (
+                AvailabilityProbeRequest(
+                    "probe",
+                    path,
+                    IPv4Address("192.0.2.2"),
+                ),
+            )
+        )
+
+        self.assertFalse(
+            availability_probe_sets_semantically_equal(first, changed)
+        )
 
     def test_duplicate_probe_id_is_rejected(self):
         path = InterfaceIdentity("vpns00", 43)
