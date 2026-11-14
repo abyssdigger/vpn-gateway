@@ -62,7 +62,7 @@ class ComposedNetworkRules:
 class _OwnerEntry:
     identity: object
     token: OwnerToken
-    rules: NetworkRulesSpec
+    rules: NetworkRulesSpec | None
 
 
 class OwnerRulesRegistry:
@@ -72,24 +72,32 @@ class OwnerRulesRegistry:
         self._entries: list[_OwnerEntry] = []
         self._next_token = 1
 
+    def ensure(self, owner: object) -> OwnerToken:
+        entry = self._find(owner)
+        if entry is not None:
+            return entry.token
+
+        token = OwnerToken(self._next_token)
+        self._next_token += 1
+        self._entries.append(_OwnerEntry(owner, token, None))
+        return token
+
     def replace(
         self,
         owner: object,
         rules: NetworkRulesSpec,
     ) -> OwnerToken:
+        token = self.ensure(owner)
         entry = self._find(owner)
-        if entry is not None:
-            entry.rules = rules
-            return entry.token
-
-        token = OwnerToken(self._next_token)
-        self._next_token += 1
-        self._entries.append(_OwnerEntry(owner, token, rules))
+        assert entry is not None
+        entry.rules = rules
         return token
 
     def get(self, owner: object) -> OwnedNetworkRules | None:
         entry = self._find(owner)
         if entry is None:
+            return None
+        if entry.rules is None:
             return None
         return OwnedNetworkRules(entry.token, entry.rules)
 
@@ -104,7 +112,39 @@ class OwnerRulesRegistry:
         return tuple(
             OwnedNetworkRules(entry.token, entry.rules)
             for entry in self._entries
+            if entry.rules is not None
         )
+
+    def preview_replace(
+        self,
+        owner: object,
+        rules: NetworkRulesSpec,
+    ) -> tuple[OwnerToken, tuple[OwnedNetworkRules, ...]]:
+        token = self.ensure(owner)
+        out: list[OwnedNetworkRules] = []
+        found = False
+        for entry in self._entries:
+            if entry.identity is owner:
+                out.append(OwnedNetworkRules(token, rules))
+                found = True
+            elif entry.rules is not None:
+                out.append(OwnedNetworkRules(entry.token, entry.rules))
+        if not found:
+            raise AssertionError("ensured owner disappeared")
+        return token, tuple(out)
+
+    def preview_remove(
+        self,
+        owner: object,
+    ) -> tuple[OwnedNetworkRules, ...]:
+        return tuple(
+            OwnedNetworkRules(entry.token, entry.rules)
+            for entry in self._entries
+            if entry.identity is not owner and entry.rules is not None
+        )
+
+    def has_identity(self, owner: object) -> bool:
+        return self._find(owner) is not None
 
     def _find(self, owner: object) -> _OwnerEntry | None:
         for entry in self._entries:
