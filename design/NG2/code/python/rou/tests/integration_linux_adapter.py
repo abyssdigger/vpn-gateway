@@ -141,6 +141,30 @@ def spec(
     )
 
 
+def routing_only_spec(
+    path_identity: InterfaceIdentity,
+    destination_network: IPv4Network,
+) -> NetworkRulesSpec:
+    local = NetworkEndpoint.local_network()
+    return NetworkRulesSpec(
+        routing_domains=(
+            RoutingDomainSpec(
+                "default",
+                (destination_network,),
+                (path_identity,),
+                TerminalDisposition.DROP,
+            ),
+        ),
+        dispatch_rules=(
+            DispatchRuleSpec(
+                destination_network,
+                "default",
+                source=local,
+            ),
+        ),
+    )
+
+
 def tagged_routes():
     return json.loads(
         host(
@@ -325,6 +349,38 @@ def main() -> int:
                 f"repair did not reopen after verification: {forwarding_writes}"
             )
         print("PASS D: owned route drift repaired behind forwarding barrier")
+
+        default_owner = object()
+        default_spec = routing_only_spec(
+            new,
+            IPv4Network("0.0.0.0/0"),
+        )
+        default_applied = adapter.apply(default_owner, default_spec)
+        if not default_applied.success:
+            raise RuntimeError(
+                f"default-route owner apply failed: {default_applied.diagnostic}"
+            )
+        if not adapter.renew_state(default_owner).success:
+            raise RuntimeError("default-route owner exact renew failed")
+
+        by_table = {}
+        for item in tagged_routes():
+            if item.get("dst") not in (None, "default"):
+                continue
+            by_table.setdefault(str(item.get("table")), []).append(item)
+        if not any(
+            any(route.get("protocol") in (202, "202") for route in routes)
+            and any(route.get("protocol") in (201, "201") for route in routes)
+            for routes in by_table.values()
+        ):
+            raise RuntimeError(
+                "no routing table contains both unicast default and terminal "
+                "blackhole default"
+            )
+        print("PASS D2: /0 dispatch and dual default routes verify in live kernel")
+
+        if not adapter.cleanup(default_owner).success:
+            raise RuntimeError("default-route owner cleanup failed")
 
         cleaned = adapter.cleanup(owner)
         if not cleaned.success:
