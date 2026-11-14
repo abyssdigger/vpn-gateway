@@ -888,12 +888,16 @@ identity. В текущей NG2 модели это влияет на priority �
 
 ### EXP-027
 
-Подтверждает route-slot materialization для availability-driven priority permutation:
+Подтверждает persistent-EMPTY materialization для availability-driven priority
+permutation:
 
 - ordinary prefix и `default`;
-- fixed metrics 10/20/30/40;
-- top-down `ip route replace`;
-- временные duplicate paths допустимы;
+- `N` eligible routes занимают `N+1` ordinary metric slots с одним EMPTY;
+- elementary move: `add duplicate into EMPTY -> delete old copy`;
+- на add phase полный eligible set сохраняется и существует ровно один duplicate;
+- после delete old metric становится новым EMPTY;
+- recovery, reverse demotion и recovery path из крайнего правого slot проходят без
+  временного удаления любого eligible route;
 - terminal blackhole сохраняется;
 - staging routing table для обычной permutation не требуется.
 
