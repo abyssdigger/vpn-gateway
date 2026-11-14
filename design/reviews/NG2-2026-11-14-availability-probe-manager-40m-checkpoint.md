@@ -1,4 +1,4 @@
-# NG2 AvailabilityProbeManager — 40-minute cycle checkpoint (draft)
+# NG2 AvailabilityProbeManager — 40-minute cycle checkpoint
 
 Date: 2026-11-14
 Branch: code-cycle-20261114-availability-probe-manager-40m
@@ -90,3 +90,32 @@ The next implementation unit is availability verdict policy. Explicit agreement 
 - timeout source/value;
 - retry spacing;
 - concurrency/cancellation behavior.
+
+## Final closure
+
+Cycle threshold: 2026-11-14T14:15:16Z.
+
+Branch-scope comparison from baseline 6e64f0e2e6658f570928f7322cce9c2952b9e592
+is confined to NG2 AvailabilityProbeManager/probe machinery, NG2 normative docs and NG2
+reviews. No NG1/RC implementation file changed.
+
+The latest executable head remains:
+
+    50af2bf94f6c9c03d42f33ea801330b4f5f69fcf
+
+Its full NG2 workflow is green, including:
+
+- unit/compile;
+- EXP-024 selective probe-process isolation;
+- EXP-025 stale conntrack generation;
+- EXP-026 selective probe-class conntrack cleanup;
+- nft syntax;
+- instance lifecycle;
+- Linux Adapter;
+- LOCAL_PROCESS integration;
+- payload dataplane.
+
+All commits after that executable head through this checkpoint are documentation/review
+only.
+
+This commit is the authoritative final cycle checkpoint.
