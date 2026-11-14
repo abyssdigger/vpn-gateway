@@ -77,6 +77,13 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG2/code/python/rou/tests/integration_linux_adapter.py
+      - name: NG2 Linux LOCAL_PROCESS integration
+        env:
+          PYTHONPATH: design/NG2/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG2/code/python/rou/tests/integration_linux_local_process.py
       - name: NG2 Linux dataplane integration
         env:
           PYTHONPATH: design/NG2/code/python
