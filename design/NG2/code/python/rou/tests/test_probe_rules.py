@@ -209,7 +209,6 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
-                    enabled=False,
                     policy=AvailabilityWindowPolicy(
                         interval_seconds=30,
                         failure_intervals=2,
