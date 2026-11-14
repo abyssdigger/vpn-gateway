@@ -873,8 +873,20 @@ MSS/MTU clamping не добавляется без отдельного док�
 ### EXP-023
 
 Подтверждает, что Profile-local availability может изменяться при неизменной interface
-identity. Это влияет на `PayloadTrafficStateRequest`, но probe execution остается за
-`AvailabilityProbeManager`.
+identity. В текущей NG2 модели это влияет на priority внутри
+`PayloadTrafficStateRequest.ordered_paths`, но не на binding membership. Probe execution
+остается за `AvailabilityProbeManager`.
+
+### EXP-027
+
+Подтверждает route-slot materialization для availability-driven priority permutation:
+
+- ordinary prefix и `default`;
+- fixed metrics 10/20/30/40;
+- top-down `ip route replace`;
+- временные duplicate paths допустимы;
+- terminal blackhole сохраняется;
+- staging routing table для обычной permutation не требуется.
 
 ## 12. Mapping старого NG1 к NG2
 
