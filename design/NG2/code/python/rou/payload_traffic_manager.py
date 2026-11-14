@@ -44,26 +44,75 @@ class PayloadTrafficManager:
         self._latest_desired: NetworkRulesSpec | None = None
         self._latest_published: PayloadTrafficStateInfo | None = None
 
+        self._reconciling = False
+        self._pending_desired: NetworkRulesSpec | None = None
+        self._audit_pending = False
+
     def handle_request(self, request: PayloadTrafficStateRequest) -> None:
         """Handle one full desired payload snapshot.
 
-        The RequestEvent has no synchronous domain reply. Publication happens through the
-        injected Event Delivery Environment port.
+        A lower-domain reconcile is transactional from this Manager's perspective.
+        Superseding requests received re-entrantly while one reconcile is active are
+        coalesced as the next desired projection; they never interleave the active
+        Adapter call.
         """
 
         desired = self._rules_calculator.calculate(request)
 
-        # Accept the derived desired projection only after pure calculation succeeds.
-        # If calculation rejects the request, the previous managed intent remains intact
-        # and no lower-domain mutation is attempted.
-        self._latest_desired = desired
+        if self._reconciling:
+            self._pending_desired = desired
+            return
 
-        info = self._apply_desired_and_observe(desired)
-        self._publish_if_changed(info)
+        self._reconciling = True
+        try:
+            next_desired: NetworkRulesSpec | None = desired
+
+            while next_desired is not None:
+                # Accept the derived desired projection only after pure calculation
+                # succeeds. A later re-entrant request may replace _pending_desired,
+                # but cannot alter this already-started reconcile.
+                self._latest_desired = next_desired
+                self._pending_desired = None
+
+                info = self._apply_desired_and_observe(next_desired)
+                self._publish_if_changed(info)
+
+                next_desired = self._pending_desired
+
+            if self._audit_pending:
+                self._audit_pending = False
+                self._audit_once()
+        finally:
+            self._reconciling = False
 
     def audit(self) -> None:
         """Run one drift/reconcile pass for the current accepted intent."""
 
+        if self._latest_desired is None:
+            return
+
+        if self._reconciling:
+            self._audit_pending = True
+            return
+
+        self._reconciling = True
+        try:
+            self._audit_once()
+
+            # A re-entrant RequestEvent always outranks a queued audit because it is
+            # newer desired intent. Coalesce to the latest one and converge only after
+            # the audit call stack has completed.
+            next_desired = self._pending_desired
+            while next_desired is not None:
+                self._pending_desired = None
+                self._latest_desired = next_desired
+                info = self._apply_desired_and_observe(next_desired)
+                self._publish_if_changed(info)
+                next_desired = self._pending_desired
+        finally:
+            self._reconciling = False
+
+    def _audit_once(self) -> None:
         desired = self._latest_desired
         if desired is None:
             return
