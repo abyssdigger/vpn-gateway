@@ -102,3 +102,29 @@ No product-policy or architecture choice currently requires human agreement.
 
 The only gate before the next physical implementation unit is target evidence for the
 already selected EXP-024 mechanism.
+
+
+## Resume protocol
+
+After any UI/session interruption, resume from this branch checkpoint rather than replaying
+the individual implementation commits.
+
+Do **not** reopen these already reviewed questions unless new evidence contradicts them:
+
+- whether runtime startup needs a protective barrier before Adapter publication — yes;
+- whether that barrier is IPv4-only — no, protective closure is dual-stack;
+- whether NG2 needs the NG1 rp_filter/IPv6 technical prerequisites — yes;
+- whether namespace lifecycle may own nft/payload policy — no;
+- whether ProbeRules should use a second physical Linux reconciler — no;
+- whether INPUT `meta skuid` is the selected reply discriminator — no, it was experimentally
+  rejected;
+- whether the selected CI mechanism is OUTPUT process identity carried by conntrack state —
+  yes;
+- whether Linux LOCAL_PROCESS materialization may begin before Debian 13 confirmation —
+  no;
+- whether a common PayloadRules/ProbeRules state type is already justified — no.
+
+The first action of the next autonomous implementation cycle should therefore be to record
+the Debian 13 EXP-024 result if target access/output is available. If it is not available,
+select a different independent review unit rather than weakening or bypassing that evidence
+gate.
