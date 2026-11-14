@@ -139,25 +139,30 @@ unrelated local process in the same namespace.
 
 This is a mechanism gap, not a product-policy question.
 
-## 7. Required next experiment
+## 7. Selective local-process experiment result
 
-Before changing `NetworkRulesSpec` or the nft compiler, add a disposable-netns experiment
-that proves a selective local-process firewall boundary in a shared namespace.
+EXP-024 tested the missing shared-namespace boundary.
 
-The experiment must establish:
+Direct INPUT socket-owner matching was rejected experimentally: the intended reply arrived
+on the exact interface/source/protocol path, but `meta skuid` did not identify the
+receiving ping socket at INPUT.
 
-- ordinary local process traffic remains unaffected;
-- probe-identity traffic is fail-closed until its rule set is armed;
-- only bound-interface + exact target + protocol probe traffic is admitted;
-- reply admission is limited to the intended probe process/flow;
-- alternate path cannot create a false positive;
-- same-name/new-ifindex remains fail-closed;
-- the mechanism works without adding capabilities to the probe process beyond the existing
-  ping-socket model.
+A second mechanism passed:
 
-If Linux cannot reliably identify the receiving probe socket/process in INPUT without a
-global default-DROP policy, the architecture must choose another isolation mechanism before
-ProbeRules implementation.
+1. OUTPUT observes the dedicated probe uid;
+2. exact admitted probe request sets a conntrack mark;
+3. INPUT requires the same conntrack mark plus exact interface/source/protocol;
+4. all other probe-uid OUTPUT is dropped;
+5. unrelated local uid traffic remains on ordinary policy.
+
+The privileged CI run proved bound success, unbound alternate-path rejection, wrong-target
+rejection and unaffected unrelated local traffic.
+
+This supplies a concrete lower-domain implementation direction without putting uid or
+conntrack mark into the semantic probe request.
+
+Debian 13 target confirmation remains required before calling the materialization
+target-proven, but the architecture choice is no longer blocked.
 
 ## 8. Rules-state comparison remains intentionally pending
 
@@ -171,9 +176,13 @@ The common-state review remains mandatory after real ProbeRules observation exis
 
 ## Final verdict
 
-**BLOCKED BY ONE KERNEL/MECHANISM EXPERIMENT, not by user policy.**
+**PASS for the architecture boundary; target mechanism confirmation remains pending.**
 
-Do not implement a fake ProbeRulesCalculator against the forwarding-only NetworkRulesSpec.
 Do not introduce a second Linux policy reconciler.
 
-Next unit: selective shared-namespace local-process probe isolation experiment.
+The common NetworkRules semantic contract may now be extended with local-process traffic
+and bound-output/protocol dispatch semantics. Linux uid and conntrack mark remain technical
+lower-domain state.
+
+The common PayloadRulesState / future ProbeRulesState comparison still waits for the real
+ProbeRules state calculator.
