@@ -52,7 +52,7 @@ class StatefulFakeRunner:
             return CommandResult(0, "", "")
 
         if argv[:2] == ("sysctl", "-n"):
-            key = argv[2]
+            key = argv[2].replace("/", ".")
             if key == "net.ipv4.ip_forward":
                 value = "1" if self.forwarding else "0"
             else:
