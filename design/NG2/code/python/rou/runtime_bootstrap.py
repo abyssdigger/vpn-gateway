@@ -63,7 +63,11 @@ def bootstrap_linux_network_rules_adapter_in_namespace(
     """Bootstrap the Adapter inside one pre-existing named network namespace."""
 
     namespace_runner = NetworkNamespaceLinuxRunner(
-        host_runner or SubprocessLinuxRunner(),
+        (
+            host_runner
+            if host_runner is not None
+            else SubprocessLinuxRunner()
+        ),
         namespace,
     )
     driver = LinuxNetworkDriver(namespace_runner)
