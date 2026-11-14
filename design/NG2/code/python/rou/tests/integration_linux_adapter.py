@@ -436,15 +436,21 @@ def main() -> int:
                 f"{forwarding_writes}"
             )
 
-        route_replaces = [
+        route_adds = [
             argv
             for argv in inner_calls
-            if argv[:3] == ("ip", "route", "replace")
+            if argv[:3] == ("ip", "route", "add")
         ]
-        if len(route_replaces) != 2:
+        route_deletes = [
+            argv
+            for argv in inner_calls
+            if argv[:3] == ("ip", "route", "del")
+        ]
+        if len(route_adds) != 3 or len(route_deletes) != 3:
             raise RuntimeError(
-                "route-priority fast path did not perform two slot replacements: "
-                f"{route_replaces}"
+                "route-priority fast path did not perform three "
+                "make-before-break moves: "
+                f"adds={route_adds} deletes={route_deletes}"
             )
 
         nft_mutations = [
