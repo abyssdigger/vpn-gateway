@@ -168,7 +168,8 @@ class LinuxIcmpProbeExecutor:
         observed = self._runner.run(
             ("sysctl", "-n", "net.ipv4.ping_group_range")
         ).stdout.strip()
-        if observed != expected:
+        fields = observed.split()
+        if fields != [gid, gid]:
             raise RuntimeError(
                 "cannot verify probe ping_group_range: "
                 f"expected {expected!r}, observed {observed!r}"
