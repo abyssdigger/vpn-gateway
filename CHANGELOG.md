@@ -1,3 +1,24 @@
+## 2026-11-14 — NG2 payload rules relation and traffic-state projection
+
+Extended the reviewed payload-state model:
+
+- PayloadRulesState now enforces core cross-axis invariants;
+- semantic equality no longer depends on ordering of routing domains, destinations, or
+  allow-only filtering collections;
+- conservative divergent relation proofs can classify narrow SAFE restrictions and
+  provable UNSAFE endpoint-pair permission widening;
+- safe rules restriction does not automatically imply DEGRADED service;
+- PayloadTrafficStateInfo now publishes aggregate PayloadRulesState plus requested
+  Profiles' observed paths only;
+- unknown/stale rules knowledge suppresses current path claims;
+- authoritative absence of a requested logical domain is represented as an empty path
+  tuple, while foreign observed domains are not promoted to upper-domain Profiles;
+- raw NetworkRulesState and Linux/network-stack details remain below the event boundary;
+- internal reviews NG2-2026-11-14-payload-rules-relation-review.md and
+  NG2-2026-11-14-payload-traffic-state-info-review.md passed.
+
+---
+
 ## 2026-11-14 — NG2 multidimensional PayloadRulesState
 
 Added and reviewed the first `PayloadRulesStateCalculator`:
