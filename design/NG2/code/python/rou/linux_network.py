@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Network
 
 from .interface_identity import InterfaceIdentity
 from .linux_local_process import LinuxLocalProcessConfig
@@ -23,6 +24,7 @@ from .network_rules import (
     NetworkRulesSpec,
     PredicateKind,
     RoutingDomainSpec,
+    TrafficPredicate,
     TrafficProtocol,
 )
 from .network_rules_composition import (
@@ -205,10 +207,10 @@ def project_network_rules_to_interfaces(
 
 
 def _probe_target_from_predicate(
-    predicate,
+    predicate: TrafficPredicate,
     *,
     outbound: bool,
-):
+) -> IPv4Network:
     if predicate.kind is not PredicateKind.MATCH or predicate.selector is None:
         raise LinuxNetworkDesiredError(
             "Linux LOCAL_PROCESS backend requires exact probe MATCH predicates"
