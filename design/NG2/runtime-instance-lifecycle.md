@@ -138,13 +138,15 @@ crash containment may close forwarding without requiring semantic cleanup.
 
 Successful `ensure_instance()` proves only fail-closed infrastructure readiness.
 
-Then runtime calls:
+The ordinary production entry point is:
 
 ```text
-bootstrap_linux_network_rules_adapter_in_namespace(...)
+bootstrap_linux_network_rules_adapter_for_instance(spec)
 ```
 
-which independently re-verifies protective closure before exposing the Adapter.
+It calls `ensure_linux_instance()` and then independently re-verifies protective closure
+through namespace bootstrap before exposing the Adapter. The lower-level namespace helper
+remains available for already-managed infrastructure boundaries.
 
 The repeated close is intentional idempotent safety verification at an architectural
 boundary, not hidden reliance on call history.
