@@ -1,6 +1,12 @@
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 import unittest
 
+from rou.availability_probe_state import (
+    AvailabilityProbeState,
+    AvailabilityProbeStateInfo,
+    ProbeObservationGeneration,
+)
+from rou.availability_routing import AvailabilityWindowPolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.payload_rules import (
     PayloadDirection,
@@ -10,7 +16,13 @@ from rou.payload_rules import (
 )
 from rou.payload_traffic_intent import (
     PayloadTrafficIntentCalculator,
+    ProbeProfileEvidenceCalculator,
     ProfileAvailabilityEvidence,
+    ProfileProbeAssignment,
+)
+from rou.probe_rules import (
+    AvailabilityProbeRequest,
+    AvailabilityProbeSetRequest,
 )
 
 
@@ -43,6 +55,134 @@ def identities(wanted: PayloadTrafficStateRequest):
         path.identity
         for path in wanted.profiles[0].ordered_paths
     )
+
+
+class ProbeProfileEvidenceCalculatorTests(unittest.TestCase):
+    def setUp(self):
+        self.calc = ProbeProfileEvidenceCalculator()
+        self.generation = ProbeObservationGeneration(1)
+
+    def probe(self, probe_id, path, target, *, enabled=True):
+        return AvailabilityProbeRequest(
+            probe_id,
+            path,
+            IPv4Address(target),
+            enabled=enabled,
+            policy=AvailabilityWindowPolicy(10, 3),
+        )
+
+    def test_only_reachable_enabled_probe_confirms_path(self):
+        pri = self.probe("pri", A, "203.0.113.10")
+        sec = self.probe("sec", B, "203.0.113.11")
+        states = (
+            AvailabilityProbeStateInfo(
+                "pri",
+                AvailabilityProbeState.UNREACHABLE,
+                observation_generation=self.generation,
+            ),
+            AvailabilityProbeStateInfo(
+                "sec",
+                AvailabilityProbeState.REACHABLE,
+                observation_generation=self.generation,
+            ),
+        )
+
+        result = self.calc.calculate(
+            AvailabilityProbeSetRequest((pri, sec)),
+            states,
+            (ProfileProbeAssignment("corp", ("pri", "sec")),),
+        )
+
+        self.assertEqual(
+            result,
+            (
+                ProfileAvailabilityEvidence(
+                    "corp",
+                    frozenset((B,)),
+                ),
+            ),
+        )
+
+    def test_enabled_probe_without_state_keeps_active_empty_evidence(self):
+        pri = self.probe("pri", A, "203.0.113.10")
+
+        result = self.calc.calculate(
+            AvailabilityProbeSetRequest((pri,)),
+            (),
+            (ProfileProbeAssignment("corp", ("pri",)),),
+        )
+
+        self.assertEqual(
+            result,
+            (
+                ProfileAvailabilityEvidence(
+                    "corp",
+                    frozenset(),
+                ),
+            ),
+        )
+
+    def test_all_assigned_probes_disabled_make_boundary_inactive(self):
+        pri = self.probe(
+            "pri",
+            A,
+            "203.0.113.10",
+            enabled=False,
+        )
+
+        result = self.calc.calculate(
+            AvailabilityProbeSetRequest((pri,)),
+            (
+                AvailabilityProbeStateInfo(
+                    "pri",
+                    AvailabilityProbeState.UNKNOWN,
+                    reason="probe disabled",
+                ),
+            ),
+            (ProfileProbeAssignment("corp", ("pri",)),),
+        )
+
+        self.assertEqual(
+            result,
+            (
+                ProfileAvailabilityEvidence("corp", None),
+            ),
+        )
+
+    def test_one_logical_probe_may_feed_multiple_profiles(self):
+        shared = self.probe("shared", A, "203.0.113.10")
+        states = (
+            AvailabilityProbeStateInfo(
+                "shared",
+                AvailabilityProbeState.REACHABLE,
+                observation_generation=self.generation,
+            ),
+        )
+
+        result = self.calc.calculate(
+            AvailabilityProbeSetRequest((shared,)),
+            states,
+            (
+                ProfileProbeAssignment("corp", ("shared",)),
+                ProfileProbeAssignment("lab", ("shared",)),
+            ),
+        )
+
+        self.assertEqual(
+            result,
+            (
+                ProfileAvailabilityEvidence("corp", frozenset((A,))),
+                ProfileAvailabilityEvidence("lab", frozenset((A,))),
+            ),
+        )
+
+    def test_unknown_probe_assignment_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "unknown probe_id"):
+            self.calc.calculate(
+                AvailabilityProbeSetRequest(()),
+                (),
+                (ProfileProbeAssignment("corp", ("missing",)),),
+            )
 
 
 class PayloadTrafficIntentCalculatorTests(unittest.TestCase):
