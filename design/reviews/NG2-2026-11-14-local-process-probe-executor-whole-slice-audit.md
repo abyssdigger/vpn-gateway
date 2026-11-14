@@ -367,5 +367,6 @@ lower network/executor layer.
 
 Lower network-rules + single-shot execution architecture is coherent.
 
-Do not start scheduler/hysteresis implementation until the target executor gate is closed
-and the execution policy contract is explicitly chosen.
+Do not start scheduler/hysteresis implementation until both the target executor gate and
+the stale-conntrack generation gate are closed, and the execution policy contract is
+explicitly chosen.
