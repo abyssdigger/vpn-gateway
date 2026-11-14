@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Address
 
+from .interface_identity import InterfaceIdentity
 from .linux_driver import LinuxCommandRunner
 from .linux_local_process import LinuxLocalProcessConfig
 from .linux_observation import parse_link_json
 from . import probe_attempt
-from .probe_rules import AvailabilityProbeRequest, ProbeMechanism
 
 
 class LinuxProbeDriverError(ValueError):
@@ -55,18 +56,18 @@ class LinuxIcmpProbeDriver:
 
     def execute(
         self,
-        request: AvailabilityProbeRequest,
+        path: InterfaceIdentity,
+        target: IPv4Address,
         *,
         timeout_seconds: int,
     ) -> probe_attempt.ProbeAttemptResult:
-        if not isinstance(request, AvailabilityProbeRequest):
+        if not isinstance(path, InterfaceIdentity):
             raise LinuxProbeDriverError(
-                "probe driver requires AvailabilityProbeRequest"
+                "probe driver requires InterfaceIdentity"
             )
-        if request.mechanism is not ProbeMechanism.ICMP:
-            return probe_attempt.ProbeAttemptResult(
-                probe_attempt.ProbeAttemptOutcome.ERROR,
-                f"unsupported probe mechanism {request.mechanism!r}",
+        if not isinstance(target, IPv4Address):
+            raise LinuxProbeDriverError(
+                "probe driver requires IPv4Address target"
             )
         if (
             type(timeout_seconds) is not int
@@ -77,7 +78,7 @@ class LinuxIcmpProbeDriver:
             )
 
         try:
-            if not self._generation_is_current(request):
+            if not self._generation_is_current(path):
                 return probe_attempt.ProbeAttemptResult(
                     probe_attempt.ProbeAttemptOutcome.ERROR,
                     "requested probe interface generation is not current",
@@ -102,8 +103,8 @@ class LinuxIcmpProbeDriver:
                     "-W",
                     str(timeout_seconds),
                     "-I",
-                    request.path.ifname,
-                    str(request.target),
+                    path.ifname,
+                    str(target),
                 ),
                 check=False,
             )
@@ -129,7 +130,7 @@ class LinuxIcmpProbeDriver:
 
     def _generation_is_current(
         self,
-        request: AvailabilityProbeRequest,
+        path: InterfaceIdentity,
     ) -> bool:
         result = self._runner.run(
             (
@@ -138,14 +139,14 @@ class LinuxIcmpProbeDriver:
                 "link",
                 "show",
                 "dev",
-                request.path.ifname,
+                path.ifname,
             ),
             check=False,
         )
         if result.returncode != 0:
             return False
         interfaces = parse_link_json(result.stdout)
-        return interfaces == (request.path,)
+        return interfaces == (path,)
 
     def _prepare_ping_socket_prerequisite(self) -> None:
         gid = str(self._config.gid)

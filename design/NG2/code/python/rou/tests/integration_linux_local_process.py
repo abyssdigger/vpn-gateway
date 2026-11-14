@@ -248,12 +248,8 @@ def main() -> int:
             ),
         )
         attempt = probe_driver.execute(
-            AvailabilityProbeRequest(
-                "primary-execution",
-                path,
-                IPv4Address(TARGET),
-                policy=AvailabilityWindowPolicy(10, 3),
-            ),
+            path,
+            IPv4Address(TARGET),
             timeout_seconds=1,
         )
         if attempt.outcome is not ProbeAttemptOutcome.REPLY:
