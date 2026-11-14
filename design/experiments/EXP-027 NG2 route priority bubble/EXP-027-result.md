@@ -8,54 +8,44 @@ Environment:
 
 - GitHub privileged Linux runner;
 - disposable network namespace;
-- four veth path interfaces;
+- veth path interfaces;
 - one table for `198.51.100.0/24`;
 - one table for `default`;
 - owned unicast protocol 202;
 - terminal blackhole protocol 201, metric 65536.
 
-Initial projection in each table:
+Verified primitive:
 
 ```text
-A metric 10
-B metric 20
-C metric 30
-D metric 40
-blackhole metric 65536
+add moving path at currently unused metric
+delete only its old route
 ```
 
-Applied sequence:
+Observed invariants:
+
+- the complete eligible path set remained present at every checked step;
+- between add and delete exactly one path had two route copies;
+- after delete every path again had exactly one copy;
+- the deleted source metric became the next free metric;
+- terminal blackhole remained present;
+- ordinary-prefix and default-route behavior matched.
+
+Passed transition classes:
 
 ```text
-replace metric 10 with B
-replace metric 20 with C
-replace metric 30 with A
+ABGD.VEJ -> ABVGD.EJ
+ABVGD.EJ -> ABGD.VEJ
+ABGDEJ.V -> ABVGDEJ
+ABVGDEJ -> ABGDEJ.V
 ```
 
-Observed after each step:
-
-```text
-A B C D
-B B C D
-B C C D
-B C A D
-```
-
-The old copy of the promoted interface survived at its lower metric until that slot was
-replaced. No userspace delete-then-add sequence was needed for the promoted slot.
-
-The same behavior passed for an ordinary prefix and for `default`.
-
-Attempt 1 failed before route setup because the runner did not support the chosen dummy-link
-fixture. It produced no routing evidence and is retained in the README. Attempt 2 reused
-the already CI-proven veth mechanism and reached the intended hypothesis.
+The fourth case proves that an all-live steady state does not need a materialized or
+configured gap: the next unused ordinary metric is sufficient for the first move.
 
 Architectural consequence:
 
-- path-priority-only changes may use fixed metric slots;
-- bubble materialization can use top-down `ip route replace`;
-- temporary duplicate paths are valid implementation state;
-- a displaced non-confirmed path need not keep a route at every intermediate step;
-- staging tables are unnecessary for ordinary availability-driven path permutations;
-- the existing structural fail-closed rebuild remains the fallback for any broader change
-  or failed fast-path verification.
+- no eligible route is intentionally removed as scratch space;
+- no dedicated transition route/table is required;
+- the free metric is inferred operationally, not stored as a semantic object;
+- one active route-priority transaction per Profile/routing-domain must complete and verify
+  before another desired priority state can start materialization.
