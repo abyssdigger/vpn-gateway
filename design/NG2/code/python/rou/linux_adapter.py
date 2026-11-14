@@ -159,7 +159,7 @@ class LinuxNetworkRulesAdapter:
         self._owners.replace(owner, spec)
         self._routing_allocation = desired.routing.allocation
         self._mark_states_from_projection(projected)
-        return ActionResult(True)
+        return ActionResult(True, result.diagnostic)
 
     def renew_state(self, owner: object) -> ActionResult:
         token = self._owners.token(owner)
