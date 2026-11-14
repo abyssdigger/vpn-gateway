@@ -45,6 +45,11 @@ Implemented:
   - raw `NetworkRulesState` never crosses the event boundary;
 - executable `PayloadTrafficManager` request/audit control loop:
   - pure request->desired calculation before accepting current intent;
+  - pure priority-only diffs use one Direct `ProfileRouteOrderExecutor` per Profile;
+  - the same Profile cannot start a second route-order operation before the first
+    lower-domain apply/materialize/verify/commit returns;
+  - multi-Profile priority snapshots are committed as completed Profile transactions,
+    while broader structural diffs stay on the aggregate path;
   - `NetworkRulesAdapter` is always called with owner=`self`;
   - apply/refresh failures are interpreted only through observed state;
   - current payload state is published only through Event Delivery Environment port;
