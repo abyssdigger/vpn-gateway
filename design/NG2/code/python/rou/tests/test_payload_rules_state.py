@@ -16,6 +16,7 @@ from rou.network_rules import (
 from rou.payload_rules_state import (
     Convergence,
     Knowledge,
+    PayloadRulesState,
     PayloadRulesStateCalculator,
     Safety,
     Service,
@@ -46,10 +47,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
 
     def test_state_rejects_dependent_axes_when_knowledge_unknown(self):
         with self.assertRaises(ValueError):
-            __import__(
-                "rou.payload_rules_state",
-                fromlist=["PayloadRulesState"],
-            ).PayloadRulesState(
+            PayloadRulesState(
                 Knowledge.UNKNOWN,
                 Convergence.DIVERGED,
                 Safety.UNKNOWN,
@@ -58,10 +56,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
 
     def test_state_rejects_unknown_convergence_when_knowledge_known(self):
         with self.assertRaises(ValueError):
-            __import__(
-                "rou.payload_rules_state",
-                fromlist=["PayloadRulesState"],
-            ).PayloadRulesState(
+            PayloadRulesState(
                 Knowledge.KNOWN,
                 Convergence.UNKNOWN,
                 Safety.UNKNOWN,
@@ -70,10 +65,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
 
     def test_state_rejects_matched_but_unsafe(self):
         with self.assertRaises(ValueError):
-            __import__(
-                "rou.payload_rules_state",
-                fromlist=["PayloadRulesState"],
-            ).PayloadRulesState(
+            PayloadRulesState(
                 Knowledge.KNOWN,
                 Convergence.MATCHED,
                 Safety.UNSAFE,
