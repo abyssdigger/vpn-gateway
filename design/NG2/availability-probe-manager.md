@@ -86,12 +86,29 @@ Every request names a concrete `InterfaceIdentity(ifname, ifindex)`.
 Same-name/new-ifindex is a new generation.
 
 Probe execution independently rechecks the concrete generation immediately before the
-attempt. NetworkRules observation and executor generation checking are complementary:
+attempt. NetworkRules observation and Driver generation checking are complementary:
 neither is replaced by the other.
 
 Probe evidence must not survive a concrete-generation change.
 
-## 5. Single-shot ICMP executor
+The Manager represents this with an owner-wide **rules-readiness epoch**. The epoch is
+Manager-local and opaque to NetworkRulesSpec/Linux technical identity:
+
+- no epoch exists before fresh `KNOWN + MATCHED + READY`;
+- leaving READY invalidates all evidence from the current epoch;
+- a later fresh transition back to READY starts a new epoch;
+- accepting a semantically changed desired probe set invalidates the previous epoch;
+- a same-name/new-ifindex request therefore cannot reuse old evidence.
+
+The epoch is not a kernel/network generation identifier and is not encoded into uid,
+conntrack mark, routing tables or nft rules.
+
+A physical backend rebuild that leaves the Manager's semantic rules observation continuously
+fresh READY does not by itself invalidate already completed evidence. Future attempt safety
+remains the responsibility of the verified probe plane plus its lower-domain generation
+mechanism.
+
+## 5. Single-shot ICMP Driver
 
 The first executable worker is `LinuxIcmpProbeDriver`.
 
@@ -128,18 +145,18 @@ as gid and executable path.
 
 The semantic AvailabilityProbeSetRequest contains none of these Linux values.
 
-The uid must not be independently duplicated in Adapter and executor configuration.
+The uid must not be independently duplicated in Adapter and Driver configuration.
 
 ## 7. ping socket prerequisite
 
-The first Linux executor uses capability-free ping sockets.
+The first Linux Driver uses capability-free ping sockets.
 
 Before each single-shot attempt it idempotently writes and freshly verifies the
 namespace-local `net.ipv4.ping_group_range` for its configured gid.
 
 This prerequisite belongs to process execution, not NetworkRulesAdapter.
 
-The current executor does not restore an unknown previous value after each attempt.
+The current Driver does not restore an unknown previous value after each attempt.
 Shutdown ownership can be added when the complete Manager lifecycle is implemented.
 
 ## 8. Logical probes and physical planes
@@ -201,8 +218,9 @@ A result collected under an older rules/interface generation is stale evidence.
 
 ## 11. Still intentionally open
 
-Before scheduler/timing implementation, the remaining evidence gate is the stale conntrack-mark generation-lifetime experiment. Debian 13 confirmation with the intended `/usr/bin/ping` is complete.
-
+The remaining lower-domain evidence gate before production conntrack remediation is
+EXP-026 Debian 13 target confirmation. EXP-025 is already target-confirmed
+STALE-INHERITANCE, and the intended Debian 13 `/usr/bin/ping` executable is confirmed.
 
 The following require an explicit later contract:
 
@@ -214,11 +232,12 @@ The following require an explicit later contract:
 - jitter;
 - concurrency/serialization;
 - cancellation on superseding request;
-- exact observation-generation representation;
-- shutdown cleanup of process runtime prerequisites;
-- target-confirmed production ping executable.
+- shutdown cleanup of process runtime prerequisites.
 
-These are not inferred from payload policy or from EXP-024.
+The observation-generation representation is no longer open at the semantic level:
+AvailabilityProbeManager uses an owner-wide rules-readiness epoch as described above.
+
+These timing/result-policy choices are not inferred from payload policy or from EXP-024.
 
 ## 12. Evidence
 
@@ -226,11 +245,12 @@ Current evidence:
 
 - EXP-024: selective local-process routing/filter mechanism PASS on Debian 13;
 - production LOCAL_PROCESS NetworkRules backend: apply/renew/dataplane PASS;
-- generation-isolation proof still requires focused stale conntrack-mark lifetime verification across rules/interface generation replacement;
+- EXP-025: Debian 13 target-confirmed STALE-INHERITANCE across same-name/new-ifindex
+  replacement;
+- EXP-026: privileged-CI probe-class selective conntrack cleanup PASS; Debian 13 target
+  confirmation pending;
 - projected generation loss retains dedicated uid guard across another owner's structural
   reconcile;
 - ProbeRulesStateCalculator: unit PASS;
 - LinuxIcmpProbeDriver: unit + privileged CI integration PASS;
 - LinuxIcmpProbeDriver with `/usr/bin/ping`: Debian 13 target LP1..LP7 PASS.
-
-The intended Debian 13 production executable remains a separate target-confirmation gate.
