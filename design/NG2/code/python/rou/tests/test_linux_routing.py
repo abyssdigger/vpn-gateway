@@ -6,10 +6,13 @@ from rou.linux_routing import (
     DomainTableAllocation,
     FIRST_PATH_METRIC,
     LinuxRouteKind,
+    LinuxRouteSpec,
     LinuxRoutingAllocationState,
     LinuxRoutingError,
     PATH_METRIC_STEP,
     TERMINAL_METRIC,
+    TERMINAL_ROUTE_PROTOCOL,
+    UNICAST_ROUTE_PROTOCOL,
     compile_linux_routing_desired,
 )
 from rou.network_rules import (
@@ -234,6 +237,31 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                 composed,
                 LinuxRoutingAllocationState(),
                 local_interface="host0",
+            )
+
+    def test_unicast_route_rejects_terminal_metric(self):
+        domain = OwnedRoutingDomainRef(OwnerToken(1), "a")
+        with self.assertRaises(LinuxRoutingError):
+            LinuxRouteSpec(
+                domain=domain,
+                table_id=1,
+                destination=IPv4Network("10.0.0.0/8"),
+                kind=LinuxRouteKind.UNICAST,
+                protocol=UNICAST_ROUTE_PROTOCOL,
+                metric=TERMINAL_METRIC,
+                path=InterfaceIdentity("vpns00", 10),
+            )
+
+    def test_terminal_blackhole_requires_owned_protocol_and_metric(self):
+        domain = OwnedRoutingDomainRef(OwnerToken(1), "a")
+        with self.assertRaises(LinuxRoutingError):
+            LinuxRouteSpec(
+                domain=domain,
+                table_id=1,
+                destination=IPv4Network("0.0.0.0/0"),
+                kind=LinuxRouteKind.BLACKHOLE,
+                protocol=TERMINAL_ROUTE_PROTOCOL,
+                metric=TERMINAL_METRIC - 1,
             )
 
     def test_metric_space_exhaustion_fails_before_partial_result(self):
