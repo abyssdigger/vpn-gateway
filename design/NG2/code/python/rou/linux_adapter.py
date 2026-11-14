@@ -121,14 +121,15 @@ class LinuxNetworkRulesAdapter:
             return ActionResult(False, "owner is not registered")
 
         try:
-            projected = self._project(self._owners.snapshot())
+            owners = self._owners.snapshot()
+            projected = self._project(owners)
             desired = compile_linux_network_desired(
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
                 local_process=self._local_process,
                 local_process_guard_required=self._has_local_process_intent(
-                    self._owners.snapshot()
+                    owners
                 ),
             )
             verification = self._backend.verify_current(desired)
@@ -194,14 +195,15 @@ class LinuxNetworkRulesAdapter:
         diagnostic: str,
     ) -> ActionResult:
         try:
-            projected = self._project(self._owners.snapshot())
+            owners = self._owners.snapshot()
+            projected = self._project(owners)
             desired = compile_linux_network_desired(
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
                 local_process=self._local_process,
                 local_process_guard_required=self._has_local_process_intent(
-                    self._owners.snapshot()
+                    owners
                 ),
             )
         except Exception as exc:
