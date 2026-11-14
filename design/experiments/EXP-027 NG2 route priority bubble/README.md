@@ -1,6 +1,6 @@
 # EXP-027 — NG2 route-priority bubble
 
-**Status:** PREPARED  
+**Status:** RUNNING — attempt 1 harness failure, route hypothesis not reached  
 **Date:** 2026-11-14  
 **Architecture baseline:** NG2 availability bubble candidate  
 **Environment:** disposable privileged Linux network namespace in GitHub CI
@@ -75,3 +75,13 @@ ordinary availability priority changes.
 
 If FAIL, the exact observed route semantics are retained here and the route transition
 design must be revised before implementation.
+
+
+## Attempt 1 — harness failure
+
+GitHub privileged CI reached EXP-027 but failed before route setup while creating a
+`dummy` link in the disposable namespace. No route replacement command ran, therefore
+this is **not** evidence for or against the routing hypothesis.
+
+Disposition: replace dummy links with veth pairs. Veth is already exercised successfully by
+the existing NG2 privileged integration suite on the same runner class.
