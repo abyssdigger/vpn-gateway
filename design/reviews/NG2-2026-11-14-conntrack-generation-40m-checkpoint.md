@@ -33,6 +33,8 @@ Privileged CI PASS:
 
 Debian 13 target confirmation is pending at this draft checkpoint.
 
+Latest executable experiment baseline: da5474f74fd993161f2212572bc80db111d926eb. NG2 workflow PASS on that commit, including EXP-025, EXP-026 and the existing Linux integration suite.
+
 ## Remediation direction if target PASS
 
 Preferred first mechanism: class-wide cleanup of ephemeral LOCAL_PROCESS probe conntrack state by dedicated ct mark.
@@ -66,6 +68,10 @@ Consequences after experiments close:
 - current LinuxNetworkDriver is Executor-like because it owns structural materialize+verify convergence; review its name separately.
 
 Do not mix those renames into EXP-025/026 mechanism evidence.
+
+## Branch-scope audit
+
+Comparison from cycle baseline 900a8391172f93356f400e8a273a0e2b766e0587 shows no NG1/RC implementation-file changes. This cycle is confined to NG2, EXP-025/026, NG2 reviews and the NG2 workflow.
 
 ## Still open
 
