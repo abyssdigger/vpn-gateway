@@ -66,6 +66,12 @@ class AvailabilityProbeManager:
         self._generation_sequence = 0
         self._active_generation: ProbeObservationGeneration | None = None
 
+    @property
+    def observation_generation(self) -> ProbeObservationGeneration | None:
+        """Current owner-wide READY epoch for diagnostics and internal tests."""
+
+        return self._active_generation
+
     def handle_request(self, request: AvailabilityProbeSetRequest) -> None:
         """Accept one full desired probe snapshot and reconcile its network plane."""
 
