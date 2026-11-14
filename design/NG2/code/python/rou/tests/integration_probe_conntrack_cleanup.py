@@ -161,7 +161,7 @@ def create_generation() -> int:
     )
 
     for target in (TARGET_A, TARGET_B, TARGET_CONTROL):
-        ns(PEER, "ip", "addr", "add", f"{target}/32", "dev", "lo")
+        ns(PEER, "ip", "addr", "replace", f"{target}/32", "dev", "lo")
 
     ns(ROU, "ip", "link", "set", "vpn0", "up")
     ns(PEER, "ip", "link", "set", "peer0", "up")
