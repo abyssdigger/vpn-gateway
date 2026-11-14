@@ -79,6 +79,50 @@ class OwnerRulesRegistryTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertIs(registry.get(owner).rules, second_rules)
 
+    def test_ensure_registers_identity_without_committed_rules(self):
+        registry = OwnerRulesRegistry()
+        owner = object()
+
+        token = registry.ensure(owner)
+
+        self.assertEqual(token, OwnerToken(1))
+        self.assertTrue(registry.has_identity(owner))
+        self.assertIsNone(registry.get(owner))
+        self.assertEqual(registry.snapshot(), ())
+
+    def test_preview_replace_does_not_commit_candidate_rules(self):
+        registry = OwnerRulesRegistry()
+        owner = object()
+        old = _spec("old", "10.0.0.0/8")
+        new = _spec("new", "192.168.0.0/16")
+        token = registry.replace(owner, old)
+
+        preview_token, preview = registry.preview_replace(owner, new)
+
+        self.assertEqual(preview_token, token)
+        self.assertEqual(
+            preview,
+            (OwnedNetworkRules(token, new),),
+        )
+        self.assertEqual(
+            registry.snapshot(),
+            (OwnedNetworkRules(token, old),),
+        )
+
+    def test_preview_remove_does_not_remove_committed_owner(self):
+        registry = OwnerRulesRegistry()
+        owner = object()
+        rules = _spec("a", "10.0.0.0/8")
+        token = registry.replace(owner, rules)
+
+        preview = registry.preview_remove(owner)
+
+        self.assertEqual(preview, ())
+        self.assertEqual(
+            registry.snapshot(),
+            (OwnedNetworkRules(token, rules),),
+        )
+
     def test_cleanup_then_readd_gets_fresh_token(self):
         registry = OwnerRulesRegistry()
         owner = object()
