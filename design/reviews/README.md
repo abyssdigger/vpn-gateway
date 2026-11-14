@@ -33,6 +33,7 @@ implementation order:
 - `NG2-2026-11-14-runtime-bootstrap-review.md`
 - `NG2-2026-11-14-runtime-namespace-assembly-review.md`
 - `NG2-2026-11-14-ipv4-namespace-prerequisites-review.md`
+- `NG2-2026-11-14-runtime-instance-lifecycle-review.md`
 
 The whole-slice audit is authoritative for current implementation presence; earlier focused
 reviews remain evidence for the design decisions they examined even when a candidate helper
