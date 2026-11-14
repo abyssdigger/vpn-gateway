@@ -1,10 +1,11 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
+from predicate_eval import PacketView, predicate_matches
+
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     EndpointKind,
-    PacketView,
     SourceNatTarget,
     TrafficProtocol,
 )
@@ -176,8 +177,8 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
             destination_port=443,
         )
 
-        self.assertFalse(reverse.predicate.matches(blocked))
-        self.assertTrue(reverse.predicate.matches(allowed))
+        self.assertFalse(predicate_matches(reverse.predicate, blocked))
+        self.assertTrue(predicate_matches(reverse.predicate, allowed))
 
     def test_default_drop_envelope_allow_limits_outbound_flow(self):
         envelope = TrafficEnvelope(
@@ -224,8 +225,8 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
             destination_port=123,
         )
 
-        self.assertTrue(flow.predicate.matches(dns))
-        self.assertFalse(flow.predicate.matches(other))
+        self.assertTrue(predicate_matches(flow.predicate, dns))
+        self.assertFalse(predicate_matches(flow.predicate, other))
 
     def test_envelope_rules_preserve_first_match_order(self):
         envelope = TrafficEnvelope(
@@ -273,7 +274,7 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
             destination_port=443,
         )
 
-        self.assertTrue(flow.predicate.matches(packet))
+        self.assertTrue(predicate_matches(flow.predicate, packet))
 
     def test_narrow_profile_prevents_broad_allow_from_widening_policy(self):
         path = PayloadPath(InterfaceIdentity("vpns00", 10))
@@ -313,10 +314,10 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
         )
 
         self.assertTrue(
-            any(rule.predicate.matches(broad_packet) for rule in outbound_rules)
+            any(predicate_matches(rule.predicate, broad_packet) for rule in outbound_rules)
         )
         self.assertFalse(
-            any(rule.predicate.matches(narrow_packet) for rule in outbound_rules)
+            any(predicate_matches(rule.predicate, narrow_packet) for rule in outbound_rules)
         )
 
     def test_nat_none_emits_no_source_translation(self):
@@ -380,7 +381,7 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
         )
 
         self.assertEqual(len(spec.source_nat), 1)
-        self.assertFalse(spec.source_nat[0].predicate.matches(packet))
+        self.assertFalse(predicate_matches(spec.source_nat[0].predicate, packet))
 
     def test_same_name_new_ifindex_remains_distinct(self):
         profile = PayloadProfileRequest(
