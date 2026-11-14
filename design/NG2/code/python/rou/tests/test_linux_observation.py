@@ -22,6 +22,7 @@ from rou.network_rules import (
     NetworkRulesSpec,
     RoutingDomainSpec,
     TerminalDisposition,
+    TrafficProtocol,
 )
 from rou.network_rules_composition import (
     OwnedNetworkRules,
@@ -166,6 +167,32 @@ class LinuxObservationParserTests(unittest.TestCase):
             IPv4Network("0.0.0.0/0"),
         )
 
+
+    def test_parse_local_process_rule_preserves_full_selector(self):
+        parsed = parse_rule_json(
+            json.dumps(
+                [
+                    {
+                        "priority": 7,
+                        "uidrange": "65534-65534",
+                        "ipproto": "icmp",
+                        "dst": "203.0.113.24",
+                        "dstlen": 32,
+                        "oif": "vpns00",
+                        "table": 7,
+                    }
+                ]
+            )
+        )
+
+        self.assertEqual(parsed[0].uid_range, (65534, 65534))
+        self.assertEqual(parsed[0].protocol, "icmp")
+        self.assertEqual(parsed[0].output_ifname, "vpns00")
+        self.assertEqual(
+            parsed[0].destination,
+            IPv4Network("203.0.113.24/32"),
+        )
+
     def test_parse_terminal_all_keeps_no_destination(self):
         parsed = parse_rule_json(
             json.dumps(
@@ -213,6 +240,107 @@ class LinuxRoutingVerificationTests(unittest.TestCase):
         )
 
         self.assertTrue(result.ok, result.errors)
+
+
+    def test_local_process_exact_selector_and_generation_verify(self):
+        target = IPv4Network("203.0.113.24/32")
+        identity = InterfaceIdentity("vpns00", 10)
+        path = NetworkEndpoint.interface_path(identity)
+        desired = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    OwnedNetworkRules(
+                        OwnerToken(1),
+                        NetworkRulesSpec(
+                            routing_domains=(
+                                RoutingDomainSpec(
+                                    "probe",
+                                    (target,),
+                                    (identity,),
+                                    TerminalDisposition.DROP,
+                                ),
+                            ),
+                            dispatch_rules=(
+                                DispatchRuleSpec(
+                                    target,
+                                    "probe",
+                                    source=NetworkEndpoint.local_process(),
+                                    bound_output=path,
+                                    protocol=TrafficProtocol.ICMP,
+                                ),
+                            ),
+                        ),
+                    ),
+                )
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+        routes = tuple(
+            ObservedRoute(
+                table_id=item.table_id,
+                destination=item.destination,
+                kind=item.kind.value,
+                protocol=item.protocol,
+                metric=item.metric,
+                ifname=None if item.path is None else item.path.ifname,
+            )
+            for item in desired.routes
+        )
+        dispatch = desired.dispatch_rules[0]
+        observed = LinuxRoutingObservation(
+            interfaces=(
+                InterfaceIdentity("host0", 2),
+                identity,
+            ),
+            routes=routes,
+            rules=(
+                ObservedRule(
+                    priority=dispatch.priority,
+                    source_ifname=None,
+                    destination=dispatch.destination,
+                    table_id=dispatch.table_id,
+                    action="to_tbl",
+                    uid_range=(65534, 65534),
+                    protocol="icmp",
+                    output_ifname="vpns00",
+                ),
+                ObservedRule(
+                    priority=desired.terminal_rule.priority,
+                    source_ifname="host0",
+                    destination=None,
+                    table_id=None,
+                    action="unreachable",
+                ),
+            ),
+            ip_forward=False,
+        )
+
+        result = verify_linux_routing(
+            desired,
+            observed,
+            expected_ip_forward=False,
+        )
+        self.assertTrue(result.ok, result.errors)
+
+        replaced = LinuxRoutingObservation(
+            interfaces=(
+                InterfaceIdentity("host0", 2),
+                InterfaceIdentity("vpns00", 11),
+            ),
+            routes=routes,
+            rules=observed.rules,
+            ip_forward=False,
+        )
+        result = verify_linux_routing(
+            desired,
+            replaced,
+            expected_ip_forward=False,
+        )
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("bound-output generation mismatch" in item for item in result.errors)
+        )
 
     def test_same_name_new_ifindex_fails_generation_verification(self):
         desired = _desired()
