@@ -162,8 +162,25 @@ def main() -> int:
         owner = object()
         applied = adapter.apply(owner, spec)
         if not applied.success:
+            rules = ns(ROU, "ip", "-j", "-4", "rule", "show", check=False)
+            nft = ns(
+                ROU,
+                "nft",
+                "-n",
+                "list",
+                "table",
+                "ip",
+                "vpng2_filter",
+                check=False,
+            )
             raise RuntimeError(
                 f"LOCAL_PROCESS production apply failed: {applied.diagnostic}"
+                + "\nRULES:\n"
+                + rules.stdout
+                + rules.stderr
+                + "\nNFT:\n"
+                + nft.stdout
+                + nft.stderr
             )
         if not adapter.renew_state(owner).success:
             state = adapter.get_last_state(owner)
