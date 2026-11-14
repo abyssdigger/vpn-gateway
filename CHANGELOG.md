@@ -1,3 +1,25 @@
+## 2026-11-14 — NG2 minimal availability verdict policy candidate
+
+Added the first policy-bearing layer above the validated raw active-probe attempt boundary:
+
+- `attempt_once()` remains policy-free and returns only generation-valid raw observations;
+- new `evaluate_once()` maps valid REPLY -> REACHABLE, NO_REPLY -> UNREACHABLE and
+  local ERROR -> UNKNOWN;
+- REACHABLE/UNREACHABLE retain the current `ProbeObservationGeneration`; UNKNOWN never
+  claims an authoritative generation;
+- READY audits preserve an already authoritative verdict from the same readiness epoch
+  instead of creating a transient UNKNOWN before each attempt;
+- request/rules generation changes still invalidate old evidence and return the affected
+  probe to UNKNOWN until fresh evidence exists;
+- repeated identical verdict publications are idempotent;
+- no scheduler, retry counter, hysteresis object or new policy abstraction was introduced.
+
+Executable SHA `7f108fec33d903eb4b599b84239abe8e78b02df2` passed NG2 Python and
+NG1 Python validation. The candidate remains on its cycle branch pending maintainer
+agreement on one-attempt NO_REPLY semantics and ERROR handling.
+
+---
+
 ## 2026-11-14 — NG2 ProbeRules semantic boundary and EXP-024
 
 Extended the common NetworkRules semantic layer far enough to represent the proven active
