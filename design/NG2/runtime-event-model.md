@@ -299,16 +299,20 @@ good news для текущего probe plane сбрасывает negative inte
 
 Новая revision заменяет предыдущий desired set.
 
-Для payload priority changes event delivery не является разрешением на параллельную
-mutation. Пока предыдущий `PayloadTrafficStateRequest` находится внутри
-materialize/verify/commit, следующий request того же managed payload domain не должен
-начать lower-domain transaction. Текущая реализация `PayloadTrafficManager` сериализует
-request handling, drift audit и shutdown одним single-flight transaction boundary.
+Для payload priority changes event delivery не является разрешением на interleave
+перестановок одного Profile. Текущий `PayloadTrafficManager` держит по одному Direct
+`ProfileRouteOrderExecutor` на Profile, участвующий в pure priority transitions.
 
-Если runtime позже будет шардирован по Profile, минимальное требование сохраняется:
-две route-priority transitions одного Profile никогда не interleave. Более новая
-availability projection может ждать завершения предыдущей transaction; следующий target
-вычисляется уже от committed order, а не от промежуточной FIB-картинки.
+Пока `execute(target)` данного Profile находится внутри lower-domain
+`apply -> materialize -> verify -> commit`, следующий route-order target того же Profile
+не начинает operation и ждет single-flight gate. После завершения он применяется уже к
+последнему законченному aggregate desired state; промежуточные Linux duplicate/EMPTY
+состояния не являются semantic input следующей transaction.
+
+Разные Profiles имеют разные Executors. Общий NetworkRules owner/Adapter может отдельно
+сериализовать physical commits своей shared domain; это не превращает caller-visible
+Profile transaction в глобальную payload transaction и не обещает atomicity набора Linux
+команд. Broad structural payload changes остаются на aggregate structural path.
 
 ### 8.3. AvailabilityProbeStateInfo
 
