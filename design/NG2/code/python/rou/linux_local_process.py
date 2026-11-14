@@ -19,9 +19,9 @@ class LinuxLocalProcessConfig:
     ct_mark: int
 
     def __post_init__(self) -> None:
-        if type(self.uid) is not int or not 0 <= self.uid < (1 << 32) - 1:
+        if type(self.uid) is not int or not 1 <= self.uid < (1 << 32) - 1:
             raise LinuxLocalProcessError(
-                "local-process uid must be an unsigned 32-bit uid other than UINT32_MAX"
+                "local-process uid must be a non-root 32-bit uid other than UINT32_MAX"
             )
         if type(self.ct_mark) is not int or not 1 <= self.ct_mark <= 0xFFFFFFFF:
             raise LinuxLocalProcessError(
