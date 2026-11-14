@@ -194,7 +194,7 @@ Observed PASS markers:
 PASS LP1: production ProbeRules apply and exact renew succeed
 PASS LP2: LOCAL_PROCESS-only policy leaves forwarding closed
 PASS LP3: unrelated local process retains ordinary alt0 path
-PASS LP4: bound capability-free probe uses production probe plane
+PASS LP4: production executor runs capability-free bound probe through production probe plane
 PASS LP5: UID guard blocks unbound escape and target widening
 PASS LP6: bound-output same-name/new-ifindex drift fails exact renew
 PASS LP7: projected generation loss retains uid guard across other-owner structural reconcile
