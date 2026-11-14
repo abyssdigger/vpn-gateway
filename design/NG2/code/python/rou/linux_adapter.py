@@ -17,6 +17,8 @@ from .network_rules import (
     StateKnowledge,
 )
 from .network_rules_composition import (
+    ComposedNetworkRules,
+    OwnedNetworkRules,
     OwnerRulesRegistry,
     OwnerToken,
     compose_network_rules,
@@ -212,7 +214,10 @@ class LinuxNetworkRulesAdapter:
             )
         return ActionResult(False, diagnostic)
 
-    def _project(self, owners):
+    def _project(
+        self,
+        owners: tuple[OwnedNetworkRules, ...],
+    ) -> ComposedNetworkRules:
         interfaces = self._backend.observe_interfaces()
         return project_network_rules_to_interfaces(
             compose_network_rules(owners),
@@ -220,13 +225,19 @@ class LinuxNetworkRulesAdapter:
         )
 
     @staticmethod
-    def _rules_for_token(projected, token: OwnerToken) -> NetworkRulesSpec:
+    def _rules_for_token(
+        projected: ComposedNetworkRules,
+        token: OwnerToken,
+    ) -> NetworkRulesSpec:
         for owned in projected.owners:
             if owned.owner == token:
                 return owned.rules
         return NetworkRulesSpec()
 
-    def _mark_states_from_projection(self, projected) -> None:
+    def _mark_states_from_projection(
+        self,
+        projected: ComposedNetworkRules,
+    ) -> None:
         empty = NetworkRulesSpec()
         projected_by_token = {
             owned.owner: owned.rules
