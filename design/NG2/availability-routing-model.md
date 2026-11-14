@@ -252,8 +252,15 @@ PayloadProfileRequest.ordered_paths
 binding или частью пользовательской конфигурации.
 
 Граница между `CONFIRMED_LIVE` prefix и остальным effective order является runtime
-availability state. Linux transition planner получает эту границу как производное
-операционное знание, а не как сохраняемое поле Profile/NetworkRules.
+availability state. Она передается внутри текущего runtime routing intent как
+
+```text
+confirmed_live_prefix_length
+```
+
+Это **не normalized configuration** и не отдельный gap object. Значение вычисляется из
+актуального availability snapshot; Linux projection только выводит из него незанятый
+metric position. При `K == N` gap не материализуется вообще.
 
 Новая отдельная Calculator abstraction для этого пока не требуется. Если логика
 effective order перестанет быть малой частью PayloadTrafficIntentCalculator, граница может
@@ -297,7 +304,8 @@ all non-confirmed:
 То есть все routes начинаются со второй позиции рабочего диапазона.
 
 Положение свободного metric не фиксируется в конфигурации и не materialized отдельным
-объектом. Оно однозначно выводится из текущего effective order и runtime live-prefix.
+объектом. Оно однозначно выводится из текущего effective order и transient
+`confirmed_live_prefix_length`.
 
 Terminal blackhole остается отдельным:
 
@@ -429,9 +437,16 @@ Linux Executor:
 
 1. свежо проверяет current projection;
 2. строит deterministic move plan;
-3. каждый move выполняет как `add duplicate -> delete old copy`;
-4. свежо проверяет конечную projection;
-5. при любой ошибке переходит в structural fail-closed rebuild.
+3. фиксирует plan как immutable для текущей transaction;
+4. каждый move выполняет как `add duplicate -> delete old copy`;
+5. свежо проверяет конечную projection;
+6. при любой ошибке переходит в structural fail-closed rebuild.
+
+Для одного Profile/routing-domain одновременно выполняется не более одной
+route-priority transaction. Новое availability state, пришедшее во время materialization,
+может только заменить pending/latest desired state; текущий plan не пересчитывается и не
+interleave'ится. Следующая transaction начинается только от freshly verified результата
+предыдущей.
 
 Caller не выбирает transition kind.
 
