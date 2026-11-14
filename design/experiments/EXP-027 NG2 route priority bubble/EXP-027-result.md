@@ -8,54 +8,82 @@ Environment:
 
 - GitHub privileged Linux runner;
 - disposable network namespace;
-- four veth path interfaces;
+- seven veth path interfaces;
 - one table for `198.51.100.0/24`;
 - one table for `default`;
 - owned unicast protocol 202;
 - terminal blackhole protocol 201, metric 65536.
 
-Initial projection in each table:
+## Proven production primitive
+
+Steady state contains one route for every eligible path plus one unoccupied ordinary
+metric slot.
+
+For one move:
 
 ```text
-A metric 10
-B metric 20
-C metric 30
-D metric 40
-blackhole metric 65536
+X@Mold + EMPTY@Mempty
+    add X@Mempty
+X@Mold + X@Mempty
+    delete X@Mold
+EMPTY@Mold + X@Mempty
 ```
 
-Applied sequence:
+Fresh FIB checks after every add proved:
+
+- the complete eligible path set remained present;
+- route count was exactly `N+1`;
+- exactly one path had two copies;
+- terminal blackhole remained.
+
+Fresh checks after every delete proved:
+
+- the complete eligible path set remained present;
+- route count returned to exactly `N`;
+- every path had exactly one copy;
+- the deleted old metric became the new EMPTY;
+- terminal blackhole remained.
+
+## Passed transitions
+
+For both ordinary prefix and `default`:
 
 ```text
-replace metric 10 with B
-replace metric 20 with C
-replace metric 30 with A
+A B G D . V E J
+    ->
+A B V G D . E J
+
+A B V G D . E J
+    ->
+A B G D . V E J
+
+A B G D E J . V
+    ->
+A B V G D E J .
 ```
 
-Observed after each step:
+Observed completion markers:
 
 ```text
-A B C D
-B B C D
-B C C D
-B C A D
+PASS P1
+PASS P2
+PASS P3
+PASS D1
+PASS D2
+PASS D3
+EXP027=PASS
 ```
 
-The old copy of the promoted interface survived at its lower metric until that slot was
-replaced. No userspace delete-then-add sequence was needed for the promoted slot.
+## Consequence
 
-The same behavior passed for an ordinary prefix and for `default`.
+The production route-priority fast path may model the FIB as a permutation of
+`eligible paths + EMPTY` and use only `add duplicate -> delete old` elementary moves.
 
-Attempt 1 failed before route setup because the runner did not support the chosen dummy-link
-fixture. It produced no routing evidence and is retained in the README. Attempt 2 reused
-the already CI-proven veth mechanism and reached the intended hypothesis.
+No eligible route is intentionally absent at any intermediate point.
 
-Architectural consequence:
+The earlier EXP-027 `ip route replace` result remains valid evidence that the same
+interface can coexist at multiple metrics, but top-down replacement is superseded as the
+production transition strategy.
 
-- path-priority-only changes may use fixed metric slots;
-- bubble materialization can use top-down `ip route replace`;
-- temporary duplicate paths are valid implementation state;
-- a displaced non-confirmed path need not keep a route at every intermediate step;
-- staging tables are unnecessary for ordinary availability-driven path permutations;
-- the existing structural fail-closed rebuild remains the fallback for any broader change
-  or failed fast-path verification.
+Structural fail-closed rebuild remains the fallback for any non-pure priority change or
+failed verification.
