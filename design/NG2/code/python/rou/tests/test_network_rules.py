@@ -1,6 +1,8 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
+from predicate_eval import PacketView, predicate_matches
+
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     DispatchRuleSpec,
@@ -10,7 +12,6 @@ from rou.network_rules import (
     NetworkRulesError,
     NetworkRulesSpec,
     NetworkRulesState,
-    PacketView,
     PortRange,
     PredicateKind,
     RoutingDomainSpec,
@@ -93,8 +94,8 @@ class NetworkRulesContractTests(unittest.TestCase):
             destination_port=443,
         )
 
-        self.assertFalse(allowed.matches(blocked_packet))
-        self.assertTrue(allowed.matches(other_packet))
+        self.assertFalse(predicate_matches(allowed, blocked_packet))
+        self.assertTrue(predicate_matches(allowed, other_packet))
 
     def test_predicate_constructors_simplify_constants(self):
         match = TrafficPredicate.match(
