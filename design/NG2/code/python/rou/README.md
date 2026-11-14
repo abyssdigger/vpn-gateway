@@ -26,7 +26,15 @@ Implemented:
   - exact zero-path rules -> matched/safe/isolated;
   - exact mixed active/zero-path rules -> matched/safe/degraded;
   - divergent proven isolation -> safe/isolated;
-  - other divergence remains unclassified until a semantic relation is proven;
+  - conservative path/allow removal can prove SAFE without guessing service;
+  - new byte-level permission on an unapproved endpoint pair can prove UNSAFE;
+  - semantic equality ignores ordering of unordered rule collections;
+- `PayloadTrafficStateInfo` payload:
+  - aggregate `PayloadRulesState`;
+  - requested Profiles only;
+  - per-Profile `observed_paths` facts;
+  - unknown rules knowledge suppresses current path claims;
+  - raw `NetworkRulesState` never crosses the event boundary;
 - zero-path routing domain as semantic `DROP` fail-close intent;
 - allow-only filtering contract:
   - `traffic_allows` describes effective byte-level permission;
@@ -50,7 +58,8 @@ Implemented:
 
 Not implemented yet:
 
-- conservative divergent-rules relation proofs for safe degradation / unsafe widening;
+- richer predicate implication only where future use justifies it;
+- RuntimeStateManager Profile-state mapping;
 - Linux `NetworkRulesAdapter` implementation;
 - owner-composition backend materialization;
 - Drivers and transition/materialization logic.
