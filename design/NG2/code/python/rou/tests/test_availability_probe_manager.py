@@ -146,6 +146,35 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         self.assertEqual(self.manager.observation_generation, generation)
         self.assertEqual(self.publisher.events, [])
 
+
+    def test_logical_probe_change_reuses_equivalent_physical_rules(self):
+        first = probe("first", self.path, "203.0.113.24")
+        second = probe("second", self.path, "203.0.113.24")
+
+        self.manager.handle_request(request(first))
+        initial_apply_count = len(self.adapter.apply_owners)
+        first_observation = self.manager.attempt_once(
+            "first",
+            timeout_seconds=1,
+        )
+
+        self.manager.handle_request(request(first, second))
+
+        self.assertEqual(
+            len(self.adapter.apply_owners),
+            initial_apply_count,
+        )
+        self.assertGreaterEqual(len(self.adapter.renew_owners), 3)
+
+        second_observation = self.manager.attempt_once(
+            "first",
+            timeout_seconds=1,
+        )
+        self.assertGreater(
+            second_observation.observation_generation.sequence,
+            first_observation.observation_generation.sequence,
+        )
+
     def test_semantically_changed_snapshot_starts_new_ready_epoch(self):
         self.manager.handle_request(
             request(probe("primary", self.path, "203.0.113.24"))
