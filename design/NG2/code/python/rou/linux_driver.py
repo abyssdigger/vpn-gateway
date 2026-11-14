@@ -271,9 +271,9 @@ class LinuxNetworkDriver:
         prerequisites = tuple(
             (
                 key,
-                self._runner.run(("sysctl", "-n", key)).stdout.strip(),
+                self._runner.run(command).stdout.strip(),
             )
-            for key, _expected in desired.prerequisites.expected_sysctls
+            for key, command in desired.prerequisites.observation_commands
         )
 
         nft_tables = parse_nft_tables(
