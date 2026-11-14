@@ -951,7 +951,9 @@ NG1 planner.py
 14. Нижняя domain за NetworkRulesAdapter не имеет independent synchronous back-edge в
     payload domain.
 15. `confirmed_live_prefix_length` является transient runtime routing intent, а не
-    пользовательской configuration и не persistent gap state.
+    пользовательской configuration и не persistent gap state; `None` означает отсутствие
+    активной availability-derived boundary, тогда как `0` означает активную boundary без
+    confirmed-live paths.
 16. Для одного Profile/routing-domain одновременно выполняется не более одной
     route-priority transaction; superseding availability state меняет только pending/latest
     desired state и не вмешивается в текущий move plan.
