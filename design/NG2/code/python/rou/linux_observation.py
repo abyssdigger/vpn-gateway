@@ -333,6 +333,16 @@ def _desired_rule_key(rule) -> tuple:
     )
 
 
+def _desired_terminal_rule_key(rule) -> tuple:
+    return (
+        rule.priority,
+        rule.source_ifname,
+        None,
+        None,
+        "unreachable",
+    )
+
+
 def _observed_rule_key(rule: ObservedRule) -> tuple:
     return (
         rule.priority,
@@ -424,6 +434,10 @@ def verify_linux_routing(
         _desired_rule_key(item)
         for item in desired.dispatch_rules
     }
+    if desired.terminal_rule is not None:
+        expected_rules.add(
+            _desired_terminal_rule_key(desired.terminal_rule)
+        )
     observed_owned_rules = {
         _observed_rule_key(item)
         for item in observed.rules
