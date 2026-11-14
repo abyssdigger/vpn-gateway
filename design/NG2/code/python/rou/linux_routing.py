@@ -5,6 +5,7 @@ from enum import Enum
 from ipaddress import IPv4Network
 
 from .interface_identity import InterfaceIdentity
+from .linux_route_priority import route_slots
 from .network_rules import EndpointKind, TrafficProtocol
 from .network_rules_composition import (
     ComposedNetworkRules,
@@ -320,7 +321,17 @@ def compile_linux_routing_desired(
             table_id = table_by_domain[domain_ref]
 
             for destination in domain.destinations:
-                for index, path in enumerate(domain.ordered_paths):
+                if domain.priority_prefix_length is None:
+                    slots = tuple(domain.ordered_paths)
+                else:
+                    slots = route_slots(
+                        domain.ordered_paths,
+                        domain.priority_prefix_length,
+                    )
+
+                for slot_index, path in enumerate(slots):
+                    if path is None:
+                        continue
                     routes.append(
                         LinuxRouteSpec(
                             domain=domain_ref,
@@ -328,7 +339,7 @@ def compile_linux_routing_desired(
                             destination=destination,
                             kind=LinuxRouteKind.UNICAST,
                             protocol=UNICAST_ROUTE_PROTOCOL,
-                            metric=_path_metric(index),
+                            metric=_path_metric(slot_index),
                             path=path,
                         )
                     )
