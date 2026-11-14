@@ -8,7 +8,9 @@
 Документ описывает события и Engines верхнего уровня VPN-GATE NG2. Внутренняя
 декомпозиция Managers и их Machinery рассматривается отдельными документами.
 
-Bootstrap/startup/shutdown пока находятся вне scope.
+Bootstrap/startup/shutdown находятся вне steady-state scope этого документа. Минимальная
+protective startup boundary для Linux network policy зафиксирована отдельно в
+`design/NG2/runtime-bootstrap.md`.
 
 ## 1. Основная петля
 
