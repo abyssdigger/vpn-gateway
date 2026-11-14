@@ -6,10 +6,16 @@
 
 ## Result
 
-**PASS.**
+**PASS for current apply/renew/dataplane behavior; generation-isolation evidence is
+incomplete pending stale conntrack-mark lifetime verification.**
 
-The backend now has real physical apply, exact renew and kernel dataplane evidence for the
+The backend has real physical apply, exact renew and kernel dataplane evidence for the
 ICMP ProbeRules plane. No second physical reconciler was introduced.
+
+A later whole-slice audit identified one additional kernel-mechanism question: marked ICMP
+conntrack state may outlive a single-shot probe and is not yet proven unable to cross a
+rules/interface generation transition if the tuple/identifier is reused. See finding A17
+in `NG2-2026-11-14-local-process-probe-executor-whole-slice-audit.md`.
 
 NG1 and RC* were used only as historical evidence/reference. No implementation was ported
 or modified from those code lines; all executable changes are in NG2.
@@ -197,6 +203,17 @@ NG2_LINUX_LOCAL_PROCESS_INTEGRATION=PASS
 
 Post-cleanup NG2 workflow at code commit `fadad395a25e55c85f0dd743f0eb3978eb8010cf`:
 unit PASS and full privileged Linux integration PASS. NG1 validation also PASS.
+
+## Additional generation evidence gate
+
+Userspace state invalidation and exact RPDB/nft generation verification are implemented,
+but conntrack-carried flow identity has its own lifetime.
+
+Before calling LOCAL_PROCESS generation isolation complete, a disposable kernel experiment
+must test stale marked ICMP conntrack entries across interface/rules generation replacement
+and deliberate tuple/identifier reuse.
+
+Do not introduce broad conntrack flushing without that evidence.
 
 ## Follow-up boundary
 
