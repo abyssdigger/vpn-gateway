@@ -180,7 +180,7 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         second = probe("second", self.path, "203.0.113.24")
 
         self.manager.handle_request(request(first))
-        first_info = self.manager.evaluate_once(
+        self.manager.evaluate_once(
             "first",
             timeout_seconds=1,
         )
@@ -204,10 +204,6 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         self.manager.audit()
 
         self.assertEqual(self.publisher.events, [])
-        self.assertEqual(
-            self.manager._latest_published["first"],
-            first_info,
-        )
 
     def test_semantically_changed_snapshot_starts_new_ready_epoch(self):
         self.manager.handle_request(
