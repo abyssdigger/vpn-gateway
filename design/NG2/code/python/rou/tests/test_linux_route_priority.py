@@ -1,3 +1,4 @@
+from itertools import permutations
 import unittest
 
 from rou.linux_route_priority import (
@@ -27,7 +28,7 @@ class RouteSlotsTests(unittest.TestCase):
 
 
 class RouteSlotPlannerTests(unittest.TestCase):
-    def assert_plan(self, current, desired, expected):
+    def assert_plan(self, current, desired, expected=None):
         moves = plan_route_slot_moves(current, desired)
         work = list(current)
         original = set(item for item in current if item is not None)
@@ -50,13 +51,14 @@ class RouteSlotPlannerTests(unittest.TestCase):
             )
 
         self.assertEqual(tuple(work), desired)
-        self.assertEqual(
-            tuple(
-                (move.path, move.source_slot, move.target_slot)
-                for move in moves
-            ),
-            expected,
-        )
+        if expected is not None:
+            self.assertEqual(
+                tuple(
+                    (move.path, move.source_slot, move.target_slot)
+                    for move in moves
+                ),
+                expected,
+            )
 
     def test_recovery_from_middle_dead_tail(self):
         self.assert_plan(
@@ -117,6 +119,49 @@ class RouteSlotPlannerTests(unittest.TestCase):
                 ("A", 4, 1),
             ),
         )
+
+    def test_all_four_path_layouts_converge_without_membership_loss(self):
+        paths = ("A", "B", "C", "D")
+        layouts = []
+        for order in permutations(paths):
+            for free in range(len(paths) + 1):
+                layouts.append(
+                    order[:free] + (None,) + order[free:]
+                )
+
+        for current in layouts:
+            for desired in layouts:
+                moves = plan_route_slot_moves(current, desired)
+                self.assertLessEqual(
+                    len(moves),
+                    2 * len(current),
+                    (current, desired, moves),
+                )
+
+                work = list(current)
+                for move in moves:
+                    self.assertIsNone(work[move.target_slot])
+                    self.assertEqual(work[move.source_slot], move.path)
+
+                    work[move.target_slot] = move.path
+                    present = [
+                        item for item in work
+                        if item is not None
+                    ]
+                    self.assertEqual(set(present), set(paths))
+                    self.assertEqual(len(present), len(paths) + 1)
+
+                    work[move.source_slot] = None
+                    self.assertEqual(
+                        set(
+                            item for item in work
+                            if item is not None
+                        ),
+                        set(paths),
+                    )
+                    self.assertEqual(work.count(None), 1)
+
+                self.assertEqual(tuple(work), desired)
 
     def test_noop(self):
         self.assertEqual(
