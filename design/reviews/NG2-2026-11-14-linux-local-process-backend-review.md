@@ -224,5 +224,6 @@ The earlier state-model evidence gate was satisfied and the follow-up is complet
 3. concrete `PayloadRulesState` and `ProbeRulesState` compared;
 4. common `RulesState` explicitly rejected because their domain semantics differ.
 
-The next real gate is the target confirmation of the single-shot Linux ICMP probe executor
-with the intended Debian 13 executable.
+The next real evidence gates are: (1) target confirmation of the single-shot Linux ICMP
+probe executor with the intended Debian 13 executable, and (2) focused stale-conntrack
+mark generation-lifetime verification.
