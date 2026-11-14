@@ -1,6 +1,6 @@
 # VPN-GATE NG2 Python reference
 
-Current status: routing/dispatch plus effective payload-filtering contract slice.
+Current status: executable NG2 payload semantic control-loop baseline.
 
 Implemented:
 
@@ -13,8 +13,6 @@ Implemented:
   - `get_last_state(owner)`;
   - idempotent `cleanup(owner)` is part of the contract;
 - explicit known/unknown Adapter state contract;
-- Adapter-internal `DesiredRulesByOwner` registry keyed strictly by caller object identity,
-  with explicit-lifetime strong ownership and no semantic owner names/priorities;
 - multidimensional `PayloadRulesState`:
   - knowledge;
   - convergence;
@@ -72,7 +70,7 @@ Not implemented yet:
 - richer predicate implication only where future use justifies it;
 - RuntimeStateManager Profile-state mapping;
 - Linux `NetworkRulesAdapter` implementation;
-- owner-composition backend materialization;
+- Adapter-internal owner registry/composition chosen together with the concrete backend;
 - Drivers and transition/materialization logic.
 
 Rootless tests:
