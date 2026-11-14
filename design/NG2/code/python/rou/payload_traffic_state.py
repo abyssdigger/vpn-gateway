@@ -10,7 +10,7 @@ from .payload_rules_state import Knowledge, PayloadRulesState
 @dataclass(frozen=True)
 class PayloadProfileTrafficState:
     profile_name: str
-    materialized_paths: tuple[InterfaceIdentity, ...] | None
+    observed_paths: tuple[InterfaceIdentity, ...] | None
 
     def __post_init__(self) -> None:
         if not self.profile_name:
@@ -28,12 +28,12 @@ class PayloadTrafficStateInfo:
             raise ValueError("duplicate profile in payload traffic state")
 
         if self.rules_state.knowledge is Knowledge.UNKNOWN:
-            if any(item.materialized_paths is not None for item in self.profiles):
+            if any(item.observed_paths is not None for item in self.profiles):
                 raise ValueError(
                     "unknown payload-rules knowledge must not claim current profile paths"
                 )
         else:
-            if any(item.materialized_paths is None for item in self.profiles):
+            if any(item.observed_paths is None for item in self.profiles):
                 raise ValueError(
                     "known payload-rules knowledge requires explicit profile path state"
                 )
