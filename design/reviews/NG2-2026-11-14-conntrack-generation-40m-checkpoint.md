@@ -86,6 +86,14 @@ Comparison from cycle baseline 900a8391172f93356f400e8a273a0e2b766e0587 shows no
 
 The latest executable artifact remains da5474f74fd993161f2212572bc80db111d926eb. Every subsequent change through the current pre-threshold head is documentation/review/checkpoint only; no Python or workflow file changed after the green EXP-026 run.
 
+## Pre-threshold closure validation
+
+- Executable experiment baseline is green and unchanged after da5474f74fd993161f2212572bc80db111d926eb.
+- EXP-025 is target-confirmed STALE-INHERITANCE.
+- EXP-026 is privileged-CI PASS; Debian 13 target result is the only external mechanism gate still pending.
+- No production conntrack remediation has been implemented before that target result.
+- Driver/Executor naming refactor is recorded but not started in this experiment cycle.
+
 ## Still open
 
 - Debian 13 EXP-026 target result. Reproduction from repository root:
