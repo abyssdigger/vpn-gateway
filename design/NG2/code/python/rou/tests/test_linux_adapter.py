@@ -194,6 +194,57 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
             reordered,
         )
 
+    def test_semantic_live_prefix_change_with_same_linux_state_is_verified_noop(self):
+        owner = object()
+        first = InterfaceIdentity("vpns00", 10)
+        second = InterfaceIdentity("vpns01", 11)
+        self.backend.interfaces = (first, second)
+        network = IPv4Network("10.0.0.0/8")
+        local = NetworkEndpoint.local_network()
+
+        def rules(prefix):
+            return NetworkRulesSpec(
+                routing_domains=(
+                    RoutingDomainSpec(
+                        "corp",
+                        (network,),
+                        (first, second),
+                        TerminalDisposition.DROP,
+                        confirmed_live_prefix_length=prefix,
+                    ),
+                ),
+                dispatch_rules=(
+                    DispatchRuleSpec(network, "corp", source=local),
+                ),
+                traffic_allows=tuple(
+                    TrafficAllowSpec(
+                        local,
+                        NetworkEndpoint.interface_path(identity),
+                        TrafficPredicate.always(),
+                    )
+                    for identity in (first, second)
+                ),
+            )
+
+        initial = rules(None)
+        managed_all_live = rules(2)
+
+        self.assertTrue(self.adapter.apply(owner, initial).success)
+        structural_count = len(self.backend.materialize_calls)
+        priority_count = len(self.backend.route_priority_calls)
+        verify_count = len(self.backend.verify_calls)
+
+        result = self.adapter.apply(owner, managed_all_live)
+
+        self.assertTrue(result.success, result.diagnostic)
+        self.assertEqual(len(self.backend.materialize_calls), structural_count)
+        self.assertEqual(len(self.backend.route_priority_calls), priority_count)
+        self.assertEqual(len(self.backend.verify_calls), verify_count + 1)
+        self.assertEqual(
+            self.adapter.get_last_state(owner).rules,
+            managed_all_live,
+        )
+
     def test_unavailable_first_candidate_reconciles_empty_committed_state(self):
         owner = object()
         missing = InterfaceIdentity("vpns00", 10)
