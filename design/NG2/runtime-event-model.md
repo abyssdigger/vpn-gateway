@@ -710,6 +710,12 @@ This is not an attempt scheduler. The eventual execution subsystem may emit only
 reply good-news and logical window boundaries. No `NO_REPLY` InfoEvent exists in the
 production contract.
 
+Activation starts the first windows and immediately sends once on every physical plane.
+When a later send deadline coincides with a window boundary, the boundary is emitted first
+and the send belongs to the next window. The execution source must serialize good-news and
+boundary publications for a generation; future EventEnvelope revision ordering preserves
+that order across asynchronous delivery.
+
 ```text
 valid generation-bound physical reply
         |
