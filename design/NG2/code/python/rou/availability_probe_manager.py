@@ -5,9 +5,11 @@ from typing import Protocol
 from .availability_probe_state import (
     AvailabilityProbeState,
     AvailabilityProbeStateInfo,
+    ProbeAttemptObservation,
     ProbeObservationGeneration,
 )
 from .network_rules import ActionResult, NetworkRulesAdapter, NetworkRulesSpec
+from .probe_attempt import ProbeDriver
 from .probe_rules import (
     AvailabilityProbeSetRequest,
     ProbeRulesCalculator,
@@ -39,12 +41,14 @@ class AvailabilityProbeManager:
         self,
         adapter: NetworkRulesAdapter,
         publisher: AvailabilityProbeStatePublisher,
+        driver: ProbeDriver,
         *,
         rules_calculator: ProbeRulesCalculator | None = None,
         state_calculator: ProbeRulesStateCalculator | None = None,
     ) -> None:
         self._adapter = adapter
         self._publisher = publisher
+        self._driver = driver
         self._rules_calculator = rules_calculator or ProbeRulesCalculator()
         self._state_calculator = (
             state_calculator or ProbeRulesStateCalculator()
@@ -90,6 +94,64 @@ class AvailabilityProbeManager:
         self._latest_rules_state = rules_state
         self._synchronize_generation(rules_state)
         self._publish_unknown_current(rules_state)
+
+    def attempt_once(
+        self,
+        probe_id: str,
+        *,
+        timeout_seconds: int,
+    ) -> ProbeAttemptObservation | None:
+        """Run one explicit attempt without choosing scheduling or verdict policy.
+
+        Returns a raw attempt observation only when both pre- and post-attempt fresh
+        rules observations belong to the same READY Manager epoch. A None result means
+        no attempt observation is valid for availability policy.
+        """
+
+        request = self._latest_request
+        desired = self._latest_desired
+        if request is None or desired is None:
+            raise ValueError("cannot run probe attempt before a desired probe set")
+
+        by_id = {
+            item.probe_id: item
+            for item in request.probes
+        }
+        if probe_id not in by_id:
+            raise ValueError(f"unknown active probe_id {probe_id!r}")
+
+        pre_state = self._audit_rules(desired)
+        self._latest_rules_state = pre_state
+        self._synchronize_generation(pre_state)
+        self._publish_unknown_current(pre_state)
+
+        generation = self._active_generation
+        if generation is None:
+            return None
+
+        result = self._driver.execute(
+            by_id[probe_id],
+            timeout_seconds=timeout_seconds,
+        )
+
+        self._adapter.renew_state(self)
+        post_state = self._current_rules_state(desired)
+        self._latest_rules_state = post_state
+
+        if not self._rules_ready(post_state):
+            self._invalidate_generation()
+            self._publish_unknown_current(post_state)
+            return None
+
+        if self._active_generation != generation:
+            self._publish_unknown_current(post_state)
+            return None
+
+        return ProbeAttemptObservation(
+            probe_id,
+            generation,
+            result,
+        )
 
     def audit(self) -> None:
         """Run one deterministic rules refresh/repair pass."""
