@@ -15,16 +15,14 @@ D = InterfaceIdentity("oc0", 13)
 
 
 class AvailabilityWindowPolicyTests(unittest.TestCase):
-    def test_minimal_policy_accepts_interval_failure_count_and_disable(self):
+    def test_minimal_policy_accepts_only_interval_and_failure_count(self):
         policy = AvailabilityWindowPolicy(
             interval_seconds=10,
             failure_intervals=3,
-            enabled=False,
         )
 
         self.assertEqual(policy.interval_seconds, 10)
         self.assertEqual(policy.failure_intervals, 3)
-        self.assertFalse(policy.enabled)
 
     def test_policy_rejects_invalid_values(self):
         for interval in (0, -1, float("inf"), float("nan"), True):
@@ -36,9 +34,6 @@ class AvailabilityWindowPolicyTests(unittest.TestCase):
             with self.subTest(failures=failures):
                 with self.assertRaises(ValueError):
                     AvailabilityWindowPolicy(10, failures)
-
-        with self.assertRaises(ValueError):
-            AvailabilityWindowPolicy(10, 1, enabled=1)
 
 
 class AvailabilityWindowStateTests(unittest.TestCase):

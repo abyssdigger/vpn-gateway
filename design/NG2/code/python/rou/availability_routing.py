@@ -17,7 +17,6 @@ class AvailabilityWindowPolicy:
 
     interval_seconds: float
     failure_intervals: int
-    enabled: bool = True
 
     def __post_init__(self) -> None:
         if (
@@ -36,10 +35,6 @@ class AvailabilityWindowPolicy:
             raise ValueError(
                 "failure_intervals must be a positive integer"
             )
-        if type(self.enabled) is not bool:
-            raise ValueError("enabled must be boolean")
-
-
 @dataclass
 class AvailabilityWindowState:
     """Routing-relevant evidence for one configured probe.

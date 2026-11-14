@@ -34,6 +34,7 @@ class AvailabilityProbeRequest:
     path: InterfaceIdentity
     target: IPv4Address
     mechanism: ProbeMechanism = ProbeMechanism.ICMP
+    enabled: bool = True
     policy: AvailabilityWindowPolicy | None = None
 
     def __post_init__(self) -> None:
@@ -45,6 +46,8 @@ class AvailabilityProbeRequest:
             raise ValueError("probe target must be an IPv4Address")
         if not isinstance(self.mechanism, ProbeMechanism):
             raise ValueError("probe mechanism must be a ProbeMechanism")
+        if type(self.enabled) is not bool:
+            raise ValueError("probe enabled must be boolean")
         if (
             self.policy is not None
             and not isinstance(self.policy, AvailabilityWindowPolicy)

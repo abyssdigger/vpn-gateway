@@ -205,6 +205,30 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
 
         self.assertEqual(self.publisher.events, [])
 
+    def test_disable_is_logical_only_and_invalidates_only_that_probe(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        self.manager.evaluate_once("primary", timeout_seconds=1)
+        generation = self.manager.observation_generation
+        apply_count = len(self.adapter.apply_owners)
+        self.publisher.events.clear()
+
+        disabled = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            enabled=False,
+        )
+        self.manager.handle_request(request(disabled))
+
+        self.assertEqual(self.manager.observation_generation, generation)
+        self.assertEqual(len(self.adapter.apply_owners), apply_count)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNKNOWN,
+        )
+
     def test_semantically_changed_snapshot_starts_new_ready_epoch(self):
         self.manager.handle_request(
             request(probe("primary", self.path, "203.0.113.24"))

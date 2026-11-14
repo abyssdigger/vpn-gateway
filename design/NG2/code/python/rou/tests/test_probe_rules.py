@@ -185,10 +185,10 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
+                    enabled=False,
                     policy=AvailabilityWindowPolicy(
                         interval_seconds=30,
                         failure_intervals=2,
-                        enabled=False,
                     ),
                 ),
             )
@@ -200,6 +200,38 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         self.assertEqual(
             ProbeRulesCalculator().calculate(first),
             ProbeRulesCalculator().calculate(changed),
+        )
+
+    def test_enabled_change_is_logical_but_not_physical_rules_change(self):
+        path = InterfaceIdentity("vpns00", 43)
+        target = IPv4Address("192.0.2.1")
+        enabled = AvailabilityProbeSetRequest(
+            (
+                AvailabilityProbeRequest(
+                    "probe",
+                    path,
+                    target,
+                    enabled=True,
+                ),
+            )
+        )
+        disabled = AvailabilityProbeSetRequest(
+            (
+                AvailabilityProbeRequest(
+                    "probe",
+                    path,
+                    target,
+                    enabled=False,
+                ),
+            )
+        )
+
+        self.assertFalse(
+            availability_probe_sets_semantically_equal(enabled, disabled)
+        )
+        self.assertEqual(
+            ProbeRulesCalculator().calculate(enabled),
+            ProbeRulesCalculator().calculate(disabled),
         )
 
     def test_duplicate_probe_id_is_rejected(self):
