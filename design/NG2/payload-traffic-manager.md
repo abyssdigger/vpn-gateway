@@ -801,14 +801,16 @@ ProbeRulesStateCalculator
 
 и собственный `ProbeRulesState`.
 
-ProbeRules semantic lower boundary теперь определена отдельно, но реальная
-`ProbeRulesState` всё ещё отсутствует: Linux local-process materialization ожидает
-target-confirmation EXP-024.
+ProbeRules semantic lower boundary, Linux LOCAL_PROCESS materialization and
+`ProbeRulesStateCalculator` теперь реализованы и наблюдаемы.
 
-После появления обеих **исполняемых и наблюдаемых** state-моделей обязателен отдельный
-review: если их оси и семантика окажутся принципиально одинаковыми, следует вынести общий
-тип состояния rules. До этого момента общий `RulesState` не вводится, чтобы не обобщать
-совпадение формы раньше доказанного совпадения предметной семантики.
+Обязательный comparison review двух state-моделей выполнен. Результат: общий
+`RulesState` **не вводится**, потому что предметная семантика различается. Payload
+divergence может быть доказанно SAFE/DEGRADED/ISOLATED, тогда как divergence probe rules
+делает availability evidence INVALID независимо от того, является ли permission delta
+restrictive или widening.
+
+Общим оставлен только generic `network_rules_semantically_equal()` helper.
 
 ## 10. Error semantics
 
@@ -937,7 +939,8 @@ NG1 planner.py
    RuntimeStateManager;
 2. audit/retry scheduling policy вокруг уже реализованного deterministic `audit()` pass;
 3. richer divergent predicate implication только там, где появится реальная необходимость;
-4. после реализации `ProbeRulesState` — review на предмет общего rules-state type;
+4. AvailabilityProbeManager execution/timing policy above the implemented probe
+   rules/state and single-shot executor;
 5. remaining runtime assembly above the implemented protective startup gate; forwarding
    closure до первого owner reconcile зафиксирован в `runtime-bootstrap.md`.
 
