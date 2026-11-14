@@ -17,6 +17,7 @@ from rou.linux_driver import (
     NetworkNamespaceLinuxRunner,
     SubprocessLinuxRunner,
 )
+from rou.network_rules import NetworkRulesSpec
 from rou.probe_rules import (
     AvailabilityProbeRequest,
     AvailabilityProbeSetRequest,
@@ -287,10 +288,7 @@ def main() -> int:
         # A reconcile for another owner must not remove the dedicated UID guard merely
         # because this owner's concrete bound generation is currently unrealizable.
         other_owner = object()
-        other = adapter.apply(other_owner, __import__(
-            "rou.network_rules",
-            fromlist=["NetworkRulesSpec"],
-        ).NetworkRulesSpec())
+        other = adapter.apply(other_owner, NetworkRulesSpec())
         if not other.success:
             raise RuntimeError(
                 "other-owner reconcile after probe generation loss failed: "
