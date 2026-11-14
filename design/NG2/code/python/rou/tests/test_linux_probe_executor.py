@@ -21,6 +21,7 @@ class FakeRunner:
         self.ping_stderr = ""
         self.group_range = "1 0"
         self.group_separator = " "
+        self.accept_group_write = True
 
     def run(self, argv, *, input_text=None, check=True):
         self.calls.append(argv)
@@ -35,7 +36,8 @@ class FakeRunner:
                 "",
             )
         if argv[:3] == ("sysctl", "-q", "-w"):
-            self.group_range = argv[-1].split("=", 1)[1]
+            if self.accept_group_write:
+                self.group_range = argv[-1].split("=", 1)[1]
             return CommandResult(0, "", "")
         if argv == ("sysctl", "-n", "net.ipv4.ping_group_range"):
             return CommandResult(
@@ -125,6 +127,16 @@ class LinuxIcmpProbeExecutorTests(unittest.TestCase):
         result = self.executor.execute(self.request, timeout_seconds=1)
 
         self.assertIs(result.outcome, ProbeAttemptOutcome.REPLY)
+
+
+    def test_unverified_ping_group_range_stops_before_ping(self):
+        self.runner.accept_group_write = False
+
+        result = self.executor.execute(self.request, timeout_seconds=1)
+
+        self.assertIs(result.outcome, ProbeAttemptOutcome.ERROR)
+        self.assertIn("ping_group_range", result.diagnostic)
+        self.assertFalse(any(call[0] == "setpriv" for call in self.runner.calls))
 
     def test_config_requires_shared_linux_identity_and_nonroot_gid(self):
         with self.assertRaises(ValueError):
