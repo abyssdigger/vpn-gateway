@@ -7,7 +7,7 @@ import re
 
 from .linux_driver import (
     LinuxCommandRunner,
-    LinuxNetworkDriver,
+    LinuxNetworkExecutor,
     NetworkNamespaceLinuxRunner,
 )
 
@@ -147,7 +147,7 @@ def _close_namespace_forwarding(
     host: LinuxCommandRunner,
 ) -> None:
     runner = NetworkNamespaceLinuxRunner(host, spec.namespace)
-    result = LinuxNetworkDriver(runner).close_forwarding_verified()
+    result = LinuxNetworkExecutor(runner).close_forwarding_verified()
     if not result.success:
         raise LinuxInstanceError(
             "cannot establish protective forwarding closure: "
