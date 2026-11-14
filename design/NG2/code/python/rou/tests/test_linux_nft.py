@@ -5,8 +5,12 @@ from rou.interface_identity import InterfaceIdentity
 from rou.linux_nft import (
     InterfaceRefKind,
     LinuxNftError,
+    NftTableObservation,
     compile_nft_filter_desired,
     compile_nft_nat_desired,
+    normalize_nft_text,
+    parse_nft_rule_comments,
+    verify_nft_table,
 )
 from rou.network_rules import (
     FlowInitiationAllowSpec,
@@ -257,6 +261,107 @@ class LinuxNftFilterTests(unittest.TestCase):
         )[1].split("}", 1)[0]
         self.assertNotIn("return", traffic_section)
 
+
+
+class LinuxNftObservationTests(unittest.TestCase):
+    def _desired(self):
+        path = _path("vpns00", 10)
+        traffic = TrafficAllowSpec(
+            LOCAL,
+            path,
+            TrafficPredicate.always(),
+        )
+        flow = FlowInitiationAllowSpec(
+            LOCAL,
+            path,
+            TrafficPredicate.always(),
+        )
+        return compile_nft_filter_desired(
+            compose_network_rules(
+                (_owned(1, traffic=(traffic,), flows=(flow,)),)
+            ),
+            local_interface="host0",
+        )
+
+    def test_normalizer_maps_live_interface_name_back_to_ifindex(self):
+        desired = self._desired()
+        observed_text = desired.definition.replace(
+            "oif 10",
+            'oif "vpns00"',
+        )
+
+        normalized = normalize_nft_text(
+            observed_text,
+            desired.interface_identities,
+        )
+
+        self.assertEqual(normalized, desired.canonical)
+
+    def test_parse_rule_comments_reads_json_marker_multiset(self):
+        desired = self._desired()
+        comments = [marker.comment for marker in desired.markers]
+        payload = {
+            "nftables": [
+                {"metainfo": {"json_schema_version": 1}},
+                *[
+                    {"rule": {"comment": comment}}
+                    for comment in reversed(comments)
+                ],
+            ]
+        }
+
+        parsed = parse_nft_rule_comments(__import__("json").dumps(payload))
+
+        self.assertEqual(parsed, tuple(sorted(comments)))
+
+    def test_exact_table_verification_requires_text_and_markers(self):
+        desired = self._desired()
+        observed = NftTableObservation(
+            canonical=desired.canonical,
+            comments=tuple(
+                sorted(marker.comment for marker in desired.markers)
+            ),
+        )
+
+        result = verify_nft_table(desired, observed)
+
+        self.assertTrue(result.ok, result.errors)
+
+    def test_marker_mismatch_fails_even_when_text_matches(self):
+        desired = self._desired()
+        observed = NftTableObservation(
+            canonical=desired.canonical,
+            comments=(),
+        )
+
+        result = verify_nft_table(desired, observed)
+
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("marker" in item for item in result.errors)
+        )
+
+    def test_same_name_multiple_generations_are_unrepresentable_together(self):
+        old = _path("vpns00", 10)
+        new = _path("vpns00", 11)
+        first = TrafficAllowSpec(
+            LOCAL,
+            old,
+            TrafficPredicate.always(),
+        )
+        second = TrafficAllowSpec(
+            LOCAL,
+            new,
+            TrafficPredicate.always(),
+        )
+
+        with self.assertRaises(LinuxNftError):
+            compile_nft_filter_desired(
+                compose_network_rules(
+                    (_owned(1, traffic=(first, second)),)
+                ),
+                local_interface="host0",
+            )
 
 
 class LinuxNftNatTests(unittest.TestCase):
