@@ -215,6 +215,52 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
         self.assertEqual(len(desired.route_slot_gaps), 1)
         self.assertEqual(desired.route_slot_gaps[0].metric, 30)
 
+    def test_empty_slot_planner_moves_only_boundary_when_order_is_unchanged(self):
+        a = InterfaceIdentity("patha", 40)
+        b = InterfaceIdentity("pathb", 41)
+        c = InterfaceIdentity("pathc", 42)
+
+        current = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        (a, b, c),
+                        priority_prefix_length=2,
+                    ),
+                )
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+        desired = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        (a, b, c),
+                        priority_prefix_length=1,
+                    ),
+                )
+            ),
+            current.allocation,
+            local_interface="host0",
+        )
+
+        moves = plan_linux_route_priority_moves(current, desired)
+
+        self.assertEqual(
+            [
+                (move.source.path, move.source.metric, move.target_metric)
+                for move in moves
+            ],
+            [(b, 20, 30)],
+        )
+
     def test_empty_slot_planner_recovers_path_from_dead_tail(self):
         a, b, v, g, d, e, j = tuple(
             InterfaceIdentity(name, 10 + index)
