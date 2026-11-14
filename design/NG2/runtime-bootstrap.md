@@ -54,9 +54,10 @@ close_forwarding_verified() -> LinuxDriverResult
 
 SUCCESS означает, что:
 
-- `net.ipv4.ip_forward=0` был установлен;
+- `net.ipv4.ip_forward=0` установлен;
+- `net.ipv6.conf.all.forwarding=0` и `net.ipv6.conf.default.forwarding=0` установлены;
 - после mutation выполнено новое наблюдение;
-- новое наблюдение подтвердило exact value `0`.
+- новое наблюдение подтвердило все три значения.
 
 FAILURE означает, что protective close не доказан. В этом случае bootstrap не возвращает
 рабочий Adapter.
