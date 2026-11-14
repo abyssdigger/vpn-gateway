@@ -117,6 +117,25 @@ This is broader than one probe path, but still narrow relative to namespace conn
 This breadth is likely acceptable and avoids per-plane mark/tuple allocation, but remains
 an explicit architecture decision rather than an automatic consequence of EXP-026.
 
+## Alignment with current ProbeRulesState scope
+
+The current ProbeRulesStateCalculator is deliberately owner-wide: any authoritative
+divergence invalidates availability evidence for the Manager's current rules generation as
+a whole.
+
+Therefore probe-class-wide conntrack cleanup is not broader than the current semantic
+evidence boundary:
+
+- a structural generation transition already makes current probe evidence non-authoritative;
+- in-flight probe attempts from that old generation may be discarded;
+- all probe-class conntrack entries are ephemeral measurement state, not payload service
+  state;
+- per-plane conntrack preservation would add allocation and transition complexity without
+  preserving any evidence that the current Manager is allowed to trust.
+
+If future AvailabilityProbeManager semantics become per-plane, cleanup granularity can be
+revisited together with that state-model change. It should not be introduced preemptively.
+
 ## Ownership requirement
 
 For mark-filtered cleanup to be safe, LinuxLocalProcessConfig.ct_mark must be exclusive to
