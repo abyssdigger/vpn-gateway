@@ -362,6 +362,8 @@ Profile directions
 Profile destinations
 Device traffic-policy references
 required payload forwarding intent
+per-Profile effective ordered_paths
+per-Profile transient confirmed_live_prefix_length
 ```
 
 Не содержит технических command sequences:
@@ -376,6 +378,10 @@ verification phases
 ```
 
 Все это принадлежит внутренней реализации PayloadTrafficManager и его Machinery.
+
+`confirmed_live_prefix_length` является derived runtime value из availability snapshot,
+не полем normalized user configuration. Оно сообщает только границу confirmed-live prefix;
+никакой EMPTY route/metric object в RequestEvent не существует.
 
 ### 8.5. PayloadTrafficStateInfo
 
