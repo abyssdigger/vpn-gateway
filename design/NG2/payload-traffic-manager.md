@@ -134,14 +134,18 @@ Request не содержит технической materialization information
 Manager хранит только явно значимое текущее состояние:
 
 ```text
-latest_request
 latest_desired_network_rules
 latest_published_payload_state
-local retry/audit scheduling state
+local retry/audit scheduling state   # when scheduler is implemented
 ```
 
-Допустим технологический cache, если он полностью восстанавливается из текущего request и
-свежего состояния Adapter.
+Исходный `PayloadTrafficStateRequest` после успешного Direct Calculator projection не
+хранится: его текущая управляющая семантика полностью представлена
+`latest_desired_network_rules`. Это исключает дублирование двух форм одного current
+intent.
+
+Допустим технологический cache, если он полностью восстанавливается из текущего desired
+ruleset и свежего состояния Adapter.
 
 Manager не хранит как собственную semantic history:
 
@@ -234,7 +238,7 @@ Operation failure сам по себе не является значением 
 
 ```text
 1. desired_rules = PayloadRulesCalculator.calculate(request)
-2. atomically accepts latest_request + latest_desired_network_rules
+2. accepts latest_desired_network_rules as the current managed intent
 3. NetworkRulesAdapter.apply(self, desired_rules)
 4. if apply failed: NetworkRulesAdapter.renewState(self)
 5. network_state = NetworkRulesAdapter.getLastState(self)
@@ -245,10 +249,10 @@ Operation failure сам по себе не является значением 
 ```
 
 Pure Calculator rejection happens before the request becomes current managed intent and
-before any Adapter mutation. Это предотвращает внутреннее состояние вида «новый request +
-старый desired ruleset». Valid RequestEvents ожидаются от доверенного RuntimeStateManager;
-invalid/unrepresentable input рассматривается как processing error, а не как частично
-принятый intent.
+before any Adapter mutation. Manager не хранит параллельно исходный request и его compiled
+form, поэтому между ними не может возникнуть внутренний drift. Valid RequestEvents
+ожидаются от доверенного RuntimeStateManager; invalid/unrepresentable input
+рассматривается как processing error, а не как частично принятый intent.
 
 Если `apply()` возвращает FAILURE, решение о дальнейшей реакции принадлежит Manager.
 
