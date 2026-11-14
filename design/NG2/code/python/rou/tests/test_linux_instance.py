@@ -1,4 +1,4 @@
-from ipaddress import IPv4Interface
+from ipaddress import IPv4Interface, IPv6Interface
 import unittest
 
 from rou.linux_instance import LinuxInstanceSpec
@@ -14,6 +14,15 @@ class LinuxInstanceSpecTests(unittest.TestCase):
         )
 
         self.assertEqual(spec.namespace, "vpn-gate-rou0")
+
+    def test_rejects_ipv6_interface_objects_even_if_called_directly(self):
+        with self.assertRaisesRegex(ValueError, "host address must be an IPv4"):
+            LinuxInstanceSpec(
+                namespace="rou0",
+                host_interface="rouvpn0",
+                host_address=IPv6Interface("2001:db8::1/126"),
+                inner_address=IPv6Interface("2001:db8::2/126"),
+            )
 
     def test_rejects_different_link_networks(self):
         with self.assertRaisesRegex(
