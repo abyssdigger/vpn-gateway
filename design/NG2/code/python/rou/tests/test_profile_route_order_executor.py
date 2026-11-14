@@ -46,12 +46,12 @@ class BlockingOperation:
 
 class ProfileRouteOrderExecutorTests(unittest.TestCase):
     def test_same_profile_execute_is_single_flight_until_operation_returns(self):
-        executor = ProfileRouteOrderExecutor("corp")
         operation = BlockingOperation()
+        executor = ProfileRouteOrderExecutor("corp", operation)
         target = _target("corp")
 
-        first = Thread(target=executor.execute, args=(target, operation))
-        second = Thread(target=executor.execute, args=(target, operation))
+        first = Thread(target=executor.execute, args=(target,))
+        second = Thread(target=executor.execute, args=(target,))
 
         first.start()
         self.assertTrue(operation.first_entered.wait(timeout=1))
@@ -86,16 +86,16 @@ class ProfileRouteOrderExecutorTests(unittest.TestCase):
             release.wait(timeout=2)
             return target.name
 
-        first = ProfileRouteOrderExecutor("a")
-        second = ProfileRouteOrderExecutor("b")
+        first = ProfileRouteOrderExecutor("a", first_operation)
+        second = ProfileRouteOrderExecutor("b", second_operation)
 
         first_thread = Thread(
             target=first.execute,
-            args=(_target("a"), first_operation),
+            args=(_target("a"),),
         )
         second_thread = Thread(
             target=second.execute,
-            args=(_target("b"), second_operation),
+            args=(_target("b"),),
         )
 
         first_thread.start()
@@ -112,10 +112,13 @@ class ProfileRouteOrderExecutorTests(unittest.TestCase):
         self.assertFalse(second_thread.is_alive())
 
     def test_rejects_target_for_another_profile(self):
-        executor = ProfileRouteOrderExecutor("a")
+        executor = ProfileRouteOrderExecutor(
+            "a",
+            lambda target: target,
+        )
 
         with self.assertRaisesRegex(ValueError, "does not match"):
-            executor.execute(_target("b"), lambda target: target)
+            executor.execute(_target("b"))
 
 
 if __name__ == "__main__":
