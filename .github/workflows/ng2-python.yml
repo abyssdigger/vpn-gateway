@@ -39,6 +39,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y iproute2 nftables iputils-ping conntrack
+      - name: NG2 selective probe-process isolation experiment
+        run: >-
+          sudo python3
+          design/NG2/code/python/rou/tests/integration_probe_process_isolation.py
       - name: NG2 Linux instance lifecycle integration
         env:
           PYTHONPATH: design/NG2/code/python
