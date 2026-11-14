@@ -1,3 +1,25 @@
+## 2026-11-14 — NG2 semantic-slice whole-code audit
+
+Completed a whole-code audit of the current NG2 semantic baseline with explicit component
+model and subject-domain isolation criteria:
+
+- removed unused retained PayloadTrafficStateRequest state from PayloadTrafficManager;
+- moved packet/predicate execution helpers out of the production NetworkRules contract and
+  into test-only code, leaving TrafficPredicate as declarative semantic AST;
+- removed the unused speculative DesiredRulesByOwner implementation and its tests; opaque
+  owner identity remains part of the Adapter API, while concrete owner storage/composition
+  will be chosen with the real Adapter backend;
+- corrected stale Manager/projector documentation and README status;
+- retained predicate boolean composition as justified payload-policy semantics rather than
+  backend syntax;
+- retained PayloadRulesState relation logic as payload-local until a real ProbeRulesState
+  model exists and can be compared;
+- confirmed EXP-012/017 boundaries remain intact and no Linux mutation mechanics leaked
+  above NetworkRulesAdapter;
+- internal review NG2-2026-11-14-semantic-slice-whole-code-audit.md passed.
+
+---
+
 ## 2026-11-14 — NG2 PayloadTrafficManager drift/audit reconcile
 
 Completed and reviewed one deterministic PayloadTrafficManager audit pass:
