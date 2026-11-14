@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from threading import Lock
 from typing import Protocol
 
 from .network_rules import ActionResult, NetworkRulesAdapter, NetworkRulesSpec
@@ -44,6 +45,7 @@ class PayloadTrafficManager:
         self._latest_desired: NetworkRulesSpec | None = None
         self._latest_published: PayloadTrafficStateInfo | None = None
 
+        self._serial_lock = Lock()
         self._reconciling = False
         self._pending_desired: NetworkRulesSpec | None = None
         self._audit_pending = False
@@ -51,70 +53,61 @@ class PayloadTrafficManager:
     def handle_request(self, request: PayloadTrafficStateRequest) -> None:
         """Handle one full desired payload snapshot.
 
-        A lower-domain reconcile is transactional from this Manager's perspective.
-        Superseding requests received re-entrantly while one reconcile is active are
-        coalesced as the next desired projection; they never interleave the active
-        Adapter call.
+        Exactly one reconcile executor drains this Manager's pending work. A
+        superseding request may replace pending desired state while the executor is
+        inside a lower-domain transaction, but it cannot enter that transaction.
         """
 
         desired = self._rules_calculator.calculate(request)
 
-        if self._reconciling:
+        with self._serial_lock:
             self._pending_desired = desired
-            return
+            if self._reconciling:
+                return
+            self._reconciling = True
 
-        self._run_serialized(initial_desired=desired)
+        self._drain_serialized_work()
 
     def audit(self) -> None:
         """Run one drift/reconcile pass for the current accepted intent."""
 
-        if self._latest_desired is None:
-            return
-
-        if self._reconciling:
+        with self._serial_lock:
+            if self._latest_desired is None and not self._reconciling:
+                return
             self._audit_pending = True
-            return
+            if self._reconciling:
+                return
+            self._reconciling = True
 
-        self._run_serialized(audit_requested=True)
+        self._drain_serialized_work()
 
-    def _run_serialized(
-        self,
-        *,
-        initial_desired: NetworkRulesSpec | None = None,
-        audit_requested: bool = False,
-    ) -> None:
-        self._reconciling = True
-        try:
-            next_desired = initial_desired
-            audit_due = audit_requested
+    def _drain_serialized_work(self) -> None:
+        while True:
+            desired: NetworkRulesSpec | None = None
+            run_audit = False
 
-            while next_desired is not None or audit_due:
-                if next_desired is not None:
-                    desired = next_desired
-                    next_desired = None
-
-                    # Accept the derived desired projection only after pure calculation
-                    # succeeds. Re-entrant requests can replace _pending_desired but
-                    # cannot alter this already-started reconcile.
-                    self._latest_desired = desired
-                    self._pending_desired = None
-
-                    info = self._apply_desired_and_observe(desired)
-                    self._publish_if_changed(info)
-                else:
-                    audit_due = False
-                    self._audit_pending = False
-                    self._audit_once()
-
+            with self._serial_lock:
                 if self._pending_desired is not None:
-                    next_desired = self._pending_desired
+                    desired = self._pending_desired
                     self._pending_desired = None
-
-                if self._audit_pending:
-                    audit_due = True
+                elif self._audit_pending:
+                    run_audit = True
                     self._audit_pending = False
-        finally:
-            self._reconciling = False
+                else:
+                    self._reconciling = False
+                    return
+
+            if desired is not None:
+                # Only this executor writes _latest_desired. Newer requests may
+                # replace _pending_desired concurrently, but this desired projection
+                # remains immutable for the active Adapter transaction.
+                self._latest_desired = desired
+                info = self._apply_desired_and_observe(desired)
+                self._publish_if_changed(info)
+                continue
+
+            if run_audit:
+                self._audit_once()
 
     def _audit_once(self) -> None:
         desired = self._latest_desired
