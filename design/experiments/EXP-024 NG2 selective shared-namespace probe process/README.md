@@ -100,3 +100,23 @@ before the mechanism is treated as final evidence.
 ## Artifact
 
 `design/NG2/code/python/rou/tests/integration_probe_process_isolation.py`
+
+
+## Attempt history
+
+### CI attempt 1 — packaged ping file-capability exec boundary
+
+The first GitHub runner attempt passed ordinary alternate-path traffic, then failed before
+the probe socket was created:
+
+```text
+PASS P1: unrelated local process remains on ordinary alt0 path
+setpriv: failed to execute ping: Operation not permitted
+```
+
+The runner's packaged `ping` carries a file-capability setup that cannot be executed after
+the process bounding set is emptied. This does not exercise nft `meta skuid`.
+
+The harness now copies the ping executable without extended attributes/file capabilities and
+executes that copy under the empty capability bounding set. This preserves the intended
+EXP-021 ping-socket model instead of relying on distribution packaging.
