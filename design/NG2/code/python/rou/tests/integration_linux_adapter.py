@@ -30,6 +30,7 @@ from ipaddress import IPv4Network
 
 NS = "vpng2-adapter-ci"
 DEST = IPv4Network("198.51.100.0/24")
+DEST2 = IPv4Network("203.0.113.0/24")
 
 
 def host(*argv: str, check: bool = True, input_text: str | None = None):
@@ -91,24 +92,27 @@ def identity(name: str) -> InterfaceIdentity:
     return InterfaceIdentity(item["ifname"], item["ifindex"])
 
 
-def spec(path_identity: InterfaceIdentity) -> NetworkRulesSpec:
+def spec(
+    path_identity: InterfaceIdentity,
+    destination_network: IPv4Network = DEST,
+) -> NetworkRulesSpec:
     local = NetworkEndpoint.local_network()
     path = NetworkEndpoint.interface_path(path_identity)
     destination = TrafficPredicate.match(
-        TrafficSelector(destination=DEST)
+        TrafficSelector(destination=destination_network)
     )
     return NetworkRulesSpec(
         routing_domains=(
             RoutingDomainSpec(
                 "corp",
-                (DEST,),
+                (destination_network,),
                 (path_identity,),
                 TerminalDisposition.DROP,
             ),
         ),
         dispatch_rules=(
             DispatchRuleSpec(
-                DEST,
+                destination_network,
                 "corp",
                 source=local,
             ),
@@ -119,7 +123,7 @@ def spec(path_identity: InterfaceIdentity) -> NetworkRulesSpec:
                 path,
                 local,
                 TrafficPredicate.match(
-                    TrafficSelector(source=DEST)
+                    TrafficSelector(source=destination_network)
                 ),
             ),
         ),
@@ -183,6 +187,7 @@ def main() -> int:
         local_interface="host0",
     )
     owner = object()
+    owner2 = object()
 
     try:
         old = identity("vpns00")
@@ -226,6 +231,16 @@ def main() -> int:
             raise RuntimeError("fresh exact renew failed after initial apply")
         print(f"PASS A: exact apply/verify ifindex={old.ifindex}")
 
+        wanted2 = spec(old, DEST2)
+        second_applied = adapter.apply(owner2, wanted2)
+        if not second_applied.success:
+            raise RuntimeError(
+                f"second owner apply failed: {second_applied.diagnostic}"
+            )
+        if adapter.get_last_state(owner2).rules != wanted2:
+            raise RuntimeError("second owner did not receive exact fresh state")
+        print("PASS A2: second owner shares generation with owner-scoped domain")
+
         # Same-name/new-ifindex must invalidate the old generation.
         host("ip", "-n", NS, "link", "del", "vpns00")
         host("ip", "-n", NS, "link", "add", "vpns00", "type", "dummy")
@@ -250,7 +265,31 @@ def main() -> int:
             raise RuntimeError(
                 f"fresh-generation apply failed: {repaired.diagnostic}"
             )
-        print("PASS C: fresh generation materialized and verified")
+
+        projected_second = adapter.get_last_state(owner2)
+        if (
+            projected_second.knowledge is not StateKnowledge.KNOWN
+            or projected_second.rules is None
+            or projected_second.rules.routing_domains[0].ordered_paths
+        ):
+            raise RuntimeError(
+                "stale second owner was not projected to KNOWN zero-path state: "
+                f"{projected_second}"
+            )
+
+        wanted2 = spec(new, DEST2)
+        second_repaired = adapter.apply(owner2, wanted2)
+        if not second_repaired.success:
+            raise RuntimeError(
+                "second owner fresh-generation apply failed: "
+                f"{second_repaired.diagnostic}"
+            )
+        if adapter.get_last_state(owner).rules != wanted:
+            raise RuntimeError("second owner update disturbed first owner")
+        print(
+            "PASS C: sequential multi-owner generation update converged "
+            "without deadlock"
+        )
 
         # Remove the normal route and prove renew detects it, then structural apply repairs.
         route = next(
@@ -289,20 +328,35 @@ def main() -> int:
 
         cleaned = adapter.cleanup(owner)
         if not cleaned.success:
-            raise RuntimeError(f"cleanup failed: {cleaned.diagnostic}")
+            raise RuntimeError(f"first owner cleanup failed: {cleaned.diagnostic}")
+
+        forward = host(
+            "ip", "netns", "exec", NS,
+            "sysctl", "-n", "net.ipv4.ip_forward"
+        ).stdout.strip()
+        if forward != "1":
+            raise RuntimeError(
+                "first owner cleanup did not preserve surviving owner forwarding"
+            )
+        if adapter.get_last_state(owner2).rules != wanted2:
+            raise RuntimeError("first owner cleanup disturbed surviving owner")
+
+        cleaned2 = adapter.cleanup(owner2)
+        if not cleaned2.success:
+            raise RuntimeError(f"second owner cleanup failed: {cleaned2.diagnostic}")
 
         forward = host(
             "ip", "netns", "exec", NS,
             "sysctl", "-n", "net.ipv4.ip_forward"
         ).stdout.strip()
         if forward != "0":
-            raise RuntimeError(f"cleanup left ip_forward={forward}")
+            raise RuntimeError(f"final cleanup left ip_forward={forward}")
 
         nft_tables = host(
             "ip", "netns", "exec", NS, "nft", "list", "tables"
         ).stdout
         if "vpng2_filter" in nft_tables or "vpng2_nat" in nft_tables:
-            raise RuntimeError("cleanup left owned nft table")
+            raise RuntimeError("final cleanup left owned nft table")
 
         stale_routes = [
             item for item in tagged_routes()
@@ -318,7 +372,10 @@ def main() -> int:
         if stale_rules:
             raise RuntimeError(f"cleanup left owned RPDB rules: {stale_rules}")
 
-        print("PASS E: cleanup removed owned physical state and closed forwarding")
+        print(
+            "PASS E: per-owner cleanup preserved survivor, final cleanup "
+            "removed owned state"
+        )
         print("NG2_LINUX_ADAPTER_INTEGRATION=PASS")
         return 0
     finally:
