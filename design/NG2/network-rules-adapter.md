@@ -146,7 +146,7 @@ mutation.
 ## 7. Namespace prerequisites
 
 The first production backend is deliberately IPv4-only. Before any structural generation
-may reopen IPv4 forwarding, the Adapter/Driver lower domain must materialize and freshly
+may reopen IPv4 forwarding, the Adapter/Executor lower domain must materialize and freshly
 verify these namespace prerequisites:
 
 - `net.ipv4.conf.all.rp_filter=0`;
@@ -240,10 +240,15 @@ ICMP probe shape: exact /32 echo-request outward and exact /32 echo-reply inward
 matching owner-scoped isolated dispatch plane. Broader predicates and other protocols fail
 closed pending separate evidence.
 
-This proves the selected routing/filter mechanism, but not yet the complete lifetime
-isolation of conntrack-carried flow identity across rules/interface generations. A focused
-stale conntrack-mark generation experiment remains mandatory before claiming that stronger
-generation property.
+EXP-025 target-confirmed that conntrack-carried probe identity is **not** intrinsically
+isolated by interface/rules generation: a marked ICMP entry survived same-name/new-ifindex
+replacement and a deliberately reused tuple inherited the stale ESTABLISHED mark.
+
+EXP-026 privileged CI proves that deleting only ICMP conntrack entries carrying the
+dedicated probe mark breaks that stale inheritance while preserving different-mark control
+state. Debian 13 target confirmation remains the external gate before adopting that cleanup
+as production structural convergence. Until then, complete LOCAL_PROCESS generation
+isolation is not claimed.
 
 ### 9.2. Source NAT
 
@@ -282,9 +287,9 @@ compiler-owned rule-marker multiset carrying owner and numeric generation data.
 
 A marker match alone is insufficient; canonical policy match alone is also insufficient.
 
-## 11. Structural Driver
+## 11. Structural Executor
 
-The first Driver deliberately implements only one safe structural path:
+The first Executor deliberately implements only one safe structural path:
 
     1. protectively close IPv4 and IPv6 forwarding
     2. materialize required namespace prerequisites (rp_filter / IPv6 disablement)
@@ -319,7 +324,7 @@ The current executable Adapter:
 - builds the fail-closed realisable owner projection;
 - composes owner-scoped semantic rules;
 - allocates and compiles concrete Linux desired state;
-- invokes the structural Driver;
+- invokes the structural Executor;
 - commits owner generation and routing allocation only on verified SUCCESS;
 - publishes per-owner last state as the freshly verified projected semantic rules;
 - keeps getLastState() I/O-free;
@@ -343,7 +348,7 @@ Current automated gates include:
   closed, alternate-route non-escape, target narrowing and same-name/new-ifindex drift.
 
 Existing EXP-012 and EXP-017 remain supporting architecture evidence; the NG2 live gates
-exercise the new compiler and Driver directly.
+exercise the new compiler and Executor directly.
 
 ## 14. Local-process semantic extension
 
@@ -385,4 +390,4 @@ Not part of the current structural baseline:
 - broader predicate-implication analysis above the backend;
 - non-Linux backend implementation.
 
-These require separate review units rather than expanding the first safe Driver implicitly.
+These require separate review units rather than expanding the first safe Executor implicitly.
