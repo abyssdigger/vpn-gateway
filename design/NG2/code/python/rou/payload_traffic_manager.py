@@ -97,17 +97,25 @@ class PayloadTrafficManager:
                     self._reconciling = False
                     return
 
-            if desired is not None:
-                # Only this executor writes _latest_desired. Newer requests may
-                # replace _pending_desired concurrently, but this desired projection
-                # remains immutable for the active Adapter transaction.
-                self._latest_desired = desired
-                info = self._apply_desired_and_observe(desired)
-                self._publish_if_changed(info)
-                continue
+            try:
+                if desired is not None:
+                    # Only this executor writes _latest_desired. Newer requests may
+                    # replace _pending_desired concurrently, but this desired projection
+                    # remains immutable for the active Adapter transaction.
+                    self._latest_desired = desired
+                    info = self._apply_desired_and_observe(desired)
+                    self._publish_if_changed(info)
+                    continue
 
-            if run_audit:
-                self._audit_once()
+                if run_audit:
+                    self._audit_once()
+            except Exception:
+                # Unexpected Machinery/publisher exceptions must not strand executor
+                # ownership forever. Pending latest-value work remains queued for the
+                # next event/audit trigger.
+                with self._serial_lock:
+                    self._reconciling = False
+                raise
 
     def _audit_once(self) -> None:
         desired = self._latest_desired
