@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import json
+import re
 
 from .interface_identity import InterfaceIdentity
 from .linux_local_process import LOCAL_PROCESS_CT_MARK, LOCAL_PROCESS_UID
@@ -200,6 +201,13 @@ def normalize_nft_text(
         line = line.replace(
             f"ct mark set 0x{LOCAL_PROCESS_CT_MARK:08x}",
             f"ct mark set 0x{LOCAL_PROCESS_CT_MARK:x}",
+        )
+        if "icmp type " in line:
+            line = line.replace("ip protocol icmp ", "")
+        line = re.sub(
+            r"\\b((?:[0-9]{1,3}\\.){3}[0-9]{1,3})/32\\b",
+            r"\\1",
+            line,
         )
 
         for identity in interface_identities:
