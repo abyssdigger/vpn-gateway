@@ -144,6 +144,7 @@ def spec(
 
 def priority_spec(
     ordered_paths: tuple[InterfaceIdentity, ...],
+    confirmed_live_prefix_length: int | None = None,
 ) -> NetworkRulesSpec:
     local = NetworkEndpoint.local_network()
     destination = TrafficPredicate.match(
@@ -176,6 +177,7 @@ def priority_spec(
                 (DEST3,),
                 ordered_paths,
                 TerminalDisposition.DROP,
+                confirmed_live_prefix_length=confirmed_live_prefix_length,
             ),
         ),
         dispatch_rules=(
@@ -488,6 +490,99 @@ def main() -> int:
         print(
             "PASS A3: pure path reorder used verified route-only fast path "
             "without forwarding or nft mutation"
+        )
+
+        # Availability demotion must move the free metric to the live/dead
+        # boundary without rebuilding forwarding or nft policy.
+        demoted = priority_spec(
+            (old, alternate),
+            confirmed_live_prefix_length=1,
+        )
+        host_runner.calls.clear()
+        demoted_result = adapter.apply(priority_owner, demoted)
+        if not demoted_result.success:
+            raise RuntimeError(
+                "priority-test demotion failed: "
+                f"{demoted_result.diagnostic}"
+            )
+
+        demotion_calls = [
+            argv[4:]
+            for argv in host_runner.calls
+            if argv[:4] == ("ip", "netns", "exec", NS)
+        ]
+        if any(
+            argv[:3] == ("sysctl", "-q", "-w")
+            and argv[-1].startswith("net.ipv4.ip_forward=")
+            for argv in demotion_calls
+        ):
+            raise RuntimeError(
+                "availability demotion touched forwarding barrier"
+            )
+        if any(
+            argv[:3] == ("nft", "-f", "-")
+            or argv[:3] == ("nft", "delete", "table")
+            for argv in demotion_calls
+        ):
+            raise RuntimeError("availability demotion mutated nft policy")
+
+        demoted_routes = {
+            item.get("metric"): item.get("dev")
+            for item in tagged_routes()
+            if item.get("protocol") in (202, "202")
+            and item.get("dst") == DEST3.with_prefixlen
+        }
+        if demoted_routes != {
+            10: "vpns00",
+            30: "vpns01",
+        }:
+            raise RuntimeError(
+                "availability demotion produced wrong live/dead gap: "
+                f"{demoted_routes}"
+            )
+
+        recovered = priority_spec(
+            (alternate, old),
+            confirmed_live_prefix_length=2,
+        )
+        host_runner.calls.clear()
+        recovered_result = adapter.apply(priority_owner, recovered)
+        if not recovered_result.success:
+            raise RuntimeError(
+                "priority-test recovery failed: "
+                f"{recovered_result.diagnostic}"
+            )
+
+        recovered_calls = [
+            argv[4:]
+            for argv in host_runner.calls
+            if argv[:4] == ("ip", "netns", "exec", NS)
+        ]
+        if any(
+            argv[:3] == ("sysctl", "-q", "-w")
+            and argv[-1].startswith("net.ipv4.ip_forward=")
+            for argv in recovered_calls
+        ):
+            raise RuntimeError(
+                "availability recovery touched forwarding barrier"
+            )
+        recovered_routes = {
+            item.get("metric"): item.get("dev")
+            for item in tagged_routes()
+            if item.get("protocol") in (202, "202")
+            and item.get("dst") == DEST3.with_prefixlen
+        }
+        if recovered_routes != {
+            10: "vpns01",
+            20: "vpns00",
+        }:
+            raise RuntimeError(
+                "availability recovery did not remove steady-state gap: "
+                f"{recovered_routes}"
+            )
+        print(
+            "PASS A4: availability demotion/recovery moved the implicit "
+            "live/dead gap through route-only transactions"
         )
 
         if not adapter.cleanup(priority_owner).success:
