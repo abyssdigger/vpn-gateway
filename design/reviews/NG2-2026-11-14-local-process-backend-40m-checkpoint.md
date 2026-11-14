@@ -35,8 +35,12 @@ Green implementation baseline 70ebd870b22b41782c0c6bef55ce18adfc0f25ef:
 - existing payload dataplane PASS.
 - NG1 validation PASS.
 
-Executor/config fixes through 717e1dd9cc448f2cfe9f5804e82081f674a730e9 also have NG2 and NG1 PASS.
-Last audit fixes after that require final CI confirmation at cycle closure.
+Latest green code/test baseline after closure audit is 9a95384b7b43121b2914e1df7b903c6da5e20518.
+It includes executor prerequisite fail-close and the internal RPDB non-root uid invariant; NG2 and NG1 are PASS.
+
+## Branch-scope integrity
+
+Comparison from pre-cycle baseline ec1ee1e056cd9cb112d94d7279c3072bf5d03ba5 shows 38 changed files and no NG1/RC implementation file. Changes are confined to NG2 plus the NG2 workflow/reviews. NG1/RC evidence was not used as a source tree for modification.
 
 ## Reviews
 
