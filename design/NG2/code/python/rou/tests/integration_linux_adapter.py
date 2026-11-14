@@ -431,9 +431,15 @@ def main() -> int:
             and argv[-1].startswith("net.ipv4.ip_forward=")
         ]
         if forwarding_writes:
+            route_mutations = [
+                argv
+                for argv in inner_calls
+                if argv[:2] == ("ip", "route")
+            ]
             raise RuntimeError(
                 "route-priority fast path touched forwarding barrier: "
-                f"{forwarding_writes}"
+                f"{forwarding_writes}; route mutations before/during fallback="
+                f"{route_mutations}"
             )
 
         route_adds = [
