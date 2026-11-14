@@ -260,9 +260,43 @@ attempt-oriented `attempt_once()/evaluate_once()`.
 single-shot `REPLY/NO_REPLY/ERROR` API is not promoted to the production semantic
 boundary: in particular, `NO_REPLY` must not become a routing event.
 
-The remaining execution-side unit is a production sender/receiver transport that emits
-generation-bound valid-reply good-news and supplies window-boundary triggers without
-reintroducing semantic attempt correlation.
+The production execution contract is now explicit and remains non-attempt-oriented.
+
+`ProbeExecutionPlanCalculator` projects the current enabled logical request plus READY
+`ProbeObservationGeneration` into:
+
+```text
+ProbeExecutionPlan
+    generation
+    physical planes:
+        mechanism
+        concrete InterfaceIdentity
+        target
+        send interval
+    logical windows:
+        probe_id
+        observation interval
+```
+
+Several logical probes that share one physical plane share transport sends. The physical
+send interval is the smallest interval requested by its enabled consumers. Logical window
+cadence remains per `probe_id`, so consumers with different `failure_intervals` or
+intervals do not share hysteresis state.
+
+Execution may report only two production facts back across this boundary:
+
+```text
+ProbeGoodNewsInfo
+ProbeWindowBoundaryInfo
+```
+
+There is deliberately no production `NO_REPLY` event. Absence of a reply acquires routing
+meaning only when `AvailabilityProbeManager` processes a logical window boundary.
+
+The current code stops at this semantic execution contract. Concrete long-lived
+sender/receiver machinery and its process/socket lifecycle remain the next lower
+implementation unit; it must consume the plan without restoring the diagnostic
+single-shot `ProbeAttemptResult` contract.
 
 ## 10. Linux technical identity
 
@@ -339,7 +373,7 @@ valid reply
 
 Remaining work is narrower:
 
-1. production sender/receiver transport and interval trigger ownership;
+1. concrete long-lived sender/receiver machinery implementing `ProbeExecutionPlan`;
 2. diagnostic publication of persistent local probing errors without changing routing
    safety;
 3. Event Delivery envelope revision/ordering implementation around the currently tested
