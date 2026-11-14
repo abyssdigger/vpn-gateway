@@ -5,6 +5,7 @@ from enum import Enum
 from ipaddress import IPv4Network
 
 from .interface_identity import InterfaceIdentity
+from .linux_route_priority import route_slots
 from .network_rules import EndpointKind, TrafficProtocol
 from .network_rules_composition import (
     ComposedNetworkRules,
@@ -321,15 +322,18 @@ def compile_linux_routing_desired(
 
             for destination in domain.destinations:
                 prefix_length = domain.confirmed_live_prefix_length
-                for index, path in enumerate(domain.ordered_paths):
-                    slot_index = index
-                    if (
-                        prefix_length is not None
-                        and prefix_length < len(domain.ordered_paths)
-                        and index >= prefix_length
-                    ):
-                        slot_index += 1
+                slots = (
+                    tuple(domain.ordered_paths)
+                    if prefix_length is None
+                    else route_slots(
+                        domain.ordered_paths,
+                        prefix_length,
+                    )
+                )
 
+                for slot_index, path in enumerate(slots):
+                    if path is None:
+                        continue
                     routes.append(
                         LinuxRouteSpec(
                             domain=domain_ref,
