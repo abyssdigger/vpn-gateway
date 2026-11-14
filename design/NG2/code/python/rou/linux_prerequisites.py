@@ -34,6 +34,18 @@ class LinuxNamespacePrerequisites:
         return tuple(expected)
 
     @property
+    def observation_commands(
+        self,
+    ) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        return tuple(
+            (
+                key,
+                ("sysctl", "-n", key.replace(".", "/", 3)),
+            )
+            for key, _expected in self.expected_sysctls
+        )
+
+    @property
     def apply_commands(self) -> tuple[tuple[str, ...], ...]:
         commands: list[tuple[str, ...]] = [
             ("sysctl", "-q", "-w", "net/ipv4/conf/all/rp_filter=0"),
