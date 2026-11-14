@@ -175,6 +175,8 @@ semantics:
 
 ```text
 execute(target)
+    -> fresh authoritative Adapter state
+    -> merge only this Profile priority into that committed/observed base
     -> lower-domain apply
     -> materialize / verify / commit
     -> completed result
@@ -290,7 +292,8 @@ NAT, terminal policy и прочая payload semantics; меняются тол�
 
 ```text
 ProfileRouteOrderExecutor(profile).execute(target_domain)
-    -> merge only this Profile priority into latest desired
+    -> obtain fresh authoritative Adapter state
+    -> merge only this Profile priority into that completed base
     -> NetworkRulesAdapter.apply(self, merged_desired)
     -> if apply failed: renewState(self)
     -> getLastState(self)
@@ -299,7 +302,10 @@ ProfileRouteOrderExecutor(profile).execute(target_domain)
 ```
 
 Если один full snapshot меняет priority у нескольких Profiles, это несколько законченных
-Profile transactions, а не один общий move-plan.
+Profile transactions, а не один общий move-plan. Если ранняя Profile transaction вернула
+FAILURE, следующий Profile не наследует её незакоммиченный desired: базой снова служит
+authoritative Adapter state. Сам полный snapshot остается current desired intent и может
+быть дожат обычным audit/reconcile.
 
 **Broader structural diff** использует aggregate path:
 
