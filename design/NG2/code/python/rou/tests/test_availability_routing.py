@@ -99,6 +99,24 @@ class EffectivePathOrderTests(unittest.TestCase):
             current,
         )
 
+    def test_probing_never_removes_the_only_eligible_path(self):
+        self.assertEqual(
+            calculate_effective_path_order(
+                (A,),
+                (A,),
+                frozenset(),
+            ),
+            (A,),
+        )
+        self.assertEqual(
+            calculate_effective_path_order(
+                (A,),
+                (A,),
+                frozenset((A,)),
+            ),
+            (A,),
+        )
+
     def test_live_paths_bubble_in_configured_priority(self):
         self.assertEqual(
             calculate_effective_path_order(
