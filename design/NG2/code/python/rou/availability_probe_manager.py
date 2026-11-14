@@ -4,6 +4,7 @@ from ipaddress import IPv4Address
 from typing import Protocol
 
 from .availability_routing import AvailabilityWindowState
+from .interface_identity import InterfaceIdentity
 from .availability_probe_state import (
     AvailabilityProbeState,
     AvailabilityProbeStateInfo,
@@ -34,9 +35,9 @@ class AvailabilityProbeManager:
     """Own the active-probe rules plane and its authoritative readiness epoch.
 
     Probe execution is intentionally not a synchronous dependency of this Manager.
-    Production evidence arrives through the good-news/window model that is integrated
-    separately.  This class currently owns only the already-proven NetworkRules lifecycle,
-    generation invalidation and publication invalidation boundary.
+    Production evidence uses a generation-bound good-news/window model. The Manager owns
+    the proven NetworkRules lifecycle, evidence-window state, generation invalidation and
+    current probe-state publication.
     """
 
     def __init__(
@@ -114,7 +115,7 @@ class AvailabilityProbeManager:
 
     def note_good_news(
         self,
-        path,
+        path: InterfaceIdentity,
         target: IPv4Address,
         generation: ProbeObservationGeneration,
         *,
@@ -128,6 +129,8 @@ class AvailabilityProbeManager:
 
         if self._active_generation is None or generation != self._active_generation:
             return 0
+        if not isinstance(path, InterfaceIdentity):
+            raise ValueError("good-news path must be an InterfaceIdentity")
         if not isinstance(target, IPv4Address):
             raise ValueError("good-news target must be an IPv4Address")
         if not isinstance(mechanism, ProbeMechanism):
@@ -359,6 +362,7 @@ class AvailabilityProbeManager:
             if self._latest_published.get(probe_id) != info:
                 self._publisher.publish(info)
             self._latest_published.pop(probe_id, None)
+            self._window_states.pop(probe_id, None)
 
     def _publish_unknown_current(
         self,
