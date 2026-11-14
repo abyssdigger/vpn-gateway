@@ -148,6 +148,39 @@ class LinuxObservationParserTests(unittest.TestCase):
             IPv4Network("0.0.0.0/0"),
         )
 
+    def test_parse_lookup_all_normalizes_to_default_prefix(self):
+        parsed = parse_rule_json(
+            json.dumps(
+                [
+                    {
+                        "priority": 1,
+                        "iif": "host0",
+                        "table": 1,
+                    }
+                ]
+            )
+        )
+
+        self.assertEqual(
+            parsed[0].destination,
+            IPv4Network("0.0.0.0/0"),
+        )
+
+    def test_parse_terminal_all_keeps_no_destination(self):
+        parsed = parse_rule_json(
+            json.dumps(
+                [
+                    {
+                        "priority": 2,
+                        "iif": "host0",
+                        "action": "unreachable",
+                    }
+                ]
+            )
+        )
+
+        self.assertIsNone(parsed[0].destination)
+
     def test_parse_rule_json_combines_dst_and_dstlen(self):
         parsed = parse_rule_json(
             json.dumps(
