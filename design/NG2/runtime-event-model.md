@@ -691,6 +691,25 @@ InterfaceObservationAgent
 
 ### 12.2. Availability evidence changes
 
+Before good-news can exist, AvailabilityProbeManager exposes generation-bound execution
+demand derived from its current READY epoch:
+
+```text
+AvailabilityProbeSetRequest + ProbeObservationGeneration
+        |
+        v
+ProbeExecutionPlanCalculator
+        |
+        v
+ProbeExecutionPlan
+    physical send cadence per deduplicated plane
+    logical window cadence per probe_id
+```
+
+This is not an attempt scheduler. The eventual execution subsystem may emit only valid
+reply good-news and logical window boundaries. No `NO_REPLY` InfoEvent exists in the
+production contract.
+
 ```text
 valid generation-bound physical reply
         |
@@ -829,7 +848,8 @@ RuntimeStateManager
 
 Следующие отдельные units:
 
-1. production probe sender/receiver transport + ownership interval triggers;
+1. concrete production probe sender/receiver machinery for the now-explicit
+   `ProbeExecutionPlan` contract;
 2. PublicationManager и его Machinery;
 3. точные remaining state/reason codes;
 4. Event Delivery Environment implementation с epoch/revision ordering;
