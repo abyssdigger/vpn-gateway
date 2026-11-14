@@ -10,9 +10,11 @@ from .linux_nft import (
     NAT_TABLE,
     NftFilterDesired,
     NftNatDesired,
+    NftTableIdentity,
     NftTableObservation,
     normalize_nft_text,
     parse_nft_rule_comments,
+    parse_nft_tables,
     verify_nft_table,
 )
 from .linux_observation import (
@@ -91,6 +93,7 @@ class LinuxNetworkObservation:
     routing: LinuxRoutingObservation
     filter: NftTableObservation | None
     nat: NftTableObservation | None
+    nft_tables: tuple[NftTableIdentity, ...]
 
 
 @dataclass(frozen=True)
@@ -149,6 +152,22 @@ def verify_linux_network(
                 desired.nat,
                 observed.nat,
             ).errors
+        )
+
+    expected_tables = set()
+    if desired.filter is not None:
+        expected_tables.add(
+            NftTableIdentity(desired.filter.family, desired.filter.table)
+        )
+    if desired.nat is not None:
+        expected_tables.add(
+            NftTableIdentity(desired.nat.family, desired.nat.table)
+        )
+    actual_tables = set(observed.nft_tables)
+    if actual_tables != expected_tables:
+        errors.append(
+            "nft table inventory differs: expected "
+            f"{sorted(expected_tables)!r}, observed {sorted(actual_tables)!r}"
         )
 
     return LinuxNetworkVerification(
@@ -215,6 +234,11 @@ class LinuxNetworkDriver:
                 f"{forward_text!r}"
             )
 
+        nft_tables = parse_nft_tables(
+            self._runner.run(
+                ("nft", "-j", "list", "tables")
+            ).stdout
+        )
         nft_filter = self._observe_nft_table(
             desired.filter,
             fallback_table=FILTER_TABLE,
@@ -242,6 +266,7 @@ class LinuxNetworkDriver:
             ),
             filter=nft_filter,
             nat=nft_nat,
+            nft_tables=nft_tables,
         )
 
     def verify_current(
@@ -333,6 +358,33 @@ class LinuxNetworkDriver:
                     )
                 )
 
+            expected_nft = set()
+            if desired.filter is not None:
+                expected_nft.add(
+                    NftTableIdentity(
+                        desired.filter.family,
+                        desired.filter.table,
+                    )
+                )
+            if desired.nat is not None:
+                expected_nft.add(
+                    NftTableIdentity(
+                        desired.nat.family,
+                        desired.nat.table,
+                    )
+                )
+            for table in before.nft_tables:
+                if table not in expected_nft:
+                    self._runner.run(
+                        (
+                            "nft",
+                            "delete",
+                            "table",
+                            table.family,
+                            table.name,
+                        )
+                    )
+
             self._replace_nft_table(
                 desired.nat,
                 fallback_table=NAT_TABLE,
@@ -413,6 +465,18 @@ class LinuxNetworkDriver:
                     observed.nat,
                 ).errors
             )
+
+        expected_tables = set()
+        if desired.filter is not None:
+            expected_tables.add(
+                NftTableIdentity(desired.filter.family, desired.filter.table)
+            )
+        if desired.nat is not None:
+            expected_tables.add(
+                NftTableIdentity(desired.nat.family, desired.nat.table)
+            )
+        if set(observed.nft_tables) != expected_tables:
+            errors.append("nft table inventory differs in closed state")
 
         return LinuxNetworkVerification(
             not errors,
