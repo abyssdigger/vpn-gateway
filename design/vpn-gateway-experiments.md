@@ -1,23 +1,34 @@
-## EXP-027 — NG2 route-priority bubble
+## EXP-027 — NG2 route-priority bubble / persistent EMPTY
 
 **Статус:** COMPLETE — PASS  
-**Architecture baseline:** NG2 minimal availability routing model  
-**Тип:** Linux FIB / fixed-metric route-slot replacement  
+**Architecture baseline:** NG2 availability priority with persistent EMPTY route slot  
+**Тип:** Linux FIB / one-empty-slot permutation  
 **Design:** [EXP-027 README](experiments/EXP-027%20NG2%20route%20priority%20bubble/README.md)  
 **Result:** [EXP-027 result](experiments/EXP-027%20NG2%20route%20priority%20bubble/EXP-027-result.md)
 
-Подтверждено в privileged CI для обычного prefix и `default`:
+Revised production strategy подтверждена в privileged CI для обычного prefix и `default`.
+
+Steady state:
 
 ```text
-A B C D
-B B C D
-B C C D
-B C A D
+N eligible paths + one EMPTY metric slot
 ```
 
-`ip route replace` заменяет fixed-metric slot, не удаляя тот же interface на другом
-metric. Terminal blackhole сохраняется. Это разрешает узкий route-priority fast path без
-staging table; broader changes по-прежнему идут через structural fail-closed rebuild.
+Elementary move:
+
+```text
+add duplicate into EMPTY
+delete old copy
+```
+
+На add phase присутствует полный eligible set плюс ровно один duplicate; после delete
+старый metric становится новым EMPTY. Ни один eligible path не вытесняется из FIB.
+
+Проверены recovery `ABGD.VEJ -> ABVGD.EJ`, обратная demotion и крайний случай
+`ABGDEJ.V -> ABVGDEJ.`. Terminal blackhole сохраняется.
+
+Ранний PASS с `ip route replace` остается валидным kernel evidence, но top-down replace
+superseded как production transition strategy.
 
 ---
 
