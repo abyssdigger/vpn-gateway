@@ -4,7 +4,13 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .linux_adapter import LinuxNetworkBackend, LinuxNetworkRulesAdapter
-from .linux_driver import LinuxDriverResult
+from .linux_driver import (
+    LinuxCommandRunner,
+    LinuxDriverResult,
+    LinuxNetworkDriver,
+    NetworkNamespaceLinuxRunner,
+    SubprocessLinuxRunner,
+)
 
 
 class LinuxRuntimeBootstrapBackend(LinuxNetworkBackend, Protocol):
@@ -45,4 +51,23 @@ def bootstrap_linux_network_rules_adapter(
             backend,
             local_interface=local_interface,
         ),
+    )
+
+
+def bootstrap_linux_network_rules_adapter_in_namespace(
+    namespace: str,
+    *,
+    local_interface: str,
+    host_runner: LinuxCommandRunner | None = None,
+) -> LinuxRuntimeBootstrapResult:
+    """Bootstrap the Adapter inside one pre-existing named network namespace."""
+
+    namespace_runner = NetworkNamespaceLinuxRunner(
+        host_runner or SubprocessLinuxRunner(),
+        namespace,
+    )
+    driver = LinuxNetworkDriver(namespace_runner)
+    return bootstrap_linux_network_rules_adapter(
+        driver,
+        local_interface=local_interface,
     )
