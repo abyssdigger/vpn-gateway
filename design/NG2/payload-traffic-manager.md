@@ -790,27 +790,34 @@ Calculator не имеет права выводить `SAFE`, `DEGRADED` или
 Поэтому новое разрешение может быть `UNSAFE`, даже если другой defect одновременно мешает
 пакету реально пройти.
 
-### 9.5. Future common state-type review
+### 9.5. Shared convergence base
 
-Для `AvailabilityProbeManager` ожидается симметричная пара:
+Повторный comparison review после availability de-complexification показал, что первые две
+оси действительно принципиально одинаковы для всех владельцев NetworkRules:
 
 ```text
-ProbeRulesCalculator
-ProbeRulesStateCalculator
+StateKnowledge
+RulesConvergence
+    MATCHED | DIVERGED | UNKNOWN
 ```
 
-и собственный `ProbeRulesState`.
+Они вынесены в общий `NetworkRulesConvergenceState` и вычисляются общим
+`assess_network_rules_convergence()`.
 
-ProbeRules semantic lower boundary, Linux LOCAL_PROCESS materialization and
-`ProbeRulesStateCalculator` теперь реализованы и наблюдаемы.
+Отдельный `ProbeRulesState` удален: его прежний `Usability` не нес самостоятельной
+информации и полностью выводился из convergence
+(`MATCHED -> READY`, `DIVERGED -> INVALID`).
 
-Обязательный comparison review двух state-моделей выполнен. Результат: общий
-`RulesState` **не вводится**, потому что предметная семантика различается. Payload
-divergence может быть доказанно SAFE/DEGRADED/ISOLATED, тогда как divergence probe rules
-делает availability evidence INVALID независимо от того, является ли permission delta
-restrictive или widening.
+Полный общий `RulesState` при этом **не вводится**. Payload сохраняет предметные
+дополнительные оси `Safety` и `Service`, потому что только payload domain требуется
+различать safe restriction, permission widening, degraded/isolated service и неизвестную
+семантику divergence.
 
-Общим оставлен только generic `network_rules_semantically_equal()` helper.
+Probe Manager для разрешения evidence достаточно общего условия:
+
+```text
+StateKnowledge.KNOWN + RulesConvergence.MATCHED
+```
 
 ## 10. Error semantics
 
