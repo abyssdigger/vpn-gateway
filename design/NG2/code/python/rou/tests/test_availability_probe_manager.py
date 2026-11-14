@@ -338,6 +338,193 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             self.publisher.events[-1].reason,
         )
 
+    def test_good_news_immediately_publishes_reachable(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        matched = self.manager.note_good_news(
+            self.path,
+            primary.target,
+            generation,
+        )
+
+        self.assertEqual(matched, 1)
+        self.assertEqual(len(self.publisher.events), 1)
+        info = self.publisher.events[0]
+        self.assertEqual(info.probe_id, "primary")
+        self.assertIs(info.state, AvailabilityProbeState.REACHABLE)
+        self.assertEqual(info.observation_generation, generation)
+
+    def test_no_good_news_uses_failure_interval_hysteresis(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        self.assertTrue(self.manager.close_interval("primary", generation))
+        self.assertEqual(self.publisher.events, [])
+        self.assertTrue(self.manager.close_interval("primary", generation))
+        self.assertEqual(self.publisher.events, [])
+
+        self.assertTrue(self.manager.close_interval("primary", generation))
+
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNREACHABLE,
+        )
+        self.assertEqual(
+            self.publisher.events[0].observation_generation,
+            generation,
+        )
+
+    def test_good_news_resets_negative_integral(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        self.manager.note_good_news(
+            self.path,
+            primary.target,
+            generation,
+        )
+        self.publisher.events.clear()
+
+        self.manager.close_interval("primary", generation)
+        self.manager.close_interval("primary", generation)
+        self.assertEqual(self.publisher.events, [])
+
+        self.manager.note_good_news(
+            self.path,
+            primary.target,
+            generation,
+        )
+        self.assertEqual(self.publisher.events, [])
+
+        self.manager.close_interval("primary", generation)
+        self.manager.close_interval("primary", generation)
+        self.assertEqual(self.publisher.events, [])
+        self.manager.close_interval("primary", generation)
+
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNREACHABLE,
+        )
+
+    def test_shared_physical_good_news_fans_out_to_enabled_consumers(self):
+        first = probe("first", self.path, "203.0.113.24")
+        second = probe("second", self.path, "203.0.113.24")
+        self.manager.handle_request(request(first, second))
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        matched = self.manager.note_good_news(
+            self.path,
+            first.target,
+            generation,
+        )
+
+        self.assertEqual(matched, 2)
+        self.assertEqual(
+            {
+                (item.probe_id, item.state)
+                for item in self.publisher.events
+            },
+            {
+                ("first", AvailabilityProbeState.REACHABLE),
+                ("second", AvailabilityProbeState.REACHABLE),
+            },
+        )
+
+    def test_stale_generation_good_news_and_boundary_are_ignored(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        stale = self.manager.observation_generation
+
+        changed = probe("primary", self.path, "203.0.113.25")
+        self.manager.handle_request(request(changed))
+        current = self.manager.observation_generation
+        self.assertNotEqual(stale, current)
+        self.publisher.events.clear()
+
+        self.assertEqual(
+            self.manager.note_good_news(
+                self.path,
+                primary.target,
+                stale,
+            ),
+            0,
+        )
+        self.assertFalse(
+            self.manager.close_interval("primary", stale)
+        )
+        self.assertEqual(self.publisher.events, [])
+
+    def test_logical_policy_change_resets_window_without_changing_rules_epoch(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.manager.note_good_news(
+            self.path,
+            primary.target,
+            generation,
+        )
+        self.manager.close_interval("primary", generation)
+
+        changed = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            policy=AvailabilityWindowPolicy(10, 2),
+        )
+        self.publisher.events.clear()
+        self.manager.handle_request(request(changed))
+
+        self.assertEqual(self.manager.observation_generation, generation)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNKNOWN,
+        )
+
+        self.publisher.events.clear()
+        self.manager.close_interval("primary", generation)
+        self.assertEqual(self.publisher.events, [])
+        self.manager.close_interval("primary", generation)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNREACHABLE,
+        )
+
+    def test_disabled_shared_consumer_does_not_receive_good_news(self):
+        first = probe("first", self.path, "203.0.113.24")
+        second = probe("second", self.path, "203.0.113.24")
+        first_disabled = AvailabilityProbeRequest(
+            first.probe_id,
+            first.path,
+            first.target,
+            enabled=False,
+            policy=first.policy,
+        )
+        self.manager.handle_request(request(first_disabled, second))
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        matched = self.manager.note_good_news(
+            self.path,
+            second.target,
+            generation,
+        )
+
+        self.assertEqual(matched, 1)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertEqual(self.publisher.events[0].probe_id, "second")
+
     def test_audit_before_first_request_is_noop(self):
         self.manager.audit()
 
