@@ -264,11 +264,11 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
                 Knowledge.KNOWN,
                 Convergence.DIVERGED,
                 Safety.SAFE,
-                Service.DEGRADED,
+                Service.UNKNOWN,
             ),
         )
 
-    def test_removed_allow_is_provably_safe_degradation(self):
+    def test_removed_allow_is_provably_safe_restriction(self):
         second = InterfaceIdentity("vpns01", 11)
         desired = NetworkRulesSpec(
             routing_domains=(
@@ -297,7 +297,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
         state = self.calc.calculate(desired, observed)
 
         self.assertIs(state.safety, Safety.SAFE)
-        self.assertIs(state.service, Service.DEGRADED)
+        self.assertIs(state.service, Service.UNKNOWN)
 
     def test_reordered_paths_are_not_assumed_restrictive(self):
         backup = InterfaceIdentity("vpns01", 11)
