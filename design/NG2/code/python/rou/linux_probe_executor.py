@@ -25,6 +25,10 @@ class ProbeAttemptResult:
     diagnostic: str | None = None
 
     def __post_init__(self) -> None:
+        if not isinstance(self.outcome, ProbeAttemptOutcome):
+            raise LinuxProbeExecutorError(
+                "probe attempt outcome must be ProbeAttemptOutcome"
+            )
         if self.outcome is ProbeAttemptOutcome.ERROR:
             if not self.diagnostic:
                 raise LinuxProbeExecutorError(
@@ -51,7 +55,10 @@ class LinuxIcmpProbeExecutorConfig:
             raise LinuxProbeExecutorError(
                 "probe gid must be a non-root 32-bit gid other than UINT32_MAX"
             )
-        if not isinstance(self.ping_path, str) or not self.ping_path.startswith("/"):
+        if (
+            not isinstance(self.ping_path, str)
+            or not self.ping_path.startswith("/")
+        ):
             raise LinuxProbeExecutorError(
                 "probe ping executable path must be absolute"
             )
