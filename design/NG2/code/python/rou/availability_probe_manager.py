@@ -199,14 +199,14 @@ class AvailabilityProbeManager:
             info = AvailabilityProbeStateInfo(
                 probe_id,
                 AvailabilityProbeState.REACHABLE,
-                reason="diagnostic probe reply received",
+                reason="probe reply received",
                 observation_generation=observation.observation_generation,
             )
         elif observation.result.outcome is ProbeAttemptOutcome.NO_REPLY:
             info = AvailabilityProbeStateInfo(
                 probe_id,
                 AvailabilityProbeState.UNREACHABLE,
-                reason="diagnostic probe attempt received no reply",
+                reason="probe attempt received no reply",
                 observation_generation=observation.observation_generation,
             )
         else:
@@ -214,7 +214,7 @@ class AvailabilityProbeManager:
                 probe_id,
                 AvailabilityProbeState.UNKNOWN,
                 reason=(
-                    "local diagnostic probe execution error: "
+                    "local probe execution error: "
                     f"{observation.result.diagnostic}"
                 ),
             )
