@@ -15,6 +15,10 @@ from rou.probe_rules import (
     AvailabilityProbeRequest,
     AvailabilityProbeSetRequest,
 )
+from rou.probe_transport import (
+    ProbeGoodNewsInfo,
+    ProbeWindowBoundaryInfo,
+)
 
 
 class RecordingPublisher:
@@ -336,6 +340,61 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         self.assertIn(
             "no authoritative probe evidence",
             self.publisher.events[-1].reason,
+        )
+
+    def test_ready_generation_exposes_non_attempt_execution_plan(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+
+        plan = self.manager.execution_plan
+
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan.generation, self.manager.observation_generation)
+        self.assertEqual(len(plan.planes), 1)
+        self.assertEqual(plan.planes[0].path, self.path)
+        self.assertEqual(plan.windows[0].probe_id, "primary")
+
+    def test_no_ready_generation_exposes_no_execution_plan(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        disabled = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            enabled=False,
+            policy=primary.policy,
+        )
+
+        self.manager.handle_request(request(disabled))
+
+        self.assertIsNone(self.manager.execution_plan)
+
+    def test_generation_bound_execution_events_use_existing_evidence_logic(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        matched = self.manager.handle_good_news(
+            ProbeGoodNewsInfo(
+                primary.mechanism,
+                primary.path,
+                primary.target,
+                generation,
+            )
+        )
+        closed = self.manager.handle_window_boundary(
+            ProbeWindowBoundaryInfo(
+                primary.probe_id,
+                generation,
+            )
+        )
+
+        self.assertEqual(matched, 1)
+        self.assertTrue(closed)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.REACHABLE,
         )
 
     def test_good_news_immediately_publishes_reachable(self):
