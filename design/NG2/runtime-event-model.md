@@ -274,22 +274,36 @@ Calculators.
 
 Определяет полный набор probes, которые runtime сейчас требует поддерживать.
 
-Первый исполнимый normalized machinery contract для ICMP:
+Текущий normalized machinery contract для ICMP:
 
 ```text
 probe_id
 ICMP mechanism
 concrete InterfaceIdentity
 IPv4 target
+optional per-probe AvailabilityProbePolicy
+    interval_seconds
+    retry_interval_seconds
+    timeout_seconds
+    failure_threshold
+    recovery_threshold
 ```
 
 `probe_id` остается logical correlation identity верхнего availability domain. Чистый
 `ProbeRulesCalculator` дедуплицирует network plane по физическому
-`(mechanism, InterfaceIdentity, target)`.
+`(mechanism, InterfaceIdentity, target)` и не включает timing policy в physical
+`NetworkRulesSpec`.
 
-Это не user-facing config grammar. Timing/hysteresis и semantic Profile/Device correlation
-остаются выше ProbeRulesCalculator. Будущие mechanisms добавляют свои normalized параметры
-отдельным review unit.
+Timing/hysteresis относится к logical probe и исполняется AvailabilityProbeManager.
+Два logical probes могут использовать один physical probe plane и иметь разные policy.
+
+`policy=None` означает отсутствие автономного cadence для данного normalized request;
+явный `evaluate_once()` остается допустим. RuntimeStateManager/его Calculator позже
+должен выдавать policy для probes, которые должны исполняться автоматически.
+
+Это не user-facing config grammar. Разбор и defaulting пользовательской timing policy
+остаются выше AvailabilityProbeManager. Будущие mechanisms добавляют свои normalized
+параметры отдельным review unit.
 
 Новая revision заменяет предыдущий desired set.
 
