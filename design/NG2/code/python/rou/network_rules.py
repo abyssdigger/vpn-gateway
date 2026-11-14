@@ -65,6 +65,7 @@ class RoutingDomainSpec:
     destinations: tuple[IPv4Network, ...]
     ordered_paths: tuple[InterfaceIdentity, ...]
     terminal_disposition: TerminalDisposition
+    priority_prefix_length: int | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -77,6 +78,15 @@ class RoutingDomainSpec:
             raise NetworkRulesError(
                 f"routing domain {self.name!r} contains duplicate paths"
             )
+        if self.priority_prefix_length is not None:
+            if type(self.priority_prefix_length) is not int:
+                raise NetworkRulesError(
+                    "routing-domain priority prefix length must be an integer"
+                )
+            if not 0 <= self.priority_prefix_length <= len(self.ordered_paths):
+                raise NetworkRulesError(
+                    "routing-domain priority prefix length is out of range"
+                )
 
 
 class TrafficProtocol(str, Enum):
