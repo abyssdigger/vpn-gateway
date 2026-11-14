@@ -105,6 +105,9 @@ Not implemented yet:
 - richer interface-origin dispatch;
 - incremental transition optimizer, only after a separate review/evidence unit.
 
+Next implementation boundary: runtime/bootstrap assembly around the reviewed structural
+Linux Adapter. Incremental transition optimization remains deferred.
+
 Rootless tests:
 
 ```sh
