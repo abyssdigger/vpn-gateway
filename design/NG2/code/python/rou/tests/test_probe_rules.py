@@ -5,7 +5,6 @@ from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     EndpointKind,
     IcmpType,
-    PredicateKind,
     TrafficProtocol,
 )
 from rou.probe_rules import (
@@ -60,9 +59,12 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         )
 
         self.assertEqual(len(rules.flow_initiation_allows), 1)
+        initiation = rules.flow_initiation_allows[0]
+        self.assertIs(initiation.source.kind, EndpointKind.LOCAL_PROCESS)
+        self.assertEqual(initiation.destination.interface, path)
         self.assertEqual(
-            rules.flow_initiation_allows[0],
-            rules.flow_initiation_allows[0],
+            initiation.predicate.selector.icmp_types,
+            (IcmpType.ECHO_REQUEST,),
         )
         self.assertEqual(rules.source_nat, ())
 
