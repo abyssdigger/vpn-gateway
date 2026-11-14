@@ -656,7 +656,7 @@ AvailabilityProbeStateInfo
 - retry counters;
 - probe socket mechanics;
 - relay worker internals;
-- Driver APIs;
+- Executor/Driver/Runner APIs;
 - Adapter internal topology;
 - metric allocator implementation.
 
