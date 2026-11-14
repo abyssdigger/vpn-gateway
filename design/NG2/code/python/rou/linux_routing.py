@@ -494,23 +494,16 @@ def compile_linux_routing_desired(
             table_id = table_by_domain[domain_ref]
 
             for destination in domain.destinations:
-                gap_index = domain.priority_prefix_length
-                if gap_index is not None:
-                    route_slot_gaps.append(
-                        LinuxRouteSlotGapSpec(
-                            domain=domain_ref,
-                            table_id=table_id,
-                            destination=destination,
-                            metric=_path_metric(gap_index),
-                        )
+                route_slot_gaps.append(
+                    LinuxRouteSlotGapSpec(
+                        domain=domain_ref,
+                        table_id=table_id,
+                        destination=destination,
+                        metric=_path_metric(len(domain.ordered_paths)),
                     )
+                )
 
                 for index, path in enumerate(domain.ordered_paths):
-                    slot_index = (
-                        index
-                        if gap_index is None or index < gap_index
-                        else index + 1
-                    )
                     routes.append(
                         LinuxRouteSpec(
                             domain=domain_ref,
@@ -518,7 +511,7 @@ def compile_linux_routing_desired(
                             destination=destination,
                             kind=LinuxRouteKind.UNICAST,
                             protocol=UNICAST_ROUTE_PROTOCOL,
-                            metric=_path_metric(slot_index),
+                            metric=_path_metric(index),
                             path=path,
                         )
                     )
