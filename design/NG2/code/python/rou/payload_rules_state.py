@@ -8,21 +8,15 @@ from .network_rules import (
     NetworkRulesState,
     PredicateKind,
     RoutingDomainSpec,
+    RulesConvergence,
     StateKnowledge,
-    network_rules_semantically_equal,
     TrafficPredicate,
+    assess_network_rules_convergence,
 )
 
 
-class Knowledge(str, Enum):
-    KNOWN = "known"
-    UNKNOWN = "unknown"
-
-
-class Convergence(str, Enum):
-    MATCHED = "matched"
-    DIVERGED = "diverged"
-    UNKNOWN = "unknown"
+Knowledge = StateKnowledge
+Convergence = RulesConvergence
 
 
 class Safety(str, Enum):
@@ -73,14 +67,6 @@ class PayloadRulesState:
             and self.convergence is not Convergence.DIVERGED
         ):
             raise ValueError("unsafe payload rules must be divergent")
-
-
-def _authoritative(observed: NetworkRulesState) -> bool:
-    return (
-        observed.knowledge is StateKnowledge.KNOWN
-        and observed.fresh
-        and observed.rules is not None
-    )
 
 
 def _isolated(rules: NetworkRulesSpec) -> bool:
@@ -216,7 +202,8 @@ class PayloadRulesStateCalculator:
         desired: NetworkRulesSpec,
         observed: NetworkRulesState,
     ) -> PayloadRulesState:
-        if not _authoritative(observed):
+        base = assess_network_rules_convergence(desired, observed)
+        if base.knowledge is StateKnowledge.UNKNOWN:
             return PayloadRulesState(
                 knowledge=Knowledge.UNKNOWN,
                 convergence=Convergence.UNKNOWN,
@@ -227,7 +214,7 @@ class PayloadRulesStateCalculator:
         assert observed.rules is not None
         actual = observed.rules
 
-        if network_rules_semantically_equal(actual, desired):
+        if base.convergence is RulesConvergence.MATCHED:
             return PayloadRulesState(
                 knowledge=Knowledge.KNOWN,
                 convergence=Convergence.MATCHED,

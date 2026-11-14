@@ -10,7 +10,11 @@ from .availability_probe_state import (
 from .network_rules import (
     ActionResult,
     NetworkRulesAdapter,
+    NetworkRulesConvergenceState,
     NetworkRulesSpec,
+    RulesConvergence,
+    StateKnowledge,
+    assess_network_rules_convergence,
     network_rules_semantically_equal,
 )
 from .probe_rules import (
@@ -18,15 +22,6 @@ from .probe_rules import (
     ProbeRulesCalculator,
     availability_probe_sets_semantically_equal,
 )
-from .probe_rules_state import (
-    Convergence,
-    Knowledge,
-    ProbeRulesState,
-    ProbeRulesStateCalculator,
-    Usability,
-)
-
-
 class AvailabilityProbeStatePublisher(Protocol):
     def publish(self, info: AvailabilityProbeStateInfo) -> None:
         ...
@@ -47,14 +42,10 @@ class AvailabilityProbeManager:
         publisher: AvailabilityProbeStatePublisher,
         *,
         rules_calculator: ProbeRulesCalculator | None = None,
-        state_calculator: ProbeRulesStateCalculator | None = None,
     ) -> None:
         self._adapter = adapter
         self._publisher = publisher
         self._rules_calculator = rules_calculator or ProbeRulesCalculator()
-        self._state_calculator = (
-            state_calculator or ProbeRulesStateCalculator()
-        )
 
         self._latest_request: AvailabilityProbeSetRequest | None = None
         self._latest_desired: NetworkRulesSpec | None = None
@@ -136,7 +127,7 @@ class AvailabilityProbeManager:
     def _audit_rules(
         self,
         desired: NetworkRulesSpec,
-    ) -> ProbeRulesState:
+    ) -> NetworkRulesConvergenceState:
         self._adapter.renew_state(self)
         rules_state = self._current_rules_state(desired)
 
@@ -149,7 +140,7 @@ class AvailabilityProbeManager:
     def _apply_desired_and_observe(
         self,
         desired: NetworkRulesSpec,
-    ) -> ProbeRulesState:
+    ) -> NetworkRulesConvergenceState:
         action = self._adapter.apply(self, desired)
         if not action.success:
             self._adapter.renew_state(self)
@@ -158,16 +149,15 @@ class AvailabilityProbeManager:
     def _current_rules_state(
         self,
         desired: NetworkRulesSpec,
-    ) -> ProbeRulesState:
+    ) -> NetworkRulesConvergenceState:
         observed = self._adapter.get_last_state(self)
-        return self._state_calculator.calculate(desired, observed)
+        return assess_network_rules_convergence(desired, observed)
 
     @staticmethod
-    def _rules_ready(state: ProbeRulesState) -> bool:
+    def _rules_ready(state: NetworkRulesConvergenceState) -> bool:
         return (
-            state.knowledge is Knowledge.KNOWN
-            and state.convergence is Convergence.MATCHED
-            and state.usability is Usability.READY
+            state.knowledge is StateKnowledge.KNOWN
+            and state.convergence is RulesConvergence.MATCHED
         )
 
     def _synchronize_generation(self, state: ProbeRulesState) -> None:
