@@ -131,13 +131,21 @@ Request не содержит технической materialization information
 
 ### 3.3. Internal current state
 
-Manager хранит только явно значимое текущее состояние:
+Manager хранит только явно значимое текущее состояние и минимальное состояние
+сериализации:
 
 ```text
 latest_desired_network_rules
 latest_published_payload_state
-local retry/audit scheduling state   # when scheduler is implemented
+
+single reconcile executor ownership
+latest pending desired projection
+pending audit flag
 ```
+
+Состояние сериализации является техническим состоянием Manager, а не semantic history
+маршрутов. Оно существует только для гарантии, что две materialization transaction одного
+PayloadTrafficManager не выполняются одновременно.
 
 Исходный `PayloadTrafficStateRequest` после успешного Direct Calculator projection не
 хранится: его текущая управляющая семантика полностью представлена
@@ -234,25 +242,63 @@ Operation failure сам по себе не является значением 
 
 ### 3.5. Request handling
 
-При новой request revision Manager:
+При новой request revision сначала выполняется pure projection:
 
 ```text
-1. desired_rules = PayloadRulesCalculator.calculate(request)
-2. accepts latest_desired_network_rules as the current managed intent
-3. NetworkRulesAdapter.apply(self, desired_rules)
-4. if apply failed: NetworkRulesAdapter.renewState(self)
-5. network_state = NetworkRulesAdapter.getLastState(self)
-6. PayloadRulesStateCalculator.calculate(desired_rules, network_state)
-7. project PayloadTrafficStateInfo
-8. publish only if semantic InfoEvent payload changed
-9. schedule retry/audit later if current state does not satisfy request
+desired_rules = PayloadRulesCalculator.calculate(request)
 ```
 
-Pure Calculator rejection happens before the request becomes current managed intent and
-before any Adapter mutation. Manager не хранит параллельно исходный request и его compiled
-form, поэтому между ними не может возникнуть внутренний drift. Valid RequestEvents
-ожидаются от доверенного RuntimeStateManager; invalid/unrepresentable input
-рассматривается как processing error, а не как частично принятый intent.
+После этого действует единый serial reconcile executor.
+
+Если executor свободен, он становится владельцем очереди и начинает materialization.
+Если transaction уже выполняется, новая revision **не** входит в текущий Adapter call:
+она только заменяет `latest pending desired`.
+
+```text
+active desired A
+    |
+    +--> NetworkRulesAdapter.apply(A)  # immutable call
+
+while A is active:
+    request B -> pending B
+    request C -> pending C             # B coalesced away
+
+A completed
+    |
+    v
+apply(C)
+```
+
+Очередь защищена коротким mutex, но mutex не удерживается во время Calculator/Adapter I/O.
+Поэтому:
+
+- re-entrant Event Delivery не создает deadlock;
+- concurrent delivery из нескольких threads не запускает второй executor;
+- current Adapter transaction остается неизменной;
+- промежуточные superseded desired snapshots не materialized;
+- audit также сериализуется тем же executor и выполняется после более нового pending
+  desired.
+
+Один reconcile pass:
+
+```text
+1. accepts selected desired_rules as latest_desired_network_rules
+2. NetworkRulesAdapter.apply(self, desired_rules)
+3. if apply failed: NetworkRulesAdapter.renewState(self)
+4. network_state = NetworkRulesAdapter.getLastState(self)
+5. PayloadRulesStateCalculator.calculate(desired_rules, network_state)
+6. project PayloadTrafficStateInfo
+7. publish only if semantic InfoEvent payload changed
+8. drain latest pending desired / pending audit
+```
+
+Pure Calculator rejection happens before request попадает в pending/current managed intent
+и до любой Adapter mutation. Manager не хранит параллельно исходный request и его compiled
+form, поэтому между ними не может возникнуть внутренний drift.
+
+Valid RequestEvents ожидаются от доверенного RuntimeStateManager;
+invalid/unrepresentable input рассматривается как processing error, а не как частично
+принятый intent.
 
 Если `apply()` возвращает FAILURE, решение о дальнейшей реакции принадлежит Manager.
 
@@ -954,9 +1000,12 @@ NG1 planner.py
     пользовательской configuration и не persistent gap state; `None` означает отсутствие
     активной availability-derived boundary, тогда как `0` означает активную boundary без
     confirmed-live paths.
-16. Для одного Profile/routing-domain одновременно выполняется не более одной
-    route-priority transaction; superseding availability state меняет только pending/latest
-    desired state и не вмешивается в текущий move plan.
+16. Для одного PayloadTrafficManager одновременно существует ровно один reconcile
+    executor. Внутри него route-priority move plan каждого routing-domain immutable до
+    завершения Adapter call; superseding availability state меняет только latest pending
+    desired state и не вмешивается в текущую transaction.
+17. Re-entrant и concurrent RequestEvent delivery не создают второй payload materializer:
+    очередь/ownership executor защищены отдельно от длительного Adapter I/O.
 
 ## 14. Пока открыто
 
