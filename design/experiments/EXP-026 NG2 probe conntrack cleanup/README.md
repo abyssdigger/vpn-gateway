@@ -1,6 +1,6 @@
 # EXP-026 — probe-class conntrack cleanup boundary
 
-**Status:** READY FOR CI/TARGET
+**Status:** PRELIMINARY PASS on privileged GitHub Linux CI; Debian 13 target confirmation required
 **Architecture baseline:** EXP-025 target-confirmed STALE-INHERITANCE
 **Type:** disposable-netns kernel/mechanism experiment
 
@@ -85,6 +85,26 @@ architecture must still decide whether invalidating all in-flight probe-class fl
 probe generation change is acceptable.
 
 FAIL means another generation primitive is required.
+
+## CI result
+
+Privileged GitHub Linux CI produced:
+
+```text
+PASS K1: two probe-mark entries and one different-mark control entry exist
+PASS K2: mark-filtered delete removed probe class and preserved different-mark control state
+PASS K3: cleaned fixed-id probe uses NEW+mark-set after generation replacement old=14 new=16
+PASS K4: different-mark control conntrack state remains usable
+EXP_026_PROBE_CLASS_CLEANUP=PASS
+```
+
+The delete command removed exactly the two ICMP entries carrying probe mark 38 (0x26).
+The control entry carrying mark 119 (0x77) remained present and usable.
+
+After concrete vpn0 replacement, the cleaned fixed identifier took the NEW+mark-set path,
+which closes the stale-inheritance mechanism demonstrated by EXP-025 for that probe class.
+
+Debian 13 target confirmation is still required before architecture adoption.
 
 ## Requirements
 
