@@ -5,7 +5,6 @@ from enum import Enum
 from ipaddress import IPv4Network
 
 from .interface_identity import InterfaceIdentity
-from .linux_local_process import LOCAL_PROCESS_UID
 from .network_rules import EndpointKind, TrafficProtocol
 from .network_rules_composition import (
     ComposedNetworkRules,
@@ -279,6 +278,12 @@ def project_linux_routing_allocation(
     return LinuxRoutingAllocationState(tuple(out))
 
 
+def _missing_local_process_uid() -> int:
+    raise LinuxRoutingError(
+        "LOCAL_PROCESS routing requires configured Linux local-process uid"
+    )
+
+
 def _path_metric(index: int) -> int:
     metric = FIRST_PATH_METRIC + index * PATH_METRIC_STEP
     if metric >= TERMINAL_METRIC:
@@ -294,7 +299,7 @@ def compile_linux_routing_desired(
     committed: LinuxRoutingAllocationState,
     *,
     local_interface: str,
-    local_process_uid: int = LOCAL_PROCESS_UID,
+    local_process_uid: int | None = None,
 ) -> LinuxRoutingDesired:
     """Compile owner-composed semantic routing into Linux routing intent."""
 
@@ -380,7 +385,11 @@ def compile_linux_routing_desired(
             dispatch.append(
                 LinuxDispatchRuleSpec(
                     **common,
-                    local_process_uid=local_process_uid,
+                    local_process_uid=(
+                        local_process_uid
+                        if local_process_uid is not None
+                        else _missing_local_process_uid()
+                    ),
                     protocol=rule.protocol,
                     bound_output=rule.bound_output.interface,
                 )
