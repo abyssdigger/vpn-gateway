@@ -1,9 +1,13 @@
 # VPN-GATE NG2 Python reference
 
-Current status: executable NG2 payload semantic control-loop baseline.
+Current status: executable NG2 payload semantic control loop plus reviewed structural
+Linux NetworkRulesAdapter baseline.
 
-Whole-slice review: **PASS** — see
+Semantic whole-slice review: **PASS** —
 `design/reviews/NG2-2026-11-14-semantic-slice-whole-code-audit.md`.
+
+Linux Adapter focused review: **PASS** —
+`design/reviews/NG2-2026-11-14-linux-network-rules-adapter-review.md`.
 
 Implemented:
 
@@ -47,6 +51,27 @@ Implemented:
   - successful repair can suppress transient drift history while failed/recovered states
     publish real current-state transitions;
   - shutdown delegates idempotent Adapter cleanup for the same owner identity;
+- concrete structural Linux `NetworkRulesAdapter`:
+  - monotonic opaque owner tokens and owner-scoped logical routing domains;
+  - staged owner generations committed only after verified physical success;
+  - fail-closed projection of absent concrete interface generations;
+  - owner-safe filtering composition: NEW flow permissions preserve owner provenance;
+  - deterministic Linux table/RPDB/metric allocation with protocol 201/202 ownership tags;
+  - per-domain terminal blackhole plus final host-ingress RPDB unreachable guard;
+  - numeric-ifindex nft filtering and source NAT;
+  - exact route/RPDB/nft/sysctl verification;
+  - exact nft table inventory ownership in the dedicated ROU namespace;
+  - full structural rebuild behind `ip_forward=0`;
+  - best-effort protective close on mutation failure;
+  - idempotent per-owner cleanup preserving surviving owners;
+- privileged Linux integration gates:
+  - exact apply/renew/cleanup;
+  - same-name/new-ifindex detection;
+  - sequential multi-owner generation transition;
+  - route and foreign-nft drift repair;
+  - real `/0` routing domain;
+  - live OUTBOUND/BIDIRECTIONAL conntrack behavior;
+  - live `EGRESS_ADDRESS` MASQUERADE;
 - zero-path routing domain as semantic `DROP` fail-close intent;
 - allow-only filtering contract:
   - `traffic_allows` describes effective byte-level permission;
@@ -72,9 +97,10 @@ Not implemented yet:
 
 - richer predicate implication only where future use justifies it;
 - RuntimeStateManager Profile-state mapping;
-- Linux `NetworkRulesAdapter` implementation;
-- Adapter-internal owner registry/composition chosen together with the concrete backend;
-- Drivers and transition/materialization logic.
+- Runtime/bootstrap assembly around the concrete Linux Adapter;
+- persistent technical allocation across daemon restart;
+- richer interface-origin dispatch;
+- incremental transition optimizer, only after a separate review/evidence unit.
 
 Rootless tests:
 
