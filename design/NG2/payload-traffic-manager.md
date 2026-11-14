@@ -720,6 +720,23 @@ Calculator не имеет права выводить `SAFE`, `DEGRADED` или
 расширять его только вместе с тестами/evidence, не превращая syntactic difference в
 необоснованную semantic оценку.
 
+Текущий реализованный proof set дополнительно фиксирует:
+
+- semantic equality не зависит от порядка routing domains, destinations внутри domain и
+  allow-only filtering rules; ordered paths и dispatch order остаются значимыми;
+- удаление paths с сохранением их relative order и/или удаление существующих allow rules
+  может доказать `SAFE`, если dispatch и NAT semantics не изменены;
+- такое доказательство restriction **не** доказывает `DEGRADED` service: service остается
+  `UNKNOWN`, пока отдельный service proof не покажет реальную потерю capability;
+- byte-level allow для endpoint pair, которого desired policy вообще не разрешает, является
+  доказанным permission widening и дает `UNSAFE`;
+- более тонкие predicate widening/narrowing внутри уже существующего endpoint pair пока не
+  классифицируются без отдельного implication proof.
+
+`Safety` относится к permissions ruleset, а не к случайной текущей достижимости пакета.
+Поэтому новое разрешение может быть `UNSAFE`, даже если другой defect одновременно мешает
+пакету реально пройти.
+
 ### 9.5. Future common state-type review
 
 Для `AvailabilityProbeManager` ожидается симметричная пара:
