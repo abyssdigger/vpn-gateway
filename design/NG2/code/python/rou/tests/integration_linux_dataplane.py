@@ -19,6 +19,8 @@ from rou.network_rules import (
     NetworkEndpoint,
     NetworkRulesSpec,
     RoutingDomainSpec,
+    SourceNatSpec,
+    SourceNatTarget,
     StateKnowledge,
     TerminalDisposition,
     TrafficAllowSpec,
@@ -120,6 +122,7 @@ def policy(
     identity: InterfaceIdentity,
     *,
     allow_remote_new: bool,
+    masquerade: bool = False,
 ) -> NetworkRulesSpec:
     local = NetworkEndpoint.local_network()
     path = NetworkEndpoint.interface_path(identity)
@@ -138,6 +141,19 @@ def policy(
         flow_rules.append(
             FlowInitiationAllowSpec(path, local, from_remote)
         )
+
+    source_nat = (
+        (
+            SourceNatSpec(
+                source=local,
+                egress=path,
+                predicate=to_remote,
+                target=SourceNatTarget.EGRESS_ADDRESS,
+            ),
+        )
+        if masquerade
+        else ()
+    )
 
     return NetworkRulesSpec(
         routing_domains=(
@@ -160,6 +176,7 @@ def policy(
             TrafficAllowSpec(path, local, from_remote),
         ),
         flow_initiation_allows=tuple(flow_rules),
+        source_nat=source_nat,
     )
 
 
@@ -225,13 +242,39 @@ def main() -> int:
             )
         print("PASS C: reverse flow-initiation allow enables remote NEW")
 
+        # Remove the remote return route. Without source NAT the remote peer cannot
+        # route 192.0.2.0/30; MASQUERADE must make the local-initiated flow work anyway.
+        run(
+            "ip", "-n", DST, "route", "del", LOCAL_NET.with_prefixlen,
+            "via", "198.51.100.1",
+        )
+        nat_policy = policy(
+            identity,
+            allow_remote_new=False,
+            masquerade=True,
+        )
+        result = adapter.apply(owner, nat_policy)
+        if not result.success:
+            raise RuntimeError(f"NAT apply failed: {result.diagnostic}")
+        run(
+            "ip", "netns", "exec", ROU,
+            "conntrack", "-F",
+            check=False,
+        )
+        if not ping(SRC, "198.51.100.2"):
+            raise RuntimeError(
+                "MASQUERADE did not preserve local-initiated flow "
+                "without remote return route"
+            )
+        print("PASS D: semantic EGRESS_ADDRESS NAT works on live dataplane")
+
         result = adapter.cleanup(owner)
         if not result.success:
             raise RuntimeError(f"cleanup failed: {result.diagnostic}")
 
         if ping(SRC, "198.51.100.2"):
             raise RuntimeError("payload forwarding survived Adapter cleanup")
-        print("PASS D: cleanup closes payload forwarding")
+        print("PASS E: cleanup closes payload forwarding")
 
         print("NG2_LINUX_DATAPLANE_INTEGRATION=PASS")
         return 0
