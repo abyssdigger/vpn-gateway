@@ -207,7 +207,10 @@ No incremental transition behavior was added during this audit.
 
 ## Final verdict
 
-**PASS after cleanup**, subject to final CI confirmation on the audit-clean baseline.
+**PASS after cleanup.**
+
+The audit-clean code baseline `d56feb60d3e0b0cf7efe0686059e87044975cfcf`
+passed NG2 unit + privileged Linux integration and NG1 Python validation.
 
 No unresolved lower-domain finding of minor severity or higher requires design
 coordination.
