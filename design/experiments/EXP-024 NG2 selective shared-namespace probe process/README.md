@@ -1,6 +1,6 @@
 # EXP-024 — selective shared-namespace probe-process isolation
 
-**Status:** PRELIMINARY PASS on privileged GitHub Linux CI; Debian 13 target confirmation pending  
+**Status:** PASS on privileged GitHub Linux CI and Debian 13 target  
 **Architecture baseline:** NG2 runtime lower assembly  
 **Type:** disposable-netns kernel/mechanism experiment
 
@@ -181,8 +181,7 @@ NG2_SELECTIVE_PROBE_PROCESS_ISOLATION=PASS
 This proves on the CI kernel that process identity can be captured where it is observable
 (OUTPUT) and carried safely to the reverse flow through conntrack state.
 
-The result is strong enough to remove the architecture ambiguity. Before production
-materialization is declared target-proven, run the same artifact on the Debian 13 target.
+The result is strong enough to remove the architecture ambiguity. The same artifact has now also passed on the Debian 13 target.
 
 
 ## Debian 13 stand preflight
@@ -211,6 +210,8 @@ sudo iptables -S FORWARD | grep -F VPNG-EXP023 || true
 Expected: no output.
 
 ## Debian 13 target confirmation
+
+Target result: **PASS** on Debian GNU/Linux 13 (trixie), kernel `6.12.116+deb13-amd64`.
 
 Run from the repository root as root (or through sudo):
 
