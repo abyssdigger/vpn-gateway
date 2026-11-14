@@ -113,6 +113,59 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
         self.assertEqual(self.adapter.get_last_state(first).rules, first_rules)
         self.assertEqual(self.adapter.get_last_state(second).rules, second_rules)
 
+    def test_unavailable_first_candidate_reconciles_empty_committed_state(self):
+        owner = object()
+        missing = InterfaceIdentity("vpns00", 10)
+        candidate = _path_rules(missing, "10.0.0.0/8")
+        self.backend.interfaces = ()
+
+        result = self.adapter.apply(owner, candidate)
+
+        self.assertFalse(result.success)
+        self.assertEqual(len(self.backend.materialize_calls), 1)
+        physical = self.backend.materialize_calls[-1]
+        self.assertEqual(physical.routing.allocation.domain_tables, ())
+        state = self.adapter.get_last_state(owner)
+        self.assertIs(state.knowledge, StateKnowledge.KNOWN)
+        self.assertEqual(state.rules, NetworkRulesSpec())
+
+        # The rejected candidate was not committed implicitly.
+        self.backend.interfaces = (missing,)
+        self.assertTrue(self.adapter.renew_state(owner).success)
+        self.assertEqual(
+            self.adapter.get_last_state(owner).rules,
+            NetworkRulesSpec(),
+        )
+
+        result = self.adapter.apply(owner, candidate)
+        self.assertTrue(result.success, result.diagnostic)
+        self.assertEqual(self.adapter.get_last_state(owner).rules, candidate)
+
+    def test_unavailable_replacement_reconciles_previous_committed_generation(self):
+        owner = object()
+        old = InterfaceIdentity("vpns00", 10)
+        missing = InterfaceIdentity("vpns01", 11)
+        self.backend.interfaces = (old,)
+        committed = _path_rules(old, "10.0.0.0/8")
+        candidate = _path_rules(missing, "192.168.0.0/16")
+        self.assertTrue(self.adapter.apply(owner, committed).success)
+
+        result = self.adapter.apply(owner, candidate)
+
+        self.assertFalse(result.success)
+        physical = self.backend.materialize_calls[-1]
+        self.assertEqual(
+            [
+                str(rule.destination)
+                for rule in physical.routing.dispatch_rules
+            ],
+            ["10.0.0.0/8"],
+        )
+        self.assertEqual(
+            self.adapter.get_last_state(owner).rules,
+            committed,
+        )
+
     def test_failed_first_apply_registers_owner_but_does_not_commit_candidate(self):
         owner = object()
         candidate = NetworkRulesSpec()
