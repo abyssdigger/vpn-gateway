@@ -15,6 +15,7 @@ from rou.linux_routing import (
     TERMINAL_ROUTE_PROTOCOL,
     UNICAST_ROUTE_PROTOCOL,
     compile_linux_routing_desired,
+    plan_linux_route_priority_moves,
 )
 from rou.network_rules import (
     DispatchRuleSpec,
@@ -39,6 +40,7 @@ def _owner_rules(
     paths=(),
     *,
     source=None,
+    priority_prefix_length=None,
 ) -> OwnedNetworkRules:
     network = IPv4Network(destination)
     if source is None:
@@ -52,6 +54,7 @@ def _owner_rules(
                     destinations=(network,),
                     ordered_paths=tuple(paths),
                     terminal_disposition=TerminalDisposition.DROP,
+                    priority_prefix_length=priority_prefix_length,
                 ),
             ),
             dispatch_rules=(
@@ -173,6 +176,207 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
             [FIRST_PATH_METRIC, FIRST_PATH_METRIC + PATH_METRIC_STEP],
         )
         self.assertTrue(all(item.metric < TERMINAL_METRIC for item in normal))
+
+    def test_priority_prefix_projects_one_persistent_empty_slot(self):
+        paths = tuple(
+            InterfaceIdentity(f"vpns0{index}", 10 + index)
+            for index in range(4)
+        )
+        desired = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        paths,
+                        priority_prefix_length=2,
+                    ),
+                )
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+
+        normal = [
+            item
+            for item in desired.routes
+            if item.kind is LinuxRouteKind.UNICAST
+        ]
+        self.assertEqual(
+            [(item.metric, item.path) for item in normal],
+            [
+                (10, paths[0]),
+                (20, paths[1]),
+                (40, paths[2]),
+                (50, paths[3]),
+            ],
+        )
+        self.assertEqual(len(desired.route_slot_gaps), 1)
+        self.assertEqual(desired.route_slot_gaps[0].metric, 30)
+
+    def test_empty_slot_planner_recovers_path_from_dead_tail(self):
+        a, b, v, g, d, e, j = tuple(
+            InterfaceIdentity(name, 10 + index)
+            for index, name in enumerate(
+                ("patha", "pathb", "pathv", "pathg", "pathd", "pathe", "pathj")
+            )
+        )
+
+        current = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        (a, b, g, d, v, e, j),
+                        priority_prefix_length=4,
+                    ),
+                )
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+        desired = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        (a, b, v, g, d, e, j),
+                        priority_prefix_length=5,
+                    ),
+                )
+            ),
+            current.allocation,
+            local_interface="host0",
+        )
+
+        moves = plan_linux_route_priority_moves(current, desired)
+
+        self.assertEqual(
+            [
+                (
+                    move.source.path,
+                    move.source.metric,
+                    move.target_metric,
+                )
+                for move in moves
+            ],
+            [
+                (d, 40, 50),
+                (g, 30, 40),
+                (v, 60, 30),
+            ],
+        )
+
+    def test_empty_slot_planner_handles_recovery_from_last_slot(self):
+        a, b, v, g, d, e, j = tuple(
+            InterfaceIdentity(name, 20 + index)
+            for index, name in enumerate(
+                ("patha", "pathb", "pathv", "pathg", "pathd", "pathe", "pathj")
+            )
+        )
+        current = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        (a, b, g, d, e, j, v),
+                        priority_prefix_length=6,
+                    ),
+                )
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+        desired = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        (a, b, v, g, d, e, j),
+                        priority_prefix_length=7,
+                    ),
+                )
+            ),
+            current.allocation,
+            local_interface="host0",
+        )
+
+        moves = plan_linux_route_priority_moves(current, desired)
+
+        self.assertEqual(
+            [
+                (move.source.path, move.source.metric, move.target_metric)
+                for move in moves
+            ],
+            [
+                (j, 60, 70),
+                (e, 50, 60),
+                (d, 40, 50),
+                (g, 30, 40),
+                (v, 80, 30),
+            ],
+        )
+
+    def test_empty_slot_planner_demotes_dead_path_without_dropping_membership(self):
+        a, b, v, g, d, e, j = tuple(
+            InterfaceIdentity(name, 30 + index)
+            for index, name in enumerate(
+                ("patha", "pathb", "pathv", "pathg", "pathd", "pathe", "pathj")
+            )
+        )
+        current = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        (a, b, v, g, d, e, j),
+                        priority_prefix_length=5,
+                    ),
+                )
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+        desired = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        (a, b, g, d, v, e, j),
+                        priority_prefix_length=4,
+                    ),
+                )
+            ),
+            current.allocation,
+            local_interface="host0",
+        )
+
+        moves = plan_linux_route_priority_moves(current, desired)
+
+        self.assertEqual(
+            [
+                (move.source.path, move.source.metric, move.target_metric)
+                for move in moves
+            ],
+            [
+                (v, 30, 60),
+                (g, 40, 30),
+                (d, 50, 40),
+            ],
+        )
 
     def test_every_domain_has_one_terminal_blackhole_default(self):
         composed = compose_network_rules(
