@@ -9,7 +9,6 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.interface_identity import InterfaceIdentity
-from rou.linux_adapter import LinuxNetworkRulesAdapter
 from rou.linux_driver import CommandResult, LinuxNetworkDriver
 from rou.runtime_bootstrap import bootstrap_linux_network_rules_adapter
 from rou.network_rules import (
