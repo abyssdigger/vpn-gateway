@@ -276,10 +276,10 @@ ProbeAttemptOutcome
 
 `LinuxIcmpProbeDriver` is the first concrete implementation.
 
-A future Manager attempt path must not feed a raw outcome into result/hysteresis policy
-based only on a pre-attempt READY observation.
+The implemented `attempt_once(probe_id, timeout_seconds=...)` path does not feed a raw
+outcome into result/hysteresis policy based only on a pre-attempt READY observation.
 
-Mandatory order:
+Implemented order:
 
 ```text
 fresh READY epoch
@@ -291,9 +291,13 @@ fresh READY epoch
     -> only then pass REPLY / NO_REPLY to result policy
 ```
 
-If the post-attempt observation is UNKNOWN/INVALID, the current epoch ends and the raw
-outcome is discarded as availability evidence. Later repair cannot retroactively validate
-that attempt.
+If the post-attempt observation is UNKNOWN/INVALID, the current epoch ends and
+`attempt_once()` returns no `ProbeAttemptObservation`. Later repair cannot retroactively
+validate that attempt.
+
+When both checks remain READY in the same epoch, the method returns a
+`ProbeAttemptObservation` containing the raw `ProbeAttemptResult`. The Manager still
+does not convert that value to REACHABLE/UNREACHABLE in the current slice.
 
 ProbeAttemptOutcome.ERROR is a local execution failure and is never directly equivalent to
 remote UNREACHABLE.
