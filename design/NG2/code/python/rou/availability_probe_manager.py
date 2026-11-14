@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ipaddress import IPv4Address
+from threading import RLock
 from typing import Protocol
 
 from .availability_routing import AvailabilityWindowState
@@ -56,6 +57,7 @@ class AvailabilityProbeManager:
     ) -> None:
         self._adapter = adapter
         self._publisher = publisher
+        self._state_lock = RLock()
         self._rules_calculator = rules_calculator or ProbeRulesCalculator()
         self._execution_plan_calculator = (
             execution_plan_calculator or ProbeExecutionPlanCalculator()
@@ -73,7 +75,8 @@ class AvailabilityProbeManager:
     def observation_generation(self) -> ProbeObservationGeneration | None:
         """Current owner-wide READY epoch for diagnostics and evidence binding."""
 
-        return self._active_generation
+        with self._state_lock:
+            return self._active_generation
 
     @property
     def execution_plan(self) -> ProbeExecutionPlan | None:
@@ -84,15 +87,23 @@ class AvailabilityProbeManager:
         observation-window cadence but no attempt identity or NO_REPLY semantics.
         """
 
-        request = self._latest_request
-        generation = self._active_generation
-        if request is None or generation is None:
-            return None
-        return self._execution_plan_calculator.calculate(request, generation)
+        with self._state_lock:
+            request = self._latest_request
+            generation = self._active_generation
+            if request is None or generation is None:
+                return None
+            return self._execution_plan_calculator.calculate(request, generation)
 
     def handle_request(self, request: AvailabilityProbeSetRequest) -> None:
         """Accept one full desired probe snapshot and reconcile its network plane."""
 
+        with self._state_lock:
+            self._handle_request_locked(request)
+
+    def _handle_request_locked(
+        self,
+        request: AvailabilityProbeSetRequest,
+    ) -> None:
         desired = self._rules_calculator.calculate(request)
 
         changed = (
@@ -158,11 +169,25 @@ class AvailabilityProbeManager:
         *,
         mechanism: ProbeMechanism = ProbeMechanism.ICMP,
     ) -> int:
-        """Accept one generation-bound valid reply from a physical probe plane.
+        """Accept one generation-bound valid reply from a physical probe plane."""
 
-        A physical reply is shared by every enabled logical consumer of the same
-        mechanism/path/target plane. Stale-generation good news is ignored.
-        """
+        with self._state_lock:
+            return self._note_good_news_locked(
+                path,
+                target,
+                generation,
+                mechanism=mechanism,
+            )
+
+    def _note_good_news_locked(
+        self,
+        path: InterfaceIdentity,
+        target: IPv4Address,
+        generation: ProbeObservationGeneration,
+        *,
+        mechanism: ProbeMechanism,
+    ) -> int:
+        """Apply good news while holding the Manager state lock."""
 
         if self._active_generation is None or generation != self._active_generation:
             return 0
@@ -220,12 +245,17 @@ class AvailabilityProbeManager:
         probe_id: str,
         generation: ProbeObservationGeneration,
     ) -> bool:
-        """Close one logical observation window.
+        """Close one logical observation window."""
 
-        Returns True only when an enabled current-generation probe was processed.
-        No-reply and local sender errors are intentionally indistinguishable here:
-        both simply mean that no good news was recorded during the window.
-        """
+        with self._state_lock:
+            return self._close_interval_locked(probe_id, generation)
+
+    def _close_interval_locked(
+        self,
+        probe_id: str,
+        generation: ProbeObservationGeneration,
+    ) -> bool:
+        """Apply a boundary while holding the Manager state lock."""
 
         if self._active_generation is None or generation != self._active_generation:
             return False
@@ -274,20 +304,22 @@ class AvailabilityProbeManager:
     def audit(self) -> None:
         """Run one deterministic rules refresh/repair pass."""
 
-        desired = self._latest_desired
-        if desired is None:
-            return
+        with self._state_lock:
+            desired = self._latest_desired
+            if desired is None:
+                return
 
-        rules_state = self._audit_rules(desired)
-        self._synchronize_generation(rules_state)
-        self._synchronize_window_states()
-        self._publish_unknown_current(rules_state)
+            rules_state = self._audit_rules(desired)
+            self._synchronize_generation(rules_state)
+            self._synchronize_window_states()
+            self._publish_unknown_current(rules_state)
 
     def shutdown(self) -> ActionResult:
         """Release all NetworkRules state owned by this Manager instance."""
 
-        self._invalidate_generation()
-        return self._adapter.cleanup(self)
+        with self._state_lock:
+            self._invalidate_generation()
+            return self._adapter.cleanup(self)
 
     def _audit_rules(
         self,
