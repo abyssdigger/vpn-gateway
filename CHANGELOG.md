@@ -28,6 +28,9 @@ temporarily removed during a permutation:
   one Direct `ProfileRouteOrderExecutor` per Profile; a second target for that Profile
   waits until the current lower-domain apply/materialize/verify/commit completes, while
   shared aggregate-owner serialization remains a separate implementation constraint;
+- each Profile Executor has one lower transaction operation bound for its lifetime, and each
+  transaction is based on fresh authoritative Adapter state, so a failed earlier Profile
+  target cannot leak its uncommitted desired order into a later Profile transaction;
 - reserved metric capacity now includes the EMPTY working slot itself, so an all-live
   maximum-size domain cannot silently consume the last metric below terminal blackhole;
 - EXP-027 additionally covers recovery with another dead path before the recovered path:
