@@ -35,9 +35,15 @@ def setup() -> None:
     cleanup()
     run("ip", "netns", "add", NS)
     ns("ip", "link", "set", "lo", "up")
-    for name in ("a", "b", "c", "d"):
-        ns("ip", "link", "add", name, "type", "dummy")
-        ns("ip", "link", "set", name, "up")
+    for suffix in ("patha", "pathb", "pathc", "pathd"):
+        path = f"path{suffix}"
+        peer = f"peer{suffix}"
+        run("ip", "link", "del", peer, check=False)
+        run("ip", "link", "add", path, "type", "veth", "peer", "name", peer)
+        run("ip", "link", "set", path, "netns", NS)
+        run("ip", "link", "set", peer, "netns", NS)
+        ns("ip", "link", "set", path, "up")
+        ns("ip", "link", "set", peer, "up")
 
 
 def routes(table: int) -> list[dict]:
@@ -106,7 +112,7 @@ def assert_map(
 
 
 def add_initial(table: int, destination: str) -> None:
-    for metric, dev in ((10, "a"), (20, "b"), (30, "c"), (40, "d")):
+    for metric, dev in ((10, "patha"), (20, "pathb"), (30, "pathc"), (40, "pathd")):
         ns(
             "ip",
             "route",
@@ -169,37 +175,37 @@ def exercise(table: int, destination: str, label: str) -> None:
     assert_map(
         table,
         destination,
-        {10: "a", 20: "b", 30: "c", 40: "d"},
+        {10: "patha", 20: "pathb", 30: "pathc", 40: "pathd"},
         f"{label} initial",
     )
 
-    replace_slot(table, destination, 10, "b")
+    replace_slot(table, destination, 10, "pathb")
     assert_map(
         table,
         destination,
-        {10: "b", 20: "b", 30: "c", 40: "d"},
+        {10: "pathb", 20: "pathb", 30: "pathc", 40: "pathd"},
         f"{label} duplicate-b",
     )
     print(
         f"PASS {label}1: metric-10 slot replaced A->B while B metric-20 survived"
     )
 
-    replace_slot(table, destination, 20, "c")
+    replace_slot(table, destination, 20, "pathc")
     assert_map(
         table,
         destination,
-        {10: "b", 20: "c", 30: "c", 40: "d"},
+        {10: "pathb", 20: "pathc", 30: "pathc", 40: "pathd"},
         f"{label} duplicate-c",
     )
     print(
         f"PASS {label}2: metric-20 slot replaced B->C while C metric-30 survived"
     )
 
-    replace_slot(table, destination, 30, "a")
+    replace_slot(table, destination, 30, "patha")
     assert_map(
         table,
         destination,
-        {10: "b", 20: "c", 30: "a", 40: "d"},
+        {10: "pathb", 20: "pathc", 30: "patha", 40: "pathd"},
         f"{label} final",
     )
     print(
