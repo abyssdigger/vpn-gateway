@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Protocol
 
 from .linux_driver import LinuxDriverResult, LinuxNetworkVerification
-from .linux_network import compile_linux_network_desired
+from .linux_network import (
+    compile_linux_network_desired,
+    project_network_rules_to_interfaces,
+)
 from .linux_routing import LinuxRoutingAllocationState
 from .network_rules import (
     ActionResult,
@@ -19,6 +22,9 @@ from .network_rules_composition import (
 
 
 class LinuxNetworkBackend(Protocol):
+    def observe_interfaces(self) -> tuple:
+        ...
+
     def materialize_structural(self, desired) -> LinuxDriverResult:
         ...
 
@@ -49,8 +55,13 @@ class LinuxNetworkRulesAdapter:
         token, candidate = self._owners.preview_replace(owner, spec)
 
         try:
+            projected = self._project(candidate)
+            projected_requested = self._rules_for_token(
+                projected,
+                token,
+            )
             desired = compile_linux_network_desired(
-                compose_network_rules(candidate),
+                projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
             )
@@ -63,14 +74,21 @@ class LinuxNetworkRulesAdapter:
         result = self._backend.materialize_structural(desired)
         if not result.success:
             self._mark_all_unknown(result.diagnostic)
-            # preview_replace() has registered first-time owner identity, so make sure
-            # the requested owner has an explicit last state as well.
             self._last_state[token] = self._unknown_state(result.diagnostic)
             return ActionResult(False, result.diagnostic)
 
+        self._mark_states_from_projection(projected)
+
+        if projected_requested != spec:
+            return ActionResult(
+                False,
+                "requested owner rules reference an unavailable concrete "
+                "interface generation",
+            )
+
         self._owners.replace(owner, spec)
         self._routing_allocation = desired.routing.allocation
-        self._mark_registered_known()
+        self._mark_states_from_projection(projected)
         return ActionResult(True)
 
     def renew_state(self, owner: object) -> ActionResult:
@@ -79,8 +97,9 @@ class LinuxNetworkRulesAdapter:
             return ActionResult(False, "owner is not registered")
 
         try:
+            projected = self._project(self._owners.snapshot())
             desired = compile_linux_network_desired(
-                compose_network_rules(self._owners.snapshot()),
+                projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
             )
@@ -95,7 +114,7 @@ class LinuxNetworkRulesAdapter:
             self._mark_all_unknown(diagnostic)
             return ActionResult(False, diagnostic)
 
-        self._mark_registered_known()
+        self._mark_states_from_projection(projected)
         return ActionResult(True)
 
     def get_last_state(self, owner: object) -> NetworkRulesState:
@@ -114,8 +133,9 @@ class LinuxNetworkRulesAdapter:
         candidate = self._owners.preview_remove(owner)
 
         try:
+            projected = self._project(candidate)
             desired = compile_linux_network_desired(
-                compose_network_rules(candidate),
+                projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
             )
@@ -135,18 +155,36 @@ class LinuxNetworkRulesAdapter:
         if token is not None:
             self._last_state.pop(token, None)
         self._routing_allocation = desired.routing.allocation
-        self._mark_registered_known()
+        self._mark_states_from_projection(projected)
         return ActionResult(True)
 
-    def _mark_registered_known(self) -> None:
+    def _project(self, owners):
+        interfaces = self._backend.observe_interfaces()
+        return project_network_rules_to_interfaces(
+            compose_network_rules(owners),
+            interfaces,
+        )
+
+    @staticmethod
+    def _rules_for_token(projected, token: OwnerToken) -> NetworkRulesSpec:
+        for owned in projected.owners:
+            if owned.owner == token:
+                return owned.rules
+        return NetworkRulesSpec()
+
+    def _mark_states_from_projection(self, projected) -> None:
         empty = NetworkRulesSpec()
+        projected_by_token = {
+            owned.owner: owned.rules
+            for owned in projected.owners
+        }
         live_tokens: set[OwnerToken] = set()
 
-        for token, rules in self._owners.registered_rules():
+        for token, _committed in self._owners.registered_rules():
             live_tokens.add(token)
             self._last_state[token] = NetworkRulesState(
                 knowledge=StateKnowledge.KNOWN,
-                rules=empty if rules is None else rules,
+                rules=projected_by_token.get(token, empty),
                 fresh=True,
             )
 
