@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from ipaddress import IPv4Address
 from typing import Protocol
 
+from .availability_routing import AvailabilityWindowState
 from .availability_probe_state import (
     AvailabilityProbeState,
     AvailabilityProbeStateInfo,
@@ -19,6 +21,7 @@ from .network_rules import (
 )
 from .probe_rules import (
     AvailabilityProbeSetRequest,
+    ProbeMechanism,
     ProbeRulesCalculator,
     availability_probe_sets_semantically_equal,
 )
@@ -53,6 +56,7 @@ class AvailabilityProbeManager:
 
         self._generation_sequence = 0
         self._active_generation: ProbeObservationGeneration | None = None
+        self._window_states: dict[str, AvailabilityWindowState] = {}
 
     @property
     def observation_generation(self) -> ProbeObservationGeneration | None:
@@ -105,7 +109,115 @@ class AvailabilityProbeManager:
             rules_state = self._audit_rules(self._latest_desired)
 
         self._synchronize_generation(rules_state)
+        self._synchronize_window_states()
         self._publish_unknown_current(rules_state)
+
+    def note_good_news(
+        self,
+        path,
+        target: IPv4Address,
+        generation: ProbeObservationGeneration,
+        *,
+        mechanism: ProbeMechanism = ProbeMechanism.ICMP,
+    ) -> int:
+        """Accept one generation-bound valid reply from a physical probe plane.
+
+        A physical reply is shared by every enabled logical consumer of the same
+        mechanism/path/target plane. Stale-generation good news is ignored.
+        """
+
+        if self._active_generation is None or generation != self._active_generation:
+            return 0
+        if not isinstance(target, IPv4Address):
+            raise ValueError("good-news target must be an IPv4Address")
+        if not isinstance(mechanism, ProbeMechanism):
+            raise ValueError("good-news mechanism must be a ProbeMechanism")
+
+        request = self._latest_request
+        if request is None:
+            return 0
+
+        matched = 0
+        for probe in request.probes:
+            if (
+                not probe.enabled
+                or probe.path != path
+                or probe.target != target
+                or probe.mechanism is not mechanism
+            ):
+                continue
+
+            state = self._window_states.setdefault(
+                probe.probe_id,
+                AvailabilityWindowState(),
+            )
+            state.note_good_news()
+            self._publish_if_changed(
+                AvailabilityProbeStateInfo(
+                    probe.probe_id,
+                    AvailabilityProbeState.REACHABLE,
+                    observation_generation=generation,
+                )
+            )
+            matched += 1
+
+        return matched
+
+    def close_interval(
+        self,
+        probe_id: str,
+        generation: ProbeObservationGeneration,
+    ) -> bool:
+        """Close one logical observation window.
+
+        Returns True only when an enabled current-generation probe was processed.
+        No-reply and local sender errors are intentionally indistinguishable here:
+        both simply mean that no good news was recorded during the window.
+        """
+
+        if self._active_generation is None or generation != self._active_generation:
+            return False
+
+        request = self._latest_request
+        if request is None:
+            return False
+
+        probe = next(
+            (
+                item
+                for item in request.probes
+                if item.probe_id == probe_id
+            ),
+            None,
+        )
+        if probe is None or not probe.enabled:
+            return False
+
+        state = self._window_states.setdefault(
+            probe.probe_id,
+            AvailabilityWindowState(),
+        )
+        state.close_interval(probe.policy)
+
+        if state.confirmed_live:
+            self._publish_if_changed(
+                AvailabilityProbeStateInfo(
+                    probe.probe_id,
+                    AvailabilityProbeState.REACHABLE,
+                    observation_generation=generation,
+                )
+            )
+        elif state.missed_intervals >= probe.policy.failure_intervals:
+            self._publish_if_changed(
+                AvailabilityProbeStateInfo(
+                    probe.probe_id,
+                    AvailabilityProbeState.UNREACHABLE,
+                    reason="no good news within failure window",
+                    observation_generation=generation,
+                )
+            )
+
+        return True
 
     def audit(self) -> None:
         """Run one deterministic rules refresh/repair pass."""
@@ -116,6 +228,7 @@ class AvailabilityProbeManager:
 
         rules_state = self._audit_rules(desired)
         self._synchronize_generation(rules_state)
+        self._synchronize_window_states()
         self._publish_unknown_current(rules_state)
 
     def shutdown(self) -> ActionResult:
@@ -181,6 +294,27 @@ class AvailabilityProbeManager:
 
     def _invalidate_generation(self) -> None:
         self._active_generation = None
+        self._window_states.clear()
+
+    def _synchronize_window_states(self) -> None:
+        request = self._latest_request
+        if request is None or self._active_generation is None:
+            self._window_states.clear()
+            return
+
+        enabled_ids = {
+            probe.probe_id
+            for probe in request.probes
+            if probe.enabled
+        }
+        for probe_id in tuple(self._window_states):
+            if probe_id not in enabled_ids:
+                self._window_states.pop(probe_id, None)
+        for probe_id in enabled_ids:
+            self._window_states.setdefault(
+                probe_id,
+                AvailabilityWindowState(),
+            )
 
     def _invalidate_changed_logical_probes(
         self,
@@ -203,6 +337,7 @@ class AvailabilityProbeManager:
             if previous_by_id[probe_id] == current_by_id[probe_id]:
                 continue
             self._latest_published.pop(probe_id, None)
+            self._window_states.pop(probe_id, None)
 
     def _publish_removed_invalidations(
         self,
