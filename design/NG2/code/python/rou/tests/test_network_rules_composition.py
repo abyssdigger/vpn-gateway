@@ -10,6 +10,7 @@ from rou.network_rules import (
     NetworkRulesSpec,
     RoutingDomainSpec,
     TerminalDisposition,
+    TrafficProtocol,
 )
 from rou.network_rules_composition import (
     NetworkRulesCompositionError,
@@ -269,6 +270,56 @@ class NetworkRulesCompositionTests(unittest.TestCase):
         )
 
         self.assertEqual(len(composed.dispatch_rules), 2)
+
+    def test_local_process_same_target_different_bound_paths_are_distinct(self):
+        target = IPv4Network("203.0.113.24/32")
+        local = NetworkEndpoint.local_process()
+        first_path = NetworkEndpoint.interface_path(
+            InterfaceIdentity("vpns00", 10)
+        )
+        second_path = NetworkEndpoint.interface_path(
+            InterfaceIdentity("vpns01", 11)
+        )
+
+        def probe_rules(domain, path):
+            return NetworkRulesSpec(
+                routing_domains=(
+                    RoutingDomainSpec(
+                        domain,
+                        (target,),
+                        (path.interface,),
+                        TerminalDisposition.DROP,
+                    ),
+                ),
+                dispatch_rules=(
+                    DispatchRuleSpec(
+                        target,
+                        domain,
+                        source=local,
+                        bound_output=path,
+                        protocol=TrafficProtocol.ICMP,
+                    ),
+                ),
+            )
+
+        composed = compose_network_rules(
+            (
+                OwnedNetworkRules(
+                    OwnerToken(1),
+                    probe_rules("primary", first_path),
+                ),
+                OwnedNetworkRules(
+                    OwnerToken(2),
+                    probe_rules("secondary", second_path),
+                ),
+            )
+        )
+
+        self.assertEqual(len(composed.dispatch_rules), 2)
+        self.assertEqual(
+            {item.bound_output for item in composed.dispatch_rules},
+            {first_path, second_path},
+        )
 
     def test_duplicate_owner_token_is_rejected(self):
         with self.assertRaises(NetworkRulesCompositionError):
