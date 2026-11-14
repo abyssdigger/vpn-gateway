@@ -71,7 +71,7 @@ def _exact_observation(desired):
         )
         for item in desired.routes
     )
-    rules = tuple(
+    rules = [
         ObservedRule(
             priority=item.priority,
             source_ifname=item.source_ifname,
@@ -80,7 +80,18 @@ def _exact_observation(desired):
             action="to_tbl",
         )
         for item in desired.dispatch_rules
-    )
+    ]
+    if desired.terminal_rule is not None:
+        rules.append(
+            ObservedRule(
+                priority=desired.terminal_rule.priority,
+                source_ifname=desired.terminal_rule.source_ifname,
+                destination=None,
+                table_id=None,
+                action="unreachable",
+            )
+        )
+    rules = tuple(rules)
     return LinuxRoutingObservation(
         interfaces=(
             InterfaceIdentity("host0", 2),
