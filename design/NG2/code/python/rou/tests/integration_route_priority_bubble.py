@@ -29,13 +29,16 @@ def ns(*argv: str, check: bool = True) -> subprocess.CompletedProcess[str]:
 
 def cleanup() -> None:
     run("ip", "netns", "del", NS, check=False)
+    for suffix in ("a", "b", "c", "d"):
+        run("ip", "link", "del", f"path{suffix}", check=False)
+        run("ip", "link", "del", f"peer{suffix}", check=False)
 
 
 def setup() -> None:
     cleanup()
     run("ip", "netns", "add", NS)
     ns("ip", "link", "set", "lo", "up")
-    for suffix in ("patha", "pathb", "pathc", "pathd"):
+    for suffix in ("a", "b", "c", "d"):
         path = f"path{suffix}"
         peer = f"peer{suffix}"
         run("ip", "link", "del", peer, check=False)
