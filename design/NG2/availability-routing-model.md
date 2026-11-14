@@ -203,7 +203,7 @@ Routing policy не сортирует все paths заново при кажд
 2. внутри этого prefix сохраняется configured priority;
 3. остальные paths не удаляются;
 4. среди остальных сохраняется их текущий относительный порядок;
-5. если подтвержденно живых paths нет, effective order вообще не меняется.
+5. если подтвержденно живых paths нет, effective order не меняется.
 
 Пример:
 
@@ -213,23 +213,18 @@ probe:               - + + -
 effective:            B C A D
 ```
 
-Переход концептуально является bubble promotion:
-
-```text
-A B C D
-B B C D
-B C A D
-```
-
-Промежуточный duplicate означает техническую route materialization, а не два логических
-bindings.
-
 Если после этого все paths теряют подтвержденную живость, порядок не возвращается
 самопроизвольно к `A B C D`: без доказанно лучшего path probing не создает новую
 перестановку.
 
 Если затем `A` получает good news, configured priority снова имеет силу среди
 подтвержденно живых paths и `A` может всплыть вверх.
+
+Availability-driven demotion не подразумевает per-flow pinning к пониженному path. Если
+policy признала path достаточно плохим, чтобы понизить его приоритет, последующие routing
+lookups должны иметь возможность использовать более предпочтительный path. Бесшовное
+сохранение established transport session при смене произвольного VPN path является другой
+функцией с другой policy.
 
 ## 8. Payload intent
 
@@ -253,97 +248,219 @@ PayloadTrafficIntentCalculator
 PayloadProfileRequest.ordered_paths
 ```
 
+`ordered_paths` остается полным eligible set. Никакой EMPTY/gap не является path,
+binding или частью пользовательской конфигурации.
+
+Граница между `CONFIRMED_LIVE` prefix и остальным effective order является runtime
+availability state. Linux transition planner получает эту границу как производное
+операционное знание, а не как сохраняемое поле Profile/NetworkRules.
+
 Новая отдельная Calculator abstraction для этого пока не требуется. Если логика
 effective order перестанет быть малой частью PayloadTrafficIntentCalculator, граница может
 быть пересмотрена позже.
 
-## 9. Уже существующая route semantics
+## 9. Route-slot projection
 
-Текущий NG2 `PayloadProfileRequest.ordered_paths` уже является семантическим порядком
-приоритета.
+Для `N` eligible paths transition planner рассматривает рабочий диапазон из `N+1`
+обычных metric positions ниже terminal blackhole.
 
-Linux projection уже отображает позиции в metrics:
+Это не означает наличие `N+1` routes. В steady state всегда присутствует ровно `N`
+unicast routes — по одному на каждый eligible path.
+
+Если подтверждено живыми `K < N` paths, единственный незанятый metric находится
+непосредственно перед первым неподтвержденным path:
 
 ```text
-position 0 -> metric 10
-position 1 -> metric 20
-position 2 -> metric 30
-...
+A B G D . V E J
+10 20 30 40 50 60 70 80
+```
+
+Точка здесь — только отсутствие route на metric 50.
+
+Крайние случаи:
+
+```text
+all live:
+A B C D
+10 20 30 40
+```
+
+Отдельной steady-state дырки нет. Metric 50 просто является следующим свободным рабочим
+position и может быть использован первым transition move.
+
+```text
+all non-confirmed:
+. A B C D
+10 20 30 40 50
+```
+
+То есть все routes начинаются со второй позиции рабочего диапазона.
+
+Положение свободного metric не фиксируется в конфигурации и не materialized отдельным
+объектом. Оно однозначно выводится из текущего effective order и runtime live-prefix.
+
+Terminal blackhole остается отдельным:
+
+```text
 terminal blackhole -> metric 65536
 ```
 
-Поэтому новая availability policy не требует нового route tier, shadow routes или
-`UNAVAILABLE_METRIC`.
+Все рабочие metrics обязаны оставаться ниже него.
 
 ## 10. Route-priority transition
 
-EXP-027 подтвердил в privileged Linux CI для обычного prefix и `default`, что fixed
-metric positions можно использовать как route slots: `ip route replace` меняет один
-slot, не удаляя тот же interface из другого metric, а terminal blackhole сохраняется.
+Чистая priority transition не меняет eligible path membership, nft filter/NAT,
+RPDB selectors, table ownership или forwarding requirement.
 
-Текущая Linux реализация имеет узкий verified fast path только для чистой permutation
-существующих unicast paths. Он свежо проверяет старую projection, выполняет top-down
-slot replacements, затем свежо проверяет конечную projection. Любой более широкий diff
-или ошибка fast path переводит operation в существующий structural fail-closed rebuild.
-
-
-При изменении только `ordered_paths` desired operation должна быть узкой route-priority
-transaction:
-
-- payload nft filtering не меняется;
-- NAT policy не меняется;
-- RPDB selectors/table ownership не меняются;
-- `ip_forward` не закрывается только из-за permutation;
-- меняются только owned unicast route slots соответствующего routing domain;
-- после transition выполняется fresh verification конечного order.
-
-Предпочтительный materialization pattern — замена route slots сверху вниз с допустимыми
-временными duplicates.
-
-Для перехода:
+Единственный primitive:
 
 ```text
-A B C D
-    ->
-B C A D
+X находится на Mold
+Mfree свободен
+
+1. add X at Mfree
+2. del X at Mold
 ```
 
-концептуальная последовательность:
+После шага 1:
+
+- полный eligible path set по-прежнему присутствует;
+- только `X` имеет две route copies;
+- свободного metric временно нет.
+
+После шага 2:
+
+- снова ровно одна route на каждый eligible path;
+- `Mold` автоматически становится новым свободным metric.
+
+Следовательно, ни живой, ни неподтвержденный path не используется как временная жертва
+перестановки.
+
+### 10.1. Death
+
+Если path становится неподтвержденным, он сначала перемещается в текущий свободный
+position справа от live-prefix. Затем живые paths, которые стояли после него, по одному
+переезжают к меньшим metrics. В результате свободный metric оказывается непосредственно
+перед свежепониженным path.
+
+Например:
 
 ```text
-A B C D
-B B C D
-B C C D
-B C A D
+A B V G D . E J
+    V dies
+
+V -> free:
+A B . G D V E J
+
+G -> free:
+A B G . D V E J
+
+D -> free:
+A B G D . V E J
 ```
 
-Вытесняемый неподтвержденный path может кратковременно остаться без собственного route.
-Это допустимо: safety requirement состоит в сохранении/появлении лучшего подтвержденного
-payload path, а не в непрерывном представлении каждого degraded path во время transition.
+Если до события все paths были live, steady-state gap отсутствует. Первый move использует
+просто следующий свободный metric после последнего path:
+
+```text
+A B V G D E J
+V dies
+
+V -> next free metric:
+A B . G D E J V
+
+G,D,E,J move toward lower metrics:
+A B G D E J . V
+```
+
+### 10.2. Recovery
+
+При recovery живые paths справа от новой позиции recovered path сначала по одному
+перемещаются к большим metrics, начиная с самого правого. Когда нужный metric освобожден,
+recovered path переезжает туда. Если после него остались неподтвержденные paths левее
+нового положения свободного metric, они аналогично сдвигаются вправо до восстановления
+границы.
+
+Пример:
+
+```text
+A B G D . V E J
+    V recovers
+
+D -> free:
+A B G . D V E J
+
+G -> free:
+A B . G D V E J
+
+V -> free:
+A B V G D . E J
+```
+
+Для:
+
+```text
+A B G D E J . V
+```
+
+тот же primitive сначала сдвигает `J,E,D,G` вправо, затем переносит `V` на его
+configured-priority position. После этого все paths live, поэтому свободный рабочий metric
+остается только за последним path и не является steady-state gap.
+
+### 10.3. Generic planner
+
+Чистый planner оперирует рабочим представлением:
+
+```text
+(path | free) * (N + 1)
+```
+
+и повторяет один primitive до совпадения с target layout.
+
+Если свободный metric уже находится на своей target position, но остается отдельный цикл
+перестановки, planner детерминированно копирует один mismatched path в свободный position,
+тем самым разрывает цикл, а затем продолжает обычное перемещение свободного slot.
+
+Это покрывает death, recovery, failback и административную permutation одним алгоритмом.
+
+### 10.4. Executor safety
+
+Linux Executor:
+
+1. свежо проверяет current projection;
+2. строит deterministic move plan;
+3. каждый move выполняет как `add duplicate -> delete old copy`;
+4. свежо проверяет конечную projection;
+5. при любой ошибке переходит в structural fail-closed rebuild.
+
+Caller не выбирает transition kind.
 
 ## 11. Kernel evidence — EXP-027 PASS
 
-EXP-027 закрыл route-slot gate в privileged Linux CI.
+EXP-027 повторно проверяет route-slot primitive в privileged Linux CI для обычного prefix
+и `default`.
 
 Подтверждено:
 
-1. один path может одновременно иметь routes к одному prefix через один interface с
-   разными metrics;
-2. `ip route replace` меняет path одного fixed-metric slot, не удаляя тот же interface
-   из соседнего metric;
-3. top-down sequence достигает `A B C D -> B C A D` без userspace delete-before-add
-   нового preferred slot;
-4. конечная FIB projection точно соответствует desired `ordered_paths`;
-5. те же свойства проходят для `default` и обычного prefix;
-6. owned protocol 202 и terminal blackhole protocol 201 / metric 65536 сохраняют
-   требуемую semantics.
+1. один interface/path может одновременно иметь две owned unicast routes к одному
+   destination на разных metrics;
+2. `ip route add` в свободный metric создает duplicate и сохраняет старую copy;
+3. exact `ip route del ... dev X metric Mold` удаляет только старую copy;
+4. после add phase присутствует полный eligible set и ровно один duplicate;
+5. после delete phase присутствует полный eligible set и по одной copy каждого path;
+6. terminal blackhole protocol 201 / metric 65536 сохраняется;
+7. проходят как ordinary prefix, так и `default`;
+8. отдельно проверены:
+   - recovery `A B G D . V E J -> A B V G D . E J`;
+   - обратная demotion;
+   - recovery `A B G D E J . V -> A B V G D E J`;
+   - death из all-live `A B V G D E J -> A B G D E J . V`.
 
-Эксперимент не заявляет multi-command kernel atomicity. Доказано более узкое необходимое
-свойство: каждый новый preferred slot materialized одной `replace`-операцией до изменения
-следующего slot, а после всей operation выполняется fresh verification.
+Ранний вариант EXP-027 с `ip route replace` остается историческим доказательством того,
+что duplicate path на разных metrics допустим, но production transition primitive теперь
+строже: ни один eligible path не вытесняется из FIB даже временно.
 
-Production fast path ограничен именно этим доказанным case; broader transition остается
-за structural fail-closed rebuild.
+Staging routing table для обычной priority permutation не требуется.
 
 ## 12. Что новая модель делает лишним
 
