@@ -37,6 +37,8 @@ implementation order:
 - `NG2-2026-11-14-runtime-lower-assembly-whole-code-audit.md`
 - `NG2-2026-11-14-probe-rules-boundary-review.md`
 - `NG2-2026-11-14-local-process-network-rules-contract-review.md`
+- `NG2-2026-11-14-probe-rules-calculator-review.md`
+- `NG2-2026-11-14-probe-rules-semantic-whole-code-audit.md`
 
 The whole-slice audit is authoritative for current implementation presence; earlier focused
 reviews remain evidence for the design decisions they examined even when a candidate helper
