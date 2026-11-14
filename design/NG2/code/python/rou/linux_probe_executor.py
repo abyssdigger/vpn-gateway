@@ -43,11 +43,15 @@ class LinuxIcmpProbeExecutorConfig:
     ping_path: str
 
     def __post_init__(self) -> None:
+        if not isinstance(self.local_process, LinuxLocalProcessConfig):
+            raise LinuxProbeExecutorError(
+                "probe executor requires LinuxLocalProcessConfig"
+            )
         if type(self.gid) is not int or not 1 <= self.gid < (1 << 32) - 1:
             raise LinuxProbeExecutorError(
                 "probe gid must be a non-root 32-bit gid other than UINT32_MAX"
             )
-        if not self.ping_path.startswith("/"):
+        if not isinstance(self.ping_path, str) or not self.ping_path.startswith("/"):
             raise LinuxProbeExecutorError(
                 "probe ping executable path must be absolute"
             )
@@ -70,6 +74,10 @@ class LinuxIcmpProbeExecutor:
         *,
         timeout_seconds: int,
     ) -> ProbeAttemptResult:
+        if not isinstance(request, AvailabilityProbeRequest):
+            raise LinuxProbeExecutorError(
+                "probe executor requires AvailabilityProbeRequest"
+            )
         if request.mechanism is not ProbeMechanism.ICMP:
             return ProbeAttemptResult(
                 ProbeAttemptOutcome.ERROR,
