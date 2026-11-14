@@ -318,24 +318,35 @@ stable.
 ## 12. Route-priority fast path
 
 EXP-027 подтверждает отдельный безопасный narrow case: если effective desired state
-отличается только permutation тех же unicast paths по тем же routing-domain metric slots,
-Linux backend может не закрывать forwarding и не перестраивать nft/RPDB.
+отличается только priority permutation тех же unicast paths при неизменной остальной
+managed projection, Linux backend может не закрывать forwarding и не перестраивать
+nft/RPDB.
+
+Для payload priority domain steady state содержит `N` eligible routes в `N+1` metric
+slots и ровно один persistent EMPTY slot. Его позиция задается semantic
+`priority_prefix_length`.
 
 Fast path обязан:
 
 1. свежо доказать, что текущая полная managed projection совпадает с committed desired;
-2. убедиться, что prerequisites, nft filter/NAT, allocation, RPDB, terminal routes и path
-   membership неизменны;
-3. materialize changed metric slots top-down через `ip route replace`;
-4. свежо доказать полное конечное desired state;
-5. при любой ошибке перейти в обычный structural fail-closed rebuild.
+2. убедиться, что prerequisites, nft filter/NAT, allocation, RPDB, terminal routes, path
+   membership и metric-slot universe неизменны;
+3. построить deterministic permutation plan для `paths + EMPTY`;
+4. каждый elementary move выполнить как `add duplicate into EMPTY -> delete old copy`;
+5. свежо доказать полное конечное desired state;
+6. при любой ошибке перейти в обычный structural fail-closed rebuild.
+
+После add phase все eligible paths продолжают присутствовать, а ровно один path имеет
+две копии. После delete phase старый metric становится новым EMPTY. Ни live, ни degraded
+eligible route не вытесняется из FIB как временный scratch.
 
 Fast path является внутренней оптимизацией Adapter/Executor. Caller по-прежнему вызывает
 тот же `apply(owner, spec)` и не выбирает transition kind.
 
-Текущий classifier разрешает fast path только для чистой перестановки существующих
-unicast paths. Изменение membership, destination, dispatch, nft policy, prerequisites или
-allocation автоматически оставляет operation на structural path.
+Текущий classifier разрешает fast path только если pure planner доказывает такую
+EMPTY-slot permutation. Изменение membership, destination, dispatch, nft policy,
+prerequisites, allocation или slot universe автоматически оставляет operation на
+structural path.
 
 ## 13. Public Linux NetworkRulesAdapter
 
