@@ -60,6 +60,23 @@ class LinuxNetworkRulesAdapter:
                 projected,
                 token,
             )
+        except Exception as exc:
+            return ActionResult(
+                False,
+                f"cannot project candidate network rules: {exc}",
+            )
+
+        if projected_requested != spec:
+            diagnostic = (
+                "requested owner rules reference an unavailable concrete "
+                "interface generation"
+            )
+            return self._reconcile_committed_after_rejected_candidate(
+                token,
+                diagnostic,
+            )
+
+        try:
             desired = compile_linux_network_desired(
                 projected,
                 self._routing_allocation,
@@ -76,15 +93,6 @@ class LinuxNetworkRulesAdapter:
             self._mark_all_unknown(result.diagnostic)
             self._last_state[token] = self._unknown_state(result.diagnostic)
             return ActionResult(False, result.diagnostic)
-
-        self._mark_states_from_projection(projected)
-
-        if projected_requested != spec:
-            return ActionResult(
-                False,
-                "requested owner rules reference an unavailable concrete "
-                "interface generation",
-            )
 
         self._owners.replace(owner, spec)
         self._routing_allocation = desired.routing.allocation
@@ -157,6 +165,44 @@ class LinuxNetworkRulesAdapter:
         self._routing_allocation = desired.routing.allocation
         self._mark_states_from_projection(projected)
         return ActionResult(True)
+
+    def _reconcile_committed_after_rejected_candidate(
+        self,
+        requested_token: OwnerToken,
+        diagnostic: str,
+    ) -> ActionResult:
+        try:
+            projected = self._project(self._owners.snapshot())
+            desired = compile_linux_network_desired(
+                projected,
+                self._routing_allocation,
+                local_interface=self._local_interface,
+            )
+        except Exception as exc:
+            combined = diagnostic + f"; committed reconcile compile failed: {exc}"
+            self._mark_all_unknown(combined)
+            self._last_state[requested_token] = self._unknown_state(combined)
+            return ActionResult(False, combined)
+
+        result = self._backend.materialize_structural(desired)
+        if not result.success:
+            combined = diagnostic
+            if result.diagnostic:
+                combined += f"; committed reconcile failed: {result.diagnostic}"
+            self._mark_all_unknown(combined)
+            self._last_state[requested_token] = self._unknown_state(combined)
+            return ActionResult(False, combined)
+
+        self._routing_allocation = desired.routing.allocation
+        self._mark_states_from_projection(projected)
+        if requested_token not in self._last_state:
+            self._last_state[requested_token] = NetworkRulesState(
+                knowledge=StateKnowledge.KNOWN,
+                rules=NetworkRulesSpec(),
+                fresh=True,
+                diagnostic=diagnostic,
+            )
+        return ActionResult(False, diagnostic)
 
     def _project(self, owners):
         interfaces = self._backend.observe_interfaces()
