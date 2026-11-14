@@ -58,7 +58,9 @@ ERROR для routing означает только отсутствие good new
 
 AvailabilityProbeRequest.enabled является отдельным logical flag. AvailabilityWindowPolicy(interval_seconds, failure_intervals) обязателен для каждого normalized probe. Policy-less mode удален.
 
-Enable/disable сохраняет logical config и не меняет physical ProbeRules plane.
+Enable/disable сохраняет logical config. Physical plane существует только пока есть хотя
+бы один enabled logical consumer: disable последнего consumer закрывает plane, а disable
+одного shared consumer не вызывает лишней перестройки.
 
 ### F5 — route priority протекал в nft/NAT ordering
 

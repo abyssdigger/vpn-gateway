@@ -14,7 +14,8 @@ model derived from the actual product requirement:
   boundary until production good-news delivery is wired;
 - every normalized logical probe now carries required AvailabilityWindowPolicy
   (interval_seconds + failure_intervals), while configured enable/disable is a separate
-  logical request property that does not rebuild an unchanged physical probe plane;
+  logical request property; physical ProbeRules exist only for enabled consumers, so
+  disabling the last consumer closes the plane while shared planes remain intact;
 - calculate_effective_path_order() implements stable bubble promotion: confirmed-live
   paths rise in configured priority while the remaining current order is preserved; startup
   and structural/admin priority changes explicitly rebase that order;

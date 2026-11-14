@@ -285,8 +285,9 @@ AvailabilityWindowPolicy
 ```
 
 `enabled=false` сохраняет настроенный logical probe, но запрещает автономное probing.
-Enable/disable является logical-only изменением и не требует перестройки неизменного
-physical ProbeRules plane. Policy обязателен для каждого normalized logical probe; policy-less manual mode удален.
+Physical ProbeRules вычисляются только из enabled probes. Поэтому disable последнего
+logical consumer закрывает соответствующий physical plane, а disable одного из нескольких
+consumers общего plane не меняет его. Logical probe config при этом сохраняется. Policy обязателен для каждого normalized logical probe; policy-less manual mode удален.
 
 `ProbeRulesCalculator` дедуплицирует physical plane по
 `(mechanism, InterfaceIdentity, target)`. Timing/enable policy не является physical
