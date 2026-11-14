@@ -1,3 +1,21 @@
+## 2026-11-14 — NG2 PayloadTrafficManager drift/audit reconcile
+
+Completed and reviewed one deterministic PayloadTrafficManager audit pass:
+
+- audit refreshes current Adapter state using the same owner identity;
+- repair is triggered by rules convergence, not by payload service severity;
+- MATCHED zero-path / DEGRADED / ISOLATED states are not treated as drift;
+- DIVERGED or UNKNOWN convergence attempts materialization of current desired rules without
+  a new RequestEvent;
+- failed repair is freshly observed before publication;
+- immediate successful repair may suppress transient drift history because InfoEvents
+  represent current state;
+- recovery after a previously published isolated state produces a READY/MATCHED transition;
+- scheduler/cadence remains outside the semantic audit method;
+- internal review NG2-2026-11-14-payload-traffic-manager-audit-review.md passed.
+
+---
+
 ## 2026-11-14 — NG2 PayloadTrafficManager request path
 
 Implemented and reviewed the first executable PayloadTrafficManager control path:
