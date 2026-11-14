@@ -160,7 +160,7 @@ class AvailabilityProbeManager:
             and state.convergence is RulesConvergence.MATCHED
         )
 
-    def _synchronize_generation(self, state: ProbeRulesState) -> None:
+    def _synchronize_generation(self, state: NetworkRulesConvergenceState) -> None:
         request = self._latest_request
         if request is None or not request.probes:
             self._invalidate_generation()
@@ -224,7 +224,7 @@ class AvailabilityProbeManager:
 
     def _publish_unknown_current(
         self,
-        rules_state: ProbeRulesState,
+        rules_state: NetworkRulesConvergenceState,
     ) -> None:
         request = self._latest_request
         if request is None:
