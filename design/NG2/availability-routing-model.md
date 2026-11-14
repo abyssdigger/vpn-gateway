@@ -434,8 +434,11 @@ target order/live-prefix
 ```
 
 Пока этот вызов не завершен, следующий route-order target **того же Profile** не начинает
-обработку: второй `execute()` ждет single-flight gate. Поэтому новый план всегда строится
-от уже завершенного semantic state, а не от промежуточного duplicate/EMPTY состояния.
+lower-domain operation: второй `execute()` ждет single-flight gate. Перед каждым Profile
+apply Manager получает fresh authoritative Adapter state и накладывает target только этого
+Profile на эту завершенную базу. Поэтому ни промежуточное duplicate/EMPTY состояние, ни
+незакоммиченный desired предыдущей неудачной transaction не становятся входом следующего
+move plan.
 
 У другого Profile другой Executor и другой gate. Текущий общий NetworkRules owner и
 shared lower-domain Adapter могут дополнительно сериализовать фактический physical commit;
