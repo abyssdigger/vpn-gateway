@@ -328,8 +328,14 @@ def main() -> int:
             DEST.with_prefixlen, "dev", "vpns00",
             "metric", "10",
         )
+        host(
+            "ip", "netns", "exec", NS,
+            "nft", "add", "table", "inet", "foreign_ci",
+        )
         if adapter.renew_state(owner).success:
-            raise RuntimeError("deleted owned route was not detected")
+            raise RuntimeError(
+                "route/foreign-nft drift was not detected"
+            )
 
         runner.calls.clear()
         repaired = adapter.apply(owner, wanted)
@@ -348,7 +354,14 @@ def main() -> int:
             raise RuntimeError(
                 f"repair did not reopen after verification: {forwarding_writes}"
             )
-        print("PASS D: owned route drift repaired behind forwarding barrier")
+        nft_tables = host(
+            "ip", "netns", "exec", NS, "nft", "list", "tables"
+        ).stdout
+        if "foreign_ci" in nft_tables:
+            raise RuntimeError("structural repair left foreign nft table")
+        print(
+            "PASS D: route + foreign-nft drift repaired behind forwarding barrier"
+        )
 
         default_owner = object()
         default_spec = routing_only_spec(
