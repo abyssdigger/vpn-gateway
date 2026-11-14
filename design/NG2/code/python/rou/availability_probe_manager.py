@@ -1,0 +1,202 @@
+from __future__ import annotations
+
+from typing import Protocol
+
+from .availability_probe_state import (
+    AvailabilityProbeState,
+    AvailabilityProbeStateInfo,
+    ProbeObservationGeneration,
+)
+from .network_rules import ActionResult, NetworkRulesAdapter, NetworkRulesSpec
+from .probe_rules import (
+    AvailabilityProbeSetRequest,
+    ProbeRulesCalculator,
+    availability_probe_sets_semantically_equal,
+)
+from .probe_rules_state import (
+    Convergence,
+    Knowledge,
+    ProbeRulesState,
+    ProbeRulesStateCalculator,
+    Usability,
+)
+
+
+class AvailabilityProbeStatePublisher(Protocol):
+    def publish(self, info: AvailabilityProbeStateInfo) -> None:
+        ...
+
+
+class AvailabilityProbeManager:
+    """Rules-control slice of the active availability-probe Manager.
+
+    Scheduling and attempt-result policy are intentionally not implemented here.
+    This slice owns probe NetworkRules lifecycle and the rules-readiness epoch that
+    future authoritative probe evidence must carry.
+    """
+
+    def __init__(
+        self,
+        adapter: NetworkRulesAdapter,
+        publisher: AvailabilityProbeStatePublisher,
+        *,
+        rules_calculator: ProbeRulesCalculator | None = None,
+        state_calculator: ProbeRulesStateCalculator | None = None,
+    ) -> None:
+        self._adapter = adapter
+        self._publisher = publisher
+        self._rules_calculator = rules_calculator or ProbeRulesCalculator()
+        self._state_calculator = (
+            state_calculator or ProbeRulesStateCalculator()
+        )
+
+        self._latest_request: AvailabilityProbeSetRequest | None = None
+        self._latest_desired: NetworkRulesSpec | None = None
+        self._latest_rules_state: ProbeRulesState | None = None
+        self._latest_published: dict[str, AvailabilityProbeStateInfo] = {}
+
+        self._generation_sequence = 0
+        self._active_generation: ProbeObservationGeneration | None = None
+
+    @property
+    def observation_generation(self) -> ProbeObservationGeneration | None:
+        """Current owner-wide READY epoch, or None while probe evidence is invalid."""
+
+        return self._active_generation
+
+    def handle_request(self, request: AvailabilityProbeSetRequest) -> None:
+        """Accept one full desired probe snapshot and reconcile its network plane."""
+
+        desired = self._rules_calculator.calculate(request)
+
+        changed = (
+            self._latest_request is None
+            or not availability_probe_sets_semantically_equal(
+                self._latest_request,
+                request,
+            )
+        )
+
+        if changed:
+            self._invalidate_generation()
+            self._latest_request = request
+            self._latest_desired = desired
+            self._drop_removed_publications(request)
+            rules_state = self._apply_desired_and_observe(desired)
+        else:
+            assert self._latest_desired is not None
+            rules_state = self._audit_rules(self._latest_desired)
+
+        self._latest_rules_state = rules_state
+        self._synchronize_generation(rules_state)
+        self._publish_unknown_current(rules_state)
+
+    def audit(self) -> None:
+        """Run one deterministic rules refresh/repair pass."""
+
+        desired = self._latest_desired
+        if desired is None:
+            return
+
+        rules_state = self._audit_rules(desired)
+        self._latest_rules_state = rules_state
+        self._synchronize_generation(rules_state)
+        self._publish_unknown_current(rules_state)
+
+    def shutdown(self) -> ActionResult:
+        """Release all NetworkRules state owned by this Manager instance."""
+
+        self._invalidate_generation()
+        return self._adapter.cleanup(self)
+
+    def _audit_rules(
+        self,
+        desired: NetworkRulesSpec,
+    ) -> ProbeRulesState:
+        self._adapter.renew_state(self)
+        rules_state = self._current_rules_state(desired)
+
+        if self._rules_ready(rules_state):
+            return rules_state
+
+        self._invalidate_generation()
+        return self._apply_desired_and_observe(desired)
+
+    def _apply_desired_and_observe(
+        self,
+        desired: NetworkRulesSpec,
+    ) -> ProbeRulesState:
+        action = self._adapter.apply(self, desired)
+        if not action.success:
+            self._adapter.renew_state(self)
+        return self._current_rules_state(desired)
+
+    def _current_rules_state(
+        self,
+        desired: NetworkRulesSpec,
+    ) -> ProbeRulesState:
+        observed = self._adapter.get_last_state(self)
+        return self._state_calculator.calculate(desired, observed)
+
+    @staticmethod
+    def _rules_ready(state: ProbeRulesState) -> bool:
+        return (
+            state.knowledge is Knowledge.KNOWN
+            and state.convergence is Convergence.MATCHED
+            and state.usability is Usability.READY
+        )
+
+    def _synchronize_generation(self, state: ProbeRulesState) -> None:
+        request = self._latest_request
+        if request is None or not request.probes:
+            self._invalidate_generation()
+            return
+
+        if not self._rules_ready(state):
+            self._invalidate_generation()
+            return
+
+        if self._active_generation is None:
+            self._generation_sequence += 1
+            self._active_generation = ProbeObservationGeneration(
+                self._generation_sequence
+            )
+
+    def _invalidate_generation(self) -> None:
+        self._active_generation = None
+
+    def _drop_removed_publications(
+        self,
+        request: AvailabilityProbeSetRequest,
+    ) -> None:
+        live_ids = {item.probe_id for item in request.probes}
+        self._latest_published = {
+            probe_id: info
+            for probe_id, info in self._latest_published.items()
+            if probe_id in live_ids
+        }
+
+    def _publish_unknown_current(
+        self,
+        rules_state: ProbeRulesState,
+    ) -> None:
+        request = self._latest_request
+        if request is None:
+            return
+
+        reason = (
+            "no authoritative probe evidence for current rules generation"
+            if self._rules_ready(rules_state)
+            else "probe rules are not ready"
+        )
+
+        for probe in sorted(request.probes, key=lambda item: item.probe_id):
+            info = AvailabilityProbeStateInfo(
+                probe.probe_id,
+                AvailabilityProbeState.UNKNOWN,
+                reason=reason,
+            )
+            if self._latest_published.get(probe.probe_id) == info:
+                continue
+            self._publisher.publish(info)
+            self._latest_published[probe.probe_id] = info
