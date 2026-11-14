@@ -1,3 +1,21 @@
+## 2026-11-14 — NG2 PayloadTrafficManager request path
+
+Implemented and reviewed the first executable PayloadTrafficManager control path:
+
+- valid PayloadTrafficStateRequest is converted to desired NetworkRulesSpec before it is
+  accepted as current managed intent;
+- invalid/unrepresentable request does not mutate Adapter state;
+- NetworkRulesAdapter calls use the Manager instance itself as opaque owner identity;
+- apply/renew operation failures remain separate from observed payload-rules state;
+- stale observation after failed operations produces UNKNOWN rather than synthetic FAILED;
+- PayloadTrafficStateInfo publication goes only through the Event Delivery Environment port;
+- repeated semantically identical InfoEvents are deduplicated;
+- shutdown delegates Adapter cleanup with the same owner identity;
+- audit/retry scheduling remains intentionally separate from this request-path unit;
+- internal review NG2-2026-11-14-payload-traffic-manager-request-review.md passed.
+
+---
+
 ## 2026-11-14 — NG2 payload rules relation and traffic-state projection
 
 Extended the reviewed payload-state model:
