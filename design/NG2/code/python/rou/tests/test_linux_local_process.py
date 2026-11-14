@@ -14,7 +14,7 @@ class LinuxLocalProcessConfigTests(unittest.TestCase):
         self.assertEqual(config.ct_mark, 0x24)
 
     def test_rejects_reserved_or_out_of_range_values(self):
-        for uid in (-1, (1 << 32) - 1):
+        for uid in (-1, 0, (1 << 32) - 1):
             with self.subTest(uid=uid):
                 with self.assertRaises(LinuxLocalProcessError):
                     LinuxLocalProcessConfig(uid=uid, ct_mark=1)
