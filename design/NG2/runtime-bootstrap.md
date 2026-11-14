@@ -11,13 +11,15 @@
 
 Конкретный Linux `NetworkRulesAdapter` уже закрывает forwarding перед каждой своей
 mutation. Этого недостаточно для startup: после restart в dedicated ROU namespace могут
-оставаться stale route/nft resources и ранее включенный `net.ipv4.ip_forward=1` до того,
+оставаться stale route/nft resources и ранее включенный IPv4/IPv6 forwarding до того,
 как первый owner request вообще будет обработан.
 
 Нормативное правило:
 
 > runtime не публикует готовый к использованию Linux NetworkRulesAdapter до fresh
-> подтверждения `net.ipv4.ip_forward=0`.
+> подтверждения protective closure: `net.ipv4.ip_forward=0`,
+> `net.ipv6.conf.all.forwarding=0` и
+> `net.ipv6.conf.default.forwarding=0`.
 
 ## 2. Граница ответственности
 
@@ -86,7 +88,7 @@ Process-history loss не должен создавать окно forwarding:
 
 ```text
 process starts
-    -> protective close + fresh verify
+    -> protective IPv4/IPv6 close + fresh verify
     -> construct/publish Adapter
     -> first owner reconcile
     -> Adapter structural verification
