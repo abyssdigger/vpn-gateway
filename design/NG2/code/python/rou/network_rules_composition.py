@@ -150,6 +150,14 @@ class OwnerRulesRegistry:
         entry = self._find(owner)
         return None if entry is None else entry.token
 
+    def registered_rules(
+        self,
+    ) -> tuple[tuple[OwnerToken, NetworkRulesSpec | None], ...]:
+        return tuple(
+            (entry.token, entry.rules)
+            for entry in self._entries
+        )
+
     def _find(self, owner: object) -> _OwnerEntry | None:
         for entry in self._entries:
             if entry.identity is owner:
