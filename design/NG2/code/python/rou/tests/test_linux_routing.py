@@ -174,6 +174,47 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
         )
         self.assertTrue(all(item.metric < TERMINAL_METRIC for item in normal))
 
+    def test_live_prefix_boundary_creates_one_empty_metric_slot(self):
+        paths = tuple(
+            InterfaceIdentity(f"vpns0{index}", 10 + index)
+            for index in range(4)
+        )
+        rules = OwnedNetworkRules(
+            OwnerToken(1),
+            NetworkRulesSpec(
+                routing_domains=(
+                    RoutingDomainSpec(
+                        "a",
+                        (IPv4Network("10.0.0.0/8"),),
+                        paths,
+                        TerminalDisposition.DROP,
+                        priority_prefix_length=2,
+                    ),
+                ),
+            ),
+        )
+
+        desired = compile_linux_routing_desired(
+            compose_network_rules((rules,)),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+
+        normal = [
+            item
+            for item in desired.routes
+            if item.kind is LinuxRouteKind.UNICAST
+        ]
+        self.assertEqual(
+            [(item.metric, item.path) for item in normal],
+            [
+                (10, paths[0]),
+                (20, paths[1]),
+                (40, paths[2]),
+                (50, paths[3]),
+            ],
+        )
+
     def test_every_domain_has_one_terminal_blackhole_default(self):
         composed = compose_network_rules(
             (
