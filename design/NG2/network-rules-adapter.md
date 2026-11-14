@@ -128,7 +128,10 @@ and projects every owner's rules fail-closed:
   the destination;
 - LOCAL_PROCESS dispatch remains only while its concrete bound-output generation is present;
   stale same-name/new-ifindex bound output is projected away together with its local-process
-  traffic permissions.
+  traffic permissions;
+- the lower-domain dedicated-process OUTPUT guard is retained from pre-projection registered
+  LOCAL_PROCESS intent until that owner intent is cleaned up, so projection cannot reopen
+  ordinary main-route escape for the dedicated uid.
 
 This projection does not rewrite an owner's desired intent. It is the observed realisable
 subset for the current Linux generation.
@@ -339,7 +342,7 @@ exercise the new compiler and Driver directly.
 
 ## 14. Local-process semantic extension
 
-The semantic NetworkRules contract also admits `LOCAL_PROCESS` endpoints for future
+The semantic NetworkRules contract also admits `LOCAL_PROCESS` endpoints for
 AvailabilityProbeManager ownership.
 
 A local-process dispatch is intentionally stricter than host-ingress dispatch and requires:
