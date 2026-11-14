@@ -77,8 +77,17 @@ the live/dead boundary in addition to effective order.
 `confirmed_live_prefix_length` was added only to transient runtime routing intent. It is
 not part of normalized user configuration.
 
-Concrete-generation projection adjusts the prefix length when an interface generation is
-absent.
+Its sentinel semantics are intentional:
+
+```text
+None -> availability-derived boundary is inactive for this Profile
+0    -> boundary is active and no path is confirmed live
+N    -> all N paths are confirmed live
+```
+
+Therefore disabling/non-participating probing cannot be confused with an active
+all-non-confirmed state. Concrete-generation projection adjusts an active prefix length
+when an interface generation is absent.
 
 ### F4 — semantic-only `None -> N` live-prefix transition caused needless structural rebuild
 
