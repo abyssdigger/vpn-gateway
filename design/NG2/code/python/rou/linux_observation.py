@@ -36,6 +36,9 @@ class ObservedRule:
     destination: IPv4Network | None
     table_id: int | None
     action: str
+    uid_range: tuple[int, int] | None = None
+    protocol: str | None = None
+    output_ifname: str | None = None
 
 
 @dataclass(frozen=True)
@@ -248,6 +251,45 @@ def _rule_destination(
     )
 
 
+
+def _rule_uid_range(
+    item: dict,
+    *,
+    position: int,
+) -> tuple[int, int] | None:
+    raw = item.get("uidrange")
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        parts = raw.split("-", 1)
+        if len(parts) != 2 or not all(part.isdecimal() for part in parts):
+            raise LinuxObservationError(
+                f"rule[{position}].uidrange has unsupported value {raw!r}"
+            )
+        return int(parts[0]), int(parts[1])
+    if isinstance(raw, dict):
+        start = raw.get("start")
+        end = raw.get("end")
+        if type(start) is int and type(end) is int and 0 <= start <= end:
+            return start, end
+    raise LinuxObservationError(
+        f"rule[{position}].uidrange has unsupported value {raw!r}"
+    )
+
+
+def _rule_protocol(item: dict, *, position: int) -> str | None:
+    raw = item.get("ipproto")
+    if raw is None:
+        return None
+    if isinstance(raw, str) and raw:
+        return raw
+    if type(raw) is int and raw >= 0:
+        return str(raw)
+    raise LinuxObservationError(
+        f"rule[{position}].ipproto has unsupported value {raw!r}"
+    )
+
+
 def parse_rule_json(text: str) -> tuple[ObservedRule, ...]:
     raw = _json_array(text, "ip-rule")
     out: list[ObservedRule] = []
@@ -285,6 +327,14 @@ def parse_rule_json(text: str) -> tuple[ObservedRule, ...]:
                 f"rule[{position}].iif must be a string"
             )
 
+        oif = item.get("oif")
+        if oif is not None and (
+            not isinstance(oif, str) or not oif
+        ):
+            raise LinuxObservationError(
+                f"rule[{position}].oif must be a string"
+            )
+
         destination = _rule_destination(
             item,
             position=position,
@@ -299,6 +349,9 @@ def parse_rule_json(text: str) -> tuple[ObservedRule, ...]:
                 destination=destination,
                 table_id=table,
                 action=action,
+                uid_range=_rule_uid_range(item, position=position),
+                protocol=_rule_protocol(item, position=position),
+                output_ifname=oif,
             )
         )
 
@@ -334,6 +387,13 @@ def _desired_rule_key(rule) -> tuple:
         rule.destination,
         rule.table_id,
         "to_tbl",
+        (
+            None
+            if rule.local_process_uid is None
+            else (rule.local_process_uid, rule.local_process_uid)
+        ),
+        None if rule.protocol is None else rule.protocol.value,
+        None if rule.bound_output is None else rule.bound_output.ifname,
     )
 
 
@@ -344,6 +404,9 @@ def _desired_terminal_rule_key(rule) -> tuple:
         None,
         None,
         "unreachable",
+        None,
+        None,
+        None,
     )
 
 
@@ -354,6 +417,9 @@ def _observed_rule_key(rule: ObservedRule) -> tuple:
         rule.destination,
         rule.table_id,
         rule.action,
+        rule.uid_range,
+        rule.protocol,
+        rule.output_ifname,
     )
 
 
@@ -371,9 +437,19 @@ def verify_linux_routing(
     }
 
     for rule in desired.dispatch_rules:
-        if rule.source_ifname not in interfaces_by_name:
+        if rule.source_ifname is not None:
+            if rule.source_ifname not in interfaces_by_name:
+                errors.append(
+                    f"dispatch source interface {rule.source_ifname!r} is absent"
+                )
+            continue
+        assert rule.bound_output is not None
+        actual_ifindex = interfaces_by_name.get(rule.bound_output.ifname)
+        if actual_ifindex != rule.bound_output.ifindex:
             errors.append(
-                f"dispatch source interface {rule.source_ifname!r} is absent"
+                "dispatch bound-output generation mismatch for "
+                f"{rule.bound_output.ifname!r}: expected ifindex "
+                f"{rule.bound_output.ifindex}, observed {actual_ifindex!r}"
             )
 
     for route in desired.routes:
