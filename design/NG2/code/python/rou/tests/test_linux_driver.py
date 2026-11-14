@@ -6,6 +6,7 @@ from rou.interface_identity import InterfaceIdentity
 from rou.linux_driver import (
     CommandResult,
     LinuxNetworkDriver,
+    NetworkNamespaceLinuxRunner,
 )
 from rou.linux_network import compile_linux_network_desired
 from rou.linux_routing import LinuxRoutingAllocationState
@@ -293,6 +294,43 @@ def _desired():
         LinuxRoutingAllocationState(),
         local_interface="host0",
     )
+
+
+class RecordingHostRunner:
+    def __init__(self):
+        self.calls = []
+
+    def run(self, argv, *, input_text=None, check=True):
+        self.calls.append((argv, input_text, check))
+        return CommandResult(0, "ok", "")
+
+
+class NetworkNamespaceLinuxRunnerTests(unittest.TestCase):
+    def test_runner_prefixes_command_and_preserves_stdin_and_check(self):
+        host = RecordingHostRunner()
+        runner = NetworkNamespaceLinuxRunner(host, "rou0")
+
+        result = runner.run(
+            ("nft", "-f", "-"),
+            input_text="table ip test {}\n",
+            check=False,
+        )
+
+        self.assertEqual(result.stdout, "ok")
+        self.assertEqual(
+            host.calls,
+            [
+                (
+                    ("ip", "netns", "exec", "rou0", "nft", "-f", "-"),
+                    "table ip test {}\n",
+                    False,
+                )
+            ],
+        )
+
+    def test_runner_rejects_empty_namespace_name(self):
+        with self.assertRaisesRegex(ValueError, "must be non-empty"):
+            NetworkNamespaceLinuxRunner(RecordingHostRunner(), "")
 
 
 class LinuxNetworkDriverTests(unittest.TestCase):
