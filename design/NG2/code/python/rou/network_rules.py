@@ -350,6 +350,49 @@ class NetworkRulesSpec:
                 )
 
 
+def routing_domains_semantically_equal(
+    actual: tuple[RoutingDomainSpec, ...],
+    desired: tuple[RoutingDomainSpec, ...],
+) -> bool:
+    """Compare routing-domain semantics while preserving ordered path priority."""
+
+    actual_by_name = {item.name: item for item in actual}
+    desired_by_name = {item.name: item for item in desired}
+
+    if actual_by_name.keys() != desired_by_name.keys():
+        return False
+
+    for name, wanted in desired_by_name.items():
+        observed = actual_by_name[name]
+        if set(observed.destinations) != set(wanted.destinations):
+            return False
+        if observed.ordered_paths != wanted.ordered_paths:
+            return False
+        if observed.terminal_disposition is not wanted.terminal_disposition:
+            return False
+
+    return True
+
+
+def network_rules_semantically_equal(
+    actual: NetworkRulesSpec,
+    desired: NetworkRulesSpec,
+) -> bool:
+    """Generic semantic equality used by domain-specific state calculators."""
+
+    return (
+        routing_domains_semantically_equal(
+            actual.routing_domains,
+            desired.routing_domains,
+        )
+        and actual.dispatch_rules == desired.dispatch_rules
+        and set(actual.traffic_allows) == set(desired.traffic_allows)
+        and set(actual.flow_initiation_allows)
+        == set(desired.flow_initiation_allows)
+        and actual.source_nat == desired.source_nat
+    )
+
+
 class StateKnowledge(str, Enum):
     KNOWN = "known"
     UNKNOWN = "unknown"
