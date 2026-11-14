@@ -42,6 +42,10 @@ It includes executor prerequisite fail-close and the internal RPDB non-root uid 
 
 Comparison from pre-cycle baseline ec1ee1e056cd9cb112d94d7279c3072bf5d03ba5 shows 38 changed files and no NG1/RC implementation file. Changes are confined to NG2 plus the NG2 workflow/reviews. NG1/RC evidence was not used as a source tree for modification.
 
+## Closure integrity
+
+From green executable baseline 9a95384b7b43121b2914e1df7b903c6da5e20518 through documentation head b80a9393db9d7bcef047661cd76c999a7a32d98a, the branch contains only documentation changes; no Python/workflow code changed after the green run. Therefore the current executable baseline is exactly the tested 9a95384b state.
+
 ## Reviews
 
 - NG2-2026-11-14-linux-local-process-backend-review.md
