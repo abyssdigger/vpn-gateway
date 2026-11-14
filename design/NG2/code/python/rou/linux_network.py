@@ -12,11 +12,7 @@ from .linux_nft import (
     compile_nft_nat_desired,
 )
 from .linux_prerequisites import LinuxNamespacePrerequisites
-from .linux_route_priority import plan_route_slot_moves
 from .linux_routing import (
-    FIRST_PATH_METRIC,
-    PATH_METRIC_STEP,
-    TERMINAL_METRIC,
     LinuxRouteKind,
     LinuxRoutingAllocationState,
     LinuxRoutingDesired,
@@ -84,73 +80,41 @@ def linux_network_route_priority_only_change(
     if current_terminal != desired_terminal:
         return False
 
-    def groups(routing: LinuxRoutingDesired):
-        out: dict[tuple, dict[int, InterfaceIdentity]] = {}
+    def slots(routing: LinuxRoutingDesired):
+        out = {}
+        groups: dict[tuple, set[InterfaceIdentity]] = {}
         for route in routing.routes:
             if route.kind is not LinuxRouteKind.UNICAST:
                 continue
             assert route.path is not None
-            group = (
+            slot = (
                 route.domain,
                 route.table_id,
                 route.destination,
                 route.protocol,
+                route.metric,
             )
-            by_metric = out.setdefault(group, {})
-            if route.metric in by_metric:
-                return None
-            by_metric[route.metric] = route.path
-        return out
+            if slot in out:
+                return None, None
+            out[slot] = route.path
+            group = (
+                route.domain,
+                route.table_id,
+                route.destination,
+            )
+            groups.setdefault(group, set()).add(route.path)
+        return out, groups
 
-    current_groups = groups(current.routing)
-    desired_groups = groups(desired.routing)
-    if current_groups is None or desired_groups is None:
+    current_slots, current_groups = slots(current.routing)
+    desired_slots, desired_groups = slots(desired.routing)
+    if current_slots is None or desired_slots is None:
         return False
-    if current_groups.keys() != desired_groups.keys():
+    if current_slots.keys() != desired_slots.keys():
+        return False
+    if current_groups != desired_groups:
         return False
 
-    changed = False
-    for group in current_groups:
-        current_by_metric = current_groups[group]
-        desired_by_metric = desired_groups[group]
-
-        if set(current_by_metric.values()) != set(desired_by_metric.values()):
-            return False
-        if len(current_by_metric) != len(desired_by_metric):
-            return False
-
-        path_count = len(current_by_metric)
-        metrics = tuple(
-            FIRST_PATH_METRIC + index * PATH_METRIC_STEP
-            for index in range(path_count + 1)
-        )
-        if metrics[-1] >= TERMINAL_METRIC:
-            return False
-        if (
-            any(metric not in metrics for metric in current_by_metric)
-            or any(metric not in metrics for metric in desired_by_metric)
-        ):
-            return False
-
-        current_slots = tuple(
-            current_by_metric.get(metric)
-            for metric in metrics
-        )
-        desired_slots = tuple(
-            desired_by_metric.get(metric)
-            for metric in metrics
-        )
-
-        if current_slots.count(None) != 1 or desired_slots.count(None) != 1:
-            return False
-        try:
-            moves = plan_route_slot_moves(current_slots, desired_slots)
-        except ValueError:
-            return False
-        if moves:
-            changed = True
-
-    return changed
+    return current_slots != desired_slots
 
 
 def _register(
