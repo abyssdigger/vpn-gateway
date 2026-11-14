@@ -9,6 +9,7 @@ from .network_rules import (
     NetworkRulesAdapter,
     NetworkRulesSpec,
     RoutingDomainSpec,
+    StateKnowledge,
 )
 from .payload_rules import (
     PayloadRulesCalculator,
@@ -172,22 +173,28 @@ class PayloadTrafficManager:
                 desired,
             )
 
-        if priority_targets:
-            for target in priority_targets:
-                executor = self._profile_route_executor(target.name)
-                executor.execute(
-                    target,
-                    self._apply_profile_priority_target,
-                )
-            return
-
-        with self._commit_lock:
-            # Accept the derived desired projection only after pure calculation succeeds.
-            # If calculation rejects the request, the previous managed intent remains
-            # intact and no lower-domain mutation is attempted.
+            # A valid full snapshot supersedes the previous managed intent before
+            # convergence starts. Profile transactions below still build physical
+            # candidates from fresh authoritative Adapter state, never from an
+            # uncommitted intermediate desired projection.
             self._latest_desired = desired
 
-            info = self._apply_desired_and_observe(desired)
+            if not priority_targets:
+                info = self._apply_desired_and_observe(desired)
+                self._publish_if_changed(info)
+                return
+
+        for target in priority_targets:
+            executor = self._profile_route_executor(target.name)
+            executor.execute(
+                target,
+                self._apply_profile_priority_target,
+            )
+
+        # Publish only after all Profile transactions requested by this full
+        # snapshot have completed (successfully or otherwise).
+        with self._commit_lock:
+            info = self._current_info(desired)
             self._publish_if_changed(info)
 
     def audit(self) -> None:
@@ -226,22 +233,47 @@ class PayloadTrafficManager:
     def _apply_profile_priority_target(
         self,
         target: RoutingDomainSpec,
-    ) -> PayloadTrafficStateInfo:
-        """Apply one Profile order as one caller-visible Direct transaction."""
+    ) -> ActionResult:
+        """Apply one Profile order from the last completed Adapter projection.
+
+        The target is an absolute Profile priority. The candidate base is freshly
+        authoritative network-rules state, so a failed earlier Profile transaction
+        cannot leak its uncommitted desired order into this transaction.
+        """
 
         with self._commit_lock:
-            current = self._latest_desired
-            if current is None:
-                raise RuntimeError(
-                    "route-priority transaction requires accepted payload intent"
+            observed = self._adapter.get_last_state(self)
+            if (
+                observed.knowledge is not StateKnowledge.KNOWN
+                or not observed.fresh
+                or observed.rules is None
+            ):
+                renewed = self._adapter.renew_state(self)
+                observed = self._adapter.get_last_state(self)
+                if (
+                    not renewed.success
+                    or observed.knowledge is not StateKnowledge.KNOWN
+                    or not observed.fresh
+                    or observed.rules is None
+                ):
+                    return ActionResult(
+                        False,
+                        "cannot establish authoritative committed base for "
+                        f"Profile {target.name!r} route-order transaction",
+                    )
+
+            try:
+                candidate = _merge_profile_priority(
+                    observed.rules,
+                    target,
                 )
+            except ValueError as exc:
+                return ActionResult(False, str(exc))
 
-            desired = _merge_profile_priority(current, target)
-            self._latest_desired = desired
-
-            info = self._apply_desired_and_observe(desired)
-            self._publish_if_changed(info)
-            return info
+            action = self._adapter.apply(self, candidate)
+            if not action.success:
+                self._adapter.renew_state(self)
+            return action
 
     def _apply_desired_and_observe(
         self,
