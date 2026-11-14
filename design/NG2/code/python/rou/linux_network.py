@@ -14,8 +14,17 @@ from .linux_routing import (
     LinuxRoutingDesired,
     compile_linux_routing_desired,
 )
-from .network_rules import EndpointKind, NetworkEndpoint
-from .network_rules_composition import ComposedNetworkRules
+from .network_rules import (
+    EndpointKind,
+    NetworkEndpoint,
+    NetworkRulesSpec,
+    RoutingDomainSpec,
+)
+from .network_rules_composition import (
+    ComposedNetworkRules,
+    OwnedNetworkRules,
+    compose_network_rules,
+)
 
 
 class LinuxNetworkDesiredError(ValueError):
@@ -100,6 +109,81 @@ def validate_linux_interface_generations(
             key=lambda item: (item.ifindex, item.ifname),
         )
     )
+
+
+def _endpoint_present(
+    endpoint: NetworkEndpoint,
+    available: set[InterfaceIdentity],
+) -> bool:
+    if endpoint.kind is EndpointKind.LOCAL_NETWORK:
+        return True
+    assert endpoint.interface is not None
+    return endpoint.interface in available
+
+
+def project_network_rules_to_interfaces(
+    composed: ComposedNetworkRules,
+    interfaces: tuple[InterfaceIdentity, ...],
+) -> ComposedNetworkRules:
+    """Fail-close owner rules that reference absent concrete generations."""
+
+    available = set(interfaces)
+    projected: list[OwnedNetworkRules] = []
+
+    for owned in composed.owners:
+        rules = owned.rules
+        routing_domains = tuple(
+            RoutingDomainSpec(
+                name=domain.name,
+                destinations=domain.destinations,
+                ordered_paths=tuple(
+                    path
+                    for path in domain.ordered_paths
+                    if path in available
+                ),
+                terminal_disposition=domain.terminal_disposition,
+            )
+            for domain in rules.routing_domains
+        )
+
+        dispatch_rules = tuple(
+            rule
+            for rule in rules.dispatch_rules
+            if _endpoint_present(rule.source, available)
+        )
+        traffic_allows = tuple(
+            rule
+            for rule in rules.traffic_allows
+            if _endpoint_present(rule.source, available)
+            and _endpoint_present(rule.destination, available)
+        )
+        flow_allows = tuple(
+            rule
+            for rule in rules.flow_initiation_allows
+            if _endpoint_present(rule.source, available)
+            and _endpoint_present(rule.destination, available)
+        )
+        source_nat = tuple(
+            rule
+            for rule in rules.source_nat
+            if _endpoint_present(rule.source, available)
+            and _endpoint_present(rule.egress, available)
+        )
+
+        projected.append(
+            OwnedNetworkRules(
+                owned.owner,
+                NetworkRulesSpec(
+                    routing_domains=routing_domains,
+                    dispatch_rules=dispatch_rules,
+                    traffic_allows=traffic_allows,
+                    flow_initiation_allows=flow_allows,
+                    source_nat=source_nat,
+                ),
+            )
+        )
+
+    return compose_network_rules(tuple(projected))
 
 
 def compile_linux_network_desired(
