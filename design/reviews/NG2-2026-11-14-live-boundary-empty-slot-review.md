@@ -56,18 +56,29 @@ E -> lower-priority EMPTY
 
 The final move returns EMPTY to the new live/non-confirmed boundary.
 
-### F4 — route transitions must be single-flight
+### F4 — route transitions must be single-flight per Profile
 
-A newer availability-derived request must not interleave its route moves with a transition
-already in materialize/verify/commit.
+A newer availability-derived target must not interleave its route moves with an active
+transition of the **same Profile**.
 
-**Resolved.** Current `PayloadTrafficManager` serializes `handle_request()`, `audit()`
-and `shutdown()` through one transaction lock. The current Manager owns the complete
-payload domain, so this is stronger than the minimum per-Profile invariant. If execution is
-later sharded, one Profile must still never have two concurrent route-priority transitions.
+**Post-cycle audit correction.** The original cycle closed this with one global
+`PayloadTrafficManager` lock. That prevented interleave but represented the wrong
+architectural boundary: the agreed caller-visible transaction belongs to Profile route
+ordering, not to the whole payload Manager.
 
-A concurrent-request unit regression proves the second request cannot enter the Adapter
-until the first transaction exits.
+The corrected implementation uses exactly one lazily retained
+`ProfileRouteOrderExecutor` per Profile for pure priority changes. Its Direct
+`execute(target)` does not return until the lower-domain apply/materialize/fresh
+verify/commit attempt has completed. A second target of that Profile waits at the same
+Executor gate.
+
+Different Profiles have distinct Executor gates. The shared aggregate NetworkRules owner
+still has a lower implementation lock so concurrent Profile transactions cannot lose each
+other's committed aggregate state; that lock is not the semantic Profile transaction and
+does not claim Linux multi-command atomicity.
+
+Regression tests cover same-Profile non-interleaving, independent per-Profile gates and
+decomposition of one multi-Profile priority snapshot into completed Profile transactions.
 
 ### F5 — EMPTY consumes metric capacity even though it has no route
 
@@ -87,12 +98,16 @@ feature for other modes/settings.
 
 ## Complexity / rudiment audit
 
-No second transition planner is retained in the final branch. The production path is:
+No second transition planner is retained. The corrected production path is:
 
 ```text
 confirmed-live prefix
         ->
 ordered_paths + priority_prefix_length
+        ->
+ProfileRouteOrderExecutor(profile)
+        ->
+NetworkRulesAdapter.apply()
         ->
 route_slots()
         ->
@@ -100,7 +115,9 @@ plan_route_slot_moves()
         ->
 LinuxNetworkExecutor.materialize_route_priority()
         ->
-fresh verify / commit
+fresh verify / Adapter commit
+        ->
+Profile Executor returns
 ```
 
 No staging table, shadow route tier, transition metric class, dead-slot search algorithm,
