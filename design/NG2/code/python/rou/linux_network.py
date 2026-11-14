@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .interface_identity import InterfaceIdentity
+from .linux_local_process import LinuxLocalProcessConfig
 from .linux_nft import (
     NftFilterDesired,
     NftNatDesired,
@@ -205,6 +206,7 @@ def compile_linux_network_desired(
     committed_routing: LinuxRoutingAllocationState,
     *,
     local_interface: str,
+    local_process: LinuxLocalProcessConfig | None = None,
 ) -> LinuxNetworkDesired:
     interface_identities = validate_linux_interface_generations(composed)
     prerequisites = LinuxNamespacePrerequisites(
@@ -222,6 +224,9 @@ def compile_linux_network_desired(
         composed,
         committed_routing,
         local_interface=local_interface,
+        local_process_uid=(
+            None if local_process is None else local_process.uid
+        ),
     )
 
     if not composed.owners:
@@ -236,6 +241,7 @@ def compile_linux_network_desired(
     filter_desired = compile_nft_filter_desired(
         composed,
         local_interface=local_interface,
+        local_process=local_process,
     )
     nat_desired = compile_nft_nat_desired(
         composed,
