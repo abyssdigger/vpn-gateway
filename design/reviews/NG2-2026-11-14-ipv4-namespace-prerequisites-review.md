@@ -134,19 +134,18 @@ model.
 
 ## Evidence
 
-Expected final gate:
+Post-fix implementation baseline `c8dbbfe8fb8eb8d7c7af3a5feed40255988aa616`:
 
-- rootless NG2 unit suite;
-- privileged structural Linux integration;
-- privileged live dataplane/NAT integration;
-- NG1 Python regression.
+- rootless NG2 unit suite: PASS;
+- privileged structural Linux integration: PASS;
+- privileged live dataplane/NAT integration: PASS;
+- NG1 Python regression: PASS.
 
 Live integration additionally covers prerequisite mutation/observation against a disposable
 kernel namespace.
 
 ## Final verdict
 
-**PASS pending final green branch gate.**
+**PASS.**
 
-No design issue remains open in this review unit. The PASS becomes unconditional once the
-post-fix branch CI is green.
+No unresolved finding remains in this review unit.
