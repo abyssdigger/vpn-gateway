@@ -57,6 +57,12 @@ class RuntimeStateManager:
     ) -> None:
         """Accept the current structural/admin payload and probe mapping snapshot."""
 
+        self._validate_routing_inputs(
+            configured_payload,
+            probe_request,
+            assignments,
+        )
+
         previous_configured = self._configured_payload
         previous_probe_request = self._probe_request
 
@@ -93,6 +99,51 @@ class RuntimeStateManager:
         self._recalculate_and_publish(
             previous_configured=previous_configured,
         )
+
+    @staticmethod
+    def _validate_routing_inputs(
+        configured_payload: PayloadTrafficStateRequest,
+        probe_request: AvailabilityProbeSetRequest,
+        assignments: tuple[ProfileProbeAssignment, ...],
+    ) -> None:
+        profiles_by_name = {
+            profile.name: profile
+            for profile in configured_payload.profiles
+        }
+        probes_by_id = {
+            probe.probe_id: probe
+            for probe in probe_request.probes
+        }
+
+        seen_profiles = set()
+        for assignment in assignments:
+            if assignment.profile_name in seen_profiles:
+                raise ValueError("duplicate Profile probe assignment")
+            seen_profiles.add(assignment.profile_name)
+
+            profile = profiles_by_name.get(assignment.profile_name)
+            if profile is None:
+                raise ValueError(
+                    f"probe assignment references unknown Profile "
+                    f"{assignment.profile_name!r}"
+                )
+            eligible = {
+                path.identity
+                for path in profile.ordered_paths
+            }
+
+            for probe_id in assignment.probe_ids:
+                probe = probes_by_id.get(probe_id)
+                if probe is None:
+                    raise ValueError(
+                        f"Profile {assignment.profile_name!r} references "
+                        f"unknown probe_id {probe_id!r}"
+                    )
+                if probe.path not in eligible:
+                    raise ValueError(
+                        f"probe {probe_id!r} path is not eligible for "
+                        f"Profile {assignment.profile_name!r}"
+                    )
 
     def handle_probe_state(self, info: AvailabilityProbeStateInfo) -> None:
         """Consume one latest-value AvailabilityProbeStateInfo projection."""
