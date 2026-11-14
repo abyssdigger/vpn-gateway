@@ -18,7 +18,7 @@ from rou.linux_probe_driver import (
     ProbeAttemptOutcome,
 )
 from rou.linux_driver import (
-    LinuxNetworkDriver,
+    LinuxNetworkExecutor,
     NetworkNamespaceLinuxRunner,
     SubprocessLinuxRunner,
 )
@@ -142,13 +142,13 @@ def main() -> int:
             SubprocessLinuxRunner(),
             ROU,
         )
-        driver = LinuxNetworkDriver(namespace_runner)
+        executor = LinuxNetworkExecutor(namespace_runner)
         local_process = LinuxLocalProcessConfig(
             uid=65534,
             ct_mark=0x24,
         )
         boot = bootstrap_linux_network_rules_adapter(
-            driver,
+            executor,
             local_interface="host0",
             local_process=local_process,
         )
