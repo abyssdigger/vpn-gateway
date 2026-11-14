@@ -26,11 +26,20 @@ model derived from the actual product requirement:
 - the redundant ProbeRulesState/ProbeRulesStateCalculator layer was removed; generic
   knowledge/convergence is now shared as NetworkRulesConvergenceState, while payload alone
   retains its domain-specific Safety/Service axes;
-- EXP-027 PASS proved fixed-metric route-slot replacement for both an ordinary prefix and
-  default: temporary duplicate paths are accepted and terminal blackhole remains;
-- Linux NetworkRules gained a verified route-priority fast path: fresh pre-check, top-down
-  ip route replace slot updates, fresh post-check, with automatic fallback to the existing
-  structural fail-closed rebuild for any broader change or failure;
+- EXP-027 PASS now proves make-before-break free-slot route permutation for ordinary prefix
+  and default: every eligible path remains present, only the moving path is temporarily
+  duplicated, and terminal blackhole remains;
+- Linux NetworkRules route-priority fast path now plans over N+1 ordinary metric positions
+  and executes each move as add duplicate -> delete old copy, with fresh pre/post
+  verification and structural fail-closed fallback;
+- transient `confirmed_live_prefix_length` carries only the derived runtime live/dead
+  boundary; the gap itself is neither configuration nor persistent state. All-live has no
+  steady gap, while all-non-confirmed paths begin at the second ordinary metric;
+- physically identical semantic updates (for example availability-unmanaged -> managed
+  all-live) use fresh verification without unnecessary structural rebuild;
+- route-priority transactions are specified as serialized per Profile/routing-domain:
+  a superseding availability state may become the next desired state but cannot interleave
+  with the active immutable move plan;
 - the standalone Linux single-shot ICMP worker is retained only as diagnostic/evidence
   machinery and now accepts only concrete path + target + technical timeout, not a logical
   AvailabilityProbeRequest;
