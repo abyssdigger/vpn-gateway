@@ -148,13 +148,13 @@ def setup() -> None:
     nft = f"""table ip probe_selective {{
 chain output {{
     type filter hook output priority 0; policy accept;
-    meta skuid {PROBE_UID} oifname "vpn0" ip daddr {TARGET} icmp type echo-request accept
-    meta skuid {PROBE_UID} drop
+    meta skuid {PROBE_UID} oifname "vpn0" ip daddr {TARGET} icmp type echo-request counter accept comment "probe-output-accept"
+    meta skuid {PROBE_UID} counter drop comment "probe-output-drop"
 }}
 chain input {{
     type filter hook input priority 0; policy accept;
-    iifname "vpn0" ip saddr {TARGET} icmp type echo-reply meta skuid {PROBE_UID} accept
-    iifname "vpn0" ip saddr {TARGET} icmp type echo-reply drop
+    iifname "vpn0" ip saddr {TARGET} icmp type echo-reply meta skuid {PROBE_UID} counter accept comment "probe-input-accept"
+    iifname "vpn0" ip saddr {TARGET} icmp type echo-reply counter drop comment "probe-input-drop"
 }}
 }}
 """
@@ -213,11 +213,41 @@ def main() -> int:
 
         bound = probe("-I", "vpn0", TARGET)
         if bound.returncode != 0:
+            nft_state = ns(
+                ROU,
+                "nft",
+                "-a",
+                "list",
+                "table",
+                "ip",
+                "probe_selective",
+                check=False,
+            )
+            route_state = ns(
+                ROU,
+                "ip",
+                "route",
+                "get",
+                TARGET,
+                "oif",
+                "vpn0",
+                "uid",
+                PROBE_UID,
+                "ipproto",
+                "icmp",
+                check=False,
+            )
             raise RuntimeError(
                 "selectively admitted bound probe failed; "
-                "INPUT socket-uid isolation may be unsupported: "
+                "INPUT socket-uid isolation may be unsupported:\n"
                 + bound.stdout
                 + bound.stderr
+                + "\nROUTE:\n"
+                + route_state.stdout
+                + route_state.stderr
+                + "\nNFT:\n"
+                + nft_state.stdout
+                + nft_state.stderr
             )
         print(
             "PASS P2: capability-free probe UID uses isolated bound vpn0 plane "
