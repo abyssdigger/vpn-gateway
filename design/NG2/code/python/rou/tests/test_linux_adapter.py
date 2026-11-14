@@ -1,6 +1,7 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
+from rou.availability_routing import AvailabilityWindowPolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_adapter import LinuxNetworkRulesAdapter
 from rou.linux_driver import LinuxDriverResult, LinuxNetworkVerification
@@ -391,6 +392,7 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
                         "probe",
                         path,
                         IPv4Address("203.0.113.24"),
+                        policy=AvailabilityWindowPolicy(10, 3),
                     ),
                 )
             )
@@ -424,6 +426,7 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
                         "probe",
                         path,
                         IPv4Address("203.0.113.24"),
+                        policy=AvailabilityWindowPolicy(10, 3),
                     ),
                 )
             )
