@@ -3,6 +3,7 @@ from ipaddress import IPv4Network
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
+from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_observation import (
     LinuxRoutingObservation,
     ObservedRoute,
@@ -276,6 +277,10 @@ class LinuxRoutingVerificationTests(unittest.TestCase):
             ),
             LinuxRoutingAllocationState(),
             local_interface="host0",
+            local_process_uid=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ).uid,
         )
         routes = tuple(
             ObservedRoute(
