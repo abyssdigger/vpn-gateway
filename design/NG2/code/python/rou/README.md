@@ -35,12 +35,16 @@ Implemented:
   - per-Profile `observed_paths` facts;
   - unknown rules knowledge suppresses current path claims;
   - raw `NetworkRulesState` never crosses the event boundary;
-- first executable `PayloadTrafficManager` request path:
+- executable `PayloadTrafficManager` request/audit control loop:
   - pure request->desired calculation before accepting current intent;
   - `NetworkRulesAdapter` is always called with owner=`self`;
-  - apply failure triggers fresh observation rather than synthetic FAILED state;
+  - apply/refresh failures are interpreted only through observed state;
   - current payload state is published only through Event Delivery Environment port;
   - semantically unchanged InfoEvents are suppressed;
+  - `audit()` refreshes current state and repairs only when convergence is not MATCHED;
+  - MATCHED zero-path isolation is not mistaken for drift;
+  - successful repair can suppress transient drift history while failed/recovered states
+    publish real current-state transitions;
   - shutdown delegates idempotent Adapter cleanup for the same owner identity;
 - zero-path routing domain as semantic `DROP` fail-close intent;
 - allow-only filtering contract:
