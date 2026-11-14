@@ -99,6 +99,12 @@ However:
 - failed shared mutation makes current state of all registered owners UNKNOWN until fresh
   observation proves otherwise.
 
+If the requested owner's current interface projection is incomplete, that candidate is
+rejected before it becomes physical desired state. The Adapter instead structurally
+reconciles the fail-closed projection of the **last committed** owner composition and
+returns FAILURE for the candidate. Thus a failed request cannot leave the backend derived
+from an uncommitted semantic generation.
+
 This is the Adapter transaction boundary.
 
 ## 6. Concrete interface generation projection
