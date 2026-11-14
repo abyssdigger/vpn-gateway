@@ -193,7 +193,7 @@ class StatefulFakeRunner:
         return out
 
     def _rules_json(self):
-        return [
+        out = [
             {
                 "priority": rule.priority,
                 "iif": rule.source_ifname,
@@ -203,6 +203,16 @@ class StatefulFakeRunner:
             }
             for rule in self.desired.routing.dispatch_rules
         ]
+        terminal = self.desired.routing.terminal_rule
+        if terminal is not None:
+            out.append(
+                {
+                    "priority": terminal.priority,
+                    "iif": terminal.source_ifname,
+                    "action": "unreachable",
+                }
+            )
+        return out
 
 
 def _desired():
