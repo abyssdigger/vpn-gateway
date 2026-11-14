@@ -5,6 +5,7 @@ from enum import Enum
 from ipaddress import IPv4Network
 
 from .interface_identity import InterfaceIdentity
+from .linux_local_process import LOCAL_PROCESS_UID
 from .network_rules import EndpointKind, TrafficProtocol
 from .network_rules_composition import (
     ComposedNetworkRules,
@@ -289,7 +290,7 @@ def compile_linux_routing_desired(
     committed: LinuxRoutingAllocationState,
     *,
     local_interface: str,
-    local_process_uid: int = 65534,
+    local_process_uid: int = LOCAL_PROCESS_UID,
 ) -> LinuxRoutingDesired:
     """Compile owner-composed semantic routing into Linux routing intent."""
 
