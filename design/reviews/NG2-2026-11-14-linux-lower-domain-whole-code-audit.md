@@ -168,7 +168,19 @@ participate in asynchronous control flow.
 No table ID, RPDB priority, route metric, nft rule text, conntrack state or barrier phase is
 visible above NetworkRulesAdapter.
 
-### W9 — bootstrap forwarding closure remains outside this slice
+### W9 — stale payload decomposition TODO survived the implementation
+
+**Severity:** documentation consistency  
+**Disposition:** fixed.
+
+`payload-traffic-manager.md` still listed NetworkRulesSpec/State and internal
+NetworkRulesAdapter decomposition as future work after those contracts and the concrete
+Linux lower domain had already been implemented and reviewed.
+
+The open-work section now points to `network-rules-adapter.md` and contains only current
+runtime/payload/bootstrap work.
+
+### W10 — bootstrap forwarding closure remains outside this slice
 
 **Severity:** lifecycle requirement  
 **Disposition:** non-blocking for this unit.
