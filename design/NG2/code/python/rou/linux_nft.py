@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import json
 
+from .interface_identity import InterfaceIdentity
 from .network_rules import (
     EndpointKind,
     FlowInitiationAllowSpec,
@@ -59,7 +61,9 @@ class NftFilterDesired:
     family: str
     table: str
     definition: str
+    canonical: str
     markers: tuple[NftRuleMarker, ...]
+    interface_identities: tuple[InterfaceIdentity, ...]
 
 
 @dataclass(frozen=True)
@@ -67,7 +71,9 @@ class NftNatDesired:
     family: str
     table: str
     definition: str
+    canonical: str
     markers: tuple[NftRuleMarker, ...]
+    interface_identities: tuple[InterfaceIdentity, ...]
 
 
 @dataclass(frozen=True)
@@ -94,6 +100,180 @@ Dnf = tuple[Clause, ...]
 class _EndpointMatch:
     terms: tuple[str, ...]
     interface_ref: NftInterfaceRef
+
+
+def _register_identity(
+    identity: InterfaceIdentity,
+    *,
+    by_name: dict[str, InterfaceIdentity],
+    by_index: dict[int, InterfaceIdentity],
+) -> None:
+    previous_name = by_name.get(identity.ifname)
+    if (
+        previous_name is not None
+        and previous_name.ifindex != identity.ifindex
+    ):
+        raise LinuxNftError(
+            "multiple interface generations with the same name cannot "
+            "coexist in one nft desired state: "
+            f"{previous_name!r} vs {identity!r}"
+        )
+
+    previous_index = by_index.get(identity.ifindex)
+    if (
+        previous_index is not None
+        and previous_index.ifname != identity.ifname
+    ):
+        raise LinuxNftError(
+            "one ifindex cannot identify multiple interface names: "
+            f"{previous_index!r} vs {identity!r}"
+        )
+
+    by_name[identity.ifname] = identity
+    by_index[identity.ifindex] = identity
+
+
+def _interface_identities(
+    composed: ComposedNetworkRules,
+    *,
+    include_nat: bool,
+) -> tuple[InterfaceIdentity, ...]:
+    by_name: dict[str, InterfaceIdentity] = {}
+    by_index: dict[int, InterfaceIdentity] = {}
+
+    def visit(endpoint: NetworkEndpoint) -> None:
+        if endpoint.kind is EndpointKind.INTERFACE:
+            assert endpoint.interface is not None
+            _register_identity(
+                endpoint.interface,
+                by_name=by_name,
+                by_index=by_index,
+            )
+
+    for owned in composed.owners:
+        for rule in owned.rules.traffic_allows:
+            visit(rule.source)
+            visit(rule.destination)
+        for rule in owned.rules.flow_initiation_allows:
+            visit(rule.source)
+            visit(rule.destination)
+        if include_nat:
+            for rule in owned.rules.source_nat:
+                visit(rule.source)
+                visit(rule.egress)
+
+    return tuple(
+        sorted(
+            by_index.values(),
+            key=lambda item: (item.ifindex, item.ifname),
+        )
+    )
+
+
+def normalize_nft_text(
+    text: str,
+    interface_identities: tuple[InterfaceIdentity, ...],
+) -> str:
+    """Normalize nft list output while preserving generation semantics."""
+
+    lines: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+
+        line = line.replace(
+            "ct state established,related",
+            "ct state 0x2,0x4",
+        )
+        line = line.replace(
+            "ct state related,established",
+            "ct state 0x2,0x4",
+        )
+        line = line.replace("ct state invalid", "ct state 0x1")
+        line = line.replace("ct state new", "ct state 0x8")
+
+        for identity in interface_identities:
+            line = line.replace(
+                f'iif "{identity.ifname}"',
+                f"iif {identity.ifindex}",
+            )
+            line = line.replace(
+                f'oif "{identity.ifname}"',
+                f"oif {identity.ifindex}",
+            )
+
+        lines.append(line)
+
+    return "\n".join(lines)
+
+
+def parse_nft_rule_comments(text: str) -> tuple[str, ...]:
+    try:
+        root = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LinuxNftError(
+            f"invalid nft JSON output: {exc}"
+        ) from None
+
+    items = root.get("nftables")
+    if not isinstance(items, list):
+        raise LinuxNftError("nft JSON root lacks nftables array")
+
+    comments: list[str] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        rule = item.get("rule")
+        if not isinstance(rule, dict):
+            continue
+        comment = rule.get("comment")
+        if comment is None:
+            continue
+        if not isinstance(comment, str):
+            raise LinuxNftError("nft rule comment is not a string")
+        comments.append(comment)
+
+    return tuple(sorted(comments))
+
+
+@dataclass(frozen=True)
+class NftTableObservation:
+    canonical: str
+    comments: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class NftTableVerification:
+    ok: bool
+    errors: tuple[str, ...]
+
+
+def verify_nft_table(
+    desired: NftFilterDesired | NftNatDesired,
+    observed: NftTableObservation | None,
+) -> NftTableVerification:
+    if observed is None:
+        return NftTableVerification(
+            False,
+            (f"nft table {desired.family} {desired.table} is absent",),
+        )
+
+    errors: list[str] = []
+    if observed.canonical != desired.canonical:
+        errors.append(
+            f"nft table {desired.table} canonical policy differs"
+        )
+
+    expected_comments = tuple(
+        sorted(marker.comment for marker in desired.markers)
+    )
+    if observed.comments != expected_comments:
+        errors.append(
+            f"nft table {desired.table} rule-marker multiset differs"
+        )
+
+    return NftTableVerification(not errors, tuple(errors))
 
 
 def _quote_token(value: str) -> str:
@@ -487,11 +667,18 @@ def compile_nft_filter_desired(
         "",
     ]
 
+    definition = "\n".join(lines)
+    identities = _interface_identities(
+        composed,
+        include_nat=False,
+    )
     return NftFilterDesired(
         family="ip",
         table=FILTER_TABLE,
-        definition="\n".join(lines),
+        definition=definition,
+        canonical=normalize_nft_text(definition, identities),
         markers=tuple(markers),
+        interface_identities=identities,
     )
 
 
@@ -560,9 +747,16 @@ def compile_nft_nat_desired(
                 )
 
     lines.extend(["}", "}", ""])
+    definition = "\n".join(lines)
+    identities = _interface_identities(
+        composed,
+        include_nat=True,
+    )
     return NftNatDesired(
         family="ip",
         table=NAT_TABLE,
-        definition="\n".join(lines),
+        definition=definition,
+        canonical=normalize_nft_text(definition, identities),
         markers=tuple(markers),
+        interface_identities=identities,
     )
