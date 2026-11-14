@@ -5,7 +5,7 @@ import unittest
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_driver import (
     CommandResult,
-    LinuxNetworkDriver,
+    LinuxNetworkExecutor,
     NetworkNamespaceLinuxRunner,
 )
 from rou.linux_network import compile_linux_network_desired
@@ -341,14 +341,14 @@ class NetworkNamespaceLinuxRunnerTests(unittest.TestCase):
             NetworkNamespaceLinuxRunner(RecordingHostRunner(), "")
 
 
-class LinuxNetworkDriverTests(unittest.TestCase):
+class LinuxNetworkExecutorTests(unittest.TestCase):
     def test_verified_protective_close_sets_and_observes_forwarding_off(self):
         desired = _desired()
         runner = StatefulFakeRunner(desired)
         runner.forwarding = True
-        driver = LinuxNetworkDriver(runner)
+        executor = LinuxNetworkExecutor(runner)
 
-        result = driver.close_forwarding_verified()
+        result = executor.close_forwarding_verified()
 
         self.assertTrue(result.success, result.diagnostic)
         self.assertFalse(runner.forwarding)
@@ -398,9 +398,9 @@ class LinuxNetworkDriverTests(unittest.TestCase):
                 )
 
         runner = LyingIpv6Runner(desired)
-        driver = LinuxNetworkDriver(runner)
+        executor = LinuxNetworkExecutor(runner)
 
-        result = driver.close_forwarding_verified()
+        result = executor.close_forwarding_verified()
 
         self.assertFalse(result.success)
         self.assertIn(
@@ -423,9 +423,9 @@ class LinuxNetworkDriverTests(unittest.TestCase):
                 )
 
         runner = LyingForwardingRunner(desired)
-        driver = LinuxNetworkDriver(runner)
+        executor = LinuxNetworkExecutor(runner)
 
-        result = driver.close_forwarding_verified()
+        result = executor.close_forwarding_verified()
 
         self.assertFalse(result.success)
         self.assertIn(
@@ -436,9 +436,9 @@ class LinuxNetworkDriverTests(unittest.TestCase):
     def test_structural_apply_closes_barrier_and_freshly_verifies(self):
         desired = _desired()
         runner = StatefulFakeRunner(desired)
-        driver = LinuxNetworkDriver(runner)
+        executor = LinuxNetworkExecutor(runner)
 
-        result = driver.materialize_structural(desired)
+        result = executor.materialize_structural(desired)
 
         self.assertTrue(result.success, result.diagnostic)
         self.assertTrue(runner.forwarding)
@@ -465,16 +465,16 @@ class LinuxNetworkDriverTests(unittest.TestCase):
     def test_structural_apply_repairs_and_verifies_namespace_prerequisites(self):
         desired = _desired()
         runner = StatefulFakeRunner(desired)
-        driver = LinuxNetworkDriver(runner)
+        executor = LinuxNetworkExecutor(runner)
 
-        result = driver.materialize_structural(desired)
+        result = executor.materialize_structural(desired)
 
         self.assertTrue(result.success, result.diagnostic)
         for key, expected in desired.prerequisites.expected_sysctls:
             self.assertEqual(runner.sysctls.get(key), expected)
 
         runner.sysctls["net.ipv4.conf.vpns00.rp_filter"] = "1"
-        verification = driver.verify_current(desired)
+        verification = executor.verify_current(desired)
         self.assertFalse(verification.ok)
         self.assertTrue(
             any(
@@ -498,9 +498,9 @@ class LinuxNetworkDriverTests(unittest.TestCase):
 
         runner = FailingRunner(desired)
         runner.forwarding = True
-        driver = LinuxNetworkDriver(runner)
+        executor = LinuxNetworkExecutor(runner)
 
-        result = driver.materialize_structural(desired)
+        result = executor.materialize_structural(desired)
 
         self.assertFalse(result.success)
         self.assertFalse(runner.forwarding)
@@ -510,9 +510,9 @@ class LinuxNetworkDriverTests(unittest.TestCase):
         desired = _desired()
         runner = StatefulFakeRunner(desired)
         runner.foreign_nft_tables.add(("inet", "foreign"))
-        driver = LinuxNetworkDriver(runner)
+        executor = LinuxNetworkExecutor(runner)
 
-        result = driver.materialize_structural(desired)
+        result = executor.materialize_structural(desired)
 
         self.assertTrue(result.success, result.diagnostic)
         self.assertEqual(runner.foreign_nft_tables, set())
@@ -526,9 +526,9 @@ class LinuxNetworkDriverTests(unittest.TestCase):
         runner = StatefulFakeRunner(desired)
         runner.nft_filter = True
         runner.nft_nat = True
-        driver = LinuxNetworkDriver(runner)
+        executor = LinuxNetworkExecutor(runner)
 
-        result = driver.materialize_structural(desired)
+        result = executor.materialize_structural(desired)
 
         self.assertTrue(result.success, result.diagnostic)
         self.assertFalse(runner.forwarding)
