@@ -249,21 +249,23 @@ A marker match alone is insufficient; canonical policy match alone is also insuf
 
 The first Driver deliberately implements only one safe structural path:
 
-    1. ip_forward = 0
-    2. fresh observation
-    3. remove owned RPDB rules
-    4. flush tracked + restart-discovered owned routing tables
-    5. install desired routes
-    6. install dispatch rules
-    7. install terminal host-ingress guard
-    8. replace NAT table
-    9. replace filter table last
-    10. fresh exact verification while forwarding remains closed
-    11. enable forwarding only if desired policy requires it
-    12. fresh exact final verification
+    1. protectively close IPv4 and IPv6 forwarding
+    2. materialize required namespace prerequisites (rp_filter / IPv6 disablement)
+    3. fresh observation
+    4. remove owned RPDB rules
+    5. flush tracked + restart-discovered owned routing tables
+    6. install desired routes
+    7. install dispatch rules
+    8. install terminal host-ingress guard
+    9. replace NAT table
+    10. replace filter table last
+    11. fresh exact verification, including namespace prerequisites, while forwarding
+        remains closed
+    12. enable IPv4 forwarding only if desired policy requires it
+    13. fresh exact final verification
 
-Any failure after mutation begins performs a best-effort protective ip_forward = 0 and
-returns FAILURE.
+Any failure after mutation begins performs a best-effort protective dual-stack forwarding
+close and returns FAILURE.
 
 There is no speculative rollback to a guessed prior state. Recovery is driven by the next
 fresh observation/reconcile.
