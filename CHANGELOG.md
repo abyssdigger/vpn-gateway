@@ -1,3 +1,19 @@
+## 2026-11-15 — NG2 non-attempt probe execution contract
+
+Defined the next execution boundary without restoring per-attempt availability semantics:
+
+- added generation-bound `ProbeExecutionPlan` projection from enabled logical probes;
+- shared physical planes use the smallest requested send interval while logical observation
+  windows remain separate per `probe_id`;
+- added typed `ProbeGoodNewsInfo` and `ProbeWindowBoundaryInfo` inputs to the existing
+  AvailabilityProbeManager evidence logic;
+- no production `NO_REPLY` event or attempt identity was introduced;
+- concrete persistent sender/receiver process/socket machinery remains a lower implementation
+  unit and must implement this contract rather than promote the diagnostic single-shot
+  `LinuxIcmpProbeDriver`.
+
+---
+
 ## 2026-11-15 — NG2 probing route-membership invariant
 
 Clarified the normative availability model after route-priority runtime wiring:
