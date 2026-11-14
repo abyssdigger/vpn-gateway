@@ -73,6 +73,13 @@ Do not mix those renames into EXP-025/026 mechanism evidence.
 
 Comparison from cycle baseline 900a8391172f93356f400e8a273a0e2b766e0587 shows no NG1/RC implementation-file changes. This cycle is confined to NG2, EXP-025/026, NG2 reviews and the NG2 workflow.
 
+## Closure checks
+
+- Both EXP-025 and EXP-026 harnesses clean their disposable namespaces in finally blocks.
+- No TODO/FIXME/XXX markers were found in either harness.
+- No global conntrack flush (`conntrack -F`) exists in either experiment.
+- From executable baseline da5474f74fd993161f2212572bc80db111d926eb through the current pre-threshold head, all changes are documentation-only.
+
 ## Still open
 
 - Debian 13 EXP-026 target result;
