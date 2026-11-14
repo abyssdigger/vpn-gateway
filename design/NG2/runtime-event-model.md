@@ -278,14 +278,16 @@ probe_id
 ICMP mechanism
 concrete InterfaceIdentity
 IPv4 target
+enabled
 optional AvailabilityWindowPolicy
     interval_seconds
     failure_intervals
-    enabled
 ```
 
 `enabled=false` сохраняет настроенный logical probe, но запрещает автономное probing.
-`policy=None` остается только внутренним/manual transition state.
+Enable/disable является logical-only изменением и не требует перестройки неизменного
+physical ProbeRules plane. `policy=None` остается только внутренним/manual transition
+state.
 
 `ProbeRulesCalculator` дедуплицирует physical plane по
 `(mechanism, InterfaceIdentity, target)`. Timing/enable policy не является physical
@@ -523,6 +525,10 @@ Binding исчезает по структурной/административ�
 - semantic desired payload projection для `PayloadTrafficStateRequest`.
 
 Для каждого Profile availability влияет только на `ordered_paths` уже bound paths.
+
+На startup, при изменении binding membership или configured priority базой становится
+новый configured eligible order. Probe history не переопределяет новое административное
+намерение.
 
 Нормативная policy — bubble promotion:
 

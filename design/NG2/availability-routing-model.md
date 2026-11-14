@@ -145,6 +145,13 @@ A B C D
 
 Probe policy строит только текущий effective order.
 
+При startup текущий effective order начинается с configured order.
+
+Структурное изменение eligible path set либо административное изменение configured
+priority является новой базой: effective order сначала rebased на новый configured
+eligible order, после чего к нему применяется актуальное positive evidence. История
+старой probe-перестановки не имеет права отменять новое административное намерение.
+
 ## 7. Bubble promotion
 
 Routing policy не сортирует все paths заново при каждом наблюдении.
@@ -231,6 +238,16 @@ terminal blackhole -> metric 65536
 `UNAVAILABLE_METRIC`.
 
 ## 10. Route-priority transition
+
+EXP-027 подтвердил в privileged Linux CI для обычного prefix и `default`, что fixed
+metric positions можно использовать как route slots: `ip route replace` меняет один
+slot, не удаляя тот же interface из другого metric, а terminal blackhole сохраняется.
+
+Текущая Linux реализация имеет узкий verified fast path только для чистой permutation
+существующих unicast paths. Он свежо проверяет старую projection, выполняет top-down
+slot replacements, затем свежо проверяет конечную projection. Любой более широкий diff
+или ошибка fast path переводит operation в существующий structural fail-closed rebuild.
+
 
 При изменении только `ordered_paths` desired operation должна быть узкой route-priority
 transaction:

@@ -68,15 +68,16 @@ probe_id
 mechanism
 concrete InterfaceIdentity
 IPv4 target
+enabled
 optional AvailabilityWindowPolicy
     interval_seconds
     failure_intervals
-    enabled
 ```
 
-`enabled=false` disables autonomous probing without deleting the configured logical probe.
-Its target, path association and timing configuration therefore remain available for later
-re-enable.
+`enabled=false` is logical probe state, not timing policy. It disables autonomous probing
+without deleting the configured logical probe. Its target, path association and timing
+configuration therefore remain available for later re-enable. Enable/disable does not
+change the physical ProbeRules plane; current logical evidence is invalidated.
 
 `policy=None` is retained only as an internal/manual transition state while runtime
 assembly is incomplete. It is not the preferred user-facing way to disable a configured
@@ -215,6 +216,8 @@ availability_routing.py
     AvailabilityWindowPolicy
     AvailabilityWindowState
     calculate_effective_path_order()
+
+`AvailabilityProbeRequest.enabled` remains outside the timing type.
 ```
 
 The old autonomous scheduler has been removed.
@@ -294,9 +297,10 @@ The remaining work is deliberately narrow:
 2. define diagnostic publication of persistent local probing errors without changing
    routing safety;
 3. feed confirmed-live evidence into effective payload ordering, not binding membership;
-4. prove the route-slot bubble transition on Linux and implement the route-only fast path;
-5. separate NAT semantic ordering from route priority so a path permutation does not
-   masquerade as NAT policy change.
+4. integrate the already proven EXP-027 route-slot fast path into the eventual runtime
+   ordering flow;
+5. keep filter/NAT semantic order independent from route priority; the current
+   PayloadRulesCalculator already canonicalizes path-policy generation for this purpose.
 
 No retry scheduler, recovery threshold or shadow fallback tier should be reintroduced
 without a new concrete requirement.
