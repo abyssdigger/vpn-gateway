@@ -95,7 +95,30 @@ process starts
 Следовательно stale Linux state между process start и first reconcile может существовать,
 но не должно пропускать forwarded payload traffic.
 
-## 6. Evidence
+## 6. Existing namespace execution
+
+Concrete production assembly may target an already existing named network namespace:
+
+```text
+host command runner
+    -> NetworkNamespaceLinuxRunner(namespace)
+    -> LinuxNetworkDriver
+    -> protective bootstrap gate
+    -> LinuxNetworkRulesAdapter
+```
+
+`NetworkNamespaceLinuxRunner` only scopes Linux commands with `ip netns exec`. It does
+not create, delete, rename or repair the namespace and does not own host-side veth/transport
+plumbing.
+
+The helper
+`bootstrap_linux_network_rules_adapter_in_namespace(namespace, local_interface, ...)`
+therefore assumes that the namespace and its local-facing interface already exist. Failure
+to enter the namespace is a bootstrap failure; it is not repaired implicitly.
+
+This keeps namespace lifecycle ownership separate from network-policy ownership.
+
+## 7. Evidence
 
 Этот unit требует:
 
@@ -105,7 +128,7 @@ process starts
 - regression, что обычный Adapter после bootstrap способен выполнить normal apply и
   открыть forwarding только после своей final verification.
 
-## 7. Не входит в этот unit
+## 8. Не входит в этот unit
 
 Отдельными review units остаются:
 
