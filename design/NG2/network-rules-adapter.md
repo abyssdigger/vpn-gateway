@@ -125,7 +125,10 @@ and projects every owner's rules fail-closed:
 - flow-initiation allow with an absent interface endpoint is removed;
 - source-NAT rule with an absent interface endpoint is removed;
 - dispatch from LOCAL_NETWORK remains, so the domain terminal route continues to fail-close
-  the destination.
+  the destination;
+- LOCAL_PROCESS dispatch remains only while its concrete bound-output generation is present;
+  stale same-name/new-ifindex bound output is projected away together with its local-process
+  traffic permissions.
 
 This projection does not rewrite an owner's desired intent. It is the observed realisable
 subset for the current Linux generation.
@@ -187,8 +190,15 @@ For every non-empty owner set the routing backend additionally installs a final 
 unreachable rule after all owned dispatch rules. This terminal rule prevents fall-through
 to the namespace main table even if filtering is later damaged. Full cleanup removes it.
 
-The first backend supports dispatch only from semantic LOCAL_NETWORK. Unsupported
-interface-origin dispatch is rejected explicitly.
+The first backend supports:
+
+- LOCAL_NETWORK dispatch through host-ingress `iif`;
+- the target-proven LOCAL_PROCESS ICMP probe selector through explicit lower-domain
+  process uid + protocol + exact target + concrete bound output interface.
+
+LOCAL_PROCESS uid is Linux runtime configuration attached to the Adapter, not semantic
+NetworkRules data. Interface-origin dispatch and non-ICMP LOCAL_PROCESS dispatch remain
+explicitly unsupported.
 
 ## 9. Filtering and NAT compilation
 
@@ -210,6 +220,23 @@ cannot accidentally synthesize a permission that neither requested.
 Semantic TrafficPredicate is compiled below the Adapter boundary into nft expressions;
 payload envelope concepts never reach this layer.
 
+LOCAL_PROCESS filtering is selective rather than a namespace-wide INPUT/OUTPUT default
+deny:
+
+- exact admitted OUTPUT from the configured non-root process uid and concrete interface
+  sets a configured conntrack mark;
+- subsequent admitted OUTPUT requires the same mark;
+- exact reverse INPUT requires the mark plus the concrete input generation and the
+  reply predicate;
+- the same candidate reply without that mark is dropped;
+- all other OUTPUT from the dedicated process uid is dropped;
+- unrelated local process traffic remains under ordinary namespace policy.
+
+The initial executable LOCAL_PROCESS backend is deliberately limited to the target-proven
+ICMP probe shape: exact /32 echo-request outward and exact /32 echo-reply inward, with a
+matching owner-scoped isolated dispatch plane. Broader predicates and other protocols fail
+closed pending separate evidence.
+
 ### 9.2. Source NAT
 
 Current source NAT support is LOCAL_NETWORK to concrete INTERFACE with target
@@ -229,7 +256,9 @@ Verification checks:
 - exact routes in all owned/transition tables;
 - no unexpected route in those tables;
 - owned protocol 201/202 routes do not exist outside tracked tables;
-- exact RPDB state in the owned priority window;
+- exact RPDB state in the owned priority window, including LOCAL_PROCESS uid range,
+  protocol, destination and bound-output name;
+- current ifindex for every LOCAL_PROCESS bound-output generation;
 - terminal host-ingress rule;
 - requested net.ipv4.ip_forward state.
 
@@ -245,7 +274,7 @@ compiler-owned rule-marker multiset carrying owner and numeric generation data.
 
 A marker match alone is insufficient; canonical policy match alone is also insufficient.
 
-## 10. Structural Driver
+## 11. Structural Driver
 
 The first Driver deliberately implements only one safe structural path:
 
@@ -273,7 +302,7 @@ fresh observation/reconcile.
 Incremental optimization is intentionally deferred until this exact structural path is
 stable.
 
-## 11. Public Linux NetworkRulesAdapter
+## 12. Public Linux NetworkRulesAdapter
 
 The current executable Adapter:
 
@@ -291,7 +320,7 @@ The current executable Adapter:
 A failed physical mutation marks all registered owner states UNKNOWN because the backend is
 shared.
 
-## 12. Evidence gates
+## 13. Evidence gates
 
 Current automated gates include:
 
@@ -300,12 +329,15 @@ Current automated gates include:
 - disposable Linux namespace structural integration covering apply/exact renew, terminal
   RPDB guard, same-name/new-ifindex drift, sequential multi-owner generation transition,
   route-drift repair behind the forwarding barrier, per-owner cleanup and final cleanup;
-- disposable Linux payload dataplane integration for stateful flow-direction semantics.
+- disposable Linux payload dataplane integration for stateful flow-direction semantics;
+- production LOCAL_PROCESS integration from `ProbeRulesCalculator` through the common
+  Adapter into real RPDB/nft kernel state, including exact renew, forwarding remaining
+  closed, alternate-route non-escape, target narrowing and same-name/new-ifindex drift.
 
 Existing EXP-012 and EXP-017 remain supporting architecture evidence; the NG2 live gates
 exercise the new compiler and Driver directly.
 
-## 13. Local-process semantic extension
+## 14. Local-process semantic extension
 
 The semantic NetworkRules contract also admits `LOCAL_PROCESS` endpoints for future
 AvailabilityProbeManager ownership.
@@ -318,15 +350,24 @@ A local-process dispatch is intentionally stricter than host-ingress dispatch an
 
 This preserves the isolated probe-plane property established by EXP-022/023.
 
-The first Linux backend does **not** materialize this endpoint yet. It rejects
-`LOCAL_PROCESS` dispatch explicitly until EXP-024 is confirmed on the Debian 13 target
-and routing/nft observation are extended as one physical-policy unit.
+EXP-024 is confirmed on the Debian 13 target and the first Linux backend now
+materializes the proven ICMP LOCAL_PROCESS probe plane as one physical-policy unit.
 
-The intended lower-domain mapping uses process identity only at local OUTPUT, carries the
-admitted flow identity through conntrack state and matches the reverse INPUT flow by that
-technical state. Numeric uid/conntrack mark do not belong to the semantic spec.
+The lower-domain mapping uses process identity only at local OUTPUT, carries admitted-flow
+identity through conntrack state and matches reverse INPUT by that technical state plus the
+exact semantic reply selector. Numeric uid and conntrack mark are explicit
+`LinuxLocalProcessConfig` values supplied at Linux runtime/bootstrap and do not belong to
+the semantic spec.
 
-## 14. Deferred work
+One Adapter currently has one dedicated LOCAL_PROCESS identity configuration. This models
+one managed probe-process class, not a per-probe/per-owner uid allocator. A deployment that
+does not use LOCAL_PROCESS rules does not require this configuration.
+
+The Adapter does not own probe-process execution prerequisites such as
+`ping_group_range`, process gid, capabilities or launcher lifecycle. Those belong to the
+future probe-process runtime/launcher boundary.
+
+## 15. Deferred work
 
 Not part of the current structural baseline:
 
