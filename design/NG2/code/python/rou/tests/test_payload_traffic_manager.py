@@ -1,4 +1,5 @@
 from ipaddress import IPv4Network
+from threading import Event, Thread
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
@@ -227,6 +228,45 @@ class PayloadTrafficManagerTests(unittest.TestCase):
                 0
             ].ordered_paths,
             (third,),
+        )
+
+    def test_concurrent_requests_share_one_transaction_executor(self):
+        first = InterfaceIdentity("vpns00", 10)
+        second = InterfaceIdentity("vpns01", 11)
+        third = InterfaceIdentity("vpns02", 12)
+        started = Event()
+        release = Event()
+
+        def block_first_apply():
+            started.set()
+            self.assertTrue(release.wait(2))
+
+        self.adapter.apply_hook = block_first_apply
+        worker = Thread(
+            target=self.manager.handle_request,
+            args=(_request(first),),
+        )
+        worker.start()
+        self.assertTrue(started.wait(2))
+
+        # These calls execute while the first Adapter.apply() is still blocked.
+        # They must only replace pending desired state.
+        self.manager.handle_request(_request(second))
+        self.manager.handle_request(_request(third))
+
+        release.set()
+        worker.join(2)
+        self.assertFalse(worker.is_alive())
+
+        self.assertEqual(
+            [
+                spec.routing_domains[0].ordered_paths
+                for spec in self.adapter.apply_specs
+            ],
+            [
+                (first,),
+                (third,),
+            ],
         )
 
     def test_reentrant_audit_waits_until_active_apply_completes(self):
