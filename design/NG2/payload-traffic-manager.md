@@ -233,15 +233,22 @@ Operation failure сам по себе не является значением 
 При новой request revision Manager:
 
 ```text
-1. stores latest request
-2. PayloadRulesCalculator.calculate(request)
+1. desired_rules = PayloadRulesCalculator.calculate(request)
+2. atomically accepts latest_request + latest_desired_network_rules
 3. NetworkRulesAdapter.apply(self, desired_rules)
-4. inspects action result
-5. obtains authoritative last Adapter state for self
+4. if apply failed: NetworkRulesAdapter.renewState(self)
+5. network_state = NetworkRulesAdapter.getLastState(self)
 6. PayloadRulesStateCalculator.calculate(desired_rules, network_state)
-7. publishes changed PayloadTrafficStateInfo
-8. schedules retry/audit if current state does not satisfy request
+7. project PayloadTrafficStateInfo
+8. publish only if semantic InfoEvent payload changed
+9. schedule retry/audit later if current state does not satisfy request
 ```
+
+Pure Calculator rejection happens before the request becomes current managed intent and
+before any Adapter mutation. Это предотвращает внутреннее состояние вида «новый request +
+старый desired ruleset». Valid RequestEvents ожидаются от доверенного RuntimeStateManager;
+invalid/unrepresentable input рассматривается как processing error, а не как частично
+принятый intent.
 
 Если `apply()` возвращает FAILURE, решение о дальнейшей реакции принадлежит Manager.
 
@@ -249,12 +256,16 @@ Operation failure сам по себе не является значением 
 
 ```text
 apply(self, ...) -> FAILURE
-renewState(self)
+renewState(self) -> SUCCESS | FAILURE
 getLastState(self)
 PayloadRulesStateCalculator(desired_rules, network_state)
-publish actual state
+project/publish actual state
 retry according to local policy
 ```
+
+Результат `renewState()` также не подменяет observation. Даже если обе операции вернули
+FAILURE, Manager публикует то состояние, которое можно доказать из `getLastState()`
+(обычно UNKNOWN/stale), а не синтетический FAILED verdict.
 
 Adapter failure не является implicit command для RuntimeStateManager.
 
