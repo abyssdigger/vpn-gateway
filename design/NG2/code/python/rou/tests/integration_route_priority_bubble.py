@@ -364,6 +364,49 @@ def exercise(table: int, destination: str, label: str) -> None:
         f"PASS {label}3: recovery ABGDEJ.V -> ABVGDEJ. kept every path"
     )
 
+    dead_before_start = {
+        10: "patha",
+        20: "pathb",
+        30: "pathg",
+        40: "pathd",
+        60: "pathe",
+        70: "pathv",
+        80: "pathj",
+    }
+    dead_before_target = {
+        10: "patha",
+        20: "pathb",
+        30: "pathv",
+        40: "pathg",
+        50: "pathd",
+        70: "pathe",
+        80: "pathj",
+    }
+    reset_routes(table, destination, dead_before_start)
+    for dev, source_metric, target_metric in (
+        ("pathd", 40, 50),
+        ("pathg", 30, 40),
+        ("pathv", 70, 30),
+        ("pathe", 60, 70),
+    ):
+        move_empty(
+            table,
+            destination,
+            dev=dev,
+            source_metric=source_metric,
+            target_metric=target_metric,
+            label=f"{label} dead-before-{dev}",
+        )
+    assert_steady(
+        table,
+        destination,
+        dead_before_target,
+        f"{label} dead-before recovery",
+    )
+    print(
+        f"PASS {label}4: recovery ABGD.EVJ -> ABVGD.EJ shifted E down"
+    )
+
 
 def main() -> int:
     if os.geteuid() != 0:
