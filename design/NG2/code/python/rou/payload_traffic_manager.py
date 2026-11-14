@@ -7,7 +7,7 @@ from .payload_rules import (
     PayloadRulesCalculator,
     PayloadTrafficStateRequest,
 )
-from .payload_rules_state import PayloadRulesStateCalculator
+from .payload_rules_state import Convergence, PayloadRulesStateCalculator
 from .payload_traffic_state import (
     PayloadTrafficStateInfo,
     project_payload_traffic_state,
@@ -60,23 +60,49 @@ class PayloadTrafficManager:
         self._latest_request = request
         self._latest_desired = desired
 
-        action = self._adapter.apply(self, desired)
-        if not action.success:
-            self._adapter.renew_state(self)
+        info = self._apply_desired_and_observe(desired)
+        self._publish_if_changed(info)
 
-        observed = self._adapter.get_last_state(self)
-        rules_state = self._state_calculator.calculate(desired, observed)
-        info = project_payload_traffic_state(
-            desired,
-            observed,
-            rules_state,
-        )
+    def audit(self) -> None:
+        """Run one drift/reconcile pass for the current accepted intent."""
+
+        desired = self._latest_desired
+        if desired is None:
+            return
+
+        self._adapter.renew_state(self)
+        info = self._current_info(desired)
+
+        if info.rules_state.convergence is not Convergence.MATCHED:
+            info = self._apply_desired_and_observe(desired)
+
         self._publish_if_changed(info)
 
     def shutdown(self) -> ActionResult:
         """Release all Adapter state/resources owned by this Manager instance."""
 
         return self._adapter.cleanup(self)
+
+    def _apply_desired_and_observe(
+        self,
+        desired: NetworkRulesSpec,
+    ) -> PayloadTrafficStateInfo:
+        action = self._adapter.apply(self, desired)
+        if not action.success:
+            self._adapter.renew_state(self)
+        return self._current_info(desired)
+
+    def _current_info(
+        self,
+        desired: NetworkRulesSpec,
+    ) -> PayloadTrafficStateInfo:
+        observed = self._adapter.get_last_state(self)
+        rules_state = self._state_calculator.calculate(desired, observed)
+        return project_payload_traffic_state(
+            desired,
+            observed,
+            rules_state,
+        )
 
     def _publish_if_changed(self, info: PayloadTrafficStateInfo) -> None:
         if info == self._latest_published:
