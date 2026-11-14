@@ -316,7 +316,7 @@ class AvailabilityCadenceHysteresisTests(unittest.TestCase):
         self.assertEqual(self.manager.run_due(9), ())
         self.assertEqual(self.manager.run_due(10), ("a",))
 
-    def test_policy_change_starts_new_epoch_without_structural_reapply(self):
+    def test_policy_change_preserves_rules_epoch_but_invalidates_probe_evidence(self):
         original = probe(
             probe_policy=policy(interval=10, retry=2)
         )
@@ -334,15 +334,16 @@ class AvailabilityCadenceHysteresisTests(unittest.TestCase):
         )
 
         self.assertEqual(self.adapter.apply_count, apply_count)
-        self.assertGreater(
-            self.manager.observation_generation.sequence,
-            old_generation.sequence,
+        self.assertEqual(
+            self.manager.observation_generation,
+            old_generation,
         )
         self.assertEqual(len(self.publisher.events), 1)
         self.assertIs(
             self.publisher.events[0].state,
             AvailabilityProbeState.UNKNOWN,
         )
+        self.assertEqual(self.manager.run_due(0), ("primary",))
 
     def test_generation_change_resets_pending_hysteresis(self):
         p = probe(
