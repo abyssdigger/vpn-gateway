@@ -1,3 +1,10 @@
+"""Standalone single-shot diagnostic probe contract.
+
+This module is retained as executable evidence for the already-proven Linux probe process
+mechanics. Production NG2 availability routing is not attempt-oriented and
+AvailabilityProbeManager does not depend on this contract.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
