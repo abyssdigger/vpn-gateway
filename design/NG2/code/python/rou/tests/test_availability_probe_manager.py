@@ -150,7 +150,7 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             AvailabilityProbeState.UNKNOWN,
         )
 
-    def test_disable_is_logical_only_and_invalidates_only_that_probe(self):
+    def test_disabling_only_probe_closes_physical_plane_and_epoch(self):
         primary = probe("primary", self.path, "203.0.113.24")
         self.manager.handle_request(request(primary))
         generation = self.manager.observation_generation
@@ -166,13 +166,37 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         )
         self.manager.handle_request(request(disabled))
 
-        self.assertEqual(self.manager.observation_generation, generation)
-        self.assertEqual(len(self.adapter.apply_owners), apply_count)
+        self.assertIsNotNone(generation)
+        self.assertEqual(len(self.adapter.apply_owners), apply_count + 1)
+        self.assertIsNone(self.manager.observation_generation)
+        self.assertEqual(self.adapter.state.rules, NetworkRulesSpec())
         self.assertEqual(len(self.publisher.events), 1)
         self.assertIs(
             self.publisher.events[0].state,
             AvailabilityProbeState.UNKNOWN,
         )
+
+    def test_disabling_shared_probe_preserves_plane_and_epoch(self):
+        first = probe("first", self.path, "203.0.113.24")
+        second = probe("second", self.path, "203.0.113.24")
+        self.manager.handle_request(request(first, second))
+        generation = self.manager.observation_generation
+        apply_count = len(self.adapter.apply_owners)
+        self.publisher.events.clear()
+
+        first_disabled = AvailabilityProbeRequest(
+            first.probe_id,
+            first.path,
+            first.target,
+            enabled=False,
+            policy=first.policy,
+        )
+        self.manager.handle_request(request(first_disabled, second))
+
+        self.assertEqual(self.manager.observation_generation, generation)
+        self.assertEqual(len(self.adapter.apply_owners), apply_count)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertEqual(self.publisher.events[0].probe_id, "first")
 
     def test_semantically_changed_physical_probe_starts_new_ready_epoch(self):
         self.manager.handle_request(

@@ -226,7 +226,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
             ProbeRulesCalculator().calculate(changed),
         )
 
-    def test_enabled_change_is_logical_but_not_physical_rules_change(self):
+    def test_disabling_only_consumer_removes_physical_probe_plane(self):
         path = InterfaceIdentity("vpns00", 43)
         target = IPv4Address("192.0.2.1")
         enabled = AvailabilityProbeSetRequest(
@@ -253,9 +253,34 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         self.assertFalse(
             availability_probe_sets_semantically_equal(enabled, disabled)
         )
-        self.assertEqual(
+        self.assertNotEqual(
             ProbeRulesCalculator().calculate(enabled),
             ProbeRulesCalculator().calculate(disabled),
+        )
+        self.assertEqual(
+            ProbeRulesCalculator().calculate(disabled).routing_domains,
+            (),
+        )
+
+    def test_disabling_one_shared_consumer_preserves_physical_plane(self):
+        path = InterfaceIdentity("vpns00", 43)
+        target = IPv4Address("192.0.2.1")
+        first = probe_request("first", path, target, enabled=True)
+        second = probe_request("second", path, target, enabled=True)
+        both = AvailabilityProbeSetRequest((first, second))
+        one_disabled = AvailabilityProbeSetRequest(
+            (
+                probe_request("first", path, target, enabled=False),
+                second,
+            )
+        )
+
+        self.assertFalse(
+            availability_probe_sets_semantically_equal(both, one_disabled)
+        )
+        self.assertEqual(
+            ProbeRulesCalculator().calculate(both),
+            ProbeRulesCalculator().calculate(one_disabled),
         )
 
     def test_duplicate_probe_id_is_rejected(self):

@@ -103,6 +103,7 @@ class ProbeRulesCalculator:
                 probe.target,
             )
             for probe in request.probes
+            if probe.enabled
         }
 
         for mechanism, identity, target_address in sorted(
