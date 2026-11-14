@@ -122,3 +122,9 @@ Closure state:
 - active NG2 contracts use LinuxIcmpProbeDriver and LinuxNetworkExecutor consistently;
 - EXP-026 Debian 13 target confirmation remains the only external mechanism gate;
 - production conntrack remediation remains intentionally unimplemented pending that gate.
+Post-renumber closure check: design/component-model.md contains no numbered internal
+cross-references that could have been invalidated by inserting Executor/Runner sections.
+
+The previous checkpoint commit a039f8ba9cbc861de241b31f07af8ed8f654af52 landed
+31 seconds before the formal threshold and is therefore treated as pre-threshold closure.
+This commit is the authoritative final checkpoint.
