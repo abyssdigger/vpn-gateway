@@ -20,6 +20,7 @@ class FakeRunner:
         self.ping_rc = 0
         self.ping_stderr = ""
         self.group_range = "1 0"
+        self.group_separator = " "
 
     def run(self, argv, *, input_text=None, check=True):
         self.calls.append(argv)
@@ -37,7 +38,11 @@ class FakeRunner:
             self.group_range = argv[-1].split("=", 1)[1]
             return CommandResult(0, "", "")
         if argv == ("sysctl", "-n", "net.ipv4.ping_group_range"):
-            return CommandResult(0, self.group_range + "\n", "")
+            return CommandResult(
+                0,
+                self.group_separator.join(self.group_range.split()) + "\n",
+                "",
+            )
         if argv[0] == "setpriv":
             return CommandResult(self.ping_rc, "", self.ping_stderr)
         raise AssertionError(f"unexpected command {argv!r}")
@@ -105,6 +110,40 @@ class LinuxIcmpProbeExecutorTests(unittest.TestCase):
 
         self.assertIs(result.outcome, ProbeAttemptOutcome.ERROR)
         self.assertFalse(any(call[0] == "setpriv" for call in self.runner.calls))
+
+
+    def test_ping_group_range_tab_readback_is_equivalent(self):
+        self.runner.group_separator = "\t"
+
+        result = self.executor.execute(self.request, timeout_seconds=1)
+
+        self.assertIs(result.outcome, ProbeAttemptOutcome.REPLY)
+
+    def test_config_requires_shared_linux_identity_and_nonroot_gid(self):
+        with self.assertRaises(ValueError):
+            LinuxIcmpProbeExecutorConfig(
+                local_process=object(),
+                gid=65534,
+                ping_path="/usr/bin/ping",
+            )
+        with self.assertRaises(ValueError):
+            LinuxIcmpProbeExecutorConfig(
+                local_process=LinuxLocalProcessConfig(
+                    uid=65534,
+                    ct_mark=0x24,
+                ),
+                gid=0,
+                ping_path="/usr/bin/ping",
+            )
+        with self.assertRaises(ValueError):
+            LinuxIcmpProbeExecutorConfig(
+                local_process=LinuxLocalProcessConfig(
+                    uid=65534,
+                    ct_mark=0x24,
+                ),
+                gid=65534,
+                ping_path="ping",
+            )
 
     def test_timeout_must_be_explicit_positive_integer(self):
         with self.assertRaises(ValueError):
