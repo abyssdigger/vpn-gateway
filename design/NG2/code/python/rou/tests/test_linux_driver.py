@@ -31,6 +31,7 @@ class StatefulFakeRunner:
     def __init__(self, desired):
         self.desired = desired
         self.forwarding = False
+        self.sysctls = {}
         self.materialized = False
         self.commands = []
         self.nft_filter = False
@@ -41,15 +42,22 @@ class StatefulFakeRunner:
         self.commands.append((argv, input_text, check))
 
         if argv[:3] == ("sysctl", "-q", "-w"):
-            self.forwarding = argv[3].endswith("=1")
+            assignment = argv[3]
+            key, value = assignment.split("=", 1)
+            key = key.replace("/", ".")
+            if key == "net.ipv4.ip_forward":
+                self.forwarding = value == "1"
+            else:
+                self.sysctls[key] = value
             return CommandResult(0, "", "")
 
-        if argv == ("sysctl", "-n", "net.ipv4.ip_forward"):
-            return CommandResult(
-                0,
-                "1\n" if self.forwarding else "0\n",
-                "",
-            )
+        if argv[:2] == ("sysctl", "-n"):
+            key = argv[2]
+            if key == "net.ipv4.ip_forward":
+                value = "1" if self.forwarding else "0"
+            else:
+                value = self.sysctls.get(key, "1")
+            return CommandResult(0, value + "\n", "")
 
         if argv == ("ip", "-j", "link", "show"):
             return CommandResult(
@@ -406,6 +414,27 @@ class LinuxNetworkDriverTests(unittest.TestCase):
             if argv == ("ip", "-j", "link", "show")
         ]
         self.assertGreaterEqual(len(link_reads), 6)
+
+    def test_structural_apply_repairs_and_verifies_namespace_prerequisites(self):
+        desired = _desired()
+        runner = StatefulFakeRunner(desired)
+        driver = LinuxNetworkDriver(runner)
+
+        result = driver.materialize_structural(desired)
+
+        self.assertTrue(result.success, result.diagnostic)
+        for key, expected in desired.prerequisites.expected_sysctls:
+            self.assertEqual(runner.sysctls.get(key), expected)
+
+        runner.sysctls["net.ipv4.conf.vpns00.rp_filter"] = "1"
+        verification = driver.verify_current(desired)
+        self.assertFalse(verification.ok)
+        self.assertTrue(
+            any(
+                "net.ipv4.conf.vpns00.rp_filter" in error
+                for error in verification.errors
+            )
+        )
 
     def test_failure_best_effort_closes_forwarding(self):
         desired = _desired()
