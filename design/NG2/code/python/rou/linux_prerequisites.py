@@ -37,13 +37,50 @@ class LinuxNamespacePrerequisites:
     def observation_commands(
         self,
     ) -> tuple[tuple[str, tuple[str, ...]], ...]:
-        return tuple(
+        commands: list[tuple[str, tuple[str, ...]]] = [
             (
-                key,
-                ("sysctl", "-n", key.replace(".", "/", 3)),
+                "net.ipv4.conf.all.rp_filter",
+                ("sysctl", "-n", "net/ipv4/conf/all/rp_filter"),
+            ),
+            (
+                "net.ipv4.conf.default.rp_filter",
+                ("sysctl", "-n", "net/ipv4/conf/default/rp_filter"),
+            ),
+            (
+                "net.ipv6.conf.all.forwarding",
+                ("sysctl", "-n", "net/ipv6/conf/all/forwarding"),
+            ),
+            (
+                "net.ipv6.conf.default.forwarding",
+                ("sysctl", "-n", "net/ipv6/conf/default/forwarding"),
+            ),
+            (
+                "net.ipv6.conf.default.disable_ipv6",
+                ("sysctl", "-n", "net/ipv6/conf/default/disable_ipv6"),
+            ),
+        ]
+        for ifname in self.interface_names:
+            commands.extend(
+                (
+                    (
+                        f"net.ipv4.conf.{ifname}.rp_filter",
+                        (
+                            "sysctl",
+                            "-n",
+                            f"net/ipv4/conf/{ifname}/rp_filter",
+                        ),
+                    ),
+                    (
+                        f"net.ipv6.conf.{ifname}.disable_ipv6",
+                        (
+                            "sysctl",
+                            "-n",
+                            f"net/ipv6/conf/{ifname}/disable_ipv6",
+                        ),
+                    ),
+                )
             )
-            for key, _expected in self.expected_sysctls
-        )
+        return tuple(commands)
 
     @property
     def apply_commands(self) -> tuple[tuple[str, ...], ...]:
