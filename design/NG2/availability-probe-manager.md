@@ -76,8 +76,11 @@ AvailabilityWindowPolicy
 
 `enabled=false` is logical probe state, not timing policy. It disables autonomous probing
 without deleting the configured logical probe. Its target, path association and timing
-configuration therefore remain available for later re-enable. Enable/disable does not
-change the physical ProbeRules plane; current logical evidence is invalidated.
+configuration therefore remain available for later re-enable.
+
+Physical ProbeRules are calculated only from enabled logical probes. Disabling the last
+consumer of a physical `(mechanism, InterfaceIdentity, target)` plane closes that plane;
+disabling one of several logical consumers sharing the same plane leaves it intact.
 
 Every normalized logical probe carries timing policy. There is no policy-less manual mode;
 `enabled=false` is the only normalized way to keep a configured probe while disabling
