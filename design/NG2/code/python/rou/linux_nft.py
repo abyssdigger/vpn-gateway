@@ -8,6 +8,7 @@ from .interface_identity import InterfaceIdentity
 from .network_rules import (
     EndpointKind,
     FlowInitiationAllowSpec,
+    IcmpType,
     NetworkEndpoint,
     PortRange,
     PredicateKind,
@@ -394,6 +395,20 @@ def _selector_atoms(selector: TrafficSelector) -> tuple[_Atom, ...]:
             _Atom(
                 f"{protocol} dport {ports}",
                 f"{protocol} dport != {ports}",
+            )
+        )
+
+    if selector.icmp_types:
+        values = tuple(sorted(item.value for item in selector.icmp_types))
+        rendered = (
+            str(values[0])
+            if len(values) == 1
+            else "{ " + ", ".join(str(item) for item in values) + " }"
+        )
+        atoms.append(
+            _Atom(
+                f"icmp type {rendered}",
+                f"icmp type != {rendered}",
             )
         )
 
