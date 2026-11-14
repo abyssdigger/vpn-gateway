@@ -281,6 +281,28 @@ def main() -> int:
                 "first Adapter reconcile did not remove stale nft policy"
             )
 
+        expected_sysctls = {
+            "net.ipv4.conf.all.rp_filter": "0",
+            "net.ipv4.conf.default.rp_filter": "0",
+            "net.ipv4.conf.host0.rp_filter": "0",
+            "net.ipv4.conf.vpns00.rp_filter": "0",
+            "net.ipv6.conf.all.forwarding": "0",
+            "net.ipv6.conf.default.forwarding": "0",
+            "net.ipv6.conf.default.disable_ipv6": "1",
+            "net.ipv6.conf.host0.disable_ipv6": "1",
+            "net.ipv6.conf.vpns00.disable_ipv6": "1",
+        }
+        for key, expected in expected_sysctls.items():
+            actual = host(
+                "ip", "netns", "exec", NS,
+                "sysctl", "-n", key,
+            ).stdout.strip()
+            if actual != expected:
+                raise RuntimeError(
+                    f"namespace prerequisite {key}={actual!r}, expected {expected!r}"
+                )
+        print("PASS A0: IPv4-only namespace prerequisites verify live")
+
         rules = owned_rules()
         terminal = [
             item for item in rules
@@ -372,6 +394,10 @@ def main() -> int:
             "ip", "netns", "exec", NS,
             "nft", "add", "table", "inet", "foreign_ci",
         )
+        host(
+            "ip", "netns", "exec", NS,
+            "sysctl", "-q", "-w", "net/ipv4/conf/vpns00/rp_filter=1",
+        )
         if adapter.renew_state(owner).success:
             raise RuntimeError(
                 "route/foreign-nft drift was not detected"
@@ -408,8 +434,17 @@ def main() -> int:
         ).stdout
         if "foreign_ci" in nft_tables:
             raise RuntimeError("structural repair left foreign nft table")
+        rp_filter = host(
+            "ip", "netns", "exec", NS,
+            "sysctl", "-n", "net/ipv4/conf/vpns00/rp_filter",
+        ).stdout.strip()
+        if rp_filter != "0":
+            raise RuntimeError(
+                f"structural repair left vpns00 rp_filter={rp_filter!r}"
+            )
         print(
-            "PASS D: route + foreign-nft drift repaired behind forwarding barrier"
+            "PASS D: route + foreign-nft + sysctl drift repaired behind "
+            "forwarding barrier"
         )
 
         default_owner = object()
