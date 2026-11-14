@@ -143,7 +143,6 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
                         (network,),
                         order,
                         TerminalDisposition.DROP,
-                        priority_prefix_length=len(order),
                     ),
                 ),
                 dispatch_rules=(
