@@ -17,6 +17,7 @@ from rou.payload_rules_state import (
     Service,
 )
 from rou.payload_traffic_state import (
+    PayloadProfileTrafficState,
     PayloadTrafficStateInfo,
     project_payload_traffic_state,
 )
@@ -46,7 +47,7 @@ class PayloadTrafficStateProjectionTests(unittest.TestCase):
             ),
         )
 
-    def test_known_state_exposes_materialized_paths_in_profile_order(self):
+    def test_known_state_exposes_observed_paths_in_profile_order(self):
         actual = NetworkRulesSpec(
             routing_domains=(
                 _domain("lab", "192.168.0.0/16", self.pri),
@@ -75,8 +76,8 @@ class PayloadTrafficStateProjectionTests(unittest.TestCase):
             [item.profile_name for item in info.profiles],
             ["corp", "lab"],
         )
-        self.assertEqual(info.profiles[0].materialized_paths, (self.pri,))
-        self.assertEqual(info.profiles[1].materialized_paths, (self.pri,))
+        self.assertEqual(info.profiles[0].observed_paths, (self.pri,))
+        self.assertEqual(info.profiles[1].observed_paths, (self.pri,))
 
     def test_missing_observed_profile_is_known_empty_path_projection(self):
         actual = NetworkRulesSpec(
@@ -103,7 +104,7 @@ class PayloadTrafficStateProjectionTests(unittest.TestCase):
         )
 
         self.assertEqual(info.profiles[1].profile_name, "lab")
-        self.assertEqual(info.profiles[1].materialized_paths, ())
+        self.assertEqual(info.profiles[1].observed_paths, ())
 
     def test_unknown_rules_state_does_not_publish_cached_paths(self):
         observed = NetworkRulesState(
@@ -125,7 +126,7 @@ class PayloadTrafficStateProjectionTests(unittest.TestCase):
         )
 
         self.assertTrue(
-            all(item.materialized_paths is None for item in info.profiles)
+            all(item.observed_paths is None for item in info.profiles)
         )
 
     def test_foreign_observed_profile_is_not_published_as_requested_profile(self):
@@ -190,10 +191,7 @@ class PayloadTrafficStateProjectionTests(unittest.TestCase):
             PayloadTrafficStateInfo(
                 rules_state=rules_state,
                 profiles=(
-                    __import__(
-                        "rou.payload_traffic_state",
-                        fromlist=["PayloadProfileTrafficState"],
-                    ).PayloadProfileTrafficState(
+                    PayloadProfileTrafficState(
                         "corp",
                         (self.pri,),
                     ),
