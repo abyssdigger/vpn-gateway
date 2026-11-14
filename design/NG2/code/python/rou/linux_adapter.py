@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Protocol
 
 from .linux_driver import LinuxDriverResult, LinuxNetworkVerification
+from .interface_identity import InterfaceIdentity
 from .linux_network import (
+    LinuxNetworkDesired,
     compile_linux_network_desired,
     project_network_rules_to_interfaces,
 )
@@ -22,13 +24,19 @@ from .network_rules_composition import (
 
 
 class LinuxNetworkBackend(Protocol):
-    def observe_interfaces(self) -> tuple:
+    def observe_interfaces(self) -> tuple[InterfaceIdentity, ...]:
         ...
 
-    def materialize_structural(self, desired) -> LinuxDriverResult:
+    def materialize_structural(
+        self,
+        desired: LinuxNetworkDesired,
+    ) -> LinuxDriverResult:
         ...
 
-    def verify_current(self, desired) -> LinuxNetworkVerification:
+    def verify_current(
+        self,
+        desired: LinuxNetworkDesired,
+    ) -> LinuxNetworkVerification:
         ...
 
 
