@@ -39,6 +39,7 @@ def _owner_rules(
     paths=(),
     *,
     source=None,
+    confirmed_live_prefix_length=None,
 ) -> OwnedNetworkRules:
     network = IPv4Network(destination)
     if source is None:
@@ -52,6 +53,7 @@ def _owner_rules(
                     destinations=(network,),
                     ordered_paths=tuple(paths),
                     terminal_disposition=TerminalDisposition.DROP,
+                    confirmed_live_prefix_length=confirmed_live_prefix_length,
                 ),
             ),
             dispatch_rules=(
@@ -173,6 +175,69 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
             [FIRST_PATH_METRIC, FIRST_PATH_METRIC + PATH_METRIC_STEP],
         )
         self.assertTrue(all(item.metric < TERMINAL_METRIC for item in normal))
+
+    def test_live_prefix_gap_is_derived_from_runtime_boundary(self):
+        paths = tuple(
+            InterfaceIdentity(f"vpns0{index}", 20 + index)
+            for index in range(4)
+        )
+
+        mixed = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        paths,
+                        confirmed_live_prefix_length=2,
+                    ),
+                )
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+        all_live = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        paths,
+                        confirmed_live_prefix_length=4,
+                    ),
+                )
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+        none_live = compile_linux_routing_desired(
+            compose_network_rules(
+                (
+                    _owner_rules(
+                        1,
+                        "a",
+                        "10.0.0.0/8",
+                        paths,
+                        confirmed_live_prefix_length=0,
+                    ),
+                )
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+
+        def metrics(desired):
+            return [
+                route.metric
+                for route in desired.routes
+                if route.kind is LinuxRouteKind.UNICAST
+            ]
+
+        self.assertEqual(metrics(mixed), [10, 20, 40, 50])
+        self.assertEqual(metrics(all_live), [10, 20, 30, 40])
+        self.assertEqual(metrics(none_live), [20, 30, 40, 50])
 
     def test_every_domain_has_one_terminal_blackhole_default(self):
         composed = compose_network_rules(
