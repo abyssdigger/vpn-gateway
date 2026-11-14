@@ -79,9 +79,9 @@ class AvailabilityProbeManager:
 
         if changed:
             self._invalidate_generation()
+            self._publish_removed_invalidations(request)
             self._latest_request = request
             self._latest_desired = desired
-            self._drop_removed_publications(request)
             rules_state = self._apply_desired_and_observe(desired)
         else:
             assert self._latest_desired is not None
@@ -165,16 +165,26 @@ class AvailabilityProbeManager:
     def _invalidate_generation(self) -> None:
         self._active_generation = None
 
-    def _drop_removed_publications(
+    def _publish_removed_invalidations(
         self,
         request: AvailabilityProbeSetRequest,
     ) -> None:
         live_ids = {item.probe_id for item in request.probes}
-        self._latest_published = {
-            probe_id: info
-            for probe_id, info in self._latest_published.items()
-            if probe_id in live_ids
-        }
+        removed_ids = sorted(
+            probe_id
+            for probe_id in self._latest_published
+            if probe_id not in live_ids
+        )
+
+        for probe_id in removed_ids:
+            info = AvailabilityProbeStateInfo(
+                probe_id,
+                AvailabilityProbeState.UNKNOWN,
+                reason="probe no longer requested",
+            )
+            if self._latest_published.get(probe_id) != info:
+                self._publisher.publish(info)
+            self._latest_published.pop(probe_id, None)
 
     def _publish_unknown_current(
         self,
