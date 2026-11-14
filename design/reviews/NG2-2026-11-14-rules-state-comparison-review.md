@@ -85,7 +85,8 @@ The two types therefore encode different domain questions.
 The exact semantic-equality helper is duplicated in the two calculators and is genuinely a
 NetworkRules-domain relation, not payload/probe policy.
 
-It may be extracted into common NetworkRules machinery without merging the state types.
+It has been extracted as `network_rules_semantically_equal()` in common NetworkRules
+machinery without merging the state types.
 
 No broader relation lattice is justified yet.
 
