@@ -69,6 +69,13 @@ class LinuxIcmpProbeExecutorTests(unittest.TestCase):
             IPv4Address("203.0.113.24"),
         )
 
+
+    def test_attempt_result_rejects_untyped_outcome(self):
+        from rou.linux_probe_executor import ProbeAttemptResult
+
+        with self.assertRaises(ValueError):
+            ProbeAttemptResult("reply")
+
     def test_reply_uses_exact_generation_and_capability_free_bound_command(self):
         result = self.executor.execute(self.request, timeout_seconds=2)
 
