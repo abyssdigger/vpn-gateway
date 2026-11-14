@@ -76,20 +76,21 @@ Routing domain сохраняет semantic ordered_paths, а path-dependent filt
 
 **Disposition:** accepted and fixed after evidence.
 
-EXP-027 PASS подтвердил для ordinary prefix и default:
+Первый EXP-027 PASS подтвердил kernel primitive: один interface может одновременно
+иметь owned routes на разных metrics, а изменение одного metric slot не уничтожает другую
+копию. Terminal blackhole сохраняется.
 
-    A10 B20 C30 D40
-    B10 B20 C30 D40
-    B10 C20 C30 D40
-    B10 C20 A30 D40
+**Subsequent correction:** production materialization усилена после этого review.
+Payload priority теперь использует persistent EMPTY slot; каждый move выполняется как
+`add duplicate into EMPTY -> delete old copy`. Поэтому любой eligible path остается
+представлен в FIB на протяжении transition. Top-down `ip route replace` остается только
+историческим evidence, а не текущим production algorithm.
 
-ip route replace меняет fixed metric slot и сохраняет копию того же interface на другом metric. Terminal blackhole остается.
-
-Linux backend теперь имеет verified route-priority fast path:
+Linux backend имеет verified route-priority fast path:
 
 1. fresh verification current compiled state;
-2. strict proof that only unicast path-slot assignment changes;
-3. top-down ip route replace;
+2. strict proof that diff является permutation того же `paths + EMPTY`;
+3. deterministic add-duplicate/delete-old move plan;
 4. fresh verification desired state;
 5. any failure -> existing structural fail-closed rebuild.
 
