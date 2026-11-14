@@ -149,13 +149,22 @@ Startup, binding-set change и configured-priority change rebase effective order
 
 Следующий execution unit должен обеспечивать только generation-bound good-news notification, interval boundary notification, enabled lifecycle и local execution diagnostics. Semantic attempt id / reply-to-send correlation запрещены без нового конкретного требования.
 
-### F13 — per-flow continuity при global route reorder
+### F13 — per-flow continuity при global route reorder — superseded clarification
 
-**Finding:** EXP-027 и текущий fast path доказывают FIB transition, но не обещают сохранение existing flows при failover/failback между paths.
+**Finding:** первоначальная формулировка review трактовала отсутствие per-flow pinning как
+ограничение доказательства EXP-027.
 
-**Disposition:** accepted as an explicit scope boundary, not a blocker for current routing priority semantics.
+**Disposition:** уточнено последующим design discussion: для текущей availability failover
+semantics per-flow pinning не требуется намеренно.
 
-Current NG2 availability policy chooses path priority for routing lookups. Per-flow pinning must not be inferred from route ordering. Если product scope позже потребует сохранять уже здоровый established flow при priority changes, это требует отдельного conntrack/mark evidence gate.
+Если path достиг negative threshold и demoted относительно доказанно живой альтернативы,
+ROU не должен продолжать специально направлять existing flow в этот path. Если
+availability policy ошибочно признала рабочий path плохим, это misconfiguration/evidence
+problem, а не повод добавлять противоречащий решению pinning layer.
+
+Flow-affinity/pinning может существовать как отдельная capability для других режимов и
+настроек. Seamless survival established transport session при смене VPN path текущей
+availability function не обещается.
 
 ## 3. Experiment consistency
 
