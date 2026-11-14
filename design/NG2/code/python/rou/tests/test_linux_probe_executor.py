@@ -33,7 +33,7 @@ class FakeRunner:
                 ),
                 "",
             )
-        if argv[:4] == ("sysctl", "-q", "-w",):
+        if argv[:3] == ("sysctl", "-q", "-w"):
             self.group_range = argv[-1].split("=", 1)[1]
             return CommandResult(0, "", "")
         if argv == ("sysctl", "-n", "net.ipv4.ping_group_range"):
