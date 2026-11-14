@@ -1,3 +1,45 @@
+## 2026-11-14 — NG2 availability runtime wiring and serialized payload transactions
+
+Completed the first executable runtime path from generation-bound availability evidence to
+payload route-priority intent:
+
+- AvailabilityProbeManager now owns per-logical-probe AvailabilityWindowState above the
+  proven NetworkRules readiness generation;
+- valid physical-plane good-news is bound to the current ProbeObservationGeneration and
+  fans out to all enabled logical consumers sharing mechanism/path/target;
+- good-news publishes REACHABLE immediately and resets the negative integral; empty windows
+  publish UNREACHABLE only after failure_intervals, while local execution errors remain
+  merely absence of positive evidence;
+- stale generation good-news/window boundaries are ignored and logical-only policy changes
+  reset only the affected evidence window;
+- added runtime-derived ProfileProbeAssignment plus ProbeProfileEvidenceCalculator so probe
+  state can feed Profile routing without embedding Profile identity into physical probe
+  rules;
+- added explicit, externally-stateless PayloadTrafficIntentCalculator: configured,
+  previous-configured and current-effective snapshots are inputs, so structural/admin
+  rebase is explicit rather than hidden history;
+- inactive availability rebases to configured order with confirmed_live_prefix_length=None;
+  active but wholly unconfirmed availability preserves current order with prefix length 0;
+- added the first RuntimeStateManager executable slice that caches latest probe projections
+  and publishes only semantically changed PayloadTrafficStateRequest snapshots;
+- assignments are rejected before publication when they reference unknown probes/Profiles
+  or a probe path outside the Profile eligible set;
+- PayloadTrafficManager now has exactly one thread-safe reconcile executor. Concurrent or
+  re-entrant superseding requests only replace latest pending desired state and cannot
+  interleave an active Adapter transaction;
+- pending snapshots are coalesced, audits share the same executor, and unexpected lower
+  exceptions release executor ownership rather than stranding the Manager;
+- end-to-end rootless regression proves good-news arriving during an active payload apply is
+  deferred and then materialized as the next coalesced desired snapshot.
+
+The blocking LinuxIcmpProbeDriver remains diagnostic/evidence machinery. It was deliberately
+not promoted to the production semantic boundary because its single-shot
+REPLY/NO_REPLY/ERROR contract would reintroduce attempt semantics. Remaining execution work
+is the production sender/receiver transport plus interval-trigger ownership and the
+EventEnvelope epoch/revision delivery implementation.
+
+---
+
 ## 2026-11-14 — NG2 availability de-complexification and route-priority bubble
 
 Superseded the same-day per-attempt cadence/hysteresis candidate with a smaller routing
