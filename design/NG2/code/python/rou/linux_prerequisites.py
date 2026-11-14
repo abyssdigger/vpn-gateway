@@ -16,99 +16,73 @@ class LinuxNamespacePrerequisites:
             raise ValueError("namespace prerequisite interface name must be non-empty")
 
     @property
-    def expected_sysctls(self) -> tuple[tuple[str, str], ...]:
-        expected: list[tuple[str, str]] = [
-            ("net.ipv4.conf.all.rp_filter", "0"),
-            ("net.ipv4.conf.default.rp_filter", "0"),
-            ("net.ipv6.conf.all.forwarding", "0"),
-            ("net.ipv6.conf.default.forwarding", "0"),
-            ("net.ipv6.conf.default.disable_ipv6", "1"),
+    def _entries(self) -> tuple[tuple[str, str, str], ...]:
+        entries: list[tuple[str, str, str]] = [
+            (
+                "net.ipv4.conf.all.rp_filter",
+                "net/ipv4/conf/all/rp_filter",
+                "0",
+            ),
+            (
+                "net.ipv4.conf.default.rp_filter",
+                "net/ipv4/conf/default/rp_filter",
+                "0",
+            ),
+            (
+                "net.ipv6.conf.all.forwarding",
+                "net/ipv6/conf/all/forwarding",
+                "0",
+            ),
+            (
+                "net.ipv6.conf.default.forwarding",
+                "net/ipv6/conf/default/forwarding",
+                "0",
+            ),
+            (
+                "net.ipv6.conf.default.disable_ipv6",
+                "net/ipv6/conf/default/disable_ipv6",
+                "1",
+            ),
         ]
         for ifname in self.interface_names:
-            expected.extend(
+            entries.extend(
                 (
-                    (f"net.ipv4.conf.{ifname}.rp_filter", "0"),
-                    (f"net.ipv6.conf.{ifname}.disable_ipv6", "1"),
+                    (
+                        f"net.ipv4.conf.{ifname}.rp_filter",
+                        f"net/ipv4/conf/{ifname}/rp_filter",
+                        "0",
+                    ),
+                    (
+                        f"net.ipv6.conf.{ifname}.disable_ipv6",
+                        f"net/ipv6/conf/{ifname}/disable_ipv6",
+                        "1",
+                    ),
                 )
             )
-        return tuple(expected)
+        return tuple(entries)
+
+    @property
+    def expected_sysctls(self) -> tuple[tuple[str, str], ...]:
+        return tuple(
+            (key, expected)
+            for key, _path, expected in self._entries
+        )
 
     @property
     def observation_commands(
         self,
     ) -> tuple[tuple[str, tuple[str, ...]], ...]:
-        commands: list[tuple[str, tuple[str, ...]]] = [
-            (
-                "net.ipv4.conf.all.rp_filter",
-                ("sysctl", "-n", "net/ipv4/conf/all/rp_filter"),
-            ),
-            (
-                "net.ipv4.conf.default.rp_filter",
-                ("sysctl", "-n", "net/ipv4/conf/default/rp_filter"),
-            ),
-            (
-                "net.ipv6.conf.all.forwarding",
-                ("sysctl", "-n", "net/ipv6/conf/all/forwarding"),
-            ),
-            (
-                "net.ipv6.conf.default.forwarding",
-                ("sysctl", "-n", "net/ipv6/conf/default/forwarding"),
-            ),
-            (
-                "net.ipv6.conf.default.disable_ipv6",
-                ("sysctl", "-n", "net/ipv6/conf/default/disable_ipv6"),
-            ),
-        ]
-        for ifname in self.interface_names:
-            commands.extend(
-                (
-                    (
-                        f"net.ipv4.conf.{ifname}.rp_filter",
-                        (
-                            "sysctl",
-                            "-n",
-                            f"net/ipv4/conf/{ifname}/rp_filter",
-                        ),
-                    ),
-                    (
-                        f"net.ipv6.conf.{ifname}.disable_ipv6",
-                        (
-                            "sysctl",
-                            "-n",
-                            f"net/ipv6/conf/{ifname}/disable_ipv6",
-                        ),
-                    ),
-                )
-            )
-        return tuple(commands)
+        return tuple(
+            (key, ("sysctl", "-n", path))
+            for key, path, _expected in self._entries
+        )
 
     @property
     def apply_commands(self) -> tuple[tuple[str, ...], ...]:
-        commands: list[tuple[str, ...]] = [
-            ("sysctl", "-q", "-w", "net/ipv4/conf/all/rp_filter=0"),
-            ("sysctl", "-q", "-w", "net/ipv4/conf/default/rp_filter=0"),
-            ("sysctl", "-q", "-w", "net/ipv6/conf/all/forwarding=0"),
-            ("sysctl", "-q", "-w", "net/ipv6/conf/default/forwarding=0"),
-            ("sysctl", "-q", "-w", "net/ipv6/conf/default/disable_ipv6=1"),
-        ]
-        for ifname in self.interface_names:
-            commands.extend(
-                (
-                    (
-                        "sysctl",
-                        "-q",
-                        "-w",
-                        f"net/ipv4/conf/{ifname}/rp_filter=0",
-                    ),
-                    (
-                        "sysctl",
-                        "-q",
-                        "-w",
-                        f"net/ipv6/conf/{ifname}/disable_ipv6=1",
-                    ),
-                )
-            )
-        return tuple(commands)
+        return tuple(
+            ("sysctl", "-q", "-w", f"{path}={expected}")
+            for _key, path, expected in self._entries
+        )
 
 
 def verify_linux_namespace_prerequisites(
