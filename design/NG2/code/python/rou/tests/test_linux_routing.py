@@ -246,17 +246,16 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
 
         self.assertIsNone(desired.terminal_rule)
 
-    def test_local_process_dispatch_is_explicitly_unsupported_until_backend_extension(self):
+    def test_local_process_dispatch_compiles_exact_probe_selector(self):
         target = IPv4Network("203.0.113.24/32")
-        path = NetworkEndpoint.interface_path(
-            InterfaceIdentity("vpns00", 10)
-        )
+        identity = InterfaceIdentity("vpns00", 10)
+        path = NetworkEndpoint.interface_path(identity)
         rules = NetworkRulesSpec(
             routing_domains=(
                 RoutingDomainSpec(
                     "probe",
                     (target,),
-                    (path.interface,),
+                    (identity,),
                     TerminalDisposition.DROP,
                 ),
             ),
@@ -270,16 +269,54 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                 ),
             ),
         )
-        composed = compose_network_rules(
-            (OwnedNetworkRules(OwnerToken(1), rules),)
+        desired = compile_linux_routing_desired(
+            compose_network_rules(
+                (OwnedNetworkRules(OwnerToken(1), rules),)
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+
+        self.assertEqual(len(desired.dispatch_rules), 1)
+        dispatch = desired.dispatch_rules[0]
+        self.assertIsNone(dispatch.source_ifname)
+        self.assertEqual(dispatch.local_process_uid, 65534)
+        self.assertIs(dispatch.protocol, TrafficProtocol.ICMP)
+        self.assertEqual(dispatch.bound_output, identity)
+        self.assertEqual(dispatch.destination, target)
+
+    def test_local_process_non_icmp_dispatch_remains_fail_closed(self):
+        target = IPv4Network("203.0.113.24/32")
+        identity = InterfaceIdentity("vpns00", 10)
+        path = NetworkEndpoint.interface_path(identity)
+        rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "probe",
+                    (target,),
+                    (identity,),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+            dispatch_rules=(
+                DispatchRuleSpec(
+                    target,
+                    "probe",
+                    source=NetworkEndpoint.local_process(),
+                    bound_output=path,
+                    protocol=TrafficProtocol.UDP,
+                ),
+            ),
         )
 
         with self.assertRaisesRegex(
             LinuxRoutingError,
-            "dispatch only from LOCAL_NETWORK",
+            "target-proven only for ICMP",
         ):
             compile_linux_routing_desired(
-                composed,
+                compose_network_rules(
+                    (OwnedNetworkRules(OwnerToken(1), rules),)
+                ),
                 LinuxRoutingAllocationState(),
                 local_interface="host0",
             )
