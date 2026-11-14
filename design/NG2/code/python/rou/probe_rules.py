@@ -61,27 +61,49 @@ class ProbeRulesCalculator:
         traffic_allows: list[TrafficAllowSpec] = []
         flow_allows: list[FlowInitiationAllowSpec] = []
 
-        for probe in request.probes:
-            if probe.mechanism is not ProbeMechanism.ICMP:
+        planes = {
+            (
+                probe.mechanism,
+                probe.path,
+                probe.target,
+            )
+            for probe in request.probes
+        }
+
+        for mechanism, identity, target_address in sorted(
+            planes,
+            key=lambda item: (
+                item[0].value,
+                item[1].ifname,
+                item[1].ifindex,
+                int(item[2]),
+            ),
+        ):
+            if mechanism is not ProbeMechanism.ICMP:
                 raise ValueError(
-                    f"unsupported probe mechanism {probe.mechanism!r}"
+                    f"unsupported probe mechanism {mechanism!r}"
                 )
 
-            target = IPv4Network(f"{probe.target}/32")
-            path = NetworkEndpoint.interface_path(probe.path)
+            target = IPv4Network(f"{target_address}/32")
+            path = NetworkEndpoint.interface_path(identity)
+            domain_name = (
+                f"probe:{mechanism.value}:"
+                f"{identity.ifname}:{identity.ifindex}:"
+                f"{target_address}"
+            )
 
             routing_domains.append(
                 RoutingDomainSpec(
-                    name=probe.probe_id,
+                    name=domain_name,
                     destinations=(target,),
-                    ordered_paths=(probe.path,),
+                    ordered_paths=(identity,),
                     terminal_disposition=TerminalDisposition.DROP,
                 )
             )
             dispatch_rules.append(
                 DispatchRuleSpec(
                     destination=target,
-                    routing_domain=probe.probe_id,
+                    routing_domain=domain_name,
                     source=LOCAL_PROCESS,
                     bound_output=path,
                     protocol=TrafficProtocol.ICMP,
