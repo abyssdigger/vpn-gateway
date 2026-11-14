@@ -201,6 +201,9 @@ A result collected under an older rules/interface generation is stale evidence.
 
 ## 11. Still intentionally open
 
+Before scheduler/timing implementation, two evidence gates must close: Debian 13 confirmation with the intended production ping executable, and the stale conntrack-mark generation-lifetime experiment.
+
+
 The following require an explicit later contract:
 
 - attempt interval;
@@ -223,6 +226,7 @@ Current evidence:
 
 - EXP-024: selective local-process routing/filter mechanism PASS on Debian 13;
 - production LOCAL_PROCESS NetworkRules backend: apply/renew/dataplane PASS;
+- generation-isolation proof still requires focused stale conntrack-mark lifetime verification across rules/interface generation replacement;
 - projected generation loss retains dedicated uid guard across another owner's structural
   reconcile;
 - ProbeRulesStateCalculator: unit PASS;
