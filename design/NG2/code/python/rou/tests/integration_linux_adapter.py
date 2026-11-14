@@ -434,7 +434,7 @@ def main() -> int:
         if forwarding_writes:
             raise RuntimeError(
                 "route-priority fast path touched forwarding barrier: "
-                f"{forwarding_writes}"
+                f"{forwarding_writes}; diagnostic={priority_changed.diagnostic!r}"
             )
 
         route_adds = [
