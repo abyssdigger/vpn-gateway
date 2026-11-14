@@ -1,3 +1,37 @@
+## 2026-11-14 — NG2 structural Linux NetworkRulesAdapter
+
+Implemented and live-validated the first concrete Linux lower domain behind
+`NetworkRulesAdapter`:
+
+- owner identity is mapped to monotonic opaque tokens and routing-domain identity is
+  owner-scoped;
+- candidate owner rules and technical allocations commit only after fresh verified physical
+  success;
+- absent concrete interface generations are projected fail-closed without mutating another
+  owner's desired intent;
+- sequential multi-owner same-name/new-ifindex transitions converge through normal per-owner
+  apply operations;
+- Linux routing uses owner-scoped tables, longest-prefix RPDB dispatch, protocol 201/202
+  ownership tags, ordered metrics below the terminal metric, per-domain terminal
+  blackholes, and a final host-ingress unreachable guard;
+- nft filtering compiles numeric ifindex generation references and preserves owner
+  provenance for NEW-flow conjunctions;
+- source NAT maps EGRESS_ADDRESS intent to narrow MASQUERADE rules;
+- exact verification covers link generation, owned routes/tables, RPDB, nft policy +
+  markers, complete nft table inventory, and ip_forward;
+- the first Driver intentionally supports only full structural repair behind
+  `ip_forward=0`, with protective close on failure and no guessed rollback;
+- dedicated ROU namespace nft policy is exclusive; foreign nft tables are drift and are
+  removed under the barrier;
+- live CI validates exact apply/renew/cleanup, /0 routing, generation replacement,
+  multi-owner lifecycle, route/foreign-nft repair, stateful flow direction, and source NAT;
+- focused review `NG2-2026-11-14-linux-network-rules-adapter-review.md` passed.
+
+Runtime/bootstrap assembly and incremental transition optimization remain separate future
+units.
+
+---
+
 ## 2026-11-14 — NG2 semantic-slice whole-code audit
 
 Completed a whole-code audit of the current NG2 semantic baseline with explicit component
