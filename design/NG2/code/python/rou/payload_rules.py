@@ -301,7 +301,14 @@ class PayloadRulesCalculator:
                 for destination in profile.destinations
             )
 
-            for path in profile.ordered_paths:
+            policy_paths = sorted(
+                profile.ordered_paths,
+                key=lambda path: (
+                    path.identity.ifname,
+                    path.identity.ifindex,
+                ),
+            )
+            for path in policy_paths:
                 path_endpoint = NetworkEndpoint.interface_path(path.identity)
                 envelope_to = _envelope_allowed_predicate(
                     path.traffic_envelope,
