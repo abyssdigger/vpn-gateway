@@ -215,6 +215,14 @@ def main() -> int:
     )
     host(
         "ip", "netns", "exec", NS,
+        "sysctl", "-q", "-w", "net/ipv6/conf/all/forwarding=1",
+    )
+    host(
+        "ip", "netns", "exec", NS,
+        "sysctl", "-q", "-w", "net/ipv6/conf/default/forwarding=1",
+    )
+    host(
+        "ip", "netns", "exec", NS,
         "nft", "add", "table", "inet", "stale_before_bootstrap",
     )
 
@@ -237,6 +245,18 @@ def main() -> int:
         raise RuntimeError(
             f"bootstrap exposed Adapter with ip_forward={forward!r}"
         )
+    for key in (
+        "net.ipv6.conf.all.forwarding",
+        "net.ipv6.conf.default.forwarding",
+    ):
+        value = host(
+            "ip", "netns", "exec", NS,
+            "sysctl", "-n", key,
+        ).stdout.strip()
+        if value != "0":
+            raise RuntimeError(
+                f"bootstrap exposed Adapter with {key}={value!r}"
+            )
     nft_tables = host(
         "ip", "netns", "exec", NS, "nft", "list", "tables"
     ).stdout
@@ -244,7 +264,7 @@ def main() -> int:
         raise RuntimeError(
             "bootstrap unexpectedly mutated stale policy before owner reconcile"
         )
-    print("PASS BOOT: stale restart state is closed before Adapter publication")
+    print("PASS BOOT: stale restart state is dual-stack closed before Adapter publication")
 
     owner = object()
     owner2 = object()
