@@ -1,3 +1,31 @@
+## 2026-11-14 — NG2 per-probe cadence and hysteresis candidate
+
+Extended AvailabilityProbeManager above the agreed one-attempt verdict boundary:
+
+- added normalized per-logical-probe `AvailabilityProbePolicy` with explicit normal/retry
+  cadence, timeout and failure/recovery thresholds;
+- threshold defaults remain 1/1, preserving the one-attempt baseline without inventing
+  wall-clock defaults;
+- `run_due(monotonic_now)` provides deterministic serial cadence without threads or sleeps;
+- pending contrary evidence retains the current authoritative verdict until its threshold is
+  reached;
+- local ERROR and invalid attempts use retry cadence but never count as remote failure;
+- timing state is per `probe_id`, even when logical probes share one physical probe plane;
+- policy remains outside `ProbeRulesCalculator` and physical `NetworkRulesSpec`;
+- audit corrected an over-broad coupling: logical-only/policy-only changes no longer bump the
+  owner-wide rules-readiness epoch or invalidate unrelated probes;
+- physical rules changes and loss of READY still invalidate the complete owner-wide evidence
+  epoch;
+- no scheduler class, async framework, lock model or second reconciler was introduced.
+
+Executable SHA `43c0d8b34cfe1f479d6a067bae272dc5cffd0eb6` passed 252 NG2 unit
+tests, privileged NG2 Linux integration and NG1 Python validation.
+
+The cycle checkpoint records the remaining semantic choices before outer runtime/tick
+assembly.
+
+---
+
 ## 2026-11-14 — NG2 minimal availability verdict policy candidate
 
 Added the first policy-bearing layer above the validated raw active-probe attempt boundary:
