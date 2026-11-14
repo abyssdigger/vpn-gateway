@@ -1,3 +1,31 @@
+## 2026-11-14 — NG2 protective runtime bootstrap and namespace assembly
+
+Closed the startup forwarding window above the structural Linux Adapter and added the
+first production runtime assembly path:
+
+- runtime bootstrap now requires a fresh readback proving
+  `net.ipv4.ip_forward=0` before exposing `LinuxNetworkRulesAdapter`;
+- failed/unverified protective close returns no Adapter;
+- bootstrap deliberately leaves stale physical policy behind the closed forwarding barrier
+  until the first normal owner reconcile;
+- privileged restart integration starts from stale nft state plus forwarding enabled,
+  proves bootstrap closure, then proves the first Adapter reconcile removes stale policy
+  before reopening forwarding;
+- `NetworkNamespaceLinuxRunner` executes the Linux Driver inside one pre-existing named
+  ROU namespace using argv-only `ip netns exec`, preserving stdin/check semantics;
+- namespace execution does not acquire namespace/veth lifecycle ownership;
+- production assembly helper builds namespace runner -> Linux Driver -> protective
+  bootstrap -> Linux Adapter for an existing namespace;
+- privileged Linux Adapter integration now exercises the production namespace runner
+  rather than a parallel test-only implementation;
+- focused reviews `NG2-2026-11-14-runtime-bootstrap-review.md` and
+  `NG2-2026-11-14-runtime-namespace-assembly-review.md` passed.
+
+Remaining runtime work starts above this boundary; namespace/veth lifecycle ownership,
+host-side transport plumbing and RuntimeStateManager assembly remain separate units.
+
+---
+
 ## 2026-11-14 — NG2 Linux lower-domain whole-code audit
 
 Completed the post-implementation audit of the structural Linux Adapter lower domain:
