@@ -378,6 +378,8 @@ def routing_domains_semantically_equal(
             return False
         if observed.ordered_paths != wanted.ordered_paths:
             return False
+        if observed.priority_prefix_length != wanted.priority_prefix_length:
+            return False
         if observed.terminal_disposition is not wanted.terminal_disposition:
             return False
 
