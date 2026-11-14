@@ -285,14 +285,18 @@ def parse_rule_json(text: str) -> tuple[ObservedRule, ...]:
                 f"rule[{position}].iif must be a string"
             )
 
+        destination = _rule_destination(
+            item,
+            position=position,
+        )
+        if destination is None and action == "to_tbl":
+            destination = IPv4Network("0.0.0.0/0")
+
         out.append(
             ObservedRule(
                 priority=priority,
                 source_ifname=iif,
-                destination=_rule_destination(
-                    item,
-                    position=position,
-                ),
+                destination=destination,
                 table_id=table,
                 action=action,
             )
