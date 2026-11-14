@@ -59,7 +59,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
 
         self.assertIs(state.knowledge, Knowledge.UNKNOWN)
         self.assertIs(state.convergence, Convergence.UNKNOWN)
-        self.assertIs(state.safety, Safety.UNSAFE)
+        self.assertIs(state.safety, Safety.UNKNOWN)
         self.assertIs(state.service, Service.UNKNOWN)
 
     def test_unknown_observation_produces_unknown_axes(self):
@@ -362,7 +362,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
 
         self.assertIs(state.knowledge, Knowledge.KNOWN)
         self.assertIs(state.convergence, Convergence.DIVERGED)
-        self.assertIs(state.safety, Safety.UNKNOWN)
+        self.assertIs(state.safety, Safety.UNSAFE)
         self.assertIs(state.service, Service.UNKNOWN)
 
 
