@@ -4,7 +4,6 @@ import unittest
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     NetworkEndpoint,
-    FlowInitiationAllowSpec,
     NetworkRulesSpec,
     NetworkRulesState,
     RoutingDomainSpec,
@@ -12,6 +11,7 @@ from rou.network_rules import (
     TerminalDisposition,
     TrafficAllowSpec,
     TrafficPredicate,
+    TrafficSelector,
 )
 from rou.payload_rules_state import (
     Convergence,
@@ -59,7 +59,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
 
         self.assertIs(state.knowledge, Knowledge.UNKNOWN)
         self.assertIs(state.convergence, Convergence.UNKNOWN)
-        self.assertIs(state.safety, Safety.UNKNOWN)
+        self.assertIs(state.safety, Safety.UNSAFE)
         self.assertIs(state.service, Service.UNKNOWN)
 
     def test_unknown_observation_produces_unknown_axes(self):
@@ -315,9 +315,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
             source=local,
             destination=path,
             predicate=TrafficPredicate.match(
-                __import__("rou.network_rules", fromlist=["TrafficSelector"]).TrafficSelector(
-                    destination=IPv4Network("10.0.0.0/8")
-                )
+                TrafficSelector(destination=IPv4Network("10.0.0.0/8"))
             ),
         )
         actual_allow = TrafficAllowSpec(
@@ -344,7 +342,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
         self.assertIs(state.safety, Safety.UNKNOWN)
         self.assertIs(state.service, Service.UNKNOWN)
 
-    def test_diverged_nonisolated_rules_are_not_guessed_safe_or_unsafe(self):
+    def test_changed_to_unapproved_endpoint_is_provably_unsafe(self):
         desired = NetworkRulesSpec(
             routing_domains=(_domain("a", self.path),),
             traffic_allows=(_allow(self.path),),
