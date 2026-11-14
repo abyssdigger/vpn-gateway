@@ -154,6 +154,10 @@ class TrafficSelector:
             raise NetworkRulesError(
                 "traffic-selector icmp types require icmp protocol"
             )
+        if any(not isinstance(item, IcmpType) for item in self.icmp_types):
+            raise NetworkRulesError(
+                "traffic-selector icmp types must use IcmpType values"
+            )
         if len(set(self.icmp_types)) != len(self.icmp_types):
             raise NetworkRulesError(
                 "traffic-selector icmp types must not contain duplicates"
