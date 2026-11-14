@@ -80,7 +80,9 @@ rules do not.
 A uid 0 guard would capture unrelated root traffic and violate EXP-024's coexistence
 property.
 
-LinuxLocalProcessConfig now requires a non-root uid.
+LinuxLocalProcessConfig now requires a non-root uid. The internal Linux RPDB dispatch
+spec/compiler enforces the same invariant even when called directly, so the lower-domain
+contract cannot be bypassed outside the normal Adapter path.
 
 ## A5 — actual iproute2 rule observation differed from assumed JSON
 
@@ -280,13 +282,19 @@ Not introduced:
 
 ## Green implementation baseline
 
-Code/test commit:
+Earlier full-slice baseline:
 
 ```text
 70ebd870b22b41782c0c6bef55ce18adfc0f25ef
 ```
 
-GitHub gates on that commit:
+Latest code/test baseline after executor fail-close and RPDB uid-invariant audit fixes:
+
+```text
+9a95384b7b43121b2914e1df7b903c6da5e20518
+```
+
+GitHub gates on the latest code baseline:
 
 - NG2 rootless unit/compile: PASS;
 - NG2 privileged Linux integration: PASS;
