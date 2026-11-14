@@ -204,22 +204,28 @@ class PayloadTrafficIntentCalculator:
         }
         configured_order = tuple(configured_paths)
 
-        current_matches_configured_shape = (
-            current_effective is not None
-            and current_effective.name == configured.name
-            and current_effective.direction is configured.direction
-            and current_effective.destinations == configured.destinations
-            and {
-                path.identity: path
+        previous_configured_order = (
+            None
+            if previous_configured is None
+            else tuple(
+                path.identity
+                for path in previous_configured.ordered_paths
+            )
+        )
+        current_effective_identities = (
+            None
+            if current_effective is None
+            else tuple(
+                path.identity
                 for path in current_effective.ordered_paths
-            }
-            == configured_paths
+            )
         )
 
         rebase = (
-            previous_configured is None
-            or previous_configured != configured
-            or not current_matches_configured_shape
+            previous_configured_order is None
+            or previous_configured_order != configured_order
+            or current_effective_identities is None
+            or set(current_effective_identities) != set(configured_order)
         )
 
         if rebase:
