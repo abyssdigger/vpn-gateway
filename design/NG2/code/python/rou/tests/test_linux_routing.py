@@ -2,6 +2,7 @@ from ipaddress import IPv4Network
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
+from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_routing import (
     DomainTableAllocation,
     FIRST_PATH_METRIC,
@@ -275,6 +276,10 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
             ),
             LinuxRoutingAllocationState(),
             local_interface="host0",
+            local_process_uid=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ).uid,
         )
 
         self.assertEqual(len(desired.dispatch_rules), 1)
@@ -319,6 +324,10 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                 ),
                 LinuxRoutingAllocationState(),
                 local_interface="host0",
+                local_process_uid=LinuxLocalProcessConfig(
+                    uid=65534,
+                    ct_mark=0x24,
+                ).uid,
             )
 
     def test_interface_dispatch_source_is_explicitly_unsupported(self):
