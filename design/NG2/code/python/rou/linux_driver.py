@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import subprocess
 from typing import Protocol
 
@@ -9,6 +9,7 @@ from .linux_network import (
     LinuxNetworkDesired,
     linux_network_route_priority_only_change,
 )
+from .linux_route_priority import plan_route_slot_moves
 from .linux_nft import (
     FILTER_TABLE,
     NAT_TABLE,
@@ -30,8 +31,10 @@ from .linux_observation import (
 )
 from .linux_prerequisites import verify_linux_namespace_prerequisites
 from .linux_routing import (
+    FIRST_PATH_METRIC,
     FIRST_RULE_PRIORITY,
     MAX_RULE_PRIORITY,
+    PATH_METRIC_STEP,
     RT_TABLE_COMPAT,
     RT_TABLE_DEFAULT,
     RT_TABLE_LOCAL,
@@ -376,43 +379,67 @@ class LinuxNetworkExecutor:
                     + "; ".join(precondition.errors)
                 )
 
-            current_slots = {
-                (
-                    route.domain,
-                    route.table_id,
-                    route.destination,
-                    route.protocol,
-                    route.metric,
-                ): route
-                for route in current.routing.routes
-                if route.kind is LinuxRouteKind.UNICAST
-            }
+            current_groups = self._route_priority_groups(current)
+            desired_groups = self._route_priority_groups(desired)
 
-            wanted = sorted(
-                (
-                    route
-                    for route in desired.routing.routes
-                    if route.kind is LinuxRouteKind.UNICAST
+            for group in sorted(
+                desired_groups,
+                key=lambda item: (
+                    item[1],
+                    -item[2].prefixlen,
+                    int(item[2].network_address),
+                    item[3],
+                    item[0],
                 ),
-                key=lambda route: (
-                    route.table_id,
-                    int(route.destination.network_address),
-                    route.destination.prefixlen,
-                    route.metric,
-                ),
-            )
-            for route in wanted:
-                slot = (
-                    route.domain,
-                    route.table_id,
-                    route.destination,
-                    route.protocol,
-                    route.metric,
+            ):
+                current_routes = current_groups[group]
+                desired_routes = desired_groups[group]
+                path_count = len(desired_routes)
+                metrics = tuple(
+                    FIRST_PATH_METRIC + index * PATH_METRIC_STEP
+                    for index in range(path_count + 1)
                 )
-                previous = current_slots[slot]
-                if previous.path == route.path:
-                    continue
-                self._runner.run(self._route_replace_argv(route))
+                if metrics[-1] >= TERMINAL_METRIC:
+                    raise LinuxDriverError(
+                        "route-priority working slot reaches terminal metric"
+                    )
+
+                current_by_metric = {
+                    route.metric: route.path
+                    for route in current_routes
+                }
+                desired_by_metric = {
+                    route.metric: route.path
+                    for route in desired_routes
+                }
+                current_slots = tuple(
+                    current_by_metric.get(metric)
+                    for metric in metrics
+                )
+                desired_slots = tuple(
+                    desired_by_metric.get(metric)
+                    for metric in metrics
+                )
+                moves = plan_route_slot_moves(current_slots, desired_slots)
+
+                template = desired_routes[0]
+                for move in moves:
+                    assert move.path is not None
+                    source = replace(
+                        template,
+                        path=move.path,
+                        metric=metrics[move.source_slot],
+                    )
+                    duplicate = replace(
+                        template,
+                        path=move.path,
+                        metric=metrics[move.target_slot],
+                    )
+
+                    # Make before break: all eligible paths remain represented.
+                    # Between these commands only the moving path is duplicated.
+                    self._runner.run(self._route_add_argv(duplicate))
+                    self._runner.run(self._route_delete_argv(source))
 
             final = self.observe(desired)
             verification = verify_linux_network(desired, final)
@@ -713,15 +740,37 @@ class LinuxNetworkExecutor:
             str(route.metric),
         )
 
-    def _route_replace_argv(self, route) -> tuple[str, ...]:
+    @staticmethod
+    def _route_priority_groups(
+        desired: LinuxNetworkDesired,
+    ) -> dict[tuple, tuple]:
+        grouped: dict[tuple, list] = {}
+        for route in desired.routing.routes:
+            if route.kind is not LinuxRouteKind.UNICAST:
+                continue
+            group = (
+                route.domain,
+                route.table_id,
+                route.destination,
+                route.protocol,
+            )
+            grouped.setdefault(group, []).append(route)
+        return {
+            group: tuple(
+                sorted(routes, key=lambda route: route.metric)
+            )
+            for group, routes in grouped.items()
+        }
+
+    def _route_delete_argv(self, route) -> tuple[str, ...]:
         if route.kind is not LinuxRouteKind.UNICAST or route.path is None:
             raise LinuxDriverError(
-                "route-priority replacement requires a unicast path route"
+                "route-priority deletion requires a unicast path route"
             )
         return (
             "ip",
             "route",
-            "replace",
+            "del",
             "table",
             str(route.table_id),
             route.destination.with_prefixlen,
