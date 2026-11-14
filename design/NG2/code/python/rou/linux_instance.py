@@ -190,6 +190,10 @@ def verify_linux_instance(
             )
 
     ns = NetworkNamespaceLinuxRunner(host, spec.namespace)
+    loopback_detail = _link_detail(ns, "lo")
+    if loopback_detail is None or "UP" not in loopback_detail.get("flags", ()):
+        errors.append("namespace loopback is missing or not UP")
+
     inner_detail = _link_detail(ns, LOCAL_INTERFACE)
     if inner_detail is None:
         errors.append(f"inner interface {LOCAL_INTERFACE!r} is missing")
