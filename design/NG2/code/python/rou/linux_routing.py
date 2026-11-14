@@ -320,7 +320,16 @@ def compile_linux_routing_desired(
             table_id = table_by_domain[domain_ref]
 
             for destination in domain.destinations:
+                prefix_length = domain.confirmed_live_prefix_length
                 for index, path in enumerate(domain.ordered_paths):
+                    slot_index = index
+                    if (
+                        prefix_length is not None
+                        and prefix_length < len(domain.ordered_paths)
+                        and index >= prefix_length
+                    ):
+                        slot_index += 1
+
                     routes.append(
                         LinuxRouteSpec(
                             domain=domain_ref,
@@ -328,7 +337,7 @@ def compile_linux_routing_desired(
                             destination=destination,
                             kind=LinuxRouteKind.UNICAST,
                             protocol=UNICAST_ROUTE_PROTOCOL,
-                            metric=_path_metric(index),
+                            metric=_path_metric(slot_index),
                             path=path,
                         )
                     )
