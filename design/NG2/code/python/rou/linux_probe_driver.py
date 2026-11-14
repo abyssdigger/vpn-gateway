@@ -38,7 +38,12 @@ class LinuxIcmpProbeDriverConfig:
 
 
 class LinuxIcmpProbeDriver:
-    """Perform one capability-free ICMP probe inside an already scoped namespace."""
+    """Standalone diagnostic single-shot ICMP worker.
+
+    This class preserves proven capability-free/generation-bound process mechanics. It is
+    not a production AvailabilityProbeManager dependency and does not define availability
+    cadence, hysteresis or routing verdict semantics.
+    """
 
     def __init__(
         self,
