@@ -176,6 +176,7 @@ def priority_spec(
                 (DEST3,),
                 ordered_paths,
                 TerminalDisposition.DROP,
+                priority_prefix_length=len(ordered_paths),
             ),
         ),
         dispatch_rules=(
