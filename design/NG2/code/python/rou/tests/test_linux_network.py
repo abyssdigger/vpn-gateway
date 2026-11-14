@@ -5,6 +5,7 @@ from rou.interface_identity import InterfaceIdentity
 from rou.linux_network import (
     LinuxNetworkDesiredError,
     compile_linux_network_desired,
+    project_network_rules_to_interfaces,
 )
 from rou.linux_routing import LinuxRoutingAllocationState
 from rou.network_rules import (
@@ -115,6 +116,119 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
         )
 
         self.assertTrue(desired.ip_forward_required)
+
+    def test_absent_generation_projects_to_zero_path_and_no_permissions(self):
+        old = InterfaceIdentity("vpns00", 10)
+        network = IPv4Network("10.0.0.0/8")
+        local = NetworkEndpoint.local_network()
+        path = NetworkEndpoint.interface_path(old)
+        rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "corp",
+                    (network,),
+                    (old,),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+            dispatch_rules=(
+                DispatchRuleSpec(network, "corp", source=local),
+            ),
+            traffic_allows=(
+                TrafficAllowSpec(local, path, TrafficPredicate.always()),
+            ),
+            flow_initiation_allows=(
+                FlowInitiationAllowSpec(
+                    local,
+                    path,
+                    TrafficPredicate.always(),
+                ),
+            ),
+        )
+        composed = compose_network_rules(
+            (OwnedNetworkRules(OwnerToken(1), rules),)
+        )
+
+        projected = project_network_rules_to_interfaces(
+            composed,
+            (InterfaceIdentity("vpns00", 11),),
+        )
+        actual = projected.owners[0].rules
+
+        self.assertEqual(
+            actual.routing_domains[0].ordered_paths,
+            (),
+        )
+        self.assertEqual(actual.traffic_allows, ())
+        self.assertEqual(actual.flow_initiation_allows, ())
+        self.assertEqual(len(actual.dispatch_rules), 1)
+
+    def test_fresh_generation_owner_can_coexist_with_stale_other_owner_after_projection(self):
+        old = InterfaceIdentity("vpns00", 10)
+        new = InterfaceIdentity("vpns00", 11)
+        local = NetworkEndpoint.local_network()
+
+        def owner(token, destination, identity):
+            network = IPv4Network(destination)
+            path = NetworkEndpoint.interface_path(identity)
+            return OwnedNetworkRules(
+                OwnerToken(token),
+                NetworkRulesSpec(
+                    routing_domains=(
+                        RoutingDomainSpec(
+                            "shared-name",
+                            (network,),
+                            (identity,),
+                            TerminalDisposition.DROP,
+                        ),
+                    ),
+                    dispatch_rules=(
+                        DispatchRuleSpec(
+                            network,
+                            "shared-name",
+                            source=local,
+                        ),
+                    ),
+                    traffic_allows=(
+                        TrafficAllowSpec(
+                            local,
+                            path,
+                            TrafficPredicate.always(),
+                        ),
+                    ),
+                ),
+            )
+
+        composed = compose_network_rules(
+            (
+                owner(1, "10.0.0.0/8", new),
+                owner(2, "192.168.0.0/16", old),
+            )
+        )
+
+        projected = project_network_rules_to_interfaces(
+            composed,
+            (new,),
+        )
+
+        first = projected.owners[0].rules
+        second = projected.owners[1].rules
+        self.assertEqual(
+            first.routing_domains[0].ordered_paths,
+            (new,),
+        )
+        self.assertEqual(
+            second.routing_domains[0].ordered_paths,
+            (),
+        )
+        self.assertEqual(second.traffic_allows, ())
+
+        # The Linux compiler now sees only one live generation of the name.
+        compile_linux_network_desired(
+            projected,
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
 
     def test_two_generations_same_name_cannot_coexist_in_linux_desired(self):
         old = InterfaceIdentity("vpns00", 10)
