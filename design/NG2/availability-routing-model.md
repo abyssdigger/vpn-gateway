@@ -299,21 +299,29 @@ B C A D
 Это допустимо: safety requirement состоит в сохранении/появлении лучшего подтвержденного
 payload path, а не в непрерывном представлении каждого degraded path во время transition.
 
-## 11. Kernel evidence gate
+## 11. Kernel evidence — EXP-027 PASS
 
-Перед production route-only materialization нужно подтвердить узким Linux experiment:
+EXP-027 закрыл route-slot gate в privileged Linux CI.
+
+Подтверждено:
 
 1. один path может одновременно иметь routes к одному prefix через один interface с
    разными metrics;
-2. route slot с заданным metric можно однозначно заменить path другого interface без
-   затрагивания соседних metrics;
-3. последовательность slot replacements не создает route gap для нового preferred path;
+2. `ip route replace` меняет path одного fixed-metric slot, не удаляя тот же interface
+   из соседнего metric;
+3. top-down sequence достигает `A B C D -> B C A D` без userspace delete-before-add
+   нового preferred slot;
 4. конечная FIB projection точно соответствует desired `ordered_paths`;
-5. те же свойства выполняются для `default` и обычных prefixes;
-6. owned protocol и terminal blackhole не меняют эти свойства.
+5. те же свойства проходят для `default` и обычного prefix;
+6. owned protocol 202 и terminal blackhole protocol 201 / metric 65536 сохраняют
+   требуемую semantics.
 
-До этого gate semantic bubble model считается принятой, а конкретная оптимизированная
-Linux command sequence остается implementation hypothesis.
+Эксперимент не заявляет multi-command kernel atomicity. Доказано более узкое необходимое
+свойство: каждый новый preferred slot materialized одной `replace`-операцией до изменения
+следующего slot, а после всей operation выполняется fresh verification.
+
+Production fast path ограничен именно этим доказанным case; broader transition остается
+за structural fail-closed rebuild.
 
 ## 12. Что новая модель делает лишним
 
