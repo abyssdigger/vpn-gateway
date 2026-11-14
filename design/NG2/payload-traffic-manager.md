@@ -952,6 +952,13 @@ NG1 planner.py
 13. Синхронный dependency graph payload domain ацикличен.
 14. Нижняя domain за NetworkRulesAdapter не имеет independent synchronous back-edge в
     payload domain.
+15. Payload mutation single-flight: `handle_request()`, `audit()` и `shutdown()` не могут
+    одновременно войти в lower-domain transaction.
+16. Availability-derived route-priority request не начинает новую перестановку, пока
+    предыдущая materialize/verify/commit transaction не завершена.
+17. Если позже появится per-Profile execution sharding, для одного Profile сохраняется
+    тот же non-interleaving invariant; новый target строится от последнего committed
+    effective order, не от промежуточных duplicate/EMPTY состояний.
 
 ## 14. Пока открыто
 
