@@ -109,6 +109,7 @@ Not implemented yet:
 - AvailabilityProbeManager cadence/retry/hysteresis and Event publication;
 - target confirmation of the intended Debian 13 production ping executable for the
   single-shot ICMP executor;
+- focused stale conntrack-mark generation-lifetime verification for LOCAL_PROCESS reverse-flow identity;
 - persistent technical allocation across daemon restart;
 - richer interface-origin dispatch;
 - incremental transition optimizer, only after a separate review/evidence unit.
