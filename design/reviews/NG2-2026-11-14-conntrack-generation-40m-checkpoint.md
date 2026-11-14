@@ -82,6 +82,10 @@ Comparison from cycle baseline 900a8391172f93356f400e8a273a0e2b766e0587 shows no
 - No global conntrack flush (`conntrack -F`) exists in either experiment.
 - From executable baseline da5474f74fd993161f2212572bc80db111d926eb through the current pre-threshold head, all changes are documentation-only.
 
+## Executable closure integrity
+
+The latest executable artifact remains da5474f74fd993161f2212572bc80db111d926eb. Every subsequent change through the current pre-threshold head is documentation/review/checkpoint only; no Python or workflow file changed after the green EXP-026 run.
+
 ## Still open
 
 - Debian 13 EXP-026 target result;
