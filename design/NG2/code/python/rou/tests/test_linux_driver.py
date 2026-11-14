@@ -34,6 +34,7 @@ class StatefulFakeRunner:
         self.commands = []
         self.nft_filter = False
         self.nft_nat = False
+        self.foreign_nft_tables = set()
 
     def run(self, argv, *, input_text=None, check=True):
         self.commands.append((argv, input_text, check))
@@ -102,6 +103,31 @@ class StatefulFakeRunner:
         if argv[:4] == ("ip", "rule", "del", "priority"):
             return CommandResult(0, "", "")
 
+        if argv == ("nft", "-j", "list", "tables"):
+            tables = []
+            if self.nft_filter:
+                tables.append(
+                    {"table": {"family": "ip", "name": "vpng2_filter"}}
+                )
+            if self.nft_nat:
+                tables.append(
+                    {"table": {"family": "ip", "name": "vpng2_nat"}}
+                )
+            tables.extend(
+                {
+                    "table": {
+                        "family": family,
+                        "name": name,
+                    }
+                }
+                for family, name in sorted(self.foreign_nft_tables)
+            )
+            return CommandResult(
+                0,
+                json.dumps({"nftables": tables}),
+                "",
+            )
+
         if argv[:6] == ("nft", "-j", "-n", "list", "table", "ip"):
             table = argv[6]
             present = (
@@ -164,11 +190,15 @@ class StatefulFakeRunner:
                 self.nft_nat = True
             return CommandResult(0, "", "")
 
-        if argv[:4] == ("nft", "delete", "table", "ip"):
-            if argv[4] == "vpng2_filter":
+        if argv[:3] == ("nft", "delete", "table"):
+            family = argv[3]
+            table = argv[4]
+            if family == "ip" and table == "vpng2_filter":
                 self.nft_filter = False
-            if argv[4] == "vpng2_nat":
+            elif family == "ip" and table == "vpng2_nat":
                 self.nft_nat = False
+            else:
+                self.foreign_nft_tables.discard((family, table))
             return CommandResult(0, "", "")
 
         raise AssertionError(f"unexpected command: {argv!r}")
@@ -317,6 +347,17 @@ class LinuxNetworkDriverTests(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertFalse(runner.forwarding)
         self.assertIn("injected route failure", result.diagnostic)
+
+    def test_structural_apply_removes_foreign_nft_tables(self):
+        desired = _desired()
+        runner = StatefulFakeRunner(desired)
+        runner.foreign_nft_tables.add(("inet", "foreign"))
+        driver = LinuxNetworkDriver(runner)
+
+        result = driver.materialize_structural(desired)
+
+        self.assertTrue(result.success, result.diagnostic)
+        self.assertEqual(runner.foreign_nft_tables, set())
 
     def test_empty_desired_deletes_owned_nft_tables_and_leaves_forwarding_off(self):
         desired = compile_linux_network_desired(
