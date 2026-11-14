@@ -113,12 +113,12 @@ Verification requires:
 - `host0` exists in namespace, is veth and UP;
 - configured host IPv4 address/prefix is present;
 - configured inner IPv4 address/prefix is present;
-- namespace default route points via configured host address and `host0`.
+- namespace default route points via configured host address and `host0`;
+- host-side and namespace-side veth expose reciprocal kernel peer ifindexes
+  (`ifindex/link_index`), proving that the two expected names are the same veth pair.
 
-Verification is read-only after protective close.
-
-Additional peer-identity proof may be added if a stable kernel representation is confirmed;
-the first NG2 migration baseline does not invent a process-history peer registry.
+Verification is read-only after protective close. Peer identity is taken from current kernel
+link metadata; no process-history peer registry is introduced.
 
 ## 7. Teardown
 
