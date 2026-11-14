@@ -152,6 +152,36 @@ class NetworkRulesCompositionTests(unittest.TestCase):
             ["10.1.0.0/16", "10.0.0.0/8"],
         )
 
+    def test_duplicate_dispatch_selector_inside_one_owner_is_rejected(self):
+        network = IPv4Network("10.0.0.0/8")
+        rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    name="a",
+                    destinations=(network,),
+                    ordered_paths=(),
+                    terminal_disposition=TerminalDisposition.DROP,
+                ),
+            ),
+            dispatch_rules=(
+                DispatchRuleSpec(
+                    network,
+                    "a",
+                    source=NetworkEndpoint.local_network(),
+                ),
+                DispatchRuleSpec(
+                    network,
+                    "a",
+                    source=NetworkEndpoint.local_network(),
+                ),
+            ),
+        )
+
+        with self.assertRaises(NetworkRulesCompositionError):
+            compose_network_rules(
+                (OwnedNetworkRules(OwnerToken(1), rules),)
+            )
+
     def test_same_dispatch_selector_across_owners_is_rejected(self):
         with self.assertRaises(NetworkRulesCompositionError):
             compose_network_rules(
