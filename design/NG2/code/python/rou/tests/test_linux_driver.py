@@ -296,6 +296,50 @@ def _desired():
 
 
 class LinuxNetworkDriverTests(unittest.TestCase):
+    def test_verified_protective_close_sets_and_observes_forwarding_off(self):
+        desired = _desired()
+        runner = StatefulFakeRunner(desired)
+        runner.forwarding = True
+        driver = LinuxNetworkDriver(runner)
+
+        result = driver.close_forwarding_verified()
+
+        self.assertTrue(result.success, result.diagnostic)
+        self.assertFalse(runner.forwarding)
+        self.assertEqual(
+            runner.commands[0][0],
+            ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+        )
+        self.assertEqual(
+            runner.commands[1][0],
+            ("sysctl", "-n", "net.ipv4.ip_forward"),
+        )
+
+    def test_verified_protective_close_fails_when_readback_is_not_closed(self):
+        desired = _desired()
+
+        class LyingForwardingRunner(StatefulFakeRunner):
+            def run(self, argv, *, input_text=None, check=True):
+                if argv == ("sysctl", "-n", "net.ipv4.ip_forward"):
+                    self.commands.append((argv, input_text, check))
+                    return CommandResult(0, "1\n", "")
+                return super().run(
+                    argv,
+                    input_text=input_text,
+                    check=check,
+                )
+
+        runner = LyingForwardingRunner(desired)
+        driver = LinuxNetworkDriver(runner)
+
+        result = driver.close_forwarding_verified()
+
+        self.assertFalse(result.success)
+        self.assertIn(
+            "verification observed net.ipv4.ip_forward=1",
+            result.diagnostic,
+        )
+
     def test_structural_apply_closes_barrier_and_freshly_verifies(self):
         desired = _desired()
         runner = StatefulFakeRunner(desired)
