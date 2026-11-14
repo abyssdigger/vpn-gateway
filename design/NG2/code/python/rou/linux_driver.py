@@ -325,12 +325,22 @@ class LinuxNetworkDriver:
         """Protectively close IPv4 forwarding and freshly verify the result."""
 
         try:
-            self._set_forwarding(False)
+            self._close_forwarding()
             if self._observe_forwarding():
                 raise LinuxDriverError(
                     "protective forwarding close verification observed "
                     "net.ipv4.ip_forward=1"
                 )
+            for key in (
+                "net/ipv6/conf/all/forwarding",
+                "net/ipv6/conf/default/forwarding",
+            ):
+                value = self._runner.run(("sysctl", "-n", key)).stdout.strip()
+                if value != "0":
+                    raise LinuxDriverError(
+                        "protective forwarding close verification observed "
+                        f"{key.replace('/', '.')}={value!r}"
+                    )
             return LinuxDriverResult(True)
         except Exception as exc:
             return LinuxDriverResult(
@@ -345,7 +355,7 @@ class LinuxNetworkDriver:
         """Full fail-closed rebuild with fresh closed/open verification."""
 
         try:
-            self._set_forwarding(False)
+            self._close_forwarding()
             for command in desired.prerequisites.apply_commands:
                 self._runner.run(command)
             before = self.observe(desired)
@@ -469,7 +479,7 @@ class LinuxNetworkDriver:
                 )
 
             if desired.ip_forward_required:
-                self._set_forwarding(True)
+                self._set_ipv4_forwarding(True)
 
             final = self.observe(desired)
             verification = verify_linux_network(
@@ -487,7 +497,7 @@ class LinuxNetworkDriver:
         except Exception as exc:
             diagnostic = str(exc)
             try:
-                self._set_forwarding(False)
+                self._close_forwarding()
             except Exception as close_exc:
                 diagnostic += (
                     "; protective forwarding close also failed: "
@@ -495,7 +505,7 @@ class LinuxNetworkDriver:
                 )
             return LinuxDriverResult(False, diagnostic)
 
-    def _set_forwarding(self, enabled: bool) -> None:
+    def _set_ipv4_forwarding(self, enabled: bool) -> None:
         self._runner.run(
             (
                 "sysctl",
@@ -503,6 +513,25 @@ class LinuxNetworkDriver:
                 "-w",
                 "net.ipv4.ip_forward="
                 + ("1" if enabled else "0"),
+            )
+        )
+
+    def _close_forwarding(self) -> None:
+        self._set_ipv4_forwarding(False)
+        self._runner.run(
+            (
+                "sysctl",
+                "-q",
+                "-w",
+                "net/ipv6/conf/all/forwarding=0",
+            )
+        )
+        self._runner.run(
+            (
+                "sysctl",
+                "-q",
+                "-w",
+                "net/ipv6/conf/default/forwarding=0",
             )
         )
 
