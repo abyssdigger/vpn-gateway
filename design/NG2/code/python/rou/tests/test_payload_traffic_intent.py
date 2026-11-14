@@ -313,6 +313,37 @@ class PayloadTrafficIntentCalculatorTests(unittest.TestCase):
             0,
         )
 
+    def test_confirmed_live_requires_interface_identities(self):
+        with self.assertRaisesRegex(ValueError, "InterfaceIdentity"):
+            ProfileAvailabilityEvidence(
+                "corp",
+                frozenset(("not-an-interface",)),
+            )
+
+    def test_mismatched_current_effective_shape_forces_rebase(self):
+        current = PayloadTrafficStateRequest(
+            (
+                PayloadProfileRequest(
+                    "corp",
+                    PayloadDirection.INBOUND,
+                    (IPv4Network("10.0.0.0/8"),),
+                    tuple(
+                        PayloadPath(identity)
+                        for identity in (B, C, A, D)
+                    ),
+                ),
+            )
+        )
+
+        effective = self.calc.calculate(
+            self.configured,
+            previous_configured=self.configured,
+            current_effective=current,
+            availability=self.evidence(),
+        )
+
+        self.assertEqual(identities(effective), (A, B, C, D))
+
     def test_noneligible_live_evidence_is_rejected(self):
         foreign = InterfaceIdentity("foreign0", 99)
 
