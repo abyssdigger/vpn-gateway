@@ -322,7 +322,7 @@ class LinuxNetworkDriver:
         )
 
     def close_forwarding_verified(self) -> LinuxDriverResult:
-        """Protectively close IPv4 forwarding and freshly verify the result."""
+        """Protectively close IPv4/IPv6 forwarding and freshly verify the result."""
 
         try:
             self._close_forwarding()
