@@ -5,7 +5,6 @@ from typing import Protocol
 from .availability_probe_state import (
     AvailabilityProbeState,
     AvailabilityProbeStateInfo,
-    ProbeAttemptObservation,
     ProbeObservationGeneration,
 )
 from .network_rules import (
@@ -14,7 +13,6 @@ from .network_rules import (
     NetworkRulesSpec,
     network_rules_semantically_equal,
 )
-from .probe_attempt import ProbeAttemptOutcome, ProbeDriver
 from .probe_rules import (
     AvailabilityProbeSetRequest,
     ProbeRulesCalculator,
@@ -35,26 +33,24 @@ class AvailabilityProbeStatePublisher(Protocol):
 
 
 class AvailabilityProbeManager:
-    """Own probe NetworkRules and generation-safe probe observations.
+    """Own the active-probe rules plane and its authoritative readiness epoch.
 
-    Production cadence/hysteresis and payload path preference are intentionally
-    outside this class.  The explicit one-shot API remains only as a lower
-    diagnostic/verification primitive while the new good-news/window model is
-    integrated above the verified probe plane.
+    Probe execution is intentionally not a synchronous dependency of this Manager.
+    Production evidence arrives through the good-news/window model that is integrated
+    separately.  This class currently owns only the already-proven NetworkRules lifecycle,
+    generation invalidation and publication invalidation boundary.
     """
 
     def __init__(
         self,
         adapter: NetworkRulesAdapter,
         publisher: AvailabilityProbeStatePublisher,
-        driver: ProbeDriver,
         *,
         rules_calculator: ProbeRulesCalculator | None = None,
         state_calculator: ProbeRulesStateCalculator | None = None,
     ) -> None:
         self._adapter = adapter
         self._publisher = publisher
-        self._driver = driver
         self._rules_calculator = rules_calculator or ProbeRulesCalculator()
         self._state_calculator = (
             state_calculator or ProbeRulesStateCalculator()
@@ -69,7 +65,7 @@ class AvailabilityProbeManager:
 
     @property
     def observation_generation(self) -> ProbeObservationGeneration | None:
-        """Current owner-wide READY epoch for diagnostics and internal tests."""
+        """Current owner-wide READY epoch for diagnostics and evidence binding."""
 
         return self._active_generation
 
@@ -119,108 +115,6 @@ class AvailabilityProbeManager:
 
         self._synchronize_generation(rules_state)
         self._publish_unknown_current(rules_state)
-
-    def attempt_once(
-        self,
-        probe_id: str,
-        *,
-        timeout_seconds: int,
-    ) -> ProbeAttemptObservation | None:
-        """Run one explicit diagnostic attempt inside one READY rules epoch.
-
-        This method is not the production availability policy.  It exists to
-        preserve the already verified lower Driver/rules-generation boundary
-        while production probing moves to interval good-news semantics.
-        """
-
-        request = self._latest_request
-        desired = self._latest_desired
-        if request is None or desired is None:
-            raise ValueError("cannot run probe attempt before a desired probe set")
-
-        by_id = {
-            item.probe_id: item
-            for item in request.probes
-        }
-        if probe_id not in by_id:
-            raise ValueError(f"unknown active probe_id {probe_id!r}")
-
-        pre_state = self._audit_rules(desired)
-        self._synchronize_generation(pre_state)
-        self._publish_unknown_current(pre_state)
-
-        generation = self._active_generation
-        if generation is None:
-            return None
-
-        result = self._driver.execute(
-            by_id[probe_id],
-            timeout_seconds=timeout_seconds,
-        )
-
-        self._adapter.renew_state(self)
-        post_state = self._current_rules_state(desired)
-
-        if not self._rules_ready(post_state):
-            self._invalidate_generation()
-            self._publish_unknown_current(post_state)
-            return None
-
-        if self._active_generation != generation:
-            self._publish_unknown_current(post_state)
-            return None
-
-        return ProbeAttemptObservation(
-            probe_id,
-            generation,
-            result,
-        )
-
-    def evaluate_once(
-        self,
-        probe_id: str,
-        *,
-        timeout_seconds: int,
-    ) -> AvailabilityProbeStateInfo | None:
-        """Project one explicit diagnostic attempt into a diagnostic verdict.
-
-        Production routing preference must not consume this per-attempt mapping.
-        It consumes the interval good-news model in availability_routing instead.
-        """
-
-        observation = self.attempt_once(
-            probe_id,
-            timeout_seconds=timeout_seconds,
-        )
-        if observation is None:
-            return None
-
-        if observation.result.outcome is ProbeAttemptOutcome.REPLY:
-            info = AvailabilityProbeStateInfo(
-                probe_id,
-                AvailabilityProbeState.REACHABLE,
-                reason="probe reply received",
-                observation_generation=observation.observation_generation,
-            )
-        elif observation.result.outcome is ProbeAttemptOutcome.NO_REPLY:
-            info = AvailabilityProbeStateInfo(
-                probe_id,
-                AvailabilityProbeState.UNREACHABLE,
-                reason="probe attempt received no reply",
-                observation_generation=observation.observation_generation,
-            )
-        else:
-            info = AvailabilityProbeStateInfo(
-                probe_id,
-                AvailabilityProbeState.UNKNOWN,
-                reason=(
-                    "local probe execution error: "
-                    f"{observation.result.diagnostic}"
-                ),
-            )
-
-        self._publish_if_changed(info)
-        return info
 
     def audit(self) -> None:
         """Run one deterministic rules refresh/repair pass."""
@@ -312,11 +206,7 @@ class AvailabilityProbeManager:
             for item in current.probes
         }
 
-        changed_ids = (
-            previous_by_id.keys()
-            & current_by_id.keys()
-        )
-        for probe_id in changed_ids:
+        for probe_id in previous_by_id.keys() & current_by_id.keys():
             if previous_by_id[probe_id] == current_by_id[probe_id]:
                 continue
             self._latest_published.pop(probe_id, None)
@@ -367,12 +257,13 @@ class AvailabilityProbeManager:
             ):
                 continue
 
-            info = AvailabilityProbeStateInfo(
-                probe.probe_id,
-                AvailabilityProbeState.UNKNOWN,
-                reason=reason,
+            self._publish_if_changed(
+                AvailabilityProbeStateInfo(
+                    probe.probe_id,
+                    AvailabilityProbeState.UNKNOWN,
+                    reason=reason,
+                )
             )
-            self._publish_if_changed(info)
 
     def _publish_if_changed(
         self,
