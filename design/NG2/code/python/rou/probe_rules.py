@@ -37,6 +37,12 @@ class AvailabilityProbeRequest:
     def __post_init__(self) -> None:
         if not self.probe_id:
             raise ValueError("probe_id must be non-empty")
+        if not isinstance(self.path, InterfaceIdentity):
+            raise ValueError("probe path must be an InterfaceIdentity")
+        if not isinstance(self.target, IPv4Address):
+            raise ValueError("probe target must be an IPv4Address")
+        if not isinstance(self.mechanism, ProbeMechanism):
+            raise ValueError("probe mechanism must be a ProbeMechanism")
 
 
 @dataclass(frozen=True)
