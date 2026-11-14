@@ -269,6 +269,27 @@ class PayloadTrafficManagerTests(unittest.TestCase):
             ],
         )
 
+    def test_unexpected_apply_exception_releases_executor_ownership(self):
+        first = _request(InterfaceIdentity("vpns00", 10))
+        second = _request(InterfaceIdentity("vpns01", 11))
+
+        def fail_once():
+            raise RuntimeError("injected unexpected failure")
+
+        self.adapter.apply_hook = fail_once
+
+        with self.assertRaisesRegex(RuntimeError, "injected"):
+            self.manager.handle_request(first)
+
+        # A later event must be able to become executor rather than only queueing
+        # forever behind the failed call.
+        self.manager.handle_request(second)
+
+        self.assertEqual(
+            self.adapter.apply_specs[-1].routing_domains[0].ordered_paths,
+            (InterfaceIdentity("vpns01", 11),),
+        )
+
     def test_reentrant_audit_waits_until_active_apply_completes(self):
         request = _request(self.path)
 
