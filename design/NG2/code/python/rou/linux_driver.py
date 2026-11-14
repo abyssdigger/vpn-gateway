@@ -231,14 +231,7 @@ class LinuxNetworkDriver:
             ).stdout
         )
 
-        forward_text = self._runner.run(
-            ("sysctl", "-n", "net.ipv4.ip_forward")
-        ).stdout.strip()
-        if forward_text not in {"0", "1"}:
-            raise LinuxDriverError(
-                "net.ipv4.ip_forward observation is not 0/1: "
-                f"{forward_text!r}"
-            )
+        forwarding = self._observe_forwarding()
 
         nft_tables = parse_nft_tables(
             self._runner.run(
@@ -268,7 +261,7 @@ class LinuxNetworkDriver:
                 interfaces=interfaces,
                 routes=routes,
                 rules=rules,
-                ip_forward=forward_text == "1",
+                ip_forward=forwarding,
             ),
             filter=nft_filter,
             nat=nft_nat,
@@ -283,6 +276,23 @@ class LinuxNetworkDriver:
             desired,
             self.observe(desired),
         )
+
+    def close_forwarding_verified(self) -> LinuxDriverResult:
+        """Protectively close IPv4 forwarding and freshly verify the result."""
+
+        try:
+            self._set_forwarding(False)
+            if self._observe_forwarding():
+                raise LinuxDriverError(
+                    "protective forwarding close verification observed "
+                    "net.ipv4.ip_forward=1"
+                )
+            return LinuxDriverResult(True)
+        except Exception as exc:
+            return LinuxDriverResult(
+                False,
+                f"cannot prove protective forwarding close: {exc}",
+            )
 
     def materialize_structural(
         self,
@@ -449,6 +459,17 @@ class LinuxNetworkDriver:
                 + ("1" if enabled else "0"),
             )
         )
+
+    def _observe_forwarding(self) -> bool:
+        forward_text = self._runner.run(
+            ("sysctl", "-n", "net.ipv4.ip_forward")
+        ).stdout.strip()
+        if forward_text not in {"0", "1"}:
+            raise LinuxDriverError(
+                "net.ipv4.ip_forward observation is not 0/1: "
+                f"{forward_text!r}"
+            )
+        return forward_text == "1"
 
     def _flush_table(self, table_id: int) -> None:
         result = self._runner.run(
