@@ -202,6 +202,29 @@ def verify_linux_instance(
                 f"{spec.inner_address.with_prefixlen} is missing"
             )
 
+    if host_detail is not None and inner_detail is not None:
+        host_ifindex = host_detail.get("ifindex")
+        host_peer = host_detail.get("link_index")
+        inner_ifindex = inner_detail.get("ifindex")
+        inner_peer = inner_detail.get("link_index")
+        if not all(
+            isinstance(value, int)
+            for value in (
+                host_ifindex,
+                host_peer,
+                inner_ifindex,
+                inner_peer,
+            )
+        ):
+            errors.append("veth peer identity is not fully observable")
+        elif (
+            host_peer != inner_ifindex
+            or inner_peer != host_ifindex
+        ):
+            errors.append(
+                "host and namespace veth interfaces are not the expected peer pair"
+            )
+
     routes = ns.run(
         ("ip", "-j", "-4", "route", "show", "table", "main"),
         check=False,
