@@ -165,7 +165,7 @@ The same EXP-024 harness subsequently passed on the Debian 13 target. The select
 OUTPUT process-identity + conntrack-carried reverse-flow mechanism is therefore
 target-confirmed.
 
-## 8. Rules-state comparison remains intentionally pending
+## 8. Rules-state follow-up completed
 
 This review does **not** create `ProbeRulesState` yet.
 
@@ -173,8 +173,9 @@ At the time of this review a state calculator was intentionally deferred because
 ProbeRules materialization existed. That evidence gate is now closed: the production
 LOCAL_PROCESS backend has passed real apply, exact renew and dataplane integration.
 
-The next required unit is therefore ProbeRulesStateCalculator, followed by the mandatory
-PayloadRulesState / ProbeRulesState comparison.
+That follow-up is now complete: ProbeRulesStateCalculator was implemented after real
+physical apply/renew evidence, and the mandatory PayloadRulesState / ProbeRulesState
+comparison rejected a common RulesState because the domain semantics differ.
 
 ## Final verdict
 
@@ -186,5 +187,5 @@ The common NetworkRules semantic contract may now be extended with local-process
 and bound-output/protocol dispatch semantics. Linux uid and conntrack mark remain technical
 lower-domain state.
 
-The common PayloadRulesState / future ProbeRulesState comparison still waits for the real
+The completed PayloadRulesState / ProbeRulesState comparison was based on the real
 ProbeRules state calculator.
