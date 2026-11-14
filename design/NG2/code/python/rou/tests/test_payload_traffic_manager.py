@@ -42,12 +42,14 @@ class FakeAdapter:
             fresh=False,
         )
         self.apply_owners = []
+        self.apply_specs = []
         self.renew_owners = []
         self.get_owners = []
         self.cleanup_owners = []
 
     def apply(self, owner, spec: NetworkRulesSpec) -> ActionResult:
         self.apply_owners.append(owner)
+        self.apply_specs.append(spec)
         if self.apply_success:
             self.state = NetworkRulesState(
                 StateKnowledge.KNOWN,
@@ -77,6 +79,33 @@ def _request(path: InterfaceIdentity) -> PayloadTrafficStateRequest:
                 PayloadDirection.OUTBOUND,
                 (IPv4Network("10.0.0.0/8"),),
                 (PayloadPath(path),),
+            ),
+        )
+    )
+
+
+def _two_profile_request(
+    a_order: tuple[InterfaceIdentity, InterfaceIdentity],
+    b_order: tuple[InterfaceIdentity, InterfaceIdentity],
+    *,
+    a_prefix: int = 2,
+    b_prefix: int = 2,
+) -> PayloadTrafficStateRequest:
+    return PayloadTrafficStateRequest(
+        (
+            PayloadProfileRequest(
+                "a",
+                PayloadDirection.OUTBOUND,
+                (IPv4Network("10.0.0.0/8"),),
+                tuple(PayloadPath(item) for item in a_order),
+                priority_prefix_length=a_prefix,
+            ),
+            PayloadProfileRequest(
+                "b",
+                PayloadDirection.OUTBOUND,
+                (IPv4Network("192.168.0.0/16"),),
+                tuple(PayloadPath(item) for item in b_order),
+                priority_prefix_length=b_prefix,
             ),
         )
     )
@@ -181,6 +210,86 @@ class PayloadTrafficManagerTests(unittest.TestCase):
         self.assertFalse(second.is_alive())
         self.assertTrue(blocking.second_entered.is_set())
         self.assertEqual(blocking.max_active, 1)
+
+    def test_route_only_diff_uses_one_executor_per_changed_profile(self):
+        a1 = InterfaceIdentity("vpna1", 21)
+        a2 = InterfaceIdentity("vpna2", 22)
+        b1 = InterfaceIdentity("vpnb1", 31)
+        b2 = InterfaceIdentity("vpnb2", 32)
+
+        initial = _two_profile_request((a1, a2), (b1, b2))
+        self.manager.handle_request(initial)
+        initial_apply_count = len(self.adapter.apply_specs)
+
+        both_changed = _two_profile_request(
+            (a2, a1),
+            (b2, b1),
+            a_prefix=1,
+            b_prefix=1,
+        )
+        self.manager.handle_request(both_changed)
+
+        self.assertEqual(
+            len(self.adapter.apply_specs),
+            initial_apply_count + 2,
+            "two changed Profiles must converge as two Profile transactions",
+        )
+        self.assertEqual(
+            set(self.manager._profile_route_executors),
+            {"a", "b"},
+        )
+
+        first_step = self.adapter.apply_specs[-2]
+        second_step = self.adapter.apply_specs[-1]
+        first_by_name = {
+            domain.name: domain
+            for domain in first_step.routing_domains
+        }
+        second_by_name = {
+            domain.name: domain
+            for domain in second_step.routing_domains
+        }
+
+        self.assertEqual(first_by_name["a"].ordered_paths, (a2, a1))
+        self.assertEqual(first_by_name["a"].priority_prefix_length, 1)
+        self.assertEqual(first_by_name["b"].ordered_paths, (b1, b2))
+        self.assertEqual(second_by_name["a"].ordered_paths, (a2, a1))
+        self.assertEqual(second_by_name["b"].ordered_paths, (b2, b1))
+        self.assertEqual(second_by_name["b"].priority_prefix_length, 1)
+
+    def test_structural_diff_does_not_masquerade_as_profile_priority_transaction(self):
+        a1 = InterfaceIdentity("vpna1", 21)
+        a2 = InterfaceIdentity("vpna2", 22)
+        b1 = InterfaceIdentity("vpnb1", 31)
+        b2 = InterfaceIdentity("vpnb2", 32)
+
+        self.manager.handle_request(
+            _two_profile_request((a1, a2), (b1, b2))
+        )
+        before = len(self.adapter.apply_specs)
+
+        structural = PayloadTrafficStateRequest(
+            (
+                PayloadProfileRequest(
+                    "a",
+                    PayloadDirection.OUTBOUND,
+                    (IPv4Network("10.0.0.0/8"),),
+                    (PayloadPath(a1),),
+                    priority_prefix_length=1,
+                ),
+                PayloadProfileRequest(
+                    "b",
+                    PayloadDirection.OUTBOUND,
+                    (IPv4Network("192.168.0.0/16"),),
+                    tuple(PayloadPath(item) for item in (b1, b2)),
+                    priority_prefix_length=2,
+                ),
+            )
+        )
+        self.manager.handle_request(structural)
+
+        self.assertEqual(len(self.adapter.apply_specs), before + 1)
+        self.assertEqual(self.manager._profile_route_executors, {})
 
     def test_request_uses_manager_instance_as_adapter_owner(self):
         result = self.manager.handle_request(_request(self.path))
