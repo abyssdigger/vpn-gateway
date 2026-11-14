@@ -293,6 +293,31 @@ ProbeWindowBoundaryInfo
 There is deliberately no production `NO_REPLY` event. Absence of a reply acquires routing
 meaning only when `AvailabilityProbeManager` processes a logical window boundary.
 
+Plan activation has deterministic phase semantics:
+
+```text
+t = activation:
+    start all logical observation windows
+    issue one send immediately on every physical plane
+
+t = later boundary:
+    first close windows whose deadline is now
+    then issue sends whose next physical deadline is now
+```
+
+Thus the first observation window is never consumed before any probe has been sent. At a
+shared timestamp, a send starts the next window rather than retroactively supplying good
+news to the window that just closed. Replies are classified by arrival, not by attempt
+correlation.
+
+Good-news and boundary events for one execution generation must be emitted through one
+ordered execution stream. EventEnvelope ordering remains responsible for rejecting late
+older revisions once that infrastructure is implemented.
+
+The Manager serializes request/audit/good-news/window handlers with one re-entrant state
+lock. A physical generation transition therefore cannot race an old reply into the new
+window state.
+
 The current code stops at this semantic execution contract. Concrete long-lived
 sender/receiver machinery and its process/socket lifecycle remain the next lower
 implementation unit; it must consume the plan without restoring the diagnostic
