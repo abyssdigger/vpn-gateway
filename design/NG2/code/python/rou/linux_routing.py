@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from enum import Enum
 from ipaddress import IPv4Network
 
@@ -130,36 +130,6 @@ class LinuxRouteSpec:
 
 
 @dataclass(frozen=True)
-class LinuxRouteSlotGapSpec:
-    domain: OwnedRoutingDomainRef
-    table_id: int
-    destination: IPv4Network
-    metric: int
-
-    def __post_init__(self) -> None:
-        if not 0 < self.metric < TERMINAL_METRIC:
-            raise LinuxRoutingError(
-                "route-slot gap metric must be below terminal metric"
-            )
-
-
-@dataclass(frozen=True)
-class LinuxRouteSlotMove:
-    source: LinuxRouteSpec
-    target_metric: int
-
-    def __post_init__(self) -> None:
-        if self.source.kind is not LinuxRouteKind.UNICAST:
-            raise LinuxRoutingError("route-slot move requires unicast source")
-        if not 0 < self.target_metric < TERMINAL_METRIC:
-            raise LinuxRoutingError(
-                "route-slot move target metric must be below terminal metric"
-            )
-        if self.source.metric == self.target_metric:
-            raise LinuxRoutingError("route-slot move must change metric")
-
-
-@dataclass(frozen=True)
 class LinuxDispatchRuleSpec:
     priority: int
     domain: OwnedRoutingDomainRef
@@ -229,7 +199,6 @@ class LinuxRoutingDesired:
     dispatch_rules: tuple[LinuxDispatchRuleSpec, ...]
     terminal_rule: LinuxTerminalRuleSpec | None
     verification_tables: tuple[int, ...]
-    route_slot_gaps: tuple[LinuxRouteSlotGapSpec, ...] = ()
 
 
 def _validate_ifname(ifname: str) -> None:
@@ -325,148 +294,6 @@ def _path_metric(index: int) -> int:
     return metric
 
 
-def _route_group_key(route: LinuxRouteSpec) -> tuple[OwnedRoutingDomainRef, int, IPv4Network]:
-    return (route.domain, route.table_id, route.destination)
-
-
-def _gap_group_key(gap: LinuxRouteSlotGapSpec) -> tuple[OwnedRoutingDomainRef, int, IPv4Network]:
-    return (gap.domain, gap.table_id, gap.destination)
-
-
-def plan_linux_route_priority_moves(
-    current: LinuxRoutingDesired,
-    desired: LinuxRoutingDesired,
-) -> tuple[LinuxRouteSlotMove, ...]:
-    """Plan one-empty-slot permutations using add-duplicate/delete-old moves.
-
-    Each completed move transfers the EMPTY slot from target_metric to the source
-    metric. During the add/delete pair every eligible path remains represented and
-    exactly one path is temporarily duplicated.
-    """
-
-    def grouped(routing: LinuxRoutingDesired):
-        out: dict[
-            tuple[OwnedRoutingDomainRef, int, IPv4Network],
-            dict[int, LinuxRouteSpec],
-        ] = {}
-        for route in routing.routes:
-            if route.kind is not LinuxRouteKind.UNICAST:
-                continue
-            group = _route_group_key(route)
-            by_metric = out.setdefault(group, {})
-            if route.metric in by_metric:
-                raise LinuxRoutingError(
-                    f"duplicate unicast metric {route.metric} in route group {group!r}"
-                )
-            by_metric[route.metric] = route
-        return out
-
-    def gaps(routing: LinuxRoutingDesired):
-        out = {}
-        for gap in routing.route_slot_gaps:
-            group = _gap_group_key(gap)
-            if group in out:
-                raise LinuxRoutingError(
-                    f"duplicate route-slot gap in group {group!r}"
-                )
-            out[group] = gap
-        return out
-
-    current_groups = grouped(current)
-    desired_groups = grouped(desired)
-    if current_groups.keys() != desired_groups.keys():
-        raise LinuxRoutingError("route-priority groups changed")
-
-    current_gaps = gaps(current)
-    desired_gaps = gaps(desired)
-    if current_gaps.keys() != desired_gaps.keys():
-        raise LinuxRoutingError("route-slot gap groups changed")
-
-    moves: list[LinuxRouteSlotMove] = []
-
-    def group_sort_key(group):
-        domain, table_id, destination = group
-        return (
-            table_id,
-            -destination.prefixlen,
-            int(destination.network_address),
-            domain,
-        )
-
-    for group in sorted(current_groups, key=group_sort_key):
-        current_routes = current_groups[group]
-        desired_routes = desired_groups[group]
-        current_gap = current_gaps.get(group)
-        desired_gap = desired_gaps.get(group)
-
-        if current_gap is None or desired_gap is None:
-            if set(current_routes.values()) != set(desired_routes.values()):
-                raise LinuxRoutingError(
-                    "unslotted route group changed during priority transition"
-                )
-            continue
-
-        current_metrics = set(current_routes) | {current_gap.metric}
-        desired_metrics = set(desired_routes) | {desired_gap.metric}
-        if current_metrics != desired_metrics:
-            raise LinuxRoutingError("route-slot metric universe changed")
-
-        current_paths = {route.path for route in current_routes.values()}
-        desired_paths = {route.path for route in desired_routes.values()}
-        if current_paths != desired_paths:
-            raise LinuxRoutingError("route-priority path membership changed")
-        if None in current_paths:
-            raise AssertionError("unicast route unexpectedly lacks path")
-
-        slot_paths = {
-            metric: route.path
-            for metric, route in current_routes.items()
-        }
-        slot_paths[current_gap.metric] = None
-        target_paths = {
-            metric: route.path
-            for metric, route in desired_routes.items()
-        }
-        target_paths[desired_gap.metric] = None
-        route_by_metric = dict(current_routes)
-
-        while slot_paths != target_paths:
-            empty_metrics = [
-                metric for metric, path in slot_paths.items() if path is None
-            ]
-            if len(empty_metrics) != 1:
-                raise LinuxRoutingError(
-                    "route-priority transition requires exactly one EMPTY slot"
-                )
-            empty_metric = empty_metrics[0]
-            wanted = target_paths[empty_metric]
-
-            if wanted is not None:
-                source_metric = next(
-                    metric
-                    for metric, path in slot_paths.items()
-                    if path == wanted
-                )
-            else:
-                source_metric = next(
-                    metric
-                    for metric in sorted(slot_paths)
-                    if slot_paths[metric] is not None
-                    and slot_paths[metric] != target_paths[metric]
-                )
-
-            source = route_by_metric[source_metric]
-            moves.append(LinuxRouteSlotMove(source, empty_metric))
-
-            duplicate = replace(source, metric=empty_metric)
-            route_by_metric[empty_metric] = duplicate
-            del route_by_metric[source_metric]
-            slot_paths[empty_metric] = source.path
-            slot_paths[source_metric] = None
-
-    return tuple(moves)
-
-
 def compile_linux_routing_desired(
     composed: ComposedNetworkRules,
     committed: LinuxRoutingAllocationState,
@@ -484,7 +311,6 @@ def compile_linux_routing_desired(
     table_by_domain = allocation.table_by_domain
 
     routes: list[LinuxRouteSpec] = []
-    route_slot_gaps: list[LinuxRouteSlotGapSpec] = []
     for owned in composed.owners:
         for domain in owned.rules.routing_domains:
             domain_ref = OwnedRoutingDomainRef(
@@ -494,15 +320,6 @@ def compile_linux_routing_desired(
             table_id = table_by_domain[domain_ref]
 
             for destination in domain.destinations:
-                route_slot_gaps.append(
-                    LinuxRouteSlotGapSpec(
-                        domain=domain_ref,
-                        table_id=table_id,
-                        destination=destination,
-                        metric=_path_metric(len(domain.ordered_paths)),
-                    )
-                )
-
                 for index, path in enumerate(domain.ordered_paths):
                     routes.append(
                         LinuxRouteSpec(
@@ -614,20 +431,10 @@ def compile_linux_routing_desired(
         )
     )
 
-    route_slot_gaps.sort(
-        key=lambda item: (
-            item.table_id,
-            -item.destination.prefixlen,
-            int(item.destination.network_address),
-            item.metric,
-        )
-    )
-
     return LinuxRoutingDesired(
         allocation=allocation,
         routes=tuple(routes),
         dispatch_rules=tuple(dispatch),
         terminal_rule=terminal_rule,
         verification_tables=verification_tables,
-        route_slot_gaps=tuple(route_slot_gaps),
     )
