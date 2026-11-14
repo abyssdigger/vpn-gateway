@@ -37,6 +37,8 @@ ALT = "vpng2-localproc-alt"
 TARGET = "203.0.113.24"
 PROBE_UID = "65534"
 PING_COPY = Path("/tmp/vpng2-localproc-ping")
+PING_OVERRIDE = os.environ.get("VPNG_NG2_PROBE_PING_PATH")
+PING_EXECUTABLE = Path(PING_OVERRIDE) if PING_OVERRIDE else PING_COPY
 
 
 def host(*argv: str, check: bool = True, input_text: str | None = None):
@@ -62,11 +64,17 @@ def cleanup() -> None:
 def make_topology() -> None:
     cleanup()
 
-    ping = shutil.which("ping")
-    if ping is None:
-        raise RuntimeError("ping binary is missing")
-    shutil.copyfile(ping, PING_COPY)
-    PING_COPY.chmod(0o755)
+    if PING_OVERRIDE:
+        if not PING_EXECUTABLE.is_absolute() or not PING_EXECUTABLE.is_file():
+            raise RuntimeError(
+                "VPNG_NG2_PROBE_PING_PATH must name an existing absolute file"
+            )
+    else:
+        ping = shutil.which("ping")
+        if ping is None:
+            raise RuntimeError("ping binary is missing")
+        shutil.copyfile(ping, PING_COPY)
+        PING_COPY.chmod(0o755)
 
     for namespace in (ROU, PRI, ALT):
         host("ip", "netns", "add", namespace)
@@ -113,7 +121,7 @@ def ping_as_probe(*args: str):
         "--clear-groups",
         "--bounding-set=-all",
         "--no-new-privs",
-        str(PING_COPY),
+        str(PING_EXECUTABLE),
         "-n",
         "-c",
         "1",
@@ -234,7 +242,7 @@ def main() -> int:
             LinuxIcmpProbeExecutorConfig(
                 local_process=local_process,
                 gid=65534,
-                ping_path=str(PING_COPY),
+                ping_path=str(PING_EXECUTABLE),
             ),
         )
         attempt = executor.execute(
