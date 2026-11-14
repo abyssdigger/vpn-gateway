@@ -8,8 +8,8 @@ from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_probe_driver import (
     LinuxIcmpProbeDriver,
     LinuxIcmpProbeDriverConfig,
-    ProbeAttemptOutcome,
 )
+from rou.probe_attempt import ProbeAttemptOutcome, ProbeAttemptResult
 from rou.probe_rules import AvailabilityProbeRequest
 
 
@@ -73,8 +73,6 @@ class LinuxIcmpProbeDriverTests(unittest.TestCase):
 
 
     def test_attempt_result_rejects_untyped_outcome(self):
-        from rou.linux_probe_driver import ProbeAttemptResult
-
         with self.assertRaises(ValueError):
             ProbeAttemptResult("reply")
 
