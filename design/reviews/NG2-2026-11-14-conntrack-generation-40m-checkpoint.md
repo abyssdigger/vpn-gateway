@@ -1,4 +1,4 @@
-# NG2 conntrack-generation 40-minute cycle checkpoint (draft)
+# NG2 conntrack-generation 40-minute cycle checkpoint
 
 Date: 2026-11-14
 Branch: code-cycle-20261114-conntrack-generation-40m
@@ -6,6 +6,8 @@ Cycle interval: 40 minutes
 
 CYCLE_START_COMMIT = f13c13eef95f8438fc36989c68a883abc43d44c0
 T0 = 2026-11-14T11:06:19Z
+
+Cycle threshold reached at/after 2026-11-14T11:46:19Z. This file is the final recovery checkpoint for the cycle; authoritative final SHA/timestamp is the GitHub commit carrying this update.
 
 ## Closed gates
 
