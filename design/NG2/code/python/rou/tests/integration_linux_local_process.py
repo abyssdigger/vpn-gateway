@@ -12,9 +12,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_local_process import LinuxLocalProcessConfig
-from rou.linux_probe_executor import (
-    LinuxIcmpProbeExecutor,
-    LinuxIcmpProbeExecutorConfig,
+from rou.linux_probe_driver import (
+    LinuxIcmpProbeDriver,
+    LinuxIcmpProbeDriverConfig,
     ProbeAttemptOutcome,
 )
 from rou.linux_driver import (
@@ -237,15 +237,15 @@ def main() -> int:
             )
         print("PASS LP3: unrelated local process retains ordinary alt0 path")
 
-        executor = LinuxIcmpProbeExecutor(
+        probe_driver = LinuxIcmpProbeDriver(
             namespace_runner,
-            LinuxIcmpProbeExecutorConfig(
+            LinuxIcmpProbeDriverConfig(
                 local_process=local_process,
                 gid=65534,
                 ping_path=str(PING_EXECUTABLE),
             ),
         )
-        attempt = executor.execute(
+        attempt = probe_driver.execute(
             AvailabilityProbeRequest(
                 "primary-execution",
                 path,
