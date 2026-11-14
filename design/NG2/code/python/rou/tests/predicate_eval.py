@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from ipaddress import IPv4Address
 
 from rou.network_rules import (
+    IcmpType,
     PredicateKind,
     TrafficPredicate,
     TrafficProtocol,
@@ -16,6 +17,7 @@ class PacketView:
     protocol: TrafficProtocol
     source_port: int | None = None
     destination_port: int | None = None
+    icmp_type: IcmpType | None = None
 
 
 def _port_matches(port: int | None, ranges) -> bool:
@@ -41,6 +43,10 @@ def _selector_matches(selector: TrafficSelector, packet: PacketView) -> bool:
         and _port_matches(
             packet.destination_port,
             selector.destination_ports,
+        )
+        and (
+            not selector.icmp_types
+            or packet.icmp_type in selector.icmp_types
         )
     )
 
