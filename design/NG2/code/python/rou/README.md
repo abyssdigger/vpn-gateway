@@ -9,6 +9,9 @@ Semantic whole-slice review: **PASS** —
 Linux Adapter focused review: **PASS** —
 `design/reviews/NG2-2026-11-14-linux-network-rules-adapter-review.md`.
 
+Linux lower-domain whole-code audit: **PASS** —
+`design/reviews/NG2-2026-11-14-linux-lower-domain-whole-code-audit.md`.
+
 Implemented:
 
 - generic network-rules routing/dispatch data contract;
