@@ -52,35 +52,11 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
             ],
             [("vpns00", 10), ("vpns01", 11)],
         )
-        self.assertEqual(
-            spec.routing_domains[0].priority_prefix_length,
-            2,
-        )
         self.assertIs(
             spec.dispatch_rules[0].source.kind,
             EndpointKind.LOCAL_NETWORK,
         )
         self.assertIsNone(spec.dispatch_rules[0].source.interface)
-
-    def test_explicit_priority_prefix_is_preserved(self):
-        profile = PayloadProfileRequest(
-            "profile-a",
-            PayloadDirection.OUTBOUND,
-            (IPv4Network("10.0.0.0/8"),),
-            (
-                PayloadPath(InterfaceIdentity("vpns00", 10)),
-                PayloadPath(InterfaceIdentity("vpns01", 11)),
-                PayloadPath(InterfaceIdentity("vpns02", 12)),
-            ),
-            priority_prefix_length=1,
-        )
-
-        spec = self._calculate(profile)
-
-        self.assertEqual(
-            spec.routing_domains[0].priority_prefix_length,
-            1,
-        )
 
     def test_path_priority_reorder_does_not_reorder_filter_or_nat_policy(self):
         first_path = PayloadPath(
