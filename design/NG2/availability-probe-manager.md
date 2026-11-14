@@ -222,16 +222,17 @@ availability_routing.py
 
 The old autonomous scheduler has been removed.
 
-The current `AvailabilityProbeManager.attempt_once()` and `evaluate_once()` remain only as
-explicit diagnostic/verification primitives over the already proven lower boundary. They
-must not be used as production routing policy.
+`AvailabilityProbeManager` no longer depends on a synchronous ProbeDriver and no longer
+exposes `attempt_once()/evaluate_once()`. Its current executable responsibility stops at
+the verified probe NetworkRules/readiness-generation boundary.
 
-Likewise, `LinuxIcmpProbeDriver` is currently a verified synchronous single-shot worker.
-It proves generation binding, capability-free execution and result classification, but its
-blocking attempt API does not define the final sender/receiver runtime architecture.
+`LinuxIcmpProbeDriver` remains standalone only as a verified diagnostic/evidence worker.
+It proves concrete-generation binding, capability-free execution and low-level result
+classification, but it is not a Manager dependency and its blocking attempt API does not
+define production availability semantics.
 
-A later execution integration may replace this worker contract without changing the
-good-news/window routing semantics.
+The production execution integration must deliver generation-bound good-news events without
+reintroducing semantic attempt correlation.
 
 ## 10. Linux technical identity
 
@@ -249,13 +250,12 @@ The semantic probe request contains none of those Linux values.
 
 ## 11. ping socket prerequisite
 
-The current Linux single-shot worker uses capability-free ping sockets and idempotently
-writes/verifies namespace-local `net.ipv4.ping_group_range` for its gid.
+The standalone Linux diagnostic worker proves capability-free ping sockets with
+namespace-local `net.ipv4.ping_group_range`.
 
-This remains execution machinery, not `NetworkRulesAdapter` policy.
-
-Shutdown cleanup of this process prerequisite remains open until the final execution
-lifecycle is selected.
+The final production sender/receiver may reuse the same prerequisite, but its ownership
+belongs to execution machinery, never `NetworkRulesAdapter` policy. Shutdown cleanup is
+defined together with that final execution lifecycle.
 
 ## 12. Removed policy
 
@@ -267,6 +267,8 @@ timeout_seconds as verdict policy
 recovery_threshold
 serial run_due() scheduler
 per-attempt NO_REPLY hysteresis
+synchronous ProbeDriver dependency in AvailabilityProbeManager
+attempt_once()/evaluate_once() Manager API
 ERROR -> immediate routing UNKNOWN transition
 availability-driven BindingCalculator removal
 UNAVAILABLE_METRIC / shadow fallback tier
@@ -293,7 +295,8 @@ per-attempt routing policy.
 
 The remaining work is deliberately narrow:
 
-1. integrate a non-attempt-correlated good-news source with `AvailabilityWindowState`;
+1. integrate a generation-bound, non-attempt-correlated good-news source with
+   `AvailabilityWindowState`;
 2. define diagnostic publication of persistent local probing errors without changing
    routing safety;
 3. feed confirmed-live evidence into effective payload ordering, not binding membership;
