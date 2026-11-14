@@ -162,10 +162,10 @@ class LinuxDispatchRuleSpec:
 
         if (
             type(self.local_process_uid) is not int
-            or self.local_process_uid < 0
+            or not 1 <= self.local_process_uid < (1 << 32) - 1
         ):
             raise LinuxRoutingError(
-                "local-process dispatch requires non-negative uid"
+                "local-process dispatch requires non-root 32-bit uid"
             )
         if self.protocol is None:
             raise LinuxRoutingError(
