@@ -162,7 +162,10 @@ class AvailabilityProbeManager:
 
     def _synchronize_generation(self, state: NetworkRulesConvergenceState) -> None:
         request = self._latest_request
-        if request is None or not request.probes:
+        if (
+            request is None
+            or not any(probe.enabled for probe in request.probes)
+        ):
             self._invalidate_generation()
             return
 
