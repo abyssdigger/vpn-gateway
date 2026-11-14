@@ -198,13 +198,14 @@ NG2_LINUX_LOCAL_PROCESS_INTEGRATION=PASS
 Post-cleanup NG2 workflow at code commit `fadad395a25e55c85f0dd743f0eb3978eb8010cf`:
 unit PASS and full privileged Linux integration PASS. NG1 validation also PASS.
 
-## Next required boundary
+## Follow-up boundary
 
-The earlier state-model evidence gate is now satisfied.
+The earlier state-model evidence gate was satisfied and the follow-up is complete:
 
-Next:
+1. `ProbeRulesStateCalculator` implemented from real NetworkRulesAdapter state;
+2. its semantics reviewed independently;
+3. concrete `PayloadRulesState` and `ProbeRulesState` compared;
+4. common `RulesState` explicitly rejected because their domain semantics differ.
 
-1. implement `ProbeRulesStateCalculator` from real NetworkRulesAdapter state;
-2. review its semantics independently;
-3. compare concrete `PayloadRulesState` and `ProbeRulesState`;
-4. introduce a common RulesState type only if that comparison proves equivalence.
+The next real gate is the target confirmation of the single-shot Linux ICMP probe executor
+with the intended Debian 13 executable.
