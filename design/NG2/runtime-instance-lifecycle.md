@@ -53,7 +53,7 @@ Network policy полностью остается за `LinuxNetworkRulesAdapte
 
 Любой существующий namespace перед structural verification сначала переводится в
 protective forwarding closure через тот же
-`LinuxNetworkDriver.close_forwarding_verified()`.
+`LinuxNetworkExecutor.close_forwarding_verified()`.
 
 Это относится и к partially-present instance, если namespace существует: lifecycle сначала
 пытается закрыть forwarding, затем сообщает structural failure.
