@@ -2,6 +2,7 @@ from ipaddress import IPv4Network
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
+from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_nft import (
     InterfaceRefKind,
     LinuxNftError,
@@ -79,6 +80,10 @@ class LinuxNftFilterTests(unittest.TestCase):
                 (_owned(1, traffic=(allow,), flows=(flow,)),)
             ),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         self.assertIn('iifname "host0" oif 10', desired.definition)
@@ -111,6 +116,10 @@ class LinuxNftFilterTests(unittest.TestCase):
                 )
             ),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         traffic_section = desired.definition.split(
@@ -145,6 +154,10 @@ class LinuxNftFilterTests(unittest.TestCase):
         desired = compile_nft_filter_desired(
             compose_network_rules((traffic_only, flow_only)),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         new_section = desired.definition.split(
@@ -179,6 +192,10 @@ class LinuxNftFilterTests(unittest.TestCase):
                 (_owned(1, traffic=(traffic,), flows=(flow,)),)
             ),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         new_section = desired.definition.split(
@@ -203,6 +220,10 @@ class LinuxNftFilterTests(unittest.TestCase):
         desired = compile_nft_filter_desired(
             compose_network_rules((_owned(1, traffic=(traffic,)),)),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         section = desired.definition.split(
@@ -224,6 +245,10 @@ class LinuxNftFilterTests(unittest.TestCase):
         desired = compile_nft_filter_desired(
             compose_network_rules((_owned(1, traffic=(traffic,)),)),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         self.assertIn('iif 10 oifname "host0"', desired.definition)
@@ -265,6 +290,10 @@ class LinuxNftFilterTests(unittest.TestCase):
         desired = compile_nft_filter_desired(
             compose_network_rules((owned,)),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         self.assertIn(
@@ -329,6 +358,10 @@ class LinuxNftFilterTests(unittest.TestCase):
         desired = compile_nft_filter_desired(
             compose_network_rules((owned,)),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         self.assertIn("chain local_output", desired.definition)
@@ -360,6 +393,10 @@ class LinuxNftFilterTests(unittest.TestCase):
         desired = compile_nft_filter_desired(
             compose_network_rules((_owned(1, traffic=(traffic,)),)),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         traffic_section = desired.definition.split(
@@ -387,6 +424,10 @@ class LinuxNftObservationTests(unittest.TestCase):
                 (_owned(1, traffic=(traffic,), flows=(flow,)),)
             ),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
     def test_normalizer_maps_live_interface_name_back_to_ifindex(self):
@@ -491,6 +532,10 @@ class LinuxNftNatTests(unittest.TestCase):
         desired = compile_nft_nat_desired(
             compose_network_rules((owned,)),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         self.assertIn(
@@ -534,6 +579,10 @@ class LinuxNftNatTests(unittest.TestCase):
         desired = compile_nft_nat_desired(
             compose_network_rules((owned,)),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         self.assertIn("ip daddr 10.0.0.0/8", desired.definition)
@@ -574,6 +623,10 @@ class LinuxNftNatTests(unittest.TestCase):
         desired = compile_nft_nat_desired(
             compose_network_rules((owned,)),
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
 
         postrouting = desired.definition.split(
