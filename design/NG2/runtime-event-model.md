@@ -81,6 +81,15 @@ evidence для нескольких Profiles. Assignment валидируетс
 должен существовать и его concrete path должен входить в eligible set соответствующего
 Profile.
 
+Current executable handlers сериализуют latest-value state одним re-entrant lock внутри
+RuntimeStateManager. Поэтому concurrent callbacks не могут одновременно пересчитывать и
+публиковать противоречащие друг другу effective snapshots; synchronous feedback через тот
+же thread при этом не deadlock'ится.
+
+Это **не** заменяет EventEnvelope ordering. Поздно доставленная старая revision может
+прийти уже после завершения более новой handler invocation; отсечение такого события
+остается ответственностью epoch/revision filter Event Delivery/runtime ingress.
+
 ### 2.2. InterfaceObservationAgent
 
 `InterfaceObservationAgent` наблюдает runtime network interfaces.
@@ -828,10 +837,12 @@ RuntimeStateManager
 6. restart/resubscription/state-refresh protocol;
 7. Profile status model.
 
-Текущий прямой unit/integration harness доставляет callbacks упорядоченно и доказывает
-semantic flow, но не заменяет будущий EventEnvelope revision filter. Именно envelope
-обязан защищать RuntimeStateManager от поздней доставки старого InfoEvent после
-superseding revision/generation.
+Текущий RuntimeStateManager самостоятельно сериализует concurrent/re-entrant handler
+execution и тем самым защищает latest-value calculation от одновременной mutation.
+Unit/integration harness доказывает semantic flow, но это не заменяет будущий
+EventEnvelope revision filter. Именно envelope обязан защищать RuntimeStateManager от
+**последовательной, но поздней** доставки старого InfoEvent после superseding
+revision/generation.
 
 Future Device lifecycle management остается отдельным будущим расширением и не является
 частью текущего NG2 runtime.
