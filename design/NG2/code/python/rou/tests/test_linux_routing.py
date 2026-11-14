@@ -217,6 +217,34 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
             [(1, "10.1.0.0/16"), (2, "10.0.0.0/8")],
         )
 
+    def test_live_owner_set_gets_terminal_host_ingress_guard(self):
+        desired = compile_linux_routing_desired(
+            compose_network_rules(
+                (_owner_rules(1, "a", "10.0.0.0/8"),)
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+
+        self.assertIsNotNone(desired.terminal_rule)
+        self.assertEqual(
+            desired.terminal_rule.priority,
+            len(desired.dispatch_rules) + 1,
+        )
+        self.assertEqual(
+            desired.terminal_rule.source_ifname,
+            "host0",
+        )
+
+    def test_empty_owner_set_has_no_terminal_guard(self):
+        desired = compile_linux_routing_desired(
+            compose_network_rules(()),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+        )
+
+        self.assertIsNone(desired.terminal_rule)
+
     def test_interface_dispatch_source_is_explicitly_unsupported(self):
         path = NetworkEndpoint.interface_path(
             InterfaceIdentity("vpns00", 10)
