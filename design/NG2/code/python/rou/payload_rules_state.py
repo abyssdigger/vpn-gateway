@@ -111,6 +111,45 @@ def _routing_is_restrictive(
     return True
 
 
+def _routing_semantically_equal(
+    actual: tuple[RoutingDomainSpec, ...],
+    desired: tuple[RoutingDomainSpec, ...],
+) -> bool:
+    actual_by_name = {item.name: item for item in actual}
+    desired_by_name = {item.name: item for item in desired}
+
+    if actual_by_name.keys() != desired_by_name.keys():
+        return False
+
+    for name, wanted in desired_by_name.items():
+        observed = actual_by_name[name]
+        if set(observed.destinations) != set(wanted.destinations):
+            return False
+        if observed.ordered_paths != wanted.ordered_paths:
+            return False
+        if observed.terminal_disposition is not wanted.terminal_disposition:
+            return False
+
+    return True
+
+
+def _semantically_equal(
+    actual: NetworkRulesSpec,
+    desired: NetworkRulesSpec,
+) -> bool:
+    return (
+        _routing_semantically_equal(
+            actual.routing_domains,
+            desired.routing_domains,
+        )
+        and actual.dispatch_rules == desired.dispatch_rules
+        and set(actual.traffic_allows) == set(desired.traffic_allows)
+        and set(actual.flow_initiation_allows)
+        == set(desired.flow_initiation_allows)
+        and actual.source_nat == desired.source_nat
+    )
+
+
 def _provably_restrictive(
     actual: NetworkRulesSpec,
     desired: NetworkRulesSpec,
@@ -139,9 +178,9 @@ def _provably_restrictive(
     ):
         return False
 
-    if set(actual.source_nat) != set(desired.source_nat):
-        # Removing/changing translation may alter externally visible traffic semantics.
-        # Keep this outside the initial safe-subset proof.
+    if actual.source_nat != desired.source_nat:
+        # NAT order is not yet defined as commutative in the generic contract. Require
+        # exact equality rather than assuming reordering is harmless.
         return False
 
     return True
@@ -197,7 +236,7 @@ class PayloadRulesStateCalculator:
         assert observed.rules is not None
         actual = observed.rules
 
-        if actual == desired:
+        if _semantically_equal(actual, desired):
             return PayloadRulesState(
                 knowledge=Knowledge.KNOWN,
                 convergence=Convergence.MATCHED,
