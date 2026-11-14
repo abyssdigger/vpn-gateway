@@ -97,8 +97,11 @@ Manager-local and opaque to NetworkRulesSpec/Linux technical identity:
 - no epoch exists before fresh `KNOWN + MATCHED + READY`;
 - leaving READY invalidates all evidence from the current epoch;
 - a later fresh transition back to READY starts a new epoch;
-- accepting a semantically changed desired probe set invalidates the previous epoch;
-- a same-name/new-ifindex request therefore cannot reuse old evidence.
+- changing the physical desired `NetworkRulesSpec` invalidates the previous epoch;
+- a same-name/new-ifindex request therefore cannot reuse old evidence;
+- logical-only request changes that leave the physical probe plane unchanged preserve the
+  rules-readiness epoch and invalidate evidence/scheduling only for changed `probe_id`
+  entries.
 
 The epoch is not a kernel/network generation identifier and is not encoded into uid,
 conntrack mark, routing tables or nft rules.
@@ -346,9 +349,10 @@ One valid attempt is enough to publish one current verdict for the active readin
 
 Repeated semantically identical verdicts are publication-idempotent.
 
-Any rules/request transition that opens a new readiness epoch invalidates an older
-REACHABLE/UNREACHABLE publication and returns the affected probe to UNKNOWN until new valid
-evidence exists.
+Any physical rules transition that opens a new readiness epoch invalidates older
+REACHABLE/UNREACHABLE publications for the Manager. A logical-only request change invalidates
+only the affected `probe_id` publication while unchanged logical probes retain evidence
+from the still-current rules epoch.
 
 This baseline is intentionally replaceable by a later retry/hysteresis policy without
 changing ProbeDriver or ProbeAttemptObservation.
@@ -414,9 +418,13 @@ authoritative REACHABLE/UNREACHABLE verdict.
 A local Driver ERROR remains exceptional evidence and immediately publishes UNKNOWN,
 clearing pending streaks. It is never counted toward remote failure hysteresis.
 
-A semantic request change, including policy-only change, invalidates current evidence and
-starts a new readiness epoch. If its physical `NetworkRulesSpec` is unchanged, the Manager
-freshly audits the existing plane rather than forcing a structural apply.
+A policy-only or other logical-only change invalidates current evidence, streaks and due
+state only for the changed `probe_id`. If the physical `NetworkRulesSpec` is unchanged,
+the Manager preserves the current rules-readiness epoch and freshly audits the existing plane
+rather than forcing a structural apply.
+
+A physical probe-plane change still invalidates the owner-wide rules epoch and therefore all
+authoritative probe evidence carried by that epoch.
 
 No jitter, parallel attempts, in-flight cancellation or stale-verdict time-to-live is
 defined by this slice.
