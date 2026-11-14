@@ -154,6 +154,25 @@ class PayloadTrafficManagerTests(unittest.TestCase):
         self.assertIs(info.rules_state.safety, Safety.SAFE)
         self.assertIs(info.rules_state.service, Service.ISOLATED)
 
+    def test_apply_and_refresh_failure_publish_unknown_observation_state(self):
+        self.adapter.apply_success = False
+        self.adapter.renew_success = False
+        self.adapter.state = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            NetworkRulesSpec(),
+            fresh=False,
+        )
+
+        self.manager.handle_request(_request(self.path))
+
+        self.assertEqual(len(self.publisher.events), 1)
+        info = self.publisher.events[0]
+        self.assertIs(info.rules_state.knowledge, Knowledge.UNKNOWN)
+        self.assertIs(info.rules_state.convergence, Convergence.UNKNOWN)
+        self.assertIs(info.rules_state.safety, Safety.UNKNOWN)
+        self.assertIs(info.rules_state.service, Service.UNKNOWN)
+        self.assertIsNone(info.profiles[0].observed_paths)
+
     def test_apply_failure_does_not_force_failed_state(self):
         request = _request(self.path)
 
