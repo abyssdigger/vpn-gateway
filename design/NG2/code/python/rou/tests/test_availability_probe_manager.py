@@ -170,9 +170,15 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         self.assertEqual(len(self.adapter.apply_owners), apply_count + 1)
         self.assertIsNone(self.manager.observation_generation)
         self.assertEqual(self.adapter.state.rules, NetworkRulesSpec())
-        # The probe was already published UNKNOWN before disable. Closing its
-        # physical plane must not duplicate an identical current-state event.
-        self.assertEqual(self.publisher.events, [])
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNKNOWN,
+        )
+        self.assertEqual(
+            self.publisher.events[0].reason,
+            "probe disabled",
+        )
 
     def test_disabling_shared_probe_preserves_plane_and_epoch(self):
         first = probe("first", self.path, "203.0.113.24")
@@ -195,6 +201,7 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         self.assertEqual(len(self.adapter.apply_owners), apply_count)
         self.assertEqual(len(self.publisher.events), 1)
         self.assertEqual(self.publisher.events[0].probe_id, "first")
+        self.assertEqual(self.publisher.events[0].reason, "probe disabled")
 
     def test_semantically_changed_physical_probe_starts_new_ready_epoch(self):
         self.manager.handle_request(
