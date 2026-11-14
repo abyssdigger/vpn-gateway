@@ -1,6 +1,7 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
+from rou.availability_probe_policy import AvailabilityProbePolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     EndpointKind,
@@ -161,6 +162,46 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
 
         self.assertFalse(
             availability_probe_sets_semantically_equal(first, changed)
+        )
+
+    def test_policy_change_is_logical_but_not_physical_rules_change(self):
+        path = InterfaceIdentity("vpns00", 43)
+        target = IPv4Address("192.0.2.1")
+        first = AvailabilityProbeSetRequest(
+            (
+                AvailabilityProbeRequest(
+                    "probe",
+                    path,
+                    target,
+                    policy=AvailabilityProbePolicy(
+                        interval_seconds=10,
+                        retry_interval_seconds=1,
+                        timeout_seconds=1,
+                    ),
+                ),
+            )
+        )
+        changed = AvailabilityProbeSetRequest(
+            (
+                AvailabilityProbeRequest(
+                    "probe",
+                    path,
+                    target,
+                    policy=AvailabilityProbePolicy(
+                        interval_seconds=30,
+                        retry_interval_seconds=2,
+                        timeout_seconds=1,
+                    ),
+                ),
+            )
+        )
+
+        self.assertFalse(
+            availability_probe_sets_semantically_equal(first, changed)
+        )
+        self.assertEqual(
+            ProbeRulesCalculator().calculate(first),
+            ProbeRulesCalculator().calculate(changed),
         )
 
     def test_duplicate_probe_id_is_rejected(self):
