@@ -148,6 +148,7 @@ class LinuxRoutingDesired:
     allocation: LinuxRoutingAllocationState
     routes: tuple[LinuxRouteSpec, ...]
     dispatch_rules: tuple[LinuxDispatchRuleSpec, ...]
+    verification_tables: tuple[int, ...]
 
 
 def _validate_ifname(ifname: str) -> None:
@@ -329,8 +330,18 @@ def compile_linux_routing_desired(
         )
     )
 
+    verification_tables = tuple(
+        sorted(
+            {
+                *(item.table_id for item in committed.domain_tables),
+                *(item.table_id for item in allocation.domain_tables),
+            }
+        )
+    )
+
     return LinuxRoutingDesired(
         allocation=allocation,
         routes=tuple(routes),
         dispatch_rules=tuple(dispatch),
+        verification_tables=verification_tables,
     )
