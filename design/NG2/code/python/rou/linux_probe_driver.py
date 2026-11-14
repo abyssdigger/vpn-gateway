@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from .linux_driver import LinuxCommandRunner
 from .linux_local_process import LinuxLocalProcessConfig
 from .linux_observation import parse_link_json
