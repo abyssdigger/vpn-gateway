@@ -214,6 +214,91 @@ class PayloadTrafficManagerTests(unittest.TestCase):
             Service.ISOLATED,
         )
 
+    def test_audit_before_first_request_is_noop(self):
+        self.manager.audit()
+
+        self.assertEqual(self.adapter.renew_owners, [])
+        self.assertEqual(self.adapter.apply_owners, [])
+        self.assertEqual(self.publisher.events, [])
+
+    def test_matched_audit_observes_without_reapplying(self):
+        request = _request(self.path)
+        self.manager.handle_request(request)
+        initial_apply_count = len(self.adapter.apply_owners)
+        self.publisher.events.clear()
+
+        self.manager.audit()
+
+        self.assertEqual(len(self.adapter.renew_owners), 1)
+        self.assertEqual(len(self.adapter.apply_owners), initial_apply_count)
+        self.assertEqual(self.publisher.events, [])
+
+    def test_drift_audit_repairs_current_desired_without_new_request(self):
+        request = _request(self.path)
+        self.manager.handle_request(request)
+        initial_apply_count = len(self.adapter.apply_owners)
+        self.publisher.events.clear()
+
+        self.adapter.state = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            NetworkRulesSpec(),
+            fresh=True,
+        )
+
+        self.manager.audit()
+
+        self.assertEqual(len(self.adapter.renew_owners), 1)
+        self.assertEqual(
+            len(self.adapter.apply_owners),
+            initial_apply_count + 1,
+        )
+        self.assertEqual(self.publisher.events, [])
+        self.assertIs(
+            self.adapter.state.rules,
+            self.manager._latest_desired,
+        )
+
+    def test_failed_drift_repair_publishes_observed_isolation(self):
+        request = _request(self.path)
+        self.manager.handle_request(request)
+        self.publisher.events.clear()
+
+        self.adapter.state = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            NetworkRulesSpec(),
+            fresh=True,
+        )
+        self.adapter.apply_success = False
+
+        self.manager.audit()
+
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].rules_state.service,
+            Service.ISOLATED,
+        )
+
+    def test_unknown_audit_attempts_repair(self):
+        request = _request(self.path)
+        self.manager.handle_request(request)
+        initial_apply_count = len(self.adapter.apply_owners)
+        self.publisher.events.clear()
+
+        self.adapter.renew_success = False
+        self.adapter.state = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            NetworkRulesSpec(),
+            fresh=False,
+        )
+
+        self.manager.audit()
+
+        self.assertEqual(
+            len(self.adapter.apply_owners),
+            initial_apply_count + 1,
+        )
+        self.assertEqual(self.publisher.events, [])
+
     def test_shutdown_cleans_adapter_state_with_same_owner_identity(self):
         result = self.manager.shutdown()
 
