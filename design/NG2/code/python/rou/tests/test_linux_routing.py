@@ -8,7 +8,6 @@ from rou.linux_routing import (
     LinuxRouteKind,
     LinuxRoutingAllocationState,
     LinuxRoutingError,
-    OwnerToken,
     PATH_METRIC_STEP,
     TERMINAL_METRIC,
     compile_linux_routing_desired,
@@ -22,6 +21,7 @@ from rou.network_rules import (
 )
 from rou.network_rules_composition import (
     OwnedNetworkRules,
+    OwnerToken,
     OwnedRoutingDomainRef,
     compose_network_rules,
 )
