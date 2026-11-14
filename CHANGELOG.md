@@ -8,6 +8,10 @@ Defined the next execution boundary without restoring per-attempt availability s
 - added typed `ProbeGoodNewsInfo` and `ProbeWindowBoundaryInfo` inputs to the existing
   AvailabilityProbeManager evidence logic;
 - no production `NO_REPLY` event or attempt identity was introduced;
+- plan activation starts windows and performs an immediate first send; coincident later
+  boundaries are emitted before the next send, preventing a synthetic startup miss;
+- AvailabilityProbeManager now serializes request/audit/good-news/window callbacks across
+  generation changes so stale execution events cannot race into new evidence state;
 - concrete persistent sender/receiver process/socket machinery remains a lower implementation
   unit and must implement this contract rather than promote the diagnostic single-shot
   `LinuxIcmpProbeDriver`.
