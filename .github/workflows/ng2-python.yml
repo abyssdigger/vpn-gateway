@@ -67,6 +67,23 @@ jobs:
         with:
           name: ng2-probe-conntrack-generation
           path: /tmp/ng2-probe-conntrack-generation.txt
+      - name: EXP-026 probe-class conntrack cleanup
+        id: probe_conntrack_cleanup
+        shell: bash
+        run: |
+          set +e
+          sudo python3 \
+            design/NG2/code/python/rou/tests/integration_probe_conntrack_cleanup.py \
+            2>&1 | tee /tmp/ng2-probe-conntrack-cleanup.txt
+          rc=${PIPESTATUS[0]}
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit "$rc"
+      - name: Upload EXP-026 diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ng2-probe-conntrack-cleanup
+          path: /tmp/ng2-probe-conntrack-cleanup.txt
       - name: Upload probe-isolation diagnostics
         if: always()
         uses: actions/upload-artifact@v4
