@@ -284,6 +284,41 @@ def main() -> int:
             f"old={path.ifindex} new={replacement.ifindex}"
         )
 
+        # A reconcile for another owner must not remove the dedicated UID guard merely
+        # because this owner's concrete bound generation is currently unrealizable.
+        other_owner = object()
+        other = adapter.apply(other_owner, __import__(
+            "rou.network_rules",
+            fromlist=["NetworkRulesSpec"],
+        ).NetworkRulesSpec())
+        if not other.success:
+            raise RuntimeError(
+                "other-owner reconcile after probe generation loss failed: "
+                f"{other.diagnostic}"
+            )
+        unbound_after_reconcile = ping_as_probe(TARGET)
+        if unbound_after_reconcile.returncode == 0:
+            raise RuntimeError(
+                "other-owner structural reconcile removed LOCAL_PROCESS uid guard"
+            )
+        nft_after = ns(
+            ROU,
+            "nft",
+            "-n",
+            "list",
+            "table",
+            "ip",
+            "vpng2_filter",
+        ).stdout
+        if "meta skuid 65534 drop" not in nft_after:
+            raise RuntimeError(
+                "LOCAL_PROCESS uid guard absent after projected other-owner reconcile"
+            )
+        print(
+            "PASS LP7: projected generation loss retains uid guard across "
+            "other-owner structural reconcile"
+        )
+
         print("NG2_LINUX_LOCAL_PROCESS_INTEGRATION=PASS")
         return 0
     finally:
