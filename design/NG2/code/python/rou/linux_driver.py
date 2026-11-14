@@ -218,8 +218,8 @@ def verify_linux_network(
     )
 
 
-class LinuxNetworkDriver:
-    """Concrete structural Linux materializer for one dedicated ROU namespace."""
+class LinuxNetworkExecutor:
+    """Converge and verify structural Linux network state for one ROU namespace."""
 
     def __init__(self, runner: LinuxCommandRunner) -> None:
         self._runner = runner
