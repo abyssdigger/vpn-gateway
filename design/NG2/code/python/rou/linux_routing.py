@@ -144,10 +144,22 @@ class LinuxDispatchRuleSpec:
 
 
 @dataclass(frozen=True)
+class LinuxTerminalRuleSpec:
+    priority: int
+    source_ifname: str
+
+    def __post_init__(self) -> None:
+        if not FIRST_RULE_PRIORITY <= self.priority <= MAX_RULE_PRIORITY:
+            raise LinuxRoutingError("terminal RPDB priority is out of owned range")
+        _validate_ifname(self.source_ifname)
+
+
+@dataclass(frozen=True)
 class LinuxRoutingDesired:
     allocation: LinuxRoutingAllocationState
     routes: tuple[LinuxRouteSpec, ...]
     dispatch_rules: tuple[LinuxDispatchRuleSpec, ...]
+    terminal_rule: LinuxTerminalRuleSpec | None
     verification_tables: tuple[int, ...]
 
 
@@ -287,11 +299,13 @@ def compile_linux_routing_desired(
                 )
             )
 
-    required_priorities = len(composed.dispatch_rules)
+    required_priorities = len(composed.dispatch_rules) + (
+        1 if composed.owners else 0
+    )
     if required_priorities > MAX_RULE_PRIORITY:
         raise LinuxRoutingError(
-            f"{required_priorities} dispatch rules exceed owned RPDB "
-            f"capacity {MAX_RULE_PRIORITY}"
+            f"{required_priorities} owned RPDB rules exceed capacity "
+            f"{MAX_RULE_PRIORITY}"
         )
 
     dispatch: list[LinuxDispatchRuleSpec] = []
@@ -318,6 +332,15 @@ def compile_linux_routing_desired(
             )
         )
 
+    terminal_rule = (
+        LinuxTerminalRuleSpec(
+            priority=FIRST_RULE_PRIORITY + len(dispatch),
+            source_ifname=local_interface,
+        )
+        if composed.owners
+        else None
+    )
+
     routes.sort(
         key=lambda item: (
             item.table_id,
@@ -343,5 +366,6 @@ def compile_linux_routing_desired(
         allocation=allocation,
         routes=tuple(routes),
         dispatch_rules=tuple(dispatch),
+        terminal_rule=terminal_rule,
         verification_tables=verification_tables,
     )
