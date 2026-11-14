@@ -15,6 +15,18 @@ Implemented:
 - explicit known/unknown Adapter state contract;
 - Adapter-internal `DesiredRulesByOwner` registry keyed strictly by caller object identity,
   with explicit-lifetime strong ownership and no semantic owner names/priorities;
+- multidimensional `PayloadRulesState`:
+  - knowledge;
+  - convergence;
+  - safety;
+  - service;
+- conservative `PayloadRulesStateCalculator`:
+  - stale/unknown observation -> unknown axes;
+  - exact active rules -> matched/safe/ready;
+  - exact zero-path rules -> matched/safe/isolated;
+  - exact mixed active/zero-path rules -> matched/safe/degraded;
+  - divergent proven isolation -> safe/isolated;
+  - other divergence remains unclassified until a semantic relation is proven;
 - zero-path routing domain as semantic `DROP` fail-close intent;
 - allow-only filtering contract:
   - `traffic_allows` describes effective byte-level permission;
@@ -38,6 +50,7 @@ Implemented:
 
 Not implemented yet:
 
+- conservative divergent-rules relation proofs for safe degradation / unsafe widening;
 - Linux `NetworkRulesAdapter` implementation;
 - owner-composition backend materialization;
 - Drivers and transition/materialization logic.
