@@ -55,6 +55,8 @@ Current recommended ordering under serialized control path:
 4. fresh exact verification;
 5. publish/commit READY only after successful cleanup + verification.
 
+Cleanup trigger if adopted: LOCAL_PROCESS intent exists before OR after the structural transaction. Do not add a probe-subtree diff detector. This covers first install, repair/replacement, last-owner removal and shared rebuild while probe ownership remains live.
+
 Production cleanup must treat '0 flow entries have been deleted' as idempotent no-op success.
 
 ## Component terminology fixed
