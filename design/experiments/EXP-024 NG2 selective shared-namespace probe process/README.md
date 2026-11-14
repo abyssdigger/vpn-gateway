@@ -183,3 +183,32 @@ This proves on the CI kernel that process identity can be captured where it is o
 
 The result is strong enough to remove the architecture ambiguity. Before production
 materialization is declared target-proven, run the same artifact on the Debian 13 target.
+
+
+## Debian 13 target confirmation
+
+Run from the repository root as root (or through sudo):
+
+```bash
+sudo python3 design/NG2/code/python/rou/tests/integration_probe_process_isolation.py
+```
+
+The harness creates only disposable namespaces named:
+
+```text
+vpng2-probe-rou
+vpng2-probe-pri
+vpng2-probe-alt
+```
+
+and removes them in `finally`.
+
+Target confirmation is PASS only if the final output contains all P1..P5 markers and:
+
+```text
+NG2_SELECTIVE_PROBE_PROCESS_ISOLATION=PASS
+```
+
+A target failure must be retained with the complete traceback/output; do not replace it by
+a simplified manual ping check, because the relevant evidence is the combined uid, bound
+oif, RPDB, nft and conntrack behavior.
