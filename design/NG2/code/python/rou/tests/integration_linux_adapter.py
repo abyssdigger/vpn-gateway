@@ -9,7 +9,11 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.interface_identity import InterfaceIdentity
-from rou.linux_driver import CommandResult, LinuxNetworkDriver
+from rou.linux_driver import (
+    CommandResult,
+    LinuxNetworkDriver,
+    NetworkNamespaceLinuxRunner,
+)
 from rou.runtime_bootstrap import bootstrap_linux_network_rules_adapter
 from rou.network_rules import (
     DispatchRuleSpec,
@@ -43,17 +47,13 @@ def host(*argv: str, check: bool = True, input_text: str | None = None):
     )
 
 
-class NamespaceRunner:
+class RecordingHostRunner:
     def __init__(self):
         self.calls: list[tuple[str, ...]] = []
 
     def run(self, argv, *, input_text=None, check=True):
         self.calls.append(argv)
         completed = host(
-            "ip",
-            "netns",
-            "exec",
-            NS,
             *argv,
             check=False,
             input_text=input_text,
@@ -65,7 +65,7 @@ class NamespaceRunner:
         )
         if check and result.returncode != 0:
             raise RuntimeError(
-                f"namespace command failed rc={result.returncode}: "
+                f"host command failed rc={result.returncode}: "
                 f"{argv!r}: {result.stderr.strip()}"
             )
         return result
@@ -204,7 +204,8 @@ def main() -> int:
         raise SystemExit("integration test must run as root")
 
     make_namespace()
-    runner = NamespaceRunner()
+    host_runner = RecordingHostRunner()
+    runner = NetworkNamespaceLinuxRunner(host_runner, NS)
     driver = LinuxNetworkDriver(runner)
 
     # Simulate process restart with stale physical policy and forwarding still open.
@@ -376,14 +377,23 @@ def main() -> int:
                 "route/foreign-nft drift was not detected"
             )
 
-        runner.calls.clear()
+        host_runner.calls.clear()
         repaired = adapter.apply(owner, wanted)
         if not repaired.success:
             raise RuntimeError(f"route drift repair failed: {repaired.diagnostic}")
         forwarding_writes = [
             argv[-1]
-            for argv in runner.calls
-            if argv[:3] == ("sysctl", "-q", "-w")
+            for argv in host_runner.calls
+            if argv[:7]
+            == (
+                "ip",
+                "netns",
+                "exec",
+                NS,
+                "sysctl",
+                "-q",
+                "-w",
+            )
         ]
         if not forwarding_writes or forwarding_writes[0] != "net.ipv4.ip_forward=0":
             raise RuntimeError(
