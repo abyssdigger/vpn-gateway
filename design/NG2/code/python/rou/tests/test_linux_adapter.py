@@ -1,9 +1,15 @@
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_adapter import LinuxNetworkRulesAdapter
 from rou.linux_driver import LinuxDriverResult, LinuxNetworkVerification
+from rou.linux_local_process import LinuxLocalProcessConfig
+from rou.probe_rules import (
+    AvailabilityProbeRequest,
+    AvailabilityProbeSetRequest,
+    ProbeRulesCalculator,
+)
 from rou.network_rules import (
     DispatchRuleSpec,
     NetworkEndpoint,
@@ -298,6 +304,65 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
             self.adapter.get_last_state(first).rules,
             first_new,
         )
+
+
+    def test_local_process_requires_explicit_linux_identity_config(self):
+        owner = object()
+        path = InterfaceIdentity("vpns00", 10)
+        self.backend.interfaces = (path,)
+        rules = ProbeRulesCalculator().calculate(
+            AvailabilityProbeSetRequest(
+                (
+                    AvailabilityProbeRequest(
+                        "probe",
+                        path,
+                        IPv4Address("203.0.113.24"),
+                    ),
+                )
+            )
+        )
+
+        result = self.adapter.apply(owner, rules)
+
+        self.assertFalse(result.success)
+        self.assertIn(
+            "configured Linux local-process uid",
+            result.diagnostic,
+        )
+        self.assertEqual(self.backend.materialize_calls, [])
+
+    def test_local_process_explicit_linux_identity_reaches_backend(self):
+        backend = FakeBackend()
+        path = InterfaceIdentity("vpns00", 10)
+        backend.interfaces = (path,)
+        adapter = LinuxNetworkRulesAdapter(
+            backend,
+            local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
+        )
+        rules = ProbeRulesCalculator().calculate(
+            AvailabilityProbeSetRequest(
+                (
+                    AvailabilityProbeRequest(
+                        "probe",
+                        path,
+                        IPv4Address("203.0.113.24"),
+                    ),
+                )
+            )
+        )
+
+        result = adapter.apply(object(), rules)
+
+        self.assertTrue(result.success, result.diagnostic)
+        desired = backend.materialize_calls[-1]
+        dispatch = desired.routing.dispatch_rules[0]
+        self.assertEqual(dispatch.local_process_uid, 65534)
+        self.assertIn("meta skuid 65534", desired.filter.definition)
+        self.assertIn("ct mark set 0x24", desired.filter.definition)
 
     def test_cleanup_rebuilds_without_removed_owner_then_forgets_identity(self):
         first = object()
