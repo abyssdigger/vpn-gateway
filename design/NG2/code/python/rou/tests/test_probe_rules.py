@@ -1,7 +1,7 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
-from rou.availability_probe_policy import AvailabilityProbePolicy
+from rou.availability_routing import AvailabilityWindowPolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     EndpointKind,
@@ -121,7 +121,6 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         self.assertEqual(len(first_rules.traffic_allows), 2)
         self.assertEqual(len(first_rules.flow_initiation_allows), 1)
 
-
     def test_probe_set_semantic_equality_ignores_tuple_order(self):
         target = IPv4Address("172.21.201.19")
         first_path = InterfaceIdentity("vpns00", 43)
@@ -173,10 +172,9 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
-                    policy=AvailabilityProbePolicy(
+                    policy=AvailabilityWindowPolicy(
                         interval_seconds=10,
-                        retry_interval_seconds=1,
-                        timeout_seconds=1,
+                        failure_intervals=3,
                     ),
                 ),
             )
@@ -187,10 +185,10 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
-                    policy=AvailabilityProbePolicy(
+                    policy=AvailabilityWindowPolicy(
                         interval_seconds=30,
-                        retry_interval_seconds=2,
-                        timeout_seconds=1,
+                        failure_intervals=2,
+                        enabled=False,
                     ),
                 ),
             )
