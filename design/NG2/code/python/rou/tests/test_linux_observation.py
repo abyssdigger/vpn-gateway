@@ -174,7 +174,8 @@ class LinuxObservationParserTests(unittest.TestCase):
                 [
                     {
                         "priority": 7,
-                        "uidrange": "65534-65534",
+                        "uid_start": 65534,
+                        "uid_end": 65534,
                         "ipproto": "icmp",
                         "dst": "203.0.113.24",
                         "dstlen": 32,
