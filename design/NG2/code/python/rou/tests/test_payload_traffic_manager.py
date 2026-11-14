@@ -271,7 +271,7 @@ class PayloadTrafficManagerTests(unittest.TestCase):
         initial_apply_count = len(self.adapter.apply_owners)
         self.publisher.events.clear()
 
-        self.assertIs(
+        self.assertEqual(
             self.adapter.state.rules.routing_domains[0].ordered_paths,
             (),
         )
