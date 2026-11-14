@@ -906,7 +906,6 @@ def compile_nft_filter_desired(
     for owned in composed.owners:
         for index, rule in enumerate(owned.rules.traffic_allows):
             if _is_local_process_pair(rule.source, rule.destination):
-                local_process_present = True
                 continue
             for line, marker in _rule_lines(
                 owner=owned.owner,
