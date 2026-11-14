@@ -178,7 +178,22 @@ Several logical probes may therefore share one physical network plane.
 This does not imply shared timing/hysteresis semantics. Execution deduplication is a future
 optimization only if it preserves each logical probe contract.
 
-## 9. Audit/reconcile skeleton
+## 9. Implemented rules-control slice
+
+The first executable AvailabilityProbeManager slice is implemented independently of
+scheduling cadence.
+
+It owns:
+
+- latest accepted full AvailabilityProbeSetRequest;
+- semantic idempotence of repeated equivalent snapshots;
+- current desired ProbeRulesCalculator output;
+- NetworkRulesAdapter owner lifecycle;
+- ProbeRulesState calculation;
+- owner-wide rules-readiness epoch;
+- UNKNOWN publication while no authoritative probe evidence exists;
+- deterministic rules audit/repair;
+- fail-closed invalidation when a probe_id leaves the desired set.
 
 A deterministic rules audit pass is defined independently of scheduling cadence:
 
@@ -203,7 +218,31 @@ Probe execution consumes only the READY branch.
 
 The cadence that invokes rules audit is not fixed here.
 
+Equivalent full snapshots are order-insensitive by probe_id and do not create a new
+readiness epoch or force structural reapply when the current rules remain READY.
+
+When a probe_id is removed from the desired full snapshot, the Manager publishes one final
+UNKNOWN state with no observation generation before forgetting that probe locally. This
+prevents a latest-value subscriber from retaining stale REACHABLE/UNREACHABLE evidence for
+a probe that is no longer requested.
+
 ## 10. Event publication
+
+Executable payload types:
+
+```text
+AvailabilityProbeState
+    UNKNOWN | REACHABLE | UNREACHABLE
+
+ProbeObservationGeneration
+    opaque Manager-local positive sequence
+
+AvailabilityProbeStateInfo
+    probe_id
+    state
+    reason/details
+    observation_generation
+```
 
 AvailabilityProbeStateInfo is current state per logical `probe_id`.
 
@@ -216,7 +255,50 @@ the published availability state is UNKNOWN rather than inferred failure.
 
 A result collected under an older rules/interface generation is stale evidence.
 
-## 11. Still intentionally open
+UNKNOWN carries no authoritative observation generation.
+REACHABLE/UNREACHABLE must carry the ProbeObservationGeneration under which their evidence
+was accepted.
+
+
+## 11. Single-attempt validity envelope
+
+The generic lower semantic Driver contract is:
+
+```text
+ProbeDriver.execute(
+    AvailabilityProbeRequest,
+    explicit timeout_seconds
+) -> ProbeAttemptResult
+
+ProbeAttemptOutcome
+    REPLY | NO_REPLY | ERROR
+```
+
+`LinuxIcmpProbeDriver` is the first concrete implementation.
+
+A future Manager attempt path must not feed a raw outcome into result/hysteresis policy
+based only on a pre-attempt READY observation.
+
+Mandatory order:
+
+```text
+fresh READY epoch
+    -> capture current ProbeObservationGeneration
+    -> ProbeDriver.execute(...)
+    -> NetworkRulesAdapter.renew_state(self)
+    -> ProbeRulesStateCalculator
+    -> require rules still READY for the captured epoch
+    -> only then pass REPLY / NO_REPLY to result policy
+```
+
+If the post-attempt observation is UNKNOWN/INVALID, the current epoch ends and the raw
+outcome is discarded as availability evidence. Later repair cannot retroactively validate
+that attempt.
+
+ProbeAttemptOutcome.ERROR is a local execution failure and is never directly equivalent to
+remote UNREACHABLE.
+
+## 12. Still intentionally open
 
 The remaining lower-domain evidence gate before production conntrack remediation is
 EXP-026 Debian 13 target confirmation. EXP-025 is already target-confirmed
@@ -239,7 +321,7 @@ AvailabilityProbeManager uses an owner-wide rules-readiness epoch as described a
 
 These timing/result-policy choices are not inferred from payload policy or from EXP-024.
 
-## 12. Evidence
+## 13. Evidence
 
 Current evidence:
 
