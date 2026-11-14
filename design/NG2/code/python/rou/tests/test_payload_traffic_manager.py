@@ -236,6 +236,7 @@ class PayloadTrafficManagerTests(unittest.TestCase):
     def test_drift_audit_repairs_current_desired_without_new_request(self):
         request = _request(self.path)
         self.manager.handle_request(request)
+        desired = self.adapter.state.rules
         initial_apply_count = len(self.adapter.apply_owners)
         self.publisher.events.clear()
 
@@ -253,10 +254,31 @@ class PayloadTrafficManagerTests(unittest.TestCase):
             initial_apply_count + 1,
         )
         self.assertEqual(self.publisher.events, [])
-        self.assertIs(
-            self.adapter.state.rules,
-            self.manager._latest_desired,
+        self.assertEqual(self.adapter.state.rules, desired)
+
+    def test_matched_isolated_intent_is_not_repaired_as_drift(self):
+        request = PayloadTrafficStateRequest(
+            (
+                PayloadProfileRequest(
+                    "corp",
+                    PayloadDirection.OUTBOUND,
+                    (IPv4Network("10.0.0.0/8"),),
+                    (),
+                ),
+            )
         )
+        self.manager.handle_request(request)
+        initial_apply_count = len(self.adapter.apply_owners)
+        self.publisher.events.clear()
+
+        self.assertIs(
+            self.adapter.state.rules.routing_domains[0].ordered_paths,
+            (),
+        )
+        self.manager.audit()
+
+        self.assertEqual(len(self.adapter.apply_owners), initial_apply_count)
+        self.assertEqual(self.publisher.events, [])
 
     def test_failed_drift_repair_publishes_observed_isolation(self):
         request = _request(self.path)
