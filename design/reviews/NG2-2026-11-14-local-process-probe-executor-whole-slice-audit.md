@@ -7,8 +7,8 @@ single-shot ICMP executor
 
 ## Result
 
-**PASS with one external evidence gate remaining: Debian 13 production executable
-confirmation for LinuxIcmpProbeExecutor.**
+**PASS for implemented/tested behavior, with two evidence gates remaining: Debian 13
+production executable confirmation and conntrack-mark generation-lifetime verification.**
 
 No unresolved code/architecture defect currently justifies additional lower-domain
 implementation before that target run.
@@ -293,6 +293,37 @@ GitHub gates on that commit:
 - production LOCAL_PROCESS integration including LP1..LP7: PASS;
 - existing NG2 payload dataplane integration: PASS;
 - NG1 Python validation/regression: PASS.
+
+## A17 — conntrack mark lifetime across probe generation changes is not yet proven
+
+**New mechanism ambiguity; unresolved at this checkpoint.**
+
+The selected reverse-path mechanism carries process identity in conntrack state. nft/RPDB
+generation verification is exact, but conntrack entries can outlive one single-shot ping
+process and interface/rules replacement does not obviously prove destruction of that flow
+state.
+
+A stale marked ICMP entry could matter if a later probe reuses the same conntrack tuple
+(including ICMP identifier) after a rules/interface generation transition. Interface
+identity is not part of the ordinary conntrack tuple.
+
+The current Manager design correctly invalidates *userspace probe evidence* across rules
+and interface generations, but that does not by itself prove that stale kernel conntrack
+identity cannot be inherited by a later packet.
+
+Do not guess a fix such as global conntrack flushing. The next kernel-mechanism experiment
+must determine:
+
+1. whether the marked ICMP conntrack entry survives the relevant interface/rules
+   generation transition;
+2. whether a later ping can deliberately reuse the tuple/identifier;
+3. whether a delayed or synthetic reply can then satisfy the new INPUT rule through the
+   stale mark;
+4. if yes, what narrow owner-scoped generation mechanism is viable without flushing
+   unrelated conntrack state.
+
+Until this is resolved, the LOCAL_PROCESS backend remains functionally green for all
+current tests but its generation-isolation proof is incomplete.
 
 ## Remaining evidence/product gates
 
