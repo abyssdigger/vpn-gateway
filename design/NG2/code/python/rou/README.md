@@ -119,7 +119,7 @@ Implemented lower/runtime slices now include:
 - target-confirmed LOCAL_PROCESS ICMP routing/nft materialization;
 - ProbeRulesCalculator and ProbeRulesStateCalculator;
 - separate PayloadRulesState and ProbeRulesState after mandatory comparison review;
-- single-shot capability-free Linux ICMP probe executor, green in privileged CI.
+- single-shot capability-free Linux ICMP probe Driver, green in privileged CI.
 
 RuntimeStateManager and remaining upper-domain assembly stay separate review units.
 
