@@ -120,10 +120,14 @@ class StatefulFakeRunner:
                 if table == "vpng2_filter"
                 else self.desired.nat
             )
-            comments = [
-                marker.comment
-                for marker in desired.markers
-            ]
+            comments = (
+                []
+                if desired is None
+                else [
+                    marker.comment
+                    for marker in desired.markers
+                ]
+            )
             return CommandResult(
                 0,
                 json.dumps(
@@ -146,7 +150,12 @@ class StatefulFakeRunner:
                 if table == "vpng2_filter"
                 else self.desired.nat
             )
-            return CommandResult(0, desired.definition, "")
+            definition = (
+                f"table ip {table} {{" + "\n}" + "\n"
+                if desired is None
+                else desired.definition
+            )
+            return CommandResult(0, definition, "")
 
         if argv == ("nft", "-f", "-"):
             if "vpng2_filter" in input_text:
