@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from threading import RLock
 from typing import Protocol
 
 from .availability_probe_state import AvailabilityProbeStateInfo
@@ -32,6 +33,7 @@ class RuntimeStateManager:
         intent_calculator: PayloadTrafficIntentCalculator | None = None,
     ) -> None:
         self._publisher = publisher
+        self._state_lock = RLock()
         self._evidence_calculator = (
             evidence_calculator or ProbeProfileEvidenceCalculator()
         )
@@ -47,7 +49,8 @@ class RuntimeStateManager:
 
     @property
     def effective_payload(self) -> PayloadTrafficStateRequest | None:
-        return self._effective_payload
+        with self._state_lock:
+            return self._effective_payload
 
     def update_payload_routing_inputs(
         self,
@@ -56,49 +59,50 @@ class RuntimeStateManager:
         assignments: tuple[ProfileProbeAssignment, ...],
     ) -> None:
         """Accept the current structural/admin payload and probe mapping snapshot."""
+        with self._state_lock:
 
-        self._validate_routing_inputs(
-            configured_payload,
-            probe_request,
-            assignments,
-        )
+            self._validate_routing_inputs(
+                configured_payload,
+                probe_request,
+                assignments,
+            )
 
-        previous_configured = self._configured_payload
-        previous_probe_request = self._probe_request
+            previous_configured = self._configured_payload
+            previous_probe_request = self._probe_request
 
-        if previous_probe_request is not None:
-            previous_by_id = {
-                probe.probe_id: probe
-                for probe in previous_probe_request.probes
-            }
-            current_by_id = {
-                probe.probe_id: probe
-                for probe in probe_request.probes
-            }
+            if previous_probe_request is not None:
+                previous_by_id = {
+                    probe.probe_id: probe
+                    for probe in previous_probe_request.probes
+                }
+                current_by_id = {
+                    probe.probe_id: probe
+                    for probe in probe_request.probes
+                }
 
-            for probe_id in tuple(self._probe_states):
-                if (
-                    probe_id not in current_by_id
-                    or previous_by_id.get(probe_id)
-                    != current_by_id[probe_id]
-                ):
-                    self._probe_states.pop(probe_id, None)
-        else:
-            current_ids = {
-                probe.probe_id
-                for probe in probe_request.probes
-            }
-            for probe_id in tuple(self._probe_states):
-                if probe_id not in current_ids:
-                    self._probe_states.pop(probe_id, None)
+                for probe_id in tuple(self._probe_states):
+                    if (
+                        probe_id not in current_by_id
+                        or previous_by_id.get(probe_id)
+                        != current_by_id[probe_id]
+                    ):
+                        self._probe_states.pop(probe_id, None)
+            else:
+                current_ids = {
+                    probe.probe_id
+                    for probe in probe_request.probes
+                }
+                for probe_id in tuple(self._probe_states):
+                    if probe_id not in current_ids:
+                        self._probe_states.pop(probe_id, None)
 
-        self._configured_payload = configured_payload
-        self._probe_request = probe_request
-        self._assignments = assignments
+            self._configured_payload = configured_payload
+            self._probe_request = probe_request
+            self._assignments = assignments
 
-        self._recalculate_and_publish(
-            previous_configured=previous_configured,
-        )
+            self._recalculate_and_publish(
+                previous_configured=previous_configured,
+            )
 
     @staticmethod
     def _validate_routing_inputs(
@@ -147,27 +151,28 @@ class RuntimeStateManager:
 
     def handle_probe_state(self, info: AvailabilityProbeStateInfo) -> None:
         """Consume one latest-value AvailabilityProbeStateInfo projection."""
+        with self._state_lock:
 
-        probe_request = self._probe_request
-        if probe_request is None:
-            return
+            probe_request = self._probe_request
+            if probe_request is None:
+                return
 
-        current_ids = {
-            probe.probe_id
-            for probe in probe_request.probes
-        }
-        if info.probe_id not in current_ids:
-            # A removal invalidation may arrive after the full desired probe snapshot
-            # has already advanced. It cannot influence current payload intent.
-            return
+            current_ids = {
+                probe.probe_id
+                for probe in probe_request.probes
+            }
+            if info.probe_id not in current_ids:
+                # A removal invalidation may arrive after the full desired probe snapshot
+                # has already advanced. It cannot influence current payload intent.
+                return
 
-        if self._probe_states.get(info.probe_id) == info:
-            return
+            if self._probe_states.get(info.probe_id) == info:
+                return
 
-        self._probe_states[info.probe_id] = info
-        self._recalculate_and_publish(
-            previous_configured=self._configured_payload,
-        )
+            self._probe_states[info.probe_id] = info
+            self._recalculate_and_publish(
+                previous_configured=self._configured_payload,
+            )
 
     def _recalculate_and_publish(
         self,
