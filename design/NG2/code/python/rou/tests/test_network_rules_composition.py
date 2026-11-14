@@ -77,7 +77,10 @@ class OwnerRulesRegistryTests(unittest.TestCase):
         second = registry.replace(owner, second_rules)
 
         self.assertEqual(first, second)
-        self.assertIs(registry.get(owner).rules, second_rules)
+        self.assertEqual(
+            registry.snapshot(),
+            (OwnedNetworkRules(first, second_rules),),
+        )
 
     def test_ensure_registers_identity_without_committed_rules(self):
         registry = OwnerRulesRegistry()
