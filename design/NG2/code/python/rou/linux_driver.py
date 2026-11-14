@@ -89,6 +89,33 @@ class SubprocessLinuxRunner:
         return result
 
 
+class NetworkNamespaceLinuxRunner:
+    """Run Linux network commands inside one pre-existing named namespace."""
+
+    def __init__(
+        self,
+        host_runner: LinuxCommandRunner,
+        namespace: str,
+    ) -> None:
+        if not namespace:
+            raise ValueError("network namespace name must be non-empty")
+        self._host_runner = host_runner
+        self._namespace = namespace
+
+    def run(
+        self,
+        argv: tuple[str, ...],
+        *,
+        input_text: str | None = None,
+        check: bool = True,
+    ) -> CommandResult:
+        return self._host_runner.run(
+            ("ip", "netns", "exec", self._namespace, *argv),
+            input_text=input_text,
+            check=check,
+        )
+
+
 @dataclass(frozen=True)
 class LinuxNetworkObservation:
     routing: LinuxRoutingObservation
