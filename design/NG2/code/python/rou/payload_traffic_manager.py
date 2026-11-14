@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from threading import Lock
 from typing import Protocol
 
-from .network_rules import ActionResult, NetworkRulesAdapter, NetworkRulesSpec
+from .network_rules import (
+    ActionResult,
+    NetworkRulesAdapter,
+    NetworkRulesSpec,
+    RoutingDomainSpec,
+)
 from .payload_rules import (
     PayloadRulesCalculator,
     PayloadTrafficStateRequest,
@@ -13,6 +19,7 @@ from .payload_traffic_state import (
     PayloadTrafficStateInfo,
     project_payload_traffic_state,
 )
+from .profile_route_order_executor import ProfileRouteOrderExecutor
 
 
 class PayloadTrafficStatePublisher(Protocol):
@@ -20,11 +27,101 @@ class PayloadTrafficStatePublisher(Protocol):
         ...
 
 
+def _profile_priority_targets(
+    current: NetworkRulesSpec | None,
+    desired: NetworkRulesSpec,
+) -> tuple[RoutingDomainSpec, ...] | None:
+    """Return changed Profile priorities, or None when the diff is broader.
+
+    The narrow Profile Executor path is intentionally conservative. It is valid
+    only when all non-routing policy is unchanged and every routing domain keeps
+    the same destinations, terminal policy and path membership.
+    """
+
+    if current is None:
+        return None
+    if (
+        current.dispatch_rules != desired.dispatch_rules
+        or current.traffic_allows != desired.traffic_allows
+        or current.flow_initiation_allows != desired.flow_initiation_allows
+        or current.source_nat != desired.source_nat
+    ):
+        return None
+
+    current_by_name = {
+        domain.name: domain
+        for domain in current.routing_domains
+    }
+    desired_by_name = {
+        domain.name: domain
+        for domain in desired.routing_domains
+    }
+    if current_by_name.keys() != desired_by_name.keys():
+        return None
+
+    changed: list[RoutingDomainSpec] = []
+    for name, target in desired_by_name.items():
+        previous = current_by_name[name]
+        if (
+            set(previous.destinations) != set(target.destinations)
+            or previous.terminal_disposition is not target.terminal_disposition
+            or set(previous.ordered_paths) != set(target.ordered_paths)
+        ):
+            return None
+        if (
+            previous.ordered_paths != target.ordered_paths
+            or previous.priority_prefix_length != target.priority_prefix_length
+        ):
+            changed.append(target)
+
+    return tuple(changed)
+
+
+def _merge_profile_priority(
+    current: NetworkRulesSpec,
+    target: RoutingDomainSpec,
+) -> NetworkRulesSpec:
+    """Change only one Profile's effective route order/live-prefix boundary."""
+
+    by_name = {
+        domain.name: domain
+        for domain in current.routing_domains
+    }
+    previous = by_name.get(target.name)
+    if previous is None:
+        raise ValueError(
+            f"route-priority target references unknown Profile {target.name!r}"
+        )
+    if (
+        set(previous.destinations) != set(target.destinations)
+        or previous.terminal_disposition is not target.terminal_disposition
+        or set(previous.ordered_paths) != set(target.ordered_paths)
+    ):
+        raise ValueError(
+            f"route-priority target for Profile {target.name!r} changed "
+            "structural routing semantics"
+        )
+
+    replacement = replace(
+        previous,
+        ordered_paths=target.ordered_paths,
+        priority_prefix_length=target.priority_prefix_length,
+    )
+    return replace(
+        current,
+        routing_domains=tuple(
+            replacement if domain.name == target.name else domain
+            for domain in current.routing_domains
+        ),
+    )
+
+
 class PayloadTrafficManager:
     """Manager for the current payload-traffic rules domain.
 
-    This executable slice covers RequestEvent handling, one deterministic audit/reconcile
-    pass and lifecycle cleanup. Audit scheduling/cadence remains a runtime concern.
+    Full structural mutations share one aggregate commit boundary because this
+    Manager owns one NetworkRulesAdapter owner. Pure route-priority changes are
+    additionally serialized by one Direct ProfileRouteOrderExecutor per Profile.
     """
 
     def __init__(
@@ -44,18 +141,47 @@ class PayloadTrafficManager:
 
         self._latest_desired: NetworkRulesSpec | None = None
         self._latest_published: PayloadTrafficStateInfo | None = None
-        self._transaction_lock = Lock()
+
+        # The aggregate owner state and shared lower-domain Adapter are committed
+        # one mutation at a time. This lock is not the Profile transaction model;
+        # it merely protects the current aggregate owner representation.
+        self._commit_lock = Lock()
+
+        # Profile route-order transactions have independent single-flight gates.
+        self._executor_registry_lock = Lock()
+        self._profile_route_executors: dict[
+            str,
+            ProfileRouteOrderExecutor,
+        ] = {}
 
     def handle_request(self, request: PayloadTrafficStateRequest) -> None:
         """Handle one full desired payload snapshot.
 
-        The RequestEvent has no synchronous domain reply. Publication happens through the
-        injected Event Delivery Environment port.
+        Pure route-priority diffs are decomposed into Profile-local Direct
+        transactions. A second priority transaction for the same Profile cannot
+        begin until the first has completed lower-domain apply/verify/commit.
+        Broader payload changes retain the aggregate structural path.
         """
 
-        with self._transaction_lock:
-            desired = self._rules_calculator.calculate(request)
+        desired = self._rules_calculator.calculate(request)
 
+        with self._commit_lock:
+            current = self._latest_desired
+            priority_targets = _profile_priority_targets(
+                current,
+                desired,
+            )
+
+        if priority_targets:
+            for target in priority_targets:
+                executor = self._profile_route_executor(target.name)
+                executor.execute(
+                    target,
+                    self._apply_profile_priority_target,
+                )
+            return
+
+        with self._commit_lock:
             # Accept the derived desired projection only after pure calculation succeeds.
             # If calculation rejects the request, the previous managed intent remains
             # intact and no lower-domain mutation is attempted.
@@ -67,7 +193,7 @@ class PayloadTrafficManager:
     def audit(self) -> None:
         """Run one drift/reconcile pass for the current accepted intent."""
 
-        with self._transaction_lock:
+        with self._commit_lock:
             desired = self._latest_desired
             if desired is None:
                 return
@@ -83,8 +209,39 @@ class PayloadTrafficManager:
     def shutdown(self) -> ActionResult:
         """Release all Adapter state/resources owned by this Manager instance."""
 
-        with self._transaction_lock:
+        with self._commit_lock:
             return self._adapter.cleanup(self)
+
+    def _profile_route_executor(
+        self,
+        profile_name: str,
+    ) -> ProfileRouteOrderExecutor:
+        with self._executor_registry_lock:
+            executor = self._profile_route_executors.get(profile_name)
+            if executor is None:
+                executor = ProfileRouteOrderExecutor(profile_name)
+                self._profile_route_executors[profile_name] = executor
+            return executor
+
+    def _apply_profile_priority_target(
+        self,
+        target: RoutingDomainSpec,
+    ) -> PayloadTrafficStateInfo:
+        """Apply one Profile order as one caller-visible Direct transaction."""
+
+        with self._commit_lock:
+            current = self._latest_desired
+            if current is None:
+                raise RuntimeError(
+                    "route-priority transaction requires accepted payload intent"
+                )
+
+            desired = _merge_profile_priority(current, target)
+            self._latest_desired = desired
+
+            info = self._apply_desired_and_observe(desired)
+            self._publish_if_changed(info)
+            return info
 
     def _apply_desired_and_observe(
         self,
