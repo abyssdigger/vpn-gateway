@@ -85,6 +85,11 @@ class TrafficProtocol(str, Enum):
     ICMP = "icmp"
 
 
+class IcmpType(int, Enum):
+    ECHO_REPLY = 0
+    ECHO_REQUEST = 8
+
+
 @dataclass(frozen=True)
 class DispatchRuleSpec:
     destination: IPv4Network
@@ -135,6 +140,7 @@ class TrafficSelector:
     protocol: TrafficProtocol | None = None
     source_ports: tuple[PortRange, ...] = ()
     destination_ports: tuple[PortRange, ...] = ()
+    icmp_types: tuple[IcmpType, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.source_ports or self.destination_ports) and self.protocol not in {
@@ -143,6 +149,14 @@ class TrafficSelector:
         }:
             raise NetworkRulesError(
                 "traffic-selector ports require tcp or udp protocol"
+            )
+        if self.icmp_types and self.protocol is not TrafficProtocol.ICMP:
+            raise NetworkRulesError(
+                "traffic-selector icmp types require icmp protocol"
+            )
+        if len(set(self.icmp_types)) != len(self.icmp_types):
+            raise NetworkRulesError(
+                "traffic-selector icmp types must not contain duplicates"
             )
         for ranges in (self.source_ports, self.destination_ports):
             for index, left in enumerate(ranges):
@@ -160,6 +174,7 @@ class TrafficSelector:
             and self.protocol is None
             and not self.source_ports
             and not self.destination_ports
+            and not self.icmp_types
         )
 
 
