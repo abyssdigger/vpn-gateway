@@ -131,7 +131,38 @@ This keeps namespace lifecycle ownership separate from network-policy ownership.
 - regression, что обычный Adapter после bootstrap способен выполнить normal apply и
   открыть forwarding только после своей final verification.
 
-## 8. Не входит в этот unit
+## 8. Full instance composition
+
+Production startup does not require an outer caller to remember two safety-sensitive
+operations in the correct order.
+
+The composition entry point:
+
+```text
+bootstrap_linux_network_rules_adapter_for_instance(spec)
+```
+
+performs:
+
+```text
+ensure_linux_instance(spec)
+    -> absent: create + verify fail-closed infrastructure
+    -> present: protective close + exact infrastructure verification
+
+then
+
+bootstrap_linux_network_rules_adapter_in_namespace(...)
+    -> independent protective close + fresh verification
+    -> construct/publish LinuxNetworkRulesAdapter
+```
+
+Any infrastructure or bootstrap failure returns a failed bootstrap result with no Adapter.
+
+The second protective close is intentionally redundant across the lifecycle/bootstrap
+boundary: correctness of Adapter publication does not depend on hidden knowledge that the
+preceding infrastructure operation already closed forwarding.
+
+## 9. Не входит в этот unit
 
 Отдельными review units остаются:
 
