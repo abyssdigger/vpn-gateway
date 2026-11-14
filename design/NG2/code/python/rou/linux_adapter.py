@@ -13,6 +13,7 @@ from .linux_network import (
 from .linux_routing import LinuxRoutingAllocationState
 from .network_rules import (
     ActionResult,
+    EndpointKind,
     NetworkRulesSpec,
     NetworkRulesState,
     StateKnowledge,
@@ -95,6 +96,7 @@ class LinuxNetworkRulesAdapter:
                 self._routing_allocation,
                 local_interface=self._local_interface,
                 local_process=self._local_process,
+                local_process_guard_required=self._has_local_process_intent(candidate),
             )
         except Exception as exc:
             return ActionResult(
@@ -125,6 +127,9 @@ class LinuxNetworkRulesAdapter:
                 self._routing_allocation,
                 local_interface=self._local_interface,
                 local_process=self._local_process,
+                local_process_guard_required=self._has_local_process_intent(
+                    self._owners.snapshot()
+                ),
             )
             verification = self._backend.verify_current(desired)
         except Exception as exc:
@@ -162,6 +167,7 @@ class LinuxNetworkRulesAdapter:
                 self._routing_allocation,
                 local_interface=self._local_interface,
                 local_process=self._local_process,
+                local_process_guard_required=self._has_local_process_intent(candidate),
             )
         except Exception as exc:
             return ActionResult(
@@ -194,6 +200,9 @@ class LinuxNetworkRulesAdapter:
                 self._routing_allocation,
                 local_interface=self._local_interface,
                 local_process=self._local_process,
+                local_process_guard_required=self._has_local_process_intent(
+                    self._owners.snapshot()
+                ),
             )
         except Exception as exc:
             combined = diagnostic + f"; committed reconcile compile failed: {exc}"
@@ -230,6 +239,28 @@ class LinuxNetworkRulesAdapter:
             compose_network_rules(owners),
             interfaces,
         )
+
+    @staticmethod
+    def _has_local_process_intent(
+        owners: tuple[OwnedNetworkRules, ...],
+    ) -> bool:
+        for owned in owners:
+            rules = owned.rules
+            if any(
+                rule.source.kind is EndpointKind.LOCAL_PROCESS
+                for rule in rules.dispatch_rules
+            ):
+                return True
+            if any(
+                rule.source.kind is EndpointKind.LOCAL_PROCESS
+                or rule.destination.kind is EndpointKind.LOCAL_PROCESS
+                for rule in (
+                    *rules.traffic_allows,
+                    *rules.flow_initiation_allows,
+                )
+            ):
+                return True
+        return False
 
     @staticmethod
     def _rules_for_token(
