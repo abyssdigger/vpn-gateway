@@ -19,9 +19,14 @@ Components
 │   └── Agent
 │
 └── Machinery
-    ├── Calculator
-    ├── Adapter
-    └── Driver
+    ├── semantic roles
+    │   ├── Calculator
+    │   ├── Adapter
+    │   ├── Executor
+    │   └── Driver
+    │
+    └── execution primitives
+        └── Runner
 ```
 
 Разделение задается способом участия компонента в архитектуре, а не сложностью его
@@ -228,7 +233,7 @@ result
 
 Caller вправе использовать returned value как результат данного обращения.
 
-Немаркированные Calculator, Adapter и Driver предполагают Direct semantics.
+Немаркированные Calculator, Adapter, Executor и Driver предполагают Direct semantics. Runner обычно является Direct execution primitive.
 
 ### 6.2. Indirect Machinery
 
@@ -397,7 +402,66 @@ caller -> Adapter -> lower domain
 Это особенно важно для Adapter, за которым находится самостоятельная система: ответ
 Adapter обычно означает «передал», а не «вот итог всей скрытой системы».
 
-## 9. Driver
+## 9. Executor
+
+**Executor** — Machinery, принимающая заданное состояние или проверяемое постусловие и
+отвечающая за его достижение.
+
+Ключевая граница ответственности:
+
+> Executor не выбирает, **какое** desired state нужно предметной области, но отвечает за
+> то, чтобы переданное ему desired state / postcondition было достигнуто либо операция
+> завершилась доказанным failure.
+
+Типичный Direct-контракт:
+
+```text
+desired state / postcondition
+    |
+    v
+Executor
+    |
+    +--> external actions
+    +--> fresh observation
+    +--> verification
+    |
+    v
+SUCCESS | FAILURE
+```
+
+Executor может:
+
+- использовать один или несколько Drivers;
+- использовать Runner напрямую;
+- самостоятельно выполнять driver-level external interactions, если выделение отдельного
+  Driver не создает полезной переиспользуемой semantic boundary.
+
+Наличие прямого внешнего I/O поэтому **не делает компонент Driver автоматически**.
+Определяющий признак Executor — ответственность за convergence / verified postcondition.
+
+Executor не должен выбирать предметную policy, ради которой desired state был выбран.
+Эта ответственность остается у Manager или иного вышележащего caller.
+
+Executor не обязан быть классом. Stateless cohesive convergence operation может быть
+функцией или набором процедур, если отдельный object boundary не дает архитектурной
+ценности.
+
+### 9.1. Direct Executor
+
+Обычный случай: return завершает попытку convergence и сообщает, достигнуто ли требуемое
+постусловие.
+
+### 9.2. Indirect Executor
+
+Indirect Executor допустим только с явно описанной completion semantics. Его synchronous
+return не доказывает достижение desired state; фактическое завершение должно наблюдаться
+отдельно.
+
+Такая форма требует review особенно внимательно: часто она означает, что за границей
+фактически скрыта самостоятельная нижняя система и верхнему уровню нужен Adapter либо
+Manager/Agent boundary.
+
+## 10. Driver
 
 **Driver** — Machinery, непосредственно взаимодействующая с конкретным внешним техническим
 механизмом.
@@ -418,7 +482,7 @@ Driver знает технический контракт механизма, н
 
 Driver также может быть Direct или Indirect.
 
-### 9.1. Direct Driver
+### 10.1. Direct Driver
 
 Пример:
 
@@ -427,7 +491,7 @@ read current routes -> route snapshot
 write sysctl        -> immediate technical result
 ```
 
-### 9.2. Indirect Driver
+### 10.2. Indirect Driver
 
 Пример:
 
@@ -442,9 +506,91 @@ submit long database job -> accepted/job_id
 Наличие synchronous return у Driver никогда само по себе не доказывает, что внешняя
 реальность достигла желаемого конечного состояния.
 
-## 10. Externally stateless Machinery
 
-Для рассматриваемой предметной области Calculator, Adapter и Driver считаются externally
+## 11. Runner
+
+**Runner** — низкоуровневый execution / transport primitive внутри Machinery.
+
+Runner механически передает конкретный внешний вызов и возвращает его сырой
+transport/execution result. Он не имеет semantic model управляемого объекта.
+
+Типичная форма:
+
+```text
+argv / request bytes / stdin / execution options
+    |
+    v
+Runner
+    |
+    v
+return code / response bytes / stdout / stderr
+```
+
+Runner не знает, означает ли вызов «добавить маршрут», «изменить sysctl», «послать probe»
+или «удалить conntrack entry».
+
+### 11.1. Runner vs Driver
+
+Граница между Runner и Driver семантическая, а не технологическая.
+
+**Runner**:
+
+- транспортирует сырой invocation;
+- возвращает сырой execution/transport result;
+- не предоставляет осмысленной операции над управляемым объектом.
+
+**Driver**:
+
+- знает конкретный внешний технический механизм;
+- предоставляет осмысленную техническую операцию над ним;
+- может использовать Runner как реализацию transport/execution boundary;
+- не владеет convergence к caller-selected desired state.
+
+Например:
+
+```text
+run(argv) -> rc/stdout/stderr
+```
+
+— Runner.
+
+```text
+probe(request) -> REPLY | NO_REPLY | ERROR
+```
+
+— Driver, даже если внутри он запускает process через Runner.
+
+### 11.2. Кто использует Runner
+
+Нормальный dependency shape:
+
+```text
+Manager
+    |
+    v
+Executor
+    |
+    +--> Driver --> Runner --> external mechanism
+    |
+    +------------> Runner --> external mechanism
+```
+
+Это не требование создавать каждый слой для каждой операции.
+
+- Driver обычно использует Runner для конкретного внешнего взаимодействия.
+- Executor может использовать Drivers и/или Runner напрямую.
+- Manager обычно должен работать через semantic Machinery boundaries, а не через Runner.
+  Прямая зависимость Manager -> Runner не запрещена формально, но требует отдельного
+  обоснования, потому что смешивает domain lifecycle/policy с raw transport mechanics.
+- Adapter может скрывать Runner внутри своей нижней реализации, но Runner не должен
+  становиться частью semantic upper-domain contract только ради передачи сырого вызова.
+
+Runner не является peer semantic-role рядом с Calculator / Adapter / Executor / Driver.
+Это implementation primitive под ними.
+
+## 12. Externally stateless Machinery
+
+Для рассматриваемой предметной области Calculator, Adapter, Executor, Driver и Runner считаются externally
 stateless независимо от их внутренней реализации.
 
 Это означает прежде всего отсутствие зависимости от **неявной** истории вызовов:
@@ -460,7 +606,7 @@ stateless независимо от их внутренней реализаци
 
 Это определение не требует физической stateless-реализации.
 
-## 11. Current state и технологический cache Engines
+## 13. Current state и технологический cache Engines
 
 Engine может хранить latest known projections:
 
@@ -481,7 +627,7 @@ latest C
 > получения того же системно значимого результата, потерянные значения были cache, а не
 > необходимой историей предметной области.
 
-## 12. Синхронные зависимости и циклы
+## 14. Синхронные зависимости и циклы
 
 Внутри одной рассматриваемой предметной области строится полный граф независимых
 синхронных зависимостей между видимыми компонентами.
@@ -515,7 +661,7 @@ A ->sync-> B ->sync-> C ->event-> A
 
 Это допустимый причинный feedback loop.
 
-### 12.1. Adapter boundary
+### 14.1. Adapter boundary
 
 Adapter завершает архитектурную видимость синхронного графа рассматриваемой области:
 
@@ -558,7 +704,7 @@ subsystem B
 скорее всего проведена неверно и стороны следует рассмотреть как одну интегрированную
 область.
 
-## 13. Иерархическая композиция
+## 15. Иерархическая композиция
 
 Модель применяется рекурсивно.
 
@@ -581,9 +727,9 @@ Event Delivery Environment
 - внутреннюю структуру Machinery;
 - отсутствие synchronous back-edge через исходящие Adapter boundaries.
 
-## 14. Review rules
+## 16. Review rules
 
-### 14.1. Engine boundary
+### 16.1. Engine boundary
 
 Следует проверить:
 
@@ -592,13 +738,13 @@ Event Delivery Environment
 - не превращается ли InfoEvent в скрытый command;
 - не маскируется ли управляющее намерение как пассивное сообщение.
 
-### 14.2. Manager vs Agent
+### 16.2. Manager vs Agent
 
 Если компонент изменяет ту же предметную среду, которую представляет, он Manager.
 
 Если он только наблюдает ее, он Agent.
 
-### 14.3. Machinery boundary
+### 16.3. Machinery boundary
 
 Следует проверить:
 
@@ -608,19 +754,30 @@ Event Delivery Environment
 - нет ли скрытого synchronous back-edge через Adapter;
 - не протекла ли предметная policy в Driver.
 
-### 14.4. Adapter vs Driver
+### 16.4. Adapter vs Executor vs Driver vs Runner
 
 Adapter соединяет **предметные области**.
 
-Driver соединяет внутреннюю систему с **конкретным внешним техническим механизмом**.
+Executor отвечает за достижение **заданного postcondition / desired state**.
 
-Если компонент знает Linux/netlink/nft/systemd/DB protocol, но не переводит между
-предметными моделями, это Driver.
+Driver соединяет внутреннюю систему с **конкретным внешним техническим механизмом** через
+осмысленные технические операции, но не владеет convergence к caller-selected desired
+state.
+
+Runner передает **сырой invocation** и возвращает сырой execution/transport result.
 
 Если компонент скрывает целую нижнюю предметную систему и представляет ее через контракт
 верхней, это Adapter.
 
-## 15. Краткая таблица
+Если компонент принимает desired state и сам materialize/observe/verify его, это Executor,
+даже если он напрямую вызывает Linux/netlink/nft/systemd/DB operations.
+
+Если компонент предоставляет одну осмысленную техническую операцию над механизмом, это
+Driver.
+
+Если компонент знает только форму raw command/request и raw response, это Runner.
+
+## 17. Краткая таблица
 
 ```text
 Engine
@@ -650,8 +807,15 @@ Adapter
     Machinery bridging two semantic/domain models;
     architectural visibility boundary
 
+Executor
+    Machinery responsible for reaching/verifying a supplied desired state or postcondition
+
 Driver
-    Machinery directly operating/reading an external technical mechanism
+    Machinery exposing meaningful operations over an external technical mechanism
+    without owning caller-selected convergence
+
+Runner
+    low-level execution/transport primitive for raw invocations and raw results
 
 Event Delivery Environment
     asynchronous delivery only
