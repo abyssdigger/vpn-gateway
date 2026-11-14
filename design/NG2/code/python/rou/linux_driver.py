@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import subprocess
 from typing import Protocol
 
@@ -40,6 +40,7 @@ from .linux_routing import (
     TERMINAL_ROUTE_PROTOCOL,
     UNICAST_ROUTE_PROTOCOL,
     LinuxRouteKind,
+    plan_linux_route_priority_moves,
 )
 
 
@@ -376,43 +377,22 @@ class LinuxNetworkExecutor:
                     + "; ".join(precondition.errors)
                 )
 
-            current_slots = {
-                (
-                    route.domain,
-                    route.table_id,
-                    route.destination,
-                    route.protocol,
-                    route.metric,
-                ): route
-                for route in current.routing.routes
-                if route.kind is LinuxRouteKind.UNICAST
-            }
-
-            wanted = sorted(
-                (
-                    route
-                    for route in desired.routing.routes
-                    if route.kind is LinuxRouteKind.UNICAST
-                ),
-                key=lambda route: (
-                    route.table_id,
-                    int(route.destination.network_address),
-                    route.destination.prefixlen,
-                    route.metric,
-                ),
+            moves = plan_linux_route_priority_moves(
+                current.routing,
+                desired.routing,
             )
-            for route in wanted:
-                slot = (
-                    route.domain,
-                    route.table_id,
-                    route.destination,
-                    route.protocol,
-                    route.metric,
+            if not moves:
+                raise LinuxDriverError(
+                    "route-priority planner produced no transition moves"
                 )
-                previous = current_slots[slot]
-                if previous.path == route.path:
-                    continue
-                self._runner.run(self._route_replace_argv(route))
+
+            for move in moves:
+                duplicate = replace(
+                    move.source,
+                    metric=move.target_metric,
+                )
+                self._runner.run(self._route_add_argv(duplicate))
+                self._runner.run(self._route_delete_argv(move.source))
 
             final = self.observe(desired)
             verification = verify_linux_network(desired, final)
@@ -713,15 +693,15 @@ class LinuxNetworkExecutor:
             str(route.metric),
         )
 
-    def _route_replace_argv(self, route) -> tuple[str, ...]:
+    def _route_delete_argv(self, route) -> tuple[str, ...]:
         if route.kind is not LinuxRouteKind.UNICAST or route.path is None:
             raise LinuxDriverError(
-                "route-priority replacement requires a unicast path route"
+                "route-priority deletion requires a unicast path route"
             )
         return (
             "ip",
             "route",
-            "replace",
+            "del",
             "table",
             str(route.table_id),
             route.destination.with_prefixlen,
