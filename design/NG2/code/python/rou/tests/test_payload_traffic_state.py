@@ -179,6 +179,26 @@ class PayloadTrafficStateProjectionTests(unittest.TestCase):
                 rules_state,
             )
 
+    def test_unknown_rules_state_with_authoritative_observation_is_rejected(self):
+        observed = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            self.desired,
+            fresh=True,
+        )
+        rules_state = PayloadRulesState(
+            Knowledge.UNKNOWN,
+            Convergence.UNKNOWN,
+            Safety.UNKNOWN,
+            Service.UNKNOWN,
+        )
+
+        with self.assertRaises(ValueError):
+            project_payload_traffic_state(
+                self.desired,
+                observed,
+                rules_state,
+            )
+
     def test_info_rejects_path_claims_when_rules_knowledge_unknown(self):
         rules_state = PayloadRulesState(
             Knowledge.UNKNOWN,
