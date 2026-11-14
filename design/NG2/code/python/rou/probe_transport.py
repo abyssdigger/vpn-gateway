@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from ipaddress import IPv4Address
+from math import isfinite
 
 from .availability_probe_state import ProbeObservationGeneration
 from .interface_identity import InterfaceIdentity
@@ -28,6 +29,7 @@ class PhysicalProbePlane:
         if (
             isinstance(self.interval_seconds, bool)
             or not isinstance(self.interval_seconds, (int, float))
+            or not isfinite(float(self.interval_seconds))
             or self.interval_seconds <= 0
         ):
             raise ValueError("physical probe plane interval must be positive")
@@ -51,16 +53,26 @@ class LogicalProbeWindow:
 
 @dataclass(frozen=True)
 class ProbeExecutionPlan:
-    """Generation-bound transport/timer demand for the execution Agent.
+    """Generation-bound transport/timer demand.
 
     Physical send cadence is deduplicated by probe plane. Logical observation-window
     cadence remains per probe_id because consumers sharing one plane may use different
-    failure-window policy.
+    failure-window policy. This type does not prescribe whether the eventual lower
+    execution subsystem is in-process or hidden behind an Adapter.
     """
 
     generation: ProbeObservationGeneration
     planes: tuple[PhysicalProbePlane, ...]
     windows: tuple[LogicalProbeWindow, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.generation, ProbeObservationGeneration):
+            raise ValueError("execution plan requires ProbeObservationGeneration")
+        if len(set(self.planes)) != len(self.planes):
+            raise ValueError("execution plan contains duplicate physical planes")
+        probe_ids = [item.probe_id for item in self.windows]
+        if len(set(probe_ids)) != len(probe_ids):
+            raise ValueError("execution plan contains duplicate logical windows")
 
 
 @dataclass(frozen=True)
