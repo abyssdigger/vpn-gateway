@@ -203,7 +203,7 @@ Routing policy не сортирует все paths заново при кажд
 2. внутри этого prefix сохраняется configured priority;
 3. остальные paths не удаляются;
 4. среди остальных сохраняется их текущий относительный порядок;
-5. если подтвержденно живых paths нет, effective order вообще не меняется.
+5. если подтвержденно живых paths нет, effective order не меняется.
 
 Пример:
 
@@ -211,25 +211,19 @@ Routing policy не сортирует все paths заново при кажд
 configured/current:  A B C D
 probe:               - + + -
 effective:            B C A D
+live-prefix length:   2
 ```
 
-Переход концептуально является bubble promotion:
-
-```text
-A B C D
-B B C D
-B C A D
-```
-
-Промежуточный duplicate означает техническую route materialization, а не два логических
-bindings.
-
-Если после этого все paths теряют подтвержденную живость, порядок не возвращается
-самопроизвольно к `A B C D`: без доказанно лучшего path probing не создает новую
-перестановку.
+Если после этого все paths теряют подтвержденную живость, относительный порядок не
+возвращается самопроизвольно к `A B C D`: без доказанно лучшего path probing не создает
+новую сортировку. Меняется только граница live-prefix.
 
 Если затем `A` получает good news, configured priority снова имеет силу среди
 подтвержденно живых paths и `A` может всплыть вверх.
+
+Live-prefix length является частью semantic payload routing intent. Это не отдельный path и
+не Linux metric: значение нужно, чтобы lower domain мог однозначно представить границу
+между confirmed-live prefix и остальным effective order, включая restart/reconciliation.
 
 ## 8. Payload intent
 
@@ -250,100 +244,211 @@ current effective order
 PayloadTrafficIntentCalculator
         |
         v
-PayloadProfileRequest.ordered_paths
+PayloadProfileRequest:
+    ordered_paths
+    priority_prefix_length
 ```
+
+`ordered_paths` содержит полный eligible set в effective order.
+`priority_prefix_length` указывает длину confirmed-live prefix.
+
+Если Profile пока не управляется availability evidence, payload projection сохраняет
+старую deterministic priority semantics: prefix считается равным полному `ordered_paths`,
+то есть технический EMPTY slot находится после последнего path.
 
 Новая отдельная Calculator abstraction для этого пока не требуется. Если логика
 effective order перестанет быть малой частью PayloadTrafficIntentCalculator, граница может
 быть пересмотрена позже.
 
-## 9. Уже существующая route semantics
+## 9. Linux route-slot projection
 
-Текущий NG2 `PayloadProfileRequest.ordered_paths` уже является семантическим порядком
-приоритета.
+Для Profile с `N` eligible paths Linux projection резервирует `N+1` обычных metric
+slots ниже terminal blackhole.
 
-Linux projection уже отображает позиции в metrics:
+Steady-state invariant:
 
 ```text
-position 0 -> metric 10
-position 1 -> metric 20
-position 2 -> metric 30
-...
+N eligible paths
+N + 1 ordinary metric slots
+exactly one EMPTY slot
+exactly one route for every eligible path
+```
+
+EMPTY находится сразу после confirmed-live prefix.
+
+При `FIRST_PATH_METRIC=10` и `PATH_METRIC_STEP=10`:
+
+```text
+A B G D . V E J
+10 20 30 40 50 60 70 80
+            ^
+          EMPTY
+```
+
+То есть точка является не route и не availability state. Это зарезервированный свободный
+metric slot.
+
+Terminal blackhole остается отдельным:
+
+```text
 terminal blackhole -> metric 65536
 ```
 
-Поэтому новая availability policy не требует нового route tier, shadow routes или
-`UNAVAILABLE_METRIC`.
+Все обычные slots, включая EMPTY, обязаны оставаться ниже terminal metric.
+
+Generic `RoutingDomainSpec`, не использующий priority-prefix semantics, может не иметь
+EMPTY slot. Persistent EMPTY является свойством payload priority projection, а не
+универсальным требованием для ProbeRules и прочих routing domains.
 
 ## 10. Route-priority transition
 
-EXP-027 подтвердил в privileged Linux CI для обычного prefix и `default`, что fixed
-metric positions можно использовать как route slots: `ip route replace` меняет один
-slot, не удаляя тот же interface из другого metric, а terminal blackhole сохраняется.
-
-Текущая Linux реализация имеет узкий verified fast path только для чистой permutation
-существующих unicast paths. Он свежо проверяет старую projection, выполняет top-down
-slot replacements, затем свежо проверяет конечную projection. Любой более широкий diff
-или ошибка fast path переводит operation в существующий structural fail-closed rebuild.
-
-
-При изменении только `ordered_paths` desired operation должна быть узкой route-priority
-transaction:
-
-- payload nft filtering не меняется;
-- NAT policy не меняется;
-- RPDB selectors/table ownership не меняются;
-- `ip_forward` не закрывается только из-за permutation;
-- меняются только owned unicast route slots соответствующего routing domain;
-- после transition выполняется fresh verification конечного order.
-
-Предпочтительный materialization pattern — замена route slots сверху вниз с допустимыми
-временными duplicates.
-
-Для перехода:
+При чистом изменении effective priority path membership не меняется. Поэтому transition
+рассматривается как перестановка:
 
 ```text
-A B C D
-    ->
-B C A D
+eligible paths + EMPTY
 ```
 
-концептуальная последовательность:
+между двумя steady states.
+
+### 10.1. Единственный primitive
+
+Пусть текущий EMPTY имеет metric `Mempty`, а path `X` сейчас находится на `Mold`.
+
+Один элементарный move:
 
 ```text
-A B C D
-B B C D
-B C C D
-B C A D
+1. add X at Mempty
+2. delete X at Mold
 ```
 
-Вытесняемый неподтвержденный path может кратковременно остаться без собственного route.
-Это допустимо: safety requirement состоит в сохранении/появлении лучшего подтвержденного
-payload path, а не в непрерывном представлении каждого degraded path во время transition.
+После первого шага:
+
+- присутствуют все `N` eligible paths;
+- routes стало `N+1`;
+- ровно один path, `X`, имеет две копии;
+- EMPTY временно отсутствует.
+
+После второго шага:
+
+- снова ровно `N` routes;
+- каждый eligible path имеет ровно одну копию;
+- `Mold` становится новым EMPTY.
+
+Ни live, ни non-confirmed path не удаляется из FIB как промежуточный прием перестановки.
+
+### 10.2. Planner
+
+Planner сравнивает current и desired mapping одного и того же набора:
+
+```text
+metric slot -> path | EMPTY
+```
+
+и повторяет primitive до полного совпадения.
+
+На каждом шаге:
+
+1. определяется текущий EMPTY;
+2. если desired state требует в этом slot конкретный path, этот path переносится в EMPTY;
+3. если desired state тоже требует здесь EMPTY, но остается отдельный цикл перестановки,
+   deterministic mismatched occupant временно переносится в EMPTY, разрывая цикл;
+4. после add/delete old location перенесенного path становится новым EMPTY.
+
+Отдельных алгоритмов для death, recovery, failback или admin reorder не требуется.
+
+### 10.3. Пример recovery
+
+```text
+current: A B G D . V E J
+target:  A B V G D . E J
+```
+
+Завершенные elementary moves:
+
+```text
+A B G D . V E J
+A B G . D V E J    D: 40 -> 50
+A B . G D V E J    G: 30 -> 40
+A B V G D . E J    V: 60 -> 30
+```
+
+Внутри каждого перехода между строками сначала существует duplicate переносимого path,
+и только затем удаляется его старая копия.
+
+### 10.4. Пример с recovered path в крайнем правом slot
+
+```text
+current: A B G D E J . V
+target:  A B V G D E J .
+```
+
+```text
+A B G D E J . V
+A B G D E . J V    J: 60 -> 70
+A B G D . E J V    E: 50 -> 60
+A B G . D E J V    D: 40 -> 50
+A B . G D E J V    G: 30 -> 40
+A B V G D E J .    V: 80 -> 30
+```
+
+Крайний правый path не является special case. Persistent EMPTY уже предоставляет
+необходимый scratch slot.
+
+### 10.5. Executor boundary
+
+Route-priority fast path допустим только если неизменны:
+
+- path membership;
+- destination/domain allocation;
+- RPDB selectors;
+- terminal routes;
+- nft filter/NAT;
+- prerequisites;
+- forwarding requirement;
+- обычный metric-slot universe.
+
+Executor:
+
+1. свежо проверяет current full projection;
+2. строит deterministic EMPTY-slot move plan;
+3. выполняет каждый move как add duplicate -> delete old;
+4. свежо проверяет конечную full projection;
+5. при любой ошибке переходит в существующий structural fail-closed rebuild.
+
+Caller не выбирает transition kind.
+
+Availability failover намеренно не реализует per-flow pinning к demoted path. Если policy
+признала path достаточно плохим для понижения приоритета, последующие routing lookups не
+должны искусственно удерживаться на нем. Seamless migration established transport session
+между произвольными VPN paths не является обещанием этой функции.
 
 ## 11. Kernel evidence — EXP-027 PASS
 
-EXP-027 закрыл route-slot gate в privileged Linux CI.
+EXP-027 повторно закрывает route-slot gate уже для persistent-EMPTY production strategy.
 
-Подтверждено:
+В privileged Linux CI, отдельно для ordinary prefix и `default`, подтверждено:
 
-1. один path может одновременно иметь routes к одному prefix через один interface с
-   разными metrics;
-2. `ip route replace` меняет path одного fixed-metric slot, не удаляя тот же interface
-   из соседнего metric;
-3. top-down sequence достигает `A B C D -> B C A D` без userspace delete-before-add
-   нового preferred slot;
-4. конечная FIB projection точно соответствует desired `ordered_paths`;
-5. те же свойства проходят для `default` и обычного prefix;
-6. owned protocol 202 и terminal blackhole protocol 201 / metric 65536 сохраняют
-   требуемую semantics.
+1. один interface/path может одновременно иметь две owned unicast routes к одному
+   destination на разных metrics;
+2. `ip route add` в EMPTY metric создает duplicate, не удаляя старую копию;
+3. exact `ip route del ... dev X metric Mold` удаляет только старую копию, после чего
+   `Mold` становится новым EMPTY;
+4. на каждом проверенном add phase присутствует полный eligible path set и ровно один
+   duplicate;
+5. после каждого delete phase присутствует полный eligible path set, по одной копии каждого
+   path и ровно один EMPTY;
+6. terminal blackhole protocol 201 / metric 65536 сохраняется на каждом шаге;
+7. те же свойства проходят для:
+   - recovery `A B G D . V E J -> A B V G D . E J`;
+   - обратной demotion;
+   - recovery `A B G D E J . V -> A B V G D E J .`.
 
-Эксперимент не заявляет multi-command kernel atomicity. Доказано более узкое необходимое
-свойство: каждый новый preferred slot materialized одной `replace`-операцией до изменения
-следующего slot, а после всей operation выполняется fresh verification.
+Ранний результат EXP-027 с `ip route replace` остается полезным kernel evidence того, что
+один path допускает одновременные routes на разных metrics, но production transition
+strategy им superseded: eligible path больше не вытесняется из FIB даже временно.
 
-Production fast path ограничен именно этим доказанным case; broader transition остается
-за structural fail-closed rebuild.
+Staging routing table для обычной priority permutation не требуется.
 
 ## 12. Что новая модель делает лишним
 
