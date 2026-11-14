@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from rou.availability_routing import AvailabilityWindowPolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_probe_driver import (
@@ -166,6 +167,7 @@ def main() -> int:
                         "primary",
                         path,
                         IPv4Address(TARGET),
+                        policy=AvailabilityWindowPolicy(10, 3),
                     ),
                 )
             )
@@ -250,6 +252,7 @@ def main() -> int:
                 "primary-execution",
                 path,
                 IPv4Address(TARGET),
+                policy=AvailabilityWindowPolicy(10, 3),
             ),
             timeout_seconds=1,
         )
