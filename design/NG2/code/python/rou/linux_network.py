@@ -117,7 +117,10 @@ def _endpoint_present(
     endpoint: NetworkEndpoint,
     available: set[InterfaceIdentity],
 ) -> bool:
-    if endpoint.kind is EndpointKind.LOCAL_NETWORK:
+    if endpoint.kind in {
+        EndpointKind.LOCAL_NETWORK,
+        EndpointKind.LOCAL_PROCESS,
+    }:
         return True
     assert endpoint.interface is not None
     return endpoint.interface in available
@@ -152,6 +155,10 @@ def project_network_rules_to_interfaces(
             rule
             for rule in rules.dispatch_rules
             if _endpoint_present(rule.source, available)
+            and (
+                rule.bound_output is None
+                or _endpoint_present(rule.bound_output, available)
+            )
         )
         traffic_allows = tuple(
             rule
