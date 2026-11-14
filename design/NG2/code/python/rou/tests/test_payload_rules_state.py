@@ -233,7 +233,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
             ),
         )
 
-    def test_removed_backup_path_is_provably_safe_degradation(self):
+    def test_removed_backup_path_is_provably_safe_restriction(self):
         backup = InterfaceIdentity("vpns01", 11)
         desired = NetworkRulesSpec(
             routing_domains=(
