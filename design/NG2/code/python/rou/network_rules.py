@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Network
 from typing import Protocol
 
 from .interface_identity import InterfaceIdentity
@@ -101,28 +101,6 @@ class PortRange:
         if self.start > self.end:
             raise NetworkRulesError("port range start must not exceed end")
 
-    def contains(self, port: int) -> bool:
-        return self.start <= port <= self.end
-
-
-@dataclass(frozen=True)
-class PacketView:
-    source: IPv4Address
-    destination: IPv4Address
-    protocol: TrafficProtocol
-    source_port: int | None = None
-    destination_port: int | None = None
-
-    def __post_init__(self) -> None:
-        ports = (self.source_port, self.destination_port)
-        if self.protocol in {TrafficProtocol.TCP, TrafficProtocol.UDP}:
-            for port in ports:
-                if port is not None and not 1 <= port <= 65535:
-                    raise NetworkRulesError("packet port must be 1..65535")
-        elif any(port is not None for port in ports):
-            raise NetworkRulesError("ICMP packet view must not carry ports")
-
-
 @dataclass(frozen=True)
 class TrafficSelector:
     source: IPv4Network | None = None
@@ -156,29 +134,6 @@ class TrafficSelector:
             and not self.source_ports
             and not self.destination_ports
         )
-
-    def matches(self, packet: PacketView) -> bool:
-        if self.source is not None and packet.source not in self.source:
-            return False
-        if self.destination is not None and packet.destination not in self.destination:
-            return False
-        if self.protocol is not None and packet.protocol is not self.protocol:
-            return False
-        if self.source_ports:
-            if packet.source_port is None:
-                return False
-            if not any(item.contains(packet.source_port) for item in self.source_ports):
-                return False
-        if self.destination_ports:
-            if packet.destination_port is None:
-                return False
-            if not any(
-                item.contains(packet.destination_port)
-                for item in self.destination_ports
-            ):
-                return False
-        return True
-
 
 class PredicateKind(str, Enum):
     ALWAYS = "always"
@@ -285,23 +240,6 @@ class TrafficPredicate:
         if item.kind is PredicateKind.NOT:
             return item.children[0]
         return cls(PredicateKind.NOT, children=(item,))
-
-    def matches(self, packet: PacketView) -> bool:
-        if self.kind is PredicateKind.ALWAYS:
-            return True
-        if self.kind is PredicateKind.NEVER:
-            return False
-        if self.kind is PredicateKind.MATCH:
-            assert self.selector is not None
-            return self.selector.matches(packet)
-        if self.kind is PredicateKind.ALL:
-            return all(item.matches(packet) for item in self.children)
-        if self.kind is PredicateKind.ANY:
-            return any(item.matches(packet) for item in self.children)
-        if self.kind is PredicateKind.NOT:
-            return not self.children[0].matches(packet)
-        raise AssertionError(f"unreachable predicate kind {self.kind!r}")
-
 
 @dataclass(frozen=True)
 class TrafficAllowSpec:
