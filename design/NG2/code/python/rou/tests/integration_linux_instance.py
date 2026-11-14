@@ -73,9 +73,15 @@ def main() -> int:
             "nft", "-j", "list", "tables",
         ).stdout
         nft_root = json.loads(nft_tables)
-        if nft_root.get("nftables"):
+        actual_tables = [
+            item["table"]
+            for item in nft_root.get("nftables", ())
+            if isinstance(item, dict) and "table" in item
+        ]
+        if actual_tables:
             raise RuntimeError(
-                "instance lifecycle unexpectedly created nft policy"
+                "instance lifecycle unexpectedly created nft policy: "
+                f"{actual_tables!r}"
             )
         print("PASS I1: fresh namespace/veth infrastructure verified without nft policy")
 
