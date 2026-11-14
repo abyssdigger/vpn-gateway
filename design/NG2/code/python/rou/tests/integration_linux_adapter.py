@@ -72,29 +72,6 @@ class RecordingHostRunner:
         return result
 
 
-class RecordingBackend:
-    def __init__(self, delegate):
-        self.delegate = delegate
-        self.last_priority_result = None
-
-    def observe_interfaces(self):
-        return self.delegate.observe_interfaces()
-
-    def materialize_structural(self, desired):
-        return self.delegate.materialize_structural(desired)
-
-    def materialize_route_priority(self, current, desired):
-        result = self.delegate.materialize_route_priority(current, desired)
-        self.last_priority_result = result
-        return result
-
-    def verify_current(self, desired):
-        return self.delegate.verify_current(desired)
-
-    def close_forwarding_verified(self):
-        return self.delegate.close_forwarding_verified()
-
-
 def cleanup():
     host("ip", "netns", "del", NS, check=False)
 
@@ -279,7 +256,6 @@ def main() -> int:
     host_runner = RecordingHostRunner()
     runner = NetworkNamespaceLinuxRunner(host_runner, NS)
     driver = LinuxNetworkExecutor(runner)
-    backend = RecordingBackend(driver)
 
     # Simulate process restart with stale physical policy and forwarding still open.
     host(
@@ -300,7 +276,7 @@ def main() -> int:
     )
 
     bootstrapped = bootstrap_linux_network_rules_adapter(
-        backend,
+        driver,
         local_interface="host0",
     )
     if not bootstrapped.success or bootstrapped.adapter is None:
@@ -455,16 +431,9 @@ def main() -> int:
             and argv[-1].startswith("net.ipv4.ip_forward=")
         ]
         if forwarding_writes:
-            route_mutations = [
-                argv
-                for argv in inner_calls
-                if argv[:2] == ("ip", "route")
-            ]
             raise RuntimeError(
                 "route-priority fast path touched forwarding barrier: "
-                f"{forwarding_writes}; route mutations before/during fallback="
-                f"{route_mutations}; backend result="
-                f"{backend.last_priority_result}"
+                f"{forwarding_writes}"
             )
 
         route_adds = [
