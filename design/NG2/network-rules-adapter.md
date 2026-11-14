@@ -317,18 +317,51 @@ stable.
 
 ## 12. Route-priority fast path
 
-EXP-027 подтверждает отдельный безопасный narrow case: если effective desired state
-отличается только permutation тех же unicast paths по тем же routing-domain metric slots,
-Linux backend может не закрывать forwarding и не перестраивать nft/RPDB.
+EXP-027 подтверждает отдельный safe narrow case: если effective desired state отличается
+только перестановкой тех же unicast paths внутри того же routing domain, Linux backend
+может не закрывать forwarding и не перестраивать nft/RPDB.
+
+Fast path использует не `ip route replace`, а один make-before-break primitive:
+
+```text
+path X находится на Mold
+Mfree свободен
+
+1. ip route add ... dev X metric Mfree
+2. ip route del ... dev X metric Mold
+```
+
+Между командами полный eligible path set сохранен и только `X` временно имеет две
+route copies. После delete старый metric автоматически становится следующим свободным
+position.
+
+Для `N` paths planner рассматривает рабочий диапазон из `N+1` ordinary metrics ниже
+terminal metric. Свободный metric не является persistent объектом Adapter:
+
+- при наличии non-confirmed tail он находится непосредственно перед первым таким path;
+- при all-live отдельного steady-state gap нет, а следующий metric после последнего path
+  просто свободен для первого move;
+- положение gap выводится из runtime priority state, а не хранится в config/NetworkRules.
 
 Fast path обязан:
 
-1. свежо доказать, что текущая полная managed projection совпадает с committed desired;
+1. свежо доказать current full managed projection;
 2. убедиться, что prerequisites, nft filter/NAT, allocation, RPDB, terminal routes и path
    membership неизменны;
-3. materialize changed metric slots top-down через `ip route replace`;
-4. свежо доказать полное конечное desired state;
-5. при любой ошибке перейти в обычный structural fail-closed rebuild.
+3. построить deterministic immutable move plan;
+4. выполнить каждый move как add duplicate -> delete old;
+5. свежо доказать конечное desired state;
+6. при любой ошибке перейти в обычный structural fail-closed rebuild.
+
+Route-priority materialization является transactional в scope одного Profile/routing
+domain. Пока выполняется один plan, новое availability-derived desired state этого же
+Profile не может вмешаться в его команды или пересчитать plan посередине. Оно может только
+заменить pending/latest desired state. После final verification следующий plan строится
+уже от подтвержденного результата предыдущей транзакции.
+
+Независимые routing domains не требуют общей глобальной route-priority блокировки только
+ради этого свойства. Shared lower-domain structural mutation по-прежнему подчиняется
+обычной Adapter transaction boundary.
 
 Fast path является внутренней оптимизацией Adapter/Executor. Caller по-прежнему вызывает
 тот же `apply(owner, spec)` и не выбирает transition kind.
