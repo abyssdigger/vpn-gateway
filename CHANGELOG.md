@@ -1,3 +1,30 @@
+## 2026-11-14 — NG2 persistent EMPTY-slot route transitions
+
+Strengthened availability-driven route-priority materialization so no eligible route is
+temporarily removed during a permutation:
+
+- payload routing intent now carries `priority_prefix_length`, the semantic boundary
+  between the confirmed-live prefix and the remaining effective order;
+- Linux projects `N` eligible paths into `N+1` ordinary metric slots with exactly one
+  persistent EMPTY slot immediately after that prefix;
+- pure route-priority transitions are planned as permutations of
+  `eligible paths + EMPTY`;
+- the only elementary mutation is `add duplicate into EMPTY -> delete old copy`, moving
+  EMPTY to the old metric;
+- during add, all eligible paths remain present and exactly one path is duplicated; after
+  delete, every path again has one route and exactly one slot is EMPTY;
+- the same planner handles recovery, demotion, failback and arbitrary pure priority cycles;
+- EXP-027 was extended and passed for ordinary prefix and `default`, including
+  `ABGD.VEJ -> ABVGD.EJ`, the reverse demotion, and
+  `ABGDEJ.V -> ABVGDEJ.`;
+- the Linux Adapter fast path now executes the planner with add/delete moves and retains
+  fresh pre/post verification plus structural fail-closed fallback;
+- the earlier top-down `ip route replace` EXP-027 result remains valid kernel evidence but
+  is superseded as the production transition strategy;
+- availability failover intentionally does not pin existing flows to a path already
+  demoted by availability policy; flow-affinity remains a separate feature for other
+  modes.
+
 ## 2026-11-14 — NG2 availability de-complexification and route-priority bubble
 
 Superseded the same-day per-attempt cadence/hysteresis candidate with a smaller routing
