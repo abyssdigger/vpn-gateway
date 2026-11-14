@@ -47,7 +47,7 @@ def project_payload_traffic_state(
     """Project rules assessment into the payload-domain InfoEvent payload.
 
     The function exposes no NetworkRulesSpec/NetworkRulesState object in the returned
-    payload. It only carries payload-rules assessment and per-Profile materialized paths.
+    payload. It only carries payload-rules assessment and per-Profile observed paths.
     """
 
     authoritative = (
