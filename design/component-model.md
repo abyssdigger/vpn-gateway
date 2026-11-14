@@ -752,6 +752,9 @@ Event Delivery Environment
 - является ли Direct return действительно результатом обращения;
 - не принимается ли acknowledgement Indirect Machinery за конечный результат;
 - нет ли скрытого synchronous back-edge через Adapter;
+- не выбирает ли Executor предметный desired state вместо получения его от caller;
+- не взял ли Driver на себя convergence к caller-selected desired state;
+- не протек ли raw Runner contract туда, где caller уже должен видеть semantic operation;
 - не протекла ли предметная policy в Driver.
 
 ### 16.4. Adapter vs Executor vs Driver vs Runner
