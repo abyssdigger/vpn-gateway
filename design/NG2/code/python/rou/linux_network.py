@@ -204,17 +204,6 @@ def project_network_rules_to_interfaces(
                     if path in available
                 ),
                 terminal_disposition=domain.terminal_disposition,
-                priority_prefix_length=(
-                    None
-                    if domain.priority_prefix_length is None
-                    else sum(
-                        1
-                        for path in domain.ordered_paths[
-                            : domain.priority_prefix_length
-                        ]
-                        if path in available
-                    )
-                ),
             )
             for domain in rules.routing_domains
         )
