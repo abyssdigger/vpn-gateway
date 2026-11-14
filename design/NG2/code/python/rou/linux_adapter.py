@@ -1,0 +1,170 @@
+from __future__ import annotations
+
+from typing import Protocol
+
+from .linux_driver import LinuxDriverResult, LinuxNetworkVerification
+from .linux_network import compile_linux_network_desired
+from .linux_routing import LinuxRoutingAllocationState
+from .network_rules import (
+    ActionResult,
+    NetworkRulesSpec,
+    NetworkRulesState,
+    StateKnowledge,
+)
+from .network_rules_composition import (
+    OwnerRulesRegistry,
+    OwnerToken,
+    compose_network_rules,
+)
+
+
+class LinuxNetworkBackend(Protocol):
+    def materialize_structural(self, desired) -> LinuxDriverResult:
+        ...
+
+    def verify_current(self, desired) -> LinuxNetworkVerification:
+        ...
+
+
+class LinuxNetworkRulesAdapter:
+    """Direct NetworkRulesAdapter over one shared dedicated Linux network domain."""
+
+    def __init__(
+        self,
+        backend: LinuxNetworkBackend,
+        *,
+        local_interface: str,
+    ) -> None:
+        self._backend = backend
+        self._local_interface = local_interface
+        self._owners = OwnerRulesRegistry()
+        self._routing_allocation = LinuxRoutingAllocationState()
+        self._last_state: dict[OwnerToken, NetworkRulesState] = {}
+
+    def apply(
+        self,
+        owner: object,
+        spec: NetworkRulesSpec,
+    ) -> ActionResult:
+        token, candidate = self._owners.preview_replace(owner, spec)
+
+        try:
+            desired = compile_linux_network_desired(
+                compose_network_rules(candidate),
+                self._routing_allocation,
+                local_interface=self._local_interface,
+            )
+        except Exception as exc:
+            return ActionResult(
+                False,
+                f"cannot compile candidate network rules: {exc}",
+            )
+
+        result = self._backend.materialize_structural(desired)
+        if not result.success:
+            self._mark_all_unknown(result.diagnostic)
+            # preview_replace() has registered first-time owner identity, so make sure
+            # the requested owner has an explicit last state as well.
+            self._last_state[token] = self._unknown_state(result.diagnostic)
+            return ActionResult(False, result.diagnostic)
+
+        self._owners.replace(owner, spec)
+        self._routing_allocation = desired.routing.allocation
+        self._mark_registered_known()
+        return ActionResult(True)
+
+    def renew_state(self, owner: object) -> ActionResult:
+        token = self._owners.token(owner)
+        if token is None:
+            return ActionResult(False, "owner is not registered")
+
+        try:
+            desired = compile_linux_network_desired(
+                compose_network_rules(self._owners.snapshot()),
+                self._routing_allocation,
+                local_interface=self._local_interface,
+            )
+            verification = self._backend.verify_current(desired)
+        except Exception as exc:
+            diagnostic = f"network observation failed: {exc}"
+            self._mark_all_unknown(diagnostic)
+            return ActionResult(False, diagnostic)
+
+        if not verification.ok:
+            diagnostic = "; ".join(verification.errors)
+            self._mark_all_unknown(diagnostic)
+            return ActionResult(False, diagnostic)
+
+        self._mark_registered_known()
+        return ActionResult(True)
+
+    def get_last_state(self, owner: object) -> NetworkRulesState:
+        token = self._owners.token(owner)
+        if token is None:
+            return self._unknown_state("owner is not registered")
+        return self._last_state.get(
+            token,
+            self._unknown_state("owner has not been freshly observed"),
+        )
+
+    def cleanup(self, owner: object) -> ActionResult:
+        if not self._owners.has_identity(owner):
+            return ActionResult(True)
+
+        candidate = self._owners.preview_remove(owner)
+
+        try:
+            desired = compile_linux_network_desired(
+                compose_network_rules(candidate),
+                self._routing_allocation,
+                local_interface=self._local_interface,
+            )
+        except Exception as exc:
+            return ActionResult(
+                False,
+                f"cannot compile cleanup network rules: {exc}",
+            )
+
+        result = self._backend.materialize_structural(desired)
+        if not result.success:
+            self._mark_all_unknown(result.diagnostic)
+            return ActionResult(False, result.diagnostic)
+
+        token = self._owners.token(owner)
+        self._owners.remove(owner)
+        if token is not None:
+            self._last_state.pop(token, None)
+        self._routing_allocation = desired.routing.allocation
+        self._mark_registered_known()
+        return ActionResult(True)
+
+    def _mark_registered_known(self) -> None:
+        empty = NetworkRulesSpec()
+        live_tokens: set[OwnerToken] = set()
+
+        for token, rules in self._owners.registered_rules():
+            live_tokens.add(token)
+            self._last_state[token] = NetworkRulesState(
+                knowledge=StateKnowledge.KNOWN,
+                rules=empty if rules is None else rules,
+                fresh=True,
+            )
+
+        self._last_state = {
+            token: state
+            for token, state in self._last_state.items()
+            if token in live_tokens
+        }
+
+    def _mark_all_unknown(self, diagnostic: str | None) -> None:
+        for token, _rules in self._owners.registered_rules():
+            self._last_state[token] = self._unknown_state(diagnostic)
+
+    @staticmethod
+    def _unknown_state(diagnostic: str | None) -> NetworkRulesState:
+        return NetworkRulesState(
+            knowledge=StateKnowledge.UNKNOWN,
+            rules=None,
+            fresh=False,
+            diagnostic=diagnostic,
+        )
