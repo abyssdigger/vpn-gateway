@@ -105,7 +105,7 @@ Concrete production assembly may target an already existing named network namesp
 ```text
 host command runner
     -> NetworkNamespaceLinuxRunner(namespace)
-    -> LinuxNetworkDriver
+    -> LinuxNetworkExecutor
     -> protective bootstrap gate
     -> LinuxNetworkRulesAdapter
 ```
