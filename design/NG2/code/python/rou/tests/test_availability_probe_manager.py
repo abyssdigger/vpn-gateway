@@ -3,6 +3,7 @@ import unittest
 
 from rou.availability_probe_manager import AvailabilityProbeManager
 from rou.availability_probe_state import AvailabilityProbeState
+from rou.probe_attempt import ProbeAttemptOutcome, ProbeAttemptResult
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     ActionResult,
@@ -22,6 +23,21 @@ class RecordingPublisher:
 
     def publish(self, info):
         self.events.append(info)
+
+
+
+
+class FakeDriver:
+    def __init__(self):
+        self.calls = []
+        self.result = ProbeAttemptResult(ProbeAttemptOutcome.REPLY)
+        self.before_return = None
+
+    def execute(self, request, *, timeout_seconds):
+        self.calls.append((request, timeout_seconds))
+        if self.before_return is not None:
+            self.before_return()
+        return self.result
 
 
 class FakeAdapter:
@@ -84,9 +100,11 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         self.path = InterfaceIdentity("vpns00", 10)
         self.adapter = FakeAdapter()
         self.publisher = RecordingPublisher()
+        self.driver = FakeDriver()
         self.manager = AvailabilityProbeManager(
             self.adapter,
             self.publisher,
+            self.driver,
         )
 
     def test_first_request_uses_manager_as_owner_and_opens_ready_epoch(self):
@@ -228,6 +246,142 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             "no authoritative probe evidence",
             self.publisher.events[-1].reason,
         )
+
+
+    def test_attempt_once_returns_raw_observation_only_after_post_rules_check(self):
+        wanted = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(wanted))
+        generation = self.manager.observation_generation
+
+        observation = self.manager.attempt_once(
+            "primary",
+            timeout_seconds=3,
+        )
+
+        self.assertIsNotNone(observation)
+        self.assertEqual(observation.probe_id, "primary")
+        self.assertEqual(observation.observation_generation, generation)
+        self.assertIs(
+            observation.result.outcome,
+            ProbeAttemptOutcome.REPLY,
+        )
+        self.assertEqual(self.driver.calls, [(wanted, 3)])
+        self.assertEqual(len(self.adapter.renew_owners), 2)
+        self.assertEqual(len(self.publisher.events), 1)
+
+    def test_attempt_once_repairs_nonready_rules_before_driver(self):
+        wanted = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(wanted))
+        old_generation = self.manager.observation_generation
+        self.adapter.state = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            NetworkRulesSpec(),
+            fresh=True,
+        )
+        initial_apply_count = len(self.adapter.apply_owners)
+
+        observation = self.manager.attempt_once(
+            "primary",
+            timeout_seconds=1,
+        )
+
+        self.assertIsNotNone(observation)
+        self.assertEqual(
+            len(self.adapter.apply_owners),
+            initial_apply_count + 1,
+        )
+        self.assertGreater(
+            observation.observation_generation.sequence,
+            old_generation.sequence,
+        )
+        self.assertEqual(len(self.driver.calls), 1)
+
+    def test_attempt_once_does_not_run_driver_when_rules_cannot_be_repaired(self):
+        wanted = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(wanted))
+        self.adapter.state = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            NetworkRulesSpec(),
+            fresh=True,
+        )
+        self.adapter.apply_success = False
+
+        observation = self.manager.attempt_once(
+            "primary",
+            timeout_seconds=1,
+        )
+
+        self.assertIsNone(observation)
+        self.assertEqual(self.driver.calls, [])
+        self.assertIsNone(self.manager.observation_generation)
+
+    def test_post_attempt_rules_drift_discards_raw_outcome(self):
+        wanted = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(wanted))
+        self.publisher.events.clear()
+
+        def drift_after_probe():
+            self.adapter.state = NetworkRulesState(
+                StateKnowledge.KNOWN,
+                NetworkRulesSpec(),
+                fresh=True,
+            )
+
+        self.driver.before_return = drift_after_probe
+
+        observation = self.manager.attempt_once(
+            "primary",
+            timeout_seconds=1,
+        )
+
+        self.assertIsNone(observation)
+        self.assertIsNone(self.manager.observation_generation)
+        self.assertEqual(len(self.driver.calls), 1)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertEqual(
+            self.publisher.events[0].reason,
+            "probe rules are not ready",
+        )
+
+    def test_driver_error_remains_raw_local_attempt_observation(self):
+        wanted = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(wanted))
+        self.driver.result = ProbeAttemptResult(
+            ProbeAttemptOutcome.ERROR,
+            "local execution failure",
+        )
+
+        observation = self.manager.attempt_once(
+            "primary",
+            timeout_seconds=1,
+        )
+
+        self.assertIsNotNone(observation)
+        self.assertIs(
+            observation.result.outcome,
+            ProbeAttemptOutcome.ERROR,
+        )
+        self.assertEqual(
+            observation.result.diagnostic,
+            "local execution failure",
+        )
+        self.assertIs(
+            self.publisher.events[-1].state,
+            AvailabilityProbeState.UNKNOWN,
+        )
+
+    def test_attempt_once_rejects_unknown_probe_id(self):
+        self.manager.handle_request(
+            request(probe("primary", self.path, "203.0.113.24"))
+        )
+
+        with self.assertRaisesRegex(ValueError, "unknown active probe_id"):
+            self.manager.attempt_once(
+                "missing",
+                timeout_seconds=1,
+            )
+
+        self.assertEqual(self.driver.calls, [])
 
     def test_audit_before_first_request_is_noop(self):
         self.manager.audit()
