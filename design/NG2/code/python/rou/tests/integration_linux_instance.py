@@ -13,10 +13,12 @@ from rou.linux_driver import SubprocessLinuxRunner
 from rou.linux_instance import (
     LinuxInstanceError,
     LinuxInstanceSpec,
-    create_linux_instance,
     destroy_linux_instance,
     ensure_linux_instance,
     verify_linux_instance,
+)
+from rou.runtime_bootstrap import (
+    bootstrap_linux_network_rules_adapter_for_instance,
 )
 
 
@@ -60,7 +62,16 @@ def main() -> int:
     )
 
     try:
-        create_linux_instance(spec, runner)
+        bootstrapped = bootstrap_linux_network_rules_adapter_for_instance(
+            spec,
+            host_runner=runner,
+        )
+        if not bootstrapped.success or bootstrapped.adapter is None:
+            raise RuntimeError(
+                "full instance bootstrap failed: "
+                f"{bootstrapped.diagnostic}"
+            )
+
         verified = verify_linux_instance(spec, runner)
         if not verified.ok:
             raise RuntimeError(
@@ -83,7 +94,10 @@ def main() -> int:
                 "instance lifecycle unexpectedly created nft policy: "
                 f"{actual_tables!r}"
             )
-        print("PASS I1: fresh namespace/veth infrastructure verified without nft policy")
+        print(
+            "PASS I1: absent instance -> fail-closed infrastructure -> "
+            "Adapter publication without nft policy"
+        )
 
         for assignment in (
             "net.ipv4.ip_forward=1",
