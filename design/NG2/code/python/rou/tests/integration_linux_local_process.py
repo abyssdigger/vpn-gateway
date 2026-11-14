@@ -12,6 +12,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_local_process import LinuxLocalProcessConfig
+from rou.linux_probe_executor import (
+    LinuxIcmpProbeExecutor,
+    LinuxIcmpProbeExecutorConfig,
+    ProbeAttemptOutcome,
+)
 from rou.linux_driver import (
     LinuxNetworkDriver,
     NetworkNamespaceLinuxRunner,
@@ -91,13 +96,6 @@ def make_topology() -> None:
     # Ordinary local traffic deliberately prefers the alternate path.
     ns(ROU, "ip", "route", "replace", f"{TARGET}/32", "dev", "alt0")
 
-    ns(
-        ROU,
-        "sysctl",
-        "-q",
-        "-w",
-        f"net.ipv4.ping_group_range={PROBE_UID} {PROBE_UID}",
-    )
 
 
 def identity(namespace: str, ifname: str) -> InterfaceIdentity:
@@ -132,19 +130,19 @@ def main() -> int:
 
     make_topology()
     try:
-        driver = LinuxNetworkDriver(
-            NetworkNamespaceLinuxRunner(
-                SubprocessLinuxRunner(),
-                ROU,
-            )
+        namespace_runner = NetworkNamespaceLinuxRunner(
+            SubprocessLinuxRunner(),
+            ROU,
+        )
+        driver = LinuxNetworkDriver(namespace_runner)
+        local_process = LinuxLocalProcessConfig(
+            uid=65534,
+            ct_mark=0x24,
         )
         boot = bootstrap_linux_network_rules_adapter(
             driver,
             local_interface="host0",
-            local_process=LinuxLocalProcessConfig(
-                uid=65534,
-                ct_mark=0x24,
-            ),
+            local_process=local_process,
         )
         if not boot.success or boot.adapter is None:
             raise RuntimeError(
@@ -231,8 +229,23 @@ def main() -> int:
             )
         print("PASS LP3: unrelated local process retains ordinary alt0 path")
 
-        bound = ping_as_probe("-I", "vpn0", TARGET)
-        if bound.returncode != 0:
+        executor = LinuxIcmpProbeExecutor(
+            namespace_runner,
+            LinuxIcmpProbeExecutorConfig(
+                local_process=local_process,
+                gid=65534,
+                ping_path=str(PING_COPY),
+            ),
+        )
+        attempt = executor.execute(
+            AvailabilityProbeRequest(
+                "primary-execution",
+                path,
+                IPv4Address(TARGET),
+            ),
+            timeout_seconds=1,
+        )
+        if attempt.outcome is not ProbeAttemptOutcome.REPLY:
             rules = ns(ROU, "ip", "-j", "-4", "rule", "show", check=False)
             nft = ns(
                 ROU,
@@ -245,17 +258,18 @@ def main() -> int:
                 check=False,
             )
             raise RuntimeError(
-                "production LOCAL_PROCESS bound probe failed:\n"
-                + bound.stdout
-                + bound.stderr
-                + "\nRULES:\n"
+                "production LOCAL_PROCESS executor probe failed: "
+                f"{attempt}\nRULES:\n"
                 + rules.stdout
                 + rules.stderr
                 + "\nNFT:\n"
                 + nft.stdout
                 + nft.stderr
             )
-        print("PASS LP4: bound capability-free probe uses production probe plane")
+        print(
+            "PASS LP4: production executor runs capability-free bound probe "
+            "through production probe plane"
+        )
 
         unbound = ping_as_probe(TARGET)
         if unbound.returncode == 0:
