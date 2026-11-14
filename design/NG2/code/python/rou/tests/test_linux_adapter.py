@@ -1,10 +1,18 @@
+from ipaddress import IPv4Network
 import unittest
 
+from rou.interface_identity import InterfaceIdentity
 from rou.linux_adapter import LinuxNetworkRulesAdapter
 from rou.linux_driver import LinuxDriverResult, LinuxNetworkVerification
 from rou.network_rules import (
+    DispatchRuleSpec,
+    NetworkEndpoint,
     NetworkRulesSpec,
+    RoutingDomainSpec,
     StateKnowledge,
+    TerminalDisposition,
+    TrafficAllowSpec,
+    TrafficPredicate,
 )
 
 
@@ -22,6 +30,10 @@ class FakeBackend:
         self.verify_ok = True
         self.materialize_calls = []
         self.verify_calls = []
+        self.interfaces = ()
+
+    def observe_interfaces(self):
+        return self.interfaces
 
     def materialize_structural(self, desired):
         self.materialize_calls.append(desired)
@@ -34,6 +46,39 @@ class FakeBackend:
         if self.verify_ok:
             return LinuxNetworkVerification(True, ())
         return LinuxNetworkVerification(False, ("injected drift",))
+
+
+def _path_rules(
+    identity: InterfaceIdentity,
+    destination: str,
+) -> NetworkRulesSpec:
+    network = IPv4Network(destination)
+    local = NetworkEndpoint.local_network()
+    path = NetworkEndpoint.interface_path(identity)
+    return NetworkRulesSpec(
+        routing_domains=(
+            RoutingDomainSpec(
+                "shared-name",
+                (network,),
+                (identity,),
+                TerminalDisposition.DROP,
+            ),
+        ),
+        dispatch_rules=(
+            DispatchRuleSpec(
+                network,
+                "shared-name",
+                source=local,
+            ),
+        ),
+        traffic_allows=(
+            TrafficAllowSpec(
+                local,
+                path,
+                TrafficPredicate.always(),
+            ),
+        ),
+    )
 
 
 class LinuxNetworkRulesAdapterTests(unittest.TestCase):
@@ -152,6 +197,54 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
         self.assertIs(
             self.adapter.get_last_state(second).knowledge,
             StateKnowledge.KNOWN,
+        )
+
+    def test_sequential_multi_owner_generation_update_does_not_deadlock(self):
+        first = object()
+        second = object()
+        old = InterfaceIdentity("vpns00", 10)
+        new = InterfaceIdentity("vpns00", 11)
+        self.backend.interfaces = (old,)
+
+        first_old = _path_rules(old, "10.0.0.0/8")
+        second_old = _path_rules(old, "192.168.0.0/16")
+        self.assertTrue(self.adapter.apply(first, first_old).success)
+        self.assertTrue(self.adapter.apply(second, second_old).success)
+
+        self.backend.interfaces = (new,)
+        first_new = _path_rules(new, "10.0.0.0/8")
+        result = self.adapter.apply(first, first_new)
+
+        self.assertTrue(result.success, result.diagnostic)
+        self.assertEqual(
+            self.adapter.get_last_state(first).rules,
+            first_new,
+        )
+        second_projected = self.adapter.get_last_state(second)
+        self.assertIs(
+            second_projected.knowledge,
+            StateKnowledge.KNOWN,
+        )
+        self.assertEqual(
+            second_projected.rules.routing_domains[0].ordered_paths,
+            (),
+        )
+        self.assertEqual(
+            second_projected.rules.traffic_allows,
+            (),
+        )
+
+        second_new = _path_rules(new, "192.168.0.0/16")
+        result = self.adapter.apply(second, second_new)
+
+        self.assertTrue(result.success, result.diagnostic)
+        self.assertEqual(
+            self.adapter.get_last_state(second).rules,
+            second_new,
+        )
+        self.assertEqual(
+            self.adapter.get_last_state(first).rules,
+            first_new,
         )
 
     def test_cleanup_rebuilds_without_removed_owner_then_forgets_identity(self):
