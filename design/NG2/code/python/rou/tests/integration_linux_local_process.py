@@ -11,6 +11,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.interface_identity import InterfaceIdentity
+from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_driver import (
     LinuxNetworkDriver,
     NetworkNamespaceLinuxRunner,
@@ -139,6 +140,10 @@ def main() -> int:
         boot = bootstrap_linux_network_rules_adapter(
             driver,
             local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
         )
         if not boot.success or boot.adapter is None:
             raise RuntimeError(
