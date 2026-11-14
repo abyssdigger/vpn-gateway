@@ -353,12 +353,59 @@ class LinuxNetworkDriverTests(unittest.TestCase):
         self.assertTrue(result.success, result.diagnostic)
         self.assertFalse(runner.forwarding)
         self.assertEqual(
-            runner.commands[0][0],
-            ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+            [item[0] for item in runner.commands[:3]],
+            [
+                ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+                (
+                    "sysctl",
+                    "-q",
+                    "-w",
+                    "net/ipv6/conf/all/forwarding=0",
+                ),
+                (
+                    "sysctl",
+                    "-q",
+                    "-w",
+                    "net/ipv6/conf/default/forwarding=0",
+                ),
+            ],
         )
-        self.assertEqual(
-            runner.commands[1][0],
-            ("sysctl", "-n", "net.ipv4.ip_forward"),
+        self.assertIn(
+            (
+                ("sysctl", "-n", "net.ipv4.ip_forward"),
+                None,
+                True,
+            ),
+            runner.commands,
+        )
+
+    def test_verified_protective_close_rejects_ipv6_forwarding_readback(self):
+        desired = _desired()
+
+        class LyingIpv6Runner(StatefulFakeRunner):
+            def run(self, argv, *, input_text=None, check=True):
+                if argv == (
+                    "sysctl",
+                    "-n",
+                    "net/ipv6/conf/all/forwarding",
+                ):
+                    self.commands.append((argv, input_text, check))
+                    return CommandResult(0, "1\n", "")
+                return super().run(
+                    argv,
+                    input_text=input_text,
+                    check=check,
+                )
+
+        runner = LyingIpv6Runner(desired)
+        driver = LinuxNetworkDriver(runner)
+
+        result = driver.close_forwarding_verified()
+
+        self.assertFalse(result.success)
+        self.assertIn(
+            "net.ipv6.conf.all.forwarding='1'",
+            result.diagnostic,
         )
 
     def test_verified_protective_close_fails_when_readback_is_not_closed(self):
