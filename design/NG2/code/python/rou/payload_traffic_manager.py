@@ -22,8 +22,8 @@ class PayloadTrafficStatePublisher(Protocol):
 class PayloadTrafficManager:
     """Manager for the current payload-traffic rules domain.
 
-    This first executable slice covers RequestEvent handling and lifecycle cleanup.
-    Drift/audit scheduling is a later review unit.
+    This executable slice covers RequestEvent handling, one deterministic audit/reconcile
+    pass and lifecycle cleanup. Audit scheduling/cadence remains a runtime concern.
     """
 
     def __init__(
@@ -41,7 +41,6 @@ class PayloadTrafficManager:
             state_calculator or PayloadRulesStateCalculator()
         )
 
-        self._latest_request: PayloadTrafficStateRequest | None = None
         self._latest_desired: NetworkRulesSpec | None = None
         self._latest_published: PayloadTrafficStateInfo | None = None
 
@@ -54,10 +53,9 @@ class PayloadTrafficManager:
 
         desired = self._rules_calculator.calculate(request)
 
-        # Accept request and its derived desired projection atomically. If pure
-        # calculation rejects the request, the previous managed intent remains intact
+        # Accept the derived desired projection only after pure calculation succeeds.
+        # If calculation rejects the request, the previous managed intent remains intact
         # and no lower-domain mutation is attempted.
-        self._latest_request = request
         self._latest_desired = desired
 
         info = self._apply_desired_and_observe(desired)
