@@ -6,7 +6,7 @@ import json
 import re
 
 from .interface_identity import InterfaceIdentity
-from .linux_local_process import LOCAL_PROCESS_CT_MARK, LOCAL_PROCESS_UID
+from .linux_local_process import LinuxLocalProcessConfig
 from .network_rules import (
     EndpointKind,
     FlowInitiationAllowSpec,
@@ -194,13 +194,15 @@ def normalize_nft_text(
         )
         line = line.replace("ct state invalid", "ct state 0x1")
         line = line.replace("ct state new", "ct state 0x8")
-        line = line.replace(
-            f"ct mark 0x{LOCAL_PROCESS_CT_MARK:08x}",
-            f"ct mark 0x{LOCAL_PROCESS_CT_MARK:x}",
+        line = re.sub(
+            r"\\bct mark set 0x0*([0-9a-fA-F]+)\\b",
+            r"ct mark set 0x\\1",
+            line,
         )
-        line = line.replace(
-            f"ct mark set 0x{LOCAL_PROCESS_CT_MARK:08x}",
-            f"ct mark set 0x{LOCAL_PROCESS_CT_MARK:x}",
+        line = re.sub(
+            r"\\bct mark 0x0*([0-9a-fA-F]+)\\b",
+            r"ct mark 0x\\1",
+            line,
         )
         if "icmp type " in line:
             line = line.replace("ip protocol icmp ", "")
@@ -682,6 +684,7 @@ def _local_process_rule_lines(
     identity: InterfaceIdentity,
     predicate: TrafficPredicate,
     action_terms: tuple[str, ...],
+    local_process: LinuxLocalProcessConfig,
 ) -> tuple[tuple[str, NftRuleMarker], ...]:
     ref = NftInterfaceRef(
         InterfaceRefKind.OIF if direction == "output" else InterfaceRefKind.IIF,
@@ -700,7 +703,7 @@ def _local_process_rule_lines(
         )
         terms = [
             (
-                f"meta skuid {LOCAL_PROCESS_UID} oif {identity.ifindex}"
+                f"meta skuid {local_process.uid} oif {identity.ifindex}"
                 if direction == "output"
                 else f"iif {identity.ifindex}"
             ),
@@ -771,6 +774,8 @@ def _owner_new_flow_rules(
 
 def _owner_local_process_rules(
     owned: OwnedNetworkRules,
+    *,
+    local_process: LinuxLocalProcessConfig,
 ) -> tuple[
     tuple[tuple[str, NftRuleMarker], ...],
     tuple[tuple[str, NftRuleMarker], ...],
@@ -801,9 +806,10 @@ def _owner_local_process_rules(
                     predicate=traffic.predicate,
                     action_terms=(
                         "ct state established,related",
-                        f"ct mark 0x{LOCAL_PROCESS_CT_MARK:x}",
+                        f"ct mark 0x{local_process.ct_mark:x}",
                         "accept",
                     ),
+                    local_process=local_process,
                 )
             )
 
@@ -826,9 +832,10 @@ def _owner_local_process_rules(
                         predicate=predicate,
                         action_terms=(
                             "ct state new",
-                            f"ct mark set 0x{LOCAL_PROCESS_CT_MARK:x}",
+                            f"ct mark set 0x{local_process.ct_mark:x}",
                             "accept",
                         ),
+                        local_process=local_process,
                     )
                 )
             continue
@@ -843,9 +850,10 @@ def _owner_local_process_rules(
                 predicate=traffic.predicate,
                 action_terms=(
                     "ct state established,related",
-                    f"ct mark 0x{LOCAL_PROCESS_CT_MARK:x}",
+                    f"ct mark 0x{local_process.ct_mark:x}",
                     "accept",
                 ),
+                local_process=local_process,
             )
         )
         input_lines.extend(
@@ -857,6 +865,7 @@ def _owner_local_process_rules(
                 identity=identity,
                 predicate=traffic.predicate,
                 action_terms=("drop",),
+                local_process=local_process,
             )
         )
 
@@ -867,6 +876,7 @@ def compile_nft_filter_desired(
     composed: ComposedNetworkRules,
     *,
     local_interface: str,
+    local_process: LinuxLocalProcessConfig | None = None,
 ) -> NftFilterDesired:
     """Compile owner-composed allow policy into one stateful nft filter table."""
 
@@ -880,7 +890,18 @@ def compile_nft_filter_desired(
     local_process_present = any(
         rule.source.kind is EndpointKind.LOCAL_PROCESS
         for rule in composed.dispatch_rules
+    ) or any(
+        _is_local_process_pair(rule.source, rule.destination)
+        for owned in composed.owners
+        for rule in (
+            *owned.rules.traffic_allows,
+            *owned.rules.flow_initiation_allows,
+        )
     )
+    if local_process_present and local_process is None:
+        raise LinuxNftError(
+            "LOCAL_PROCESS filtering requires configured Linux local-process identity"
+        )
 
     for owned in composed.owners:
         for index, rule in enumerate(owned.rules.traffic_allows):
@@ -906,7 +927,14 @@ def compile_nft_filter_desired(
             new_lines.append(line)
             markers.append(marker)
 
-        local_output, local_input = _owner_local_process_rules(owned)
+        local_output, local_input = (
+            _owner_local_process_rules(
+                owned,
+                local_process=local_process,
+            )
+            if local_process is not None
+            else ((), ())
+        )
         for line, marker in local_output:
             local_output_lines.append(line)
             markers.append(marker)
@@ -940,7 +968,7 @@ def compile_nft_filter_desired(
                 "chain local_output {",
                 "type filter hook output priority 0; policy accept;",
                 *local_output_lines,
-                f"meta skuid {LOCAL_PROCESS_UID} drop",
+                f"meta skuid {local_process.uid} drop",
                 "}",
                 "chain local_input {",
                 "type filter hook input priority 0; policy accept;",
