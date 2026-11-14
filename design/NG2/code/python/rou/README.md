@@ -2,6 +2,9 @@
 
 Current status: executable NG2 payload semantic control-loop baseline.
 
+Whole-slice review: **PASS** — see
+`design/reviews/NG2-2026-11-14-semantic-slice-whole-code-audit.md`.
+
 Implemented:
 
 - generic network-rules routing/dispatch data contract;
