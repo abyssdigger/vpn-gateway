@@ -324,6 +324,9 @@ def compile_linux_routing_desired(
                 if domain.priority_prefix_length is None:
                     slots = tuple(domain.ordered_paths)
                 else:
+                    # Validate the reserved EMPTY metric as part of the working
+                    # slot universe even when EMPTY itself has no route.
+                    _path_metric(len(domain.ordered_paths))
                     slots = route_slots(
                         domain.ordered_paths,
                         domain.priority_prefix_length,
