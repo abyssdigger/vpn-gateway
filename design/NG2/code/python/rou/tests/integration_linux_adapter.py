@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_adapter import LinuxNetworkRulesAdapter
 from rou.linux_driver import CommandResult, LinuxNetworkDriver
+from rou.runtime_bootstrap import bootstrap_linux_network_rules_adapter
 from rou.network_rules import (
     DispatchRuleSpec,
     FlowInitiationAllowSpec,
@@ -206,10 +207,45 @@ def main() -> int:
     make_namespace()
     runner = NamespaceRunner()
     driver = LinuxNetworkDriver(runner)
-    adapter = LinuxNetworkRulesAdapter(
+
+    # Simulate process restart with stale physical policy and forwarding still open.
+    host(
+        "ip", "netns", "exec", NS,
+        "sysctl", "-q", "-w", "net.ipv4.ip_forward=1",
+    )
+    host(
+        "ip", "netns", "exec", NS,
+        "nft", "add", "table", "inet", "stale_before_bootstrap",
+    )
+
+    bootstrapped = bootstrap_linux_network_rules_adapter(
         driver,
         local_interface="host0",
     )
+    if not bootstrapped.success or bootstrapped.adapter is None:
+        raise RuntimeError(
+            "runtime bootstrap failed: "
+            f"{bootstrapped.diagnostic}"
+        )
+    adapter = bootstrapped.adapter
+
+    forward = host(
+        "ip", "netns", "exec", NS,
+        "sysctl", "-n", "net.ipv4.ip_forward",
+    ).stdout.strip()
+    if forward != "0":
+        raise RuntimeError(
+            f"bootstrap exposed Adapter with ip_forward={forward!r}"
+        )
+    nft_tables = host(
+        "ip", "netns", "exec", NS, "nft", "list", "tables"
+    ).stdout
+    if "stale_before_bootstrap" not in nft_tables:
+        raise RuntimeError(
+            "bootstrap unexpectedly mutated stale policy before owner reconcile"
+        )
+    print("PASS BOOT: stale restart state is closed before Adapter publication")
+
     owner = object()
     owner2 = object()
 
@@ -240,6 +276,10 @@ def main() -> int:
         ).stdout
         if "vpng2_filter" not in nft_tables or "vpng2_nat" not in nft_tables:
             raise RuntimeError("owned nft tables are missing")
+        if "stale_before_bootstrap" in nft_tables:
+            raise RuntimeError(
+                "first Adapter reconcile did not remove stale nft policy"
+            )
 
         rules = owned_rules()
         terminal = [
