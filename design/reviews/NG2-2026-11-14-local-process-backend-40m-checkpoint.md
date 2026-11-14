@@ -103,6 +103,10 @@ Retain complete output on failure.
 
 Do not invent scheduler/hysteresis defaults.
 
+## Closure validation
+
+The final executable state remains the green 9a95384b baseline; every subsequent branch change through the pre-threshold closure head is documentation-only. Modified-code static audit is clean apart from intentional exception-class pass bodies. Two evidence gates remain explicit: target /usr/bin/ping executor confirmation and stale conntrack-mark generation-lifetime verification.
+
 ## Resume protocol
 
 Do not reopen these decisions without contradictory evidence:
