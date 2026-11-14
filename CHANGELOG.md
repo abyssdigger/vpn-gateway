@@ -1,3 +1,26 @@
+## 2026-11-14 — NG2 multidimensional PayloadRulesState
+
+Added and reviewed the first `PayloadRulesStateCalculator`:
+
+- renamed the earlier generic `PayloadStateCalculator` concept to
+  `PayloadRulesStateCalculator`, reflecting that it assesses rules handling payload rather
+  than the payload/data plane itself;
+- `PayloadRulesState` is explicitly multidimensional: `knowledge`, `convergence`,
+  `safety`, and `service`;
+- stale observations are non-authoritative and cannot produce a current assessment;
+- exact rules can be simultaneously `MATCHED` while service is `READY`, `DEGRADED`
+  or `ISOLATED`;
+- divergent proven isolation is classified `SAFE + ISOLATED`;
+- non-isolated divergence remains conservative `UNKNOWN` until a semantic relation can be
+  proven;
+- the calculator consumes only desired/observed network-rules contracts and does not
+  re-read payload config;
+- a future review is explicitly required after `ProbeRulesState` exists to determine
+  whether both state models justify a common rules-state type;
+- internal review `NG2-2026-11-14-payload-rules-state-review.md` passed.
+
+---
+
 ## 2026-11-14 — NG2 Adapter owner identity registry
 
 Added and reviewed the first Adapter-internal owner-lifecycle utility:
