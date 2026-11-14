@@ -352,6 +352,7 @@ def compile_linux_network_desired(
     *,
     local_interface: str,
     local_process: LinuxLocalProcessConfig | None = None,
+    local_process_guard_required: bool = False,
 ) -> LinuxNetworkDesired:
     _validate_local_process_probe_policy(composed)
     interface_identities = validate_linux_interface_generations(composed)
@@ -388,6 +389,7 @@ def compile_linux_network_desired(
         composed,
         local_interface=local_interface,
         local_process=local_process,
+        local_process_guard_required=local_process_guard_required,
     )
     nat_desired = compile_nft_nat_desired(
         composed,
