@@ -1,6 +1,6 @@
 # EXP-025 — stale conntrack mark across probe generations
 
-**Status:** READY FOR CI/TARGET
+**Status:** PRELIMINARY FINDING on privileged GitHub Linux CI; Debian 13 target confirmation required
 **Architecture baseline:** NG2 LOCAL_PROCESS probe plane
 **Type:** disposable-netns kernel/mechanism experiment
 
@@ -119,6 +119,29 @@ generation-isolation proof is complete.
 
 Do not respond by globally flushing conntrack. Any remediation must first be reviewed for
 scope and coexistence with unrelated ROU flows.
+
+## CI result
+
+Privileged GitHub Linux CI produced:
+
+```text
+PASS C1: generation A created marked fixed-identifier conntrack state ifindex=10
+PASS C2: generation B recreated same vpn0 identity with new ifindex old=10 new=12
+OBS C3: generation-A marked conntrack entry after replacement = PRESENT
+OBS C4: tuple reuse counter deltas new=0 established=1
+FINDING C4: generation B inherited stale marked ESTABLISHED conntrack state
+PASS C5: explicit matching conntrack deletion restores NEW+mark-set path
+EXP_025_RESULT=STALE-INHERITANCE
+```
+
+The matching stale entry retained `mark=37` (`0x25`) across interface replacement.
+Deliberate reuse of ICMP identifier 4242 used the ESTABLISHED-marked path rather than
+NEW+mark-set. After deleting only the matching conntrack entry, the same fixed identifier
+returned to NEW+mark-set.
+
+This is an architecture finding, not a harness failure.
+
+Target confirmation on Debian 13 is required before selecting remediation.
 
 ## Requirements
 
