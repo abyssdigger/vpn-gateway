@@ -341,7 +341,10 @@ terminal metric. Свободный metric не является persistent об
 - при наличии non-confirmed tail он находится непосредственно перед первым таким path;
 - при all-live отдельного steady-state gap нет, а следующий metric после последнего path
   просто свободен для первого move;
-- положение gap выводится из runtime priority state, а не хранится в config/NetworkRules.
+- сам gap нигде не хранится;
+- transient `confirmed_live_prefix_length` проходит через текущий routing intent и
+  позволяет Linux projection однозначно вывести незанятый metric. Это не user config и не
+  persistent allocation state.
 
 Fast path обязан:
 
