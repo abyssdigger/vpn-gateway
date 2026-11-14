@@ -111,6 +111,24 @@ def _two_profile_request(
     )
 
 
+class FailSecondApplyAdapter(FakeAdapter):
+    """Initial structural apply succeeds; first Profile transaction fails."""
+
+    def __init__(self):
+        super().__init__()
+        self._apply_count = 0
+
+    def apply(self, owner, spec: NetworkRulesSpec) -> ActionResult:
+        self._apply_count += 1
+        original = self.apply_success
+        if self._apply_count == 2:
+            self.apply_success = False
+        try:
+            return super().apply(owner, spec)
+        finally:
+            self.apply_success = original
+
+
 class BlockingAdapter(FakeAdapter):
     def __init__(self):
         super().__init__()
@@ -256,6 +274,49 @@ class PayloadTrafficManagerTests(unittest.TestCase):
         self.assertEqual(second_by_name["a"].ordered_paths, (a2, a1))
         self.assertEqual(second_by_name["b"].ordered_paths, (b2, b1))
         self.assertEqual(second_by_name["b"].priority_prefix_length, 1)
+
+    def test_later_profile_uses_committed_base_after_earlier_profile_failure(self):
+        a1 = InterfaceIdentity("vpna1", 21)
+        a2 = InterfaceIdentity("vpna2", 22)
+        b1 = InterfaceIdentity("vpnb1", 31)
+        b2 = InterfaceIdentity("vpnb2", 32)
+
+        adapter = FailSecondApplyAdapter()
+        manager = PayloadTrafficManager(adapter, RecordingPublisher())
+        manager.handle_request(
+            _two_profile_request((a1, a2), (b1, b2))
+        )
+
+        manager.handle_request(
+            _two_profile_request(
+                (a2, a1),
+                (b2, b1),
+                a_prefix=1,
+                b_prefix=1,
+            )
+        )
+
+        # The A transaction failed and therefore was not committed. The B
+        # transaction must start from the authoritative old A order instead of
+        # smuggling the uncommitted A target into B's apply.
+        last = adapter.apply_specs[-1]
+        by_name = {
+            domain.name: domain
+            for domain in last.routing_domains
+        }
+        self.assertEqual(by_name["a"].ordered_paths, (a1, a2))
+        self.assertEqual(by_name["a"].priority_prefix_length, 2)
+        self.assertEqual(by_name["b"].ordered_paths, (b2, b1))
+        self.assertEqual(by_name["b"].priority_prefix_length, 1)
+
+        # The full request remains the Manager's desired intent, so a later
+        # audit can retry the still-divergent A target.
+        desired_by_name = {
+            domain.name: domain
+            for domain in manager._latest_desired.routing_domains
+        }
+        self.assertEqual(desired_by_name["a"].ordered_paths, (a2, a1))
+        self.assertEqual(desired_by_name["b"].ordered_paths, (b2, b1))
 
     def test_structural_diff_does_not_masquerade_as_profile_priority_transaction(self):
         a1 = InterfaceIdentity("vpna1", 21)
