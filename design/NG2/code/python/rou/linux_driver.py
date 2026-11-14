@@ -302,6 +302,22 @@ class LinuxNetworkDriver:
                     )
                 )
 
+            terminal_rule = desired.routing.terminal_rule
+            if terminal_rule is not None:
+                self._runner.run(
+                    (
+                        "ip",
+                        "rule",
+                        "add",
+                        "priority",
+                        str(terminal_rule.priority),
+                        "iif",
+                        terminal_rule.source_ifname,
+                        "type",
+                        "unreachable",
+                    )
+                )
+
             self._replace_nft_table(
                 desired.nat,
                 fallback_table=NAT_TABLE,
