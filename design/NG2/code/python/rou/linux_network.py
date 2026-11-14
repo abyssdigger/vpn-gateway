@@ -93,6 +93,11 @@ def validate_linux_interface_generations(
             for path in domain.ordered_paths:
                 _register(path, by_name, by_index)
 
+        for rule in owned.rules.dispatch_rules:
+            _visit_endpoint(rule.source, by_name, by_index)
+            if rule.bound_output is not None:
+                _visit_endpoint(rule.bound_output, by_name, by_index)
+
         for rule in owned.rules.traffic_allows:
             _visit_endpoint(rule.source, by_name, by_index)
             _visit_endpoint(rule.destination, by_name, by_index)
