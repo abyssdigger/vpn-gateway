@@ -135,7 +135,6 @@ class AvailabilityProbeManager:
             raise ValueError(f"unknown active probe_id {probe_id!r}")
 
         pre_state = self._audit_rules(desired)
-        self._latest_rules_state = pre_state
         self._synchronize_generation(pre_state)
         self._publish_unknown_current(pre_state)
 
@@ -150,7 +149,6 @@ class AvailabilityProbeManager:
 
         self._adapter.renew_state(self)
         post_state = self._current_rules_state(desired)
-        self._latest_rules_state = post_state
 
         if not self._rules_ready(post_state):
             self._invalidate_generation()
