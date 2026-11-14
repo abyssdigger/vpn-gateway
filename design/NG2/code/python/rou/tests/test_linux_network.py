@@ -253,6 +253,34 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
         self.assertEqual(actual.flow_initiation_allows, ())
         self.assertEqual(len(actual.dispatch_rules), 1)
 
+    def test_interface_projection_recalculates_live_prefix_boundary(self):
+        a = InterfaceIdentity("vpns00", 10)
+        b = InterfaceIdentity("vpns01", 11)
+        c = InterfaceIdentity("vpns02", 12)
+        rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "corp",
+                    (IPv4Network("10.0.0.0/8"),),
+                    (a, b, c),
+                    TerminalDisposition.DROP,
+                    priority_prefix_length=2,
+                ),
+            ),
+        )
+        composed = compose_network_rules(
+            (OwnedNetworkRules(OwnerToken(1), rules),)
+        )
+
+        projected = project_network_rules_to_interfaces(
+            composed,
+            (b, c),
+        )
+        domain = projected.owners[0].rules.routing_domains[0]
+
+        self.assertEqual(domain.ordered_paths, (b, c))
+        self.assertEqual(domain.priority_prefix_length, 1)
+
     def test_fresh_generation_owner_can_coexist_with_stale_other_owner_after_projection(self):
         old = InterfaceIdentity("vpns00", 10)
         new = InterfaceIdentity("vpns00", 11)
