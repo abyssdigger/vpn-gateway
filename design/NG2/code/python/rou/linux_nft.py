@@ -193,6 +193,14 @@ def normalize_nft_text(
         )
         line = line.replace("ct state invalid", "ct state 0x1")
         line = line.replace("ct state new", "ct state 0x8")
+        line = line.replace(
+            f"ct mark 0x{LOCAL_PROCESS_CT_MARK:08x}",
+            f"ct mark 0x{LOCAL_PROCESS_CT_MARK:x}",
+        )
+        line = line.replace(
+            f"ct mark set 0x{LOCAL_PROCESS_CT_MARK:08x}",
+            f"ct mark set 0x{LOCAL_PROCESS_CT_MARK:x}",
+        )
 
         for identity in interface_identities:
             line = line.replace(
@@ -785,7 +793,7 @@ def _owner_local_process_rules(
                     predicate=traffic.predicate,
                     action_terms=(
                         "ct state established,related",
-                        f"ct mark {LOCAL_PROCESS_CT_MARK}",
+                        f"ct mark 0x{LOCAL_PROCESS_CT_MARK:x}",
                         "accept",
                     ),
                 )
@@ -810,7 +818,7 @@ def _owner_local_process_rules(
                         predicate=predicate,
                         action_terms=(
                             "ct state new",
-                            f"ct mark set {LOCAL_PROCESS_CT_MARK}",
+                            f"ct mark set 0x{LOCAL_PROCESS_CT_MARK:x}",
                             "accept",
                         ),
                     )
@@ -827,7 +835,7 @@ def _owner_local_process_rules(
                 predicate=traffic.predicate,
                 action_terms=(
                     "ct state established,related",
-                    f"ct mark {LOCAL_PROCESS_CT_MARK}",
+                    f"ct mark 0x{LOCAL_PROCESS_CT_MARK:x}",
                     "accept",
                 ),
             )
@@ -861,7 +869,10 @@ def compile_nft_filter_desired(
     local_output_lines: list[str] = []
     local_input_lines: list[str] = []
     markers: list[NftRuleMarker] = []
-    local_process_present = False
+    local_process_present = any(
+        rule.source.kind is EndpointKind.LOCAL_PROCESS
+        for rule in composed.dispatch_rules
+    )
 
     for owned in composed.owners:
         for index, rule in enumerate(owned.rules.traffic_allows):
