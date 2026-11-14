@@ -93,14 +93,6 @@ class OwnerRulesRegistry:
         entry.rules = rules
         return token
 
-    def get(self, owner: object) -> OwnedNetworkRules | None:
-        entry = self._find(owner)
-        if entry is None:
-            return None
-        if entry.rules is None:
-            return None
-        return OwnedNetworkRules(entry.token, entry.rules)
-
     def remove(self, owner: object) -> bool:
         for index, entry in enumerate(self._entries):
             if entry.identity is owner:
