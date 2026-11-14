@@ -64,7 +64,8 @@ Implemented:
   - numeric-ifindex nft filtering and source NAT;
   - exact route/RPDB/nft/sysctl verification;
   - exact nft table inventory ownership in the dedicated ROU namespace;
-  - full structural rebuild behind `ip_forward=0`;
+  - full structural rebuild behind protective IPv4/IPv6 forwarding closure;
+  - exact IPv4-only namespace prerequisites: rp_filter disabled and IPv6 forwarding disabled;
   - best-effort protective close on mutation failure;
   - idempotent per-owner cleanup preserving surviving owners;
 - protective runtime bootstrap:
