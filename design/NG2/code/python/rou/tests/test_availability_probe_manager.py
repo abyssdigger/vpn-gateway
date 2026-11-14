@@ -180,6 +180,40 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             "probe disabled",
         )
 
+    def test_reenable_recreates_plane_and_opens_new_epoch(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        first_generation = self.manager.observation_generation
+
+        disabled = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            enabled=False,
+            policy=primary.policy,
+        )
+        self.manager.handle_request(request(disabled))
+        self.assertIsNone(self.manager.observation_generation)
+        self.assertEqual(
+            self.publisher.events[-1].reason,
+            "probe disabled",
+        )
+
+        apply_count = len(self.adapter.apply_owners)
+        self.manager.handle_request(request(primary))
+
+        self.assertEqual(len(self.adapter.apply_owners), apply_count + 1)
+        second_generation = self.manager.observation_generation
+        self.assertIsNotNone(second_generation)
+        self.assertGreater(
+            second_generation.sequence,
+            first_generation.sequence,
+        )
+        self.assertIn(
+            "no authoritative probe evidence",
+            self.publisher.events[-1].reason,
+        )
+
     def test_disabling_shared_probe_preserves_plane_and_epoch(self):
         first = probe("first", self.path, "203.0.113.24")
         second = probe("second", self.path, "203.0.113.24")
