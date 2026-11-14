@@ -50,7 +50,17 @@ def project_payload_traffic_state(
     payload. It only carries payload-rules assessment and per-Profile materialized paths.
     """
 
+    authoritative = (
+        observed.knowledge is StateKnowledge.KNOWN
+        and observed.fresh
+        and observed.rules is not None
+    )
+
     if rules_state.knowledge is Knowledge.UNKNOWN:
+        if authoritative:
+            raise ValueError(
+                "unknown payload-rules state contradicts authoritative observation"
+            )
         return PayloadTrafficStateInfo(
             rules_state=rules_state,
             profiles=tuple(
@@ -59,11 +69,7 @@ def project_payload_traffic_state(
             ),
         )
 
-    if (
-        observed.knowledge is not StateKnowledge.KNOWN
-        or not observed.fresh
-        or observed.rules is None
-    ):
+    if not authoritative:
         raise ValueError(
             "known payload-rules state requires authoritative network-rules observation"
         )
