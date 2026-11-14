@@ -91,6 +91,9 @@ class RecordingBackend:
     def verify_current(self, desired):
         return self.delegate.verify_current(desired)
 
+    def close_forwarding_verified(self):
+        return self.delegate.close_forwarding_verified()
+
 
 def cleanup():
     host("ip", "netns", "del", NS, check=False)
