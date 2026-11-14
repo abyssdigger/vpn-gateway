@@ -29,6 +29,10 @@ class LinuxInstanceSpec:
     inner_address: IPv4Interface
 
     def __post_init__(self) -> None:
+        if not isinstance(self.host_address, IPv4Interface):
+            raise ValueError("host address must be an IPv4 interface")
+        if not isinstance(self.inner_address, IPv4Interface):
+            raise ValueError("inner address must be an IPv4 interface")
         if not _NAMESPACE_RE.fullmatch(self.namespace):
             raise ValueError(f"invalid namespace name {self.namespace!r}")
         if not _IFNAME_RE.fullmatch(self.host_interface):
