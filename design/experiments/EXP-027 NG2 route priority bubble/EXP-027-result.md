@@ -60,6 +60,10 @@ A B G D . V E J
 A B G D E J . V
     ->
 A B V G D E J .
+
+A B G D . E V J
+    ->
+A B V G D . E J
 ```
 
 Observed completion markers:
@@ -68,9 +72,11 @@ Observed completion markers:
 PASS P1
 PASS P2
 PASS P3
+PASS P4
 PASS D1
 PASS D2
 PASS D3
+PASS D4
 EXP027=PASS
 ```
 
