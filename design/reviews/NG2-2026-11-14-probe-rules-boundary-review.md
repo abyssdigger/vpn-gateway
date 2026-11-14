@@ -161,22 +161,24 @@ rejection and unaffected unrelated local traffic.
 This supplies a concrete lower-domain implementation direction without putting uid or
 conntrack mark into the semantic probe request.
 
-Debian 13 target confirmation remains required before calling the materialization
-target-proven, but the architecture choice is no longer blocked.
+The same EXP-024 harness subsequently passed on the Debian 13 target. The selected
+OUTPUT process-identity + conntrack-carried reverse-flow mechanism is therefore
+target-confirmed.
 
 ## 8. Rules-state comparison remains intentionally pending
 
 This review does **not** create `ProbeRulesState` yet.
 
-A state calculator without an executable/observable ProbeRules materialization would only
-copy PayloadRulesState shape by assumption, exactly the premature abstraction the earlier
-review prohibited.
+At the time of this review a state calculator was intentionally deferred because no real
+ProbeRules materialization existed. That evidence gate is now closed: the production
+LOCAL_PROCESS backend has passed real apply, exact renew and dataplane integration.
 
-The common-state review remains mandatory after real ProbeRules observation exists.
+The next required unit is therefore ProbeRulesStateCalculator, followed by the mandatory
+PayloadRulesState / ProbeRulesState comparison.
 
 ## Final verdict
 
-**PASS for the architecture boundary; target mechanism confirmation remains pending.**
+**PASS for the architecture boundary; EXP-024 target mechanism confirmation is complete.**
 
 Do not introduce a second Linux policy reconciler.
 
