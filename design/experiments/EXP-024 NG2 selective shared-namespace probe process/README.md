@@ -120,3 +120,31 @@ the process bounding set is emptied. This does not exercise nft `meta skuid`.
 The harness now copies the ping executable without extended attributes/file capabilities and
 executes that copy under the empty capability bounding set. This preserves the intended
 EXP-021 ping-socket model instead of relying on distribution packaging.
+
+
+### CI attempt 2 — INPUT socket uid is not a usable discriminator
+
+After removing the packaged ping file-capability artifact, the intended probe request
+reached the exact OUTPUT allow rule and the RPDB lookup selected table 6024:
+
+```text
+OUTPUT probe accept: packets 1
+route: target via primary dev vpn0 table 6024 uid 65534
+```
+
+The echo reply arrived on `vpn0`, but:
+
+```text
+INPUT meta skuid 65534 accept: packets 0
+INPUT exact-reply fallback drop: packets 1
+```
+
+Therefore `meta skuid` is usable for the locally generated OUTPUT packet but does not
+identify the receiving probe socket at the INPUT hook on this runner/kernel.
+
+That mechanism is rejected for reply admission.
+
+The next attempt marks the admitted OUTPUT conntrack entry and matches the reverse INPUT
+packet by that conntrack mark plus exact interface/source/protocol. This carries proven
+process identity from the point where it is observable into the return flow without
+requiring global INPUT default-DROP.
