@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from .linux_driver import LinuxCommandRunner
 from .linux_local_process import LinuxLocalProcessConfig
 from .linux_observation import parse_link_json
-from .probe_attempt import ProbeAttemptOutcome, ProbeAttemptResult
+from . import probe_attempt
 from .probe_rules import AvailabilityProbeRequest, ProbeMechanism
 
 
@@ -53,14 +53,14 @@ class LinuxIcmpProbeDriver:
         request: AvailabilityProbeRequest,
         *,
         timeout_seconds: int,
-    ) -> ProbeAttemptResult:
+    ) -> probe_attempt.ProbeAttemptResult:
         if not isinstance(request, AvailabilityProbeRequest):
             raise LinuxProbeDriverError(
                 "probe driver requires AvailabilityProbeRequest"
             )
         if request.mechanism is not ProbeMechanism.ICMP:
-            return ProbeAttemptResult(
-                ProbeAttemptOutcome.ERROR,
+            return probe_attempt.ProbeAttemptResult(
+                probe_attempt.ProbeAttemptOutcome.ERROR,
                 f"unsupported probe mechanism {request.mechanism!r}",
             )
         if (
@@ -73,8 +73,8 @@ class LinuxIcmpProbeDriver:
 
         try:
             if not self._generation_is_current(request):
-                return ProbeAttemptResult(
-                    ProbeAttemptOutcome.ERROR,
+                return probe_attempt.ProbeAttemptResult(
+                    probe_attempt.ProbeAttemptOutcome.ERROR,
                     "requested probe interface generation is not current",
                 )
 
@@ -103,19 +103,19 @@ class LinuxIcmpProbeDriver:
                 check=False,
             )
         except Exception as exc:
-            return ProbeAttemptResult(
-                ProbeAttemptOutcome.ERROR,
+            return probe_attempt.ProbeAttemptResult(
+                probe_attempt.ProbeAttemptOutcome.ERROR,
                 str(exc),
             )
 
         if completed.returncode == 0:
-            return ProbeAttemptResult(ProbeAttemptOutcome.REPLY)
+            return probe_attempt.ProbeAttemptResult(probe_attempt.ProbeAttemptOutcome.REPLY)
         if completed.returncode == 1:
-            return ProbeAttemptResult(ProbeAttemptOutcome.NO_REPLY)
+            return probe_attempt.ProbeAttemptResult(probe_attempt.ProbeAttemptOutcome.NO_REPLY)
 
         detail = completed.stderr.strip() or completed.stdout.strip()
-        return ProbeAttemptResult(
-            ProbeAttemptOutcome.ERROR,
+        return probe_attempt.ProbeAttemptResult(
+            probe_attempt.ProbeAttemptOutcome.ERROR,
             (
                 f"ping exited rc={completed.returncode}"
                 + (f": {detail}" if detail else "")
