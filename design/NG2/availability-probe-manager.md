@@ -69,7 +69,7 @@ mechanism
 concrete InterfaceIdentity
 IPv4 target
 enabled
-optional AvailabilityWindowPolicy
+AvailabilityWindowPolicy
     interval_seconds
     failure_intervals
 ```
@@ -79,9 +79,9 @@ without deleting the configured logical probe. Its target, path association and 
 configuration therefore remain available for later re-enable. Enable/disable does not
 change the physical ProbeRules plane; current logical evidence is invalidated.
 
-`policy=None` is retained only as an internal/manual transition state while runtime
-assembly is incomplete. It is not the preferred user-facing way to disable a configured
-probe.
+Every normalized logical probe carries timing policy. There is no policy-less manual mode;
+`enabled=false` is the only normalized way to keep a configured probe while disabling
+autonomous execution.
 
 Timing policy is not part of physical `ProbeRulesCalculator` output.
 
