@@ -239,6 +239,41 @@ class RuntimeStateManagerAvailabilityTests(unittest.TestCase):
             0,
         )
 
+    def test_assignment_to_noneligible_path_is_rejected_early(self):
+        foreign_probe = probe_set(
+            probe("foreign", D, "203.0.113.99"),
+        )
+        configured = payload((A, B, C))
+
+        with self.assertRaisesRegex(ValueError, "not eligible"):
+            self.manager.update_payload_routing_inputs(
+                configured,
+                foreign_probe,
+                (
+                    ProfileProbeAssignment(
+                        "corp",
+                        ("foreign",),
+                    ),
+                ),
+            )
+
+        self.assertEqual(self.publisher.events, [])
+
+    def test_assignment_to_unknown_profile_is_rejected_early(self):
+        with self.assertRaisesRegex(ValueError, "unknown Profile"):
+            self.manager.update_payload_routing_inputs(
+                payload((A, B, C, D)),
+                self.probes,
+                (
+                    ProfileProbeAssignment(
+                        "missing",
+                        ("a",),
+                    ),
+                ),
+            )
+
+        self.assertEqual(self.publisher.events, [])
+
     def test_removed_probe_state_event_cannot_change_current_payload(self):
         self.update()
         without_b = probe_set(
