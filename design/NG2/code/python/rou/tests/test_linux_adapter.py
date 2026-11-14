@@ -98,7 +98,7 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertIs(state.knowledge, StateKnowledge.KNOWN)
-        self.assertIs(state.rules, rules)
+        self.assertEqual(state.rules, rules)
         self.assertTrue(state.fresh)
 
     def test_equal_but_distinct_owners_remain_separate(self):
@@ -110,8 +110,8 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
         self.assertTrue(self.adapter.apply(first, first_rules).success)
         self.assertTrue(self.adapter.apply(second, second_rules).success)
 
-        self.assertIs(self.adapter.get_last_state(first).rules, first_rules)
-        self.assertIs(self.adapter.get_last_state(second).rules, second_rules)
+        self.assertEqual(self.adapter.get_last_state(first).rules, first_rules)
+        self.assertEqual(self.adapter.get_last_state(second).rules, second_rules)
 
     def test_failed_first_apply_registers_owner_but_does_not_commit_candidate(self):
         owner = object()
@@ -136,13 +136,12 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
 
     def test_failed_replacement_keeps_previous_committed_generation(self):
         owner = object()
-        old = NetworkRulesSpec()
+        path = InterfaceIdentity("vpns00", 10)
+        self.backend.interfaces = (path,)
+        old = _path_rules(path, "10.0.0.0/8")
         self.assertTrue(self.adapter.apply(owner, old).success)
 
-        # Use a distinct object with equivalent semantic content: if replacement were
-        # committed on failure get_last_state after renew would expose this candidate
-        # object rather than the old committed generation.
-        candidate = NetworkRulesSpec()
+        candidate = _path_rules(path, "192.168.0.0/16")
         self.backend.materialize_success = False
 
         result = self.adapter.apply(owner, candidate)
@@ -154,7 +153,7 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
 
         self.backend.materialize_success = True
         self.assertTrue(self.adapter.renew_state(owner).success)
-        self.assertIs(self.adapter.get_last_state(owner).rules, old)
+        self.assertEqual(self.adapter.get_last_state(owner).rules, old)
 
     def test_failed_shared_mutation_marks_other_owner_unknown(self):
         first = object()
@@ -295,7 +294,7 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
 
         self.backend.materialize_success = True
         self.assertTrue(self.adapter.renew_state(owner).success)
-        self.assertIs(self.adapter.get_last_state(owner).rules, rules)
+        self.assertEqual(self.adapter.get_last_state(owner).rules, rules)
 
     def test_cleanup_unknown_owner_is_idempotent_without_physical_mutation(self):
         before = len(self.backend.materialize_calls)
