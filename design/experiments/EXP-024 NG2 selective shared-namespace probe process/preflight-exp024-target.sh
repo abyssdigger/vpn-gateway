@@ -42,7 +42,7 @@ if [ -r /etc/os-release ]; then
     printf 'OS_ID=%s\n' "${ID:-unknown}"
     printf 'OS_VERSION_ID=%s\n' "${VERSION_ID:-unknown}"
     printf 'OS_PRETTY_NAME=%s\n' "${PRETTY_NAME:-unknown}"
-    if [ "${ID:-}" = "debian" ] && [ "\${VERSION_ID:-}" = "13" ]; then
+    if [ "${ID:-}" = "debian" ] && [ "${VERSION_ID:-}" = "13" ]; then
         pass "target is Debian 13"
     else
         fail "EXP-024 target confirmation requires Debian 13"
