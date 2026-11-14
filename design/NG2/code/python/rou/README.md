@@ -35,6 +35,13 @@ Implemented:
   - per-Profile `observed_paths` facts;
   - unknown rules knowledge suppresses current path claims;
   - raw `NetworkRulesState` never crosses the event boundary;
+- first executable `PayloadTrafficManager` request path:
+  - pure request->desired calculation before accepting current intent;
+  - `NetworkRulesAdapter` is always called with owner=`self`;
+  - apply failure triggers fresh observation rather than synthetic FAILED state;
+  - current payload state is published only through Event Delivery Environment port;
+  - semantically unchanged InfoEvents are suppressed;
+  - shutdown delegates idempotent Adapter cleanup for the same owner identity;
 - zero-path routing domain as semantic `DROP` fail-close intent;
 - allow-only filtering contract:
   - `traffic_allows` describes effective byte-level permission;
