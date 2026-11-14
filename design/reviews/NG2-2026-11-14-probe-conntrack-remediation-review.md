@@ -136,6 +136,32 @@ evidence boundary:
 If future AvailabilityProbeManager semantics become per-plane, cleanup granularity can be
 revisited together with that state-model change. It should not be introduced preemptively.
 
+## Cleanup trigger
+
+Do not add a physical diff detector for LOCAL_PROCESS nft/RPDB subtrees.
+
+If the remediation is adopted, cleanup is required for a structural transaction whenever
+LOCAL_PROCESS intent exists **before or after** that transaction.
+
+This covers:
+
+- first LOCAL_PROCESS install;
+- replacement / interface generation transition;
+- structural repair while probe ownership remains live;
+- removal of the last LOCAL_PROCESS owner;
+- shared structural rebuild while another owner changes.
+
+For a payload-only deployment with no current or candidate LOCAL_PROCESS intent, no
+conntrack cleanup is requested.
+
+A shared payload rebuild while a probe owner remains live may discard ephemeral completed
+conntrack state, but under the serialized single-shot model there is no concurrent active
+probe attempt. Completed availability evidence is an upper-domain observation, not the
+conntrack entry itself.
+
+This trigger is simpler and more robust than attempting to infer whether a particular
+subset of nft/RPDB text changed.
+
 ## Transition concurrency boundary
 
 The initial remediation assumes the current synchronous control model:
