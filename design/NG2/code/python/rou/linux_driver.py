@@ -163,6 +163,21 @@ class LinuxNetworkDriver:
     def __init__(self, runner: LinuxCommandRunner) -> None:
         self._runner = runner
 
+    def observe_interfaces(self) -> tuple:
+        first_links = self._runner.run(
+            ("ip", "-j", "link", "show")
+        ).stdout
+        interfaces = parse_link_json(first_links)
+        final_links = self._runner.run(
+            ("ip", "-j", "link", "show")
+        ).stdout
+        final_interfaces = parse_link_json(final_links)
+        if final_interfaces != interfaces:
+            raise LinuxDriverError(
+                "interface inventory changed during interface observation"
+            )
+        return interfaces
+
     def observe(
         self,
         desired: LinuxNetworkDesired,
