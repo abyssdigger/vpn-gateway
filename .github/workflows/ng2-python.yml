@@ -27,3 +27,22 @@ jobs:
           python3 -m unittest discover
           -s design/NG2/code/python/rou/tests
           -p 'test_*.py' -v
+
+  linux-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: NG2 Linux Adapter integration
+        env:
+          PYTHONPATH: design/NG2/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG2/code/python/rou/tests/integration_linux_adapter.py
