@@ -2,6 +2,7 @@ from ipaddress import IPv4Address
 import json
 import unittest
 
+from rou.availability_routing import AvailabilityWindowPolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_driver import CommandResult
 from rou.linux_local_process import LinuxLocalProcessConfig
@@ -69,6 +70,7 @@ class LinuxIcmpProbeDriverTests(unittest.TestCase):
             "probe",
             self.identity,
             IPv4Address("203.0.113.24"),
+            policy=AvailabilityWindowPolicy(10, 3),
         )
 
 
@@ -111,6 +113,7 @@ class LinuxIcmpProbeDriverTests(unittest.TestCase):
             "probe",
             InterfaceIdentity("vpns00", 11),
             IPv4Address("203.0.113.24"),
+            policy=self.request.policy,
         )
 
         result = self.driver.execute(stale, timeout_seconds=1)

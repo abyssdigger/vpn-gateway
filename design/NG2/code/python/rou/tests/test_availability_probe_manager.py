@@ -2,6 +2,7 @@ from ipaddress import IPv4Address
 import unittest
 
 from rou.availability_probe_manager import AvailabilityProbeManager
+from rou.availability_routing import AvailabilityWindowPolicy
 from rou.availability_probe_state import AvailabilityProbeState
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
@@ -72,6 +73,7 @@ def probe(
         probe_id,
         path,
         IPv4Address(target),
+        policy=AvailabilityWindowPolicy(10, 3),
     )
 
 
@@ -160,6 +162,7 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             primary.path,
             primary.target,
             enabled=False,
+            policy=primary.policy,
         )
         self.manager.handle_request(request(disabled))
 

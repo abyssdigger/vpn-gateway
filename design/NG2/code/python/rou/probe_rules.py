@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Network
 
@@ -35,7 +35,7 @@ class AvailabilityProbeRequest:
     target: IPv4Address
     mechanism: ProbeMechanism = ProbeMechanism.ICMP
     enabled: bool = True
-    policy: AvailabilityWindowPolicy | None = None
+    policy: AvailabilityWindowPolicy = field(kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.probe_id:
@@ -48,12 +48,9 @@ class AvailabilityProbeRequest:
             raise ValueError("probe mechanism must be a ProbeMechanism")
         if type(self.enabled) is not bool:
             raise ValueError("probe enabled must be boolean")
-        if (
-            self.policy is not None
-            and not isinstance(self.policy, AvailabilityWindowPolicy)
-        ):
+        if not isinstance(self.policy, AvailabilityWindowPolicy):
             raise ValueError(
-                "probe policy must be AvailabilityWindowPolicy or None"
+                "probe policy must be AvailabilityWindowPolicy"
             )
 
 

@@ -16,12 +16,36 @@ from rou.probe_rules import (
 )
 
 
+
+TEST_POLICY = AvailabilityWindowPolicy(
+    interval_seconds=10,
+    failure_intervals=3,
+)
+
+
+def probe_request(
+    probe_id,
+    path,
+    target,
+    *,
+    enabled=True,
+    policy=TEST_POLICY,
+):
+    return AvailabilityProbeRequest(
+        probe_id,
+        path,
+        target,
+        enabled=enabled,
+        policy=policy,
+    )
+
+
 class ProbeRulesCalculatorTests(unittest.TestCase):
     def test_icmp_probe_derives_isolated_local_process_rules(self):
         path = InterfaceIdentity("vpns00", 43)
         request = AvailabilityProbeSetRequest(
             (
-                AvailabilityProbeRequest(
+                probe_request(
                     "profile-a:vpns00",
                     path,
                     IPv4Address("172.21.201.19"),
@@ -89,8 +113,8 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         rules = ProbeRulesCalculator().calculate(
             AvailabilityProbeSetRequest(
                 (
-                    AvailabilityProbeRequest("pri", first, target),
-                    AvailabilityProbeRequest("sec", second, target),
+                    probe_request("pri", first, target),
+                    probe_request("sec", second, target),
                 )
             )
         )
@@ -106,8 +130,8 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
 
         first = AvailabilityProbeSetRequest(
             (
-                AvailabilityProbeRequest("profile-a", path, target),
-                AvailabilityProbeRequest("profile-b", path, target),
+                probe_request("profile-a", path, target),
+                probe_request("profile-b", path, target),
             )
         )
         second = AvailabilityProbeSetRequest(tuple(reversed(first.probes)))
@@ -128,8 +152,8 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
 
         first = AvailabilityProbeSetRequest(
             (
-                AvailabilityProbeRequest("pri", first_path, target),
-                AvailabilityProbeRequest("sec", second_path, target),
+                probe_request("pri", first_path, target),
+                probe_request("sec", second_path, target),
             )
         )
         reordered = AvailabilityProbeSetRequest(tuple(reversed(first.probes)))
@@ -142,7 +166,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         path = InterfaceIdentity("vpns00", 43)
         first = AvailabilityProbeSetRequest(
             (
-                AvailabilityProbeRequest(
+                probe_request(
                     "probe",
                     path,
                     IPv4Address("192.0.2.1"),
@@ -151,7 +175,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         )
         changed = AvailabilityProbeSetRequest(
             (
-                AvailabilityProbeRequest(
+                probe_request(
                     "probe",
                     path,
                     IPv4Address("192.0.2.2"),
@@ -168,7 +192,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         target = IPv4Address("192.0.2.1")
         first = AvailabilityProbeSetRequest(
             (
-                AvailabilityProbeRequest(
+                probe_request(
                     "probe",
                     path,
                     target,
@@ -181,7 +205,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         )
         changed = AvailabilityProbeSetRequest(
             (
-                AvailabilityProbeRequest(
+                probe_request(
                     "probe",
                     path,
                     target,
@@ -207,7 +231,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         target = IPv4Address("192.0.2.1")
         enabled = AvailabilityProbeSetRequest(
             (
-                AvailabilityProbeRequest(
+                probe_request(
                     "probe",
                     path,
                     target,
@@ -217,7 +241,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         )
         disabled = AvailabilityProbeSetRequest(
             (
-                AvailabilityProbeRequest(
+                probe_request(
                     "probe",
                     path,
                     target,
@@ -239,12 +263,12 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate probe_id"):
             AvailabilityProbeSetRequest(
                 (
-                    AvailabilityProbeRequest(
+                    probe_request(
                         "same",
                         path,
                         IPv4Address("192.0.2.1"),
                     ),
-                    AvailabilityProbeRequest(
+                    probe_request(
                         "same",
                         path,
                         IPv4Address("192.0.2.2"),

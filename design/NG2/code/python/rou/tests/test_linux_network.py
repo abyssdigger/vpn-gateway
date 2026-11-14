@@ -1,6 +1,7 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
+from rou.availability_routing import AvailabilityWindowPolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_network import (
@@ -378,6 +379,7 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
                         "probe",
                         identity,
                         IPv4Address("203.0.113.24"),
+                        policy=AvailabilityWindowPolicy(10, 3),
                     ),
                 )
             )
