@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import json
 import os
 import shutil
@@ -8,10 +9,10 @@ import subprocess
 
 NS = "vpng2-bubble"
 PREFIX = "198.51.100.0/24"
-TARGET = "198.51.100.1"
 NORMAL_PROTO = "202"
 TERMINAL_PROTO = "201"
 TERMINAL_METRIC = 65536
+PATHS = ("patha", "pathb", "pathv", "pathg", "pathd", "pathe", "pathj")
 
 
 def run(*argv: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -29,23 +30,21 @@ def ns(*argv: str, check: bool = True) -> subprocess.CompletedProcess[str]:
 
 def cleanup() -> None:
     run("ip", "netns", "del", NS, check=False)
-    for suffix in ("a", "b", "c", "d"):
-        run("ip", "link", "del", f"path{suffix}", check=False)
-        run("ip", "link", "del", f"peer{suffix}", check=False)
+    for name in PATHS:
+        run("ip", "link", "del", name, check=False)
 
 
 def setup() -> None:
     cleanup()
     run("ip", "netns", "add", NS)
     ns("ip", "link", "set", "lo", "up")
-    for suffix in ("a", "b", "c", "d"):
-        path = f"path{suffix}"
-        peer = f"peer{suffix}"
+    for name in PATHS:
+        peer = "peer-" + name
         run("ip", "link", "del", peer, check=False)
-        run("ip", "link", "add", path, "type", "veth", "peer", "name", peer)
-        run("ip", "link", "set", path, "netns", NS)
+        run("ip", "link", "add", name, "type", "veth", "peer", "name", peer)
+        run("ip", "link", "set", name, "netns", NS)
         run("ip", "link", "set", peer, "netns", NS)
-        ns("ip", "link", "set", path, "up")
+        ns("ip", "link", "set", name, "up")
         ns("ip", "link", "set", peer, "up")
 
 
@@ -96,7 +95,7 @@ def terminal_present(table: int, destination: str) -> bool:
     return False
 
 
-def assert_map(
+def assert_steady(
     table: int,
     destination: str,
     expected: dict[int, str],
@@ -108,14 +107,27 @@ def assert_map(
             f"{label}: expected {expected!r}, observed {observed!r}; "
             f"full routes={routes(table)!r}"
         )
+    if set(observed.values()) != set(PATHS):
+        raise RuntimeError(
+            f"{label}: eligible path set changed: {observed!r}"
+        )
+    if len(observed) != len(PATHS):
+        raise RuntimeError(
+            f"{label}: steady state must contain exactly one route per path"
+        )
     if not terminal_present(table, destination):
         raise RuntimeError(
             f"{label}: terminal blackhole disappeared: {routes(table)!r}"
         )
 
 
-def add_initial(table: int, destination: str) -> None:
-    for metric, dev in ((10, "patha"), (20, "pathb"), (30, "pathc"), (40, "pathd")):
+def reset_routes(
+    table: int,
+    destination: str,
+    mapping: dict[int, str],
+) -> None:
+    ns("ip", "route", "flush", "table", str(table), check=False)
+    for metric, dev in sorted(mapping.items()):
         ns(
             "ip",
             "route",
@@ -143,76 +155,213 @@ def add_initial(table: int, destination: str) -> None:
         "table",
         str(table),
     )
+    assert_steady(table, destination, mapping, "reset")
 
 
-def replace_slot(
+def move_empty(
     table: int,
     destination: str,
-    metric: int,
+    *,
     dev: str,
+    source_metric: int,
+    target_metric: int,
+    label: str,
 ) -> None:
-    result = ns(
+    before = route_map(table, destination)
+    if target_metric in before:
+        raise RuntimeError(
+            f"{label}: target metric {target_metric} is not EMPTY: {before!r}"
+        )
+    if before.get(source_metric) != dev:
+        raise RuntimeError(
+            f"{label}: source slot mismatch: {before!r}"
+        )
+
+    ns(
         "ip",
         "route",
-        "replace",
+        "add",
         destination,
         "dev",
         dev,
         "metric",
-        str(metric),
+        str(target_metric),
         "proto",
         NORMAL_PROTO,
         "table",
         str(table),
-        check=False,
     )
-    if result.returncode != 0:
+
+    duplicated = route_map(table, destination)
+    counts = Counter(duplicated.values())
+    if len(duplicated) != len(PATHS) + 1:
         raise RuntimeError(
-            f"route replace failed for {destination} metric={metric} dev={dev}: "
-            f"{result.stdout}{result.stderr}; routes={routes(table)!r}"
+            f"{label}: add phase did not create exactly one extra route: "
+            f"{duplicated!r}"
         )
+    if set(duplicated.values()) != set(PATHS):
+        raise RuntimeError(
+            f"{label}: add phase lost an eligible path: {duplicated!r}"
+        )
+    if counts[dev] != 2 or sum(value == 2 for value in counts.values()) != 1:
+        raise RuntimeError(
+            f"{label}: add phase must contain exactly one duplicated path: "
+            f"{duplicated!r}"
+        )
+    if not terminal_present(table, destination):
+        raise RuntimeError(f"{label}: terminal disappeared during add phase")
+
+    ns(
+        "ip",
+        "route",
+        "del",
+        destination,
+        "dev",
+        dev,
+        "metric",
+        str(source_metric),
+        "proto",
+        NORMAL_PROTO,
+        "table",
+        str(table),
+    )
+
+    after = route_map(table, destination)
+    if len(after) != len(PATHS):
+        raise RuntimeError(
+            f"{label}: delete phase did not restore one route per path: {after!r}"
+        )
+    if set(after.values()) != set(PATHS):
+        raise RuntimeError(
+            f"{label}: delete phase lost an eligible path: {after!r}"
+        )
+    if source_metric in after:
+        raise RuntimeError(
+            f"{label}: old metric did not become EMPTY: {after!r}"
+        )
+    if after.get(target_metric) != dev:
+        raise RuntimeError(
+            f"{label}: moved path is absent from target metric: {after!r}"
+        )
+    if not terminal_present(table, destination):
+        raise RuntimeError(f"{label}: terminal disappeared during delete phase")
 
 
 def exercise(table: int, destination: str, label: str) -> None:
-    add_initial(table, destination)
-    assert_map(
+    recovery_start = {
+        10: "patha",
+        20: "pathb",
+        30: "pathg",
+        40: "pathd",
+        60: "pathv",
+        70: "pathe",
+        80: "pathj",
+    }
+    recovery_target = {
+        10: "patha",
+        20: "pathb",
+        30: "pathv",
+        40: "pathg",
+        50: "pathd",
+        70: "pathe",
+        80: "pathj",
+    }
+    reset_routes(table, destination, recovery_start)
+    move_empty(
         table,
         destination,
-        {10: "patha", 20: "pathb", 30: "pathc", 40: "pathd"},
-        f"{label} initial",
+        dev="pathd",
+        source_metric=40,
+        target_metric=50,
+        label=f"{label} recovery-D",
+    )
+    move_empty(
+        table,
+        destination,
+        dev="pathg",
+        source_metric=30,
+        target_metric=40,
+        label=f"{label} recovery-G",
+    )
+    move_empty(
+        table,
+        destination,
+        dev="pathv",
+        source_metric=60,
+        target_metric=30,
+        label=f"{label} recovery-V",
+    )
+    assert_steady(table, destination, recovery_target, f"{label} recovery")
+    print(
+        f"PASS {label}1: recovery ABGD.VEJ -> ABVGD.EJ kept every path"
     )
 
-    replace_slot(table, destination, 10, "pathb")
-    assert_map(
+    move_empty(
         table,
         destination,
-        {10: "pathb", 20: "pathb", 30: "pathc", 40: "pathd"},
-        f"{label} duplicate-b",
+        dev="pathv",
+        source_metric=30,
+        target_metric=60,
+        label=f"{label} demotion-V",
     )
+    move_empty(
+        table,
+        destination,
+        dev="pathg",
+        source_metric=40,
+        target_metric=30,
+        label=f"{label} demotion-G",
+    )
+    move_empty(
+        table,
+        destination,
+        dev="pathd",
+        source_metric=50,
+        target_metric=40,
+        label=f"{label} demotion-D",
+    )
+    assert_steady(table, destination, recovery_start, f"{label} demotion")
     print(
-        f"PASS {label}1: metric-10 slot replaced A->B while B metric-20 survived"
+        f"PASS {label}2: demotion ABVGD.EJ -> ABGD.VEJ kept every path"
     )
 
-    replace_slot(table, destination, 20, "pathc")
-    assert_map(
-        table,
-        destination,
-        {10: "pathb", 20: "pathc", 30: "pathc", 40: "pathd"},
-        f"{label} duplicate-c",
-    )
+    end_start = {
+        10: "patha",
+        20: "pathb",
+        30: "pathg",
+        40: "pathd",
+        50: "pathe",
+        60: "pathj",
+        80: "pathv",
+    }
+    end_target = {
+        10: "patha",
+        20: "pathb",
+        30: "pathv",
+        40: "pathg",
+        50: "pathd",
+        60: "pathe",
+        70: "pathj",
+    }
+    reset_routes(table, destination, end_start)
+    for dev, source_metric, target_metric in (
+        ("pathj", 60, 70),
+        ("pathe", 50, 60),
+        ("pathd", 40, 50),
+        ("pathg", 30, 40),
+        ("pathv", 80, 30),
+    ):
+        move_empty(
+            table,
+            destination,
+            dev=dev,
+            source_metric=source_metric,
+            target_metric=target_metric,
+            label=f"{label} tail-{dev}",
+        )
+    assert_steady(table, destination, end_target, f"{label} tail recovery")
     print(
-        f"PASS {label}2: metric-20 slot replaced B->C while C metric-30 survived"
-    )
-
-    replace_slot(table, destination, 30, "patha")
-    assert_map(
-        table,
-        destination,
-        {10: "pathb", 20: "pathc", 30: "patha", 40: "pathd"},
-        f"{label} final",
-    )
-    print(
-        f"PASS {label}3: bubble transition converged A,B,C,D -> B,C,A,D"
+        f"PASS {label}3: recovery ABGDEJ.V -> ABVGDEJ. kept every path"
     )
 
 
