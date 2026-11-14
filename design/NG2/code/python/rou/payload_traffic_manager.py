@@ -52,8 +52,12 @@ class PayloadTrafficManager:
         injected Event Delivery Environment port.
         """
 
-        self._latest_request = request
         desired = self._rules_calculator.calculate(request)
+
+        # Accept request and its derived desired projection atomically. If pure
+        # calculation rejects the request, the previous managed intent remains intact
+        # and no lower-domain mutation is attempted.
+        self._latest_request = request
         self._latest_desired = desired
 
         action = self._adapter.apply(self, desired)
