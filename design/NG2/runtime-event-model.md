@@ -305,9 +305,10 @@ good news для текущего probe plane сбрасывает negative inte
 
 Пока `execute(target)` данного Profile находится внутри lower-domain
 `apply -> materialize -> verify -> commit`, следующий route-order target того же Profile
-не начинает operation и ждет single-flight gate. После завершения он применяется уже к
-последнему законченному aggregate desired state; промежуточные Linux duplicate/EMPTY
-состояния не являются semantic input следующей transaction.
+не начинает operation и ждет single-flight gate. Следующая Profile transaction строит
+candidate от fresh authoritative Adapter state; поэтому промежуточные Linux
+duplicate/EMPTY состояния и незакоммиченный desired не являются semantic input следующей
+transaction.
 
 Разные Profiles имеют разные Executors. Общий NetworkRules owner/Adapter может отдельно
 сериализовать physical commits своей shared domain; это не превращает caller-visible
