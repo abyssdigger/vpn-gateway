@@ -14,19 +14,25 @@ Active probing не является механизмом допуска или 
 Следовательно:
 
 - probe result не меняет binding membership;
-- probe result сам по себе не удаляет последний payload path;
-- недоступный или непроверяемый path остается допустимым fallback;
+- probe result не создает и не удаляет payload path;
+- недоступный или непроверяемый path остается в полном eligible route set;
 - если существует подтвержденно живой альтернативный path, он должен подняться выше
   неподтвержденных paths;
-- если подтвержденно живой альтернативы нет, probing не должен ухудшать существующую
-  маршрутизацию.
+- если подтвержденно живой альтернативы нет, probing не меняет относительный порядок
+  оставшихся paths.
 
-Это fail-safe свойство:
+Это общий инвариант availability routing:
 
 ```text
-probing may improve path preference
-probing must not create an outage by removing the last eligible path
+probing may change only path preference
+probing never changes payload route membership
 ```
+
+Он не имеет отдельного исключения для «последнего» или «единственного» path: probing вообще
+не выполняет операции добавления или удаления payload routes. Изменение
+`CONFIRMED_LIVE / NOT_CONFIRMED_LIVE` влияет только на desired order и
+`priority_prefix_length`, после чего Profile route-order transaction переставляет уже
+существующие routes по metric slots.
 
 ## 2. Два независимых вопроса
 
@@ -160,9 +166,10 @@ continued windows without good news
 negative threshold он может подняться выше. Если подтвержденной альтернативы нет,
 probing не создает новый outage и текущий payload order сохраняется.
 
-ERROR никогда не означает:
+ERROR, как и любой другой probe outcome, никогда не означает:
 
 ```text
+add path
 remove path
 disable binding
 prohibit payload
