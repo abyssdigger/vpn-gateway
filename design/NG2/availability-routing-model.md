@@ -418,6 +418,11 @@ Executor:
 
 Caller не выбирает transition kind.
 
+Route-priority transition является single-flight transaction для managed payload domain.
+Новый availability event может изменить следующий desired target, но не может запустить
+второй move plan до завершения текущего `materialize -> verify -> commit`. Промежуточные
+duplicate/EMPTY states никогда не являются входом следующего semantic calculation.
+
 Availability failover намеренно не реализует per-flow pinning к demoted path. Если policy
 признала path достаточно плохим для понижения приоритета, последующие routing lookups не
 должны искусственно удерживаться на нем. Seamless migration established transport session
