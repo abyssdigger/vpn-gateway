@@ -12,7 +12,7 @@ from ipaddress import IPv4Network
 
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_adapter import LinuxNetworkRulesAdapter
-from rou.linux_driver import CommandResult, LinuxNetworkDriver
+from rou.linux_driver import CommandResult, LinuxNetworkExecutor
 from rou.network_rules import (
     DispatchRuleSpec,
     FlowInitiationAllowSpec,
@@ -196,7 +196,7 @@ def main() -> int:
     setup()
     owner = object()
     adapter = LinuxNetworkRulesAdapter(
-        LinuxNetworkDriver(RouRunner()),
+        LinuxNetworkExecutor(RouRunner()),
         local_interface="host0",
     )
 
