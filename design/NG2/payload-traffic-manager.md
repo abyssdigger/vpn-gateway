@@ -155,6 +155,46 @@ Manager не хранит как собственную semantic history:
 - previous transition kind;
 - persisted interface admission history.
 
+### 3.3.1. Profile route-order Executors
+
+Pure availability-driven priority mutation имеет отдельную caller-visible transaction
+boundary.
+
+Для каждого Profile, который реально получил priority-only diff, Manager лениво создает и
+переиспользует ровно один:
+
+```text
+ProfileRouteOrderExecutor(profile_name)
+```
+
+Это Direct Executor верхней payload/profile границы, а не Linux transaction primitive.
+
+Его входом является уже выбранный caller'ом target routing-domain order/live-prefix.
+Executor не вычисляет policy и не выбирает winner. Он гарантирует только completion
+semantics:
+
+```text
+execute(target)
+    -> lower-domain apply
+    -> materialize / verify / commit
+    -> completed result
+    -> return
+```
+
+Второй `execute()` того же Profile не входит в operation, пока первый не вернулся.
+Следовательно, новый dead/live-derived target одного Profile никогда не использует
+промежуточный EMPTY/duplicate state предыдущей перестановки как semantic current state.
+
+У разных Profiles разные Executors и независимые single-flight gates.
+
+Текущий Manager при этом по-прежнему имеет один aggregate NetworkRules owner. Короткая
+shared commit serialization защищает его `latest_desired_network_rules` и общий Adapter
+от concurrent lost update. Это нижележащее implementation constraint shared owner/domain,
+а **не** замена per-Profile Executor и не утверждение об atomic Linux mutation.
+
+Broad structural diff (membership, destinations, filtering, NAT, dispatch и т. п.) не
+маскируется под Profile priority transaction и остается на aggregate structural path.
+
 ### 3.4. Output
 
 Manager публикует:
@@ -234,18 +274,44 @@ Operation failure сам по себе не является значением 
 
 ### 3.5. Request handling
 
-При новой request revision Manager:
+При новой request revision Manager сначала выполняет pure projection:
 
 ```text
-1. desired_rules = PayloadRulesCalculator.calculate(request)
-2. accepts latest_desired_network_rules as the current managed intent
-3. NetworkRulesAdapter.apply(self, desired_rules)
-4. if apply failed: NetworkRulesAdapter.renewState(self)
-5. network_state = NetworkRulesAdapter.getLastState(self)
-6. PayloadRulesStateCalculator.calculate(desired_rules, network_state)
-7. project PayloadTrafficStateInfo
-8. publish only if semantic InfoEvent payload changed
-9. schedule retry/audit later if current state does not satisfy request
+desired_rules = PayloadRulesCalculator.calculate(request)
+```
+
+Дальше существуют два строго различимых случая.
+
+**Pure Profile priority diff** — неизменны membership, destinations, dispatch, filtering,
+NAT, terminal policy и прочая payload semantics; меняются только `ordered_paths` и/или
+`priority_prefix_length` одного или нескольких Profiles.
+
+Тогда каждый изменившийся Profile обрабатывается отдельно:
+
+```text
+ProfileRouteOrderExecutor(profile).execute(target_domain)
+    -> merge only this Profile priority into latest desired
+    -> NetworkRulesAdapter.apply(self, merged_desired)
+    -> if apply failed: renewState(self)
+    -> getLastState(self)
+    -> calculate/project/publish
+    -> return only after lower transaction completed
+```
+
+Если один full snapshot меняет priority у нескольких Profiles, это несколько законченных
+Profile transactions, а не один общий move-plan.
+
+**Broader structural diff** использует aggregate path:
+
+```text
+1. accepts desired_rules as latest_desired_network_rules
+2. NetworkRulesAdapter.apply(self, desired_rules)
+3. if apply failed: NetworkRulesAdapter.renewState(self)
+4. network_state = NetworkRulesAdapter.getLastState(self)
+5. PayloadRulesStateCalculator.calculate(desired_rules, network_state)
+6. project PayloadTrafficStateInfo
+7. publish only if semantic InfoEvent payload changed
+8. schedule retry/audit later if current state does not satisfy request
 ```
 
 Pure Calculator rejection happens before the request becomes current managed intent and
@@ -952,13 +1018,17 @@ NG1 planner.py
 13. Синхронный dependency graph payload domain ацикличен.
 14. Нижняя domain за NetworkRulesAdapter не имеет independent synchronous back-edge в
     payload domain.
-15. Payload mutation single-flight: `handle_request()`, `audit()` и `shutdown()` не могут
-    одновременно войти в lower-domain transaction.
-16. Availability-derived route-priority request не начинает новую перестановку, пока
-    предыдущая materialize/verify/commit transaction не завершена.
-17. Если позже появится per-Profile execution sharding, для одного Profile сохраняется
-    тот же non-interleaving invariant; новый target строится от последнего committed
-    effective order, не от промежуточных duplicate/EMPTY состояний.
+15. Для каждого Profile существует не более одного активного
+    `ProfileRouteOrderExecutor.execute()`.
+16. Availability-derived route-priority target одного Profile не начинает новую
+    перестановку, пока предыдущий apply/materialize/verify/commit этого Profile не завершен.
+17. Новый target строится от последнего законченного aggregate desired state; промежуточные
+    duplicate/EMPTY состояния Linux никогда не являются semantic input следующей Profile
+    transaction.
+18. Shared aggregate-owner commit serialization и per-Profile Executor — разные границы:
+    первая защищает общую representation/Adapter state, вторая задает caller-visible
+    completion semantics route ordering.
+19. Broader structural request не классифицируется как Profile priority transaction.
 
 ## 14. Пока открыто
 
