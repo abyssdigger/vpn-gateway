@@ -136,6 +136,25 @@ A redundant local-process-presence assignment remained after the explicit pre-sc
 
 **Fixed.** Removed.
 
+### R7 — projected generation loss could remove the uid guard during another owner reconcile
+
+The first projection implementation correctly removed stale bound-output dispatch/allow
+rules, but the nft compiler inferred whether the uid guard was needed only from the
+post-projection realizable rules.
+
+If the probe generation disappeared and another owner triggered a structural reconcile,
+the projected probe rules could contain no LOCAL_PROCESS endpoint at all. That could remove
+the final uid OUTPUT guard and let the dedicated probe uid fall through to ordinary main
+routing.
+
+**Fixed.** Guard lifetime is derived from registered LOCAL_PROCESS owner intent before
+interface projection and is passed separately to physical compilation. Projection may
+remove every realizable probe permission while the dedicated uid guard remains closed.
+
+Privileged regression LP7 deletes the committed generation, triggers a different owner's
+structural reconcile and proves that the probe uid still cannot escape through the live
+alternate route.
+
 ## Deliberately outside this Adapter
 
 The NetworkRules Adapter does not own:
@@ -172,6 +191,7 @@ PASS LP3: unrelated local process retains ordinary alt0 path
 PASS LP4: bound capability-free probe uses production probe plane
 PASS LP5: UID guard blocks unbound escape and target widening
 PASS LP6: bound-output same-name/new-ifindex drift fails exact renew
+PASS LP7: projected generation loss retains uid guard across other-owner structural reconcile
 NG2_LINUX_LOCAL_PROCESS_INTEGRATION=PASS
 ```
 
