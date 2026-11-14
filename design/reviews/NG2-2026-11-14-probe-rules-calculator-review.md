@@ -97,18 +97,21 @@ primary/secondary probes to the same target remain separate physical planes.
 
 ## Lower backend status
 
-The concrete Linux routing compiler still explicitly rejects LOCAL_PROCESS dispatch.
+The concrete Linux backend now materializes the target-proven ICMP LOCAL_PROCESS probe
+plane through the same common NetworkRulesAdapter. It uses explicit Linux-only process
+identity configuration, exact RPDB observation and selective nft OUTPUT/INPUT with
+conntrack-carried reverse-flow identity.
 
-This is intentional fail-closed staging. Pure ProbeRules calculation can now be reviewed
-independently, while Linux materialization waits for Debian 13 confirmation of EXP-024.
+Broader LOCAL_PROCESS protocols/predicates remain fail-closed.
 
 ## Rules-state comparison
 
-Still pending by design.
+The prior evidence gate is now satisfied: production ProbeRules-derived NetworkRules have
+passed physical apply and exact renew.
 
-A real `ProbeRulesStateCalculator` requires apply/renew observation from the physical
-LOCAL_PROCESS backend. Only then should PayloadRulesState and ProbeRulesState be compared
-for a possible common type.
+`ProbeRulesStateCalculator` is therefore the next required unit. Only after that concrete
+state model exists should PayloadRulesState and ProbeRulesState be compared for a possible
+common type.
 
 ## Evidence gate
 
