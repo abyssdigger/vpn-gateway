@@ -524,7 +524,10 @@ Binding исчезает по структурной/административ�
 
 - semantic desired payload projection для `PayloadTrafficStateRequest`.
 
-Для каждого Profile availability влияет только на `ordered_paths` уже bound paths.
+Для каждого Profile availability влияет только на:
+
+- `ordered_paths` уже bound paths;
+- `priority_prefix_length` — длину confirmed-live prefix внутри этого order.
 
 На startup, при изменении binding membership или configured priority базой становится
 новый configured eligible order. Probe history не переопределяет новое административное
@@ -534,7 +537,9 @@ Binding исчезает по структурной/административ�
 
 - подтвержденно живые paths всплывают наверх в configured priority;
 - остальные paths сохраняются;
-- если подтвержденно живой альтернативы нет, текущий order не меняется.
+- если подтвержденно живой альтернативы нет, current relative order не меняется;
+- граница prefix двигается вместе с current confirmed-live set и является semantic input
+  для lower-domain EMPTY-slot projection.
 
 Linux/kernel materialization в Calculator не входит.
 
