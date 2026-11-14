@@ -1,6 +1,6 @@
 # EXP-024 — selective shared-namespace probe-process isolation
 
-**Status:** preliminary CI mechanism gate pending target confirmation  
+**Status:** PRELIMINARY PASS on privileged GitHub Linux CI; Debian 13 target confirmation pending  
 **Architecture baseline:** NG2 runtime lower assembly  
 **Type:** disposable-netns kernel/mechanism experiment
 
@@ -148,3 +148,38 @@ The next attempt marks the admitted OUTPUT conntrack entry and matches the rever
 packet by that conntrack mark plus exact interface/source/protocol. This carries proven
 process identity from the point where it is observable into the return flow without
 requiring global INPUT default-DROP.
+
+
+### CI attempt 3 — PASS with conntrack-carried flow identity
+
+The third attempt replaced INPUT socket-uid matching with:
+
+```text
+OUTPUT:
+    probe uid + exact oif + target + protocol
+        -> set conntrack mark
+        -> accept
+
+INPUT:
+    exact iif + remote source + reply protocol + conntrack mark
+        -> accept
+    same candidate reply without mark
+        -> drop
+```
+
+Observed final markers:
+
+```text
+PASS P1: unrelated local process remains on ordinary alt0 path
+PASS P2: capability-free probe UID uses isolated bound vpn0 plane with selective INPUT/OUTPUT admission
+PASS P3: same probe UID cannot escape unbound through alt0
+PASS P4: probe UID cannot widen target admission
+PASS P5: selective probe policy leaves unrelated local traffic intact
+NG2_SELECTIVE_PROBE_PROCESS_ISOLATION=PASS
+```
+
+This proves on the CI kernel that process identity can be captured where it is observable
+(OUTPUT) and carried safely to the reverse flow through conntrack state.
+
+The result is strong enough to remove the architecture ambiguity. Before production
+materialization is declared target-proven, run the same artifact on the Debian 13 target.
