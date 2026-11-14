@@ -58,6 +58,26 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
         )
         self.assertIsNone(spec.dispatch_rules[0].source.interface)
 
+    def test_runtime_live_prefix_is_preserved_in_routing_intent(self):
+        profile = PayloadProfileRequest(
+            "profile-a",
+            PayloadDirection.OUTBOUND,
+            (IPv4Network("10.0.0.0/8"),),
+            (
+                PayloadPath(InterfaceIdentity("vpns00", 10)),
+                PayloadPath(InterfaceIdentity("vpns01", 11)),
+                PayloadPath(InterfaceIdentity("vpns02", 12)),
+            ),
+            confirmed_live_prefix_length=2,
+        )
+
+        spec = self._calculate(profile)
+
+        self.assertEqual(
+            spec.routing_domains[0].confirmed_live_prefix_length,
+            2,
+        )
+
     def test_path_priority_reorder_does_not_reorder_filter_or_nat_policy(self):
         first_path = PayloadPath(
             InterfaceIdentity("vpns00", 10),
