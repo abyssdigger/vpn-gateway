@@ -4,32 +4,42 @@ Superseded the same-day per-attempt cadence/hysteresis candidate with a smaller 
 model derived from the actual product requirement:
 
 - active probing no longer controls binding membership or removes payload paths;
-- routing policy consumes only positive `CONFIRMED_LIVE` evidence; lack of positive
-  evidence never removes the last eligible path;
-- one valid reply is immediate good news, while negative evidence is the integral count of
-  observation intervals without good news;
+- one valid reply is immediate good news; negative evidence is only the integral count of
+  observation intervals without good news, including intervals affected by local probe
+  execution errors;
 - per-attempt correlation, retry cadence, recovery threshold and timeout-as-verdict-policy
   were removed from production availability semantics;
-- configured probe enable/disable is a logical request property separate from timing policy
-  and does not rebuild an unchanged physical probe plane;
-- `calculate_effective_path_order()` implements stable bubble promotion: confirmed-live
-  paths rise in configured priority while the remaining current order is preserved;
-- availability was removed from `BindingCalculator` semantics and now affects only
-  `PayloadTrafficIntentCalculator -> ordered_paths`;
+- AvailabilityProbeManager no longer depends on a synchronous ProbeDriver and no longer
+  exposes attempt_once()/evaluate_once(); it owns only the probe rules/readiness-generation
+  boundary until production good-news delivery is wired;
+- every normalized logical probe now carries required AvailabilityWindowPolicy
+  (interval_seconds + failure_intervals), while configured enable/disable is a separate
+  logical request property that does not rebuild an unchanged physical probe plane;
+- calculate_effective_path_order() implements stable bubble promotion: confirmed-live
+  paths rise in configured priority while the remaining current order is preserved; startup
+  and structural/admin priority changes explicitly rebase that order;
+- availability was removed from BindingCalculator semantics and now affects only
+  PayloadTrafficIntentCalculator -> ordered_paths;
 - payload filter/NAT generation was canonicalized independently of route priority, so a
   pure path permutation no longer masquerades as nft/NAT policy change;
+- the redundant ProbeRulesState/ProbeRulesStateCalculator layer was removed; generic
+  knowledge/convergence is now shared as NetworkRulesConvergenceState, while payload alone
+  retains its domain-specific Safety/Service axes;
 - EXP-027 PASS proved fixed-metric route-slot replacement for both an ordinary prefix and
-  `default`: temporary duplicate paths are accepted and terminal blackhole remains;
+  default: temporary duplicate paths are accepted and terminal blackhole remains;
 - Linux NetworkRules gained a verified route-priority fast path: fresh pre-check, top-down
-  `ip route replace` slot updates, fresh post-check, with automatic fallback to the
-  existing structural fail-closed rebuild for any broader change or failure;
+  ip route replace slot updates, fresh post-check, with automatic fallback to the existing
+  structural fail-closed rebuild for any broader change or failure;
+- the standalone Linux single-shot ICMP worker is retained only as diagnostic/evidence
+  machinery and now accepts only concrete path + target + technical timeout, not a logical
+  AvailabilityProbeRequest;
 - historical cadence/verdict checkpoint documents remain preserved as superseded design
   evidence rather than being rewritten.
 
-The clean normative model is `design/NG2/availability-routing-model.md`. The older
-same-day cadence and one-attempt entries below are retained only as chronology and no
-longer define current NG2 production availability semantics.
-
+The clean normative model is design/NG2/availability-routing-model.md. The autonomous
+de-complexification review is design/reviews/NG2-2026-11-14-availability-decomplexification-review.md.
+The older same-day cadence and one-attempt entries below are retained only as chronology and
+no longer define current NG2 production availability semantics.
 ---
 
 ## 2026-11-14 — NG2 per-probe cadence and hysteresis candidate
