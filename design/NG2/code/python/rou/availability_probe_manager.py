@@ -240,6 +240,16 @@ class AvailabilityProbeManager:
         )
 
         for probe in sorted(request.probes, key=lambda item: item.probe_id):
+            if not probe.enabled:
+                self._publish_if_changed(
+                    AvailabilityProbeStateInfo(
+                        probe.probe_id,
+                        AvailabilityProbeState.UNKNOWN,
+                        reason="probe disabled",
+                    )
+                )
+                continue
+
             latest = self._latest_published.get(probe.probe_id)
             if (
                 self._rules_ready(rules_state)
