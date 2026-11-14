@@ -31,7 +31,10 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
 
         self.assertEqual(len(rules.routing_domains), 1)
         domain = rules.routing_domains[0]
-        self.assertEqual(domain.name, "profile-a:vpns00")
+        self.assertEqual(
+            domain.name,
+            "probe:icmp:vpns00:43:172.21.201.19",
+        )
         self.assertEqual(
             domain.destinations,
             (IPv4Network("172.21.201.19/32"),),
@@ -86,6 +89,27 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
             [item.bound_output.interface for item in rules.dispatch_rules],
             [first, second],
         )
+
+    def test_same_physical_probe_plane_is_deduplicated_across_logical_ids(self):
+        target = IPv4Address("172.21.201.19")
+        path = InterfaceIdentity("vpns00", 43)
+
+        first = AvailabilityProbeSetRequest(
+            (
+                AvailabilityProbeRequest("profile-a", path, target),
+                AvailabilityProbeRequest("profile-b", path, target),
+            )
+        )
+        second = AvailabilityProbeSetRequest(tuple(reversed(first.probes)))
+
+        first_rules = ProbeRulesCalculator().calculate(first)
+        second_rules = ProbeRulesCalculator().calculate(second)
+
+        self.assertEqual(first_rules, second_rules)
+        self.assertEqual(len(first_rules.routing_domains), 1)
+        self.assertEqual(len(first_rules.dispatch_rules), 1)
+        self.assertEqual(len(first_rules.traffic_allows), 2)
+        self.assertEqual(len(first_rules.flow_initiation_allows), 1)
 
     def test_duplicate_probe_id_is_rejected(self):
         path = InterfaceIdentity("vpns00", 43)
