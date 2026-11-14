@@ -109,9 +109,10 @@ Broader LOCAL_PROCESS protocols/predicates remain fail-closed.
 The prior evidence gate is now satisfied: production ProbeRules-derived NetworkRules have
 passed physical apply and exact renew.
 
-`ProbeRulesStateCalculator` is therefore the next required unit. Only after that concrete
-state model exists should PayloadRulesState and ProbeRulesState be compared for a possible
-common type.
+`ProbeRulesStateCalculator` was subsequently implemented after physical apply/renew
+evidence. The required comparison with PayloadRulesState is also complete and rejected a
+common RulesState because probe usability and payload service/safety have different
+semantics.
 
 ## Evidence gate
 
