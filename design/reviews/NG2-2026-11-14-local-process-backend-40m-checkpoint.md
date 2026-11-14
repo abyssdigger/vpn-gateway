@@ -9,7 +9,7 @@ Cycle interval: 40 minutes
 CYCLE_START_COMMIT = b072e73df00cc5dd53b3e964eec6220026a7337a
 T0 = 2026-11-14T10:07:02Z
 
-This file is the recovery anchor. Final closure commit/time is recorded when the cycle threshold is reached.
+This file is the recovery anchor. Closure validation is complete; this update is the cycle-threshold checkpoint marker. The authoritative final commit SHA/timestamp is the GitHub commit carrying this update and is reported in the human checkpoint message.
 
 ## Completed
 
