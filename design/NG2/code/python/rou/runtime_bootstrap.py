@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .linux_adapter import LinuxNetworkBackend, LinuxNetworkRulesAdapter
+from .linux_instance import (
+    LinuxInstanceSpec,
+    ensure_linux_instance,
+)
 from .linux_driver import (
     LinuxCommandRunner,
     LinuxDriverResult,
@@ -74,4 +78,31 @@ def bootstrap_linux_network_rules_adapter_in_namespace(
     return bootstrap_linux_network_rules_adapter(
         driver,
         local_interface=local_interface,
+    )
+
+
+def bootstrap_linux_network_rules_adapter_for_instance(
+    spec: LinuxInstanceSpec,
+    *,
+    host_runner: LinuxCommandRunner | None = None,
+) -> LinuxRuntimeBootstrapResult:
+    """Ensure fail-closed instance infrastructure, then publish its Adapter."""
+
+    runner = (
+        host_runner
+        if host_runner is not None
+        else SubprocessLinuxRunner()
+    )
+    try:
+        ensure_linux_instance(spec, runner)
+    except Exception as exc:
+        return LinuxRuntimeBootstrapResult(
+            False,
+            diagnostic=f"instance infrastructure is not ready: {exc}",
+        )
+
+    return bootstrap_linux_network_rules_adapter_in_namespace(
+        spec.namespace,
+        local_interface="host0",
+        host_runner=runner,
     )
