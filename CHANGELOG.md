@@ -24,8 +24,10 @@ temporarily removed during a permutation:
 - availability failover intentionally does not pin existing flows to a path already
   demoted by availability policy; flow-affinity remains a separate feature for other
   modes;
-- added explicit single-flight payload mutation: request handling, audit and shutdown cannot
-  overlap one lower-domain materialize/verify/commit transaction;
+- post-cycle audit corrected the transaction boundary: pure route-priority changes now use
+  one Direct `ProfileRouteOrderExecutor` per Profile; a second target for that Profile
+  waits until the current lower-domain apply/materialize/verify/commit completes, while
+  shared aggregate-owner serialization remains a separate implementation constraint;
 - reserved metric capacity now includes the EMPTY working slot itself, so an all-live
   maximum-size domain cannot silently consume the last metric below terminal blackhole;
 - EXP-027 additionally covers recovery with another dead path before the recovered path:
