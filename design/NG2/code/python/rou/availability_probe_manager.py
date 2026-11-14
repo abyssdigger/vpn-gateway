@@ -26,6 +26,12 @@ from .probe_rules import (
     ProbeRulesCalculator,
     availability_probe_sets_semantically_equal,
 )
+from .probe_transport import (
+    ProbeExecutionPlan,
+    ProbeExecutionPlanCalculator,
+    ProbeGoodNewsInfo,
+    ProbeWindowBoundaryInfo,
+)
 class AvailabilityProbeStatePublisher(Protocol):
     def publish(self, info: AvailabilityProbeStateInfo) -> None:
         ...
@@ -46,10 +52,14 @@ class AvailabilityProbeManager:
         publisher: AvailabilityProbeStatePublisher,
         *,
         rules_calculator: ProbeRulesCalculator | None = None,
+        execution_plan_calculator: ProbeExecutionPlanCalculator | None = None,
     ) -> None:
         self._adapter = adapter
         self._publisher = publisher
         self._rules_calculator = rules_calculator or ProbeRulesCalculator()
+        self._execution_plan_calculator = (
+            execution_plan_calculator or ProbeExecutionPlanCalculator()
+        )
 
         self._latest_request: AvailabilityProbeSetRequest | None = None
         self._latest_desired: NetworkRulesSpec | None = None
@@ -64,6 +74,21 @@ class AvailabilityProbeManager:
         """Current owner-wide READY epoch for diagnostics and evidence binding."""
 
         return self._active_generation
+
+    @property
+    def execution_plan(self) -> ProbeExecutionPlan | None:
+        """Current generation-bound execution demand for the probe Agent.
+
+        None means execution must be quiescent because no authoritative READY
+        generation exists. The plan contains physical send cadence and logical
+        observation-window cadence but no attempt identity or NO_REPLY semantics.
+        """
+
+        request = self._latest_request
+        generation = self._active_generation
+        if request is None or generation is None:
+            return None
+        return self._execution_plan_calculator.calculate(request, generation)
 
     def handle_request(self, request: AvailabilityProbeSetRequest) -> None:
         """Accept one full desired probe snapshot and reconcile its network plane."""
@@ -112,6 +137,18 @@ class AvailabilityProbeManager:
         self._synchronize_generation(rules_state)
         self._synchronize_window_states()
         self._publish_unknown_current(rules_state)
+
+    def handle_good_news(self, info: ProbeGoodNewsInfo) -> int:
+        """Consume one execution-Agent good-news InfoEvent."""
+
+        if not isinstance(info, ProbeGoodNewsInfo):
+            raise ValueError("good-news event must be ProbeGoodNewsInfo")
+        return self.note_good_news(
+            info.path,
+            info.target,
+            info.generation,
+            mechanism=info.mechanism,
+        )
 
     def note_good_news(
         self,
@@ -165,6 +202,18 @@ class AvailabilityProbeManager:
             matched += 1
 
         return matched
+
+    def handle_window_boundary(
+        self,
+        info: ProbeWindowBoundaryInfo,
+    ) -> bool:
+        """Consume one execution-Agent observation-window boundary InfoEvent."""
+
+        if not isinstance(info, ProbeWindowBoundaryInfo):
+            raise ValueError(
+                "window-boundary event must be ProbeWindowBoundaryInfo"
+            )
+        return self.close_interval(info.probe_id, info.generation)
 
     def close_interval(
         self,
