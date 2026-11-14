@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from .linux_driver import LinuxDriverResult, LinuxNetworkVerification
+from .linux_local_process import LinuxLocalProcessConfig
 from .interface_identity import InterfaceIdentity
 from .linux_network import (
     LinuxNetworkDesired,
@@ -50,9 +51,11 @@ class LinuxNetworkRulesAdapter:
         backend: LinuxNetworkBackend,
         *,
         local_interface: str,
+        local_process: LinuxLocalProcessConfig | None = None,
     ) -> None:
         self._backend = backend
         self._local_interface = local_interface
+        self._local_process = local_process
         self._owners = OwnerRulesRegistry()
         self._routing_allocation = LinuxRoutingAllocationState()
         self._last_state: dict[OwnerToken, NetworkRulesState] = {}
@@ -91,6 +94,7 @@ class LinuxNetworkRulesAdapter:
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
+                local_process=self._local_process,
             )
         except Exception as exc:
             return ActionResult(
@@ -120,6 +124,7 @@ class LinuxNetworkRulesAdapter:
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
+                local_process=self._local_process,
             )
             verification = self._backend.verify_current(desired)
         except Exception as exc:
@@ -156,6 +161,7 @@ class LinuxNetworkRulesAdapter:
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
+                local_process=self._local_process,
             )
         except Exception as exc:
             return ActionResult(
@@ -187,6 +193,7 @@ class LinuxNetworkRulesAdapter:
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
+                local_process=self._local_process,
             )
         except Exception as exc:
             combined = diagnostic + f"; committed reconcile compile failed: {exc}"
