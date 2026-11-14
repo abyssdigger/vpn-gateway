@@ -102,6 +102,28 @@ V 80 -> 30
 
 The far-right recovered path is therefore not a special case.
 
+### Recovery with another dead path before the recovered path
+
+```text
+A B G D . E V J
+        ->
+A B V G D . E J
+```
+
+Completed moves:
+
+```text
+D 40 -> 50
+G 30 -> 40
+V 70 -> 30
+E 60 -> 70
+```
+
+This explicitly proves the second half of recovery: live paths first make room for the
+recovered path; after it takes its configured live position, a dead path that used to be
+before it in the dead tail moves toward lower priority, returning EMPTY to the live/dead
+boundary.
+
 ## Harness
 
 ```text
@@ -122,9 +144,11 @@ Observed for both ordinary prefix and `default`:
 PASS P1: recovery ABGD.VEJ -> ABVGD.EJ kept every path
 PASS P2: demotion ABVGD.EJ -> ABGD.VEJ kept every path
 PASS P3: recovery ABGDEJ.V -> ABVGDEJ. kept every path
+PASS P4: recovery ABGD.EVJ -> ABVGD.EJ shifted E down
 PASS D1: recovery ABGD.VEJ -> ABVGD.EJ kept every path
 PASS D2: demotion ABVGD.EJ -> ABGD.VEJ kept every path
 PASS D3: recovery ABGDEJ.V -> ABVGDEJ. kept every path
+PASS D4: recovery ABGD.EVJ -> ABVGD.EJ shifted E down
 EXP027=PASS
 ```
 
