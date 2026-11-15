@@ -34,11 +34,17 @@ def plane(interval=10.0):
     )
 
 
-def plan(sequence=1, *, plane_interval=10.0, window_interval=10.0):
+def plan(
+    sequence=1,
+    *,
+    plane_interval=10.0,
+    window_interval=10.0,
+    window_epoch=1,
+):
     return ProbeExecutionPlan(
         ProbeObservationGeneration(sequence),
         (plane(plane_interval),),
-        (LogicalProbeWindow("primary", window_interval),),
+        (LogicalProbeWindow("primary", window_interval, window_epoch),),
     )
 
 
@@ -177,6 +183,18 @@ class ProbeExecutionScheduleTests(unittest.TestCase):
         self.assertEqual(boundaries, ())
         self.assertEqual(sends, (plane(20.0),))
         self.assertEqual(schedule.next_deadline(), 125.0)
+
+    def test_same_generation_new_evidence_epoch_restarts_window_phase(self):
+        schedule = ProbeExecutionSchedule()
+        schedule.reconcile(plan(window_epoch=1), 100.0)
+        schedule.pop_due(100.0)
+
+        schedule.reconcile(plan(window_epoch=2), 105.0)
+
+        boundaries, sends = schedule.pop_due(110.0)
+        self.assertEqual(boundaries, ())
+        self.assertEqual(sends, (plane(),))
+        self.assertEqual(schedule.next_deadline(), 115.0)
 
     def test_new_generation_restarts_windows_and_sends_immediately(self):
         schedule = ProbeExecutionSchedule()
