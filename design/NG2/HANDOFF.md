@@ -683,3 +683,29 @@ presentation. Do not treat that formatting issue as an architecture problem.
    materializer with last-verified baseline and emergent empty-slot semantics.
 10. Current cycle is complete only when final HEAD evidence is recorded, checkpoint exists,
     and PR #21 is closed without merge.
+
+
+## 16. Mandatory input for the first NG3 review
+
+This handoff must be included explicitly in the first whole-scope NG3 review.
+
+It is **not** normative NG3 architecture and must not be copied forward mechanically. Its role
+is historical/conversation delta and review evidence:
+
+- identify NG2 decisions that were made deliberately and should not be accidentally
+  rediscovered or reversed;
+- identify unresolved semantics that NG2 intentionally did not invent;
+- identify complexity that was removed because it did not serve real VPN-GATE scenarios;
+- compare those decisions against the NG3 product requirements and component decomposition;
+- distinguish reusable experimental evidence from obsolete NG2 implementation structure.
+
+The first NG3 review must therefore ask, for every material item in this handoff:
+
+1. which accepted NG3 requirement, if any, still needs the behavior;
+2. which NG3 component responsibility, if any, legitimately realizes it;
+3. whether the item is evidence, a constraint, a historical implementation decision or an
+   unresolved question;
+4. whether carrying it forward would preserve product value or merely preserve NG2 shape.
+
+Absence of a current NG3 requirement is not by itself a reason to invent one in order to
+retain an NG2 mechanism.
