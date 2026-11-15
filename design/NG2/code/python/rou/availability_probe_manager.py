@@ -244,7 +244,12 @@ class AvailabilityProbeManager:
             raise ValueError(
                 "window-boundary event must be ProbeWindowBoundaryInfo"
             )
-        return self.close_interval(info.probe_id, info.generation)
+        with self._state_lock:
+            return self._close_intervals_locked(
+                info.probe_id,
+                info.generation,
+                info.elapsed_intervals,
+            )
 
     def close_interval(
         self,
@@ -261,10 +266,22 @@ class AvailabilityProbeManager:
         probe_id: str,
         generation: ProbeObservationGeneration,
     ) -> bool:
-        """Apply a boundary while holding the Manager state lock."""
+        """Apply one boundary while holding the Manager state lock."""
+
+        return self._close_intervals_locked(probe_id, generation, 1)
+
+    def _close_intervals_locked(
+        self,
+        probe_id: str,
+        generation: ProbeObservationGeneration,
+        count: int,
+    ) -> bool:
+        """Apply one or more elapsed boundaries while holding the state lock."""
 
         if self._active_generation is None or generation != self._active_generation:
             return False
+        if type(count) is not int or count <= 0:
+            raise ValueError("boundary count must be a positive integer")
 
         request = self._latest_request
         if request is None:
@@ -285,7 +302,7 @@ class AvailabilityProbeManager:
             probe.probe_id,
             AvailabilityWindowState(),
         )
-        state.close_interval(probe.policy)
+        state.close_intervals(probe.policy, count)
 
         if state.confirmed_live:
             self._publish_if_changed(
