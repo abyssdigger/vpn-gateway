@@ -66,11 +66,16 @@ On physical ProbeRules generation loss,
 `AvailabilityProbeManager` publishes `None` before starting a later lower-domain
 transition. A later fresh READY generation publishes a replacement plan.
 
-Logical-only cadence changes may replace a plan without changing
+Logical-only changes may replace a plan without changing
 `ProbeObservationGeneration`.
 
-Unchanged plane/window cadence keeps its existing phase. A changed or newly added plane
-gets an immediate send. A changed or newly added logical window begins a fresh interval.
+Each logical window also carries an opaque positive `evidence_epoch` owned by
+`AvailabilityProbeManager`. The epoch changes whenever that logical probe definition
+changes, including a `failure_intervals`-only change that does not alter physical cadence.
+
+Unchanged plane cadence keeps its existing phase. A logical window keeps its phase only
+when both interval and `evidence_epoch` are unchanged. A changed/new evidence epoch begins
+a fresh logical interval without leaking `failure_intervals` into the Agent.
 
 ## 4. Cadence
 
