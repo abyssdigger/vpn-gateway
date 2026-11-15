@@ -11,10 +11,11 @@ from .availability_probe_state import ProbeObservationGeneration
 from .linux_probe_driver import LinuxIcmpProbeDriver
 from .probe_attempt import ProbeAttemptOutcome
 from .probe_transport import (
+    LogicalProbeChannel,
     PhysicalProbePlane,
     ProbeExecutionPlan,
     ProbeGoodNewsInfo,
-    ProbeWindowBoundaryInfo,
+    ProbeTickInfo,
 )
 
 
@@ -48,10 +49,7 @@ class ProbeSendDriver(Protocol):
 
 
 class LinuxDiagnosticPingSendAdapter:
-    """Hide the historical diagnostic attempt contract below production execution.
-
-    NO_REPLY is collapsed to ordinary absence of good news. It never crosses this Adapter.
-    """
+    """Hide the historical single-shot result contract below production execution."""
 
     def __init__(self, driver: LinuxIcmpProbeDriver) -> None:
         if not callable(getattr(driver, "execute", None)):
@@ -85,8 +83,8 @@ class ProbeGoodNewsPublisher(Protocol):
         ...
 
 
-class ProbeWindowBoundaryPublisher(Protocol):
-    def publish(self, info: ProbeWindowBoundaryInfo) -> None:
+class ProbeTickPublisher(Protocol):
+    def publish(self, info: ProbeTickInfo) -> None:
         ...
 
 
@@ -129,23 +127,18 @@ class _PlaneSchedule:
 
 
 @dataclass
-class _WindowSchedule:
-    probe_id: str
-    interval_seconds: float
-    evidence_epoch: int
-    next_boundary: float
+class _TickSchedule:
+    channel: LogicalProbeChannel
+    next_tick: float
 
 
 class ProbeExecutionSchedule:
-    """Generation-bound deterministic cadence state.
-
-    The schedule owns only time placement. It never derives availability verdicts.
-    """
+    """Generation-bound physical-send and logical-tick cadence."""
 
     def __init__(self) -> None:
         self._plan: ProbeExecutionPlan | None = None
         self._planes: dict[tuple[object, object, object], _PlaneSchedule] = {}
-        self._windows: dict[str, _WindowSchedule] = {}
+        self._ticks: dict[str, _TickSchedule] = {}
 
     @property
     def plan(self) -> ProbeExecutionPlan | None:
@@ -177,13 +170,13 @@ class ProbeExecutionSchedule:
         if plan is None:
             self._plan = None
             self._planes.clear()
-            self._windows.clear()
+            self._ticks.clear()
             return
 
         old_planes = self._planes
-        old_windows = self._windows
+        old_ticks = self._ticks
         new_planes: dict[tuple[object, object, object], _PlaneSchedule] = {}
-        new_windows: dict[str, _WindowSchedule] = {}
+        new_ticks: dict[str, _TickSchedule] = {}
 
         for plane in plan.planes:
             key = (plane.mechanism, plane.path, plane.target)
@@ -195,49 +188,40 @@ class ProbeExecutionSchedule:
             ):
                 next_send = old.next_send
             else:
-                # Activation or cadence change gets one immediate send.
                 next_send = now
             new_planes[key] = _PlaneSchedule(plane, next_send)
 
-        for window in plan.windows:
-            old = old_windows.get(window.probe_id)
+        for channel in plan.channels:
+            old = old_ticks.get(channel.probe_id)
             if (
                 not generation_changed
                 and old is not None
-                and old.interval_seconds == window.interval_seconds
-                and old.evidence_epoch == window.evidence_epoch
+                and old.channel == channel
             ):
-                next_boundary = old.next_boundary
+                next_tick = old.next_tick
             else:
-                # New/changed logical evidence window starts now.
-                next_boundary = now + window.interval_seconds
-            new_windows[window.probe_id] = _WindowSchedule(
-                window.probe_id,
-                window.interval_seconds,
-                window.evidence_epoch,
-                next_boundary,
-            )
+                next_tick = now + float(channel.policy.interval_seconds)
+            new_ticks[channel.probe_id] = _TickSchedule(channel, next_tick)
 
         self._plan = plan
         self._planes = new_planes
-        self._windows = new_windows
+        self._ticks = new_ticks
 
     def next_deadline(self) -> float | None:
         deadlines = [
             item.next_send
             for item in self._planes.values()
         ] + [
-            item.next_boundary
-            for item in self._windows.values()
+            item.next_tick
+            for item in self._ticks.values()
         ]
         return min(deadlines) if deadlines else None
 
     def pop_due(
         self,
         now: float,
-    ) -> tuple[tuple[ProbeWindowBoundaryInfo, ...], tuple[PhysicalProbePlane, ...]]:
-        plan = self._plan
-        if plan is None:
+    ) -> tuple[tuple[ProbeTickInfo, ...], tuple[PhysicalProbePlane, ...]]:
+        if self._plan is None:
             return (), ()
         if (
             isinstance(now, bool)
@@ -247,23 +231,15 @@ class ProbeExecutionSchedule:
             raise ValueError("schedule time must be finite numeric")
         now = float(now)
 
-        boundaries: list[ProbeWindowBoundaryInfo] = []
-        for probe_id in sorted(self._windows):
-            item = self._windows[probe_id]
-            if item.next_boundary > now:
+        ticks: list[ProbeTickInfo] = []
+        for probe_id in sorted(self._ticks):
+            item = self._ticks[probe_id]
+            if item.next_tick > now:
                 continue
-            elapsed = int(
-                (now - item.next_boundary) // item.interval_seconds
-            ) + 1
-            boundaries.append(
-                ProbeWindowBoundaryInfo(
-                    probe_id,
-                    plan.generation,
-                    evidence_epoch=item.evidence_epoch,
-                    elapsed_intervals=elapsed,
-                )
-            )
-            item.next_boundary += elapsed * item.interval_seconds
+            ticks.append(ProbeTickInfo(item.channel))
+            interval = float(item.channel.policy.interval_seconds)
+            elapsed = int((now - item.next_tick) // interval) + 1
+            item.next_tick += elapsed * interval
 
         sends: list[PhysicalProbePlane] = []
         for key in sorted(
@@ -279,32 +255,21 @@ class ProbeExecutionSchedule:
             if item.next_send > now:
                 continue
             sends.append(item.plane)
-            # Do not burst stale sends after a scheduler delay. One current send is
-            # useful; historical sends are not. Advance the cadence in O(1).
-            elapsed = int(
-                (now - item.next_send) // item.plane.interval_seconds
-            ) + 1
-            item.next_send += elapsed * item.plane.interval_seconds
+            interval = float(item.plane.interval_seconds)
+            elapsed = int((now - item.next_send) // interval) + 1
+            item.next_send += elapsed * interval
 
-        # Caller must publish boundaries before starting sends. This realizes the
-        # normative boundary-before-next-send rule for coincident deadlines.
-        return tuple(boundaries), tuple(sends)
+        return tuple(ticks), tuple(sends)
 
 
 class LinuxProbeExecutionAgent:
-    """Long-lived Linux active-probe execution Agent.
-
-    It owns cadence and process-launch lifecycle, but no availability policy. Physical
-    sends use a ProbeSendDriver asynchronously. The compatibility Adapter may reuse the
-    already-proven LinuxIcmpProbeDriver without exposing its attempt result contract.
-    Only successful replies become good-news; local failures are diagnostics only.
-    """
+    """Long-lived Linux probe Agent with no availability hysteresis policy."""
 
     def __init__(
         self,
         driver: ProbeSendDriver,
         good_news_publisher: ProbeGoodNewsPublisher,
-        boundary_publisher: ProbeWindowBoundaryPublisher,
+        tick_publisher: ProbeTickPublisher,
         diagnostic_publisher: ProbeExecutionDiagnosticPublisher,
         *,
         timeout_seconds: int,
@@ -319,7 +284,7 @@ class LinuxProbeExecutionAgent:
 
         self._driver = driver
         self._good_news_publisher = good_news_publisher
-        self._boundary_publisher = boundary_publisher
+        self._tick_publisher = tick_publisher
         self._diagnostic_publisher = diagnostic_publisher
         self._timeout_seconds = timeout_seconds
         self._clock = clock
@@ -328,9 +293,7 @@ class LinuxProbeExecutionAgent:
         self._schedule = ProbeExecutionSchedule()
         self._running = False
         self._thread: Thread | None = None
-        # Good-news and window-boundary facts share one publication order per Agent.
-        # EventEnvelope revisions can later preserve this order across async delivery.
-        self._event_publication_lock = Lock()
+
         self._diagnostic_publication_lock = Lock()
         self._diagnostic_lock = Lock()
         self._in_flight: set[
@@ -383,24 +346,17 @@ class LinuxProbeExecutionAgent:
             self._thread = None
 
     def process_due(self, now: float | None = None) -> None:
-        """Process due work once.
-
-        Public for deterministic integration/testing and used by the internal loop.
-        Publication occurs outside the schedule lock.
-        """
-
         if now is None:
             now = self._clock()
         with self._condition:
-            boundaries, sends = self._schedule.pop_due(now)
+            ticks, sends = self._schedule.pop_due(now)
             plan = self._schedule.plan
 
         if plan is None:
             return
 
-        for event in boundaries:
-            with self._event_publication_lock:
-                self._boundary_publisher.publish(event)
+        for info in ticks:
+            self._tick_publisher.publish(info)
         for plane in sends:
             self._launch_send(plan, plane)
 
@@ -490,25 +446,25 @@ class LinuxProbeExecutionAgent:
                     return
                 if plane not in current.planes:
                     return
+                consumers = tuple(
+                    channel
+                    for channel in current.channels
+                    if (
+                        channel.mechanism is plane.mechanism
+                        and channel.path == plane.path
+                        and channel.target == plane.target
+                    )
+                )
 
             if result.local_error is not None:
-                self._publish_diagnostic_error(
-                    plan,
-                    plane,
-                    result.local_error,
-                )
+                self._publish_diagnostic_error(plan, plane, result.local_error)
                 return
 
             self._publish_diagnostic_ready(plan, plane)
             if result.good_news:
-                with self._event_publication_lock:
+                for channel in consumers:
                     self._good_news_publisher.publish(
-                        ProbeGoodNewsInfo(
-                            plane.mechanism,
-                            plane.path,
-                            plane.target,
-                            plan.generation,
-                        )
+                        ProbeGoodNewsInfo(channel)
                     )
         finally:
             with self._condition:
@@ -575,15 +531,12 @@ class LinuxProbeExecutionAgent:
                         return
                     self._latest_diagnostic[key] = info
 
-            # Plan updates may now proceed, but they will observe this committed
-            # diagnostic and emit INACTIVE after this publication if it became stale.
             self._diagnostic_publisher.publish(info)
 
     def _take_stale_diagnostics_locked(
         self,
         plan: ProbeExecutionPlan | None,
     ) -> tuple[ProbeExecutionDiagnosticInfo, ...]:
-        # Called while schedule condition is held; diagnostic map has its own lock.
         with self._diagnostic_lock:
             if plan is None:
                 stale = tuple(self._latest_diagnostic.values())
