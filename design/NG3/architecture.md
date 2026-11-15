@@ -438,6 +438,81 @@ The exact endpoint selector carried by `normalized_binding_intent` remains inten
 open until `VPNG-R1.R2` is decomposed. This keeps runtime identity semantics defined while
 leaving the external declarative interface unresolved.
 
+## 3.3. Declarative configuration boundary
+
+**Implements:**
+- `VPNG-R1.R2.R1`
+- `VPNG-R1.R2.R2`
+- `VPNG-R1.R2.R3`
+- `VPNG-R1.R3.C1.R1`
+- `VPNG-R2.R5`
+- `VPNG-R4.R1`
+- `VPNG-R7.R3.R1`
+- `VPNG-R7.R3.R2`
+- `VPNG-R7.R5`
+
+NG3 uses a declarative external configuration boundary. Users/admins describe product intent;
+they do not provide an ordered recipe of Linux networking operations.
+
+### ConfigurationAdapter
+
+**Component type:** Adapter
+
+The Adapter translates an external configuration representation into validated, normalized
+domain intents.
+
+It is Direct Machinery: a successful return means the supplied configuration has been
+accepted and normalized; a failed return means no dependent network mutation may begin from
+that candidate configuration.
+
+The architecture intentionally avoids a global mutable "runtime configuration object".
+Instead, the adapter produces explicit domain contracts needed by accepted requirements.
+
+The first required normalized contract is:
+
+```text
+VPNPathIntent:
+    logical_path_id
+    binding_intent
+```
+
+where:
+
+- `logical_path_id` is the stable product identity from `VPNG-R1.R3.R1`;
+- `binding_intent` contains only the information required by `VPNPathAdapter` to resolve
+  one concrete endpoint inside the managed network domain;
+- the exact external syntax and concrete selector form are implementation/interface choices
+  and may be refined independently without changing the semantic contract.
+
+Payload policy is normalized separately rather than being embedded into the VPN path binding
+contract.
+
+Validation must reject at least:
+
+- missing required logical identity;
+- duplicate/ambiguous logical path identity;
+- binding intent insufficient to resolve a supported endpoint;
+- contradictory declarations that cannot produce one deterministic semantic result.
+
+A rejected configuration is not partially materialized.
+
+### Administrator onboarding contract
+
+For each supported externally provisioned VPN-channel integration, administrator
+documentation must explain:
+
+1. how to provision the external VPN channel according to its own mechanism;
+2. what result must exist inside the managed network domain;
+3. how to declare the logical `path_id` and binding intent through the product
+   configuration boundary;
+4. how to determine that VPN-GATE accepted or rejected the binding.
+
+This closes the architecture of `VPNG-R1.R3.C1.R1` without choosing the final configuration
+file syntax or a specific VPN protocol.
+
+No ConfigManager, live-reload Engine, configuration database or generic plugin registry is
+introduced. Those require separate accepted requirements if they become necessary.
+
 # 4. PayloadTrafficManager
 
 **Component type:** Manager
