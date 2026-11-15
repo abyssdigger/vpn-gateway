@@ -432,7 +432,9 @@ No finding is silently ignored.
 
 ## Human escalation
 
-The AI resolves ordinary implementation/review findings autonomously.
+The AI resolves ordinary requirement refinements, design, implementation and review findings
+autonomously when their meaning is unambiguously derived from already accepted product
+requirements.
 
 Human agreement is required when the decision materially changes one of:
 
@@ -452,7 +454,7 @@ checkpoint.
 Long development sessions may be interrupted by the execution environment after roughly
 45 minutes. Do not rely on subjective wall-clock tracking.
 
-Each autonomous development cycle has a **cycle interval**:
+Each autonomous design/development cycle has a **cycle interval**:
 
 - if the user explicitly specifies an interval when starting that cycle, use that value;
 - otherwise the default cycle interval is **40 minutes**.
@@ -461,16 +463,16 @@ Call the selected value `CYCLE_INTERVAL`. After it is chosen for the cycle, all 
 logic below refers only to `CYCLE_INTERVAL`; do not substitute the default value back into
 later decisions.
 
-Each autonomous development cycle uses **Git commit timestamps as the checkpoint clock**
+Each autonomous design/development cycle uses **Git commit timestamps as the checkpoint clock**
 and a dedicated GitHub-visible **code-cycle branch** as the external activity record.
 
 At the start of a cycle:
 
 1. determine and record `CYCLE_INTERVAL`;
 2. create or select a dedicated branch for that autonomous cycle, named clearly enough to
-   identify the current code cycle;
-3. all implementation, test, review and fix commits for the cycle are written to that
-   branch;
+   identify the current review/design/development cycle;
+3. all requirement, design, implementation, test, evidence, review and fix commits for the
+   cycle are written to that branch;
 4. **every commit must be present on GitHub immediately after it is created**; do not keep
    a local-only sequence of commits for later batch push;
 5. the first commit created in the cycle becomes `CYCLE_START_COMMIT`;
@@ -481,14 +483,15 @@ At the start of a cycle:
 9. if the elapsed time is greater than or equal to `CYCLE_INTERVAL`, set
    `CHECKPOINT_PENDING=true`.
 
-The code-cycle branch is the authoritative externally observable activity trail. Chat/UI
+The cycle branch is the authoritative externally observable activity trail. Chat/UI
 availability is not used to infer whether autonomous work is still running.
 
 When `CHECKPOINT_PENDING=true`:
 
 - do not start another review unit;
-- finish the **current review unit completely**:
-  implementation, required tests/evidence, expert review and accepted fixes;
+- finish the **current review unit completely** at its current scope:
+  requirement/design gates, implementation when applicable, required tests/evidence,
+  expert review and accepted fixes;
 - create/push the final checkpoint commit for that unit;
 - post a brief human-facing checkpoint/discussion;
 - stop autonomous development until the next user turn.
@@ -508,8 +511,8 @@ The checkpoint message must include:
 - decisions that genuinely require human agreement;
 - the next intended review unit.
 
-A new autonomous cycle starts only after the next user turn, with a new code-cycle branch
-(or a clearly reset cycle branch when explicitly chosen), a newly selected
+A new autonomous cycle starts only after the next user turn, with a new cycle branch
+(or a clearly reset existing cycle branch when explicitly chosen), a newly selected
 `CYCLE_INTERVAL`, and a new `CYCLE_START_COMMIT`.
 
 This is a session-preservation mechanism, not a reason to create extra review documents or
@@ -517,9 +520,14 @@ to interrupt a review unit halfway through.
 
 ## Completion criteria
 
-Development of the current product scope is complete when:
+Design and development of the current product scope are complete when:
 
+- every required product function is represented by accepted requirements;
+- every implemented material behavior is traceable to those requirements;
 - no unblocked required product function remains;
+- no unresolved candidate constraint materially changes the effective product envelope;
+- all accepted constraints have passed bottom-up lifting and product-envelope review;
+- all material component responsibilities and interactions are traceable to requirements;
 - all required evidence gates for that scope have passed;
 - all accepted review findings are fixed or explicitly postponed outside the current scope;
 - and a final full-project review has no unresolved finding of minor severity or higher.
