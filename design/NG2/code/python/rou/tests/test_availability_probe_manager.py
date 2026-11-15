@@ -21,6 +21,30 @@ class RecordingPublisher:
         self.events.append(value)
 
 
+class FailOncePublisher:
+    def __init__(self):
+        self.calls = 0
+        self.events = []
+
+    def publish(self, value):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("publisher boom")
+        self.events.append(value)
+
+
+class RaiseOnSecondPublisher:
+    def __init__(self):
+        self.calls = 0
+        self.events = []
+
+    def publish(self, value):
+        self.calls += 1
+        if self.calls == 2:
+            raise RuntimeError("publisher boom")
+        self.events.append(value)
+
+
 class FakeAdapter:
     def __init__(self):
         self.apply_success = True
@@ -140,6 +164,40 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
             first_generation,
         )
 
+    def test_failed_physical_change_quiesce_retries_before_new_generation(self):
+        publisher = RaiseOnSecondPublisher()
+        manager = AvailabilityProbeManager(
+            self.adapter,
+            execution_plan_publisher=publisher,
+        )
+        first = request(
+            probe("primary", self.path, "203.0.113.24")
+        )
+        changed = request(
+            probe("primary", self.path, "203.0.113.25")
+        )
+
+        manager.handle_request(first)
+        first_generation = manager.observation_generation
+
+        with self.assertRaisesRegex(RuntimeError, "publisher boom"):
+            manager.handle_request(changed)
+
+        self.assertIsNone(manager.observation_generation)
+
+        manager.handle_request(changed)
+
+        self.assertEqual(publisher.calls, 4)
+        self.assertIsNone(publisher.events[1])
+        self.assertEqual(
+            publisher.events[-1].channels[0].target,
+            IPv4Address("203.0.113.25"),
+        )
+        self.assertNotEqual(
+            publisher.events[-1].generation,
+            first_generation,
+        )
+
     def test_disabling_only_probe_quiesces_execution(self):
         first = probe("primary", self.path, "203.0.113.24")
         self.manager.handle_request(request(first))
@@ -198,6 +256,52 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
             first_generation.sequence,
         )
         self.assertIsNone(self.execution.events[0])
+
+    def test_failed_plan_publication_is_retryable(self):
+        publisher = FailOncePublisher()
+        manager = AvailabilityProbeManager(
+            self.adapter,
+            execution_plan_publisher=publisher,
+        )
+        wanted = request(
+            probe("primary", self.path, "203.0.113.24")
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "publisher boom"):
+            manager.handle_request(wanted)
+
+        manager.handle_request(wanted)
+
+        self.assertEqual(publisher.calls, 2)
+        self.assertEqual(len(publisher.events), 1)
+        self.assertEqual(
+            publisher.events[0].generation,
+            manager.observation_generation,
+        )
+
+    def test_shutdown_cleanup_runs_even_if_quiesce_publication_raises(self):
+        publisher = RaiseOnSecondPublisher()
+        manager = AvailabilityProbeManager(
+            self.adapter,
+            execution_plan_publisher=publisher,
+        )
+        manager.handle_request(
+            request(probe("primary", self.path, "203.0.113.24"))
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "publisher boom"):
+            manager.shutdown()
+
+        self.assertEqual(publisher.calls, 2)
+        self.assertIn(manager, self.adapter.cleanup_owners)
+
+        # The failed quiesce was not recorded as delivered. A retry must
+        # publish None even though the physical generation is already gone.
+        result = manager.shutdown()
+
+        self.assertTrue(result.success)
+        self.assertEqual(publisher.calls, 3)
+        self.assertIsNone(publisher.events[-1])
 
     def test_shutdown_quiesces_execution_and_cleans_same_owner(self):
         self.manager.handle_request(

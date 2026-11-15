@@ -123,8 +123,11 @@ class AvailabilityProbeManager:
 
     def shutdown(self) -> ActionResult:
         with self._state_lock:
-            self._invalidate_generation()
-            return self._adapter.cleanup(self)
+            try:
+                self._invalidate_generation()
+            finally:
+                result = self._adapter.cleanup(self)
+            return result
 
     def _audit_rules(
         self,
@@ -183,8 +186,12 @@ class AvailabilityProbeManager:
 
     def _invalidate_generation(self) -> None:
         had_generation = self._active_generation is not None
+        published_plan_needs_quiesce = (
+            self._execution_plan_was_published
+            and self._latest_execution_plan_published is not None
+        )
         self._active_generation = None
-        if had_generation:
+        if had_generation or published_plan_needs_quiesce:
             self._publish_execution_plan_if_changed()
 
     def _current_execution_plan_locked(self) -> ProbeExecutionPlan | None:

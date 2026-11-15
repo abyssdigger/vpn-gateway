@@ -316,12 +316,19 @@ class LinuxProbeExecutionAgent:
             if self._running:
                 return
             self._running = True
-            self._thread = Thread(
+            thread = Thread(
                 target=self._run,
                 name="vpn-gate-probe-execution",
                 daemon=True,
             )
-            self._thread.start()
+            self._thread = thread
+            try:
+                thread.start()
+            except Exception:
+                self._running = False
+                self._thread = None
+                self._condition.notify_all()
+                raise
 
     def update_plan(self, plan: ProbeExecutionPlan | None) -> None:
         with self._condition:
@@ -369,22 +376,26 @@ class LinuxProbeExecutionAgent:
             self._launch_send(plan, plane)
 
     def _run(self) -> None:
-        while True:
-            with self._condition:
-                if not self._running:
-                    return
-                deadline = self._schedule.next_deadline()
-                if deadline is None:
-                    self._condition.wait()
-                    continue
-                delay = deadline - self._clock()
-                if delay > 0:
-                    self._condition.wait(timeout=delay)
-                    continue
-            try:
+        try:
+            while True:
+                with self._condition:
+                    if not self._running:
+                        return
+                    deadline = self._schedule.next_deadline()
+                    if deadline is None:
+                        self._condition.wait()
+                        continue
+                    delay = deadline - self._clock()
+                    if delay > 0:
+                        self._condition.wait(timeout=delay)
+                        continue
                 self.process_due()
-            except Exception:
-                _LOG.exception("probe execution Agent processing failed")
+        finally:
+            with self._condition:
+                if self._thread is current_thread():
+                    self._running = False
+                    self._thread = None
+                self._condition.notify_all()
 
     def _launch_send(
         self,

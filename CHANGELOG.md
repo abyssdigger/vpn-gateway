@@ -1,3 +1,29 @@
+## 2026-11-15 — NG2 process-local failure hardening
+
+Recovered and completed the interrupted publisher-failure work:
+
+- ProbeExecutionAgent isolates tick, good-news fanout and diagnostic publisher exceptions
+  at their exact process-local boundaries;
+- one failing good-news consumer no longer blocks sibling logical consumers;
+- diagnostic publication failure no longer suppresses good news, and failed READY/ERROR
+  publication remains retryable;
+- removed the broad scheduler-loop catch so unexpected Agent defects stay visible;
+- scheduler bookkeeping now recovers from `Thread.start()` failure and unexpected thread
+  exit, permitting explicit restart without hiding the original exception;
+- AvailabilityProbeManager always attempts probe-rule cleanup even if quiesce-plan
+  publication fails;
+- failed quiesce publication remains retryable after physical generation clear, including
+  shutdown and physical target replacement;
+- PayloadTrafficManager state publication failure was verified retryable via `audit()`
+  without re-materializing matched rules;
+- outer network-policy audit/stop preserve two simultaneous unexpected owner exceptions
+  with `ExceptionGroup`;
+- mixed ActionResult failure + unexpected peer exception preserves the ordinary failure
+  diagnostic as an exception note;
+- final CI run **749** passed **315 unit tests** and the complete privileged Linux matrix.
+
+---
+
 ## 2026-11-15 — NG2 executable network-policy runtime assembly
 
 Assembled the already-reviewed payload/probe components into an executable Linux
