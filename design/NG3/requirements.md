@@ -13,12 +13,16 @@ requirement/constraint review.
 Canonical compact form:
 
 ```text
-**[ID]** Purpose | Statement   — for R
-**[ID]** Reason  | Statement   — for C
+**[ID]** Purpose | Statement [closed]   — for R
+**[ID]** Reason  | Statement [closed]   — for C
 ```
 
 The italicized part answers **зачем** for a requirement and **почему** for a constraint.
 The part after `|` is the normative implementation-facing statement.
+
+`[closed]` is optional and means only that architecture is sufficient for this node in the
+current scope. Requirements do not list the architectural decisions that close them; those
+are found by searching architecture documents for the requirement/constraint ID.
 
 Section headings below are only human-readable grouping. They are not requirements and do
 not participate in the requirement tree.
