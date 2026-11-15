@@ -615,9 +615,8 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
         self.good("a")
 
         self.assertEqual(self.order(), (self.a, self.b, self.c))
-        self.assertEqual(
-            self.adapter.state.rules.routing_domains[0].preferred_prefix_length,
-            3,
+        self.assertIsNone(
+            self.adapter.state.rules.routing_domains[0].preferred_prefix_length
         )
 
     def test_tick_without_good_news_breaks_partial_recovery(self):
