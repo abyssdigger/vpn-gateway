@@ -92,20 +92,20 @@ class ProbeExecutionPlan:
 
 @dataclass(frozen=True)
 class ProbeGoodNewsInfo:
-    probe_id: str
+    channel: LogicalProbeChannel
 
     def __post_init__(self) -> None:
-        if not isinstance(self.probe_id, str) or not self.probe_id:
-            raise ValueError("good-news info requires non-empty probe_id")
+        if not isinstance(self.channel, LogicalProbeChannel):
+            raise ValueError("good-news info requires LogicalProbeChannel")
 
 
 @dataclass(frozen=True)
 class ProbeTickInfo:
-    probe_id: str
+    channel: LogicalProbeChannel
 
     def __post_init__(self) -> None:
-        if not isinstance(self.probe_id, str) or not self.probe_id:
-            raise ValueError("tick info requires non-empty probe_id")
+        if not isinstance(self.channel, LogicalProbeChannel):
+            raise ValueError("tick info requires LogicalProbeChannel")
 
 
 class ProbeExecutionPlanCalculator:
