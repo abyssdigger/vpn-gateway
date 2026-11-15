@@ -167,8 +167,21 @@ When requirement/constraint text or decomposition links change:
 - keep the existing stable ID unless the entity itself was incorrectly identified;
 - update the node in place rather than creating a shadow copy;
 - preserve causal decomposition links as `[decomp: blocker -> pending|deblocker]`;
+- use only `[closed]` in the requirement tree to record architecture closure;
+- do not copy architecture-decision IDs or architecture link lists into requirements;
+- to determine how a closed requirement is realized, search architecture artifacts for the
+  exact requirement/constraint ID;
 - revalidate affected descendants, constraints, architecture references and evidence;
+- remove/revalidate `[closed]` after a semantic change before implementation continues;
 - use Git history as the current editorial change record.
+
+`[closed]` means that, for the current scope, no further architecture decision is required
+for that specific `R/C`. It does not mean implemented or evidenced.
+
+A node with `[decomp: ... -> pending]` cannot be `[closed]`.
+
+After architecture review closes a node, mark it `[closed]` in the requirement tree only
+after verifying that the architecture contains an exact reference to that ID.
 
 Do not introduce a separate semantic requirement-change journal until a concrete project
 need requires querying semantic transitions independently from Git history. Such a journal
@@ -287,6 +300,9 @@ Implementation may begin only when all of the following hold for the affected sc
 - no active decomposition block exists on a requirement/constraint whose missing detail is
   necessary for the implementation scope;
 - all material component responsibilities and interactions are traceable to requirements;
+- every requirement/constraint whose architecture is required by the implementation unit is
+  marked `[closed]`;
+- every such `[closed]` node has an exact reference in the architecture;
 - discovered constraints have been lifted far enough to expose their product effect;
 - any user/administrator/external-system adaptation caused by an accepted constraint is
   explicit as a requirement/contract rather than an undocumented workaround;
