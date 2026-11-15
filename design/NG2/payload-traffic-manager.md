@@ -140,7 +140,8 @@ Profiles participating in payload traffic
 Profile destinations
 Profile direction policy
 current usable/bound concrete interfaces per Profile
-ordering/preference of usable paths
+configured/base ordering of usable paths
+availability channel assignment/policy required for runtime priority
 Device traffic envelopes
 Device NAT policy
 other payload-semantic requirements
@@ -158,8 +159,10 @@ latest_desired_network_rules
 latest_published_payload_state
 
 single reconcile executor ownership
-latest pending desired projection
+latest pending structural desired projection
 pending audit flag
+availability channel state and bounded producer aggregates
+last verified route-priority materialized snapshot
 ```
 
 Состояние сериализации является техническим состоянием Manager, а не semantic history
@@ -209,15 +212,20 @@ PayloadTrafficStateInfo
 `rules_state` сообщает aggregate состояние правил по независимым осям.
 
 Per-Profile `observed_paths` сообщает только фактическую routing projection requested
-Profile:
+Profile after the Manager's internal availability-priority materialization:
 
 - при authoritative observation — concrete ordered paths;
 - authoritative отсутствие logical domain — пустой tuple;
 - неизвестное/stale observation — UNKNOWN.
 
 Эти paths не являются самостоятельным verdict о здоровье Profile. RuntimeStateManager
-комбинирует их с `rules_state`, binding/availability и другими system-level facts в
-`ProfileStateCalculator`. Availability уже учтена upstream в desired `ordered_paths`; она не превращает observed path в binding ON/OFF внутри PayloadTrafficManager.
+может комбинировать их с `rules_state`, binding и другими system-level facts в
+`ProfileStateCalculator`.
+
+Availability priority больше не вычисляется upstream как готовый `ordered_paths`.
+`PayloadTrafficManager` владеет текущим GOOD/BAD channel state и выводит effective order
+внутри своей managed domain. Availability по-прежнему не превращает observed path в
+binding ON/OFF и не меняет payload membership.
 
 Foreign observed routing domains не публикуются как requested Profiles; их наличие
 отражается через divergence/safety rules-state assessment.
