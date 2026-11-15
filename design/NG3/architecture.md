@@ -864,7 +864,6 @@ only change ordering.
 - `VPNG-R3.R6.R2`
 - `VPNG-R3.R6.R3`
 - `VPNG-R3.R6.R3.R1`
-- `VPNG-R3.R6.R3.R2`
 - `VPNG-R6.R3`
 - `VPNG-R7.R1`
 - `VPNG-R7.R3`
