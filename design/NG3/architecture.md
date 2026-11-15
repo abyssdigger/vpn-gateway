@@ -980,6 +980,61 @@ For the current scope, procedural lifecycle orchestration remains the accepted a
 A dedicated Engine would require a later requirement proving an ongoing semantic
 responsibility that cannot be represented by these direct operations.
 
+## 12.2. Local Manager reconciliation
+
+**Implements:**
+- `VPNG-R5.R2`
+- `VPNG-R5.R2.R1`
+- `VPNG-R5.R3`
+- `VPNG-R5.R3.R1`
+- `VPNG-R7.R1`
+- `VPNG-R7.R1.R1`
+
+Any Manager that owns mutable external state keeps the current accepted desired semantic
+state and periodically re-observes its own managed domain while the corresponding function
+is active.
+
+The reconciliation loop is local to the Manager:
+
+```text
+current desired state
+        +
+periodic audit / relevant event
+        |
+        v
+observe authoritative actual state
+        |
+        +-- already satisfied --> publish/retain confirmed projection
+        |
+        +-- drift / previous recoverable failure
+                    |
+                    v
+             converge through Adapter
+                    |
+                    v
+             verify postcondition
+```
+
+The periodic audit is a fallback for silent drift. Relevant external or internal events may
+trigger earlier reconciliation, but correctness does not depend on receiving such an event.
+
+The exact audit interval is a local implementation parameter unless a later product
+requirement makes recovery latency user-visible.
+
+No global scheduler, durable retry queue, missed-tick replay or retry-history journal is
+introduced.
+
+If an audit occurs while reconciliation is already active, at most one future reconciliation
+need must be retained; multiple equivalent triggers may be coalesced because the next
+reconciliation always starts from freshly observed actual state.
+
+A recoverable failure does not enqueue the failed command sequence for replay. The Manager
+retains desired semantic state and on a later reconciliation re-observes reality and computes
+a new convergence operation from current state.
+
+This architecture makes retry idempotence a property of semantic reconciliation rather than
+command replay.
+
 # 13. Requirement coverage in this architecture pass
 
 | Requirement area | Architecture status |
@@ -996,7 +1051,7 @@ responsibility that cannot be represented by these direct operations.
 | `VPNG-R3.R6` subtree — path-usability evidence | active observation selected via AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
 | `VPNG-R4` subtree — safety | lower boundary/executor responsibilities represented; managed network isolation selected; concrete lower mutation strategy otherwise incomplete |
 | `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5`, `VPNG-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
-| `VPNG-R5.R2`, `VPNG-R5.R3` recovery | represented locally by Manager/Adapter/Executor contracts |
+| `VPNG-R5.R2`, `VPNG-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
 | `VPNG-R6.R1` configured intent visibility | **not yet architected** |
 | `VPNG-R6.R2`, `VPNG-R6.R4` payload effective state | component-level projection represented |
 | `VPNG-R6.R3` system failure visibility | partial diagnostics only; **final aggregation missing** |
@@ -1089,8 +1144,8 @@ Affected requirements:
 - `VPNG-R5.R5`
 - `VPNG-R5.R6`
 
-Lifecycle control semantics are now explicit. They still do not justify a separate
-long-lived lifecycle component.
+Lifecycle control semantics and autonomous local reconciliation are now explicit. They
+still do not justify a separate global lifecycle component.
 
 For the first release, VPN tunnel/session creation is outside this lifecycle scope by
 `VPNG-R1.R3.C1`; lifecycle concerns VPN-GATE-owned state and its use of already provisioned
