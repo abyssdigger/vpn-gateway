@@ -122,7 +122,26 @@ ProbeRules generation.
 Availability hysteresis reset/preservation rules are handled by
 `PayloadTrafficManager`, not here.
 
-## 6. Audit and shutdown
+## 6. Execution-plan publication failures
+
+Execution-plan publication is process-local and synchronous.
+
+If publication of a changed plan raises:
+
+- the exception remains visible to the Manager caller;
+- the failed plan is not recorded as successfully published;
+- an equivalent later request/audit may retry the same publication.
+
+During shutdown, quiesce-plan publication is attempted before probe-rule cleanup. If that
+publication raises, probe-owned NetworkRules cleanup is still attempted in `finally`;
+the publisher exception remains visible after cleanup.
+
+During steady-state generation invalidation, publication failure may stop the current
+Manager operation before a replacement generation is opened. This is deliberate: the
+Manager must not silently advance physical generation while the execution Agent may still
+hold the preceding plan.
+
+## 7. Audit and shutdown
 
 Audit:
 
@@ -136,7 +155,7 @@ Audit:
 Shutdown invalidates the generation, quiesces execution and cleans the Manager-owned
 NetworkRules state.
 
-## 7. Removed machinery
+## 8. Removed machinery
 
 The Manager no longer contains or publishes:
 
