@@ -23,13 +23,15 @@ from rou.payload_rules import (
     PayloadTrafficStateRequest,
 )
 from rou.payload_traffic_manager import PayloadTrafficManager
-from rou.probe_rules import AvailabilityProbeRequest, AvailabilityProbeSetRequest
 from rou.runtime_assembly import (
     AvailabilityConfigFanout,
     AvailabilityGoodNewsPort,
     AvailabilityPriorityConfigCalculator,
+    AvailabilityProbeSetCalculator,
     AvailabilityTickPort,
     ProbeExecutionPlanPort,
+    RuntimeAvailabilityChannel,
+    RuntimeAvailabilityConfig,
 )
 
 
@@ -84,7 +86,7 @@ class PlanConsumer:
         self.plans.append(plan)
 
 
-def probe(
+def runtime_channel(
     channel_id,
     path,
     target,
@@ -94,13 +96,22 @@ def probe(
     failure=2,
     recovery=2,
 ):
-    return AvailabilityProbeRequest(
+    return RuntimeAvailabilityChannel(
         channel_id,
         path,
         IPv4Address(target),
         enabled=enabled,
         interval_seconds=interval,
         hysteresis=AvailabilityHysteresisPolicy(failure, recovery),
+    )
+
+
+def runtime_config(*channels):
+    return RuntimeAvailabilityConfig(
+        tuple(channels),
+        (ProfileAvailabilityAssignment("corp", tuple(
+            item.channel_id for item in channels
+        )),),
     )
 
 
@@ -117,28 +128,20 @@ def payload_request(*paths):
     )
 
 
-class AvailabilityPriorityConfigCalculatorTests(unittest.TestCase):
-    def test_projects_only_payload_priority_fields(self):
-        probes = AvailabilityProbeSetRequest(
-            (
-                probe(
-                    "a",
-                    A,
-                    "203.0.113.10",
-                    interval=30,
-                    failure=4,
-                    recovery=3,
-                ),
+class AvailabilityProjectionCalculatorTests(unittest.TestCase):
+    def test_priority_projection_contains_only_payload_fields(self):
+        source = runtime_config(
+            runtime_channel(
+                "a",
+                A,
+                "203.0.113.10",
+                interval=30,
+                failure=4,
+                recovery=3,
             )
         )
-        assignments = (
-            ProfileAvailabilityAssignment("corp", ("a",)),
-        )
 
-        config = AvailabilityPriorityConfigCalculator().calculate(
-            probes,
-            assignments,
-        )
+        config = AvailabilityPriorityConfigCalculator().calculate(source)
 
         self.assertEqual(
             config.channels,
@@ -156,24 +159,46 @@ class AvailabilityPriorityConfigCalculatorTests(unittest.TestCase):
         self.assertFalse(hasattr(channel, "mechanism"))
         self.assertFalse(hasattr(channel, "interval_seconds"))
 
-    def test_disabled_probe_remains_disabled_priority_channel(self):
-        probes = AvailabilityProbeSetRequest(
-            (
-                probe(
-                    "a",
-                    A,
-                    "203.0.113.10",
-                    enabled=False,
-                ),
+    def test_probe_projection_keeps_physical_fields_independently(self):
+        source = runtime_config(
+            runtime_channel(
+                "a",
+                A,
+                "203.0.113.10",
+                interval=30,
+                failure=4,
+                recovery=3,
             )
         )
 
-        config = AvailabilityPriorityConfigCalculator().calculate(
-            probes,
-            (ProfileAvailabilityAssignment("corp", ("a",)),),
+        probes = AvailabilityProbeSetCalculator().calculate(source)
+
+        self.assertEqual(len(probes.probes), 1)
+        item = probes.probes[0]
+        self.assertEqual(item.probe_id, "a")
+        self.assertEqual(item.path, A)
+        self.assertEqual(item.target, IPv4Address("203.0.113.10"))
+        self.assertEqual(item.interval_seconds, 30)
+        self.assertEqual(
+            item.hysteresis,
+            AvailabilityHysteresisPolicy(4, 3),
         )
 
-        self.assertFalse(config.channels[0].enabled)
+    def test_disabled_channel_is_disabled_in_both_projections(self):
+        source = runtime_config(
+            runtime_channel(
+                "a",
+                A,
+                "203.0.113.10",
+                enabled=False,
+            )
+        )
+
+        priority = AvailabilityPriorityConfigCalculator().calculate(source)
+        probes = AvailabilityProbeSetCalculator().calculate(source)
+
+        self.assertFalse(priority.channels[0].enabled)
+        self.assertFalse(probes.probes[0].enabled)
 
 
 class RuntimeAssemblyPortTests(unittest.TestCase):
@@ -199,18 +224,15 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
         channel = AvailabilityPriorityChannel("a", A, True, policy)
         self.payload_manager.configure_availability(
             AvailabilityPriorityConfigCalculator().calculate(
-                AvailabilityProbeSetRequest(
-                    (
-                        probe(
-                            "a",
-                            A,
-                            "203.0.113.10",
-                            failure=1,
-                            recovery=1,
-                        ),
+                runtime_config(
+                    runtime_channel(
+                        "a",
+                        A,
+                        "203.0.113.10",
+                        failure=1,
+                        recovery=1,
                     )
-                ),
-                (ProfileAvailabilityAssignment("corp", ("a",)),),
+                )
             )
         )
 
@@ -240,11 +262,8 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
             probe_manager,
             self.payload_manager,
         )
-        probes = AvailabilityProbeSetRequest(
-            (probe("a", A, "203.0.113.10"),)
-        )
-        assignments = (
-            ProfileAvailabilityAssignment("corp", ("a",)),
+        source = runtime_config(
+            runtime_channel("a", A, "203.0.113.10")
         )
 
         observed_prefixes = []
@@ -258,7 +277,7 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
 
         probe_adapter.apply_hook = during_probe_apply
 
-        fanout.apply(probes, assignments)
+        fanout.apply(source)
 
         self.assertEqual(observed_prefixes, [2])
         self.assertEqual(len(plan_consumer.plans), 1)
@@ -279,13 +298,10 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
             probe_manager,
             self.payload_manager,
         )
-        first = AvailabilityProbeSetRequest(
-            (probe("a", A, "203.0.113.10", failure=2),)
+        first = runtime_config(
+            runtime_channel("a", A, "203.0.113.10", failure=2)
         )
-        assignment = (
-            ProfileAvailabilityAssignment("corp", ("a",)),
-        )
-        fanout.apply(first, assignment)
+        fanout.apply(first)
 
         stale = AvailabilityPriorityChannel(
             "a",
@@ -294,10 +310,10 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
             AvailabilityHysteresisPolicy(2, 2),
         )
 
-        changed = AvailabilityProbeSetRequest(
-            (probe("a", A, "203.0.113.10", failure=5),)
+        changed = runtime_config(
+            runtime_channel("a", A, "203.0.113.10", failure=5)
         )
-        fanout.apply(changed, assignment)
+        fanout.apply(changed)
 
         self.assertFalse(
             self.payload_manager.handle_availability_good_news(
