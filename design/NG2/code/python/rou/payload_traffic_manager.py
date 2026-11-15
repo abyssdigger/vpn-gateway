@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from threading import Lock
 from typing import Protocol
 
 from .availability_collector import (
     AvailabilityChannelState,
+    AvailabilityGoodNews,
     AvailabilityPendingInput,
-    ProfileProbeAssignment,
+    AvailabilityPriorityChannel,
+    AvailabilityPriorityConfig,
+    AvailabilityTick,
     calculate_availability_path_order,
 )
 from .network_rules import ActionResult, NetworkRulesAdapter, NetworkRulesSpec
@@ -20,15 +24,6 @@ from .payload_traffic_state import (
     PayloadTrafficStateInfo,
     project_payload_traffic_state,
 )
-from .probe_rules import (
-    AvailabilityProbeRequest,
-    AvailabilityProbeSetRequest,
-)
-from .probe_transport import (
-    LogicalProbeChannel,
-    ProbeGoodNewsInfo,
-    ProbeTickInfo,
-)
 
 
 class PayloadTrafficStatePublisher(Protocol):
@@ -37,7 +32,7 @@ class PayloadTrafficStatePublisher(Protocol):
 
 
 class PayloadTrafficManager:
-    """Own payload policy, availability priority state and one reconcile executor."""
+    """Own structural payload policy plus optional availability priority."""
 
     def __init__(
         self,
@@ -50,38 +45,30 @@ class PayloadTrafficManager:
         self._adapter = adapter
         self._publisher = publisher
         self._rules_calculator = rules_calculator or PayloadRulesCalculator()
-        self._state_calculator = (
-            state_calculator or PayloadRulesStateCalculator()
-        )
+        self._state_calculator = state_calculator or PayloadRulesStateCalculator()
 
         self._latest_configured: PayloadTrafficStateRequest | None = None
-        self._latest_effective_desired: PayloadTrafficStateRequest | None = None
+        self._latest_effective: PayloadTrafficStateRequest | None = None
         self._last_verified_effective: PayloadTrafficStateRequest | None = None
         self._latest_desired: NetworkRulesSpec | None = None
         self._latest_published: PayloadTrafficStateInfo | None = None
 
-        self._probe_request: AvailabilityProbeSetRequest | None = None
-        self._assignments: tuple[ProfileProbeAssignment, ...] = ()
+        self._availability = AvailabilityPriorityConfig((), ())
         self._channel_states: dict[str, AvailabilityChannelState] = {}
         self._pending_inputs: dict[str, AvailabilityPendingInput] = {}
 
         self._serial_lock = Lock()
         self._reconciling = False
         self._pending_request: PayloadTrafficStateRequest | None = None
-        self._pending_availability_config: tuple[
-            AvailabilityProbeSetRequest,
-            tuple[ProfileProbeAssignment, ...],
-        ] | None = None
+        self._pending_availability: AvailabilityPriorityConfig | None = None
         self._availability_work_pending = False
         self._audit_pending = False
 
     def handle_request(self, request: PayloadTrafficStateRequest) -> None:
-        """Accept one full structural/admin payload snapshot."""
-
         if not isinstance(request, PayloadTrafficStateRequest):
             raise ValueError("payload request must be PayloadTrafficStateRequest")
 
-        # Validate pure payload semantics before entering current intent.
+        # Structural payload validation remains independent of availability.
         self._rules_calculator.calculate(request)
 
         with self._serial_lock:
@@ -89,54 +76,39 @@ class PayloadTrafficManager:
             if self._reconciling:
                 return
             self._reconciling = True
-
         self._drain_serialized_work()
 
     def configure_availability(
         self,
-        request: AvailabilityProbeSetRequest,
-        assignments: tuple[ProfileProbeAssignment, ...],
+        config: AvailabilityPriorityConfig,
     ) -> None:
-        """Accept latest logical availability-channel configuration.
-
-        This is configuration/control input, not probe evidence. Policy-only changes keep
-        the current availability_problems flag but reset hysteresis progress.
-        """
-
-        if not isinstance(request, AvailabilityProbeSetRequest):
+        if not isinstance(config, AvailabilityPriorityConfig):
             raise ValueError(
-                "availability config requires AvailabilityProbeSetRequest"
+                "availability config must be AvailabilityPriorityConfig"
             )
-        if any(
-            not isinstance(item, ProfileProbeAssignment)
-            for item in assignments
-        ):
-            raise ValueError(
-                "availability assignments must contain ProfileProbeAssignment"
-            )
-        self._validate_assignment_references(request, assignments)
 
         with self._serial_lock:
-            self._pending_availability_config = (request, assignments)
+            self._pending_availability = config
             if self._reconciling:
                 return
             self._reconciling = True
-
         self._drain_serialized_work()
 
-    def handle_probe_good_news(self, info: ProbeGoodNewsInfo) -> bool:
-        if not isinstance(info, ProbeGoodNewsInfo):
-            raise ValueError("good-news input must be ProbeGoodNewsInfo")
+    def handle_availability_good_news(
+        self,
+        info: AvailabilityGoodNews,
+    ) -> bool:
+        if not isinstance(info, AvailabilityGoodNews):
+            raise ValueError("good-news input must be AvailabilityGoodNews")
 
         with self._serial_lock:
-            probe = self._current_probe_for_channel_locked(info.channel)
-            if probe is None:
+            channel = self._current_channel_locked(info.channel)
+            if channel is None:
                 return False
-            pending = self._pending_inputs.setdefault(
-                probe.probe_id,
+            self._pending_inputs.setdefault(
+                channel.channel_id,
                 AvailabilityPendingInput(),
-            )
-            pending.note_good_news(probe.policy)
+            ).note_good_news(channel.policy)
             self._availability_work_pending = True
             if self._reconciling:
                 return True
@@ -145,16 +117,16 @@ class PayloadTrafficManager:
         self._drain_serialized_work()
         return True
 
-    def handle_probe_tick(self, info: ProbeTickInfo) -> bool:
-        if not isinstance(info, ProbeTickInfo):
-            raise ValueError("tick input must be ProbeTickInfo")
+    def handle_availability_tick(self, info: AvailabilityTick) -> bool:
+        if not isinstance(info, AvailabilityTick):
+            raise ValueError("tick input must be AvailabilityTick")
 
         with self._serial_lock:
-            probe = self._current_probe_for_channel_locked(info.channel)
-            if probe is None:
+            channel = self._current_channel_locked(info.channel)
+            if channel is None:
                 return False
             self._pending_inputs.setdefault(
-                probe.probe_id,
+                channel.channel_id,
                 AvailabilityPendingInput(),
             ).note_tick()
             self._availability_work_pending = True
@@ -173,16 +145,12 @@ class PayloadTrafficManager:
             if self._reconciling:
                 return
             self._reconciling = True
-
         self._drain_serialized_work()
 
     def _drain_serialized_work(self) -> None:
         while True:
             request: PayloadTrafficStateRequest | None = None
-            availability_config: tuple[
-                AvailabilityProbeSetRequest,
-                tuple[ProfileProbeAssignment, ...],
-            ] | None = None
+            availability: AvailabilityPriorityConfig | None = None
             run_availability = False
             run_audit = False
 
@@ -190,9 +158,9 @@ class PayloadTrafficManager:
                 if self._pending_request is not None:
                     request = self._pending_request
                     self._pending_request = None
-                elif self._pending_availability_config is not None:
-                    availability_config = self._pending_availability_config
-                    self._pending_availability_config = None
+                elif self._pending_availability is not None:
+                    availability = self._pending_availability
+                    self._pending_availability = None
                 elif self._availability_work_pending:
                     run_availability = True
                     self._availability_work_pending = False
@@ -207,15 +175,12 @@ class PayloadTrafficManager:
                 if request is not None:
                     self._apply_payload_request(request)
                     continue
-
-                if availability_config is not None:
-                    self._apply_availability_config(*availability_config)
+                if availability is not None:
+                    self._apply_availability_config(availability)
                     continue
-
                 if run_availability:
                     self._process_availability_inputs()
                     continue
-
                 if run_audit:
                     self._audit_once()
             except Exception:
@@ -228,111 +193,100 @@ class PayloadTrafficManager:
         request: PayloadTrafficStateRequest,
     ) -> None:
         previous = self._latest_configured
-        self._validate_config_against_payload(
+        self._validate_availability_against_payload(
             request,
-            self._probe_request,
-            self._assignments,
+            self._availability,
         )
         self._latest_configured = request
         self._reconcile_payload(previous_configured=previous)
 
     def _apply_availability_config(
         self,
-        request: AvailabilityProbeSetRequest,
-        assignments: tuple[ProfileProbeAssignment, ...],
+        config: AvailabilityPriorityConfig,
     ) -> None:
-        self._validate_config_against_payload(
+        self._validate_availability_against_payload(
             self._latest_configured,
-            request,
-            assignments,
+            config,
         )
 
-        previous_by_id = (
-            {
-                item.probe_id: item
-                for item in self._probe_request.probes
-            }
-            if self._probe_request is not None
-            else {}
-        )
+        previous_by_id = {
+            item.channel_id: item for item in self._availability.channels
+        }
         current_by_id = {
-            item.probe_id: item
-            for item in request.probes
+            item.channel_id: item for item in config.channels
         }
 
-        for probe_id in tuple(self._channel_states):
-            if probe_id not in current_by_id:
-                self._channel_states.pop(probe_id, None)
-                self._pending_inputs.pop(probe_id, None)
+        for channel_id in tuple(self._channel_states):
+            if channel_id not in current_by_id:
+                self._channel_states.pop(channel_id, None)
+                self._pending_inputs.pop(channel_id, None)
 
-        for probe_id, probe in current_by_id.items():
-            previous = previous_by_id.get(probe_id)
-            state = self._channel_states.get(probe_id)
+        for channel_id, channel in current_by_id.items():
+            previous = previous_by_id.get(channel_id)
+            state = self._channel_states.get(channel_id)
             pending = self._pending_inputs.setdefault(
-                probe_id,
+                channel_id,
                 AvailabilityPendingInput(),
             )
 
-            if not probe.enabled:
+            if not channel.enabled:
                 if state is None:
                     state = AvailabilityChannelState()
-                    self._channel_states[probe_id] = state
+                    self._channel_states[channel_id] = state
                 state.disable()
                 pending.clear()
                 continue
 
-            same_channel = (
+            same_path = (
                 previous is not None
                 and previous.enabled
-                and previous.path == probe.path
-                and previous.target == probe.target
-                and previous.mechanism is probe.mechanism
+                and previous.path == channel.path
             )
-
-            if state is None or not same_channel:
-                self._channel_states[probe_id] = AvailabilityChannelState()
+            if state is None or not same_path:
+                self._channel_states[channel_id] = AvailabilityChannelState()
                 pending.clear()
                 continue
 
-            if previous != probe:
+            if previous != channel:
                 state.reset_policy_progress()
                 pending.clear()
 
-        self._probe_request = request
-        self._assignments = assignments
-
+        self._availability = config
         if self._latest_configured is not None:
             self._reconcile_payload(
                 previous_configured=self._latest_configured,
             )
 
     def _process_availability_inputs(self) -> None:
-        request = self._probe_request
-        if request is None:
+        channels = {
+            item.channel_id: item
+            for item in self._availability.channels
+            if item.enabled
+        }
+        if not channels:
             return
 
         with self._serial_lock:
             snapshots = tuple(
                 (
-                    probe,
+                    channel,
                     self._pending_inputs.setdefault(
-                        probe.probe_id,
+                        channel.channel_id,
                         AvailabilityPendingInput(),
                     ).take(),
                 )
-                for probe in request.probes
-                if probe.enabled
+                for channel in channels.values()
             )
 
         changed = False
-        for probe, (good_news, tick_pending) in snapshots:
+        for channel, (good_news, tick_pending) in snapshots:
             state = self._channel_states.setdefault(
-                probe.probe_id,
+                channel.channel_id,
                 AvailabilityChannelState(),
             )
             changed = (
                 state.process(
-                    probe.policy,
+                    channel.policy,
                     pending_good_news=good_news,
                     tick_pending=tick_pending,
                 )
@@ -353,20 +307,21 @@ class PayloadTrafficManager:
         if configured is None:
             return
 
-        effective = self._calculate_effective_request(
+        effective, preferred_prefixes = self._calculate_effective_request(
             configured,
             previous_configured=previous_configured,
         )
-        if (
-            self._latest_effective_desired is not None
-            and effective == self._latest_effective_desired
-            and self._latest_desired is not None
-        ):
+        desired = self._rules_calculator.calculate(effective)
+        desired = self._apply_preferred_prefixes(
+            desired,
+            preferred_prefixes,
+        )
+
+        if self._latest_desired is not None and desired == self._latest_desired:
+            self._latest_effective = effective
             return
 
-        desired = self._rules_calculator.calculate(effective)
-
-        self._latest_effective_desired = effective
+        self._latest_effective = effective
         self._latest_desired = desired
 
         info = self._apply_desired_and_observe(desired)
@@ -379,7 +334,7 @@ class PayloadTrafficManager:
         configured: PayloadTrafficStateRequest,
         *,
         previous_configured: PayloadTrafficStateRequest | None,
-    ) -> PayloadTrafficStateRequest:
+    ) -> tuple[PayloadTrafficStateRequest, dict[str, int | None]]:
         previous_by_name = (
             {}
             if previous_configured is None
@@ -396,20 +351,18 @@ class PayloadTrafficManager:
                 for item in self._last_verified_effective.profiles
             }
         )
-        assignment_by_name = {
+        assignments = {
             item.profile_name: item
-            for item in self._assignments
+            for item in self._availability.assignments
         }
-        probes_by_id = (
-            {}
-            if self._probe_request is None
-            else {
-                item.probe_id: item
-                for item in self._probe_request.probes
-            }
-        )
+        channels = {
+            item.channel_id: item
+            for item in self._availability.channels
+        }
 
         result: list[PayloadProfileRequest] = []
+        preferred_prefixes: dict[str, int | None] = {}
+
         for profile in configured.profiles:
             configured_paths = {
                 path.identity: path
@@ -423,59 +376,63 @@ class PayloadTrafficManager:
                 None
                 if previous is None
                 else tuple(
-                    path.identity
-                    for path in previous.ordered_paths
+                    path.identity for path in previous.ordered_paths
                 )
             )
             verified_order = (
                 None
                 if verified is None
                 else tuple(
-                    path.identity
-                    for path in verified.ordered_paths
+                    path.identity for path in verified.ordered_paths
                 )
             )
-
             rebase = (
                 previous_order != configured_order
                 or verified_order is None
                 or set(verified_order) != set(configured_order)
             )
-            current_order = (
-                configured_order
-                if rebase
-                else verified_order
-            )
+            current_order = configured_order if rebase else verified_order
             assert current_order is not None
 
-            problem_paths = set()
-            assignment = assignment_by_name.get(profile.name)
+            assignment = assignments.get(profile.name)
+            active_by_path: dict[
+                object,
+                list[AvailabilityPriorityChannel],
+            ] = {}
             if assignment is not None:
-                probes_by_path: dict[object, list[AvailabilityProbeRequest]] = {}
-                for probe_id in assignment.probe_ids:
-                    probe = probes_by_id.get(probe_id)
-                    if probe is None or not probe.enabled:
+                for channel_id in assignment.channel_ids:
+                    channel = channels[channel_id]
+                    if not channel.enabled:
                         continue
-                    probes_by_path.setdefault(probe.path, []).append(probe)
+                    active_by_path.setdefault(
+                        channel.path,
+                        [],
+                    ).append(channel)
 
-                for path, path_probes in probes_by_path.items():
+            if not active_by_path:
+                effective_order = configured_order
+                preferred_prefixes[profile.name] = None
+            else:
+                problem_paths = {
+                    path
+                    for path, path_channels in active_by_path.items()
                     if all(
-                        self._channel_states.get(probe.probe_id) is not None
+                        self._channel_states.get(channel.channel_id)
+                        is not None
                         and self._channel_states[
-                            probe.probe_id
+                            channel.channel_id
                         ].availability_problems
-                        for probe in path_probes
-                    ):
-                        problem_paths.add(path)
-
-            effective_order = calculate_availability_path_order(
-                configured_order,
-                current_order,
-                frozenset(problem_paths),
-            )
-            no_problem_prefix_length = (
-                len(configured_order) - len(problem_paths)
-            )
+                        for channel in path_channels
+                    )
+                }
+                effective_order = calculate_availability_path_order(
+                    configured_order,
+                    current_order,
+                    frozenset(problem_paths),
+                )
+                preferred_prefixes[profile.name] = (
+                    len(configured_order) - len(problem_paths)
+                )
 
             result.append(
                 PayloadProfileRequest(
@@ -486,11 +443,28 @@ class PayloadTrafficManager:
                         configured_paths[identity]
                         for identity in effective_order
                     ),
-                    no_problem_prefix_length=no_problem_prefix_length,
                 )
             )
 
-        return PayloadTrafficStateRequest(tuple(result))
+        return PayloadTrafficStateRequest(tuple(result)), preferred_prefixes
+
+    @staticmethod
+    def _apply_preferred_prefixes(
+        desired: NetworkRulesSpec,
+        preferred_prefixes: dict[str, int | None],
+    ) -> NetworkRulesSpec:
+        return replace(
+            desired,
+            routing_domains=tuple(
+                replace(
+                    domain,
+                    preferred_prefix_length=preferred_prefixes.get(
+                        domain.name
+                    ),
+                )
+                for domain in desired.routing_domains
+            ),
+        )
 
     def _audit_once(self) -> None:
         desired = self._latest_desired
@@ -505,9 +479,9 @@ class PayloadTrafficManager:
 
         if (
             info.rules_state.convergence is Convergence.MATCHED
-            and self._latest_effective_desired is not None
+            and self._latest_effective is not None
         ):
-            self._last_verified_effective = self._latest_effective_desired
+            self._last_verified_effective = self._latest_effective
 
         self._publish_if_changed(info)
 
@@ -541,84 +515,50 @@ class PayloadTrafficManager:
         self._publisher.publish(info)
         self._latest_published = info
 
-    def _current_probe_for_channel_locked(
+    def _current_channel_locked(
         self,
-        channel: LogicalProbeChannel,
-    ) -> AvailabilityProbeRequest | None:
-        request = self._probe_request
-        if request is None:
-            return None
-
-        for probe in request.probes:
-            if probe.probe_id != channel.probe_id:
+        channel: AvailabilityPriorityChannel,
+    ) -> AvailabilityPriorityChannel | None:
+        for current in self._availability.channels:
+            if current.channel_id != channel.channel_id:
                 continue
-            if not probe.enabled:
+            if not current.enabled or current != channel:
                 return None
-            if (
-                probe.path != channel.path
-                or probe.target != channel.target
-                or probe.mechanism is not channel.mechanism
-                or probe.policy != channel.policy
-            ):
-                return None
-            return probe
+            return current
         return None
 
     @staticmethod
-    def _validate_assignment_references(
-        request: AvailabilityProbeSetRequest,
-        assignments: tuple[ProfileProbeAssignment, ...],
-    ) -> None:
-        probe_ids = {
-            item.probe_id
-            for item in request.probes
-        }
-        profile_names = []
-        for assignment in assignments:
-            profile_names.append(assignment.profile_name)
-            missing = set(assignment.probe_ids) - probe_ids
-            if missing:
-                raise ValueError(
-                    f"Profile {assignment.profile_name!r} references "
-                    "unknown probe_id: "
-                    + ", ".join(sorted(missing))
-                )
-        if len(set(profile_names)) != len(profile_names):
-            raise ValueError("duplicate Profile probe assignment")
-
-    @staticmethod
-    def _validate_config_against_payload(
+    def _validate_availability_against_payload(
         payload: PayloadTrafficStateRequest | None,
-        request: AvailabilityProbeSetRequest | None,
-        assignments: tuple[ProfileProbeAssignment, ...],
+        config: AvailabilityPriorityConfig,
     ) -> None:
-        if payload is None or request is None:
+        if payload is None:
             return
 
-        profiles_by_name = {
+        profiles = {
             item.name: item
             for item in payload.profiles
         }
-        probes_by_id = {
-            item.probe_id: item
-            for item in request.probes
+        channels = {
+            item.channel_id: item
+            for item in config.channels
         }
 
-        for assignment in assignments:
-            profile = profiles_by_name.get(assignment.profile_name)
+        for assignment in config.assignments:
+            profile = profiles.get(assignment.profile_name)
             if profile is None:
                 raise ValueError(
-                    f"probe assignment references unknown Profile "
+                    "availability assignment references unknown Profile "
                     f"{assignment.profile_name!r}"
                 )
             eligible = {
                 path.identity
                 for path in profile.ordered_paths
             }
-            for probe_id in assignment.probe_ids:
-                probe = probes_by_id[probe_id]
-                if probe.path not in eligible:
+            for channel_id in assignment.channel_ids:
+                channel = channels[channel_id]
+                if channel.path not in eligible:
                     raise ValueError(
-                        f"probe {probe_id!r} path is not eligible for "
-                        f"Profile {assignment.profile_name!r}"
+                        f"availability channel {channel_id!r} path is not "
+                        f"eligible for Profile {assignment.profile_name!r}"
                     )
