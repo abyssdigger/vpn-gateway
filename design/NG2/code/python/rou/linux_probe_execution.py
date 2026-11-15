@@ -292,6 +292,9 @@ class LinuxProbeExecutionAgent:
         self._schedule = ProbeExecutionSchedule()
         self._running = False
         self._thread: Thread | None = None
+        # Good-news and window-boundary facts share one publication order per Agent.
+        # EventEnvelope revisions can later preserve this order across async delivery.
+        self._event_publication_lock = Lock()
         self._diagnostic_lock = Lock()
         self._latest_diagnostic: dict[
             tuple[int, PhysicalProbePlane],
@@ -350,7 +353,8 @@ class LinuxProbeExecutionAgent:
             return
 
         for event in boundaries:
-            self._boundary_publisher.publish(event)
+            with self._event_publication_lock:
+                self._boundary_publisher.publish(event)
         for plane in sends:
             self._launch_send(plan, plane)
 
@@ -412,14 +416,15 @@ class LinuxProbeExecutionAgent:
 
         self._publish_diagnostic_ready(plan, plane)
         if result.good_news:
-            self._good_news_publisher.publish(
-                ProbeGoodNewsInfo(
-                    plane.mechanism,
-                    plane.path,
-                    plane.target,
-                    plan.generation,
+            with self._event_publication_lock:
+                self._good_news_publisher.publish(
+                    ProbeGoodNewsInfo(
+                        plane.mechanism,
+                        plane.path,
+                        plane.target,
+                        plan.generation,
+                    )
                 )
-            )
 
     def _publish_diagnostic_ready(
         self,
