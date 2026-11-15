@@ -1,3 +1,31 @@
+## 2026-11-15 — NG2 Linux probe execution Agent
+
+Implemented the first production execution Engine for the non-attempt availability
+contract:
+
+- AvailabilityProbeManager now publishes latest-value `ProbeExecutionPlan | None`
+  RequestEvents; generation loss publishes quiesce before later lower-domain transition;
+- added long-lived `LinuxProbeExecutionAgent` owning monotonic cadence, immediate first
+  send, boundary-before-next-send ordering and generation filtering;
+- production Agent sees only `ProbeSendResult(good_news, local_error)`; a compatibility
+  Adapter collapses the historical diagnostic Driver's `NO_REPLY` below this boundary;
+- physical execution is bounded to one in-flight send per plane/generation; cadence overrun
+  is local diagnostic state and never an immediate routing verdict;
+- delayed observation windows are batched with `elapsed_intervals` and applied in O(1);
+  missed physical sends are not replayed as a catch-up burst;
+- good-news and window-boundary publications are source-serialized;
+- local execution diagnostics are generation-scoped READY/ERROR/INACTIVE projections and
+  stale worker completions cannot overwrite invalidation;
+- rootless regression coverage now spans Manager plan publication, Agent scheduling,
+  diagnostic lifecycle and the execution -> evidence round trip;
+- the Linux mechanism remains the already target-validated capability-free
+  `LinuxIcmpProbeDriver`; no new raw/ping-socket kernel behavior is claimed.
+
+The remaining ordering gate is EventEnvelope epoch/revision delivery plus daemon/runtime
+assembly of the real event transport.
+
+---
+
 ## 2026-11-15 — NG2 non-attempt probe execution contract
 
 Defined the next execution boundary without restoring per-attempt availability semantics:
