@@ -6,7 +6,8 @@ from threading import Condition, Lock, Thread
 import time
 from typing import Callable, Protocol
 
-from .probe_attempt import ProbeAttemptOutcome, ProbeAttemptResult
+from .linux_probe_driver import LinuxIcmpProbeDriver
+from .probe_attempt import ProbeAttemptOutcome
 from .probe_transport import (
     PhysicalProbePlane,
     ProbeExecutionPlan,
@@ -15,15 +16,62 @@ from .probe_transport import (
 )
 
 
+@dataclass(frozen=True)
+class ProbeSendResult:
+    good_news: bool
+    local_error: str | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.good_news) is not bool:
+            raise ValueError("probe send good_news must be boolean")
+        if self.local_error is not None and not self.local_error:
+            raise ValueError("probe send local_error must be non-empty when present")
+        if self.good_news and self.local_error is not None:
+            raise ValueError("good-news send result cannot also be a local error")
+
+
 class ProbeSendDriver(Protocol):
-    def execute(
+    def execute_send(
         self,
         path,
         target,
         *,
         timeout_seconds: int,
-    ) -> ProbeAttemptResult:
+    ) -> ProbeSendResult:
         ...
+
+
+class LinuxDiagnosticPingSendAdapter:
+    """Hide the historical diagnostic attempt contract below production execution.
+
+    NO_REPLY is collapsed to ordinary absence of good news. It never crosses this Adapter.
+    """
+
+    def __init__(self, driver: LinuxIcmpProbeDriver) -> None:
+        if not isinstance(driver, LinuxIcmpProbeDriver):
+            raise ValueError("ping send Adapter requires LinuxIcmpProbeDriver")
+        self._driver = driver
+
+    def execute_send(
+        self,
+        path,
+        target,
+        *,
+        timeout_seconds: int,
+    ) -> ProbeSendResult:
+        result = self._driver.execute(
+            path,
+            target,
+            timeout_seconds=timeout_seconds,
+        )
+        if result.outcome is ProbeAttemptOutcome.REPLY:
+            return ProbeSendResult(True)
+        if result.outcome is ProbeAttemptOutcome.ERROR:
+            return ProbeSendResult(
+                False,
+                result.diagnostic or "local probe execution error",
+            )
+        return ProbeSendResult(False)
 
 
 class ProbeGoodNewsPublisher(Protocol):
@@ -228,7 +276,7 @@ class LinuxProbeExecutionAgent:
         timeout_seconds: int = 1,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        if not callable(getattr(driver, "execute", None)):
+        if not callable(getattr(driver, "execute_send", None)):
             raise ValueError("Linux probe execution Agent requires ProbeSendDriver")
         if type(timeout_seconds) is not int or timeout_seconds <= 0:
             raise ValueError("technical timeout_seconds must be a positive integer")
@@ -341,7 +389,7 @@ class LinuxProbeExecutionAgent:
         plan: ProbeExecutionPlan,
         plane: PhysicalProbePlane,
     ) -> None:
-        result = self._driver.execute(
+        result = self._driver.execute_send(
             plane.path,
             plane.target,
             timeout_seconds=self._timeout_seconds,
@@ -354,8 +402,16 @@ class LinuxProbeExecutionAgent:
             if plane not in current.planes:
                 return
 
-        if result.outcome is ProbeAttemptOutcome.REPLY:
-            self._publish_diagnostic_ready(plan, plane)
+        if result.local_error is not None:
+            self._publish_diagnostic_error(
+                plan,
+                plane,
+                result.local_error,
+            )
+            return
+
+        self._publish_diagnostic_ready(plan, plane)
+        if result.good_news:
             self._good_news_publisher.publish(
                 ProbeGoodNewsInfo(
                     plane.mechanism,
@@ -364,19 +420,6 @@ class LinuxProbeExecutionAgent:
                     plan.generation,
                 )
             )
-            return
-
-        if result.outcome is ProbeAttemptOutcome.ERROR:
-            self._publish_diagnostic_error(
-                plan,
-                plane,
-                result.diagnostic or "local probe execution error",
-            )
-            return
-
-        # NO_REPLY is deliberately not a production event. A successful local ping
-        # execution with no reply also clears an earlier local machinery error.
-        self._publish_diagnostic_ready(plan, plane)
 
     def _publish_diagnostic_ready(
         self,
