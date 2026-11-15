@@ -1,5 +1,11 @@
 # VPN-GATE NG2 — ProbeExecutionAgent
 
+> **2026-11-15 normative update:** logical observation windows are removed from the target
+> architecture. `design/NG2/availability-collector-materializer.md` supersedes the
+> `LogicalProbeWindow`, `evidence_epoch`, boundary batching and `elapsed_intervals`
+> portions below. Physical send cadence, stale physical-generation rejection, bounded
+> workers and local diagnostics remain normative.
+
 **Status:** active NG2 design  
 **Date:** 2026-11-15  
 **Scope:** production execution of generation-bound active probe demand  
