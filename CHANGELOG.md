@@ -25,9 +25,11 @@ network-policy object graph without reintroducing an availability evidence bus:
 - `stop()` is now a terminal lifecycle boundary while repeated stop remains available for
   cleanup retry/idempotence; audit/cleanup attempts remain independent across probe and
   payload owner scopes;
-- final simplified `runtime_assembly.py` is 349 lines / 10 top-level definitions versus
+- an all-clear availability state no longer emits any `preferred_prefix_length`; enabling
+  probing with zero problem paths is now also a payload materialization no-op;
+- final simplified `runtime_assembly.py` is 346 lines / 10 top-level definitions versus
   the pre-review 492 lines / 17 definitions;
-- final milestone CI run 691 passed **300 unit tests** plus the full privileged Linux
+- final milestone CI run 710 passed **301 unit tests** plus the full privileged Linux
   matrix.
 
 ---
