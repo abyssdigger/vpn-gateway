@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from ipaddress import IPv4Address
 from math import isfinite
 
-from .availability_collector import AvailabilityChannelPolicy
+from .availability_collector import AvailabilityGoodNews, AvailabilityTick
 from .availability_probe_state import ProbeObservationGeneration
 from .interface_identity import InterfaceIdentity
 from .probe_rules import (
@@ -38,23 +38,30 @@ class PhysicalProbePlane:
 
 @dataclass(frozen=True)
 class LogicalProbeChannel:
-    probe_id: str
+    channel_id: str
     mechanism: ProbeMechanism
     path: InterfaceIdentity
     target: IPv4Address
-    policy: AvailabilityChannelPolicy
+    interval_seconds: float
 
     def __post_init__(self) -> None:
-        if not isinstance(self.probe_id, str) or not self.probe_id:
-            raise ValueError("logical probe channel requires non-empty probe_id")
+        if not isinstance(self.channel_id, str) or not self.channel_id:
+            raise ValueError("logical probe channel requires non-empty channel_id")
         if not isinstance(self.mechanism, ProbeMechanism):
             raise ValueError("logical probe channel requires ProbeMechanism")
         if not isinstance(self.path, InterfaceIdentity):
             raise ValueError("logical probe channel requires InterfaceIdentity")
         if not isinstance(self.target, IPv4Address):
             raise ValueError("logical probe channel requires IPv4Address target")
-        if not isinstance(self.policy, AvailabilityChannelPolicy):
-            raise ValueError("logical probe channel requires AvailabilityChannelPolicy")
+        if (
+            isinstance(self.interval_seconds, bool)
+            or not isinstance(self.interval_seconds, (int, float))
+            or not isfinite(float(self.interval_seconds))
+            or self.interval_seconds <= 0
+        ):
+            raise ValueError(
+                "logical probe channel interval must be positive"
+            )
 
 
 @dataclass(frozen=True)
@@ -79,33 +86,15 @@ class ProbeExecutionPlan:
         if len(set(plane_keys)) != len(plane_keys):
             raise ValueError("execution plan contains duplicate physical planes")
 
-        probe_ids = []
+        channel_ids = []
         for item in self.channels:
             if not isinstance(item, LogicalProbeChannel):
                 raise ValueError(
                     "execution plan channels must contain LogicalProbeChannel"
                 )
-            probe_ids.append(item.probe_id)
-        if len(set(probe_ids)) != len(probe_ids):
+            channel_ids.append(item.channel_id)
+        if len(set(channel_ids)) != len(channel_ids):
             raise ValueError("execution plan contains duplicate logical channels")
-
-
-@dataclass(frozen=True)
-class ProbeGoodNewsInfo:
-    channel: LogicalProbeChannel
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.channel, LogicalProbeChannel):
-            raise ValueError("good-news info requires LogicalProbeChannel")
-
-
-@dataclass(frozen=True)
-class ProbeTickInfo:
-    channel: LogicalProbeChannel
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.channel, LogicalProbeChannel):
-            raise ValueError("tick info requires LogicalProbeChannel")
 
 
 class ProbeExecutionPlanCalculator:
@@ -132,18 +121,18 @@ class ProbeExecutionPlanCalculator:
                 continue
 
             key = (probe.mechanism, probe.path, probe.target)
-            interval = float(probe.policy.interval_seconds)
+            interval = float(probe.interval_seconds)
             previous = interval_by_plane.get(key)
             if previous is None or interval < previous:
                 interval_by_plane[key] = interval
 
             channels.append(
                 LogicalProbeChannel(
-                    probe.probe_id,
+                    probe.channel_id,
                     probe.mechanism,
                     probe.path,
                     probe.target,
-                    probe.policy,
+                    probe.interval_seconds,
                 )
             )
 
@@ -162,5 +151,5 @@ class ProbeExecutionPlanCalculator:
         return ProbeExecutionPlan(
             generation,
             planes,
-            tuple(sorted(channels, key=lambda item: item.probe_id)),
+            tuple(sorted(channels, key=lambda item: item.channel_id)),
         )
