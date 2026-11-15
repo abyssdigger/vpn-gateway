@@ -297,18 +297,48 @@ class LinuxNetworkPolicyRuntime:
 
     def audit(self) -> None:
         self._require_active()
+        probe_error: Exception | None = None
         try:
             self.availability.probe_manager.audit()
-        finally:
+        except Exception as exc:
+            probe_error = exc
+
+        try:
             self.payload_manager.audit()
+        except Exception as payload_error:
+            if probe_error is not None:
+                raise ExceptionGroup(
+                    "network-policy audit failed for both owners",
+                    (probe_error, payload_error),
+                )
+            raise
+
+        if probe_error is not None:
+            raise probe_error
 
     def stop(self) -> NetworkPolicyRuntimeStopResult:
         self._stopped = True
-        probe_result: ActionResult
+        probe_error: Exception | None = None
+        probe_result: ActionResult | None = None
         try:
             probe_result = self.availability.stop()
-        finally:
+        except Exception as exc:
+            probe_error = exc
+
+        try:
             payload_result = self.payload_manager.shutdown()
+        except Exception as payload_error:
+            if probe_error is not None:
+                raise ExceptionGroup(
+                    "network-policy cleanup failed for both owners",
+                    (probe_error, payload_error),
+                )
+            raise
+
+        if probe_error is not None:
+            raise probe_error
+
+        assert probe_result is not None
         return NetworkPolicyRuntimeStopResult(
             probe_result,
             payload_result,
