@@ -896,10 +896,15 @@ long-lived semantic component.
 Instead, the architecture records only required postconditions:
 
 **Implements:**
+- `VPNG-R1.R2`
 - `VPNG-R4.R4`
 - `VPNG-R5.R1`
 - `VPNG-R5.R4`
 - `VPNG-R5.R5`
+- `VPNG-R5.R6`
+- `VPNG-R5.R6.R1`
+- `VPNG-R5.R6.R2`
+- `VPNG-R5.R6.R3`
 - `VPNG-R7.R1`
 
 Required orchestration semantics:
@@ -911,25 +916,58 @@ Required orchestration semantics:
 4. attempt cleanup of independent owned domains even if another cleanup fails;
 5. preserve all material failures for observability.
 
-Whether these steps remain procedural assembly or require a dedicated Engine is intentionally
-left open until deeper lifecycle requirements demand one.
+## 12.1. Product lifecycle control surface
+
+The lifecycle operations required by `VPNG-R5.R6` are exposed through a thin product
+control surface.
+
+The architecture does not require that surface to be a specific CLI, service manager,
+socket or API. Those are replaceable interface mechanisms.
+
+Semantically:
+
+```text
+start
+    -> run startup orchestration
+    -> report success only after required readiness/safety postconditions
+
+stop
+    -> run quiesce + cleanup orchestration
+    -> report success only after required cleanup postconditions
+
+restart
+    -> stop/cleanup as required
+    -> start from the resulting authoritative state
+    -> never report success while previous required cleanup remains unresolved
+```
+
+The control surface is not a long-lived domain Engine and owns no independent lifecycle
+policy. It invokes procedural assembly/orchestration whose postconditions are already
+defined by the lifecycle requirements.
+
+This keeps product control operations explicit while avoiding a LifecycleManager that has no
+independently required semantic state.
+
+For the current scope, procedural lifecycle orchestration remains the accepted architecture.
+A dedicated Engine would require a later requirement proving an ongoing semantic
+responsibility that cannot be represented by these direct operations.
 
 # 13. Requirement coverage in this architecture pass
 
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG-R1.R2` declarative operation | **not yet architected**: configuration boundary missing |
-| `VPNG-R1.R3` VPN-channel service | external channel boundary established; exact onboarding contract incomplete |
+| `VPNG-R1.R2` declarative operation | configuration side represented by ConfigurationAdapter; lifecycle control side represented by thin product control surface |
+| `VPNG-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
-| `VPNG-R1.R3.C1.R1` admin instructions/contract | requirement identified; concrete supported-channel instructions still missing |
+| `VPNG-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
 | `VPNG-R1.R3.C2` isolated VPN data-plane endpoint | architecture constraint derived from managed-network isolation |
-| `VPNG-R1.R3.C2.R1` isolated-channel onboarding result | required result known; concrete mechanism intentionally unresolved |
+| `VPNG-R1.R3.C2.R1` isolated-channel onboarding result | placement result architecture accepted; concrete provisioning commands remain implementation-specific |
 | `VPNG-R2` subtree — payload policy | semantic ownership represented; normalized config schema missing |
 | `VPNG-R3.R1`–`VPNG-R3.R5`, `VPNG-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
 | `VPNG-R3.R6` subtree — path-usability evidence | active observation selected via AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
 | `VPNG-R4` subtree — safety | lower boundary/executor responsibilities represented; managed network isolation selected; concrete lower mutation strategy otherwise incomplete |
-| `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5` lifecycle | postconditions recorded; orchestration component intentionally absent |
+| `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5`, `VPNG-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
 | `VPNG-R5.R2`, `VPNG-R5.R3` recovery | represented locally by Manager/Adapter/Executor contracts |
 | `VPNG-R6.R1` configured intent visibility | **not yet architected** |
 | `VPNG-R6.R2`, `VPNG-R6.R4` payload effective state | component-level projection represented |
@@ -958,26 +996,20 @@ never become necessary.
 
 # 15. Design gaps that block deeper architecture
 
-## 15.1. Configuration model
+## 15.1. Remaining configuration semantics
 
-Affected requirements:
-- `VPNG-R1.R2`
-- `VPNG-R2.R1`
-- `VPNG-R2.R2`
-- `VPNG-R2.R3`
-- `VPNG-R2.R4`
-- `VPNG-R2.R5`
-- `VPNG-R6.R1`
+The configuration boundary itself is now defined and the VPN-path binding contract is
+architecturally closed.
 
-Missing requirement detail:
+Remaining requirement detail is limited to still-open product semantics, primarily:
 
 - how users identify traffic classes;
-- how VPN paths are referenced;
-- how directions are expressed;
-- how conflicting/overlapping declarations are surfaced;
-- which configuration changes must be supported live.
+- how traffic policy references path sets and directions in the external configuration;
+- whether any configuration changes must be supported live;
+- final user-visible configured-intent projection under `VPNG-R6.R1`.
 
-Until this is refined, NG3 must not invent a universal normalized config schema.
+These gaps must be refined by their owning requirement branches rather than by expanding
+`ConfigurationAdapter` into a universal configuration framework.
 
 ## 15.2. Availability evidence semantics
 
@@ -1017,7 +1049,7 @@ the final user-facing status model, aggregation ownership or presentation bounda
 No RuntimeStateManager/StatusManager is introduced until that responsibility is made
 concrete.
 
-## 15.4. Complete lifecycle ownership
+## 15.4. Lifecycle ownership
 
 Affected requirements:
 - `VPNG-R5.R1`
@@ -1025,15 +1057,17 @@ Affected requirements:
 - `VPNG-R5.R3`
 - `VPNG-R5.R4`
 - `VPNG-R5.R5`
+- `VPNG-R5.R6`
 
-The required postconditions are clear enough to constrain components but not yet sufficient
-to prove that a separate long-lived lifecycle component is necessary.
+Lifecycle control semantics are now explicit. They still do not justify a separate
+long-lived lifecycle component.
 
 For the first release, VPN tunnel/session creation is outside this lifecycle scope by
-`VPNG-R1.R3.C1`; lifecycle here concerns VPN-GATE-owned state and its use of already
-provisioned channels.
+`VPNG-R1.R3.C1`; lifecycle concerns VPN-GATE-owned state and its use of already provisioned
+channels.
 
-Procedural assembly remains the simpler default.
+Procedural assembly plus the thin product control surface remains the simpler accepted
+architecture.
 
 ## 15.5. Administrator-facing VPN-channel onboarding contract
 
