@@ -208,6 +208,7 @@ class OwnerScopedFakeAdapter:
         self.states = {}
         self.apply_calls = []
         self.renew_calls = []
+        self.renew_raise = set()
         self.cleanup_calls = []
         self.cleanup_results = {}
         self.cleanup_raise = set()
@@ -223,6 +224,8 @@ class OwnerScopedFakeAdapter:
 
     def renew_state(self, owner):
         self.renew_calls.append(owner)
+        if owner in self.renew_raise:
+            raise RuntimeError("renew boom")
         if owner not in self.states:
             self.states[owner] = NetworkRulesState(
                 StateKnowledge.KNOWN,
@@ -619,6 +622,30 @@ class LinuxNetworkPolicyRuntimeTests(unittest.TestCase):
             runtime.payload_manager,
             runtime.availability.probe_manager,
         )
+
+    def test_probe_audit_exception_still_attempts_payload_audit(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+        adapter.renew_calls.clear()
+        adapter.renew_raise.add(runtime.availability.probe_manager)
+
+        with self.assertRaisesRegex(RuntimeError, "renew boom"):
+            runtime.audit()
+
+        self.assertIn(runtime.payload_manager, adapter.renew_calls)
 
     def test_audit_refreshes_both_network_policy_owners(self):
         adapter = OwnerScopedFakeAdapter()
