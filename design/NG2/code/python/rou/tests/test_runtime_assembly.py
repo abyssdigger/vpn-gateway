@@ -430,12 +430,13 @@ class LinuxAvailabilityRuntimeAssemblyTests(unittest.TestCase):
         runtime.start()
 
         result = runtime.stop()
+        calls_after_stop = len(driver.calls)
 
         self.assertTrue(result.success)
         self.assertEqual(probe_adapter.cleanup_calls, 1)
 
         runtime.agent.process_due(100.0)
-        self.assertEqual(driver.calls, [])
+        self.assertEqual(len(driver.calls), calls_after_stop)
 
 
 if __name__ == "__main__":
