@@ -347,13 +347,15 @@ fact. availability-problems hysteresis принадлежит PayloadTrafficMana
 
 Новая revision заменяет предыдущий desired set.
 
-### 8.3. Availability diagnostic projection
+### 8.3. Availability diagnostics
 
-`AvailabilityProbeStateInfo` больше не является routing-control Event contract.
+`AvailabilityProbeStateInfo` удален из executable routing-control contract.
 
-Во время миграции implementation может продолжать публиковать probe diagnostics/status,
-но RuntimeStateManager не использует их для вычисления route priority. Routing-relevant
-availability-problems state находится внутри PayloadTrafficManager collector.
+Current routing-relevant availability state находится внутри
+`PayloadTrafficManager`. Local execution health остается отдельным
+`ProbeExecutionDiagnosticInfo`; если позже понадобится aggregate availability status,
+он должен проецироваться из текущего collector/Agent state, а не возвращать старую
+routing-control цепочку.
 
 ### 8.4. PayloadTrafficStateRequest
 
@@ -543,22 +545,16 @@ Binding исчезает по структурной/административ�
 
 - полный desired set для `AvailabilityProbeSetRequest`.
 
-### 10.4. PayloadTrafficIntentCalculator
+### 10.4. Payload traffic intent
 
-Вход:
+Structural runtime calculation produces `PayloadTrafficStateRequest` from config,
+binding and other non-availability runtime facts.
 
-- config и configured/base path priority;
-- binding matrix;
-- availability channel assignment/policy;
-- другие structural runtime facts.
-
-Выход:
-
-- semantic structural payload projection для `PayloadTrafficStateRequest`.
-
-Calculator больше не принимает current availability probe states и не вычисляет готовый
-effective `ordered_paths`. current availability-problems state, effective order и live-prefix boundary
-принадлежат PayloadTrafficManager collector/materializer flow.
+Current availability state is not projected through a separate
+`PayloadTrafficIntentCalculator`. The executable availability-priority calculation is a
+small part of `PayloadTrafficManager`: configured/base path order plus its current
+`availability_problems` collector state produce the effective path order and
+`no_problem_prefix_length`.
 
 ## 11. Recalculation RuntimeStateManager
 
@@ -618,13 +614,13 @@ valid current reply -> pending_good_news += 1 (saturating)
 logical timer fire  -> tick_pending = true
 ```
 
-The producer call only updates bounded state under a short lock and returns. It never
-waits for route materialization.
+Producer ingress updates bounded state under a short lock. If the sole payload executor
+is already busy, ingress returns immediately. If it is free, that caller may become the
+executor and synchronously drain the current collector snapshot.
 
-The PayloadTrafficManager collector later processes the accumulated facts as one
-simultaneous observation, updates current availability-problems channel state, and if the
-routing-relevant snapshot changed invokes the sole route-priority materializer
-synchronously.
+The collector processes accumulated facts as one simultaneous observation, updates
+current `availability_problems` state, and, only if the routing-relevant effective
+request changed, invokes the sole route materializer synchronously.
 
 ```text
 ProbeExecutionAgent
@@ -727,16 +723,30 @@ RuntimeStateManager
 The good-news/tick edge is an aggregate producer input, not a replayable Event journal.
 The collector/materializer edge is synchronous Machinery flow inside PayloadTrafficManager.
 
-## 16. Следующая декомпозиция
+## 16. Current executable state and remaining assembly
 
-Архитектурно зафиксированы:
+Implemented:
 
-- physical ProbeRules/readiness ownership в AvailabilityProbeManager;
-- bounded physical sends and stale-generation rejection in ProbeExecutionAgent;
-- bounded colorless good-news counter + boolean tick input;
-- availability-problems collector policy inside PayloadTrafficManager;
-- synchronous use of the sole route-priority materializer;
-- no EventEnvelope requirement on the availability collector/materializer path.
+- physical ProbeRules/readiness in `AvailabilityProbeManager`;
+- physical generation stale-worker guard;
+- `ProbeExecutionPlan` with physical planes + logical channels;
+- `ProbeExecutionAgent` with bounded sends, logical ticks and diagnostics;
+- saturating good-news counters + boolean tick latches;
+- `availability_problems` hysteresis inside `PayloadTrafficManager`;
+- direct availability-priority calculation and synchronous use of its sole reconcile
+  executor;
+- no EventEnvelope dependency on the good-news/tick path.
 
-Current code still implements the superseded logical-window/evidence-epoch model. The next
-coherent implementation unit is its replacement by this bounded aggregate collector.
+Removed as executable availability machinery:
+
+- logical windows;
+- `evidence_epoch`;
+- `elapsed_intervals`;
+- `AvailabilityProbeStateInfo` routing mediation;
+- `payload_traffic_intent.py`;
+- the old availability-specific `runtime_state_manager.py` slice.
+
+Remaining runtime work is assembly: structural config/request calculation, fanout of the
+current probe/assignment configuration to the two owning Managers, connection of
+`ProbeExecutionAgent` good-news/tick outputs to `PayloadTrafficManager`, and status
+projection of local probe diagnostics.
