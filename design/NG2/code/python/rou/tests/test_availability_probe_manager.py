@@ -101,10 +101,79 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         self.path = InterfaceIdentity("vpns00", 10)
         self.adapter = FakeAdapter()
         self.publisher = RecordingPublisher()
+        self.execution_publisher = RecordingPublisher()
         self.manager = AvailabilityProbeManager(
             self.adapter,
             self.publisher,
+            execution_plan_publisher=self.execution_publisher,
         )
+
+    def test_first_ready_request_publishes_execution_plan(self):
+        wanted = request(
+            probe("primary", self.path, "203.0.113.24")
+        )
+
+        self.manager.handle_request(wanted)
+
+        self.assertEqual(len(self.execution_publisher.events), 1)
+        plan = self.execution_publisher.events[0]
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan.generation, self.manager.observation_generation)
+        self.assertEqual(len(plan.planes), 1)
+        self.assertEqual(plan.windows[0].probe_id, "primary")
+
+    def test_equivalent_request_does_not_republish_execution_plan(self):
+        wanted = request(
+            probe("primary", self.path, "203.0.113.24")
+        )
+        self.manager.handle_request(wanted)
+        self.execution_publisher.events.clear()
+
+        self.manager.handle_request(wanted)
+
+        self.assertEqual(self.execution_publisher.events, [])
+
+    def test_physical_generation_change_quiesces_before_new_plan(self):
+        self.manager.handle_request(
+            request(probe("primary", self.path, "203.0.113.24"))
+        )
+        first = self.execution_publisher.events[-1]
+        self.execution_publisher.events.clear()
+
+        self.manager.handle_request(
+            request(probe("primary", self.path, "203.0.113.25"))
+        )
+
+        self.assertEqual(len(self.execution_publisher.events), 2)
+        self.assertIsNone(self.execution_publisher.events[0])
+        second = self.execution_publisher.events[1]
+        self.assertIsNotNone(second)
+        self.assertNotEqual(second.generation, first.generation)
+        self.assertEqual(
+            second.planes[0].target,
+            IPv4Address("203.0.113.25"),
+        )
+
+    def test_logical_cadence_change_republishes_plan_without_generation_change(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.execution_publisher.events.clear()
+
+        changed = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            policy=AvailabilityWindowPolicy(30, 2),
+        )
+        self.manager.handle_request(request(changed))
+
+        self.assertEqual(self.manager.observation_generation, generation)
+        self.assertEqual(len(self.execution_publisher.events), 1)
+        changed_plan = self.execution_publisher.events[0]
+        self.assertEqual(changed_plan.generation, generation)
+        self.assertEqual(changed_plan.planes[0].interval_seconds, 30.0)
+        self.assertEqual(changed_plan.windows[0].interval_seconds, 30.0)
 
     def test_first_request_uses_manager_as_owner_and_opens_ready_epoch(self):
         wanted = request(
@@ -661,6 +730,7 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertIsNone(self.manager.observation_generation)
+        self.assertIsNone(self.execution_publisher.events[-1])
         self.assertEqual(len(self.adapter.cleanup_owners), 1)
         self.assertIs(self.adapter.cleanup_owners[0], self.manager)
 
