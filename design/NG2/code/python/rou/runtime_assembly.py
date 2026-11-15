@@ -22,7 +22,11 @@ from .linux_probe_execution import (
 )
 from .interface_identity import InterfaceIdentity
 from .network_rules import ActionResult, NetworkRulesAdapter
-from .payload_traffic_manager import PayloadTrafficManager
+from .payload_rules import PayloadTrafficStateRequest
+from .payload_traffic_manager import (
+    PayloadTrafficManager,
+    PayloadTrafficStatePublisher,
+)
 from .probe_rules import (
     AvailabilityProbeRequest,
     AvailabilityProbeSetRequest,
@@ -306,4 +310,81 @@ def build_linux_availability_runtime(
         probe_manager,
         agent,
         fanout,
+    )
+
+
+@dataclass(frozen=True)
+class NetworkPolicyRuntimeStopResult:
+    probe_cleanup: ActionResult
+    payload_cleanup: ActionResult
+
+    @property
+    def success(self) -> bool:
+        return self.probe_cleanup.success and self.payload_cleanup.success
+
+
+@dataclass
+class LinuxNetworkPolicyRuntime:
+    """Outer owner of the current Linux network-policy Managers/Agent."""
+
+    payload_manager: PayloadTrafficManager
+    availability: LinuxAvailabilityRuntimeAssembly
+
+    def handle_payload_request(
+        self,
+        request: PayloadTrafficStateRequest,
+    ) -> None:
+        self.payload_manager.handle_request(request)
+
+    def configure_availability(
+        self,
+        config: RuntimeAvailabilityConfig,
+    ) -> None:
+        self.availability.configure(config)
+
+    def start(self) -> None:
+        self.availability.start()
+
+    def audit(self) -> None:
+        self.availability.probe_manager.audit()
+        self.payload_manager.audit()
+
+    def stop(self) -> NetworkPolicyRuntimeStopResult:
+        probe_result: ActionResult
+        try:
+            probe_result = self.availability.stop()
+        finally:
+            payload_result = self.payload_manager.shutdown()
+        return NetworkPolicyRuntimeStopResult(
+            probe_result,
+            payload_result,
+        )
+
+
+def build_linux_network_policy_runtime(
+    adapter: NetworkRulesAdapter,
+    payload_publisher: PayloadTrafficStatePublisher,
+    probe_driver: ProbeSendDriver,
+    diagnostic_publisher: ProbeExecutionDiagnosticPublisher,
+    *,
+    timeout_seconds: int,
+    clock: Callable[[], float] = time.monotonic,
+) -> LinuxNetworkPolicyRuntime:
+    """Build both network-policy owners on one owner-composing Adapter."""
+
+    payload_manager = PayloadTrafficManager(
+        adapter,
+        payload_publisher,
+    )
+    availability = build_linux_availability_runtime(
+        adapter,
+        payload_manager,
+        probe_driver,
+        diagnostic_publisher,
+        timeout_seconds=timeout_seconds,
+        clock=clock,
+    )
+    return LinuxNetworkPolicyRuntime(
+        payload_manager,
+        availability,
     )
