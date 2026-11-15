@@ -6,14 +6,24 @@ from threading import Condition, Lock, Thread
 import time
 from typing import Callable, Protocol
 
-from .linux_probe_driver import LinuxIcmpProbeDriver
-from .probe_attempt import ProbeAttemptOutcome
+from .probe_attempt import ProbeAttemptOutcome, ProbeAttemptResult
 from .probe_transport import (
     PhysicalProbePlane,
     ProbeExecutionPlan,
     ProbeGoodNewsInfo,
     ProbeWindowBoundaryInfo,
 )
+
+
+class ProbeSendDriver(Protocol):
+    def execute(
+        self,
+        path,
+        target,
+        *,
+        timeout_seconds: int,
+    ) -> ProbeAttemptResult:
+        ...
 
 
 class ProbeGoodNewsPublisher(Protocol):
@@ -210,7 +220,7 @@ class LinuxProbeExecutionAgent:
 
     def __init__(
         self,
-        driver: LinuxIcmpProbeDriver,
+        driver: ProbeSendDriver,
         good_news_publisher: ProbeGoodNewsPublisher,
         boundary_publisher: ProbeWindowBoundaryPublisher,
         diagnostic_publisher: ProbeExecutionDiagnosticPublisher,
@@ -218,8 +228,8 @@ class LinuxProbeExecutionAgent:
         timeout_seconds: int = 1,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        if not isinstance(driver, LinuxIcmpProbeDriver):
-            raise ValueError("Linux probe execution Agent requires LinuxIcmpProbeDriver")
+        if not callable(getattr(driver, "execute", None)):
+            raise ValueError("Linux probe execution Agent requires ProbeSendDriver")
         if type(timeout_seconds) is not int or timeout_seconds <= 0:
             raise ValueError("technical timeout_seconds must be a positive integer")
 
