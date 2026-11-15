@@ -39,7 +39,7 @@ def _owner_rules(
     paths=(),
     *,
     source=None,
-    confirmed_live_prefix_length=None,
+    no_problem_prefix_length=None,
 ) -> OwnedNetworkRules:
     network = IPv4Network(destination)
     if source is None:
@@ -53,7 +53,7 @@ def _owner_rules(
                     destinations=(network,),
                     ordered_paths=tuple(paths),
                     terminal_disposition=TerminalDisposition.DROP,
-                    confirmed_live_prefix_length=confirmed_live_prefix_length,
+                    no_problem_prefix_length=no_problem_prefix_length,
                 ),
             ),
             dispatch_rules=(
@@ -190,7 +190,7 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                         "a",
                         "10.0.0.0/8",
                         paths,
-                        confirmed_live_prefix_length=2,
+                        no_problem_prefix_length=2,
                     ),
                 )
             ),
@@ -205,7 +205,7 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                         "a",
                         "10.0.0.0/8",
                         paths,
-                        confirmed_live_prefix_length=4,
+                        no_problem_prefix_length=4,
                     ),
                 )
             ),
@@ -220,7 +220,7 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
                         "a",
                         "10.0.0.0/8",
                         paths,
-                        confirmed_live_prefix_length=0,
+                        no_problem_prefix_length=0,
                     ),
                 )
             ),
