@@ -444,16 +444,22 @@ class PayloadTrafficManager:
             problem_paths = set()
             assignment = assignment_by_name.get(profile.name)
             if assignment is not None:
+                probes_by_path: dict[object, list[AvailabilityProbeRequest]] = {}
                 for probe_id in assignment.probe_ids:
                     probe = probes_by_id.get(probe_id)
                     if probe is None or not probe.enabled:
                         continue
-                    state = self._channel_states.get(probe_id)
-                    if (
-                        state is not None
-                        and state.availability_problems
+                    probes_by_path.setdefault(probe.path, []).append(probe)
+
+                for path, path_probes in probes_by_path.items():
+                    if all(
+                        self._channel_states.get(probe.probe_id) is not None
+                        and self._channel_states[
+                            probe.probe_id
+                        ].availability_problems
+                        for probe in path_probes
                     ):
-                        problem_paths.add(probe.path)
+                        problem_paths.add(path)
 
             effective_order = calculate_availability_path_order(
                 configured_order,
