@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address
 from math import isfinite
-from typing import Callable, Protocol
+from typing import Callable, Generic, TypeVar
 import time
 
 from .availability_collector import (
@@ -164,49 +164,19 @@ class AvailabilityPriorityConfigCalculator:
         )
 
 
-class ProbePlanConsumer(Protocol):
-    def update_plan(self, plan: ProbeExecutionPlan | None) -> None:
-        ...
+_T = TypeVar("_T")
 
 
-class ProbeExecutionPlanPort:
-    """Synchronous publisher port from ProbeManager to ProbeExecutionAgent."""
+class CallbackPublisher(Generic[_T]):
+    """Minimal synchronous publisher adapter for process-local wiring."""
 
-    def __init__(self, consumer: ProbePlanConsumer) -> None:
-        if not callable(getattr(consumer, "update_plan", None)):
-            raise ValueError("probe plan consumer must expose update_plan")
-        self._consumer = consumer
+    def __init__(self, callback: Callable[[_T], object]) -> None:
+        if not callable(callback):
+            raise ValueError("publisher callback must be callable")
+        self._callback = callback
 
-    def publish(self, plan: ProbeExecutionPlan | None) -> None:
-        if plan is not None and not isinstance(plan, ProbeExecutionPlan):
-            raise ValueError("probe plan port requires ProbeExecutionPlan or None")
-        self._consumer.update_plan(plan)
-
-
-class AvailabilityGoodNewsPort:
-    """Publisher port from ProbeExecutionAgent to PayloadTrafficManager."""
-
-    def __init__(self, manager: PayloadTrafficManager) -> None:
-        if not isinstance(manager, PayloadTrafficManager):
-            raise ValueError(
-                "good-news port requires PayloadTrafficManager"
-            )
-        self._manager = manager
-
-    def publish(self, info: AvailabilityGoodNews) -> None:
-        self._manager.handle_availability_good_news(info)
-
-
-class AvailabilityTickPort:
-    """Publisher port from ProbeExecutionAgent to PayloadTrafficManager."""
-
-    def __init__(self, manager: PayloadTrafficManager) -> None:
-        if not isinstance(manager, PayloadTrafficManager):
-            raise ValueError("tick port requires PayloadTrafficManager")
-        self._manager = manager
-
-    def publish(self, info: AvailabilityTick) -> None:
-        self._manager.handle_availability_tick(info)
+    def publish(self, value: _T) -> None:
+        self._callback(value)
 
 
 class AvailabilityConfigFanout:
@@ -288,8 +258,12 @@ def build_linux_availability_runtime(
 ) -> LinuxAvailabilityRuntimeAssembly:
     """Wire the current Linux probe execution path directly to payload priority."""
 
-    good_news = AvailabilityGoodNewsPort(payload_manager)
-    tick = AvailabilityTickPort(payload_manager)
+    good_news = CallbackPublisher(
+        payload_manager.handle_availability_good_news
+    )
+    tick = CallbackPublisher(
+        payload_manager.handle_availability_tick
+    )
     agent = LinuxProbeExecutionAgent(
         driver,
         good_news,
@@ -300,7 +274,7 @@ def build_linux_availability_runtime(
     )
     probe_manager = AvailabilityProbeManager(
         probe_adapter,
-        execution_plan_publisher=ProbeExecutionPlanPort(agent),
+        execution_plan_publisher=CallbackPublisher(agent.update_plan),
     )
     fanout = AvailabilityConfigFanout(
         probe_manager,
