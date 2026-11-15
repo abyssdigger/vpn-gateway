@@ -91,96 +91,33 @@ probes разделяют один physical `(mechanism, InterfaceIdentity, targ
 Disable не означает удаление payload path: eligibility payload path и probe lifecycle
 остаются независимыми.
 
-## 3. Положительное evidence
+## 3. Availability evidence state machine
 
-Любой валидный reply через нужный concrete path является хорошей новостью.
+Routing evidence aggregation is now normative in
+`design/NG2/availability-collector-materializer.md`.
 
-Не требуется знать:
-
-- какой send породил reply;
-- attempt id;
-- sequence попытки на semantic уровне;
-- завершились ли предыдущие sends;
-- какой именно in-flight send следует считать успешным.
-
-Для routing policy достаточно события:
+For routing priority each channel is projected only as:
 
 ```text
-good_news(path)
+GOOD
+BAD
 ```
 
-Любая good news:
+Diagnostic UNKNOWN/local execution error may still exist outside this routing projection.
 
-- немедленно подтверждает path как живой;
-- сбрасывает накопленное отсутствие good news;
-- прекращает UNKNOWN в диагностической state-модели, если оно было.
-
-## 4. Отрицательное evidence и hysteresis
-
-Отрицательное evidence образуется не результатом отдельной попытки, а последовательностью
-evaluation intervals, в которых для path не было good news.
-
-Минимальное состояние:
+The essential asymmetric transitions are:
 
 ```text
-missed_intervals
+GOOD -> BAD    only while processing a tick
+BAD  -> GOOD   only while processing one or more good-news replies
 ```
 
-На границе interval:
+Good-news replies are colorless and countable. Several delayed valid replies may complete
+BAD -> GOOD recovery in one collector pass. A tick is only a pending fact; multiple
+undrained timer expirations collapse to one tick and are not replayed as elapsed windows.
 
-```text
-if good_news_since_previous_boundary:
-    missed_intervals = 0
-    path = CONFIRMED_LIVE
-else:
-    missed_intervals += 1
-```
-
-После настроенного порога отсутствия good news path перестает считаться
-`CONFIRMED_LIVE`.
-
-Положительное evidence асимметрично отрицательному: один валидный reply уже доказывает
-работоспособность канала, тогда как отсутствие reply требует hysteresis.
-
-## 5. Ошибка probe machinery
-
-Локальная ошибка probing не доказывает недоступность удаленного канала и не является
-отдельным routing transition.
-
-Для routing preference ERROR означает только:
-
-```text
-в этом observation window не получено good news
-```
-
-Поэтому уже подтвержденный живой path **не** теряет `CONFIRMED_LIVE` от единичного ERROR.
-Ошибка участвует в том же integral времени без good news:
-
-```text
-ERROR in one window
-    -> missed_intervals += 1 at window boundary
-    -> retain CONFIRMED_LIVE while below failure_intervals
-
-continued windows without good news
-    -> threshold reached
-    -> NOT_CONFIRMED_LIVE
-```
-
-Если другой path тем временем имеет подтвержденную живость, после достижения общего
-negative threshold он может подняться выше. Если подтвержденной альтернативы нет,
-probing не создает новый outage и текущий payload order сохраняется.
-
-ERROR, как и любой другой probe outcome, никогда не означает:
-
-```text
-add path
-remove path
-disable binding
-prohibit payload
-```
-
-Диагностический state/reason для локальной ошибки остается отдельным от remote
-unreachability; routing policy использует только накопленное отсутствие good news.
+Local probe execution ERROR is diagnostic only. It neither creates a negative event nor
+changes route membership.
 
 ## 6. Базовый configured order
 
