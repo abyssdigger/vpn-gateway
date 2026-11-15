@@ -128,8 +128,8 @@ probe.
 
 Routing-level смысл evidence зафиксирован отдельно в
 `design/NG2/availability-routing-model.md`: подтвержденно живой path может получить более
-высокий приоритет среди уже bound/eligible paths, а отсутствие подтверждения не является
-командой удалить последний путь.
+высокий приоритет среди уже bound/eligible paths, но probing вообще не меняет payload
+route membership.
 
 ### 2.4. ProbeExecutionAgent
 
