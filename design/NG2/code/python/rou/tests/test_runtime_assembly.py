@@ -1,4 +1,4 @@
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Address, IPv4Interface, IPv4Network
 import time
 import unittest
 
@@ -11,6 +11,7 @@ from rou.availability_collector import (
 )
 from rou.availability_probe_manager import AvailabilityProbeManager
 from rou.interface_identity import InterfaceIdentity
+from rou.linux_instance import LinuxInstanceSpec
 from rou.network_rules import (
     ActionResult,
     NetworkRulesSpec,
@@ -24,7 +25,7 @@ from rou.payload_rules import (
     PayloadTrafficStateRequest,
 )
 from rou.payload_traffic_manager import PayloadTrafficManager
-from rou.linux_driver import LinuxDriverResult
+from rou.linux_driver import CommandResult, LinuxDriverResult
 from rou.linux_probe_execution import (
     ProbeExecutionHealth,
     ProbeSendResult,
@@ -40,6 +41,7 @@ from rou.runtime_assembly import (
     RuntimeAvailabilityConfig,
     LinuxNetworkPolicyRuntimeBootstrapResult,
     bootstrap_linux_network_policy_runtime,
+    bootstrap_linux_network_policy_runtime_for_instance,
     build_linux_availability_runtime,
     build_linux_network_policy_runtime,
 )
@@ -98,6 +100,97 @@ class FakeSendDriver:
     def execute_send(self, path, target, *, timeout_seconds):
         self.calls.append((path, target, timeout_seconds))
         return self.result
+
+
+class ExistingInstanceHostRunner:
+    def __init__(self):
+        self.forwarding = True
+        self.ipv4_close_writes = 0
+
+    @staticmethod
+    def _result(value):
+        return CommandResult(0, value, "")
+
+    def run(self, argv, *, input_text=None, check=True):
+        if argv == ("ip", "netns", "list"):
+            return self._result("rou0\n")
+
+        if argv == (
+            "ip", "-j", "-d", "link", "show", "dev", "rouvpn0"
+        ):
+            return self._result(
+                '[{"ifindex":10,"link_index":11,"flags":["UP"],'
+                '"linkinfo":{"info_kind":"veth"}}]'
+            )
+        if argv == (
+            "ip", "-j", "-4", "addr", "show", "dev", "rouvpn0"
+        ):
+            return self._result(
+                '[{"addr_info":[{"family":"inet","local":"192.0.2.0",'
+                '"prefixlen":31}]}]'
+            )
+
+        prefix = ("ip", "netns", "exec", "rou0")
+        if argv == (*prefix, "sysctl", "-q", "-w", "net.ipv4.ip_forward=0"):
+            self.forwarding = False
+            self.ipv4_close_writes += 1
+            return self._result("")
+        if argv in {
+            (*prefix, "sysctl", "-q", "-w", "net/ipv6/conf/all/forwarding=0"),
+            (
+                *prefix,
+                "sysctl",
+                "-q",
+                "-w",
+                "net/ipv6/conf/default/forwarding=0",
+            ),
+        }:
+            return self._result("")
+        if argv == (*prefix, "sysctl", "-n", "net.ipv4.ip_forward"):
+            return self._result("1\n" if self.forwarding else "0\n")
+        if argv in {
+            (*prefix, "sysctl", "-n", "net/ipv6/conf/all/forwarding"),
+            (
+                *prefix,
+                "sysctl",
+                "-n",
+                "net/ipv6/conf/default/forwarding",
+            ),
+        }:
+            return self._result("0\n")
+
+        if argv == (
+            *prefix,
+            "ip", "-j", "-d", "link", "show", "dev", "lo",
+        ):
+            return self._result(
+                '[{"ifindex":1,"flags":["UP"]}]'
+            )
+        if argv == (
+            *prefix,
+            "ip", "-j", "-d", "link", "show", "dev", "host0",
+        ):
+            return self._result(
+                '[{"ifindex":11,"link_index":10,"flags":["UP"],'
+                '"linkinfo":{"info_kind":"veth"}}]'
+            )
+        if argv == (
+            *prefix,
+            "ip", "-j", "-4", "addr", "show", "dev", "host0",
+        ):
+            return self._result(
+                '[{"addr_info":[{"family":"inet","local":"192.0.2.1",'
+                '"prefixlen":31}]}]'
+            )
+        if argv == (
+            *prefix,
+            "ip", "-j", "-4", "route", "show", "table", "main",
+        ):
+            return self._result(
+                '[{"dst":"default","gateway":"192.0.2.0","dev":"host0"}]'
+            )
+
+        raise AssertionError(f"unexpected command: {argv!r}")
 
 
 class FakeBootstrapBackend:
@@ -637,6 +730,32 @@ class LinuxNetworkPolicyRuntimeTests(unittest.TestCase):
             },
         )
 
+
+
+class LinuxInstanceNetworkPolicyBootstrapTests(unittest.TestCase):
+    def test_existing_instance_is_reverified_and_reclosed_before_runtime_exposure(self):
+        runner = ExistingInstanceHostRunner()
+        spec = LinuxInstanceSpec(
+            namespace="rou0",
+            host_interface="rouvpn0",
+            host_address=IPv4Interface("192.0.2.0/31"),
+            inner_address=IPv4Interface("192.0.2.1/31"),
+        )
+
+        result = bootstrap_linux_network_policy_runtime_for_instance(
+            spec,
+            payload_publisher=RecordingPublisher(),
+            probe_driver=FakeSendDriver(ProbeSendResult(False)),
+            diagnostic_publisher=RecordingPublisher(),
+            timeout_seconds=1,
+            host_runner=runner,
+            clock=lambda: 100.0,
+        )
+
+        self.assertTrue(result.success, result.diagnostic)
+        self.assertIsNotNone(result.runtime)
+        self.assertFalse(runner.forwarding)
+        self.assertEqual(runner.ipv4_close_writes, 2)
 
 
 class LinuxNetworkPolicyBootstrapTests(unittest.TestCase):
