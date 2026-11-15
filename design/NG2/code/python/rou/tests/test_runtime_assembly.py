@@ -785,6 +785,70 @@ class LinuxNetworkPolicyRuntimeTests(unittest.TestCase):
 
         self.assertIn(runtime.payload_manager, adapter.cleanup_calls)
 
+    def test_payload_cleanup_exception_keeps_probe_failure_diagnostic(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+        adapter.cleanup_results[
+            runtime.availability.probe_manager
+        ] = ActionResult(False, "probe cleanup failed")
+        adapter.cleanup_raise.add(runtime.payload_manager)
+
+        with self.assertRaisesRegex(RuntimeError, "cleanup boom") as caught:
+            runtime.stop()
+
+        self.assertTrue(
+            any(
+                "probe cleanup also returned failure: probe cleanup failed"
+                in note
+                for note in (caught.exception.__notes__ or ())
+            )
+        )
+
+    def test_probe_cleanup_exception_keeps_payload_failure_diagnostic(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+        adapter.cleanup_raise.add(runtime.availability.probe_manager)
+        adapter.cleanup_results[
+            runtime.payload_manager
+        ] = ActionResult(False, "payload cleanup failed")
+
+        with self.assertRaisesRegex(RuntimeError, "cleanup boom") as caught:
+            runtime.stop()
+
+        self.assertTrue(
+            any(
+                "payload cleanup also returned failure: payload cleanup failed"
+                in note
+                for note in (caught.exception.__notes__ or ())
+            )
+        )
+
     def test_dual_cleanup_exceptions_preserve_both_failures(self):
         adapter = OwnerScopedFakeAdapter()
         runtime = build_linux_network_policy_runtime(
