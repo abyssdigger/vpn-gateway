@@ -351,7 +351,7 @@ class PayloadTrafficManagerTests(unittest.TestCase):
         self.manager.handle_request(request)
 
         self.assertEqual(len(self.publisher.events), 1)
-        self.assertEqual(len(self.adapter.apply_owners), 2)
+        self.assertEqual(len(self.adapter.apply_owners), 1)
 
     def test_changed_observation_is_published(self):
         request = _request(self.path)
@@ -713,6 +713,45 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
             ProbeGoodNewsInfo(changed_channel)
         )
         self.assertEqual(self.order(), (self.a, self.b, self.c))
+
+    def test_path_with_multiple_probes_is_problem_only_when_all_are_problem(self):
+        extra = AvailabilityProbeRequest(
+            "a-secondary",
+            self.a,
+            IPv4Address("203.0.113.110"),
+            policy=self.policy,
+        )
+        probes = AvailabilityProbeSetRequest(self.probes.probes + (extra,))
+        assignments = (
+            ProfileProbeAssignment(
+                "corp",
+                ("a", "a-secondary", "b", "c"),
+            ),
+        )
+        self.manager.configure_availability(probes, assignments)
+
+        primary = LogicalProbeChannel(
+            self.probes.probes[0].probe_id,
+            self.probes.probes[0].mechanism,
+            self.probes.probes[0].path,
+            self.probes.probes[0].target,
+            self.probes.probes[0].policy,
+        )
+        secondary = LogicalProbeChannel(
+            extra.probe_id,
+            extra.mechanism,
+            extra.path,
+            extra.target,
+            extra.policy,
+        )
+
+        for _ in range(2):
+            self.manager.handle_probe_tick(ProbeTickInfo(primary))
+        self.assertEqual(self.order(), (self.a, self.b, self.c))
+
+        for _ in range(2):
+            self.manager.handle_probe_tick(ProbeTickInfo(secondary))
+        self.assertEqual(self.order(), (self.b, self.c, self.a))
 
     def test_old_channel_callback_is_ignored_after_definition_change(self):
         stale = self.channel("a")
