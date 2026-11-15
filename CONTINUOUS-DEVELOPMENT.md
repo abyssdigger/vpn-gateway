@@ -127,7 +127,7 @@ When a requirement is insufficient:
 5. verify every new `R` node against its parent:
    - it must refine rather than expand or rewrite the parent;
    - its `Purpose` must remain honestly derived from the parent purpose;
-6. for every new `C` node:
+7. for every new `C` node:
    - record its `Reason`;
    - state what is constrained and how;
    - identify who must compensate for the limitation;
@@ -139,17 +139,17 @@ When a requirement is insufficient:
    - lift its observable effect upward;
    - verify the resulting effective product envelope;
 7. define acceptance evidence at the cheapest sufficient level;
-8. if further decomposition of the affected node depends on insufficiently decomposed
+9. if further decomposition of the affected node depends on insufficiently decomposed
    semantics in another requirement/constraint branch:
    - add `[decomp: <blocker-ID> -> pending]` to the blocked node;
    - stop only that decomposition path;
    - continue independent requirement/design work;
-9. when the blocker or one of its descendants later provides enough specificity:
+10. when the blocker or one of its descendants later provides enough specificity:
    - replace `pending` in the same link with the concrete deblocker ID:
      `[decomp: <blocker-ID> -> <deblocker-ID>]`;
    - keep the blocker part unchanged for causal traceability;
    - resume review of the blocked decomposition;
-10. only then return to component design when the relevant requirement paths are sufficiently concrete.
+11. only then return to component design when the relevant requirement paths are sufficiently concrete.
 
 A thought that occurs during implementation is **not** automatically a requirement.
 
@@ -215,6 +215,9 @@ resolved autonomously.
 
 Human agreement is required before proceeding when requirement work would:
 
+- create or modify an `R/C` whose `Purpose/Reason` is not naturally and unambiguously
+  derivable from the accepted ancestry;
+- expose disagreement about why a requirement exists or why a constraint is legitimate;
 - add or materially change an L1 product promise;
 - introduce a new user-visible capability;
 - choose between multiple materially different user-visible semantics;
