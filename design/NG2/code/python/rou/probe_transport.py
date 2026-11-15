@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 from math import isfinite
-from typing import Mapping
 
+from .availability_collector import AvailabilityChannelPolicy
 from .availability_probe_state import ProbeObservationGeneration
 from .interface_identity import InterfaceIdentity
 from .probe_rules import (
@@ -37,151 +37,113 @@ class PhysicalProbePlane:
 
 
 @dataclass(frozen=True)
-class LogicalProbeWindow:
+class LogicalProbeChannel:
     probe_id: str
-    interval_seconds: float
-    evidence_epoch: int = 1
+    mechanism: ProbeMechanism
+    path: InterfaceIdentity
+    target: IPv4Address
+    policy: AvailabilityChannelPolicy
 
     def __post_init__(self) -> None:
         if not isinstance(self.probe_id, str) or not self.probe_id:
-            raise ValueError("logical probe window requires non-empty probe_id")
-        if (
-            isinstance(self.interval_seconds, bool)
-            or not isinstance(self.interval_seconds, (int, float))
-            or not isfinite(float(self.interval_seconds))
-            or self.interval_seconds <= 0
-        ):
-            raise ValueError("logical probe window interval must be positive")
-        if type(self.evidence_epoch) is not int or self.evidence_epoch <= 0:
-            raise ValueError("logical probe window evidence_epoch must be positive")
+            raise ValueError("logical probe channel requires non-empty probe_id")
+        if not isinstance(self.mechanism, ProbeMechanism):
+            raise ValueError("logical probe channel requires ProbeMechanism")
+        if not isinstance(self.path, InterfaceIdentity):
+            raise ValueError("logical probe channel requires InterfaceIdentity")
+        if not isinstance(self.target, IPv4Address):
+            raise ValueError("logical probe channel requires IPv4Address target")
+        if not isinstance(self.policy, AvailabilityChannelPolicy):
+            raise ValueError("logical probe channel requires AvailabilityChannelPolicy")
 
 
 @dataclass(frozen=True)
 class ProbeExecutionPlan:
-    """Generation-bound transport/timer demand.
-
-    Physical send cadence is deduplicated by probe plane. Logical observation-window
-    cadence remains per probe_id because consumers sharing one plane may use different
-    failure-window policy. This type does not prescribe whether the eventual lower
-    execution subsystem is in-process or hidden behind an Adapter.
-    """
+    """Generation-bound physical-send and logical-tick demand."""
 
     generation: ProbeObservationGeneration
     planes: tuple[PhysicalProbePlane, ...]
-    windows: tuple[LogicalProbeWindow, ...]
+    channels: tuple[LogicalProbeChannel, ...]
 
     def __post_init__(self) -> None:
         if not isinstance(self.generation, ProbeObservationGeneration):
             raise ValueError("execution plan requires ProbeObservationGeneration")
+
+        plane_keys = []
         for item in self.planes:
             if not isinstance(item, PhysicalProbePlane):
                 raise ValueError(
                     "execution plan planes must contain PhysicalProbePlane"
                 )
-        plane_keys = [
-            (item.mechanism, item.path, item.target)
-            for item in self.planes
-        ]
+            plane_keys.append((item.mechanism, item.path, item.target))
         if len(set(plane_keys)) != len(plane_keys):
             raise ValueError("execution plan contains duplicate physical planes")
-        for item in self.windows:
-            if not isinstance(item, LogicalProbeWindow):
+
+        probe_ids = []
+        for item in self.channels:
+            if not isinstance(item, LogicalProbeChannel):
                 raise ValueError(
-                    "execution plan windows must contain LogicalProbeWindow"
+                    "execution plan channels must contain LogicalProbeChannel"
                 )
-        probe_ids = [item.probe_id for item in self.windows]
+            probe_ids.append(item.probe_id)
         if len(set(probe_ids)) != len(probe_ids):
-            raise ValueError("execution plan contains duplicate logical windows")
+            raise ValueError("execution plan contains duplicate logical channels")
 
 
 @dataclass(frozen=True)
 class ProbeGoodNewsInfo:
-    mechanism: ProbeMechanism
-    path: InterfaceIdentity
-    target: IPv4Address
-    generation: ProbeObservationGeneration
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.mechanism, ProbeMechanism):
-            raise ValueError("good-news info requires ProbeMechanism")
-        if not isinstance(self.path, InterfaceIdentity):
-            raise ValueError("good-news info requires InterfaceIdentity")
-        if not isinstance(self.target, IPv4Address):
-            raise ValueError("good-news info requires IPv4Address target")
-        if not isinstance(self.generation, ProbeObservationGeneration):
-            raise ValueError("good-news info requires ProbeObservationGeneration")
-
-
-@dataclass(frozen=True)
-class ProbeWindowBoundaryInfo:
     probe_id: str
-    generation: ProbeObservationGeneration
-    evidence_epoch: int = 1
-    elapsed_intervals: int = 1
 
     def __post_init__(self) -> None:
         if not isinstance(self.probe_id, str) or not self.probe_id:
-            raise ValueError("window-boundary info requires non-empty probe_id")
-        if not isinstance(self.generation, ProbeObservationGeneration):
-            raise ValueError("window-boundary info requires ProbeObservationGeneration")
-        if type(self.evidence_epoch) is not int or self.evidence_epoch <= 0:
-            raise ValueError("window-boundary evidence_epoch must be positive")
-        if type(self.elapsed_intervals) is not int or self.elapsed_intervals <= 0:
-            raise ValueError("window-boundary elapsed_intervals must be positive")
+            raise ValueError("good-news info requires non-empty probe_id")
+
+
+@dataclass(frozen=True)
+class ProbeTickInfo:
+    probe_id: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.probe_id, str) or not self.probe_id:
+            raise ValueError("tick info requires non-empty probe_id")
 
 
 class ProbeExecutionPlanCalculator:
-    """Pure projection from logical probes + READY generation to execution demand."""
+    """Pure projection from enabled logical probes to physical sends and ticks."""
 
     def calculate(
         self,
         request: AvailabilityProbeSetRequest,
         generation: ProbeObservationGeneration,
-        *,
-        evidence_epochs: Mapping[str, int] | None = None,
     ) -> ProbeExecutionPlan:
         if not isinstance(request, AvailabilityProbeSetRequest):
             raise ValueError("execution plan requires AvailabilityProbeSetRequest")
         if not isinstance(generation, ProbeObservationGeneration):
             raise ValueError("execution plan requires ProbeObservationGeneration")
 
-        if evidence_epochs is not None:
-            request_ids = {probe.probe_id for probe in request.probes}
-            if set(evidence_epochs) != request_ids:
-                raise ValueError(
-                    "execution plan evidence_epochs must cover exactly current probes"
-                )
-            if any(
-                type(value) is not int or value <= 0
-                for value in evidence_epochs.values()
-            ):
-                raise ValueError(
-                    "execution plan evidence epochs must be positive integers"
-                )
-
         interval_by_plane: dict[
             tuple[ProbeMechanism, InterfaceIdentity, IPv4Address],
             float,
         ] = {}
-        windows: list[LogicalProbeWindow] = []
+        channels: list[LogicalProbeChannel] = []
 
         for probe in request.probes:
             if not probe.enabled:
                 continue
+
             key = (probe.mechanism, probe.path, probe.target)
             interval = float(probe.policy.interval_seconds)
             previous = interval_by_plane.get(key)
             if previous is None or interval < previous:
                 interval_by_plane[key] = interval
-            windows.append(
-                LogicalProbeWindow(
+
+            channels.append(
+                LogicalProbeChannel(
                     probe.probe_id,
-                    interval,
-                    (
-                        evidence_epochs[probe.probe_id]
-                        if evidence_epochs is not None
-                        else 1
-                    ),
+                    probe.mechanism,
+                    probe.path,
+                    probe.target,
+                    probe.policy,
                 )
             )
 
@@ -200,5 +162,5 @@ class ProbeExecutionPlanCalculator:
         return ProbeExecutionPlan(
             generation,
             planes,
-            tuple(sorted(windows, key=lambda item: item.probe_id)),
+            tuple(sorted(channels, key=lambda item: item.probe_id)),
         )
