@@ -1023,7 +1023,7 @@ NG1 planner.py
 13. Синхронный dependency graph payload domain ацикличен.
 14. Нижняя domain за NetworkRulesAdapter не имеет independent synchronous back-edge в
     payload domain.
-15. `confirmed_live_prefix_length` является transient runtime routing intent, а не
+15. `no_problem_prefix_length` является transient runtime routing intent, а не
     пользовательской configuration и не persistent gap state; `None` означает отсутствие
     активной availability-derived boundary, тогда как `0` означает активную boundary без
     confirmed-live paths.
@@ -1051,7 +1051,7 @@ NG1 planner.py
 6. remaining runtime assembly above the implemented protective startup gate; forwarding
    closure до первого owner reconcile зафиксирован в `runtime-bootstrap.md`.
 
-Availability bubble wiring, transient `confirmed_live_prefix_length`, runtime
+Availability-problems priority wiring, transient `no_problem_prefix_length`, runtime
 probe-to-Profile evidence projection и single-executor payload queue/coalescing уже
 реализованы. Linux route-only materialization подтверждена EXP-027.
 
