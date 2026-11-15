@@ -105,7 +105,7 @@ clear `availability_problems`.
 valid good news when they arrive. Several delayed replies may therefore complete recovery
 in one collector pass.
 
-A tick without any good news since the preceding tick breaks an incomplete BAD-channel
+A tick without any good news since the preceding tick breaks an incomplete problem-channel
 recovery sequence.
 
 ## 4. Input aggregation
@@ -255,7 +255,7 @@ Thus, with `recovery_good_news = 3`, three delayed replies arriving in one colle
 are sufficient for immediate recovery. The collector does not wait for two additional
 timer intervals merely to spread those replies across artificial observation windows.
 
-If the channel entered the pass BAD and a tick is also pending:
+If the channel entered the pass problem and a tick is also pending:
 
 ```text
 if no good news has been seen since the preceding tick
@@ -267,7 +267,7 @@ consume tick_pending
 ```
 
 If current good news completes recovery in the same pass, the simultaneous tick does not
-then apply GOOD-channel degradation logic to the newly cleared problem state.
+then apply no-problem channel degradation logic to the newly cleared problem state.
 
 Therefore:
 
@@ -300,7 +300,7 @@ The problem-channel rule consumes the three replies:
 
 ```text
 recovery_progress: 0 -> 3
-status: true -> false
+availability_problems: true -> false
 ```
 
 The replies proved that three probes succeeded; transport delay did not turn them into
@@ -320,8 +320,8 @@ reply after that physical generation has been invalidated.
 This guard is below availability hysteresis. It must not be used to version timer windows,
 recovery policy, collector/materializer communication or route order.
 
-A logical-policy-only change resets the affected collector channel state directly. It does
-not require an `evidence_epoch`.
+A logical-policy-only change preserves `availability_problems`, resets hysteresis progress,
+and clears pending per-channel aggregates. It does not require an `evidence_epoch`.
 
 ## 11. Synchronous materializer boundary
 
@@ -385,7 +385,7 @@ It never:
 - adds an eligible payload path;
 - removes an eligible payload path;
 - changes binding membership;
-- changes filter/NAT membership merely because a channel is BAD.
+- changes filter/NAT membership merely because a channel is problem.
 
 The existing effective-order and metric-hole model remains normative:
 
