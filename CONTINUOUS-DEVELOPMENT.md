@@ -167,7 +167,12 @@ When requirement/constraint text or decomposition links change:
 - keep the existing stable ID unless the entity itself was incorrectly identified;
 - update the node in place rather than creating a shadow copy;
 - preserve causal decomposition links as `[decomp: blocker -> pending|deblocker]`;
-- use only `[closed]` in the requirement tree to record architecture closure;
+- use one architecture-closure label per requirement/constraint:
+  `[pending_closure]`, `[closed]` or `[rejected_closure]`;
+- `[pending_closure]` means an architecture candidate exists but acceptance is pending;
+- `[closed]` means the closure candidate passed sufficient acceptance;
+- `[rejected_closure]` means the closure candidate failed acceptance and the affected
+  implementation remains blocked;
 - do not copy architecture-decision IDs or architecture link lists into requirements;
 - to determine how a closed requirement is realized, search architecture artifacts for the
   exact requirement/constraint ID;
@@ -175,22 +180,29 @@ When requirement/constraint text or decomposition links change:
 - remove/revalidate `[closed]` after a semantic change before implementation continues;
 - use Git history as the current editorial change record.
 
-`[closed]` means that, for the current scope, no further architecture decision is required
-for that specific `R/C`. It does not mean implemented or evidenced.
+The normal closure lifecycle is:
 
-A node with `[decomp: ... -> pending]` cannot be `[closed]`.
+```text
+open -> pending_closure -> closed | rejected_closure
+rejected_closure -> pending_closure
+```
 
-After architecture review closes a node, mark it `[closed]` in the requirement tree only
-after verifying that the architecture contains an exact reference to that ID.
+A node with `[decomp: ... -> pending]` cannot be `[pending_closure]` or `[closed]`.
+
+After architecture produces a closure candidate, mark `[pending_closure]` only after
+verifying an exact architecture reference. Replace it with `[closed]` only after sufficient
+acceptance/review evidence. Replace it with `[rejected_closure]` when acceptance shows the
+candidate is insufficient or unacceptable.
 
 The closure check is deliberately asymmetric:
 
 ```text
-closed R/C without architecture reference -> ERROR
-architecture reference to non-closed R/C   -> ALLOWED
+pending_closure R/C without architecture reference -> ERROR
+closed R/C without architecture reference          -> ERROR
+architecture reference to unlabeled R/C             -> ALLOWED
 ```
 
-An architecture reference alone never auto-closes a requirement.
+An architecture reference alone never changes closure state.
 
 Do not introduce a separate semantic requirement-change journal until a concrete project
 need requires querying semantic transitions independently from Git history. Such a journal
@@ -310,10 +322,13 @@ Implementation may begin only when all of the following hold for the affected sc
   necessary for the implementation scope;
 - all material component responsibilities and interactions are traceable to requirements;
 - every requirement/constraint whose architecture is required by the implementation unit is
-  marked `[closed]`;
-- every such `[closed]` node has an exact reference in the architecture;
-- the mechanical closure check reports every `[closed]` node without an architecture
-  reference as an error, while allowing architecture references to non-closed nodes;
+  marked `[closed]`; `[pending_closure]` and `[rejected_closure]` block implementation
+  of the dependent behavior;
+- every `[pending_closure]` and `[closed]` node has an exact reference in the architecture;
+- every `[rejected_closure]` node has explicit rejection evidence/review;
+- the mechanical closure check reports every `[pending_closure]` or `[closed]` node
+  without an architecture reference as an error, while allowing architecture references to
+  unlabeled nodes;
 - discovered constraints have been lifted far enough to expose their product effect;
 - any user/administrator/external-system adaptation caused by an accepted constraint is
   explicit as a requirement/contract rather than an undocumented workaround;
