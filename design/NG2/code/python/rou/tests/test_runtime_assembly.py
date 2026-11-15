@@ -413,10 +413,11 @@ class LinuxAvailabilityRuntimeAssemblyTests(unittest.TestCase):
         payload_manager.handle_request(payload_request(A))
 
         probe_adapter = FakeAdapter()
+        driver = FakeSendDriver(ProbeSendResult(False))
         runtime = build_linux_availability_runtime(
             probe_adapter,
             payload_manager,
-            FakeSendDriver(ProbeSendResult(False)),
+            driver,
             RecordingPublisher(),
             timeout_seconds=1,
             clock=lambda: 100.0,
@@ -432,7 +433,9 @@ class LinuxAvailabilityRuntimeAssemblyTests(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(probe_adapter.cleanup_calls, 1)
-        self.assertIsNone(runtime.agent._schedule.plan)
+
+        runtime.agent.process_due(100.0)
+        self.assertEqual(driver.calls, [])
 
 
 if __name__ == "__main__":
