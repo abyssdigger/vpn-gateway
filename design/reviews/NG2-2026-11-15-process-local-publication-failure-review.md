@@ -122,3 +122,74 @@ No external experiment is required.
 
 Continue review of lifecycle/assembly invariants and stale artifacts. Do not add an
 asynchronous reliability layer without an explicit product contract requiring one.
+
+
+## F7 — scheduler thread failure left stale running state
+
+**Disposition:** accepted and fixed.
+
+After removing the broad scheduler-loop exception catch, an unexpected internal exception
+correctly became visible, but the Agent could retain `_running=True` and a dead thread
+identity. A synchronous `Thread.start()` failure had the same bookkeeping problem.
+
+The Agent now:
+
+- restores non-running state if `Thread.start()` raises;
+- clears running/thread identity in the scheduler thread's `finally` path;
+- does not swallow the original unexpected exception;
+- permits a later explicit `start()` retry.
+
+Regressions cover both synchronous start failure and visible unexpected scheduler-thread
+failure followed by successful restart.
+
+## F8 — mixed expected/unexpected cleanup failures lost diagnostics
+
+**Disposition:** accepted and fixed.
+
+If one owner cleanup returned `ActionResult(False, diagnostic)` while the other owner
+threw an unexpected exception, the exception necessarily prevented returning
+`NetworkPolicyRuntimeStopResult`, so the ordinary failure diagnostic was lost.
+
+The unexpected exception now retains the expected peer failure as a Python exception
+note. This does not convert `ActionResult` failures into exceptions and does not add a
+new error hierarchy.
+
+## F9 — physical replacement quiesce retry
+
+**Disposition:** accepted and verified.
+
+A failed publication of the quiesce `None` during physical target replacement leaves the
+old successfully published plan unresolved. A later identical replacement request must
+retry that quiesce before opening/publishing the new physical generation.
+
+Regression proves the sequence:
+
+1. generation A plan published;
+2. replacement quiesce publication fails;
+3. Manager generation is cleared;
+4. retry successfully publishes `None`;
+5. new rules/generation B are then published.
+
+This is the same unresolved-published-plan invariant used for shutdown retry.
+
+## Final evidence
+
+Final code head for the cycle:
+
+`95427ba2aab64bd99dd46326991bc66104fef549`
+
+GitHub Actions `NG2 Python` run **749**:
+
+- compile: PASS;
+- **315 rootless unit tests PASS**;
+- selective probe-process isolation: PASS;
+- EXP-025: PASS;
+- EXP-026: PASS;
+- EXP-027: PASS;
+- nft ICMP selector: PASS;
+- Linux instance lifecycle: PASS;
+- Linux Adapter: PASS;
+- Linux LOCAL_PROCESS: PASS;
+- Linux dataplane: PASS.
+
+No new external experiment was required.
