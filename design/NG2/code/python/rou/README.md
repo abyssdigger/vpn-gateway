@@ -144,7 +144,7 @@ Implemented lower/runtime slices now include:
 - direct process-local wiring:
   AvailabilityProbeManager -> ProbeExecutionAgent -> PayloadTrafficManager;
 - shared-Adapter `LinuxNetworkPolicyRuntime` with distinct Manager owner identities,
-  independent audit and independent cleanup;
+  fail-independent audit/cleanup and terminal stop lifecycle;
 - protective bootstrap entry points that expose the network-policy runtime only after
   verified forwarding closure, including full-instance composition.
 
