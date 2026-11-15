@@ -1,7 +1,11 @@
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 from threading import Event, Thread
 import unittest
 
+from rou.availability_collector import (
+    AvailabilityChannelPolicy,
+    ProfileProbeAssignment,
+)
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     ActionResult,
@@ -22,6 +26,16 @@ from rou.payload_rules_state import (
     Service,
 )
 from rou.payload_traffic_manager import PayloadTrafficManager
+from rou.probe_rules import (
+    AvailabilityProbeRequest,
+    AvailabilityProbeSetRequest,
+    ProbeMechanism,
+)
+from rou.probe_transport import (
+    LogicalProbeChannel,
+    ProbeGoodNewsInfo,
+    ProbeTickInfo,
+)
 
 
 class RecordingPublisher:
@@ -502,6 +516,271 @@ class PayloadTrafficManagerTests(unittest.TestCase):
         self.assertTrue(result.success)
         self.assertEqual(len(self.adapter.cleanup_owners), 1)
         self.assertIs(self.adapter.cleanup_owners[0], self.manager)
+
+
+class PayloadTrafficAvailabilityTests(unittest.TestCase):
+    def setUp(self):
+        self.a = InterfaceIdentity("vpns00", 10)
+        self.b = InterfaceIdentity("vpns01", 11)
+        self.c = InterfaceIdentity("vpns02", 12)
+        self.adapter = FakeAdapter()
+        self.publisher = RecordingPublisher()
+        self.manager = PayloadTrafficManager(self.adapter, self.publisher)
+        self.policy = AvailabilityChannelPolicy(10, 2, 3)
+
+        self.payload = PayloadTrafficStateRequest(
+            (
+                PayloadProfileRequest(
+                    "corp",
+                    PayloadDirection.OUTBOUND,
+                    (IPv4Network("10.0.0.0/8"),),
+                    (
+                        PayloadPath(self.a),
+                        PayloadPath(self.b),
+                        PayloadPath(self.c),
+                    ),
+                ),
+            )
+        )
+        self.probes = AvailabilityProbeSetRequest(
+            (
+                AvailabilityProbeRequest(
+                    "a",
+                    self.a,
+                    IPv4Address("203.0.113.10"),
+                    policy=self.policy,
+                ),
+                AvailabilityProbeRequest(
+                    "b",
+                    self.b,
+                    IPv4Address("203.0.113.11"),
+                    policy=self.policy,
+                ),
+                AvailabilityProbeRequest(
+                    "c",
+                    self.c,
+                    IPv4Address("203.0.113.12"),
+                    policy=self.policy,
+                ),
+            )
+        )
+        self.assignments = (
+            ProfileProbeAssignment("corp", ("a", "b", "c")),
+        )
+
+        self.manager.handle_request(self.payload)
+        self.manager.configure_availability(self.probes, self.assignments)
+
+    def channel(self, probe_id):
+        probe = next(
+            item for item in self.probes.probes
+            if item.probe_id == probe_id
+        )
+        return LogicalProbeChannel(
+            probe.probe_id,
+            probe.mechanism,
+            probe.path,
+            probe.target,
+            probe.policy,
+        )
+
+    def order(self):
+        return self.adapter.state.rules.routing_domains[0].ordered_paths
+
+    def tick(self, probe_id):
+        return self.manager.handle_probe_tick(
+            ProbeTickInfo(self.channel(probe_id))
+        )
+
+    def good(self, probe_id):
+        return self.manager.handle_probe_good_news(
+            ProbeGoodNewsInfo(self.channel(probe_id))
+        )
+
+    def test_initial_and_enabled_probing_preserve_configured_order(self):
+        self.assertEqual(self.order(), (self.a, self.b, self.c))
+        self.assertEqual(
+            self.adapter.state.rules.routing_domains[0].no_problem_prefix_length,
+            3,
+        )
+
+    def test_failure_ticks_move_only_problem_path_down(self):
+        self.tick("a")
+        self.assertEqual(self.order(), (self.a, self.b, self.c))
+
+        self.tick("a")
+
+        self.assertEqual(self.order(), (self.b, self.c, self.a))
+        self.assertEqual(
+            self.adapter.state.rules.routing_domains[0].no_problem_prefix_length,
+            2,
+        )
+
+    def test_delayed_good_news_can_recover_in_one_materialization_cycle(self):
+        self.tick("a")
+        self.tick("a")
+        self.assertEqual(self.order(), (self.b, self.c, self.a))
+
+        self.good("a")
+        self.good("a")
+        self.good("a")
+
+        self.assertEqual(self.order(), (self.a, self.b, self.c))
+        self.assertEqual(
+            self.adapter.state.rules.routing_domains[0].no_problem_prefix_length,
+            3,
+        )
+
+    def test_tick_without_good_news_breaks_partial_recovery(self):
+        self.tick("a")
+        self.tick("a")
+        self.good("a")
+        self.good("a")
+        self.tick("a")
+        self.good("a")
+
+        self.assertEqual(self.order(), (self.b, self.c, self.a))
+
+    def test_disabled_probe_has_no_availability_problem_by_definition(self):
+        self.tick("a")
+        self.tick("a")
+        self.assertEqual(self.order(), (self.b, self.c, self.a))
+
+        disabled = AvailabilityProbeSetRequest(
+            tuple(
+                AvailabilityProbeRequest(
+                    item.probe_id,
+                    item.path,
+                    item.target,
+                    mechanism=item.mechanism,
+                    enabled=(item.probe_id != "a"),
+                    policy=item.policy,
+                )
+                for item in self.probes.probes
+            )
+        )
+        self.manager.configure_availability(disabled, self.assignments)
+
+        self.assertEqual(self.order(), (self.a, self.b, self.c))
+
+    def test_policy_only_change_preserves_problem_flag_but_resets_progress(self):
+        self.tick("a")
+        self.tick("a")
+        self.good("a")
+        self.good("a")
+
+        changed_policy = AvailabilityChannelPolicy(10, 5, 4)
+        changed = AvailabilityProbeSetRequest(
+            tuple(
+                AvailabilityProbeRequest(
+                    item.probe_id,
+                    item.path,
+                    item.target,
+                    mechanism=item.mechanism,
+                    enabled=item.enabled,
+                    policy=(
+                        changed_policy
+                        if item.probe_id == "a"
+                        else item.policy
+                    ),
+                )
+                for item in self.probes.probes
+            )
+        )
+        self.manager.configure_availability(changed, self.assignments)
+
+        self.assertEqual(self.order(), (self.b, self.c, self.a))
+
+        changed_a = next(
+            item for item in changed.probes
+            if item.probe_id == "a"
+        )
+        changed_channel = LogicalProbeChannel(
+            changed_a.probe_id,
+            changed_a.mechanism,
+            changed_a.path,
+            changed_a.target,
+            changed_a.policy,
+        )
+        for _ in range(3):
+            self.manager.handle_probe_good_news(
+                ProbeGoodNewsInfo(changed_channel)
+            )
+        self.assertEqual(self.order(), (self.b, self.c, self.a))
+
+        self.manager.handle_probe_good_news(
+            ProbeGoodNewsInfo(changed_channel)
+        )
+        self.assertEqual(self.order(), (self.a, self.b, self.c))
+
+    def test_old_channel_callback_is_ignored_after_definition_change(self):
+        stale = self.channel("a")
+        changed = AvailabilityProbeSetRequest(
+            tuple(
+                AvailabilityProbeRequest(
+                    item.probe_id,
+                    item.path,
+                    (
+                        IPv4Address("203.0.113.99")
+                        if item.probe_id == "a"
+                        else item.target
+                    ),
+                    mechanism=item.mechanism,
+                    enabled=item.enabled,
+                    policy=item.policy,
+                )
+                for item in self.probes.probes
+            )
+        )
+        self.manager.configure_availability(changed, self.assignments)
+
+        self.assertFalse(
+            self.manager.handle_probe_good_news(
+                ProbeGoodNewsInfo(stale)
+            )
+        )
+
+    def test_availability_updates_share_existing_serial_executor(self):
+        started = Event()
+        release = Event()
+
+        def block_apply():
+            started.set()
+            self.assertTrue(release.wait(2))
+
+        self.adapter.apply_hook = block_apply
+        worker = Thread(
+            target=lambda: (
+                self.tick("a"),
+                self.tick("a"),
+            )
+        )
+        worker.start()
+        self.assertTrue(started.wait(2))
+
+        self.good("b")
+        self.tick("b")
+
+        release.set()
+        worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(
+            max(
+                1,
+                sum(
+                    1
+                    for spec in self.adapter.apply_specs
+                    if spec.routing_domains
+                ),
+            ),
+            len(
+                [
+                    spec
+                    for spec in self.adapter.apply_specs
+                    if spec.routing_domains
+                ]
+            ),
+        )
 
 
 if __name__ == "__main__":
