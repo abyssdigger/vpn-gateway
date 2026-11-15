@@ -19,11 +19,16 @@ network-policy object graph without reintroducing an availability evidence bus:
   network-policy runtime helpers only after verified forwarding closure;
 - full-instance composition preserves the deliberate double protective close across
   instance-lifecycle and Adapter-bootstrap boundaries;
-- whole-assembly cleanup moved bootstrap logic back out of `runtime_assembly.py` and
-  collapsed three redundant forwarding-port classes into one generic callback publisher;
-- final simplified `runtime_assembly.py` is 366 lines / 11 top-level definitions versus
+- whole-assembly cleanup moved bootstrap logic back out of `runtime_assembly.py`,
+  collapsed three redundant forwarding-port classes into one generic callback publisher,
+  and removed the fanout pseudo-component;
+- `stop()` is now a terminal lifecycle boundary while repeated stop remains available for
+  cleanup retry/idempotence; audit/cleanup attempts remain independent across probe and
+  payload owner scopes;
+- final simplified `runtime_assembly.py` is 349 lines / 10 top-level definitions versus
   the pre-review 492 lines / 17 definitions;
-- final reviewed code CI passed **297 unit tests** plus the full privileged Linux matrix.
+- final milestone CI run 691 passed **300 unit tests** plus the full privileged Linux
+  matrix.
 
 ---
 
