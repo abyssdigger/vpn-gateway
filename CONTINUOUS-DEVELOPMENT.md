@@ -139,7 +139,16 @@ When a requirement is insufficient:
    - lift its observable effect upward;
    - verify the resulting effective product envelope;
 7. define acceptance evidence at the cheapest sufficient level;
-8. only then return to component design.
+8. if further decomposition of the affected node depends on insufficiently decomposed
+   semantics in another requirement/constraint branch:
+   - add `[decomp-blocked-by: <ID>]` to the blocked node;
+   - stop only that decomposition path;
+   - continue independent requirement/design work;
+9. when the blocking node or one of its descendants later provides enough specificity:
+   - add `[decomp-unblocks: <blocked-ID>; blocker=<original-blocker-ID>]` to the resolver;
+   - keep the original block link for traceability;
+   - resume review of the blocked decomposition;
+10. only then return to component design when the relevant requirement paths are sufficiently concrete.
 
 A thought that occurs during implementation is **not** automatically a requirement.
 
@@ -258,6 +267,8 @@ Implementation may begin only when all of the following hold for the affected sc
 - every requirement has meaningful `Purpose + Statement`;
 - every accepted constraint has meaningful `Reason + Statement`;
 - no unresolved product-semantic ambiguity is being hidden in implementation;
+- no active decomposition block exists on a requirement/constraint whose missing detail is
+  necessary for the implementation scope;
 - all material component responsibilities and interactions are traceable to requirements;
 - discovered constraints have been lifted far enough to expose their product effect;
 - any user/administrator/external-system adaptation caused by an accepted constraint is
