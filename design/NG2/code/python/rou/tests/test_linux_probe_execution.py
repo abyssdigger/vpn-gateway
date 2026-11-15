@@ -145,6 +145,7 @@ class ProbeExecutionScheduleTests(unittest.TestCase):
 
         self.assertEqual(len(boundaries), 1)
         self.assertEqual(boundaries[0].probe_id, "primary")
+        self.assertEqual(boundaries[0].evidence_epoch, 1)
         self.assertEqual(sends, (plane(),))
 
     def test_delayed_scheduler_closes_all_elapsed_windows_but_does_not_burst_sends(self):
