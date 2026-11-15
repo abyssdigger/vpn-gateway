@@ -75,7 +75,7 @@ RuntimeStateManager остается владельцем общей structural/
 проекции, но больше не является посредником availability hysteresis для route priority.
 
 Runtime-derived association logical probes with Profiles может по-прежнему вычисляться и
-валидироваться из configuration/interface state, однако текущие GOOD/BAD counters/latches
+валидироваться из configuration/interface state, однако текущие availability-problems counters/latches
 не проходят цепочку `AvailabilityProbeStateInfo -> RuntimeStateManager ->
 PayloadTrafficStateRequest`.
 
@@ -114,7 +114,7 @@ Agent не выполняет Device admission и не определяет Prof
 - current concrete physical generation;
 - execution demand for `ProbeExecutionAgent`.
 
-Он не владеет routing hysteresis, GOOD/BAD channel counters или payload route priority.
+Он не владеет routing hysteresis, availability-problems channel counters или payload route priority.
 
 ### 2.4. ProbeExecutionAgent
 
@@ -342,7 +342,7 @@ NetworkRules semantics.
 
 Production availability policy не коррелирует reply с semantic attempt id. Valid replies
 являются colorless good-news units; logical timer firing является только pending tick
-fact. GOOD/BAD hysteresis принадлежит PayloadTrafficManager collector и задается
+fact. availability-problems hysteresis принадлежит PayloadTrafficManager collector и задается
 `design/NG2/availability-collector-materializer.md`.
 
 Новая revision заменяет предыдущий desired set.
@@ -353,7 +353,7 @@ fact. GOOD/BAD hysteresis принадлежит PayloadTrafficManager collector
 
 Во время миграции implementation может продолжать публиковать probe diagnostics/status,
 но RuntimeStateManager не использует их для вычисления route priority. Routing-relevant
-GOOD/BAD state находится внутри PayloadTrafficManager collector.
+availability-problems state находится внутри PayloadTrafficManager collector.
 
 ### 8.4. PayloadTrafficStateRequest
 
@@ -557,7 +557,7 @@ Binding исчезает по структурной/административ�
 - semantic structural payload projection для `PayloadTrafficStateRequest`.
 
 Calculator больше не принимает current availability probe states и не вычисляет готовый
-effective `ordered_paths`. GOOD/BAD current state, effective order и live-prefix boundary
+effective `ordered_paths`. current availability-problems state, effective order и live-prefix boundary
 принадлежат PayloadTrafficManager collector/materializer flow.
 
 ## 11. Recalculation RuntimeStateManager
@@ -622,7 +622,7 @@ The producer call only updates bounded state under a short lock and returns. It 
 waits for route materialization.
 
 The PayloadTrafficManager collector later processes the accumulated facts as one
-simultaneous observation, updates current GOOD/BAD channel state, and if the
+simultaneous observation, updates current availability-problems channel state, and if the
 routing-relevant snapshot changed invokes the sole route-priority materializer
 synchronously.
 
@@ -734,7 +734,7 @@ The collector/materializer edge is synchronous Machinery flow inside PayloadTraf
 - physical ProbeRules/readiness ownership в AvailabilityProbeManager;
 - bounded physical sends and stale-generation rejection in ProbeExecutionAgent;
 - bounded colorless good-news counter + boolean tick input;
-- GOOD/BAD collector policy inside PayloadTrafficManager;
+- availability-problems collector policy inside PayloadTrafficManager;
 - synchronous use of the sole route-priority materializer;
 - no EventEnvelope requirement on the availability collector/materializer path.
 
