@@ -753,8 +753,9 @@ Implemented executable network-policy assembly:
 - two sibling Direct Calculators independently project:
   - `AvailabilityProbeSetRequest`;
   - `AvailabilityPriorityConfig`;
-- ordered fanout installs payload-priority config before allowing a new probe execution
-  plan to publish;
+- `LinuxAvailabilityRuntimeAssembly.configure()` calculates both projections first,
+  then installs payload-priority config before allowing a new probe execution plan to
+  publish;
 - process-local publisher edges are synchronous `CallbackPublisher` calls, not an
   EventEnvelope bus;
 - `build_linux_availability_runtime()` wires:
@@ -763,7 +764,8 @@ Implemented executable network-policy assembly:
   runtime on one owner-composing NetworkRulesAdapter;
 - outer `audit()` invokes the two Managers independently; it does not create merged
   global desired state;
-- outer `stop()` cleans probe and payload owners independently.
+- outer `stop()` is a terminal runtime lifecycle boundary and cleans probe/payload
+  owners independently; repeated stop remains permitted for cleanup retry/idempotence.
 
 Protective startup composition is kept in `runtime-bootstrap.md`, not in steady-state
 assembly.
