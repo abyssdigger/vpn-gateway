@@ -19,25 +19,39 @@ physical ping workers                         timer
         +--> colorless good news                +--> tick
                     \                           /
                      v                         v
-                    AvailabilityProbeManager / collector
-                         current channel state
+                    bounded availability input
+                                  |
+                                  v
+                       PayloadTrafficManager
+                     availability collector state
                                   |
                                   | synchronous current snapshot
                                   v
-                         route materializer
+                    route-priority materializer
                                   |
                            transactional reorder
                                   |
                                 return
 ```
 
-The collector owns availability state and degradation/recovery policy. The route
-materializer owns route-priority convergence. Probe execution never changes payload route
+The collector state is owned by `PayloadTrafficManager`, because availability in NG2 is
+routing-priority policy. The route-priority materializer is the sole transactional route
+Executor already owned by that Manager. Probe execution never changes payload route
 membership.
 
-There is no asynchronous queue between collector and materializer. While materialization
-runs, producers may accumulate new input facts; the collector processes them after the
-synchronous materializer call returns.
+`AvailabilityProbeManager` continues to own physical ProbeRules/readiness and execution
+demand, but no longer owns routing hysteresis. This avoids a synchronous call from one
+Manager into another Manager's private Machinery.
+
+There is no asynchronous queue between collector and materializer: both are inside the
+same Manager execution flow. Producer-facing input is different: ping workers/timers only
+update bounded aggregates under a short lock and return. They never wait for route
+materialization.
+
+The collector snapshots and clears/updates those aggregates, releases the input lock, and
+then may call the materializer synchronously. While materialization runs, producers may
+accumulate new input facts in the fresh aggregate state; the collector processes them
+after the synchronous materializer call returns.
 
 The design relies on the operational scale already chosen for NG2: route-priority
 materialization is millisecond-scale while probe cadence is second-scale. The model does
@@ -160,8 +174,10 @@ been accepted since the preceding processed tick.
 
 ## 6. One collector pass
 
-The collector is single-threaded with respect to channel-state calculation and synchronous
-materialization. Producers only update the bounded input aggregates and wake the collector.
+The `PayloadTrafficManager` collector loop is single-threaded with respect to
+channel-state calculation and synchronous route-priority materialization. Producers only
+update bounded input aggregates under a short mutex and wake the collector; the mutex is
+never held across route calculation, kernel I/O or verification.
 
 For each pass, the collector obtains the current accumulated facts. Events within that
 pass are treated as simultaneous observations. Their source ordering is intentionally not
@@ -289,6 +305,9 @@ loss. No attempt correlation or reply timestamp is required.
 ## 10. Physical generation guard
 
 The collector model itself has no logical evidence epoch and no event revision.
+`AvailabilityProbeStateInfo` is no longer a routing-control intermediate between
+`AvailabilityProbeManager`, `RuntimeStateManager` and `PayloadTrafficManager`;
+availability status may still be projected outward for diagnostics/status.
 
 The existing physical `ProbeObservationGeneration` has a narrower purpose: a bounded
 worker launched for an obsolete ProbeRules/interface generation must not contribute a
@@ -305,8 +324,8 @@ not require an `evidence_epoch`.
 The collector remembers current channel statuses. Counter/latch changes that do not change
 a routing-relevant status do not require materialization.
 
-When the routing-relevant current snapshot changes, the collector calls the route
-materializer synchronously:
+When the routing-relevant current snapshot changes, the collector calls the
+`PayloadTrafficManager` route-priority materializer synchronously:
 
 ```text
 materialize(current_snapshot)
@@ -317,8 +336,10 @@ The call does not return until the current route transaction has either:
 - reached and verified the requested materialized state; or
 - failed with an explicit convergence result.
 
-The materializer owns the last successfully materialized snapshot and compares before
-acting:
+The materializer owns the last **verified** materialized route-priority snapshot and
+compares before acting. A failed/partially observed transaction never advances that
+baseline; the next pass re-observes authoritative route state before planning further
+moves:
 
 ```text
 if desired == last_materialized:
@@ -334,13 +355,18 @@ return
 Only one materialization transaction for the relevant Profile/routing scope may execute at
 a time.
 
-There is therefore no:
+For availability-driven reorder work there is therefore no:
 
 - materializer-ready event;
-- pending route-plan queue;
-- concurrent route transaction;
+- collector-to-materializer route-plan queue;
+- second/concurrent route transaction;
 - cancellation of a running route transaction;
-- route-plan supersession inside a transaction.
+- availability supersession inside a transaction.
+
+Other payload-domain changes may still arrive through the existing
+`PayloadTrafficManager` request path. They share the same sole transactional executor;
+availability processing does not create a second executor or a second queue of kernel
+moves.
 
 New probe/tick facts that arrive while materialization runs accumulate only in the bounded
 collector input state. On return, the collector performs another pass over the latest
@@ -399,10 +425,11 @@ remains diagnostic only.
 ## 14. Ordering and EventEnvelope consequence
 
 This path does not require EventEnvelope ordering between collector and materializer
-because the boundary is deliberately synchronous.
+because they are one synchronous Manager flow.
 
-Producer-to-collector ordering is also intentionally weaker than an event journal:
-good-news multiplicity and the existence of a pending tick are aggregated facts.
+Producer-to-collector delivery is not an Event journal either. It is a non-blocking input
+port that updates bounded aggregates. Ordering is intentionally weaker than an event
+journal: good-news multiplicity and the existence of a pending tick are aggregate facts.
 
 A future general Event Delivery Environment may still use envelopes for other asynchronous
 latest-value streams. It must not be introduced into this availability path merely to
@@ -420,8 +447,12 @@ must remove, rather than wrap:
 - batched window catch-up;
 - source-order locking whose only purpose is ordering good-news against window boundaries.
 
-The migration should introduce the bounded collector aggregates and direct synchronous
-materializer handoff as the next coherent code review unit.
+The migration should move routing hysteresis/current channel state into
+`PayloadTrafficManager`, introduce the bounded producer-facing aggregates there, and
+connect them directly to the existing sole transactional route-priority executor as the
+next coherent code review unit. `AvailabilityProbeManager` should retain physical
+ProbeRules/readiness/execution-demand ownership but stop acting as the routing-evidence
+collector.
 
 Physical-generation safety, bounded send-worker execution, diagnostic lifecycle and the
 already proven Linux ping mechanism remain valid unless separately contradicted.
