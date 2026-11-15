@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from ipaddress import IPv4Address
 from math import isfinite
 
+from .availability_collector import AvailabilityPriorityChannel
 from .availability_probe_state import ProbeObservationGeneration
 from .interface_identity import InterfaceIdentity
 from .probe_rules import (
@@ -37,19 +38,18 @@ class PhysicalProbePlane:
 
 @dataclass(frozen=True)
 class LogicalProbeChannel:
-    channel_id: str
+    priority: AvailabilityPriorityChannel
     mechanism: ProbeMechanism
-    path: InterfaceIdentity
     target: IPv4Address
     interval_seconds: float
 
     def __post_init__(self) -> None:
-        if not isinstance(self.channel_id, str) or not self.channel_id:
-            raise ValueError("logical probe channel requires non-empty channel_id")
+        if not isinstance(self.priority, AvailabilityPriorityChannel):
+            raise ValueError(
+                "logical probe channel requires AvailabilityPriorityChannel"
+            )
         if not isinstance(self.mechanism, ProbeMechanism):
             raise ValueError("logical probe channel requires ProbeMechanism")
-        if not isinstance(self.path, InterfaceIdentity):
-            raise ValueError("logical probe channel requires InterfaceIdentity")
         if not isinstance(self.target, IPv4Address):
             raise ValueError("logical probe channel requires IPv4Address target")
         if (
@@ -91,7 +91,7 @@ class ProbeExecutionPlan:
                 raise ValueError(
                     "execution plan channels must contain LogicalProbeChannel"
                 )
-            channel_ids.append(item.channel_id)
+            channel_ids.append(item.priority.channel_id)
         if len(set(channel_ids)) != len(channel_ids):
             raise ValueError("execution plan contains duplicate logical channels")
 
@@ -127,9 +127,13 @@ class ProbeExecutionPlanCalculator:
 
             channels.append(
                 LogicalProbeChannel(
-                    probe.probe_id,
+                    AvailabilityPriorityChannel(
+                        probe.probe_id,
+                        probe.path,
+                        probe.enabled,
+                        probe.hysteresis,
+                    ),
                     probe.mechanism,
-                    probe.path,
                     probe.target,
                     probe.interval_seconds,
                 )
@@ -150,5 +154,10 @@ class ProbeExecutionPlanCalculator:
         return ProbeExecutionPlan(
             generation,
             planes,
-            tuple(sorted(channels, key=lambda item: item.channel_id)),
+            tuple(
+                sorted(
+                    channels,
+                    key=lambda item: item.priority.channel_id,
+                )
+            ),
         )
