@@ -1,5 +1,11 @@
 # VPN-GATE NG2 — событийная модель runtime
 
+> **2026-11-15 availability-path update:** the active-probe collector -> route-materializer
+> path is intentionally synchronous and aggregate-based as specified by
+> `design/NG2/availability-collector-materializer.md`. It does not require EventEnvelope
+> revision/epoch ordering. The general Event Delivery model below remains applicable to
+> genuinely asynchronous latest-value streams elsewhere in runtime.
+
 **Статус:** нормативный проект NG2  
 **Дата:** 2026-11-13  
 **Область:** steady-state runtime после успешного startup и до начала shutdown  
