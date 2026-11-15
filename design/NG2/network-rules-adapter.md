@@ -338,8 +338,8 @@ position.
 Для `N` paths planner рассматривает рабочий диапазон из `N+1` ordinary metrics ниже
 terminal metric. Свободный metric не является persistent объектом Adapter:
 
-- при наличии non-confirmed tail он находится непосредственно перед первым таким path;
-- при all-live отдельного steady-state gap нет, а следующий metric после последнего path
+- при наличии non-preferred tail он находится непосредственно перед первым таким path;
+- при all-preferred отдельного steady-state gap нет, а следующий metric после последнего path
   просто свободен для первого move;
 - сам gap нигде не хранится;
 - transient `confirmed_live_prefix_length` проходит через текущий routing intent и
@@ -357,7 +357,7 @@ Fast path обязан:
 6. при любой ошибке перейти в обычный structural fail-closed rebuild.
 
 Route-priority materialization является transactional в scope одного Profile/routing
-domain. Пока выполняется один plan, новое availability-derived desired state этого же
+domain. Пока выполняется один plan, новое priority-derived desired state этого же
 Profile не может вмешаться в его команды или пересчитать plan посередине. Оно может только
 заменить pending/latest desired state. После final verification следующий plan строится
 уже от подтвержденного результата предыдущей транзакции.
