@@ -1,153 +1,114 @@
 # VPN-GATE NG2 — ProbeExecutionAgent
 
-> **2026-11-15 normative update:** logical observation windows are removed from the target
-> architecture. `design/NG2/availability-collector-materializer.md` supersedes the
-> `LogicalProbeWindow`, `evidence_epoch`, boundary batching and `elapsed_intervals`
-> portions below. Physical send cadence, stale physical-generation rejection, bounded
-> workers and local diagnostics remain normative.
-
-**Status:** active NG2 design  
+**Status:** normative NG2 design  
 **Date:** 2026-11-15  
-**Scope:** production execution of generation-bound active probe demand  
-**Upstream contract:** `design/NG2/availability-probe-manager.md`
+**Scope:** physical probe sends, logical ticks and local execution diagnostics
 
 ## 1. Role
 
-`ProbeExecutionAgent` is an Engine of the Agent family.
+`ProbeExecutionAgent` is an Agent Engine below `AvailabilityProbeManager`.
 
-It observes remote reachability by actively sending probes, but it does not own routing
-policy and does not decide whether a payload path is eligible, reachable or removable.
-
-Its inputs are latest-value `ProbeExecutionPlan | None` RequestEvents from
-`AvailabilityProbeManager`.
-
-Its availability-facing outputs are colorless good-news observations and logical ticks.
-It also publishes local execution diagnostics. Good-news/tick inputs are aggregated by the
-PayloadTrafficManager collector; they are not replayable event-journal records.
-
-## 2. Ownership split
-
-`AvailabilityProbeManager` owns:
-
-- logical probe requests;
-- ProbeRules lifecycle;
-- READY `ProbeObservationGeneration`;
-- physical ProbeRules/readiness generation;
-- current execution demand.
-
-`ProbeExecutionAgent` owns:
-
-- current execution plan lifecycle;
-- monotonic physical-send and logical-tick cadence;
-- physical send launch;
-- generation-scoped worker acceptance;
-- local execution diagnostics.
-
-The Agent does **not** own:
-
-- `failure_intervals`;
-- routing verdicts;
-- payload route membership;
-- binding membership;
-- per-attempt semantic identity.
-
-## 3. Request lifecycle
-
-A non-`None` plan means: execute this complete current physical/logical probe demand.
-
-`None` means: quiesce it.
-
-A physical ProbeRules generation loss quiesces current demand before a later lower-domain
-transition. A later fresh READY generation installs replacement demand.
-
-Logical policy changes do not require an `evidence_epoch`. Routing hysteresis state is
-outside this Agent.
-
-## 4. Cadence
-
-The Agent schedules two technical activities:
+Input:
 
 ```text
-physical send deadline -> launch at most one current send
-logical tick deadline   -> set current channel tick_pending = true
+ProbeExecutionPlan | None
 ```
 
-A late wake-up does not replay historical activity:
+Outputs:
 
-- missed physical sends are not burst-replayed;
-- repeated undrained logical ticks collapse to one pending fact in the collector input;
-- the next deadlines advance to the future in O(1).
+```text
+ProbeGoodNewsInfo
+ProbeTickInfo
+ProbeExecutionDiagnosticInfo
+```
 
-There is no elapsed-window catch-up.
+The Agent owns cadence/process execution only. It owns no availability hysteresis and no
+payload routing policy.
 
-## 5. Physical send boundary
+## 2. Physical sends
 
-The production Agent depends on:
+Each deduplicated physical plane has:
+
+```text
+mechanism
+InterfaceIdentity
+target
+send interval
+```
+
+Activation or physical cadence change schedules one immediate send.
+
+At most one send is in flight per physical plane/generation. If the next send deadline
+arrives while the previous worker is still running, no second worker is launched and the
+condition is reported only as local execution diagnostic state.
+
+Delayed scheduler wake-up launches at most one current send. Historical sends are not
+burst-replayed.
+
+## 3. Logical ticks
+
+Each enabled logical channel has one tick cadence equal to its configured
+`interval_seconds`.
+
+A due logical tick publishes:
+
+```text
+ProbeTickInfo(current LogicalProbeChannel)
+```
+
+If execution wakes after several nominal intervals, exactly one current tick is published
+and the deadline advances directly into the future.
+
+There is no elapsed interval count and no boundary replay.
+
+## 4. Good news
+
+The technical send boundary is:
 
 ```text
 ProbeSendDriver.execute_send(...)
-    -> ProbeSendResult(good_news: bool, local_error: str | None)
+    -> ProbeSendResult(
+           good_news: bool,
+           local_error: str | None
+       )
 ```
 
-No `NO_REPLY` type crosses this boundary.
-
-The current Linux compatibility implementation wraps the already target-validated
-single-shot `LinuxIcmpProbeDriver`:
+Current Linux compatibility mapping:
 
 ```text
 REPLY    -> good_news=true
-NO_REPLY -> good_news=false, local_error=None
-ERROR    -> good_news=false, local_error=<diagnostic>
+NO_REPLY -> good_news=false
+ERROR    -> local_error=<diagnostic>
 ```
 
-Individual `ping -c 1` workers remain bounded technical sends.
+`NO_REPLY` is not a production event.
 
-## 6. Send concurrency
-
-At most one send may be in flight for one physical plane/generation.
-
-If the next send deadline arrives before the previous send completes, no second worker is
-launched for that plane and local diagnostic state records the overrun. Different physical
-planes may execute concurrently.
-
-## 7. Availability input publication
-
-A successful reply contributes one colorless good-news unit to every current logical
-consumer of that physical plane.
-
-The receiving bounded input saturates at that channel's configured
-`recovery_good_news`. No attempt identity, timestamp or semantic send sequence is
-published.
-
-A logical cadence firing only sets that channel's `tick_pending` flag. A second firing
-while the flag is already set adds nothing.
-
-The Agent does not need to order good news against ticks. The collector deliberately treats
-the accumulated good-news count and pending-tick fact in one pass as simultaneous
-observations.
-
-A result from an obsolete physical generation or from a plane no longer in the current
-plan is discarded.
-
-## 8. Removed window machinery
-
-The target Agent has no:
+A successful physical reply is fanned out to the **current** logical consumers of that
+physical plane:
 
 ```text
-LogicalProbeWindow.evidence_epoch
-ProbeWindowBoundaryInfo.elapsed_intervals
-boundary catch-up
-boundary-before-next-send semantic ordering
-good-news/window source-order lock
+ProbeGoodNewsInfo(current LogicalProbeChannel)
 ```
 
-Physical generation remains only as a stale-worker safety guard.
+Individual replies carry no attempt id, sequence or timestamp.
 
-## 9. Local diagnostics
+## 5. Stale result rejection
 
-`ProbeExecutionDiagnosticInfo` is generation- and plane-scoped.
+A bounded worker result is discarded unless, at completion time:
 
-States:
+- a plan is still active;
+- the physical generation matches;
+- the physical plane remains in the current plan.
+
+The logical channel descriptor carried by good-news/tick input gives
+`PayloadTrafficManager` an additional cheap guard against a callback from an obsolete
+logical definition.
+
+No logical epoch is required.
+
+## 6. Diagnostics
+
+Local execution diagnostic states remain:
 
 ```text
 READY
@@ -155,49 +116,36 @@ ERROR
 INACTIVE
 ```
 
-`ERROR` is local execution health only. It never directly changes routing evidence.
+They are keyed by physical generation + plane.
 
-Repeated identical current diagnostics are suppressed.
+Repeated identical diagnostics are suppressed. Plan removal or generation replacement
+invalidates current diagnostics with `INACTIVE`.
 
-When a plane/generation leaves the current plan, its latest diagnostic is followed by
-`INACTIVE`. Diagnostic publication is serialized against plan invalidation so a stale
-worker cannot publish `READY` or `ERROR` after the corresponding `INACTIVE`.
+Diagnostic state never directly changes route priority.
 
-## 10. Shutdown
+## 7. Shutdown
 
 `stop()`:
 
-- clears current execution demand;
-- emits required diagnostic `INACTIVE` transitions;
-- wakes and terminates the scheduler thread;
-- is idempotent;
-- does not accept late worker results as current evidence.
+- clears current plan;
+- emits required `INACTIVE` diagnostics;
+- terminates the scheduler thread;
+- is idempotent.
 
-Already running bounded technical workers may finish after logical quiesce, but their
-results are generation/plan checked and discarded. The Linux ping Driver receives an
-**explicit required technical timeout** from runtime assembly; there is no hidden default
-that could be mistaken for availability verdict policy.
+Already-running bounded workers may complete, but stale generation/plan checks prevent
+their results from becoming current good news.
 
-## 11. Safety invariants
+## 8. Removed machinery
 
-1. Probe execution never adds or removes payload routes.
-2. `NO_REPLY` never becomes a production availability event.
-3. Local execution `ERROR` never becomes an immediate routing verdict.
-4. Old-generation worker results never become current evidence.
-5. One physical plane cannot create unbounded overlapping workers.
-6. Boundary-before-next-send ordering is preserved at coincident deadlines.
-7. Suspended execution does not replay historical sends.
-8. Execution diagnostics are explicitly invalidated when their plane/generation becomes
-   inactive.
+The Agent no longer has:
 
-## 12. Remaining gates
+- `LogicalProbeWindow`;
+- `ProbeWindowBoundaryInfo`;
+- `evidence_epoch`;
+- `elapsed_intervals`;
+- good-news/window ordering locks;
+- boundary-before-send policy semantics;
+- catch-up window processing.
 
-This unit does not close:
-
-- Event Delivery Environment / `EventEnvelope` revision filtering for delayed delivery;
-- daemon/runtime assembly that instantiates the Agent and connects actual event transport;
-- Profile status consumption of local execution diagnostics;
-- target validation only if the Linux send mechanism later changes materially away from
-  the already validated capability-free `/usr/bin/ping` path.
-
-No new kernel behavior is claimed by the current implementation.
+Its availability-facing behavior is now exactly: **send pings, report successful replies,
+emit ticks**.
