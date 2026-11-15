@@ -328,9 +328,20 @@ A temporary draft PR is used only to expose the repository's pull-request-trigge
 `NG2 Python` workflow for this code-cycle branch. It will be closed without merge after
 the final result is recorded.
 
-At the time this review document is first written, the latest workflow result is still
-pending. The final verdict below must not be changed to PASS until that run completes
-successfully or an equivalent stronger test result is obtained.
+Final observable CI evidence is GitHub Actions `NG2 Python` run 515:
+
+- compile: PASS;
+- rootless unit suite: **338 tests PASS**;
+- privileged Linux integration: PASS;
+- selective probe-process isolation: PASS;
+- EXP-025 stale probe conntrack generation: PASS;
+- EXP-026 probe-class conntrack cleanup: PASS;
+- EXP-027 route-priority bubble: PASS;
+- Linux nft ICMP selector syntax: PASS;
+- Linux instance lifecycle: PASS;
+- Linux Adapter integration: PASS;
+- Linux LOCAL_PROCESS integration: PASS;
+- Linux dataplane integration: PASS.
 
 No new target-specific kernel property is claimed by this unit.
 
@@ -347,7 +358,8 @@ Not part of this review unit:
 
 ## Verdict
 
-**PENDING CI.**
+**PASS.**
 
-The architecture/code review has no unresolved finding. Final review-unit acceptance waits
-only for the observable NG2 Python workflow result.
+All accepted findings were fixed and regression-covered. The final code/test-bearing
+baseline passed both the rootless suite and the complete privileged NG2 Linux integration
+workflow. No unresolved finding blocks the next review unit.
