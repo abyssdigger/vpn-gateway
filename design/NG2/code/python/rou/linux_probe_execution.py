@@ -252,6 +252,7 @@ class ProbeExecutionSchedule:
                 ProbeWindowBoundaryInfo(
                     probe_id,
                     plan.generation,
+                    evidence_epoch=item.evidence_epoch,
                     elapsed_intervals=elapsed,
                 )
             )
