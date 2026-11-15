@@ -1,4 +1,5 @@
 from ipaddress import IPv4Address, IPv4Network
+import time
 import unittest
 
 from rou.availability_collector import (
@@ -23,6 +24,10 @@ from rou.payload_rules import (
     PayloadTrafficStateRequest,
 )
 from rou.payload_traffic_manager import PayloadTrafficManager
+from rou.linux_probe_execution import (
+    ProbeExecutionHealth,
+    ProbeSendResult,
+)
 from rou.runtime_assembly import (
     AvailabilityConfigFanout,
     AvailabilityGoodNewsPort,
@@ -32,6 +37,7 @@ from rou.runtime_assembly import (
     ProbeExecutionPlanPort,
     RuntimeAvailabilityChannel,
     RuntimeAvailabilityConfig,
+    build_linux_availability_runtime,
 )
 
 
@@ -56,6 +62,7 @@ class FakeAdapter:
         )
         self.apply_specs = []
         self.apply_hook = None
+        self.cleanup_calls = 0
 
     def apply(self, owner, spec):
         self.apply_specs.append(spec)
@@ -75,7 +82,18 @@ class FakeAdapter:
         return self.state
 
     def cleanup(self, owner):
+        self.cleanup_calls += 1
         return ActionResult(True)
+
+
+class FakeSendDriver:
+    def __init__(self, result):
+        self.result = result
+        self.calls = []
+
+    def execute_send(self, path, target, *, timeout_seconds):
+        self.calls.append((path, target, timeout_seconds))
+        return self.result
 
 
 class PlanConsumer:
@@ -320,6 +338,101 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
                 AvailabilityGoodNews(stale)
             )
         )
+
+
+
+class LinuxAvailabilityRuntimeAssemblyTests(unittest.TestCase):
+    def test_builder_wires_probe_reply_directly_back_to_payload_priority(self):
+        payload_adapter = FakeAdapter()
+        payload_manager = PayloadTrafficManager(
+            payload_adapter,
+            RecordingPublisher(),
+        )
+        payload_manager.handle_request(payload_request(A, B))
+
+        probe_adapter = FakeAdapter()
+        diagnostics = RecordingPublisher()
+        driver = FakeSendDriver(ProbeSendResult(True))
+        runtime = build_linux_availability_runtime(
+            probe_adapter,
+            payload_manager,
+            driver,
+            diagnostics,
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        source = runtime_config(
+            runtime_channel(
+                "a",
+                A,
+                "203.0.113.10",
+                failure=1,
+                recovery=1,
+            )
+        )
+        runtime.configure(source)
+
+        channel = AvailabilityPriorityConfigCalculator().calculate(
+            source
+        ).channels[0]
+        payload_manager.handle_availability_tick(
+            AvailabilityTick(channel)
+        )
+        self.assertEqual(
+            payload_adapter.state.rules.routing_domains[0].ordered_paths,
+            (B, A),
+        )
+
+        runtime.agent.process_due(100.0)
+
+        deadline = time.monotonic() + 2
+        while (
+            payload_adapter.state.rules.routing_domains[0].ordered_paths
+            != (A, B)
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.005)
+
+        self.assertEqual(
+            payload_adapter.state.rules.routing_domains[0].ordered_paths,
+            (A, B),
+        )
+        self.assertEqual(len(driver.calls), 1)
+        self.assertTrue(
+            any(
+                item.health is ProbeExecutionHealth.READY
+                for item in diagnostics.events
+            )
+        )
+
+    def test_stop_quiesces_agent_and_cleans_probe_rules(self):
+        payload_manager = PayloadTrafficManager(
+            FakeAdapter(),
+            RecordingPublisher(),
+        )
+        payload_manager.handle_request(payload_request(A))
+
+        probe_adapter = FakeAdapter()
+        runtime = build_linux_availability_runtime(
+            probe_adapter,
+            payload_manager,
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.configure(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+        runtime.start()
+
+        result = runtime.stop()
+
+        self.assertTrue(result.success)
+        self.assertEqual(probe_adapter.cleanup_calls, 1)
+        self.assertIsNone(runtime.agent._schedule.plan)
 
 
 if __name__ == "__main__":
