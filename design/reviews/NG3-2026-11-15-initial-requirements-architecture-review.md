@@ -437,6 +437,21 @@ Ignoring NG2 and reading only the NG3 requirements:
 
 None of these should be guessed from old implementation.
 
+## Compact requirement presentation
+
+The NG3 requirement document now uses one normative line per node:
+
+```text
+**[ID]** Purpose | Statement   — R
+**[ID]** Reason  | Statement   — C
+```
+
+Section headings are grouping only and carry no requirement semantics.
+
+This is a presentation change, not a semantic compression: full `Purpose/Reason` and
+`Statement` remain mandatory. The format is intentionally straightforward to validate
+mechanically later.
+
 # 8. Simplification review
 
 The current architecture deliberately avoided:
@@ -462,10 +477,10 @@ documents.
 Result:
 
 ```text
-requirement IDs in tree:             52
-architecture requirement references: 159
-unique requirement IDs referenced:   43
-missing/broken requirement IDs:        0
+requirement/constraint IDs in tree:   55
+architecture requirement references:  177
+unique IDs referenced:                 51
+missing/broken IDs:                    0
 ```
 
 The seven component-role sections currently detected in the architecture are:
@@ -477,6 +492,10 @@ The seven component-role sections currently detected in the architecture are:
 - ActiveProbeDriver — Driver;
 - NetworkPolicyAdapter — Adapter;
 - NetworkPolicyExecutor — Executor.
+
+Direct architecture coverage currently leaves only parent/aggregate L1 nodes without their
+own explicit references; the cross-cutting implementation-quality children are now linked at
+architecture-document scope.
 
 This check proves reference integrity only. It does not prove that every traceability claim
 is semantically correct; that is covered by the expert review above.
