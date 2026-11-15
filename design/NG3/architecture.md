@@ -983,6 +983,7 @@ Instead, the architecture records only required postconditions:
 **Implements:**
 - `VPNG-R1.R2`
 - `VPNG-R4.R4`
+- `VPNG-R5`
 - `VPNG-R5.R1`
 - `VPNG-R5.R4`
 - `VPNG-R5.R5`
