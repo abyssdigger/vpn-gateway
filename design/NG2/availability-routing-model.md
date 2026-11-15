@@ -55,7 +55,7 @@ For one Profile/path:
   no-problem class.
 
 This preserves the previous "one valid positive path observation is enough" behavior
-without requiring a separate confirmed-live state model.
+without requiring a separate separate positive-health state model.
 
 ## 4. Effective order
 
@@ -97,7 +97,7 @@ effective:           A B C D
 The transient runtime routing intent carries:
 
 ```text
-no_problem_prefix_length
+preferred_prefix_length
 ```
 
 For N paths:
@@ -149,7 +149,7 @@ separate feature with separate policy.
 Это не означает наличие `N+1` routes. В steady state всегда присутствует ровно `N`
 unicast routes — по одному на каждый eligible path.
 
-Если подтверждено живыми `K < N` paths, единственный незанятый metric находится
+Если без availability-проблем `K < N` paths, единственный незанятый metric находится
 непосредственно перед первым неподтвержденным path:
 
 ```text
@@ -171,7 +171,7 @@ A B C D
 position и может быть использован первым transition move.
 
 ```text
-all non-confirmed:
+all problem-marked:
 . A B C D
 10 20 30 40 50
 ```
@@ -180,7 +180,7 @@ all non-confirmed:
 
 Положение свободного metric не фиксируется в конфигурации и не materialized отдельным
 объектом. Оно однозначно выводится из текущего effective order и transient
-`no_problem_prefix_length`.
+`preferred_prefix_length`.
 
 Terminal blackhole остается отдельным:
 
@@ -222,7 +222,7 @@ Mfree свободен
 ### 10.1. Death
 
 Если path становится неподтвержденным, он сначала перемещается в текущий свободный
-position справа от live-prefix. Затем живые paths, которые стояли после него, по одному
+position справа от preferred-prefix. Затем preferred paths, которые стояли после него, по одному
 переезжают к меньшим metrics. В результате свободный metric оказывается непосредственно
 перед свежепониженным path.
 
@@ -258,7 +258,7 @@ A B G D E J . V
 
 ### 10.2. Recovery
 
-При recovery живые paths справа от новой позиции recovered path сначала по одному
+При recovery preferred paths справа от новой позиции recovered path сначала по одному
 перемещаются к большим metrics, начиная с самого правого. Когда нужный metric освобожден,
 recovered path переезжает туда. Если после него остались неподтвержденные paths левее
 нового положения свободного metric, они аналогично сдвигаются вправо до восстановления
