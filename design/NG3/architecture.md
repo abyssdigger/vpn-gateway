@@ -1,6 +1,6 @@
 # VPN-GATE NG3 — Architecture Report
 
-**Status:** NG3 architecture, requirement-closure draft  
+**Status:** partial NG3 architecture, probe-target normalization refinement  
 **Cycle:** `ng3-design-cycle-20261116-final-gates-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
@@ -435,11 +435,6 @@ A successful result must prove at least:
 - exactly one current endpoint is selected;
 - a previously superseded endpoint is not returned as current.
 
-For availability target inference, the Adapter also exposes the current observable network
-facts of the matched VPN endpoint that are necessary to derive an unambiguous check target
-when the user omitted one. It does not decide whether that target constitutes "goodness";
-it only reports facts from the accepted binding/current endpoint environment.
-
 The Adapter does **not**:
 
 - create the VPN session;
@@ -502,10 +497,15 @@ PayloadPolicyIntent:
     allowed_path_ids
     configured_preference
 
-AvailabilityCheckIntent:
+AvailabilityCheckConfig:
     logical_path_id
     mechanism
-    target = explicit_ip | derive_from_vpn_endpoint
+    target = explicit IPv4 | omitted
+
+AvailabilityProbeIntent:
+    logical_path_id
+    mechanism
+    target = concrete IPv4
 ```
 
 where:
@@ -518,12 +518,15 @@ where:
   VPN -> ordinary-network permission;
 - `allowed_path_ids` is the explicit set of logical VPN paths eligible for that traffic;
 - `configured_preference` orders only those already allowed paths;
-- `AvailabilityCheckIntent.mechanism` is the user-selected meaning of "how this path is
+- `AvailabilityCheckConfig.mechanism` is the user-selected meaning of "how this path is
   checked"; first-release accepted value is `icmp`;
-- an explicit target means the user chose that address as the criterion endpoint;
-- an omitted target normalizes to `derive_from_vpn_endpoint`;
-- the exact external field name/string syntax is an interface choice; a representation such
-  as `icmp/<ip>` can map to the same normalized contract without becoming architecture;
+- `target` is optional only at the external configuration boundary;
+- an explicit target must be preserved unchanged into normalized probe intent;
+- before probe runtime receives a request, normalization must produce one concrete IPv4
+  target for every enabled probe;
+- the exact product rule that selects the default target when the external target is omitted
+  is not yet accepted and remains the only open semantic point in this branch;
+- the exact external field name/string syntax is an interface choice;
 - the exact external syntax and concrete selector forms are implementation/interface choices
   and may be refined independently without changing the semantic contracts.
 
@@ -536,6 +539,8 @@ Validation must reject at least:
 - binding intent insufficient to resolve a supported endpoint;
 - unsupported availability-check mechanism;
 - malformed explicit check target;
+- a target-less probe when the accepted default-target rule cannot produce one concrete
+  normalized target;
 - contradictory declarations that cannot produce one deterministic semantic result.
 
 A rejected configuration is not partially materialized.
@@ -816,8 +821,7 @@ The Agent owns ongoing execution of configured active availability observations.
 
 It owns:
 
-- currently requested user-defined observation channels;
-- resolution of each normalized `AvailabilityCheckIntent`;
+- currently requested normalized observation channels;
 - cadence for the selected active-observation mechanism;
 - bounded in-flight checks;
 - association of each result with the current requested path identity;
@@ -856,45 +860,50 @@ No logical evidence epoch, attempt journal or replay ordering is introduced.
 - `VPNG-R3.R6.R2`
 - `VPNG-R7.R1`
 
-## 7.4. User-defined check criterion and target resolution
+## 7.4. User-defined check criterion and normalized target
 
 **Implements:**
-- `VPNG-R3.R6.R3`
 - `VPNG-R3.R6.R3.R1`
-- `VPNG-R3.R6.R3.R2`
 
 **Constrained by:**
 - `VPNG-R3.R6.R3.R1.C1`
 
 The product does not attempt to define one universal semantic "VPN path is good" predicate.
 
-Instead, each availability-enabled logical path has an `AvailabilityCheckIntent` selected
-by the user.
+The user selects the check mechanism and may provide an explicit IPv4 target in external
+configuration.
 
-First-release normalized shape:
-
-```text
-mechanism = icmp
-target = explicit_ip | derive_from_vpn_endpoint
-```
-
-Resolution:
-
-1. if an explicit target is configured, use that target;
-2. otherwise observe the current verified VPN path binding and endpoint/network facts;
-3. attempt to derive one unambiguous ICMP target associated with the current VPN endpoint;
-4. if derivation fails or is ambiguous, publish diagnostic/`no_evidence`; do not classify
-   the path as good or bad.
-
-This means evidence semantics are intentionally user-relative:
+The probe runtime boundary receives only normalized requests:
 
 ```text
-reply to the user's selected/resolved criterion -> positive evidence
-valid check with no reply                       -> negative evidence
-cannot resolve/execute a valid check            -> no_evidence + diagnostic
+AvailabilityProbeIntent:
+    logical_path_id
+    mechanism = icmp
+    target = concrete IPv4
 ```
 
-The target is part of the observation context. A target change or endpoint-binding change
+Therefore `AvailabilityProbeAgent` and `ActiveProbeDriver` do not know whether the target
+was explicitly configured or supplied by a default-target normalization rule.
+
+Current accepted semantics:
+
+1. explicit target -> normalization preserves exactly that IPv4 target;
+2. omitted target -> configuration normalization must select one concrete IPv4 target before
+   runtime probe demand is produced;
+3. the exact selection rule for that default target is not yet accepted.
+
+The third point is a requirements gap, not a reason to move target inference into probe
+runtime or VPNPathAdapter.
+
+Once a concrete target exists, evidence semantics remain user-relative:
+
+```text
+reply to the configured/normalized criterion -> positive evidence
+valid check with no reply                    -> negative evidence
+local execution failure                      -> no_evidence + diagnostic
+```
+
+The concrete target is part of the observation context. A normalized target change
 invalidates in-flight results from the preceding context.
 
 Future TCP/UDP/HTTP checks may add Driver implementations behind the same normalized
@@ -1310,7 +1319,7 @@ internal Manager state.
 | `VPNG-R1.R3.C2.R1` isolated-channel onboarding result | placement result architecture accepted; concrete provisioning commands remain implementation-specific |
 | `VPNG-R2` subtree — payload policy | normalized `PayloadPolicyIntent` and pure structural policy calculation accepted; external syntax remains implementation detail |
 | `VPNG-R3.R1`–`VPNG-R3.R5`, `VPNG-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
-| `VPNG-R3.R6` subtree — path-usability evidence | user-selected availability criterion accepted; first release ICMP with explicit/derived target and `no_evidence` diagnostics |
+| `VPNG-R3.R6` subtree — path-usability evidence | user-selected criterion and first-release ICMP accepted; explicit-target path closed, default-target selection rule reopened |
 | `VPNG-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
 | `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5`, `VPNG-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
 | `VPNG-R5.R2`, `VPNG-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
@@ -1368,12 +1377,14 @@ Confirmation/hysteresis semantics and the normalized event contract are now defi
 
 The first-release observation semantics are now defined by user-selected ICMP check intent.
 
-An explicit target is used directly; omitted target requests derivation from the current
-verified VPN endpoint/network facts. Failure to derive or execute a valid check is
-diagnostic/`no_evidence`, not automatic path failure.
+An explicit target is preserved directly into normalized probe intent.
 
-Future TCP/UDP/HTTP mechanisms remain outside current scope and do not block first-release
-closure.
+For an omitted target, the product still needs one accepted deterministic default-target
+selection rule in the configuration-normalization layer. That rule is intentionally not
+invented here.
+
+Future TCP/UDP/HTTP mechanisms remain outside current scope and do not affect this open
+default-target question.
 
 ## 16.3. User-visible status presentation
 
