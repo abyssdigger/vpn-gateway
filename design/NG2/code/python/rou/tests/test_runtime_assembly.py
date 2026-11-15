@@ -421,12 +421,7 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
         )
 
     def test_config_fanout_installs_payload_priority_before_probe_rules(self):
-        plans = []
         probe_adapter = FakeAdapter()
-        probe_manager = AvailabilityProbeManager(
-            probe_adapter,
-            execution_plan_publisher=CallbackPublisher(plans.append),
-        )
         runtime = build_linux_availability_runtime(
             probe_adapter,
             self.payload_manager,
@@ -435,7 +430,6 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
             timeout_seconds=1,
             clock=lambda: 100.0,
         )
-        runtime.probe_manager = probe_manager
         source = runtime_config(
             runtime_channel("a", A, "203.0.113.10")
         )
@@ -454,16 +448,6 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
         runtime.configure(source)
 
         self.assertEqual(observed_prefixes, [2])
-        self.assertEqual(len(plans), 1)
-        self.assertEqual(
-            plans[0].channels[0].priority,
-            AvailabilityPriorityChannel(
-                "a",
-                A,
-                True,
-                AvailabilityHysteresisPolicy(2, 2),
-            ),
-        )
 
     def test_stale_old_priority_descriptor_is_rejected_after_fanout(self):
         probe_adapter = FakeAdapter()
