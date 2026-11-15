@@ -126,6 +126,51 @@ class DiagnosticPingSendAdapterTests(unittest.TestCase):
         self.assertEqual(result, ProbeSendResult(False, "exec failed"))
 
 
+class ProbeExecutionContractValidationTests(unittest.TestCase):
+    def test_send_result_rejects_invalid_local_error(self):
+        with self.assertRaises(ValueError):
+            ProbeSendResult(False, 123)
+        with self.assertRaises(ValueError):
+            ProbeSendResult(False, "")
+        with self.assertRaises(ValueError):
+            ProbeSendResult(True, "contradiction")
+
+    def test_schedule_rejects_untyped_plan_and_nonfinite_time(self):
+        schedule = ProbeExecutionSchedule()
+        with self.assertRaises(ValueError):
+            schedule.reconcile(object(), 100.0)
+        for value in (float("inf"), float("nan"), True):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    schedule.reconcile(None, value)
+
+    def test_agent_requires_explicit_positive_timeout_and_callable_clock(self):
+        with self.assertRaises(TypeError):
+            LinuxProbeExecutionAgent(
+                FakeDriver(),
+                RecordingPublisher("good"),
+                RecordingPublisher("boundary"),
+                RecordingPublisher("diag"),
+            )
+        with self.assertRaises(ValueError):
+            LinuxProbeExecutionAgent(
+                FakeDriver(),
+                RecordingPublisher("good"),
+                RecordingPublisher("boundary"),
+                RecordingPublisher("diag"),
+                timeout_seconds=0,
+            )
+        with self.assertRaises(ValueError):
+            LinuxProbeExecutionAgent(
+                FakeDriver(),
+                RecordingPublisher("good"),
+                RecordingPublisher("boundary"),
+                RecordingPublisher("diag"),
+                timeout_seconds=1,
+                clock=object(),
+            )
+
+
 class ProbeExecutionScheduleTests(unittest.TestCase):
     def test_activation_sends_immediately_without_closing_empty_window(self):
         schedule = ProbeExecutionSchedule()
