@@ -31,6 +31,18 @@ from rou.payload_rules_state import (
 )
 from rou.payload_traffic_manager import PayloadTrafficManager
 
+class FailOncePublisher:
+    def __init__(self):
+        self.calls = 0
+        self.events = []
+
+    def publish(self, info):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("publisher boom")
+        self.events.append(info)
+
+
 class RecordingPublisher:
     def __init__(self):
         self.events = []
@@ -149,6 +161,28 @@ class PayloadTrafficManagerTests(unittest.TestCase):
         self.assertEqual(
             info.profiles[0].observed_paths,
             (self.path,),
+        )
+
+    def test_state_publication_failure_is_retryable_without_rematerialization(self):
+        publisher = FailOncePublisher()
+        manager = PayloadTrafficManager(
+            self.adapter,
+            publisher,
+        )
+        wanted = _request(self.path)
+
+        with self.assertRaisesRegex(RuntimeError, "publisher boom"):
+            manager.handle_request(wanted)
+
+        apply_count = len(self.adapter.apply_specs)
+        manager.audit()
+
+        self.assertEqual(len(self.adapter.apply_specs), apply_count)
+        self.assertEqual(publisher.calls, 2)
+        self.assertEqual(len(publisher.events), 1)
+        self.assertIs(
+            publisher.events[0].rules_state.convergence,
+            Convergence.MATCHED,
         )
 
     def test_apply_failure_refreshes_observation_before_interpretation(self):
