@@ -103,6 +103,8 @@ class OwnerScopedFakeAdapter:
         self.apply_calls = []
         self.renew_calls = []
         self.cleanup_calls = []
+        self.cleanup_results = {}
+        self.cleanup_raise = set()
 
     def apply(self, owner, spec):
         self.apply_calls.append((owner, spec))
@@ -136,7 +138,9 @@ class OwnerScopedFakeAdapter:
     def cleanup(self, owner):
         self.cleanup_calls.append(owner)
         self.states.pop(owner, None)
-        return ActionResult(True)
+        if owner in self.cleanup_raise:
+            raise RuntimeError("cleanup boom")
+        return self.cleanup_results.get(owner, ActionResult(True))
 
 
 class PlanConsumer:
@@ -541,6 +545,56 @@ class LinuxNetworkPolicyRuntimeTests(unittest.TestCase):
                 runtime.availability.probe_manager,
             },
         )
+
+    def test_stop_reports_probe_cleanup_failure_but_still_cleans_payload(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+        adapter.cleanup_results[
+            runtime.availability.probe_manager
+        ] = ActionResult(False, "probe cleanup failed")
+
+        result = runtime.stop()
+
+        self.assertFalse(result.success)
+        self.assertFalse(result.probe_cleanup.success)
+        self.assertTrue(result.payload_cleanup.success)
+        self.assertIn(runtime.payload_manager, adapter.cleanup_calls)
+
+    def test_unexpected_probe_cleanup_exception_still_attempts_payload_cleanup(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+        adapter.cleanup_raise.add(runtime.availability.probe_manager)
+
+        with self.assertRaisesRegex(RuntimeError, "cleanup boom"):
+            runtime.stop()
+
+        self.assertIn(runtime.payload_manager, adapter.cleanup_calls)
 
     def test_stop_cleans_both_manager_owners(self):
         adapter = OwnerScopedFakeAdapter()
