@@ -145,7 +145,8 @@ class ProbeExecutionScheduleTests(unittest.TestCase):
 
         boundaries, sends = schedule.pop_due(135.0)
 
-        self.assertEqual(len(boundaries), 3)
+        self.assertEqual(len(boundaries), 1)
+        self.assertEqual(boundaries[0].elapsed_intervals, 3)
         self.assertEqual(sends, (plane(),))
         self.assertEqual(schedule.next_deadline(), 140.0)
 
