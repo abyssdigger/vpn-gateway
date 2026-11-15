@@ -95,6 +95,25 @@ payload traffic**.
 - transition/barrier phases;
 - конкретные network-stack verification commands.
 
+## 2.1. Availability collector ownership
+
+Availability routing hysteresis is part of payload-priority policy and is therefore owned
+inside `PayloadTrafficManager`, not by `AvailabilityProbeManager`.
+
+The producer-facing boundary is deliberately smaller than an asynchronous Event stream:
+current probe workers/timers update bounded per-channel aggregates
+(`pending_good_news`, `tick_pending`) through a short-lock input port and return. The
+Manager's single collector flow consumes those aggregate facts, updates current GOOD/BAD
+channel state, and invokes the existing route-priority materializer synchronously only
+when the routing-relevant snapshot changes.
+
+The normative state machine and aggregation rules are defined in
+`design/NG2/availability-collector-materializer.md`.
+
+Availability-driven route reorders use the same sole transactional executor as all other
+route mutations. They do not introduce a second pending route-plan queue or a concurrent
+route executor.
+
 ## 3. PayloadTrafficManager
 
 ### 3.1. Тип
