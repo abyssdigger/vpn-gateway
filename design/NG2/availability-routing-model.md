@@ -102,7 +102,8 @@ preferred_prefix_length
 
 For N paths:
 
-- `N`: every path is in the no-problem prefix; no steady metric gap is needed;
+- no problem paths: `preferred_prefix_length=None`; no availability-derived boundary or
+  steady metric gap exists;
 - `K`, where `0 < K < N`: the emergent free metric slot is immediately before the
   first problem path;
 - `0`: all paths currently have problems; current order is retained and the first
