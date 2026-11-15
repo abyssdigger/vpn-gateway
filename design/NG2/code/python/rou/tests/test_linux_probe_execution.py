@@ -62,12 +62,15 @@ class FakeDriver:
         self.entered = Event()
         self.release = Event()
         self.block = False
+        self.raise_error = None
 
     def execute_send(self, path, target, *, timeout_seconds):
         self.calls.append((path, target, timeout_seconds))
         self.entered.set()
         if self.block:
             self.release.wait(timeout=2)
+        if self.raise_error is not None:
+            raise RuntimeError(self.raise_error)
         if self.outcome is ProbeAttemptOutcome.ERROR:
             return ProbeSendResult(
                 False,
@@ -289,6 +292,38 @@ class LinuxProbeExecutionAgentTests(unittest.TestCase):
         self.wait_for_events(self.good, 2)
 
         self.assertEqual(self.order[0][0], "boundary")
+
+    def test_slow_send_does_not_spawn_unbounded_overlapping_workers(self):
+        self.driver.block = True
+        self.agent.update_plan(plan())
+        self.agent.process_due(100.0)
+        self.assertTrue(self.driver.entered.wait(timeout=2))
+
+        self.agent.process_due(110.0)
+        self.wait_for_events(self.diagnostic, 1)
+
+        self.assertEqual(len(self.driver.calls), 1)
+        self.assertIs(
+            self.diagnostic.events[-1].health,
+            ProbeExecutionHealth.ERROR,
+        )
+        self.assertIn("still in flight", self.diagnostic.events[-1].diagnostic)
+
+        self.driver.release.set()
+
+    def test_unexpected_driver_exception_is_local_diagnostic_only(self):
+        self.driver.raise_error = "boom"
+        self.agent.update_plan(plan())
+        self.agent.process_due(100.0)
+
+        self.wait_for_events(self.diagnostic, 1)
+
+        self.assertEqual(self.good.events, [])
+        self.assertIs(
+            self.diagnostic.events[0].health,
+            ProbeExecutionHealth.ERROR,
+        )
+        self.assertIn("Driver raised", self.diagnostic.events[0].diagnostic)
 
     def test_old_generation_worker_result_is_dropped_after_plan_change(self):
         self.driver.outcome = ProbeAttemptOutcome.REPLY
