@@ -22,6 +22,7 @@ from .linux_probe_execution import (
 )
 from .interface_identity import InterfaceIdentity
 from .network_rules import ActionResult, NetworkRulesAdapter
+from .linux_local_process import LinuxLocalProcessConfig
 from .payload_rules import PayloadTrafficStateRequest
 from .payload_traffic_manager import (
     PayloadTrafficManager,
@@ -33,6 +34,10 @@ from .probe_rules import (
     ProbeMechanism,
 )
 from .probe_transport import ProbeExecutionPlan
+from .runtime_bootstrap import (
+    LinuxRuntimeBootstrapBackend,
+    bootstrap_linux_network_rules_adapter,
+)
 
 
 @dataclass(frozen=True)
@@ -387,4 +392,59 @@ def build_linux_network_policy_runtime(
     return LinuxNetworkPolicyRuntime(
         payload_manager,
         availability,
+    )
+
+
+@dataclass(frozen=True)
+class LinuxNetworkPolicyRuntimeBootstrapResult:
+    success: bool
+    runtime: LinuxNetworkPolicyRuntime | None = None
+    diagnostic: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.success and self.runtime is None:
+            raise ValueError(
+                "successful network-policy bootstrap requires runtime"
+            )
+        if not self.success and self.runtime is not None:
+            raise ValueError(
+                "failed network-policy bootstrap must not expose runtime"
+            )
+
+
+def bootstrap_linux_network_policy_runtime(
+    backend: LinuxRuntimeBootstrapBackend,
+    *,
+    local_interface: str,
+    payload_publisher: PayloadTrafficStatePublisher,
+    probe_driver: ProbeSendDriver,
+    diagnostic_publisher: ProbeExecutionDiagnosticPublisher,
+    timeout_seconds: int,
+    local_process: LinuxLocalProcessConfig | None = None,
+    clock: Callable[[], float] = time.monotonic,
+) -> LinuxNetworkPolicyRuntimeBootstrapResult:
+    """Expose network-policy runtime only after verified protective bootstrap."""
+
+    bootstrap = bootstrap_linux_network_rules_adapter(
+        backend,
+        local_interface=local_interface,
+        local_process=local_process,
+    )
+    if not bootstrap.success:
+        return LinuxNetworkPolicyRuntimeBootstrapResult(
+            False,
+            diagnostic=bootstrap.diagnostic,
+        )
+
+    assert bootstrap.adapter is not None
+    return LinuxNetworkPolicyRuntimeBootstrapResult(
+        True,
+        runtime=build_linux_network_policy_runtime(
+            bootstrap.adapter,
+            payload_publisher,
+            probe_driver,
+            diagnostic_publisher,
+            timeout_seconds=timeout_seconds,
+            clock=clock,
+        ),
     )
