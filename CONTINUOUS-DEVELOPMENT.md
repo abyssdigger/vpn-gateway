@@ -1,37 +1,334 @@
-# CONTINUOUS-DEVELOPMENT RULES
+# CONTINUOUS DESIGN AND DEVELOPMENT RULES
 
-## Core development cycle
+## Normative design inputs
 
-Development proceeds in coherent **review units** rather than individual helper functions.
+Continuous work uses two independent normative models together:
 
-A review unit is the smallest coherent product change that can be independently specified,
-tested, reviewed and either accepted or rejected as one piece.
+- `design/requirements-model.md` defines requirements, constraints, refinement and
+  bottom-up constraint lifting;
+- `design/component-model.md` defines the permitted component roles and interaction
+  semantics.
 
-For every review unit:
+The requirements model answers what the product must provide, for what purpose, and where
+its promise is constrained.
+
+The component model answers which components may own the required responsibilities and how
+they may interact.
+
+Neither model is allowed to manufacture facts for the other:
+
+- an architectural mechanism is not a product requirement merely because it exists or is
+  convenient to implement;
+- a requirement does not prescribe a component or interaction unless that choice is itself
+  externally required;
+- an implementation limitation does not silently become product scope.
+
+## Unified review-unit cycle
+
+Work proceeds in coherent **review units** rather than individual helper functions.
+
+A review unit is the smallest coherent product change that can be independently:
+
+- traced to accepted requirements;
+- designed;
+- implemented when implementation is required;
+- evidenced;
+- reviewed;
+- accepted or rejected as one piece.
+
+A review unit may start as requirement/design work and contain no code at all. Implementation
+starts only after the requirement and design gates for the affected behavior are satisfied.
+
+The normal cycle is:
+
+```text
+accepted product need
+        |
+        v
+requirement validation / refinement
+        |
+        v
+constraint review and lifting
+        |
+        v
+component design
+        |
+        v
+requirement + design gate
+        |
+        v
+implementation
+        |
+        v
+evidence
+        |
+        v
+expert review
+        |
+        v
+accepted fixes
+```
+
+Any later phase may discover that an earlier phase was insufficient. In that case the
+affected work returns to the earliest insufficient phase instead of inventing semantics
+locally.
+
+## Requirement gate
+
+Before designing or implementing behavior, identify the concrete requirement nodes that
+justify it.
+
+For every affected requirement:
+
+1. read its full ancestry;
+2. read both mandatory parts of every relevant requirement:
+   - `Purpose`: **зачем** это требуется;
+   - `Statement`: что именно система обязана обеспечить;
+3. read all applicable constraints and their mandatory parts:
+   - `Reason`: **почему** ограничение существует;
+   - `Statement`: что именно ограничено и как действует это ограничение;
+4. verify that the intended change stays within the existing scope and meaning;
+5. verify that the requirement is concrete enough to distinguish acceptable from
+   unacceptable behavior at the level being designed;
+6. identify the cheapest sufficient acceptance evidence, even if the exact test or
+   experiment will be implemented later.
+
+A requirement is insufficient for the current design when implementation would have to
+invent material semantics not derivable from it.
+
+Typical signals are:
+
+- two or more materially different user-visible behaviors would all satisfy the current
+  wording;
+- a test cannot be written without deciding a new behavior;
+- a component needs persistent state whose meaning is not justified by a requirement;
+- a new event, state, retry, queue, epoch, cache or lifecycle policy appears only because it
+  is technically possible or convenient;
+- a supposedly necessary edge case has no confirmed real product scenario;
+- the implementation needs a new assumption about supported environment or usage;
+- a newly discovered limitation changes the effective product envelope;
+- a new idea is attractive but has no accepted `Purpose`.
+
+If any of these occurs, do **not** resolve it inside implementation merely to keep coding.
+
+Return to requirement work for the affected scope.
+
+## Requirement refinement procedure
+
+When a requirement is insufficient:
+
+1. state exactly what decision cannot be derived from the current tree;
+2. identify the highest existing requirement whose meaning is affected;
+3. determine whether the missing information is:
+   - a refinement of an existing requirement;
+   - a constraint on an existing requirement;
+   - or a genuinely new product promise;
+4. add or change only the minimum requirement nodes necessary;
+5. verify every new `R` node against its parent:
+   - it must refine rather than expand or rewrite the parent;
+   - its `Purpose` must remain honestly derived from the parent purpose;
+6. for every new `C` node:
+   - record its `Reason`;
+   - state what is constrained and how;
+   - lift its observable effect upward;
+   - verify the resulting effective product envelope;
+7. define acceptance evidence at the cheapest sufficient level;
+8. only then return to component design.
+
+A thought that occurs during implementation is **not** automatically a requirement.
+
+If it is not needed to satisfy an accepted product purpose, it remains outside the current
+scope unless explicitly accepted as a new requirement.
+
+A requirement must never be invented merely to preserve an existing component or mechanism.
+
+## Human acceptance of requirement decisions
+
+Unambiguous refinements that are strictly implied by an accepted parent requirement may be
+resolved autonomously.
+
+Human agreement is required before proceeding when requirement work would:
+
+- add or materially change an L1 product promise;
+- introduce a new user-visible capability;
+- choose between multiple materially different user-visible semantics;
+- materially narrow the useful product envelope by accepting a constraint;
+- change user-visible configuration/schema or promised behavior;
+- remove previously agreed product functionality;
+- make a scope or priority trade-off rather than a technical derivation.
+
+The implementation of the affected behavior remains gated until that decision is accepted.
+
+## Component-design gate
+
+Once the requirements are sufficient, design the smallest component structure that realizes
+them using `design/component-model.md`.
+
+The design report for a non-trivial review unit must identify:
+
+- **Requirements** — exact requirement/constraint IDs implemented by the unit;
+- **Scenario** — the real product situation in which those requirements matter;
+- **Components** — which permitted component primitives are used;
+- **Responsibilities** — what each component owns;
+- **Interactions** — how components communicate with each other;
+- **External environment** — which kernel, network, process, timer, configuration or operator
+  facts cross the system boundary;
+- **Traceability** — which requirement makes each material responsibility and interaction
+  necessary;
+- **Necessity** — why the responsibility needs to exist at all and why it belongs in a
+  separate component or interaction rather than a simpler local mechanism;
+- **Constraints** — limitations introduced or discovered by the proposed design;
+- **Constraint lifting** — their effect on parent requirements and the product envelope;
+- **Simplification review** — states, components, interactions or generality deliberately
+  omitted because no accepted real scenario requires them;
+- **Evidence plan** — how each relevant requirement will be proven.
+
+The report may be concise for a small unit. The content is mandatory; document size is not.
+
+A component, responsibility or interaction that cannot be honestly traced to a concrete
+requirement is a design finding, not a reason to create a requirement afterward.
+
+## Mandatory simplification review
+
+Before implementation, review the proposed design specifically for unnecessary generality.
+
+For each material component, state, interaction and failure-recovery mechanism ask:
+
+1. Which exact accepted requirement needs it?
+2. Which real supported scenario exercises it?
+3. What observable product behavior breaks if it is removed?
+4. Can the same requirement be satisfied with less persistent state?
+5. Can an asynchronous interaction be synchronous or direct?
+6. Can historical data be replaced by current or bounded aggregate state?
+7. Is guaranteed delivery/replay actually required?
+8. Is a separate lifecycle owner actually required?
+9. Are we solving an arbitrary framework problem rather than the actual product problem?
+10. Do all accumulated constraints still leave the parent requirement practically useful?
+
+If removing a mechanism changes only theoretical generality and no accepted requirement,
+removal is preferred.
+
+## Requirement/design gate verdict
+
+Implementation may begin only when all of the following hold for the affected scope:
+
+- relevant requirements and constraints are identified by ID;
+- every requirement has meaningful `Purpose + Statement`;
+- every accepted constraint has meaningful `Reason + Statement`;
+- no unresolved product-semantic ambiguity is being hidden in implementation;
+- all material component responsibilities and interactions are traceable to requirements;
+- discovered constraints have been lifted far enough to expose their product effect;
+- the effective product envelope remains useful for the intended real scenarios;
+- the simplification review found no unnecessary mechanism that should be removed first;
+- required human decisions, if any, are accepted;
+- an evidence plan exists.
+
+Failure of this gate returns the unit to requirements or component design. It does not
+authorize speculative implementation.
+
+## Implementation cycle
+
+After the requirement/design gate passes:
 
 1. implement the smallest coherent change;
 2. add or update the cheapest sufficient tests/evidence;
-3. perform an autonomous expert review of the changed subsystem and its interaction with
-   whole-project invariants;
+3. perform an autonomous expert review of the changed subsystem and its interaction with:
+   - the accepted requirement tree;
+   - applicable constraints and product envelope;
+   - the component model;
+   - whole-project invariants;
 4. resolve every accepted finding before starting the next review unit.
+
+During implementation, compare the emerging code against the approved design continuously.
+
+If implementation reveals that the requirements or design are insufficient, stop only the
+affected behavior and return to the corresponding earlier phase. Do not keep extending code
+while the governing requirement is unresolved.
+
+## Classification of discoveries during implementation
+
+When new information appears, classify it before acting:
+
+### Requirement insufficiency
+
+The product meaning is missing or ambiguous.
+
+Action:
+
+```text
+implementation
+    -> requirement refinement / acceptance
+    -> component redesign if needed
+    -> implementation
+```
+
+Do not settle product semantics through coding convenience.
+
+### Design insufficiency
+
+Requirements are clear, but the current component decomposition cannot realize them cleanly.
+
+Action:
+
+```text
+implementation
+    -> component design review
+    -> requirement/constraint recheck
+    -> implementation
+```
+
+Do not change product requirements merely to preserve a poor decomposition.
+
+### Technical uncertainty
+
+Requirements and component responsibilities are clear, but an external or implementation
+fact is uncertain.
+
+Action: use the experiment procedure below.
+
+### Implementation defect
+
+Requirements and design are sufficient; code simply violates them.
+
+Action: fix and evidence normally.
+
+### New product idea
+
+The idea is useful but not required by the accepted tree.
+
+Action: keep it out of the current implementation. Promote it only through explicit
+requirement acceptance.
+
+This classification is mandatory because otherwise implementation tends to convert every
+local difficulty or interesting idea into accidental product semantics.
+
+## Expert-review role
 
 The expert-review role has:
 
-- strong Linux/network-stack knowledge;
-- practical Python-to-Rust migration experience, with the goal of keeping Python
-  architecture and data flow Rust-aligned;
+- strong subject-domain expertise appropriate to the system under review;
+- strong Linux/network-stack knowledge for VPN-GATE reviews;
+- practical Python-to-Rust migration experience where relevant, with the goal of keeping
+  Python architecture and data flow Rust-aligned;
 - aggressive attention to small defects and edge cases;
 - enough whole-project scope to identify redundant, mutually inconsistent or suboptimal
   architecture/functionality;
+- an obligation to verify that every material behavior remains traceable to an accepted
+  requirement rather than merely existing in code;
+- an obligation to challenge components, states and interactions whose necessity cannot be
+  demonstrated from real supported scenarios;
 - an obligation to evaluate whether the implementation follows the project's component
   model cleanly rather than merely reproducing its behavior;
 - an obligation to verify subject-domain isolation: concepts, policy and implementation
   details of a lower domain must not leak across an Adapter boundary unless they are part
   of the explicit contract;
+- an obligation to perform bottom-up constraint review when implementation reveals a new
+  limitation;
 - an obligation to produce precise, actionable recommendations.
 
 A full whole-project review is required when:
 
+- an L1 requirement or material product constraint changes;
 - an architectural or ownership boundary changes;
 - a substantial integration milestone is reached;
 - release/deployment acceptance is approached;
@@ -39,7 +336,20 @@ A full whole-project review is required when:
 
 ## Ambiguity and experiment procedure
 
-When implementation encounters a material ambiguity whose answer affects correctness:
+Experiments resolve **technical facts**, not missing product semantics.
+
+Before starting an experiment, first verify that:
+
+- the governing requirement is sufficiently defined;
+- the component responsibility that depends on the fact is understood;
+- the ambiguity is about the real environment, protocol, kernel, implementation mechanism
+  or other externally discoverable fact.
+
+If the answer would choose what the product is supposed to mean, return to requirement
+refinement instead of using an experiment to manufacture semantics.
+
+When implementation or design encounters a material technical ambiguity whose answer affects
+correctness:
 
 1. State the hypothesis and the behavior that depends on it.
 2. Select the **cheapest environment that is sufficient to prove that property**:
