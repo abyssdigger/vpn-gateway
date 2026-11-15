@@ -96,6 +96,16 @@ For every affected requirement:
 A requirement is insufficient for the current design when implementation would have to
 invent material semantics not derivable from it.
 
+A requirement/constraint chain is also insufficient when its mandatory semantic first part
+cannot be stated clearly:
+
+- requirement: `Purpose` / **Зачем?**
+- constraint: `Reason` / **Почему?**
+
+If that answer is not natural, unambiguous and derivable from accepted ancestry without
+appealing to a preferred architecture, stop autonomous refinement and escalate the affected
+ancestry chain for human discussion.
+
 Typical signals are:
 
 - two or more materially different user-visible behaviors would all satisfy the current
@@ -107,7 +117,10 @@ Typical signals are:
 - a supposedly necessary edge case has no confirmed real product scenario;
 - the implementation needs a new assumption about supported environment or usage;
 - a newly discovered limitation changes the effective product envelope;
-- a new idea is attractive but has no accepted `Purpose`.
+- a new idea is attractive but has no accepted `Purpose`;
+- the proposed `Purpose` merely paraphrases the `Statement`;
+- the proposed `Reason` explains an implementation choice rather than why the constraint
+  exists.
 
 If any of these occurs, do **not** resolve it inside implementation merely to keep coding.
 
@@ -115,41 +128,43 @@ Return to requirement work for the affected scope.
 
 ## Requirement refinement procedure
 
-When a requirement is insufficient:
+When a requirement or constraint is insufficient:
 
 1. state exactly what decision cannot be derived from the current tree;
-2. identify the highest existing requirement whose meaning is affected;
-3. determine whether the missing information is:
+2. walk the affected ancestry and verify that every relevant `Purpose/Reason` remains clear;
+3. if any `Purpose/Reason` is not naturally and unambiguously derivable, stop autonomous
+   refinement and escalate that chain for human discussion;
+4. identify the highest existing requirement/constraint whose meaning is affected;
+5. determine whether the missing information is:
    - a refinement of an existing requirement;
    - a constraint on an existing requirement;
    - or a genuinely new product promise;
-4. add or change only the minimum requirement nodes necessary;
-5. verify every new `R` node against its parent:
-   - it must refine rather than expand or rewrite the parent;
-   - its `Purpose` must remain honestly derived from the parent purpose;
-7. for every new `C` node:
-   - record its `Reason`;
+6. add or change only the minimum requirement/constraint nodes necessary;
+7. for every new or changed `R` node:
+   - verify that it refines rather than expands or rewrites the parent;
+   - verify that its `Purpose` is honestly derived from accepted ancestry;
+8. for every new or changed `C` node:
+   - record a clear `Reason`;
    - state what is constrained and how;
    - identify who must compensate for the limitation;
    - if work/knowledge is shifted to a user, administrator or external system, add the
      necessary child requirement under that constraint;
    - that child requirement must state what the product must provide so the external
-     participant can perform the adaptation correctly and reproducibly (for example an
-     instruction, API, configuration contract, validation rule or diagnostic surface);
-   - lift its observable effect upward;
+     participant can perform the adaptation correctly and reproducibly;
+   - lift the observable effect upward;
    - verify the resulting effective product envelope;
-7. define acceptance evidence at the cheapest sufficient level;
-9. if further decomposition of the affected node depends on insufficiently decomposed
-   semantics in another requirement/constraint branch:
-   - add `[decomp: <blocker-ID> -> pending]` to the blocked node;
-   - stop only that decomposition path;
-   - continue independent requirement/design work;
-10. when the blocker or one of its descendants later provides enough specificity:
-   - replace `pending` in the same link with the concrete deblocker ID:
-     `[decomp: <blocker-ID> -> <deblocker-ID>]`;
-   - keep the blocker part unchanged for causal traceability;
-   - resume review of the blocked decomposition;
-11. only then return to component design when the relevant requirement paths are sufficiently concrete.
+9. define acceptance evidence at the cheapest sufficient level;
+10. if further decomposition depends on insufficient semantics in another `R/C` branch:
+    - add `[decomp: <blocker-ID> -> pending]` to the blocked node;
+    - stop only that decomposition path;
+    - continue independent requirement/design work;
+11. when the blocker or one of its descendants later provides enough specificity:
+    - replace `pending` in the same link with the concrete deblocker ID:
+      `[decomp: <blocker-ID> -> <deblocker-ID>]`;
+    - keep the blocker part unchanged for causal traceability;
+    - resume review of the blocked decomposition;
+12. return to component design only when the relevant requirement paths are sufficiently
+    concrete.
 
 A thought that occurs during implementation is **not** automatically a requirement.
 
