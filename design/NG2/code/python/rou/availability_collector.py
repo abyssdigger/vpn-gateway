@@ -162,6 +162,22 @@ class AvailabilityChannelState:
         return self.availability_problems != previous
 
 
+@dataclass(frozen=True)
+class ProfileProbeAssignment:
+    """Associate one payload Profile with logical availability channels."""
+
+    profile_name: str
+    probe_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.profile_name, str) or not self.profile_name:
+            raise ValueError("probe assignment requires non-empty profile_name")
+        if any(not isinstance(item, str) or not item for item in self.probe_ids):
+            raise ValueError("probe assignment requires non-empty probe_id values")
+        if len(set(self.probe_ids)) != len(self.probe_ids):
+            raise ValueError("probe assignment contains duplicate probe_id")
+
+
 def calculate_availability_path_order(
     configured_order: tuple[InterfaceIdentity, ...],
     current_order: tuple[InterfaceIdentity, ...],
