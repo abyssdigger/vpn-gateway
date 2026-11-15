@@ -123,8 +123,11 @@ class AvailabilityProbeManager:
 
     def shutdown(self) -> ActionResult:
         with self._state_lock:
-            self._invalidate_generation()
-            return self._adapter.cleanup(self)
+            try:
+                self._invalidate_generation()
+            finally:
+                result = self._adapter.cleanup(self)
+            return result
 
     def _audit_rules(
         self,
