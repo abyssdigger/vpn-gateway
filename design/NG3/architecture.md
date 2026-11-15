@@ -30,7 +30,10 @@ This pass intentionally does **not** yet define:
 
 - the complete user configuration schema;
 - configuration parsing/normalization ownership;
-- the complete VPN process/device lifecycle;
+- automatic VPN-session provisioning/configuration, because `VPNG-R1.R3.C1` explicitly leaves
+  that responsibility to the administrator in the first release;
+- the exact administrator-facing VPN-channel onboarding contract required by
+  `VPNG-R1.R3.C1.R1`;
 - final end-user status aggregation;
 - transport publication;
 - final ROU/BOU topology;
@@ -173,6 +176,33 @@ managed network domain                               |
 
 The event-delivery mechanism is intentionally left abstract. NG3 requires the semantic edge,
 not a persistent bus, journal or replay system.
+
+## 3.1. External VPN-channel boundary
+
+**Implements:**
+- `VPNG-R1.R3`
+- `VPNG-R1.R3.C1.R1`
+
+**Constrained by:**
+- `VPNG-R1.R3.C1`
+
+For the first release, VPN-GATE consumes VPN channels that have already been deployed and
+basically configured by the administrator.
+
+The architecture therefore does **not** introduce a VPN-session/tunnel provisioning Manager
+merely because older generations contained VPN process-management machinery.
+
+The product-side boundary must eventually define enough administrator-facing contract to make
+an externally provisioned channel:
+
+- identifiable as a concrete VPN-GATE path;
+- observable to the extent required by routing, safety and status requirements;
+- usable by payload policy;
+- documentable as a repeatable administrator procedure.
+
+The exact representation of that contract is intentionally open. A Linux interface name,
+process identity, protocol-specific handle or another mechanism must not be selected until
+the supported deployment requirements make that choice necessary.
 
 # 4. PayloadTrafficManager
 
@@ -581,6 +611,9 @@ left open until deeper lifecycle requirements demand one.
 | --- | --- |
 | `VPNG-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
 | `VPNG-R1.R2` declarative operation | **not yet architected**: configuration boundary missing |
+| `VPNG-R1.R3` VPN-channel service | external channel boundary established; exact onboarding contract incomplete |
+| `VPNG-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
+| `VPNG-R1.R3.C1.R1` admin instructions/contract | requirement identified; concrete supported-channel instructions still missing |
 | `VPNG-R2` subtree — payload policy | semantic ownership represented; normalized config schema missing |
 | `VPNG-R3.R1`–`VPNG-R3.R5`, `VPNG-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
 | `VPNG-R3.R6` subtree — path-usability evidence | active observation selected via AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
@@ -685,7 +718,27 @@ Affected requirements:
 The required postconditions are clear enough to constrain components but not yet sufficient
 to prove that a separate long-lived lifecycle component is necessary.
 
+For the first release, VPN tunnel/session creation is outside this lifecycle scope by
+`VPNG-R1.R3.C1`; lifecycle here concerns VPN-GATE-owned state and its use of already
+provisioned channels.
+
 Procedural assembly remains the simpler default.
+
+## 15.5. Administrator-facing VPN-channel onboarding contract
+
+Affected requirements:
+- `VPNG-R1.R3`
+- `VPNG-R1.R3.C1`
+- `VPNG-R1.R3.C1.R1`
+- `VPNG-R6.R1`
+
+The ownership boundary is now decided: the administrator provisions/configures the channel in
+the first release.
+
+Still missing are the supported-channel contract and instructions that tell the administrator
+how VPN-GATE identifies and consumes such a channel.
+
+This must be refined before choosing concrete interface/process/protocol identity machinery.
 
 # 16. Current architecture principle
 
