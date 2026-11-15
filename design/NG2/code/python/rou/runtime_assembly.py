@@ -179,57 +179,19 @@ class CallbackPublisher(Generic[_T]):
         self._callback(value)
 
 
-class AvailabilityConfigFanout:
-    """Project one normalized slice independently into both owning Managers.
-
-    Payload-priority configuration is installed first. The probe Manager is then allowed
-    to publish a new execution plan whose outputs can immediately match the current
-    payload-priority channel descriptors.
-
-    This is ordered fanout, not a cross-Manager transaction. Before the probe Manager
-    accepts the new request, its preceding probe demand remains the current demand.
-    """
-
-    def __init__(
-        self,
-        probe_manager: AvailabilityProbeManager,
-        payload_manager: PayloadTrafficManager,
-        *,
-        probe_calculator: AvailabilityProbeSetCalculator | None = None,
-        priority_calculator: AvailabilityPriorityConfigCalculator | None = None,
-    ) -> None:
-        if not isinstance(probe_manager, AvailabilityProbeManager):
-            raise ValueError(
-                "availability fanout requires AvailabilityProbeManager"
-            )
-        if not isinstance(payload_manager, PayloadTrafficManager):
-            raise ValueError(
-                "availability fanout requires PayloadTrafficManager"
-            )
-        self._probe_manager = probe_manager
-        self._payload_manager = payload_manager
-        self._probe_calculator = (
-            probe_calculator or AvailabilityProbeSetCalculator()
-        )
-        self._priority_calculator = (
-            priority_calculator or AvailabilityPriorityConfigCalculator()
-        )
-
-    def apply(self, config: RuntimeAvailabilityConfig) -> None:
-        priority = self._priority_calculator.calculate(config)
-        probes = self._probe_calculator.calculate(config)
-
-        self._payload_manager.configure_availability(priority)
-        self._probe_manager.handle_request(probes)
-
-
 @dataclass
 class LinuxAvailabilityRuntimeAssembly:
     """Executable Linux availability wiring around an existing PayloadTrafficManager."""
 
     probe_manager: AvailabilityProbeManager
+    payload_manager: PayloadTrafficManager
     agent: LinuxProbeExecutionAgent
-    config_fanout: AvailabilityConfigFanout
+    probe_calculator: AvailabilityProbeSetCalculator = field(
+        default_factory=AvailabilityProbeSetCalculator
+    )
+    priority_calculator: AvailabilityPriorityConfigCalculator = field(
+        default_factory=AvailabilityPriorityConfigCalculator
+    )
     _stopped: bool = field(default=False, init=False, repr=False)
 
     def _require_active(self) -> None:
@@ -238,7 +200,12 @@ class LinuxAvailabilityRuntimeAssembly:
 
     def configure(self, config: RuntimeAvailabilityConfig) -> None:
         self._require_active()
-        self.config_fanout.apply(config)
+        priority = self.priority_calculator.calculate(config)
+        probes = self.probe_calculator.calculate(config)
+
+        # Ordered assembly, not a cross-Manager transaction.
+        self.payload_manager.configure_availability(priority)
+        self.probe_manager.handle_request(probes)
 
     def start(self) -> None:
         self._require_active()
@@ -284,14 +251,10 @@ def build_linux_availability_runtime(
         probe_adapter,
         execution_plan_publisher=CallbackPublisher(agent.update_plan),
     )
-    fanout = AvailabilityConfigFanout(
-        probe_manager,
-        payload_manager,
-    )
     return LinuxAvailabilityRuntimeAssembly(
         probe_manager,
+        payload_manager,
         agent,
-        fanout,
     )
 
 
