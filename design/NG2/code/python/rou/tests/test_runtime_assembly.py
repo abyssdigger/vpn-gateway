@@ -9,7 +9,6 @@ from rou.availability_collector import (
     AvailabilityTick,
     ProfileAvailabilityAssignment,
 )
-from rou.availability_probe_manager import AvailabilityProbeManager
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_instance import LinuxInstanceSpec
 from rou.network_rules import (
