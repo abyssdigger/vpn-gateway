@@ -183,6 +183,15 @@ A node with `[decomp: ... -> pending]` cannot be `[closed]`.
 After architecture review closes a node, mark it `[closed]` in the requirement tree only
 after verifying that the architecture contains an exact reference to that ID.
 
+The closure check is deliberately asymmetric:
+
+```text
+closed R/C without architecture reference -> ERROR
+architecture reference to non-closed R/C   -> ALLOWED
+```
+
+An architecture reference alone never auto-closes a requirement.
+
 Do not introduce a separate semantic requirement-change journal until a concrete project
 need requires querying semantic transitions independently from Git history. Such a journal
 is a future requirements-management feature, not a prerequisite for current design work.
@@ -303,6 +312,8 @@ Implementation may begin only when all of the following hold for the affected sc
 - every requirement/constraint whose architecture is required by the implementation unit is
   marked `[closed]`;
 - every such `[closed]` node has an exact reference in the architecture;
+- the mechanical closure check reports every `[closed]` node without an architecture
+  reference as an error, while allowing architecture references to non-closed nodes;
 - discovered constraints have been lifted far enough to expose their product effect;
 - any user/administrator/external-system adaptation caused by an accepted constraint is
   explicit as a requirement/contract rather than an undocumented workaround;
