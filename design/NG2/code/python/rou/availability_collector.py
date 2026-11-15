@@ -94,20 +94,22 @@ class AvailabilityPriorityConfig:
 
 @dataclass(frozen=True)
 class AvailabilityGoodNews:
-    channel_id: str
+    channel: AvailabilityPriorityChannel
 
     def __post_init__(self) -> None:
-        if not isinstance(self.channel_id, str) or not self.channel_id:
-            raise ValueError("good news requires non-empty channel_id")
+        if not isinstance(self.channel, AvailabilityPriorityChannel):
+            raise ValueError(
+                "good news requires AvailabilityPriorityChannel"
+            )
 
 
 @dataclass(frozen=True)
 class AvailabilityTick:
-    channel_id: str
+    channel: AvailabilityPriorityChannel
 
     def __post_init__(self) -> None:
-        if not isinstance(self.channel_id, str) or not self.channel_id:
-            raise ValueError("tick requires non-empty channel_id")
+        if not isinstance(self.channel, AvailabilityPriorityChannel):
+            raise ValueError("tick requires AvailabilityPriorityChannel")
 
 
 @dataclass
