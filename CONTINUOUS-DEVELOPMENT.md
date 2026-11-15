@@ -130,6 +130,10 @@ When a requirement is insufficient:
 6. for every new `C` node:
    - record its `Reason`;
    - state what is constrained and how;
+   - identify who must compensate for the limitation;
+   - if work/knowledge is shifted to a user, administrator or external system, add the
+     necessary child requirement under that constraint to make the adaptation/contract
+     explicit;
    - lift its observable effect upward;
    - verify the resulting effective product envelope;
 7. define acceptance evidence at the cheapest sufficient level;
@@ -254,6 +258,8 @@ Implementation may begin only when all of the following hold for the affected sc
 - no unresolved product-semantic ambiguity is being hidden in implementation;
 - all material component responsibilities and interactions are traceable to requirements;
 - discovered constraints have been lifted far enough to expose their product effect;
+- any user/administrator/external-system adaptation caused by an accepted constraint is
+  explicit as a requirement/contract rather than an undocumented workaround;
 - the effective product envelope remains useful for the intended real scenarios;
 - the simplification review found no unnecessary mechanism that should be removed first;
 - required human decisions, if any, are accepted;
