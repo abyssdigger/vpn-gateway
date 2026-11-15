@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from ipaddress import IPv4Address
 from math import isfinite
-from typing import Protocol
+from typing import Callable, Protocol
+import time
 
 from .availability_collector import (
     AvailabilityGoodNews,
@@ -14,7 +15,13 @@ from .availability_collector import (
     ProfileAvailabilityAssignment,
 )
 from .availability_probe_manager import AvailabilityProbeManager
+from .linux_probe_execution import (
+    LinuxProbeExecutionAgent,
+    ProbeExecutionDiagnosticPublisher,
+    ProbeSendDriver,
+)
 from .interface_identity import InterfaceIdentity
+from .network_rules import ActionResult, NetworkRulesAdapter
 from .payload_traffic_manager import PayloadTrafficManager
 from .probe_rules import (
     AvailabilityProbeRequest,
@@ -240,3 +247,63 @@ class AvailabilityConfigFanout:
 
         self._payload_manager.configure_availability(priority)
         self._probe_manager.handle_request(probes)
+
+
+@dataclass
+class LinuxAvailabilityRuntimeAssembly:
+    """Executable Linux availability wiring around an existing PayloadTrafficManager."""
+
+    probe_manager: AvailabilityProbeManager
+    agent: LinuxProbeExecutionAgent
+    config_fanout: AvailabilityConfigFanout
+
+    def configure(self, config: RuntimeAvailabilityConfig) -> None:
+        self.config_fanout.apply(config)
+
+    def start(self) -> None:
+        self.agent.start()
+
+    def stop(self) -> ActionResult:
+        """Quiesce probe demand/workers and clean the probe-owned network rules."""
+
+        try:
+            result = self.probe_manager.shutdown()
+        finally:
+            self.agent.stop()
+        return result
+
+
+def build_linux_availability_runtime(
+    probe_adapter: NetworkRulesAdapter,
+    payload_manager: PayloadTrafficManager,
+    driver: ProbeSendDriver,
+    diagnostic_publisher: ProbeExecutionDiagnosticPublisher,
+    *,
+    timeout_seconds: int,
+    clock: Callable[[], float] = time.monotonic,
+) -> LinuxAvailabilityRuntimeAssembly:
+    """Wire the current Linux probe execution path directly to payload priority."""
+
+    good_news = AvailabilityGoodNewsPort(payload_manager)
+    tick = AvailabilityTickPort(payload_manager)
+    agent = LinuxProbeExecutionAgent(
+        driver,
+        good_news,
+        tick,
+        diagnostic_publisher,
+        timeout_seconds=timeout_seconds,
+        clock=clock,
+    )
+    probe_manager = AvailabilityProbeManager(
+        probe_adapter,
+        execution_plan_publisher=ProbeExecutionPlanPort(agent),
+    )
+    fanout = AvailabilityConfigFanout(
+        probe_manager,
+        payload_manager,
+    )
+    return LinuxAvailabilityRuntimeAssembly(
+        probe_manager,
+        agent,
+        fanout,
+    )
