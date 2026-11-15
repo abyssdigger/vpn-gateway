@@ -725,6 +725,69 @@ class LinuxNetworkPolicyRuntimeTests(unittest.TestCase):
 
         self.assertIn(runtime.payload_manager, adapter.cleanup_calls)
 
+    def test_stop_is_terminal_for_runtime_operations_but_cleanup_can_retry(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+
+        first = runtime.stop()
+        second = runtime.stop()
+
+        self.assertTrue(first.success)
+        self.assertTrue(second.success)
+
+        for operation in (
+            lambda: runtime.start(),
+            lambda: runtime.audit(),
+            lambda: runtime.handle_payload_request(payload_request(A)),
+            lambda: runtime.configure_availability(
+                runtime_config(
+                    runtime_channel("a", A, "203.0.113.10")
+                )
+            ),
+        ):
+            with self.subTest(operation=operation):
+                with self.assertRaisesRegex(RuntimeError, "has been stopped"):
+                    operation()
+
+    def test_standalone_availability_stop_is_terminal(self):
+        payload_manager = PayloadTrafficManager(
+            FakeAdapter(),
+            RecordingPublisher(),
+        )
+        payload_manager.handle_request(payload_request(A))
+        runtime = build_linux_availability_runtime(
+            FakeAdapter(),
+            payload_manager,
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+
+        runtime.stop()
+
+        with self.assertRaisesRegex(RuntimeError, "has been stopped"):
+            runtime.start()
+        with self.assertRaisesRegex(RuntimeError, "has been stopped"):
+            runtime.configure(
+                runtime_config(
+                    runtime_channel("a", A, "203.0.113.10")
+                )
+            )
+
     def test_stop_cleans_both_manager_owners(self):
         adapter = OwnerScopedFakeAdapter()
         runtime = build_linux_network_policy_runtime(
