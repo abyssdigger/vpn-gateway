@@ -44,14 +44,14 @@ demand, but no longer owns routing hysteresis. This avoids a synchronous call fr
 Manager into another Manager's private Machinery.
 
 There is no asynchronous queue between collector and materializer: both are inside the
-same Manager execution flow. Producer-facing input is different: ping workers/timers only
-update bounded aggregates under a short lock and return. They never wait for route
-materialization.
+same Manager execution flow. Producer-facing input is different: ping workers/timers update bounded aggregates under a
+short lock. If the sole executor is already busy, ingress returns immediately. If it is
+free, the ingress caller may become the collector executor and synchronously drain the
+current aggregate snapshot. No dedicated collector thread or event queue is required.
 
-The collector snapshots and clears/updates those aggregates, releases the input lock, and
-then may call the materializer synchronously. While materialization runs, producers may
-accumulate new input facts in the fresh aggregate state; the collector processes them
-after the synchronous materializer call returns.
+The collector releases the input lock before route calculation/materialization. While a
+materialization runs, other producers only accumulate new bounded facts; the current
+executor processes them after the synchronous materializer call returns.
 
 The design relies on the operational scale already chosen for NG2: route-priority
 materialization is millisecond-scale while probe cadence is second-scale. The model does
@@ -309,9 +309,9 @@ loss. No attempt correlation or reply timestamp is required.
 ## 10. Physical generation guard
 
 The collector model itself has no logical evidence epoch and no event revision.
-`AvailabilityProbeStateInfo` is no longer a routing-control intermediate between
-`AvailabilityProbeManager`, `RuntimeStateManager` and `PayloadTrafficManager`;
-availability status may still be projected outward for diagnostics/status.
+`AvailabilityProbeStateInfo` and the old routing-control chain through
+`RuntimeStateManager` have been removed. Availability diagnostics, if later needed, must
+be projected from current collector/Agent state without reintroducing that control path.
 
 The existing physical `ProbeObservationGeneration` has a narrower purpose: a bounded
 worker launched for an obsolete ProbeRules/interface generation must not contribute a
@@ -439,24 +439,24 @@ A future general Event Delivery Environment may still use envelopes for other as
 latest-value streams. It must not be introduced into this availability path merely to
 reconstruct an order that the collector semantics explicitly discard.
 
-## 15. Implementation migration
+## 15. Current implementation
 
-Current code still contains the superseded window model. The implementation migration
-must remove, rather than wrap:
+The Python implementation now follows this model directly:
 
-- `AvailabilityWindowState` missed-window integral;
-- `LogicalProbeWindow`;
-- logical `evidence_epoch`;
-- `ProbeWindowBoundaryInfo.elapsed_intervals`;
-- batched window catch-up;
-- source-order locking whose only purpose is ordering good-news against window boundaries.
+- `availability_collector.py` owns the small policy/state primitives and path-order
+  calculation;
+- `AvailabilityProbeManager` owns only ProbeRules/readiness plus physical generation and
+  execution demand;
+- `ProbeExecutionAgent` owns physical sends, logical ticks and local diagnostics;
+- `PayloadTrafficManager` owns bounded availability inputs, channel state and the sole
+  serialized route materializer.
 
-The migration should move routing hysteresis/current channel state into
-`PayloadTrafficManager`, introduce the bounded producer-facing aggregates there, and
-connect them directly to the existing sole transactional route-priority executor as the
-next coherent code review unit. `AvailabilityProbeManager` should retain physical
-ProbeRules/readiness/execution-demand ownership but stop acting as the routing-evidence
-collector.
+Removed production artifacts:
 
-Physical-generation safety, bounded send-worker execution, diagnostic lifecycle and the
-already proven Linux ping mechanism remain valid unless separately contradicted.
+- `availability_routing.py`;
+- `payload_traffic_intent.py`;
+- the availability-specific executable `runtime_state_manager.py` slice;
+- logical windows, `evidence_epoch`, `elapsed_intervals` and boundary events.
+
+The only retained generation token is `ProbeObservationGeneration`, scoped strictly to
+physical stale-worker rejection.
