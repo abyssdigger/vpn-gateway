@@ -186,6 +186,56 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             first_window.evidence_epoch,
         )
 
+    def test_stale_logical_window_boundary_is_rejected_after_policy_change(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        first_plan = self.execution_publisher.events[-1]
+        stale_epoch = first_plan.windows[0].evidence_epoch
+
+        changed = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            policy=AvailabilityWindowPolicy(
+                primary.policy.interval_seconds,
+                2,
+            ),
+        )
+        self.manager.handle_request(request(changed))
+        current_plan = self.execution_publisher.events[-1]
+        current_epoch = current_plan.windows[0].evidence_epoch
+        self.assertNotEqual(stale_epoch, current_epoch)
+        self.publisher.events.clear()
+
+        stale_processed = self.manager.handle_window_boundary(
+            ProbeWindowBoundaryInfo(
+                primary.probe_id,
+                generation,
+                evidence_epoch=stale_epoch,
+                elapsed_intervals=2,
+            )
+        )
+
+        self.assertFalse(stale_processed)
+        self.assertEqual(self.publisher.events, [])
+
+        current_processed = self.manager.handle_window_boundary(
+            ProbeWindowBoundaryInfo(
+                primary.probe_id,
+                generation,
+                evidence_epoch=current_epoch,
+                elapsed_intervals=2,
+            )
+        )
+
+        self.assertTrue(current_processed)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNREACHABLE,
+        )
+
     def test_logical_cadence_change_republishes_plan_without_generation_change(self):
         primary = probe("primary", self.path, "203.0.113.24")
         self.manager.handle_request(request(primary))
