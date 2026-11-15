@@ -20,15 +20,16 @@
 - probe-specific `NetworkRules` ownership;
 - probe-rules observation and repair;
 - concrete-interface/rules readiness generation;
-- execution-side probe evidence;
-- publication of `AvailabilityProbeStateInfo`.
+- current concrete physical generation;
+- generation-bound execution demand for the probe Agent.
 
 It does not own:
 
 - Profile binding membership;
 - payload route membership;
 - payload route metrics;
-- selection of the last surviving payload path;
+- GOOD/BAD availability hysteresis and counters;
+- route-priority materialization;
 - VPN process lifecycle;
 - user-facing configuration parsing.
 
@@ -144,213 +145,72 @@ The Manager keeps an owner-wide rules-readiness epoch:
 This epoch is Manager-local. It is not encoded into routing tables, uid, conntrack mark or
 nft objects.
 
-## 6. Good-news model
+## 6. Execution observations
 
-Production availability semantics are **not attempt-oriented**.
+Production availability semantics remain non-attempt-oriented.
 
-The routing-relevant positive input is only a generation-bound fact about the physical
-probe plane:
+A current physical reply produces colorless good news associated with the current logical
+consumer/channel. The physical generation guard exists only to reject results from an
+obsolete ProbeRules/interface generation.
 
-```text
-good_news(
-    mechanism,
-    concrete InterfaceIdentity,
-    target,
-    ProbeObservationGeneration
-)
-```
+`AvailabilityProbeManager` does not turn those replies into routing verdicts. Routing
+hysteresis is owned by the bounded collector inside `PayloadTrafficManager`, defined in
+`design/NG2/availability-collector-materializer.md`.
 
-Any valid reply through the current concrete probe plane is good news regardless of which
-send caused it. The Manager fans one such fact out to every enabled logical `probe_id`
-sharing the same physical `(mechanism, InterfaceIdentity, target)` plane.
+The execution side also produces a logical tick. The tick has level semantics for the
+collector: repeated undrained firings collapse to one pending fact.
 
-No routing-policy contract requires:
+There is no production negative reply event.
 
-- attempt id;
-- matching reply to a semantic attempt object;
-- per-attempt `NO_REPLY`;
-- recovery streak;
-- retry cadence;
-- verdict timeout attached to one send.
+## 7. Execution plan
 
-A valid good-news event immediately confirms the path live and resets accumulated missed
-intervals.
+The Manager projects current enabled probes plus the READY physical generation into
+execution demand.
 
-## 7. Negative integral
+The plan contains the information needed to:
 
-Negative evidence is accumulated at observation-window boundaries.
+- send probes on each current concrete physical plane;
+- schedule one tick cadence for each logical channel;
+- reject old physical-worker results after generation invalidation.
 
-For one logical probe the minimal state is:
+It does not contain:
 
-```text
-confirmed_live
-missed_intervals
-good_news_since_boundary
-```
+- logical `evidence_epoch`;
+- elapsed-window counts;
+- failure/recovery counters;
+- route priority.
 
-At a boundary:
+A logical-policy-only change updates/reset the affected collector channel through the
+current configuration path; it does not require a separate execution evidence epoch.
 
-```text
-good news seen:
-    missed_intervals = 0
-    confirmed_live = true
+## 8. Collector boundary
 
-no good news:
-    missed_intervals += 1
-    if missed_intervals >= failure_intervals:
-        confirmed_live = false
-```
+The routing-relevant availability state is not materialized inside this Manager.
 
-One positive reply is sufficient for recovery. There is no `recovery_threshold`.
-
-A local probing error does not prove remote unreachability. For routing preference it
-simply fails to provide positive evidence; diagnostics may retain the local error reason.
-The same interval integral prevents a transient local fault from becoming an immediate
-persistent negative conclusion.
-
-## 8. Routing consequence
-
-`AvailabilityProbeStateInfo` is consumed by runtime priority calculation, not by
-`BindingCalculator`.
-
-The current routing rule is:
-
-- confirmed-live paths may bubble above paths without confirmed live evidence;
-- live paths preserve configured priority;
-- paths without confirmed-live evidence are retained;
-- if no confirmed-live alternative exists, probing does not perturb the current payload
-  order.
-
-The exact algorithm and route-transition requirements are normative in
-`availability-routing-model.md`.
-
-## 9. Current executable split
-
-The clean pure policy core is implemented in:
+Current good-news/tick observations update the bounded producer-facing input owned by
+`PayloadTrafficManager`:
 
 ```text
-availability_routing.py
-    AvailabilityWindowPolicy
-    AvailabilityWindowState
-    calculate_effective_path_order()
+pending_good_news: saturating counter
+tick_pending: bool
 ```
 
-`AvailabilityProbeRequest.enabled` remains outside the timing type. The old autonomous
-attempt scheduler remains removed.
+That input port is deliberately non-blocking: producers update bounded aggregates under a
+short lock and return. The PayloadTrafficManager collector loop owns GOOD/BAD policy and
+synchronous route-priority materialization.
 
-`AvailabilityProbeManager` now owns the production evidence/window state above its
-verified NetworkRules generation boundary:
+`AvailabilityProbeStateInfo` may remain as diagnostic/status projection during
+implementation migration, but it is not the routing-control intermediate.
 
-```text
-note_good_news(path, target, generation, mechanism)
-close_interval(probe_id, generation)
-```
+## 9. Physical generation safety
 
-Properties:
+Every physical request names a concrete `InterfaceIdentity(ifname, ifindex)`.
 
-- good-news is accepted only for the current READY generation;
-- stale-generation good-news and stale window boundaries are ignored;
-- one physical reply fans out to all enabled logical consumers of that plane;
-- good-news publishes `REACHABLE` immediately and resets the negative integral;
-- a window without good-news increments the integral;
-- `UNREACHABLE` is published only after `failure_intervals`;
-- local sender failure has no direct routing transition: unless good-news arrives, the
-  window simply closes without positive evidence;
-- logical policy change with unchanged physical rules preserves the READY generation but
-  resets only that logical probe's evidence window;
-- physical rules-generation change resets all evidence windows.
+Same-name/new-ifindex is a new concrete generation. A worker result from an invalidated
+generation must not contribute good news after the new generation becomes current.
 
-The Manager still does **not** depend on a synchronous ProbeDriver and does not expose
-attempt-oriented `attempt_once()/evaluate_once()`.
-
-`LinuxIcmpProbeDriver` remains standalone diagnostic/evidence machinery. Its blocking
-single-shot `REPLY/NO_REPLY/ERROR` API is not promoted to the production semantic
-boundary: in particular, `NO_REPLY` must not become a routing event.
-
-The production execution contract is now explicit and remains non-attempt-oriented.
-
-`ProbeExecutionPlanCalculator` projects the current enabled logical request plus READY
-`ProbeObservationGeneration` into:
-
-```text
-ProbeExecutionPlan
-    generation
-    physical planes:
-        mechanism
-        concrete InterfaceIdentity
-        target
-        send interval
-    logical windows:
-        probe_id
-        observation interval
-        opaque evidence_epoch
-```
-
-Several logical probes that share one physical plane share transport sends. The physical
-send interval is the smallest interval requested by its enabled consumers. Logical window
-cadence remains per `probe_id`, so consumers with different `failure_intervals` or
-intervals do not share hysteresis state.
-
-`evidence_epoch` is a Manager-owned opaque reset token, not execution policy. It changes
-when one logical probe definition changes even if its interval remains the same. This lets
-the Agent restart that probe's observation-window phase after, for example, a
-`failure_intervals`-only change without exposing the threshold itself below the Manager.
-
-Execution may report only two routing-relevant production facts back across this boundary:
-
-```text
-ProbeGoodNewsInfo
-ProbeWindowBoundaryInfo(
-    probe_id,
-    ProbeObservationGeneration,
-    evidence_epoch,
-    elapsed_intervals
-)
-```
-
-There is deliberately no production `NO_REPLY` event. Absence of a reply acquires routing
-meaning only when `AvailabilityProbeManager` processes a current logical window boundary.
-A boundary with stale `ProbeObservationGeneration` or stale logical `evidence_epoch` is
-ignored.
-
-Plan activation has deterministic phase semantics:
-
-```text
-t = activation:
-    start all logical observation windows
-    issue one send immediately on every physical plane
-
-t = later boundary:
-    first close windows whose deadline is now
-    then issue sends whose next physical deadline is now
-```
-
-Thus the first observation window is never consumed before any probe has been sent. At a
-shared timestamp, a send starts the next window rather than retroactively supplying good
-news to the window that just closed. Replies are classified by arrival, not by attempt
-correlation.
-
-Good-news and boundary events for one execution generation must be emitted through one
-ordered execution stream. EventEnvelope ordering remains responsible for rejecting late
-older revisions once that infrastructure is implemented.
-
-The Manager serializes request/audit/good-news/window handlers with one re-entrant state
-lock. A physical generation transition therefore cannot race an old reply into the new
-window state.
-
-The concrete production execution Engine is now implemented as
-`LinuxProbeExecutionAgent`, documented in
-`design/NG2/probe-execution-agent.md`.
-
-`AvailabilityProbeManager` publishes the current `ProbeExecutionPlan | None` as a
-latest-value RequestEvent. Loss of a READY generation publishes `None` before a later
-lower-domain transition; a later fresh READY generation publishes a replacement plan.
-
-The Agent owns cadence and physical send lifecycle. It returns only generation-bound
-`ProbeGoodNewsInfo`, batched `ProbeWindowBoundaryInfo` and local
-`ProbeExecutionDiagnosticInfo`. The historical `ProbeAttemptResult` contract remains
-hidden below a Linux compatibility Adapter and does not cross the production execution
-boundary.
+This is the only epoch-like mechanism required by this availability path. It guards
+physical worker lifetime; it does not order collector inputs or materializer requests.
 
 ## 10. Linux technical identity
 
