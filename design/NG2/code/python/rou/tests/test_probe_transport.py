@@ -55,6 +55,43 @@ class ProbeExecutionPlanTests(unittest.TestCase):
             [("fast", 10.0), ("slow", 30.0)],
         )
 
+    def test_explicit_evidence_epochs_are_projected_without_policy_leakage(self):
+        request = AvailabilityProbeSetRequest(
+            (
+                probe("slow", A, "203.0.113.10", 30),
+                probe("fast", A, "203.0.113.10", 10),
+            )
+        )
+
+        plan = self.calculator.calculate(
+            request,
+            self.generation,
+            evidence_epochs={"slow": 7, "fast": 11},
+        )
+
+        self.assertEqual(
+            [(item.probe_id, item.evidence_epoch) for item in plan.windows],
+            [("fast", 11), ("slow", 7)],
+        )
+
+    def test_evidence_epoch_mapping_must_cover_exact_probe_set(self):
+        request = AvailabilityProbeSetRequest(
+            (probe("a", A, "203.0.113.10", 10),)
+        )
+
+        with self.assertRaises(ValueError):
+            self.calculator.calculate(
+                request,
+                self.generation,
+                evidence_epochs={},
+            )
+        with self.assertRaises(ValueError):
+            self.calculator.calculate(
+                request,
+                self.generation,
+                evidence_epochs={"a": 0},
+            )
+
     def test_distinct_generation_or_path_keeps_distinct_physical_planes(self):
         request = AvailabilityProbeSetRequest(
             (
