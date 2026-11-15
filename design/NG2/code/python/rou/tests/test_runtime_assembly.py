@@ -31,7 +31,6 @@ from rou.linux_probe_execution import (
     ProbeSendResult,
 )
 from rou.runtime_assembly import (
-    AvailabilityConfigFanout,
     AvailabilityPriorityConfigCalculator,
     AvailabilityProbeSetCalculator,
     CallbackPublisher,
@@ -428,10 +427,15 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
             probe_adapter,
             execution_plan_publisher=CallbackPublisher(plans.append),
         )
-        fanout = AvailabilityConfigFanout(
-            probe_manager,
+        runtime = build_linux_availability_runtime(
+            probe_adapter,
             self.payload_manager,
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
         )
+        runtime.probe_manager = probe_manager
         source = runtime_config(
             runtime_channel("a", A, "203.0.113.10")
         )
@@ -447,7 +451,7 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
 
         probe_adapter.apply_hook = during_probe_apply
 
-        fanout.apply(source)
+        runtime.configure(source)
 
         self.assertEqual(observed_prefixes, [2])
         self.assertEqual(len(plans), 1)
@@ -463,15 +467,18 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
 
     def test_stale_old_priority_descriptor_is_rejected_after_fanout(self):
         probe_adapter = FakeAdapter()
-        probe_manager = AvailabilityProbeManager(probe_adapter)
-        fanout = AvailabilityConfigFanout(
-            probe_manager,
+        runtime = build_linux_availability_runtime(
+            probe_adapter,
             self.payload_manager,
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
         )
         first = runtime_config(
             runtime_channel("a", A, "203.0.113.10", failure=2)
         )
-        fanout.apply(first)
+        runtime.configure(first)
 
         stale = AvailabilityPriorityChannel(
             "a",
@@ -483,7 +490,7 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
         changed = runtime_config(
             runtime_channel("a", A, "203.0.113.10", failure=5)
         )
-        fanout.apply(changed)
+        runtime.configure(changed)
 
         self.assertFalse(
             self.payload_manager.handle_availability_good_news(
