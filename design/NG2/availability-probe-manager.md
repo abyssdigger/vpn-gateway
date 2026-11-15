@@ -77,9 +77,10 @@ mechanism
 concrete InterfaceIdentity
 IPv4 target
 enabled
-AvailabilityWindowPolicy
+AvailabilityChannelPolicy
     interval_seconds
-    failure_intervals
+    failure_ticks
+    recovery_good_news
 ```
 
 `enabled=false` is logical probe state, not timing policy. It disables autonomous probing
@@ -274,31 +275,28 @@ per-attempt routing policy.
 
 ## 14. Open implementation units
 
-The runtime semantic path is now executable through:
+The target semantic path is now:
 
 ```text
-valid reply
- -> AvailabilityProbeManager good-news/window state
- -> AvailabilityProbeStateInfo
- -> RuntimeStateManager
- -> Profile availability evidence
- -> PayloadTrafficIntentCalculator
- -> PayloadTrafficStateRequest
- -> serialized PayloadTrafficManager
- -> NetworkRulesAdapter route-priority fast path
+ProbeExecutionAgent
+    -> bounded good-news/tick input
+    -> PayloadTrafficManager availability collector
+    -> effective route priority
+    -> sole transactional route materializer
 ```
 
-Remaining work is narrower:
+Current Python still contains the superseded Manager-owned window/evidence implementation.
+The next coherent code unit must migrate that implementation rather than adding
+EventEnvelope machinery around it.
 
-1. Event Delivery envelope revision/ordering implementation around the currently tested
-   latest-value handlers;
-2. daemon/runtime assembly that instantiates `LinuxProbeExecutionAgent` and connects the
-   real Event Delivery Environment;
-3. Profile/status consumption of generation-scoped local execution diagnostics;
-4. target/live validation only if the execution mechanism later differs materially from
+Still separate after that migration:
+
+1. daemon/runtime assembly;
+2. Profile/status consumption of generation-scoped local execution diagnostics;
+3. target/live validation only if the execution mechanism later differs materially from
    the already proven capability-free `ping` worker.
 
 Filter/NAT semantic order remains independent from route priority.
 
-No retry scheduler, recovery threshold, per-attempt `NO_REPLY` policy or shadow fallback
-tier should be reintroduced without a new concrete requirement.
+No retry scheduler, per-attempt `NO_REPLY` policy, logical evidence epoch or shadow
+fallback tier should be reintroduced without a new concrete requirement.
