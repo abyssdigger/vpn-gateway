@@ -519,6 +519,27 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             generation,
         )
 
+    def test_batched_window_boundary_reaches_failure_threshold_once(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        processed = self.manager.handle_window_boundary(
+            ProbeWindowBoundaryInfo(
+                primary.probe_id,
+                generation,
+                elapsed_intervals=3,
+            )
+        )
+
+        self.assertTrue(processed)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNREACHABLE,
+        )
+
     def test_good_news_resets_negative_integral(self):
         primary = probe("primary", self.path, "203.0.113.24")
         self.manager.handle_request(request(primary))
