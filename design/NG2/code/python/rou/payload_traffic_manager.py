@@ -357,6 +357,13 @@ class PayloadTrafficManager:
             configured,
             previous_configured=previous_configured,
         )
+        if (
+            self._latest_effective_desired is not None
+            and effective == self._latest_effective_desired
+            and self._latest_desired is not None
+        ):
+            return
+
         desired = self._rules_calculator.calculate(effective)
 
         self._latest_effective_desired = effective
