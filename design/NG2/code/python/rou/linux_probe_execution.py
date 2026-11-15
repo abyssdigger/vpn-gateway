@@ -26,8 +26,12 @@ class ProbeSendResult:
     def __post_init__(self) -> None:
         if type(self.good_news) is not bool:
             raise ValueError("probe send good_news must be boolean")
-        if self.local_error is not None and not self.local_error:
-            raise ValueError("probe send local_error must be non-empty when present")
+        if self.local_error is not None and (
+            not isinstance(self.local_error, str) or not self.local_error
+        ):
+            raise ValueError(
+                "probe send local_error must be non-empty string when present"
+            )
         if self.good_news and self.local_error is not None:
             raise ValueError("good-news send result cannot also be a local error")
 
@@ -115,7 +119,7 @@ class ProbeExecutionDiagnosticInfo:
             if not self.diagnostic:
                 raise ValueError("ERROR diagnostic requires detail")
         elif self.diagnostic is not None:
-            raise ValueError("READY diagnostic must not carry detail")
+            raise ValueError("non-ERROR diagnostic must not carry detail")
 
 
 @dataclass
@@ -159,6 +163,9 @@ class ProbeExecutionSchedule:
         ):
             raise ValueError("schedule time must be finite numeric")
         now = float(now)
+
+        if plan is not None and not isinstance(plan, ProbeExecutionPlan):
+            raise ValueError("schedule plan must be ProbeExecutionPlan or None")
 
         previous = self._plan
         generation_changed = (
@@ -300,13 +307,15 @@ class LinuxProbeExecutionAgent:
         boundary_publisher: ProbeWindowBoundaryPublisher,
         diagnostic_publisher: ProbeExecutionDiagnosticPublisher,
         *,
-        timeout_seconds: int = 1,
+        timeout_seconds: int,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not callable(getattr(driver, "execute_send", None)):
             raise ValueError("Linux probe execution Agent requires ProbeSendDriver")
         if type(timeout_seconds) is not int or timeout_seconds <= 0:
             raise ValueError("technical timeout_seconds must be a positive integer")
+        if not callable(clock):
+            raise ValueError("probe execution clock must be callable")
 
         self._driver = driver
         self._good_news_publisher = good_news_publisher
