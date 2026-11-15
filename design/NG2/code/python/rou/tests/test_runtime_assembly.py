@@ -32,11 +32,9 @@ from rou.linux_probe_execution import (
 )
 from rou.runtime_assembly import (
     AvailabilityConfigFanout,
-    AvailabilityGoodNewsPort,
     AvailabilityPriorityConfigCalculator,
     AvailabilityProbeSetCalculator,
-    AvailabilityTickPort,
-    ProbeExecutionPlanPort,
+    CallbackPublisher,
     RuntimeAvailabilityChannel,
     RuntimeAvailabilityConfig,
     build_linux_availability_runtime,
@@ -251,14 +249,6 @@ class OwnerScopedFakeAdapter:
         return self.cleanup_results.get(owner, ActionResult(True))
 
 
-class PlanConsumer:
-    def __init__(self):
-        self.plans = []
-
-    def update_plan(self, plan):
-        self.plans.append(plan)
-
-
 def runtime_channel(
     channel_id,
     path,
@@ -384,13 +374,13 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
         )
         self.payload_manager.handle_request(payload_request(A, B))
 
-    def test_plan_port_forwards_plan_and_quiesce(self):
-        consumer = PlanConsumer()
-        port = ProbeExecutionPlanPort(consumer)
+    def test_callback_publisher_forwards_value_synchronously(self):
+        values = []
+        port = CallbackPublisher(values.append)
 
         port.publish(None)
 
-        self.assertEqual(consumer.plans, [None])
+        self.assertEqual(values, [None])
 
     def test_good_news_and_tick_ports_use_payload_manager_boundary(self):
         policy = AvailabilityHysteresisPolicy(1, 1)
@@ -409,8 +399,12 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
             )
         )
 
-        tick = AvailabilityTickPort(self.payload_manager)
-        good = AvailabilityGoodNewsPort(self.payload_manager)
+        tick = CallbackPublisher(
+            self.payload_manager.handle_availability_tick
+        )
+        good = CallbackPublisher(
+            self.payload_manager.handle_availability_good_news
+        )
 
         tick.publish(AvailabilityTick(channel))
         self.assertEqual(
@@ -425,11 +419,11 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
         )
 
     def test_config_fanout_installs_payload_priority_before_probe_rules(self):
-        plan_consumer = PlanConsumer()
+        plans = []
         probe_adapter = FakeAdapter()
         probe_manager = AvailabilityProbeManager(
             probe_adapter,
-            execution_plan_publisher=ProbeExecutionPlanPort(plan_consumer),
+            execution_plan_publisher=CallbackPublisher(plans.append),
         )
         fanout = AvailabilityConfigFanout(
             probe_manager,
@@ -453,9 +447,9 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
         fanout.apply(source)
 
         self.assertEqual(observed_prefixes, [2])
-        self.assertEqual(len(plan_consumer.plans), 1)
+        self.assertEqual(len(plans), 1)
         self.assertEqual(
-            plan_consumer.plans[0].channels[0].priority,
+            plans[0].channels[0].priority,
             AvailabilityPriorityChannel(
                 "a",
                 A,
