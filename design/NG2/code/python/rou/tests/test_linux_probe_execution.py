@@ -6,9 +6,11 @@ import unittest
 from rou.availability_probe_state import ProbeObservationGeneration
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_probe_execution import (
+    LinuxDiagnosticPingSendAdapter,
     LinuxProbeExecutionAgent,
     ProbeExecutionHealth,
     ProbeExecutionSchedule,
+    ProbeSendResult,
 )
 from rou.probe_attempt import ProbeAttemptOutcome, ProbeAttemptResult
 from rou.probe_rules import ProbeMechanism
@@ -61,17 +63,58 @@ class FakeDriver:
         self.release = Event()
         self.block = False
 
-    def execute(self, path, target, *, timeout_seconds):
+    def execute_send(self, path, target, *, timeout_seconds):
         self.calls.append((path, target, timeout_seconds))
         self.entered.set()
         if self.block:
             self.release.wait(timeout=2)
         if self.outcome is ProbeAttemptOutcome.ERROR:
-            return ProbeAttemptResult(
-                ProbeAttemptOutcome.ERROR,
+            return ProbeSendResult(
+                False,
                 self.diagnostic or "local failure",
             )
-        return ProbeAttemptResult(self.outcome)
+        return ProbeSendResult(
+            self.outcome is ProbeAttemptOutcome.REPLY,
+        )
+
+
+class FakeDiagnosticDriver:
+    def __init__(self, result):
+        self.result = result
+
+    def execute(self, path, target, *, timeout_seconds):
+        return self.result
+
+
+class DiagnosticPingSendAdapterTests(unittest.TestCase):
+    def test_reply_maps_to_good_news_without_attempt_type_leak(self):
+        adapter = LinuxDiagnosticPingSendAdapter(
+            FakeDiagnosticDriver(ProbeAttemptResult(ProbeAttemptOutcome.REPLY))
+        )
+
+        result = adapter.execute_send(A, TARGET, timeout_seconds=1)
+
+        self.assertEqual(result, ProbeSendResult(True))
+
+    def test_no_reply_collapses_to_plain_absence_of_good_news(self):
+        adapter = LinuxDiagnosticPingSendAdapter(
+            FakeDiagnosticDriver(ProbeAttemptResult(ProbeAttemptOutcome.NO_REPLY))
+        )
+
+        result = adapter.execute_send(A, TARGET, timeout_seconds=1)
+
+        self.assertEqual(result, ProbeSendResult(False))
+
+    def test_error_maps_only_to_local_diagnostic(self):
+        adapter = LinuxDiagnosticPingSendAdapter(
+            FakeDiagnosticDriver(
+                ProbeAttemptResult(ProbeAttemptOutcome.ERROR, "exec failed")
+            )
+        )
+
+        result = adapter.execute_send(A, TARGET, timeout_seconds=1)
+
+        self.assertEqual(result, ProbeSendResult(False, "exec failed"))
 
 
 class ProbeExecutionScheduleTests(unittest.TestCase):
