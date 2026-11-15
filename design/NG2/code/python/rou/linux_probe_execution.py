@@ -316,6 +316,14 @@ class LinuxProbeExecutionAgent:
         # EventEnvelope revisions can later preserve this order across async delivery.
         self._event_publication_lock = Lock()
         self._diagnostic_lock = Lock()
+        self._in_flight: set[
+            tuple[
+                ProbeObservationGeneration,
+                object,
+                object,
+                object,
+            ]
+        ] = set()
         self._latest_diagnostic: dict[
             tuple[ProbeObservationGeneration, PhysicalProbePlane],
             ProbeExecutionDiagnosticInfo,
@@ -398,53 +406,107 @@ class LinuxProbeExecutionAgent:
         plan: ProbeExecutionPlan,
         plane: PhysicalProbePlane,
     ) -> None:
-        Thread(
-            target=self._execute_send,
-            args=(plan, plane),
-            name=(
-                "vpn-gate-probe-send-"
-                f"{plane.path.ifname}-{plane.path.ifindex}-{plane.target}"
-            ),
-            daemon=True,
-        ).start()
-
-    def _execute_send(
-        self,
-        plan: ProbeExecutionPlan,
-        plane: PhysicalProbePlane,
-    ) -> None:
-        result = self._driver.execute_send(
-            plane.path,
-            plane.target,
-            timeout_seconds=self._timeout_seconds,
-        )
-
+        key = self._in_flight_key(plan, plane)
         with self._condition:
             current = self._schedule.plan
             if current is None or current.generation != plan.generation:
                 return
             if plane not in current.planes:
                 return
+            if key in self._in_flight:
+                overrun = True
+            else:
+                self._in_flight.add(key)
+                overrun = False
 
-        if result.local_error is not None:
+        if overrun:
             self._publish_diagnostic_error(
                 plan,
                 plane,
-                result.local_error,
+                "previous physical probe send is still in flight",
             )
             return
 
-        self._publish_diagnostic_ready(plan, plane)
-        if result.good_news:
-            with self._event_publication_lock:
-                self._good_news_publisher.publish(
-                    ProbeGoodNewsInfo(
-                        plane.mechanism,
-                        plane.path,
-                        plane.target,
-                        plan.generation,
-                    )
+        worker = Thread(
+            target=self._execute_send,
+            args=(plan, plane, key),
+            name=(
+                "vpn-gate-probe-send-"
+                f"{plane.path.ifname}-{plane.path.ifindex}-{plane.target}"
+            ),
+            daemon=True,
+        )
+        try:
+            worker.start()
+        except Exception as exc:
+            with self._condition:
+                self._in_flight.discard(key)
+            self._publish_diagnostic_error(
+                plan,
+                plane,
+                f"cannot start probe send worker: {exc}",
+            )
+
+    def _execute_send(
+        self,
+        plan: ProbeExecutionPlan,
+        plane: PhysicalProbePlane,
+        key: tuple[ProbeObservationGeneration, object, object, object],
+    ) -> None:
+        try:
+            try:
+                result = self._driver.execute_send(
+                    plane.path,
+                    plane.target,
+                    timeout_seconds=self._timeout_seconds,
                 )
+            except Exception as exc:
+                result = ProbeSendResult(
+                    False,
+                    f"probe send Driver raised: {exc}",
+                )
+
+            with self._condition:
+                current = self._schedule.plan
+                if current is None or current.generation != plan.generation:
+                    return
+                if plane not in current.planes:
+                    return
+
+            if result.local_error is not None:
+                self._publish_diagnostic_error(
+                    plan,
+                    plane,
+                    result.local_error,
+                )
+                return
+
+            self._publish_diagnostic_ready(plan, plane)
+            if result.good_news:
+                with self._event_publication_lock:
+                    self._good_news_publisher.publish(
+                        ProbeGoodNewsInfo(
+                            plane.mechanism,
+                            plane.path,
+                            plane.target,
+                            plan.generation,
+                        )
+                    )
+        finally:
+            with self._condition:
+                self._in_flight.discard(key)
+
+    @staticmethod
+    def _in_flight_key(
+        plan: ProbeExecutionPlan,
+        plane: PhysicalProbePlane,
+    ) -> tuple[ProbeObservationGeneration, object, object, object]:
+        return (
+            plan.generation,
+            plane.mechanism,
+            plane.path,
+            plane.target,
+        )
 
     def _publish_diagnostic_ready(
         self,
