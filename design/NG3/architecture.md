@@ -100,11 +100,11 @@ The managed-domain contract is:
   present inside the managed domain;
 - **observation before use:** runtime code verifies the endpoint is present in the expected
   domain before accepting it for managed forwarding;
-- **identity:** the exact rule that binds a configured logical VPN path to a concrete
-  endpoint remains unresolved and is intentionally delegated back to the requirement tree.
+- **identity:** logical path identity is bound to one verified current concrete endpoint
+  through the accepted VPNPathAdapter/configuration contracts.
 
-This closes the architectural shape of the managed domain without inventing the still-open
-path-identity/configuration contract.
+This closes the architectural shape of the managed domain while keeping concrete external
+field names and protocol-specific endpoint discovery as implementation choices.
 
 The host network namespace is outside this managed domain. Interaction with the host must
 occur only through explicit boundary links/contracts.
@@ -161,14 +161,14 @@ This section intentionally does **not** specify whether the VPN endpoint arrives
 creation inside the namespace, interface movement, process placement, protocol-specific
 setup or another mechanism.
 
-For the current scope, onboarding is architecturally closed only with respect to **where the
-result must end up**: the data-plane endpoint must be inside the managed domain and the host
-boundary must be explicit.
+For the current scope, onboarding is architecturally closed with respect to both:
 
-Onboarding remains open with respect to **which concrete endpoint corresponds to which
-logical VPN path**. That identity/configuration decision is not derivable from the isolation
-requirements and is tracked in the requirement tree as a new decomposition block on
-`VPNG-R1.R3`.
+- **where** the data-plane endpoint must exist — inside the managed domain behind an explicit
+  host/domain boundary;
+- **which logical path it represents** — through the verified logical-path binding contract.
+
+Concrete per-integration commands and external field names remain documentation/interface
+implementation work.
 
 
 
@@ -361,8 +361,8 @@ basically configured by the administrator.
 The architecture therefore does **not** introduce a VPN-session/tunnel provisioning Manager
 merely because older generations contained VPN process-management machinery.
 
-The product-side boundary must eventually define enough administrator-facing contract to make
-an externally provisioned channel:
+The product-side boundary defines enough administrator-facing contract to make an externally
+provisioned channel:
 
 - place its data-plane endpoint inside the isolated managed network domain;
 - identifiable as a concrete VPN-GATE path;
@@ -370,9 +370,9 @@ an externally provisioned channel:
 - usable by payload policy;
 - documentable as a repeatable administrator procedure.
 
-The exact representation of that contract is intentionally open. A Linux interface move,
-process placement, interface name, protocol-specific handle or another mechanism must not be
-selected until the supported deployment requirements make that choice necessary.
+The exact representation of that contract remains integration-specific. A Linux interface
+move, process placement, interface name, protocol-specific handle or another mechanism may be
+selected by a supported integration without changing the accepted product semantics.
 
 ## 3.2. Logical VPN path binding
 
@@ -449,9 +449,9 @@ The Adapter does **not**:
 - decide availability health;
 - invent the user configuration syntax.
 
-The exact endpoint selector carried by `normalized_binding_intent` remains intentionally
-open until `VPNG-R1.R2` is decomposed. This keeps runtime identity semantics defined while
-leaving the external declarative interface unresolved.
+The semantic content of `normalized_binding_intent` is defined: it must identify one
+current concrete endpoint for one logical path. The exact external selector spelling and
+protocol-specific discovery mechanics remain replaceable interface/integration details.
 
 ## 3.3. Declarative configuration boundary
 
@@ -697,9 +697,8 @@ On either state transition, obsolete progress is reset.
 
 No observation history, time window, replay log or unbounded attempt count is retained.
 
-This closes adaptation semantics independently from the still-open question of which concrete
-observation mechanism is adequate to produce `positive/negative` evidence for supported
-failure scenarios.
+Adaptation consumes evidence from the user-selected availability criterion. For the first
+release, that criterion is ICMP with explicit or derived target semantics defined below.
 
 ## 4.4. Availability affects priority only
 
@@ -1111,7 +1110,8 @@ No requirement currently justifies:
 The Manager publishes a current projection that distinguishes desired/effective/unknown
 state where that distinction affects behavior or safety.
 
-A final system-wide status model is not yet designed.
+System-wide current status is composed by `RuntimeStatusAgent` from authoritative owner
+snapshots; see section 13.
 
 # 12. Startup, shutdown and recovery
 
@@ -1308,10 +1308,10 @@ internal Manager state.
 | `VPNG-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
 | `VPNG-R1.R3.C2` isolated VPN data-plane endpoint | architecture constraint derived from managed-network isolation |
 | `VPNG-R1.R3.C2.R1` isolated-channel onboarding result | placement result architecture accepted; concrete provisioning commands remain implementation-specific |
-| `VPNG-R2` subtree — payload policy | semantic ownership represented; normalized config schema missing |
+| `VPNG-R2` subtree — payload policy | normalized `PayloadPolicyIntent` and pure structural policy calculation accepted; external syntax remains implementation detail |
 | `VPNG-R3.R1`–`VPNG-R3.R5`, `VPNG-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
-| `VPNG-R3.R6` subtree — path-usability evidence | active observation selected via AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
-| `VPNG-R4` subtree — safety | lower boundary/executor responsibilities represented; managed network isolation selected; concrete lower mutation strategy otherwise incomplete |
+| `VPNG-R3.R6` subtree — path-usability evidence | user-selected availability criterion accepted; first release ICMP with explicit/derived target and `no_evidence` diagnostics |
+| `VPNG-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
 | `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5`, `VPNG-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
 | `VPNG-R5.R2`, `VPNG-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
 | `VPNG-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
@@ -1339,24 +1339,22 @@ requirement currently makes them necessary:
 This omission is an implementation of `VPNG-R7.R1`, not a claim that such machinery can
 never become necessary.
 
-# 16. Design gaps that block deeper architecture
+# 16. Implementation freedoms and future extensions
 
 ## 16.1. Remaining configuration semantics
 
 The configuration boundary itself is now defined and the VPN-path binding contract is
 architecturally closed.
 
-Remaining configuration detail is limited primarily to external representation and lifecycle:
+Remaining configuration detail is implementation/interface freedom:
 
-- the concrete external syntax used to express `traffic_selector`, path IDs and direction
-  permissions;
-- whether any configuration changes must be supported live;
-- final user-visible configured-intent projection under `VPNG-R6.R1`.
+- concrete external syntax used to express selectors, path IDs, direction permissions and
+  availability checks;
+- parser/serialization mechanics;
+- any future live-change capability, which is not currently promised.
 
-The semantic payload-policy contract itself is now defined by `PayloadPolicyIntent`.
-
-These gaps must be refined by their owning requirement branches rather than by expanding
-`ConfigurationAdapter` into a universal configuration framework.
+The semantic contracts are already defined. These freedoms must not be expanded into a
+universal configuration framework without a new requirement.
 
 ## 16.2. Availability evidence semantics
 
@@ -1381,7 +1379,7 @@ closure.
 
 Status aggregation semantics and ownership are now defined by `RuntimeStatusAgent`.
 
-Still intentionally open as interface implementation detail:
+Still replaceable as interface implementation detail:
 
 - concrete CLI/API/text presentation format;
 - formatting and filtering for different operator surfaces.
@@ -1409,23 +1407,20 @@ channels.
 Procedural assembly plus the thin product control surface remains the simpler accepted
 architecture.
 
-## 16.5. Administrator-facing VPN-channel onboarding contract
+## 16.5. Administrator-facing VPN-channel onboarding implementation
 
-Affected requirements:
-- `VPNG-R1.R3`
-- `VPNG-R1.R3.C1`
-- `VPNG-R1.R3.C1.R1`
-- `VPNG-R6.R1`
+The onboarding architecture is closed:
 
-The ownership boundary is now decided: the administrator provisions/configures the channel in
-the first release.
+- the administrator provisions/configures the external channel;
+- its data-plane endpoint must be present inside the managed domain;
+- configuration binds a stable logical path identity to one verified current endpoint;
+- availability-check target may be explicit or derived from current endpoint/network facts;
+- acceptance/rejection and unresolved target/binding conditions are observable.
 
-Still missing are the supported-channel contract and instructions that tell the administrator
-how VPN-GATE identifies and consumes such a channel.
+Remaining work is concrete documentation and integration implementation for each supported
+VPN technology.
 
-This must be refined before choosing concrete interface/process/protocol identity machinery.
-
-# 16. Current architecture principle
+# 17. Current architecture principle
 
 For this NG3 pass:
 
