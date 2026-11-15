@@ -320,8 +320,10 @@ class LinuxNetworkPolicyRuntime:
         self.availability.start()
 
     def audit(self) -> None:
-        self.availability.probe_manager.audit()
-        self.payload_manager.audit()
+        try:
+            self.availability.probe_manager.audit()
+        finally:
+            self.payload_manager.audit()
 
     def stop(self) -> NetworkPolicyRuntimeStopResult:
         probe_result: ActionResult
