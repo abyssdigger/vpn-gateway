@@ -121,7 +121,7 @@ class PayloadProfileRequest:
     direction: PayloadDirection
     destinations: tuple[IPv4Network, ...]
     ordered_paths: tuple[PayloadPath, ...]
-    confirmed_live_prefix_length: int | None = None
+    no_problem_prefix_length: int | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -136,14 +136,14 @@ class PayloadProfileRequest:
             raise ValueError(
                 f"profile {self.name!r} contains duplicate concrete paths"
             )
-        if self.confirmed_live_prefix_length is not None:
-            if type(self.confirmed_live_prefix_length) is not int:
+        if self.no_problem_prefix_length is not None:
+            if type(self.no_problem_prefix_length) is not int:
                 raise ValueError(
-                    "confirmed-live prefix length must be an integer"
+                    "no-problem prefix length must be an integer"
                 )
-            if not 0 <= self.confirmed_live_prefix_length <= len(self.ordered_paths):
+            if not 0 <= self.no_problem_prefix_length <= len(self.ordered_paths):
                 raise ValueError(
-                    "confirmed-live prefix length is out of range"
+                    "no-problem prefix length is out of range"
                 )
 
 
@@ -299,8 +299,8 @@ class PayloadRulesCalculator:
                         path.identity for path in profile.ordered_paths
                     ),
                     terminal_disposition=TerminalDisposition.DROP,
-                    confirmed_live_prefix_length=(
-                        profile.confirmed_live_prefix_length
+                    no_problem_prefix_length=(
+                        profile.no_problem_prefix_length
                     ),
                 )
             )
