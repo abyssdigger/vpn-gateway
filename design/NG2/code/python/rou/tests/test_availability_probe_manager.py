@@ -33,9 +33,16 @@ class FailOncePublisher:
         self.events.append(value)
 
 
-class RaisingPublisher:
+class RaiseOnSecondPublisher:
+    def __init__(self):
+        self.calls = 0
+        self.events = []
+
     def publish(self, value):
-        raise RuntimeError("publisher boom")
+        self.calls += 1
+        if self.calls == 2:
+            raise RuntimeError("publisher boom")
+        self.events.append(value)
 
 
 class FakeAdapter:
@@ -239,24 +246,19 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
         )
 
     def test_shutdown_cleanup_runs_even_if_quiesce_publication_raises(self):
+        publisher = RaiseOnSecondPublisher()
         manager = AvailabilityProbeManager(
             self.adapter,
-            execution_plan_publisher=FailOncePublisher(),
+            execution_plan_publisher=publisher,
         )
-        wanted = request(
-            probe("primary", self.path, "203.0.113.24")
+        manager.handle_request(
+            request(probe("primary", self.path, "203.0.113.24"))
         )
-
-        # First publication fails, retry installs the active plan.
-        with self.assertRaisesRegex(RuntimeError, "publisher boom"):
-            manager.handle_request(wanted)
-        manager.handle_request(wanted)
-
-        manager._execution_plan_publisher = RaisingPublisher()
 
         with self.assertRaisesRegex(RuntimeError, "publisher boom"):
             manager.shutdown()
 
+        self.assertEqual(publisher.calls, 2)
         self.assertIn(manager, self.adapter.cleanup_owners)
 
     def test_shutdown_quiesces_execution_and_cleans_same_owner(self):
