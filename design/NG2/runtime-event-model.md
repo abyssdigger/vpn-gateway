@@ -79,9 +79,11 @@ Runtime-derived association logical probes with Profiles может по-пре�
 не проходят цепочку `AvailabilityProbeStateInfo -> RuntimeStateManager ->
 PayloadTrafficStateRequest`.
 
-Raw current good-news/tick observations поступают в bounded input port
-`PayloadTrafficManager`, который сам владеет availability collector state для route
-priority. Поэтому EventEnvelope ordering не требуется для этой availability path.
+RuntimeStateManager отдельно проецирует structural payload intent, physical probe demand
+и probe-independent `AvailabilityPriorityConfig`. Current good-news/tick observations
+идут из ProbeExecutionAgent прямо в bounded input PayloadTrafficManager и не возвращаются
+через RuntimeStateManager. Поэтому EventEnvelope ordering не требуется для этой
+availability path.
 
 ### 2.2. InterfaceObservationAgent
 
@@ -142,18 +144,21 @@ are normative in `design/NG2/availability-collector-materializer.md`.
 декомпозиция и Machinery contracts зафиксированы в
 `design/NG2/payload-traffic-manager.md`.
 
-Его предметная область включает только правила, определяющие payload forwarding:
+Его предметная область включает правила, определяющие payload forwarding, и
+опциональный auxiliary priority modifier:
 
-- Profile routing/RPDB;
+- Profile routing;
 - payload filtering;
 - payload NAT;
 - payload forwarding safety;
-- необходимые payload-related network prerequisites.
+- current effective path order;
+- bounded availability-priority hysteresis.
 
 Он не управляет:
 
 - VPN-процессами;
-- availability probe subsystem;
+- probe target/mechanism/cadence;
+- availability ProbeRules;
 - transport publication workers;
 - Profile satisfaction.
 
@@ -311,102 +316,102 @@ Calculators.
 
 **Kind:** RequestEvent  
 **Publisher:** RuntimeStateManager  
-**Subscribers:** AvailabilityProbeManager  
-**Subject:** availability probe set  
+**Subscriber:** AvailabilityProbeManager  
 **Publication mode:** full desired snapshot
 
-Определяет полный набор logical probes, которые runtime сейчас требует поддерживать.
-
-Текущий normalized contract:
+Defines physical/logical active-probe execution demand:
 
 ```text
 probe_id
-ICMP mechanism
-concrete InterfaceIdentity
-IPv4 target
+mechanism
+InterfaceIdentity
+target
 enabled
-AvailabilityChannelPolicy
-    interval_seconds
+interval_seconds
+AvailabilityHysteresisPolicy
     failure_ticks
     recovery_good_news
 ```
 
-`enabled=false` сохраняет настроенный logical probe, но запрещает автономное probing.
-Physical ProbeRules вычисляются только из enabled probes. Поэтому disable последнего
-logical consumer закрывает соответствующий physical plane, а disable одного из нескольких
-consumers общего plane не меняет его. Logical probe config при этом сохраняется. Policy обязателен для каждого normalized logical probe; policy-less manual mode удален.
+The hysteresis values are present in normalized probe configuration so runtime can project
+the matching payload-priority channel descriptor, but the probe execution side does not
+interpret them.
 
-`ProbeRulesCalculator` дедуплицирует physical plane по
-`(mechanism, InterfaceIdentity, target)`. Timing/enable policy не является physical
-NetworkRules semantics.
+Physical ProbeRules depend only on enabled physical plane identity:
 
-Production availability policy не коррелирует reply с semantic attempt id. Valid replies
-являются colorless good-news units; logical timer firing является только pending tick
-fact. availability-problems hysteresis принадлежит PayloadTrafficManager collector и задается
-`design/NG2/availability-collector-materializer.md`.
+```text
+(mechanism, InterfaceIdentity, target)
+```
 
-Новая revision заменяет предыдущий desired set.
+Probe cadence depends on `interval_seconds`.
 
-### 8.3. Availability diagnostics
+### 8.3. AvailabilityPriorityConfig
 
-`AvailabilityProbeStateInfo` удален из executable routing-control contract.
+**Kind:** RequestEvent / latest desired auxiliary configuration  
+**Publisher:** RuntimeStateManager  
+**Subscriber:** PayloadTrafficManager  
+**Publication mode:** full desired snapshot
 
-Current routing-relevant availability state находится внутри
-`PayloadTrafficManager`. Local execution health остается отдельным
-`ProbeExecutionDiagnosticInfo`; если позже понадобится aggregate availability status,
-он должен проецироваться из текущего collector/Agent state, а не возвращать старую
-routing-control цепочку.
+Payload-facing availability config is deliberately probe-independent:
 
-### 8.4. PayloadTrafficStateRequest
+```text
+AvailabilityPriorityConfig
+    channels[]
+        channel_id
+        path
+        enabled
+        failure_ticks
+        recovery_good_news
+
+    assignments[]
+        profile_name
+        channel_ids[]
+```
+
+It contains no target, mechanism, cadence, physical generation or attempt identity.
+
+When a Profile has no enabled assigned channel, availability is inactive for that Profile
+and must not alter its structural payload intent or lower routing boundary.
+
+### 8.4. Availability diagnostics
+
+`AvailabilityProbeStateInfo` is not a routing-control Event contract.
+
+Current routing-relevant availability state is internal to PayloadTrafficManager.
+ProbeExecutionAgent may publish `ProbeExecutionDiagnosticInfo` for status/diagnostics,
+but such diagnostics do not feed route priority directly.
+
+### 8.5. PayloadTrafficStateRequest
 
 **Kind:** RequestEvent  
 **Publisher:** RuntimeStateManager  
-**Subscribers:** PayloadTrafficManager  
-**Subject:** complete payload traffic domain  
+**Subscriber:** PayloadTrafficManager  
 **Publication mode:** full desired snapshot
 
-Содержит семантическое желаемое payload traffic state:
+Contains only structural/admin payload semantics:
 
 ```text
 Profiles participating in payload
 selected/bound concrete interfaces per Profile
 configured/base path order per Profile
-availability channel assignment/policy per Profile
 Profile directions
 Profile destinations
-Device traffic-policy references
-required payload forwarding intent
+Device traffic envelopes
+Device NAT intent
 ```
 
-Не содержит технических command sequences:
+It contains no availability channel, hysteresis, current verdict, preferred-prefix hint,
+metric or Linux command sequence.
 
-```text
-ip route add/del
-ip rule add/del
-nft command sequence
-sysctl command sequence
-transaction phases
-verification phases
-```
+Configured `ordered_paths` is the administrative baseline. Availability may influence
+the Manager's internal effective order but does not rewrite this Request contract.
 
-Все это принадлежит внутренней реализации PayloadTrafficManager и его Machinery.
-
-Effective availability order и transient live-prefix boundary являются внутренним current
-state PayloadTrafficManager. Они не являются полями normalized user configuration и не
-передаются как готовая availability projection через PayloadTrafficStateRequest. Никакой
-EMPTY route/metric object в RequestEvent не существует.
-
-### 8.5. PayloadTrafficStateInfo
+### 8.6. PayloadTrafficStateInfo
 
 **Kind:** InfoEvent  
 **Publisher:** PayloadTrafficManager  
 **Subscribers:** RuntimeStateManager; diagnostics/status  
-**Subject:** payload traffic domain  
 **Publication mode:** current state snapshot
-
-Публикует системно значимое состояние payload traffic domain.
-
-Текущий payload event contract:
 
 ```text
 PayloadTrafficStateInfo
@@ -421,20 +426,13 @@ PayloadTrafficStateInfo
         observed_paths: tuple[InterfaceIdentity, ...] | UNKNOWN
 ```
 
-`PayloadRulesState` является многомерным state, а не единым READY/FAILED enum.
+`observed_paths` is the actual materialized payload routing order. It is a payload fact,
+not a probe verdict, even if optional availability priority influenced that order.
 
-`observed_paths` — факт текущей materialized routing projection для requested Profile,
-не verdict о корректности Profile. При неизвестном authoritative rules observation paths
-тоже UNKNOWN; при авторитетном отсутствии requested logical routing domain публикуется
-пустой список paths.
+Raw `NetworkRulesState`, probe counters/verdicts and Linux route/RPDB/nft details do not
+cross this InfoEvent boundary.
 
-Raw `NetworkRulesState`, Linux route/RPDB/nft details и foreign logical domains в этот
-InfoEvent не входят.
-
-Manager вправе локально fail-close при недоказанной безопасности и затем опубликовать
-фактическое состояние.
-
-### 8.6. PublicationStateRequest
+### 8.7. PublicationStateRequest
 
 **Kind:** RequestEvent  
 **Publisher:** RuntimeStateManager  
@@ -444,7 +442,7 @@ Manager вправе локально fail-close при недоказанной
 
 Определяет желаемые publication endpoints в предметных терминах.
 
-### 8.7. PublicationStateInfo
+### 8.8. PublicationStateInfo
 
 **Kind:** InfoEvent  
 **Publisher:** PublicationManager  
@@ -454,7 +452,7 @@ Manager вправе локально fail-close при недоказанной
 
 Публикует фактическое системно значимое состояние transport publication.
 
-### 8.8. ProfileStateInfo
+### 8.9. ProfileStateInfo
 
 **Kind:** InfoEvent  
 **Publisher:** RuntimeStateManager  
@@ -475,12 +473,10 @@ CurrentRuntimeSnapshot
     normalized_config
 
     interface_inventory
-    availability_probe_states
-
     payload_traffic_state
     publication_state
 
-    derived/current policy projections
+    derived/current structural policy projections
 ```
 
 Каждая projection до первой корректной публикации имеет состояние UNKNOWN.
@@ -488,7 +484,6 @@ CurrentRuntimeSnapshot
 UNKNOWN нельзя молча трактовать как:
 
 - пустой interface set;
-- probe failure;
 - успешный empty payload state;
 - успешную publication absence.
 
@@ -535,26 +530,39 @@ Binding исчезает по структурной/административ�
 
 ### 10.3. AvailabilityProbeDemandCalculator
 
-Вход:
+Input:
 
-- config;
-- selected interfaces;
-- Profile balancing requirements.
+- normalized config;
+- selected/bound concrete interfaces;
+- Profile availability configuration.
 
-Выход:
+Output:
 
-- полный desired set для `AvailabilityProbeSetRequest`.
+- full physical/logical `AvailabilityProbeSetRequest` for AvailabilityProbeManager.
 
-### 10.4. Payload traffic intent
+It owns target/mechanism/cadence projection only.
+
+### 10.4. AvailabilityPriorityConfigCalculator
+
+Input:
+
+- the same normalized logical availability configuration;
+- selected/bound concrete interfaces;
+- Profile/channel association.
+
+Output:
+
+- probe-independent `AvailabilityPriorityConfig` for PayloadTrafficManager.
+
+It projects only channel id, payload path, enable state and hysteresis thresholds.
+
+### 10.5. Payload traffic intent
 
 Structural runtime calculation produces `PayloadTrafficStateRequest` from config,
-binding and other non-availability runtime facts.
+binding and other **non-availability** runtime facts.
 
-Current availability state is not projected through a separate
-`PayloadTrafficIntentCalculator`. The executable availability-priority calculation is a
-small part of `PayloadTrafficManager`: configured/base path order plus its current
-`availability_problems` collector state produce the effective path order and
-`no_problem_prefix_length`.
+Current availability state and effective order are not projected by RuntimeStateManager.
+They belong inside PayloadTrafficManager.
 
 ## 11. Recalculation RuntimeStateManager
 
@@ -591,11 +599,15 @@ InterfaceObservationAgent
                 |
                 +-- selection
                 +-- binding
-                +-- availability probe demand
-                +-- payload traffic intent
+                +-- physical probe demand
+                +-- availability priority config
+                +-- structural payload intent
                 |
                 +-- AvailabilityProbeSetRequest
                 |       -> AvailabilityProbeManager
+                |
+                +-- AvailabilityPriorityConfig
+                |       -> PayloadTrafficManager
                 |
                 +-- PayloadTrafficStateRequest
                         -> PayloadTrafficManager
@@ -606,12 +618,15 @@ InterfaceObservationAgent
 `AvailabilityProbeManager` derives generation-bound execution demand from current READY
 ProbeRules. `ProbeExecutionAgent` executes physical sends and logical tick cadence.
 
-Producer-facing observations are aggregated directly into bounded
-PayloadTrafficManager-owned channel input:
+ProbeExecutionAgent publishes probe-independent priority-channel observations directly
+into bounded PayloadTrafficManager input:
 
 ```text
-valid current reply -> pending_good_news += 1 (saturating)
-logical timer fire  -> tick_pending = true
+AvailabilityGoodNews(current AvailabilityPriorityChannel)
+    -> pending_good_news += 1 (saturating)
+
+AvailabilityTick(current AvailabilityPriorityChannel)
+    -> tick_pending = true
 ```
 
 Producer ingress updates bounded state under a short lock. If the sole payload executor
@@ -697,56 +712,65 @@ InterfaceObservationAgent
         v
 RuntimeStateManager
         |
-        +-- AvailabilityProbeSetRequest --> AvailabilityProbeManager
-        |                                      |
-        |                               ProbeExecutionPlan
-        |                                      |
-        |                                      v
-        |                              ProbeExecutionAgent
-        |                                      |
-        |                              good news / tick
-        |                                      |
-        +-- PayloadTrafficStateRequest          v
-                |                     PayloadTrafficManager
-                |                     bounded collector input
-                +--------------------------->   |
-                                                v
-                                      synchronous route
-                                        materializer
-                                                |
-                                      PayloadTrafficStateInfo
-                                                |
-                                                v
-                                      RuntimeStateManager
+        +-- AvailabilityProbeSetRequest -------> AvailabilityProbeManager
+        |                                             |
+        |                                      ProbeExecutionPlan
+        |                                             |
+        |                                             v
+        |                                     ProbeExecutionAgent
+        |                                        |          |
+        |                                        |          +-- diagnostics
+        |                                        |
+        |                     AvailabilityGoodNews / AvailabilityTick
+        |                                        |
+        +-- AvailabilityPriorityConfig ----------+------+
+        |                                               |
+        +-- PayloadTrafficStateRequest ---------------->|
+                                                        v
+                                              PayloadTrafficManager
+                                                        |
+                                             single reconcile/materializer
+                                                        |
+                                              PayloadTrafficStateInfo
+                                                        |
+                                                        v
+                                              RuntimeStateManager
 ```
 
-The good-news/tick edge is an aggregate producer input, not a replayable Event journal.
-The collector/materializer edge is synchronous Machinery flow inside PayloadTrafficManager.
+The two payload control inputs are independent:
+
+- `PayloadTrafficStateRequest` is structural/admin intent;
+- `AvailabilityPriorityConfig` is optional auxiliary priority configuration.
+
+Good-news/tick ingress bypasses RuntimeStateManager because it is bounded current input,
+not a replayable Event journal.
 
 ## 16. Current executable state and remaining assembly
 
 Implemented:
 
-- physical ProbeRules/readiness in `AvailabilityProbeManager`;
-- physical generation stale-worker guard;
-- `ProbeExecutionPlan` with physical planes + logical channels;
-- `ProbeExecutionAgent` with bounded sends, logical ticks and diagnostics;
-- saturating good-news counters + boolean tick latches;
-- `availability_problems` hysteresis inside `PayloadTrafficManager`;
-- direct availability-priority calculation and synchronous use of its sole reconcile
-  executor;
-- no EventEnvelope dependency on the good-news/tick path.
+- ProbeRules/readiness and physical generation ownership in AvailabilityProbeManager;
+- ProbeExecutionAgent physical sends, logical ticks and local diagnostics;
+- split probe cadence vs payload hysteresis;
+- probe-independent `AvailabilityPriorityChannel`;
+- bounded good-news/tick collector inside PayloadTrafficManager;
+- structural `PayloadTrafficStateRequest` with no availability fields;
+- optional `AvailabilityPriorityConfig` input;
+- direct effective-order calculation and one serialized payload materializer;
+- no EventEnvelope dependency on availability ingress.
 
-Removed as executable availability machinery:
+Removed from the runtime control path:
 
-- logical windows;
-- `evidence_epoch`;
-- `elapsed_intervals`;
 - `AvailabilityProbeStateInfo` routing mediation;
-- `payload_traffic_intent.py`;
-- the old availability-specific `runtime_state_manager.py` slice.
+- logical windows / `evidence_epoch` / `elapsed_intervals`;
+- availability-derived fields in PayloadTrafficStateRequest;
+- probe target/mechanism/cadence from PayloadTrafficManager.
 
-Remaining runtime work is assembly: structural config/request calculation, fanout of the
-current probe/assignment configuration to the two owning Managers, connection of
-`ProbeExecutionAgent` good-news/tick outputs to `PayloadTrafficManager`, and status
-projection of local probe diagnostics.
+Remaining work is runtime assembly:
+
+1. implement/finalize the two pure config projections:
+   `AvailabilityProbeSetRequest` and `AvailabilityPriorityConfig`;
+2. fan structural `PayloadTrafficStateRequest` independently;
+3. wire Agent good-news/tick publishers directly to PayloadTrafficManager;
+4. project probe execution diagnostics into status;
+5. schedule ordinary audit/retry loops.
