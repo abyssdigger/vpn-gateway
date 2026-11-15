@@ -123,7 +123,29 @@ invalidates current diagnostics with `INACTIVE`.
 
 Diagnostic state never directly changes route priority.
 
-## 7. Shutdown
+## 7. Process-local publication failures
+
+The Agent treats publisher exceptions as failures of an adjacent process-local consumer,
+not as probe verdicts.
+
+Rules:
+
+- a failing `AvailabilityTick` callback is logged and does not prevent due physical sends;
+- one failing `AvailabilityGoodNews` callback does not block fanout to other current
+  logical consumers of the same physical plane;
+- READY/ERROR diagnostic publication failure is logged and does not suppress good news;
+- a failed READY/ERROR publication is removed from duplicate-suppression state so the same
+  diagnostic may be retried when observed again;
+- failed INACTIVE diagnostic publication is logged but is not persisted in a reliable
+  delivery queue.
+
+No callback failure creates availability state, retry epochs or an EventEnvelope backlog.
+
+Known callback failures are isolated at their exact publication boundary. Unexpected
+internal Agent exceptions are **not** swallowed by a broad scheduler-loop catch; they
+remain visible as implementation failures.
+
+## 8. Shutdown
 
 `stop()`:
 
@@ -135,7 +157,7 @@ Diagnostic state never directly changes route priority.
 Already-running bounded workers may complete, but stale generation/plan checks prevent
 their results from becoming current good news.
 
-## 8. Removed machinery
+## 9. Removed machinery
 
 The Agent no longer has:
 
