@@ -321,7 +321,7 @@ def compile_linux_routing_desired(
             table_id = table_by_domain[domain_ref]
 
             for destination in domain.destinations:
-                prefix_length = domain.no_problem_prefix_length
+                prefix_length = domain.preferred_prefix_length
                 slots = (
                     tuple(domain.ordered_paths)
                     if prefix_length is None
