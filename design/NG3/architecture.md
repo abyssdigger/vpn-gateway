@@ -317,6 +317,25 @@ managed network domain                               |
 The event-delivery mechanism is intentionally left abstract. NG3 requires the semantic edge,
 not a persistent bus, journal or replay system.
 
+The externally provisioned VPN-channel integration adds one narrow Machinery boundary:
+
+```text
+logical VPN path intent
+        |
+        v
++-----------------------+
+| VPNPathAdapter        |
+|       Adapter         |
++-----------------------+
+        |
+        v
+observed concrete endpoint
+inside managed network domain
+```
+
+The Adapter resolves and verifies a binding; it does not provision or configure the VPN
+session.
+
 ## 3.1. External VPN-channel boundary
 
 **Implements:**
@@ -344,6 +363,80 @@ an externally provisioned channel:
 The exact representation of that contract is intentionally open. A Linux interface move,
 process placement, interface name, protocol-specific handle or another mechanism must not be
 selected until the supported deployment requirements make that choice necessary.
+
+## 3.2. Logical VPN path binding
+
+**Implements:**
+- `VPNG-R1.R3.R1`
+- `VPNG-R1.R3.R2`
+- `VPNG-R1.R3.R3`
+- `VPNG-R4.R6.R1.R4`
+- `VPNG-R7.R3.R1`
+- `VPNG-R7.R3.R2`
+
+The architecture separates:
+
+```text
+logical path identity
+!=
+concrete current data-plane endpoint
+```
+
+The product-facing path identity is stable for the configuration lifecycle. Runtime endpoint
+identity may change when the administrator recreates/replaces the externally provisioned VPN
+channel.
+
+The normalized internal contract therefore contains a logical path identity plus enough
+binding intent to locate the expected concrete endpoint. The exact user-facing syntax that
+produces this normalized contract is intentionally not defined here.
+
+A concrete endpoint becomes the current endpoint for a logical path only after the binding
+has been observed and verified.
+
+### VPNPathAdapter
+
+**Component type:** Adapter
+
+**Implements:**
+- `VPNG-R1.R3.R2`
+- `VPNG-R1.R3.R3`
+- `VPNG-R4.R6.R1.R4`
+- `VPNG-R7.R3`
+- `VPNG-R7.R5`
+
+The Adapter is the boundary between logical VPN-path semantics and the externally
+provisioned concrete VPN endpoint.
+
+Conceptual contract:
+
+```text
+observe_binding(logical_path_id, normalized_binding_intent)
+    -> matched current endpoint
+     | absent
+     | ambiguous
+     | wrong managed domain
+     | structurally unusable
+```
+
+A successful result must prove at least:
+
+- the endpoint is inside the managed network domain;
+- the endpoint matches the normalized binding intent for the logical path;
+- exactly one current endpoint is selected;
+- a previously superseded endpoint is not returned as current.
+
+The Adapter does **not**:
+
+- create the VPN session;
+- configure protocol credentials;
+- choose payload eligibility;
+- decide path preference;
+- decide availability health;
+- invent the user configuration syntax.
+
+The exact endpoint selector carried by `normalized_binding_intent` remains intentionally
+open until `VPNG-R1.R2` is decomposed. This keeps runtime identity semantics defined while
+leaving the external declarative interface unresolved.
 
 # 4. PayloadTrafficManager
 
