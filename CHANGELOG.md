@@ -13,13 +13,17 @@ contract:
   is local diagnostic state and never an immediate routing verdict;
 - delayed observation windows are batched with `elapsed_intervals` and applied in O(1);
   missed physical sends are not replayed as a catch-up burst;
+- logical probes carry an opaque Manager-owned `evidence_epoch`; threshold-only policy
+  changes restart their window phase, and stale already-emitted boundaries are rejected
+  even when the physical READY generation is unchanged;
 - good-news and window-boundary publications are source-serialized;
 - local execution diagnostics are generation-scoped READY/ERROR/INACTIVE projections and
   stale worker completions cannot overwrite invalidation;
 - rootless regression coverage now spans Manager plan publication, Agent scheduling,
   diagnostic lifecycle and the execution -> evidence round trip;
 - the Linux mechanism remains the already target-validated capability-free
-  `LinuxIcmpProbeDriver`; no new raw/ping-socket kernel behavior is claimed.
+  `LinuxIcmpProbeDriver`; its technical timeout is an explicit required runtime value,
+  and no new raw/ping-socket kernel behavior is claimed.
 
 The remaining ordering gate is EventEnvelope epoch/revision delivery plus daemon/runtime
 assembly of the real event transport.
