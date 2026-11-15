@@ -85,7 +85,7 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
         self.assertEqual(len(self.execution.events), 1)
         plan = self.execution.events[0]
         self.assertEqual(plan.generation, self.manager.observation_generation)
-        self.assertEqual(plan.channels[0].probe_id, "primary")
+        self.assertEqual(plan.channels[0].priority.channel_id, "primary")
 
     def test_equivalent_request_preserves_generation_and_does_not_republish(self):
         wanted = request(probe("primary", self.path, "203.0.113.24"))
@@ -174,7 +174,7 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
         self.assertEqual(len(self.adapter.apply_owners), apply_count)
         self.assertEqual(self.manager.observation_generation, generation)
         self.assertEqual(
-            [item.probe_id for item in self.execution.events[-1].channels],
+            [item.priority.channel_id for item in self.execution.events[-1].channels],
             ["first", "second"],
         )
 
