@@ -46,7 +46,26 @@ The Manager records a plan as published only after the publisher returns success
 Therefore a failed publication can be retried by an equivalent later request/audit without
 creating a new physical generation merely for delivery retry.
 
-## F4 — two unexpected owner exceptions lost the first diagnostic
+## F4 — failed quiesce could not be retried after generation clear
+
+**Disposition:** accepted and fixed.
+
+The first shutdown hardening guaranteed probe-rule cleanup after quiesce publication
+failure, but generation invalidation cleared `_active_generation` before the failed
+publisher call. A later `shutdown()` therefore saw no generation to invalidate and did
+not retry `None`.
+
+Generation invalidation now also checks whether the last successfully published execution
+plan is still non-None. That unresolved published-plan state is sufficient to retry
+quiesce.
+
+A public regression proves:
+
+1. active plan publication succeeds;
+2. first shutdown fails while publishing `None`, but cleanup runs;
+3. second shutdown publishes `None` successfully and cleans again.
+
+## F5 — two unexpected owner exceptions lost the first diagnostic
 
 **Disposition:** accepted and fixed.
 
@@ -63,7 +82,7 @@ If only one owner throws, that original exception is raised directly.
 Expected `ActionResult(False, diagnostic)` remains an ordinary result and is not wrapped
 as an exception.
 
-## F5 — no generic reliable-delivery framework
+## F6 — no generic reliable-delivery framework
 
 **Disposition:** rejected as unnecessary complexity.
 
