@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from threading import Condition, Lock, Thread
+from math import isfinite
+from threading import Condition, Lock, Thread, current_thread
 import time
 from typing import Callable, Protocol
 
+from .availability_probe_state import ProbeObservationGeneration
 from .linux_probe_driver import LinuxIcmpProbeDriver
 from .probe_attempt import ProbeAttemptOutcome
 from .probe_transport import (
@@ -96,14 +98,14 @@ class ProbeExecutionHealth(str, Enum):
 
 @dataclass(frozen=True)
 class ProbeExecutionDiagnosticInfo:
-    generation_sequence: int
+    generation: ProbeObservationGeneration
     plane: PhysicalProbePlane
     health: ProbeExecutionHealth
     diagnostic: str | None = None
 
     def __post_init__(self) -> None:
-        if type(self.generation_sequence) is not int or self.generation_sequence <= 0:
-            raise ValueError("diagnostic generation sequence must be positive")
+        if not isinstance(self.generation, ProbeObservationGeneration):
+            raise ValueError("diagnostic requires ProbeObservationGeneration")
         if not isinstance(self.plane, PhysicalProbePlane):
             raise ValueError("diagnostic requires PhysicalProbePlane")
         if not isinstance(self.health, ProbeExecutionHealth):
@@ -148,8 +150,12 @@ class ProbeExecutionSchedule:
         plan: ProbeExecutionPlan | None,
         now: float,
     ) -> None:
-        if not isinstance(now, (int, float)):
-            raise ValueError("schedule time must be numeric")
+        if (
+            isinstance(now, bool)
+            or not isinstance(now, (int, float))
+            or not isfinite(float(now))
+        ):
+            raise ValueError("schedule time must be finite numeric")
         now = float(now)
 
         previous = self._plan
@@ -222,6 +228,12 @@ class ProbeExecutionSchedule:
         plan = self._plan
         if plan is None:
             return (), ()
+        if (
+            isinstance(now, bool)
+            or not isinstance(now, (int, float))
+            or not isfinite(float(now))
+        ):
+            raise ValueError("schedule time must be finite numeric")
         now = float(now)
 
         boundaries: list[ProbeWindowBoundaryInfo] = []
@@ -269,9 +281,9 @@ class LinuxProbeExecutionAgent:
     """Long-lived Linux active-probe execution Agent.
 
     It owns cadence and process-launch lifecycle, but no availability policy. Physical
-    sends use the already-proven LinuxIcmpProbeDriver asynchronously. Only successful
-    replies become good-news. NO_REPLY is intentionally discarded as transport absence;
-    local ERROR becomes diagnostic state only.
+    sends use a ProbeSendDriver asynchronously. The compatibility Adapter may reuse the
+    already-proven LinuxIcmpProbeDriver without exposing its attempt result contract.
+    Only successful replies become good-news; local failures are diagnostics only.
     """
 
     def __init__(
@@ -305,7 +317,7 @@ class LinuxProbeExecutionAgent:
         self._event_publication_lock = Lock()
         self._diagnostic_lock = Lock()
         self._latest_diagnostic: dict[
-            tuple[int, PhysicalProbePlane],
+            tuple[ProbeObservationGeneration, PhysicalProbePlane],
             ProbeExecutionDiagnosticInfo,
         ] = {}
 
@@ -339,7 +351,7 @@ class LinuxProbeExecutionAgent:
             self._discard_stale_diagnostics_locked(None)
             thread = self._thread
             self._condition.notify_all()
-        if thread is not None:
+        if thread is not None and thread is not current_thread():
             thread.join()
         with self._condition:
             self._thread = None
@@ -441,7 +453,7 @@ class LinuxProbeExecutionAgent:
     ) -> None:
         self._publish_diagnostic(
             ProbeExecutionDiagnosticInfo(
-                plan.generation.sequence,
+                plan.generation,
                 plane,
                 ProbeExecutionHealth.READY,
             )
@@ -455,7 +467,7 @@ class LinuxProbeExecutionAgent:
     ) -> None:
         self._publish_diagnostic(
             ProbeExecutionDiagnosticInfo(
-                plan.generation.sequence,
+                plan.generation,
                 plane,
                 ProbeExecutionHealth.ERROR,
                 diagnostic,
@@ -466,7 +478,7 @@ class LinuxProbeExecutionAgent:
         self,
         info: ProbeExecutionDiagnosticInfo,
     ) -> None:
-        key = (info.generation_sequence, info.plane)
+        key = (info.generation, info.plane)
         with self._diagnostic_lock:
             if self._latest_diagnostic.get(key) == info:
                 return
@@ -483,7 +495,7 @@ class LinuxProbeExecutionAgent:
                 self._latest_diagnostic.clear()
                 return
             live = {
-                (plan.generation.sequence, plane)
+                (plan.generation, plane)
                 for plane in plan.planes
             }
             for key in tuple(self._latest_diagnostic):
