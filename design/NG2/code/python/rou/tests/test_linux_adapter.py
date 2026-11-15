@@ -1,7 +1,7 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
-from rou.availability_collector import AvailabilityChannelPolicy
+from rou.availability_collector import AvailabilityHysteresisPolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_adapter import LinuxNetworkRulesAdapter
 from rou.linux_driver import LinuxDriverResult, LinuxNetworkVerification
@@ -462,7 +462,8 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
                         "probe",
                         path,
                         IPv4Address("203.0.113.24"),
-                        policy=AvailabilityChannelPolicy(10, 3, 1),
+                        interval_seconds=10,
+                        hysteresis=AvailabilityHysteresisPolicy(3, 1),
                     ),
                 )
             )
@@ -496,7 +497,8 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
                         "probe",
                         path,
                         IPv4Address("203.0.113.24"),
-                        policy=AvailabilityChannelPolicy(10, 3, 1),
+                        interval_seconds=10,
+                        hysteresis=AvailabilityHysteresisPolicy(3, 1),
                     ),
                 )
             )
