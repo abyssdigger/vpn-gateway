@@ -325,6 +325,46 @@ class LinuxProbeExecutionAgentTests(unittest.TestCase):
         )
         self.assertIn("Driver raised", self.diagnostic.events[0].diagnostic)
 
+    def test_plan_removal_invalidates_persistent_diagnostic_state(self):
+        self.driver.outcome = ProbeAttemptOutcome.NO_REPLY
+        self.agent.update_plan(plan())
+        self.agent.process_due(100.0)
+        self.wait_for_events(self.diagnostic, 1)
+
+        self.agent.update_plan(None)
+
+        self.assertEqual(len(self.diagnostic.events), 2)
+        self.assertIs(
+            self.diagnostic.events[0].health,
+            ProbeExecutionHealth.READY,
+        )
+        self.assertIs(
+            self.diagnostic.events[1].health,
+            ProbeExecutionHealth.INACTIVE,
+        )
+        self.assertEqual(
+            self.diagnostic.events[1].generation,
+            self.diagnostic.events[0].generation,
+        )
+
+    def test_generation_change_invalidates_old_diagnostic_before_new_generation(self):
+        self.driver.outcome = ProbeAttemptOutcome.ERROR
+        self.agent.update_plan(plan(1))
+        self.agent.process_due(100.0)
+        self.wait_for_events(self.diagnostic, 1)
+
+        self.agent.update_plan(plan(2))
+
+        self.assertEqual(len(self.diagnostic.events), 2)
+        self.assertIs(
+            self.diagnostic.events[-1].health,
+            ProbeExecutionHealth.INACTIVE,
+        )
+        self.assertEqual(
+            self.diagnostic.events[-1].generation.sequence,
+            1,
+        )
+
     def test_old_generation_worker_result_is_dropped_after_plan_change(self):
         self.driver.outcome = ProbeAttemptOutcome.REPLY
         self.driver.block = True
