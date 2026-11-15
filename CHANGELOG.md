@@ -1,3 +1,34 @@
+## 2026-11-15 — NG2 availability simplification
+
+Superseded the observation-window/evidence pipeline with the final optional
+`availability_problems` priority modifier:
+
+- availability starts with no problems; disabled probing also means no availability
+  problems by definition, so configured path ranking is authoritative at startup;
+- per-channel input is only a saturating good-news counter plus a boolean pending tick;
+  delayed replies may complete recovery immediately and undrained timer expirations
+  collapse to one tick;
+- AvailabilityProbeManager now owns only ProbeRules/readiness, the physical stale-worker
+  generation and execution-plan publication;
+- ProbeExecutionAgent now owns only bounded physical sends, logical tick cadence and local
+  diagnostics; logical windows, evidence epochs and elapsed-window replay are gone;
+- PayloadTrafficManager now owns availability hysteresis and route-priority calculation,
+  using the same sole serialized route materializer as all other payload route changes;
+- AvailabilityProbeStateInfo routing mediation, PayloadTrafficIntentCalculator and the old
+  availability-specific RuntimeStateManager executable slice were removed;
+- path-level availability problems require all enabled assigned probes for that path to
+  report problems; one non-problem probe is enough to keep the path in the normal class;
+- `confirmed_live_prefix_length` was renamed to `no_problem_prefix_length`;
+- identical effective payload requests no longer re-materialize; drift remains the
+  responsibility of `audit()`;
+- final code-bearing CI run 579 passed 278 rootless tests and the complete privileged Linux
+  integration matrix.
+
+Relative to the preceding availability collector checkpoint, executable production Python
+is net 639 lines smaller and tests are net 1921 lines smaller.
+
+---
+
 ## 2026-11-15 — NG2 Linux probe execution Agent
 
 Implemented the first production execution Engine for the non-attempt availability
