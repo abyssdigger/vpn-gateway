@@ -7,11 +7,9 @@ from typing import Callable, Generic, TypeVar
 import time
 
 from .availability_collector import (
-    AvailabilityGoodNews,
     AvailabilityHysteresisPolicy,
     AvailabilityPriorityChannel,
     AvailabilityPriorityConfig,
-    AvailabilityTick,
     ProfileAvailabilityAssignment,
 )
 from .availability_probe_manager import AvailabilityProbeManager
@@ -32,7 +30,6 @@ from .probe_rules import (
     AvailabilityProbeSetRequest,
     ProbeMechanism,
 )
-from .probe_transport import ProbeExecutionPlan
 
 
 @dataclass(frozen=True)
