@@ -145,7 +145,23 @@ Known callback failures are isolated at their exact publication boundary. Unexpe
 internal Agent exceptions are **not** swallowed by a broad scheduler-loop catch; they
 remain visible as implementation failures.
 
-## 8. Shutdown
+## 8. Scheduler thread lifecycle
+
+`start()` is idempotent while the scheduler thread is running.
+
+If construction/start of the scheduler thread raises synchronously, the Agent restores
+its non-running bookkeeping before re-raising. A later ordinary `start()` may retry.
+
+If the scheduler thread exits because of an unexpected internal exception, that exception
+remains visible through normal Python thread exception reporting. The thread's `finally`
+path clears the current running/thread identity, so a later explicit `start()` may create
+a replacement scheduler thread.
+
+This bookkeeping recovery does not convert unexpected internal exceptions into local
+probe diagnostics and does not add automatic restart policy; outer runtime/service policy
+may decide whether a restart is appropriate.
+
+## 9. Shutdown
 
 `stop()`:
 
@@ -157,7 +173,7 @@ remain visible as implementation failures.
 Already-running bounded workers may complete, but stale generation/plan checks prevent
 their results from becoming current good news.
 
-## 9. Removed machinery
+## 10. Removed machinery
 
 The Agent no longer has:
 
