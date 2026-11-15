@@ -342,7 +342,7 @@ terminal metric. Свободный metric не является persistent об
 - при all-preferred отдельного steady-state gap нет, а следующий metric после последнего path
   просто свободен для первого move;
 - сам gap нигде не хранится;
-- transient `confirmed_live_prefix_length` проходит через текущий routing intent и
+- transient `preferred_prefix_length` проходит через текущий routing intent и
   позволяет Linux projection однозначно вывести незанятый metric. Это не user config и не
   persistent allocation state.
 
