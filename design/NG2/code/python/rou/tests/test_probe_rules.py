@@ -1,7 +1,7 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
-from rou.availability_collector import AvailabilityChannelPolicy
+from rou.availability_collector import AvailabilityHysteresisPolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     EndpointKind,
@@ -17,7 +17,7 @@ from rou.probe_rules import (
 
 
 
-TEST_POLICY = AvailabilityChannelPolicy(interval_seconds=10, failure_ticks=3, recovery_good_news=1)
+TEST_HYSTERESIS = AvailabilityHysteresisPolicy(failure_ticks=3, recovery_good_news=1)
 
 
 def probe_request(
@@ -26,14 +26,16 @@ def probe_request(
     target,
     *,
     enabled=True,
-    policy=TEST_POLICY,
+    interval=10,
+    hysteresis=TEST_HYSTERESIS,
 ):
     return AvailabilityProbeRequest(
         probe_id,
         path,
         target,
         enabled=enabled,
-        policy=policy,
+        interval_seconds=interval,
+        hysteresis=hysteresis,
     )
 
 
@@ -193,7 +195,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
-                    policy=AvailabilityChannelPolicy(interval_seconds=10, failure_ticks=3, recovery_good_news=1),
+                    interval=10, hysteresis=AvailabilityHysteresisPolicy(3, 1),
                 ),
             )
         )
@@ -203,7 +205,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
-                    policy=AvailabilityChannelPolicy(interval_seconds=30, failure_ticks=2, recovery_good_news=1),
+                    interval=30, hysteresis=AvailabilityHysteresisPolicy(2, 1),
                 ),
             )
         )
