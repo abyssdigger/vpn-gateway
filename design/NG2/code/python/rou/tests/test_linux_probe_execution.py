@@ -435,16 +435,34 @@ class LinuxProbeExecutionAgentTests(unittest.TestCase):
         # so observing it proves the first worker advanced past that callback.
         self.wait_for(self.good.events, 1)
 
-        # Allow the worker's finally block to release the in-flight slot before
-        # scheduling the next physical send.
+        # Advance through successive due times. If the first retry races the
+        # worker's finally block, that due send may report an overrun; a later
+        # due time must still launch a fresh physical send.
         deadline = time.monotonic() + 2
+        now = 110.0
         while len(self.driver.calls) < 2 and time.monotonic() < deadline:
-            agent.process_due(110.0)
+            agent.process_due(now)
+            now += 10.0
             time.sleep(0.005)
 
         self.assertGreaterEqual(len(self.driver.calls), 2)
-        self.wait_for(diag.events, 1)
-        self.assertIs(diag.events[0].health, ProbeExecutionHealth.READY)
+
+        deadline = time.monotonic() + 2
+        while (
+            not any(
+                item.health is ProbeExecutionHealth.READY
+                for item in diag.events
+            )
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.005)
+
+        self.assertTrue(
+            any(
+                item.health is ProbeExecutionHealth.READY
+                for item in diag.events
+            )
+        )
 
     def test_stop_is_idempotent_and_quiesces_schedule(self):
         self.agent.update_plan(plan())
