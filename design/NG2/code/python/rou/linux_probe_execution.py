@@ -381,10 +381,7 @@ class LinuxProbeExecutionAgent:
                 if delay > 0:
                     self._condition.wait(timeout=delay)
                     continue
-            try:
-                self.process_due()
-            except Exception:
-                _LOG.exception("probe execution Agent processing failed")
+            self.process_due()
 
     def _launch_send(
         self,
