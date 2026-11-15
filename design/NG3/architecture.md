@@ -621,7 +621,57 @@ No unbounded attempt history, evidence journal or replay log is justified.
 - `VPNG-R3.R5.R2`
 - `VPNG-R7.R1.R1`
 
-The exact evidence input semantics are not finalized in this pass; see design gaps.
+The Manager consumes semantic availability evidence, not raw probe execution results.
+
+Normalized evidence:
+
+```text
+AvailabilityEvidence:
+    logical_path_id
+    observation_context
+    outcome = positive | negative | no_evidence
+```
+
+where:
+
+- `positive` is accepted evidence that the observed path property is currently usable;
+- `negative` is accepted evidence that the observed path property is currently unusable;
+- `no_evidence` means the observation attempt does not justify changing path state
+  (for example, a local execution failure that does not itself prove path failure).
+
+Only fresh evidence for the current logical path/context enters hysteresis.
+
+For each logical path the Manager keeps bounded confirmation state:
+
+```text
+availability_problem: bool
+degradation_progress: 0..degradation_threshold
+recovery_progress:    0..recovery_threshold
+```
+
+The thresholds are finite local availability-policy parameters. They are not assumed to be
+user-configurable unless a later requirement says so.
+
+Transition semantics:
+
+- while `availability_problem == false`:
+  - negative evidence advances bounded degradation progress;
+  - positive evidence clears degradation progress;
+  - `no_evidence` does not fabricate path evidence;
+  - reaching the degradation threshold establishes the problem;
+- while `availability_problem == true`:
+  - positive evidence advances bounded recovery progress;
+  - negative evidence clears recovery progress;
+  - `no_evidence` does not fabricate recovery;
+  - reaching the recovery threshold clears the problem.
+
+On either state transition, obsolete progress is reset.
+
+No observation history, time window, replay log or unbounded attempt count is retained.
+
+This closes adaptation semantics independently from the still-open question of which concrete
+observation mechanism is adequate to produce `positive/negative` evidence for supported
+failure scenarios.
 
 ## 4.4. Availability affects priority only
 
@@ -889,10 +939,14 @@ The architecture currently needs only semantic event edges required by Engine ro
 The event must identify the logical path and carry only the bounded observation information
 needed by the Manager.
 
-The exact positive/negative evidence shape is unresolved. Local inability to execute the
-observation mechanism is not automatically treated as path failure: by
-`VPNG-R3.R6.R3`, evidence used for path adaptation must actually observe a relevant path
-property.
+The event carries normalized `AvailabilityEvidence`.
+
+Local inability to execute the observation mechanism produces `no_evidence` plus diagnostic
+state unless the observation contract proves that the failure itself demonstrates path
+unusability.
+
+By `VPNG-R3.R6.R3`, only evidence that observes a relevant path property may become
+`positive` or `negative`.
 
 No requirement currently justifies:
 
@@ -1166,21 +1220,18 @@ Affected requirements:
 - `VPNG-R3.R5`
 - `VPNG-R3.R6`
 
-Current requirements are sufficient to reject stale/misbound evidence and to require an
-adequate observation property, but they do not yet define the full confirmation policy.
+Confirmation/hysteresis semantics and the normalized event contract are now defined.
 
-Missing requirement detail:
+The remaining open issue is narrower:
 
-- what exactly constitutes sufficient negative path evidence;
-- how delayed positive evidence interacts with an evaluation boundary;
-- whether confirmation thresholds are user-configurable product semantics or internal
-  policy.
+- which concrete observed property and mechanism are sufficient to classify a result as
+  `positive` or `negative` for the supported failure scenarios.
 
-A local observation-execution failure is currently treated as diagnostic rather than path
-evidence unless a lower requirement/evidence proves that such a failure itself demonstrates
-path unusability.
+A local observation-execution failure remains diagnostic/`no_evidence` unless the selected
+observation contract proves that such a failure itself demonstrates path unusability.
 
-This gap blocks final event contract and hysteresis algorithm.
+This gap blocks closure of `VPNG-R3.R6.R3` and therefore the R3 parent, but not the
+adaptation state machine.
 
 ## 16.3. User-visible status presentation
 
