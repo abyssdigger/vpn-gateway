@@ -24,6 +24,7 @@ from rou.payload_rules import (
     PayloadTrafficStateRequest,
 )
 from rou.payload_traffic_manager import PayloadTrafficManager
+from rou.linux_driver import LinuxDriverResult
 from rou.linux_probe_execution import (
     ProbeExecutionHealth,
     ProbeSendResult,
@@ -37,6 +38,8 @@ from rou.runtime_assembly import (
     ProbeExecutionPlanPort,
     RuntimeAvailabilityChannel,
     RuntimeAvailabilityConfig,
+    LinuxNetworkPolicyRuntimeBootstrapResult,
+    bootstrap_linux_network_policy_runtime,
     build_linux_availability_runtime,
     build_linux_network_policy_runtime,
 )
@@ -94,6 +97,16 @@ class FakeSendDriver:
 
     def execute_send(self, path, target, *, timeout_seconds):
         self.calls.append((path, target, timeout_seconds))
+        return self.result
+
+
+class FakeBootstrapBackend:
+    def __init__(self, result):
+        self.result = result
+        self.close_calls = 0
+
+    def close_forwarding_verified(self):
+        self.close_calls += 1
         return self.result
 
 
@@ -623,6 +636,56 @@ class LinuxNetworkPolicyRuntimeTests(unittest.TestCase):
                 runtime.availability.probe_manager,
             },
         )
+
+
+
+class LinuxNetworkPolicyBootstrapTests(unittest.TestCase):
+    def test_runtime_is_exposed_only_after_verified_protective_close(self):
+        backend = FakeBootstrapBackend(LinuxDriverResult(True))
+
+        result = bootstrap_linux_network_policy_runtime(
+            backend,
+            local_interface="host0",
+            payload_publisher=RecordingPublisher(),
+            probe_driver=FakeSendDriver(ProbeSendResult(False)),
+            diagnostic_publisher=RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+
+        self.assertTrue(result.success)
+        self.assertIsNotNone(result.runtime)
+        self.assertEqual(backend.close_calls, 1)
+
+    def test_failed_protective_close_exposes_no_runtime(self):
+        backend = FakeBootstrapBackend(
+            LinuxDriverResult(False, "cannot prove forwarding closed")
+        )
+
+        result = bootstrap_linux_network_policy_runtime(
+            backend,
+            local_interface="host0",
+            payload_publisher=RecordingPublisher(),
+            probe_driver=FakeSendDriver(ProbeSendResult(False)),
+            diagnostic_publisher=RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+
+        self.assertFalse(result.success)
+        self.assertIsNone(result.runtime)
+        self.assertEqual(
+            result.diagnostic,
+            "cannot prove forwarding closed",
+        )
+        self.assertEqual(backend.close_calls, 1)
+
+    def test_bootstrap_result_rejects_inconsistent_runtime_exposure(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "successful network-policy bootstrap requires runtime",
+        ):
+            LinuxNetworkPolicyRuntimeBootstrapResult(True)
 
 
 if __name__ == "__main__":
