@@ -17,8 +17,8 @@ ProbeExecutionPlan | None
 Outputs:
 
 ```text
-ProbeGoodNewsInfo
-ProbeTickInfo
+AvailabilityGoodNews
+AvailabilityTick
 ProbeExecutionDiagnosticInfo
 ```
 
@@ -53,7 +53,7 @@ Each enabled logical channel has one tick cadence equal to its configured
 A due logical tick publishes:
 
 ```text
-ProbeTickInfo(current LogicalProbeChannel)
+AvailabilityTick(current AvailabilityPriorityChannel)
 ```
 
 If execution wakes after several nominal intervals, exactly one current tick is published
@@ -87,7 +87,7 @@ A successful physical reply is fanned out to the **current** logical consumers o
 physical plane:
 
 ```text
-ProbeGoodNewsInfo(current LogicalProbeChannel)
+AvailabilityGoodNews(current AvailabilityPriorityChannel)
 ```
 
 Individual replies carry no attempt id, sequence or timestamp.
@@ -100,9 +100,9 @@ A bounded worker result is discarded unless, at completion time:
 - the physical generation matches;
 - the physical plane remains in the current plan.
 
-The logical channel descriptor carried by good-news/tick input gives
-`PayloadTrafficManager` an additional cheap guard against a callback from an obsolete
-logical definition.
+The probe-independent `AvailabilityPriorityChannel` descriptor carried by good-news/tick
+input gives PayloadTrafficManager a cheap guard against a callback from an obsolete
+logical definition. Target, mechanism and cadence do not cross that boundary.
 
 No logical epoch is required.
 
