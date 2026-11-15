@@ -52,7 +52,10 @@ traffic must not acquire VPN forwarding merely because those paths exist.
 
 Relevant requirements:
 - `VPNG-R1.R1`
-- `VPNG-R2.R1-R4`
+- `VPNG-R2.R1`
+- `VPNG-R2.R2`
+- `VPNG-R2.R3`
+- `VPNG-R2.R4`
 - `VPNG-R4.R1`
 
 ## S2 — Preferred path degrades
@@ -62,7 +65,11 @@ least one allowed alternative remains usable. New traffic should prefer the usab
 alternative, without changing path membership.
 
 Relevant requirements:
-- `VPNG-R3.R1-R5`
+- `VPNG-R3.R1`
+- `VPNG-R3.R2`
+- `VPNG-R3.R3`
+- `VPNG-R3.R4`
+- `VPNG-R3.R5`
 - `VPNG-R3.R7`
 
 ## S3 — Local presence is not sufficient evidence
@@ -95,8 +102,12 @@ decision must be based on freshly observed authoritative state and must not sile
 unallowed forwarding.
 
 Relevant requirements:
-- `VPNG-R4.R2-R5`
-- `VPNG-R5.R2-R3`
+- `VPNG-R4.R2`
+- `VPNG-R4.R3`
+- `VPNG-R4.R4`
+- `VPNG-R4.R5`
+- `VPNG-R5.R2`
+- `VPNG-R5.R3`
 
 ## S6 — One cleanup area fails
 
@@ -104,10 +115,11 @@ Shutdown owns several independent resources. Failure to clean one must not preve
 to clean the others, and the failures must remain visible.
 
 Relevant requirements:
-- `VPNG-R5.R4-R5`
+- `VPNG-R5.R4`
+- `VPNG-R5.R5`
 - `VPNG-R6.R3`
 
-# 4. Architecture summary
+# 3. Architecture summary
 
 ```text
 normalized payload intent
@@ -566,16 +578,16 @@ left open until deeper lifecycle requirements demand one.
 | --- | --- |
 | `VPNG-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
 | `VPNG-R1.R2` declarative operation | **not yet architected**: configuration boundary missing |
-| `VPNG-R2.*` payload policy | semantic ownership represented; normalized config schema missing |
-| `VPNG-R3.R1-R5,R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
-| `VPNG-R3.R6.*` path-usability evidence | active observation selected via AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
-| `VPNG-R4.*` safety | lower boundary/executor responsibilities represented; concrete kernel strategy absent |
-| `VPNG-R5.R1,R4,R5` lifecycle | postconditions recorded; orchestration component intentionally absent |
-| `VPNG-R5.R2,R3` recovery | represented locally by Manager/Adapter/Executor contracts |
+| `VPNG-R2` subtree — payload policy | semantic ownership represented; normalized config schema missing |
+| `VPNG-R3.R1`–`VPNG-R3.R5`, `VPNG-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
+| `VPNG-R3.R6` subtree — path-usability evidence | active observation selected via AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
+| `VPNG-R4` subtree — safety | lower boundary/executor responsibilities represented; concrete kernel strategy absent |
+| `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5` lifecycle | postconditions recorded; orchestration component intentionally absent |
+| `VPNG-R5.R2`, `VPNG-R5.R3` recovery | represented locally by Manager/Adapter/Executor contracts |
 | `VPNG-R6.R1` configured intent visibility | **not yet architected** |
-| `VPNG-R6.R2,R4` payload effective state | component-level projection represented |
+| `VPNG-R6.R2`, `VPNG-R6.R4` payload effective state | component-level projection represented |
 | `VPNG-R6.R3` system failure visibility | partial diagnostics only; **final aggregation missing** |
-| `VPNG-R7.*` implementation quality | applied as cross-cutting architecture rules |
+| `VPNG-R7` subtree — implementation quality | applied as cross-cutting architecture rules |
 
 # 14. Deliberately omitted machinery
 
@@ -603,7 +615,11 @@ never become necessary.
 
 Affected requirements:
 - `VPNG-R1.R2`
-- `VPNG-R2.R1-R5`
+- `VPNG-R2.R1`
+- `VPNG-R2.R2`
+- `VPNG-R2.R3`
+- `VPNG-R2.R4`
+- `VPNG-R2.R5`
 - `VPNG-R6.R1`
 
 Missing requirement detail:
@@ -619,7 +635,10 @@ Until this is refined, NG3 must not invent a universal normalized config schema.
 ## 15.2. Availability evidence semantics
 
 Affected requirements:
-- `VPNG-R3.R3-R6`
+- `VPNG-R3.R3`
+- `VPNG-R3.R4`
+- `VPNG-R3.R5`
+- `VPNG-R3.R6`
 
 Current requirements are sufficient to reject stale/misbound evidence and to require an
 adequate observation property, but they do not yet define the full confirmation policy.
@@ -640,7 +659,10 @@ This gap blocks final event contract and hysteresis algorithm.
 ## 15.3. User-visible status aggregation
 
 Affected requirements:
-- `VPNG-R6.R1-R4`
+- `VPNG-R6.R1`
+- `VPNG-R6.R2`
+- `VPNG-R6.R3`
+- `VPNG-R6.R4`
 
 Current components can expose local current state, but the requirements do not yet define
 the final user-facing status model, aggregation ownership or presentation boundary.
@@ -651,7 +673,11 @@ concrete.
 ## 15.4. Complete lifecycle ownership
 
 Affected requirements:
-- `VPNG-R5.R1-R5`
+- `VPNG-R5.R1`
+- `VPNG-R5.R2`
+- `VPNG-R5.R3`
+- `VPNG-R5.R4`
+- `VPNG-R5.R5`
 
 The required postconditions are clear enough to constrain components but not yet sufficient
 to prove that a separate long-lived lifecycle component is necessary.
