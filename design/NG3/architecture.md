@@ -249,7 +249,8 @@ Keeping them together therefore follows both the product semantics and
 ## 4.3. Availability state inside the Manager
 
 For each availability-enabled logical path, the Manager may keep only the bounded semantic
-state necessary to implement `VPNG-R3.R3`, `VPNG-R3.R4` and `VPNG-R3.R5`:
+state necessary to implement `VPNG-R3.R3`, `VPNG-R3.R4`, `VPNG-R3.R5.R1` and
+`VPNG-R3.R5.R2`:
 
 - whether an availability problem is currently established;
 - bounded progress toward establishing a problem;
@@ -261,6 +262,8 @@ No unbounded attempt history, evidence journal or replay log is justified.
 - `VPNG-R3.R3`
 - `VPNG-R3.R4`
 - `VPNG-R3.R5`
+- `VPNG-R3.R5.R1`
+- `VPNG-R3.R5.R2`
 - `VPNG-R7.R1.R1`
 
 The exact evidence input semantics are not finalized in this pass; see design gaps.
