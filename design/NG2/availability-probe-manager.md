@@ -276,12 +276,18 @@ ProbeExecutionPlan
     logical windows:
         probe_id
         observation interval
+        opaque evidence_epoch
 ```
 
 Several logical probes that share one physical plane share transport sends. The physical
 send interval is the smallest interval requested by its enabled consumers. Logical window
 cadence remains per `probe_id`, so consumers with different `failure_intervals` or
 intervals do not share hysteresis state.
+
+`evidence_epoch` is a Manager-owned opaque reset token, not execution policy. It changes
+when one logical probe definition changes even if its interval remains the same. This lets
+the Agent restart that probe's observation-window phase after, for example, a
+`failure_intervals`-only change without exposing the threshold itself below the Manager.
 
 Execution may report only two production facts back across this boundary:
 
