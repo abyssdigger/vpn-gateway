@@ -144,7 +144,7 @@ def spec(
 
 def priority_spec(
     ordered_paths: tuple[InterfaceIdentity, ...],
-    no_problem_prefix_length: int | None = None,
+    preferred_prefix_length: int | None = None,
 ) -> NetworkRulesSpec:
     local = NetworkEndpoint.local_network()
     destination = TrafficPredicate.match(
@@ -177,7 +177,7 @@ def priority_spec(
                 (DEST3,),
                 ordered_paths,
                 TerminalDisposition.DROP,
-                no_problem_prefix_length=no_problem_prefix_length,
+                preferred_prefix_length=preferred_prefix_length,
             ),
         ),
         dispatch_rules=(
@@ -496,7 +496,7 @@ def main() -> int:
         # boundary without rebuilding forwarding or nft policy.
         demoted = priority_spec(
             (old, alternate),
-            no_problem_prefix_length=1,
+            preferred_prefix_length=1,
         )
         host_runner.calls.clear()
         demoted_result = adapter.apply(priority_owner, demoted)
@@ -543,7 +543,7 @@ def main() -> int:
 
         recovered = priority_spec(
             (alternate, old),
-            no_problem_prefix_length=2,
+            preferred_prefix_length=2,
         )
         host_runner.calls.clear()
         recovered_result = adapter.apply(priority_owner, recovered)
