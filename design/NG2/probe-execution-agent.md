@@ -186,7 +186,10 @@ generation
 elapsed_intervals >= 1
 ```
 
-`AvailabilityWindowState.close_intervals()` applies the same integral semantics in O(1).
+`AvailabilityProbeManager` first verifies both physical `generation` and logical
+`evidence_epoch`, then `AvailabilityWindowState.close_intervals()` applies the same
+integral semantics in O(1). A boundary already emitted for an older logical definition is
+therefore stale even when the physical READY generation did not change.
 
 If good news existed in the first elapsed window and several further windows elapsed
 during suspension, the first boundary consumes that good news and the remaining windows
@@ -223,8 +226,9 @@ worker cannot publish `READY` or `ERROR` after the corresponding `INACTIVE`.
 - does not accept late worker results as current evidence.
 
 Already running bounded technical workers may finish after logical quiesce, but their
-results are generation/plan checked and discarded. The current Linux ping Driver has an
-explicit technical timeout, so such workers do not become unbounded background state.
+results are generation/plan checked and discarded. The Linux ping Driver receives an
+**explicit required technical timeout** from runtime assembly; there is no hidden default
+that could be mistaken for availability verdict policy.
 
 ## 11. Safety invariants
 
