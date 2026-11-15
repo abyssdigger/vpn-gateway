@@ -1,7 +1,7 @@
 import unittest
 
 from rou.availability_collector import (
-    AvailabilityChannelPolicy,
+    AvailabilityHysteresisPolicy,
     AvailabilityChannelState,
     AvailabilityPendingInput,
     calculate_availability_path_order,
@@ -17,7 +17,7 @@ D = InterfaceIdentity("d0", 13)
 
 class AvailabilityPendingInputTests(unittest.TestCase):
     def test_good_news_counter_saturates_at_recovery_requirement(self):
-        policy = AvailabilityChannelPolicy(10, 3, 3)
+        policy = AvailabilityHysteresisPolicy(3, 3)
         pending = AvailabilityPendingInput()
 
         for _ in range(20):
@@ -38,11 +38,7 @@ class AvailabilityPendingInputTests(unittest.TestCase):
 
 class AvailabilityChannelStateTests(unittest.TestCase):
     def setUp(self):
-        self.policy = AvailabilityChannelPolicy(
-            interval_seconds=10,
-            failure_ticks=3,
-            recovery_good_news=3,
-        )
+        self.policy = AvailabilityHysteresisPolicy(failure_ticks=3, recovery_good_news=3)
 
     def test_initial_state_has_no_availability_problems(self):
         state = AvailabilityChannelState()
@@ -110,7 +106,7 @@ class AvailabilityChannelStateTests(unittest.TestCase):
         self.assertEqual(state.recovery_progress, 0)
 
     def test_simultaneous_recovery_and_tick_cannot_redegrade_channel(self):
-        policy = AvailabilityChannelPolicy(10, 1, 2)
+        policy = AvailabilityHysteresisPolicy(1, 2)
         state = AvailabilityChannelState(availability_problems=True)
 
         changed = state.process(
