@@ -21,6 +21,23 @@ class RecordingPublisher:
         self.events.append(value)
 
 
+class FailOncePublisher:
+    def __init__(self):
+        self.calls = 0
+        self.events = []
+
+    def publish(self, value):
+        self.calls += 1
+        if self.calls == 1:
+            raise RuntimeError("publisher boom")
+        self.events.append(value)
+
+
+class RaisingPublisher:
+    def publish(self, value):
+        raise RuntimeError("publisher boom")
+
+
 class FakeAdapter:
     def __init__(self):
         self.apply_success = True
@@ -198,6 +215,49 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
             first_generation.sequence,
         )
         self.assertIsNone(self.execution.events[0])
+
+    def test_failed_plan_publication_is_retryable(self):
+        publisher = FailOncePublisher()
+        manager = AvailabilityProbeManager(
+            self.adapter,
+            execution_plan_publisher=publisher,
+        )
+        wanted = request(
+            probe("primary", self.path, "203.0.113.24")
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "publisher boom"):
+            manager.handle_request(wanted)
+
+        manager.handle_request(wanted)
+
+        self.assertEqual(publisher.calls, 2)
+        self.assertEqual(len(publisher.events), 1)
+        self.assertEqual(
+            publisher.events[0].generation,
+            manager.observation_generation,
+        )
+
+    def test_shutdown_cleanup_runs_even_if_quiesce_publication_raises(self):
+        manager = AvailabilityProbeManager(
+            self.adapter,
+            execution_plan_publisher=FailOncePublisher(),
+        )
+        wanted = request(
+            probe("primary", self.path, "203.0.113.24")
+        )
+
+        # First publication fails, retry installs the active plan.
+        with self.assertRaisesRegex(RuntimeError, "publisher boom"):
+            manager.handle_request(wanted)
+        manager.handle_request(wanted)
+
+        manager._execution_plan_publisher = RaisingPublisher()
+
+        with self.assertRaisesRegex(RuntimeError, "publisher boom"):
+            manager.shutdown()
+
+        self.assertIn(manager, self.adapter.cleanup_owners)
 
     def test_shutdown_quiesces_execution_and_cleans_same_owner(self):
         self.manager.handle_request(
