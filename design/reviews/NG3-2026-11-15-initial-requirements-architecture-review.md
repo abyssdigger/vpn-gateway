@@ -446,7 +446,34 @@ No omitted mechanism is currently required by an accepted NG3 requirement.
 
 The architecture therefore satisfies the intent of `VPNG-R7.R1` at this stage.
 
-# 9. Final verdict
+# 9. Traceability evidence
+
+A mechanical reference check was run against the current NG3 requirement and architecture
+documents.
+
+Result:
+
+```text
+requirement IDs in tree:             52
+architecture requirement references: 159
+unique requirement IDs referenced:   43
+missing/broken requirement IDs:        0
+```
+
+The seven component-role sections currently detected in the architecture are:
+
+- PayloadTrafficManager — Manager;
+- PayloadPolicyCalculator — Calculator;
+- AvailabilityPriorityCalculator — Calculator;
+- AvailabilityProbeAgent — Agent;
+- ActiveProbeDriver — Driver;
+- NetworkPolicyAdapter — Adapter;
+- NetworkPolicyExecutor — Executor.
+
+This check proves reference integrity only. It does not prove that every traceability claim
+is semantically correct; that is covered by the expert review above.
+
+# 10. Final verdict
 
 **Verdict: PASS for the first NG3 requirement-first architecture review unit, with explicit
 open requirement gates.**
