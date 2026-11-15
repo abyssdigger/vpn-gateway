@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — Architecture Report
 
 **Status:** partial NG3 architecture, design-cycle draft  
-**Cycle:** `ng3-design-cycle-20261115-40m`  
+**Cycle:** `ng3-design-cycle-20261115-managed-domain-contract-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
 
@@ -49,7 +49,9 @@ Those gaps remain requirements without invented architecture.
 - `VPNG-R4.R6`
 - `VPNG-R4.R6.R1`
 - `VPNG-R4.R6.R1.R1`
+- `VPNG-R4.R6.R1.R2`
 - `VPNG-R4.R6.R1.R3`
+- `VPNG-R4.R6.R1.R4`
 - `VPNG-R4.R2`
 - `VPNG-R4.R4`
 - `VPNG-R5.R1`
@@ -63,6 +65,12 @@ data plane.
 For the Linux implementation direction, the minimal current realization is a dedicated
 network namespace containing the VPN-GATE-owned virtual network environment.
 
+The explicit host/domain boundary is realized by dedicated boundary links rather than by
+using arbitrary host routes/interfaces as implicit product plumbing. For the current Linux
+architecture, a dedicated veth-style link is the minimal default for each required
+host/domain attachment because it gives one endpoint inside the managed namespace and one
+explicit peer outside it without merging the two routing domains.
+
 Inside this domain belong the network objects whose semantics are owned by VPN-GATE,
 including:
 
@@ -71,6 +79,22 @@ including:
 - managed ingress/egress links;
 - VPN data-plane adapters/endpoints used as VPN paths;
 - probe data-plane state when probing a path requires it.
+
+The managed-domain contract is:
+
+- **ownership:** mutable routing/policy state used only by VPN-GATE lives inside the managed
+  domain unless a boundary object is explicitly declared;
+- **host boundary:** host connectivity enters through named/dedicated boundary endpoints,
+  not through ambient host networking;
+- **VPN path placement:** a VPN path's data-plane endpoint used by managed forwarding is
+  present inside the managed domain;
+- **observation before use:** runtime code verifies the endpoint is present in the expected
+  domain before accepting it for managed forwarding;
+- **identity:** the exact rule that binds a configured logical VPN path to a concrete
+  endpoint remains unresolved and is intentionally delegated back to the requirement tree.
+
+This closes the architectural shape of the managed domain without inventing the still-open
+path-identity/configuration contract.
 
 The host network namespace is outside this managed domain. Interaction with the host must
 occur only through explicit boundary links/contracts.
@@ -123,12 +147,18 @@ host / external provisioning environment
 +----------------------------------+
 ```
 
-This section intentionally does **not** specify whether onboarding uses interface creation
-inside the namespace, interface movement, process placement, protocol-specific setup or
-another mechanism.
+This section intentionally does **not** specify whether the VPN endpoint arrives by interface
+creation inside the namespace, interface movement, process placement, protocol-specific
+setup or another mechanism.
 
-That choice belongs to the later supported-channel integration design and must be justified
-by its own requirements/constraints and evidence.
+For the current scope, onboarding is architecturally closed only with respect to **where the
+result must end up**: the data-plane endpoint must be inside the managed domain and the host
+boundary must be explicit.
+
+Onboarding remains open with respect to **which concrete endpoint corresponds to which
+logical VPN path**. That identity/configuration decision is not derivable from the isolation
+requirements and is tracked in the requirement tree as a new decomposition block on
+`VPNG-R1.R3`.
 
 
 
