@@ -164,9 +164,19 @@ The implementation of the affected behavior remains gated until that decision is
 Once the requirements are sufficient, design the smallest component structure that realizes
 them using `design/component-model.md`.
 
+The architecture produced by this phase is a **traceable implementation report for accepted
+requirements**, not an independent source of product semantics.
+
+The gate question is:
+
+> **Докажи, что ты вообще знаешь, что и зачем собираешься реализовывать.**
+
+For VPN-GATE architecture artifacts, requirement linkage is mandatory and explicit.
+
 The design report for a non-trivial review unit must identify:
 
-- **Requirements** — exact requirement/constraint IDs implemented by the unit;
+- **Requirements** — exact requirement/constraint IDs implemented by the unit, using
+  explicit `Implements:` and `Constrained by:` references;
 - **Scenario** — the real product situation in which those requirements matter;
 - **Components** — which permitted component primitives are used;
 - **Responsibilities** — what each component owns;
@@ -185,8 +195,34 @@ The design report for a non-trivial review unit must identify:
 
 The report may be concise for a small unit. The content is mandatory; document size is not.
 
+Every normative architecture document must support direct navigation from its material
+decisions to the exact requirement/constraint nodes that justify them.
+
+At minimum:
+
+```text
+Implements:
+- VPNG-R...
+
+Constrained by:
+- VPNG-R....C...
+```
+
+must appear at document or section scope wherever the mapping is unambiguous.
+
+For component-level architecture, each material component must identify the most specific
+requirements it implements. Material responsibilities, interactions, lifecycle rules and
+safety invariants must be traceable within the document either by their own references or
+by an enclosing block whose scope is exact.
+
+A distant ancestor requirement is not a sufficient reference when a more specific accepted
+descendant defines the behavior.
+
 A component, responsibility or interaction that cannot be honestly traced to a concrete
 requirement is a design finding, not a reason to create a requirement afterward.
+
+Conversely, when a requirement changes, every architecture artifact that references that
+node or one of its descendants must be revalidated before implementation proceeds.
 
 ## Mandatory simplification review
 
@@ -313,8 +349,9 @@ The expert-review role has:
 - aggressive attention to small defects and edge cases;
 - enough whole-project scope to identify redundant, mutually inconsistent or suboptimal
   architecture/functionality;
-- an obligation to verify that every material behavior remains traceable to an accepted
-  requirement rather than merely existing in code;
+- an obligation to verify that every material architecture decision and implemented
+  behavior remains explicitly traceable to the most specific applicable accepted requirement
+  rather than merely existing in docs or code;
 - an obligation to challenge components, states and interactions whose necessity cannot be
   demonstrated from real supported scenarios;
 - an obligation to evaluate whether the implementation follows the project's component
