@@ -1,5 +1,12 @@
 # VPN-GATE NG2 — AvailabilityProbeManager
 
+> **2026-11-15 normative update:** availability hysteresis, input aggregation and the
+> collector-to-route-materializer boundary are now defined by
+> `design/NG2/availability-collector-materializer.md`. The observation-window,
+> `evidence_epoch`, `elapsed_intervals` and asynchronous collector/materializer ordering
+> text below is retained temporarily as implementation-migration context and is not
+> normative where it conflicts with that document.
+
 **Status:** active NG2 design  
 **Date:** 2026-11-14  
 **Scope:** active availability-probe managed domain  
