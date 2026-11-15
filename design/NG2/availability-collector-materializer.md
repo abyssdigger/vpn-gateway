@@ -58,55 +58,60 @@ materialization is millisecond-scale while probe cadence is second-scale. The mo
 not attempt to reconstruct wall-clock history accumulated while materialization is in
 progress.
 
-## 2. Availability channel
+## 2. Availability-priority channel
 
-A logical availability channel is identified by the current logical probe and its current
-concrete physical plane:
+Payload-facing availability uses a probe-independent descriptor:
 
 ```text
-probe_id
-mechanism
-InterfaceIdentity(ifname, ifindex)
-target
+AvailabilityPriorityChannel
+    channel_id
+    InterfaceIdentity path
+    enabled
+    AvailabilityHysteresisPolicy
+        failure_ticks
+        recovery_good_news
 ```
 
-A concrete `InterfaceIdentity` remains significant. Same-name/new-ifindex is a different
-physical channel generation.
+It intentionally contains no:
 
-Several logical channels may share one physical send plane. One valid physical reply may
-therefore contribute one good-news fact to each current logical consumer of that plane.
+- target address;
+- probe mechanism;
+- probe cadence;
+- physical generation;
+- attempt id;
+- timestamp.
 
-Individual replies are otherwise colorless:
+Physical probe execution may derive this descriptor from a richer logical probe request,
+but PayloadTrafficManager never needs those physical details.
 
-- no attempt id;
-- no semantic send sequence;
-- no reply timestamp in availability policy;
-- no distinction between replies other than the channel to which they currently apply.
+The full immutable descriptor is carried on good-news/tick input so a late callback from an
+obsolete logical definition can be rejected without adding a logical epoch.
 
-## 3. Normalized policy
+## 3. Hysteresis policy
 
-Each enabled logical channel has:
+Each enabled availability-priority channel has:
 
 ```text
-interval_seconds
 failure_ticks
 recovery_good_news
 ```
 
-All three values are positive.
+Both values are positive.
 
-`failure_ticks` is the number of tick observations without any good news required to
-set `availability_problems = true`.
+Probe cadence is separate and owned by ProbeExecutionAgent.
+
+`failure_ticks` is the number of processed tick observations without any good news
+required to set `availability_problems = true`.
 
 `recovery_good_news` is the number of consecutive valid good-news replies required to
 clear `availability_problems`.
 
-"Consecutive" here does not mean one reply per timer interval. Delayed replies remain
-valid good news when they arrive. Several delayed replies may therefore complete recovery
-in one collector pass.
+"Consecutive" does not mean one reply per timer interval. Delayed replies remain valid
+good news when they arrive. Several delayed replies may therefore complete recovery in one
+collector pass.
 
-A tick without any good news since the preceding tick breaks an incomplete problem-channel
-recovery sequence.
+A tick without any good news since the preceding tick breaks an incomplete recovery
+sequence.
 
 ## 4. Input aggregation
 
@@ -372,8 +377,8 @@ Other payload-domain changes may still arrive through the existing
 availability processing does not create a second executor or a second queue of kernel
 moves.
 
-New probe/tick facts that arrive while materialization runs accumulate only in the bounded
-collector input state. On return, the collector performs another pass over the latest
+New availability good-news/tick facts that arrive while materialization runs accumulate
+only in the bounded collector input state. On return, the collector performs another pass over the latest
 facts and, if the routing-relevant snapshot changed again, invokes materialization again.
 
 ## 12. Route semantics
@@ -406,8 +411,8 @@ It no longer owns logical observation windows.
 Its availability-facing outputs reduce to:
 
 ```text
-good_news(current physical channel)
-tick(current logical channel)
+AvailabilityGoodNews(current AvailabilityPriorityChannel)
+AvailabilityTick(current AvailabilityPriorityChannel)
 ```
 
 The tick is level-like input to the collector: repeated undrained ticks collapse to one
