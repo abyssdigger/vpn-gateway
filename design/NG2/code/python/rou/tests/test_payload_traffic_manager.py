@@ -587,6 +587,19 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
         self.assertEqual(domain.ordered_paths, (self.a, self.b, self.c))
         self.assertIsNone(domain.preferred_prefix_length)
 
+    def test_enabling_all_clear_availability_does_not_rematerialize_payload(self):
+        adapter = FakeAdapter()
+        manager = PayloadTrafficManager(adapter, RecordingPublisher())
+        manager.handle_request(self.payload)
+        apply_count = len(adapter.apply_specs)
+
+        manager.configure_availability(self.config)
+
+        self.assertEqual(len(adapter.apply_specs), apply_count)
+        self.assertIsNone(
+            adapter.state.rules.routing_domains[0].preferred_prefix_length
+        )
+
     def test_active_availability_preserves_configured_order_initially(self):
         self.assertEqual(self.order(), (self.a, self.b, self.c))
         self.assertIsNone(
