@@ -13,16 +13,19 @@ requirement/constraint review.
 Canonical compact form:
 
 ```text
-**[ID]** Purpose | Statement [closed]   — for R
-**[ID]** Reason  | Statement [closed]   — for C
+**[ID]** Purpose | Statement [pending_closure|closed|rejected_closure]   — for R
+**[ID]** Reason  | Statement [pending_closure|closed|rejected_closure]   — for C
 ```
 
 The italicized part answers **зачем** for a requirement and **почему** for a constraint.
 The part after `|` is the normative implementation-facing statement.
 
-`[closed]` is optional and means only that architecture is sufficient for this node in the
-current scope. Requirements do not list the architectural decisions that close them; those
-are found by searching architecture documents for the requirement/constraint ID.
+The optional closure label records acceptance state only:
+`[pending_closure]` means an architecture candidate exists but is not yet accepted;
+`[closed]` means it has been accepted as sufficient for the current scope;
+`[rejected_closure]` means the candidate failed acceptance. Requirements do not list the
+architectural decisions themselves; those are found by searching architecture documents for
+the requirement/constraint ID.
 
 Section headings below are only human-readable grouping. They are not requirements and do
 not participate in the requirement tree.
