@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — Architecture Report
 
-**Status:** partial NG3 architecture, design-cycle draft  
-**Cycle:** `ng3-design-cycle-20261115-managed-domain-contract-40m`  
+**Status:** NG3 architecture, requirement-closure draft  
+**Cycle:** `ng3-design-cycle-20261116-final-gates-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
 
@@ -17,6 +17,12 @@ every NG3 architectural element below must be justified again by NG3 requirement
 
 **Implements:**
 - `VPNG-R1`
+- `VPNG-R2`
+- `VPNG-R3`
+- `VPNG-R4`
+- `VPNG-R5`
+- `VPNG-R6`
+- `VPNG-R7`
 
 This pass attempts architecture only for the requirements that are already sufficiently
 defined to justify concrete responsibilities:
@@ -29,22 +35,23 @@ defined to justify concrete responsibilities:
 - local drift/retry behavior around owned network policy;
 - current component-level state publication.
 
-This pass intentionally does **not** yet define:
+This architecture intentionally does **not** yet define implementation details that no
+accepted requirement makes architectural semantics:
 
-- the complete user configuration schema;
-- configuration parsing/normalization ownership;
-- automatic VPN-session provisioning/configuration, because `VPNG-R1.R3.C1` explicitly leaves
-  that responsibility to the administrator in the first release;
-- the exact administrator-facing VPN-channel onboarding contract required by
-  `VPNG-R1.R3.C1.R1`;
-- final end-user status aggregation;
-- transport publication;
-- final ROU/BOU topology;
-- Linux-specific route/table/nft/sysctl representation;
-- WireGuard/OpenConnect-specific machinery;
+- final external configuration field names / textual syntax;
+- automatic VPN-session provisioning/configuration, because `VPNG-R1.R3.C1` leaves that
+  responsibility to the administrator in the first release;
+- concrete per-integration administrator command sequences/documents;
+- concrete CLI/API/status presentation formatting;
+- concrete event-delivery transport;
+- final process/package assembly topology where existing contracts do not require one;
+- complete Linux route/table/nft/sysctl representation beyond the accepted safety and
+  priority-transition mechanisms;
+- WireGuard/OpenConnect-specific provisioning machinery;
+- TCP/UDP/HTTP availability checks beyond the accepted first-release ICMP constraint;
 - a universal event persistence/replay layer.
 
-Those gaps remain requirements without invented architecture.
+These omissions are deliberate implementation freedom, not unresolved requirement semantics.
 
 ## 1.1. Managed network isolation boundary ("стакан")
 
