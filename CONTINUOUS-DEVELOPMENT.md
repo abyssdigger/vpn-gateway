@@ -141,12 +141,13 @@ When a requirement is insufficient:
 7. define acceptance evidence at the cheapest sufficient level;
 8. if further decomposition of the affected node depends on insufficiently decomposed
    semantics in another requirement/constraint branch:
-   - add `[decomp-blocked-by: <ID>]` to the blocked node;
+   - add `[decomp: <blocker-ID> -> pending]` to the blocked node;
    - stop only that decomposition path;
    - continue independent requirement/design work;
-9. when the blocking node or one of its descendants later provides enough specificity:
-   - add `[decomp-unblocks: <blocked-ID>; blocker=<original-blocker-ID>]` to the resolver;
-   - keep the original block link for traceability;
+9. when the blocker or one of its descendants later provides enough specificity:
+   - replace `pending` in the same link with the concrete deblocker ID:
+     `[decomp: <blocker-ID> -> <deblocker-ID>]`;
+   - keep the blocker part unchanged for causal traceability;
    - resume review of the blocked decomposition;
 10. only then return to component design when the relevant requirement paths are sufficiently concrete.
 
