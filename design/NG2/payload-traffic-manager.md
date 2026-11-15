@@ -103,7 +103,7 @@ inside `PayloadTrafficManager`, not by `AvailabilityProbeManager`.
 The producer-facing boundary is deliberately smaller than an asynchronous Event stream:
 current probe workers/timers update bounded per-channel aggregates
 (`pending_good_news`, `tick_pending`) through a short-lock input port and return. The
-Manager's single collector flow consumes those aggregate facts, updates current GOOD/BAD
+Manager's single collector flow consumes those aggregate facts, updates current availability-problems
 channel state, and invokes the existing route-priority materializer synchronously only
 when the routing-relevant snapshot changes.
 
@@ -223,7 +223,7 @@ Profile after the Manager's internal availability-priority materialization:
 `ProfileStateCalculator`.
 
 Availability priority больше не вычисляется upstream как готовый `ordered_paths`.
-`PayloadTrafficManager` владеет текущим GOOD/BAD channel state и выводит effective order
+`PayloadTrafficManager` владеет текущим availability-problems channel state и выводит effective order
 внутри своей managed domain. Availability по-прежнему не превращает observed path в
 binding ON/OFF и не меняет payload membership.
 
