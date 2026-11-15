@@ -109,7 +109,7 @@ runtime_assembly.py
     already-created component graph and steady-state lifecycle
 ```
 
-Current `runtime_assembly.py` is **349 lines / 10 top-level definitions**, down from the
+Current `runtime_assembly.py` is **346 lines / 10 top-level definitions**, down from the
 pre-review **492 lines / 17 definitions**.
 
 ## F6 — audit of independent owners stopped after peer exception
@@ -207,7 +207,38 @@ PayloadTrafficManager has no synchronous dependency back to ProbeManager/Agent.
 The later Agent -> PayloadManager path is producer delivery from the Agent execution flow,
 not a synchronous back-edge from a Manager call chain.
 
-## F12 — structural payload projection/status/audit scheduler
+## F12 — all-clear availability still emitted an unnecessary lower hint
+
+**Classification:** accepted and fixed.
+
+Even with zero problem paths, active availability still produced
+`preferred_prefix_length=N`. This did not create a physical gap, but it made enabling
+all-clear availability a distinct lower desired ruleset and could trigger an unnecessary
+payload reconcile.
+
+The Manager now emits a non-None preferred-prefix hint only when at least one path is
+actually in the problem tail.
+
+Consequences proved by regression:
+
+- inactive availability -> no hint;
+- active but all-clear availability -> no hint and no extra payload Adapter apply;
+- first actual problem -> concrete preferred-prefix boundary;
+- full recovery -> hint disappears again.
+
+## F13 — assembly tests must not rewrite the built object graph
+
+**Classification:** accepted and fixed.
+
+One ordering regression temporarily replaced `runtime.probe_manager` after builder
+construction to observe plan publication. That test depended on an internally inconsistent
+object graph.
+
+It was rewritten against public assembly behavior. The stronger current ordering
+regression changes both physical target and hysteresis descriptor, then injects new
+good-news during probe apply and proves the new payload descriptor was installed first.
+
+## F14 — structural payload projection/status/audit scheduler
 
 **Classification:** not implemented; correctly left outside this milestone.
 
@@ -234,12 +265,12 @@ No production rollback was required.
 
 Final reviewed code head:
 
-`123cb25c419d8d5dc9543992c44462d925e4cbce`
+`82032f701930c8be475925b103553ed0f497d820`
 
-GitHub Actions `NG2 Python` run **691**:
+GitHub Actions `NG2 Python` run **710**:
 
 - compile: PASS;
-- **300 rootless unit tests PASS**;
+- **301 rootless unit tests PASS**;
 - selective probe-process isolation: PASS;
 - EXP-025: PASS;
 - EXP-026: PASS;
