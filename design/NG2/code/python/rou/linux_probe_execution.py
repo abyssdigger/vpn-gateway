@@ -227,11 +227,19 @@ class ProbeExecutionSchedule:
         boundaries: list[ProbeWindowBoundaryInfo] = []
         for probe_id in sorted(self._windows):
             item = self._windows[probe_id]
-            while item.next_boundary <= now:
-                boundaries.append(
-                    ProbeWindowBoundaryInfo(probe_id, plan.generation)
+            if item.next_boundary > now:
+                continue
+            elapsed = int(
+                (now - item.next_boundary) // item.interval_seconds
+            ) + 1
+            boundaries.append(
+                ProbeWindowBoundaryInfo(
+                    probe_id,
+                    plan.generation,
+                    elapsed_intervals=elapsed,
                 )
-                item.next_boundary += item.interval_seconds
+            )
+            item.next_boundary += elapsed * item.interval_seconds
 
         sends: list[PhysicalProbePlane] = []
         for key in sorted(
