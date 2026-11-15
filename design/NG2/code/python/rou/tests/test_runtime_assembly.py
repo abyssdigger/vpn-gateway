@@ -39,11 +39,13 @@ from rou.runtime_assembly import (
     ProbeExecutionPlanPort,
     RuntimeAvailabilityChannel,
     RuntimeAvailabilityConfig,
+    build_linux_availability_runtime,
+    build_linux_network_policy_runtime,
+)
+from rou.runtime_bootstrap import (
     LinuxNetworkPolicyRuntimeBootstrapResult,
     bootstrap_linux_network_policy_runtime,
     bootstrap_linux_network_policy_runtime_for_instance,
-    build_linux_availability_runtime,
-    build_linux_network_policy_runtime,
 )
 
 
