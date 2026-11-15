@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from ipaddress import IPv4Address
 from math import isfinite
 
-from .availability_collector import AvailabilityGoodNews, AvailabilityTick
 from .availability_probe_state import ProbeObservationGeneration
 from .interface_identity import InterfaceIdentity
 from .probe_rules import (
@@ -128,7 +127,7 @@ class ProbeExecutionPlanCalculator:
 
             channels.append(
                 LogicalProbeChannel(
-                    probe.channel_id,
+                    probe.probe_id,
                     probe.mechanism,
                     probe.path,
                     probe.target,
