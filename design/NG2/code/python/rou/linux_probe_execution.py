@@ -195,7 +195,7 @@ class ProbeExecutionSchedule:
             if (
                 not generation_changed
                 and old is not None
-                and old.channel == channel
+                and old.channel.interval_seconds == channel.interval_seconds
             ):
                 next_tick = old.next_tick
             else:
