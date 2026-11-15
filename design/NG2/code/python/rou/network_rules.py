@@ -65,7 +65,7 @@ class RoutingDomainSpec:
     destinations: tuple[IPv4Network, ...]
     ordered_paths: tuple[InterfaceIdentity, ...]
     terminal_disposition: TerminalDisposition
-    confirmed_live_prefix_length: int | None = None
+    no_problem_prefix_length: int | None = None
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -78,14 +78,14 @@ class RoutingDomainSpec:
             raise NetworkRulesError(
                 f"routing domain {self.name!r} contains duplicate paths"
             )
-        if self.confirmed_live_prefix_length is not None:
-            if type(self.confirmed_live_prefix_length) is not int:
+        if self.no_problem_prefix_length is not None:
+            if type(self.no_problem_prefix_length) is not int:
                 raise NetworkRulesError(
-                    "confirmed-live prefix length must be an integer"
+                    "no-problem prefix length must be an integer"
                 )
-            if not 0 <= self.confirmed_live_prefix_length <= len(self.ordered_paths):
+            if not 0 <= self.no_problem_prefix_length <= len(self.ordered_paths):
                 raise NetworkRulesError(
-                    "confirmed-live prefix length is out of range"
+                    "no-problem prefix length is out of range"
                 )
 
 
@@ -379,8 +379,8 @@ def routing_domains_semantically_equal(
         if observed.ordered_paths != wanted.ordered_paths:
             return False
         if (
-            observed.confirmed_live_prefix_length
-            != wanted.confirmed_live_prefix_length
+            observed.no_problem_prefix_length
+            != wanted.no_problem_prefix_length
         ):
             return False
         if observed.terminal_disposition is not wanted.terminal_disposition:
