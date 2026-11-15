@@ -79,6 +79,8 @@ class AvailabilityProbeManager:
         self._generation_sequence = 0
         self._active_generation: ProbeObservationGeneration | None = None
         self._window_states: dict[str, AvailabilityWindowState] = {}
+        self._logical_evidence_epoch_sequence = 0
+        self._logical_evidence_epochs: dict[str, int] = {}
 
     @property
     def observation_generation(self) -> ProbeObservationGeneration | None:
@@ -128,6 +130,11 @@ class AvailabilityProbeManager:
                     previous_desired,
                     desired,
                 )
+            )
+
+            self._synchronize_logical_evidence_epochs(
+                previous_request,
+                request,
             )
 
             if physical_changed:
@@ -413,7 +420,11 @@ class AvailabilityProbeManager:
         generation = self._active_generation
         if request is None or generation is None:
             return None
-        return self._execution_plan_calculator.calculate(request, generation)
+        return self._execution_plan_calculator.calculate(
+            request,
+            generation,
+            evidence_epochs=self._logical_evidence_epochs,
+        )
 
     def _publish_execution_plan_if_changed(self) -> None:
         publisher = self._execution_plan_publisher
@@ -455,6 +466,38 @@ class AvailabilityProbeManager:
                 probe_id,
                 AvailabilityWindowState(),
             )
+
+    def _synchronize_logical_evidence_epochs(
+        self,
+        previous: AvailabilityProbeSetRequest | None,
+        current: AvailabilityProbeSetRequest,
+    ) -> None:
+        previous_by_id = (
+            {
+                item.probe_id: item
+                for item in previous.probes
+            }
+            if previous is not None
+            else {}
+        )
+        current_by_id = {
+            item.probe_id: item
+            for item in current.probes
+        }
+
+        for probe_id in tuple(self._logical_evidence_epochs):
+            if probe_id not in current_by_id:
+                self._logical_evidence_epochs.pop(probe_id, None)
+
+        for probe_id, item in current_by_id.items():
+            if (
+                probe_id not in self._logical_evidence_epochs
+                or previous_by_id.get(probe_id) != item
+            ):
+                self._logical_evidence_epoch_sequence += 1
+                self._logical_evidence_epochs[probe_id] = (
+                    self._logical_evidence_epoch_sequence
+                )
 
     def _invalidate_changed_logical_probes(
         self,
