@@ -128,6 +128,7 @@ class _PlaneSchedule:
 class _WindowSchedule:
     probe_id: str
     interval_seconds: float
+    evidence_epoch: int
     next_boundary: float
 
 
@@ -197,6 +198,7 @@ class ProbeExecutionSchedule:
                 not generation_changed
                 and old is not None
                 and old.interval_seconds == window.interval_seconds
+                and old.evidence_epoch == window.evidence_epoch
             ):
                 next_boundary = old.next_boundary
             else:
@@ -205,6 +207,7 @@ class ProbeExecutionSchedule:
             new_windows[window.probe_id] = _WindowSchedule(
                 window.probe_id,
                 window.interval_seconds,
+                window.evidence_epoch,
                 next_boundary,
             )
 
