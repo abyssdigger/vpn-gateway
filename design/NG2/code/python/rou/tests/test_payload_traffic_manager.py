@@ -196,18 +196,24 @@ class PayloadTrafficManagerTests(unittest.TestCase):
         self.assertIsNone(info.profiles[0].observed_paths)
 
     def test_apply_failure_does_not_force_failed_state(self):
-        request = _request(self.path)
+        first = _request(self.path)
+        second_path = InterfaceIdentity("vpns01", 11)
+        second = _request(second_path)
 
-        # Materialize once, then make a later apply operation fail while fresh observation
-        # still shows the requested rules.
-        self.manager.handle_request(request)
+        self.manager.handle_request(first)
         self.publisher.events.clear()
         self.adapter.apply_success = False
 
-        self.manager.handle_request(request)
+        self.manager.handle_request(second)
 
         self.assertEqual(len(self.adapter.renew_owners), 1)
-        self.assertEqual(len(self.publisher.events), 0)
+        self.assertEqual(len(self.publisher.events), 1)
+        info = self.publisher.events[-1]
+        self.assertIs(info.rules_state.convergence, Convergence.DIVERGED)
+        self.assertEqual(
+            info.profiles[0].observed_paths,
+            (self.path,),
+        )
 
     def test_reentrant_superseding_requests_are_coalesced_after_active_apply(self):
         first = InterfaceIdentity("vpns00", 10)
@@ -363,7 +369,7 @@ class PayloadTrafficManagerTests(unittest.TestCase):
             NetworkRulesSpec(),
             fresh=True,
         )
-        self.manager.handle_request(request)
+        self.manager.audit()
 
         self.assertEqual(len(self.publisher.events), 2)
         self.assertIs(
