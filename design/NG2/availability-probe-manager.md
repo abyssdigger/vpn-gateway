@@ -289,15 +289,22 @@ when one logical probe definition changes even if its interval remains the same.
 the Agent restart that probe's observation-window phase after, for example, a
 `failure_intervals`-only change without exposing the threshold itself below the Manager.
 
-Execution may report only two production facts back across this boundary:
+Execution may report only two routing-relevant production facts back across this boundary:
 
 ```text
 ProbeGoodNewsInfo
-ProbeWindowBoundaryInfo
+ProbeWindowBoundaryInfo(
+    probe_id,
+    ProbeObservationGeneration,
+    evidence_epoch,
+    elapsed_intervals
+)
 ```
 
 There is deliberately no production `NO_REPLY` event. Absence of a reply acquires routing
-meaning only when `AvailabilityProbeManager` processes a logical window boundary.
+meaning only when `AvailabilityProbeManager` processes a current logical window boundary.
+A boundary with stale `ProbeObservationGeneration` or stale logical `evidence_epoch` is
+ignored.
 
 Plan activation has deterministic phase semantics:
 
