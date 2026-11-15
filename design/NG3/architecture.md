@@ -428,6 +428,11 @@ A successful result must prove at least:
 - exactly one current endpoint is selected;
 - a previously superseded endpoint is not returned as current.
 
+For availability target inference, the Adapter also exposes the current observable network
+facts of the matched VPN endpoint that are necessary to derive an unambiguous check target
+when the user omitted one. It does not decide whether that target constitutes "goodness";
+it only reports facts from the accepted binding/current endpoint environment.
+
 The Adapter does **not**:
 
 - create the VPN session;
@@ -489,6 +494,11 @@ PayloadPolicyIntent:
     direction_permissions
     allowed_path_ids
     configured_preference
+
+AvailabilityCheckIntent:
+    logical_path_id
+    mechanism
+    target = explicit_ip | derive_from_vpn_endpoint
 ```
 
 where:
@@ -501,6 +511,12 @@ where:
   VPN -> ordinary-network permission;
 - `allowed_path_ids` is the explicit set of logical VPN paths eligible for that traffic;
 - `configured_preference` orders only those already allowed paths;
+- `AvailabilityCheckIntent.mechanism` is the user-selected meaning of "how this path is
+  checked"; first-release accepted value is `icmp`;
+- an explicit target means the user chose that address as the criterion endpoint;
+- an omitted target normalizes to `derive_from_vpn_endpoint`;
+- the exact external field name/string syntax is an interface choice; a representation such
+  as `icmp/<ip>` can map to the same normalized contract without becoming architecture;
 - the exact external syntax and concrete selector forms are implementation/interface choices
   and may be refined independently without changing the semantic contracts.
 
@@ -511,6 +527,8 @@ Validation must reject at least:
 - missing required logical identity;
 - duplicate/ambiguous logical path identity;
 - binding intent insufficient to resolve a supported endpoint;
+- unsupported availability-check mechanism;
+- malformed explicit check target;
 - contradictory declarations that cannot produce one deterministic semantic result.
 
 A rejected configuration is not partially materialized.
@@ -779,6 +797,8 @@ only change ordering.
 - `VPNG-R3.R6.R1`
 - `VPNG-R3.R6.R2`
 - `VPNG-R3.R6.R3`
+- `VPNG-R3.R6.R3.R1`
+- `VPNG-R3.R6.R3.R2`
 - `VPNG-R6.R3`
 - `VPNG-R7.R1`
 - `VPNG-R7.R3`
@@ -790,12 +810,13 @@ The Agent owns ongoing execution of configured active availability observations.
 
 It owns:
 
-- currently requested observation channels;
+- currently requested user-defined observation channels;
+- resolution of each normalized `AvailabilityCheckIntent`;
 - cadence for the selected active-observation mechanism;
 - bounded in-flight checks;
 - association of each result with the current requested path identity;
 - rejection of results that no longer belong to the current observation context;
-- local diagnostics about inability to execute the observation mechanism.
+- local diagnostics about inability to resolve or execute the observation mechanism.
 
 It does not own:
 
@@ -829,6 +850,50 @@ No logical evidence epoch, attempt journal or replay ordering is introduced.
 - `VPNG-R3.R6.R2`
 - `VPNG-R7.R1`
 
+## 7.4. User-defined check criterion and target resolution
+
+**Implements:**
+- `VPNG-R3.R6.R3`
+- `VPNG-R3.R6.R3.R1`
+- `VPNG-R3.R6.R3.R2`
+
+**Constrained by:**
+- `VPNG-R3.R6.R3.R1.C1`
+
+The product does not attempt to define one universal semantic "VPN path is good" predicate.
+
+Instead, each availability-enabled logical path has an `AvailabilityCheckIntent` selected
+by the user.
+
+First-release normalized shape:
+
+```text
+mechanism = icmp
+target = explicit_ip | derive_from_vpn_endpoint
+```
+
+Resolution:
+
+1. if an explicit target is configured, use that target;
+2. otherwise observe the current verified VPN path binding and endpoint/network facts;
+3. attempt to derive one unambiguous ICMP target associated with the current VPN endpoint;
+4. if derivation fails or is ambiguous, publish diagnostic/`no_evidence`; do not classify
+   the path as good or bad.
+
+This means evidence semantics are intentionally user-relative:
+
+```text
+reply to the user's selected/resolved criterion -> positive evidence
+valid check with no reply                       -> negative evidence
+cannot resolve/execute a valid check            -> no_evidence + diagnostic
+```
+
+The target is part of the observation context. A target change or endpoint-binding change
+invalidates in-flight results from the preceding context.
+
+Future TCP/UDP/HTTP checks may add Driver implementations behind the same normalized
+criterion contract, but they are not first-release capabilities.
+
 # 8. ActiveProbeDriver
 
 **Component type:** Driver
@@ -837,6 +902,8 @@ No logical evidence epoch, attempt journal or replay ordering is introduced.
 - `VPNG-R3.R6`
 - `VPNG-R3.R6.R1`
 - `VPNG-R3.R6.R3`
+- `VPNG-R3.R6.R3.R1`
+- `VPNG-R3.R6.R3.R1.C1.R1`
 - `VPNG-R7.R3.R2`
 - `VPNG-R7.R5`
 
@@ -849,12 +916,14 @@ check(concrete path observation identity, configured mechanism)
 
 It hides mechanism-specific execution from the Agent.
 
-NG3 currently selects active observation as the architecture for scenario S3, but does not
-yet select a concrete transport mechanism.
+For the first release, the concrete supported Driver mechanism is ICMP echo.
 
-ICMP, TCP connect, protocol-native liveness or another mechanism therefore remain possible
-Driver implementations until requirements, evidence or accepted constraints narrow that
-space.
+The Driver executes one ICMP check through the concrete current VPN path toward the resolved
+target and reports technical reply/no-reply/local-error facts. The Agent maps those facts to
+`positive/negative/no_evidence` according to the criterion contract.
+
+TCP, UDP, HTTP and protocol-native liveness remain future possible Driver implementations,
+not current capabilities.
 
 # 9. NetworkPolicyAdapter
 
@@ -901,6 +970,8 @@ one observable.
 **Implements:**
 - `VPNG-R4.R2`
 - `VPNG-R4.R3`
+- `VPNG-R4.R3.R1`
+- `VPNG-R4.R3.R2`
 - `VPNG-R4.R5`
 - `VPNG-R5.R2`
 - `VPNG-R5.R3`
@@ -919,11 +990,74 @@ Required properties:
 - after partial failure, re-observe before planning another mutation;
 - prefer a safe restrictive result when the required postcondition cannot be confirmed.
 
-The exact Linux transaction algorithm is not chosen in this pass.
+The Executor distinguishes two transition classes.
 
-In particular, the NG2 empty-slot route permutation mechanism is **not** automatically
-carried into NG3. It may later be selected if lower-level routing requirements and kernel
-evidence make it the minimal sufficient implementation.
+## 10.1. Pure priority permutation — make-before-break route-slot transaction
+
+**Implements:**
+- `VPNG-R4.R3.R1`
+- `VPNG-R3.R2`
+- `VPNG-R3.R3`
+- `VPNG-R3.R4`
+
+When the desired change alters only priority/order of the same eligible unicast path set,
+the Linux implementation uses an owned working range of `N+1` ordinary metric positions
+for `N` eligible routes.
+
+Exactly one metric position is free in the working representation; it is emergent transaction
+state, not configuration.
+
+The only move primitive is:
+
+```text
+X currently at Mold
+Mfree is free
+
+1. add the same allowed route X at Mfree
+2. verify/continue transaction
+3. delete X at Mold
+```
+
+Between steps 1 and 3:
+
+- every eligible path still has at least one route;
+- `X` temporarily has two route copies with different metrics;
+- no unrelated or previously ineligible path is introduced.
+
+After deletion, `Mold` becomes the new free metric position.
+
+The deterministic planner repeats this primitive until the current route ordering equals the
+desired ordering. The active transaction plan is immutable; newly arriving desired state is
+handled by a later transaction from freshly verified state.
+
+This is the NG3 re-derivation of the historical "metric hole" algorithm. Historical NG2
+EXP-027 already demonstrated the relevant Linux property: the same path can temporarily
+exist at two metrics, exact deletion removes only the old copy, and the full eligible set
+remains present for both ordinary prefixes and `default`.
+
+The historical evidence is reusable because the kernel claim is materially identical; the
+NG2 product semantics are not inherited by that fact.
+
+## 10.2. Structural policy transition — guarded fail-closed convergence
+
+**Implements:**
+- `VPNG-R4.R3.R2`
+- `VPNG-R4.R1`
+- `VPNG-R4.R2`
+- `VPNG-R4.R5`
+
+If membership, direction, filtering/NAT or another structural policy dimension changes, the
+priority-only route-slot proof no longer applies.
+
+The Executor may establish/retain a restrictive guard for the affected traffic while it
+changes lower state, and may temporarily interrupt forwarding when necessary to preserve the
+safety postconditions.
+
+It must never preserve continuity by passing traffic through a path or policy state that is
+forbidden by either the old or new accepted policy.
+
+After partial failure it re-observes authoritative lower state before planning further
+mutation.
 
 # 11. Event contracts
 
@@ -937,6 +1071,7 @@ The architecture currently needs only semantic event edges required by Engine ro
 - `VPNG-R3.R6`
 - `VPNG-R3.R6.R1`
 - `VPNG-R3.R6.R2`
+- `VPNG-R3.R6.R3`
 - `VPNG-R7.R5`
 
 The event must identify the logical path and carry only the bounded observation information
@@ -1226,16 +1361,14 @@ Affected requirements:
 
 Confirmation/hysteresis semantics and the normalized event contract are now defined.
 
-The remaining open issue is narrower:
+The first-release observation semantics are now defined by user-selected ICMP check intent.
 
-- which concrete observed property and mechanism are sufficient to classify a result as
-  `positive` or `negative` for the supported failure scenarios.
+An explicit target is used directly; omitted target requests derivation from the current
+verified VPN endpoint/network facts. Failure to derive or execute a valid check is
+diagnostic/`no_evidence`, not automatic path failure.
 
-A local observation-execution failure remains diagnostic/`no_evidence` unless the selected
-observation contract proves that such a failure itself demonstrates path unusability.
-
-This gap blocks closure of `VPNG-R3.R6.R3` and therefore the R3 parent, but not the
-adaptation state machine.
+Future TCP/UDP/HTTP mechanisms remain outside current scope and do not block first-release
+closure.
 
 ## 16.3. User-visible status presentation
 
