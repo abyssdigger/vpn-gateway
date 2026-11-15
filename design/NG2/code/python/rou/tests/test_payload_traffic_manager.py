@@ -589,9 +589,8 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
 
     def test_active_availability_preserves_configured_order_initially(self):
         self.assertEqual(self.order(), (self.a, self.b, self.c))
-        self.assertEqual(
-            self.adapter.state.rules.routing_domains[0].preferred_prefix_length,
-            3,
+        self.assertIsNone(
+            self.adapter.state.rules.routing_domains[0].preferred_prefix_length
         )
 
     def test_failure_ticks_move_only_problem_path_down(self):
