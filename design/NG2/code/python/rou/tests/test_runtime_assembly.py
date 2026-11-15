@@ -38,6 +38,7 @@ from rou.runtime_assembly import (
     RuntimeAvailabilityChannel,
     RuntimeAvailabilityConfig,
     build_linux_availability_runtime,
+    build_linux_network_policy_runtime,
 )
 
 
@@ -94,6 +95,48 @@ class FakeSendDriver:
     def execute_send(self, path, target, *, timeout_seconds):
         self.calls.append((path, target, timeout_seconds))
         return self.result
+
+
+class OwnerScopedFakeAdapter:
+    def __init__(self):
+        self.states = {}
+        self.apply_calls = []
+        self.renew_calls = []
+        self.cleanup_calls = []
+
+    def apply(self, owner, spec):
+        self.apply_calls.append((owner, spec))
+        self.states[owner] = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            spec,
+            fresh=True,
+        )
+        return ActionResult(True)
+
+    def renew_state(self, owner):
+        self.renew_calls.append(owner)
+        if owner not in self.states:
+            self.states[owner] = NetworkRulesState(
+                StateKnowledge.KNOWN,
+                NetworkRulesSpec(),
+                fresh=True,
+            )
+        return ActionResult(True)
+
+    def get_last_state(self, owner):
+        return self.states.get(
+            owner,
+            NetworkRulesState(
+                StateKnowledge.UNKNOWN,
+                None,
+                fresh=False,
+            ),
+        )
+
+    def cleanup(self, owner):
+        self.cleanup_calls.append(owner)
+        self.states.pop(owner, None)
+        return ActionResult(True)
 
 
 class PlanConsumer:
@@ -437,6 +480,95 @@ class LinuxAvailabilityRuntimeAssemblyTests(unittest.TestCase):
 
         runtime.agent.process_due(100.0)
         self.assertEqual(len(driver.calls), calls_after_stop)
+
+
+
+class LinuxNetworkPolicyRuntimeTests(unittest.TestCase):
+    def test_builder_uses_one_adapter_with_distinct_manager_owners(self):
+        adapter = OwnerScopedFakeAdapter()
+        payload_events = RecordingPublisher()
+        diagnostics = RecordingPublisher()
+        driver = FakeSendDriver(ProbeSendResult(False))
+
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            payload_events,
+            driver,
+            diagnostics,
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+
+        runtime.handle_payload_request(payload_request(A, B))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+
+        owners = [owner for owner, _spec in adapter.apply_calls]
+        self.assertIn(runtime.payload_manager, owners)
+        self.assertIn(runtime.availability.probe_manager, owners)
+        self.assertIsNot(
+            runtime.payload_manager,
+            runtime.availability.probe_manager,
+        )
+
+    def test_audit_refreshes_both_network_policy_owners(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+        adapter.renew_calls.clear()
+
+        runtime.audit()
+
+        self.assertEqual(
+            set(adapter.renew_calls),
+            {
+                runtime.payload_manager,
+                runtime.availability.probe_manager,
+            },
+        )
+
+    def test_stop_cleans_both_manager_owners(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+
+        result = runtime.stop()
+
+        self.assertTrue(result.success)
+        self.assertEqual(
+            set(adapter.cleanup_calls),
+            {
+                runtime.payload_manager,
+                runtime.availability.probe_manager,
+            },
+        )
 
 
 if __name__ == "__main__":
