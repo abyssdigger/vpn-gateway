@@ -327,7 +327,7 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
         self.assertIs(state.safety, Safety.SAFE)
         self.assertIs(state.service, Service.UNKNOWN)
 
-    def test_live_prefix_divergence_changes_priority_not_exposure_safety(self):
+    def test_preferred_prefix_divergence_changes_priority_not_exposure_safety(self):
         backup = InterfaceIdentity("vpns01", 11)
         desired = NetworkRulesSpec(
             routing_domains=(

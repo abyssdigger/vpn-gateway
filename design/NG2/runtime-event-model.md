@@ -747,30 +747,35 @@ not a replayable Event journal.
 
 ## 16. Current executable state and remaining assembly
 
-Implemented:
+Implemented executable network-policy assembly:
 
-- ProbeRules/readiness and physical generation ownership in AvailabilityProbeManager;
-- ProbeExecutionAgent physical sends, logical ticks and local diagnostics;
-- split probe cadence vs payload hysteresis;
-- probe-independent `AvailabilityPriorityChannel`;
-- bounded good-news/tick collector inside PayloadTrafficManager;
-- structural `PayloadTrafficStateRequest` with no availability fields;
-- optional `AvailabilityPriorityConfig` input;
-- direct effective-order calculation and one serialized payload materializer;
-- no EventEnvelope dependency on availability ingress.
+- `RuntimeAvailabilityConfig` is the normalized upstream availability slice;
+- two sibling Direct Calculators independently project:
+  - `AvailabilityProbeSetRequest`;
+  - `AvailabilityPriorityConfig`;
+- `LinuxAvailabilityRuntimeAssembly.configure()` calculates both projections first,
+  then installs payload-priority config before allowing a new probe execution plan to
+  publish;
+- process-local publisher edges are synchronous `CallbackPublisher` calls, not an
+  EventEnvelope bus;
+- `build_linux_availability_runtime()` wires:
+  AvailabilityProbeManager -> ProbeExecutionAgent -> PayloadTrafficManager;
+- `build_linux_network_policy_runtime()` owns PayloadTrafficManager plus the availability
+  runtime on one owner-composing NetworkRulesAdapter;
+- outer `audit()` invokes the two Managers independently; it does not create merged
+  global desired state;
+- outer `stop()` is a terminal runtime lifecycle boundary and cleans probe/payload
+  owners independently; repeated stop remains permitted for cleanup retry/idempotence.
 
-Removed from the runtime control path:
+Protective startup composition is kept in `runtime-bootstrap.md`, not in steady-state
+assembly.
 
-- `AvailabilityProbeStateInfo` routing mediation;
-- logical windows / `evidence_epoch` / `elapsed_intervals`;
-- availability-derived fields in PayloadTrafficStateRequest;
-- probe target/mechanism/cadence from PayloadTrafficManager.
+Still not implemented in Python:
 
-Remaining work is runtime assembly:
+1. structural config/selection/binding -> `PayloadTrafficStateRequest` projection;
+2. final RuntimeStateManager/ProfileState model;
+3. probe diagnostic/status consumption;
+4. explicit audit/retry cadence policy;
+5. production asynchronous Event Delivery wiring for streams that genuinely require it.
 
-1. implement/finalize the two pure config projections:
-   `AvailabilityProbeSetRequest` and `AvailabilityPriorityConfig`;
-2. fan structural `PayloadTrafficStateRequest` independently;
-3. wire Agent good-news/tick publishers directly to PayloadTrafficManager;
-4. project probe execution diagnostics into status;
-5. schedule ordinary audit/retry loops.
+The availability path itself is fully wired without an evidence bus or logical epoch.

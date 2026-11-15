@@ -141,11 +141,21 @@ This keeps namespace lifecycle ownership separate from network-policy ownership.
 Production startup does not require an outer caller to remember two safety-sensitive
 operations in the correct order.
 
-The composition entry point:
+The lower Adapter composition entry point remains:
 
 ```text
 bootstrap_linux_network_rules_adapter_for_instance(spec)
 ```
+
+The executable network-policy runtime adds two higher convenience entry points:
+
+```text
+bootstrap_linux_network_policy_runtime(...)
+bootstrap_linux_network_policy_runtime_for_instance(spec, ...)
+```
+
+Both delegate protective closure to the lower bootstrap before constructing
+`LinuxNetworkPolicyRuntime`; they do not duplicate sysctl/netns policy.
 
 performs:
 
@@ -161,18 +171,30 @@ bootstrap_linux_network_rules_adapter_in_namespace(...)
     -> construct/publish LinuxNetworkRulesAdapter
 ```
 
-Any infrastructure or bootstrap failure returns a failed bootstrap result with no Adapter.
+Any infrastructure or bootstrap failure returns a failed bootstrap result with no Adapter
+and therefore no network-policy runtime.
+
+The full-instance runtime path is:
+
+```text
+ensure_linux_instance
+    -> protective close + exact infrastructure verification
+bootstrap LinuxNetworkRulesAdapter
+    -> independent protective close + fresh verification
+build LinuxNetworkPolicyRuntime
+    -> PayloadTrafficManager + AvailabilityProbeManager + ProbeExecutionAgent
+```
 
 The second protective close is intentionally redundant across the lifecycle/bootstrap
-boundary: correctness of Adapter publication does not depend on hidden knowledge that the
-preceding infrastructure operation already closed forwarding.
+boundary: correctness of Adapter/runtime publication does not depend on hidden knowledge
+that the preceding infrastructure operation already closed forwarding.
 
 ## 9. Не входит в этот unit
 
 Отдельными review units остаются:
 
 - создание/удаление network namespace и host-side transport plumbing;
-- RuntimeStateManager event assembly;
+- RuntimeStateManager/ProfileState event assembly;
 - startup loading/normalization configuration;
-- shutdown orchestration;
+- periodic audit/retry scheduling policy;
 - persistent technical allocation across process restart.

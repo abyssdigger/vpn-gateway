@@ -80,6 +80,38 @@ class RecordingPublisher:
         self.events.append(info)
 
 
+class RaisingPublisher:
+    def __init__(self):
+        self.events = []
+
+    def publish(self, info):
+        self.events.append(info)
+        raise RuntimeError("publisher boom")
+
+
+class FailOncePublisher:
+    def __init__(self):
+        self.events = []
+        self.failed = False
+
+    def publish(self, info):
+        if not self.failed:
+            self.failed = True
+            raise RuntimeError("publisher boom")
+        self.events.append(info)
+
+
+class SelectiveGoodNewsPublisher:
+    def __init__(self, failing_channel):
+        self.failing_channel = failing_channel
+        self.events = []
+
+    def publish(self, info):
+        if info.channel.channel_id == self.failing_channel:
+            raise RuntimeError("publisher boom")
+        self.events.append(info)
+
+
 class FakeDriver:
     def __init__(self):
         self.result = ProbeSendResult(False)
@@ -312,6 +344,97 @@ class LinuxProbeExecutionAgentTests(unittest.TestCase):
 
         self.assertEqual(self.good.events, [])
         self.assertIs(self.diag.events[-1].health, ProbeExecutionHealth.ERROR)
+
+    def test_tick_publisher_exception_does_not_abort_due_processing(self):
+        tick = RaisingPublisher()
+        agent = LinuxProbeExecutionAgent(
+            self.driver,
+            self.good,
+            tick,
+            self.diag,
+            timeout_seconds=2,
+            clock=lambda: 100.0,
+        )
+        agent.update_plan(plan())
+        agent.process_due(100.0)
+        self.wait_for(self.driver.calls, 1)
+
+        agent.process_due(110.0)
+        self.wait_for(self.driver.calls, 2)
+
+        self.assertEqual(len(tick.events), 1)
+
+    def test_one_good_news_subscriber_failure_does_not_block_other_consumers(self):
+        good = SelectiveGoodNewsPublisher("primary")
+        agent = LinuxProbeExecutionAgent(
+            self.driver,
+            good,
+            self.tick,
+            self.diag,
+            timeout_seconds=2,
+            clock=lambda: 100.0,
+        )
+        second = channel(
+            "second",
+            interval=20,
+            hysteresis=AvailabilityHysteresisPolicy(2, 3),
+        )
+        current = ProbeExecutionPlan(
+            ProbeObservationGeneration(1),
+            (plane(),),
+            (channel(), second),
+        )
+        self.driver.result = ProbeSendResult(True)
+
+        agent.update_plan(current)
+        agent.process_due(100.0)
+        self.wait_for(good.events, 1)
+
+        self.assertEqual(
+            [item.channel.channel_id for item in good.events],
+            ["second"],
+        )
+
+    def test_diagnostic_publisher_failure_does_not_suppress_good_news(self):
+        diag = RaisingPublisher()
+        agent = LinuxProbeExecutionAgent(
+            self.driver,
+            self.good,
+            self.tick,
+            diag,
+            timeout_seconds=2,
+            clock=lambda: 100.0,
+        )
+        self.driver.result = ProbeSendResult(True)
+
+        agent.update_plan(plan())
+        agent.process_due(100.0)
+        self.wait_for(self.good.events, 1)
+
+        self.assertEqual(
+            self.good.events[0].channel.channel_id,
+            "primary",
+        )
+
+    def test_failed_diagnostic_publication_is_retryable(self):
+        diag = FailOncePublisher()
+        agent = LinuxProbeExecutionAgent(
+            self.driver,
+            self.good,
+            self.tick,
+            diag,
+            timeout_seconds=2,
+            clock=lambda: 100.0,
+        )
+
+        agent.update_plan(plan())
+        agent.process_due(100.0)
+        self.wait_for(self.driver.calls, 1)
+
+        agent.process_due(110.0)
+        self.wait_for(diag.events, 1)
+
+        self.assertIs(diag.events[0].health, ProbeExecutionHealth.READY)
 
     def test_stop_is_idempotent_and_quiesces_schedule(self):
         self.agent.update_plan(plan())
