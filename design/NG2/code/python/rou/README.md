@@ -138,16 +138,24 @@ Implemented lower/runtime slices now include:
   hint until an enabled assigned channel exists;
 - direct effective-order calculation and the same sole payload reconcile executor for
   auxiliary route priority;
-- generic lower `preferred_prefix_length` hint, not an availability-named payload field.
+- generic lower `preferred_prefix_length` hint, not an availability-named payload field;
+- normalized `RuntimeAvailabilityConfig` with independent physical-probe and
+  payload-priority projections;
+- direct process-local wiring:
+  AvailabilityProbeManager -> ProbeExecutionAgent -> PayloadTrafficManager;
+- shared-Adapter `LinuxNetworkPolicyRuntime` with distinct Manager owner identities,
+  independent audit and independent cleanup;
+- protective bootstrap entry points that expose the network-policy runtime only after
+  verified forwarding closure, including full-instance composition.
 
 Removed executable availability artifacts include `availability_routing.py`,
 `payload_traffic_intent.py` and the old availability-specific
 `runtime_state_manager.py` slice. PayloadTrafficManager no longer imports
 `probe_rules` or `probe_transport`; target/mechanism/cadence stop at the probe side.
 
-Remaining work is runtime assembly/status wiring: produce the physical probe request and
-the independent availability-priority config from the same normalized configuration, then
-wire Agent observations directly to PayloadTrafficManager.
+Remaining work is above/beside the now-executable network-policy assembly:
+structural config/binding -> PayloadTrafficStateRequest projection, Profile/status
+aggregation, probe diagnostic consumption and explicit audit/retry cadence policy.
 
 Rootless tests:
 
