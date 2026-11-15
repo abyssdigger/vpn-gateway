@@ -1,5 +1,10 @@
 # VPN-GATE NG2 — минимальная модель availability и приоритета маршрутов
 
+> **2026-11-15 normative update:** Sections describing availability evidence/hysteresis
+> are superseded by `design/NG2/availability-collector-materializer.md`. Route membership,
+> effective-order, emergent metric-gap and transactional route-move semantics in this
+> document remain normative.
+
 **Status:** active NG2 baseline candidate  
 **Date:** 2026-11-14  
 **Scope:** active probing as a routing-priority input
