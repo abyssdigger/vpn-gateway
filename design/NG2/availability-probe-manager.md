@@ -318,10 +318,19 @@ The Manager serializes request/audit/good-news/window handlers with one re-entra
 lock. A physical generation transition therefore cannot race an old reply into the new
 window state.
 
-The current code stops at this semantic execution contract. Concrete long-lived
-sender/receiver machinery and its process/socket lifecycle remain the next lower
-implementation unit; it must consume the plan without restoring the diagnostic
-single-shot `ProbeAttemptResult` contract.
+The concrete production execution Engine is now implemented as
+`LinuxProbeExecutionAgent`, documented in
+`design/NG2/probe-execution-agent.md`.
+
+`AvailabilityProbeManager` publishes the current `ProbeExecutionPlan | None` as a
+latest-value RequestEvent. Loss of a READY generation publishes `None` before a later
+lower-domain transition; a later fresh READY generation publishes a replacement plan.
+
+The Agent owns cadence and physical send lifecycle. It returns only generation-bound
+`ProbeGoodNewsInfo`, batched `ProbeWindowBoundaryInfo` and local
+`ProbeExecutionDiagnosticInfo`. The historical `ProbeAttemptResult` contract remains
+hidden below a Linux compatibility Adapter and does not cross the production execution
+boundary.
 
 ## 10. Linux technical identity
 
@@ -342,9 +351,12 @@ The semantic probe request contains none of those Linux values.
 The standalone Linux diagnostic worker proves capability-free ping sockets with
 namespace-local `net.ipv4.ping_group_range`.
 
-The final production sender/receiver may reuse the same prerequisite, but its ownership
-belongs to execution machinery, never `NetworkRulesAdapter` policy. Shutdown cleanup is
-defined together with that final execution lifecycle.
+The current Linux execution path reuses the same prerequisite through the already proven
+single-shot ping Driver, hidden below `LinuxDiagnosticPingSendAdapter`. Its ownership
+belongs to execution machinery, never `NetworkRulesAdapter` policy.
+
+The long-lived lifecycle belongs to `LinuxProbeExecutionAgent`; individual ping workers
+are bounded technical sends and remain generation-checked.
 
 ## 12. Removed policy
 
@@ -398,13 +410,13 @@ valid reply
 
 Remaining work is narrower:
 
-1. concrete long-lived sender/receiver machinery implementing `ProbeExecutionPlan`;
-2. diagnostic publication of persistent local probing errors without changing routing
-   safety;
-3. Event Delivery envelope revision/ordering implementation around the currently tested
+1. Event Delivery envelope revision/ordering implementation around the currently tested
    latest-value handlers;
-4. target/live validation of the final execution transport if it differs materially from
-   the already proven diagnostic `ping` worker.
+2. daemon/runtime assembly that instantiates `LinuxProbeExecutionAgent` and connects the
+   real Event Delivery Environment;
+3. Profile/status consumption of generation-scoped local execution diagnostics;
+4. target/live validation only if the execution mechanism later differs materially from
+   the already proven capability-free `ping` worker.
 
 Filter/NAT semantic order remains independent from route priority.
 
