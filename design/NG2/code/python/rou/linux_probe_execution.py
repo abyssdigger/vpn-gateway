@@ -94,6 +94,7 @@ class ProbeExecutionDiagnosticPublisher(Protocol):
 class ProbeExecutionHealth(str, Enum):
     READY = "ready"
     ERROR = "error"
+    INACTIVE = "inactive"
 
 
 @dataclass(frozen=True)
@@ -317,6 +318,7 @@ class LinuxProbeExecutionAgent:
         # Good-news and window-boundary facts share one publication order per Agent.
         # EventEnvelope revisions can later preserve this order across async delivery.
         self._event_publication_lock = Lock()
+        self._diagnostic_publication_lock = Lock()
         self._diagnostic_lock = Lock()
         self._in_flight: set[
             tuple[
@@ -346,21 +348,22 @@ class LinuxProbeExecutionAgent:
     def update_plan(self, plan: ProbeExecutionPlan | None) -> None:
         with self._condition:
             self._schedule.reconcile(plan, self._clock())
-            self._discard_stale_diagnostics_locked(plan)
+            inactive = self._take_stale_diagnostics_locked(plan)
             self._condition.notify_all()
+        self._publish_inactive_diagnostics(inactive)
 
     def stop(self) -> None:
         thread: Thread | None
         with self._condition:
-            if not self._running:
-                self._schedule.reconcile(None, self._clock())
-                self._discard_stale_diagnostics_locked(None)
-                return
+            was_running = self._running
             self._running = False
             self._schedule.reconcile(None, self._clock())
-            self._discard_stale_diagnostics_locked(None)
-            thread = self._thread
+            inactive = self._take_stale_diagnostics_locked(None)
+            thread = self._thread if was_running else None
             self._condition.notify_all()
+
+        self._publish_inactive_diagnostics(inactive)
+
         if thread is not None and thread is not current_thread():
             thread.join()
         with self._condition:
@@ -516,11 +519,12 @@ class LinuxProbeExecutionAgent:
         plane: PhysicalProbePlane,
     ) -> None:
         self._publish_diagnostic(
+            plan,
             ProbeExecutionDiagnosticInfo(
                 plan.generation,
                 plane,
                 ProbeExecutionHealth.READY,
-            )
+            ),
         )
 
     def _publish_diagnostic_error(
@@ -530,38 +534,73 @@ class LinuxProbeExecutionAgent:
         diagnostic: str,
     ) -> None:
         self._publish_diagnostic(
+            plan,
             ProbeExecutionDiagnosticInfo(
                 plan.generation,
                 plane,
                 ProbeExecutionHealth.ERROR,
                 diagnostic,
-            )
+            ),
         )
 
     def _publish_diagnostic(
         self,
+        plan: ProbeExecutionPlan,
         info: ProbeExecutionDiagnosticInfo,
     ) -> None:
-        key = (info.generation, info.plane)
-        with self._diagnostic_lock:
-            if self._latest_diagnostic.get(key) == info:
-                return
-            self._latest_diagnostic[key] = info
-        self._diagnostic_publisher.publish(info)
+        with self._diagnostic_publication_lock:
+            with self._condition:
+                current = self._schedule.plan
+                if current is None or current.generation != plan.generation:
+                    return
+                if info.plane not in current.planes:
+                    return
 
-    def _discard_stale_diagnostics_locked(
+            key = (info.generation, info.plane)
+            with self._diagnostic_lock:
+                if self._latest_diagnostic.get(key) == info:
+                    return
+                self._latest_diagnostic[key] = info
+            self._diagnostic_publisher.publish(info)
+
+    def _take_stale_diagnostics_locked(
         self,
         plan: ProbeExecutionPlan | None,
-    ) -> None:
+    ) -> tuple[ProbeExecutionDiagnosticInfo, ...]:
         # Called while schedule condition is held; diagnostic map has its own lock.
         with self._diagnostic_lock:
             if plan is None:
+                stale = tuple(self._latest_diagnostic.values())
                 self._latest_diagnostic.clear()
-                return
-            live = {
-                (plan.generation, plane)
-                for plane in plan.planes
-            }
-            for key in tuple(self._latest_diagnostic):
-                if key not in live:
-                    self._latest_diagnostic.pop(key, None)
+            else:
+                live = {
+                    (plan.generation, plane)
+                    for plane in plan.planes
+                }
+                stale = tuple(
+                    info
+                    for key, info in self._latest_diagnostic.items()
+                    if key not in live
+                )
+                for key in tuple(self._latest_diagnostic):
+                    if key not in live:
+                        self._latest_diagnostic.pop(key, None)
+
+        return tuple(
+            ProbeExecutionDiagnosticInfo(
+                info.generation,
+                info.plane,
+                ProbeExecutionHealth.INACTIVE,
+            )
+            for info in stale
+        )
+
+    def _publish_inactive_diagnostics(
+        self,
+        items: tuple[ProbeExecutionDiagnosticInfo, ...],
+    ) -> None:
+        if not items:
+            return
+        with self._diagnostic_publication_lock:
+            for info in items:
+                self._diagnostic_publisher.publish(info)
