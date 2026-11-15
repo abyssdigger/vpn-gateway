@@ -445,6 +445,12 @@ leaving the external declarative interface unresolved.
 - `VPNG-R1.R2.R2`
 - `VPNG-R1.R2.R3`
 - `VPNG-R1.R3.C1.R1`
+- `VPNG-R2.R1`
+- `VPNG-R2.R2`
+- `VPNG-R2.R3`
+- `VPNG-R2.R3.R1`
+- `VPNG-R2.R3.R2`
+- `VPNG-R2.R4`
 - `VPNG-R2.R5`
 - `VPNG-R4.R1`
 - `VPNG-R7.R3.R1`
@@ -468,12 +474,18 @@ that candidate configuration.
 The architecture intentionally avoids a global mutable "runtime configuration object".
 Instead, the adapter produces explicit domain contracts needed by accepted requirements.
 
-The first required normalized contract is:
+The first required normalized contracts are:
 
 ```text
 VPNPathIntent:
     logical_path_id
     binding_intent
+
+PayloadPolicyIntent:
+    traffic_selector
+    direction_permissions
+    allowed_path_ids
+    configured_preference
 ```
 
 where:
@@ -481,11 +493,15 @@ where:
 - `logical_path_id` is the stable product identity from `VPNG-R1.R3.R1`;
 - `binding_intent` contains only the information required by `VPNPathAdapter` to resolve
   one concrete endpoint inside the managed network domain;
-- the exact external syntax and concrete selector form are implementation/interface choices
-  and may be refined independently without changing the semantic contract.
+- `traffic_selector` identifies the traffic class to which one policy intent applies;
+- `direction_permissions` independently represents ordinary-network -> VPN and
+  VPN -> ordinary-network permission;
+- `allowed_path_ids` is the explicit set of logical VPN paths eligible for that traffic;
+- `configured_preference` orders only those already allowed paths;
+- the exact external syntax and concrete selector forms are implementation/interface choices
+  and may be refined independently without changing the semantic contracts.
 
-Payload policy is normalized separately rather than being embedded into the VPN path binding
-contract.
+Payload policy and VPN path binding remain separate normalized contracts.
 
 Validation must reject at least:
 
@@ -645,6 +661,9 @@ Availability is not allowed to:
 - `VPNG-R2.R1`
 - `VPNG-R2.R2`
 - `VPNG-R2.R3`
+- `VPNG-R2.R3.R1`
+- `VPNG-R2.R3.R2`
+- `VPNG-R2.R4`
 - `VPNG-R2.R5`
 - `VPNG-R7.R3.R1`
 - `VPNG-R7.R5`
@@ -657,8 +676,17 @@ It is pure: the same inputs produce the same projection.
 This component is justified because policy interpretation is independently testable and must
 not depend on hidden network history.
 
-The exact normalized input schema remains intentionally unspecified until the configuration
-requirements are decomposed further.
+Its normalized input is `PayloadPolicyIntent`.
+
+The Calculator must preserve these invariants:
+
+- traffic membership comes only from `traffic_selector`;
+- path eligibility comes only from `allowed_path_ids`;
+- direction permissions are independent and explicit;
+- configured preference cannot add an ineligible path;
+- availability state is not an input to structural membership or permission;
+- ambiguous overlapping policy must either resolve deterministically according to the
+  accepted policy contract or be rejected before materialization.
 
 # 6. AvailabilityPriorityCalculator
 
@@ -1001,12 +1029,14 @@ never become necessary.
 The configuration boundary itself is now defined and the VPN-path binding contract is
 architecturally closed.
 
-Remaining requirement detail is limited to still-open product semantics, primarily:
+Remaining configuration detail is limited primarily to external representation and lifecycle:
 
-- how users identify traffic classes;
-- how traffic policy references path sets and directions in the external configuration;
+- the concrete external syntax used to express `traffic_selector`, path IDs and direction
+  permissions;
 - whether any configuration changes must be supported live;
 - final user-visible configured-intent projection under `VPNG-R6.R1`.
+
+The semantic payload-policy contract itself is now defined by `PayloadPolicyIntent`.
 
 These gaps must be refined by their owning requirement branches rather than by expanding
 `ConfigurationAdapter` into a universal configuration framework.
