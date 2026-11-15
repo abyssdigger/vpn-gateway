@@ -261,6 +261,14 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
         self.assertEqual(publisher.calls, 2)
         self.assertIn(manager, self.adapter.cleanup_owners)
 
+        # The failed quiesce was not recorded as delivered. A retry must
+        # publish None even though the physical generation is already gone.
+        result = manager.shutdown()
+
+        self.assertTrue(result.success)
+        self.assertEqual(publisher.calls, 3)
+        self.assertIsNone(publisher.events[-1])
+
     def test_shutdown_quiesces_execution_and_cleans_same_owner(self):
         self.manager.handle_request(
             request(probe("primary", self.path, "203.0.113.24"))
