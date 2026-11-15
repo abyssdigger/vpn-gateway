@@ -46,7 +46,7 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
         network = IPv4Network("10.0.0.0/8")
         local = NetworkEndpoint.local_network()
 
-        def desired(order, no_problem_prefix_length=None):
+        def desired(order, preferred_prefix_length=None):
             rules = NetworkRulesSpec(
                 routing_domains=(
                     RoutingDomainSpec(
@@ -54,7 +54,7 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
                         (network,),
                         order,
                         TerminalDisposition.DROP,
-                        no_problem_prefix_length=no_problem_prefix_length,
+                        preferred_prefix_length=preferred_prefix_length,
                     ),
                 ),
                 dispatch_rules=(
@@ -97,7 +97,7 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
 
         boundary_shift = desired(
             (first, second),
-            no_problem_prefix_length=1,
+            preferred_prefix_length=1,
         )
         self.assertTrue(
             linux_network_route_priority_only_change(
@@ -230,7 +230,7 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
                     (network,),
                     (old,),
                     TerminalDisposition.DROP,
-                    no_problem_prefix_length=1,
+                    preferred_prefix_length=1,
                 ),
             ),
             dispatch_rules=(
@@ -262,7 +262,7 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
             (),
         )
         self.assertEqual(
-            actual.routing_domains[0].no_problem_prefix_length,
+            actual.routing_domains[0].preferred_prefix_length,
             0,
         )
         self.assertEqual(actual.traffic_allows, ())
