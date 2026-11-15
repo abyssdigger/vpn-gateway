@@ -426,14 +426,24 @@ class LinuxProbeExecutionAgentTests(unittest.TestCase):
             timeout_seconds=2,
             clock=lambda: 100.0,
         )
+        self.driver.result = ProbeSendResult(True)
 
         agent.update_plan(plan())
         agent.process_due(100.0)
-        self.wait_for(self.driver.calls, 1)
 
-        agent.process_due(110.0)
+        # Good news is emitted after the failed READY diagnostic publication,
+        # so observing it proves the first worker advanced past that callback.
+        self.wait_for(self.good.events, 1)
+
+        # Allow the worker's finally block to release the in-flight slot before
+        # scheduling the next physical send.
+        deadline = time.monotonic() + 2
+        while len(self.driver.calls) < 2 and time.monotonic() < deadline:
+            agent.process_due(110.0)
+            time.sleep(0.005)
+
+        self.assertGreaterEqual(len(self.driver.calls), 2)
         self.wait_for(diag.events, 1)
-
         self.assertIs(diag.events[0].health, ProbeExecutionHealth.READY)
 
     def test_stop_is_idempotent_and_quiesces_schedule(self):
