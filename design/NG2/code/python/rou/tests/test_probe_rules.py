@@ -17,10 +17,7 @@ from rou.probe_rules import (
 
 
 
-TEST_POLICY = AvailabilityChannelPolicy(
-    interval_seconds=10,
-    failure_intervals=3,
-)
+TEST_POLICY = AvailabilityChannelPolicy(interval_seconds=10, failure_ticks=3, recovery_good_news=1)
 
 
 def probe_request(
@@ -196,10 +193,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
-                    policy=AvailabilityChannelPolicy(
-                        interval_seconds=10,
-                        failure_intervals=3,
-                    ),
+                    policy=AvailabilityChannelPolicy(interval_seconds=10, failure_ticks=3, recovery_good_news=1),
                 ),
             )
         )
@@ -209,10 +203,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
-                    policy=AvailabilityChannelPolicy(
-                        interval_seconds=30,
-                        failure_intervals=2,
-                    ),
+                    policy=AvailabilityChannelPolicy(interval_seconds=30, failure_ticks=2, recovery_good_news=1),
                 ),
             )
         )
