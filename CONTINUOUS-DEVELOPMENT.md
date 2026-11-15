@@ -158,6 +158,22 @@ scope unless explicitly accepted as a new requirement.
 
 A requirement must never be invented merely to preserve an existing component or mechanism.
 
+## Requirement artifact maintenance
+
+The current requirement tree is the normative source of requirement state.
+
+When requirement/constraint text or decomposition links change:
+
+- keep the existing stable ID unless the entity itself was incorrectly identified;
+- update the node in place rather than creating a shadow copy;
+- preserve causal decomposition links as `[decomp: blocker -> pending|deblocker]`;
+- revalidate affected descendants, constraints, architecture references and evidence;
+- use Git history as the current editorial change record.
+
+Do not introduce a separate semantic requirement-change journal until a concrete project
+need requires querying semantic transitions independently from Git history. Such a journal
+is a future requirements-management feature, not a prerequisite for current design work.
+
 ## Human acceptance of requirement decisions
 
 Unambiguous refinements that are strictly implied by an accepted parent requirement may be
