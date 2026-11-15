@@ -154,6 +154,38 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             IPv4Address("203.0.113.25"),
         )
 
+    def test_failure_threshold_only_change_restarts_logical_window_epoch(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        first_plan = self.execution_publisher.events[-1]
+        first_window = first_plan.windows[0]
+        self.execution_publisher.events.clear()
+
+        changed = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            policy=AvailabilityWindowPolicy(
+                primary.policy.interval_seconds,
+                2,
+            ),
+        )
+        self.manager.handle_request(request(changed))
+
+        self.assertEqual(self.manager.observation_generation, generation)
+        self.assertEqual(len(self.execution_publisher.events), 1)
+        second_plan = self.execution_publisher.events[0]
+        second_window = second_plan.windows[0]
+        self.assertEqual(
+            second_window.interval_seconds,
+            first_window.interval_seconds,
+        )
+        self.assertNotEqual(
+            second_window.evidence_epoch,
+            first_window.evidence_epoch,
+        )
+
     def test_logical_cadence_change_republishes_plan_without_generation_change(self):
         primary = probe("primary", self.path, "203.0.113.24")
         self.manager.handle_request(request(primary))
