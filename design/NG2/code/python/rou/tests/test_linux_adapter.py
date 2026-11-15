@@ -210,7 +210,7 @@ class LinuxNetworkRulesAdapterTests(unittest.TestCase):
                         (network,),
                         (first, second),
                         TerminalDisposition.DROP,
-                        confirmed_live_prefix_length=prefix,
+                        no_problem_prefix_length=prefix,
                     ),
                 ),
                 dispatch_rules=(
