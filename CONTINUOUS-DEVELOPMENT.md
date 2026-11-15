@@ -132,8 +132,10 @@ When a requirement is insufficient:
    - state what is constrained and how;
    - identify who must compensate for the limitation;
    - if work/knowledge is shifted to a user, administrator or external system, add the
-     necessary child requirement under that constraint to make the adaptation/contract
-     explicit;
+     necessary child requirement under that constraint;
+   - that child requirement must state what the product must provide so the external
+     participant can perform the adaptation correctly and reproducibly (for example an
+     instruction, API, configuration contract, validation rule or diagnostic surface);
    - lift its observable effect upward;
    - verify the resulting effective product envelope;
 7. define acceptance evidence at the cheapest sufficient level;
