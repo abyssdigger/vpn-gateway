@@ -256,6 +256,7 @@ class AvailabilityProbeManager:
                 info.probe_id,
                 info.generation,
                 info.elapsed_intervals,
+                evidence_epoch=info.evidence_epoch,
             )
 
     def close_interval(
@@ -275,13 +276,20 @@ class AvailabilityProbeManager:
     ) -> bool:
         """Apply one boundary while holding the Manager state lock."""
 
-        return self._close_intervals_locked(probe_id, generation, 1)
+        return self._close_intervals_locked(
+            probe_id,
+            generation,
+            1,
+            evidence_epoch=self._logical_evidence_epochs.get(probe_id),
+        )
 
     def _close_intervals_locked(
         self,
         probe_id: str,
         generation: ProbeObservationGeneration,
         count: int,
+        *,
+        evidence_epoch: int | None,
     ) -> bool:
         """Apply one or more elapsed boundaries while holding the state lock."""
 
@@ -289,6 +297,9 @@ class AvailabilityProbeManager:
             return False
         if type(count) is not int or count <= 0:
             raise ValueError("boundary count must be a positive integer")
+        expected_epoch = self._logical_evidence_epochs.get(probe_id)
+        if expected_epoch is None or evidence_epoch != expected_epoch:
+            return False
 
         request = self._latest_request
         if request is None:
