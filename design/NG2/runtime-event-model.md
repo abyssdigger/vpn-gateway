@@ -71,30 +71,17 @@ Runtime не требует единого процедурного global recon
 
 Latest-value storage является cache текущего мира, а не историческим журналом.
 
-Первый executable slice уже реализует availability-driven payload priority. Он хранит:
+RuntimeStateManager остается владельцем общей structural/configuration
+проекции, но больше не является посредником availability hysteresis для route priority.
 
-```text
-current configured payload snapshot
-current AvailabilityProbeSetRequest
-latest AvailabilityProbeStateInfo by probe_id
-runtime-derived ProfileProbeAssignment
-current effective PayloadTrafficStateRequest
-```
+Runtime-derived association logical probes with Profiles может по-прежнему вычисляться и
+валидироваться из configuration/interface state, однако текущие GOOD/BAD counters/latches
+не проходят цепочку `AvailabilityProbeStateInfo -> RuntimeStateManager ->
+PayloadTrafficStateRequest`.
 
-`ProfileProbeAssignment(profile_name, probe_ids)` является runtime-derived association,
-а не полем physical ProbeRules и не Linux policy. Один logical probe может быть источником
-evidence для нескольких Profiles. Assignment валидируется до публикации: каждый probe
-должен существовать и его concrete path должен входить в eligible set соответствующего
-Profile.
-
-Current executable handlers сериализуют latest-value state одним re-entrant lock внутри
-RuntimeStateManager. Поэтому concurrent callbacks не могут одновременно пересчитывать и
-публиковать противоречащие друг другу effective snapshots; synchronous feedback через тот
-же thread при этом не deadlock'ится.
-
-Это **не** заменяет EventEnvelope ordering. Поздно доставленная старая revision может
-прийти уже после завершения более новой handler invocation; отсечение такого события
-остается ответственностью epoch/revision filter Event Delivery/runtime ingress.
+Raw current good-news/tick observations поступают в bounded input port
+`PayloadTrafficManager`, который сам владеет availability collector state для route
+priority. Поэтому EventEnvelope ordering не требуется для этой availability path.
 
 ### 2.2. InterfaceObservationAgent
 
@@ -119,58 +106,35 @@ Agent не выполняет Device admission и не определяет Prof
 
 ### 2.3. AvailabilityProbeManager
 
-`AvailabilityProbeManager` управляет подсистемой активных availability probes.
-
-Его managed domain:
+`AvailabilityProbeManager` управляет physical active-probe domain:
 
 - desired logical probe set;
-- probe-specific network environment;
-- execution-side probe evidence;
-- rules/interface-generation validity;
-- публикация текущего availability evidence.
+- probe-specific NetworkRules;
+- rules/readiness lifecycle;
+- current concrete physical generation;
+- execution demand for `ProbeExecutionAgent`.
 
-Он **не** определяет Profile binding membership и не удаляет payload path по результату
-probe.
-
-Routing-level смысл evidence зафиксирован отдельно в
-`design/NG2/availability-routing-model.md`: подтвержденно живой path может получить более
-высокий приоритет среди уже bound/eligible paths, но probing вообще не меняет payload
-route membership.
+Он не владеет routing hysteresis, GOOD/BAD channel counters или payload route priority.
 
 ### 2.4. ProbeExecutionAgent
 
-`ProbeExecutionAgent` исполняет generation-bound active-probe demand.
+`ProbeExecutionAgent` исполняет current physical probe demand.
 
-Он получает latest-value RequestEvent:
-
-```text
-ProbeExecutionPlan | None
-```
-
-от `AvailabilityProbeManager`.
-
-Agent владеет:
-
-- monotonic send/window cadence;
-- immediate first send;
-- boundary-before-next-send phase ordering;
-- bounded physical send workers;
-- generation filtering результатов;
-- local execution diagnostics.
-
-Он публикует:
+Он владеет physical send cadence, bounded workers, stale physical-generation rejection и
+local execution diagnostics. Для availability collector он производит только:
 
 ```text
-ProbeGoodNewsInfo
-ProbeWindowBoundaryInfo
-ProbeExecutionDiagnosticInfo
+good_news(current channel)
+tick(current logical channel)
 ```
 
-`NO_REPLY` не существует как production Event. Local execution error также не является
-routing verdict.
+Good news increment bounded counters; tick sets a boolean pending fact. Neither input is a
+journal item requiring replay ordering. `NO_REPLY` remains absence of good news; local
+execution ERROR remains diagnostic only.
 
-Конкретная Linux реализация и lifecycle описаны в
-`design/NG2/probe-execution-agent.md`.
+Logical observation windows, `evidence_epoch`, `elapsed_intervals` and boundary
+catch-up are not part of the target runtime model. Exact aggregation and transition rules
+are normative in `design/NG2/availability-collector-materializer.md`.
 
 ### 2.5. PayloadTrafficManager
 
