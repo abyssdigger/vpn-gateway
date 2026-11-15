@@ -1,3 +1,32 @@
+## 2026-11-15 — NG2 executable network-policy runtime assembly
+
+Assembled the already-reviewed payload/probe components into an executable Linux
+network-policy object graph without reintroducing an availability evidence bus:
+
+- added immutable `RuntimeAvailabilityConfig` as the normalized upstream availability
+  slice;
+- added independent Direct projections to `AvailabilityProbeSetRequest` and
+  `AvailabilityPriorityConfig`;
+- ordered config fanout installs payload-priority descriptors before a new probe execution
+  plan may emit observations;
+- added process-local synchronous `CallbackPublisher` wiring for Manager/Agent edges;
+- added `LinuxAvailabilityRuntimeAssembly` and shared-Adapter
+  `LinuxNetworkPolicyRuntime`;
+- PayloadTrafficManager and AvailabilityProbeManager remain distinct Adapter owners;
+- outer audit keeps owner scopes independent; outer stop cleans both owners even when one
+  cleanup fails;
+- protective runtime bootstrap remains in `runtime_bootstrap.py` and now exposes
+  network-policy runtime helpers only after verified forwarding closure;
+- full-instance composition preserves the deliberate double protective close across
+  instance-lifecycle and Adapter-bootstrap boundaries;
+- whole-assembly cleanup moved bootstrap logic back out of `runtime_assembly.py` and
+  collapsed three redundant forwarding-port classes into one generic callback publisher;
+- final simplified `runtime_assembly.py` is 366 lines / 11 top-level definitions versus
+  the pre-review 492 lines / 17 definitions;
+- final reviewed code CI passed **297 unit tests** plus the full privileged Linux matrix.
+
+---
+
 ## 2026-11-15 — NG2 payload/probing decoupling
 
 Cleaned the remaining payload-domain coupling left from earlier availability designs:
