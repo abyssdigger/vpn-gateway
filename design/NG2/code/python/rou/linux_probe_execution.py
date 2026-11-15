@@ -556,11 +556,14 @@ class LinuxProbeExecutionAgent:
                 if info.plane not in current.planes:
                     return
 
-            key = (info.generation, info.plane)
-            with self._diagnostic_lock:
-                if self._latest_diagnostic.get(key) == info:
-                    return
-                self._latest_diagnostic[key] = info
+                key = (info.generation, info.plane)
+                with self._diagnostic_lock:
+                    if self._latest_diagnostic.get(key) == info:
+                        return
+                    self._latest_diagnostic[key] = info
+
+            # Plan updates may now proceed, but they will observe this committed
+            # diagnostic and emit INACTIVE after this publication if it became stale.
             self._diagnostic_publisher.publish(info)
 
     def _take_stale_diagnostics_locked(
