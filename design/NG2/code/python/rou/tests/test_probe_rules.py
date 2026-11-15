@@ -1,7 +1,7 @@
 from ipaddress import IPv4Address, IPv4Network
 import unittest
 
-from rou.availability_routing import AvailabilityWindowPolicy
+from rou.availability_collector import AvailabilityChannelPolicy
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
     EndpointKind,
@@ -17,7 +17,7 @@ from rou.probe_rules import (
 
 
 
-TEST_POLICY = AvailabilityWindowPolicy(
+TEST_POLICY = AvailabilityChannelPolicy(
     interval_seconds=10,
     failure_intervals=3,
 )
@@ -196,7 +196,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
-                    policy=AvailabilityWindowPolicy(
+                    policy=AvailabilityChannelPolicy(
                         interval_seconds=10,
                         failure_intervals=3,
                     ),
@@ -209,7 +209,7 @@ class ProbeRulesCalculatorTests(unittest.TestCase):
                     "probe",
                     path,
                     target,
-                    policy=AvailabilityWindowPolicy(
+                    policy=AvailabilityChannelPolicy(
                         interval_seconds=30,
                         failure_intervals=2,
                     ),
