@@ -47,6 +47,9 @@ Those gaps remain requirements without invented architecture.
 
 **Implements:**
 - `VPNG-R4.R6`
+- `VPNG-R4.R6.R1`
+- `VPNG-R4.R6.R1.R1`
+- `VPNG-R4.R6.R1.R3`
 - `VPNG-R4.R2`
 - `VPNG-R4.R4`
 - `VPNG-R5.R1`
@@ -84,7 +87,6 @@ namespace itself.
 
 **Constrained by:**
 - `VPNG-R1.R3.C1`
-- `VPNG-R1.R3.C2`
 - `VPNG-R1.R3.C2`
 
 **Implements:**
