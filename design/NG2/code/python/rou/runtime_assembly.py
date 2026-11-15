@@ -333,9 +333,27 @@ class LinuxNetworkPolicyRuntime:
                     "network-policy cleanup failed for both owners",
                     (probe_error, payload_error),
                 )
+            if probe_result is not None and not probe_result.success:
+                diagnostic = (
+                    f": {probe_result.diagnostic}"
+                    if probe_result.diagnostic
+                    else ""
+                )
+                payload_error.add_note(
+                    "probe cleanup also returned failure" + diagnostic
+                )
             raise
 
         if probe_error is not None:
+            if not payload_result.success:
+                diagnostic = (
+                    f": {payload_result.diagnostic}"
+                    if payload_result.diagnostic
+                    else ""
+                )
+                probe_error.add_note(
+                    "payload cleanup also returned failure" + diagnostic
+                )
             raise probe_error
 
         assert probe_result is not None
