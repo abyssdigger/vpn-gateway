@@ -48,8 +48,8 @@ class LinuxDiagnosticPingSendAdapter:
     """
 
     def __init__(self, driver: LinuxIcmpProbeDriver) -> None:
-        if not isinstance(driver, LinuxIcmpProbeDriver):
-            raise ValueError("ping send Adapter requires LinuxIcmpProbeDriver")
+        if not callable(getattr(driver, "execute", None)):
+            raise ValueError("ping send Adapter requires single-shot probe Driver")
         self._driver = driver
 
     def execute_send(
