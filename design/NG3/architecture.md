@@ -15,6 +15,9 @@ every NG3 architectural element below must be justified again by NG3 requirement
 
 # 1. Architecture scope of this pass
 
+**Implements:**
+- `VPNG-R1`
+
 This pass attempts architecture only for the requirements that are already sufficiently
 defined to justify concrete responsibilities:
 
