@@ -203,7 +203,7 @@ binding или частью пользовательской конфигура�
 availability state. Она передается внутри текущего runtime routing intent как
 
 ```text
-confirmed_live_prefix_length
+no_problem_prefix_length
 ```
 
 Это **не normalized configuration** и не отдельный gap object. Значение вычисляется из
@@ -266,7 +266,7 @@ all non-confirmed:
 
 Положение свободного metric не фиксируется в конфигурации и не materialized отдельным
 объектом. Оно однозначно выводится из текущего effective order и transient
-`confirmed_live_prefix_length`.
+`no_problem_prefix_length`.
 
 Terminal blackhole остается отдельным:
 
