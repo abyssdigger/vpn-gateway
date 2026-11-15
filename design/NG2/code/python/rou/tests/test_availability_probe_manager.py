@@ -164,6 +164,40 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
             first_generation,
         )
 
+    def test_failed_physical_change_quiesce_retries_before_new_generation(self):
+        publisher = RaiseOnSecondPublisher()
+        manager = AvailabilityProbeManager(
+            self.adapter,
+            execution_plan_publisher=publisher,
+        )
+        first = request(
+            probe("primary", self.path, "203.0.113.24")
+        )
+        changed = request(
+            probe("primary", self.path, "203.0.113.25")
+        )
+
+        manager.handle_request(first)
+        first_generation = manager.observation_generation
+
+        with self.assertRaisesRegex(RuntimeError, "publisher boom"):
+            manager.handle_request(changed)
+
+        self.assertIsNone(manager.observation_generation)
+
+        manager.handle_request(changed)
+
+        self.assertEqual(publisher.calls, 4)
+        self.assertIsNone(publisher.events[1])
+        self.assertEqual(
+            publisher.events[-1].channels[0].target,
+            IPv4Address("203.0.113.25"),
+        )
+        self.assertNotEqual(
+            publisher.events[-1].generation,
+            first_generation,
+        )
+
     def test_disabling_only_probe_quiesces_execution(self):
         first = probe("primary", self.path, "203.0.113.24")
         self.manager.handle_request(request(first))
