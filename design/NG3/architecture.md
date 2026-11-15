@@ -498,11 +498,14 @@ PayloadPolicyIntent:
     configured_preference
 
 AvailabilityCheckConfig:
+    availability_subject_id
+    policy_context_id
     logical_path_id
     mechanism
     target = explicit IPv4 | omitted
 
 AvailabilityProbeIntent:
+    availability_subject_id
     logical_path_id
     mechanism
     target = concrete IPv4
@@ -518,19 +521,70 @@ where:
   VPN -> ordinary-network permission;
 - `allowed_path_ids` is the explicit set of logical VPN paths eligible for that traffic;
 - `configured_preference` orders only those already allowed paths;
-- `AvailabilityCheckConfig.mechanism` is the user-selected meaning of "how this path is
+- `availability_subject_id` identifies one policy/traffic-context use of one logical VPN
+  path; it is not physical interface identity;
+- the same logical path/interface may therefore have different availability subjects in
+  different policy contexts;
+- `AvailabilityCheckConfig.mechanism` is the user-selected meaning of "how this subject is
   checked"; first-release accepted value is `icmp`;
 - `target` is optional only at the external configuration boundary;
 - an explicit target must be preserved unchanged into normalized probe intent;
+- when target is omitted, normalization must derive one concrete IPv4 deterministically from
+  already accepted policy/path/Device/interface/binding/peer topology semantics for that
+  availability subject;
+- there is no universal global default probe IP;
 - before probe runtime receives a request, normalization must produce one concrete IPv4
   target for every enabled probe;
-- the exact product rule that selects the default target when the external target is omitted
-  is not yet accepted and remains the only open semantic point in this branch;
 - the exact external field name/string syntax is an interface choice;
 - the exact external syntax and concrete selector forms are implementation/interface choices
   and may be refined independently without changing the semantic contracts.
 
 Payload policy and VPN path binding remain separate normalized contracts.
+
+### AvailabilityTargetCalculator
+
+**Component type:** Calculator
+
+**Implements:**
+- `VPNG-R3.R6.R1`
+- `VPNG-R3.R6.R3.R1`
+- `VPNG-R3.R6.R3.R2`
+- `VPNG-R7.R1`
+- `VPNG-R7.R3.R1`
+- `VPNG-R7.R5`
+
+This pure semantic projection owns default-target derivation above probe runtime.
+
+Conceptual contract:
+
+```text
+derive_target(
+    availability_subject,
+    mechanism,
+    explicit_target?,
+    accepted policy/path/device/binding/peer topology facts
+)
+    -> concrete IPv4
+     | unresolved
+     | ambiguous
+```
+
+Rules:
+
+- explicit target -> return exactly that IPv4;
+- omitted target -> derive the path-specific target mathematically from already available
+  semantics of the concrete availability subject;
+- never substitute a global public/default IP;
+- the same physical interface may produce different targets for different availability
+  subjects;
+- unresolved or ambiguous derivation rejects/diagnoses that probe intent before runtime
+  execution.
+
+The Calculator does not probe the network and does not own runtime observation state.
+
+Device/integration-specific derivation formulas may be implemented behind this contract. They
+must be deterministic projections of already accepted topology semantics and must not require
+the user to provide an additional target merely to make bare `icmp` work.
 
 Validation must reject at least:
 
@@ -539,8 +593,8 @@ Validation must reject at least:
 - binding intent insufficient to resolve a supported endpoint;
 - unsupported availability-check mechanism;
 - malformed explicit check target;
-- a target-less probe when the accepted default-target rule cannot produce one concrete
-  normalized target;
+- a target-less probe when the available subject/topology semantics cannot produce one
+  unambiguous concrete normalized target;
 - contradictory declarations that cannot produce one deterministic semantic result.
 
 A rejected configuration is not partially materialized.
@@ -636,9 +690,9 @@ Keeping them together therefore follows both the product semantics and
 
 ## 4.3. Availability state inside the Manager
 
-For each availability-enabled logical path, the Manager may keep only the bounded semantic
-state necessary to implement `VPNG-R3.R3`, `VPNG-R3.R4`, `VPNG-R3.R5.R1` and
-`VPNG-R3.R5.R2`:
+For each availability subject (one policy/traffic context + logical VPN path), the Manager
+may keep only the bounded semantic state necessary to implement `VPNG-R3.R3`,
+`VPNG-R3.R4`, `VPNG-R3.R5.R1` and `VPNG-R3.R5.R2`:
 
 - whether an availability problem is currently established;
 - bounded progress toward establishing a problem;
@@ -660,6 +714,7 @@ Normalized evidence:
 
 ```text
 AvailabilityEvidence:
+    availability_subject_id
     logical_path_id
     observation_context
     outcome = positive | negative | no_evidence
@@ -672,9 +727,9 @@ where:
 - `no_evidence` means the observation attempt does not justify changing path state
   (for example, a local execution failure that does not itself prove path failure).
 
-Only fresh evidence for the current logical path/context enters hysteresis.
+Only fresh evidence for the current availability subject/path/context enters hysteresis.
 
-For each logical path the Manager keeps bounded confirmation state:
+For each availability subject the Manager keeps bounded confirmation state:
 
 ```text
 availability_problem: bool
@@ -824,7 +879,8 @@ It owns:
 - currently requested normalized observation channels;
 - cadence for the selected active-observation mechanism;
 - bounded in-flight checks;
-- association of each result with the current requested path identity;
+- association of each result with the current requested availability-subject identity and
+  concrete path observation identity;
 - rejection of results that no longer belong to the current observation context;
 - local diagnostics about inability to resolve or execute the observation mechanism.
 
@@ -870,30 +926,32 @@ No logical evidence epoch, attempt journal or replay ordering is introduced.
 
 The product does not attempt to define one universal semantic "VPN path is good" predicate.
 
-The user selects the check mechanism and may provide an explicit IPv4 target in external
-configuration.
+The user selects the check mechanism for one availability subject and may provide an
+explicit IPv4 target in external configuration.
 
 The probe runtime boundary receives only normalized requests:
 
 ```text
 AvailabilityProbeIntent:
+    availability_subject_id
     logical_path_id
     mechanism = icmp
     target = concrete IPv4
 ```
 
 Therefore `AvailabilityProbeAgent` and `ActiveProbeDriver` do not know whether the target
-was explicitly configured or supplied by a default-target normalization rule.
+was explicitly configured or derived by `AvailabilityTargetCalculator`.
 
 Current accepted semantics:
 
 1. explicit target -> normalization preserves exactly that IPv4 target;
-2. omitted target -> configuration normalization must select one concrete IPv4 target before
-   runtime probe demand is produced;
-3. the exact selection rule for that default target is not yet accepted.
+2. omitted target -> `AvailabilityTargetCalculator` derives one concrete IPv4 from the
+   already accepted topology/semantics of this availability subject;
+3. there is no universal default probe IP;
+4. if derivation is unresolved/ambiguous, runtime probe demand is not produced for that
+   subject and the problem is diagnostic.
 
-The third point is a requirements gap, not a reason to move target inference into probe
-runtime or VPNPathAdapter.
+Target derivation remains above probe runtime and outside `VPNPathAdapter` policy.
 
 Once a concrete target exists, evidence semantics remain user-relative:
 
@@ -903,8 +961,8 @@ valid check with no reply                    -> negative evidence
 local execution failure                      -> no_evidence + diagnostic
 ```
 
-The concrete target is part of the observation context. A normalized target change
-invalidates in-flight results from the preceding context.
+The availability subject and concrete target are both part of the observation context. A
+subject/target/path-binding change invalidates in-flight results from the preceding context.
 
 Future TCP/UDP/HTTP checks may add Driver implementations behind the same normalized
 criterion contract, but they are not first-release capabilities.
@@ -1089,8 +1147,8 @@ The architecture currently needs only semantic event edges required by Engine ro
 - `VPNG-R3.R6.R3`
 - `VPNG-R7.R5`
 
-The event must identify the logical path and carry only the bounded observation information
-needed by the Manager.
+The event must identify the availability subject and logical path and carry only the bounded
+observation information needed by the Manager.
 
 The event carries normalized `AvailabilityEvidence`.
 
@@ -1365,26 +1423,23 @@ Remaining configuration detail is implementation/interface freedom:
 The semantic contracts are already defined. These freedoms must not be expanded into a
 universal configuration framework without a new requirement.
 
-## 16.2. Availability evidence semantics
+## 16.2. Availability target derivation
 
-Affected requirements:
-- `VPNG-R3.R3`
-- `VPNG-R3.R4`
-- `VPNG-R3.R5`
-- `VPNG-R3.R6`
+The product semantics and architecture boundary are now defined:
 
-Confirmation/hysteresis semantics and the normalized event contract are now defined.
+- availability is subject-specific (policy/traffic context + logical VPN path);
+- explicit target is preserved exactly;
+- bare ICMP derives one concrete target deterministically from already accepted
+  subject/path/Device/interface/binding/peer topology semantics;
+- no universal global default target exists;
+- `AvailabilityTargetCalculator` performs this pure normalization before probe runtime;
+- unresolved/ambiguous derivation is diagnostic and produces no runtime probe demand.
 
-The first-release observation semantics are now defined by user-selected ICMP check intent.
+Concrete Device/integration-specific derivation formulas remain implementation work behind
+the accepted Calculator contract. They must satisfy the deterministic subject-specific
+contract and require their own implementation evidence.
 
-An explicit target is preserved directly into normalized probe intent.
-
-For an omitted target, the product still needs one accepted deterministic default-target
-selection rule in the configuration-normalization layer. That rule is intentionally not
-invented here.
-
-Future TCP/UDP/HTTP mechanisms remain outside current scope and do not affect this open
-default-target question.
+Future TCP/UDP/HTTP mechanisms remain outside current scope.
 
 ## 16.3. User-visible status presentation
 
