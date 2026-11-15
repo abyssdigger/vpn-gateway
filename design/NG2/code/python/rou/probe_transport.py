@@ -112,12 +112,15 @@ class ProbeGoodNewsInfo:
 class ProbeWindowBoundaryInfo:
     probe_id: str
     generation: ProbeObservationGeneration
+    elapsed_intervals: int = 1
 
     def __post_init__(self) -> None:
         if not isinstance(self.probe_id, str) or not self.probe_id:
             raise ValueError("window-boundary info requires non-empty probe_id")
         if not isinstance(self.generation, ProbeObservationGeneration):
             raise ValueError("window-boundary info requires ProbeObservationGeneration")
+        if type(self.elapsed_intervals) is not int or self.elapsed_intervals <= 0:
+            raise ValueError("window-boundary elapsed_intervals must be positive")
 
 
 class ProbeExecutionPlanCalculator:
