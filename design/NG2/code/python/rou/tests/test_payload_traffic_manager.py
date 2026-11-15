@@ -636,7 +636,8 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
         self.tick("a")
         self.good("a")
         self.good("a")
-        self.tick("a")
+        self.tick("a")   # consumes the armed good-news trigger
+        self.tick("a")   # no good news since the preceding tick: reset progress
         self.good("a")
 
         self.assertEqual(self.order(), (self.b, self.c, self.a))
