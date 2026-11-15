@@ -40,7 +40,74 @@ This pass intentionally does **not** yet define:
 
 Those gaps remain requirements without invented architecture.
 
-# 2. Architecture summary
+# 2. Real scenarios used by this design
+
+These scenarios are not additional requirements. They are concrete situations used to test
+whether the decomposition is necessary and sufficient.
+
+## S1 — Explicitly managed payload
+
+A configured traffic class is allowed to use a configured set of VPN paths. Unrelated host
+traffic must not acquire VPN forwarding merely because those paths exist.
+
+Relevant requirements:
+- `VPNG-R1.R1`
+- `VPNG-R2.R1-R4`
+- `VPNG-R4.R1`
+
+## S2 — Preferred path degrades
+
+Two or more paths are allowed. The preferred path becomes practically unusable while at
+least one allowed alternative remains usable. New traffic should prefer the usable
+alternative, without changing path membership.
+
+Relevant requirements:
+- `VPNG-R3.R1-R5`
+- `VPNG-R3.R7`
+
+## S3 — Local presence is not sufficient evidence
+
+A VPN interface/process can remain locally present while the remote path property relevant
+to the product scenario is no longer usable. Payload may also be idle, so waiting for a
+payload failure is not always useful.
+
+The architecture therefore selects active observation as the first NG3 mechanism for
+obtaining evidence required by `VPNG-R3.R6`. Active probing is an architectural choice,
+not a product promise.
+
+Relevant requirements:
+- `VPNG-R3.R6`
+- `VPNG-R3.R6.R3`
+
+## S4 — Old observation finishes late
+
+The observed concrete path context changes while an earlier asynchronous check is still
+in-flight. Its later result must not modify current preference.
+
+Relevant requirements:
+- `VPNG-R3.R6.R1`
+- `VPNG-R3.R6.R2`
+
+## S5 — Network mutation partially fails
+
+The system begins changing owned network policy and one lower operation fails. The next
+decision must be based on freshly observed authoritative state and must not silently expose
+unallowed forwarding.
+
+Relevant requirements:
+- `VPNG-R4.R2-R5`
+- `VPNG-R5.R2-R3`
+
+## S6 — One cleanup area fails
+
+Shutdown owns several independent resources. Failure to clean one must not prevent attempts
+to clean the others, and the failures must remain visible.
+
+Relevant requirements:
+- `VPNG-R5.R4-R5`
+- `VPNG-R6.R3`
+
+# 4. Architecture summary
 
 ```text
 normalized payload intent
@@ -95,7 +162,7 @@ managed network domain                               |
 The event-delivery mechanism is intentionally left abstract. NG3 requires the semantic edge,
 not a persistent bus, journal or replay system.
 
-# 3. PayloadTrafficManager
+# 4. PayloadTrafficManager
 
 **Component type:** Manager
 
@@ -123,7 +190,7 @@ not a persistent bus, journal or replay system.
 - `VPNG-R7.R5`
 - `VPNG-R7.R6`
 
-## 3.1. Responsibility
+## 4.1. Responsibility
 
 The Manager owns the current semantic payload-policy projection for the traffic domain that
 has already been normalized into its input contract.
@@ -147,7 +214,7 @@ It does **not** own:
 - Linux route/table/nft representation;
 - global user-facing status aggregation.
 
-## 3.2. Why one Manager
+## 4.2. Why one Manager
 
 The payload policy requirements form one transactional semantic responsibility:
 
@@ -167,7 +234,7 @@ protocol not demanded by any accepted requirement.
 Keeping them together therefore follows both the product semantics and
 `VPNG-R7.R1`.
 
-## 3.3. Availability state inside the Manager
+## 4.3. Availability state inside the Manager
 
 For each availability-enabled logical path, the Manager may keep only the bounded semantic
 state necessary to implement `VPNG-R3.R3`, `VPNG-R3.R4` and `VPNG-R3.R5`:
@@ -186,7 +253,7 @@ No unbounded attempt history, evidence journal or replay log is justified.
 
 The exact evidence input semantics are not finalized in this pass; see design gaps.
 
-## 3.4. Availability affects priority only
+## 4.4. Availability affects priority only
 
 The Manager applies availability only after structural policy has established the allowed
 path set.
@@ -216,7 +283,7 @@ Availability is not allowed to:
 - `VPNG-R3.R2`
 - `VPNG-R3.R7`
 
-# 4. PayloadPolicyCalculator
+# 5. PayloadPolicyCalculator
 
 **Component type:** Calculator
 
@@ -239,7 +306,7 @@ not depend on hidden network history.
 The exact normalized input schema remains intentionally unspecified until the configuration
 requirements are decomposed further.
 
-# 5. AvailabilityPriorityCalculator
+# 6. AvailabilityPriorityCalculator
 
 **Component type:** Calculator
 
@@ -268,7 +335,7 @@ Manager because confirmation spans observations.
 The output always contains the same structurally allowed path membership. Availability can
 only change ordering.
 
-# 6. AvailabilityProbeAgent
+# 7. AvailabilityProbeAgent
 
 **Component type:** Agent
 
@@ -282,17 +349,17 @@ only change ordering.
 - `VPNG-R7.R3`
 - `VPNG-R7.R5`
 
-## 6.1. Responsibility
+## 7.1. Responsibility
 
 The Agent owns ongoing execution of configured active availability observations.
 
 It owns:
 
 - currently requested observation channels;
-- active-check cadence;
+- cadence for the selected active-observation mechanism;
 - bounded in-flight checks;
 - association of each result with the current requested path identity;
-- rejection of results that belong to a superseded physical observation generation;
+- rejection of results that no longer belong to the current observation context;
 - local diagnostics about inability to execute the observation mechanism.
 
 It does not own:
@@ -302,16 +369,16 @@ It does not own:
 - availability hysteresis policy outcome;
 - effective route order.
 
-## 6.2. Why Agent
+## 7.2. Why Agent
 
 Active checking is ongoing observation of an external network condition. The component
 does not manage that network condition; it observes it.
 
 Therefore it is an Agent under `design/component-model.md`, rather than a Manager.
 
-## 6.3. Generation token
+## 7.3. Generation token
 
-To implement `VPNG-R3.R6.R3`, an in-flight result must carry enough identity to determine
+To implement `VPNG-R3.R6.R2`, an in-flight result must carry enough identity to determine
 whether it still belongs to the current physical observation context.
 
 The minimal proposed mechanism is a monotonically replaced local observation-generation
@@ -324,16 +391,17 @@ It exists only to reject stale physical results.
 No logical evidence epoch, attempt journal or replay ordering is introduced.
 
 **Implements:**
-- `VPNG-R3.R6.R3`
+- `VPNG-R3.R6.R2`
 - `VPNG-R7.R1`
 
-# 7. ActiveProbeDriver
+# 8. ActiveProbeDriver
 
 **Component type:** Driver
 
 **Implements:**
 - `VPNG-R3.R6`
 - `VPNG-R3.R6.R1`
+- `VPNG-R3.R6.R3`
 - `VPNG-R7.R3.R2`
 - `VPNG-R7.R5`
 
@@ -346,12 +414,14 @@ check(concrete path observation identity, configured mechanism)
 
 It hides mechanism-specific execution from the Agent.
 
-No concrete mechanism is selected normatively in NG3 yet.
+NG3 currently selects active observation as the architecture for scenario S3, but does not
+yet select a concrete transport mechanism.
 
 ICMP, TCP connect, protocol-native liveness or another mechanism therefore remain possible
-implementation choices until requirements or accepted constraints narrow that space.
+Driver implementations until requirements, evidence or accepted constraints narrow that
+space.
 
-# 8. NetworkPolicyAdapter
+# 9. NetworkPolicyAdapter
 
 **Component type:** Adapter
 
@@ -389,7 +459,7 @@ The upper Manager must not know:
 Those details belong below the Adapter boundary unless a future product requirement makes
 one observable.
 
-# 9. NetworkPolicyExecutor
+# 10. NetworkPolicyExecutor
 
 **Component type:** Executor
 
@@ -420,24 +490,27 @@ In particular, the NG2 empty-slot route permutation mechanism is **not** automat
 carried into NG3. It may later be selected if lower-level routing requirements and kernel
 evidence make it the minimal sufficient implementation.
 
-# 10. Event contracts
+# 11. Event contracts
 
 The architecture currently needs only semantic event edges required by Engine roles.
 
-## 10.1. Availability observation
+## 11.1. Availability observation
 
 `AvailabilityProbeAgent -> PayloadTrafficManager`
 
 **Implements:**
 - `VPNG-R3.R6`
 - `VPNG-R3.R6.R1`
-- `VPNG-R3.R6.R3`
+- `VPNG-R3.R6.R2`
 - `VPNG-R7.R5`
 
 The event must identify the logical path and carry only the bounded observation information
 needed by the Manager.
 
-The exact positive/negative evidence shape is unresolved.
+The exact positive/negative evidence shape is unresolved. Local inability to execute the
+observation mechanism is not automatically treated as path failure: by
+`VPNG-R3.R6.R3`, evidence used for path adaptation must actually observe a relevant path
+property.
 
 No requirement currently justifies:
 
@@ -446,7 +519,7 @@ No requirement currently justifies:
 - a persistent event log;
 - a universal ordering service.
 
-## 10.2. Payload state publication
+## 11.2. Payload state publication
 
 `PayloadTrafficManager -> observers`
 
@@ -459,7 +532,7 @@ state where that distinction affects behavior or safety.
 
 A final system-wide status model is not yet designed.
 
-# 11. Startup, shutdown and recovery
+# 12. Startup, shutdown and recovery
 
 This pass does **not** introduce a LifecycleManager.
 
@@ -487,7 +560,7 @@ Required orchestration semantics:
 Whether these steps remain procedural assembly or require a dedicated Engine is intentionally
 left open until deeper lifecycle requirements demand one.
 
-# 12. Requirement coverage in this architecture pass
+# 13. Requirement coverage in this architecture pass
 
 | Requirement area | Architecture status |
 | --- | --- |
@@ -495,7 +568,7 @@ left open until deeper lifecycle requirements demand one.
 | `VPNG-R1.R2` declarative operation | **not yet architected**: configuration boundary missing |
 | `VPNG-R2.*` payload policy | semantic ownership represented; normalized config schema missing |
 | `VPNG-R3.R1-R5,R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
-| `VPNG-R3.R6.*` active observation | represented by AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
+| `VPNG-R3.R6.*` path-usability evidence | active observation selected via AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
 | `VPNG-R4.*` safety | lower boundary/executor responsibilities represented; concrete kernel strategy absent |
 | `VPNG-R5.R1,R4,R5` lifecycle | postconditions recorded; orchestration component intentionally absent |
 | `VPNG-R5.R2,R3` recovery | represented locally by Manager/Adapter/Executor contracts |
@@ -504,7 +577,7 @@ left open until deeper lifecycle requirements demand one.
 | `VPNG-R6.R3` system failure visibility | partial diagnostics only; **final aggregation missing** |
 | `VPNG-R7.*` implementation quality | applied as cross-cutting architecture rules |
 
-# 13. Deliberately omitted machinery
+# 14. Deliberately omitted machinery
 
 The following are deliberately absent from this first architecture because no accepted NG3
 requirement currently makes them necessary:
@@ -524,9 +597,9 @@ requirement currently makes them necessary:
 This omission is an implementation of `VPNG-R7.R1`, not a claim that such machinery can
 never become necessary.
 
-# 14. Design gaps that block deeper architecture
+# 15. Design gaps that block deeper architecture
 
-## 14.1. Configuration model
+## 15.1. Configuration model
 
 Affected requirements:
 - `VPNG-R1.R2`
@@ -543,21 +616,28 @@ Missing requirement detail:
 
 Until this is refined, NG3 must not invent a universal normalized config schema.
 
-## 14.2. Availability evidence semantics
+## 15.2. Availability evidence semantics
 
 Affected requirements:
 - `VPNG-R3.R3-R6`
 
+Current requirements are sufficient to reject stale/misbound evidence and to require an
+adequate observation property, but they do not yet define the full confirmation policy.
+
 Missing requirement detail:
 
-- what exactly constitutes negative path evidence;
-- whether local probe-execution failure is path evidence or only diagnostic;
-- how delayed positive evidence interacts with a check boundary;
-- whether thresholds are user-configurable product semantics or implementation policy.
+- what exactly constitutes sufficient negative path evidence;
+- how delayed positive evidence interacts with an evaluation boundary;
+- whether confirmation thresholds are user-configurable product semantics or internal
+  policy.
+
+A local observation-execution failure is currently treated as diagnostic rather than path
+evidence unless a lower requirement/evidence proves that such a failure itself demonstrates
+path unusability.
 
 This gap blocks final event contract and hysteresis algorithm.
 
-## 14.3. User-visible status aggregation
+## 15.3. User-visible status aggregation
 
 Affected requirements:
 - `VPNG-R6.R1-R4`
@@ -568,7 +648,7 @@ the final user-facing status model, aggregation ownership or presentation bounda
 No RuntimeStateManager/StatusManager is introduced until that responsibility is made
 concrete.
 
-## 14.4. Complete lifecycle ownership
+## 15.4. Complete lifecycle ownership
 
 Affected requirements:
 - `VPNG-R5.R1-R5`
@@ -578,7 +658,7 @@ to prove that a separate long-lived lifecycle component is necessary.
 
 Procedural assembly remains the simpler default.
 
-# 15. Current architecture principle
+# 16. Current architecture principle
 
 For this NG3 pass:
 
