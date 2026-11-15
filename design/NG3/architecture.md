@@ -43,6 +43,27 @@ This pass intentionally does **not** yet define:
 
 Those gaps remain requirements without invented architecture.
 
+## 1.1. Architecture-wide implementation requirements
+
+The structure and maintenance rules of this report itself implement cross-cutting NG3
+requirements that do not belong to one runtime component.
+
+**Implements:**
+- `VPNG-R7.R2`
+- `VPNG-R7.R3.R3`
+- `VPNG-R7.R4`
+- `VPNG-R7.R6.R1`
+- `VPNG-R7.R6.R2`
+
+Consequences for this architecture:
+
+- responsibilities and contracts are described locally enough for human/AI review;
+- stable internal contracts are intended to contain unrelated change;
+- independent component scopes are intended to support parallel review/development units;
+- every material architectural block links back to the requirement tree;
+- any requirement/constraint change requires revalidation of the affected architecture
+  before implementation continues.
+
 # 2. Real scenarios used by this design
 
 These scenarios are not additional requirements. They are concrete situations used to test
