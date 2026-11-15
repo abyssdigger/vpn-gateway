@@ -230,16 +230,24 @@ class LinuxAvailabilityRuntimeAssembly:
     probe_manager: AvailabilityProbeManager
     agent: LinuxProbeExecutionAgent
     config_fanout: AvailabilityConfigFanout
+    _stopped: bool = field(default=False, init=False, repr=False)
+
+    def _require_active(self) -> None:
+        if self._stopped:
+            raise RuntimeError("availability runtime has been stopped")
 
     def configure(self, config: RuntimeAvailabilityConfig) -> None:
+        self._require_active()
         self.config_fanout.apply(config)
 
     def start(self) -> None:
+        self._require_active()
         self.agent.start()
 
     def stop(self) -> ActionResult:
-        """Quiesce probe demand/workers and clean the probe-owned network rules."""
+        """Terminally quiesce probe work and clean probe-owned network rules."""
 
+        self._stopped = True
         try:
             result = self.probe_manager.shutdown()
         finally:
@@ -303,29 +311,39 @@ class LinuxNetworkPolicyRuntime:
 
     payload_manager: PayloadTrafficManager
     availability: LinuxAvailabilityRuntimeAssembly
+    _stopped: bool = field(default=False, init=False, repr=False)
+
+    def _require_active(self) -> None:
+        if self._stopped:
+            raise RuntimeError("network-policy runtime has been stopped")
 
     def handle_payload_request(
         self,
         request: PayloadTrafficStateRequest,
     ) -> None:
+        self._require_active()
         self.payload_manager.handle_request(request)
 
     def configure_availability(
         self,
         config: RuntimeAvailabilityConfig,
     ) -> None:
+        self._require_active()
         self.availability.configure(config)
 
     def start(self) -> None:
+        self._require_active()
         self.availability.start()
 
     def audit(self) -> None:
+        self._require_active()
         try:
             self.availability.probe_manager.audit()
         finally:
             self.payload_manager.audit()
 
     def stop(self) -> NetworkPolicyRuntimeStopResult:
+        self._stopped = True
         probe_result: ActionResult
         try:
             probe_result = self.availability.stop()
