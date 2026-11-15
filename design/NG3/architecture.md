@@ -1035,7 +1035,69 @@ a new convergence operation from current state.
 This architecture makes retry idempotence a property of semantic reconciliation rather than
 command replay.
 
-# 13. Requirement coverage in this architecture pass
+# 13. RuntimeStatusAgent
+
+**Component type:** Agent
+
+**Implements:**
+- `VPNG-R6`
+- `VPNG-R6.R1`
+- `VPNG-R6.R2`
+- `VPNG-R6.R3`
+- `VPNG-R6.R4`
+- `VPNG-R7.R1`
+- `VPNG-R7.R1.R1`
+- `VPNG-R7.R3.R1`
+- `VPNG-R7.R5`
+
+The Agent observes current projections published by the Engines that own product domains and
+composes a user-facing current status snapshot.
+
+It is deliberately an Agent rather than a Manager because it does not actuate or own the
+represented domains.
+
+Inputs are current-snapshot InfoEvents, including where applicable:
+
+- accepted/configured intent reported by the owner that accepted it;
+- current logical VPN-path binding/effective path information;
+- current payload policy/effective ordering;
+- availability observation/diagnostic state;
+- lifecycle/readiness/cleanup failures;
+- lower-domain convergence failures that prevent required postconditions.
+
+The Agent stores only the latest relevant snapshot per authoritative source. It does not
+store event history, reconstruct past transitions or become a system-of-record.
+
+Conceptual output:
+
+```text
+RuntimeStatusSnapshot:
+    configured_intent
+    confirmed_effective_state
+    availability_state
+    readiness
+    blocking_problems
+    unknown_or_unconfirmed_fields
+```
+
+Truthfulness rules:
+
+- a desired/configured value is never reported as confirmed actual merely because it was
+  requested;
+- missing or stale authoritative information is represented as unknown/unconfirmed;
+- a local source retains ownership of its semantic truth; the StatusAgent only composes;
+- conflicting snapshots are surfaced as an inconsistency/problem rather than resolved by a
+  hidden status policy;
+- current status contains no unbounded history.
+
+The presentation mechanism is outside this component contract. CLI, API, text output or
+another user-facing surface may render the same current `RuntimeStatusSnapshot` without
+changing status semantics.
+
+A final status query therefore does not require direct knowledge of kernel commands or
+internal Manager state.
+
+# 14. Requirement coverage in this architecture pass
 
 | Requirement area | Architecture status |
 | --- | --- |
@@ -1052,12 +1114,12 @@ command replay.
 | `VPNG-R4` subtree — safety | lower boundary/executor responsibilities represented; managed network isolation selected; concrete lower mutation strategy otherwise incomplete |
 | `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5`, `VPNG-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
 | `VPNG-R5.R2`, `VPNG-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
-| `VPNG-R6.R1` configured intent visibility | **not yet architected** |
-| `VPNG-R6.R2`, `VPNG-R6.R4` payload effective state | component-level projection represented |
-| `VPNG-R6.R3` system failure visibility | partial diagnostics only; **final aggregation missing** |
+| `VPNG-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
+| `VPNG-R6.R2`, `VPNG-R6.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
+| `VPNG-R6.R3` system failure visibility | RuntimeStatusAgent aggregates current blocking diagnostics without becoming policy owner |
 | `VPNG-R7` subtree — implementation quality | applied as cross-cutting architecture rules |
 
-# 14. Deliberately omitted machinery
+# 15. Deliberately omitted machinery
 
 The following are deliberately absent from this first architecture because no accepted NG3
 requirement currently makes them necessary:
@@ -1077,9 +1139,9 @@ requirement currently makes them necessary:
 This omission is an implementation of `VPNG-R7.R1`, not a claim that such machinery can
 never become necessary.
 
-# 15. Design gaps that block deeper architecture
+# 16. Design gaps that block deeper architecture
 
-## 15.1. Remaining configuration semantics
+## 16.1. Remaining configuration semantics
 
 The configuration boundary itself is now defined and the VPN-path binding contract is
 architecturally closed.
@@ -1096,7 +1158,7 @@ The semantic payload-policy contract itself is now defined by `PayloadPolicyInte
 These gaps must be refined by their owning requirement branches rather than by expanding
 `ConfigurationAdapter` into a universal configuration framework.
 
-## 15.2. Availability evidence semantics
+## 16.2. Availability evidence semantics
 
 Affected requirements:
 - `VPNG-R3.R3`
@@ -1120,21 +1182,19 @@ path unusability.
 
 This gap blocks final event contract and hysteresis algorithm.
 
-## 15.3. User-visible status aggregation
+## 16.3. User-visible status presentation
 
-Affected requirements:
-- `VPNG-R6.R1`
-- `VPNG-R6.R2`
-- `VPNG-R6.R3`
-- `VPNG-R6.R4`
+Status aggregation semantics and ownership are now defined by `RuntimeStatusAgent`.
 
-Current components can expose local current state, but the requirements do not yet define
-the final user-facing status model, aggregation ownership or presentation boundary.
+Still intentionally open as interface implementation detail:
 
-No RuntimeStateManager/StatusManager is introduced until that responsibility is made
-concrete.
+- concrete CLI/API/text presentation format;
+- formatting and filtering for different operator surfaces.
 
-## 15.4. Lifecycle ownership
+These do not require another domain component unless later product requirements make
+presentation behavior itself semantic.
+
+## 16.4. Lifecycle ownership
 
 Affected requirements:
 - `VPNG-R5.R1`
@@ -1154,7 +1214,7 @@ channels.
 Procedural assembly plus the thin product control surface remains the simpler accepted
 architecture.
 
-## 15.5. Administrator-facing VPN-channel onboarding contract
+## 16.5. Administrator-facing VPN-channel onboarding contract
 
 Affected requirements:
 - `VPNG-R1.R3`
