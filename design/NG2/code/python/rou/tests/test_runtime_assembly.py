@@ -671,6 +671,42 @@ class LinuxNetworkPolicyRuntimeTests(unittest.TestCase):
 
         self.assertIn(runtime.payload_manager, adapter.renew_calls)
 
+    def test_dual_audit_exceptions_preserve_both_failures(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+        adapter.renew_calls.clear()
+        adapter.renew_raise.update(
+            {
+                runtime.availability.probe_manager,
+                runtime.payload_manager,
+            }
+        )
+
+        with self.assertRaises(ExceptionGroup) as caught:
+            runtime.audit()
+
+        self.assertEqual(len(caught.exception.exceptions), 2)
+        self.assertEqual(
+            adapter.renew_calls,
+            [
+                runtime.availability.probe_manager,
+                runtime.payload_manager,
+            ],
+        )
+
     def test_audit_refreshes_both_network_policy_owners(self):
         adapter = OwnerScopedFakeAdapter()
         runtime = build_linux_network_policy_runtime(
@@ -748,6 +784,41 @@ class LinuxNetworkPolicyRuntimeTests(unittest.TestCase):
             runtime.stop()
 
         self.assertIn(runtime.payload_manager, adapter.cleanup_calls)
+
+    def test_dual_cleanup_exceptions_preserve_both_failures(self):
+        adapter = OwnerScopedFakeAdapter()
+        runtime = build_linux_network_policy_runtime(
+            adapter,
+            RecordingPublisher(),
+            FakeSendDriver(ProbeSendResult(False)),
+            RecordingPublisher(),
+            timeout_seconds=1,
+            clock=lambda: 100.0,
+        )
+        runtime.handle_payload_request(payload_request(A))
+        runtime.configure_availability(
+            runtime_config(
+                runtime_channel("a", A, "203.0.113.10")
+            )
+        )
+        adapter.cleanup_raise.update(
+            {
+                runtime.availability.probe_manager,
+                runtime.payload_manager,
+            }
+        )
+
+        with self.assertRaises(ExceptionGroup) as caught:
+            runtime.stop()
+
+        self.assertEqual(len(caught.exception.exceptions), 2)
+        self.assertEqual(
+            adapter.cleanup_calls,
+            [
+                runtime.availability.probe_manager,
+                runtime.payload_manager,
+            ],
+        )
 
     def test_stop_is_terminal_for_runtime_operations_but_cleanup_can_retry(self):
         adapter = OwnerScopedFakeAdapter()
