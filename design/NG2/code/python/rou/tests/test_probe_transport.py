@@ -1,7 +1,10 @@
 from ipaddress import IPv4Address
 import unittest
 
-from rou.availability_collector import AvailabilityChannelPolicy
+from rou.availability_collector import (
+    AvailabilityHysteresisPolicy,
+    AvailabilityPriorityChannel,
+)
 from rou.availability_probe_state import ProbeObservationGeneration
 from rou.interface_identity import InterfaceIdentity
 from rou.probe_rules import AvailabilityProbeRequest, AvailabilityProbeSetRequest
@@ -10,8 +13,6 @@ from rou.probe_transport import (
     PhysicalProbePlane,
     ProbeExecutionPlan,
     ProbeExecutionPlanCalculator,
-    ProbeGoodNewsInfo,
-    ProbeTickInfo,
 )
 
 
@@ -19,13 +20,23 @@ A = InterfaceIdentity("a0", 10)
 B = InterfaceIdentity("b0", 11)
 
 
-def probe(probe_id, path, target, interval, *, enabled=True, failure=3, recovery=2):
+def probe(
+    probe_id,
+    path,
+    target,
+    interval,
+    *,
+    enabled=True,
+    failure=3,
+    recovery=2,
+):
     return AvailabilityProbeRequest(
         probe_id,
         path,
         IPv4Address(target),
         enabled=enabled,
-        policy=AvailabilityChannelPolicy(interval, failure, recovery),
+        interval_seconds=interval,
+        hysteresis=AvailabilityHysteresisPolicy(failure, recovery),
     )
 
 
@@ -47,7 +58,10 @@ class ProbeExecutionPlanTests(unittest.TestCase):
         self.assertEqual(len(plan.planes), 1)
         self.assertEqual(plan.planes[0].interval_seconds, 10.0)
         self.assertEqual(
-            [(item.probe_id, item.policy.interval_seconds) for item in plan.channels],
+            [
+                (item.priority.channel_id, item.interval_seconds)
+                for item in plan.channels
+            ],
             [("fast", 10), ("slow", 30)],
         )
 
@@ -79,13 +93,18 @@ class ProbeExecutionPlanTests(unittest.TestCase):
         )
 
     def test_plan_rejects_duplicate_physical_plane_and_channel(self):
-        mechanism = probe("a", A, "203.0.113.10", 10).mechanism
+        request = probe("a", A, "203.0.113.10", 10)
+        mechanism = request.mechanism
         channel = LogicalProbeChannel(
-            "a",
+            AvailabilityPriorityChannel(
+                "a",
+                A,
+                True,
+                AvailabilityHysteresisPolicy(3, 2),
+            ),
             mechanism,
-            A,
             IPv4Address("203.0.113.10"),
-            AvailabilityChannelPolicy(10, 3, 2),
+            10,
         )
 
         with self.assertRaisesRegex(ValueError, "duplicate physical planes"):
@@ -113,16 +132,25 @@ class ProbeExecutionPlanTests(unittest.TestCase):
                 (channel, channel),
             )
 
-    def test_good_news_and_tick_only_carry_channel_identity(self):
+    def test_logical_channel_projects_only_payload_relevant_priority_descriptor(self):
+        request = AvailabilityProbeSetRequest(
+            (probe("a", A, "203.0.113.10", 10),)
+        )
+
         channel = self.calculator.calculate(
-            AvailabilityProbeSetRequest(
-                (probe("a", A, "203.0.113.10", 10),)
-            ),
+            request,
             self.generation,
         ).channels[0]
 
-        self.assertEqual(ProbeGoodNewsInfo(channel).channel, channel)
-        self.assertEqual(ProbeTickInfo(channel).channel, channel)
+        self.assertEqual(channel.priority.channel_id, "a")
+        self.assertEqual(channel.priority.path, A)
+        self.assertEqual(
+            channel.priority.policy,
+            AvailabilityHysteresisPolicy(3, 2),
+        )
+        self.assertFalse(hasattr(channel.priority, "target"))
+        self.assertFalse(hasattr(channel.priority, "mechanism"))
+        self.assertFalse(hasattr(channel.priority, "interval_seconds"))
 
 
 if __name__ == "__main__":
