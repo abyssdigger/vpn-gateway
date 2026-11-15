@@ -268,9 +268,11 @@ class ProbeExecutionSchedule:
                 continue
             sends.append(item.plane)
             # Do not burst stale sends after a scheduler delay. One current send is
-            # useful; historical sends are not.
-            while item.next_send <= now:
-                item.next_send += item.plane.interval_seconds
+            # useful; historical sends are not. Advance the cadence in O(1).
+            elapsed = int(
+                (now - item.next_send) // item.plane.interval_seconds
+            ) + 1
+            item.next_send += elapsed * item.plane.interval_seconds
 
         # Caller must publish boundaries before starting sends. This realizes the
         # normative boundary-before-next-send rule for coincident deadlines.
