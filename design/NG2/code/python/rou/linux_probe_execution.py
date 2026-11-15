@@ -191,7 +191,7 @@ class ProbeExecutionSchedule:
             new_planes[key] = _PlaneSchedule(plane, next_send)
 
         for channel in plan.channels:
-            old = old_ticks.get(channel.channel_id)
+            old = old_ticks.get(channel.priority.channel_id)
             if (
                 not generation_changed
                 and old is not None
@@ -200,7 +200,7 @@ class ProbeExecutionSchedule:
                 next_tick = old.next_tick
             else:
                 next_tick = now + float(channel.interval_seconds)
-            new_ticks[channel.channel_id] = _TickSchedule(channel, next_tick)
+            new_ticks[channel.priority.channel_id] = _TickSchedule(channel, next_tick)
 
         self._plan = plan
         self._planes = new_planes
@@ -235,7 +235,7 @@ class ProbeExecutionSchedule:
             item = self._ticks[probe_id]
             if item.next_tick > now:
                 continue
-            ticks.append(AvailabilityTick(item.channel.channel_id))
+            ticks.append(AvailabilityTick(item.channel.priority))
             interval = float(item.channel.interval_seconds)
             elapsed = int((now - item.next_tick) // interval) + 1
             item.next_tick += elapsed * interval
@@ -450,7 +450,7 @@ class LinuxProbeExecutionAgent:
                     for channel in current.channels
                     if (
                         channel.mechanism is plane.mechanism
-                        and channel.path == plane.path
+                        and channel.priority.path == plane.path
                         and channel.target == plane.target
                     )
                 )
@@ -463,7 +463,7 @@ class LinuxProbeExecutionAgent:
             if result.good_news:
                 for channel in consumers:
                     self._good_news_publisher.publish(
-                        AvailabilityGoodNews(channel.channel_id)
+                        AvailabilityGoodNews(channel.priority)
                     )
         finally:
             with self._condition:
