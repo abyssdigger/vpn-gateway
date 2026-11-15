@@ -199,7 +199,7 @@ class ProbeExecutionSchedule:
             ):
                 next_tick = old.next_tick
             else:
-                next_tick = now + float(channel.policy.interval_seconds)
+                next_tick = now + float(channel.interval_seconds)
             new_ticks[channel.channel_id] = _TickSchedule(channel, next_tick)
 
         self._plan = plan
@@ -235,7 +235,7 @@ class ProbeExecutionSchedule:
             item = self._ticks[probe_id]
             if item.next_tick > now:
                 continue
-            ticks.append(AvailabilityTick(item.channel))
+            ticks.append(AvailabilityTick(item.channel.channel_id))
             interval = float(item.channel.interval_seconds)
             elapsed = int((now - item.next_tick) // interval) + 1
             item.next_tick += elapsed * interval
@@ -463,7 +463,7 @@ class LinuxProbeExecutionAgent:
             if result.good_news:
                 for channel in consumers:
                     self._good_news_publisher.publish(
-                        AvailabilityGoodNews(channel)
+                        AvailabilityGoodNews(channel.channel_id)
                     )
         finally:
             with self._condition:
