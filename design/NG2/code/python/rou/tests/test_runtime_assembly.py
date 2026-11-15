@@ -419,7 +419,7 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
             (A, B),
         )
 
-    def test_config_fanout_installs_payload_priority_before_probe_rules(self):
+    def test_config_fanout_installs_new_priority_descriptor_before_probe_apply(self):
         probe_adapter = FakeAdapter()
         runtime = build_linux_availability_runtime(
             probe_adapter,
@@ -429,24 +429,58 @@ class RuntimeAssemblyPortTests(unittest.TestCase):
             timeout_seconds=1,
             clock=lambda: 100.0,
         )
-        source = runtime_config(
-            runtime_channel("a", A, "203.0.113.10")
+
+        first = runtime_config(
+            runtime_channel(
+                "a",
+                A,
+                "203.0.113.10",
+                failure=1,
+                recovery=2,
+            )
+        )
+        runtime.configure(first)
+        old_channel = AvailabilityPriorityConfigCalculator().calculate(
+            first
+        ).channels[0]
+        self.payload_manager.handle_availability_tick(
+            AvailabilityTick(old_channel)
+        )
+        self.assertEqual(
+            self.payload_adapter.state.rules.routing_domains[0].ordered_paths,
+            (B, A),
         )
 
-        observed_prefixes = []
+        changed = runtime_config(
+            runtime_channel(
+                "a",
+                A,
+                "203.0.113.99",
+                failure=1,
+                recovery=1,
+            )
+        )
+        new_channel = AvailabilityPriorityConfigCalculator().calculate(
+            changed
+        ).channels[0]
+        accepted_during_probe_apply = []
 
         def during_probe_apply(_spec):
-            observed_prefixes.append(
-                self.payload_adapter.state.rules.routing_domains[
-                    0
-                ].preferred_prefix_length
+            accepted_during_probe_apply.append(
+                self.payload_manager.handle_availability_good_news(
+                    AvailabilityGoodNews(new_channel)
+                )
             )
 
         probe_adapter.apply_hook = during_probe_apply
 
-        runtime.configure(source)
+        runtime.configure(changed)
 
-        self.assertEqual(observed_prefixes, [2])
+        self.assertEqual(accepted_during_probe_apply, [True])
+        self.assertEqual(
+            self.payload_adapter.state.rules.routing_domains[0].ordered_paths,
+            (A, B),
+        )
 
     def test_stale_old_priority_descriptor_is_rejected_after_fanout(self):
         probe_adapter = FakeAdapter()
