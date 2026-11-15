@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 from math import isfinite
+from typing import Mapping
 
 from .availability_probe_state import ProbeObservationGeneration
 from .interface_identity import InterfaceIdentity
@@ -39,6 +40,7 @@ class PhysicalProbePlane:
 class LogicalProbeWindow:
     probe_id: str
     interval_seconds: float
+    evidence_epoch: int = 1
 
     def __post_init__(self) -> None:
         if not isinstance(self.probe_id, str) or not self.probe_id:
@@ -50,6 +52,8 @@ class LogicalProbeWindow:
             or self.interval_seconds <= 0
         ):
             raise ValueError("logical probe window interval must be positive")
+        if type(self.evidence_epoch) is not int or self.evidence_epoch <= 0:
+            raise ValueError("logical probe window evidence_epoch must be positive")
 
 
 @dataclass(frozen=True)
@@ -130,11 +134,27 @@ class ProbeExecutionPlanCalculator:
         self,
         request: AvailabilityProbeSetRequest,
         generation: ProbeObservationGeneration,
+        *,
+        evidence_epochs: Mapping[str, int] | None = None,
     ) -> ProbeExecutionPlan:
         if not isinstance(request, AvailabilityProbeSetRequest):
             raise ValueError("execution plan requires AvailabilityProbeSetRequest")
         if not isinstance(generation, ProbeObservationGeneration):
             raise ValueError("execution plan requires ProbeObservationGeneration")
+
+        if evidence_epochs is not None:
+            request_ids = {probe.probe_id for probe in request.probes}
+            if set(evidence_epochs) != request_ids:
+                raise ValueError(
+                    "execution plan evidence_epochs must cover exactly current probes"
+                )
+            if any(
+                type(value) is not int or value <= 0
+                for value in evidence_epochs.values()
+            ):
+                raise ValueError(
+                    "execution plan evidence epochs must be positive integers"
+                )
 
         interval_by_plane: dict[
             tuple[ProbeMechanism, InterfaceIdentity, IPv4Address],
@@ -150,7 +170,17 @@ class ProbeExecutionPlanCalculator:
             previous = interval_by_plane.get(key)
             if previous is None or interval < previous:
                 interval_by_plane[key] = interval
-            windows.append(LogicalProbeWindow(probe.probe_id, interval))
+            windows.append(
+                LogicalProbeWindow(
+                    probe.probe_id,
+                    interval,
+                    (
+                        evidence_epochs[probe.probe_id]
+                        if evidence_epochs is not None
+                        else 1
+                    ),
+                )
+            )
 
         planes = tuple(
             PhysicalProbePlane(mechanism, path, target, interval)
