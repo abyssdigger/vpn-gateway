@@ -76,7 +76,10 @@ that depends on it, not vice versa.
 The tree is sufficient to start core payload/availability design, but it is not yet evidence
 that every major VPN-GATE product responsibility has been captured.
 
-The main unresolved product-scope question is VPN-path ownership, described in F3 below.
+The original VPN-path ownership gap was resolved during this review by
+`VPNG-R1.R3 -> VPNG-R1.R3.C1 -> VPNG-R1.R3.C1.R1`. The remaining gaps are lower-level
+configuration/onboarding semantics rather than uncertainty over who provisions the VPN
+channel in the first release.
 
 # 4. Findings and disposition
 
@@ -127,35 +130,40 @@ R7: how much implementation complexity is acceptable
 architecture: bounded state chosen to satisfy both
 ```
 
-## F3 — Ownership of VPN paths is still undefined
+## F3 — Ownership of VPN paths required an explicit product decision
 
 **Severity:** major requirement gap  
-**Disposition:** accepted, open human requirement gate
+**Disposition:** accepted and resolved by explicit requirement/constraint
 
-Current L1 wording speaks about "configured VPN paths", but does not decide whether VPN-GATE
-must:
+The initial L1 wording spoke about "configured VPN paths" but did not decide who creates and
+configures those paths.
 
-- create and maintain VPN sessions/tunnels itself;
-- manage some path types and consume others from the environment;
-- or only route through externally established paths.
+The accepted requirement chain is now:
 
-This matters directly to future architecture for:
+```text
+VPNG-R1.R3
+    VPN-GATE must be able to consume supported VPN channels as paths
 
-- VPN process/session Managers;
-- credentials/config ownership;
-- reconnect behavior;
-- tunnel health;
-- path identity/lifecycle;
-- status;
-- startup/shutdown ordering.
+VPNG-R1.R3.C1
+    first release: administrator deploys and basically configures the VPN channel
 
-NG2/NG1 history contains answers, but importing them would violate the NG3 requirement-first
-process.
+VPNG-R1.R3.C1.R1
+    VPN-GATE must provide the instructions/contract needed to make that channel
+    visible, manageable and usable by VPN-GATE
+```
 
-No VPN-process Manager is therefore designed in this review unit.
+This resolves the ownership question for the first release without importing NG1/NG2
+VPN-process architecture.
 
-**Required next action:** obtain/accept a requirement refinement under `VPNG-R1` and/or
-`VPNG-R5` before designing VPN-path lifecycle components.
+Architectural consequence:
+
+- no VPN-session/tunnel provisioning Manager is introduced;
+- the architecture contains an external VPN-channel boundary;
+- exact administrator-facing onboarding identity/mechanism remains to be refined before a
+  concrete Driver/Agent/Adapter is chosen.
+
+This is a successful example of constraint lifting: the limitation is visible at the product
+boundary and its compensating administrator-facing requirement is explicit.
 
 ## F4 — User configuration semantics are deliberately incomplete
 
@@ -385,7 +393,7 @@ The following areas are intentionally suspended rather than filled with speculat
 | Requirement | Missing architecture / decision |
 | --- | --- |
 | `VPNG-R1.R2` | authoritative user configuration boundary |
-| `VPNG-R1` / `VPNG-R5` | ownership and lifecycle of VPN paths/tunnels |
+| `VPNG-R1.R3.C1.R1` | concrete administrator-facing VPN-channel onboarding contract/instructions |
 | parts of `VPNG-R2` | concrete traffic classification/configuration model |
 | `VPNG-R3.R5` subtree | final negative-evidence and threshold semantics |
 | `VPNG-R4.R3-R5` | concrete lower network transition algorithm |
@@ -419,7 +427,7 @@ Ignoring NG2 and reading only the NG3 requirements:
 
 ## What remains underspecified
 
-- Who owns creation/maintenance of a VPN path.
+- The exact administrator-facing contract by which an externally provisioned VPN channel becomes identifiable and usable by VPN-GATE.
 - What the user configuration vocabulary is.
 - What exact remote/path failures availability is required to detect.
 - How much availability tuning is user-visible.
@@ -483,12 +491,9 @@ NG3 architecture baseline.
 
 The review does **not** declare the whole NG3 product architecture complete.
 
-The most important unresolved item requiring human product semantics is:
+The VPN-channel ownership gate is now resolved for the first release: the administrator
+provisions/configures the channel, and VPN-GATE consumes it through a documented onboarding
+contract.
 
-> Does VPN-GATE own creation and lifecycle of configured VPN paths/tunnels, and if so, what
-> class of paths does it own?
-
-Until that is answered, no NG3 VPN-process/session architecture should be invented.
-
-The next requirement-first unit should refine that product boundary, then configuration
-semantics and final observability, before expanding architecture into those areas.
+The next requirement-first unit should refine that onboarding/configuration contract and
+final observability semantics before expanding architecture into those areas.
