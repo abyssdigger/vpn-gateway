@@ -38,6 +38,11 @@ class AvailabilityProbeStatePublisher(Protocol):
         ...
 
 
+class ProbeExecutionPlanPublisher(Protocol):
+    def publish(self, plan: ProbeExecutionPlan | None) -> None:
+        ...
+
+
 class AvailabilityProbeManager:
     """Own the active-probe rules plane and its authoritative readiness epoch.
 
@@ -54,6 +59,7 @@ class AvailabilityProbeManager:
         *,
         rules_calculator: ProbeRulesCalculator | None = None,
         execution_plan_calculator: ProbeExecutionPlanCalculator | None = None,
+        execution_plan_publisher: ProbeExecutionPlanPublisher | None = None,
     ) -> None:
         self._adapter = adapter
         self._publisher = publisher
@@ -62,6 +68,9 @@ class AvailabilityProbeManager:
         self._execution_plan_calculator = (
             execution_plan_calculator or ProbeExecutionPlanCalculator()
         )
+        self._execution_plan_publisher = execution_plan_publisher
+        self._latest_execution_plan_published: ProbeExecutionPlan | None = None
+        self._execution_plan_was_published = False
 
         self._latest_request: AvailabilityProbeSetRequest | None = None
         self._latest_desired: NetworkRulesSpec | None = None
@@ -88,11 +97,7 @@ class AvailabilityProbeManager:
         """
 
         with self._state_lock:
-            request = self._latest_request
-            generation = self._active_generation
-            if request is None or generation is None:
-                return None
-            return self._execution_plan_calculator.calculate(request, generation)
+            return self._current_execution_plan_locked()
 
     def handle_request(self, request: AvailabilityProbeSetRequest) -> None:
         """Accept one full desired probe snapshot and reconcile its network plane."""
@@ -147,6 +152,7 @@ class AvailabilityProbeManager:
 
         self._synchronize_generation(rules_state)
         self._synchronize_window_states()
+        self._publish_execution_plan_if_changed()
         self._publish_unknown_current(rules_state)
 
     def handle_good_news(self, info: ProbeGoodNewsInfo) -> int:
@@ -312,6 +318,7 @@ class AvailabilityProbeManager:
             rules_state = self._audit_rules(desired)
             self._synchronize_generation(rules_state)
             self._synchronize_window_states()
+            self._publish_execution_plan_if_changed()
             self._publish_unknown_current(rules_state)
 
     def shutdown(self) -> ActionResult:
@@ -377,8 +384,40 @@ class AvailabilityProbeManager:
             )
 
     def _invalidate_generation(self) -> None:
+        had_generation = self._active_generation is not None
         self._active_generation = None
         self._window_states.clear()
+        if had_generation:
+            # Quiesce execution demand before any subsequent lower-domain transition.
+            self._publish_execution_plan_if_changed()
+
+    def _current_execution_plan_locked(self) -> ProbeExecutionPlan | None:
+        request = self._latest_request
+        generation = self._active_generation
+        if request is None or generation is None:
+            return None
+        return self._execution_plan_calculator.calculate(request, generation)
+
+    def _publish_execution_plan_if_changed(self) -> None:
+        publisher = self._execution_plan_publisher
+        if publisher is None:
+            return
+
+        current = self._current_execution_plan_locked()
+        if (
+            self._execution_plan_was_published
+            and current == self._latest_execution_plan_published
+        ):
+            return
+
+        # Do not publish a synthetic initial quiescent state. Once execution has
+        # been activated, however, None is a real RequestEvent meaning "stop".
+        if not self._execution_plan_was_published and current is None:
+            return
+
+        publisher.publish(current)
+        self._latest_execution_plan_published = current
+        self._execution_plan_was_published = True
 
     def _synchronize_window_states(self) -> None:
         request = self._latest_request
