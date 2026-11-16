@@ -10,6 +10,7 @@ on:
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
+      - "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/**"
   pull_request:
     paths:
       - "design/NG3/code/python/**"
@@ -19,6 +20,7 @@ on:
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
+      - "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/**"
 
 jobs:
   unit:
@@ -161,3 +163,17 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_nft_scaffold_prepare.py
+
+
+  linux-payload-nat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables procps
+      - name: EXP-033 exact-ifindex payload masquerade
+        run: >-
+          sudo python3
+          "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/exp033_payload_masquerade.py"
