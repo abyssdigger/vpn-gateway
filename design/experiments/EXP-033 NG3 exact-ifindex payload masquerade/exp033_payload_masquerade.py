@@ -209,8 +209,11 @@ def main() -> int:
             and isinstance(match["left"].get("meta"), dict)
             and match["left"]["meta"].get("key") in ("iif", "oif")
         }
-        assert by_key.get("iif") == host_iif, (by_key, host_iif)
-        assert by_key.get("oif") == path_oif, (by_key, path_oif)
+        # Current nft 1.1.6 renders existing ifindex operands back as
+        # interface names even with -n. Preserve this evidence rather than
+        # pretending the display is numeric.
+        assert by_key.get("iif") == gate_left, (by_key, gate_left)
+        assert by_key.get("oif") == gate_right, (by_key, gate_right)
 
         # H4: a different ingress does not match the host-boundary iif index.
         assert not ping(other, "10.33.2.2"), (
@@ -232,6 +235,21 @@ def main() -> int:
 
         new_oif = ifindex(gate, gate_right)
         assert new_oif != old_oif, (old_oif, new_oif)
+
+        stale_value = ruleset(gate)
+        stale_rules = nat_rules(stale_value)
+        assert len(stale_rules) == 1, stale_rules
+        print(
+            "EXP033_STALE_RULE_AFTER_REPLACEMENT_JSON="
+            + json.dumps(stale_rules[0], sort_keys=True)
+        )
+        stale_numeric_value = ruleset(gate, numeric=True)
+        stale_numeric_rules = nat_rules(stale_numeric_value)
+        assert len(stale_numeric_rules) == 1, stale_numeric_rules
+        print(
+            "EXP033_STALE_RULE_AFTER_REPLACEMENT_NUMERIC_JSON="
+            + json.dumps(stale_numeric_rules[0], sort_keys=True)
+        )
 
         assert not ping(left, "10.33.2.3"), (
             "stale numeric oif rule matched same-name replacement interface"
