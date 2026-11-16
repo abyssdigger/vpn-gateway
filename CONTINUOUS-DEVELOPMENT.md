@@ -636,6 +636,104 @@ natural boundaries independent of the CD window.
 - Large overruns beyond `CYCLE_INTERVAL` are undesirable because they increase the risk that
   the interface/session fails before a usable handoff is delivered.
 
+### Mainline snapshot requirements
+
+The snapshot policy is normative process behavior. It is expressed explicitly because a
+working branch and `main` serve different purposes.
+
+#### CD-SNAPSHOT-R1 — snapshot boundary is a logical block boundary
+
+**Basis:** `main` is the compact chronological record used to resume and inspect completed
+logical development blocks without replaying their entire working history.
+
+**Statement:** a snapshot may be published only for a deliberately selected **logical
+development block state**. A CD/session-safety boundary is neither necessary nor sufficient
+for a snapshot. Completion of a logical block may produce a snapshot at any point inside a
+CD window; an unfinished logical block remains only on its working branch across any number
+of CD windows.
+
+#### CD-SNAPSHOT-R2 — one logical snapshot is exactly one new mainline commit
+
+**Purpose:** preserve a compact mainline while retaining the full development trail on the
+working branch.
+
+**Statement:** publication of one logical snapshot to `main` creates exactly **one** new
+commit whose:
+
+- parent is the current accepted `main` snapshot HEAD;
+- tree is exactly the committed tree selected from the logical block's working branch;
+- commit message identifies the next sequential snapshot number, the logical block, source
+  branch and exact source commit;
+- ancestry does **not** include the intermediate commits of the working branch.
+
+The working branch retains all intermediate commits. It is not merged, rebased onto
+`main` for publication, or otherwise used to import its commit chain into `main`.
+
+A snapshot is therefore equivalent to a squash of the selected committed tree onto the
+previous snapshot, not a squash-merge operation whose ancestry may depend on branch history.
+
+#### CD-SNAPSHOT-R3 — source state is explicit and may precede branch HEAD
+
+**Purpose:** a working branch may already contain unfinished work for the next logical block
+when the previous block is ready to snapshot.
+
+**Statement:** every snapshot names an exact `SOURCE_SNAPSHOT_COMMIT`. The snapshot tree
+must equal that commit's tree. The source commit need not be the current branch HEAD.
+Unfinished descendant commits must never leak into the earlier logical snapshot.
+
+#### CD-SNAPSHOT-R4 — numbering is a mainline invariant
+
+**Purpose:** snapshot numbers are chronological mainline checkpoint identifiers.
+
+**Statement:** the new snapshot number is exactly the previous accepted mainline snapshot
+number plus one. If published history is explicitly reconstructed, every reconstructed
+snapshot after the reconstruction point is renumbered to preserve one gap-free chronological
+sequence. A commit message with an obsolete snapshot number is incorrect even when its tree
+is correct.
+
+#### CD-SNAPSHOT-R5 — snapshot verification is mechanical
+
+**Purpose:** prevent accidental publication of branch history or the wrong logical tree.
+
+**Statement:** before updating `main`, verify all of:
+
+1. current `main` HEAD is the expected previous snapshot;
+2. source branch and exact `SOURCE_SNAPSHOT_COMMIT` are recorded;
+3. the candidate snapshot tree hash equals the source commit tree hash;
+4. the candidate snapshot parent is exactly the expected previous `main` HEAD;
+5. comparison from previous snapshot to candidate snapshot reports exactly one commit
+   (`ahead_by = 1`);
+6. no unfinished descendant tree is being substituted for the selected source state.
+
+After updating `main`, repeat the parent/tree/one-commit checks against the published ref.
+
+If any check fails, do not continue development on the assumption that the snapshot was
+published correctly.
+
+#### CD-SNAPSHOT-R6 — development history stays on the working branch
+
+**Purpose:** preserve evidence and debugging history without turning `main` into a raw
+implementation journal.
+
+**Statement:** intermediate requirement, design, experiment, code, test, review and fix
+commits remain reachable from their working branch. They are not copied one-by-one to
+`main`. Removing or rewriting the working branch is a separate repository-history action
+and is not implied by snapshot publication.
+
+#### CD-SNAPSHOT-R7 — CHANGELOG synchronization is stage-gated
+
+**Purpose:** future snapshots should provide a concise user-readable index in addition to Git
+history, without forcing churn during the current NG3 convergence phase.
+
+**Statement:** through the active NG3 development stage, snapshot publication does **not**
+require an immediate `CHANGELOG.md` edit. At NG3 closure, the missing NG3 snapshot summary
+must be reconciled/backfilled. For development stages after NG3, each new mainline snapshot
+must include the corresponding concise `CHANGELOG.md` entry in the snapshotted tree unless
+an explicit later project decision changes this policy.
+
+The changelog entry summarizes the completed logical result; it never replaces normative
+requirements, architecture, evidence or review artifacts.
+
 ### Cycle branch and clock
 
 Each CD cycle uses Git commit timestamps as an objective elapsed-time clock and a dedicated
