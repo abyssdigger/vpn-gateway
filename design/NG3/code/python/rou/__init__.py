@@ -30,6 +30,11 @@ from .payload_profile import (
     PayloadProfileRequest,
     build_payload_profile_requests,
 )
+from .profile_classification import (
+    ProfileClassificationError,
+    classify_inbound_profile,
+    classify_outbound_profile,
+)
 
 __all__ = [
     "BindingProjectionError",
@@ -46,12 +51,15 @@ __all__ = [
     "PathBinding",
     "PayloadProfileProjectionError",
     "PayloadProfileRequest",
+    "ProfileClassificationError",
     "ProfileStructuralIntent",
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
     "WaitingCandidate",
     "build_payload_profile_requests",
+    "classify_inbound_profile",
+    "classify_outbound_profile",
     "parse_ip_link_inventory",
     "parse_structural_config",
     "project_device_bindings",
