@@ -21,7 +21,6 @@ on:
       - "design/experiments/EXP-045 NG3 composite Profile forward mutation/**"
       - "design/experiments/EXP-046 NG3 publication local admission/**"
       - "design/experiments/EXP-047 NG3 atomic local publication mutation/**"
-      - "design/experiments/EXP-047 NG3 atomic publication local mutation/**"
   pull_request:
     paths:
       - "design/NG3/code/python/**"
@@ -270,10 +269,6 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-047 NG3 atomic local publication mutation/exp047_atomic_local_publication.py"
-      - name: EXP-047 atomic publication local mutation
-        run: >-
-          sudo python3
-          "design/experiments/EXP-047 NG3 atomic publication local mutation/exp047_atomic_publication_mutation.py"
       - name: NG3 strict payload_forward observer integration
         env:
           PYTHONPATH: design/NG3/code/python
