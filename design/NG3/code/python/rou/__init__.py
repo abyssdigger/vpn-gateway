@@ -144,6 +144,19 @@ from .composite_nft_policy import (
     CompositeNftPolicyConflict,
     compare_composite_nft_policy,
 )
+from .composite_nft_plan import (
+    CompositeNftMutationStep,
+    CompositeNftPlanError,
+    CompositeNftStepKind,
+    select_composite_nft_step,
+)
+from .composite_nft_mutation import (
+    CompositeNftMutationResult,
+    CompositeNftMutationStatus,
+    CompositeNftPhysicalSnapshot,
+    converge_composite_nft_step_once,
+)
+from .linux_composite_nft import LinuxCompositeNftBackend
 from .device_firewall_mutation import (
     DeviceFirewallMutationResult,
     DeviceFirewallMutationStatus,
@@ -273,6 +286,13 @@ __all__ = [
     "AvailabilityOutcome",
     "AvailabilityPriorityError",
     "BindingProjectionError",
+    "CompositeNftMutationStep",
+    "CompositeNftPlanError",
+    "CompositeNftStepKind",
+    "CompositeNftMutationResult",
+    "CompositeNftMutationStatus",
+    "CompositeNftPhysicalSnapshot",
+    "LinuxCompositeNftBackend",
     "CompositeNftDesiredState",
     "CompositeNftPolicyComparison",
     "CompositeNftPolicyConflict",
@@ -369,6 +389,8 @@ __all__ = [
     "LinuxPayloadNatBackend",
     "compare_payload_nat",
     "observe_payload_forward",
+    "select_composite_nft_step",
+    "converge_composite_nft_step_once",
     "compare_composite_nft_policy",
     "compare_device_firewall",
     "compile_device_firewall_policy",
