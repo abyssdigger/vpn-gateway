@@ -90,6 +90,21 @@ from .payload_nat_desired import (
     PayloadNatProjectionError,
     build_payload_nat_desired_state,
 )
+from .payload_nat_observation import (
+    PAYLOAD_NAT_RULE_COMMENT,
+    ObservedPayloadMasquerade,
+    PayloadNatComparison,
+    PayloadNatObservationError,
+    PayloadNatRuleConflict,
+    compare_payload_nat,
+)
+from .payload_nat_mutation import (
+    PayloadNatMutationResult,
+    PayloadNatMutationStatus,
+    PayloadNatPhysicalSnapshot,
+    converge_payload_nat_step_once,
+)
+from .linux_payload_nat import LinuxPayloadNatBackend
 from .payload_profile import (
     PayloadProfileProjectionError,
     PayloadProfileRequest,
@@ -228,6 +243,17 @@ __all__ = [
     "NftNamespaceObservation",
     "NftNamespaceStatus",
     "NumericResourcePool",
+    "PAYLOAD_NAT_RULE_COMMENT",
+    "ObservedPayloadMasquerade",
+    "PayloadNatComparison",
+    "PayloadNatObservationError",
+    "PayloadNatRuleConflict",
+    "PayloadNatMutationResult",
+    "PayloadNatMutationStatus",
+    "PayloadNatPhysicalSnapshot",
+    "LinuxPayloadNatBackend",
+    "compare_payload_nat",
+    "converge_payload_nat_step_once",
     "PAYLOAD_FORWARD_CHAIN",
     "PAYLOAD_FORWARD_COMMENT",
     "PAYLOAD_NFT_SCAFFOLD",

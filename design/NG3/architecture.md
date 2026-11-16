@@ -1988,6 +1988,51 @@ incidental.
 
 ###### Authoritative payload NAT rule observation
 
+**Component:** read-only direct Calculator for normalized nft observation/comparison.
+
+**Implements:**
+- `VPNG0001-R1.R2.R4.R6.R1` — explicit Device NAT intent projected onto an exact current path;
+- `VPNG0001-R1.R3.R2` — unambiguous current physical endpoint binding;
+- `VPNG0001-R1.R3.R3` — replaced endpoint must not inherit old interface identity;
+- `VPNG0004-R4.R3.R2` — structural NAT changes may not bypass a restrictive transition;
+- `VPNG0004-R4.R4` — unconfirmed network state cannot authorize forwarding;
+- `VPNG0004-R4.R5` — authoritative actual state is required after uncertainty.
+
+**Constrained by:**
+- `VPNG0001-R1.R2.R4.R6.C1` — lower NAT observation does not assume an unaccepted human-facing configuration grammar.
+
+**Scenario and responsibility:** After an external Device endpoint disappears or is recreated
+with the same name, the product must distinguish the old physical NAT rule from the new
+desired path binding before any structural reconciliation. An existing read-only nft
+Adapter supplies canonical objects in the owned table; a fresh interface inventory
+supplies current `(ifname, ifindex)` identities. The direct Calculator classifies the
+owned NAT chain and compares recognized physical rules against already normalized
+`PayloadNatDesiredState`, returning confirmed/missing/stale/conflict without mutation.
+
+**Interactions and external environment:** The Calculator has synchronous, explicit
+inputs and no kernel I/O, timer, retained history or event ownership. The Adapter's
+table ownership and invariant scaffold checks must pass before using its output.
+The only external facts are the observed nft JSON representation and fresh Linux link
+identity. EXP-033 supplies the platform evidence for name/decimal-index renderings.
+
+**Necessity and simplification:** Exact physical rule classification is required before
+deleting or replacing any owned NAT object; desired-state projection alone cannot prove
+actual current state. One pure Calculator is sufficient: no additional Agent, cache,
+async event/retry flow, second NAT routing policy, or persistent interface history is
+introduced.
+
+**Constraints and lifting:** A conflict, invalid/stale endpoint or incomplete ownership
+classification cannot be turned into permission to forward or delete state. The observer
+changes no user-visible NAT capability and imposes no new product restriction; only
+future physical NAT mutation remains gated behind the structural `ForwardingGate`.
+
+**Evidence plan:** Rootless tests cover strict whole-chain recognition, current and
+stale ifindices, same-name replacement, unexpected owned expressions/comments, duplicate
+rules, missing desired state and invalid/ambiguous inventory; existing EXP-033 establishes
+real nft/kernel representation. Run NG3 Python CI on the actual reviewed branch,
+perform expert review against this architecture, and record dispositions before accepting
+this review unit.
+
 The strict NAT observer operates only after table/scaffold ownership is confirmed and consumes:
 
 ```text
@@ -2061,6 +2106,91 @@ and can do so without equating same-name/new-ifindex endpoints.
 
 Observation remains read-only. Physical NAT add/delete is not accepted until this parser and
 comparison contract are executable and reviewed.
+
+EXP-034 has subsequently proved on the selected GitHub Linux/nft target that a recognized
+stale NAT rule can be deleted by its observed handle after same-name interface replacement,
+without deleting the new current rule. A nonexistent handle delete fails without changing
+the observed nft objects. This is **technical evidence only**, not authority for production
+mutation: full owned-scope classification, an independently confirmed disabled
+`ForwardingGate`, fresh pre/post-observation, and guarded structural convergence remain
+necessary before any runtime NAT write path is accepted.
+
+###### Guarded NAT-only structural mutation reference slice
+
+**Component type:** a bounded direct `NetworkPolicyExecutor` operation with a lower
+Linux nft Driver and the existing read-only Calculator. This is deliberately a
+partial reference slice, **not** completion of full Release 1 structural policy.
+
+**Implements:**
+- `VPNG0001-R1.R2.R4.R6.R1`;
+- `VPNG0001-R1.R3.R2`;
+- `VPNG0001-R1.R3.R3`;
+- `VPNG0004-R4.R3.R2`;
+- `VPNG0004-R4.R4`;
+- `VPNG0004-R4.R5`.
+
+**Constrained by:**
+- `VPNG0001-R1.R2.R4.R6.C1` — no guessed external NAT grammar.
+
+**Scenario:** One recognized old exact-ifindex NAT rule remains in the marked
+payload postrouting chain after a Device endpoint was replaced. The required
+current physical NAT desired state may need stale rule deletion and new rule
+addition, but no packet may forward during the mixed transition.
+
+**Responsibilities and interactions:** The direct Executor first converges the
+owned managed-netns `ForwardingGate` to `DISABLED` and confirms a fresh read.
+An injected lower Driver obtains one nft ruleset observation bracketed by two
+fresh link inventories; relevant current `(ifname, ifindex)` identities must
+agree. Existing pure observers confirm the table/scaffold and classify every
+rule in `payload_postrouting` against the supplied normalized desired state.
+The Executor must additionally account for **every other object** in the owned
+nft table; this bounded slice explicitly refuses mutation if there is any
+unsupported object or a rule in `payload_forward`. This refusal is a missing
+reference capability, not a new product-level constraint. The eventual complete
+structural Executor must combine the independently reviewed forward/probe and
+NAT classifications rather than silently narrowing supported payload traffic.
+
+**One-step mutation / postconditions:** With no conflicts and exact current
+desired endpoint identity, choose one deterministic recognized stale handle for
+deletion, or one missing desired current exact-ifindex masquerade for addition.
+Recheck `ForwardingGate == DISABLED` immediately before each write. After
+each write, obtain a fresh bounded structural snapshot and prove the expected
+**whole-chain change**: delete removed exactly that handle and preserved all
+other rules, or add introduced exactly one recognized desired physical NAT
+rule with a fresh handle while preserving all previous rules. A successful
+nft command is not an independently confirmed postcondition.
+
+**Failure recovery:** A thrown/failed lower command cannot authorize replay
+of a stale plan. Reobserve the owned scope and gate; report the authoritative
+current result or an unconfirmed failure. Do not open forwarding, silently
+delete a conflict, adopt a same-name replacement, or keep an old handle as a
+persistent desired-state identity. A later retry must plan from fresh state.
+All VPN-GATE structural writes to this owned namespace must be serialized;
+unrecognized concurrent external changes cause a fail-closed refusal.
+
+**External evidence and necessity:** EXP-033 validates numeric-ifindex rule
+realization and stale interface representation; EXP-034 validates exact-handle
+old-rule deletion and failure isolation on the selected Linux/nft target.
+A physical Driver is necessary for actual kernel actuation; the existing
+read-only Calculator is reused for all classification. No second policy
+classifier, background Agent, retry queue, stored handle registry, async
+completion protocol or new user configuration is introduced.
+
+**Scope / constraint lifting:** Since this reference slice permits only an
+empty forward chain and no other unknown table objects, it is safe but
+**not sufficient for the production case with materialized forward/probe
+rules**. No acceptance of first-release product scope reduction follows.
+The complete structural Executor remains separately gated on composition
+with the full nft owner classifiers, RPDB/routes and final forwarding
+activation.
+
+**Evidence plan:** rootless fake Driver/Gate tests for lost barrier,
+unknown nft objects, stale/duplicate/conflicting NAT, exact single-step
+postconditions and failed command re-observation; a disposable-netns
+physical backend integration for real add/delete with `ip_forward=0`.
+Only after independent expert review may this partial lower slice be
+considered executable reference evidence. It must never reopen the root
+forwarding barrier.
 
 The scaffold is deliberately independent from the root structural barrier:
 
