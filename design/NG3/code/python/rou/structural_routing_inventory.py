@@ -14,6 +14,11 @@ class StructuralRoutingInventoryError(ValueError):
     pass
 
 
+class ReservedOwnerKind(str, Enum):
+    PAYLOAD = "payload"
+    PROBE = "probe"
+
+
 @dataclass(frozen=True, slots=True)
 class ObservedManagedRoute:
     table: int
@@ -39,6 +44,7 @@ class ObservedManagedRule:
 
 @dataclass(frozen=True, slots=True)
 class ReservedPolicyConflict:
+    owner: ReservedOwnerKind
     resource: str
     reason: str
 
@@ -73,7 +79,8 @@ def parse_structural_routing_inventory(
         table = _parse_optional_decimal(row.get("table"))
         if table is None:
             continue
-        if not _is_reserved_table(table, platform):
+        owner = _table_owner(table, platform)
+        if owner is None:
             continue
         resource = f"route[{index}] table={table}"
         try:
@@ -87,7 +94,11 @@ def parse_structural_routing_inventory(
             )
         except StructuralRoutingInventoryError as exc:
             conflicts.append(
-                ReservedPolicyConflict(resource=resource, reason=str(exc))
+                ReservedPolicyConflict(
+                    owner=owner,
+                    resource=resource,
+                    reason=str(exc),
+                )
             )
 
     for index, row in enumerate(rule_rows):
@@ -110,20 +121,32 @@ def parse_structural_routing_inventory(
             )
         except StructuralRoutingInventoryError as exc:
             conflicts.append(
-                ReservedPolicyConflict(resource=resource, reason=str(exc))
+                ReservedPolicyConflict(
+                    owner=owner,
+                    resource=resource,
+                    reason=str(exc),
+                )
             )
 
-    if len(set(routes)) != len(routes):
+    duplicate_routes = _duplicates(routes)
+    for route in duplicate_routes:
+        owner = _table_owner(route.table, platform)
+        assert owner is not None
         conflicts.append(
             ReservedPolicyConflict(
-                resource="routes",
+                owner=owner,
+                resource=f"route table={route.table}",
                 reason="reserved inventory contains duplicate normalized route",
             )
         )
-    if len(set(rules)) != len(rules):
+    duplicate_rules = _duplicates(rules)
+    for rule in duplicate_rules:
+        owner = _rule_owner(rule.priority, platform)
+        assert owner is not None
         conflicts.append(
             ReservedPolicyConflict(
-                resource="rules",
+                owner=owner,
+                resource=f"rule priority={rule.priority}",
                 reason="reserved inventory contains duplicate normalized rule",
             )
         )
@@ -287,7 +310,7 @@ def _parse_reserved_rule(
             "reserved rule has unsupported source selector"
         )
 
-    if owner == "payload":
+    if owner is ReservedOwnerKind.PAYLOAD:
         allowed = {"priority", "src", "table", "dst", "dstlen", "iif"}
         extras = sorted(set(row) - allowed)
         if extras:
@@ -340,24 +363,25 @@ def _parse_reserved_rule(
     )
 
 
-def _is_reserved_table(
+def _table_owner(
     table: int,
     platform: NetworkPolicyPlatformSpace,
-) -> bool:
-    return (
-        platform.payload_tables.contains(table)
-        or platform.probe_tables.contains(table)
-    )
+) -> ReservedOwnerKind | None:
+    if platform.payload_tables.contains(table):
+        return ReservedOwnerKind.PAYLOAD
+    if platform.probe_tables.contains(table):
+        return ReservedOwnerKind.PROBE
+    return None
 
 
 def _rule_owner(
     priority: int,
     platform: NetworkPolicyPlatformSpace,
-) -> str | None:
+) -> ReservedOwnerKind | None:
     if platform.probe_rule_priorities.contains(priority):
-        return "probe"
+        return ReservedOwnerKind.PROBE
     if platform.payload_rule_priorities.contains(priority):
-        return "payload"
+        return ReservedOwnerKind.PAYLOAD
     return None
 
 
@@ -493,6 +517,17 @@ def _required_hex_or_int(value: object, label: str) -> int:
             f"{label} is outside u32"
         )
     return result
+
+
+def _duplicates(values):
+    seen = set()
+    duplicates = set()
+    for value in values:
+        if value in seen:
+            duplicates.add(value)
+        else:
+            seen.add(value)
+    return tuple(duplicates)
 
 
 def _route_key(route: ObservedManagedRoute) -> tuple[object, ...]:

@@ -7,6 +7,7 @@ from rou.interface_identity import InterfaceIdentity
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.payload_routing_desired import ManagedRouteType
 from rou.structural_routing_inventory import (
+    ReservedOwnerKind,
     StructuralRoutingInventoryError,
     parse_structural_routing_inventory,
 )
@@ -138,6 +139,7 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
         self.assertEqual(len(value.routes), 3)
         self.assertEqual(len(value.conflicts), 1)
         self.assertIn("unexpected protocol role", value.conflicts[0].reason)
+        self.assertEqual(value.conflicts[0].owner, ReservedOwnerKind.PAYLOAD)
 
     def test_reserved_rule_wrong_table_pool_is_conflict(self):
         rules = EXP029_RULES + [
@@ -153,6 +155,7 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
         value = parse(EXP029_ROUTES, rules)
         self.assertEqual(len(value.conflicts), 1)
         self.assertIn("outside payload table pool", value.conflicts[0].reason)
+        self.assertEqual(value.conflicts[0].owner, ReservedOwnerKind.PAYLOAD)
 
     def test_reserved_rule_unknown_selector_is_conflict(self):
         rules = [

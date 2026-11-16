@@ -54,10 +54,16 @@ from .payload_routing_desired import (
 from .structural_routing_inventory import (
     ObservedManagedRoute,
     ObservedManagedRule,
+    ReservedOwnerKind,
     ReservedPolicyConflict,
     StructuralRoutingInventoryError,
     StructuralRoutingObservation,
     parse_structural_routing_inventory,
+)
+from .payload_routing_compare import (
+    PayloadRoutingComparison,
+    PayloadRoutingComparisonError,
+    compare_payload_routing,
 )
 from .network_policy_layout import (
     NetworkPolicyLayout,
@@ -155,6 +161,8 @@ __all__ = [
     "PayloadPolicyAllocation",
     "PayloadProfileProjectionError",
     "PayloadProfileRequest",
+    "PayloadRoutingComparison",
+    "PayloadRoutingComparisonError",
     "PayloadRoutingDesiredState",
     "PayloadRoutingProjectionError",
     "ProbePolicyAllocation",
@@ -162,6 +170,7 @@ __all__ = [
     "ProbeRoutingDemand",
     "ProfileClassificationError",
     "ProfileStructuralIntent",
+    "ReservedOwnerKind",
     "ReservedPolicyConflict",
     "RouteMetricPlatformSpace",
     "RoutePriorityConvergenceError",
@@ -196,6 +205,7 @@ __all__ = [
     "build_payload_routing_desired_state",
     "build_route_priority_domain_realizations",
     "classify_inbound_profile",
+    "compare_payload_routing",
     "classify_outbound_profile",
     "converge_route_priority_once",
     "converge_route_priority_profile_once",
