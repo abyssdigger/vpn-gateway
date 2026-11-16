@@ -49,6 +49,7 @@ Current trace:
 | EXP-048-backed structural route/RPDB mutation Driver | `linux_structural_routing.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md`, `EXP-048-result-20261116.md` |
 | exact-before-release cross-domain phase planner | `structural_policy_plan.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | semantic Profile forward compiler | `payload_forward_compiler.py` | `NG3-2026-11-17-profile-forward-compiler-review.md` |
+| multi-path Device firewall semantic compiler | `device_firewall_policy_compiler.py`, `device_firewall_compiler.py` | `NG3-2026-11-17-device-firewall-policy-compiler-review.md` |
 | guarded cross-domain structural Executor + Linux snapshot backend | `structural_policy_mutation.py`, `linux_structural_policy.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
@@ -2703,9 +2704,61 @@ facts but does not compile semantic predicates itself.
 
 A mismatch in rule order is a desired-state mismatch even when the same rule set is present.
 
-The lower contract intentionally does not derive a production child-chain naming scheme.
-Naming remains an input to the lower realization layer until the semantic compiler unit
-selects a deterministic lower identifier. The comparison layer grants no mutation authority.
+The exact lower contract itself does not derive child-chain names. Production multi-path
+composition assigns them in the semantic-to-lower compiler described below; the comparison
+layer still grants no mutation authority.
+
+###### Multi-path Device firewall composition and child-chain identity
+
+**Implements:**
+- `VPNG0001-R1.R2.R4.R6.R2`;
+- `VPNG0001-R1.R2.R4.R6.R2.R1`;
+- `VPNG0001-R1.R2.R4.R6.R2.R2`;
+- `VPNG0001-R1.R2.R4.R6.R2.R3`;
+- `VPNG0001-R1.R2.R4.R6.R2.R4`;
+- `VPNG0007-R7.R1`;
+- `VPNG0007-R7.R3.R1`.
+
+The caller supplies normalized Device firewall intent for every Device that currently backs
+a payload path, including explicit `rules=None` when the firewall is omitted. Missing
+semantic input is an error rather than an implicit unrestricted firewall.
+
+Current logical paths are sorted by canonical `LogicalPathId`. Their zero-based ordinal in
+that current desired set is the internal lower token for child-chain naming:
+
+```text
+OUT: df_out_<8-digit lowercase hex ordinal>
+IN:  df_in_<8-digit lowercase hex ordinal>
+```
+
+Examples:
+
+```text
+df_out_00000000
+df_in_00000000
+df_out_00000001
+```
+
+The emitted identifier contains no Device/Profile/user ID and uses only the already accepted
+safe nft identifier character set. It is deterministic for the same current semantic path
+set and requires no persistent token registry, history or collision-prone hash.
+
+A membership change may renumber later current paths and therefore cause additional owned
+chain replacement under the closed structural ForwardingGate. Release 1 does not promise
+minimal nft-object churn during structural membership change; introducing persistent naming
+state solely to avoid that churn is not justified.
+
+For each current path with explicit Device firewall policy, the composition Calculator calls
+the existing one-path semantic compiler with the current host/path identities and its two
+allocated child-chain names. Omitted policy produces no child chains for that path.
+
+The current physical path realization set must not contain duplicate logical paths, reuse one
+endpoint for multiple logical paths, or reuse the host boundary as a VPN endpoint.
+
+**Evidence plan:** rootless tests for omitted/explicit policy, canonical naming independent of
+input order, same-Device multi-path uniqueness, missing normalized policy, duplicate policy
+and endpoint identity conflicts. Existing EXP-041..044 evidence is sufficient for the
+resulting safe chain-name syntax and lower mutation; no new kernel primitive is introduced.
 
 The semantic compiler and bounded mutation slice are now evidence-backed as follows.
 
