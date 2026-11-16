@@ -43,11 +43,17 @@ def build_payload_nat_desired_state(
         )
 
     semantic_paths: set[LogicalPathId] = set()
+    profile_ids: set[str] = set()
     for profile in profiles:
         if not isinstance(profile, PayloadProfileRequest):
             raise PayloadNatProjectionError(
                 "profiles must contain PayloadProfileRequest"
             )
+        if profile.profile_id in profile_ids:
+            raise PayloadNatProjectionError(
+                f"duplicate payload Profile {profile.profile_id!r}"
+            )
+        profile_ids.add(profile.profile_id)
         if len(set(profile.ordered_paths)) != len(profile.ordered_paths):
             raise PayloadNatProjectionError(
                 f"Profile {profile.profile_id!r} repeats a logical path"
@@ -64,6 +70,10 @@ def build_payload_nat_desired_state(
         if route.path_id in route_by_path:
             raise PayloadNatProjectionError(
                 f"duplicate current route realization for {route.path_id!r}"
+            )
+        if route.endpoint == host_boundary:
+            raise PayloadNatProjectionError(
+                "host boundary cannot also be a payload VPN path endpoint"
             )
         previous = endpoint_owner.get(route.endpoint)
         if previous is not None and previous != route.path_id:

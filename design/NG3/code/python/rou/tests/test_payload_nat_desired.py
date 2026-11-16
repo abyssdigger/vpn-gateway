@@ -145,6 +145,33 @@ class PayloadNatDesiredTests(unittest.TestCase):
                 HOST,
             )
 
+    def test_duplicate_profile_identity_is_rejected(self):
+        with self.assertRaisesRegex(
+            PayloadNatProjectionError,
+            "duplicate payload Profile",
+        ):
+            build_payload_nat_desired_state(
+                (
+                    profile("same", (A0,)),
+                    profile("same", (A0,)),
+                ),
+                (route(A0, EP_A0),),
+                (DeviceNatPolicyIntent("a", NatIntent.MASQUERADE),),
+                HOST,
+            )
+
+    def test_host_boundary_cannot_be_vpn_egress_endpoint(self):
+        with self.assertRaisesRegex(
+            PayloadNatProjectionError,
+            "host boundary",
+        ):
+            build_payload_nat_desired_state(
+                (profile("p", (A0,)),),
+                (route(A0, HOST),),
+                (DeviceNatPolicyIntent("a", NatIntent.MASQUERADE),),
+                HOST,
+            )
+
     def test_zero_path_profiles_need_no_nat_policy(self):
         value = build_payload_nat_desired_state(
             (profile("empty", ()),),
