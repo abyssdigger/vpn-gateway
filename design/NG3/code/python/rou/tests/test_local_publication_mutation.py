@@ -89,7 +89,55 @@ class LocalPublicationMutationPlanTests(unittest.TestCase):
                 LocalPublicationDeleteRef(LocalPublicationHook.OUTPUT, 42),
             ),
         )
-        self.assertEqual(step.add_rules, ())
+        self.assertEqual(
+            step.add_rules,
+            (
+                spec(LocalPublicationHook.OUTPUT, host=NEW_HOST),
+                spec(LocalPublicationHook.INPUT, host=NEW_HOST),
+            ),
+        )
+
+
+    def test_full_diff_combines_all_stale_and_missing_rules(self):
+        stale = (
+            ObservedLocalPublicationRule(
+                handle=51,
+                hook=LocalPublicationHook.INPUT,
+                protocol=PublicationProtocol.TCP,
+                host_boundary=HOST,
+                local_address=ADDR,
+                local_port=44442,
+            ),
+            ObservedLocalPublicationRule(
+                handle=52,
+                hook=LocalPublicationHook.OUTPUT,
+                protocol=PublicationProtocol.TCP,
+                host_boundary=HOST,
+                local_address=ADDR,
+                local_port=44442,
+            ),
+        )
+        desired = LocalPublicationDesiredState(
+            (
+                spec(LocalPublicationHook.INPUT),
+                spec(LocalPublicationHook.OUTPUT),
+            )
+        )
+        comparison = LocalPublicationComparison(
+            confirmed=(),
+            missing=desired.rules,
+            stale=stale,
+            conflicts=(),
+        )
+        step = select_local_publication_step(comparison, desired)
+        self.assertEqual(
+            step.delete_rules,
+            (
+                LocalPublicationDeleteRef(LocalPublicationHook.INPUT, 51),
+                LocalPublicationDeleteRef(LocalPublicationHook.OUTPUT, 52),
+            ),
+        )
+        self.assertEqual(set(step.add_rules), set(desired.rules))
 
     def test_missing_pair_is_added_in_one_endpoint_transaction(self):
         desired = LocalPublicationDesiredState(
