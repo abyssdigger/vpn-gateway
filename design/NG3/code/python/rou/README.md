@@ -23,6 +23,8 @@ Implemented:
 - Profile-level multi-domain priority coordinator with deterministic domain order and final fresh verification of every destination domain;
 - lower Adapter route-priority realization contract for internal table/protocol/path-route identity and validated Linux metric space;
 - deterministic shared lower network-policy allocator over injected table/RPDB/route-metric/nft platform resource space;
+- accepted EXP-028 Linux platform constants for table/RPDB/protocol/metric/nft namespaces;
+- semantic Profile/allocation to per-destination route-priority domain assembly without inferring gateway/onlink semantics;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
@@ -30,7 +32,7 @@ Important non-goals of the current reference:
 - no Device Engine;
 - no Netlink event state/history/replay;
 - no general Linux structural route/RPDB/nft policy executor beyond the reviewed pure-priority route-key slice;
-- no shared lower network-policy allocator/layout for route tables, owner protocol, RPDB priorities and metric namespaces yet;
+- no complete structural NetworkPolicyExecutor for terminal guards, RPDB dispatch and nft payload/probe policy yet;
 - no full daemon/lifecycle assembly;
 - no production probe execution;
 - no final user-facing NAT / traffic-envelope / publication grammar;
