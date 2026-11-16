@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from rou.composite_nft_policy import (
     CompositeNftDesiredState,
@@ -16,6 +16,11 @@ from rou.device_firewall_desired import (
 )
 from rou.device_firewall_structure import DeviceFirewallRuleAction
 from rou.interface_identity import InterfaceIdentity
+from rou.local_publication_policy import (
+    PublicationLocalEndpointIntent,
+    PublicationProtocol,
+    build_local_publication_desired,
+)
 from rou.nft_namespace_inventory import (
     NG3_NFT_OWNER_COMMENT,
     NftNamespaceObject,
@@ -206,6 +211,58 @@ class CompositeNftPolicyTests(unittest.TestCase):
         result = compare_composite_nft_policy(
             observation(child, jump, forward, nat, fallthrough),
             (host, vpn),
+            desired,
+        )
+        self.assertTrue(result.desired_confirmed)
+        self.assertEqual(result.conflicts, ())
+
+
+    def test_exact_local_publication_is_classified_in_composite_scope(self):
+        host = InterfaceIdentity("host0", 10)
+        address = IPv4Address("198.51.100.46")
+        local_desired = build_local_publication_desired(
+            (
+                PublicationLocalEndpointIntent(
+                    "device",
+                    PublicationProtocol.TCP,
+                    address,
+                    44443,
+                    host,
+                ),
+            )
+        )
+        desired = CompositeNftDesiredState(
+            profile_forward=PayloadForwardDesiredState(()),
+            payload_nat=PayloadNatDesiredState(()),
+            device_firewall=DeviceFirewallDesiredState(()),
+            local_publication=local_desired,
+        )
+
+        def local_rule(chain, ifkey, addr_field, port_field, handle):
+            return obj(
+                "rule",
+                {
+                    "family": "ip",
+                    "table": "vpn_gate",
+                    "chain": chain,
+                    "handle": handle,
+                    "comment": "vpn-gate:ng3:local-publication-v1",
+                    "expr": [
+                        {"match": {"op": "==", "left": {"meta": {"key": ifkey}}, "right": "host0"}},
+                        {"match": {"op": "==", "left": {"payload": {"protocol": "ip", "field": addr_field}}, "right": str(address)}},
+                        {"match": {"op": "==", "left": {"payload": {"protocol": "tcp", "field": port_field}}, "right": 44443}},
+                        {"accept": None},
+                    ],
+                },
+                handle,
+            )
+
+        result = compare_composite_nft_policy(
+            observation(
+                local_rule("stack_input", "iif", "daddr", "dport", 50),
+                local_rule("stack_output", "oif", "saddr", "sport", 51),
+            ),
+            (host,),
             desired,
         )
         self.assertTrue(result.desired_confirmed)
