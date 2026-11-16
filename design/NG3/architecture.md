@@ -1628,6 +1628,185 @@ Therefore the next allocator unit is gated by the structural lower-policy layout
 The existing realization types are consumers of that future allocation contract, not the
 authority that chooses global Linux resource namespaces.
 
+### 9.2. Shared lower network-policy ownership/allocation layout
+
+**Implements:**
+- `VPNG0001-R1.R1`
+- `VPNG0003-R3.R6`
+- `VPNG0004-R4.R1`
+- `VPNG0004-R4.R1.R1`
+- `VPNG0004-R4.R2`
+- `VPNG0004-R4.R5`
+- `VPNG0004-R4.R6.R1.R1`
+- `VPNG0005-R5.R2`
+- `VPNG0005-R5.R4`
+- `VPNG0005-R5.R5`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R3.R1`
+- `VPNG0007-R7.R3.R2`
+
+The lower Linux policy namespace is allocated from **semantic owner scopes**, not from
+user-visible identifiers copied directly into kernel object names.
+
+Current owner kinds are:
+
+```text
+PayloadPolicyOwner(profile_id)
+
+ProbePolicyOwner(
+    availability_subject_id = (profile_id, logical_path_id)
+)
+```
+
+The owner key is semantic identity. Kernel resource numbers are internal realization.
+
+#### Routing-table ownership
+
+Each enabled payload Profile owns one internal routing table even when its current concrete
+path set is empty. Keeping the table/domain present preserves the accepted rule that a
+zero-path Profile remains a fail-closed policy domain instead of disappearing into ambient
+routing.
+
+A Profile table contains the structural routes for all of that Profile's remote
+destinations plus a terminal fail-closed route. Pure-priority convergence mutates only the
+ordinary path-route metrics inside that already-selected table.
+
+Probe policy does not automatically receive one table per subject merely because the owner
+exists. A probe-owner table is allocated only when the accepted physical probe mechanism
+needs an independent path-routing domain. This keeps owner identity explicit without
+pre-allocating unused kernel machinery.
+
+Payload and probe table allocations come from disjoint lower resource pools.
+
+#### RPDB ownership
+
+Payload dispatch rules are generated from the normalized `(destination, Profile)` set and
+are ordered deterministically by:
+
+```text
+prefix length descending
+network address ascending
+Profile ID ascending only as a final deterministic tie-break
+```
+
+Exact duplicate destination ownership is already rejected by configuration normalization,
+so the final tie-break does not create policy semantics.
+
+The payload RPDB pool must execute before ambient/main lookup for managed host-boundary
+traffic. Probe rules, when required by the selected probe mechanism, use a disjoint
+higher-precedence owner pool and an explicit probe discriminator; they do not reuse payload
+dispatch identity.
+
+Rule priority numbers are internal allocation, not configuration.
+
+#### Route ownership markers
+
+Linux route protocol values are role markers, not Profile/subject identifiers.
+
+The lower platform contract reserves distinct marker roles for:
+
+```text
+managed path/unicast route
+managed terminal/guard route
+```
+
+The exact numeric protocol values are platform constants and must be evidence-gated before
+production use. Historical 201/202 behavior is reusable evidence but does not by itself make
+those numbers an NG3 normative choice.
+
+Owner scope is determined by the combination of allocated table/domain, route role/shape and
+semantic allocation record. A protocol marker alone is never sufficient proof that an
+arbitrary route may be deleted.
+
+#### Metric ownership
+
+For a payload Profile with `N` currently realized paths, the lower allocation supplies:
+
+```text
+N strictly increasing preference metrics
+>= 1 disjoint scratch metric when N > 1
+one terminal guard metric lower in preference than every preference/scratch metric
+```
+
+Availability changes only permute which already-eligible logical path owns each preference
+slot. They do not allocate a second availability-specific metric namespace.
+
+A zero-path Profile requires no preference/scratch metrics but still retains its terminal
+fail-closed route.
+
+The allocator must reject an unrepresentable path count before mutation. It must not silently
+truncate paths or reuse a guard metric as scratch space.
+
+#### nftables ownership
+
+Packet filtering/NAT realization uses a dedicated VPN-GATE-owned nftables namespace inside
+the managed network domain.
+
+Payload and probe policy remain separate semantic owner scopes inside that namespace even
+when one physical nft table is sufficient.
+
+The lower allocator must not embed arbitrary user IDs directly into nft object names merely
+for ownership. Stable internal owner tokens/indices may be used when per-owner objects are
+required.
+
+The dedicated nft namespace is cleanup identity for VPN-GATE packet-policy objects. A
+pre-existing incompatible object in that reserved namespace is a marker conflict, not a
+candidate for silent adoption or deletion.
+
+#### Deterministic allocation and configuration change
+
+Allocation is deterministic for one accepted semantic owner set.
+
+A minimal implementation may rank canonical owner keys and assign the next available entry
+from an ordered platform resource pool. Persistent hash maps or durable allocation journals
+are not required merely to preserve numeric IDs across a configuration change.
+
+No product requirement promises stable table/rule/metric numbers across a structural
+configuration transition.
+
+If a configuration change changes owner membership or allocation rank, the change is a
+**structural** network-policy transition. It must pass through the accepted restrictive
+barrier/reconciliation path; it is not eligible for the pure-priority fast path.
+
+#### Cleanup and conflict rule
+
+Reserved lower resource spaces are not permission for blind deletion.
+
+Cleanup/recovery must:
+
+1. inventory the reserved resource scope;
+2. prove each candidate resource matches an accepted VPN-GATE owner/role shape;
+3. delete/reconcile only proved owned resources;
+4. treat an unexpected object inside a reserved table/priority/protocol/nft namespace as an
+   observable ownership conflict and fail closed rather than silently deleting foreign
+   state.
+
+This applies equally to current and stale allocations from a previous accepted
+configuration.
+
+Because table/rule allocations may change across a structural configuration transition,
+cleanup identity must be derivable from the reserved lower namespace and exact resource
+shape, not solely from the current configuration's allocation map.
+
+#### Platform resource-space contract
+
+Concrete numeric pools are lower Linux platform constants.
+
+They must satisfy:
+
+- disjoint payload/probe table pools;
+- disjoint RPDB owner pools with the required precedence relative to ambient/main lookup;
+- route protocol marker values that are representable and observable through the accepted
+  inventory mechanism;
+- enough metric space for the largest accepted currently realized path set plus scratch and
+  terminal guard;
+- no arbitrary small product limit when a larger kernel resource space can be used safely;
+- privileged evidence for the actual chosen Linux numeric ranges before production code
+  relies on them.
+
+The user configuration never contains these values.
+
 # 10. NetworkPolicyExecutor
 
 **Component type:** Executor
