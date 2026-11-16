@@ -198,3 +198,17 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_payload_nat_mutation.py
+
+
+  linux-payload-forward:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables procps
+      - name: EXP-035 exact-ifindex NEW-forward admission
+        run: >-
+          sudo python3
+          "design/experiments/EXP-035 NG3 exact-ifindex NEW-forward admission/exp035_new_forward_admission.py"
