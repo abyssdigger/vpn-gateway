@@ -97,8 +97,11 @@ Manager-local and opaque to NetworkRulesSpec/Linux technical identity:
 - no epoch exists before fresh `KNOWN + MATCHED + READY`;
 - leaving READY invalidates all evidence from the current epoch;
 - a later fresh transition back to READY starts a new epoch;
-- accepting a semantically changed desired probe set invalidates the previous epoch;
-- a same-name/new-ifindex request therefore cannot reuse old evidence.
+- changing the physical desired `NetworkRulesSpec` invalidates the previous epoch;
+- a same-name/new-ifindex request therefore cannot reuse old evidence;
+- logical-only request changes that leave the physical probe plane unchanged preserve the
+  rules-readiness epoch and invalidate evidence/scheduling only for changed `probe_id`
+  entries.
 
 The epoch is not a kernel/network generation identifier and is not encoded into uid,
 conntrack mark, routing tables or nft rules.
@@ -182,8 +185,13 @@ Network plane identity used by ProbeRulesCalculator:
 
 Several logical probes may therefore share one physical network plane.
 
-This does not imply shared timing/hysteresis semantics. Execution deduplication is a future
-optimization only if it preserves each logical probe contract.
+Timing/hysteresis is explicitly per logical `probe_id`, not per physical plane.
+`AvailabilityProbeRequest.policy` therefore does not participate in
+`ProbeRulesCalculator` output. Two logical probes sharing one plane may have different
+cadence, timeout and thresholds.
+
+Execution deduplication remains a future optimization only if it preserves each logical
+probe contract.
 
 ## 9. Implemented rules-control slice
 
@@ -223,9 +231,9 @@ calculate ProbeRulesState
 
 Probe execution consumes only the READY branch.
 
-The cadence that invokes rules audit is not fixed here.
+Rules audit is also performed as part of each attempted probe validity envelope.
 
-The Manager also exposes `evaluate_once()` as the first policy-bearing boundary. It reuses
+The Manager also exposes `evaluate_once()` as the minimal direct policy-bearing boundary. It reuses
 `attempt_once()` and materializes only the minimal one-attempt verdict mapping. The raw
 `attempt_once()` API remains policy-free and independently testable.
 
@@ -341,29 +349,109 @@ One valid attempt is enough to publish one current verdict for the active readin
 
 Repeated semantically identical verdicts are publication-idempotent.
 
-Any rules/request transition that opens a new readiness epoch invalidates an older
-REACHABLE/UNREACHABLE publication and returns the affected probe to UNKNOWN until new valid
-evidence exists.
+Any physical rules transition that opens a new readiness epoch invalidates older
+REACHABLE/UNREACHABLE publications for the Manager. A logical-only request change invalidates
+only the affected `probe_id` publication while unchanged logical probes retain evidence
+from the still-current rules epoch.
 
 This baseline is intentionally replaceable by a later retry/hysteresis policy without
 changing ProbeDriver or ProbeAttemptObservation.
 
-## 13. Still intentionally open
+## 13. Per-probe cadence and hysteresis
+
+The next executable layer is a normalized optional `AvailabilityProbePolicy` attached to
+each logical `AvailabilityProbeRequest`:
+
+```text
+interval_seconds
+retry_interval_seconds
+timeout_seconds
+failure_threshold
+recovery_threshold
+```
+
+`policy=None` means that the logical probe is not autonomously scheduled by the Manager.
+It remains available to explicit `evaluate_once()` callers. This is useful for staged
+assembly and tests; production runtime assembly may require policy for probes that are
+expected to run autonomously.
+
+Threshold defaults are 1/1, preserving the already-agreed single-attempt verdict baseline.
+No arbitrary default wall-clock values are invented: interval, retry interval and timeout
+must be supplied explicitly by the normalized policy producer.
+
+The Manager owns only deterministic scheduling state. It does not sleep and does not own a
+thread or event loop. The outer runtime calls:
+
+```text
+run_due(monotonic_now)
+```
+
+and the Manager executes all currently due probes serially in deterministic `probe_id`
+order.
+
+AvailabilityProbeManager has a single-threaded control-loop contract: its public mutation
+methods are not intended for concurrent invocation. The outer runtime serializes request,
+audit and cadence calls. No internal lock/thread model is introduced.
+
+The supplied `monotonic_now` is the dispatch timestamp for the whole pass. The next due
+deadline is anchored to that dispatch timestamp, not to wall-clock completion of the
+possibly blocking Driver call. A probe is attempted at most once per `run_due()` call, so
+missed deadlines never cause an internal catch-up loop.
+
+Scheduling semantics:
+
+- a newly scheduled probe is immediately due;
+- after a stable valid verdict/check, the next attempt uses `interval_seconds`;
+- while contrary evidence has not yet reached its transition threshold, the next attempt
+  uses `retry_interval_seconds`;
+- local ERROR or an attempt rejected by the validity envelope also uses
+  `retry_interval_seconds`;
+- matching evidence cancels an incomplete opposite streak;
+- a new Manager readiness epoch resets all threshold streaks and due-state.
+
+Hysteresis is verdict retention, not UNKNOWN insertion:
+
+```text
+REACHABLE
+    +-- NO_REPLY x (failure_threshold - 1) --> remain REACHABLE
+    +-- NO_REPLY x failure_threshold       --> UNREACHABLE
+
+UNREACHABLE
+    +-- REPLY x (recovery_threshold - 1)   --> remain UNREACHABLE
+    +-- REPLY x recovery_threshold         --> REACHABLE
+```
+
+From UNKNOWN, the corresponding threshold must also be satisfied before publishing an
+authoritative REACHABLE/UNREACHABLE verdict.
+
+A local Driver ERROR remains exceptional evidence and immediately publishes UNKNOWN,
+clearing pending streaks. It is never counted toward remote failure hysteresis.
+
+A policy-only or other logical-only change invalidates current evidence, streaks and due
+state only for the changed `probe_id`. If the physical `NetworkRulesSpec` is unchanged,
+the Manager preserves the current rules-readiness epoch and freshly audits the existing plane
+rather than forcing a structural apply.
+
+A physical probe-plane change still invalidates the owner-wide rules epoch and therefore all
+authoritative probe evidence carried by that epoch.
+
+No jitter, parallel attempts, in-flight cancellation or stale-verdict time-to-live is
+defined by this slice.
+
+## 14. Still intentionally open
 
 The remaining lower-domain evidence gate before production conntrack remediation is
 EXP-026 Debian 13 target confirmation. EXP-025 is already target-confirmed
 STALE-INHERITANCE, and the intended Debian 13 `/usr/bin/ping` executable is confirmed.
 
-The following require an explicit later contract:
+The following still require an explicit later contract:
 
-- attempt interval;
-- per-attempt timeout policy;
-- retry count;
-- success/failure thresholds;
-- hysteresis;
+- user-facing timing/policy grammar and normalization;
 - jitter;
-- concurrency/serialization;
-- cancellation on superseding request;
+- outer runtime tick/event-loop integration;
+- parallel attempt policy, if any;
+- cancellation on a superseding request while a synchronous Driver call is already in flight;
+- stale-verdict time-to-live, if any beyond active cadence;
 - shutdown cleanup of process runtime prerequisites.
 
 The observation-generation representation is no longer open at the semantic level:
@@ -371,7 +459,7 @@ AvailabilityProbeManager uses an owner-wide rules-readiness epoch as described a
 
 These timing/result-policy choices are not inferred from payload policy or from EXP-024.
 
-## 14. Evidence
+## 15. Evidence
 
 Current evidence:
 
