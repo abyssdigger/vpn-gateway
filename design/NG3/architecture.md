@@ -2068,6 +2068,132 @@ already-supported function reaches its own bounded implementation unit and can p
 necessary selectors. This keeps `INPUT=DROP` / `OUTPUT=DROP` fail-closed semantics intact
 without manufacturing new product behavior.
 
+###### Publication local/system contribution — EXP-046
+
+Transport publication is the first function that has reached that bounded lower unit.
+
+EXP-010/011 already establish the publication topology and real OpenConnect same-port
+TCP/UDP transport. EXP-046 separately proves the exact managed local firewall contribution
+for an already-normalized internal publication endpoint.
+
+For one current host-boundary identity, exact managed local IPv4 address, transport protocol
+and internal port, desired contribution is:
+
+```text
+stack_input:
+    current host-boundary iif
+    ip daddr = exact local publication IPv4
+    tcp|udp dport = exact internal port
+    accept
+
+stack_output:
+    current host-boundary oif
+    ip saddr = exact local publication IPv4
+    tcp|udp sport = exact internal port
+    accept
+```
+
+No blanket `ct state established,related` exception is required.
+
+EXP-046 proves real TCP and UDP request/response with both local base chains terminal-DROP.
+Wrong port remains blocked, and the same endpoint/port arriving through a Device-side
+interface remains blocked. The accepted lower owner marker is:
+
+```text
+vpn-gate:ng3:local-publication-v1
+```
+
+The internal `PublicationLocalEndpointIntent` is not external config grammar. It carries
+only already-normalized publication facts plus the current host-boundary identity. Its
+projection produces one INPUT and one OUTPUT contribution and set-deduplicates identical
+physical rules across Devices.
+
+The strict publication-local observer/comparator:
+
+- decodes only rules carrying the publication owner marker;
+- requires exact chain/direction, interface generation, local IPv4, protocol, port and
+  plain `accept`;
+- classifies same-name/old-ifindex contributions as stale;
+- detects duplicate/malformed owned rules;
+- grants no mutation authority.
+
+The composite nft owner comparison now recognizes exact publication-local rules in addition
+to Profile forward, Device firewall and payload NAT. Unknown `stack_input` /
+`stack_output` rules remain whole-scope conflicts.
+
+###### Publication local/system mutation — EXP-047
+
+The managed IPv4 ForwardingGate is **not** a safety barrier for locally delivered
+`stack_input` / `stack_output` traffic. Local publication mutation therefore has its own
+lower safety primitive rather than inheriting payload-policy assumptions.
+
+EXP-047 proves that one `nft -f -` batch is transactional for the publication-local owner
+class:
+
+- exact INPUT/OUTPUT additions become visible only when the whole batch commits;
+- an invalid later command rolls back an earlier valid command from the same batch;
+- exact-handle INPUT/OUTPUT deletion may be submitted in one transaction;
+- the transaction leaves Profile forward / Device firewall / payload NAT objects untouched.
+
+The lower desired state enforces a complete pair for every publication endpoint:
+
+```text
+one normalized publication endpoint
+    -> exactly one stack_input rule
+    -> exactly one stack_output rule
+```
+
+A partial physical pair is drift, not a legal desired state.
+
+`select_local_publication_step` computes one atomic **full diff** across the publication-local
+owner class:
+
+```text
+all observed stale publication-local handles
+    + all missing exact desired publication-local rules
+        -> one nft transaction
+```
+
+No old->new endpoint identity is inferred. Handles are ephemeral references from the current
+fresh observation and include their exact hook/chain identity. There is no persistent handle
+registry.
+
+The Linux publication Driver renders only EXP-046-backed rule shapes and applies the whole
+diff in one nft transaction. Fresh exact observation remains the postcondition authority.
+
+The composite whole-table planner now includes publication-local state. Its safety ordering is:
+
+```text
+cleanup:
+    stale local publication accepts
+    -> stale Profile positive admission
+    -> stale Device jump
+    -> stale Device child
+    -> stale NAT
+
+addition:
+    missing NAT
+    -> missing Device child/jump
+    -> missing Profile positive admission
+    -> missing local publication full diff
+```
+
+The publication-local add is deliberately last because it is an independent positive local
+permission and is not protected by ForwardingGate. Stale local permissions are removed first
+for the same reason.
+
+The privileged composite integration proves coexistence of Profile forward, Device firewall,
+payload NAT and publication-local rules in one reserved table. It also proves one-step atomic
+replacement of an existing publication endpoint rule pair with a new desired pair, followed
+by exact whole-scope confirmation.
+
+This closes physical local-rule convergence **only for Device transport publication**.
+Loopback, probe and integration-specific exceptions remain unmaterialized until each function
+has its own exact lower selector/evidence unit.
+
+Probe remains independently gated by the EXP-024/025/026 generation/conntrack evidence and
+is not widened by the publication result.
+
 Concrete payload rules are added only by a fully normalized payload-policy projection. They
 must not be inferred from historical TOML examples.
 
