@@ -18,7 +18,10 @@ from rou.device_firewall_structure import (
     ObservedDeviceFirewallJump,
 )
 from rou.interface_identity import InterfaceIdentity
-from rou.local_publication_observation import LocalPublicationComparison
+from rou.local_publication_observation import (
+    LocalPublicationComparison,
+    ObservedLocalPublicationRule,
+)
 from rou.local_publication_policy import (
     LocalPublicationDesiredState,
     LocalPublicationHook,
@@ -84,6 +87,7 @@ def comparison(
     device_stale_chains=(),
     device_stale_jumps=(),
     local_missing=(),
+    local_stale=(),
 ):
     return CompositeNftPolicyComparison(
         scaffold=SCAFFOLD,
@@ -109,7 +113,7 @@ def comparison(
         local_publication=LocalPublicationComparison(
             confirmed=(),
             missing=local_missing,
-            stale=(),
+            stale=local_stale,
             conflicts=(),
         ),
         conflicts=(),
@@ -117,6 +121,38 @@ def comparison(
 
 
 class CompositeNftPlanTests(unittest.TestCase):
+    def test_stale_local_publication_precedes_payload_cleanup(self):
+        stale_local = ObservedLocalPublicationRule(
+            handle=9,
+            hook=LocalPublicationHook.INPUT,
+            protocol=PublicationProtocol.TCP,
+            host_boundary=HOST,
+            local_address=IPv4Address("198.51.100.46"),
+            local_port=44443,
+        )
+        stale_profile = ObservedPayloadForwardRule(
+            10,
+            PayloadForwardRuleKind.NEW,
+            HOST,
+            VPN,
+            PayloadForwardRemoteField.DESTINATION,
+            PREFIX,
+        )
+        step = select_composite_nft_step(
+            comparison(
+                profile_stale=(stale_profile,),
+                local_stale=(stale_local,),
+            )
+        )
+        self.assertEqual(
+            step.kind,
+            CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
+        )
+        self.assertEqual(
+            step.local_publication_step.delete_rules[0].handle,
+            9,
+        )
+
     def test_cleanup_precedence_starts_with_stale_profile_admission(self):
         stale_profile = ObservedPayloadForwardRule(
             10,
