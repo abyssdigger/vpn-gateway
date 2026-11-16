@@ -247,8 +247,8 @@ class NetworkPolicyLayoutTests(unittest.TestCase):
             "higher precedence",
         ):
             platform(
-                probe_priorities=(1500, 1600),
-                payload_priorities=(1000, 2000),
+                probe_priorities=(2000, 2100),
+                payload_priorities=(1000, 1500),
             )
         with self.assertRaisesRegex(
             NetworkPolicyLayoutError,
@@ -257,6 +257,30 @@ class NetworkPolicyLayoutTests(unittest.TestCase):
             platform(
                 payload_priorities=(32000, 33000),
                 ambient=32766,
+            )
+
+    def test_rule_pools_must_not_claim_linux_local_priority_zero(self):
+        with self.assertRaisesRegex(
+            NetworkPolicyLayoutError,
+            "priority 0",
+        ):
+            platform(probe_priorities=(0, 100))
+
+    def test_payload_profile_id_must_be_non_empty(self):
+        invalid = PayloadProfileRequest(
+            profile_id="",
+            direction=Direction.OUTBOUND,
+            destinations=(IPv4Network("10.0.0.0/8"),),
+            ordered_paths=(A,),
+        )
+        with self.assertRaisesRegex(
+            NetworkPolicyLayoutError,
+            "non-empty string",
+        ):
+            allocate_network_policy_layout(
+                (invalid,),
+                (),
+                platform(),
             )
 
     def test_route_protocol_markers_are_distinct_internal_roles(self):

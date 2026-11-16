@@ -141,6 +141,13 @@ class NetworkPolicyPlatformSpace:
                     f"{pool_name} overlaps Linux reserved table IDs"
                 )
 
+        if (
+            self.probe_rule_priorities.first == 0
+            or self.payload_rule_priorities.first == 0
+        ):
+            raise NetworkPolicyLayoutError(
+                "VPN-GATE RPDB priority pools must not include Linux local priority 0"
+            )
         if self.probe_rule_priorities.overlaps(self.payload_rule_priorities):
             raise NetworkPolicyLayoutError(
                 "probe and payload RPDB priority pools must be disjoint"
@@ -343,6 +350,10 @@ def _validate_semantic_inputs(
         if not isinstance(profile, PayloadProfileRequest):
             raise NetworkPolicyLayoutError(
                 "payload_profiles must contain PayloadProfileRequest"
+            )
+        if not isinstance(profile.profile_id, str) or not profile.profile_id:
+            raise NetworkPolicyLayoutError(
+                "payload Profile ID must be a non-empty string"
             )
         if profile.profile_id in profile_ids:
             raise NetworkPolicyLayoutError(
