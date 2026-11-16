@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 import json
 from typing import Protocol, Sequence
@@ -25,6 +25,7 @@ class NftNamespaceStatus(str, Enum):
 class NftNamespaceObject:
     kind: str
     canonical_json: str
+    source_order: int = field(default=0, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +132,7 @@ def parse_nft_namespace_ruleset(
                         sort_keys=True,
                         separators=(",", ":"),
                     ),
+                    source_order=index,
                 )
             )
 

@@ -1994,6 +1994,80 @@ The invariant scaffold may therefore include all four accepted base chains
 System/local allow contributions remain a separate policy unit and are not implied by the
 scaffold itself.
 
+##### Managed local/system allow policy
+
+**Implements:**
+- `VPNG0004-R4.R6.R1.R5`;
+- `VPNG0004-R4.R6.R1.R5.R1`;
+- `VPNG0001-R1.R2.R4.R6.R3` where a supported Device publication requires local transport traffic;
+- `VPNG0001-R1.R3.C1.R1` for integration-specific local control traffic explicitly required by a supported onboarding contract.
+
+The managed `stack_input` / `stack_output` exception layer is compiled only from explicit
+VPN-GATE-owned **local/system allow intents**. It is not a second user firewall and it must
+not derive permissions from Device firewall `ALLOW` rules.
+
+A normalized contribution has this semantic shape:
+
+```text
+LocalSystemAllowIntent
+    owner_function
+        = loopback
+        | probe
+        | publication(device_id)
+        | integration(integration_id)
+    hook = input | output
+    protocol
+    current_interface_identity?
+    source_prefix?
+    destination_prefix?
+    source_port?
+    destination_port?
+    peer_or_endpoint_identity?
+```
+
+Every field is a semantic selector, not raw nft syntax. A contribution is valid only when its
+`owner_function` is backed by an already accepted product/integration need and every selector
+required to prevent scope broadening is known. Unknown lower facts produce no wider fallback
+rule.
+
+The desired policy is the set-union of normalized contributions after canonical
+deduplication. Composition does not introduce ordering semantics between independent
+contributions: each contribution is a positive exception to the chain's terminal DROP.
+A rule compiler may combine mechanically equivalent selectors only when packet acceptance is
+provably unchanged.
+
+The following are forbidden as implicit defaults:
+
+- blanket `accept` in either local chain;
+- blanket `ct state established,related accept` covering unrelated local traffic;
+- acceptance based only on an interface name when current interface identity is required;
+- publication wildcarding beyond the normalized Device publication intent;
+- probe acceptance broader than the exact probe flow contract;
+- copying Device firewall rules into `stack_input` or `stack_output`.
+
+Lifecycle ownership follows the source intent. If a publication, probe path or supported
+integration disappears from current desired state, its local/system contribution becomes
+stale and must be removed through the same observe/compare/converge discipline as other owned
+nft state. A stale contribution never remains merely because it would be harmless.
+
+The policy Calculator therefore has a bounded responsibility:
+
+```text
+accepted current product/integration intents
+    + current verified lower identities required by those intents
+        -> desired LocalSystemAllowIntent set
+```
+
+The existing nft realization boundary is responsible only for compiling that desired set,
+observing owned rules, classifying exact/missing/stale/conflicting state and converging to the
+supplied desired state. It must not invent missing local permissions.
+
+This unit deliberately does **not** define a universal fixed exception list. Exact loopback,
+probe, publication and integration contributions are admitted only when the corresponding
+already-supported function reaches its own bounded implementation unit and can provide the
+necessary selectors. This keeps `INPUT=DROP` / `OUTPUT=DROP` fail-closed semantics intact
+without manufacturing new product behavior.
+
 Concrete payload rules are added only by a fully normalized payload-policy projection. They
 must not be inferred from historical TOML examples.
 
@@ -2372,6 +2446,48 @@ endpoint through confirmed transport provenance to the exact current binding; ru
 ifnames are not user-facing selectors. Under
 `VPNG0001-R1.R2.R4.R6.R2.R5.C1`, this does not block ordinary Release-1 Device firewall
 rules.
+
+###### Device firewall lower structural ownership
+
+EXP-041 proves the lower nft control-flow primitives required by the accepted composition:
+
+- `payload_forward` may jump to one ordinary owned child chain for the exact current
+  host-boundary/path pair;
+- Device `ALLOW` is represented by child-chain `return`, so evaluation continues to the
+  later Profile hard gate rather than accepting directly;
+- Device `DENY` may terminate with `drop`;
+- explicit-policy no-match is represented by a final terminal child `drop`;
+- nft preserves the physical order of child rules;
+- a `reject` action is structurally observable, while its final normalized
+  protocol-appropriate realization remains separately gated.
+
+The lower owner markers accepted for this structural layer are:
+
+```text
+child chain:   vpn-gate:ng3:device-fw-child-v1
+base jump:     vpn-gate:ng3:device-fw-jump-v1
+explicit rule: vpn-gate:ng3:device-fw-rule-v1
+fallthrough:   vpn-gate:ng3:device-fw-fallthrough-v1
+```
+
+The generic nft namespace inventory preserves each contained object's physical
+`source_order` in addition to canonical JSON. Existing unordered consumers may continue to
+canonicalize locally; ordered Device firewall observation must use the preserved physical
+order.
+
+The structural observer recognizes:
+
+- owned ordinary child-chain shape;
+- exact current/stale interface identity for Device jumps;
+- ordered explicit child rules whose final action is `return`, `drop` or `reject`;
+- exactly positioned terminal fallthrough `drop`;
+- conflicts such as a jump to a non-owned child chain, wrong owner markers, unsupported
+  rule actions or fallthrough before later rules.
+
+This is **structural ownership evidence only**. Match predicates are retained as canonical
+JSON and are not yet promoted into normalized Device-firewall semantics. Therefore this
+observer is not by itself authority to delete/rewrite arbitrary recognized rules, and it
+does not close the separate protocol/port-predicate or final REJECT realization gates.
 
 No deny-rule ordering or nft jump graph is introduced merely to solve Profile prefix
 overlap; the already accepted canonical CIDR partition remains the simpler Profile-gate
