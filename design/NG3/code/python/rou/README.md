@@ -49,6 +49,7 @@ Implemented:
 - EXP-048-backed structural payload route/RPDB Linux Driver using exact argv-only guard/path/dispatch add/delete primitives without independent observation;
 - pure exact-before-release cross-domain structural phase planner covering desired guards, stale RPDB retirement, stale route cleanup, desired path routes, nft convergence and RPDB activation last;
 - guarded cross-domain structural NetworkPolicyExecutor with one link-bracketed route/RPDB+nft snapshot, persistent closed ForwardingGate during mixed state, strict fresh postcondition progress, final forwarding activation only from exact state and immediate safety re-close when post-activation verification fails;
+- explicit bounded structural transaction coordinator that repeats only verified `STEP_APPLIED` one-step results, stops immediately on terminal failure or unfinished inter-attempt regression, has no arbitrary retry budget, and derives termination from the non-negative strictly decreasing structural distance;
 - Linux cross-domain backend that observes route JSON + rule JSON + nft JSON inside one current-interface bracket and delegates mutation to the already evidenced route/RPDB and composite nft Drivers;
 - privileged cross-domain integration proving old-policy -> new-policy convergence without mixed-state forwarding, command-error-after-success recovery from fresh state, zero-path Profile blackhole behavior and same-name/new-ifindex fail-closed rejection before mutation;
 - rootless cross-contract structural-pipeline integration scenarios.
