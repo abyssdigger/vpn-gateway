@@ -35,6 +35,7 @@ Current trace:
 | NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
 | NetworkPolicyExecutor re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
 | NetworkPolicyExecutor single-attempt observe/apply/re-observe contract | `route_priority_executor.py` | `NG3-2026-11-16-route-priority-executor-attempt-code-review.md` |
+| NetworkPolicyAdapter/Executor owned route-key inventory projection | `route_priority_inventory.py` | `NG3-2026-11-16-route-priority-inventory-code-review.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
@@ -1617,6 +1618,14 @@ authoritative state and could falsely justify deletion or success.
 Therefore:
 
 - each route-key domain is observed and converged from its own fresh kernel snapshot;
+- one current domain snapshot is normalized from numeric IPv4 iproute2 JSON by exact
+  owner-protocol + destination scope and current path endpoint identity;
+- path identity matching includes the current `(ifname, ifindex)` endpoint plus the
+  expected gateway/onlink shape, so same-name interface replacement or a foreign owned row
+  cannot impersonate the accepted logical path;
+- route forms not representable by the single-path priority contract (multipath/nexthop
+  forms, cross-family `via`, or unrepresented flags) fail observation instead of being
+  silently projected into a simpler state;
 - the path-level `logical_path -> observed metrics` model is valid only inside one such
   route-key domain;
 - temporary progress may differ between route-key domains while convergence is in flight,

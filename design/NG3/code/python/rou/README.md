@@ -18,6 +18,7 @@ Implemented:
 - pure make-before-break route-priority move planning for unchanged path membership;
 - partial-state route-priority convergence from a fresh observed snapshot, including safe cleanup of already-confirmed duplicate route copies;
 - single-attempt route-priority Executor contract with mandatory re-observation after failure and fresh final postcondition verification;
+- strict owned route-key inventory projection from current iproute2 JSON and current interface/path identity;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
