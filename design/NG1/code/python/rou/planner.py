@@ -1,21 +1,32 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Address
+import logging
 from typing import Callable, Mapping
 
 from .command_backend import CommandBackend, NamespaceBackend
+from .config import validate_active_config
 from .device_engine import (
     DeviceBindingSnapshot,
     DeviceBindingState,
     InterfaceIdentity,
+    binding_snapshot_from_state,
     reconcile_devices,
 )
 from .domain import ActiveConfig, Availability
 from .environment import EnvironmentSnapshot, collect_environment_snapshot
-from .firewall_kernel import apply_filter_state, verify_filter_state
+from .firewall_kernel import (
+    apply_filter_state,
+    observe_filter_state,
+    verify_filter_state,
+)
 from .firewall_state import FirewallDesiredState, compile_filter_state
 from .kernel_allocation import KernelAllocation, compile_kernel_allocation
-from .kernel_mutation import compile_kernel_mutation_plan
+from .kernel_mutation import (
+    compile_kernel_mutation_plan,
+    compile_lifecycle_route_rebuild_plan,
+)
 from .kernel_state import (
     KernelDesiredState,
     compile_kernel_desired_state,
@@ -26,7 +37,11 @@ from .namespace_prereq import (
     apply_namespace_prerequisites,
     verify_namespace_prerequisites,
 )
-from .nat_kernel import apply_nat_state, verify_nat_state
+from .nat_kernel import (
+    apply_nat_state,
+    observe_nat_state,
+    verify_nat_state,
+)
 from .nat_state import NatDesiredState, NatProvider
 from .traffic_state import (
     TrafficProjection,
@@ -34,6 +49,10 @@ from .traffic_state import (
     committed_state_from_verified,
     project_normal_metrics,
 )
+from .transition import TransitionKind, assess_binding_lifecycle
+
+
+LOG = logging.getLogger(__name__)
 
 
 class PlannerError(RuntimeError):
@@ -95,13 +114,21 @@ def default_snapshot_collector(
     )
 
 
-def _project(
+def compile_planner_projection(
     config: ActiveConfig,
     committed: PlannerRuntimeState,
     snapshot: EnvironmentSnapshot,
     nat_provider: NatProvider,
     availability_provider: AvailabilityProvider | None,
+    local_publication_address: IPv4Address | None,
 ) -> PlannerProjection:
+    LOG.debug(
+        "planner-projection-start interfaces=%d committed_expectations=%d "
+        "committed_metrics=%d",
+        len(snapshot.interfaces),
+        len(committed.devices.expectations),
+        len(committed.traffic.normal_metrics),
+    )
     availability = (
         availability_provider(snapshot)
         if availability_provider is not None
@@ -125,9 +152,13 @@ def _project(
         metrics,
         allocation,
     )
-    firewall = compile_filter_state(config, devices.snapshot)
+    firewall = compile_filter_state(
+        config,
+        devices.snapshot,
+        local_publication_address=local_publication_address,
+    )
     nat = nat_provider.compile(config, devices.snapshot)
-    return PlannerProjection(
+    result = PlannerProjection(
         device_state=devices.next_state,
         bindings=devices.snapshot,
         metrics=metrics,
@@ -136,6 +167,80 @@ def _project(
         firewall=firewall,
         nat=nat,
     )
+    LOG.debug(
+        "planner-projection-result bound=%d over_quota=%d assignments=%d "
+        "waiting=%d tables=%d rules=%d routes=%d",
+        len(result.bindings.bound),
+        len(result.bindings.over_quota),
+        len(result.metrics.assignments),
+        len(result.metrics.waiting_for_slot),
+        len(result.allocation.profile_tables),
+        len(result.kernel.rules),
+        len(result.kernel.routes),
+    )
+    return result
+
+
+def _project_committed_generation(
+    config: ActiveConfig,
+    committed: PlannerRuntimeState,
+    nat_provider: NatProvider,
+    local_publication_address: IPv4Address | None,
+) -> PlannerProjection:
+    """Reconstruct the previous verified generation from durable runtime history."""
+
+    bindings = binding_snapshot_from_state(
+        config,
+        committed.devices,
+    )
+    metrics = project_normal_metrics(
+        config,
+        bindings,
+        committed.traffic,
+    )
+    allocation = compile_kernel_allocation(config)
+    return PlannerProjection(
+        device_state=committed.devices,
+        bindings=bindings,
+        metrics=metrics,
+        allocation=allocation,
+        kernel=compile_kernel_desired_state(
+            config,
+            bindings,
+            metrics,
+            allocation,
+        ),
+        firewall=compile_filter_state(
+            config,
+            bindings,
+            local_publication_address=local_publication_address,
+        ),
+        nat=nat_provider.compile(config, bindings),
+    )
+
+
+def _surviving_previous_bindings(
+    previous: DeviceBindingSnapshot,
+    current: DeviceBindingSnapshot,
+) -> DeviceBindingSnapshot:
+    current_keys = {
+        (
+            item.device_name,
+            item.expected_index,
+            item.identity,
+        )
+        for item in current.bound
+    }
+    survivors = tuple(
+        item
+        for item in previous.bound
+        if (
+            item.device_name,
+            item.expected_index,
+            item.identity,
+        ) in current_keys
+    )
+    return DeviceBindingSnapshot(survivors, ())
 
 
 def _best_effort_close(backend: NamespaceBackend) -> None:
@@ -195,12 +300,18 @@ def reconcile_once(
     availability_provider: AvailabilityProvider | None = None,
     collect_snapshot: SnapshotCollector = default_snapshot_collector,
     persist_verified_state: VerifiedStatePersister | None = None,
+    local_publication_address: IPv4Address | None = None,
 ) -> PlannerResult:
     """Run one complete observe->plan->apply->observe->verify->commit cycle.
 
-    Interface churn during a barriered transition is not hidden by retries inside this
-    function. It returns PlannerRetryRequired with forwarding left closed; the outer event
-    loop can immediately reconcile again from a fresh snapshot.
+    Proven ordinary binding lifecycle is repaired incrementally while forwarding remains
+    open and RPDB fail-close stays installed. Structural/unknown drift uses the global
+    forwarding barrier.
+
+    Interface churn during an apply transition is not hidden by retries inside this
+    function. It returns PlannerRetryRequired; the outer event loop immediately reconciles
+    again from a fresh snapshot. Any transition that ceases to be provably incremental is
+    contained fail-closed by the Planner error boundary.
 
     When a persistence callback is supplied, verified runtime history is durably recorded
     before forwarding is opened. Persistence failure is therefore fail-closed and prevents
@@ -210,13 +321,38 @@ def reconcile_once(
     ns = NamespaceBackend(namespace, host_backend)
 
     try:
+        validate_active_config(config)
+        LOG.debug(
+            "planner-reconcile-start namespace=%s profiles=%s active_devices=%s "
+            "committed_expectations=%d committed_metrics=%d",
+            namespace,
+            sorted(
+                profile.name
+                for profile in config.profiles.values()
+                if profile.enabled
+            ),
+            sorted(config.active_device_names),
+            len(committed.devices.expectations),
+            len(committed.traffic.normal_metrics),
+        )
         initial = collect_snapshot(namespace, host_backend)
-        projection = _project(
+        LOG.debug(
+            "planner-observe-initial interfaces=%s routes=%d rules=%d ip_forward=%r",
+            [
+                (item.identity.ifname, item.identity.ifindex)
+                for item in initial.interfaces
+            ],
+            len(initial.routes),
+            len(initial.rules),
+            initial.sysctl_map.get("net.ipv4.ip_forward"),
+        )
+        projection = compile_planner_projection(
             config,
             committed,
             initial,
             nat_provider,
             availability_provider,
+            local_publication_address,
         )
 
         current_errors_open = _verify_all(
@@ -226,9 +362,14 @@ def reconcile_once(
             forwarding=True,
         )
         if not current_errors_open:
+            LOG.debug("planner-decision steady-verified-open")
             next_state = _commit(projection)
             if persist_verified_state is not None:
                 persist_verified_state(next_state)
+            LOG.debug(
+                "planner-commit steady changed_kernel=false waiting=%d",
+                len(projection.metrics.waiting_for_slot),
+            )
             return PlannerResult(
                 state=next_state,
                 projection=projection,
@@ -245,6 +386,7 @@ def reconcile_once(
             forwarding=False,
         )
         if not current_errors_closed:
+            LOG.debug("planner-decision verified-closed-reopen")
             next_state = _commit(projection)
             if persist_verified_state is not None:
                 persist_verified_state(next_state)
@@ -262,10 +404,18 @@ def reconcile_once(
                 forwarding=True,
             )
             if final_errors:
+                LOG.debug(
+                    "planner-verify reopen-failed errors=%s",
+                    final_errors,
+                )
                 _best_effort_close(ns)
                 raise PlannerVerificationError(
                     "post-reopen verification failed: " + "; ".join(final_errors)
                 )
+            LOG.debug(
+                "planner-commit reopened changed_kernel=true waiting=%d",
+                len(projection.metrics.waiting_for_slot),
+            )
             return PlannerResult(
                 state=next_state,
                 projection=projection,
@@ -273,16 +423,167 @@ def reconcile_once(
                 needs_immediate_reconcile=bool(projection.metrics.waiting_for_slot),
             )
 
+
+        # Ordinary binding lifecycle may be repaired without a global forwarding barrier,
+        # but only after proving the observed state is exactly the previous/new verified
+        # generations and owned RPDB state is unchanged.
+        previous_projection = _project_committed_generation(
+            config,
+            committed,
+            nat_provider,
+            local_publication_address,
+        )
+        observed_filter = observe_filter_state(ns)
+        observed_nat = observe_nat_state(ns)
+        assessment = assess_binding_lifecycle(
+            previous_projection.kernel,
+            projection.kernel,
+            previous_projection.firewall,
+            projection.firewall,
+            previous_projection.nat,
+            projection.nat,
+            previous_projection.bindings,
+            projection.bindings,
+            initial,
+            observed_filter,
+            observed_nat,
+        )
+
+        LOG.debug(
+            "planner-transition-assessment kind=%s reasons=%s",
+            assessment.kind.value,
+            assessment.reasons,
+        )
+
+        survivors = _surviving_previous_bindings(
+            previous_projection.bindings,
+            projection.bindings,
+        )
+        survivor_prereq = verify_namespace_prerequisites(
+            initial,
+            survivors,
+            forwarding=True,
+        )
+
+        if (
+            assessment.kind is TransitionKind.BINDING_LIFECYCLE
+            and survivor_prereq.ok
+        ):
+            LOG.debug(
+                "planner-decision lifecycle-incremental survivors=%d new_bound=%d",
+                len(survivors.bound),
+                len(projection.bindings.bound),
+            )
+            apply_namespace_prerequisites(
+                projection.bindings,
+                ns,
+            )
+            prepared = collect_snapshot(namespace, host_backend)
+            if prepared.interfaces != initial.interfaces:
+                raise PlannerRetryRequired(
+                    "interface set changed while preparing lifecycle transition"
+                )
+
+            prepared_prereq = verify_namespace_prerequisites(
+                prepared,
+                projection.bindings,
+                forwarding=True,
+            )
+            if not prepared_prereq.ok:
+                raise PlannerVerificationError(
+                    "lifecycle prerequisites failed: "
+                    + "; ".join(prepared_prereq.errors)
+                )
+
+            reassessment = assess_binding_lifecycle(
+                previous_projection.kernel,
+                projection.kernel,
+                previous_projection.firewall,
+                projection.firewall,
+                previous_projection.nat,
+                projection.nat,
+                previous_projection.bindings,
+                projection.bindings,
+                prepared,
+                observe_filter_state(ns),
+                observe_nat_state(ns),
+            )
+            if reassessment.kind is not TransitionKind.BINDING_LIFECYCLE:
+                raise PlannerRetryRequired(
+                    "state ceased to be a proven lifecycle transition: "
+                    + "; ".join(reassessment.reasons)
+                )
+
+            lifecycle_plan = compile_lifecycle_route_rebuild_plan(
+                projection.kernel,
+                prepared,
+            )
+            LOG.debug(
+                "planner-apply lifecycle commands=%d",
+                len(lifecycle_plan.commands),
+            )
+            execute_kernel_mutation_plan(lifecycle_plan, ns)
+            # Admission is installed last. A newly routable masqueraded path must never
+            # become FORWARD-acceptable before its NAT state exists.
+            apply_nat_state(projection.nat, ns)
+            apply_filter_state(projection.firewall, ns)
+
+            applied = collect_snapshot(namespace, host_backend)
+            if applied.interfaces != initial.interfaces:
+                raise PlannerRetryRequired(
+                    "interface set changed during lifecycle apply"
+                )
+
+            applied_errors = _verify_all(
+                projection,
+                applied,
+                ns,
+                forwarding=True,
+            )
+            if applied_errors:
+                LOG.debug(
+                    "planner-verify lifecycle-failed errors=%s",
+                    applied_errors,
+                )
+                raise PlannerVerificationError(
+                    "lifecycle verification failed: "
+                    + "; ".join(applied_errors)
+                )
+
+            next_state = _commit(projection)
+            if persist_verified_state is not None:
+                persist_verified_state(next_state)
+
+            LOG.debug(
+                "planner-commit lifecycle changed_kernel=true waiting=%d",
+                len(projection.metrics.waiting_for_slot),
+            )
+            return PlannerResult(
+                state=next_state,
+                projection=projection,
+                changed_kernel=True,
+                needs_immediate_reconcile=bool(
+                    projection.metrics.waiting_for_slot
+                ),
+            )
+
+        LOG.debug(
+            "planner-decision structural-barrier assessment=%s survivor_prereq=%s",
+            assessment.reasons,
+            survivor_prereq.errors,
+        )
+
         # From this point on, all structural repair runs behind a closed barrier.
         ns.run(("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"))
 
         barrier_snapshot = collect_snapshot(namespace, host_backend)
-        barrier_projection = _project(
+        barrier_projection = compile_planner_projection(
             config,
             committed,
             barrier_snapshot,
             nat_provider,
             availability_provider,
+            local_publication_address,
         )
 
         apply_namespace_prerequisites(
@@ -309,6 +610,10 @@ def reconcile_once(
             barrier_projection.kernel,
             prepared,
         )
+        LOG.debug(
+            "planner-apply structural commands=%d",
+            len(mutation_plan.commands),
+        )
         execute_kernel_mutation_plan(mutation_plan, ns)
         apply_filter_state(barrier_projection.firewall, ns)
         apply_nat_state(barrier_projection.nat, ns)
@@ -326,6 +631,10 @@ def reconcile_once(
             forwarding=False,
         )
         if applied_errors:
+            LOG.debug(
+                "planner-verify structural-closed-failed errors=%s",
+                applied_errors,
+            )
             raise PlannerVerificationError(
                 "closed-barrier verification failed: "
                 + "; ".join(applied_errors)
@@ -350,11 +659,19 @@ def reconcile_once(
             forwarding=True,
         )
         if final_errors:
+            LOG.debug(
+                "planner-verify final-open-failed errors=%s",
+                final_errors,
+            )
             _best_effort_close(ns)
             raise PlannerVerificationError(
                 "final verification failed: " + "; ".join(final_errors)
             )
 
+        LOG.debug(
+            "planner-commit structural changed_kernel=true waiting=%d",
+            len(barrier_projection.metrics.waiting_for_slot),
+        )
         return PlannerResult(
             state=next_state,
             projection=barrier_projection,
@@ -364,9 +681,19 @@ def reconcile_once(
             ),
         )
 
-    except PlannerError:
+    except PlannerError as exc:
+        LOG.debug(
+            "planner-reconcile-failed type=%s message=%s",
+            type(exc).__name__,
+            exc,
+        )
         _best_effort_close(ns)
         raise
     except Exception as exc:
+        LOG.debug(
+            "planner-reconcile-unexpected-failure type=%s message=%s",
+            type(exc).__name__,
+            exc,
+        )
         _best_effort_close(ns)
         raise PlannerError(f"reconciliation failed: {exc}") from exc

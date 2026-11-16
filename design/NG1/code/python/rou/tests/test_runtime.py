@@ -143,6 +143,7 @@ class DeviceEngineTests(unittest.TestCase):
             expected_interfaces=(
                 ExpectedInterface(InterfaceMatch(MatchKind.PREFIX, "vpns"), 2),
             ),
+            nat=NatMode.NONE,
         )
         config = ActiveConfig(devices={"oc": device}, profiles={})
         result = reconcile_devices(

@@ -196,6 +196,9 @@ def run_instance_runtime(
                         loop_config=loop_config,
                         should_stop=stop.should_stop,
                         health_check=supervisor.check_health,
+                        local_publication_address=(
+                            instance_cfg.instance.inner_address.ip
+                        ),
                     )
         except BaseException:
             try:

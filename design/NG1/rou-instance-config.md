@@ -31,7 +31,9 @@ All fields are required.
 - `publication_bind_address`: host-main-namespace IPv4 address used by publication
   sockets. `0.0.0.0` explicitly means wildcard.
 - `router_config`: absolute path to router schema-v1 TOML.
-- `state_file`: absolute path for durable runtime history.
+- `state_file`: absolute path for durable runtime history, required to remain below
+  `/var/lib/vpn-gateway` so the hardened systemd unit can grant the minimum persistent
+  write scope.
 
 The internal peer name is fixed to `host0` in schema version 1 and is not configurable.
 
@@ -60,3 +62,16 @@ The default production path is:
 
 The CLI may accept an explicit instance-file override for testing/administration, but
 systemd template operation uses the conventional path.
+
+
+## systemd lifecycle
+
+The reference `rouvpn@.service` uses:
+
+- `ExecStartPre=rou prepare <id>`: create a fully absent instance or repair safe
+  fail-closed bootstrap state of a fully present instance;
+- `ExecStart=rou run <id>`: start the production runtime only after strict preparation;
+- `ExecStopPost=rou contain <id>`: best-effort `ip_forward=0` containment.
+
+`rou up <id>` enables and starts the instance service. `rou down <id>` disables/stops
+the service, proves it inactive, then removes the namespace/veth appliance.

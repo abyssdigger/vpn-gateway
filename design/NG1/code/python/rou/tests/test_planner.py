@@ -12,7 +12,18 @@ from rou.device_engine import (
     InterfaceIdentity,
     reconcile_devices,
 )
-from rou.domain import ActiveConfig, Device, NatMode, Direction, ExpectedInterface, InterfaceMatch, MatchKind, Profile
+from rou.domain import (
+    ActiveConfig,
+    Device,
+    Direction,
+    EnvelopeAction,
+    ExpectedInterface,
+    InterfaceMatch,
+    MatchKind,
+    NatMode,
+    Profile,
+    TrafficEnvelope,
+)
 from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule
 from rou.firewall_state import compile_filter_state
 from rou.kernel_allocation import compile_kernel_allocation
@@ -24,7 +35,7 @@ from rou.planner import (
     PlannerRuntimeState,
     reconcile_once,
 )
-from rou.traffic_state import project_normal_metrics
+from rou.traffic_state import committed_state_from_verified, project_normal_metrics
 
 
 class FakeHostBackend:
@@ -36,6 +47,11 @@ class FakeHostBackend:
     def run(self, argv, *, input_text=None, check=True):
         self.calls.append((argv, input_text, check))
         stdout = ""
+        if argv[-1:] == ("iptables-legacy-restore",) and input_text:
+            if input_text.startswith("*filter"):
+                self.filter_save = input_text.strip()
+            elif input_text.startswith("*nat"):
+                self.nat_save = input_text.strip()
         if argv[-4:] == ("iptables-legacy-save", "-c", "-t", "filter"):
             stdout = self.filter_save
         elif argv[-4:] == ("iptables-legacy-save", "-c", "-t", "nat"):
@@ -77,11 +93,27 @@ def interfaces(ifindex=10):
     )
 
 
+
+def interfaces_two():
+    return (
+        EnvironmentInterface(InterfaceIdentity("host0", 2)),
+        EnvironmentInterface(InterfaceIdentity("vpns00", 10)),
+        EnvironmentInterface(InterfaceIdentity("vpns01", 11)),
+    )
+
+
+def interfaces_survivor():
+    return (
+        EnvironmentInterface(InterfaceIdentity("host0", 2)),
+        EnvironmentInterface(InterfaceIdentity("vpns01", 11)),
+    )
+
 def sysctls(forwarding: bool, ifname="vpns00"):
     return (
         ("net.ipv4.ip_forward", "1" if forwarding else "0"),
         ("net.ipv4.conf.all.rp_filter", "0"),
         ("net.ipv4.conf.default.rp_filter", "0"),
+        ("net.ipv4.fib_multipath_hash_policy", "0"),
         ("net.ipv6.conf.all.forwarding", "0"),
         ("net.ipv6.conf.default.forwarding", "0"),
         ("net.ipv6.conf.default.disable_ipv6", "1"),
@@ -220,6 +252,148 @@ class PlannerTests(unittest.TestCase):
         self.assertGreaterEqual(writes.count("net.ipv4.ip_forward=0"), 1)
         self.assertEqual(writes[-1], "net.ipv4.ip_forward=1")
 
+
+    def test_bound_member_disappearance_repairs_without_global_barrier(self):
+        cfg = config()
+
+        previous_devices = reconcile_devices(
+            cfg,
+            PlannerRuntimeState.empty().devices,
+            interfaces_two(),
+        )
+        previous_metrics = project_normal_metrics(
+            cfg,
+            previous_devices.snapshot,
+            PlannerRuntimeState.empty().traffic,
+        )
+        committed = PlannerRuntimeState(
+            previous_devices.next_state,
+            committed_state_from_verified(previous_metrics),
+        )
+        allocation = compile_kernel_allocation(cfg)
+        previous_firewall = compile_filter_state(
+            cfg,
+            previous_devices.snapshot,
+        )
+        previous_nat = ExplicitNoNatProvider().compile(
+            cfg,
+            previous_devices.snapshot,
+        )
+
+        current_devices = reconcile_devices(
+            cfg,
+            committed.devices,
+            interfaces_survivor(),
+        )
+        current_metrics = project_normal_metrics(
+            cfg,
+            current_devices.snapshot,
+            committed.traffic,
+        )
+        current_kernel = compile_kernel_desired_state(
+            cfg,
+            current_devices.snapshot,
+            current_metrics,
+            allocation,
+        )
+
+        observed_routes = tuple(
+            KernelRoute(
+                r.table,
+                r.destination,
+                r.route_type,
+                r.protocol,
+                r.metric,
+                r.ifname,
+                r.nexthops,
+            )
+            for r in current_kernel.routes
+            if r.metric != 65535
+        )
+        observed_rules = tuple(
+            KernelRule(
+                r.priority,
+                r.table,
+                r.action,
+                destination=r.destination,
+                iif=r.iif,
+            )
+            for r in current_kernel.rules
+        )
+        initial = EnvironmentSnapshot(
+            interfaces=interfaces_survivor(),
+            routes=observed_routes,
+            rules=observed_rules,
+            sysctls=sysctls(True, "vpns01"),
+        )
+        applied = observed_kernel_snapshot(
+            current_kernel,
+            forwarding=True,
+            ifs=interfaces_survivor(),
+        )
+
+        backend = FakeHostBackend(
+            previous_firewall.canonical_save,
+            previous_nat.canonical_save,
+        )
+        queue = SnapshotQueue([initial, initial, applied])
+
+        result = reconcile_once(
+            cfg,
+            "rou0",
+            committed,
+            backend,
+            ExplicitNoNatProvider(),
+            collect_snapshot=queue,
+        )
+
+        self.assertTrue(result.changed_kernel)
+        self.assertEqual(queue.calls, 3)
+        forwarding_writes = [
+            arg
+            for call, _stdin, _check in backend.calls
+            for arg in call
+            if arg.startswith("net.ipv4.ip_forward=")
+        ]
+        self.assertEqual(forwarding_writes, [])
+        self.assertFalse(
+            any(
+                len(call) >= 4
+                and call[-4:] == ("ip", "route", "flush", "table")
+                for call, _stdin, _check in backend.calls
+            )
+        )
+        self.assertTrue(
+            any(
+                "route" in call and "add" in call and "65535" in call
+                for call, _stdin, _check in backend.calls
+            )
+        )
+        self.assertFalse(
+            any(
+                len(call) >= 6
+                and call[-3:-1] == ("ip", "rule")
+                for call, _stdin, _check in backend.calls
+            )
+        )
+
+        restore_calls = [
+            (index, stdin)
+            for index, (_call, stdin, _check) in enumerate(backend.calls)
+            if stdin is not None and stdin.startswith(("*nat", "*filter"))
+        ]
+        nat_index = next(
+            index
+            for index, stdin in restore_calls
+            if stdin.startswith("*nat")
+        )
+        filter_index = next(
+            index
+            for index, stdin in restore_calls
+            if stdin.startswith("*filter")
+        )
+        self.assertLess(nat_index, filter_index)
+
     def test_verified_state_is_persisted_before_forwarding_open(self):
         _, _, kernel, firewall, nat = expected_for(interfaces())
         initial = EnvironmentSnapshot(
@@ -264,7 +438,7 @@ class PlannerTests(unittest.TestCase):
         self.assertEqual(events[1][0], "open")
 
     def test_persistence_failure_prevents_forwarding_open(self):
-        _, _, _kernel, firewall, nat = expected_for(interfaces())
+        _, _, kernel, firewall, nat = expected_for(interfaces())
         initial = EnvironmentSnapshot(
             interfaces=interfaces(),
             routes=(),
@@ -278,7 +452,11 @@ class PlannerTests(unittest.TestCase):
             sysctls=sysctls(False),
         )
         backend = FakeHostBackend(firewall.canonical_save, nat.canonical_save)
-        queue = SnapshotQueue([initial, barrier, barrier])
+        applied = observed_kernel_snapshot(
+            kernel,
+            forwarding=False,
+        )
+        queue = SnapshotQueue([initial, barrier, barrier, applied])
 
         def fail_persist(_state):
             raise OSError("disk full")
@@ -338,6 +516,59 @@ class PlannerTests(unittest.TestCase):
         ]
         self.assertIn("net.ipv4.ip_forward=0", writes)
         self.assertNotIn("net.ipv4.ip_forward=1", writes)
+
+
+    def test_programmatic_invalid_remote_profile_is_rejected_before_snapshot(self):
+        invalid = ActiveConfig(
+            {
+                "oc": Device(
+                    "oc",
+                    True,
+                    (
+                        ExpectedInterface(
+                            InterfaceMatch(MatchKind.PREFIX, "vpns"),
+                            2,
+                        ),
+                    ),
+                    nat=NatMode.NONE,
+                    traffic_envelope=TrafficEnvelope(
+                        default_action=EnvelopeAction.DROP,
+                    ),
+                )
+            },
+            {
+                "support": Profile(
+                    "support",
+                    True,
+                    Direction.INBOUND,
+                    (ipaddress.IPv4Network("10.0.0.0/8"),),
+                    ("oc",),
+                )
+            },
+        )
+        backend = FakeHostBackend("", "")
+        queue = SnapshotQueue([])
+
+        with self.assertRaisesRegex(
+            PlannerError,
+            "requires active interface capacity exactly 1",
+        ):
+            reconcile_once(
+                invalid,
+                "rou0",
+                PlannerRuntimeState.empty(),
+                backend,
+                ExplicitNoNatProvider(),
+                collect_snapshot=queue,
+            )
+
+        self.assertEqual(queue.calls, 0)
+        self.assertTrue(
+            any(
+                "net.ipv4.ip_forward=0" in call[0]
+                for call in backend.calls
+            )
+        )
 
     def test_unresolved_nat_policy_fails_closed(self):
         initial = EnvironmentSnapshot(

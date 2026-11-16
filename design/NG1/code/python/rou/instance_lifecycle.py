@@ -7,8 +7,11 @@ import re
 
 from .command_backend import CommandBackend, NamespaceBackend
 from .device_engine import DeviceBindingSnapshot
+from .domain import ActiveConfig
 from .environment import collect_environment_snapshot
-from .namespace_prereq import verify_namespace_prerequisites
+from .firewall_kernel import apply_filter_state, observe_filter_state
+from .firewall_state import compile_filter_state
+from .namespace_prereq import apply_namespace_prerequisites, verify_namespace_prerequisites
 
 
 _IFNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
@@ -269,6 +272,25 @@ def verify_instance(
         if not default_ok:
             errors.append("namespace underlay default route is missing")
 
+
+    try:
+        filter_text = observe_filter_state(ns)
+    except Exception as exc:
+        errors.append(f"cannot observe namespace filter table: {exc}")
+    else:
+        required_policies = {
+            ":INPUT DROP [0:0]",
+            ":FORWARD DROP [0:0]",
+            ":OUTPUT DROP [0:0]",
+        }
+        filter_lines = set(filter_text.splitlines())
+        missing_policies = sorted(required_policies - filter_lines)
+        if missing_policies:
+            errors.append(
+                "namespace filter default policies are not fail-closed: "
+                + ", ".join(missing_policies)
+            )
+
     try:
         snapshot = collect_environment_snapshot(
             config.namespace,
@@ -373,6 +395,13 @@ def create_instance(
             )
         )
 
+
+        bootstrap_filter = compile_filter_state(
+            ActiveConfig({}, {}),
+            DeviceBindingSnapshot((), ()),
+        )
+        apply_filter_state(bootstrap_filter, ns)
+
         verified = verify_instance(config, host)
         if not verified.ok:
             raise InstanceLifecycleError(
@@ -390,6 +419,72 @@ def create_instance(
             check=False,
         )
         raise
+
+
+
+def ensure_instance(
+    config: InstanceConfig,
+    host: CommandBackend,
+) -> None:
+    """Ensure the owned instance exists in verified fail-closed form.
+
+    This is intended for systemd ExecStartPre and boot recovery:
+
+    - fully absent namespace+host-veth -> create a fresh instance;
+    - fully present -> close forwarding, then verify exact owned structure/prerequisites;
+    - partially present -> structural error; never guess/adopt/repair ownership.
+    """
+
+    namespaces = _namespace_names(host)
+    namespace_exists = config.namespace in namespaces
+    host_link_exists = _host_link_exists(host, config.host_if)
+
+    if not namespace_exists and not host_link_exists:
+        create_instance(config, host)
+        return
+
+    if namespace_exists != host_link_exists:
+        raise InstanceLifecycleError(
+            "instance infrastructure is partially present; "
+            f"namespace_exists={namespace_exists} "
+            f"host_link_exists={host_link_exists}"
+        )
+
+    ns = NamespaceBackend(config.namespace, host)
+    ns.run(
+        ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+        check=False,
+    )
+    apply_namespace_prerequisites(
+        DeviceBindingSnapshot((), ()),
+        ns,
+    )
+    bootstrap_filter = compile_filter_state(
+        ActiveConfig({}, {}),
+        DeviceBindingSnapshot((), ()),
+    )
+    apply_filter_state(bootstrap_filter, ns)
+
+    verified = verify_instance(config, host, forwarding=False)
+    if not verified.ok:
+        raise InstanceLifecycleError(
+            "existing instance failed fail-closed verification: "
+            + "; ".join(verified.errors)
+        )
+
+
+def contain_instance(
+    config: InstanceConfig,
+    host: CommandBackend,
+) -> None:
+    """Best-effort containment used by service stop/crash hooks."""
+
+    if config.namespace not in _namespace_names(host):
+        return
+    NamespaceBackend(config.namespace, host).run(
+        ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+        check=False,
+    )
 
 
 def destroy_instance(

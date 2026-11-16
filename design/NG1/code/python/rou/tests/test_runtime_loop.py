@@ -1,3 +1,4 @@
+from ipaddress import IPv4Address
 from pathlib import Path
 import sys
 import unittest
@@ -173,6 +174,44 @@ class RuntimeLoopTests(unittest.TestCase):
             if "net.ipv4.ip_forward=0" in argv
         ]
         self.assertGreaterEqual(len(close_commands), 2)
+
+
+    def test_local_publication_address_is_forwarded_to_planner(self):
+        backend = FakeHostBackend()
+        store = FakeStore()
+        wakeups = FakeWakeups()
+        reconciles = 0
+        seen = []
+
+        def fake_reconcile(*args, **kwargs):
+            nonlocal reconciles
+            reconciles += 1
+            seen.append(kwargs.get("local_publication_address"))
+            return PlannerResult(
+                PlannerRuntimeState.empty(),
+                dummy_projection(),
+                False,
+                False,
+            )
+
+        address = IPv4Address("192.0.2.2")
+        with patch("rou.runtime.reconcile_once", side_effect=fake_reconcile):
+            run_runtime_loop(
+                ActiveConfig({}, {}),
+                "rou0",
+                backend,
+                ExplicitNoNatProvider(),
+                store,
+                wakeups,
+                loop_config=RuntimeLoopConfig(
+                    retry_delay_seconds=0,
+                    audit_interval_seconds=10,
+                ),
+                should_stop=lambda: reconciles >= 1,
+                local_publication_address=address,
+            )
+
+        self.assertEqual(seen, [address])
 
     def test_normal_stop_closes_forwarding(self):
         backend = FakeHostBackend()

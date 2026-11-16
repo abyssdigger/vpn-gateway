@@ -1,3 +1,69 @@
+## 2026-11-12 — NG1 Draft 5 correction implementation and kernel proof
+
+Implemented the accepted safety-correction review across the production Python ROU:
+
+- remote-initiated Profiles are rejected unless active capacity is exactly 1 and every
+  active Device has restrictive envelope `default=drop`;
+- INPUT/FORWARD/OUTPUT are all default-DROP with explicit local/transit admissions;
+- ordinary binding lifecycle is classified separately from structural drift;
+- lifecycle route repair is a semantic diff and continuously preserves each Profile
+  table's terminal blackhole;
+- full owned RPDB priority window 1..32765 is verified, not merely current rule range;
+- local publication address is carried through runtime -> Planner -> INPUT materialization;
+- iptables save/restore verification now normalizes counters, chain serialization and
+  canonical state/match ordering instead of comparing fragile raw text;
+- bootstrap installs/verifies default-DROP filter before runtime/publications;
+- boot-time `ensure_instance`, containment commands, persistent systemd instance lifecycle
+  and hardened state path were added;
+- runtime state rejects symlink ancestors;
+- `rou show` now uses the production projectors/verifiers for full desired-vs-live status.
+
+Additional whole-code review finding:
+
+- legacy iptables interface admission is name-based and cannot by itself prove zero-window
+  isolation across same-name/new-ifindex replacement. EXP-017 was prepared as the strict
+  dynamic-generation firewall backend gate.
+
+GitHub validation at commit `958aec8dff27d1042755883626ff74e0480de54c` passed both
+rootless and privileged kernel-integration jobs.
+
+---
+
+## 2026-11-12 — NG1 Draft 5 correction: remote-init safety, local firewall, barrier scope
+
+External whole-model review found three material safety gaps and one over-conservative
+transition rule. The review and independent analysis are archived verbatim in
+`design/reviews/`; the project response is separate.
+
+Accepted corrections:
+
+- INBOUND/BIDIRECTIONAL Profiles are production-valid only at active interface capacity 1;
+- remote-initiated Profiles additionally require restrictive Device envelopes with
+  terminal `default=drop`;
+- multi-interface remote-initiated return steering is deferred behind EXP-014 connmark/
+  fwmark evidence;
+- ESTABLISHED/RELATED state acceptance is explicitly bound-interface <-> host0 only;
+- ROU INPUT and OUTPUT are both default-DROP with narrow local/underlay admissions;
+- persistent shadow fallback is retained, while its positive UNAVAILABLE trigger remains
+  deliberately deferred to future DeviceManager/availability work;
+- ordinary binding/availability lifecycle transitions no longer require global
+  `ip_forward=0`; the global barrier is reserved for structural/unknown drift and
+  unverified recovery;
+- rou-up ordering now establishes and verifies fail-closed state before publications;
+- `fib_multipath_hash_policy` is made an explicit future prerequisite (EXP-016);
+- real TCP MTU/MSS behavior is gated by EXP-015 instead of guessed TCPMSS policy;
+- PROJECT-CONVENTIONS now names NG1 as current normative architecture and permits the
+  existing English NG1 baseline.
+
+Prepared experiments:
+
+- EXP-014 — remote-initiated flow pinning;
+- EXP-015 — real TCP MTU/MSS;
+- EXP-016 — ECMP hash-policy prerequisite.
+
+The pre-correction implementation is preserved on branch
+`ng1-production-draft5-pre-expert-review-20261112`.
+
 ## 2026-11-11 — NG1 Draft 4: explicit NEW verdicts; EXP-013 closed
 
 Final Draft 3 + EXP-013 review found one materialization ambiguity in overlapping Profile

@@ -89,8 +89,8 @@ class ConfigNatProvider:
                 ifname = binding.identity.ifname
                 for prefix in prefixes:
                     lines.append(
-                        f"-A POSTROUTING -o {ifname} "
-                        f"-d {prefix.with_prefixlen} "
+                        f"-A POSTROUTING -d {prefix.with_prefixlen} "
+                        f"-o {ifname} "
                         "-m addrtype ! --dst-type LOCAL -j MASQUERADE"
                     )
 

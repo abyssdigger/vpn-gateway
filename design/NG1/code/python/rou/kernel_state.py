@@ -6,7 +6,7 @@ from ipaddress import IPv4Network
 from .device_engine import DeviceBindingSnapshot
 from .domain import ActiveConfig
 from .environment import EnvironmentSnapshot, KernelRoute, KernelRule, RouteNexthop
-from .kernel_allocation import KernelAllocation
+from .kernel_allocation import KernelAllocation, MAX_OWNED_RULE_PRIORITY
 from .metrics import BLACKHOLE_METRIC
 from .route_intent import compile_profile_route_intents
 from .traffic_state import TrafficProjection
@@ -207,11 +207,10 @@ def verify_kernel_desired_state(
         errors.append(f"unexpected routes in owned tables: {sorted(map(str, extra_routes))}")
 
     expected_rules = {_rule_key(item) for item in desired.rules}
-    max_priority = max((item.priority for item in desired.rules), default=0)
     observed_owned_rules = {
         _rule_key(item)
         for item in observed.rules
-        if 1 <= item.priority <= max_priority
+        if 1 <= item.priority <= MAX_OWNED_RULE_PRIORITY
     }
 
     missing_rules = expected_rules - observed_owned_rules

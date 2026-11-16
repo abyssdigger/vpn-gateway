@@ -26,6 +26,7 @@ def make_config():
                 "oc",
                 True,
                 (ExpectedInterface(InterfaceMatch(MatchKind.PREFIX, "vpns"), 2),),
+                nat=NatMode.NONE,
             )
         },
         {
@@ -217,6 +218,67 @@ class KernelStateTests(unittest.TestCase):
             EnvironmentSnapshot((), routes=tuple(observed_routes), rules=tuple(observed_rules)),
         )
         self.assertTrue(result.ok, result.errors)
+
+
+    def test_verify_rejects_foreign_rule_anywhere_in_owned_priority_window(self):
+        config = make_config()
+        identity = InterfaceIdentity("vpns00", 10)
+        desired = compile_kernel_desired_state(
+            config,
+            DeviceBindingSnapshot(
+                (BoundInterface("oc", 0, identity, Availability.AVAILABLE),),
+                (),
+            ),
+            TrafficProjection(
+                (MetricAssignment("corp", "oc", 0, identity, 1),),
+                (),
+            ),
+            compile_kernel_allocation(config),
+        )
+        observed_routes = tuple(
+            KernelRoute(
+                r.table,
+                r.destination,
+                r.route_type,
+                r.protocol,
+                r.metric,
+                r.ifname,
+                r.nexthops,
+            )
+            for r in desired.routes
+        )
+        observed_rules = [
+            KernelRule(
+                r.priority,
+                r.table,
+                r.action,
+                destination=r.destination,
+                iif=r.iif,
+            )
+            for r in desired.rules
+        ]
+        observed_rules.append(
+            KernelRule(
+                1000,
+                254,
+                "to_tbl",
+                destination=ipaddress.IPv4Network("203.0.113.0/24"),
+                iif="host0",
+            )
+        )
+
+        result = verify_kernel_desired_state(
+            desired,
+            EnvironmentSnapshot(
+                (),
+                routes=observed_routes,
+                rules=tuple(observed_rules),
+            ),
+        )
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("unexpected rules" in error for error in result.errors)
+        )
 
 
 if __name__ == "__main__":

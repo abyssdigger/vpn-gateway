@@ -22,13 +22,16 @@ class MetricLayoutTests(unittest.TestCase):
 
     def test_device_then_expected_interface_order(self):
         cfg = parse_active_config('''
+schema_version = 1
 [device.wg]
 enabled = true
 expected_interfaces = ["wg0"]
+nat = "none"
 
 [device.oc]
 enabled = true
 expected_interfaces = ["oc-main", "vpns*/3", "oc-backup"]
+nat = "none"
 
 [profile.corp]
 enabled = true
@@ -49,12 +52,14 @@ device_order = ["wg", "oc"]
 
     def test_disabled_device_in_order_consumes_no_metric_space(self):
         cfg = parse_active_config('''
+schema_version = 1
 [device.future]
 enabled = false
 
 [device.oc]
 enabled = true
 expected_interfaces = ["vpns*/2"]
+nat = "none"
 
 [profile.corp]
 enabled = true
@@ -67,13 +72,16 @@ device_order = ["future", "oc"]
 
     def test_shared_device_can_have_different_profile_ranges(self):
         cfg = parse_active_config('''
+schema_version = 1
 [device.oc]
 enabled = true
 expected_interfaces = ["vpns*/2"]
+nat = "none"
 
 [device.wg]
 enabled = true
 expected_interfaces = ["wg0"]
+nat = "none"
 
 [profile.a]
 enabled = true
@@ -93,9 +101,11 @@ device_order = ["wg", "oc"]
 
     def test_max_normal_capacity_fits(self):
         cfg = parse_active_config(f'''
+schema_version = 1
 [device.huge]
 enabled = true
 expected_interfaces = ["vpn*/{MAX_NORMAL_METRIC}"]
+nat = "none"
 
 [profile.corp]
 enabled = true
@@ -109,9 +119,11 @@ device_order = ["huge"]
     def test_normal_capacity_cannot_consume_unavailable_metric(self):
         with self.assertRaisesRegex(ConfigError, 'normal metric'):
             parse_active_config(f'''
+schema_version = 1
 [device.huge]
 enabled = true
 expected_interfaces = ["vpn*/{UNAVAILABLE_METRIC}"]
+nat = "none"
 
 [profile.corp]
 enabled = true

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 from pathlib import Path
 
 from .command_backend import CommandBackend, NamespaceBackend, SubprocessBackend
@@ -13,8 +14,15 @@ from .instance_config import (
     load_instance_file_config,
     validate_instance_id,
 )
-from .instance_lifecycle import create_instance, destroy_instance, verify_instance
+from .instance_lifecycle import (
+    contain_instance,
+    destroy_instance,
+    ensure_instance,
+    verify_instance,
+)
+from .nat_state import ConfigNatProvider
 from .runtime_app import run_instance_runtime
+from .status import inspect_runtime_status
 from .state_store import JsonRuntimeStateStore, StateStoreError
 
 
@@ -55,6 +63,36 @@ def _systemctl(
     return backend.run(("systemctl", *args), check=check)
 
 
+
+def cmd_prepare(
+    instance_id: str,
+    instance_file: Path,
+    backend: CommandBackend,
+) -> dict[str, object]:
+    instance, _router = _load_pair(instance_id, instance_file)
+    ensure_instance(instance.instance, backend)
+    return {
+        "ok": True,
+        "instance_id": instance_id,
+        "prepared": True,
+    }
+
+
+def cmd_contain(
+    instance_id: str,
+    instance_file: Path,
+    backend: CommandBackend,
+) -> dict[str, object]:
+    validate_instance_id(instance_id)
+    instance = load_instance_file_config(instance_file)
+    contain_instance(instance.instance, backend)
+    return {
+        "ok": True,
+        "instance_id": instance_id,
+        "contained": True,
+    }
+
+
 def cmd_check(
     instance_id: str,
     instance_file: Path,
@@ -83,9 +121,26 @@ def cmd_up(
     instance, _router = _load_pair(instance_id, instance_file)
     service = _service_name(instance_id)
 
-    create_instance(instance.instance, backend)
+    already_active = _systemctl(
+        backend,
+        "is-active",
+        "--quiet",
+        service,
+        check=False,
+    )
+    if already_active.returncode == 0:
+        _systemctl(backend, "enable", service)
+        return {
+            "ok": True,
+            "instance_id": instance_id,
+            "service": service,
+            "namespace": instance.instance.namespace,
+            "already_active": True,
+        }
+
+    ensure_instance(instance.instance, backend)
     try:
-        _systemctl(backend, "start", service)
+        _systemctl(backend, "enable", "--now", service)
         active = _systemctl(
             backend,
             "is-active",
@@ -99,7 +154,7 @@ def cmd_up(
             )
     except Exception:
         # Failed up must not leave a half-created appliance behind.
-        _systemctl(backend, "stop", service, check=False)
+        _systemctl(backend, "disable", "--now", service, check=False)
         destroy_instance(instance.instance, backend)
         raise
 
@@ -120,7 +175,7 @@ def cmd_down(
     instance = load_instance_file_config(instance_file)
     service = _service_name(instance_id)
 
-    _systemctl(backend, "stop", service, check=False)
+    _systemctl(backend, "disable", "--now", service, check=False)
     active = _systemctl(
         backend,
         "is-active",
@@ -156,29 +211,6 @@ def cmd_down(
     }
 
 
-def _safe_state_summary(
-    instance: InstanceFileConfig,
-    router,
-) -> dict[str, object]:
-    try:
-        loaded = JsonRuntimeStateStore(instance.state_file).load(router)
-    except StateStoreError as exc:
-        return {
-            "state_ok": False,
-            "state_error": str(exc),
-        }
-    return {
-        "state_ok": True,
-        "dropped_state_entries": loaded.dropped_entries,
-        "remembered_metric_count": len(
-            loaded.state.traffic.normal_metrics
-        ),
-        "remembered_expectation_count": len(
-            loaded.state.devices.expectations
-        ),
-    }
-
-
 def cmd_show(
     instance_id: str,
     instance_file: Path,
@@ -196,8 +228,8 @@ def cmd_show(
         "instance_file": str(instance_file),
         "namespace": instance.instance.namespace,
         "host_interface": instance.instance.host_if,
-        "verified": verification.ok,
-        "verification_errors": list(verification.errors),
+        "appliance_verified": verification.ok,
+        "appliance_errors": list(verification.errors),
         "active_devices": sorted(router.active_device_names),
         "enabled_profiles": sorted(
             name
@@ -205,28 +237,99 @@ def cmd_show(
             if profile.enabled
         ),
     }
-    result.update(_safe_state_summary(instance, router))
 
-    if verification.ok:
-        snapshot = collect_environment_snapshot(
-            instance.instance.namespace,
-            lambda argv: backend.run(argv).stdout,
-        )
-        result["interfaces"] = [
+    try:
+        loaded = JsonRuntimeStateStore(instance.state_file).load(router)
+    except StateStoreError as exc:
+        result.update(
             {
-                "ifname": item.identity.ifname,
-                "ifindex": item.identity.ifindex,
+                "state_ok": False,
+                "state_error": str(exc),
+                "policy_verified": False,
+                "policy_errors": [
+                    "runtime state is not trustworthy; policy projection skipped"
+                ],
             }
-            for item in snapshot.interfaces
-        ]
-        result["route_count"] = len(snapshot.routes)
-        result["rule_count"] = len(snapshot.rules)
-        result["ip_forward"] = snapshot.sysctl_map.get(
-            "net.ipv4.ip_forward"
         )
+        return result
 
+    result.update(
+        {
+            "state_ok": True,
+            "dropped_state_entries": loaded.dropped_entries,
+            "remembered_metric_count": len(
+                loaded.state.traffic.normal_metrics
+            ),
+            "remembered_expectation_count": len(
+                loaded.state.devices.expectations
+            ),
+        }
+    )
+
+    if not verification.ok:
+        result.update(
+            {
+                "policy_verified": False,
+                "policy_errors": [
+                    "instance/appliance verification failed; policy projection skipped"
+                ],
+            }
+        )
+        return result
+
+    snapshot = collect_environment_snapshot(
+        instance.instance.namespace,
+        lambda argv: backend.run(argv).stdout,
+    )
+    ns = NamespaceBackend(instance.instance.namespace, backend)
+    status = inspect_runtime_status(
+        router,
+        instance.instance.namespace,
+        loaded.state,
+        snapshot,
+        ns,
+        ConfigNatProvider(),
+        local_publication_address=instance.instance.inner_address.ip,
+    )
+
+    result.update(
+        {
+            "policy_verified": status.ok,
+            "policy_errors": list(status.errors),
+            "interfaces": [
+                {
+                    "ifname": item.identity.ifname,
+                    "ifindex": item.identity.ifindex,
+                }
+                for item in snapshot.interfaces
+            ],
+            "bound_interfaces": [
+                {
+                    "device": item.device_name,
+                    "expected_index": item.expected_index,
+                    "ifname": item.identity.ifname,
+                    "ifindex": item.identity.ifindex,
+                    "availability": item.availability.value,
+                }
+                for item in status.projection.bindings.bound
+            ],
+            "over_quota_interfaces": [
+                {
+                    "device": item.device_name,
+                    "expected_index": item.expected_index,
+                    "ifname": item.identity.ifname,
+                    "ifindex": item.identity.ifindex,
+                }
+                for item in status.projection.bindings.over_quota
+            ],
+            "route_count": len(snapshot.routes),
+            "rule_count": len(snapshot.rules),
+            "ip_forward": snapshot.sysctl_map.get(
+                "net.ipv4.ip_forward"
+            ),
+        }
+    )
     return result
-
 
 def cmd_run(
     instance_id: str,
@@ -257,7 +360,7 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for name in ("check", "up", "down", "show", "run"):
+    for name in ("check", "prepare", "contain", "up", "down", "show", "run"):
         sub = subparsers.add_parser(name)
         sub.add_argument("instance_id")
     return parser
@@ -281,10 +384,23 @@ def main(
             if args.instance_file is not None
             else default_instance_file(args.instance_id)
         )
+        if (
+            backend is None
+            and args.command in {"prepare", "contain", "up", "down", "show", "run"}
+            and os.geteuid() != 0
+        ):
+            raise CliError(
+                f"rou {args.command} requires root privileges; use sudo"
+            )
+
         host = backend or SubprocessBackend()
 
         if args.command == "check":
             output = cmd_check(args.instance_id, instance_file)
+        elif args.command == "prepare":
+            output = cmd_prepare(args.instance_id, instance_file, host)
+        elif args.command == "contain":
+            output = cmd_contain(args.instance_id, instance_file, host)
         elif args.command == "up":
             output = cmd_up(args.instance_id, instance_file, host)
         elif args.command == "down":

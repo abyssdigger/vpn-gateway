@@ -64,8 +64,44 @@ class InstanceFileConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(InstanceFileConfigError, "different paths"):
             parse_instance_file_config(
                 VALID.replace(
-                    "/var/lib/vpn-gateway/rou0/state.json",
                     "/etc/vpn-gateway/routers/rou0.toml",
+                    "/var/lib/vpn-gateway/rou0/state.json",
+                )
+            )
+
+
+
+    def test_absolute_paths_reject_parent_traversal(self):
+        with self.assertRaisesRegex(
+            InstanceFileConfigError,
+            "parent-directory traversal",
+        ):
+            parse_instance_file_config(
+                VALID.replace(
+                    "/var/lib/vpn-gateway/rou0/state.json",
+                    "/var/lib/vpn-gateway/../tmp/state.json",
+                )
+            )
+        with self.assertRaisesRegex(
+            InstanceFileConfigError,
+            "parent-directory traversal",
+        ):
+            parse_instance_file_config(
+                VALID.replace(
+                    "/etc/vpn-gateway/routers/rou0.toml",
+                    "/etc/vpn-gateway/routers/../other.toml",
+                )
+            )
+
+    def test_state_file_must_stay_under_hardened_state_root(self):
+        with self.assertRaisesRegex(
+            InstanceFileConfigError,
+            "must be below /var/lib/vpn-gateway",
+        ):
+            parse_instance_file_config(
+                VALID.replace(
+                    "/var/lib/vpn-gateway/rou0/state.json",
+                    "/srv/rou0/state.json",
                 )
             )
 

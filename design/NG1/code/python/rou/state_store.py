@@ -236,6 +236,23 @@ class JsonRuntimeStateStore:
 
     def _validate_parent(self) -> None:
         parent = self.path.parent
+
+        current = parent
+        while True:
+            try:
+                ancestor_info = current.lstat()
+            except OSError as exc:
+                raise StateStoreError(
+                    f"cannot stat runtime state path ancestor {current}: {exc}"
+                ) from exc
+            if stat.S_ISLNK(ancestor_info.st_mode):
+                raise StateStoreError(
+                    f"runtime state path ancestor must not be a symlink: {current}"
+                )
+            if current == current.parent:
+                break
+            current = current.parent
+
         try:
             info = parent.lstat()
         except OSError as exc:

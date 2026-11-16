@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+PYTHONPATH=/usr/local/lib/vpn-gateway
+PYTHONNOUSERSITE=1
+export PYTHONPATH PYTHONNOUSERSITE
+
+exec /usr/bin/python3 -s -m rou "$@"

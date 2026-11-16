@@ -81,6 +81,12 @@ def verify_namespace_prerequisites(
         if actual != expected:
             errors.append(f"{key}={actual!r}, expected {expected!r}")
 
+    hash_policy = values.get("net.ipv4.fib_multipath_hash_policy")
+    if hash_policy is None or not hash_policy.isdecimal():
+        errors.append(
+            "net.ipv4.fib_multipath_hash_policy is not observable as an integer"
+        )
+
     for ifname in _payload_ifnames(bindings):
         expected_per_if = {
             f"net.ipv4.conf.{ifname}.rp_filter": "0",

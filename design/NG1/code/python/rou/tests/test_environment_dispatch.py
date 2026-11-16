@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.dispatch import classify_device_to_host_profile, compile_profile_dispatch
-from rou.domain import ActiveConfig, Direction, Profile
+from rou.domain import ActiveConfig, Device, Direction, NatMode, Profile
 from rou.environment import EnvironmentParseError, parse_ip_link_json
 
 
@@ -114,7 +114,13 @@ class DispatchTests(unittest.TestCase):
                 ("wg-backup",),
             ),
         }
-        config = ActiveConfig({}, profiles)
+        config = ActiveConfig(
+            {
+                "oc-main": Device("oc-main", True, nat=NatMode.NONE),
+                "wg-backup": Device("wg-backup", True, nat=NatMode.NONE),
+            },
+            profiles,
+        )
 
         self.assertEqual(
             classify_device_to_host_profile(
@@ -142,7 +148,10 @@ class DispatchTests(unittest.TestCase):
                 ("oc-main",),
             ),
         }
-        config = ActiveConfig({}, profiles)
+        config = ActiveConfig(
+            {"oc-main": Device("oc-main", True, nat=NatMode.NONE)},
+            profiles,
+        )
 
         self.assertEqual(
             classify_device_to_host_profile(
@@ -163,7 +172,13 @@ class DispatchTests(unittest.TestCase):
                 ("oc-main",),
             )
         }
-        config = ActiveConfig({}, profiles)
+        config = ActiveConfig(
+            {
+                "oc-main": Device("oc-main", True, nat=NatMode.NONE),
+                "wg-backup": Device("wg-backup", True, nat=NatMode.NONE),
+            },
+            profiles,
+        )
 
         self.assertIsNone(
             classify_device_to_host_profile(

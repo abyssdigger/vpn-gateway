@@ -1,13 +1,78 @@
+## EXP-018 — NG1: systemd deployment lifecycle
+
+**Статус:** PREPARED — live Debian 13 deployment gate  
+**Architecture baseline:** NG1 Draft 5 after 2026-11-12 safety correction  
+**Design:** [EXP-018 README](experiments/EXP-018%20NG1%20systemd%20deployment%20lifecycle/README.md)
+
+Цель: на disposable Debian 13 с systemd PID1 доказать реальный
+`prepare -> run -> contain` lifecycle hardened unit, normal restart, SIGKILL
+`Restart=on-failure`, boot recreation и финальный `rou down`. GitHub CI проверяет
+unit syntax и kernel/netns plumbing, но не считается заменой target-systemd proof.
+
+---
+
+## EXP-017 — NG1: ifindex-aware firewall admission
+
+**Статус:** PREPARED — strict dynamic-generation firewall gate  
+**Architecture baseline:** NG1 Draft 5 after 2026-11-12 safety correction  
+**Design:** [EXP-017 README](experiments/EXP-017%20NG1%20ifindex-aware%20firewall%20admission/README.md)
+
+Цель: доказать firewall materialization, привязанный к конкретной interface generation
+`(ifname,ifindex)`, а не только к переиспользуемому имени интерфейса. Текущий
+iptables-legacy backend матчится по имени, поэтому same-name/new-ifindex replacement может
+получить краткое pre-observation окно старых правил.
+
+Предпочтительный кандидат проверки — nftables numeric `meta iif/oif` или эквивалентный
+target-kernel primitive.
+
+---
+
+## EXP-016 — NG1: ECMP hash-policy prerequisite
+
+**Статус:** PREPARED — future availability-trigger gate  
+**Architecture baseline:** NG1 Draft 5 after 2026-11-12 correction review  
+**Design:** [EXP-016 README](experiments/EXP-016%20NG1%20ECMP%20hash%20policy%20prerequisite/README.md)
+
+Цель: выбрать и доказать явное production-значение
+`net.ipv4.fib_multipath_hash_policy` до включения реального DeviceManager/availability
+trigger, способного сделать ECMP fallback эффективным.
+
+---
+
+## EXP-015 — NG1: MTU/MSS real TCP
+
+**Статус:** PREPARED — production-readiness gate  
+**Architecture baseline:** NG1 Draft 5 after 2026-11-12 correction review  
+**Design:** [EXP-015 README](experiments/EXP-015%20NG1%20MTU%20MSS%20real%20TCP/README.md)
+
+Цель: на реальном OpenConnect/WireGuard payload определить, нужен ли MSS clamp/MTU policy,
+не вводя TCPMSS по предположению.
+
+---
+
+## EXP-014 — NG1: remote-initiated flow pinning
+
+**Статус:** PREPARED — future extension gate  
+**Architecture baseline:** NG1 Draft 5 after 2026-11-12 correction review  
+**Design:** [EXP-014 README](experiments/EXP-014%20NG1%20remote-initiated%20flow%20pinning/README.md)
+
+Цель: доказать connmark/fwmark return steering, retired-mark fail-close и conntrack
+lifecycle перед любым будущим снятием production-ограничения
+`INBOUND/BIDIRECTIONAL capacity(Profile) == 1`.
+
+---
+
 ## EXP-013 — NG1: unavailable-path common-metric fallback
 
-**Статус:** IN PROGRESS — Phase A PASS; A3 artifact interpretation + Phase B remain  
+**Статус:** COMPLETE — PASS (Phase A PASS, Phase B PASS)  
 **Architecture baseline:** NG1 Draft 2 after production-model review cycle  
 **Тип:** Linux FIB / direct-dev multipath / real VPN fallback gate  
 **Design:** [EXP-013 README](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/README.md)  
 **Phase A harness:** [vpn-gateway-exp-013-phase-a.sh](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/vpn-gateway-exp-013-phase-a.sh)  
 **Phase B harness:** [vpn-gateway-exp-013-phase-b.sh](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/vpn-gateway-exp-013-phase-b.sh)  
 **Attempt 1:** [EXP-013-phase-A-attempt-1.md](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/EXP-013-phase-A-attempt-1.md)  
-**Phase A PASS:** [EXP-013-phase-A-result.md](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/EXP-013-phase-A-result.md)
+**Phase A PASS:** [EXP-013-phase-A-result.md](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/EXP-013-phase-A-result.md)  
+**Phase B PASS:** [EXP-013-phase-B-result.md](experiments/EXP-013%20NG1%20unavailable%20common%20metric%20fallback/EXP-013-phase-B-result.md)
 
 ### Цель
 
@@ -23,11 +88,12 @@ normal metric < UNAVAILABLE_METRIC < BLACKHOLE_METRIC
 Phase A проверяет direct-`dev` multipath, JSON inventory, `/0` competition с terminal
 blackhole и interface disappearance/return в disposable netns.
 
-Phase B будет проверять те же transitions на двух реальных VPN interfaces с payload,
+Phase B проверила те же transitions на двух реальных OpenConnect interfaces с payload,
 включая случай «interface существует, но path фактически мертв».
 
-**Gate:** unavailable-path projector TrafficEngine не реализуется до live-результата
-EXP-013. Если kernel semantics расходится с моделью, сначала меняется архитектура.
+**Решение:** EXP-013 COMPLETE — PASS. Persistent shadow fallback разрешен к production
+materialization. Его availability trigger сознательно отложен до будущего
+DeviceManager/Device-specific detector; это не отменяет доказанную routing-механику.
 
 ---
 

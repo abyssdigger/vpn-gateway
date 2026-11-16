@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Address
 import logging
 import time
 from typing import Callable, Protocol
@@ -90,6 +91,7 @@ def run_runtime_loop(
     should_stop: StopPredicate = lambda: False,
     sleep: Callable[[float], None] = time.sleep,
     health_check: HealthCheck | None = None,
+    local_publication_address: IPv4Address | None = None,
 ) -> RuntimeLoopResult:
     """Run the long-lived production reconciliation loop.
 
@@ -156,6 +158,7 @@ def run_runtime_loop(
                     availability_provider=availability_provider,
                     collect_snapshot=collect_snapshot,
                     persist_verified_state=state_store.save,
+                    local_publication_address=local_publication_address,
                 )
             except PlannerRetryRequired as exc:
                 planner_failures += 1
