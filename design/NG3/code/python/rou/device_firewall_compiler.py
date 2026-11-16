@@ -43,7 +43,7 @@ def compile_device_firewall_policy(
     the accepted first-match semantics while avoiding redundant interface
     predicates on every explicit rule.
 
-    REJECT remains behind its separate lower-realization gate.
+    EXP-043 defines the accepted lower REJECT mapping.
     """
     if not isinstance(policy, DeviceFirewallPolicyIntent):
         raise DeviceFirewallCompileError(
@@ -112,11 +112,6 @@ def compile_device_firewall_policy(
 def _compile_rule(
     rule: DeviceFirewallRuleIntent,
 ) -> DeviceFirewallRuleSpec:
-    if rule.action is DeviceFirewallAction.REJECT:
-        raise DeviceFirewallCompileError(
-            "Device firewall REJECT lower realization is not accepted yet"
-        )
-
     matches: list[str] = []
     if rule.source_ipv4_cidr is not None:
         matches.append(
@@ -188,6 +183,14 @@ def _compile_rule(
     elif rule.action is DeviceFirewallAction.DENY:
         lower_action = DeviceFirewallRuleAction.DROP
         action_json = '{"drop":null}'
+    elif rule.action is DeviceFirewallAction.REJECT:
+        lower_action = DeviceFirewallRuleAction.REJECT
+        if protocol == "tcp":
+            action_json = '{"reject":{"type":"tcp reset"}}'
+        else:
+            action_json = (
+                '{"reject":{"expr":"port-unreachable","type":"icmp"}}'
+            )
     else:
         raise DeviceFirewallCompileError(
             f"unsupported Device firewall action {rule.action!r}"
