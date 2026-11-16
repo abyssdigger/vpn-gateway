@@ -113,6 +113,10 @@ from .payload_forward_observation import (
     PayloadForwardRuleKind,
     observe_payload_forward,
 )
+from .payload_forward_compiler import (
+    PayloadForwardCompileError,
+    compile_payload_forward_policy,
+)
 from .payload_forward_desired import (
     PayloadForwardDesiredError,
     PayloadForwardDesiredState,
@@ -444,6 +448,7 @@ __all__ = [
     "PayloadForwardDesiredError",
     "PayloadForwardDesiredState",
     "PayloadForwardRuleSpec",
+    "PayloadForwardCompileError",
     "PayloadForwardComparison",
     "PayloadForwardComparisonError",
     "ObservedPayloadMasquerade",
@@ -466,6 +471,7 @@ __all__ = [
     "compare_composite_nft_policy",
     "compare_device_firewall",
     "compile_device_firewall_policy",
+    "compile_payload_forward_policy",
     "compare_payload_forward",
     "observe_device_firewall_structure",
     "converge_payload_nat_step_once",
