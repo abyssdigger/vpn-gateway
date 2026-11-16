@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — Architecture Report
 
 **Status:** NG3 architecture, current Release 1 closure with executable reference slices  
-**Cycle:** `ng3-design-cycle-20261116-post-closure-implementation-readiness-40m`  
+**Cycle:** `ng3-design-cycle-20261116-primary-requirements-basis-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
 
@@ -33,6 +33,7 @@ Current trace:
 | PayloadTrafficManager bounded availability confirmation state | `availability_confirmation.py` | `NG3-2026-11-16-availability-confirmation-code-review.md` |
 | AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md` |
 | NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
+| NetworkPolicyExecutor re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
@@ -1603,6 +1604,29 @@ After deletion, `Mold` becomes the new free metric position.
 
 The deterministic planner repeats this primitive until the current route ordering equals the
 desired ordering.
+
+The executable convergence layer additionally accepts a **freshly observed owned-route
+snapshot** in which one logical path may temporarily have more than one metric after a
+partially completed make-before-break move.
+
+Its normalized recovery semantics are:
+
+- identical logical-path membership remains mandatory for the priority-only path;
+- an already-observed redundant route copy may be deleted only while another confirmed copy
+  of the same logical path remains;
+- after redundant copies are normalized, further movement is expressed only as the semantic
+  `RoutePriorityMove(from_metric, to_metric)` primitive;
+- a `RoutePriorityMove` retains the architectural meaning
+  `add new copy -> verify -> delete old copy`; it is not exposed as independently replayable
+  raw add/delete commands;
+- a path with no observed route, an inter-path metric collision, a route outside the owned
+  metric space, or a structural membership difference is rejected from this priority-only
+  convergence path;
+- after any partial execution failure the remaining plan is stale: the Executor must
+  re-observe authoritative state and produce a new convergence plan before another mutation.
+
+The convergence planner itself is not postcondition evidence. Confirmation still belongs to
+the physical Executor/Adapter boundary after Linux mutation and re-observation.
 
 Priority mutation is serialized **per Profile/routing domain**:
 

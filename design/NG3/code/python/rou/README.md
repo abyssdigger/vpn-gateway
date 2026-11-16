@@ -16,6 +16,7 @@ Implemented:
 - bounded availability confirmation state;
 - availability-only effective priority transformation with unchanged membership;
 - pure make-before-break route-priority move planning for unchanged path membership;
+- partial-state route-priority convergence from a fresh observed snapshot, including safe cleanup of already-confirmed duplicate route copies;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
@@ -23,6 +24,7 @@ Important non-goals of the current reference:
 - no Device Engine;
 - no Netlink event state/history/replay;
 - no Linux route/RPDB/nft execution;
+- no authoritative kernel owned-route snapshot parser/collector yet;
 - no full daemon/lifecycle assembly;
 - no production probe execution;
 - no final user-facing NAT / traffic-envelope / publication grammar;
