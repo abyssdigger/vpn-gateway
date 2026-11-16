@@ -124,3 +124,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-031 NG3 nft namespace owner marker/exp031_nft_owner_marker.py"
+      - name: NG3 nft namespace inventory integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_nft_namespace_inventory.py

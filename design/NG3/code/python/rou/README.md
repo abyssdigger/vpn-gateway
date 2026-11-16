@@ -30,6 +30,7 @@ Implemented:
 - strict read-only structural route/RPDB inventory over the entire reserved NG3 table/priority namespaces, with explicit owner-scoped conflicts for unrepresentable reserved objects;
 - pure payload actual-vs-desired structural comparison producing confirmed/missing/stale route and RPDB sets without mutation;
 - EXP-030-backed managed-netns IPv4 ForwardingGate with write/reread postcondition semantics;
+- EXP-031-backed read-only nft table ownership observation using the exact `vpn-gate:ng3:owner-v1` marker and canonical contained-object capture;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
