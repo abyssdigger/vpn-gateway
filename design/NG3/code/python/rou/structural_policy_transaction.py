@@ -90,6 +90,15 @@ def converge_structural_policy(
         if initial_distance is None and attempt_initial_distance is not None:
             initial_distance = attempt_initial_distance
 
+        if attempt.status is StructuralPolicyMutationStatus.CONFIRMED:
+            return StructuralPolicyTransactionResult(
+                status=StructuralPolicyTransactionStatus.CONFIRMED,
+                attempts=tuple(attempts),
+                initial_distance=initial_distance,
+                final_distance=attempt_final_distance,
+                diagnostic=attempt.diagnostic,
+            )
+
         if (
             previous_final_distance is not None
             and attempt_initial_distance is not None
@@ -105,15 +114,6 @@ def converge_structural_policy(
                     f"attempts: previous={previous_final_distance}, "
                     f"current={attempt_initial_distance}"
                 ),
-            )
-
-        if attempt.status is StructuralPolicyMutationStatus.CONFIRMED:
-            return StructuralPolicyTransactionResult(
-                status=StructuralPolicyTransactionStatus.CONFIRMED,
-                attempts=tuple(attempts),
-                initial_distance=initial_distance,
-                final_distance=attempt_final_distance,
-                diagnostic=attempt.diagnostic,
             )
 
         if attempt.status is not StructuralPolicyMutationStatus.STEP_APPLIED:
