@@ -105,7 +105,15 @@ def main() -> int:
         assert len(probe_routes) == 1, probe_routes
 
         normal = next(row for row in payload_routes if row.get("dst") == "10.77.0.0/16")
-        guard = next(row for row in payload_routes if row.get("type") == "blackhole")
+        guard_rows = [
+            row
+            for row in payload_routes
+            if route_protocol(row) == GUARD_PROTO
+            and row.get("dst") == "default"
+            and row.get("metric") == GUARD_METRIC
+        ]
+        assert len(guard_rows) == 1, payload_routes
+        guard = guard_rows[0]
         probe = probe_routes[0]
 
         assert route_table(normal) in (None, PAYLOAD_TABLE_FIRST), normal
@@ -113,6 +121,7 @@ def main() -> int:
         assert normal.get("metric") == FIRST_METRIC, normal
         assert normal.get("dev") == "path0", normal
 
+        assert guard.get("type") in ("blackhole", 6), guard
         assert route_protocol(guard) == GUARD_PROTO, guard
         assert guard.get("metric") == GUARD_METRIC, guard
         assert guard.get("dst") == "default", guard
