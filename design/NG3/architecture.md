@@ -2537,10 +2537,93 @@ The lower contract intentionally does not derive a production child-chain naming
 Naming remains an input to the lower realization layer until the semantic compiler unit
 selects a deterministic lower identifier. The comparison layer grants no mutation authority.
 
-This closes the normalized-intent / exact-lower-comparison unit while leaving the next
-semantic compiler gate explicit: converting accepted internal Device-firewall fields into
-proven nft predicate expressions requires its own lower evidence and review, especially for
-protocol/port predicates and final REJECT realization.
+The semantic compiler and bounded mutation slice are now evidence-backed as follows.
+
+**Predicate realization — EXP-042.**
+
+- IPv4 source/destination selectors compile to exact nft `ip saddr/daddr` expressions;
+- protocol-only `tcp|udp|icmp` uses `meta l4proto`;
+- TCP/UDP source/destination ports use protocol-specific payload expressions;
+- nft canonicalization removes a redundant separate `meta l4proto tcp|udp` when a
+  protocol-specific port expression already constrains the rule;
+- `/32` renders as a plain IPv4 address while shorter prefixes render as prefix objects.
+
+The compiler therefore produces the **observed canonical nft shape**, not a textual source
+recipe. Ports require an already-normalized TCP/UDP protocol. Unsupported protocol tokens
+remain a compile error rather than being guessed into a lower rule.
+
+For one current Device/path the compiler uses two direction-specific child chains:
+
+```text
+OUT chain:
+    ingress = current host boundary
+    egress  = current Device path
+
+IN chain:
+    ingress = current Device path
+    egress  = current host boundary
+```
+
+IN and OUT packet domains are disjoint, so filtering the original ordered policy into each
+direction-specific subsequence preserves first-match semantics while avoiding redundant
+interface predicates on every child rule. Each explicit chain ends in terminal `drop`.
+Omitted Device firewall produces no Device child chains/jumps.
+
+Lower action mapping is:
+
+```text
+ALLOW  -> return
+DENY   -> drop
+REJECT + TCP -> reject with tcp reset
+REJECT + UDP/ICMP/unspecified IPv4 -> bare reject
+```
+
+EXP-043 proved the REJECT mapping on real forwarded traffic: TCP produced immediate reset /
+`ECONNREFUSED`; UDP and generic/ICMP cases produced active ICMP port-unreachable rather
+than silent timeout. For protocol-only TCP REJECT, nft canonicalization omits a redundant
+`meta l4proto tcp` because the tcp-reset action itself constrains the protocol.
+
+**Base-chain ordering — EXP-044.**
+
+A Device jump appended after Profile NEW/RETURN accepts is unsafe: the earlier Profile
+`accept` can terminate evaluation before Device policy. The accepted lower primitive for a
+new jump is therefore `insert rule`, placing the Device jump before existing Profile rules.
+The Profile observer delegates marked Device jumps to the Device structural observer rather
+than treating them as malformed Profile rules.
+
+**Bounded guarded mutation reference slice.**
+
+`converge_device_firewall_step_once` is an Executor-style one-step convergence operation
+behind the closed managed forwarding barrier. Its mutation order is:
+
+```text
+stale Device jump
+    -> delete exact handle first
+
+then stale unreferenced child chain
+    -> flush + delete exact owned chain
+
+then missing desired chain
+    -> create child + ordered rules
+    -> insert jump before Profile rules
+```
+
+Every step begins from a fresh link-bracketed nft observation and ends with fresh
+whole-bounded-scope observation plus a closed-gate recheck. Command success is never treated
+as postcondition proof. A wrapper error may still end in success only when fresh observation
+independently proves strict progress/exact desired state.
+
+The bounded slice recognizes the invariant scaffold, Profile NEW/RETURN rules and Device
+firewall objects. It intentionally refuses coexisting NAT or local/system rule classes with
+`CONFLICT`; this is a limitation of this reference slice, **not** a product constraint.
+Whole Release-1 policy convergence requires a later combined structural Executor that
+classifies and preserves all accepted owner classes together.
+
+The live guarded integration proves initial two-direction materialization, replacement via
+`delete jump -> delete chain -> create`, insertion before Profile acceptance, fresh
+postcondition verification and persistent `ip_forward=0` throughout. A first live run also
+exposed the protocol-only TCP-REJECT canonicalization mismatch; the desired compiler was
+corrected to the observed nft shape and the full workflow then passed.
 
 No deny-rule ordering or nft jump graph is introduced merely to solve Profile prefix
 overlap; the already accepted canonical CIDR partition remains the simpler Profile-gate
