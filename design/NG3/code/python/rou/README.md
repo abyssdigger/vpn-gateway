@@ -27,7 +27,8 @@ Implemented:
 - semantic Profile/allocation to per-destination route-priority domain assembly without inferring gateway/onlink semantics;
 - explicit opt-in direct-device VPN integration route realizer from verified PathBinding objects;
 - complete immutable payload route/RPDB desired-state projection with terminal guards, per-destination path routes and host-boundary dispatch rules;
-- strict read-only structural route/RPDB inventory over the entire reserved NG3 table/priority namespaces, with explicit conflicts for unrepresentable reserved objects;
+- strict read-only structural route/RPDB inventory over the entire reserved NG3 table/priority namespaces, with explicit owner-scoped conflicts for unrepresentable reserved objects;
+- pure payload actual-vs-desired structural comparison producing confirmed/missing/stale route and RPDB sets without mutation;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:

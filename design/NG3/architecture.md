@@ -45,6 +45,7 @@ Current trace:
 | explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
 | complete payload route/RPDB desired-state projection | `payload_routing_desired.py` | `NG3-2026-11-16-payload-routing-desired-state-review.md` |
 | strict whole-reserved route/RPDB structural observation | `structural_routing_inventory.py` | `NG3-2026-11-16-structural-routing-inventory-review.md` |
+| pure payload actual-vs-desired structural comparison | `payload_routing_compare.py` | `NG3-2026-11-16-payload-routing-comparison-review.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:

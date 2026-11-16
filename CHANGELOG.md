@@ -1,3 +1,36 @@
+## 2026-11-16 — NG3 lower network-policy ownership and structural observation
+
+Continued NG3 from the primary-requirement/priority-convergence checkpoint:
+
+- defined one shared lower NetworkPolicyAdapter ownership layout for payload/probe table,
+  RPDB, route-protocol, metric and nft namespaces;
+- added deterministic allocation over injected platform resource pools without leaking Linux
+  identifiers into user configuration;
+- EXP-028 accepted the concrete NG3 Linux resource space, including high 32-bit table-pool
+  boundaries, RPDB pool boundaries, proto 201/202, metric `1..` with terminal
+  `0xffffffff`, and `table ip vpn_gate`;
+- codified the EXP-028 platform constants in `NG3_LINUX_POLICY_PLATFORM`;
+- separated verified endpoint binding from integration-specific route realization and added
+  an explicit opt-in direct-device realizer;
+- assembled semantic Profile/allocation state into per-destination route-priority domains;
+- added complete immutable payload routing desired state with terminal guards, ordinary path
+  routes and host-boundary RPDB dispatch;
+- made structural RPDB activation explicitly dependent on the shared restrictive
+  route+nft transaction barrier;
+- EXP-029 accepted current iproute2 6.19 numeric JSON shapes for full reserved route/RPDB
+  observation;
+- added strict whole-reserved structural inventory with explicit payload/probe owner-scoped
+  conflicts;
+- added pure payload actual-vs-desired comparison producing confirmed/missing/stale sets
+  without mutation;
+- latest full workflow evidence: **217 unit tests, OK**, EXP-028 PASS, EXP-029 PASS and
+  physical route-priority Linux integration PASS.
+
+The cycle deliberately stops before physical structural activation; the next implementation
+boundary is the restrictive nft/route structural transaction rather than an independent
+RPDB switch.
+
+---
 ## 2026-11-16 — NG3 primary-requirement model and priority-convergence implementation
 
 Reworked the project requirement model and continued NG3 implementation from the accepted
