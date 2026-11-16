@@ -13,6 +13,7 @@ Implemented:
 - delayed waiting promotion only after a removal projection can become committed;
 - `PayloadProfileRequest` projection, including zero-path Profile preservation;
 - outbound/inbound NEW-flow Profile classification with ingress-path restriction;
+- pure disjoint most-specific Profile CIDR partition for global outbound and path-relative inbound classification, proven point-equivalent to the existing point classifiers; this is Profile permission only and does not apply Device traffic envelope or compile nft rules;
 - bounded availability confirmation state;
 - availability-only effective priority transformation with unchanged membership;
 - pure make-before-break route-priority move planning for unchanged path membership;

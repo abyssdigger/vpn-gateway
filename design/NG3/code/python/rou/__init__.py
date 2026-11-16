@@ -172,6 +172,12 @@ from .profile_classification import (
     classify_inbound_profile,
     classify_outbound_profile,
 )
+from .profile_prefix_partition import (
+    ProfilePrefixFragment,
+    ProfilePrefixPartitionError,
+    build_inbound_profile_partition,
+    build_outbound_profile_partition,
+)
 from .route_priority import (
     RoutePriorityMove,
     RoutePriorityPlanError,
@@ -313,6 +319,8 @@ __all__ = [
     "ProbePolicyOwner",
     "ProbeRoutingDemand",
     "ProfileClassificationError",
+    "ProfilePrefixFragment",
+    "ProfilePrefixPartitionError",
     "ProfileStructuralIntent",
     "ReservedOwnerKind",
     "ReservedPolicyConflict",
@@ -351,6 +359,8 @@ __all__ = [
     "build_payload_routing_desired_state",
     "build_route_priority_domain_realizations",
     "classify_inbound_profile",
+    "build_inbound_profile_partition",
+    "build_outbound_profile_partition",
     "compare_payload_nft_scaffold",
     "compare_payload_routing",
     "converge_forwarding_gate_once",
