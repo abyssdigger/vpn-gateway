@@ -184,7 +184,7 @@ def converge_composite_nft_step_once(
 
     apply_error: Exception | None = None
     try:
-        _apply_step(nft_backend, step)
+        apply_composite_nft_step(nft_backend, step)
     except Exception as exc:
         apply_error = exc
 
@@ -268,7 +268,7 @@ def converge_composite_nft_step_once(
     )
 
 
-def _apply_step(
+def apply_composite_nft_step(
     backend: CompositeNftMutationBackend,
     step: CompositeNftMutationStep,
 ) -> None:
