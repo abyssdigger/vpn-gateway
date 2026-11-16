@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from ipaddress import IPv4Address, IPv4Network, ip_address, ip_network
 import json
 from typing import Iterable
