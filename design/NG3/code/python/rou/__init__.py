@@ -138,6 +138,10 @@ from .device_firewall_compare import (
     DeviceFirewallComparisonError,
     compare_device_firewall,
 )
+from .device_firewall_policy_compiler import (
+    DeviceFirewallPolicyCompileError,
+    compile_device_firewall_policies,
+)
 from .device_firewall_compiler import (
     DeviceFirewallCompileError,
     compile_device_firewall_policy,
@@ -380,6 +384,7 @@ __all__ = [
     "DeviceFirewallRuleSpec",
     "DeviceFirewallComparison",
     "DeviceFirewallComparisonError",
+    "DeviceFirewallPolicyCompileError",
     "DeviceFirewallCompileError",
     "DeviceFirewallMutationResult",
     "DeviceFirewallMutationStatus",
@@ -470,6 +475,7 @@ __all__ = [
     "compare_local_publication",
     "compare_composite_nft_policy",
     "compare_device_firewall",
+    "compile_device_firewall_policies",
     "compile_device_firewall_policy",
     "compile_payload_forward_policy",
     "compare_payload_forward",
