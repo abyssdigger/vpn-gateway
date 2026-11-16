@@ -179,6 +179,24 @@ ordinary -> VPN NEW: classify by remote destination.
 VPN -> ordinary NEW: first restrict by actual ingress Device/path, then classify by remote
 source.
 
+## TIP-P6 — Multi-path inbound return pinning is not historically proven
+
+EXP-014 was prepared but not completed.
+
+Current recovered config allows `inbound` / `bidirectional` and multiple eligible paths,
+but historical evidence does **not** establish how a remotely initiated flow is guaranteed to
+return through a compatible path when more than one path is eligible.
+
+Do not silently assume:
+
+- ordinary effective-priority routing is sufficient;
+- asymmetric return is always acceptable;
+- connmark/fwmark pinning is already proven;
+- first release is limited to one inbound path.
+
+This is a product/evidence gate. The supported behavior or limitation must be accepted before
+claiming complete architecture closure for multi-path inbound/bidirectional Profiles.
+
 # 5. Bootstrap / lifecycle
 
 ## TIP-L1 — Startup success is safe appliance readiness, not VPN connectivity
