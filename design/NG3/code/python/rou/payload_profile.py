@@ -25,7 +25,7 @@ def build_payload_profile_requests(
     bindings: Iterable[PathBinding],
 ) -> tuple[PayloadProfileRequest, ...]:
     """Build structural Profile requests from current accepted logical path bindings."""
-    ordered_profiles = tuple(profiles)
+    ordered_profiles = tuple(sorted(profiles, key=lambda profile: profile.profile_id))
     current_bindings = tuple(bindings)
     _validate_inputs(ordered_profiles, current_bindings)
 
