@@ -158,6 +158,82 @@ class RoutePriorityDomainBuilderTests(unittest.TestCase):
                 ),
             )
 
+    def test_stale_metric_allocation_cardinality_is_rejected(self):
+        old = PayloadProfileRequest(
+            profile_id="corp",
+            direction=Direction.OUTBOUND,
+            destinations=(IPv4Network("10.0.0.0/8"),),
+            ordered_paths=(A, B),
+        )
+        current = PayloadProfileRequest(
+            profile_id="corp",
+            direction=Direction.OUTBOUND,
+            destinations=(IPv4Network("10.0.0.0/8"),),
+            ordered_paths=(A,),
+        )
+        stale_allocation = allocation(old)
+
+        with self.assertRaisesRegex(
+            RoutePriorityDomainBuildError,
+            "cardinality",
+        ):
+            build_route_priority_domain_realizations(
+                current,
+                stale_allocation,
+                (RoutePriorityPathRoute(A, EP_A),),
+            )
+
+    def test_missing_or_duplicate_destinations_are_rejected(self):
+        no_dest = PayloadProfileRequest(
+            profile_id="corp",
+            direction=Direction.OUTBOUND,
+            destinations=(),
+            ordered_paths=(A,),
+        )
+        with self.assertRaisesRegex(
+            RoutePriorityDomainBuildError,
+            "at least one destination",
+        ):
+            build_route_priority_domain_realizations(
+                no_dest,
+                allocation(
+                    PayloadProfileRequest(
+                        profile_id="corp",
+                        direction=Direction.OUTBOUND,
+                        destinations=(IPv4Network("10.0.0.0/8"),),
+                        ordered_paths=(A,),
+                    )
+                ),
+                (RoutePriorityPathRoute(A, EP_A),),
+            )
+
+        duplicate_dest = PayloadProfileRequest(
+            profile_id="corp",
+            direction=Direction.OUTBOUND,
+            destinations=(
+                IPv4Network("10.0.0.0/8"),
+                IPv4Network("10.0.0.0/8"),
+            ),
+            ordered_paths=(A,),
+        )
+        # Build a valid allocation separately because the allocator correctly
+        # rejects duplicate destinations before this lower bridge.
+        valid = PayloadProfileRequest(
+            profile_id="corp",
+            direction=Direction.OUTBOUND,
+            destinations=(IPv4Network("10.0.0.0/8"),),
+            ordered_paths=(A,),
+        )
+        with self.assertRaisesRegex(
+            RoutePriorityDomainBuildError,
+            "duplicate destinations",
+        ):
+            build_route_priority_domain_realizations(
+                duplicate_dest,
+                allocation(valid),
+                (RoutePriorityPathRoute(A, EP_A),),
+            )
+
     def test_gateway_onlink_semantics_are_preserved_not_inferred(self):
         value = profile(paths=(A,))
         routed = RoutePriorityPathRoute(

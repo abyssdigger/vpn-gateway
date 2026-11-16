@@ -56,6 +56,15 @@ def build_route_priority_domain_realizations(
             )
         by_path[spec.path_id] = spec
 
+    if not profile.destinations:
+        raise RoutePriorityDomainBuildError(
+            "semantic Profile must contain at least one destination"
+        )
+    if len(set(profile.destinations)) != len(profile.destinations):
+        raise RoutePriorityDomainBuildError(
+            "semantic Profile contains duplicate destinations"
+        )
+
     semantic_paths = tuple(profile.ordered_paths)
     if len(set(semantic_paths)) != len(semantic_paths):
         raise RoutePriorityDomainBuildError(
@@ -77,6 +86,10 @@ def build_route_priority_domain_realizations(
     if allocation.metric_space is None:
         raise RoutePriorityDomainBuildError(
             "non-empty Profile has no priority metric space"
+        )
+    if len(allocation.metric_space.preference_slots) != len(semantic_paths):
+        raise RoutePriorityDomainBuildError(
+            "priority metric-space cardinality does not match current semantic path membership"
         )
 
     ordered_path_routes = tuple(
