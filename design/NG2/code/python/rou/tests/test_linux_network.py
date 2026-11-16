@@ -17,6 +17,7 @@ from rou.network_rules import (
     TerminalDisposition,
     TrafficAllowSpec,
     TrafficPredicate,
+    TrafficProtocol,
 )
 from rou.network_rules_composition import (
     OwnedNetworkRules,
@@ -229,6 +230,56 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
             LinuxRoutingAllocationState(),
             local_interface="host0",
         )
+
+
+    def test_local_process_projection_tracks_bound_output_generation(self):
+        old = InterfaceIdentity("vpns00", 10)
+        new = InterfaceIdentity("vpns00", 11)
+        target = IPv4Network("203.0.113.24/32")
+        local_process = NetworkEndpoint.local_process()
+        old_path = NetworkEndpoint.interface_path(old)
+        rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "probe",
+                    (target,),
+                    (old,),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+            dispatch_rules=(
+                DispatchRuleSpec(
+                    target,
+                    "probe",
+                    source=local_process,
+                    bound_output=old_path,
+                    protocol=TrafficProtocol.ICMP,
+                ),
+            ),
+            traffic_allows=(
+                TrafficAllowSpec(
+                    local_process,
+                    old_path,
+                    TrafficPredicate.always(),
+                ),
+                TrafficAllowSpec(
+                    old_path,
+                    local_process,
+                    TrafficPredicate.always(),
+                ),
+            ),
+        )
+        projected = project_network_rules_to_interfaces(
+            compose_network_rules(
+                (OwnedNetworkRules(OwnerToken(1), rules),)
+            ),
+            (new,),
+        )
+        actual = projected.owners[0].rules
+
+        self.assertEqual(actual.routing_domains[0].ordered_paths, ())
+        self.assertEqual(actual.dispatch_rules, ())
+        self.assertEqual(actual.traffic_allows, ())
 
     def test_two_generations_same_name_cannot_coexist_in_linux_desired(self):
         old = InterfaceIdentity("vpns00", 10)

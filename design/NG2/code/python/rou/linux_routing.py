@@ -5,7 +5,7 @@ from enum import Enum
 from ipaddress import IPv4Network
 
 from .interface_identity import InterfaceIdentity
-from .network_rules import EndpointKind
+from .network_rules import EndpointKind, TrafficProtocol
 from .network_rules_composition import (
     ComposedNetworkRules,
     OwnedRoutingDomainRef,
@@ -133,14 +133,48 @@ class LinuxRouteSpec:
 class LinuxDispatchRuleSpec:
     priority: int
     domain: OwnedRoutingDomainRef
-    source_ifname: str
     destination: IPv4Network
     table_id: int
+    source_ifname: str | None = None
+    local_process_uid: int | None = None
+    protocol: TrafficProtocol | None = None
+    bound_output: InterfaceIdentity | None = None
 
     def __post_init__(self) -> None:
         if not FIRST_RULE_PRIORITY <= self.priority <= MAX_RULE_PRIORITY:
             raise LinuxRoutingError("RPDB priority is out of owned range")
-        _validate_ifname(self.source_ifname)
+
+        local_network = self.source_ifname is not None
+        local_process = (
+            self.local_process_uid is not None
+            or self.protocol is not None
+            or self.bound_output is not None
+        )
+        if local_network == local_process:
+            raise LinuxRoutingError(
+                "dispatch must select exactly one Linux source mode"
+            )
+
+        if local_network:
+            assert self.source_ifname is not None
+            _validate_ifname(self.source_ifname)
+            return
+
+        if (
+            type(self.local_process_uid) is not int
+            or self.local_process_uid < 0
+        ):
+            raise LinuxRoutingError(
+                "local-process dispatch requires non-negative uid"
+            )
+        if self.protocol is None:
+            raise LinuxRoutingError(
+                "local-process dispatch requires protocol"
+            )
+        if self.bound_output is None:
+            raise LinuxRoutingError(
+                "local-process dispatch requires bound output generation"
+            )
 
 
 @dataclass(frozen=True)
@@ -255,6 +289,7 @@ def compile_linux_routing_desired(
     committed: LinuxRoutingAllocationState,
     *,
     local_interface: str,
+    local_process_uid: int = 65534,
 ) -> LinuxRoutingDesired:
     """Compile owner-composed semantic routing into Linux routing intent."""
 
@@ -310,26 +345,46 @@ def compile_linux_routing_desired(
 
     dispatch: list[LinuxDispatchRuleSpec] = []
     for offset, rule in enumerate(composed.dispatch_rules):
-        if rule.source.kind is not EndpointKind.LOCAL_NETWORK:
-            raise LinuxRoutingError(
-                "current Linux routing backend supports dispatch only from "
-                "LOCAL_NETWORK"
-            )
-
         table_id = table_by_domain.get(rule.routing_domain)
         if table_id is None:
             raise LinuxRoutingError(
                 f"dispatch references unallocated domain {rule.routing_domain!r}"
             )
 
-        dispatch.append(
-            LinuxDispatchRuleSpec(
-                priority=FIRST_RULE_PRIORITY + offset,
-                domain=rule.routing_domain,
-                source_ifname=local_interface,
-                destination=rule.destination,
-                table_id=table_id,
+        common = dict(
+            priority=FIRST_RULE_PRIORITY + offset,
+            domain=rule.routing_domain,
+            destination=rule.destination,
+            table_id=table_id,
+        )
+        if rule.source.kind is EndpointKind.LOCAL_NETWORK:
+            dispatch.append(
+                LinuxDispatchRuleSpec(
+                    **common,
+                    source_ifname=local_interface,
+                )
             )
+            continue
+
+        if rule.source.kind is EndpointKind.LOCAL_PROCESS:
+            if rule.bound_output is None or rule.protocol is None:
+                raise LinuxRoutingError(
+                    "local-process dispatch lacks bound output or protocol"
+                )
+            assert rule.bound_output.interface is not None
+            dispatch.append(
+                LinuxDispatchRuleSpec(
+                    **common,
+                    local_process_uid=local_process_uid,
+                    protocol=rule.protocol,
+                    bound_output=rule.bound_output.interface,
+                )
+            )
+            continue
+
+        raise LinuxRoutingError(
+            "current Linux routing backend does not support dispatch "
+            f"from {rule.source.kind.value}"
         )
 
     terminal_rule = (
