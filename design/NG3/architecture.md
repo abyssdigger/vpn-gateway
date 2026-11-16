@@ -751,6 +751,7 @@ ProfileConfigIntent:
     destinations[]
     device_order[]
     availability_check?
+    ordinary_gateway_nat_intent?
 
 DeviceBindingIntent:
     device_id
@@ -2723,6 +2724,153 @@ physical backend integration for real add/delete with `ip_forward=0`.
 Only after independent expert review may this partial lower slice be
 considered executable reference evidence. It must never reopen the root
 forwarding barrier.
+
+##### Ordinary-side Profile gateway NAT boundary
+
+**Implements:**
+- `VPNG0001-R1.R2.R4.R4.R4`;
+- `VPNG0001-R1.R2.R4.R4.R4.R1`;
+- `VPNG0004-R4.R6.R1.R6`;
+- `VPNG0004-R4.R6.R1.R6.R1`.
+
+**Constrained by:**
+- `VPNG0001-R1.R2.R4.R4.R4.C1`.
+
+This is a second source-NAT purpose and must not be conflated with Device
+`NatIntent.MASQUERADE`.
+
+```text
+Device VPN-side NAT
+    ordinary -> managed firewall -> Device/path postrouting masquerade -> VPN
+
+Profile ordinary-side gateway NAT
+    VPN -> managed Device/Profile firewall -> explicit host boundary
+        -> host forwarding toward ordinary network
+        -> optional Profile-scoped gateway source NAT
+```
+
+The first exists to make ordinary-originated traffic usable through a VPN path. The second
+exists only when an ordinary-network next hop needs replies to return through the VPN-GATE
+host without being taught routes to remote VPN prefixes.
+
+A packet whose destination is the VPN-GATE host itself is locally delivered on the host side
+and does not require the gateway-forwarding NAT contribution. The semantic intent therefore
+does not mean "SNAT every inbound VPN packet"; it means "SNAT the already-permitted
+VPN-originated packet when the host forwards it onward through the owned ordinary-side
+gateway boundary".
+
+The normalized upper intent is conceptually:
+
+```text
+ProfileGatewayNatIntent:
+    profile_id
+    mode = NONE | MASQUERADE
+```
+
+This type name is architectural shorthand, not accepted external configuration syntax.
+
+The Device/Profile firewall runs before the packet leaves the managed network domain.
+Consequently source address/port filtering still sees the original remote payload sender.
+Ordinary-side gateway NAT must never be moved ahead of that managed policy boundary.
+
+###### Profile association across the host boundary
+
+Per-Profile gateway NAT cannot safely reclassify packets on the host merely by remote source
+prefix.
+
+Inbound Profile classification is path-relative:
+
+```text
+actual ingress logical path
+    +
+remote source prefix
+    ->
+selected Profile
+```
+
+Two Profiles may therefore overlap in remote prefix space while being unambiguous because
+they admit different ingress paths. Once several managed paths converge on one ordinary host
+boundary, source CIDR alone no longer carries that provenance.
+
+The lower boundary must consequently preserve a verifiable association:
+
+```text
+selected Profile inside managed policy
+        +
+packet crossing explicit host boundary
+        ->
+BoundaryProfileAssociation(profile_id, packet/flow)
+        ->
+ProfileGatewayNatOwner(profile_id)
+```
+
+`BoundaryProfileAssociation` is a semantic lower contract, not a selection of Linux
+mechanism. A reserved packet mark, a distinct boundary resource, conntrack metadata or
+another mechanism may be accepted later only after evidence proves that it preserves the
+already-selected Profile without colliding with routing/probe/host policy.
+
+The host-side NAT implementation must not infer the Profile from:
+
+- source CIDR alone;
+- boundary ifname alone when the boundary is shared;
+- current VPN ifname that is no longer present in the host-side packet path;
+- Device identity without the Profile classification result.
+
+If the exact current packet/flow association cannot be confirmed, that Profile's gateway NAT
+is unready and must not be applied.
+
+###### Ownership and component boundary
+
+The semantic owner remains the existing payload/Profile policy owner. No new long-lived
+Manager is introduced.
+
+The existing `NetworkPolicyAdapter` gains a **separate host-boundary lower realization
+sub-contract** because this mutable state is outside the managed network namespace:
+
+```text
+observe ProfileGatewayNatOwner(profile_id)
+apply desired Profile gateway NAT + verify
+cleanup owned Profile gateway NAT + verify absence
+```
+
+This host-boundary owner scope is disjoint from the managed-domain
+`table ip vpn_gate` owner scope. It may mutate only explicitly reserved boundary objects
+required for the selected Profile gateway NAT and must treat unrelated host firewall/routing
+state as foreign.
+
+The exact host-side nft table/chain identity, packet-association carrier and command ordering
+remain implementation/evidence decisions. They are not user-facing knobs.
+
+A structural transition that changes Profile gateway NAT or its boundary association is not
+eligible for the pure route-priority fast path. The affected forwarding must remain
+restrictive until managed policy, association and host-boundary NAT postconditions are all
+freshly verified.
+
+###### Return path and failure semantics
+
+For a forwarded VPN-originated packet, successful ordinary-side source NAT makes the
+ordinary-network destination reply to the VPN-GATE host gateway address. Normal conntrack
+reverse NAT then restores the remote destination on the reply before routing it back toward
+the explicit managed boundary.
+
+This capability does not replace the existing requirement that traffic for managed remote
+prefixes be routed into the VPN-GATE boundary. It only avoids requiring each downstream
+ordinary host to know those remote routes.
+
+Failure or ambiguity in host-side NAT observation, owner classification or Profile
+association cannot be treated as "NAT probably active". The Profile gateway-NAT function is
+reported unconfirmed/unready and no new boundary NAT permission is activated from guessed
+state.
+
+**Simplification:** no universal host-firewall Manager, per-packet userspace proxy, endpoint
+provisioning service, durable association journal or guessed host-route editor is introduced.
+
+**Evidence gate:** before physical implementation, a bounded experiment must prove the
+selected Linux mechanism for carrying the already-selected Profile association across the
+namespace/boundary and for applying/reversing host-side masquerade without affecting
+unrelated host traffic. The experiment must include overlapping remote prefixes on distinct
+ingress paths so that source-prefix-only reclassification would fail, plus host-local traffic
+that must not receive gateway NAT.
 
 The scaffold is deliberately independent from the root structural barrier:
 
