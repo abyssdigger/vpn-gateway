@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from rou.binding import LogicalPathId
 from rou.composite_nft_plan import (
@@ -19,6 +19,11 @@ from rou.device_firewall_structure import (
 )
 from rou.interface_identity import InterfaceIdentity
 from rou.local_publication_observation import LocalPublicationComparison
+from rou.local_publication_policy import (
+    LocalPublicationHook,
+    LocalPublicationRuleSpec,
+    PublicationProtocol,
+)
 from rou.nft_namespace_inventory import NftNamespaceStatus
 from rou.nft_payload_scaffold import (
     NftPayloadScaffoldComparison,
@@ -77,6 +82,7 @@ def comparison(
     device_missing=(),
     device_stale_chains=(),
     device_stale_jumps=(),
+    local_missing=(),
 ):
     return CompositeNftPolicyComparison(
         scaffold=SCAFFOLD,
@@ -101,7 +107,7 @@ def comparison(
         ),
         local_publication=LocalPublicationComparison(
             confirmed=(),
-            missing=(),
+            missing=local_missing,
             stale=(),
             conflicts=(),
         ),
@@ -176,6 +182,26 @@ class CompositeNftPlanTests(unittest.TestCase):
             comparison(profile_missing=(PROFILE_SPEC,))
         )
         self.assertEqual(step.kind, CompositeNftStepKind.ADD_PROFILE_RULE)
+
+
+    def test_local_publication_drift_blocks_payload_plan(self):
+        local = LocalPublicationRuleSpec(
+            hook=LocalPublicationHook.INPUT,
+            protocol=PublicationProtocol.TCP,
+            host_boundary=HOST,
+            local_address=IPv4Address("198.51.100.46"),
+            local_port=44443,
+        )
+        with self.assertRaisesRegex(
+            Exception,
+            "separate local-mutation gate",
+        ):
+            select_composite_nft_step(
+                comparison(
+                    profile_missing=(PROFILE_SPEC,),
+                    local_missing=(local,),
+                )
+            )
 
     def test_exact_state_has_no_step(self):
         self.assertIsNone(select_composite_nft_step(comparison()))
