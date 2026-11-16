@@ -2107,6 +2107,14 @@ and can do so without equating same-name/new-ifindex endpoints.
 Observation remains read-only. Physical NAT add/delete is not accepted until this parser and
 comparison contract are executable and reviewed.
 
+EXP-034 has subsequently proved on the selected GitHub Linux/nft target that a recognized
+stale NAT rule can be deleted by its observed handle after same-name interface replacement,
+without deleting the new current rule. A nonexistent handle delete fails without changing
+the observed nft objects. This is **technical evidence only**, not authority for production
+mutation: full owned-scope classification, an independently confirmed disabled
+`ForwardingGate`, fresh pre/post-observation, and guarded structural convergence remain
+necessary before any runtime NAT write path is accepted.
+
 The scaffold is deliberately independent from the root structural barrier:
 
 - structural rebuild happens while verified `ip_forward=0`;

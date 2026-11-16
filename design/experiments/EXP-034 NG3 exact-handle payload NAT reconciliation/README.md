@@ -1,6 +1,6 @@
 # EXP-034 — NG3 nft exact-handle payload NAT reconciliation
 
-**Status:** experimental gate; result not yet accepted  
+**Status:** PASS on GitHub Linux CI; scope limited to exact-handle nft behavior  
 **Stage:** NG3  
 **Date:** 2026-11-16
 
@@ -40,7 +40,7 @@ PYTHONPATH=design/NG3/code/python sudo --preserve-env=PYTHONPATH \
 
 ## Result
 
-PENDING — see dated evidence result after GitHub Actions completes.
+PASS — see `EXP-034-result-20261116.md` for exact observations, run and limits.
 
 ## Architectural consequence
 
