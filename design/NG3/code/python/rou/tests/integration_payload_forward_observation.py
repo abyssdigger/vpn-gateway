@@ -92,15 +92,15 @@ def main() -> None:
             inventory(namespace),
         )
         assert current.conflict_free, current
-        assert len(current.current) == 2 and not current.stale, current
+        assert len(current.current_identity_rules) == 2 and not current.stale_identity_rules, current
         assert {
-            item.kind for item in current.current
+            item.kind for item in current.current_identity_rules
         } == {
             PayloadForwardRuleKind.NEW,
             PayloadForwardRuleKind.RETURN,
         }, current
         assert {
-            item.remote_field for item in current.current
+            item.remote_field for item in current.current_identity_rules
         } == {
             PayloadForwardRemoteField.DESTINATION,
             PayloadForwardRemoteField.SOURCE,
@@ -117,8 +117,8 @@ def main() -> None:
             inventory(namespace),
         )
         assert stale.conflict_free, stale
-        assert not stale.current and len(stale.stale) == 2, stale
-        for item in stale.stale:
+        assert not stale.current_identity_rules and len(stale.stale_identity_rules) == 2, stale
+        for item in stale.stale_identity_rules:
             operands = (item.ingress, item.egress)
             assert old_vpn.ifindex in operands, (item, old_vpn)
             assert new_vpn not in operands, (item, new_vpn)

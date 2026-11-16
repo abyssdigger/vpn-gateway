@@ -146,14 +146,14 @@ class PayloadForwardObservationTests(unittest.TestCase):
     def test_new_current_rule_is_recognized(self):
         result = self.observe(rule())
         self.assertTrue(result.conflict_free)
-        self.assertEqual(len(result.current), 1)
-        found = result.current[0]
+        self.assertEqual(len(result.current_identity_rules), 1)
+        found = result.current_identity_rules[0]
         self.assertEqual(found.kind, PayloadForwardRuleKind.NEW)
         self.assertEqual(found.ingress, HOST)
         self.assertEqual(found.egress, OLD)
         self.assertEqual(found.remote_field, PayloadForwardRemoteField.DESTINATION)
         self.assertEqual(found.remote_prefix, IPv4Network("10.0.0.0/24"))
-        self.assertEqual(result.stale, ())
+        self.assertEqual(result.stale_identity_rules, ())
 
     def test_return_current_rule_is_recognized(self):
         result = self.observe(
@@ -164,7 +164,7 @@ class PayloadForwardObservationTests(unittest.TestCase):
                 field="saddr",
             )
         )
-        found = result.current[0]
+        found = result.current_identity_rules[0]
         self.assertEqual(found.kind, PayloadForwardRuleKind.RETURN)
         self.assertEqual(found.ingress, OLD)
         self.assertEqual(found.egress, HOST)
@@ -173,7 +173,7 @@ class PayloadForwardObservationTests(unittest.TestCase):
     def test_32_string_normalizes_to_host_network(self):
         result = self.observe(rule(value="10.0.0.7"))
         self.assertEqual(
-            result.current[0].remote_prefix,
+            result.current_identity_rules[0].remote_prefix,
             IPv4Network("10.0.0.7/32"),
         )
 
@@ -182,24 +182,24 @@ class PayloadForwardObservationTests(unittest.TestCase):
             rule(value=prefix("0.0.0.0", 0))
         )
         self.assertEqual(
-            result.current[0].remote_prefix,
+            result.current_identity_rules[0].remote_prefix,
             IPv4Network("0.0.0.0/0"),
         )
 
     def test_live_numeric_indices_resolve_to_current_identity(self):
         result = self.observe(rule(iif="5", oif="9"))
-        self.assertEqual(result.current[0].ingress, HOST)
-        self.assertEqual(result.current[0].egress, OLD)
+        self.assertEqual(result.current_identity_rules[0].ingress, HOST)
+        self.assertEqual(result.current_identity_rules[0].egress, OLD)
 
     def test_stale_numeric_ifindex_cannot_impersonate_same_name_replacement(self):
         result = self.observe(
             rule(oif="9"),
             interfaces=(HOST, NEW),
         )
-        self.assertEqual(result.current, ())
-        self.assertEqual(len(result.stale), 1)
-        self.assertEqual(result.stale[0].egress, 9)
-        self.assertNotEqual(result.stale[0].egress, NEW)
+        self.assertEqual(result.current_identity_rules, ())
+        self.assertEqual(len(result.stale_identity_rules), 1)
+        self.assertEqual(result.stale_identity_rules[0].egress, 9)
+        self.assertNotEqual(result.stale_identity_rules[0].egress, NEW)
 
     def test_unknown_owner_comment_is_conflict(self):
         result = self.observe(rule(comment="foreign"))
@@ -298,7 +298,7 @@ class PayloadForwardObservationTests(unittest.TestCase):
 
     def test_duplicate_physical_rules_are_conflict(self):
         result = self.observe(rule(handle=30), rule(handle=31))
-        self.assertEqual(len(result.current), 1)
+        self.assertEqual(len(result.current_identity_rules), 1)
         self.assertIn("duplicate physical", result.conflicts[0].reason)
 
     def test_same_interfaces_and_prefix_but_different_kind_are_distinct(self):
@@ -313,7 +313,7 @@ class PayloadForwardObservationTests(unittest.TestCase):
             ),
         )
         self.assertTrue(result.conflict_free)
-        self.assertEqual(len(result.current), 2)
+        self.assertEqual(len(result.current_identity_rules), 2)
 
     def test_non_forward_chain_rule_is_ignored(self):
         result = self.observe(
@@ -321,7 +321,7 @@ class PayloadForwardObservationTests(unittest.TestCase):
             rule(handle=31),
         )
         self.assertTrue(result.conflict_free)
-        self.assertEqual(len(result.current), 1)
+        self.assertEqual(len(result.current_identity_rules), 1)
 
     def test_missing_scaffold_is_hard_failure(self):
         rows = {

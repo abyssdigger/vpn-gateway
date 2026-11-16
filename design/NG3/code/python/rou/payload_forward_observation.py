@@ -56,16 +56,22 @@ class PayloadForwardRuleConflict:
 
 @dataclass(frozen=True, slots=True)
 class PayloadForwardObservation:
-    current: tuple[ObservedPayloadForwardRule, ...]
-    stale: tuple[ObservedPayloadForwardRule, ...]
+    current_identity_rules: tuple[ObservedPayloadForwardRule, ...]
+    stale_identity_rules: tuple[ObservedPayloadForwardRule, ...]
     conflicts: tuple[PayloadForwardRuleConflict, ...]
 
     @property
     def recognized(self) -> tuple[ObservedPayloadForwardRule, ...]:
-        return self.current + self.stale
+        """Rules with accepted owner shape, regardless of desired-policy status."""
+        return self.current_identity_rules + self.stale_identity_rules
 
     @property
     def conflict_free(self) -> bool:
+        """No shape/ownership conflicts inside payload_forward only.
+
+        This does not mean the recognized rules are desired current policy and
+        does not authorize mutation or forwarding activation.
+        """
         return not self.conflicts
 
 
@@ -183,11 +189,15 @@ def observe_payload_forward(
         physical_seen.add(key)
         unique.append(rule)
 
-    current = tuple(rule for rule in unique if not rule.stale)
-    stale = tuple(rule for rule in unique if rule.stale)
+    current_identity_rules = tuple(
+        rule for rule in unique if not rule.stale
+    )
+    stale_identity_rules = tuple(
+        rule for rule in unique if rule.stale
+    )
     return PayloadForwardObservation(
-        current=current,
-        stale=stale,
+        current_identity_rules=current_identity_rules,
+        stale_identity_rules=stale_identity_rules,
         conflicts=tuple(conflicts),
     )
 
