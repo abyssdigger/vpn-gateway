@@ -23,6 +23,18 @@ class RoutePriorityPathRoute:
     gateway: IPv4Address | None = None
     onlink: bool = False
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.path_id, LogicalPathId):
+            raise ValueError("path_id must be a LogicalPathId")
+        if not isinstance(self.endpoint, InterfaceIdentity):
+            raise ValueError("endpoint must be an InterfaceIdentity")
+        if self.gateway is not None and not isinstance(
+            self.gateway, IPv4Address
+        ):
+            raise ValueError("gateway must be an IPv4Address or None")
+        if type(self.onlink) is not bool:
+            raise ValueError("onlink must be bool")
+
 
 def parse_ip_route_priority_snapshot(
     text: str,
@@ -31,6 +43,7 @@ def parse_ip_route_priority_snapshot(
     owner_protocol: int,
     path_routes: Iterable[RoutePriorityPathRoute],
     interfaces: Iterable[InterfaceIdentity],
+    protocol_filtered: bool = False,
 ) -> RoutePrioritySnapshot:
     """Project one owned route-key domain from iproute2 JSON.
 
@@ -66,7 +79,12 @@ def parse_ip_route_priority_snapshot(
                 f"route[{position}] must be an object"
             )
 
-        protocol = _parse_protocol(row.get("protocol"), position)
+        protocol = _parse_protocol(
+            row.get("protocol"),
+            position,
+            owner_protocol=owner_protocol,
+            protocol_filtered=protocol_filtered,
+        )
         row_destination = _parse_destination(row.get("dst"), position)
 
         if protocol != owner_protocol or row_destination != destination:
@@ -78,11 +96,11 @@ def parse_ip_route_priority_snapshot(
                 f"route[{position}] in owned priority domain is not unicast"
             )
 
-        nexthops = row.get("nexthops")
-        if nexthops not in (None, []):
-            raise RoutePriorityInventoryError(
-                f"route[{position}] uses multipath/nexthops and is not a single-path priority route"
-            )
+        for unsupported in ("nexthops", "nhid", "multipath", "via"):
+            if unsupported in row:
+                raise RoutePriorityInventoryError(
+                    f"route[{position}] contains unsupported {unsupported!r} semantics"
+                )
 
         dev = row.get("dev")
         if not isinstance(dev, str) or not dev:
@@ -103,6 +121,11 @@ def parse_ip_route_priority_snapshot(
         ):
             raise RoutePriorityInventoryError(
                 f"route[{position}].flags must be an array of strings"
+            )
+        unknown_flags = sorted(set(flags) - {"onlink"})
+        if unknown_flags:
+            raise RoutePriorityInventoryError(
+                f"route[{position}] contains unrepresented flags: {unknown_flags}"
             )
         onlink = "onlink" in flags
 
@@ -194,17 +217,32 @@ def _index_path_routes(
     return expected
 
 
-def _parse_protocol(value: object, position: int) -> int:
+def _parse_protocol(
+    value: object,
+    position: int,
+    *,
+    owner_protocol: int,
+    protocol_filtered: bool,
+) -> int:
+    if value is None:
+        return owner_protocol if protocol_filtered else -1
+
     if type(value) is int:
         protocol = value
     elif isinstance(value, str) and value.isdecimal():
         protocol = int(value, 10)
     else:
-        return -1
+        raise RoutePriorityInventoryError(
+            f"route[{position}].protocol is not numeric"
+        )
 
     if not 0 <= protocol <= 255:
         raise RoutePriorityInventoryError(
             f"route[{position}].protocol is outside [0, 255]"
+        )
+    if protocol_filtered and protocol != owner_protocol:
+        raise RoutePriorityInventoryError(
+            f"route[{position}].protocol does not match filtered owner protocol"
         )
     return protocol
 
