@@ -2489,6 +2489,59 @@ JSON and are not yet promoted into normalized Device-firewall semantics. Therefo
 observer is not by itself authority to delete/rewrite arbitrary recognized rules, and it
 does not close the separate protocol/port-predicate or final REJECT realization gates.
 
+###### Device firewall normalized intent and exact lower desired comparison
+
+The internal semantic model now represents an optional Device firewall independently of its
+external grammar:
+
+```text
+DeviceFirewallPolicyIntent
+    device_id
+    rules = omitted | ordered non-empty rules
+
+DeviceFirewallRuleIntent
+    direction = IN | OUT
+    action = ALLOW | DENY | REJECT
+    protocol?
+    source_port?
+    destination_port?
+    source_ipv4_cidr?
+    destination_ipv4_cidr?
+    comment?
+```
+
+Omitted policy remains distinct from an explicit policy. An explicit policy is non-empty and
+preserves literal rule order. The model validates only already accepted field semantics and
+basic type/range invariants; it deliberately does not select the external spelling or the
+final accepted protocol vocabulary.
+
+A separate exact lower desired contract represents one owned child chain plus its exact
+host/path jump and ordered physical rules. Predicate expressions and final nft actions are
+canonical JSON at this boundary. The desired layer therefore records already-compiled lower
+facts but does not compile semantic predicates itself.
+
+`compare_device_firewall` compares:
+
+- exact current ingress/egress identities;
+- exact opaque lower child-chain identifier supplied by the caller;
+- exact ordered rule sequence;
+- exact predicate-expression JSON;
+- exact lower action JSON;
+- terminal-fallthrough position;
+- stale extra owned chains/jumps;
+- structural conflicts from the read-only observer.
+
+A mismatch in rule order is a desired-state mismatch even when the same rule set is present.
+
+The lower contract intentionally does not derive a production child-chain naming scheme.
+Naming remains an input to the lower realization layer until the semantic compiler unit
+selects a deterministic lower identifier. The comparison layer grants no mutation authority.
+
+This closes the normalized-intent / exact-lower-comparison unit while leaving the next
+semantic compiler gate explicit: converting accepted internal Device-firewall fields into
+proven nft predicate expressions requires its own lower evidence and review, especially for
+protocol/port predicates and final REJECT realization.
+
 No deny-rule ordering or nft jump graph is introduced merely to solve Profile prefix
 overlap; the already accepted canonical CIDR partition remains the simpler Profile-gate
 mechanism. Ordered chains exist because user-authored Device firewall order is now itself an
