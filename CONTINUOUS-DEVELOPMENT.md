@@ -171,7 +171,7 @@ When a requirement or constraint is insufficient:
     - keep the blocker part unchanged for causal traceability;
     - resume review of the blocked decomposition;
 12. if sufficiently concrete accepted R/C nodes make another Requirement impossible to satisfy:
-    - add `[unreachable because of: <R/C-ID>, <R/C-ID>, ...]` beside the unreachable Requirement;
+    - add `[unreachable because of <R/C-ID>, <R/C-ID>, ...]` beside the unreachable Requirement;
     - use the minimal sufficient set of normative causes;
     - stop architecture/implementation for that Requirement;
     - escalate for human requirement decision; do not search for an architecture workaround
@@ -218,7 +218,7 @@ rejected_closure -> pending_closure
 
 A node with `[decomp: ... -> pending]` cannot be `[pending_closure]` or `[closed]`.
 
-A Requirement with active `[unreachable because of: ...]` cannot be
+A Requirement with active `[unreachable because of ...]` cannot be
 `[pending_closure]` or `[closed]`. This link records a requirement-tree inconsistency,
 not an architecture closure status.
 
@@ -357,7 +357,7 @@ Implementation may begin only when all of the following hold for the affected sc
 - no active decomposition block exists on a requirement/constraint whose missing detail is
   necessary for the implementation scope;
 - no Requirement required by the implementation scope has an active
-  `[unreachable because of: ...]` link;
+  `[unreachable because of ...]` link;
 - all material component responsibilities and interactions are traceable to requirements;
 - every requirement/constraint whose architecture is required by the implementation unit is
   marked `[closed]`; `[pending_closure]` and `[rejected_closure]` block implementation
