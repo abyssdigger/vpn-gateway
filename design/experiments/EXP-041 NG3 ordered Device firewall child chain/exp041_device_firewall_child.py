@@ -44,6 +44,13 @@ def nft_script(namespace: str, script: str) -> None:
     ns(namespace, "nft", "-f", "-", input_text=script)
 
 
+def ifindex(namespace: str, ifname: str) -> int:
+    value = ns(namespace, "cat", f"/sys/class/net/{ifname}/ifindex").stdout.strip()
+    index = int(value)
+    assert index > 0, index
+    return index
+
+
 def ping(namespace: str, destination: str) -> bool:
     completed = ns(
         namespace,
@@ -139,6 +146,9 @@ def main() -> int:
         ns(vpn, "ip", "route", "add", "10.41.1.0/30", "via", "10.41.2.1")
         ns(managed, "sysctl", "-q", "-w", "net.ipv4.ip_forward=1")
 
+        host_index = ifindex(managed, m_o_if)
+        path_index = ifindex(managed, m_v_if)
+
         nft_script(
             managed,
             f"""table ip vpn_gate {{
@@ -146,9 +156,9 @@ def main() -> int:
     chain payload_forward {{
         type filter hook forward priority 0; policy drop;
         comment "{FORWARD_COMMENT}"
-        iifname "{m_o_if}" oifname "{m_v_if}" jump {CHILD} comment "{JUMP_COMMENT}"
-        ct state new iifname "{m_o_if}" oifname "{m_v_if}" ip daddr 10.41.2.0/29 accept comment "{PROFILE_NEW_COMMENT}"
-        ct state established,related iifname "{m_v_if}" oifname "{m_o_if}" ip saddr 10.41.2.0/29 accept comment "{PROFILE_RETURN_COMMENT}"
+        meta iif {host_index} meta oif {path_index} jump {CHILD} comment "{JUMP_COMMENT}"
+        ct state new meta iif {host_index} meta oif {path_index} ip daddr 10.41.2.0/29 accept comment "{PROFILE_NEW_COMMENT}"
+        ct state established,related meta iif {path_index} meta oif {host_index} ip saddr 10.41.2.0/29 accept comment "{PROFILE_RETURN_COMMENT}"
     }}
     chain {CHILD} {{
         ip daddr 10.41.2.2 drop comment "{RULE_COMMENT}"
