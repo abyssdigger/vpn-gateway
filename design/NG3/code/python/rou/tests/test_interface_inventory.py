@@ -61,6 +61,10 @@ class InterfaceInventoryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "positive integer"):
             InterfaceIdentity("vpn0", True)
 
+    def test_interface_identity_rejects_oversized_name_directly(self):
+        with self.assertRaisesRegex(ValueError, "IFNAMSIZ"):
+            InterfaceIdentity("abcdefghijklmnop", 7)
+
 
 if __name__ == "__main__":
     unittest.main()

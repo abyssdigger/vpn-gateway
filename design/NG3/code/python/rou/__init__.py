@@ -1,3 +1,5 @@
+"""VPN-GATE NG3 Python reference slice."""
+
 from .availability_priority import (
     AvailabilityPriorityError,
     calculate_effective_path_order,
@@ -7,8 +9,6 @@ from .availability_confirmation import (
     AvailabilityOutcome,
     apply_availability_evidence,
 )
-"""VPN-GATE NG3 Python reference slice."""
-
 from .binding import (
     BindingProjectionError,
     DeviceBindingProjection,

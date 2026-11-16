@@ -221,6 +221,10 @@ def _validate_selector_fragment(value: str, where: str) -> None:
         raise ConfigError(
             f"{where} interface name/prefix must not be empty"
         )
+    if len(value.encode("utf-8")) > 15:
+        raise ConfigError(
+            f"{where} interface name/prefix exceeds Linux IFNAMSIZ-1"
+        )
     if "*" in value or "/" in value:
         raise ConfigError(
             f"{where} contains selector syntax in the name/prefix"

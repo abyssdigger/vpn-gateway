@@ -80,6 +80,47 @@ class AvailabilityConfirmationTests(unittest.TestCase):
                         degradation_threshold=value, recovery_threshold=1,
                     )
 
+    def test_state_requires_strict_boolean_and_integer_progress(self):
+        invalid = (
+            {"availability_problem": 1},
+            {"degradation_progress": True},
+            {"degradation_progress": 0.5},
+            {"recovery_progress": True, "availability_problem": True},
+            {"recovery_progress": 0.5, "availability_problem": True},
+        )
+        for kwargs in invalid:
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(ValueError):
+                    AvailabilityConfirmationState(**kwargs)
+
+    def test_unknown_outcome_is_rejected_not_interpreted_as_evidence(self):
+        with self.assertRaisesRegex(ValueError, "AvailabilityOutcome"):
+            apply_availability_evidence(
+                AvailabilityConfirmationState(),
+                "negative",
+                degradation_threshold=1,
+                recovery_threshold=1,
+            )
+
+    def test_progress_outside_current_threshold_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "exceeds"):
+            apply_availability_evidence(
+                AvailabilityConfirmationState(degradation_progress=3),
+                AvailabilityOutcome.NO_EVIDENCE,
+                degradation_threshold=2,
+                recovery_threshold=2,
+            )
+        with self.assertRaisesRegex(ValueError, "exceeds"):
+            apply_availability_evidence(
+                AvailabilityConfirmationState(
+                    availability_problem=True,
+                    recovery_progress=3,
+                ),
+                AvailabilityOutcome.NO_EVIDENCE,
+                degradation_threshold=2,
+                recovery_threshold=2,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
