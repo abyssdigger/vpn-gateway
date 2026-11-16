@@ -531,7 +531,66 @@ The semantic content of `normalized_binding_intent` is defined: it must identify
 current concrete endpoint for one logical path. The exact external selector spelling and
 protocol-specific discovery mechanics remain replaceable interface/integration details.
 
-### 3.2.1. Bound endpoint versus route realization
+### 3.2.1. Transport endpoint provenance
+
+**Implements:**
+- `VPNG0001-R1.R3.R5`
+- `VPNG0001-R1.R3.R5.C1.R1`
+
+**Constrained by:**
+- `VPNG0001-R1.R3.R5.C1`
+
+Transport endpoint provenance is a bounded optional fact attached to the **current verified
+path binding**, not part of stable `LogicalPathId` identity:
+
+```text
+current PathBinding
+    = LogicalPathId + current InterfaceIdentity(ifname, ifindex)
+
+optional current transport provenance
+    = transport endpoint/peer identity
+      proven by the accepted integration discovery/onboarding contract
+      for exactly that current PathBinding
+```
+
+The fact answers a different question from the tunnel's inner/network-layer peer address and
+from an availability probe target. A public OpenConnect server address, a WireGuard peer
+endpoint, an inner point-to-point address and a Profile-specific ICMP target are not assumed
+to be interchangeable.
+
+`VPNPathAdapter` is the technical observation boundary for this provenance because it already
+owns observation and verification of the concrete external endpoint. A supported integration
+may enrich the current binding observation with transport provenance when its accepted lower
+contract provides sufficient evidence. The Adapter must return provenance as absent/unresolved
+rather than infer it from an interface prefix, slot number, reused ifname, ambient route or an
+unrelated inner peer address.
+
+Provenance validity is scoped to the exact current concrete binding. Replacement of the
+concrete endpoint invalidates the old provenance together with the old binding; no separate
+global generation counter or provenance history is introduced.
+
+Potential consumers remain separate semantic owners:
+
+- `AvailabilityTargetCalculator` may use confirmed transport provenance when an accepted
+  integration-specific target derivation formula requires it;
+- a future endpoint-scoped Device firewall policy may resolve a logical/named endpoint through
+  confirmed provenance and then materialize the rule against the current concrete path;
+- status/diagnostics may display confirmed provenance without becoming its source of truth.
+
+The first release does **not** require this fact for ordinary path binding, routing, explicit
+availability targets or other functions whose accepted semantics do not depend on it. A
+consumer that requires provenance must fail/diagnose that dependent function when provenance
+is unavailable; it must not broaden scope to all paths or guess a peer.
+
+The exact human-facing named-endpoint syntax is deliberately postponed to the later
+configuration-format review. No named-endpoint grammar is selected here.
+
+**Evidence gate:** EXP-039 checks whether transport endpoint identity is an organic generic
+property of a Linux point-to-point TUN interface or requires integration-specific provenance.
+Until that evidence is reviewed, no generic interface-discovery implementation may claim to
+recover a transport peer merely from point-to-point interface state.
+
+### 3.2.2. Bound endpoint versus route realization
 
 A verified `PathBinding(logical_path_id, InterfaceIdentity)` proves **which current
 endpoint** represents the path. It does not, by itself, prove the complete Linux route
