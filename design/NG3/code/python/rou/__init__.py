@@ -134,6 +134,10 @@ from .device_firewall_compare import (
     DeviceFirewallComparisonError,
     compare_device_firewall,
 )
+from .device_firewall_compiler import (
+    DeviceFirewallCompileError,
+    compile_device_firewall_policy,
+)
 from .device_firewall_structure import (
     DEVICE_FIREWALL_CHILD_COMMENT,
     DEVICE_FIREWALL_FALLTHROUGH_COMMENT,
@@ -271,6 +275,7 @@ __all__ = [
     "DeviceFirewallRuleSpec",
     "DeviceFirewallComparison",
     "DeviceFirewallComparisonError",
+    "DeviceFirewallCompileError",
     "DeviceFirewallRuleAction",
     "DeviceFirewallStructureConflict",
     "DeviceFirewallStructureError",
@@ -345,6 +350,7 @@ __all__ = [
     "compare_payload_nat",
     "observe_payload_forward",
     "compare_device_firewall",
+    "compile_device_firewall_policy",
     "compare_payload_forward",
     "observe_device_firewall_structure",
     "converge_payload_nat_step_once",
