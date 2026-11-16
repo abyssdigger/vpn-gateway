@@ -20,7 +20,7 @@ Included:
 - selector ambiguity checks;
 - duplicate exact destination ownership checks;
 - first-release inbound/bidirectional configured-capacity validation;
-- pure normalized `DeviceBindingIntent` / `ProfileConfigIntent` structural projection.
+- pure normalized `DeviceBindingIntent` / `ProfileStructuralIntent` structural projection.
 
 Explicitly excluded from this unit:
 
@@ -97,12 +97,12 @@ ExpectedInterfaceSelector
     value
     quota
 
-DeviceConfigIntent
+DeviceStructuralIntent
     device_id
     enabled
     expected_interfaces[]
 
-ProfileConfigIntent
+ProfileStructuralIntent
     profile_id
     enabled
     direction
