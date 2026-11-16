@@ -5,6 +5,7 @@ on:
     paths:
       - "design/NG3/code/python/**"
       - ".github/workflows/ng3-python.yml"
+      - "design/experiments/EXP-028 NG3 lower policy platform space/**"
   pull_request:
     paths:
       - "design/NG3/code/python/**"
