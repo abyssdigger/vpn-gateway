@@ -124,7 +124,7 @@ NG3 requirement merely because it existed before.
 
 ## Explicit traffic policy
 
-**[VPNG-R2]** *Чтобы использование VPN было следствием явного решения пользователя, а не побочным эффектом наличия работоспособного VPN-пути.* | Пользователь должен иметь возможность явно определить, какой трафик VPN-GATE обслуживает, через какие VPN-пути этот трафик разрешено передавать и в каком направлении.
+**[VPNG-R2]** *Чтобы использование VPN было следствием явного решения пользователя, а не побочным эффектом наличия работоспособного VPN-пути.* | Пользователь должен иметь возможность явно определить, какой трафик VPN-GATE обслуживает, через какие VPN-пути этот трафик разрешено передавать и в каком направлении. [closed]
 
  **[VPNG-R2.R1]** *Чтобы можно было однозначно отличить управляемый VPN-GATE трафик от остального трафика системы.* | Политика должна однозначно определять, какой трафик входит в область управления VPN-GATE. [closed]
 
@@ -138,13 +138,13 @@ NG3 requirement merely because it existed before.
 
   **[VPNG-R2.R2.R1]** *Чтобы Profile явно определял, какие пользовательски описанные VPN resources разрешено использовать для его трафика.* | `Profile.device_order` должен быть непустым ordered списком уникальных Device IDs; только enabled Devices из этого списка и их допустимо bound paths могут участвовать в forwarding данного Profile. [closed]
 
- **[VPNG-R2.R3]** *Чтобы разрешение одного направления передачи не становилось неявным разрешением другого.* | Политика должна однозначно определять разрешенное направление передачи управляемого трафика.
+ **[VPNG-R2.R3]** *Чтобы разрешение одного направления передачи не становилось неявным разрешением другого.* | Политика должна однозначно определять разрешенное направление передачи управляемого трафика. [closed]
 
-  **[VPNG-R2.R3.R3]** *Чтобы направление Profile было читаемым пользовательским policy decision, а не выводилось из topology.* | Enabled Profile должен явно задавать одно из `outbound`, `inbound`, `bidirectional`: outbound разрешает инициирование новых flows со стороны ordinary/host network к Profile destinations, inbound — со стороны разрешенного VPN path к ordinary/host network, bidirectional — оба направления; return traffic уже допустимых flows может обслуживаться statefully независимо от стороны инициатора.
+  **[VPNG-R2.R3.R3]** *Чтобы направление Profile было читаемым пользовательским policy decision, а не выводилось из topology.* | Enabled Profile должен явно задавать одно из `outbound`, `inbound`, `bidirectional`: outbound разрешает инициирование новых flows со стороны ordinary/host network к Profile destinations, inbound — со стороны разрешенного VPN path к ordinary/host network, bidirectional — оба направления; return traffic уже допустимых flows может обслуживаться statefully независимо от стороны инициатора. [closed]
 
-   **[VPNG-R2.R3.C1]** *Потому что безопасная return-path semantics для remote-initiated flow при нескольких одновременно допустимых VPN paths ещё не подтверждена на целевой платформе, а первый release не должен обещать неподтвержденный multi-path inbound behavior.* | В первом release Profile с direction `inbound` или `bidirectional` поддерживается только если его текущая принятая конфигурация может породить не более одного eligible logical VPN path; multi-path inbound/bidirectional относится к будущему release и требует отдельной архитектуры/evidence.
+   **[VPNG-R2.R3.C1]** *Потому что безопасная return-path semantics для remote-initiated flow при нескольких одновременно допустимых VPN paths ещё не подтверждена на целевой платформе, а первый release не должен обещать неподтвержденный multi-path inbound behavior.* | В первом release Profile с direction `inbound` или `bidirectional` поддерживается только если его текущая принятая конфигурация может породить не более одного eligible logical VPN path; multi-path inbound/bidirectional относится к будущему release и требует отдельной архитектуры/evidence. [closed]
 
-    **[VPNG-R2.R3.C1.R1]** *Чтобы неподдерживаемая multi-path inbound/bidirectional topology не возникала неожиданно после runtime discovery и не требовала угадывать безопасное поведение на лету.* | Config normalization должна до сетевой actuation отклонять enabled Profile с direction `inbound` или `bidirectional`, если суммарная максимально возможная eligible logical-path capacity его currently enabled referenced Devices превышает 1; причина отказа должна быть явной и диагностируемой.
+    **[VPNG-R2.R3.C1.R1]** *Чтобы неподдерживаемая multi-path inbound/bidirectional topology не возникала неожиданно после runtime discovery и не требовала угадывать безопасное поведение на лету.* | Config normalization должна до сетевой actuation отклонять enabled Profile с direction `inbound` или `bidirectional`, если суммарная максимально возможная eligible logical-path capacity его currently enabled referenced Devices превышает 1; причина отказа должна быть явной и диагностируемой. [closed]
 
   **[VPNG-R2.R3.R1]** *Чтобы разрешение отправки трафика из обычной сети через VPN не подразумевало обратный доступ.* | Политика должна позволять независимо определить, разрешена ли передача соответствующего управляемого трафика со стороны обычной сети в сторону выбранных VPN-путей. [closed]
 
