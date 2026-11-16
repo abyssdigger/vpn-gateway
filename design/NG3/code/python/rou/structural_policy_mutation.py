@@ -231,6 +231,7 @@ def converge_structural_policy_step_once(
             barrier,
             before,
             initial,
+            initial,
             result,
         )
 
@@ -366,6 +367,7 @@ def converge_structural_policy_step_once(
             barrier,
             after,
             final,
+            initial,
             result,
             attempted=True,
             step=step,
@@ -391,6 +393,7 @@ def _activate_exact(
     barrier: ForwardingGateExecutionResult,
     exact_snapshot: StructuralPolicyPhysicalSnapshot,
     exact_comparison: StructuralPolicyComparison,
+    initial_comparison: StructuralPolicyComparison,
     result_factory,
     *,
     attempted: bool = False,
@@ -400,7 +403,7 @@ def _activate_exact(
     if _gate_lost(gate_backend):
         return result_factory(
             StructuralPolicyMutationStatus.BARRIER_LOST,
-            exact_comparison,
+            initial_comparison,
             exact_comparison,
             attempted=attempted,
             step=step,
@@ -422,7 +425,7 @@ def _activate_exact(
                 if safety.confirmed
                 else StructuralPolicyMutationStatus.SAFETY_RECLOSE_FAILED
             ),
-            exact_comparison,
+            initial_comparison,
             exact_comparison,
             attempted=attempted,
             step=step,
@@ -473,7 +476,7 @@ def _activate_exact(
     if verified:
         return result_factory(
             StructuralPolicyMutationStatus.CONFIRMED,
-            exact_comparison,
+            initial_comparison,
             final_comparison,
             attempted=attempted,
             step=step,
@@ -496,7 +499,7 @@ def _activate_exact(
             if safety.confirmed
             else StructuralPolicyMutationStatus.SAFETY_RECLOSE_FAILED
         ),
-        exact_comparison,
+        initial_comparison,
         final_comparison,
         attempted=attempted,
         step=step,
