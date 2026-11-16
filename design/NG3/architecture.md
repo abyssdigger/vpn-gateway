@@ -1994,6 +1994,80 @@ The invariant scaffold may therefore include all four accepted base chains
 System/local allow contributions remain a separate policy unit and are not implied by the
 scaffold itself.
 
+##### Managed local/system allow policy
+
+**Implements:**
+- `VPNG0004-R4.R6.R1.R5`;
+- `VPNG0004-R4.R6.R1.R5.R1`;
+- `VPNG0001-R1.R2.R4.R6.R3` where a supported Device publication requires local transport traffic;
+- `VPNG0001-R1.R3.C1.R1` for integration-specific local control traffic explicitly required by a supported onboarding contract.
+
+The managed `stack_input` / `stack_output` exception layer is compiled only from explicit
+VPN-GATE-owned **local/system allow intents**. It is not a second user firewall and it must
+not derive permissions from Device firewall `ALLOW` rules.
+
+A normalized contribution has this semantic shape:
+
+```text
+LocalSystemAllowIntent
+    owner_function
+        = loopback
+        | probe
+        | publication(device_id)
+        | integration(integration_id)
+    hook = input | output
+    protocol
+    current_interface_identity?
+    source_prefix?
+    destination_prefix?
+    source_port?
+    destination_port?
+    peer_or_endpoint_identity?
+```
+
+Every field is a semantic selector, not raw nft syntax. A contribution is valid only when its
+`owner_function` is backed by an already accepted product/integration need and every selector
+required to prevent scope broadening is known. Unknown lower facts produce no wider fallback
+rule.
+
+The desired policy is the set-union of normalized contributions after canonical
+deduplication. Composition does not introduce ordering semantics between independent
+contributions: each contribution is a positive exception to the chain's terminal DROP.
+A rule compiler may combine mechanically equivalent selectors only when packet acceptance is
+provably unchanged.
+
+The following are forbidden as implicit defaults:
+
+- blanket `accept` in either local chain;
+- blanket `ct state established,related accept` covering unrelated local traffic;
+- acceptance based only on an interface name when current interface identity is required;
+- publication wildcarding beyond the normalized Device publication intent;
+- probe acceptance broader than the exact probe flow contract;
+- copying Device firewall rules into `stack_input` or `stack_output`.
+
+Lifecycle ownership follows the source intent. If a publication, probe path or supported
+integration disappears from current desired state, its local/system contribution becomes
+stale and must be removed through the same observe/compare/converge discipline as other owned
+nft state. A stale contribution never remains merely because it would be harmless.
+
+The policy Calculator therefore has a bounded responsibility:
+
+```text
+accepted current product/integration intents
+    + current verified lower identities required by those intents
+        -> desired LocalSystemAllowIntent set
+```
+
+The existing nft realization boundary is responsible only for compiling that desired set,
+observing owned rules, classifying exact/missing/stale/conflicting state and converging to the
+supplied desired state. It must not invent missing local permissions.
+
+This unit deliberately does **not** define a universal fixed exception list. Exact loopback,
+probe, publication and integration contributions are admitted only when the corresponding
+already-supported function reaches its own bounded implementation unit and can provide the
+necessary selectors. This keeps `INPUT=DROP` / `OUTPUT=DROP` fail-closed semantics intact
+without manufacturing new product behavior.
+
 Concrete payload rules are added only by a fully normalized payload-policy projection. They
 must not be inferred from historical TOML examples.
 
