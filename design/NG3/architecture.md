@@ -487,6 +487,16 @@ protocol-specific discovery mechanics remain replaceable interface/integration d
 - `VPNG-R1.R2.R4.R4.R2`
 - `VPNG-R1.R2.R4.R4.R3`
 - `VPNG-R1.R2.R4.R5`
+- `VPNG-R1.R2.R4.R6`
+- `VPNG-R1.R2.R4.R6.R1`
+- `VPNG-R1.R2.R4.R6.R2`
+- `VPNG-R1.R2.R4.R6.R3`
+- `VPNG-R1.R2.R4.R6.C1`
+- `VPNG-R1.R2.R5`
+- `VPNG-R1.R2.R5.R1`
+- `VPNG-R1.R2.R5.R2`
+- `VPNG-R1.R2.R5.R3`
+- `VPNG-R1.R2.R5.R4`
 - `VPNG-R1.R3.C1.R1`
 - `VPNG-R2.R1`
 - `VPNG-R2.R1.R1`
@@ -546,6 +556,9 @@ DeviceConfigIntent:
     device_id
     enabled
     expected_interfaces[] = ordered(selector, quota)
+    nat_intent
+    traffic_envelope?
+    publications?
 
 ProfileConfigIntent:
     profile_id
@@ -559,13 +572,11 @@ DeviceBindingIntent:
     device_id
     expected_interfaces[]
 
-ProfileConfigIntent:
-    profile_id
-    enabled
-    direction
-    destinations[]
-    device_order[]
-    availability_check?
+DevicePolicyIntent:
+    device_id
+    nat_intent
+    traffic_envelope?
+    publications?
 
 PayloadProfileRequest:
     profile_id
@@ -591,10 +602,23 @@ Key normalization rules:
 - disabled Device/Profile placeholders do not require active-object semantic completeness;
 - active Devices are derived as enabled Devices referenced by at least one enabled Profile;
 - `DeviceBindingIntent` retains ordered expected-interface selectors and quotas;
-- `PayloadProfileRequest` retains explicit direction, remote destinations and ordered Device
+- `ProfileConfigIntent` retains explicit direction, remote destinations and ordered Device
   references;
+- `PayloadProfileRequest` contains the concrete ordered logical paths obtained after binding
+  while preserving Profile identity/direction/destinations;
 - current concrete logical paths are derived from accepted Device bindings, not written
   directly into Profile config;
+- supported user-facing values are parsed strictly and canonically; invalid/ambiguous input is
+  rejected rather than silently repaired;
+- field order is semantic only where the contract explicitly declares policy order;
+- derived implementation values such as aggregate Device quota, ifindex, route metrics and
+  table/rule priorities are not required from the user;
+- Device NAT intent is explicit; no implicit active-Device NAT default is assumed;
+- Device traffic envelope is normalized as a restrictive policy that can only narrow Profile
+  permission;
+- Device transport publication intent is normalized separately from Profile payload routing;
+- exact final TOML grammar for envelope/publication remains an interface-review item and is
+  not inferred from historical prototype spellings;
 - availability subject identity is exactly `(profile_id, logical_path_id)`;
 - the same bound interface/path may therefore have independent availability state in
   different Profiles;
@@ -609,6 +633,59 @@ and Profile fields are normative interface behavior in `design/NG3/config-model.
 
 Payload policy, Device binding and availability remain separate normalized contracts even
 though they originate from one human configuration.
+
+### Device policy normalization
+
+**Implements:**
+- `VPNG-R1.R2.R4.R6`
+- `VPNG-R1.R2.R4.R6.R1`
+- `VPNG-R1.R2.R4.R6.R2`
+- `VPNG-R1.R2.R4.R6.R3`
+- `VPNG-R1.R2.R4.R6.C1`
+- `VPNG-R2.R1`
+- `VPNG-R2.R2`
+- `VPNG-R2.R3`
+- `VPNG-R4.R1`
+
+The configuration boundary keeps Device transport policy separate from Profile need.
+
+```text
+DeviceConfigIntent
+    -> DeviceBindingIntent
+    -> DevicePolicyIntent
+```
+
+NAT semantics currently recovered at product level:
+
+```text
+none
+    -> no VPN-GATE payload source NAT on this Device/path
+
+masquerade
+    -> source NAT through the current concrete path of this Device
+```
+
+There is no implicit active-Device NAT default.
+
+Traffic envelope semantics:
+
+```text
+effective payload permission
+    = Profile permission
+      INTERSECT
+      Device envelope
+```
+
+The envelope can remove permission but cannot create destinations, directions or path
+eligibility absent from Profile policy.
+
+Transport publication semantics remain a Device/transport concern. The normalized intent
+describes an explicitly owned host-side publication boundary into the managed network domain;
+it is not part of Profile routing identity or availability health.
+
+Historical envelope/publication TOML examples are schema-design evidence only. Until an exact
+NG3 grammar is accepted, `ConfigurationAdapter` must reject unsupported guessed forms rather
+than emulate old spellings heuristically.
 
 ### AvailabilityTargetCalculator
 
@@ -665,6 +742,9 @@ Validation must reject at least:
 - duplicate Device references inside one Profile;
 - duplicate exact destination ownership among enabled Profiles;
 - invalid/non-strict IPv4 destination CIDRs;
+- missing/invalid explicit Device NAT intent where the supported Device capability requires it;
+- Device envelope declarations that would expand rather than restrict Profile permission;
+- unsupported/ambiguous traffic-envelope or publication grammar;
 - malformed or unsupported availability-check mechanism/target;
 - a target-less probe when subject/topology semantics cannot produce one unambiguous concrete
   normalized target;
@@ -1021,6 +1101,8 @@ Its semantic inputs are:
 enabled ProfileConfigIntent set
 +
 current Device binding projection
++
+normalized DevicePolicyIntent set
 ```
 
 It first produces one `PayloadProfileRequest` per enabled Profile, then the structural
@@ -1041,8 +1123,52 @@ The Calculator must preserve these invariants:
 - direction is explicit and independent;
 - configured preference follows Profile.device_order -> expected-interface order -> stable
   slot;
+- Device traffic envelope is intersected with Profile permission before lower Adapter
+  materialization and can never widen Profile permission;
+- per-path NAT intent comes from the owning Device policy and is independent from availability;
+- transport publication intent is not interpreted as Profile payload permission;
 - availability state is not an input to structural membership or permission;
 - availability can later reorder only already-eligible logical paths.
+
+## 5.1. Multi-path inbound/bidirectional return-path gate
+
+**Affected requirements:**
+- `VPNG-R2`
+- `VPNG-R2.R3`
+- `VPNG-R2.R3.R3`
+
+The recovered Profile contract allows `inbound` and `bidirectional`, and a Profile may have
+more than one eligible path.
+
+The current architecture does **not** yet claim complete closure for the case where a
+remote-initiated flow enters through one of several simultaneously eligible paths and its
+return traffic must be kept compatible with that ingress path.
+
+Historical evidence status:
+
+- EXP-014 was prepared specifically to test multi-path remote-initiated flow pinning;
+- EXP-014 was not completed;
+- no later recovered experiment establishes equivalent target behavior.
+
+Therefore NG3 must not silently assume any of the following:
+
+- ordinary current priority routing is sufficient for return-path correctness;
+- asymmetric return is always acceptable for every supported transport/profile;
+- connmark/fwmark return steering is already proven;
+- the first release is automatically limited to one inbound path.
+
+This is a human product/evidence gate.
+
+Two legitimate resolution classes exist, neither of which may be selected autonomously:
+
+1. **support multi-path inbound/bidirectional** — accept an architecture for return-path
+   handling and obtain sufficient evidence (EXP-014 or equivalent);
+2. **constrain first-release support** — add an explicit product Constraint with natural
+   Reason/Statement and define how configuration/runtime exposes/rejects the unsupported
+   case.
+
+Until one class is accepted, `VPNG-R2.R3` and `VPNG-R2.R3.R3` remain open for
+architecture closure.
 
 # 6. AvailabilityPriorityCalculator
 
@@ -1256,6 +1382,56 @@ target evidence. Production acceptance of that specific remediation requires eit
 This is an implementation/evidence gate, not new user-visible availability semantics.
 
 
+## 8.2. Probe network preconditions and shared lower policy boundary
+
+**Implements:**
+- `VPNG-R3.R6`
+- `VPNG-R3.R6.R1`
+- `VPNG-R3.R6.R2`
+- `VPNG-R4.R1`
+- `VPNG-R4.R2`
+- `VPNG-R4.R5`
+- `VPNG-R7.R3`
+- `VPNG-R7.R3.R1`
+- `VPNG-R7.R3.R2`
+
+A path-specific availability observation is valid only when its local network preconditions
+ensure that the probe is actually constrained to the intended path and cannot silently escape
+through another Device or ordinary routing.
+
+The availability side owns the semantic lifecycle/readiness of those observation
+preconditions:
+
+```text
+active normalized availability channels
+        ->
+required probe-owner network policy
+        ->
+shared lower NetworkPolicyAdapter / Executor
+        ->
+verified probe execution precondition
+        ->
+physical probe attempt
+```
+
+This does not turn `AvailabilityProbeAgent` into the owner of the remote network condition.
+The Agent still observes that external condition; it may use lower Machinery to prepare and
+verify its local measurement environment.
+
+Payload-policy and probe-policy desired state are distinct semantic owner scopes even when
+they share the same lower Linux realization boundary.
+
+The lower network-policy contract must therefore preserve owner identity/scope and reject or
+fail closed on unsafe inter-owner conflict before physical application.
+
+A separate physical `ProbeRulesAdapter` is not introduced merely to preserve ownership.
+The shared Adapter may realize both owners as long as its semantic contract keeps them
+distinct.
+
+When no enabled observation channel requires a probe-owner policy scope, that scope is
+removed through the same verified cleanup boundary rather than being left as implicit
+ambient state.
+
 # 9. NetworkPolicyAdapter
 
 **Component type:** Adapter
@@ -1272,7 +1448,11 @@ This is an implementation/evidence gate, not new user-visible availability seman
 - `VPNG-R7.R3.R2`
 - `VPNG-R7.R5`
 
-The Adapter is the boundary from payload semantics into the lower network-policy domain.
+The Adapter is the shared boundary from owner-scoped semantic network policy into the lower
+network-policy domain.
+
+Current semantic owners include at least payload policy and probe-observation policy. Sharing
+the physical Adapter does not merge those owners.
 
 Its contract must express semantic operations such as:
 
@@ -1332,11 +1512,16 @@ The Executor distinguishes two transition classes.
 - `VPNG-R3.R4`
 
 When the desired change alters only priority/order of the same eligible unicast path set,
-the Linux implementation uses an owned working range of `N+1` ordinary metric positions
-for `N` eligible routes.
+the Linux implementation uses owned ordinary metric space and must be able to identify one
+currently unused metric whenever a route move requires working space.
 
-Exactly one metric position is free in the working representation; it is emergent transaction
-state, not configuration.
+The unused/free metric is inferred operationally from freshly observed current state. It is
+not configuration, semantic state or a permanently materialized "hole".
+
+In particular, EXP-027 proved that an all-live steady state needs no configured/materialized
+gap: the next unused ordinary metric is sufficient for the first move. Other layouts may
+naturally expose a free metric between ordered regions as a consequence of the current route
+arrangement.
 
 The only move primitive is:
 
@@ -1358,8 +1543,19 @@ Between steps 1 and 3:
 After deletion, `Mold` becomes the new free metric position.
 
 The deterministic planner repeats this primitive until the current route ordering equals the
-desired ordering. The active transaction plan is immutable; newly arriving desired state is
-handled by a later transaction from freshly verified state.
+desired ordering.
+
+Priority mutation is serialized **per Profile/routing domain**:
+
+- only one priority transaction for that Profile/domain mutates its metric layout at a time;
+- the active transaction plan is immutable and is not cancelled halfway through;
+- newer desired orders may be coalesced to the latest desired order while the active
+  transaction completes;
+- after final verification, a later transaction starts from freshly observed materialized
+  state and the latest desired order;
+- replay of every intermediate availability transition is neither required nor desired;
+- unrelated Profiles/domains are not globally serialized merely because one Profile is
+  moving metrics.
 
 This is the NG3 re-derivation of the historical "metric hole" algorithm. Historical NG2
 EXP-027 already demonstrated the relevant Linux property: the same path can temporarily
@@ -1438,6 +1634,22 @@ state where that distinction affects behavior or safety.
 System-wide current status is composed by `RuntimeStatusAgent` from authoritative owner
 snapshots; see section 13.
 
+Publication success is separate from convergence success.
+
+If the Manager has already applied and freshly verified the required semantic state but
+publishing the resulting current projection fails transiently:
+
+- the verified semantic/physical operation is not blindly repeated solely because the
+  publisher failed;
+- the owner retains enough current verified projection to retry publication;
+- a later audit/reconciliation may republish the current projection without mutating already
+  matched lower state;
+- unexpected internal programming/runtime faults remain errors and are not converted into a
+  fake successful publication state.
+
+This follows `VPNG-R5.R3`, `VPNG-R6.R3`, `VPNG-R6.R4` and keeps mutation retry separate
+from information-delivery retry.
+
 # 12. Startup, shutdown and recovery
 
 This pass does **not** introduce a LifecycleManager.
@@ -1462,12 +1674,40 @@ Instead, the architecture records only required postconditions:
 
 Required orchestration semantics:
 
-1. establish a protective network boundary before declaring payload ready;
-2. create/start components only after their prerequisites exist;
-3. during shutdown, quiesce ongoing activity before deleting state it depends on where
-   dependency requires this order;
-4. attempt cleanup of independent owned domains even if another cleanup fails;
-5. preserve all material failures for observability.
+1. acquire/establish instance ownership/exclusion needed to prevent competing mutation;
+2. before trusting a new candidate configuration, observe and cleanup/contain stale owned
+   state from an incomplete or previous instance using only ownership markers/invariants that
+   do not depend on successfully parsing the new config;
+3. if stale owned state cannot be safely cleaned or contained, do not proceed as though a
+   known baseline exists; retain/re-establish protective restriction and report the failure;
+4. load and validate the candidate Device/Profile configuration before dependent actuation;
+5. construct/verify the managed network domain and protective fail-closed boundary before
+   declaring payload ready;
+6. create/start runtime components only after their prerequisites exist;
+7. external VPN process/interface presence is **not** a general startup-success prerequisite:
+   an enabled Profile may reach ready structural policy with zero current paths and remains
+   fail-closed until valid bindings appear;
+8. materialize current Profile policy from valid bindings and verify required safety/readiness
+   postconditions from fresh observation;
+9. only then report successful start/readiness;
+10. during shutdown, quiesce ongoing activity before deleting state it depends on where
+    dependency requires this order;
+11. attempt cleanup of independent owned domains even if another cleanup fails;
+12. preserve all material failures for observability.
+
+Startup/stop interaction is phase-bounded:
+
+- stop/shutdown handlers must be effective before startup begins creating owned mutable state;
+- if a stop is requested during STARTING, finish/abort the current bounded phase safely and do
+  not begin later startup phases;
+- once startup may have created forwarding-capable or other safety-relevant owned state, stop
+  must execute containment/cleanup rather than exit and abandon partial state;
+- a stop between lower-state apply and readiness publication must not leave owned forwarding
+  active after process exit.
+
+This is the recovered semantic value of the historical
+`LOCK -> CLEANUP -> LOAD/VALIDATE -> APPLY -> RUN` ordering. The exact CLI/service-manager
+mechanism and exact phase implementation are replaceable.
 
 ## 12.1. Product lifecycle control surface
 
@@ -1529,7 +1769,8 @@ periodic audit / relevant event
         v
 observe authoritative actual state
         |
-        +-- already satisfied --> publish/retain confirmed projection
+        +-- already satisfied --> no physical mutation;
+        |                        publish/republish confirmed projection if needed
         |
         +-- drift / previous recoverable failure
                     |
@@ -1633,7 +1874,7 @@ internal Manager state.
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG-R1.R2` declarative operation | recovered Device/Profile TOML contract normalized by ConfigurationAdapter; lifecycle controls remain separate |
+| `VPNG-R1.R2` declarative operation | recovered strict Device/Profile user contract normalized by ConfigurationAdapter, including Device transport-policy intents; unresolved envelope/publication prototype grammar remains explicitly non-normative |
 | `VPNG-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
