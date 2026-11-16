@@ -25,6 +25,7 @@ from .forwarding_gate import (
     converge_forwarding_gate_once,
 )
 from .interface_identity import InterfaceIdentity
+from .local_publication_mutation import LocalPublicationMutationStep
 from .nft_namespace_inventory import NftNamespaceObservation
 from .payload_forward_desired import PayloadForwardRuleSpec
 from .payload_nat_desired import PayloadMasqueradeSpec
@@ -47,6 +48,10 @@ class CompositeNftMutationBackend(Protocol):
     def create_device_chain(self, spec: DeviceFirewallChainSpec) -> None: ...
     def delete_nat_rule(self, handle: int) -> None: ...
     def add_nat_rule(self, spec: PayloadMasqueradeSpec) -> None: ...
+    def apply_local_publication_step(
+        self,
+        step: LocalPublicationMutationStep,
+    ) -> None: ...
 
 
 class CompositeNftMutationStatus(str, Enum):
@@ -152,7 +157,10 @@ def converge_composite_nft_step_once(
         )
 
     try:
-        step = select_composite_nft_step(initial)
+        step = select_composite_nft_step(
+            initial,
+            desired.local_publication,
+        )
     except CompositeNftPlanError as exc:
         return result(
             CompositeNftMutationStatus.CONFLICT,
@@ -285,6 +293,11 @@ def _apply_step(
     elif step.kind is CompositeNftStepKind.ADD_NAT_RULE:
         assert step.nat_rule is not None
         backend.add_nat_rule(step.nat_rule)
+    elif step.kind is CompositeNftStepKind.APPLY_LOCAL_PUBLICATION:
+        assert step.local_publication_step is not None
+        backend.apply_local_publication_step(
+            step.local_publication_step
+        )
     else:
         raise ValueError(f"unsupported composite nft step {step.kind!r}")
 
