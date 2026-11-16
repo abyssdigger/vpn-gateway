@@ -21,6 +21,10 @@ from .domain import (
     StructuralConfig,
 )
 from .interface_identity import InterfaceIdentity
+from .interface_inventory import (
+    InterfaceInventoryError,
+    parse_ip_link_inventory,
+)
 from .payload_profile import (
     PayloadProfileProjectionError,
     PayloadProfileRequest,
@@ -37,6 +41,7 @@ __all__ = [
     "Direction",
     "ExpectedInterfaceSelector",
     "InterfaceIdentity",
+    "InterfaceInventoryError",
     "LogicalPathId",
     "PathBinding",
     "PayloadProfileProjectionError",
@@ -47,6 +52,7 @@ __all__ = [
     "StructuralConfig",
     "WaitingCandidate",
     "build_payload_profile_requests",
+    "parse_ip_link_inventory",
     "parse_structural_config",
     "project_device_bindings",
 ]
