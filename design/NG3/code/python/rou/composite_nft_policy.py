@@ -6,7 +6,7 @@ It does not mutate and deliberately treats any still-unclassified owner class as
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from typing import Iterable
 
@@ -19,6 +19,12 @@ from .device_firewall_structure import (
     DEVICE_FIREWALL_RULE_COMMENT,
 )
 from .interface_identity import InterfaceIdentity
+from .local_publication_observation import (
+    LOCAL_PUBLICATION_RULE_COMMENT,
+    LocalPublicationComparison,
+    compare_local_publication,
+)
+from .local_publication_policy import LocalPublicationDesiredState
 from .nft_namespace_inventory import NftNamespaceObject, NftNamespaceObservation
 from .nft_payload_scaffold import NftPayloadScaffoldComparison, compare_payload_nft_scaffold
 from .payload_forward_compare import PayloadForwardComparison, compare_payload_forward
@@ -40,6 +46,9 @@ class CompositeNftDesiredState:
     profile_forward: PayloadForwardDesiredState
     payload_nat: PayloadNatDesiredState
     device_firewall: DeviceFirewallDesiredState
+    local_publication: LocalPublicationDesiredState = field(
+        default_factory=lambda: LocalPublicationDesiredState(())
+    )
 
     def __post_init__(self) -> None:
         if not isinstance(self.profile_forward, PayloadForwardDesiredState):
@@ -48,6 +57,8 @@ class CompositeNftDesiredState:
             raise ValueError("payload_nat must be PayloadNatDesiredState")
         if not isinstance(self.device_firewall, DeviceFirewallDesiredState):
             raise ValueError("device_firewall must be DeviceFirewallDesiredState")
+        if not isinstance(self.local_publication, LocalPublicationDesiredState):
+            raise ValueError("local_publication must be LocalPublicationDesiredState")
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +73,7 @@ class CompositeNftPolicyComparison:
     profile_forward: PayloadForwardComparison
     payload_nat: PayloadNatComparison
     device_firewall: DeviceFirewallComparison
+    local_publication: LocalPublicationComparison
     conflicts: tuple[CompositeNftPolicyConflict, ...]
 
     @property
@@ -73,6 +85,7 @@ class CompositeNftPolicyComparison:
             and not self.payload_nat.stale
             and not self.payload_nat.conflicts
             and self.device_firewall.desired_confirmed
+            and self.local_publication.desired_confirmed
             and not self.conflicts
         )
 
@@ -99,6 +112,9 @@ def compare_composite_nft_policy(
     device = compare_device_firewall(
         observation, current_interfaces, desired.device_firewall
     )
+    local_publication = compare_local_publication(
+        observation, current_interfaces, desired.local_publication
+    )
 
     conflicts: list[CompositeNftPolicyConflict] = []
     if profile.conflicts:
@@ -115,6 +131,14 @@ def compare_composite_nft_policy(
         conflicts.extend(
             CompositeNftPolicyConflict("Device firewall: " + item.reason)
             for item in device.conflicts
+        )
+    if local_publication.conflicts:
+        conflicts.extend(
+            CompositeNftPolicyConflict(
+                "local publication: " + item.reason,
+                "rule",
+            )
+            for item in local_publication.conflicts
         )
 
     # Structural ownership must be checked against the actual observation, not only
@@ -168,6 +192,11 @@ def compare_composite_nft_policy(
         if chain == "payload_postrouting" and comment == PAYLOAD_NAT_RULE_COMMENT:
             continue
         if (
+            chain in {"stack_input", "stack_output"}
+            and comment == LOCAL_PUBLICATION_RULE_COMMENT
+        ):
+            continue
+        if (
             isinstance(chain, str)
             and chain in actual_child_names
             and comment in {
@@ -187,6 +216,7 @@ def compare_composite_nft_policy(
         profile_forward=profile,
         payload_nat=nat,
         device_firewall=device,
+        local_publication=local_publication,
         conflicts=tuple(conflicts),
     )
 

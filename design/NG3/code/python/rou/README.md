@@ -41,9 +41,11 @@ Implemented:
 - bounded guarded NAT-only one-step Executor + Linux nft Driver with exact whole-scope postconditions, strict refusal of foreign/forward-rule objects, verified closed ForwardingGate, and no forwarding activation; retained as narrow reference evidence;
 - EXP-041/042/043/044-backed ordered Device firewall child-chain owner/observer/desired/compiler/mutation slice, including active REJECT realization and mandatory Device-jump insertion before Profile acceptance;
 - EXP-045-backed combined read-only nft owner/desired comparison for the invariant scaffold plus Profile forward, Device firewall and payload NAT owner classes;
-- pure combined mutation-step planner with restrictive cleanup first and new Profile positive admission last;
-- guarded combined Profile/Device/NAT nft Executor + Linux backend using one link-bracketed whole-table snapshot before and after each write, persistent closed ForwardingGate, exact postcondition progress and no forwarding activation;
-- privileged combined coexistence integration covering materialization to exact state, complete cleanup back to scaffold-only, Device-before-Profile ordering and fail-closed refusal of unclassified stack-local rules;
+- EXP-046-backed normalized Device-transport publication-local INPUT/OUTPUT intent, exact paired desired rules and strict owner observation using current host-boundary identity, exact local IPv4/protocol/port selectors and plain accept;
+- EXP-047-backed atomic publication-local mutation Driver using one transactional nft full-diff batch for stale exact-handle deletion plus missing exact-rule addition, without treating ForwardingGate as a local-plane safety barrier;
+- pure combined mutation-step planner with stale local admission cleanup first, payload restrictive cleanup next, payload additions, and missing publication-local admission last;
+- guarded combined Profile/Device/NAT/publication-local nft Executor + Linux backend using one link-bracketed whole-table snapshot before and after each write, persistent closed ForwardingGate for payload safety, exact postcondition progress and no forwarding activation;
+- privileged combined coexistence integration covering materialization to exact state, atomic local-publication replacement, complete cleanup back to scaffold-only, Device-before-Profile ordering and fail-closed refusal of still-unclassified local owner classes;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
@@ -51,7 +53,7 @@ Important non-goals of the current reference:
 - no Device Engine;
 - no Netlink event state/history/replay;
 - no complete cross-domain structural NetworkPolicyExecutor coordinating route/RPDB plus nft policy yet;
-- no materialized local/system stack_input/stack_output exception owner class yet; exact control/probe/publication/integration rules remain behind their lower evidence gates;
+- no generic local/system stack_input/stack_output exception framework; only Device transport publication is materialized, while loopback/probe/integration-specific exceptions remain behind their own lower evidence gates;
 - no full daemon/lifecycle assembly;
 - no production probe execution;
 - no final user-facing NAT / traffic-envelope / publication grammar;
