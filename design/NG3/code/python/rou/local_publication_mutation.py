@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from .local_publication_observation import (
-    LocalPublicationComparison,
-    ObservedLocalPublicationRule,
-)
+from .local_publication_observation import LocalPublicationComparison
 from .local_publication_policy import (
     LocalPublicationDesiredState,
     LocalPublicationHook,
     LocalPublicationRuleSpec,
-    PublicationProtocol,
 )
 
 
@@ -29,11 +25,11 @@ class LocalPublicationDeleteRef:
 
 @dataclass(frozen=True, slots=True)
 class LocalPublicationMutationStep:
-    """One endpoint-scoped nft transaction.
+    """One publication-owner full-diff nft transaction.
 
-    delete_handles are applied first in the same nft batch. add_rules then adds
-    the desired missing exact rules for that endpoint. Either side may be empty,
-    but the step itself must change physical state.
+    Stale exact delete refs are applied first in the same nft batch, followed
+    by all missing exact desired rules. Either side may be empty, but the step
+    itself must change physical state.
     """
 
     delete_rules: tuple[LocalPublicationDeleteRef, ...]
