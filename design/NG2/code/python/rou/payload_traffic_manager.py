@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from threading import Lock
 from typing import Protocol
 
 from .network_rules import ActionResult, NetworkRulesAdapter, NetworkRulesSpec
@@ -44,26 +45,79 @@ class PayloadTrafficManager:
         self._latest_desired: NetworkRulesSpec | None = None
         self._latest_published: PayloadTrafficStateInfo | None = None
 
+        self._serial_lock = Lock()
+        self._reconciling = False
+        self._pending_desired: NetworkRulesSpec | None = None
+        self._audit_pending = False
+
     def handle_request(self, request: PayloadTrafficStateRequest) -> None:
         """Handle one full desired payload snapshot.
 
-        The RequestEvent has no synchronous domain reply. Publication happens through the
-        injected Event Delivery Environment port.
+        Exactly one reconcile executor drains this Manager's pending work. A
+        superseding request may replace pending desired state while the executor is
+        inside a lower-domain transaction, but it cannot enter that transaction.
         """
 
         desired = self._rules_calculator.calculate(request)
 
-        # Accept the derived desired projection only after pure calculation succeeds.
-        # If calculation rejects the request, the previous managed intent remains intact
-        # and no lower-domain mutation is attempted.
-        self._latest_desired = desired
+        with self._serial_lock:
+            self._pending_desired = desired
+            if self._reconciling:
+                return
+            self._reconciling = True
 
-        info = self._apply_desired_and_observe(desired)
-        self._publish_if_changed(info)
+        self._drain_serialized_work()
 
     def audit(self) -> None:
         """Run one drift/reconcile pass for the current accepted intent."""
 
+        with self._serial_lock:
+            if self._latest_desired is None and not self._reconciling:
+                return
+            self._audit_pending = True
+            if self._reconciling:
+                return
+            self._reconciling = True
+
+        self._drain_serialized_work()
+
+    def _drain_serialized_work(self) -> None:
+        while True:
+            desired: NetworkRulesSpec | None = None
+            run_audit = False
+
+            with self._serial_lock:
+                if self._pending_desired is not None:
+                    desired = self._pending_desired
+                    self._pending_desired = None
+                elif self._audit_pending:
+                    run_audit = True
+                    self._audit_pending = False
+                else:
+                    self._reconciling = False
+                    return
+
+            try:
+                if desired is not None:
+                    # Only this executor writes _latest_desired. Newer requests may
+                    # replace _pending_desired concurrently, but this desired projection
+                    # remains immutable for the active Adapter transaction.
+                    self._latest_desired = desired
+                    info = self._apply_desired_and_observe(desired)
+                    self._publish_if_changed(info)
+                    continue
+
+                if run_audit:
+                    self._audit_once()
+            except Exception:
+                # Unexpected Machinery/publisher exceptions must not strand executor
+                # ownership forever. Pending latest-value work remains queued for the
+                # next event/audit trigger.
+                with self._serial_lock:
+                    self._reconciling = False
+                raise
+
+    def _audit_once(self) -> None:
         desired = self._latest_desired
         if desired is None:
             return

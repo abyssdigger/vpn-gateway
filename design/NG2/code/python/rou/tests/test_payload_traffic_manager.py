@@ -1,4 +1,5 @@
 from ipaddress import IPv4Network
+from threading import Event, Thread
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
@@ -41,12 +42,19 @@ class FakeAdapter:
             fresh=False,
         )
         self.apply_owners = []
+        self.apply_specs = []
+        self.apply_hook = None
         self.renew_owners = []
         self.get_owners = []
         self.cleanup_owners = []
 
     def apply(self, owner, spec: NetworkRulesSpec) -> ActionResult:
         self.apply_owners.append(owner)
+        self.apply_specs.append(spec)
+        hook = self.apply_hook
+        self.apply_hook = None
+        if hook is not None:
+            hook()
         if self.apply_success:
             self.state = NetworkRulesState(
                 StateKnowledge.KNOWN,
@@ -186,6 +194,141 @@ class PayloadTrafficManagerTests(unittest.TestCase):
 
         self.assertEqual(len(self.adapter.renew_owners), 1)
         self.assertEqual(len(self.publisher.events), 0)
+
+    def test_reentrant_superseding_requests_are_coalesced_after_active_apply(self):
+        first = InterfaceIdentity("vpns00", 10)
+        second = InterfaceIdentity("vpns01", 11)
+        third = InterfaceIdentity("vpns02", 12)
+        initial = _request(first)
+        superseded = _request(second)
+        latest = _request(third)
+
+        def during_first_apply():
+            self.manager.handle_request(superseded)
+            self.manager.handle_request(latest)
+
+        self.adapter.apply_hook = during_first_apply
+
+        self.manager.handle_request(initial)
+
+        self.assertEqual(len(self.adapter.apply_specs), 2)
+        applied_paths = [
+            spec.routing_domains[0].ordered_paths
+            for spec in self.adapter.apply_specs
+        ]
+        self.assertEqual(
+            applied_paths,
+            [
+                (first,),
+                (third,),
+            ],
+        )
+        self.assertEqual(
+            self.adapter.get_last_state(self.manager).rules.routing_domains[
+                0
+            ].ordered_paths,
+            (third,),
+        )
+
+    def test_concurrent_requests_share_one_transaction_executor(self):
+        first = InterfaceIdentity("vpns00", 10)
+        second = InterfaceIdentity("vpns01", 11)
+        third = InterfaceIdentity("vpns02", 12)
+        started = Event()
+        release = Event()
+
+        def block_first_apply():
+            started.set()
+            self.assertTrue(release.wait(2))
+
+        self.adapter.apply_hook = block_first_apply
+        worker = Thread(
+            target=self.manager.handle_request,
+            args=(_request(first),),
+        )
+        worker.start()
+        self.assertTrue(started.wait(2))
+
+        # These calls execute while the first Adapter.apply() is still blocked.
+        # They must only replace pending desired state.
+        self.manager.handle_request(_request(second))
+        self.manager.handle_request(_request(third))
+
+        release.set()
+        worker.join(2)
+        self.assertFalse(worker.is_alive())
+
+        self.assertEqual(
+            [
+                spec.routing_domains[0].ordered_paths
+                for spec in self.adapter.apply_specs
+            ],
+            [
+                (first,),
+                (third,),
+            ],
+        )
+
+    def test_unexpected_apply_exception_releases_executor_ownership(self):
+        first = _request(InterfaceIdentity("vpns00", 10))
+        second = _request(InterfaceIdentity("vpns01", 11))
+
+        def fail_once():
+            raise RuntimeError("injected unexpected failure")
+
+        self.adapter.apply_hook = fail_once
+
+        with self.assertRaisesRegex(RuntimeError, "injected"):
+            self.manager.handle_request(first)
+
+        # A later event must be able to become executor rather than only queueing
+        # forever behind the failed call.
+        self.manager.handle_request(second)
+
+        self.assertEqual(
+            self.adapter.apply_specs[-1].routing_domains[0].ordered_paths,
+            (InterfaceIdentity("vpns01", 11),),
+        )
+
+    def test_reentrant_audit_waits_until_active_apply_completes(self):
+        request = _request(self.path)
+
+        def during_apply():
+            self.manager.audit()
+
+        self.adapter.apply_hook = during_apply
+
+        self.manager.handle_request(request)
+
+        self.assertEqual(len(self.adapter.apply_specs), 1)
+        self.assertEqual(len(self.adapter.renew_owners), 1)
+        self.assertIs(self.adapter.renew_owners[0], self.manager)
+
+    def test_reentrant_request_precedes_deferred_audit(self):
+        first = InterfaceIdentity("vpns00", 10)
+        second = InterfaceIdentity("vpns01", 11)
+        initial = _request(first)
+        latest = _request(second)
+
+        def during_first_apply():
+            self.manager.audit()
+            self.manager.handle_request(latest)
+
+        self.adapter.apply_hook = during_first_apply
+
+        self.manager.handle_request(initial)
+
+        self.assertEqual(
+            [
+                spec.routing_domains[0].ordered_paths
+                for spec in self.adapter.apply_specs
+            ],
+            [
+                (first,),
+                (second,),
+            ],
+        )
+        self.assertEqual(len(self.adapter.renew_owners), 1)
 
     def test_semantically_unchanged_info_is_not_republished(self):
         request = _request(self.path)

@@ -141,14 +141,21 @@ nft objects.
 
 Production availability semantics are **not attempt-oriented**.
 
-The routing-relevant positive input is only:
+The routing-relevant positive input is only a generation-bound fact about the physical
+probe plane:
 
 ```text
-good_news(probe_id)
+good_news(
+    mechanism,
+    concrete InterfaceIdentity,
+    target,
+    ProbeObservationGeneration
+)
 ```
 
 Any valid reply through the current concrete probe plane is good news regardless of which
-send caused it.
+send caused it. The Manager fans one such fact out to every enabled logical `probe_id`
+sharing the same physical `(mechanism, InterfaceIdentity, target)` plane.
 
 No routing-policy contract requires:
 
@@ -219,22 +226,42 @@ availability_routing.py
     AvailabilityWindowPolicy
     AvailabilityWindowState
     calculate_effective_path_order()
-
-`AvailabilityProbeRequest.enabled` remains outside the timing type.
 ```
 
-The old autonomous scheduler has been removed.
+`AvailabilityProbeRequest.enabled` remains outside the timing type. The old autonomous
+attempt scheduler remains removed.
 
-`AvailabilityProbeManager` no longer depends on a synchronous ProbeDriver and no longer
-exposes `attempt_once()/evaluate_once()`. Its current executable responsibility stops at
-the verified probe NetworkRules/readiness-generation boundary.
+`AvailabilityProbeManager` now owns the production evidence/window state above its
+verified NetworkRules generation boundary:
 
-`LinuxIcmpProbeDriver` remains standalone only as a verified diagnostic/evidence worker.
-It proves concrete-generation binding, capability-free execution and low-level result
-classification, but it is not a Manager dependency and its blocking attempt API does not
-define production availability semantics.
+```text
+note_good_news(path, target, generation, mechanism)
+close_interval(probe_id, generation)
+```
 
-The production execution integration must deliver generation-bound good-news events without
+Properties:
+
+- good-news is accepted only for the current READY generation;
+- stale-generation good-news and stale window boundaries are ignored;
+- one physical reply fans out to all enabled logical consumers of that plane;
+- good-news publishes `REACHABLE` immediately and resets the negative integral;
+- a window without good-news increments the integral;
+- `UNREACHABLE` is published only after `failure_intervals`;
+- local sender failure has no direct routing transition: unless good-news arrives, the
+  window simply closes without positive evidence;
+- logical policy change with unchanged physical rules preserves the READY generation but
+  resets only that logical probe's evidence window;
+- physical rules-generation change resets all evidence windows.
+
+The Manager still does **not** depend on a synchronous ProbeDriver and does not expose
+attempt-oriented `attempt_once()/evaluate_once()`.
+
+`LinuxIcmpProbeDriver` remains standalone diagnostic/evidence machinery. Its blocking
+single-shot `REPLY/NO_REPLY/ERROR` API is not promoted to the production semantic
+boundary: in particular, `NO_REPLY` must not become a routing event.
+
+The remaining execution-side unit is a production sender/receiver transport that emits
+generation-bound valid-reply good-news and supplies window-boundary triggers without
 reintroducing semantic attempt correlation.
 
 ## 10. Linux technical identity
@@ -296,17 +323,31 @@ per-attempt routing policy.
 
 ## 14. Open implementation units
 
-The remaining work is deliberately narrow:
+The runtime semantic path is now executable through:
 
-1. integrate a generation-bound, non-attempt-correlated good-news source with
-   `AvailabilityWindowState`;
-2. define diagnostic publication of persistent local probing errors without changing
-   routing safety;
-3. feed confirmed-live evidence into effective payload ordering, not binding membership;
-4. integrate the already proven EXP-027 route-slot fast path into the eventual runtime
-   ordering flow;
-5. keep filter/NAT semantic order independent from route priority; the current
-   PayloadRulesCalculator already canonicalizes path-policy generation for this purpose.
+```text
+valid reply
+ -> AvailabilityProbeManager good-news/window state
+ -> AvailabilityProbeStateInfo
+ -> RuntimeStateManager
+ -> Profile availability evidence
+ -> PayloadTrafficIntentCalculator
+ -> PayloadTrafficStateRequest
+ -> serialized PayloadTrafficManager
+ -> NetworkRulesAdapter route-priority fast path
+```
 
-No retry scheduler, recovery threshold or shadow fallback tier should be reintroduced
-without a new concrete requirement.
+Remaining work is narrower:
+
+1. production sender/receiver transport and interval trigger ownership;
+2. diagnostic publication of persistent local probing errors without changing routing
+   safety;
+3. Event Delivery envelope revision/ordering implementation around the currently tested
+   latest-value handlers;
+4. target/live validation of the final execution transport if it differs materially from
+   the already proven diagnostic `ping` worker.
+
+Filter/NAT semantic order remains independent from route priority.
+
+No retry scheduler, recovery threshold, per-attempt `NO_REPLY` policy or shadow fallback
+tier should be reintroduced without a new concrete requirement.
