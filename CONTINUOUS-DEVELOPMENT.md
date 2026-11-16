@@ -596,7 +596,7 @@ Long development sessions may be interrupted by the execution environment after 
 Each autonomous design/development cycle has a **cycle interval**:
 
 - if the user explicitly specifies an interval when starting that cycle, use that value;
-- otherwise the default cycle interval is **40 minutes**.
+- otherwise the default cycle interval is **35 minutes**.
 
 Call the selected value `CYCLE_INTERVAL`. After it is chosen for the cycle, all cadence
 logic below refers only to `CYCLE_INTERVAL`; do not substitute the default value back into
