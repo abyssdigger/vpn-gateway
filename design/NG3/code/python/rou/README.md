@@ -1,39 +1,37 @@
 # VPN-GATE NG3 Python reference
 
-Current executable scope is intentionally narrow.
+Current executable scope is intentionally narrow and split into reviewed units.
 
-Implemented review units:
+Implemented:
 
-- structural Device/Profile TOML parsing;
-- canonical IDs and explicit `enabled`;
-- exact/prefix `expected_interfaces` selectors and quotas;
-- strict IPv4 destinations;
-- Device references and active Device derivation;
-- selector/destination ambiguity rejection;
+- structural Device/Profile TOML normalization;
+- canonical IDs, explicit `enabled`, strict IPv4 destinations and selector/quota validation;
 - Release 1 inbound/bidirectional configured-capacity validation;
-- immutable structural normalized values.
+- authoritative `ip -j link show` interface identity parsing;
+- concrete endpoint identity as `(ifname, ifindex)`;
+- pure stable-slot Device binding projection with bounded waiting-candidate order;
+- delayed waiting promotion only after a removal projection can become committed;
+- `PayloadProfileRequest` projection, including zero-path Profile preservation;
+- outbound/inbound NEW-flow Profile classification with ingress-path restriction;
+- bounded availability confirmation state;
+- availability-only effective priority transformation with unchanged membership;
+- pure make-before-break route-priority move planning for unchanged path membership;
+- rootless cross-contract structural-pipeline integration scenarios.
 
-Also implemented:
+Important non-goals of the current reference:
 
-- pure stable-slot Device binding projection from fresh ordered interface inventory;
-- concrete current interface identity as `(ifname, ifindex)`;
-- logical path identity as Device/selector/stable-slot;
-- survivor preservation and bounded waiting-candidate order;
-- delayed promotion: a slot freed by disappearance is reusable only on a later reconciliation
-  after the removal projection has been committed;
-- same-name/new-ifindex treated as a fresh endpoint;
-- no Device Engine, Netlink event state, history/replay or kernel mutation in this slice.
+- no Device Engine;
+- no Netlink event state/history/replay;
+- no Linux route/RPDB/nft execution;
+- no full daemon/lifecycle assembly;
+- no production probe execution;
+- no final user-facing NAT / traffic-envelope / publication grammar;
+- no availability timing grammar.
 
-Not yet implemented in the user-facing parser:
+Those omitted areas remain behind their current architecture/evidence gates and must not be
+guessed from historical NG1/NG2 code.
 
-- final NAT spelling;
-- traffic-envelope grammar;
-- publication grammar;
-- availability-check/timing grammar.
-
-Those fields are deliberately not guessed from historical prototypes.
-
-Rootless tests:
+Rootless test command:
 
 ```sh
 PYTHONPATH=design/NG3/code/python \
@@ -41,3 +39,5 @@ python3 -m unittest discover \
     -s design/NG3/code/python/rou/tests \
     -p 'test_*.py' -v
 ```
+
+Code reviews for each unit are stored under `design/reviews/`.
