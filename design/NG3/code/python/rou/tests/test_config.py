@@ -305,5 +305,91 @@ expected_interfaces = ["vpns0"]
 """)
 
 
+    def test_release1_inbound_capacity_sums_enabled_referenced_devices(self):
+        with self.assertRaisesRegex(ConfigError, "capacity is 2"):
+            parse_structural_config("""
+[device.a]
+enabled = true
+expected_interfaces = ["a0"]
+
+[device.b]
+enabled = true
+expected_interfaces = ["b0"]
+
+[profile.support]
+enabled = true
+direction = "inbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["a", "b"]
+""")
+
+        cfg = parse_structural_config("""
+[device.a]
+enabled = true
+expected_interfaces = ["a0"]
+
+[device.b]
+enabled = false
+expected_interfaces = "ignored while disabled"
+
+[profile.support]
+enabled = true
+direction = "inbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["a", "b"]
+""")
+        self.assertEqual(cfg.active_device_ids, frozenset({"a"}))
+
+    def test_unknown_active_fields_are_rejected(self):
+        with self.assertRaisesRegex(ConfigError, "unsupported field"):
+            parse_structural_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpns0"]
+unknown = true
+""")
+        with self.assertRaisesRegex(ConfigError, "unsupported field"):
+            parse_structural_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpns0"]
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+unknown = true
+""")
+
+    def test_destination_order_is_not_normalized_policy(self):
+        left = parse_structural_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpns0"]
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["192.168.100.0/24", "10.0.0.0/8"]
+device_order = ["oc"]
+""")
+        right = parse_structural_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpns0"]
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8", "192.168.100.0/24"]
+device_order = ["oc"]
+""")
+        self.assertEqual(
+            left.profiles["corp"].destinations,
+            right.profiles["corp"].destinations,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
