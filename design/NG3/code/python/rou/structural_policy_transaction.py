@@ -37,7 +37,8 @@ class StructuralPolicyTransactionResult:
         return (
             self.status is StructuralPolicyTransactionStatus.CONFIRMED
             and bool(self.attempts)
-            and self.attempts[-1].confirmed
+            and self.attempts[-1].status
+            is StructuralPolicyMutationStatus.CONFIRMED
         )
 
 
