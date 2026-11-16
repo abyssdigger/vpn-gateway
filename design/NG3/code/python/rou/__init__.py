@@ -241,8 +241,14 @@ from .structural_policy_mutation import (
     StructuralPolicyPhysicalSnapshot,
     compare_structural_policy,
     converge_structural_policy_step_once,
+    structural_policy_distance,
 )
 from .linux_structural_policy import LinuxStructuralPolicyBackend
+from .structural_policy_transaction import (
+    StructuralPolicyTransactionResult,
+    StructuralPolicyTransactionStatus,
+    converge_structural_policy,
+)
 from .structural_policy_plan import (
     StructuralPolicyMutationStep,
     StructuralPolicyPlanError,
@@ -513,6 +519,8 @@ __all__ = [
     "StructuralPolicyPhysicalSnapshot",
     "StructuralPolicyMutationStep",
     "StructuralPolicyPlanError",
+    "StructuralPolicyTransactionResult",
+    "StructuralPolicyTransactionStatus",
     "StructuralPolicyStepKind",
     "StructuralRoutingInventoryError",
     "StructuralRoutingObservation",
@@ -532,6 +540,8 @@ __all__ = [
     "compare_payload_nft_scaffold",
     "compare_structural_policy",
     "converge_structural_policy_step_once",
+    "structural_policy_distance",
+    "converge_structural_policy",
     "select_structural_policy_step",
     "compare_payload_routing",
     "converge_device_firewall_step_once",
