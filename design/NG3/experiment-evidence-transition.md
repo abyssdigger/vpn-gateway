@@ -363,17 +363,24 @@ Reuse only the tested FIB facts if NG3 later needs the materially same mechanism
 
 ## 17. EXP-014 — remote-initiated multi-path flow pinning
 
-Class: PREPARED / UNPROVEN.
+Class: PREPARED / UNPROVEN; deferred Release 2 evidence.
 
 The intended experiment would prove connmark/fwmark return steering and fail-closed mark
 retirement for multiple inbound paths.
 
 It was not completed.
 
+Release 1 no longer depends on this experiment because it explicitly rejects
+`inbound`/`bidirectional` Profiles whose configured maximum eligible logical-path capacity
+exceeds 1.
+
+EXP-014 is retained as the primary future evidence candidate for Release 2
+multi-path inbound/bidirectional support.
+
 Constraint:
 
-Do not claim safe INBOUND/BIDIRECTIONAL capacity greater than one from historical design
-alone. If current requirements demand it, equivalent evidence is still needed.
+Do not claim safe INBOUND/BIDIRECTIONAL capacity greater than one until requirements are
+revised and EXP-014 or materially equivalent target evidence is accepted.
 
 ## 18. EXP-015 — MTU/MSS real TCP
 
