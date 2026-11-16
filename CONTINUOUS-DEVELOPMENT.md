@@ -571,9 +571,9 @@ Autonomous internal development reviews normally use **one document** containing
 - findings;
 - disposition of every finding;
 - final verdict;
-- explicit accumulated requirement-state inventory listing every active `decomp` link,
-  every active `unreal` link and every `[rejected_closure]` node; write `none` for an empty
-  category rather than omitting it.
+- explicit accumulated requirement-state inventory listing every current `decomp` link
+  (mark each as `pending` or `resolved`), every active `unreal` link and every
+  `[rejected_closure]` node; write `none` for an empty category rather than omitting it.
 
 Create a separate response document only when the review originated externally, must remain
 immutable/verbatim, or the disposition is produced materially later/by a different reviewer.
@@ -666,8 +666,9 @@ The checkpoint message must include:
 - the exact unfinished or blocked item, if any;
 - decisions that genuinely require human agreement;
 - the next intended review unit;
-- explicit current lists of active `decomp`, active `unreal`, and `[rejected_closure]`
-  requirement states, with `none` written for empty categories.
+- explicit current lists of all `decomp` links (with `pending|resolved` state), active
+  `unreal` links, and `[rejected_closure]` requirement states, with `none` written for empty
+  categories.
 
 A new autonomous cycle starts only after the next user turn, with a new cycle branch
 (or a clearly reset existing cycle branch when explicitly chosen), a newly selected
