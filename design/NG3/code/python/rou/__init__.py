@@ -34,6 +34,16 @@ from .interface_inventory import (
     InterfaceInventoryError,
     parse_ip_link_inventory,
 )
+from .forwarding_gate import (
+    ForwardingGateExecutionResult,
+    ForwardingGateExecutionStatus,
+    ForwardingGateState,
+    converge_forwarding_gate_once,
+)
+from .linux_forwarding_gate import (
+    LinuxForwardingGateBackend,
+    LinuxForwardingGateError,
+)
 from .direct_device_route import (
     DirectDeviceRouteRealizationError,
     realize_direct_device_path_routes,
@@ -141,10 +151,15 @@ __all__ = [
     "DirectDeviceRouteRealizationError",
     "Direction",
     "ExpectedInterfaceSelector",
+    "ForwardingGateExecutionResult",
+    "ForwardingGateExecutionStatus",
+    "ForwardingGateState",
     "InterfaceIdentity",
     "InterfaceInventoryError",
     "IproutePriorityBackend",
     "IproutePriorityBackendError",
+    "LinuxForwardingGateBackend",
+    "LinuxForwardingGateError",
     "LogicalPathId",
     "ManagedRouteSpec",
     "ManagedRouteType",
@@ -206,6 +221,7 @@ __all__ = [
     "build_route_priority_domain_realizations",
     "classify_inbound_profile",
     "compare_payload_routing",
+    "converge_forwarding_gate_once",
     "classify_outbound_profile",
     "converge_route_priority_once",
     "converge_route_priority_profile_once",

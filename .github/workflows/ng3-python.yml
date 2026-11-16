@@ -101,3 +101,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/exp030_forwarding_barrier.py"
+      - name: NG3 forwarding-gate backend integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_forwarding_gate_backend.py

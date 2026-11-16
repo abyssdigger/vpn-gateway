@@ -29,6 +29,7 @@ Implemented:
 - complete immutable payload route/RPDB desired-state projection with terminal guards, per-destination path routes and host-boundary dispatch rules;
 - strict read-only structural route/RPDB inventory over the entire reserved NG3 table/priority namespaces, with explicit owner-scoped conflicts for unrepresentable reserved objects;
 - pure payload actual-vs-desired structural comparison producing confirmed/missing/stale route and RPDB sets without mutation;
+- EXP-030-backed managed-netns IPv4 ForwardingGate with write/reread postcondition semantics;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
@@ -57,7 +58,7 @@ python3 -m unittest discover \
 Code reviews for each unit are stored under `design/reviews/`.
 
 
-GitHub CI additionally runs a privileged disposable-network-namespace integration for the
-physical route-priority backend. That integration exercises real iproute2 add/delete,
+GitHub CI additionally runs privileged disposable-network-namespace integrations for the
+physical route-priority backend and the managed-netns forwarding gate. That integration exercises real iproute2 add/delete,
 make-before-break priority movement and recovery from an already materialized duplicate
 route state.
