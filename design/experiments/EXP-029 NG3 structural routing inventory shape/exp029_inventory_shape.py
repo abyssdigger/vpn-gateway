@@ -104,6 +104,47 @@ def main() -> int:
         assert len(managed_routes) == 3, managed_routes
         assert len(managed_rules) == 2, managed_rules
 
+        payload_path = next(
+            row for row in managed_routes
+            if row.get("dst") == "10.77.0.0/16"
+        )
+        probe_path = next(
+            row for row in managed_routes
+            if row.get("dst") == "198.51.100.7"
+        )
+        guard = next(
+            row for row in managed_routes
+            if row.get("protocol") in (GUARD_PROTO, str(GUARD_PROTO))
+        )
+        assert payload_path.get("table") in (PAYLOAD_TABLE, str(PAYLOAD_TABLE))
+        assert payload_path.get("protocol") in (PATH_PROTO, str(PATH_PROTO))
+        assert payload_path.get("metric") == 1
+        assert payload_path.get("dev") == "path0"
+        assert payload_path.get("scope") in (253, "253")
+        assert probe_path.get("table") in (PROBE_TABLE, str(PROBE_TABLE))
+        assert probe_path.get("dst") == "198.51.100.7"
+        assert guard.get("type") in ("blackhole", 6, "6")
+        assert guard.get("dst") == "default"
+        assert guard.get("metric") == 0xFFFFFFFF
+
+        probe_rule = next(
+            row for row in managed_rules
+            if row.get("priority") == PROBE_RULE
+        )
+        payload_rule = next(
+            row for row in managed_rules
+            if row.get("priority") == PAYLOAD_RULE
+        )
+        assert probe_rule.get("src") == "all"
+        assert probe_rule.get("table") in (PROBE_TABLE, str(PROBE_TABLE))
+        assert probe_rule.get("fwmark") == "0x1234"
+        assert probe_rule.get("fwmask") == "0xffff"
+        assert payload_rule.get("src") == "all"
+        assert payload_rule.get("table") in (PAYLOAD_TABLE, str(PAYLOAD_TABLE))
+        assert payload_rule.get("dst") == "10.77.0.0"
+        assert payload_rule.get("dstlen") == 16
+        assert payload_rule.get("iif") == "host0"
+
         print("EXP029_ROUTES_JSON=" + json.dumps(managed_routes, sort_keys=True))
         print("EXP029_RULES_JSON=" + json.dumps(managed_rules, sort_keys=True))
         print("EXP-029 structural routing inventory shape: PASS")

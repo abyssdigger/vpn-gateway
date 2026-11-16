@@ -51,6 +51,14 @@ from .payload_routing_desired import (
     PayloadRoutingProjectionError,
     build_payload_routing_desired_state,
 )
+from .structural_routing_inventory import (
+    ObservedManagedRoute,
+    ObservedManagedRule,
+    ReservedPolicyConflict,
+    StructuralRoutingInventoryError,
+    StructuralRoutingObservation,
+    parse_structural_routing_inventory,
+)
 from .network_policy_layout import (
     NetworkPolicyLayout,
     NetworkPolicyLayoutError,
@@ -138,6 +146,8 @@ __all__ = [
     "NetworkPolicyLayout",
     "NetworkPolicyLayoutError",
     "NetworkPolicyPlatformSpace",
+    "ObservedManagedRoute",
+    "ObservedManagedRule",
     "NG3_LINUX_POLICY_PLATFORM",
     "NumericResourcePool",
     "PathBinding",
@@ -152,6 +162,7 @@ __all__ = [
     "ProbeRoutingDemand",
     "ProfileClassificationError",
     "ProfileStructuralIntent",
+    "ReservedPolicyConflict",
     "RouteMetricPlatformSpace",
     "RoutePriorityConvergenceError",
     "RoutePriorityDeleteDuplicate",
@@ -174,6 +185,8 @@ __all__ = [
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
+    "StructuralRoutingInventoryError",
+    "StructuralRoutingObservation",
     "SubprocessCommandRunner",
     "WaitingCandidate",
     "allocate_network_policy_layout",
@@ -188,6 +201,7 @@ __all__ = [
     "converge_route_priority_profile_once",
     "parse_ip_link_inventory",
     "parse_ip_route_priority_snapshot",
+    "parse_structural_routing_inventory",
     "plan_route_priority_convergence",
     "plan_route_priority_moves",
     "parse_structural_config",
