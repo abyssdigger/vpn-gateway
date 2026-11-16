@@ -137,7 +137,17 @@ class LinuxNetworkRulesAdapter:
             # committed projection cannot be reconstructed for fast-path proof.
             current_desired = None
 
-        if (
+        if current_desired is not None and current_desired == desired:
+            try:
+                verification = self._backend.verify_current(desired)
+            except Exception:
+                verification = None
+
+            if verification is not None and verification.ok:
+                result = LinuxDriverResult(True)
+            else:
+                result = self._backend.materialize_structural(desired)
+        elif (
             current_desired is not None
             and linux_network_route_priority_only_change(
                 current_desired,

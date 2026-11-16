@@ -2,64 +2,70 @@
 
 **Status:** COMPLETE — PASS  
 **Date:** 2026-11-14  
-**Architecture baseline:** NG2 availability bubble candidate  
+**Architecture baseline:** NG2 availability route-priority transition  
 **Environment:** disposable privileged Linux network namespace in GitHub CI
 
 ## Hypothesis
 
-NG2 can materialize an availability-driven path permutation without a second routing table
-or full forwarding barrier by treating each normal route metric as a replaceable slot.
+Availability-driven path priority can be rearranged without a second routing table and
+without temporarily removing any eligible path from the FIB.
 
-For:
+For one routing-domain destination with `N` eligible paths, the transition machinery may
+use one currently unused ordinary metric position as a moving free slot.
 
-```text
-A B C D
-- + + -
-```
-
-the semantic target is:
+The only mutation primitive is:
 
 ```text
-B C A D
+path X currently at Mold
+Mfree currently unused
+
+ip route add ... dev X metric Mfree
+ip route del ... dev X metric Mold
 ```
 
-The proposed kernel sequence is:
+After the add, every eligible path is still present and exactly one path is duplicated.
+After the delete, every eligible path is present exactly once and `Mold` becomes the new
+free metric.
 
-```text
-A10 B20 C30 D40
-B10 B20 C30 D40
-B10 C20 C30 D40
-B10 C20 A30 D40
-```
-
-The temporary duplicate path is intentional. A displaced non-confirmed path may be absent
-from its old slot while a confirmed-live replacement is already present.
+The free metric is not a route, configuration object, binding, or persistent state.
 
 ## Properties to prove
 
 The experiment checks both an ordinary prefix and `default`:
 
-1. `ip route replace` can replace one fixed-metric unicast slot with another interface;
-2. an existing route for the replacement interface at a different metric survives;
-3. repeated slot replacement converges to the desired bubble permutation;
-4. the terminal blackhole at metric 65536 survives every transition;
-5. no delete-then-add gap is required by the userspace mutation sequence.
+1. one path may simultaneously own two same-destination routes on different metrics;
+2. `ip route add` into a free metric preserves the old copy;
+3. exact `ip route del ... dev X metric Mold` removes only the old copy;
+4. every add phase preserves the full eligible path set and creates exactly one duplicate;
+5. every delete phase restores exactly one route per eligible path;
+6. terminal blackhole metric 65536 survives every transition;
+7. the same primitive covers recovery, demotion, recovery from the final dead position,
+   and death from all-live.
 
-The experiment does not claim multi-command kernel transaction atomicity. It proves the
-smaller property required by the design: each promoted slot is installed by one route
-replace operation before the next slot is changed.
+## Tested transitions
 
-## Procedure
+The dot denotes only an unused metric position.
 
-The CI harness creates one namespace and four dummy interfaces, then builds independent
-tables for:
+```text
+recovery:
+A B G D . V E J
+A B V G D . E J
 
-- `198.51.100.0/24`;
-- `default`.
+demotion:
+A B V G D . E J
+A B G D . V E J
 
-Each table starts with normal routes at metrics 10/20/30/40 and a terminal blackhole at
-65536. The harness applies the three replacements above and validates the complete JSON FIB
-projection after every step.
+last dead path recovers:
+A B G D E J . V
+A B V G D E J
+
+death from all-live:
+A B V G D E J
+A B G D E J . V
+```
+
+The all-live state has no steady-state gap. The next ordinary metric after the last path is
+simply unused and is available to the first make-before-break move.
 
 Harness:
 
@@ -67,53 +73,45 @@ Harness:
 design/NG2/code/python/rou/tests/integration_route_priority_bubble.py
 ```
 
-## Architectural consequence
-
-If PASS, NG2 may implement a narrow route-priority fast path using fixed metric slots and
-make-before-displace bubble replacement. Staging routing tables are not required for
-ordinary availability priority changes.
-
-If FAIL, the exact observed route semantics are retained here and the route transition
-design must be revised before implementation.
-
-
-## Attempt 1 — harness failure
-
-GitHub privileged CI reached EXP-027 but failed before route setup while creating a
-`dummy` link in the disposable namespace. No route replacement command ran, therefore
-this is **not** evidence for or against the routing hypothesis.
-
-Disposition: replace dummy links with veth pairs. Veth is already exercised successfully by
-the existing NG2 privileged integration suite on the same runner class.
-
-
-## Successful run
-
-Privileged GitHub CI completed the veth-based second attempt:
-
-```text
-PASS P1: metric-10 slot replaced A->B while B metric-20 survived
-PASS P2: metric-20 slot replaced B->C while C metric-30 survived
-PASS P3: bubble transition converged A,B,C,D -> B,C,A,D
-PASS D1: metric-10 slot replaced A->B while B metric-20 survived
-PASS D2: metric-20 slot replaced B->C while C metric-30 survived
-PASS D3: bubble transition converged A,B,C,D -> B,C,A,D
-EXP027=PASS
-```
-
-`P` is the ordinary-prefix table and `D` is the default-route table.
-
-The terminal blackhole remained present after every checked transition because every
-intermediate projection was validated before the next replacement.
-
 ## Result
 
 **PASS.**
 
-For the tested Linux/iproute2 environment, fixed metric positions can be treated as route
-slots for a pure path-order permutation. `ip route replace` changes one slot without
-removing the same interface from another metric, so the bubble transition needs neither a
-staging routing table nor delete-before-add of the promoted path.
+Privileged CI passed all four transitions for both the ordinary-prefix and default-route
+tables:
 
-Production code still requires fresh pre/post verification and must fall back to the
-structural fail-closed path when the requested change is not a pure path-order permutation.
+```text
+PASS P1: ABGD.VEJ -> ABVGD.EJ
+PASS P2: ABVGD.EJ -> ABGD.VEJ
+PASS P3: ABGDEJ.V -> ABVGDEJ
+PASS P4: ABVGDEJ -> ABGDEJ.V
+
+PASS D1: ABGD.VEJ -> ABVGD.EJ
+PASS D2: ABVGD.EJ -> ABGD.VEJ
+PASS D3: ABGDEJ.V -> ABVGDEJ
+PASS D4: ABVGDEJ -> ABGDEJ.V
+EXP027=PASS
+```
+
+The earlier EXP-027 `ip route replace` result remains historical evidence that one path
+can coexist at multiple metrics, but it is superseded as the production transition
+strategy. Production uses add-duplicate then delete-old so no eligible path is displaced
+even temporarily.
+
+## Architectural consequence
+
+NG2 may use one route-priority transactional Executor per Profile/routing-domain.
+
+A transaction:
+
+1. starts from a freshly verified current projection;
+2. computes one deterministic move plan;
+3. executes each move as add duplicate -> delete old;
+4. freshly verifies the final projection;
+5. falls back to structural fail-closed rebuild on any failure.
+
+A new availability state for the same Profile must not interleave with an active
+transaction. It may replace/coalesce the pending next desired state, but the running move
+plan remains immutable until verification completes.
+
+A staging routing table is not required for ordinary path-priority permutation.

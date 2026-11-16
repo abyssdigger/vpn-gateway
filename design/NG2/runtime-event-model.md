@@ -226,6 +226,22 @@ Manager:
 - не требует повторного request для каждого retry;
 - публикует текущую managed-domain projection как InfoEvent.
 
+Superseding RequestEvent обновляет desired state, но не обязан прерывать уже начатую
+нижнеуровневую transaction. Для transaction-scoped Machinery действует правило:
+
+```text
+running transaction
+    -> immutable current -> target plan
+newer request
+    -> latest/pending desired only
+transaction verified complete
+    -> converge from verified result to latest desired
+```
+
+В частности, availability-driven route-priority materialization сериализуется в scope
+Profile/routing-domain: два route move plans одного Profile не выполняются одновременно и
+не interleave commands.
+
 RequestEvent не требует непосредственного response.
 
 ## 7. InfoEvent semantics
@@ -346,6 +362,8 @@ Profile directions
 Profile destinations
 Device traffic-policy references
 required payload forwarding intent
+per-Profile effective ordered_paths
+per-Profile transient confirmed_live_prefix_length
 ```
 
 Не содержит технических command sequences:
@@ -360,6 +378,10 @@ verification phases
 ```
 
 Все это принадлежит внутренней реализации PayloadTrafficManager и его Machinery.
+
+`confirmed_live_prefix_length` является derived runtime value из availability snapshot,
+не полем normalized user configuration. Оно сообщает только границу confirmed-live prefix;
+никакой EMPTY route/metric object в RequestEvent не существует.
 
 ### 8.5. PayloadTrafficStateInfo
 

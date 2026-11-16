@@ -327,6 +327,44 @@ class PayloadRulesStateCalculatorTests(unittest.TestCase):
         self.assertIs(state.safety, Safety.SAFE)
         self.assertIs(state.service, Service.UNKNOWN)
 
+    def test_live_prefix_divergence_changes_priority_not_exposure_safety(self):
+        backup = InterfaceIdentity("vpns01", 11)
+        desired = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    name="a",
+                    destinations=(IPv4Network("10.0.0.0/8"),),
+                    ordered_paths=(self.path, backup),
+                    terminal_disposition=TerminalDisposition.DROP,
+                    confirmed_live_prefix_length=1,
+                ),
+            ),
+            traffic_allows=(_allow(self.path),),
+        )
+        actual = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    name="a",
+                    destinations=(IPv4Network("10.0.0.0/8"),),
+                    ordered_paths=(self.path, backup),
+                    terminal_disposition=TerminalDisposition.DROP,
+                    confirmed_live_prefix_length=2,
+                ),
+            ),
+            traffic_allows=(_allow(self.path),),
+        )
+        observed = NetworkRulesState(
+            StateKnowledge.KNOWN,
+            actual,
+            fresh=True,
+        )
+
+        state = self.calc.calculate(desired, observed)
+
+        self.assertIs(state.convergence, Convergence.DIVERGED)
+        self.assertIs(state.safety, Safety.SAFE)
+        self.assertIs(state.service, Service.UNKNOWN)
+
     def test_reordered_paths_are_not_assumed_restrictive(self):
         backup = InterfaceIdentity("vpns01", 11)
         desired = NetworkRulesSpec(

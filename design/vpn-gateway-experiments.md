@@ -2,22 +2,24 @@
 
 **Статус:** COMPLETE — PASS  
 **Architecture baseline:** NG2 minimal availability routing model  
-**Тип:** Linux FIB / fixed-metric route-slot replacement  
+**Тип:** Linux FIB / make-before-break free-slot route permutation  
 **Design:** [EXP-027 README](experiments/EXP-027%20NG2%20route%20priority%20bubble/README.md)  
 **Result:** [EXP-027 result](experiments/EXP-027%20NG2%20route%20priority%20bubble/EXP-027-result.md)
 
 Подтверждено в privileged CI для обычного prefix и `default`:
 
 ```text
-A B C D
-B B C D
-B C C D
-B C A D
+ABGD.VEJ -> ABVGD.EJ
+ABVGD.EJ -> ABGD.VEJ
+ABGDEJ.V -> ABVGDEJ
+ABVGDEJ -> ABGDEJ.V
 ```
 
-`ip route replace` заменяет fixed-metric slot, не удаляя тот же interface на другом
-metric. Terminal blackhole сохраняется. Это разрешает узкий route-priority fast path без
-staging table; broader changes по-прежнему идут через structural fail-closed rebuild.
+Каждый move выполняется как `add duplicate -> delete old copy`: полный eligible path set
+сохраняется, старый metric автоматически становится новым свободным position, terminal
+blackhole остается на месте. All-live не требует persistent gap — первым scratch служит
+следующий свободный ordinary metric. Staging table не требуется; broader changes
+по-прежнему идут через structural fail-closed rebuild.
 
 ---
 
