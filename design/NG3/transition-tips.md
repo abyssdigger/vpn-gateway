@@ -34,6 +34,50 @@ that originally needed them was removed.
 Current examples: multi-path inbound return pinning, MTU/MSS policy, target-systemd lifecycle,
 and Debian 13 confirmation of EXP-026.
 
+## TIP-R5 — Preserve ownership semantics, not superseded component vocabulary
+
+The recovered NG2 snapshot used an older vocabulary where `Engine` and `Executor` were not
+generic architectural categories. Current NG3 has since accepted
+`design/component-model.md`, where Engine is a component family and Executor is Machinery.
+
+Therefore:
+
+- do not use the NG2 taxonomy to reopen the current component model;
+- do reuse its ownership boundaries when they still apply;
+- classify recovered responsibilities using the **current** NG3 vocabulary.
+
+Historical names such as `AvailabilityProbeManager` or `NetworkRulesAdapter` are evidence
+about responsibility boundaries, not mandatory current class names.
+
+## TIP-R6 — Components exchange semantic contracts, not lower implementation detail
+
+Across a boundary, expose the meaning needed by the consumer.
+
+Prefer:
+
+```text
+desired semantic state
+current semantic observation
+verified result
+```
+
+over leaking shell commands, route metrics, nft syntax or lower state that the consumer does
+not need.
+
+This is especially important when recovering old code-level contracts: a concrete CODE type
+can be useful evidence of meaning without requiring the same serialized/API shape in NG3.
+
+## TIP-R7 — Async boundaries follow ownership, not fashion
+
+Events are appropriate between independent long-lived owners.
+
+Calculators, Adapters, Executors and Drivers may be invoked synchronously by their owner when
+there is no useful asynchronous ownership boundary.
+
+Do not convert every internal calculation into an Event merely because the old runtime had an
+event environment. Conversely, do not collapse an actual independent owner into a synchronous
+helper merely to reduce message count.
+
 # 2. Human-facing configuration
 
 ## TIP-C1 — Config is user policy, not Linux mechanics
@@ -245,17 +289,48 @@ product-controlled allow/deny decision.
 A route/interface/process may remain present while payload is dead. Metric expresses
 preference among eligible paths, not liveness.
 
-## TIP-N3 — Pure priority permutation is make-before-break
+## TIP-N3 — Pure priority permutation is make-before-break; the hole is emergent
 
-EXP-027 proved N eligible routes can use N+1 ordinary metric positions:
+EXP-027 proved the move primitive:
 
-    add duplicate at free metric
-    delete old metric copy
+```text
+add duplicate at a currently unused metric
+delete only the old copy
+```
 
-All eligible paths remain represented. Do not reintroduce staging tables or delete-as-scratch
-without a new requirement.
+All eligible paths remain represented.
 
-## TIP-N4 — Structural transition is a different class
+The free metric is **operationally inferred**, not a semantic/config/runtime "hole" object.
+
+Important edge case from EXP-027:
+
+```text
+all-live steady state
+    -> no materialized/configured gap is required
+    -> the next unused ordinary metric is sufficient for the first move
+```
+
+Do not over-specify a permanently reserved N+1 layout merely because one transaction needs
+working space.
+
+Do not reintroduce staging tables or delete-as-scratch without a new requirement.
+
+## TIP-N4 — Route-priority mutation is serialized only per affected Profile/routing domain
+
+For one Profile/routing domain:
+
+- one priority transaction runs at a time;
+- a half-completed transaction is not cancelled;
+- its plan completes through final verification;
+- newer desired orders may be coalesced to the latest desired state;
+- after commit/verification, the next transaction starts from freshly observed materialized
+  state;
+- replay of every intermediate availability transition is unnecessary.
+
+Unrelated Profiles need not be globally serialized merely because one Profile is moving
+metrics.
+
+## TIP-N5 — Structural transition is a different class
 
 Membership/filter/NAT/direction changes are not covered by the priority-only proof and may
 need restrictive fail-closed convergence.
@@ -284,6 +359,43 @@ First release is ICMP.
     bare icmp -> deterministic Profile/path-specific target derived above probe runtime
 
 No universal public default probe IP.
+
+## TIP-A5 — Preserve physical-fact versus policy-interpretation ownership, not old event names
+
+The NG2 snapshot used `AvailabilityGoodNews`, `AvailabilityTick` and
+`AvailabilityPriorityChannel` after removing an older window/evidence hierarchy.
+
+Current NG3 has re-derived the boundary as normalized
+`positive | negative | no_evidence` plus bounded confirmation state.
+
+The transferable rule is:
+
+```text
+probe side
+    -> reports relevant physical observation
+
+payload/Profile owner
+    -> decides what that observation means for priority
+```
+
+Do not restore GoodNews/Tick, attempt IDs, windows, epochs or replay merely because they once
+existed in code/design. Use the current requirement-derived evidence contract unless a new
+requirement shows it is insufficient.
+
+## TIP-A6 — Shared lower network machinery must preserve semantic ownership
+
+Payload rules and probe rules may converge through one lower network-policy Adapter/Executor,
+but they remain distinct semantic owners/scopes.
+
+Requirements:
+
+- probe-path safety rules cannot silently widen payload permission;
+- payload rules cannot accidentally erase required probe isolation;
+- owner conflicts are detected before unsafe physical application;
+- sharing one lower Adapter is not permission to merge owner policy.
+
+A separate physical ProbeRulesAdapter is not justified merely to keep semantic owners
+separate; ownership can be represented in the desired-state contract.
 
 ## TIP-Q1 — A path-specific probe must not escape through an alternate Device
 
@@ -314,6 +426,44 @@ An explicit probe-generation invalidation boundary is required if that mechanism
 
 Privileged CI proves mark-filtered cleanup can remove probe-class state while preserving
 different-mark control state and restoring NEW+mark-set. Debian 13 confirmation remains open.
+
+## TIP-O1 — Physical success and publication success are separate postconditions
+
+A verified successful mutation must not be blindly repeated merely because publication of the
+resulting state failed.
+
+The owner should retain enough current verified projection to retry publication separately.
+
+```text
+apply + verify succeeded
+publish failed
+    -> retain verified state
+    -> retry publication
+    -> do not repeat physical action solely for the publisher failure
+```
+
+Unexpected internal faults remain errors; they must not be converted into fake successful
+publication.
+
+## TIP-O2 — Audit repairs drift and can republish; it should not rewrite matched state
+
+For an authoritative owner:
+
+```text
+observe
+  -> MATCHED
+       -> no physical mutation
+       -> publish/republish current projection if needed
+
+  -> NOT MATCHED
+       -> reconcile
+       -> fresh observe
+       -> verify
+       -> publish
+```
+
+Audit cadence is a lifecycle policy/implementation parameter unless a product requirement
+makes recovery latency user-visible.
 
 # 8. Backend / evidence discipline
 
