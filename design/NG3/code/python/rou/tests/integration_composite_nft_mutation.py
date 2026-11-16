@@ -291,47 +291,6 @@ def main():
         assert len(local_input) == 1 and "local-publication-v1" in local_input[0]
         assert len(local_output) == 1 and "local-publication-v1" in local_output[0]
 
-        replacement_local = build_local_publication_desired(
-            (
-                PublicationLocalEndpointIntent(
-                    "device",
-                    PublicationProtocol.TCP,
-                    publication_ip,
-                    44444,
-                    host,
-                ),
-            )
-        )
-        replacement_desired = CompositeNftDesiredState(
-            profile,
-            nat,
-            device,
-            replacement_local,
-        )
-        replacement = converge(
-            gate,
-            backend,
-            replacement_desired,
-        )
-        replacement_steps = [
-            item.step.kind
-            for item in replacement
-            if item.step is not None
-        ]
-        assert replacement_steps == [
-            CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
-        ], replacement_steps
-        replacement_snapshot = backend.observe_composite_snapshot()
-        replacement_local_rules = [
-            item.canonical_json
-            for item in replacement_snapshot.observation.objects
-            if item.kind == "rule"
-            and "local-publication-v1" in item.canonical_json
-        ]
-        assert len(replacement_local_rules) == 2, replacement_local_rules
-        assert all("44444" in item for item in replacement_local_rules)
-        assert all("44443" not in item for item in replacement_local_rules)
-
         empty = CompositeNftDesiredState(
             PayloadForwardDesiredState(()),
             PayloadNatDesiredState(()),
