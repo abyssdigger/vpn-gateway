@@ -47,7 +47,7 @@ class PayloadNatComparison:
     conflicts: tuple[PayloadNatRuleConflict, ...]
 
     @property
-    def mutation_safe(self) -> bool:
+    def conflict_free(self) -> bool:
         return not self.conflicts
 
 
@@ -101,7 +101,11 @@ def compare_payload_nat(
         except PayloadNatObservationError as exc:
             conflicts.append(PayloadNatRuleConflict(None, str(exc)))
             continue
-        if payload.get("chain") != PAYLOAD_POSTROUTING_CHAIN:
+        chain = payload.get("chain")
+        if not isinstance(chain, str) or not chain:
+            conflicts.append(PayloadNatRuleConflict(None, "rule has missing/invalid chain"))
+            continue
+        if chain != PAYLOAD_POSTROUTING_CHAIN:
             continue
         handle = payload.get("handle")
         if type(handle) is not int or handle < 0:
