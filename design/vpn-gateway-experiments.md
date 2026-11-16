@@ -1,3 +1,71 @@
+## EXP-033 — NG3 exact-ifindex payload masquerade
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** payload NAT lower realization contract  
+**Тип:** nft exact-ifindex source NAT + replacement identity  
+**Design:** [EXP-033 README](experiments/EXP-033%20NG3%20exact-ifindex%20payload%20masquerade/README.md)  
+**Result:** [EXP-033 result](experiments/EXP-033%20NG3%20exact-ifindex%20payload%20masquerade/EXP-033-result-20261116.md)
+
+Privileged packet test подтвердил реальный MASQUERADE по exact ingress/egress ifindex,
+исключение другого ingress и отсутствие match у stale rule после same-name/new-ifindex
+replacement.
+
+Дополнительно установлено: nft JSON показывает текущий ifindex operand как ifname, а после
+исчезновения интерфейса — как decimal-string старого ifindex. Авторитетное наблюдение NAT
+поэтому обязано сочетать ruleset JSON со fresh interface inventory.
+
+---
+
+## EXP-032 — NG3 payload nft scaffold
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** invariant payload nft scaffold review  
+**Тип:** nft base-chain metadata + terminal-drop packet behavior  
+**Design:** [EXP-032 README](experiments/EXP-032%20NG3%20payload%20nft%20scaffold/README.md)  
+**Result:** [EXP-032 result](experiments/EXP-032%20NG3%20payload%20nft%20scaffold/EXP-032-result-20261116.md)
+
+Privileged CI подтвердил exact metadata двух invariant chains, terminal behavior
+`payload_forward policy drop` даже при foreign ACCEPT base chains до/после него, explicit
+allow behavior и отсутствие NAT rules в пустом postrouting chain.
+
+Scaffold принят без определения final Profile allow/envelope и Device masquerade rules.
+
+---
+
+## EXP-031 — NG3 nft namespace owner marker
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** NG3 nft namespace ownership marker review  
+**Тип:** nft table-level ownership marker / JSON observation  
+**Design:** [EXP-031 README](experiments/EXP-031%20NG3%20nft%20namespace%20owner%20marker/README.md)  
+**Result:** [EXP-031 result](experiments/EXP-031%20NG3%20nft%20namespace%20owner%20marker/EXP-031-result-20261116.md)
+
+Текущий nftables подтвердил exact table comment
+`vpn-gate:ng3:owner-v1` в `nft -j list ruleset`; same-name table без marker наблюдается
+отдельно, foreign tables сохраняются независимо.
+
+Marker принят только как table-level ownership prerequisite; он не разрешает blind cleanup
+неизвестных объектов внутри table.
+
+---
+
+## EXP-030 — NG3 managed-netns forwarding barrier
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** NG3 structural root barrier review  
+**Тип:** managed-network-namespace IPv4 forwarding safety barrier  
+**Design:** [EXP-030 README](experiments/EXP-030%20NG3%20managed-netns%20forwarding%20barrier/README.md)  
+**Result:** [EXP-030 result](experiments/EXP-030%20NG3%20managed-netns%20forwarding%20barrier/EXP-030-result-20261116.md)
+
+Privileged CI на реальном трехnamespace packet path подтвердил, что
+`net.ipv4.ip_forward=0` внутри managed namespace блокирует транзит, `1` восстанавливает
+его, а host namespace value при этом не изменяется.
+
+Принят safety contract: structural mutation может считать barrier установленным только
+после fresh reread `ip_forward == 0`.
+
+---
+
 ## EXP-029 — NG3 structural routing inventory shape
 
 **Статус:** COMPLETE — PASS  

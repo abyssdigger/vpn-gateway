@@ -46,6 +46,11 @@ Current trace:
 | complete payload route/RPDB desired-state projection | `payload_routing_desired.py` | `NG3-2026-11-16-payload-routing-desired-state-review.md` |
 | strict whole-reserved route/RPDB structural observation | `structural_routing_inventory.py` | `NG3-2026-11-16-structural-routing-inventory-review.md` |
 | pure payload actual-vs-desired structural comparison | `payload_routing_compare.py` | `NG3-2026-11-16-payload-routing-comparison-review.md` |
+| managed-netns structural forwarding gate | `forwarding_gate.py`, `linux_forwarding_gate.py` | `NG3-2026-11-16-forwarding-gate-code-review.md`, `EXP-030-result-20261116.md` |
+| nft table-level ownership observation | `nft_namespace_inventory.py` | `NG3-2026-11-16-nft-namespace-inventory-code-review.md`, `EXP-031-result-20261116.md` |
+| invariant payload nft scaffold comparison | `nft_payload_scaffold.py` | `NG3-2026-11-16-payload-nft-scaffold-code-review.md`, `EXP-032-result-20261116.md` |
+| guarded physical payload nft scaffold preparation | `nft_scaffold_executor.py`, `linux_nft_scaffold.py` | `NG3-2026-11-16-nft-scaffold-prepare-code-review.md` |
+| normalized Device NAT intent -> payload masquerade desired projection | `device_policy.py`, `payload_nat_desired.py` | `NG3-2026-11-16-payload-nat-desired-code-review.md`, `EXP-033-result-20261116.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
@@ -1820,6 +1825,311 @@ The dedicated nft namespace is cleanup identity for VPN-GATE packet-policy objec
 pre-existing incompatible object in that reserved namespace is a marker conflict, not a
 candidate for silent adoption or deletion.
 
+##### nft namespace ownership marker
+
+The first-release Linux nft namespace has one fixed table identity:
+
+```text
+family: ip
+table:  vpn_gate
+```
+
+Table-name reservation alone is not sufficient evidence that a pre-existing table belongs
+to this product.
+
+An owned NG3 table therefore carries one exact versioned table comment:
+
+```text
+vpn-gate:ng3:owner-v1
+```
+
+The table-level observation states are:
+
+```text
+ABSENT
+    no table ip vpn_gate exists
+
+OWNED
+    exactly one table ip vpn_gate exists
+    and its table comment == "vpn-gate:ng3:owner-v1"
+
+CONFLICT
+    table ip vpn_gate exists
+    but the ownership marker is absent, malformed or different
+```
+
+The marker is an ownership prerequisite, not blanket deletion authority.
+
+Even an `OWNED` table must have its contained chains/rules/sets/objects inventoried against
+accepted VPN-GATE shapes before cleanup or replacement. Any unexpected contained object
+remains an explicit ownership conflict rather than something to delete merely because it
+sits inside the marked table.
+
+##### Invariant payload nft scaffold
+
+The first-release payload nft namespace has two invariant base chains whose existence and
+metadata do not depend on the unresolved final user-facing Device envelope/NAT grammar.
+
+```text
+chain payload_forward
+    type filter
+    hook forward
+    priority 0
+    policy drop
+    comment "vpn-gate:ng3:payload-forward-v1"
+
+chain payload_postrouting
+    type nat
+    hook postrouting
+    priority 100
+    policy accept
+    comment "vpn-gate:ng3:payload-postrouting-v1"
+```
+
+`payload_forward` owns the final VPN-GATE verdict for IPv4 packets forwarded through the
+managed network domain. Its default `drop` is structural fail-closed behavior: an empty
+payload policy forwards nothing.
+
+Concrete allow rules are added only by a later, fully normalized payload-policy projection.
+They must not be inferred from historical TOML examples.
+
+`payload_postrouting` exists as the stable owner boundary for supported payload source-NAT
+realization. It is valid and intentionally empty when no accepted Device/path requires NAT.
+Its base-chain policy is `accept`; the presence of the chain alone never creates NAT.
+
+The two chain comments are lower schema/version markers. A same-name chain with missing or
+different marker, hook, type, priority or policy is an ownership/shape conflict.
+
+##### Payload source-NAT lower contract
+
+The internal normalized NAT semantic is already fixed independently of its final external
+TOML spelling:
+
+```text
+NatIntent.NONE
+NatIntent.MASQUERADE
+```
+
+For one current logical path owned by a Device:
+
+```text
+NONE
+    -> no VPN-GATE payload NAT contribution for that path
+
+MASQUERADE
+    -> one postrouting masquerade contribution for payload
+       entering from the managed ordinary/host boundary
+       and leaving through that path's current concrete endpoint
+```
+
+The physical match must bind to the exact current interface identities, not merely reusable
+interface names.
+
+The intended Linux/nft match is therefore based on numeric current interface indices:
+
+```text
+meta iif == host_boundary.ifindex
+meta oif == path_endpoint.ifindex
+masquerade
+```
+
+A same-name/new-ifindex endpoint must not inherit a stale NAT contribution before the new
+binding is accepted and structural policy is rebuilt.
+
+The NAT contribution intentionally does not repeat Profile destination prefixes.
+
+Reason:
+
+1. `payload_forward` is evaluated before postrouting and owns payload permission;
+2. only traffic already admitted by the complete forwarding policy can reach the NAT action;
+3. one Device/path may be shared by multiple Profiles;
+4. duplicating destinations into NAT would create a second policy-classification surface
+   with no requirement benefit.
+
+The host-boundary ingress match also keeps locally generated probe/control traffic out of
+payload NAT.
+
+NAT intent is structural and availability-independent. Availability may reorder eligible
+paths but cannot create/remove a Device NAT contribution.
+
+If several Profiles share the same current path, their identical NAT contribution is
+deduplicated by the exact `(host boundary identity, path endpoint identity)` pair.
+
+This lower contract does not choose the final human-facing `nat` field spelling. It consumes
+an already normalized semantic intent.
+
+EXP-033 passed on the current Linux/nftables target.
+
+The rule was created with numeric interface indices and behaved as exact ifindex identity.
+Current nft JSON representation is intentionally normalized as follows:
+
+- while the stored ifindex resolves to a current interface, the operand is rendered as that
+  interface name even with `nft -n -j list ruleset`;
+- after the interface disappears, the same stored operand is rendered as a decimal-string
+  ifindex;
+- recreating the same interface name with a new ifindex does not make the stale rule match.
+
+Therefore authoritative NAT observation must normalize an nft meta-interface operand using a
+fresh current interface inventory:
+
+```text
+textual ifname
+    -> current InterfaceIdentity(ifname, ifindex)
+
+decimal-string operand
+    -> unresolved/stale numeric ifindex unless that exact index is independently present
+```
+
+It must never compare only textual interface names.
+
+EXP-033 also proved real source translation, ingress scoping and same-name replacement
+behavior. The exact nft rule comment is `vpn-gate:ng3:payload-nat-v1`; the rule handle is
+incidental.
+
+###### Authoritative payload NAT rule observation
+
+The strict NAT observer operates only after table/scaffold ownership is confirmed and consumes:
+
+```text
+canonical nft objects from table ip vpn_gate
++
+one fresh current InterfaceIdentity inventory
+```
+
+Every rule in `payload_postrouting` is inside VPN-GATE's owned policy boundary and must be
+classified. It is not safe to ignore a rule merely because its comment is unfamiliar.
+
+The only currently accepted payload NAT rule shape is:
+
+```text
+chain = payload_postrouting
+comment = "vpn-gate:ng3:payload-nat-v1"
+
+expr[0]:
+    meta iif == <interface operand>
+
+expr[1]:
+    meta oif == <interface operand>
+
+expr[2]:
+    masquerade
+
+no additional semantic expressions
+```
+
+Rule `handle` is retained as exact current kernel-object identity for a later mutation
+planner, but it is not semantic desired-state identity.
+
+Interface operands normalize as follows:
+
+```text
+ifname string:
+    resolve through fresh current interface inventory
+    -> current InterfaceIdentity
+
+decimal-string ifindex:
+    if exact current ifindex exists, resolve to that InterfaceIdentity
+    otherwise retain as stale/unresolved numeric interface identity
+
+other textual/numeric form:
+    conflict
+```
+
+A stale/unresolved numeric identity never confirms a desired current
+`PayloadMasqueradeSpec`.
+
+The observer must report an explicit conflict for:
+
+- missing/wrong NAT owner comment;
+- wrong chain/table/family;
+- missing or repeated iif/oif match;
+- name/index operand that cannot be normalized unambiguously;
+- any extra match/action/expression;
+- NAT action other than plain masquerade;
+- duplicate normalized physical NAT rule.
+
+Thus actual-vs-desired comparison can classify:
+
+```text
+confirmed desired masquerade contribution
+missing desired contribution
+stale recognized owned contribution
+conflicting/unrepresentable owned NAT rule
+```
+
+and can do so without equating same-name/new-ifindex endpoints.
+
+Observation remains read-only. Physical NAT add/delete is not accepted until this parser and
+comparison contract are executable and reviewed.
+
+The scaffold is deliberately independent from the root structural barrier:
+
+- structural rebuild happens while verified `ip_forward=0`;
+- the scaffold may then be created/repaired and verified;
+- final allow/NAT rules are materialized behind the still-closed root barrier;
+- RPDB activation and full route+nft verification still occur before re-enabling forwarding.
+
+A foreign nft base chain outside `table ip vpn_gate` is not adopted or deleted by this
+scaffold. For safety, the payload forward chain must still prevent a foreign unconditional
+`accept` chain at another priority from bypassing its default drop.
+
+EXP-032 passed on the current Linux/nftables target.
+
+The accepted JSON metadata is:
+
+```json
+{"comment":"vpn-gate:ng3:payload-forward-v1","family":"ip","handle":1,"hook":"forward","name":"payload_forward","policy":"drop","prio":0,"table":"vpn_gate","type":"filter"}
+
+{"comment":"vpn-gate:ng3:payload-postrouting-v1","family":"ip","handle":2,"hook":"postrouting","name":"payload_postrouting","policy":"accept","prio":100,"table":"vpn_gate","type":"nat"}
+```
+
+Handles are incidental and excluded from scaffold identity.
+
+The live packet test also proved:
+
+- an empty `payload_forward policy drop` blocks transit;
+- foreign unconditional-accept base chains at priorities `-100` and `100` do not bypass
+  that drop;
+- explicit allow rules inside `payload_forward` can permit the tested path;
+- the empty `payload_postrouting` chain contains no NAT rule.
+
+Observation uses full JSON ruleset inventory rather than treating a failed
+`list table` command as proof of absence:
+
+```text
+nft -j list ruleset
+```
+
+This keeps:
+
+- valid table absence;
+- malformed/unsupported owned-table shape;
+- command/JSON observation failure;
+
+as distinct states.
+
+The marker is lower implementation state. It is not user configuration and does not encode a
+Profile/Device ID.
+
+EXP-031 passed against the current nftables target.
+
+The marked table is currently observed as:
+
+```json
+{"comment":"vpn-gate:ng3:owner-v1","family":"ip","handle":2,"name":"vpn_gate"}
+```
+
+and an unmarked same-name table as:
+
+```json
+{"family":"ip","handle":3,"name":"vpn_gate"}
+```
+
+The numeric handle is incidental kernel identity and is not part of the ownership marker.
+
+The executable observer must therefore compare `family`, `name` and exact `comment`,
+while retaining contained objects separately for later strict shape classification.
+
 #### Deterministic allocation and configuration change
 
 Allocation is deterministic for one accepted semantic owner set.
@@ -2219,14 +2529,88 @@ In particular, installing a new RPDB dispatch rule can make a newly prepared Pro
 reachable. That activation must not occur before the filtering/NAT state required by the
 same new semantic policy is safe.
 
-Therefore the physical structural transaction has this ordering contract:
+#### Root barrier primitive
+
+The first-release structural barrier is the managed network namespace's own IPv4 forwarding
+gate:
+
+```text
+net.ipv4.ip_forward = 0
+```
+
+This sysctl belongs to the isolated managed network domain, not to the ordinary host network
+namespace.
+
+The Executor may begin allowing structural mutation only after:
+
+```text
+write ip_forward = 0
+        ->
+fresh reread
+        ->
+observed value == 0
+```
+
+A successful write command without the confirming reread is not a barrier.
+
+This primitive is deliberately below the user configuration contract. It is not a policy
+knob and does not depend on Profile direction, NAT spelling, Device envelope grammar or
+current route allocation.
+
+The root barrier is global to managed IPv4 forwarding. Structural transitions may therefore
+temporarily interrupt forwarding for Profiles whose individual semantic policy did not
+change. Release 1 does not promise continuity across a structural policy transition; the
+separate pure-priority fast path remains the mechanism for non-disruptive priority-only
+changes.
+
+The global barrier is chosen intentionally instead of a per-Profile nft deny rule:
+
+- it does not depend on correctly classifying overlapping Profile prefixes while state is
+  mixed;
+- it remains effective when path bindings or RPDB allocations are being replaced;
+- it does not depend on the final NAT/traffic-envelope grammar;
+- critically, it does not rely on the nft namespace being already trusted while nft
+  ownership/conflict recovery is itself in progress.
+
+If the Executor cannot verify `ip_forward=0`, it must not begin or continue an allowing
+structural rebuild. From a previously verified state the requested structural transition is
+aborted. During startup/recovery from UNKNOWN state, inability to establish the barrier is a
+hard failure and no new allowing state is materialized.
+
+The managed namespace forwarding gate therefore becomes explicit lower owned state:
+
+```text
+ForwardingGate:
+    desired = enabled | disabled
+    observed = 0 | 1 | unknown
+```
+
+Only `observed = 0` is sufficient as the structural barrier.
+
+EXP-030 passed in privileged GitHub CI and proved the selected primitive on the current Linux
+target with real forwarded packets:
+
+- the managed namespace value was independently writable/readable;
+- changing it did not change the host namespace value;
+- `ip_forward=1` passed transit ICMP across a two-interface routing namespace;
+- `ip_forward=0` blocked that same transit path;
+- restoring and rereading `1` restored forwarding.
+
+The executable lower backend may therefore use
+`ip netns exec <managed-ns> sysctl ... net.ipv4.ip_forward`, but success remains defined by
+the fresh reread value rather than process exit status alone.
+
+#### Structural transaction ordering
+
+With the root barrier verified, the physical structural transaction has this ordering
+contract:
 
 ```text
 fresh lower observation
         ->
-establish/verify restrictive barrier for affected traffic
+set/reread managed-netns ip_forward = 0
         ->
-prepare/verify new inactive routing tables
+prepare/verify new guarded routing tables
     - terminal guards first
     - desired ordinary path routes
         ->
@@ -2236,7 +2620,7 @@ install/switch/verify RPDB dispatch
         ->
 verify complete desired routing + nft postcondition
         ->
-release restrictive barrier
+set/reread managed-netns ip_forward = 1
         ->
 fresh final verification
         ->
