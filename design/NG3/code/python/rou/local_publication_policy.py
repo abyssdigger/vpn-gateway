@@ -63,6 +63,25 @@ class LocalPublicationDesiredState:
             raise ValueError("rules must contain LocalPublicationRuleSpec")
         if len(set(self.rules)) != len(self.rules):
             raise ValueError("duplicate desired local publication rule")
+
+        endpoint_hooks: dict[tuple[object, ...], set[LocalPublicationHook]] = {}
+        for rule in self.rules:
+            key = (
+                rule.protocol,
+                rule.host_boundary,
+                rule.local_address,
+                rule.local_port,
+            )
+            endpoint_hooks.setdefault(key, set()).add(rule.hook)
+        required_hooks = {
+            LocalPublicationHook.INPUT,
+            LocalPublicationHook.OUTPUT,
+        }
+        if any(hooks != required_hooks for hooks in endpoint_hooks.values()):
+            raise ValueError(
+                "each desired local publication endpoint must contain INPUT and OUTPUT"
+            )
+
         object.__setattr__(self, "rules", tuple(sorted(self.rules)))
 
 
