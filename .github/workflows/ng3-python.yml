@@ -11,6 +11,7 @@ on:
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
       - "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/**"
+      - "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/**"
   pull_request:
     paths:
       - "design/NG3/code/python/**"
@@ -21,6 +22,7 @@ on:
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
       - "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/**"
+      - "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/**"
 
 jobs:
   unit:
@@ -231,3 +233,17 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_payload_forward_observation.py
+
+  linux-endpoint-provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2
+      - name: EXP-039 generic TUN transport endpoint provenance
+        run: >-
+          sudo python3
+          "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/exp039_tun_transport_provenance.py"
+
