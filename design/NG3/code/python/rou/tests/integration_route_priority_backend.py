@@ -15,11 +15,18 @@ from rou.route_priority_executor import (
     converge_route_priority_once,
 )
 from rou.route_priority_inventory import RoutePriorityPathRoute
+from rou.route_priority_profile import (
+    RoutePriorityDomainId,
+    RoutePriorityDomainRequest,
+    RoutePriorityProfileStatus,
+    converge_route_priority_profile_once,
+)
 
 
 A = LogicalPathId("a", 0, 0)
 B = LogicalPathId("b", 0, 0)
 DEST = IPv4Network("10.77.0.0/16")
+DEST2 = IPv4Network("10.88.0.0/16")
 TABLE = 100
 PROTO = 202
 
@@ -100,6 +107,55 @@ def main():
         assert recovered.status is RoutePriorityExecutionStatus.SUCCESS
         assert recovered.final.routes[A] == frozenset((10,))
         assert recovered.final.routes[B] == frozenset((20,))
+
+        # Add a second independent route-key domain for the same Profile and
+        # prove Profile-level convergence plus final verification across both.
+        run(
+            "ip", "-n", ns, "-4", "route", "add", "unicast", str(DEST2),
+            "table", str(TABLE), "proto", str(PROTO), "metric", "10",
+            "dev", "patha",
+        )
+        run(
+            "ip", "-n", ns, "-4", "route", "add", "unicast", str(DEST2),
+            "table", str(TABLE), "proto", str(PROTO), "metric", "20",
+            "dev", "pathb",
+        )
+
+        backend2 = IproutePriorityBackend(
+            runner=runner,
+            namespace=ns,
+            table=TABLE,
+            owner_protocol=PROTO,
+            destination=DEST2,
+            path_routes=paths,
+        )
+
+        profile_result = converge_route_priority_profile_once(
+            (
+                RoutePriorityDomainRequest(
+                    domain_id=RoutePriorityDomainId("profile-a", DEST2),
+                    backend=backend2,
+                    desired={A: 20, B: 10},
+                    working_metrics=(10, 20, 30),
+                ),
+                RoutePriorityDomainRequest(
+                    domain_id=RoutePriorityDomainId("profile-a", DEST),
+                    backend=backend,
+                    desired={A: 20, B: 10},
+                    working_metrics=(10, 20, 30),
+                ),
+            )
+        )
+        assert profile_result.status is RoutePriorityProfileStatus.SUCCESS
+        assert profile_result.confirmed
+        assert all(outcome.confirmed for outcome in profile_result.domains)
+
+        final_one = backend.observe_route_priority()
+        final_two = backend2.observe_route_priority()
+        assert final_one.routes[A] == frozenset((20,))
+        assert final_one.routes[B] == frozenset((10,))
+        assert final_two.routes[A] == frozenset((20,))
+        assert final_two.routes[B] == frozenset((10,))
 
         print("NG3 route-priority Linux integration: PASS")
     finally:
