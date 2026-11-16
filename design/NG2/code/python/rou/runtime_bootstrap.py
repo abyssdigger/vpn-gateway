@@ -12,7 +12,7 @@ from .linux_instance import (
 from .linux_driver import (
     LinuxCommandRunner,
     LinuxDriverResult,
-    LinuxNetworkDriver,
+    LinuxNetworkExecutor,
     NetworkNamespaceLinuxRunner,
     SubprocessLinuxRunner,
 )
@@ -78,9 +78,9 @@ def bootstrap_linux_network_rules_adapter_in_namespace(
         ),
         namespace,
     )
-    driver = LinuxNetworkDriver(namespace_runner)
+    executor = LinuxNetworkExecutor(namespace_runner)
     return bootstrap_linux_network_rules_adapter(
-        driver,
+        executor,
         local_interface=local_interface,
         local_process=local_process,
     )

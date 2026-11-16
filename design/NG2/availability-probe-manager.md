@@ -93,7 +93,7 @@ Probe evidence must not survive a concrete-generation change.
 
 ## 5. Single-shot ICMP executor
 
-The first executable worker is `LinuxIcmpProbeExecutor`.
+The first executable worker is `LinuxIcmpProbeDriver`.
 
 It performs one bound attempt and returns:
 
@@ -230,7 +230,7 @@ Current evidence:
 - projected generation loss retains dedicated uid guard across another owner's structural
   reconcile;
 - ProbeRulesStateCalculator: unit PASS;
-- LinuxIcmpProbeExecutor: unit + privileged CI integration PASS;
-- LinuxIcmpProbeExecutor with `/usr/bin/ping`: Debian 13 target LP1..LP7 PASS.
+- LinuxIcmpProbeDriver: unit + privileged CI integration PASS;
+- LinuxIcmpProbeDriver with `/usr/bin/ping`: Debian 13 target LP1..LP7 PASS.
 
 The intended Debian 13 production executable remains a separate target-confirmation gate.

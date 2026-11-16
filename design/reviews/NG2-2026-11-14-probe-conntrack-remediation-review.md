@@ -207,10 +207,9 @@ The agreed distinction is:
   driver-level operations directly when separate Driver abstraction adds no value;
 - Manager chooses desired state/lifecycle.
 
-Under that terminology the current class named `LinuxNetworkDriver`, which performs a
-full materialize+verify convergence transaction, should be reviewed for possible
-reclassification as an Executor. This naming cleanup is orthogonal to EXP-026 and must not
-change the conntrack mechanism evidence.
+Under that terminology the structural convergence component is now named
+`LinuxNetworkExecutor`. The naming correction is orthogonal to EXP-026 and did not change
+the conntrack mechanism evidence.
 
 ## Cleanup idempotence
 

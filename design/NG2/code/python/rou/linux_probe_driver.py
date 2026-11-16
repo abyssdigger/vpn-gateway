@@ -9,7 +9,7 @@ from .linux_observation import parse_link_json
 from .probe_rules import AvailabilityProbeRequest, ProbeMechanism
 
 
-class LinuxProbeExecutorError(ValueError):
+class LinuxProbeDriverError(ValueError):
     pass
 
 
@@ -26,51 +26,51 @@ class ProbeAttemptResult:
 
     def __post_init__(self) -> None:
         if not isinstance(self.outcome, ProbeAttemptOutcome):
-            raise LinuxProbeExecutorError(
+            raise LinuxProbeDriverError(
                 "probe attempt outcome must be ProbeAttemptOutcome"
             )
         if self.outcome is ProbeAttemptOutcome.ERROR:
             if not self.diagnostic:
-                raise LinuxProbeExecutorError(
+                raise LinuxProbeDriverError(
                     "probe execution error requires diagnostic"
                 )
         elif self.diagnostic is not None:
-            raise LinuxProbeExecutorError(
+            raise LinuxProbeDriverError(
                 "non-error probe result must not carry diagnostic"
             )
 
 
 @dataclass(frozen=True)
-class LinuxIcmpProbeExecutorConfig:
+class LinuxIcmpProbeDriverConfig:
     local_process: LinuxLocalProcessConfig
     gid: int
     ping_path: str
 
     def __post_init__(self) -> None:
         if not isinstance(self.local_process, LinuxLocalProcessConfig):
-            raise LinuxProbeExecutorError(
-                "probe executor requires LinuxLocalProcessConfig"
+            raise LinuxProbeDriverError(
+                "probe driver requires LinuxLocalProcessConfig"
             )
         if type(self.gid) is not int or not 1 <= self.gid < (1 << 32) - 1:
-            raise LinuxProbeExecutorError(
+            raise LinuxProbeDriverError(
                 "probe gid must be a non-root 32-bit gid other than UINT32_MAX"
             )
         if (
             not isinstance(self.ping_path, str)
             or not self.ping_path.startswith("/")
         ):
-            raise LinuxProbeExecutorError(
+            raise LinuxProbeDriverError(
                 "probe ping executable path must be absolute"
             )
 
 
-class LinuxIcmpProbeExecutor:
-    """Execute one capability-free ICMP attempt inside an already scoped namespace."""
+class LinuxIcmpProbeDriver:
+    """Perform one capability-free ICMP probe inside an already scoped namespace."""
 
     def __init__(
         self,
         runner: LinuxCommandRunner,
-        config: LinuxIcmpProbeExecutorConfig,
+        config: LinuxIcmpProbeDriverConfig,
     ) -> None:
         self._runner = runner
         self._config = config
@@ -82,8 +82,8 @@ class LinuxIcmpProbeExecutor:
         timeout_seconds: int,
     ) -> ProbeAttemptResult:
         if not isinstance(request, AvailabilityProbeRequest):
-            raise LinuxProbeExecutorError(
-                "probe executor requires AvailabilityProbeRequest"
+            raise LinuxProbeDriverError(
+                "probe driver requires AvailabilityProbeRequest"
             )
         if request.mechanism is not ProbeMechanism.ICMP:
             return ProbeAttemptResult(
@@ -94,7 +94,7 @@ class LinuxIcmpProbeExecutor:
             type(timeout_seconds) is not int
             or timeout_seconds <= 0
         ):
-            raise LinuxProbeExecutorError(
+            raise LinuxProbeDriverError(
                 "probe timeout_seconds must be a positive integer"
             )
 

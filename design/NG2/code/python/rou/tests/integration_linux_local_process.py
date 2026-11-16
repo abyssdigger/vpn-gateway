@@ -12,13 +12,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_local_process import LinuxLocalProcessConfig
-from rou.linux_probe_executor import (
-    LinuxIcmpProbeExecutor,
-    LinuxIcmpProbeExecutorConfig,
+from rou.linux_probe_driver import (
+    LinuxIcmpProbeDriver,
+    LinuxIcmpProbeDriverConfig,
     ProbeAttemptOutcome,
 )
 from rou.linux_driver import (
-    LinuxNetworkDriver,
+    LinuxNetworkExecutor,
     NetworkNamespaceLinuxRunner,
     SubprocessLinuxRunner,
 )
@@ -142,13 +142,13 @@ def main() -> int:
             SubprocessLinuxRunner(),
             ROU,
         )
-        driver = LinuxNetworkDriver(namespace_runner)
+        executor = LinuxNetworkExecutor(namespace_runner)
         local_process = LinuxLocalProcessConfig(
             uid=65534,
             ct_mark=0x24,
         )
         boot = bootstrap_linux_network_rules_adapter(
-            driver,
+            executor,
             local_interface="host0",
             local_process=local_process,
         )
@@ -237,15 +237,15 @@ def main() -> int:
             )
         print("PASS LP3: unrelated local process retains ordinary alt0 path")
 
-        executor = LinuxIcmpProbeExecutor(
+        probe_driver = LinuxIcmpProbeDriver(
             namespace_runner,
-            LinuxIcmpProbeExecutorConfig(
+            LinuxIcmpProbeDriverConfig(
                 local_process=local_process,
                 gid=65534,
                 ping_path=str(PING_EXECUTABLE),
             ),
         )
-        attempt = executor.execute(
+        attempt = probe_driver.execute(
             AvailabilityProbeRequest(
                 "primary-execution",
                 path,
@@ -266,7 +266,7 @@ def main() -> int:
                 check=False,
             )
             raise RuntimeError(
-                "production LOCAL_PROCESS executor probe failed: "
+                "production LOCAL_PROCESS probe Driver failed: "
                 f"{attempt}\nRULES:\n"
                 + rules.stdout
                 + rules.stderr
@@ -275,7 +275,7 @@ def main() -> int:
                 + nft.stderr
             )
         print(
-            "PASS LP4: production executor runs capability-free bound probe "
+            "PASS LP4: production probe Driver runs capability-free bound probe "
             "through production probe plane"
         )
 
