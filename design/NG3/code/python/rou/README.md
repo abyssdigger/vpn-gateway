@@ -46,13 +46,17 @@ Implemented:
 - pure combined mutation-step planner with stale local admission cleanup first, payload restrictive cleanup next, payload additions, and missing publication-local admission last;
 - guarded combined Profile/Device/NAT/publication-local nft Executor + Linux backend using one link-bracketed whole-table snapshot before and after each write, persistent closed ForwardingGate for payload safety, exact postcondition progress and no forwarding activation;
 - privileged combined coexistence integration covering materialization to exact state, atomic local-publication replacement, complete cleanup back to scaffold-only, Device-before-Profile ordering and fail-closed refusal of still-unclassified local owner classes;
+- EXP-048-backed structural payload route/RPDB Linux Driver using exact argv-only guard/path/dispatch add/delete primitives without independent observation;
+- pure exact-before-release cross-domain structural phase planner covering desired guards, stale RPDB retirement, stale route cleanup, desired path routes, nft convergence and RPDB activation last;
+- guarded cross-domain structural NetworkPolicyExecutor with one link-bracketed route/RPDB+nft snapshot, persistent closed ForwardingGate during mixed state, strict fresh postcondition progress, final forwarding activation only from exact state and immediate safety re-close when post-activation verification fails;
+- Linux cross-domain backend that observes route JSON + rule JSON + nft JSON inside one current-interface bracket and delegates mutation to the already evidenced route/RPDB and composite nft Drivers;
+- privileged cross-domain integration proving old-policy -> new-policy convergence without mixed-state forwarding, command-error-after-success recovery from fresh state, zero-path Profile blackhole behavior and same-name/new-ifindex fail-closed rejection before mutation;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
 
 - no Device Engine;
 - no Netlink event state/history/replay;
-- no complete cross-domain structural NetworkPolicyExecutor coordinating route/RPDB plus nft policy yet;
 - no generic local/system stack_input/stack_output exception framework; only Device transport publication is materialized, while loopback/probe/integration-specific exceptions remain behind their own lower evidence gates;
 - no full daemon/lifecycle assembly;
 - no production probe execution;
@@ -75,6 +79,7 @@ Code reviews for each unit are stored under `design/reviews/`.
 
 
 GitHub CI additionally runs privileged disposable-network-namespace integrations for the
-physical route-priority backend and the managed-netns forwarding gate. That integration exercises real iproute2 add/delete,
-make-before-break priority movement and recovery from an already materialized duplicate
-route state.
+physical route-priority backend, managed-netns forwarding gate, nft owner/mutation units and
+the complete cross-domain structural convergence reference. The latter exercises real
+route/RPDB+nft transition ordering, verified forwarding activation, fail-closed zero-path
+behavior and current-interface-generation rejection.

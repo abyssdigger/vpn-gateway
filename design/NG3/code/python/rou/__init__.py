@@ -234,6 +234,21 @@ from .payload_routing_compare import (
     PayloadRoutingComparisonError,
     compare_payload_routing,
 )
+from .structural_policy_mutation import (
+    StructuralPolicyComparison,
+    StructuralPolicyMutationResult,
+    StructuralPolicyMutationStatus,
+    StructuralPolicyPhysicalSnapshot,
+    compare_structural_policy,
+    converge_structural_policy_step_once,
+)
+from .linux_structural_policy import LinuxStructuralPolicyBackend
+from .structural_policy_plan import (
+    StructuralPolicyMutationStep,
+    StructuralPolicyPlanError,
+    StructuralPolicyStepKind,
+    select_structural_policy_step,
+)
 from .network_policy_layout import (
     NetworkPolicyLayout,
     NetworkPolicyLayoutError,
@@ -248,6 +263,10 @@ from .network_policy_layout import (
     allocate_network_policy_layout,
 )
 from .linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
+from .linux_structural_routing import (
+    LinuxStructuralRoutingBackend,
+    LinuxStructuralRoutingError,
+)
 from .profile_classification import (
     ProfileClassificationError,
     classify_inbound_profile,
@@ -422,6 +441,8 @@ __all__ = [
     "PayloadNatMutationStatus",
     "PayloadNatPhysicalSnapshot",
     "LinuxPayloadNatBackend",
+    "LinuxStructuralRoutingError",
+    "LinuxStructuralRoutingBackend",
     "compare_payload_nat",
     "observe_payload_forward",
     "select_composite_nft_step",
@@ -485,6 +506,14 @@ __all__ = [
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
+    "LinuxStructuralPolicyBackend",
+    "StructuralPolicyComparison",
+    "StructuralPolicyMutationResult",
+    "StructuralPolicyMutationStatus",
+    "StructuralPolicyPhysicalSnapshot",
+    "StructuralPolicyMutationStep",
+    "StructuralPolicyPlanError",
+    "StructuralPolicyStepKind",
     "StructuralRoutingInventoryError",
     "StructuralRoutingObservation",
     "SubprocessCommandRunner",
@@ -501,6 +530,9 @@ __all__ = [
     "build_inbound_profile_partition",
     "build_outbound_profile_partition",
     "compare_payload_nft_scaffold",
+    "compare_structural_policy",
+    "converge_structural_policy_step_once",
+    "select_structural_policy_step",
     "compare_payload_routing",
     "converge_device_firewall_step_once",
     "converge_forwarding_gate_once",

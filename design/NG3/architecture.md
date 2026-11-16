@@ -46,6 +46,9 @@ Current trace:
 | complete payload route/RPDB desired-state projection | `payload_routing_desired.py` | `NG3-2026-11-16-payload-routing-desired-state-review.md` |
 | strict whole-reserved route/RPDB structural observation | `structural_routing_inventory.py` | `NG3-2026-11-16-structural-routing-inventory-review.md` |
 | pure payload actual-vs-desired structural comparison | `payload_routing_compare.py` | `NG3-2026-11-16-payload-routing-comparison-review.md` |
+| EXP-048-backed structural route/RPDB mutation Driver | `linux_structural_routing.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md`, `EXP-048-result-20261116.md` |
+| exact-before-release cross-domain phase planner | `structural_policy_plan.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
+| guarded cross-domain structural Executor + Linux snapshot backend | `structural_policy_mutation.py`, `linux_structural_policy.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | managed-netns structural forwarding gate | `forwarding_gate.py`, `linux_forwarding_gate.py` | `NG3-2026-11-16-forwarding-gate-code-review.md`, `EXP-030-result-20261116.md` |
 | nft table-level ownership observation | `nft_namespace_inventory.py` | `NG3-2026-11-16-nft-namespace-inventory-code-review.md`, `EXP-031-result-20261116.md` |
 | invariant payload nft scaffold comparison | `nft_payload_scaffold.py` | `NG3-2026-11-16-payload-nft-scaffold-code-review.md`, `EXP-032-result-20261116.md` |
@@ -58,7 +61,6 @@ The implementation intentionally stops before unresolved or separately-gated bou
 - final Device NAT/firewall/publication user grammar;
 - availability user timing grammar;
 - Netlink/poll scheduling and full VPNPathAdapter runtime collection;
-- general Linux route/RPDB/nft policy mutation beyond the bounded pure-priority route-key backend;
 - ICMP execution/probe-plane production mechanism;
 - full lifecycle/deployment assembly.
 
@@ -4006,6 +4008,103 @@ visible.
 
 This observation boundary is read-only. It does not authorize cleanup or activation by
 itself.
+
+### 10.2.4. Executable cross-domain structural convergence
+
+The first-release reference implementation now closes the guarded route/RPDB+nft boundary
+without introducing another semantic owner.
+
+The invariant four-chain nft scaffold remains a separate lower bootstrap/repair prerequisite.
+The cross-domain Executor does not silently create or adopt it:
+
+```text
+scaffold absent/incomplete
+    -> PRECONDITION_FAILED
+    -> run the already accepted scaffold bootstrap/repair boundary
+
+reserved nft ownership/shape conflict
+    -> CONFLICT
+    -> no structural mutation
+```
+
+Once that prerequisite is satisfied, one authoritative structural snapshot is:
+
+```text
+fresh link inventory
+    -> full reserved IPv4 route JSON
+    -> full reserved IPv4 rule JSON
+    -> full nft ruleset JSON
+    -> fresh link inventory
+```
+
+The two link inventories must be identical. Route/RPDB and nft comparisons therefore consume
+one common current interface generation rather than independent nested observations.
+
+Each Executor invocation:
+
+1. closes and rereads the managed IPv4 ForwardingGate;
+2. obtains one fresh cross-domain snapshot;
+3. computes current routing+nft comparison;
+4. selects at most one mutation from the accepted exact-before-release phase planner;
+5. rechecks that the ForwardingGate is still closed;
+6. applies exactly one route/RPDB or nft mutation;
+7. obtains a fresh cross-domain snapshot;
+8. accepts command failure as non-authoritative when the fresh state nevertheless proves
+   strict progress;
+9. otherwise keeps forwarding closed and returns the observed failure/conflict.
+
+No stale mutation plan is replayed. A later invocation always replans from fresh state.
+
+The Linux route/RPDB Driver is intentionally mutation-only. It uses the EXP-048-backed exact
+argv forms for:
+
+- terminal blackhole guard add/delete;
+- ordinary path-route add/delete;
+- payload host-boundary RPDB dispatch add/delete.
+
+It does not perform an independent observation and does not infer ownership from a reserved
+table/priority alone. Stale deletes consume typed objects produced by the whole-reserved
+observer.
+
+When a fresh post-write snapshot is fully exact, activation is a separate verified phase:
+
+```text
+exact routing+nft while ForwardingGate=DISABLED
+    -> recheck gate still DISABLED
+    -> set/reread ForwardingGate=ENABLED
+    -> fresh whole cross-domain snapshot
+    -> reread gate
+    -> CONFIRMED only if state is still exact and gate is ENABLED
+```
+
+If the post-activation whole-state verification fails, the Executor immediately attempts to
+restore and reread `ForwardingGate=DISABLED`. A verified re-close is reported as a failed
+activation/final verification, not as success. Failure to confirm the safety re-close is a
+separate `SAFETY_RECLOSE_FAILED` result.
+
+The root forwarding barrier protects managed payload forwarding only. Publication-local
+INPUT/OUTPUT state remains governed by its EXP-047 atomic full-diff contract and is included
+in the nft exactness check; the Executor does not pretend that `ip_forward=0` blocks local
+traffic. Probe-owned local/system materialization remains behind
+`design/deferrals/NG3-probe-local-system-materialization.md`.
+
+Privileged integration run `43949342868` proves on the current GitHub Linux environment:
+
+- an old accepted route/RPDB+nft policy can carry real traffic through ALT;
+- every mixed-state convergence step retains `ForwardingGate=DISABLED` and real traffic is
+  blocked;
+- the exact new policy is activated only after routing+nft confirmation and then carries real
+  traffic through VPN;
+- an injected exception after a physically successful final RPDB add is recovered from fresh
+  state and does not cause blind replay;
+- a zero-path Profile retains desired RPDB dispatch plus terminal blackhole and cannot fall
+  through to ambient/main routing after forwarding is re-enabled;
+- same-name/new-ifindex replacement makes the stale desired interface generation invalid
+  before mutation, leaves forwarding closed and materializes no new path route.
+
+This executable reference does not subsume the pure-priority fast path. Priority-only metric
+movement remains the non-disruptive path when structural membership/filter/NAT semantics are
+unchanged.
 
 # 11. Event contracts
 
