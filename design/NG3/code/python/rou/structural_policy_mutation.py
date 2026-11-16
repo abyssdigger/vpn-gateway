@@ -22,7 +22,11 @@ from .forwarding_gate import (
 from .interface_identity import InterfaceIdentity
 from .local_publication_mutation import LocalPublicationMutationStep
 from .network_policy_layout import NetworkPolicyPlatformSpace
-from .nft_namespace_inventory import NftNamespaceObservation
+from .nft_namespace_inventory import (
+    NftNamespaceObservation,
+    NftNamespaceStatus,
+)
+from .nft_payload_scaffold import compare_payload_nft_scaffold
 from .payload_forward_desired import PayloadForwardRuleSpec
 from .payload_nat_desired import PayloadMasqueradeSpec
 from .payload_routing_compare import (
@@ -86,8 +90,17 @@ class StructuralPolicyMutationBackend(Protocol):
     ) -> None: ...
 
 
+class StructuralPolicyPreconditionError(ValueError):
+    pass
+
+
+class StructuralPolicyConflictError(ValueError):
+    pass
+
+
 class StructuralPolicyMutationStatus(str, Enum):
     CONFIRMED = "confirmed"
+    PRECONDITION_FAILED = "precondition_failed"
     STEP_APPLIED = "step_applied"
     BARRIER_FAILED = "barrier_failed"
     BARRIER_LOST = "barrier_lost"
@@ -132,17 +145,40 @@ def compare_structural_policy(
 ) -> StructuralPolicyComparison:
     if not isinstance(snapshot, StructuralPolicyPhysicalSnapshot):
         raise ValueError("snapshot must be StructuralPolicyPhysicalSnapshot")
-    return StructuralPolicyComparison(
-        routing=compare_payload_routing(
+
+    scaffold = compare_payload_nft_scaffold(snapshot.nft)
+    if (
+        scaffold.namespace_status is NftNamespaceStatus.CONFLICT
+        or scaffold.conflicts
+    ):
+        reason = (
+            scaffold.conflicts[0].reason
+            if scaffold.conflicts
+            else "reserved nft namespace ownership conflict"
+        )
+        raise StructuralPolicyConflictError(reason)
+    if not scaffold.scaffold_confirmed:
+        raise StructuralPolicyPreconditionError(
+            "invariant nft scaffold is not confirmed"
+        )
+
+    try:
+        routing = compare_payload_routing(
             routing_desired,
             snapshot.routing,
             platform,
-        ),
-        nft=compare_composite_nft_policy(
+        )
+        nft = compare_composite_nft_policy(
             snapshot.nft,
             snapshot.interfaces,
             nft_desired,
-        ),
+        )
+    except ValueError as exc:
+        raise StructuralPolicyConflictError(str(exc)) from exc
+
+    return StructuralPolicyComparison(
+        routing=routing,
+        nft=nft,
     )
 
 
@@ -207,7 +243,12 @@ def converge_structural_policy_step_once(
             nft_desired,
             platform,
         )
-    except ValueError as exc:
+    except StructuralPolicyPreconditionError as exc:
+        return result(
+            StructuralPolicyMutationStatus.PRECONDITION_FAILED,
+            diagnostic=str(exc),
+        )
+    except StructuralPolicyConflictError as exc:
         return result(
             StructuralPolicyMutationStatus.CONFLICT,
             diagnostic=str(exc),
@@ -276,7 +317,26 @@ def converge_structural_policy_step_once(
             nft_desired,
             platform,
         )
-    except ValueError as exc:
+    except StructuralPolicyPreconditionError as exc:
+        return result(
+            (
+                StructuralPolicyMutationStatus.APPLY_FAILED
+                if apply_error is not None
+                else StructuralPolicyMutationStatus.POSTCONDITION_FAILED
+            ),
+            initial,
+            attempted=True,
+            step=step,
+            diagnostic=(
+                f"after-write scaffold precondition failed: {exc}"
+                + (
+                    f"; apply error: {type(apply_error).__name__}: {apply_error}"
+                    if apply_error is not None
+                    else ""
+                )
+            ),
+        )
+    except StructuralPolicyConflictError as exc:
         return result(
             (
                 StructuralPolicyMutationStatus.APPLY_FAILED
