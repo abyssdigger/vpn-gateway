@@ -2121,10 +2121,75 @@ The composite nft owner comparison now recognizes exact publication-local rules 
 to Profile forward, Device firewall and payload NAT. Unknown `stack_input` /
 `stack_output` rules remain whole-scope conflicts.
 
-**Local mutation remains gated.** The managed IPv4 ForwardingGate is not a safety barrier for
-locally delivered INPUT/OUTPUT traffic. Therefore a missing or stale publication-local rule
-blocks the current composite payload mutation planner rather than being repaired by it.
-Physical local-rule convergence requires a separate mutation-safety design/evidence unit.
+###### Publication local/system mutation — EXP-047
+
+The managed IPv4 ForwardingGate is **not** a safety barrier for locally delivered
+`stack_input` / `stack_output` traffic. Local publication mutation therefore has its own
+lower safety primitive rather than inheriting payload-policy assumptions.
+
+EXP-047 proves that one `nft -f -` batch is transactional for the publication-local owner
+class:
+
+- exact INPUT/OUTPUT additions become visible only when the whole batch commits;
+- an invalid later command rolls back an earlier valid command from the same batch;
+- exact-handle INPUT/OUTPUT deletion may be submitted in one transaction;
+- the transaction leaves Profile forward / Device firewall / payload NAT objects untouched.
+
+The lower desired state enforces a complete pair for every publication endpoint:
+
+```text
+one normalized publication endpoint
+    -> exactly one stack_input rule
+    -> exactly one stack_output rule
+```
+
+A partial physical pair is drift, not a legal desired state.
+
+`select_local_publication_step` computes one atomic **full diff** across the publication-local
+owner class:
+
+```text
+all observed stale publication-local handles
+    + all missing exact desired publication-local rules
+        -> one nft transaction
+```
+
+No old->new endpoint identity is inferred. Handles are ephemeral references from the current
+fresh observation and include their exact hook/chain identity. There is no persistent handle
+registry.
+
+The Linux publication Driver renders only EXP-046-backed rule shapes and applies the whole
+diff in one nft transaction. Fresh exact observation remains the postcondition authority.
+
+The composite whole-table planner now includes publication-local state. Its safety ordering is:
+
+```text
+cleanup:
+    stale local publication accepts
+    -> stale Profile positive admission
+    -> stale Device jump
+    -> stale Device child
+    -> stale NAT
+
+addition:
+    missing NAT
+    -> missing Device child/jump
+    -> missing Profile positive admission
+    -> missing local publication full diff
+```
+
+The publication-local add is deliberately last because it is an independent positive local
+permission and is not protected by ForwardingGate. Stale local permissions are removed first
+for the same reason.
+
+The privileged composite integration proves coexistence of Profile forward, Device firewall,
+payload NAT and publication-local rules in one reserved table. It also proves one-step atomic
+replacement of an existing publication endpoint rule pair with a new desired pair, followed
+by exact whole-scope confirmation.
+
+This closes physical local-rule convergence **only for Device transport publication**.
+Loopback, probe and integration-specific exceptions remain unmaterialized until each function
+has its own exact lower selector/evidence unit.
 
 Probe remains independently gated by the EXP-024/025/026 generation/conntrack evidence and
 is not widened by the publication result.
