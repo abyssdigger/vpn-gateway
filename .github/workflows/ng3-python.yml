@@ -273,6 +273,13 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_device_firewall_mutation.py
+      - name: NG3 combined Profile Device NAT convergence integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_composite_nft_mutation.py
 
   linux-endpoint-provenance:
     runs-on: ubuntu-latest
