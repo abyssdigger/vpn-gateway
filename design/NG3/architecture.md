@@ -1945,6 +1945,14 @@ retry engine или вторую policy-classification логику.
 платформенно подтверждённой; даже PASS не разрешает materialization
 непроверенной полной Profile permission или открытие `ForwardingGate`.
 
+**EXP-035 result:** PASS on privileged GitHub Linux CI. Numeric current
+`meta iif/oif` plus `ct state new` and exact IPv4 destination prefix
+matched only the intended NEW packet. Different ingress, different egress,
+outside-prefix traffic and same-name/new-ifindex replacement did not match.
+Current interface operands rendered symbolically; the stale old oif rendered
+as a decimal-string ifindex. This evidence accepts the lower primitive only;
+full payload filter semantics remain gated as stated above.
+
 
 `payload_postrouting` exists as the stable owner boundary for supported payload source-NAT
 realization. It is valid and intentionally empty when no accepted Device/path requires NAT.

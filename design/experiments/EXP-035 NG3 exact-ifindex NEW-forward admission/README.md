@@ -1,6 +1,6 @@
 # EXP-035 — NG3 exact-ifindex NEW-flow nft FORWARD admission
 
-**Status:** PREPARED / UNPROVEN.
+**Status:** PASS on privileged GitHub Linux CI; lower primitive only.
 **Owner:** NG3 lower Linux nft implementation.
 **Environment:** privileged GitHub Actions Linux runner, disposable netns.
 
@@ -29,6 +29,4 @@ longest-prefix arbitration from the result.
 
 ## Result
 
-PENDING. CI/harness evidence and architectural consequence to be
-recorded without promoting test syntax to accepted production shape
-until the result has been reviewed.
+PASS — see `EXP-035-result-20261116.md`. The result proves the tested lower nft primitive only; it does not define complete Profile filtering semantics.
