@@ -49,3 +49,12 @@ The experiment records the host `net.ipv4.ip_forward` value and never writes it.
 
 All hypotheses must pass in privileged GitHub CI before the managed-netns sysctl is accepted
 as the executable NG3 structural root barrier.
+
+
+## Result
+
+**COMPLETE — PASS.**
+
+GitHub Actions run: `43836959288`.
+
+See `EXP-030-result-20261116.md` for packet-path evidence and the accepted lower contract.

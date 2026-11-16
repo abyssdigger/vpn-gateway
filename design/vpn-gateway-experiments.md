@@ -1,3 +1,20 @@
+## EXP-030 — NG3 managed-netns forwarding barrier
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** NG3 structural root barrier review  
+**Тип:** managed-network-namespace IPv4 forwarding safety barrier  
+**Design:** [EXP-030 README](experiments/EXP-030%20NG3%20managed-netns%20forwarding%20barrier/README.md)  
+**Result:** [EXP-030 result](experiments/EXP-030%20NG3%20managed-netns%20forwarding%20barrier/EXP-030-result-20261116.md)
+
+Privileged CI на реальном трехnamespace packet path подтвердил, что
+`net.ipv4.ip_forward=0` внутри managed namespace блокирует транзит, `1` восстанавливает
+его, а host namespace value при этом не изменяется.
+
+Принят safety contract: structural mutation может считать barrier установленным только
+после fresh reread `ip_forward == 0`.
+
+---
+
 ## EXP-029 — NG3 structural routing inventory shape
 
 **Статус:** COMPLETE — PASS  

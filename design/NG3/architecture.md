@@ -2277,6 +2277,19 @@ ForwardingGate:
 
 Only `observed = 0` is sufficient as the structural barrier.
 
+EXP-030 passed in privileged GitHub CI and proved the selected primitive on the current Linux
+target with real forwarded packets:
+
+- the managed namespace value was independently writable/readable;
+- changing it did not change the host namespace value;
+- `ip_forward=1` passed transit ICMP across a two-interface routing namespace;
+- `ip_forward=0` blocked that same transit path;
+- restoring and rereading `1` restored forwarding.
+
+The executable lower backend may therefore use
+`ip netns exec <managed-ns> sysctl ... net.ipv4.ip_forward`, but success remains defined by
+the fresh reread value rather than process exit status alone.
+
 #### Structural transaction ordering
 
 With the root barrier verified, the physical structural transaction has this ordering
