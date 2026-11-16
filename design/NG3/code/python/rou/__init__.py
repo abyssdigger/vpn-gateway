@@ -80,6 +80,16 @@ from .direct_device_route import (
     DirectDeviceRouteRealizationError,
     realize_direct_device_path_routes,
 )
+from .device_policy import (
+    DeviceNatPolicyIntent,
+    NatIntent,
+)
+from .payload_nat_desired import (
+    PayloadMasqueradeSpec,
+    PayloadNatDesiredState,
+    PayloadNatProjectionError,
+    build_payload_nat_desired_state,
+)
 from .payload_profile import (
     PayloadProfileProjectionError,
     PayloadProfileRequest,
@@ -180,6 +190,7 @@ __all__ = [
     "DeviceBindingProjection",
     "DeviceBindingState",
     "DeviceStructuralIntent",
+    "DeviceNatPolicyIntent",
     "DirectDeviceRouteRealizationError",
     "Direction",
     "ExpectedInterfaceSelector",
@@ -202,6 +213,7 @@ __all__ = [
     "NftBaseChainSpec",
     "LinuxNftNamespaceBackend",
     "LinuxNftScaffoldBackend",
+    "NatIntent",
     "NetworkPolicyLayout",
     "NetworkPolicyLayoutError",
     "NetworkPolicyPlatformSpace",
@@ -225,6 +237,9 @@ __all__ = [
     "PayloadDispatchRule",
     "PayloadNftScaffoldPrepareResult",
     "PayloadNftScaffoldPrepareStatus",
+    "PayloadMasqueradeSpec",
+    "PayloadNatDesiredState",
+    "PayloadNatProjectionError",
     "PayloadPolicyAllocation",
     "PayloadProfileProjectionError",
     "PayloadProfileRequest",
@@ -269,6 +284,7 @@ __all__ = [
     "allocate_network_policy_layout",
     "apply_availability_evidence",
     "calculate_effective_path_order",
+    "build_payload_nat_desired_state",
     "build_payload_profile_requests",
     "build_payload_routing_desired_state",
     "build_route_priority_domain_realizations",

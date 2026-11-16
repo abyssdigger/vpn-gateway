@@ -33,6 +33,7 @@ Implemented:
 - EXP-031-backed read-only nft table ownership observation using the exact `vpn-gate:ng3:owner-v1` marker and canonical contained-object capture;
 - EXP-032-backed pure payload nft scaffold contract/comparison for exact fail-closed FORWARD and empty postrouting NAT base-chain metadata;
 - guarded physical payload nft scaffold bootstrap/repair that closes/rechecks the managed-netns ForwardingGate and refuses mutation through conflicts or unclassified nft objects;
+- EXP-033-backed normalized Device NAT intent and pure payload masquerade desired projection using exact current boundary/egress InterfaceIdentity values, without selecting external TOML grammar;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
