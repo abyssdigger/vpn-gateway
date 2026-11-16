@@ -224,3 +224,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-038 NG3 payload-forward prefix-boundary JSON/exp038_prefix_boundary_json.py"
+      - name: NG3 strict payload_forward observer integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_payload_forward_observation.py
