@@ -487,6 +487,16 @@ protocol-specific discovery mechanics remain replaceable interface/integration d
 - `VPNG-R1.R2.R4.R4.R2`
 - `VPNG-R1.R2.R4.R4.R3`
 - `VPNG-R1.R2.R4.R5`
+- `VPNG-R1.R2.R4.R6`
+- `VPNG-R1.R2.R4.R6.R1`
+- `VPNG-R1.R2.R4.R6.R2`
+- `VPNG-R1.R2.R4.R6.R3`
+- `VPNG-R1.R2.R4.R6.C1`
+- `VPNG-R1.R2.R5`
+- `VPNG-R1.R2.R5.R1`
+- `VPNG-R1.R2.R5.R2`
+- `VPNG-R1.R2.R5.R3`
+- `VPNG-R1.R2.R5.R4`
 - `VPNG-R1.R3.C1.R1`
 - `VPNG-R2.R1`
 - `VPNG-R2.R1.R1`
@@ -546,6 +556,9 @@ DeviceConfigIntent:
     device_id
     enabled
     expected_interfaces[] = ordered(selector, quota)
+    nat_intent
+    traffic_envelope?
+    publications?
 
 ProfileConfigIntent:
     profile_id
@@ -559,13 +572,11 @@ DeviceBindingIntent:
     device_id
     expected_interfaces[]
 
-ProfileConfigIntent:
-    profile_id
-    enabled
-    direction
-    destinations[]
-    device_order[]
-    availability_check?
+DevicePolicyIntent:
+    device_id
+    nat_intent
+    traffic_envelope?
+    publications?
 
 PayloadProfileRequest:
     profile_id
@@ -591,10 +602,23 @@ Key normalization rules:
 - disabled Device/Profile placeholders do not require active-object semantic completeness;
 - active Devices are derived as enabled Devices referenced by at least one enabled Profile;
 - `DeviceBindingIntent` retains ordered expected-interface selectors and quotas;
-- `PayloadProfileRequest` retains explicit direction, remote destinations and ordered Device
+- `ProfileConfigIntent` retains explicit direction, remote destinations and ordered Device
   references;
+- `PayloadProfileRequest` contains the concrete ordered logical paths obtained after binding
+  while preserving Profile identity/direction/destinations;
 - current concrete logical paths are derived from accepted Device bindings, not written
   directly into Profile config;
+- supported user-facing values are parsed strictly and canonically; invalid/ambiguous input is
+  rejected rather than silently repaired;
+- field order is semantic only where the contract explicitly declares policy order;
+- derived implementation values such as aggregate Device quota, ifindex, route metrics and
+  table/rule priorities are not required from the user;
+- Device NAT intent is explicit; no implicit active-Device NAT default is assumed;
+- Device traffic envelope is normalized as a restrictive policy that can only narrow Profile
+  permission;
+- Device transport publication intent is normalized separately from Profile payload routing;
+- exact final TOML grammar for envelope/publication remains an interface-review item and is
+  not inferred from historical prototype spellings;
 - availability subject identity is exactly `(profile_id, logical_path_id)`;
 - the same bound interface/path may therefore have independent availability state in
   different Profiles;
@@ -609,6 +633,59 @@ and Profile fields are normative interface behavior in `design/NG3/config-model.
 
 Payload policy, Device binding and availability remain separate normalized contracts even
 though they originate from one human configuration.
+
+### Device policy normalization
+
+**Implements:**
+- `VPNG-R1.R2.R4.R6`
+- `VPNG-R1.R2.R4.R6.R1`
+- `VPNG-R1.R2.R4.R6.R2`
+- `VPNG-R1.R2.R4.R6.R3`
+- `VPNG-R1.R2.R4.R6.C1`
+- `VPNG-R2.R1`
+- `VPNG-R2.R2`
+- `VPNG-R2.R3`
+- `VPNG-R4.R1`
+
+The configuration boundary keeps Device transport policy separate from Profile need.
+
+```text
+DeviceConfigIntent
+    -> DeviceBindingIntent
+    -> DevicePolicyIntent
+```
+
+NAT semantics currently recovered at product level:
+
+```text
+none
+    -> no VPN-GATE payload source NAT on this Device/path
+
+masquerade
+    -> source NAT through the current concrete path of this Device
+```
+
+There is no implicit active-Device NAT default.
+
+Traffic envelope semantics:
+
+```text
+effective payload permission
+    = Profile permission
+      INTERSECT
+      Device envelope
+```
+
+The envelope can remove permission but cannot create destinations, directions or path
+eligibility absent from Profile policy.
+
+Transport publication semantics remain a Device/transport concern. The normalized intent
+describes an explicitly owned host-side publication boundary into the managed network domain;
+it is not part of Profile routing identity or availability health.
+
+Historical envelope/publication TOML examples are schema-design evidence only. Until an exact
+NG3 grammar is accepted, `ConfigurationAdapter` must reject unsupported guessed forms rather
+than emulate old spellings heuristically.
 
 ### AvailabilityTargetCalculator
 
@@ -665,6 +742,9 @@ Validation must reject at least:
 - duplicate Device references inside one Profile;
 - duplicate exact destination ownership among enabled Profiles;
 - invalid/non-strict IPv4 destination CIDRs;
+- missing/invalid explicit Device NAT intent where the supported Device capability requires it;
+- Device envelope declarations that would expand rather than restrict Profile permission;
+- unsupported/ambiguous traffic-envelope or publication grammar;
 - malformed or unsupported availability-check mechanism/target;
 - a target-less probe when subject/topology semantics cannot produce one unambiguous concrete
   normalized target;
@@ -1021,6 +1101,8 @@ Its semantic inputs are:
 enabled ProfileConfigIntent set
 +
 current Device binding projection
++
+normalized DevicePolicyIntent set
 ```
 
 It first produces one `PayloadProfileRequest` per enabled Profile, then the structural
@@ -1041,6 +1123,10 @@ The Calculator must preserve these invariants:
 - direction is explicit and independent;
 - configured preference follows Profile.device_order -> expected-interface order -> stable
   slot;
+- Device traffic envelope is intersected with Profile permission before lower Adapter
+  materialization and can never widen Profile permission;
+- per-path NAT intent comes from the owning Device policy and is independent from availability;
+- transport publication intent is not interpreted as Profile payload permission;
 - availability state is not an input to structural membership or permission;
 - availability can later reorder only already-eligible logical paths.
 
@@ -1633,7 +1719,7 @@ internal Manager state.
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG-R1.R2` declarative operation | recovered Device/Profile TOML contract normalized by ConfigurationAdapter; lifecycle controls remain separate |
+| `VPNG-R1.R2` declarative operation | recovered strict Device/Profile user contract normalized by ConfigurationAdapter, including Device transport-policy intents; unresolved envelope/publication prototype grammar remains explicitly non-normative |
 | `VPNG-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
