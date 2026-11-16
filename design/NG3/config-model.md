@@ -109,6 +109,19 @@ An unknown Device reference is invalid.
 
 # 3.1. Recovered configuration-language principles
 
+The source material distinguishes two layers:
+
+```text
+stable user semantics
+    -> should be recovered into NG3 requirements
+
+last agreed prototype spelling
+    -> evidence for schema design, but not automatically NG3 schema v1
+```
+
+This distinction is especially important for Device NAT, traffic-envelope and publication
+fields.
+
 The historical config work established principles stronger than any one prototype spelling:
 
 - object IDs use stable opaque identifiers; current recovered grammar is
@@ -235,10 +248,12 @@ their final NG3 human-facing grammar remains under review.
 
 Historical Device policy distinguished at least:
 
-```text
-none
-masquerade
+```toml
+nat = "none"
+nat = "masquerade"
 ```
+
+The last agreed prototype deliberately had **no implicit NAT default** for an active Device.
 
 Semantics:
 
@@ -248,8 +263,10 @@ Semantics:
 
 NAT belongs to transport/path policy, not availability/health.
 
-The old spelling `nat = "none|masquerade"` is a strong prototype candidate, but this
-document does not yet promote that exact spelling to final NG3 schema.
+The spelling `nat = "none|masquerade"` is the last agreed prototype and is strong schema
+evidence. NG3 requirements already retain the semantic obligation that NAT intent be explicit;
+the final schema review must decide whether this exact spelling becomes normative. No
+`snat = <address>` capability is recovered from the prototype.
 
 ### Device traffic envelope
 
@@ -267,9 +284,34 @@ effective permission
 The envelope may restrict traffic allowed by Profile semantics but must never expand Profile
 permission or bypass Profile direction/destination/path eligibility.
 
-Historical design included source/destination prefixes, protocol and ports, but the
-human-facing TOML grammar was explicitly left unresolved. NG3 must recover/decide that
-grammar rather than infer it from old examples.
+Historical design included source/destination prefixes, protocol and ports.
+
+Recovered prototype example:
+
+```toml
+[device.oc-main.traffic_envelope]
+default = "allow"
+
+[[device.oc-main.traffic_envelope.rules]]
+direction = "from-device"
+action = "drop"
+source = "10.20.0.0/16"
+protocol = "tcp"
+destination_ports = ["8007"]
+```
+
+Recovered value grammar also used strict port forms:
+
+```text
+"N"
+"A-B"
+```
+
+with inclusive `1..65535` bounds and rejection of reversed/invalid ranges.
+
+However the normative NG1 config document explicitly left the **final human-facing
+traffic-envelope TOML grammar unresolved**. These examples are prototype evidence, not
+automatic NG3 schema.
 
 ### Device publications
 
@@ -281,8 +323,41 @@ inside the managed network domain so VPN transport configuration can remain stab
 EXP-010/011 prove publication as a technical boundary, including real OpenConnect same-port
 TCP/UDP publication.
 
-Historical NG1 explicitly left the human-facing publication grammar unresolved. NG3 must
-not declare a prototype range syntax normative merely because it was discussed.
+Recovered prototype publication syntax used compact values such as:
+
+```text
+<external>/<protocol>[><internal>]
+
+44443/tcp
+5678/udp>7890
+4700:4900/udp>55200:55400
+```
+
+Recovered value rules included:
+
+- ports `1..65535`;
+- inclusive ranges;
+- equal cardinality for range-to-range mapping;
+- rejection of reversed/invalid ranges;
+- rejection of semantically ambiguous overlaps;
+- TCP and UDP are separate protocol domains.
+
+Historical NG1 explicitly left the **final human-facing publication grammar unresolved**.
+NG3 must not declare this prototype syntax normative merely because it was discussed.
+
+### Requirement trace
+
+The recovered Device policy/config semantics refine:
+
+- `VPNG-R1.R2.R4.R6`;
+- `VPNG-R1.R2.R4.R6.R1`;
+- `VPNG-R1.R2.R4.R6.R2`;
+- `VPNG-R1.R2.R4.R6.R3`;
+- `VPNG-R1.R2.R4.R6.C1`;
+- `VPNG-R1.R2.R5` and its canonical-config children.
+
+These nodes remain open until the full Device/config + experiment recovery review is
+performed.
 
 ### Ordering
 
@@ -594,7 +669,10 @@ At minimum, accepted configuration must enforce:
 - exact duplicate destination ownership across enabled Profiles is rejected;
 - overlapping destinations remain deterministic;
 - availability target is normalized to a concrete IPv4 before runtime probe execution;
-- any semantic failure is reported before dependent network actuation.
+- any semantic failure is reported before dependent network actuation;
+- active Device NAT intent is explicit when NAT capability is used;
+- user input is not silently canonicalized when the accepted contract requires strict form;
+- derived values such as aggregate Device quota are not required from the user.
 
 Disabled placeholders are the explicit exception to active-object field completeness.
 
