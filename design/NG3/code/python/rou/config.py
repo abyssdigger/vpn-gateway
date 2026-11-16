@@ -150,15 +150,24 @@ def _parse_profile(profile_id: str, raw: Any) -> ProfileStructuralIntent:
     raw_destinations = body.get("destinations")
     if not isinstance(raw_destinations, list) or not raw_destinations:
         raise ConfigError(f"{where}.destinations must be a non-empty array")
-    destinations = tuple(
+    parsed_destinations = tuple(
         _strict_ipv4_network(
             value,
             f"{where}.destinations[{index}]",
         )
         for index, value in enumerate(raw_destinations)
     )
-    if len(set(destinations)) != len(destinations):
+    if len(set(parsed_destinations)) != len(parsed_destinations):
         raise ConfigError(f"{where}.destinations contains duplicates")
+    destinations = tuple(
+        sorted(
+            parsed_destinations,
+            key=lambda network: (
+                int(network.network_address),
+                network.prefixlen,
+            ),
+        )
+    )
 
     order = body.get("device_order")
     if not isinstance(order, list) or not order:
