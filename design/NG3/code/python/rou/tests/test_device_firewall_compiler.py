@@ -187,22 +187,62 @@ class DeviceFirewallCompilerTests(unittest.TestCase):
                 in_chain_name="dfw_in",
             )
 
-    def test_reject_remains_behind_separate_lower_gate(self):
+    def test_tcp_reject_compiles_to_reset(self):
         rule = DeviceFirewallRuleIntent(
             direction=DeviceFirewallDirection.OUT,
             action=DeviceFirewallAction.REJECT,
+            protocol="tcp",
+            destination_port=443,
         )
-        with self.assertRaisesRegex(
-            DeviceFirewallCompileError,
-            "REJECT lower realization is not accepted yet",
-        ):
-            compile_device_firewall_policy(
-                DeviceFirewallPolicyIntent("wg-main", (rule,)),
-                HOST,
-                VPN,
-                out_chain_name="dfw_out",
-                in_chain_name="dfw_in",
-            )
+        value = compile_device_firewall_policy(
+            DeviceFirewallPolicyIntent("wg-main", (rule,)),
+            HOST,
+            VPN,
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+        )
+        compiled = value.chains[0].rules[0]
+        self.assertEqual(compiled.action, DeviceFirewallRuleAction.REJECT)
+        self.assertEqual(
+            compiled.action_json,
+            '{"reject":{"type":"tcp reset"}}',
+        )
+
+    def test_non_tcp_and_generic_reject_compile_to_icmp_unreachable(self):
+        cases = (
+            DeviceFirewallRuleIntent(
+                direction=DeviceFirewallDirection.OUT,
+                action=DeviceFirewallAction.REJECT,
+            ),
+            DeviceFirewallRuleIntent(
+                direction=DeviceFirewallDirection.OUT,
+                action=DeviceFirewallAction.REJECT,
+                protocol="udp",
+            ),
+            DeviceFirewallRuleIntent(
+                direction=DeviceFirewallDirection.OUT,
+                action=DeviceFirewallAction.REJECT,
+                protocol="icmp",
+            ),
+        )
+        for rule in cases:
+            with self.subTest(protocol=rule.protocol):
+                value = compile_device_firewall_policy(
+                    DeviceFirewallPolicyIntent("wg-main", (rule,)),
+                    HOST,
+                    VPN,
+                    out_chain_name="dfw_out",
+                    in_chain_name="dfw_in",
+                )
+                compiled = value.chains[0].rules[0]
+                self.assertEqual(
+                    compiled.action,
+                    DeviceFirewallRuleAction.REJECT,
+                )
+                self.assertEqual(
+                    compiled.action_json,
+                    '{"reject":{"expr":"port-unreachable","type":"icmp"}}',
+                )
 
 
 if __name__ == "__main__":
