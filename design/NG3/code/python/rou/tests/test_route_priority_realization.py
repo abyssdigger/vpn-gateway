@@ -75,6 +75,16 @@ class RoutePriorityRealizationTests(unittest.TestCase):
         )
         self.assertEqual(dict(value.desired_metrics((A,))), {A: 10})
 
+    def test_preference_slots_must_follow_linux_metric_preference(self):
+        with self.assertRaisesRegex(
+            RoutePriorityRealizationError,
+            "strictly increasing",
+        ):
+            RoutePriorityMetricSpace(
+                preference_slots=(20, 10),
+                scratch_metrics=(30,),
+            )
+
     def test_metric_space_rejects_duplicate_or_invalid_metrics(self):
         with self.assertRaisesRegex(
             RoutePriorityRealizationError,
@@ -86,9 +96,14 @@ class RoutePriorityRealizationTests(unittest.TestCase):
             )
         with self.assertRaisesRegex(
             RoutePriorityRealizationError,
-            "non-negative integers",
+            "integers in",
         ):
             RoutePriorityMetricSpace(preference_slots=(True,))
+        with self.assertRaisesRegex(
+            RoutePriorityRealizationError,
+            "integers in",
+        ):
+            RoutePriorityMetricSpace(preference_slots=(0x1_0000_0000,))
 
     def test_one_endpoint_cannot_realize_two_logical_paths(self):
         with self.assertRaisesRegex(

@@ -26,13 +26,20 @@ class RoutePriorityMetricSpace:
                 "preference_slots must be non-empty"
             )
         all_metrics = self.preference_slots + self.scratch_metrics
-        if any(type(metric) is not int or metric < 0 for metric in all_metrics):
+        if any(
+            type(metric) is not int or not 0 <= metric <= 0xFFFFFFFF
+            for metric in all_metrics
+        ):
             raise RoutePriorityRealizationError(
-                "all route-priority metrics must be non-negative integers"
+                "all route-priority metrics must be integers in [0, 2^32-1]"
             )
         if len(set(all_metrics)) != len(all_metrics):
             raise RoutePriorityRealizationError(
                 "route-priority metric space contains duplicate metrics"
+            )
+        if tuple(sorted(self.preference_slots)) != self.preference_slots:
+            raise RoutePriorityRealizationError(
+                "preference_slots must be strictly increasing Linux metrics"
             )
 
     @property
