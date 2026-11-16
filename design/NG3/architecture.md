@@ -4055,6 +4055,41 @@ Each Executor invocation:
 
 No stale mutation plan is replayed. A later invocation always replans from fresh state.
 
+The complete structural transaction is an explicit coordinator over that one-step contract,
+not a retry loop hidden inside the Executor:
+
+```text
+STEP_APPLIED with strict distance decrease
+    -> invoke one fresh one-step attempt
+
+CONFIRMED
+    -> transaction confirmed
+
+any other terminal one-step status
+    -> stop transaction immediately
+
+unfinished fresh attempt starts farther from desired than the prior verified final state
+    -> REGRESSED
+    -> stop this transaction
+```
+
+The structural distance is a technical count of unresolved lower-state differences; it is
+not a product health score. Every accepted `STEP_APPLIED` result strictly decreases it.
+Between attempts the next fresh state may be equal or closer because of independent
+progress. If an unfinished transaction has moved farther away, the current transaction
+stops rather than converting external churn into hidden retries. If that fresh attempt has
+already reached and verified `CONFIRMED`, the exact confirmed state remains authoritative.
+
+Because distance is non-negative and every continued step strictly decreases it, no
+arbitrary `max_steps` / retry count is required for termination. A later Manager audit may
+start a new transaction from fresh state after a failed/regressed transaction; it does not
+resume the old plan.
+
+Privileged run `43951600267` additionally exercises this coordinator after a
+same-name/new-ifindex refusal: using the new current interface identity, the coordinator
+performs the remaining multi-step restoration and reaches confirmed forwarding through the
+new VPN generation.
+
 The Linux route/RPDB Driver is intentionally mutation-only. It uses the EXP-048-backed exact
 argv forms for:
 
