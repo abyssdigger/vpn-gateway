@@ -1,3 +1,59 @@
+## 2026-11-14 — NG2 Adapter owner identity registry
+
+Added and reviewed the first Adapter-internal owner-lifecycle utility:
+
+- `DesiredRulesByOwner` keys ownership by Python object identity, not semantic names,
+  equality or hashes;
+- registered owners are kept strongly alive until explicit removal, preventing `id()`
+  reuse while a scope exists;
+- registry removal is idempotent and is only the internal registration step of the broader
+  Adapter `cleanup(owner)` contract;
+- the registry deliberately does not merge policies, assign owner priority or interpret
+  caller type/domain;
+- NG2 Python CI was added and passed on Python 3.13;
+- internal review `NG2-2026-11-14-adapter-owner-registry-review.md` passed.
+
+---
+
+## 2026-11-14 — NG2 semantic payload NAT contract
+
+Completed and reviewed the payload NAT projection:
+
+- `PayloadNatMode.NONE` emits no source-translation intent;
+- `PayloadNatMode.MASQUERADE` becomes network-rules
+  `SourceNatTarget.EGRESS_ADDRESS`;
+- Linux/nft `postrouting` and `masquerade` mechanics remain below the Adapter boundary;
+- source NAT is bound to concrete generation-aware egress identity;
+- more-specific Profile destinations are excluded from broader NAT intents;
+- NAT projection stays independent from traffic-envelope filtering semantics;
+- internal review `NG2-2026-11-14-payload-nat-review.md` passed.
+
+---
+
+## 2026-11-14 — NG2 payload filtering and Adapter ownership boundary
+
+Completed the first reviewed payload-filtering contract slice:
+
+- `NetworkRulesAdapter` ownership is now opaque caller-instance identity rather than a
+  semantic `NetworkRulesScope`; the contract includes idempotent `cleanup(owner)`;
+- independent owner policies remain semantically isolated and may be physically composed
+  only inside the Adapter backend;
+- `host0` no longer leaks into the payload/network-rules contract; `LOCAL_NETWORK` is
+  used as the semantic host-facing endpoint;
+- payload traffic-envelope types are independent from network-rules selector types and are
+  explicitly converted by `PayloadRulesCalculator`;
+- filtering is allow-only with separate effective `traffic_allows` and
+  `flow_initiation_allows` semantics;
+- first-match Device envelope behavior, default allow/drop, and overlapping Profile
+  precedence are preserved before the Adapter boundary;
+- terminal routing policy is semantic `DROP | REJECT`; Linux blackhole/unreachable route
+  types remain Adapter implementation details;
+- canonical `InterfaceIdentity` moved to a neutral cross-domain module;
+- internal review `NG2-2026-11-14-payload-filtering-review.md` passed after accepted
+  boundary-cleanup findings were fixed.
+
+---
+
 ## 2026-11-14 — NG2 first executable network-rules slice
 
 Started the NG2 Python reference under `design/NG2/code/python/rou`:
