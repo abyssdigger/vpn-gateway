@@ -69,6 +69,7 @@ def main() -> int:
         for ifname in ("host0", "path0", "path1"):
             run("ip", "-n", ns, "link", "add", ifname, "type", "dummy")
             run("ip", "-n", ns, "link", "set", ifname, "up")
+        run("ip", "-n", ns, "-4", "addr", "add", "192.0.2.1/24", "dev", "host0")
 
         # H1/H3/H4: high 32-bit table IDs, role protocols and full u32 guard metric.
         run(
