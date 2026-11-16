@@ -74,17 +74,21 @@ def main() -> int:
         ip saddr 192.0.2.0/24 ip daddr 198.51.100.10 meta l4proto tcp tcp sport 12345 tcp dport 443 return comment "{RULE_COMMENT}"
         meta l4proto udp udp sport 5353 udp dport 53 drop comment "{RULE_COMMENT}"
         meta l4proto icmp return comment "{RULE_COMMENT}"
+        meta l4proto tcp return comment "{RULE_COMMENT}"
+        meta l4proto udp return comment "{RULE_COMMENT}"
     }}
 }}
 """,
         )
 
         found = rules(namespace)
-        assert len(found) == 3, found
+        assert len(found) == 5, found
 
         tcp = found[0]
         udp = found[1]
         icmp = found[2]
+        tcp_only = found[3]
+        udp_only = found[4]
 
 
         expected_tcp = [
@@ -109,15 +113,27 @@ def main() -> int:
             match({"meta": {"key": "l4proto"}}, "icmp"),
             {"return": None},
         ]
+        expected_tcp_only = [
+            match({"meta": {"key": "l4proto"}}, "tcp"),
+            {"return": None},
+        ]
+        expected_udp_only = [
+            match({"meta": {"key": "l4proto"}}, "udp"),
+            {"return": None},
+        ]
 
         assert tcp.get("expr") == expected_tcp, tcp
         assert udp.get("expr") == expected_udp, udp
         assert icmp.get("expr") == expected_icmp, icmp
+        assert tcp_only.get("expr") == expected_tcp_only, tcp_only
+        assert udp_only.get("expr") == expected_udp_only, udp_only
         assert all(rule.get("comment") == RULE_COMMENT for rule in found), found
 
         print("EXP042_TCP_JSON=" + json.dumps(tcp, sort_keys=True))
         print("EXP042_UDP_JSON=" + json.dumps(udp, sort_keys=True))
         print("EXP042_ICMP_JSON=" + json.dumps(icmp, sort_keys=True))
+        print("EXP042_TCP_ONLY_JSON=" + json.dumps(tcp_only, sort_keys=True))
+        print("EXP042_UDP_ONLY_JSON=" + json.dumps(udp_only, sort_keys=True))
         print("EXP042_IPV4_SOURCE_PREFIX=1")
         print("EXP042_IPV4_DESTINATION_32=1")
         print("EXP042_META_L4PROTO=1")
