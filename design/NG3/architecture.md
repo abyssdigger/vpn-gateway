@@ -2287,7 +2287,8 @@ accepted unordered `PayloadForwardDesiredState`.
 - `VPNG0001-R1.R2.R4.R6.R2.R1`;
 - `VPNG0001-R1.R2.R4.R6.R2.R2`;
 - `VPNG0001-R1.R2.R4.R6.R2.R3`;
-- `VPNG0001-R1.R2.R4.R6.R2.R4`.
+- `VPNG0001-R1.R2.R4.R6.R2.R4`;
+- `VPNG0001-R1.R2.R4.R6.R2.R5`.
 
 **Constrained by:**
 - `VPNG0001-R1.R2.R4.R6.C1`;
