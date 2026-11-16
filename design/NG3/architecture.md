@@ -1862,6 +1862,53 @@ accepted VPN-GATE shapes before cleanup or replacement. Any unexpected contained
 remains an explicit ownership conflict rather than something to delete merely because it
 sits inside the marked table.
 
+##### Invariant payload nft scaffold
+
+The first-release payload nft namespace has two invariant base chains whose existence and
+metadata do not depend on the unresolved final user-facing Device envelope/NAT grammar.
+
+```text
+chain payload_forward
+    type filter
+    hook forward
+    priority 0
+    policy drop
+    comment "vpn-gate:ng3:payload-forward-v1"
+
+chain payload_postrouting
+    type nat
+    hook postrouting
+    priority 100
+    policy accept
+    comment "vpn-gate:ng3:payload-postrouting-v1"
+```
+
+`payload_forward` owns the final VPN-GATE verdict for IPv4 packets forwarded through the
+managed network domain. Its default `drop` is structural fail-closed behavior: an empty
+payload policy forwards nothing.
+
+Concrete allow rules are added only by a later, fully normalized payload-policy projection.
+They must not be inferred from historical TOML examples.
+
+`payload_postrouting` exists as the stable owner boundary for supported payload source-NAT
+realization. It is valid and intentionally empty when no accepted Device/path requires NAT.
+Its base-chain policy is `accept`; the presence of the chain alone never creates NAT.
+
+The two chain comments are lower schema/version markers. A same-name chain with missing or
+different marker, hook, type, priority or policy is an ownership/shape conflict.
+
+The scaffold is deliberately independent from the root structural barrier:
+
+- structural rebuild happens while verified `ip_forward=0`;
+- the scaffold may then be created/repaired and verified;
+- final allow/NAT rules are materialized behind the still-closed root barrier;
+- RPDB activation and full route+nft verification still occur before re-enabling forwarding.
+
+A foreign nft base chain outside `table ip vpn_gate` is not adopted or deleted by this
+scaffold. For safety, the payload forward chain must still prevent a foreign unconditional
+`accept` chain at another priority from bypassing its default drop. This netfilter behavior
+is evidence-gated before the scaffold becomes executable.
+
 Observation uses full JSON ruleset inventory rather than treating a failed
 `list table` command as proof of absence:
 
