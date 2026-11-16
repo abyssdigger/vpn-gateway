@@ -212,3 +212,7 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-035 NG3 exact-ifindex NEW-forward admission/exp035_new_forward_admission.py"
+      - name: EXP-036 prefix-scoped stateful return
+        run: >-
+          sudo python3
+          "design/experiments/EXP-036 NG3 prefix-scoped stateful return/exp036_prefix_scoped_return.py"
