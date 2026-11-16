@@ -9,6 +9,7 @@ import sys
 TABLE_COMMENT = "vpn-gate:ng3:owner-v1"
 FORWARD_COMMENT = "vpn-gate:ng3:payload-forward-v1"
 CHILD = "device_fw_exp041"
+CHILD_COMMENT = "vpn-gate:ng3:device-fw-child-v1"
 JUMP_COMMENT = "vpn-gate:ng3:device-fw-jump-v1"
 RULE_COMMENT = "vpn-gate:ng3:device-fw-rule-v1"
 REVERSE_COMMENT = "vpn-gate:ng3:device-fw-reverse-v1"
@@ -71,6 +72,24 @@ def ruleset(namespace: str) -> dict:
     assert isinstance(value, dict), value
     assert isinstance(value.get("nftables"), list), value
     return value
+
+
+def chain_row(value: dict, chain_name: str) -> dict:
+    matches: list[dict] = []
+    for row in value["nftables"]:
+        if not isinstance(row, dict):
+            continue
+        chain = row.get("chain")
+        if not isinstance(chain, dict):
+            continue
+        if (
+            chain.get("family") == "ip"
+            and chain.get("table") == "vpn_gate"
+            and chain.get("name") == chain_name
+        ):
+            matches.append(chain)
+    assert len(matches) == 1, matches
+    return matches[0]
 
 
 def rules_in_chain(value: dict, chain_name: str) -> list[dict]:
@@ -161,6 +180,7 @@ def main() -> int:
         ct state established,related meta iif {path_index} meta oif {host_index} ip saddr 10.41.2.0/29 accept comment "{PROFILE_RETURN_COMMENT}"
     }}
     chain {CHILD} {{
+        comment "{CHILD_COMMENT}"
         ip daddr 10.41.2.2 drop comment "{RULE_COMMENT}"
         ip saddr 10.41.2.0/29 return comment "{REVERSE_COMMENT}"
         drop comment "{FALLTHROUGH_COMMENT}"
@@ -192,7 +212,13 @@ add rule ip vpn_gate {CHILD} drop comment "{FALLTHROUGH_COMMENT}"
 
         value = ruleset(managed)
         base_rules = rules_in_chain(value, "payload_forward")
+        child_chain = chain_row(value, CHILD)
         child_rules = rules_in_chain(value, CHILD)
+
+        assert child_chain.get("comment") == CHILD_COMMENT, child_chain
+        assert "hook" not in child_chain, child_chain
+        assert "type" not in child_chain, child_chain
+        assert "policy" not in child_chain, child_chain
 
         assert len(base_rules) == 3, base_rules
         assert [rule.get("comment") for rule in base_rules] == [
@@ -219,6 +245,7 @@ add rule ip vpn_gate {CHILD} drop comment "{FALLTHROUGH_COMMENT}"
         assert has_action(child_rules[2], "reject"), child_rules[2]
         assert has_action(child_rules[3], "drop"), child_rules[3]
 
+        print("EXP041_CHILD_CHAIN_JSON=" + json.dumps(child_chain, sort_keys=True))
         print("EXP041_BASE_RULES_JSON=" + json.dumps(base_rules, sort_keys=True))
         print("EXP041_CHILD_RULES_JSON=" + json.dumps(child_rules, sort_keys=True))
         print("EXP041_CHILD_DROP_NARROWS_PROFILE=1")
