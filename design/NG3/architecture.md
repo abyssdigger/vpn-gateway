@@ -1988,6 +1988,51 @@ incidental.
 
 ###### Authoritative payload NAT rule observation
 
+**Component:** read-only direct Calculator for normalized nft observation/comparison.
+
+**Implements:**
+- `VPNG0001-R1.R2.R4.R6.R1` — explicit Device NAT intent projected onto an exact current path;
+- `VPNG0001-R1.R3.R2` — unambiguous current physical endpoint binding;
+- `VPNG0001-R1.R3.R3` — replaced endpoint must not inherit old interface identity;
+- `VPNG0004-R4.R3.R2` — structural NAT changes may not bypass a restrictive transition;
+- `VPNG0004-R4.R4` — unconfirmed network state cannot authorize forwarding;
+- `VPNG0004-R4.R5` — authoritative actual state is required after uncertainty.
+
+**Constrained by:**
+- `VPNG0001-R1.R2.R4.R6.C1` — lower NAT observation does not assume an unaccepted human-facing configuration grammar.
+
+**Scenario and responsibility:** After an external Device endpoint disappears or is recreated
+with the same name, the product must distinguish the old physical NAT rule from the new
+desired path binding before any structural reconciliation. An existing read-only nft
+Adapter supplies canonical objects in the owned table; a fresh interface inventory
+supplies current `(ifname, ifindex)` identities. The direct Calculator classifies the
+owned NAT chain and compares recognized physical rules against already normalized
+`PayloadNatDesiredState`, returning confirmed/missing/stale/conflict without mutation.
+
+**Interactions and external environment:** The Calculator has synchronous, explicit
+inputs and no kernel I/O, timer, retained history or event ownership. The Adapter's
+table ownership and invariant scaffold checks must pass before using its output.
+The only external facts are the observed nft JSON representation and fresh Linux link
+identity. EXP-033 supplies the platform evidence for name/decimal-index renderings.
+
+**Necessity and simplification:** Exact physical rule classification is required before
+deleting or replacing any owned NAT object; desired-state projection alone cannot prove
+actual current state. One pure Calculator is sufficient: no additional Agent, cache,
+async event/retry flow, second NAT routing policy, or persistent interface history is
+introduced.
+
+**Constraints and lifting:** A conflict, invalid/stale endpoint or incomplete ownership
+classification cannot be turned into permission to forward or delete state. The observer
+changes no user-visible NAT capability and imposes no new product restriction; only
+future physical NAT mutation remains gated behind the structural `ForwardingGate`.
+
+**Evidence plan:** Rootless tests cover strict whole-chain recognition, current and
+stale ifindices, same-name replacement, unexpected owned expressions/comments, duplicate
+rules, missing desired state and invalid/ambiguous inventory; existing EXP-033 establishes
+real nft/kernel representation. Run NG3 Python CI on the actual reviewed branch,
+perform expert review against this architecture, and record dispositions before accepting
+this review unit.
+
 The strict NAT observer operates only after table/scaffold ownership is confirmed and consumes:
 
 ```text
