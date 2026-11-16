@@ -62,23 +62,26 @@ BACKEND-SPECIFIC
 5. Numeric ifindex is not durable generation identity across missed lifecycle/restart.
    Exact reuse was demonstrated.
 
-6. VPN transport peer is not a generic Linux route-next-hop abstraction.
+6. Fresh interface generation does not necessarily imply fresh conntrack-carried probe
+   identity. EXP-025 proved stale marked conntrack inheritance across generation replacement.
+
+7. VPN transport peer is not a generic Linux route-next-hop abstraction.
    In particular, WireGuard peer choice follows AllowedIPs, not arbitrary FIB next-hop.
 
-7. Route metric/order is priority, not health detection.
+8. Route metric/order is priority, not health detection.
 
-8. Over-quota discovered interface is not an admitted path.
+9. Over-quota discovered interface is not an admitted path.
 
-9. Apply success is not commit.
+10. Apply success is not commit.
    State becomes committed only after fresh observation and verification.
 
-10. Existing survivors must not churn because fresh observation order changed.
+11. Existing survivors must not churn because fresh observation order changed.
 
-11. Per-table firewall atomicity does not imply cross-table/routing atomicity.
+12. Per-table firewall atomicity does not imply cross-table/routing atomicity.
 
-12. A PASS on an old mechanism does not require NG3 to reuse the old architecture.
+13. A PASS on an old mechanism does not require NG3 to reuse the old architecture.
 
-13. PREPARED experiment does not establish the intended behavior.
+14. PREPARED experiment does not establish the intended behavior.
 
 Any NG3 decomposition contradicting these facts needs either an explicit scope/environment
 difference or new evidence.
@@ -536,22 +539,149 @@ Current NG3 implication:
 - one priority transaction per Profile/routing domain completes and verifies before another
   desired order is materialized.
 
-## 28. Current missing experiment numbers
+## 28. EXP-024 — selective shared-namespace probe-process isolation
 
-No EXP-024, EXP-025 or EXP-026 artifact is present in the current repository:
+Class: PROVEN, target-confirmed.
 
-- no experiment-ledger entry;
-- no repository content search hit;
-- no commit-message hit.
+The experiment exists on the active NG2 development line even though it was missing from the
+central experiment ledger and default-branch search.
 
-Current interpretation:
+It proved on privileged CI and Debian 13 target that probe-process identity can be captured
+where it is observable and carried into the reverse flow without imposing global
+INPUT/OUTPUT default-DROP on unrelated local processes.
 
-These are unused numbers, not evidence.
+The rejected attempt is itself evidence:
 
-If archived chats or an external branch later recover material with these IDs, this section
-must be updated. No semantic conclusion may be derived from the numbering gap itself.
+```text
+INPUT meta skuid
+    != usable receiving-socket discriminator
+```
 
-## 29. Device/config evidence boundary relevant to current recovery
+The accepted mechanism was:
+
+```text
+OUTPUT:
+    probe uid + exact oif + target + protocol
+        -> set dedicated conntrack mark
+        -> accept
+
+INPUT:
+    exact iif + remote source + reply protocol + conntrack mark
+        -> accept
+```
+
+Other proved properties:
+
+- unrelated local traffic remains ordinary;
+- unbound probe traffic cannot escape through an alternate path;
+- probe target admission remains narrow;
+- capability-free ping-socket model works with the tested setup.
+
+Constraint:
+
+Linux uid is a lower-domain process selector, not an availability semantic field.
+
+The conntrack-carried identity created a separate generation question, answered negatively by
+EXP-025.
+
+## 29. EXP-025 — stale probe conntrack generation
+
+Class: PROVEN NEGATIVE FINDING, target-confirmed.
+
+Status:
+
+```text
+TARGET-CONFIRMED FINDING — STALE-INHERITANCE
+```
+
+The result is not a PASS of the isolation mechanism. It proves a failure mode.
+
+On both privileged CI and Debian 13 target:
+
+- generation A created a marked ICMP conntrack entry;
+- vpn0 was deleted and recreated with a new ifindex;
+- the marked conntrack entry survived;
+- generation B deliberately reused the same tuple / ICMP identifier;
+- the new probe took the ESTABLISHED path carrying the stale mark rather than NEW+mark-set;
+- deleting that exact conntrack entry restored NEW+mark-set.
+
+Therefore:
+
+```text
+fresh interface generation
++ regenerated exact RPDB/nft selectors
+    !=
+fresh conntrack-carried probe identity
+```
+
+This is a strong NG3 constraint.
+
+Interface-generation replacement alone is insufficient to invalidate probe flow identity.
+
+Any probe design carrying local process identity through conntrack must define a narrow
+generation-boundary invalidation/remediation strategy.
+
+Global conntrack flush was explicitly rejected as an unreviewed remediation.
+
+## 30. EXP-026 — probe-class conntrack cleanup boundary
+
+Class: PROVEN ON PRIVILEGED CI / TARGET CONFIRMATION OPEN.
+
+Current experiment README status:
+
+```text
+PRELIMINARY PASS on privileged GitHub Linux CI;
+Debian 13 target confirmation required
+```
+
+The tested remediation:
+
+```text
+conntrack -D -p icmp -m <dedicated-probe-mark>
+```
+
+proved in privileged CI that:
+
+- two probe-class entries carrying the dedicated mark are removed;
+- unrelated differently marked conntrack state remains;
+- after cleanup and interface-generation replacement, fixed-id probe takes NEW+mark-set;
+- unrelated control traffic remains usable.
+
+Interpretation:
+
+This proves a **narrow mechanism candidate** for breaking EXP-025 stale inheritance without a
+namespace-wide conntrack flush.
+
+It does **not** yet establish production/target evidence on Debian 13.
+
+It also does not by itself decide product/architecture policy:
+
+- whether all in-flight probe-class flows may be invalidated together;
+- whether mark-wide cleanup is the minimal accepted generation boundary;
+- when exactly cleanup runs relative to binding-generation replacement.
+
+Until target confirmation or an explicit evidence-policy decision is accepted, NG3 must not
+describe EXP-026 as target-confirmed PASS.
+
+## 31. Experiment-ledger/search gap
+
+EXP-024, EXP-025 and EXP-026 were not missing from the development history.
+
+They exist in the NG2 development chain and later descendant branches, but were absent from:
+
+- repository default branch `main`;
+- central `design/vpn-gateway-experiments.md` ledger.
+
+That combination caused normal default-branch code search to report them as absent.
+
+This is a tooling/indexing gap, not lost evidence.
+
+The central ledger should carry explicit entries for all three experiments so future evidence
+review does not depend on branch-aware search.
+
+## 32. Device/config evidence boundary relevant to current recovery
+
+## 32. Device/config evidence boundary relevant to current recovery
 
 Historical material confirms that Device was a transport-capability concept with:
 
@@ -588,7 +718,7 @@ NAT is a stronger candidate for recovered Device policy, but exact current gramm
 needs to be reviewed together with the final config surface rather than inferred from
 internal types.
 
-## 30. Current evidence map to NG3 areas
+## 33. Current evidence map to NG3 areas
 
 | NG3 area | Primary evidence |
 | --- | --- |
@@ -599,15 +729,18 @@ internal types.
 | Profile zero-path safety | EXP-004.2, EXP-012 |
 | Concrete interface routing abstraction | EXP-009 |
 | Availability independent from binding | EXP-019, EXP-020 |
-| ICMP/path-specific probe mechanism | EXP-021, EXP-022, EXP-023 |
+| ICMP/path-specific probe mechanism | EXP-021, EXP-022, EXP-023, EXP-024 |
 | Current interface-generation firewall enforcement | EXP-017, EXP-021, EXP-022 |
+| Selective shared-namespace probe process isolation | EXP-024 |
+| Probe conntrack stale-generation risk | EXP-025 — target-confirmed negative finding |
+| Probe-class conntrack cleanup candidate | EXP-026 — CI PASS, target confirmation open |
 | Pure route-priority transition | EXP-027 |
 | ECMP only if reintroduced | EXP-013, EXP-016 |
 | Multi-path inbound return pinning | EXP-014 — UNPROVEN |
 | MTU/MSS production policy | EXP-015 — UNPROVEN |
 | Target systemd crash/restart lifecycle | EXP-018 — UNPROVEN |
 
-## 31. How to use this document during decomposition
+## 34. How to use this document during decomposition
 
 For every proposed child Requirement/Constraint or architecture mechanism:
 
@@ -623,7 +756,7 @@ For every proposed child Requirement/Constraint or architecture mechanism:
 7. if reconciling the evidence makes Purpose/Reason non-obvious, stop autonomous
    decomposition and escalate that requirement ancestry for human discussion.
 
-## 32. Re-run criteria
+## 35. Re-run criteria
 
 Historical evidence should be re-run or replaced when:
 
@@ -636,7 +769,7 @@ Historical evidence should be re-run or replaced when:
 
 Do not re-run an experiment merely because component names changed.
 
-## 33. Canonical source hierarchy
+## 36. Canonical source hierarchy
 
 When this summary is not precise enough:
 
