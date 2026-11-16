@@ -46,6 +46,18 @@ class LocalPublicationEndpointSpec:
         )
 
 
+@dataclass(frozen=True, order=True, slots=True)
+class LocalPublicationDeleteRef:
+    hook: LocalPublicationHook
+    handle: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.hook, LocalPublicationHook):
+            raise ValueError("hook must be LocalPublicationHook")
+        if type(self.handle) is not int or self.handle < 0:
+            raise ValueError("invalid local publication delete handle")
+
+
 @dataclass(frozen=True, slots=True)
 class LocalPublicationMutationStep:
     """One endpoint-scoped nft transaction.
@@ -55,16 +67,19 @@ class LocalPublicationMutationStep:
     but the step itself must change physical state.
     """
 
-    delete_handles: tuple[int, ...]
+    delete_rules: tuple[LocalPublicationDeleteRef, ...]
     add_rules: tuple[LocalPublicationRuleSpec, ...]
 
     def __post_init__(self) -> None:
-        if not self.delete_handles and not self.add_rules:
+        if not self.delete_rules and not self.add_rules:
             raise ValueError("local publication mutation step must change state")
-        if len(set(self.delete_handles)) != len(self.delete_handles):
-            raise ValueError("duplicate local publication delete handle")
-        if any(type(handle) is not int or handle < 0 for handle in self.delete_handles):
-            raise ValueError("invalid local publication delete handle")
+        if not all(
+            isinstance(ref, LocalPublicationDeleteRef)
+            for ref in self.delete_rules
+        ):
+            raise ValueError("delete_rules must contain LocalPublicationDeleteRef")
+        if len(set(self.delete_rules)) != len(self.delete_rules):
+            raise ValueError("duplicate local publication delete ref")
         if not all(
             isinstance(rule, LocalPublicationRuleSpec)
             for rule in self.add_rules
@@ -118,7 +133,12 @@ def select_local_publication_step(
         )[0]
         rules = stale_groups[key]
         return LocalPublicationMutationStep(
-            delete_handles=tuple(sorted(rule.handle for rule in rules)),
+            delete_rules=tuple(
+                sorted(
+                    LocalPublicationDeleteRef(rule.hook, rule.handle)
+                    for rule in rules
+                )
+            ),
             add_rules=(),
         )
 
@@ -153,6 +173,6 @@ def select_local_publication_step(
         )
     )
     return LocalPublicationMutationStep(
-        delete_handles=(),
+        delete_rules=(),
         add_rules=rules,
     )
