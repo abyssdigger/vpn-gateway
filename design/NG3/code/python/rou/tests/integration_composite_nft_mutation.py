@@ -227,6 +227,43 @@ def main():
         ], created_steps
         assert gate.observe_forwarding_gate() is ForwardingGateState.DISABLED
 
+        replacement_local = build_local_publication_desired(
+            (
+                PublicationLocalEndpointIntent(
+                    "device",
+                    PublicationProtocol.TCP,
+                    publication_ip,
+                    44444,
+                    host,
+                ),
+            )
+        )
+        replacement_desired = CompositeNftDesiredState(
+            profile,
+            nat,
+            device,
+            replacement_local,
+        )
+        replacement = converge(gate, backend, replacement_desired)
+        replacement_steps = [
+            item.step.kind
+            for item in replacement
+            if item.step is not None
+        ]
+        assert replacement_steps == [
+            CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
+        ], replacement_steps
+        local_after_replace = backend.observe_composite_snapshot()
+        local_json = "\n".join(
+            item.canonical_json
+            for item in local_after_replace.observation.objects
+            if item.kind == "rule"
+            and "local-publication-v1" in item.canonical_json
+        )
+        assert "44444" in local_json
+        assert "44443" not in local_json
+        assert gate.observe_forwarding_gate() is ForwardingGateState.DISABLED
+
         snapshot = backend.observe_composite_snapshot()
         forward_rules = [
             item.canonical_json
