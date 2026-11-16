@@ -390,6 +390,16 @@ device_order = ["oc"]
             right.profiles["corp"].destinations,
         )
 
+    def test_selector_fragment_cannot_exceed_linux_ifname_limit(self):
+        for selector in ("abcdefghijklmnop", "abcdefghijklmnop*/1"):
+            with self.subTest(selector=selector):
+                with self.assertRaisesRegex(ConfigError, "IFNAMSIZ"):
+                    parse_structural_config(f"""
+[device.oc]
+enabled = true
+expected_interfaces = ["{selector}"]
+""")
+
 
 if __name__ == "__main__":
     unittest.main()
