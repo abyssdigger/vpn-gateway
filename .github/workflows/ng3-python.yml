@@ -39,7 +39,7 @@ jobs:
       - name: Install Linux networking tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y iproute2
+          sudo apt-get install -y iproute2 nftables
       - name: NG3 route-priority Linux integration
         env:
           PYTHONPATH: design/NG3/code/python
@@ -47,3 +47,20 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_route_priority_backend.py
+
+
+  linux-policy-platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Linux policy tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-028 lower policy platform space
+        run: >-
+          sudo python3
+          "design/experiments/EXP-028 NG3 lower policy platform space/exp028_lower_policy_space.py"
