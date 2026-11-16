@@ -235,16 +235,16 @@ def converge_payload_nat_step_once(
         except Exception as exc:
             apply_error = exc
 
+    after = None
+    final = None
+    observation_error: Exception | None = None
     try:
         after = nat_backend.observe_nat_snapshot()
         final = _classify(after, desired)
     except Exception as exc:
-        return result(
-            PayloadNatMutationStatus.APPLY_FAILED if apply_error else
-            PayloadNatMutationStatus.POSTCONDITION_FAILED,
-            initial, attempted=True, step=step,
-            diagnostic=f"after-write observation/classification failed: {type(exc).__name__}: {exc}",
-        )
+        observation_error = exc
+    # Gate re-observation is mandatory even when nft re-observation failed.
+    # No successful or failed command is authorization to open forwarding.
     try:
         final_gate = gate_backend.observe_forwarding_gate()
     except Exception as exc:
@@ -255,6 +255,17 @@ def converge_payload_nat_step_once(
         return result(PayloadNatMutationStatus.BARRIER_LOST, initial, final,
                       attempted=True, step=step,
                       diagnostic="forwarding barrier lost during NAT write")
+    if observation_error is not None:
+        return result(
+            PayloadNatMutationStatus.APPLY_FAILED if apply_error else
+            PayloadNatMutationStatus.POSTCONDITION_FAILED,
+            initial, attempted=True, step=step,
+            diagnostic=(
+                "after-write observation/classification failed: "
+                f"{type(observation_error).__name__}: {observation_error}"
+            ),
+        )
+    assert after is not None and final is not None
 
     if not _exact_step_postcondition(
         before, after, final,

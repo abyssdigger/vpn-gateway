@@ -98,6 +98,13 @@ from .payload_nat_observation import (
     PayloadNatRuleConflict,
     compare_payload_nat,
 )
+from .payload_nat_mutation import (
+    PayloadNatMutationResult,
+    PayloadNatMutationStatus,
+    PayloadNatPhysicalSnapshot,
+    converge_payload_nat_step_once,
+)
+from .linux_payload_nat import LinuxPayloadNatBackend
 from .payload_profile import (
     PayloadProfileProjectionError,
     PayloadProfileRequest,
@@ -241,7 +248,12 @@ __all__ = [
     "PayloadNatComparison",
     "PayloadNatObservationError",
     "PayloadNatRuleConflict",
+    "PayloadNatMutationResult",
+    "PayloadNatMutationStatus",
+    "PayloadNatPhysicalSnapshot",
+    "LinuxPayloadNatBackend",
     "compare_payload_nat",
+    "converge_payload_nat_step_once",
     "PAYLOAD_FORWARD_CHAIN",
     "PAYLOAD_FORWARD_COMMENT",
     "PAYLOAD_NFT_SCAFFOLD",

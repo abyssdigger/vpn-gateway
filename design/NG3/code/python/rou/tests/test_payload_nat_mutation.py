@@ -76,8 +76,11 @@ class FakeNft:
         self.fail_apply = False
         self.extra_delete = False
         self.duplicate_add = False
+        self.fail_observe_after_write = False
 
     def observe_nat_snapshot(self):
+        if self.fail_observe_after_write and self.actions:
+            raise RuntimeError("synthetic post-write observation failure")
         text = json.dumps({"nftables": [*self.rows, *self.rules]})
         return PayloadNatPhysicalSnapshot(
             parse_nft_namespace_ruleset(text),
@@ -177,6 +180,24 @@ class PayloadNatMutationTests(unittest.TestCase):
         self.assertEqual(result.status, PayloadNatMutationStatus.BARRIER_LOST)
         self.assertFalse(result.mutation_attempted)
         self.assertEqual(nft.actions, [])
+
+    def test_post_write_observation_failure_still_checks_gate(self):
+        nft = FakeNft()
+        nft.fail_observe_after_write = True
+        gate = FakeGate(lose_at=4)
+        result = self.attempt(nft, gate)
+        self.assertEqual(result.status, PayloadNatMutationStatus.BARRIER_LOST)
+        self.assertEqual(gate.observations, 4)
+        self.assertTrue(result.mutation_attempted)
+
+    def test_failed_post_write_observation_never_claims_success(self):
+        nft = FakeNft()
+        nft.fail_observe_after_write = True
+        gate = FakeGate()
+        result = self.attempt(nft, gate)
+        self.assertEqual(result.status, PayloadNatMutationStatus.POSTCONDITION_FAILED)
+        self.assertEqual(gate.observations, 4)
+        self.assertFalse(result.confirmed)
 
     def test_post_write_gate_loss_prevents_confirmation(self):
         gate = FakeGate(lose_at=4)
