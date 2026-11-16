@@ -1,6 +1,6 @@
 # VPN-GATE NG1 — ROU concept
 
-Status: **working concept; ROU v0 live-verified and production routing/direction/envelope semantics clarified.**
+Status: **Draft-5-aligned concept; production nft routing/direction/envelope semantics implemented and integration-verified.**
 
 This document captures the top-level NG1 model before implementation details are frozen in the architecture.
 
@@ -100,11 +100,11 @@ ROU therefore provides **transport publication**.
 
 A publication maps a host-side TCP/UDP endpoint owned by ROU to an internal transport endpoint inside the ROU namespace.
 
-Conceptual mapping notation only (the TOML publication grammar is still open):
+Schema-version-1 publication grammar:
 
     5678/udp>7890
-    44443/tcp>44443
-    44443/udp>44443
+    44443/tcp
+    44443/udp
     4700:4900/udp>55200:55400
 
 Meaning:
@@ -125,7 +125,7 @@ means:
     ...
     4900 -> 55400
 
-A future human-facing syntax may choose a shorthand for equal external/internal ports; that syntax is intentionally not fixed here.
+For equal external/internal ports, the right side is omitted as the schema-v1 shorthand.
 
 ## 6. Publication is relay, not BOU DNAT
 
@@ -219,9 +219,11 @@ filtered set. A more-specific prefix owned only by another Device cannot shadow 
 less-specific Profile for the actual ingress Device. This makes shared Devices and
 cross-Device prefix overlaps unambiguous.
 
-**Device.traffic_envelope** is the administrator's tunnel firewall. It applies to the
-Device as a whole and can restrict from-device/to-device source/destination prefixes,
-protocols and ports.
+**Device.traffic_envelope** is the administrator's tunnel firewall. Draft 5 fixes its
+schema-v1 grammar. It applies to the Device as a whole and can restrict
+from-device/to-device source/destination prefixes, protocols and ports. Envelope allow
+returns to the generated Profile guard rather than accepting directly; envelope drop
+terminates the flow.
 
 Example intent:
 
@@ -248,14 +250,21 @@ The namespace main table may keep its ordinary `default -> host0` because only h
 forwarded payload is forced through Profile dispatch plus a terminal host0 fail-closed
 rule.
 
-Thus:
+For OUTBOUND Profiles this requires no flow mark:
 
-- Device -> host reply/INBOUND payload can use main -> host0 after stateful admission;
-- host -> Device traffic to a remote Profile prefix uses Profile RPDB/table dispatch;
+- host -> Device NEW uses Profile RPDB/table dispatch;
+- remote reply returns through the same tunnel and can use main -> host0 after stateful
+  admission;
 - unmatched forwarded host0 payload is dropped before it can use main.
 
-The architecture therefore does not require conntrack marks merely to implement return
-routing, although an implementation may use marks internally if useful.
+Remote-initiated traffic is stricter. Schema version 1 permits INBOUND/BIDIRECTIONAL only
+when active Profile interface capacity is exactly 1 and every active Device has a
+restrictive traffic envelope with terminal default DROP. Capacity one makes the host reply
+unambiguous without conntrack marks.
+
+Capacity > 1 for remote-initiated Profiles is deliberately postponed. Any future relaxation
+requires proven flow pinning (EXP-014) so replies are steered to the concrete interface
+generation that admitted the flow.
 
 ## 9. BOU
 
@@ -320,9 +329,9 @@ The next-generation production model is now defined around:
 - normalized availability where UNKNOWN/AVAILABLE stay in the normal tier and positive UNAVAILABLE moves to a lower fallback tier;
 - metric ordering normal < UNAVAILABLE_METRIC < BLACKHOLE_METRIC, including /0 Profiles.
 
-The initial human-facing TOML configuration contract is recorded in
-`design/NG1/rou-config.md`. Device traffic-envelope grammar remains to be designed, but
-its ownership/capability boundary is fixed in the architecture.
+The normative schema-v1 router and instance configuration contracts are recorded in
+`design/NG1/rou-config.md` and `design/NG1/rou-instance-config.md`, including Device
+NAT, publications and traffic-envelope grammar.
 
 EXP-013 passed. The common unavailable fallback uses persistent shadow membership: one
 bound member materializes as a direct-device route, while multiple bound members use one
