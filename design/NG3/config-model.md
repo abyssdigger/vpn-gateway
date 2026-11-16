@@ -9,6 +9,9 @@ configuration while re-deriving its NG3 implementation consequences.
 
 It is a product/interface contract, not permission to inherit NG1 runtime components.
 
+Historical kernel/process facts used while recovering this model are summarized in
+`design/NG3/experiment-evidence-transition.md`.
+
 # 1. User model
 
 The configuration separates:
@@ -104,7 +107,69 @@ An unknown Device reference is invalid.
 - `VPNG-R1.R2.R4.R2.R1`
 - `VPNG-R1.R2.R4.R5`
 
+# 3.1. Recovered configuration-language principles
+
+The source material distinguishes two layers:
+
+```text
+stable user semantics
+    -> should be recovered into NG3 requirements
+
+last agreed prototype spelling
+    -> evidence for schema design, but not automatically NG3 schema v1
+```
+
+This distinction is especially important for Device NAT, traffic-envelope and publication
+fields.
+
+The historical config work established principles stronger than any one prototype spelling:
+
+- object IDs use stable opaque identifiers; current recovered grammar is
+  `[a-z0-9][a-z0-9-]*`;
+- field names use semantic `snake_case`;
+- booleans are real TOML booleans and are not encoded as strings/numbers;
+- enum-like values use one canonical lowercase spelling;
+- collection-valued fields use plural names unless ordering itself is the semantic
+  (`device_order`);
+- derived/redundant quantities are not repeated by the user;
+- Linux implementation vocabulary such as ifindex, route metric, table ID or rule priority
+  is not exposed unless it becomes a real user policy knob;
+- ambiguous or non-canonical input is rejected rather than silently repaired.
+
+Examples of strict validation already recovered:
+
+- destination CIDRs must be strict network forms; host bits are not silently normalized;
+- meaningless duplicate declarations are rejected;
+- unknown object references are errors while known disabled references are valid;
+- positive quantities such as prefix-selector quota must be strictly greater than zero.
+
+Timing/unit field names remain unresolved at the human-facing layer. Internal names such as
+`interval_seconds` or `failure_ticks` must not be copied into user config merely because
+they exist in runtime types.
+
 # 4. Device
+
+A Device is a user-described **transport capability**, not a runtime binding object and not
+a Manager.
+
+Conceptually:
+
+```text
+Device
+    = which VPN/network transport capability may satisfy Profiles
+```
+
+It may describe:
+
+- how concrete VPN interfaces are expected/discovered;
+- static administrative preference inside the Device;
+- transport/path NAT intent;
+- a restrictive Device traffic envelope;
+- transport publication intent;
+- other transport-specific policy that does not belong to Profile payload need.
+
+A Device does not guarantee that any runtime interface exists and does not store current
+binding state.
 
 An enabled Device describes expected runtime endpoints.
 
@@ -174,7 +239,140 @@ interface naming into hidden policy.
 - `VPNG-R1.R3.R4.R3`
 - `VPNG-R1.R3.R4.R4`
 
-## 4.1. Logical paths derived from Device slots
+## 4.1. Device policy concepts recovered from historical design
+
+The following concepts are considered stable enough to retain as product-model input while
+their final NG3 human-facing grammar remains under review.
+
+### NAT intent
+
+Historical Device policy distinguished at least:
+
+```toml
+nat = "none"
+nat = "masquerade"
+```
+
+The last agreed prototype deliberately had **no implicit NAT default** for an active Device.
+
+Semantics:
+
+- `none`: VPN-GATE performs no payload source NAT for this Device/path;
+- `masquerade`: payload source NAT is applied through the current concrete path of the
+  Device.
+
+NAT belongs to transport/path policy, not availability/health.
+
+The spelling `nat = "none|masquerade"` is the last agreed prototype and is strong schema
+evidence. NG3 requirements already retain the semantic obligation that NAT intent be explicit;
+the final schema review must decide whether this exact spelling becomes normative. No
+`snat = <address>` capability is recovered from the prototype.
+
+### Device traffic envelope
+
+Device traffic envelope is administrator-authored restrictive policy over tunnel traffic.
+
+Its invariant is:
+
+```text
+effective permission
+    = Profile permission
+      INTERSECT
+      Device traffic envelope
+```
+
+The envelope may restrict traffic allowed by Profile semantics but must never expand Profile
+permission or bypass Profile direction/destination/path eligibility.
+
+Historical design included source/destination prefixes, protocol and ports.
+
+Recovered prototype example:
+
+```toml
+[device.oc-main.traffic_envelope]
+default = "allow"
+
+[[device.oc-main.traffic_envelope.rules]]
+direction = "from-device"
+action = "drop"
+source = "10.20.0.0/16"
+protocol = "tcp"
+destination_ports = ["8007"]
+```
+
+Recovered value grammar also used strict port forms:
+
+```text
+"N"
+"A-B"
+```
+
+with inclusive `1..65535` bounds and rejection of reversed/invalid ranges.
+
+However the normative NG1 config document explicitly left the **final human-facing
+traffic-envelope TOML grammar unresolved**. These examples are prototype evidence, not
+automatic NG3 schema.
+
+### Device publications
+
+Publication belongs to Device/transport binding, not Profile routing.
+
+Conceptually it maps a host-side TCP/UDP transport endpoint to an internal transport endpoint
+inside the managed network domain so VPN transport configuration can remain stable.
+
+EXP-010/011 prove publication as a technical boundary, including real OpenConnect same-port
+TCP/UDP publication.
+
+Recovered prototype publication syntax used compact values such as:
+
+```text
+<external>/<protocol>[><internal>]
+
+44443/tcp
+5678/udp>7890
+4700:4900/udp>55200:55400
+```
+
+Recovered value rules included:
+
+- ports `1..65535`;
+- inclusive ranges;
+- equal cardinality for range-to-range mapping;
+- rejection of reversed/invalid ranges;
+- rejection of semantically ambiguous overlaps;
+- TCP and UDP are separate protocol domains.
+
+Historical NG1 explicitly left the **final human-facing publication grammar unresolved**.
+NG3 must not declare this prototype syntax normative merely because it was discussed.
+
+### Requirement trace
+
+The recovered Device policy/config semantics refine:
+
+- `VPNG-R1.R2.R4.R6`;
+- `VPNG-R1.R2.R4.R6.R1`;
+- `VPNG-R1.R2.R4.R6.R2`;
+- `VPNG-R1.R2.R4.R6.R3`;
+- `VPNG-R1.R2.R4.R6.C1`;
+- `VPNG-R1.R2.R5` and its canonical-config children.
+
+These nodes remain open until the full Device/config + experiment recovery review is
+performed.
+
+### Ordering
+
+The administrative path-priority hierarchy remains:
+
+```text
+Profile.device_order
+    -> Device.expected_interfaces order
+        -> stable runtime slots within selector quota
+```
+
+This ordering is user policy. Runtime discovery may not replace it with lexical interface
+ordering.
+
+## 4.2. Logical paths derived from Device slots
 
 Users do not name every runtime/logical VPN path in Profile configuration.
 
@@ -210,7 +408,20 @@ Consequences:
 
 # 5. Profile
 
-An enabled Profile expresses one user network need.
+An enabled Profile expresses one independent logical routing/payload-policy domain: a user
+network need that remains meaningful independently of the current VPN transport instances.
+
+Profile is **not**:
+
+- a VPN interface;
+- a VPN peer;
+- a tunnel/session;
+- a Linux route metric;
+- an availability probe target;
+- a container for concrete Linux rules.
+
+Device/binding layers provide transport capability; Profile describes what network behavior
+that capability is allowed to satisfy.
 
 Required semantic fields:
 
@@ -310,9 +521,57 @@ endpoints.
 - `VPNG-R2.R2.R1`
 - `VPNG-R3.R1.R1`
 
-# 6. Profile-scoped availability
+# 6. Profile runtime normalization
+
+After Device binding, one enabled Profile normalizes to a structural payload request:
+
+```text
+PayloadProfileRequest:
+    profile_id
+    direction
+    destinations[]
+    ordered_paths[]
+```
+
+The path list is obtained from currently valid bindings of enabled Devices in
+`Profile.device_order`.
+
+It may be empty.
+
+```text
+paths = 0
+    !=
+Profile disappeared
+```
+
+With zero paths the Profile remains the owner of its destinations and materializes
+fail-closed terminal behavior. Traffic must not fall through to ambient/main routing merely
+because no VPN path is currently usable/bound.
+
+The structural request is independent from availability. Availability may only change the
+effective ordering of existing paths.
+
+It must not change:
+
+- Profile destinations;
+- direction;
+- Device membership;
+- binding eligibility;
+- structural existence of the Profile.
+
+**Requirements:**
+- `VPNG-R1.R2.R4.R4.R2`
+- `VPNG-R1.R2.R4.R4.R3`
+- `VPNG-R2.R2.R2`
+- `VPNG-R3.R2.R1`
+- `VPNG-R4.R1.R1`
+
+# 7. Profile-scoped availability
 
 Availability is a property of one Profile/path use, not of a physical interface globally.
+
+Availability is not part of structural Profile membership. It is a negative priority
+modifier applied after the Profile's eligible path set has been obtained from binding.
 
 ```text
 availability subject
@@ -366,7 +625,7 @@ semantic contract, not the string parser shorthand, is what downstream component
 - `VPNG-R3.R6.R3.R1.C1`
 - `VPNG-R3.R6.R3.R2`
 
-# 7. Configuration normalization boundary
+# 8. Configuration normalization boundary
 
 The human-facing Device/Profile model is normalized before runtime network components consume
 it.
@@ -395,7 +654,7 @@ the user semantics above.
 
 In particular, runtime consumers must not need to parse TOML strings.
 
-# 8. Required validation behavior
+# 9. Required validation behavior
 
 At minimum, accepted configuration must enforce:
 
@@ -410,11 +669,14 @@ At minimum, accepted configuration must enforce:
 - exact duplicate destination ownership across enabled Profiles is rejected;
 - overlapping destinations remain deterministic;
 - availability target is normalized to a concrete IPv4 before runtime probe execution;
-- any semantic failure is reported before dependent network actuation.
+- any semantic failure is reported before dependent network actuation;
+- active Device NAT intent is explicit when NAT capability is used;
+- user input is not silently canonicalized when the accepted contract requires strict form;
+- derived values such as aggregate Device quota are not required from the user.
 
 Disabled placeholders are the explicit exception to active-object field completeness.
 
-# 9. What is not inherited from NG1
+# 10. What is not inherited from NG1
 
 This recovered config model does not require NG3 to restore:
 
@@ -424,12 +686,15 @@ This recovered config model does not require NG3 to restore:
 - NG1 runtime state classes;
 - NG1 metric allocator implementation;
 - transport publication machinery;
-- Device traffic-envelope grammar;
+- any guessed Device traffic-envelope grammar (the concept is retained; grammar remains
+  unresolved);
+- any guessed Device publication grammar (the concept is retained; grammar remains
+  unresolved);
 - old process topology.
 
 Those require independent NG3 requirements if needed.
 
-# 10. Implementation consequences
+# 11. Implementation consequences
 
 This contract immediately creates implementation obligations for:
 
@@ -451,3 +716,14 @@ This contract immediately creates implementation obligations for:
 
 These are implementation obligations derived from the user contract, not independent reasons
 to introduce new runtime components.
+
+# 12. Historical Profile status work intentionally not imported
+
+Recovered discussions considered a final aggregated `ProfileState` composed from binding,
+payload-rule, publication and probe diagnostic facts.
+
+That aggregation semantics was explicitly unfinished.
+
+Therefore this config recovery does not invent a single Profile verdict or make probe
+diagnostics control routing through status. A stronger Profile-specific status model remains
+a separate future requirement/design unit if needed.

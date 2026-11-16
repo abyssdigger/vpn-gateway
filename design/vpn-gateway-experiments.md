@@ -23,6 +23,99 @@ blackhole остается на месте. All-live не требует persist
 
 ---
 
+## EXP-026 — NG2: probe-class conntrack cleanup
+
+**Статус:** PRELIMINARY PASS на privileged GitHub Linux CI; Debian 13 target confirmation required  
+**Architecture baseline:** EXP-025 target-confirmed STALE-INHERITANCE  
+**Тип:** probe-generation remediation / conntrack isolation  
+**Design:** [EXP-026 README](experiments/EXP-026%20NG2%20probe%20conntrack%20cleanup/README.md)
+
+Цель: проверить узкую remediation для stale probe conntrack identity без global conntrack
+flush.
+
+В privileged CI подтверждено:
+
+- `conntrack -D -p icmp -m 0x26` удаляет probe-class entries с dedicated mark;
+- differently marked control conntrack state сохраняется;
+- после cleanup + concrete interface generation replacement fixed-id probe снова идет через
+  NEW+mark-set, а не наследует старый ESTABLISHED mark;
+- unrelated control traffic остается usable.
+
+Важно: это пока **не target-confirmed PASS**. README по-прежнему требует Debian 13
+confirmation. До нее EXP-026 является доказанным CI mechanism candidate, но не окончательным
+target evidence.
+
+---
+
+## EXP-025 — NG2: stale probe conntrack generation
+
+**Статус:** TARGET-CONFIRMED FINDING — STALE-INHERITANCE  
+**Architecture baseline:** NG2 LOCAL_PROCESS probe plane после EXP-024  
+**Тип:** negative generation-isolation finding  
+**Design:** [EXP-025 README](experiments/EXP-025%20NG2%20stale%20probe%20conntrack%20generation/README.md)
+
+Цель: проверить, уничтожается ли conntrack-carried probe identity при замене concrete
+interface generation.
+
+Privileged CI и Debian 13 target показали одинаковый результат:
+
+- marked ICMP conntrack state поколения A переживает удаление/recreation `vpn0`;
+- поколение B с новым ifindex, но тем же tuple / ICMP identifier, наследует старый
+  ESTABLISHED marked state;
+- selective deletion matching conntrack entry возвращает следующий probe в NEW+mark-set.
+
+Результат — не PASS старого isolation mechanism, а **target-confirmed negative finding**:
+
+```text
+interface generation replacement
++ exact RPDB/nft regeneration
+    !=
+fresh conntrack-carried probe identity
+```
+
+Следствие: backend требует отдельную narrow generation-boundary remediation. Global
+conntrack flush не считается допустимым автоматически.
+
+---
+
+## EXP-024 — NG2: selective shared-namespace probe-process isolation
+
+**Статус:** COMPLETE — PASS на privileged GitHub Linux CI и Debian 13 target  
+**Architecture baseline:** NG2 runtime lower assembly  
+**Тип:** selective local-process probe isolation  
+**Design:** [EXP-024 README](experiments/EXP-024%20NG2%20selective%20shared-namespace%20probe%20process/README.md)
+
+Цель: изолировать probe process внутри общего ROU namespace без global INPUT/OUTPUT
+default-DROP для остальных локальных процессов.
+
+Первая попытка показала, что receiving ping socket нельзя надежно идентифицировать через
+`meta skuid` на INPUT.
+
+Итоговый доказанный механизм:
+
+```text
+OUTPUT:
+    probe uid + exact oif + target + protocol
+        -> set dedicated conntrack mark
+        -> accept
+
+INPUT:
+    exact iif + remote source + reply protocol + conntrack mark
+        -> accept
+```
+
+PASS подтвердил:
+
+- capability-free probe process использует только intended bound path;
+- unbound probe не escape-ится через alternate path;
+- target admission остается narrow;
+- unrelated local processes продолжают обычную networking;
+- process identity можно перенести из OUTPUT в reverse flow через conntrack state.
+
+Linux uid остается lower-domain selector, а не availability semantic field.
+
+---
+
 ## EXP-023 — NG1: real OpenConnect Profile-binding probe plane
 
 **Статус:** COMPLETE — PASS на real dual-OpenConnect stand  
