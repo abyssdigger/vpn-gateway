@@ -35,6 +35,7 @@ payload_forward
     policy drop
 
 device_fw_exp041
+    comment "vpn-gate:ng3:device-fw-child-v1"
     ordered explicit rules
     ...
     terminal drop for explicit-policy no-match
