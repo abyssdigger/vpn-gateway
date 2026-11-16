@@ -34,6 +34,10 @@ from .interface_inventory import (
     InterfaceInventoryError,
     parse_ip_link_inventory,
 )
+from .direct_device_route import (
+    DirectDeviceRouteRealizationError,
+    realize_direct_device_path_routes,
+)
 from .payload_profile import (
     PayloadProfileProjectionError,
     PayloadProfileRequest,
@@ -112,6 +116,7 @@ __all__ = [
     "DeviceBindingProjection",
     "DeviceBindingState",
     "DeviceStructuralIntent",
+    "DirectDeviceRouteRealizationError",
     "Direction",
     "ExpectedInterfaceSelector",
     "InterfaceIdentity",
@@ -173,4 +178,5 @@ __all__ = [
     "plan_route_priority_moves",
     "parse_structural_config",
     "project_device_bindings",
+    "realize_direct_device_path_routes",
 ]
