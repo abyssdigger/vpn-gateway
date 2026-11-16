@@ -9,7 +9,7 @@ class InterfaceIdentity:
     ifindex: int
 
     def __post_init__(self) -> None:
-        if not self.ifname:
-            raise ValueError("ifname must not be empty")
-        if self.ifindex <= 0:
-            raise ValueError("ifindex must be positive")
+        if not isinstance(self.ifname, str) or not self.ifname:
+            raise ValueError("ifname must be a non-empty string")
+        if type(self.ifindex) is not int or self.ifindex <= 0:
+            raise ValueError("ifindex must be a positive integer")
