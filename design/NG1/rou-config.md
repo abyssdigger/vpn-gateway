@@ -1,16 +1,18 @@
-# VPN-GATE NG1 — human-facing ROU configuration
+# VPN-GATE NG1 — router configuration schema version 1
 
-Status: **initial agreed contract; only decisions explicitly closed in the configuration brainstorm are normative here.**
+Status: **normative for NG1 Draft 5**
 
-This document defines the human-facing configuration surface that is already agreed.
-Fields not described here, including the final syntax for Device publications,
-Device traffic envelopes and future DeviceManager features, remain open.
+Router policy uses TOML and requires:
 
-## 1. File format
+```toml
+schema_version = 1
+```
 
-ROU configuration uses **TOML**.
+Unknown or missing versions are rejected.
 
-Devices and Profiles are named tables, not arrays of tables:
+## 1. Object identifiers
+
+Devices and Profiles are named tables:
 
 ```toml
 [device.oc-main]
@@ -20,28 +22,19 @@ enabled = true
 enabled = true
 ```
 
-The table key is the stable object identifier. There is no separate human-facing
-`name` field.
-
-Object identifiers use:
+Identifiers use:
 
 ```text
 [a-z0-9][a-z0-9-]*
 ```
 
-The same identifier rules apply to Device and Profile IDs.
+A leading digit is allowed. IDs are opaque strings.
 
-This deliberately excludes dots, underscores, whitespace and uppercase characters so
-identifiers remain unquoted and unambiguous in TOML dotted tables.
+## 2. Disabled placeholders
 
-A leading digit is intentionally allowed. IDs are opaque strings; consumers must not
-reinterpret them as numbers, shell identifiers or raw/unescaped systemd unit fragments.
+`enabled` is mandatory for every declared Device/Profile.
 
-## 2. enabled and placeholders
-
-`enabled` is mandatory for every declared Device and Profile. There is no default.
-
-A disabled object is allowed to be only a named placeholder:
+A disabled declaration may be only:
 
 ```toml
 [device.wg-future]
@@ -51,40 +44,38 @@ enabled = false
 enabled = false
 ```
 
-For `enabled = false`, remaining object fields are optional and are not deeply
-semantically validated. The parser still has to parse valid TOML and identify the object
-ID plus `enabled = false`.
+Remaining fields on disabled objects are not deeply semantically validated.
 
-An enabled Profile may reference a known disabled Device. That is valid administrative
-state, not a warning or error. A reference to an unknown Device ID is a configuration
-error.
+An enabled Profile may reference a known disabled Device. Unknown Device references are
+configuration errors.
 
-## 3. Device configuration
+## 3. Enabled Device
 
-An enabled Device requires a non-empty ordered `expected_interfaces` list.
+Every enabled Device requires:
+
+- non-empty ordered `expected_interfaces`;
+- explicit `nat = "none" | "masquerade"`.
 
 Example:
 
 ```toml
 [device.oc-main]
 enabled = true
-expected_interfaces = [
-    "oc-main",
-    "vpns*/3",
-    "oc-backup",
+expected_interfaces = ["vpns*/2"]
+nat = "masquerade"
+publications = [
+    "44443/tcp",
+    "44443/udp",
 ]
 ```
 
-The name `expected_interfaces` is intentional: the configuration states what ROU expects
-to discover, not what it guarantees will exist.
+### 3.1 Expected interfaces
 
-### 3.1 Expected-interface syntax
-
-Exactly two forms are currently defined:
+Forms:
 
 ```text
 <ifname>
-<prefix>*/<N>
+<prefix>*/<positive-quota>
 ```
 
 Examples:
@@ -94,132 +85,101 @@ wg0
 vpns*/5
 ```
 
-Semantics:
+Exact match has quota 1. Prefix form requires explicit positive quota. Selector order is
+priority order. Active selectors must be disjoint across active Devices.
 
-- `wg0` -> EXACT match, `interface_quota = 1`;
-- `vpns*/5` -> PREFIX(`vpns`) match, `interface_quota = 5`.
+### 3.2 NAT
 
-For PREFIX form, `N` is mandatory and must be a positive integer. There is no implicit
-PREFIX quota.
+`nat = "none"` means ROU does no payload source NAT for this Device.
 
-Forms such as these are invalid:
+`nat = "masquerade"` creates POSTROUTING MASQUERADE only:
 
-```text
-vpns*
-wg0/1
-vpns*/0
-vpns*/
-```
+- on currently bound interfaces of the Device;
+- for remote prefixes of enabled Profiles referencing that Device.
 
-The `*` is configuration syntax for a trailing prefix wildcard only. The bootstrap
-parser converts it immediately into the typed internal `InterfaceMatch`; wildcard
-strings do not propagate into runtime logic.
+There is no implicit NAT default and no explicit SNAT in schema version 1.
 
-### 3.2 Order and quota
+### 3.3 Publications
 
-`expected_interfaces` order is semantically significant.
-
-All runtime interfaces admitted through an earlier entry outrank interfaces admitted
-through a later entry of the same Device.
-
-Each entry owns its own `interface_quota`. The Device aggregate is derived, not separately
-configured:
+Grammar:
 
 ```text
-Device.interface_quota =
-    sum(ExpectedInterface.interface_quota)
+<external-port-or-range>/<tcp|udp>[><internal-port-or-range>]
 ```
 
-Selectors must be pairwise disjoint within one Device and across Devices that are active
-for the current configuration.
+Examples:
 
-## 4. Profile configuration
+```toml
+publications = [
+    "44443/tcp",
+    "44443/udp",
+    "5678/udp>7890",
+    "4700:4900/udp>55200:55400",
+]
+```
 
-An enabled Profile requires all of:
+If the internal side is omitted it equals the external side. Bounds are inclusive,
+1..65535, and range cardinalities must match.
+
+For active Devices:
+
+- external ranges for the same protocol must not overlap;
+- internal target ranges for the same protocol must not overlap across different Devices;
+- one Device may expose multiple external aliases to the same internal endpoint;
+- TCP and UDP may use the same numeric ports.
+
+Publication bind/target addresses come from the instance configuration, not Device policy.
+
+### 3.4 Traffic envelope
+
+Optional Device-scoped firewall:
+
+```toml
+[device.oc-main.traffic_envelope]
+default = "allow"
+
+[[device.oc-main.traffic_envelope.rules]]
+direction = "from-device"
+action = "drop"
+source = "10.20.0.0/16"
+protocol = "tcp"
+destination_ports = ["8007"]
+
+[[device.oc-main.traffic_envelope.rules]]
+direction = "to-device"
+action = "allow"
+destination = "192.168.50.0/24"
+protocol = "udp"
+destination_ports = ["53", "5353-5355"]
+```
+
+Envelope rule fields:
+
+- required: `direction = "from-device" | "to-device"`;
+- required: `action = "allow" | "drop"`;
+- optional strict IPv4 `source`, `destination`;
+- optional `protocol = "any" | "tcp" | "udp" | "icmp"`, default `any`;
+- optional `source_ports`, `destination_ports` as `"N"` or `"A-B"`;
+- ports are valid only for TCP/UDP;
+- duplicate/overlapping ranges in one port list are rejected.
+
+Rules are first-match in file order followed by explicit `default`.
+
+Envelope allow is restrictive composition, not permission bypass: it materializes as
+RETURN to the generated Profile-direction guard, never FORWARD ACCEPT. Envelope drop is
+DROP. The envelope is traversed before ESTABLISHED/RELATED and generated NEW rules.
+
+## 4. Enabled Profile
+
+Requires:
 
 - `direction`;
 - non-empty `destinations`;
-- non-empty `device_order`.
+- non-empty ordered `device_order`.
 
-Minimal enabled example:
-
-```toml
-[profile.corp]
-enabled = true
-direction = "outbound"
-destinations = ["10.0.0.0/8"]
-device_order = ["oc-main"]
-```
-
-### 4.1 direction
-
-`direction` is mandatory for enabled Profiles and has no default.
-
-It controls **which side may initiate a flow** for the Profile's remote prefixes. It is
-ROU-generated stateful transit policy, not the administrator-authored Device firewall.
-
-Allowed values are exactly:
-
-```text
-outbound
-inbound
-bidirectional
-```
-
-No abbreviations are defined.
-
-Operational meaning:
-
-- `outbound`: host side may initiate NEW flows toward the Profile remote prefixes;
-- `inbound`: remote side may initiate NEW flows through a bound Device toward the host;
-- `bidirectional`: either side may initiate NEW flows;
-- admitted ESTABLISHED/RELATED return traffic is allowed in both directions.
-
-The independent Device `traffic_envelope` may restrict any of these flows further.
-
-### 4.2 destinations
-
-`destinations` is a non-empty list of strict **remote/VPN-side** IPv4 CIDR prefixes.
-
-The field name reflects the host -> VPN routing view. For Device -> host NEW-flow
-classification the same prefixes are matched as remote source prefixes.
-
-Rules:
-
-- `/0` and `/32` are valid;
-- host bits are rejected rather than silently canonicalized;
-- duplicate destinations among enabled Profiles are rejected, including duplicates inside
-  one Profile;
-- overlap at different prefix lengths is allowed;
-- list order has no routing semantics.
-
-### 4.3 device_order
-
-`device_order` is a non-empty ordered list of Device IDs.
-
-Rules:
-
-- order is semantically significant;
-- duplicate Device IDs inside one Profile are rejected;
-- unknown Device IDs are rejected;
-- known `enabled = false` Devices are valid references and are skipped operationally;
-- disabled Device references consume no current metric range; enabling one later is a new configuration transition.
-
-Device priority from this list is followed by the order of that Device's
-`expected_interfaces`.
-
-## 5. Current example
+Example:
 
 ```toml
-[device.oc-main]
-enabled = true
-expected_interfaces = [
-    "vpns*/2",
-]
-
-[device.wg-backup]
-enabled = false
-
 [profile.corp]
 enabled = true
 direction = "outbound"
@@ -227,51 +187,67 @@ destinations = [
     "10.0.0.0/8",
     "192.168.100.0/24",
 ]
-device_order = [
-    "oc-main",
-    "wg-backup",
-]
-
-[profile.future]
-enabled = false
+device_order = ["oc-main", "wg-backup"]
 ```
 
-This example intentionally demonstrates that an enabled Profile may reference an
-incomplete disabled Device placeholder.
+### 4.1 Direction
 
-## 6. Device traffic-envelope capability boundary
+Values:
 
-The human-facing grammar is **not yet fixed**, but the architecture now fixes what the
-future Device envelope must be able to express.
+- `outbound`: host may initiate NEW;
+- `inbound`: remote side may initiate NEW;
+- `bidirectional`: either side may initiate NEW.
 
-It is Device-scoped, not Profile-scoped, and applies to every bound interface/Profile
-sharing that Device.
+ESTABLISHED/RELATED return traffic is admitted subject to Device envelope.
 
-Required capability surface:
+### 4.2 Destinations
 
-- direction relative to the Device: from-device / to-device;
-- source IPv4 prefix;
-- destination IPv4 prefix;
-- protocol at least TCP / UDP / ICMP;
-- TCP/UDP source and destination ports where applicable;
-- allow/drop action;
-- explicit/default terminal policy.
+Strict remote-side IPv4 CIDRs:
 
-Canonical admin use cases include temporary source-network restriction on one Device and
-temporary destination-port blocking (for example TCP/8007) on another.
+- `/0` and `/32` valid;
+- host bits rejected;
+- exact duplicate prefixes across enabled Profiles rejected;
+- overlap at different prefix lengths allowed;
+- order has no routing semantics.
 
-This is a capability contract only. The parser must continue to reject guessed
-`traffic_envelope` syntax until the TOML grammar is separately agreed.
+### 4.3 Device order
 
-## 6. Deliberately unresolved configuration surface
+Ordered Device IDs. Unknown IDs rejected. Known disabled Device references valid and
+consume no current metric range.
 
-The following are not yet fixed by this contract:
+## 5. Complete example
 
-- configuration schema/version field;
-- human-facing Device publication syntax;
-- Device traffic-envelope syntax;
-- future DeviceManager lifecycle/configuration fields;
-- future Profile warm-reservation syntax;
-- reload/CandidateConfig administrative syntax.
+```toml
+schema_version = 1
 
-They must not be invented implicitly by the first parser implementation.
+[device.oc-main]
+enabled = true
+expected_interfaces = ["vpns*/2"]
+nat = "masquerade"
+publications = ["44443/tcp", "44443/udp"]
+
+[device.oc-main.traffic_envelope]
+default = "allow"
+
+[[device.oc-main.traffic_envelope.rules]]
+direction = "from-device"
+action = "drop"
+source = "10.20.0.0/16"
+
+[device.wg-backup]
+enabled = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc-main", "wg-backup"]
+```
+
+## 6. Explicitly outside schema version 1
+
+- DeviceManager process lifecycle/configuration;
+- Profile warm reservation;
+- live reload/CandidateConfig administrative protocol;
+- explicit SNAT;
+- IPv6 payload policy.

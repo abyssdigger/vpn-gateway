@@ -5,12 +5,12 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from rou.domain import ActiveConfig, Device, Direction, Profile
+from rou.domain import ActiveConfig, Device, NatMode, Direction, Profile
 from rou.firewall_intent import FlowDirection, Verdict, compile_new_flow_intents
 
 
 def enabled_device(name: str) -> Device:
-    return Device(name=name, enabled=True)
+    return Device(name=name, enabled=True, nat=NatMode.NONE)
 
 
 class FirewallIntentTests(unittest.TestCase):
