@@ -117,7 +117,6 @@ def compare_composite_nft_policy(
             for item in device.conflicts
         )
 
-    child_names = {chain.name for chain in device.chains if False}
     # Structural ownership must be checked against the actual observation, not only
     # desired-confirmed chains. Collect every explicitly marked Device child.
     actual_child_names: set[str] = set()
