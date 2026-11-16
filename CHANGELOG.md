@@ -1,3 +1,88 @@
+## 2026-11-12 — EXP-019 PASS: WireGuard raw availability evidence
+
+Future DeviceManager research established that WireGuard interface presence and
+latest-handshake age are insufficient as prompt liveness indicators.
+
+A disposable two-namespace WireGuard experiment proved:
+
+- wg0 remains present with the same ifindex while its UDP underlay is broken;
+- an active path probe fails during the outage and recovers after underlay restoration;
+- the same wg0 generation survives the full loss/recovery cycle;
+- latest-successful-handshake timestamp remained unchanged across the short outage and
+  successful payload recovery.
+
+Consequence: a future WireGuard positive UNAVAILABLE detector must not rely solely on
+interface presence or handshake age. Active path probing is viable raw evidence, but probe
+target/cadence/threshold semantics are intentionally left for a human-approved
+DeviceManager design.
+
+Attempts 1–3 are preserved as harness/environment false negatives; attempt 4 is PASS.
+
+EXP-019 is archived evidence rather than a permanent dependency of the completed core NG1
+CI. A DeviceManager implementation that relies on this behavior will add its own permanent
+integration coverage.
+
+---
+
+## 2026-11-12 — EXP-016 PASS: production ECMP hash policy fixed to 1
+
+EXP-016 closed the future availability prerequisite for ECMP fallback.
+
+Privileged disposable-netns evidence proved:
+
+- target kernel accepts fib_multipath_hash_policy values 0, 1, 2 and 3;
+- policy 1 keeps one repeated TCP 5-tuple on a stable nexthop;
+- policy 0 ignores L4-only variation for a fixed L3 pair;
+- policy 1 uses L4 variation across both ECMP members;
+- the sysctl is namespace-isolated.
+
+NG1 now owns and exactly verifies:
+
+```text
+net.ipv4.fib_multipath_hash_policy=1
+```
+
+Fresh instance creation and restart/ensure use the same shared prerequisite compiler, so
+bootstrap and runtime no longer duplicate sysctl policy.
+
+The hash-policy gate is closed. Positive UNAVAILABLE classification and DeviceManager
+availability semantics remain future work.
+
+---
+
+## 2026-11-12 — NG1 production nft baseline and full disposable cycle PASS
+
+The current NG1 Python production baseline now uses nftables as its only production
+filter/NAT backend.
+
+Completed and verified:
+
+- EXP-017 PASS: numeric nft iif/oif rules preserve concrete interface-generation identity
+  across same-name/new-ifindex replacement;
+- generation-safe nft verification uses complete policy semantics plus stable
+  compiler-owned generation markers;
+- legacy iptables remains regression/historical evidence only;
+- Planner supports both ordinary binding lifecycle and proven ROUTE_ADDITIVE incremental
+  transitions without unnecessary global ip_forward=0;
+- post-prerequisite reassessment accepts the same proven incremental transition set as
+  initial assessment;
+- disposable privileged production cycle passes:
+  initial reconcile, same-name/new-ifindex replacement, metric promotion, ordinary member
+  disappearance, structural foreign-nft barrier repair and durable runtime-state verify;
+- rootless NG1 and RC3 suites and privileged kernel integration are green on the reviewed
+  baseline.
+
+Future-gated work remains intentionally separate:
+
+- EXP-014 multi-interface remote-initiated flow pinning — postponed until after the first
+  working production release;
+- EXP-015 real TCP MTU/MSS signoff;
+- EXP-016 ECMP hash-policy prerequisite before enabling a real UNAVAILABLE trigger;
+- DeviceManager availability/process lifecycle work after the core baseline is otherwise
+  complete.
+
+---
+
 ## 2026-11-12 — NG1 Draft 5 correction implementation and kernel proof
 
 Implemented the accepted safety-correction review across the production Python ROU:

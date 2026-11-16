@@ -91,6 +91,53 @@ class EnvironmentLiveTests(unittest.TestCase):
         self.assertEqual(rules[1].iif, "host0")
         self.assertEqual(rules[2].table, 254)
 
+    def test_parse_rule_uses_separate_iproute2_src_dst_lengths(self):
+        rules = parse_ip_rule_json(
+            """[
+              {
+                "priority":10,
+                "src":"192.0.2.0",
+                "srclen":24,
+                "dst":"198.51.100.0",
+                "dstlen":24,
+                "iif":"host0",
+                "table":11
+              },
+              {
+                "priority":11,
+                "src":"all",
+                "dst":"203.0.113.7",
+                "iif":"host0",
+                "table":12
+              }
+            ]"""
+        )
+        self.assertEqual(
+            rules[0].source,
+            ipaddress.IPv4Network("192.0.2.0/24"),
+        )
+        self.assertEqual(
+            rules[0].destination,
+            ipaddress.IPv4Network("198.51.100.0/24"),
+        )
+        self.assertEqual(
+            rules[1].destination,
+            ipaddress.IPv4Network("203.0.113.7/32"),
+        )
+
+    def test_parse_rule_rejects_conflicting_embedded_and_separate_prefixlen(self):
+        with self.assertRaisesRegex(EnvironmentParseError, "conflicts"):
+            parse_ip_rule_json(
+                """[
+                  {
+                    "priority":10,
+                    "dst":"198.51.100.0/24",
+                    "dstlen":16,
+                    "table":11
+                  }
+                ]"""
+            )
+
     def test_addr_rejects_unknown_interface(self):
         with self.assertRaisesRegex(EnvironmentParseError, "unobserved interface"):
             parse_ip_addr_json(

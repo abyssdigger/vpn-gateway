@@ -311,10 +311,10 @@ ROU owns and verifies at least these namespace prerequisites:
 - strict reverse-path filtering must not invalidate policy-routed/asymmetric VPN traffic:
   ROU-owned payload interfaces use an explicitly safe `rp_filter` policy (disabled by
   default for this model; a proven equivalent loose policy may be substituted later);
-- `net.ipv4.fib_multipath_hash_policy` is ROU-owned and verified rather than inherited
-  silently from the host/kernel default. The concrete production value is gated by the
-  dedicated target-kernel ECMP prerequisite experiment; until then no availability
-  detector may make the ECMP fallback tier operationally effective;
+- `net.ipv4.fib_multipath_hash_policy=1` is ROU-owned, applied and exactly verified
+  rather than inherited from the host/kernel default. EXP-016 proved on the target kernel
+  class used by CI that policy 1 is namespace-isolated, deterministic for one 5-tuple and
+  uses L4 flow variation across ECMP members;
 - a newly appearing Device interface is not admitted for payload forwarding until required
   per-interface sysctl state is verified;
 - IPv6 is disabled on ROU-owned payload interfaces in the first production model,
@@ -590,18 +590,23 @@ It receives:
 Inbound payload from such an interface is rejected by the owned transit policy. Its
 existence cannot create an alternate forwarding path.
 
-**Backend proof boundary.** The normalized identity is `(ifname,ifindex)`, but the current
-Python iptables-legacy materializer matches interfaces by reusable name. Consequently, a
-same-name/new-ifindex generation that appears before the controller observes the old
-generation's disappearance may transiently match old name-based rules. Observed
-same-name/new-ifindex replacement is treated as structural drift and repaired under the
-global barrier, but that does not prove absence of the pre-observation window.
+**Production backend identity boundary.** EXP-017 proves that nftables numeric
+`meta iif/oif` matches the concrete interface generation, not the reusable interface
+name. The production filter/NAT materializer therefore uses numeric ifindex for dynamic
+Device interfaces and name matching only for stable infrastructure interfaces such as
+`host0` and `lo`.
 
-Strict production isolation for dynamically reusable interface names is therefore gated by
-EXP-017. The preferred resolution is an ifindex-aware firewall materialization (for
-example nftables numeric `meta iif/oif`) or an equivalently strong proven lifecycle
-serialization. This gate does not weaken the domain invariant; it identifies the remaining
-backend evidence required to enforce it without a timing window.
+Production verification combines complete canonical nft policy semantics with a separate
+JSON observation of compiler-owned generation markers
+`vpng-ifref:iif:<ifindex>` / `vpng-ifref:oif:<ifindex>`. The kernel match itself is
+numeric iif/oif; the marker avoids relying on nft's symbolic rendering of a live interface.
+A same-name/new-ifindex replacement is consequently a fresh lifecycle generation and does
+not inherit policy from the retired interface. If the observed nft policy cannot be proven
+to be either the previous or desired verified generation, the transition is structural and
+uses the global barrier.
+
+Legacy iptables materialization remains historical/regression evidence only; it is not a
+production NG1 backend.
 
 ## 6. Static domain model
 
@@ -747,6 +752,20 @@ Publication state, transport-specific observations and other raw evidence remain
 to DeviceEngine; downstream components receive only normalized availability.
 
 Availability does not break the bound-interface lifetime.
+
+EXP-019 provides WireGuard-specific raw evidence for future DeviceManager work:
+
+- a WireGuard interface can remain present/up with the same `(ifname,ifindex)` while its
+  remote underlay path is unusable;
+- an active probe bound to the WireGuard path can distinguish loss and recovery without
+  replacing the interface generation;
+- latest-successful-handshake age alone is not a sufficient prompt liveness trigger:
+  short path loss and successful payload recovery were observed with the same recorded
+  latest-handshake timestamp.
+
+This evidence does not define the production detector. Probe target, cadence, failure/
+recovery thresholds and any Device-specific configuration belong to future DeviceManager
+design. DeviceEngine continues to export only normalized UNKNOWN/AVAILABLE/UNAVAILABLE.
 
 ### 7.4 Device traffic envelope
 
@@ -1618,7 +1637,8 @@ ROU does not seize or rewrite unrelated host VPN routes.
 72. ROU-owned INPUT is default-DROP and admits only loopback, local ESTABLISHED/RELATED, and host0 to configured internal publication endpoints; Device interfaces have no implicit ROU-local access.
 73. ROU-owned OUTPUT is default-DROP and admits only loopback, local ESTABLISHED/RELATED, and locally generated traffic whose egress is host0.
 74. The persistent shadow fallback is implemented before its production availability trigger; positive UNAVAILABLE classification is intentionally deferred to future DeviceManager/Device-specific detector work.
-75. net.ipv4.fib_multipath_hash_policy is an observed/owned namespace prerequisite and may not be silently inherited when ECMP fallback can become effective.
+75. net.ipv4.fib_multipath_hash_policy=1 is an applied/verified namespace prerequisite, proven by EXP-016; it must not be silently inherited from the host/kernel default.
 76. Incremental lifecycle route repair never flushes a Profile table or removes its terminal blackhole; the blackhole remains continuously installed so a temporarily missing more-specific route cannot fall through to a broader overlapping Profile rule.
-77. With the current iptables interface-name backend, same-name/new-ifindex replacement is treated as structural/unknown drift and uses the global barrier because old name-based rules could otherwise match the fresh interface generation before verification.
+77. Production nft policy matches dynamic bound interfaces by numeric ifindex and verifies compiler-owned generation markers for those numeric references; same-name/new-ifindex is a fresh lifecycle generation, while an unprovable policy generation remains structural/unknown drift.
 78. Incremental binding admission installs route state first, required NAT second, and generated FORWARD admission last; a newly routable MASQUERADE Device is never intentionally admitted before translation state exists.
+79. With unchanged bindings/RPDB/policy, an observed owned-route set that is a strict subset of the unchanged desired route generation may be repaired additively without the global barrier only when every terminal Profile blackhole remains installed; any extra/stale owned route remains structural drift.

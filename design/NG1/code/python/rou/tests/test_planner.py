@@ -25,10 +25,9 @@ from rou.domain import (
     TrafficEnvelope,
 )
 from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule
-from rou.firewall_state import compile_filter_state
 from rou.kernel_allocation import compile_kernel_allocation
 from rou.kernel_state import compile_kernel_desired_state
-from rou.nat_state import ExplicitNoNatProvider, UnresolvedNatProvider
+from rou.nft_policy import compile_nft_filter_state, compile_nft_nat_state
 from rou.planner import (
     PlannerError,
     PlannerRetryRequired,
@@ -36,27 +35,7 @@ from rou.planner import (
     reconcile_once,
 )
 from rou.traffic_state import committed_state_from_verified, project_normal_metrics
-
-
-class FakeHostBackend:
-    def __init__(self, filter_save: str, nat_save: str):
-        self.filter_save = filter_save
-        self.nat_save = nat_save
-        self.calls = []
-
-    def run(self, argv, *, input_text=None, check=True):
-        self.calls.append((argv, input_text, check))
-        stdout = ""
-        if argv[-1:] == ("iptables-legacy-restore",) and input_text:
-            if input_text.startswith("*filter"):
-                self.filter_save = input_text.strip()
-            elif input_text.startswith("*nat"):
-                self.nat_save = input_text.strip()
-        if argv[-4:] == ("iptables-legacy-save", "-c", "-t", "filter"):
-            stdout = self.filter_save
-        elif argv[-4:] == ("iptables-legacy-save", "-c", "-t", "nat"):
-            stdout = self.nat_save
-        return CommandResult(argv, 0, stdout, "")
+from _nft_fake import FakeNftBackend
 
 
 def config():
@@ -113,7 +92,7 @@ def sysctls(forwarding: bool, ifname="vpns00"):
         ("net.ipv4.ip_forward", "1" if forwarding else "0"),
         ("net.ipv4.conf.all.rp_filter", "0"),
         ("net.ipv4.conf.default.rp_filter", "0"),
-        ("net.ipv4.fib_multipath_hash_policy", "0"),
+        ("net.ipv4.fib_multipath_hash_policy", "1"),
         ("net.ipv6.conf.all.forwarding", "0"),
         ("net.ipv6.conf.default.forwarding", "0"),
         ("net.ipv6.conf.default.disable_ipv6", "1"),
@@ -136,8 +115,8 @@ def expected_for(initial_interfaces):
         metrics,
         allocation,
     )
-    firewall = compile_filter_state(cfg, devices.snapshot)
-    nat = ExplicitNoNatProvider().compile(cfg, devices.snapshot)
+    firewall = compile_nft_filter_state(cfg, devices.snapshot)
+    nat = compile_nft_nat_state(cfg, devices.snapshot)
     return devices, metrics, kernel, firewall, nat
 
 
@@ -194,7 +173,7 @@ class PlannerTests(unittest.TestCase):
     def test_verified_open_state_commits_without_mutation(self):
         _, _, kernel, firewall, nat = expected_for(interfaces())
         snap = observed_kernel_snapshot(kernel, forwarding=True)
-        backend = FakeHostBackend(firewall.canonical_save, nat.canonical_save)
+        backend = FakeNftBackend(firewall, nat)
         queue = SnapshotQueue([snap])
 
         result = reconcile_once(
@@ -202,7 +181,6 @@ class PlannerTests(unittest.TestCase):
             "rou0",
             PlannerRuntimeState.empty(),
             backend,
-            ExplicitNoNatProvider(),
             collect_snapshot=queue,
         )
 
@@ -230,7 +208,7 @@ class PlannerTests(unittest.TestCase):
         prepared = barrier
         applied = observed_kernel_snapshot(kernel, forwarding=False)
         final = observed_kernel_snapshot(kernel, forwarding=True)
-        backend = FakeHostBackend(firewall.canonical_save, nat.canonical_save)
+        backend = FakeNftBackend(firewall, nat)
         queue = SnapshotQueue([initial, barrier, prepared, applied, final])
 
         result = reconcile_once(
@@ -238,7 +216,6 @@ class PlannerTests(unittest.TestCase):
             "rou0",
             PlannerRuntimeState.empty(),
             backend,
-            ExplicitNoNatProvider(),
             collect_snapshot=queue,
         )
 
@@ -252,6 +229,37 @@ class PlannerTests(unittest.TestCase):
         self.assertGreaterEqual(writes.count("net.ipv4.ip_forward=0"), 1)
         self.assertEqual(writes[-1], "net.ipv4.ip_forward=1")
 
+
+    def test_foreign_nft_table_forces_structural_repair_and_is_deleted(self):
+        _, _, kernel, firewall, nat = expected_for(interfaces())
+        initial = observed_kernel_snapshot(kernel, forwarding=True)
+        barrier = observed_kernel_snapshot(kernel, forwarding=False)
+        final = observed_kernel_snapshot(kernel, forwarding=True)
+        backend = FakeNftBackend(firewall, nat)
+        backend.tables["foreign"] = (
+            "table ip foreign {\n}",
+            (),
+        )
+        queue = SnapshotQueue([initial, barrier, barrier, barrier, final])
+
+        result = reconcile_once(
+            config(),
+            "rou0",
+            PlannerRuntimeState.empty(),
+            backend,
+            collect_snapshot=queue,
+        )
+
+        self.assertTrue(result.changed_kernel)
+        self.assertNotIn("foreign", backend.tables)
+        writes = [
+            arg
+            for call, _stdin, _check in backend.calls
+            for arg in call
+            if arg.startswith("net.ipv4.ip_forward=")
+        ]
+        self.assertIn("net.ipv4.ip_forward=0", writes)
+        self.assertEqual(writes[-1], "net.ipv4.ip_forward=1")
 
     def test_bound_member_disappearance_repairs_without_global_barrier(self):
         cfg = config()
@@ -271,11 +279,11 @@ class PlannerTests(unittest.TestCase):
             committed_state_from_verified(previous_metrics),
         )
         allocation = compile_kernel_allocation(cfg)
-        previous_firewall = compile_filter_state(
+        previous_firewall = compile_nft_filter_state(
             cfg,
             previous_devices.snapshot,
         )
-        previous_nat = ExplicitNoNatProvider().compile(
+        previous_nat = compile_nft_nat_state(
             cfg,
             previous_devices.snapshot,
         )
@@ -332,9 +340,9 @@ class PlannerTests(unittest.TestCase):
             ifs=interfaces_survivor(),
         )
 
-        backend = FakeHostBackend(
-            previous_firewall.canonical_save,
-            previous_nat.canonical_save,
+        backend = FakeNftBackend(
+            previous_firewall,
+            previous_nat,
         )
         queue = SnapshotQueue([initial, initial, applied])
 
@@ -343,7 +351,6 @@ class PlannerTests(unittest.TestCase):
             "rou0",
             committed,
             backend,
-            ExplicitNoNatProvider(),
             collect_snapshot=queue,
         )
 
@@ -377,22 +384,98 @@ class PlannerTests(unittest.TestCase):
             )
         )
 
-        restore_calls = [
+        nft_apply_calls = [
             (index, stdin)
-            for index, (_call, stdin, _check) in enumerate(backend.calls)
-            if stdin is not None and stdin.startswith(("*nat", "*filter"))
+            for index, (call, stdin, _check) in enumerate(backend.calls)
+            if call[-3:] == ("nft", "-f", "-") and stdin is not None
         ]
         nat_index = next(
             index
-            for index, stdin in restore_calls
-            if stdin.startswith("*nat")
+            for index, stdin in nft_apply_calls
+            if "table ip vpng_nat" in stdin
         )
         filter_index = next(
             index
-            for index, stdin in restore_calls
-            if stdin.startswith("*filter")
+            for index, stdin in nft_apply_calls
+            if "table ip vpng_filter" in stdin
         )
         self.assertLess(nat_index, filter_index)
+
+
+    def test_route_additive_reassessment_remains_incremental(self):
+        cfg = config()
+        devices, metrics, kernel, firewall, nat = expected_for(interfaces())
+        committed = PlannerRuntimeState(
+            devices.next_state,
+            committed_state_from_verified(metrics),
+        )
+
+        observed_routes = tuple(
+            KernelRoute(
+                r.table,
+                r.destination,
+                r.route_type,
+                r.protocol,
+                r.metric,
+                r.ifname,
+                r.nexthops,
+            )
+            for r in kernel.routes
+            if not (
+                r.route_type == "unicast"
+                and r.metric is not None
+                and r.metric < 65535
+            )
+        )
+        observed_rules = tuple(
+            KernelRule(
+                r.priority,
+                r.table,
+                r.action,
+                destination=r.destination,
+                iif=r.iif,
+            )
+            for r in kernel.rules
+        )
+        initial = EnvironmentSnapshot(
+            interfaces=interfaces(),
+            routes=observed_routes,
+            rules=observed_rules,
+            sysctls=sysctls(True),
+        )
+        applied = observed_kernel_snapshot(
+            kernel,
+            forwarding=True,
+        )
+
+        backend = FakeNftBackend(firewall, nat)
+        queue = SnapshotQueue([initial, initial, applied])
+
+        result = reconcile_once(
+            cfg,
+            "rou0",
+            committed,
+            backend,
+            collect_snapshot=queue,
+        )
+
+        self.assertTrue(result.changed_kernel)
+        self.assertEqual(queue.calls, 3)
+        self.assertFalse(
+            any(
+                "net.ipv4.ip_forward=0" in call[0]
+                for call in backend.calls
+            )
+        )
+        self.assertTrue(
+            any(
+                "route" in call
+                and "add" in call
+                and "10.0.0.0/8" in call
+                for call, _stdin, _check in backend.calls
+            )
+        )
+
 
     def test_verified_state_is_persisted_before_forwarding_open(self):
         _, _, kernel, firewall, nat = expected_for(interfaces())
@@ -410,7 +493,7 @@ class PlannerTests(unittest.TestCase):
         )
         applied = observed_kernel_snapshot(kernel, forwarding=False)
         final = observed_kernel_snapshot(kernel, forwarding=True)
-        backend = FakeHostBackend(firewall.canonical_save, nat.canonical_save)
+        backend = FakeNftBackend(firewall, nat)
         queue = SnapshotQueue([initial, barrier, barrier, applied, final])
         events = []
 
@@ -429,7 +512,6 @@ class PlannerTests(unittest.TestCase):
             "rou0",
             PlannerRuntimeState.empty(),
             backend,
-            ExplicitNoNatProvider(),
             collect_snapshot=queue,
             persist_verified_state=persist,
         )
@@ -451,7 +533,7 @@ class PlannerTests(unittest.TestCase):
             rules=(),
             sysctls=sysctls(False),
         )
-        backend = FakeHostBackend(firewall.canonical_save, nat.canonical_save)
+        backend = FakeNftBackend(firewall, nat)
         applied = observed_kernel_snapshot(
             kernel,
             forwarding=False,
@@ -467,7 +549,6 @@ class PlannerTests(unittest.TestCase):
                 "rou0",
                 PlannerRuntimeState.empty(),
                 backend,
-                ExplicitNoNatProvider(),
                 collect_snapshot=queue,
                 persist_verified_state=fail_persist,
             )
@@ -495,7 +576,7 @@ class PlannerTests(unittest.TestCase):
             interfaces=changed_ifs,
             sysctls=sysctls(False),
         )
-        backend = FakeHostBackend(firewall.canonical_save, nat.canonical_save)
+        backend = FakeNftBackend(firewall, nat)
         queue = SnapshotQueue([initial, barrier, prepared])
 
         with self.assertRaises(PlannerRetryRequired):
@@ -504,7 +585,6 @@ class PlannerTests(unittest.TestCase):
                 "rou0",
                 PlannerRuntimeState.empty(),
                 backend,
-                ExplicitNoNatProvider(),
                 collect_snapshot=queue,
             )
 
@@ -546,7 +626,10 @@ class PlannerTests(unittest.TestCase):
                 )
             },
         )
-        backend = FakeHostBackend("", "")
+        backend = FakeNftBackend(
+            compile_nft_filter_state(config(), DeviceBindingSnapshot((), ())),
+            compile_nft_nat_state(config(), DeviceBindingSnapshot((), ())),
+        )
         queue = SnapshotQueue([])
 
         with self.assertRaisesRegex(
@@ -558,7 +641,6 @@ class PlannerTests(unittest.TestCase):
                 "rou0",
                 PlannerRuntimeState.empty(),
                 backend,
-                ExplicitNoNatProvider(),
                 collect_snapshot=queue,
             )
 
@@ -570,30 +652,6 @@ class PlannerTests(unittest.TestCase):
             )
         )
 
-    def test_unresolved_nat_policy_fails_closed(self):
-        initial = EnvironmentSnapshot(
-            interfaces=interfaces(),
-            sysctls=sysctls(True),
-        )
-        backend = FakeHostBackend("", "")
-        queue = SnapshotQueue([initial])
-
-        with self.assertRaisesRegex(PlannerError, "NAT policy"):
-            reconcile_once(
-                config(),
-                "rou0",
-                PlannerRuntimeState.empty(),
-                backend,
-                UnresolvedNatProvider(),
-                collect_snapshot=queue,
-            )
-
-        self.assertTrue(
-            any(
-                "net.ipv4.ip_forward=0" in call[0]
-                for call in backend.calls
-            )
-        )
 
 
 if __name__ == "__main__":

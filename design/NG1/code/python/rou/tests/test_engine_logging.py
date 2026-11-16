@@ -23,11 +23,11 @@ from rou.domain import (
     Profile,
 )
 from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule
-from rou.firewall_state import compile_filter_state
 from rou.kernel_allocation import compile_kernel_allocation
 from rou.kernel_state import compile_kernel_desired_state
-from rou.nat_state import ExplicitNoNatProvider
+from rou.nft_policy import compile_nft_filter_state, compile_nft_nat_state
 from rou.planner import PlannerRuntimeState, reconcile_once
+from _nft_fake import FakeNftBackend
 from rou.traffic_state import (
     TrafficRuntimeState,
     project_normal_metrics,
@@ -73,7 +73,7 @@ def sysctls():
         ("net.ipv4.ip_forward", "1"),
         ("net.ipv4.conf.all.rp_filter", "0"),
         ("net.ipv4.conf.default.rp_filter", "0"),
-        ("net.ipv4.fib_multipath_hash_policy", "0"),
+        ("net.ipv4.fib_multipath_hash_policy", "1"),
         ("net.ipv6.conf.all.forwarding", "0"),
         ("net.ipv6.conf.default.forwarding", "0"),
         ("net.ipv6.conf.default.disable_ipv6", "1"),
@@ -82,20 +82,6 @@ def sysctls():
         ("net.ipv4.conf.vpns00.rp_filter", "0"),
         ("net.ipv6.conf.vpns00.disable_ipv6", "1"),
     )
-
-
-class FakeBackend:
-    def __init__(self, filter_text, nat_text):
-        self.filter_text = filter_text
-        self.nat_text = nat_text
-
-    def run(self, argv, *, input_text=None, check=True):
-        stdout = ""
-        if argv[-4:] == ("iptables-legacy-save", "-c", "-t", "filter"):
-            stdout = self.filter_text
-        elif argv[-4:] == ("iptables-legacy-save", "-c", "-t", "nat"):
-            stdout = self.nat_text
-        return CommandResult(argv, 0, stdout, "")
 
 
 class EngineLoggingTests(unittest.TestCase):
@@ -146,8 +132,8 @@ class EngineLoggingTests(unittest.TestCase):
             metrics,
             allocation,
         )
-        firewall = compile_filter_state(cfg, devices.snapshot)
-        nat = ExplicitNoNatProvider().compile(cfg, devices.snapshot)
+        firewall = compile_nft_filter_state(cfg, devices.snapshot)
+        nat = compile_nft_nat_state(cfg, devices.snapshot)
 
         snapshot = EnvironmentSnapshot(
             interfaces=interfaces(),
@@ -175,10 +161,7 @@ class EngineLoggingTests(unittest.TestCase):
             ),
             sysctls=sysctls(),
         )
-        backend = FakeBackend(
-            firewall.canonical_save,
-            nat.canonical_save,
-        )
+        backend = FakeNftBackend(firewall, nat)
 
         with self.assertLogs("rou.planner", level="DEBUG") as planner_logs:
             result = reconcile_once(
@@ -186,7 +169,6 @@ class EngineLoggingTests(unittest.TestCase):
                 "rou0",
                 PlannerRuntimeState.empty(),
                 backend,
-                ExplicitNoNatProvider(),
                 collect_snapshot=lambda _ns, _backend: snapshot,
             )
 

@@ -8,10 +8,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
 from rou.domain import Availability
 from rou.environment import EnvironmentSnapshot, KernelRoute, KernelRule
-from rou.firewall_state import FirewallDesiredState
 from rou.kernel_state import KernelDesiredState, KernelRouteSpec, KernelRuleSpec
-from rou.nat_state import NatDesiredState
-from rou.transition import TransitionKind, assess_binding_lifecycle
+from rou.transition import (
+    PolicyGenerationObservation,
+    TransitionKind,
+    assess_binding_lifecycle,
+)
 
 
 def bindings(ifindex: int | None):
@@ -55,7 +57,6 @@ def desired(ifname: str | None):
             (),
         )
     )
-    routes = tuple(routes)
     rules = (
         KernelRuleSpec(
             1,
@@ -72,13 +73,10 @@ def desired(ifname: str | None):
             "unreachable",
         ),
     )
-    return KernelDesiredState(routes, rules, (1,))
+    return KernelDesiredState(tuple(routes), rules, (1,))
 
 
-def observed_from(
-    routes,
-    rules,
-):
+def observed_from(routes, rules):
     return EnvironmentSnapshot(
         (),
         routes=tuple(routes),
@@ -105,17 +103,20 @@ def rule_observed():
     )
 
 
+def previous_policy():
+    return PolicyGenerationObservation(True, False, True, False)
+
+
+def desired_or_previous_policy():
+    return PolicyGenerationObservation(True, True, True, True)
+
+
 class TransitionTests(unittest.TestCase):
     def test_bound_member_disappearance_is_lifecycle_when_owned_state_is_known(self):
-        previous = desired("vpns00")
-        current = desired(None)
         result = assess_binding_lifecycle(
-            previous,
-            current,
-            FirewallDesiredState("", "old-filter"),
-            FirewallDesiredState("", "new-filter"),
-            NatDesiredState("", "old-nat"),
-            NatDesiredState("", "new-nat"),
+            desired("vpns00"),
+            desired(None),
+            previous_policy(),
             bindings(10),
             bindings(None),
             observed_from(
@@ -132,14 +133,10 @@ class TransitionTests(unittest.TestCase):
                 ),
                 rule_observed(),
             ),
-            "old-filter",
-            "old-nat",
         )
         self.assertEqual(result.kind, TransitionKind.BINDING_LIFECYCLE)
 
     def test_foreign_route_in_owned_table_is_structural(self):
-        previous = desired("vpns00")
-        current = desired(None)
         foreign = KernelRoute(
             1,
             ipaddress.IPv4Network("192.0.2.0/24"),
@@ -150,12 +147,9 @@ class TransitionTests(unittest.TestCase):
             (),
         )
         result = assess_binding_lifecycle(
-            previous,
-            current,
-            FirewallDesiredState("", "old-filter"),
-            FirewallDesiredState("", "new-filter"),
-            NatDesiredState("", "old-nat"),
-            NatDesiredState("", "new-nat"),
+            desired("vpns00"),
+            desired(None),
+            previous_policy(),
             bindings(10),
             bindings(None),
             observed_from(
@@ -173,38 +167,27 @@ class TransitionTests(unittest.TestCase):
                 ),
                 rule_observed(),
             ),
-            "old-filter",
-            "old-nat",
         )
         self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
-        self.assertTrue(
-            any("outside previous/new" in reason for reason in result.reasons)
-        )
+        self.assertTrue(any("outside previous/new" in x for x in result.reasons))
 
     def test_foreign_filter_generation_is_structural(self):
         result = assess_binding_lifecycle(
             desired("vpns00"),
             desired(None),
-            FirewallDesiredState("", "old-filter"),
-            FirewallDesiredState("", "new-filter"),
-            NatDesiredState("", "old-nat"),
-            NatDesiredState("", "new-nat"),
+            PolicyGenerationObservation(False, False, True, False),
             bindings(10),
             bindings(None),
             observed_from((), rule_observed()),
-            "foreign-filter",
-            "old-nat",
         )
         self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
+        self.assertTrue(any("filter policy" in x for x in result.reasons))
 
-    def test_same_name_new_ifindex_requires_structural_barrier(self):
+    def test_same_name_new_ifindex_is_lifecycle_when_policy_generation_is_known(self):
         result = assess_binding_lifecycle(
             desired("vpns00"),
             desired("vpns00"),
-            FirewallDesiredState("", "same-filter"),
-            FirewallDesiredState("", "same-filter"),
-            NatDesiredState("", "same-nat"),
-            NatDesiredState("", "same-nat"),
+            desired_or_previous_policy(),
             bindings(10),
             bindings(11),
             observed_from(
@@ -230,18 +213,113 @@ class TransitionTests(unittest.TestCase):
                 ),
                 rule_observed(),
             ),
-            "same-filter",
-            "same-nat",
+        )
+        self.assertEqual(result.kind, TransitionKind.BINDING_LIFECYCLE)
+        self.assertEqual(result.reasons, ())
+
+    def test_same_name_new_ifindex_is_structural_when_policy_generation_unknown(self):
+        result = assess_binding_lifecycle(
+            desired("vpns00"),
+            desired("vpns00"),
+            PolicyGenerationObservation(False, False, True, True),
+            bindings(10),
+            bindings(11),
+            observed_from(
+                (
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("10.0.0.0/8"),
+                        "unicast",
+                        202,
+                        1,
+                        "vpns00",
+                        (),
+                    ),
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("0.0.0.0/0"),
+                        "blackhole",
+                        201,
+                        65536,
+                        None,
+                        (),
+                    ),
+                ),
+                rule_observed(),
+            ),
         )
         self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
-        self.assertTrue(
-            any("same-name/new-ifindex" in reason for reason in result.reasons)
-        )
 
+    def test_missing_desired_normal_route_is_proven_route_additive(self):
+        kernel = desired("vpns00")
+        result = assess_binding_lifecycle(
+            kernel,
+            kernel,
+            PolicyGenerationObservation(True, True, True, True),
+            bindings(10),
+            bindings(10),
+            observed_from(
+                (
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("0.0.0.0/0"),
+                        "blackhole",
+                        201,
+                        65536,
+                        None,
+                        (),
+                    ),
+                ),
+                rule_observed(),
+            ),
+        )
+        self.assertEqual(result.kind, TransitionKind.ROUTE_ADDITIVE)
+        self.assertEqual(result.reasons, ())
+
+    def test_same_bindings_with_extra_owned_route_is_structural(self):
+        kernel = desired("vpns00")
+        result = assess_binding_lifecycle(
+            kernel,
+            kernel,
+            PolicyGenerationObservation(True, True, True, True),
+            bindings(10),
+            bindings(10),
+            observed_from(
+                (
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("10.0.0.0/8"),
+                        "unicast",
+                        202,
+                        1,
+                        "vpns00",
+                        (),
+                    ),
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("192.0.2.0/24"),
+                        "unicast",
+                        202,
+                        9,
+                        "vpns00",
+                        (),
+                    ),
+                    KernelRoute(
+                        1,
+                        ipaddress.IPv4Network("0.0.0.0/0"),
+                        "blackhole",
+                        201,
+                        65536,
+                        None,
+                        (),
+                    ),
+                ),
+                rule_observed(),
+            ),
+        )
+        self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
 
     def test_foreign_rule_above_terminal_is_structural(self):
-        previous = desired("vpns00")
-        current = desired(None)
         rules = list(rule_observed())
         rules.append(
             KernelRule(
@@ -253,42 +331,27 @@ class TransitionTests(unittest.TestCase):
             )
         )
         result = assess_binding_lifecycle(
-            previous,
-            current,
-            FirewallDesiredState("", "old-filter"),
-            FirewallDesiredState("", "new-filter"),
-            NatDesiredState("", "old-nat"),
-            NatDesiredState("", "new-nat"),
+            desired("vpns00"),
+            desired(None),
+            previous_policy(),
             bindings(10),
             bindings(None),
             observed_from((), tuple(rules)),
-            "old-filter",
-            "old-nat",
         )
         self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
-        self.assertTrue(
-            any("RPDB" in reason for reason in result.reasons)
-        )
-
+        self.assertTrue(any("RPDB" in x for x in result.reasons))
 
     def test_missing_terminal_blackhole_is_structural(self):
         result = assess_binding_lifecycle(
             desired("vpns00"),
             desired(None),
-            FirewallDesiredState("", "old-filter"),
-            FirewallDesiredState("", "new-filter"),
-            NatDesiredState("", "old-nat"),
-            NatDesiredState("", "new-nat"),
+            previous_policy(),
             bindings(10),
             bindings(None),
             observed_from((), rule_observed()),
-            "old-filter",
-            "old-nat",
         )
         self.assertEqual(result.kind, TransitionKind.STRUCTURAL)
-        self.assertTrue(
-            any("terminal Profile blackhole" in reason for reason in result.reasons)
-        )
+        self.assertTrue(any("terminal Profile blackhole" in x for x in result.reasons))
 
 
 if __name__ == "__main__":

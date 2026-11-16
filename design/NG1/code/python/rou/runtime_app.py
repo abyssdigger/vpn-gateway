@@ -18,7 +18,6 @@ from .instance_config import (
     validate_instance_id,
 )
 from .instance_lifecycle import verify_instance
-from .nat_state import ConfigNatProvider
 from .publication import PublicationSupervisor, compile_publication_endpoints
 from .runtime import RuntimeLoopConfig, RuntimeLoopResult, run_runtime_loop
 from .state_store import JsonRuntimeStateStore
@@ -190,7 +189,6 @@ def run_instance_runtime(
                         router_cfg,
                         instance_cfg.instance.namespace,
                         backend,
-                        ConfigNatProvider(),
                         store,
                         wakeups,
                         loop_config=loop_config,

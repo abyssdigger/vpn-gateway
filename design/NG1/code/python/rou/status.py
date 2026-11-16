@@ -7,11 +7,13 @@ from .command_backend import NamespaceBackend
 from .config import validate_active_config
 from .domain import ActiveConfig
 from .environment import EnvironmentSnapshot
-from .firewall_kernel import verify_filter_state
 from .kernel_state import verify_kernel_desired_state
 from .namespace_prereq import verify_namespace_prerequisites
-from .nat_kernel import verify_nat_state
-from .nat_state import NatProvider
+from .nft_policy import (
+    observe_nft_ruleset_inventory,
+    verify_nft_ruleset_ownership,
+    verify_nft_table,
+)
 from .planner import (
     PlannerProjection,
     PlannerRuntimeState,
@@ -32,7 +34,6 @@ def inspect_runtime_status(
     committed: PlannerRuntimeState,
     snapshot: EnvironmentSnapshot,
     backend: NamespaceBackend,
-    nat_provider: NatProvider,
     *,
     local_publication_address: IPv4Address | None = None,
 ) -> RuntimeStatus:
@@ -49,7 +50,6 @@ def inspect_runtime_status(
         config,
         committed,
         snapshot,
-        nat_provider,
         None,
         local_publication_address,
     )
@@ -71,13 +71,22 @@ def inspect_runtime_status(
         )
         errors.extend(prereq.errors)
 
-    firewall = verify_filter_state(projection.firewall, backend)
-    if not firewall.ok:
-        errors.append("filter table mismatch")
+    ownership = verify_nft_ruleset_ownership(
+        observe_nft_ruleset_inventory(backend)
+    )
+    if not ownership.ok:
+        errors.append(
+            "foreign nft tables present: "
+            + repr(ownership.foreign_tables)
+        )
 
-    nat = verify_nat_state(projection.nat, backend)
+    firewall = verify_nft_table(projection.firewall, backend)
+    if not firewall.ok:
+        errors.append("nft filter table mismatch")
+
+    nat = verify_nft_table(projection.nat, backend)
     if not nat.ok:
-        errors.append("nat table mismatch")
+        errors.append("nft NAT table mismatch")
 
     return RuntimeStatus(
         ok=not errors,

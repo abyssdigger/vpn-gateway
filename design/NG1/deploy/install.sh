@@ -6,6 +6,13 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+for command_name in python3 ip nft sysctl systemctl; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        echo "ERROR: required command not found: $command_name" >&2
+        exit 1
+    fi
+done
+
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SRC_ROU=$(CDPATH= cd -- "$SCRIPT_DIR/../code/python/rou" && pwd)
 
@@ -24,6 +31,7 @@ install -d -m 0700 /var/lib/vpn-gateway
 STAGE=$(mktemp -d "$LIB_ROOT/.rou-stage.XXXXXX")
 trap 'rm -rf "$STAGE"' EXIT HUP INT TERM
 cp -a "$SRC_ROU" "$STAGE/rou"
+rm -rf "$STAGE/rou/tests"
 
 OLD="$LIB_ROOT/.rou-old"
 rm -rf "$OLD"

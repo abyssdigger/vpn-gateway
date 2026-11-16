@@ -164,17 +164,13 @@ def parse_instance_file_config(text: str) -> InstanceFileConfig:
     router_config = _absolute_path(
         body["router_config"],
         "instance.router_config",
+        required_root=Path("/etc/vpn-gateway/routers"),
     )
     state_file = _absolute_path(
         body["state_file"],
         "instance.state_file",
         required_root=Path("/var/lib/vpn-gateway"),
     )
-    if router_config == state_file:
-        raise InstanceFileConfigError(
-            "router_config and state_file must be different paths"
-        )
-
     return InstanceFileConfig(
         instance=instance,
         publication_bind_address=_ipv4_address(

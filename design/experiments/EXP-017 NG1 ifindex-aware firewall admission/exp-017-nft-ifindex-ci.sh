@@ -64,23 +64,66 @@ if ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
     exit 1
 fi
 echo "PASS B: same-name/new-ifindex=$NEW_INDEX does not inherit old iif/oif rules"
+echo "JSON_AFTER_B_BEGIN"
+ip netns exec "$ROU" nft -j -n list table ip vpng_exp17
+echo "JSON_AFTER_B_END"
 
 # Update only ingress generation. SRC -> ROU must work again, while ROU -> SRC must still
 # fail because OUTPUT remains pinned to old oif.
 ip netns exec "$ROU" nft add rule ip vpng_exp17 input \
-    meta iif "$NEW_INDEX" ip protocol icmp counter accept
+    meta iif "$NEW_INDEX" ip protocol icmp counter accept \
+    comment '"vpng-ifref:iif:'"$NEW_INDEX"'"'
 
-ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null
-if ip netns exec "$ROU" ping -c 1 -W 1 198.18.17.1 >/dev/null 2>&1; then
-    echo "FAIL: fresh same-name generation matched old numeric oif rule" >&2
+# The echo request should now reach INPUT, but the echo reply must still be blocked by
+# stale OUTPUT. Therefore end-to-end ping remains unsuccessful; prove ingress admission
+# by observing the counter on the new-iif rule instead of requiring a reply.
+if ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
+    echo "FAIL: ping succeeded before new oif generation was admitted" >&2
     exit 1
 fi
-echo "PASS C: new iif alone does not bypass stale oif generation rule"
+
+echo "JSON_AFTER_C_REQUEST_BEGIN"
+ip netns exec "$ROU" nft -j -n list chain ip vpng_exp17 input
+echo "JSON_AFTER_C_REQUEST_END"
+
+NEW_IIF_PKTS=$(ip netns exec "$ROU" nft -j -n list chain ip vpng_exp17 input |
+    python3 -c '
+import json
+import sys
+target = int(sys.argv[1])
+doc = json.load(sys.stdin)
+for item in doc.get("nftables", []):
+    rule = item.get("rule")
+    if not isinstance(rule, dict):
+        continue
+    matched = False
+    packets = None
+    for expr in rule.get("expr", []):
+        match = expr.get("match") if isinstance(expr, dict) else None
+        counter = expr.get("counter") if isinstance(expr, dict) else None
+        if isinstance(counter, dict):
+            packets = counter.get("packets")
+    if rule.get("comment") == f"vpng-ifref:iif:{target}" and packets is not None:
+        print(packets)
+        break
+' "$NEW_INDEX")
+case "$NEW_IIF_PKTS" in
+    ''|*[!0-9]*)
+        echo "FAIL: could not read new-iif counter: $NEW_IIF_PKTS" >&2
+        exit 1
+        ;;
+    0)
+        echo "FAIL: new iif rule did not see ingress request" >&2
+        exit 1
+        ;;
+esac
+echo "PASS C: new iif admits ingress, stale oif still blocks reply"
 
 ip netns exec "$ROU" nft add rule ip vpng_exp17 output \
     meta oif "$NEW_INDEX" ip protocol icmp counter accept
 ip netns exec "$ROU" ping -c 1 -W 1 198.18.17.1 >/dev/null
-echo "PASS D: explicit new oif restores local egress"
+ip netns exec "$SRC" ping -c 1 -W 1 "$TARGET" >/dev/null
+echo "PASS D: explicit new oif restores both local egress and full echo flow"
 
 ip netns exec "$ROU" nft -n list table ip vpng_exp17
 echo "EXP_017_PRELIMINARY_IIF_OIF=PASS"

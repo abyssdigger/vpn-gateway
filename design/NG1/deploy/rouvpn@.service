@@ -13,7 +13,7 @@ ExecStopPost=-/usr/local/sbin/rou contain %i
 
 Restart=on-failure
 RestartSec=2s
-TimeoutStopSec=15s
+TimeoutStopSec=45s
 
 RuntimeDirectory=vpn-gateway
 RuntimeDirectoryMode=0700

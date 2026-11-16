@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import time
 
 from .command_backend import CommandBackend, NamespaceBackend, SubprocessBackend
 from .config import load_active_config
@@ -20,7 +21,6 @@ from .instance_lifecycle import (
     ensure_instance,
     verify_instance,
 )
-from .nat_state import ConfigNatProvider
 from .runtime_app import run_instance_runtime
 from .status import inspect_runtime_status
 from .state_store import JsonRuntimeStateStore, StateStoreError
@@ -29,6 +29,8 @@ from .state_store import JsonRuntimeStateStore, StateStoreError
 LOG = logging.getLogger(__name__)
 DEFAULT_INSTANCE_DIR = Path("/etc/vpn-gateway/instances")
 SERVICE_TEMPLATE = "rouvpn@{instance}.service"
+UP_VERIFY_TIMEOUT_SECONDS = 15.0
+UP_VERIFY_POLL_SECONDS = 0.2
 
 
 class CliError(RuntimeError):
@@ -113,6 +115,84 @@ def cmd_check(
     }
 
 
+
+
+def _disable_and_prove_inactive(
+    instance: InstanceFileConfig,
+    service: str,
+    backend: CommandBackend,
+) -> None:
+    _systemctl(backend, "disable", "--now", service, check=False)
+    active = _systemctl(
+        backend,
+        "is-active",
+        "--quiet",
+        service,
+        check=False,
+    )
+    if active.returncode == 0:
+        contain_instance(instance.instance, backend)
+        raise CliError(
+            f"refusing teardown while {service} remains active"
+        )
+    if active.returncode not in {3, 4}:
+        contain_instance(instance.instance, backend)
+        raise CliError(
+            f"cannot prove {service} inactive: systemctl is-active "
+            f"returned {active.returncode}"
+        )
+
+
+def _wait_up_verified(
+    instance_id: str,
+    instance_file: Path,
+    backend: CommandBackend,
+    *,
+    timeout_seconds: float = UP_VERIFY_TIMEOUT_SECONDS,
+    poll_seconds: float = UP_VERIFY_POLL_SECONDS,
+    monotonic=time.monotonic,
+    sleep=time.sleep,
+) -> dict[str, object]:
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be positive")
+    if poll_seconds <= 0:
+        raise ValueError("poll_seconds must be positive")
+
+    deadline = monotonic() + timeout_seconds
+    last_status: dict[str, object] | None = None
+    last_error: Exception | None = None
+
+    while True:
+        try:
+            status = cmd_show(instance_id, instance_file, backend)
+        except Exception as exc:
+            last_error = exc
+        else:
+            last_status = status
+            last_error = None
+            if (
+                status.get("appliance_verified") is True
+                and status.get("state_ok") is True
+                and status.get("policy_verified") is True
+                and status.get("ip_forward") == "1"
+            ):
+                return status
+
+        if monotonic() >= deadline:
+            if last_error is not None:
+                detail = f"last verification error: {last_error}"
+            else:
+                detail = (
+                    "last verification status: "
+                    + repr(last_status)
+                )
+            raise CliError(
+                "ROU runtime did not reach verified forwarding state; "
+                + detail
+            )
+        sleep(poll_seconds)
+
+
 def cmd_up(
     instance_id: str,
     instance_file: Path,
@@ -130,6 +210,7 @@ def cmd_up(
     )
     if already_active.returncode == 0:
         _systemctl(backend, "enable", service)
+        _wait_up_verified(instance_id, instance_file, backend)
         return {
             "ok": True,
             "instance_id": instance_id,
@@ -152,9 +233,19 @@ def cmd_up(
             raise CliError(
                 f"{service} did not become active after start"
             )
-    except Exception:
-        # Failed up must not leave a half-created appliance behind.
-        _systemctl(backend, "disable", "--now", service, check=False)
+        _wait_up_verified(instance_id, instance_file, backend)
+    except Exception as original_error:
+        # Failed up may delete the appliance only after proving that the supervised
+        # runtime is no longer active. If service shutdown itself is uncertain, retain
+        # the namespace and surface both failures rather than tearing it out from under
+        # a possibly live supervisor.
+        try:
+            _disable_and_prove_inactive(instance, service, backend)
+        except Exception as rollback_error:
+            raise CliError(
+                f"rou up failed: {original_error}; "
+                f"rollback could not prove service inactive: {rollback_error}"
+            ) from original_error
         destroy_instance(instance.instance, backend)
         raise
 
@@ -175,33 +266,7 @@ def cmd_down(
     instance = load_instance_file_config(instance_file)
     service = _service_name(instance_id)
 
-    _systemctl(backend, "disable", "--now", service, check=False)
-    active = _systemctl(
-        backend,
-        "is-active",
-        "--quiet",
-        service,
-        check=False,
-    )
-    if active.returncode == 0:
-        # Never tear the namespace out from under a live host-side supervisor.
-        NamespaceBackend(instance.instance.namespace, backend).run(
-            ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
-            check=False,
-        )
-        raise CliError(
-            f"refusing teardown while {service} remains active"
-        )
-    if active.returncode not in {3, 4}:
-        NamespaceBackend(instance.instance.namespace, backend).run(
-            ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
-            check=False,
-        )
-        raise CliError(
-            f"cannot prove {service} inactive: systemctl is-active "
-            f"returned {active.returncode}"
-        )
-
+    _disable_and_prove_inactive(instance, service, backend)
     destroy_instance(instance.instance, backend)
     return {
         "ok": True,
@@ -288,7 +353,6 @@ def cmd_show(
         loaded.state,
         snapshot,
         ns,
-        ConfigNatProvider(),
         local_publication_address=instance.instance.inner_address.ip,
     )
 
@@ -379,11 +443,21 @@ def main(
     )
 
     try:
+        default_file = default_instance_file(args.instance_id)
         instance_file = (
             args.instance_file
             if args.instance_file is not None
-            else default_instance_file(args.instance_id)
+            else default_file
         )
+        if (
+            args.instance_file is not None
+            and args.command in {"up", "down"}
+            and instance_file != default_file
+        ):
+            raise CliError(
+                "rou up/down are systemd-owned lifecycle commands and require "
+                f"the conventional instance file {default_file}"
+            )
         if (
             backend is None
             and args.command in {"prepare", "contain", "up", "down", "show", "run"}

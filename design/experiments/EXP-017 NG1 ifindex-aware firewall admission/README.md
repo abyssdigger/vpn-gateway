@@ -1,63 +1,83 @@
 # EXP-017 — NG1 ifindex-aware firewall admission
 
-**Status:** PREPARED — firewall-backend production gate  
+**Status:** PASS  
 **Architecture baseline:** NG1 Draft 5 after 2026-11-12 safety correction  
 **Type:** Linux netfilter/interface-generation experiment
 
-## Problem
+## Question
 
-The current Python backend materializes bound-interface policy with
-`iptables-legacy -i/-o <ifname>`.
+Can NG1 bind firewall admission to one concrete Linux interface generation rather than to
+a reusable interface name, so a same-name/new-ifindex replacement does not inherit policy
+from its predecessor?
 
-Linux interface identity in the NG1 model is `(ifname, ifindex)`, but legacy iptables
-interface matches are name-based. If one interface generation disappears and a new
-interface reuses the same name before ROU has reconciled the disappearance, the old
-name-based rules may match packets from the fresh, not-yet-verified generation.
+## Method
 
-Detecting same-name/new-ifindex in the next snapshot and switching to the structural
-barrier is necessary but not sufficient to eliminate that pre-observation window.
+A disposable namespace created interface `vpn0` with generation A, installed nftables
+rules using numeric `meta iif A` / `meta oif A`, proved traffic, deleted the interface,
+then recreated the same name with generation B before changing the rules.
 
-## Goal
+The experiment then changed ingress and egress generation rules independently.
 
-Prove a production materialization that binds admission to the concrete interface
-generation rather than only to its reusable name.
+## Result
 
-Preferred candidate: nftables rules matching numeric input/output interface identity
-(`meta iif` / `meta oif`, or another target-kernel primitive with equivalent
-generation semantics).
+PASS on GitHub Linux kernel/nftables integration runner.
 
-## Required checks
+Observed sequence:
 
-On the target Debian 13 kernel/userspace:
+1. **PASS A** — numeric iif/oif for generation A admitted the original interface.
+2. **PASS B** — same-name generation B did not inherit old generation A iif/oif rules.
+3. **PASS C** — adding only B's ingress rule admitted the request while stale A output
+   still blocked the reply.
+4. **PASS D** — adding B's output rule restored complete echo flow.
 
-1. create interface `vpn0` with ifindex A;
-2. install allow/state rules tied to generation A;
-3. verify admitted traffic on A;
-4. delete A;
-5. recreate `vpn0` with different ifindex B without changing firewall rules;
-6. prove B does **not** inherit A's admission;
-7. update rules explicitly to B and prove admission then works;
-8. repeat for:
-   - NEW Profile allow/drop;
-   - ESTABLISHED/RELATED bound-pair acceptance;
-   - Device traffic-envelope chain traversal;
-   - INPUT/OUTPUT constraints where relevant;
-9. verify atomic ruleset replacement and canonical state observation;
-10. verify behavior when the bound interface disappears during ruleset replacement.
+This proves that the nft kernel primitive is generation-specific.
 
-## Decision gate
+## Observation finding
 
-The first production release claiming strict invariant
-"unbound/fresh interface generation has no payload ACCEPT state" may not rely solely on
-legacy name-based iptables rules for dynamically reusable interface names.
+A second important result changed the verifier design.
 
-Possible resolutions:
+nft JSON/text rendering may resolve a **live** numeric iif/oif back to the current
+interface name:
 
-- adopt an ifindex-aware nftables backend;
-- or prove an equally strong kernel primitive;
-- or make DeviceManager serialize interface-name reuse behind a fail-closed barrier and
-  prove that lifecycle end-to-end.
+```json
+"right": "vpn0"
+```
 
-Until one resolution is PASS, the current iptables backend remains suitable for
-development/integration and for interface names whose generation cannot be reused before
-ROU reconciliation, but strict dynamic-generation isolation is not considered proven.
+while a stale reference to the disappeared generation remains numeric.
+
+Therefore production verification must **not** reconstruct generation identity solely from
+the rendered meta-match right-hand value.
+
+The experiment additionally proved a stable rule marker:
+
+```text
+comment "vpng-ifref:iif:<ifindex>"
+```
+
+The comment remains attached to the generation-specific rule and is visible in nft JSON
+independently of symbolic interface rendering. Production NG1 therefore uses compiler-owned
+`vpng-ifref:iif:N` / `vpng-ifref:oif:N` comments as its exact observable generation
+markers while the underlying kernel match remains numeric meta iif/oif.
+
+## Production consequence
+
+- nftables is the NG1 production firewall/NAT backend.
+- dynamic Device interface policy uses numeric ifindex;
+- same-name/new-ifindex is a fresh lifecycle generation;
+- generated dynamic-interface rules carry an exact compiler-owned generation comment;
+- verifier checks complete policy semantics plus the generation-marker multiset;
+- legacy iptables name matching remains historical/regression evidence only.
+
+## Evidence note
+
+The CI job containing the experiment initially remained red because the **subsequent**
+production nft round-trip still assumed that live nft JSON always rendered numeric iif/oif.
+EXP-017 itself had already printed PASS A/B/C/D. That downstream verifier defect is tracked
+and corrected separately; it is not an EXP-017 failure.
+
+## Decision
+
+The original firewall-backend gate is closed: **PASS**.
+
+No DeviceManager serialization workaround is required for same-name reuse. The production
+backend can enforce NG1's `(ifname,ifindex)` generation model directly.

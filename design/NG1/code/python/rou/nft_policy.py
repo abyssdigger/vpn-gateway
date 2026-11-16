@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from ipaddress import IPv4Address
+import json
+import re
 
 from .command_backend import NamespaceBackend
 from .device_engine import DeviceBindingSnapshot
@@ -33,6 +35,7 @@ class NftTableDesiredState:
     definition: str
     canonical: str
     interface_identities: tuple[tuple[int, str], ...] = ()
+    numeric_interface_refs: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,178 @@ class NftVerification:
     ok: bool
     actual: str
     expected: str
+
+
+@dataclass(frozen=True)
+class NftObservedState:
+    canonical: str
+    numeric_interface_refs: tuple[tuple[str, int], ...]
+
+
+@dataclass(frozen=True)
+class NftRulesetInventory:
+    tables: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class NftOwnershipVerification:
+    ok: bool
+    foreign_tables: tuple[tuple[str, str], ...]
+
+
+OWNED_NFT_TABLES = frozenset(
+    {
+        ("ip", FILTER_TABLE),
+        ("ip", NAT_TABLE),
+    }
+)
+
+
+
+def _numeric_interface_refs_from_definition(
+    definition: str,
+) -> tuple[tuple[str, int], ...]:
+    refs = [
+        (match.group(1), int(match.group(2)))
+        for match in re.finditer(
+            r"\b(iif|oif)\s+([0-9]+)\b",
+            definition,
+        )
+    ]
+    return tuple(sorted(refs))
+
+
+def _numeric_interface_refs_from_json(
+    text: str,
+) -> tuple[tuple[str, int], ...]:
+    """Read compiler-owned generation markers from nft JSON rule comments.
+
+    nft may render a live numeric meta iif/oif as the current interface name even in
+    numeric JSON mode. The kernel match remains generation-specific, but observation must
+    not reconstruct identity from that symbolic rendering.
+
+    Every production rule containing a dynamic numeric iif/oif therefore carries exactly
+    one stable comment:
+
+        vpng-ifref:iif:<ifindex>
+        vpng-ifref:oif:<ifindex>
+
+    EXP-017 proves that the comment survives same-name/new-ifindex replacement while the
+    underlying numeric rule continues to match only its original generation.
+    """
+
+    try:
+        root = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise NftPolicyError(f"invalid nft JSON output: {exc}") from None
+
+    items = root.get("nftables")
+    if not isinstance(items, list):
+        raise NftPolicyError("nft JSON root lacks nftables array")
+
+    refs: list[tuple[str, int]] = []
+    marker = re.compile(r"^vpng-ifref:(iif|oif):([1-9][0-9]*)$")
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        rule = item.get("rule")
+        if not isinstance(rule, dict):
+            continue
+        comment = rule.get("comment")
+        if not isinstance(comment, str):
+            continue
+        if not comment.startswith("vpng-ifref:"):
+            continue
+        match = marker.fullmatch(comment)
+        if match is None:
+            raise NftPolicyError(
+                f"invalid ROU nft generation marker {comment!r}"
+            )
+        refs.append((match.group(1), int(match.group(2))))
+
+    return tuple(sorted(refs))
+
+def observe_nft_generation_refs(
+    desired: NftTableDesiredState,
+    backend: NamespaceBackend,
+) -> tuple[tuple[str, int], ...]:
+    result = backend.run(
+        (
+            "nft",
+            "-j",
+            "-n",
+            "list",
+            "table",
+            desired.family,
+            desired.name,
+        )
+    )
+    return _numeric_interface_refs_from_json(result.stdout)
+
+def observe_nft_ruleset_inventory(
+    backend: NamespaceBackend,
+) -> NftRulesetInventory:
+    result = backend.run(("nft", "-j", "-n", "list", "ruleset"))
+    try:
+        root = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise NftPolicyError(
+            f"invalid nft ruleset JSON output: {exc}"
+        ) from None
+
+    items = root.get("nftables")
+    if not isinstance(items, list):
+        raise NftPolicyError("nft ruleset JSON root lacks nftables array")
+
+    tables: set[tuple[str, str]] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        table = item.get("table")
+        if not isinstance(table, dict):
+            continue
+        family = table.get("family")
+        name = table.get("name")
+        if not isinstance(family, str) or not family:
+            raise NftPolicyError("nft table family is not a non-empty string")
+        if not isinstance(name, str) or not name:
+            raise NftPolicyError("nft table name is not a non-empty string")
+        key = (family, name)
+        if key in tables:
+            raise NftPolicyError(f"duplicate nft table in inventory: {key!r}")
+        tables.add(key)
+
+    return NftRulesetInventory(tuple(sorted(tables)))
+
+
+def verify_nft_ruleset_ownership(
+    inventory: NftRulesetInventory,
+) -> NftOwnershipVerification:
+    foreign = tuple(
+        table
+        for table in inventory.tables
+        if table not in OWNED_NFT_TABLES
+    )
+    return NftOwnershipVerification(
+        ok=not foreign,
+        foreign_tables=foreign,
+    )
+
+
+def delete_foreign_nft_tables(
+    inventory: NftRulesetInventory,
+    backend: NamespaceBackend,
+) -> None:
+    """Delete all non-ROU nft tables in the dedicated namespace.
+
+    This is structural-repair behavior and must only be called behind the global forwarding
+    barrier. Each delete is argv-based so even an unusual foreign table name cannot become
+    nft script injection.
+    """
+
+    ownership = verify_nft_ruleset_ownership(inventory)
+    for family, name in ownership.foreign_tables:
+        backend.run(("nft", "delete", "table", family, name))
 
 
 def normalize_nft_list(
@@ -91,6 +266,14 @@ def _quote(value: str) -> str:
     if not value or any(ch not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-" for ch in value):
         raise ValueError(f"unsupported nft interface/table token {value!r}")
     return f'"{value}"'
+
+
+def _ifref_comment(kind: str, ifindex: int) -> str:
+    if kind not in {"iif", "oif"}:
+        raise ValueError(f"unsupported nft interface-ref kind {kind!r}")
+    if ifindex <= 0:
+        raise ValueError("nft interface-ref ifindex must be positive")
+    return f'comment "vpng-ifref:{kind}:{ifindex}"'
 
 
 def _port_text(port_range: PortRange) -> str:
@@ -264,21 +447,25 @@ def compile_nft_filter_state(
         for binding in by_device.get(device_name, ()):
             ifindex = binding.identity.ifindex
             lines.append(
-                f'iifname "{HOST_INTERFACE}" oif {ifindex} jump {to_chain}'
+                f'iifname "{HOST_INTERFACE}" oif {ifindex} jump {to_chain} '
+                f'{_ifref_comment("oif", ifindex)}'
             )
             lines.append(
-                f'iif {ifindex} oifname "{HOST_INTERFACE}" jump {from_chain}'
+                f'iif {ifindex} oifname "{HOST_INTERFACE}" jump {from_chain} '
+                f'{_ifref_comment("iif", ifindex)}'
             )
 
     for binding in bindings.bound:
         ifindex = binding.identity.ifindex
         lines.append(
             f'iifname "{HOST_INTERFACE}" oif {ifindex} '
-            "ct state established,related accept"
+            "ct state established,related accept "
+            f'{_ifref_comment("oif", ifindex)}'
         )
         lines.append(
             f'iif {ifindex} oifname "{HOST_INTERFACE}" '
-            "ct state established,related accept"
+            "ct state established,related accept "
+            f'{_ifref_comment("iif", ifindex)}'
         )
 
     for intent in compile_new_flow_intents(config):
@@ -290,12 +477,14 @@ def compile_nft_filter_state(
                 lines.append(
                     f"ip daddr {prefix} "
                     f'iifname "{HOST_INTERFACE}" oif {ifindex} '
-                    f"ct state new {verdict}"
+                    f"ct state new {verdict} "
+                    f'{_ifref_comment("oif", ifindex)}'
                 )
             else:
                 lines.append(
                     f"ip saddr {prefix} iif {ifindex} "
-                    f'oifname "{HOST_INTERFACE}" ct state new {verdict}'
+                    f'oifname "{HOST_INTERFACE}" ct state new {verdict} '
+                    f'{_ifref_comment("iif", ifindex)}'
                 )
 
     lines.append("}")
@@ -329,6 +518,9 @@ def compile_nft_filter_state(
         definition=definition,
         canonical=normalize_nft_list(definition, identities),
         interface_identities=identities,
+        numeric_interface_refs=_numeric_interface_refs_from_definition(
+            definition
+        ),
     )
 
 
@@ -372,7 +564,8 @@ def compile_nft_nat_state(
             for prefix in prefixes:
                 lines.append(
                     f"ip daddr {prefix.with_prefixlen} "
-                    f"oif {binding.identity.ifindex} masquerade"
+                    f"oif {binding.identity.ifindex} masquerade "
+                    f'{_ifref_comment("oif", binding.identity.ifindex)}'
                 )
 
     lines.extend(["}", "}", ""])
@@ -391,6 +584,9 @@ def compile_nft_nat_state(
         definition=definition,
         canonical=normalize_nft_list(definition, identities),
         interface_identities=identities,
+        numeric_interface_refs=_numeric_interface_refs_from_definition(
+            definition
+        ),
     )
 
 
@@ -442,13 +638,95 @@ def observe_nft_table(
     )
 
 
+def observe_nft_state(
+    desired: NftTableDesiredState,
+    backend: NamespaceBackend,
+) -> NftObservedState | None:
+    """Observe one owned nft table through the production verification boundary.
+
+    Textual canonicalization verifies complete policy/order semantics. JSON observation
+    independently reads compiler-owned `vpng-ifref:...` rule comments that encode the
+    numeric generation used by each dynamic iif/oif kernel match, even when nft renders the
+    live meta-match itself as an interface name.
+
+    The two reads are intentionally encapsulated here. The runtime serializes its own nft
+    mutations; foreign concurrent mutation can only make this observation stale, never make
+    an unverified interface generation satisfy the exact marker multiset.
+    """
+
+    probe = backend.run(
+        (
+            "nft",
+            "-j",
+            "-n",
+            "list",
+            "table",
+            desired.family,
+            desired.name,
+        ),
+        check=False,
+    )
+    if probe.returncode != 0:
+        stderr = probe.stderr.lower()
+        if (
+            "no such file or directory" in stderr
+            or "does not exist" in stderr
+        ):
+            return None
+        raise NftPolicyError(
+            f"cannot observe nft table {desired.family} {desired.name}: "
+            f"returncode={probe.returncode} stderr={probe.stderr.strip()!r}"
+        )
+
+    refs = _numeric_interface_refs_from_json(probe.stdout)
+    return NftObservedState(
+        canonical=observe_nft_table(desired, backend),
+        numeric_interface_refs=refs,
+    )
+
+
+def verify_nft_observation(
+    desired: NftTableDesiredState,
+    observed: NftObservedState | None,
+) -> NftVerification:
+    if observed is None:
+        return NftVerification(
+            ok=False,
+            actual="<absent>",
+            expected=(
+                desired.canonical
+                + "\n# numeric-interface-refs="
+                + repr(desired.numeric_interface_refs)
+            ),
+        )
+
+    text_ok = observed.canonical == desired.canonical
+    refs_ok = (
+        observed.numeric_interface_refs
+        == desired.numeric_interface_refs
+    )
+    actual = (
+        observed.canonical
+        + "\n# numeric-interface-refs="
+        + repr(observed.numeric_interface_refs)
+    )
+    expected = (
+        desired.canonical
+        + "\n# numeric-interface-refs="
+        + repr(desired.numeric_interface_refs)
+    )
+    return NftVerification(
+        ok=text_ok and refs_ok,
+        actual=actual,
+        expected=expected,
+    )
+
+
 def verify_nft_table(
     desired: NftTableDesiredState,
     backend: NamespaceBackend,
 ) -> NftVerification:
-    actual = observe_nft_table(desired, backend)
-    return NftVerification(
-        ok=actual == desired.canonical,
-        actual=actual,
-        expected=desired.canonical,
+    return verify_nft_observation(
+        desired,
+        observe_nft_state(desired, backend),
     )

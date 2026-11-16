@@ -53,7 +53,7 @@ class InstanceFileConfigTests(unittest.TestCase):
                 VALID.replace("schema_version = 1", "schema_version = 2")
             )
 
-    def test_paths_must_be_absolute_and_distinct(self):
+    def test_paths_must_be_absolute(self):
         with self.assertRaisesRegex(InstanceFileConfigError, "must be absolute"):
             parse_instance_file_config(
                 VALID.replace(
@@ -61,15 +61,6 @@ class InstanceFileConfigTests(unittest.TestCase):
                     "router.toml",
                 )
             )
-        with self.assertRaisesRegex(InstanceFileConfigError, "different paths"):
-            parse_instance_file_config(
-                VALID.replace(
-                    "/etc/vpn-gateway/routers/rou0.toml",
-                    "/var/lib/vpn-gateway/rou0/state.json",
-                )
-            )
-
-
 
     def test_absolute_paths_reject_parent_traversal(self):
         with self.assertRaisesRegex(
@@ -90,6 +81,18 @@ class InstanceFileConfigTests(unittest.TestCase):
                 VALID.replace(
                     "/etc/vpn-gateway/routers/rou0.toml",
                     "/etc/vpn-gateway/routers/../other.toml",
+                )
+            )
+
+    def test_router_config_must_stay_under_hardened_config_root(self):
+        with self.assertRaisesRegex(
+            InstanceFileConfigError,
+            "must be below /etc/vpn-gateway/routers",
+        ):
+            parse_instance_file_config(
+                VALID.replace(
+                    "/etc/vpn-gateway/routers/rou0.toml",
+                    "/home/admin/rou0.toml",
                 )
             )
 

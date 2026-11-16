@@ -278,6 +278,60 @@ def parse_ip_route_json(text: str) -> tuple[KernelRoute, ...]:
     return tuple(out)
 
 
+def _parse_rule_network(
+    item: dict,
+    field: str,
+    len_field: str,
+    *,
+    what: str,
+) -> IPv4Network | None:
+    """Parse iproute2 rule JSON address + separate prefix-length fields.
+
+    iproute2 serializes an RPDB prefix as, for example:
+
+        {"dst": "198.51.100.0", "dstlen": 24}
+
+    rather than embedding "/24" in the address string. Host-length rules may omit the
+    length field. "all" means no selector.
+    """
+
+    raw = item.get(field)
+    if raw in (None, "all"):
+        return None
+    if not isinstance(raw, str) or not raw:
+        raise EnvironmentParseError(f"{what}.{field} must be an IPv4 address")
+
+    raw_len = item.get(len_field)
+    if raw_len is not None and (
+        type(raw_len) is not int or not 0 <= raw_len <= 32
+    ):
+        raise EnvironmentParseError(
+            f"{what}.{len_field} must be an integer 0..32"
+        )
+
+    if "/" in raw:
+        network = _parse_network(
+            raw,
+            default="0.0.0.0/0",
+            what=f"{what}.{field}",
+        )
+        if raw_len is not None and raw_len != network.prefixlen:
+            raise EnvironmentParseError(
+                f"{what}.{field} prefix length {network.prefixlen} "
+                f"conflicts with {len_field}={raw_len}"
+            )
+        return network
+
+    prefixlen = 32 if raw_len is None else raw_len
+    try:
+        return IPv4Network(f"{raw}/{prefixlen}", strict=True)
+    except Exception:
+        raise EnvironmentParseError(
+            f"{what}.{field}/{len_field} is not a strict IPv4 prefix: "
+            f"{raw!r}/{prefixlen}"
+        ) from None
+
+
 def parse_ip_rule_json(text: str) -> tuple[KernelRule, ...]:
     """Parse `ip -j -4 rule show` into semantic RPDB observations."""
 
@@ -298,22 +352,22 @@ def parse_ip_rule_json(text: str) -> tuple[KernelRule, ...]:
         table_value = item.get("table")
         table = None if table_value is None else _parse_table(table_value, f"rule[{position}]")
 
-        source = item.get("src")
-        destination = item.get("dst")
         out.append(
             KernelRule(
                 priority=priority,
                 table=table,
                 action=action,
-                source=(
-                    None
-                    if source in (None, "all")
-                    else _parse_network(source, default="0.0.0.0/0", what=f"rule[{position}].src")
+                source=_parse_rule_network(
+                    item,
+                    "src",
+                    "srclen",
+                    what=f"rule[{position}]",
                 ),
-                destination=(
-                    None
-                    if destination in (None, "all")
-                    else _parse_network(destination, default="0.0.0.0/0", what=f"rule[{position}].dst")
+                destination=_parse_rule_network(
+                    item,
+                    "dst",
+                    "dstlen",
+                    what=f"rule[{position}]",
                 ),
                 iif=item.get("iif"),
             )

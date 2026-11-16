@@ -45,7 +45,7 @@ Device interface, so the runtime must remain safe through table-local blackhole 
 - no manual namespace preparation is required after install/config;
 - every service start enters through fail-closed `rou prepare`;
 - post-crash restart returns to `policy_verified=true`;
-- service hardening does not block required netns/ip/sysctl/iptables operations;
+- service hardening does not block required netns/ip/sysctl/nft operations;
 - teardown leaves no owned namespace/veth;
 - unexpected failure does not leave forwarding usable without the supervised runtime.
 

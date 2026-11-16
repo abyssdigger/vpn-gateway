@@ -8,7 +8,6 @@ from typing import Callable, Protocol
 
 from .command_backend import CommandBackend, NamespaceBackend
 from .domain import ActiveConfig
-from .nat_state import NatProvider
 from .planner import (
     AvailabilityProvider,
     PlannerError,
@@ -81,7 +80,6 @@ def run_runtime_loop(
     config: ActiveConfig,
     namespace: str,
     host_backend: CommandBackend,
-    nat_provider: NatProvider,
     state_store: JsonRuntimeStateStore,
     wakeups: WakeupSource,
     *,
@@ -154,7 +152,6 @@ def run_runtime_loop(
                     namespace,
                     committed,
                     host_backend,
-                    nat_provider,
                     availability_provider=availability_provider,
                     collect_snapshot=collect_snapshot,
                     persist_verified_state=state_store.save,
