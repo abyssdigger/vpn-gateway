@@ -198,3 +198,36 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_payload_nat_mutation.py
+
+
+  linux-payload-forward:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables procps
+      - name: EXP-035 exact-ifindex NEW-forward admission
+        run: >-
+          sudo python3
+          "design/experiments/EXP-035 NG3 exact-ifindex NEW-forward admission/exp035_new_forward_admission.py"
+      - name: EXP-036 prefix-scoped stateful return
+        run: >-
+          sudo python3
+          "design/experiments/EXP-036 NG3 prefix-scoped stateful return/exp036_prefix_scoped_return.py"
+      - name: EXP-037 production-shape payload_forward JSON
+        run: >-
+          sudo python3
+          "design/experiments/EXP-037 NG3 production-shape payload-forward JSON/exp037_payload_forward_json.py"
+      - name: EXP-038 payload_forward prefix-boundary JSON
+        run: >-
+          sudo python3
+          "design/experiments/EXP-038 NG3 payload-forward prefix-boundary JSON/exp038_prefix_boundary_json.py"
+      - name: NG3 strict payload_forward observer integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_payload_forward_observation.py

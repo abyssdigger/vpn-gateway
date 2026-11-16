@@ -98,6 +98,27 @@ from .payload_nat_observation import (
     PayloadNatRuleConflict,
     compare_payload_nat,
 )
+from .payload_forward_observation import (
+    PAYLOAD_FORWARD_NEW_COMMENT,
+    PAYLOAD_FORWARD_RETURN_COMMENT,
+    ObservedPayloadForwardRule,
+    PayloadForwardObservation,
+    PayloadForwardObservationError,
+    PayloadForwardRemoteField,
+    PayloadForwardRuleConflict,
+    PayloadForwardRuleKind,
+    observe_payload_forward,
+)
+from .payload_forward_desired import (
+    PayloadForwardDesiredError,
+    PayloadForwardDesiredState,
+    PayloadForwardRuleSpec,
+)
+from .payload_forward_compare import (
+    PayloadForwardComparison,
+    PayloadForwardComparisonError,
+    compare_payload_forward,
+)
 from .payload_nat_mutation import (
     PayloadNatMutationResult,
     PayloadNatMutationStatus,
@@ -150,6 +171,12 @@ from .profile_classification import (
     ProfileClassificationError,
     classify_inbound_profile,
     classify_outbound_profile,
+)
+from .profile_prefix_partition import (
+    ProfilePrefixFragment,
+    ProfilePrefixPartitionError,
+    build_inbound_profile_partition,
+    build_outbound_profile_partition,
 )
 from .route_priority import (
     RoutePriorityMove,
@@ -244,6 +271,19 @@ __all__ = [
     "NftNamespaceStatus",
     "NumericResourcePool",
     "PAYLOAD_NAT_RULE_COMMENT",
+    "PAYLOAD_FORWARD_NEW_COMMENT",
+    "PAYLOAD_FORWARD_RETURN_COMMENT",
+    "ObservedPayloadForwardRule",
+    "PayloadForwardObservation",
+    "PayloadForwardObservationError",
+    "PayloadForwardRemoteField",
+    "PayloadForwardRuleConflict",
+    "PayloadForwardRuleKind",
+    "PayloadForwardDesiredError",
+    "PayloadForwardDesiredState",
+    "PayloadForwardRuleSpec",
+    "PayloadForwardComparison",
+    "PayloadForwardComparisonError",
     "ObservedPayloadMasquerade",
     "PayloadNatComparison",
     "PayloadNatObservationError",
@@ -253,6 +293,8 @@ __all__ = [
     "PayloadNatPhysicalSnapshot",
     "LinuxPayloadNatBackend",
     "compare_payload_nat",
+    "observe_payload_forward",
+    "compare_payload_forward",
     "converge_payload_nat_step_once",
     "PAYLOAD_FORWARD_CHAIN",
     "PAYLOAD_FORWARD_COMMENT",
@@ -277,6 +319,8 @@ __all__ = [
     "ProbePolicyOwner",
     "ProbeRoutingDemand",
     "ProfileClassificationError",
+    "ProfilePrefixFragment",
+    "ProfilePrefixPartitionError",
     "ProfileStructuralIntent",
     "ReservedOwnerKind",
     "ReservedPolicyConflict",
@@ -315,6 +359,8 @@ __all__ = [
     "build_payload_routing_desired_state",
     "build_route_priority_domain_realizations",
     "classify_inbound_profile",
+    "build_inbound_profile_partition",
+    "build_outbound_profile_partition",
     "compare_payload_nft_scaffold",
     "compare_payload_routing",
     "converge_forwarding_gate_once",
