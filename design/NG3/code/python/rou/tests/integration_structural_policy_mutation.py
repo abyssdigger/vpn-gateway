@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ipaddress import IPv4Address, IPv4Network
+import json
 import os
 import subprocess
 import sys
@@ -453,7 +454,6 @@ def main() -> int:
             "ip", "-n", managed, "-j", "-N", "-4",
             "route", "show", "table", str(NEW_TABLE),
         ).stdout
-        import json
         managed_rows = json.loads(rows)
         assert not any(
             str(row.get("protocol")) == "202"
