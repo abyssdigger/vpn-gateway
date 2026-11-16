@@ -184,24 +184,54 @@ class CompositeNftPlanTests(unittest.TestCase):
         self.assertEqual(step.kind, CompositeNftStepKind.ADD_PROFILE_RULE)
 
 
-    def test_local_publication_drift_blocks_payload_plan(self):
-        local = LocalPublicationRuleSpec(
+    def test_missing_local_publication_is_atomic_step_after_profile_addition(self):
+        local_input = LocalPublicationRuleSpec(
             hook=LocalPublicationHook.INPUT,
             protocol=PublicationProtocol.TCP,
             host_boundary=HOST,
             local_address=IPv4Address("198.51.100.46"),
             local_port=44443,
         )
-        with self.assertRaisesRegex(
-            Exception,
-            "separate local-mutation gate",
-        ):
-            select_composite_nft_step(
-                comparison(
-                    profile_missing=(PROFILE_SPEC,),
-                    local_missing=(local,),
-                )
-            )
+        local_output = LocalPublicationRuleSpec(
+            hook=LocalPublicationHook.OUTPUT,
+            protocol=PublicationProtocol.TCP,
+            host_boundary=HOST,
+            local_address=IPv4Address("198.51.100.46"),
+            local_port=44443,
+        )
+        local_desired = __import__(
+            "rou.local_publication_policy",
+            fromlist=["LocalPublicationDesiredState"],
+        ).LocalPublicationDesiredState(
+            (local_input, local_output)
+        )
+
+        step = select_composite_nft_step(
+            comparison(
+                profile_missing=(PROFILE_SPEC,),
+                local_missing=(local_input, local_output),
+            ),
+            local_desired,
+        )
+        self.assertEqual(
+            step.kind,
+            CompositeNftStepKind.ADD_PROFILE_RULE,
+        )
+
+        step = select_composite_nft_step(
+            comparison(
+                local_missing=(local_input, local_output),
+            ),
+            local_desired,
+        )
+        self.assertEqual(
+            step.kind,
+            CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
+        )
+        self.assertEqual(
+            [rule.hook for rule in step.local_publication_step.add_rules],
+            [LocalPublicationHook.OUTPUT, LocalPublicationHook.INPUT],
+        )
 
     def test_exact_state_has_no_step(self):
         self.assertIsNone(select_composite_nft_step(comparison()))
