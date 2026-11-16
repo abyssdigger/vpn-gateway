@@ -102,10 +102,12 @@ inside `PayloadTrafficManager`, not by `AvailabilityProbeManager`.
 
 The producer-facing boundary is deliberately smaller than an asynchronous Event stream:
 current probe workers/timers update bounded per-channel aggregates
-(`pending_good_news`, `tick_pending`) through a short-lock input port and return. The
-Manager's single collector flow consumes those aggregate facts, updates current availability-problems
-channel state, and invokes the existing route-priority materializer synchronously only
-when the routing-relevant snapshot changes.
+(`pending_good_news`, `tick_pending`) under a short lock. If the sole reconcile
+executor is busy, ingress returns immediately. If it is free, the ingress caller may
+become that executor and drain the aggregate collector synchronously.
+
+The Manager updates current `availability_problems` state and invokes the existing
+route-priority materializer only when the resulting effective payload request changed.
 
 The normative state machine and aggregation rules are defined in
 `design/NG2/availability-collector-materializer.md`.
@@ -1024,9 +1026,9 @@ NG1 planner.py
 14. Нижняя domain за NetworkRulesAdapter не имеет independent synchronous back-edge в
     payload domain.
 15. `no_problem_prefix_length` является transient runtime routing intent, а не
-    пользовательской configuration и не persistent gap state; `None` означает отсутствие
-    активной availability-derived boundary, тогда как `0` означает активную boundary без
-    confirmed-live paths.
+    пользовательской configuration и не persistent gap state; `N` означает отсутствие
+    availability-проблем у всех N paths и отсутствие steady gap, `0` — проблемы у всех
+    paths при сохранении их текущего относительного порядка.
 16. Для одного PayloadTrafficManager одновременно существует ровно один reconcile
     executor. Внутри него route-priority move plan каждого routing-domain immutable до
     завершения Adapter call; superseding availability state меняет только latest pending
@@ -1045,15 +1047,14 @@ NG1 planner.py
    RuntimeStateManager;
 2. audit/retry scheduling policy вокруг уже реализованного deterministic `audit()` pass;
 3. richer divergent predicate implication только там, где появится реальная необходимость;
-4. Event Delivery Environment epoch/revision ordering вокруг уже исполняемого
-   availability -> payload latest-value flow;
-5. production availability sender/receiver transport и ownership interval triggers;
-6. remaining runtime assembly above the implemented protective startup gate; forwarding
-   closure до первого owner reconcile зафиксирован в `runtime-bootstrap.md`.
+4. general Event Delivery Environment ordering only for asynchronous streams that still
+   need it; availability good-news/tick ingress does not;
+5. remaining runtime assembly above the implemented protective startup gate: fanout of
+   structural availability configuration, Agent -> PayloadTrafficManager input wiring and
+   status/diagnostic projection.
 
-Availability-problems priority wiring, transient `no_problem_prefix_length`, runtime
-probe-to-Profile evidence projection и single-executor payload queue/coalescing уже
-реализованы. Linux route-only materialization подтверждена EXP-027.
+Availability-problems priority wiring, transient `no_problem_prefix_length`, direct
+probe-to-Profile assignment and single-executor payload queue/coalescing are implemented. Linux route-only materialization подтверждена EXP-027.
 
 Adapter boundary остается фиксированной: Linux transaction machinery не должна снова
 протекать в PayloadTrafficManager.

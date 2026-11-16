@@ -1,231 +1,145 @@
-# VPN-GATE NG2 — минимальная модель availability и приоритета маршрутов
+# VPN-GATE NG2 — availability и приоритет маршрутов
 
-> **2026-11-15 normative update:** Sections describing availability evidence/hysteresis
-> are superseded by `design/NG2/availability-collector-materializer.md`. Route membership,
-> effective-order, emergent metric-gap and transactional route-move semantics in this
-> document remain normative.
+**Status:** normative NG2 design  
+**Date:** 2026-11-15  
+**Scope:** availability as an optional routing-priority modifier
 
-**Status:** active NG2 baseline candidate  
-**Date:** 2026-11-14  
-**Scope:** active probing as a routing-priority input
+## 1. Core invariant
 
-## 1. Задача
+Availability probing does not define whether a payload path exists or may carry traffic.
 
-Active probing не является механизмом допуска или отключения VPN path.
+Only binding/eligibility controls payload route membership.
 
-Его единственная управляющая цель — помочь выбрать более предпочтительный path среди уже
-допустимых и materialized paths одного Profile.
-
-Следовательно:
-
-- probe result не меняет binding membership;
-- probe result не создает и не удаляет payload path;
-- недоступный или непроверяемый path остается в полном eligible route set;
-- если существует подтвержденно живой альтернативный path, он должен подняться выше
-  неподтвержденных paths;
-- если подтвержденно живой альтернативы нет, probing не меняет относительный порядок
-  оставшихся paths.
-
-Это общий инвариант availability routing:
+Availability may change **priority only**:
 
 ```text
-probing may change only path preference
-probing never changes payload route membership
+probing may reorder eligible paths
+probing never adds or removes an eligible payload path
 ```
 
-Отдельного исключения для «последнего» или «единственного» path нет: probing вообще не
-выполняет операций добавления или удаления payload routes. Изменение
-`availability_problems = false / true` влияет только на desired order и границу
-confirmed-live prefix.
-
-## 2. Два независимых вопроса
-
-Для каждого path существуют две независимые характеристики.
-
-### 2.1. Eligibility
-
-Определяется не probing:
-
-- path существует как concrete interface generation;
-- path выбран/допущен конфигурацией и binding policy;
-- административно не отключен;
-- удовлетворяет другим обязательным условиям Profile.
-
-Только eligibility определяет membership в payload route set.
-
-### 2.2. Probe evidence
-
-Probe subsystem сообщает только качество текущего знания о достижимости через eligible
-path.
-
-Для routing priority достаточно различать:
+The routing-relevant fact per logical channel is:
 
 ```text
-availability_problems = false
-NOT_availability_problems = false
+availability_problems: bool
 ```
 
-Диагностика вправе дополнительно различать отсутствие ответа, локальную ошибку probe
-machinery и отсутствие еще достаточного наблюдения. Эти причины не должны превращаться в
-разные правила удаления payload path.
+Initial state is `false`. Disabled probing also means `false` by definition.
 
-### 2.3. Configured enable/disable
+Therefore probing is an additional negative signal, not the backbone of runtime state.
 
-Logical probe configuration survives disable/re-enable.
+## 2. Configured order is the baseline
 
-```text
-enabled = false
-```
-
-означает:
-
-- autonomous probing не выполняется;
-- накопленное current evidence этого logical probe не используется;
-- target/path/timing configuration сохраняется;
-- повторное включение не требует заново конструировать logical probe configuration.
-
-Physical ProbeRules materialized только для enabled consumers. Если несколько logical
-probes разделяют один physical `(mechanism, InterfaceIdentity, target)` plane, отключение
-одного consumer не закрывает plane. Отключение последнего enabled consumer закрывает его.
-
-Disable не означает удаление payload path: eligibility payload path и probe lifecycle
-остаются независимыми.
-
-## 3. Availability evidence state machine
-
-Routing evidence aggregation is now normative in
-`design/NG2/availability-collector-materializer.md`.
-
-For routing priority each channel is projected only as:
-
-```text
-no-problem
-problem
-```
-
-Diagnostic UNKNOWN/local execution error may still exist outside this routing projection.
-
-The essential asymmetric transitions are:
-
-```text
-no-problem -> problem    only while processing a tick
-problem  -> no-problem   only while processing one or more good-news replies
-```
-
-Good-news replies are colorless and countable. Several delayed valid replies may complete
-problem -> no-problem recovery in one collector pass. A tick is only a pending fact; multiple
-undrained timer expirations collapse to one tick and are not replayed as elapsed windows.
-
-Local probe execution ERROR is diagnostic only. It neither creates a negative event nor
-changes route membership.
-
-## 6. Базовый configured order
-
-Каждый Profile имеет исходный deterministic path order:
+Each Profile has deterministic configured path order:
 
 ```text
 A B C D
 ```
 
-Он задает административный приоритет paths и не меняется из-за истории probing.
+Startup begins exactly in that order. Enabling probing does not delay or demote any path.
 
-Probe policy строит только текущий effective order.
+A structural path-set or configured-priority change rebases the current order to the new
+configured order before current availability-problem flags are applied.
 
-При startup текущий effective order начинается с configured order.
+## 3. Problem aggregation
 
-Структурное изменение eligible path set либо административное изменение configured
-priority является новой базой: effective order сначала rebased на новый configured
-eligible order, после чего к нему применяется актуальное positive evidence. История
-старой probe-перестановки не имеет права отменять новое административное намерение.
+The per-channel hysteresis and input aggregation are normative in
+`design/NG2/availability-collector-materializer.md`.
 
-## 7. Bubble promotion
+For one Profile/path:
 
-Routing policy не сортирует все paths заново при каждом наблюдении.
+- channels with probing disabled contribute no problem;
+- if one path has several enabled assigned probe channels, the path is considered to have
+  availability problems only when **all** those channels currently have
+  `availability_problems=true`;
+- one channel without problems is therefore sufficient to keep that path in the
+  no-problem class.
 
-Она выполняет только продвижение подтвержденно живых paths через paths без подтвержденной
-живости.
+This preserves the previous "one valid positive path observation is enough" behavior
+without requiring a separate confirmed-live state model.
 
-Эквивалентная формулировка:
+## 4. Effective order
 
-1. подтвержденно живые paths образуют верхний prefix effective order;
-2. внутри этого prefix сохраняется configured priority;
-3. остальные paths не удаляются;
-4. среди остальных сохраняется их текущий относительный порядок;
-5. если подтвержденно живых paths нет, effective order не меняется.
-
-Пример:
+The effective order is calculated from:
 
 ```text
-configured/current:  A B C D
-probe:               - + + -
-effective:            B C A D
+configured order
+current verified effective order
+set of paths with availability problems
 ```
 
-Если после этого все paths теряют подтвержденную живость, порядок не возвращается
-самопроизвольно к `A B C D`: без доказанно лучшего path probing не создает новую
-перестановку.
+Rules:
 
-Если затем `A` получает good news, configured priority снова имеет силу среди
-подтвержденно живых paths и `A` может всплыть вверх.
+1. paths without availability problems form the leading prefix;
+2. that prefix is ordered by configured priority;
+3. paths with availability problems remain present;
+4. problem paths preserve their current relative order;
+5. if every path has problems, there is no better path to promote and current relative
+   order is retained;
+6. if no path has problems, effective order is exactly configured order.
 
-Availability-driven demotion не подразумевает per-flow pinning к пониженному path. Если
-policy признала path достаточно плохим, чтобы понизить его приоритет, последующие routing
-lookups должны иметь возможность использовать более предпочтительный path. Бесшовное
-сохранение established transport session при смене произвольного VPN path является другой
-функцией с другой policy.
-
-## 8. Payload intent
-
-Availability evidence не должен поступать в `BindingCalculator` как условие membership.
-
-Вместо этого:
+Example:
 
 ```text
-eligible/bound paths
-        +
-configured priority
-        +
-availability evidence
-        +
-current effective order
-        |
-        v
-PayloadTrafficIntentCalculator
-        |
-        v
-PayloadProfileRequest.ordered_paths
+configured/current: A B C D
+B has problems
+
+effective:           A C D B
 ```
 
-`ordered_paths` остается полным eligible set. Никакой EMPTY/gap не является path,
-binding или частью пользовательской конфигурации.
+If B recovers and no path has problems:
 
-Граница между `availability_problems = false` prefix и остальным effective order является runtime
-availability state. Она передается внутри текущего runtime routing intent как
+```text
+effective:           A B C D
+```
+
+## 5. Materialized boundary
+
+The transient runtime routing intent carries:
 
 ```text
 no_problem_prefix_length
 ```
 
-Это **не normalized configuration** и не отдельный gap object. Значение вычисляется из
-актуального availability snapshot; Linux projection только выводит из него незанятый
-metric position.
+For N paths:
 
-Семантика значения:
+- `N`: every path is in the no-problem prefix; no steady metric gap is needed;
+- `K`, where `0 < K < N`: the emergent free metric slot is immediately before the
+  first problem path;
+- `0`: all paths currently have problems; current order is retained and the first
+  ordinary metric slot is free.
 
-```text
-None -> availability-derived boundary для Profile не активна;
-0    -> boundary активна, confirmed-live paths нет;
-K    -> первые K paths подтверждены живыми;
-N    -> все N paths подтверждены живыми.
-```
+This is runtime materialization state, not user configuration and not a persistent gap
+object.
 
-`None` и `0` не эквивалентны. В частности, отключение probing не должно притворяться
-состоянием «все paths мертвы». При `None` routes остаются contiguous. При `K == N`
-gap также физически не материализуется.
+## 6. Disable semantics
 
-Новая отдельная Calculator abstraction для этого пока не требуется. Если логика
-effective order перестанет быть малой частью PayloadTrafficIntentCalculator, граница может
-быть пересмотрена позже.
+Disabling a logical probe:
+
+- stops autonomous probe execution for that channel;
+- clears its `availability_problems` contribution immediately;
+- does not remove its payload path;
+- does not imply UNKNOWN or unhealthy routing state.
+
+If disabling the last problematic channel for a path clears the path-level problem, the
+path can return to configured priority through the ordinary route sorter.
+
+## 7. Route transition ownership
+
+Availability-driven reorder uses the same sole transactional route executor as every
+other payload route mutation.
+
+There is no separate availability route queue or concurrent reorder executor.
+
+A running lower transaction is immutable. New ping/tick facts can accumulate, but another
+route materialization begins only after the current one returns.
+
+## 8. Session behavior
+
+Availability-driven demotion does not imply per-flow pinning to the previous path.
+Subsequent routing lookups use the new priority order.
+
+Preserving arbitrary established transport sessions across VPN-path changes would be a
+separate feature with separate policy.
 
 ## 9. Route-slot projection
 

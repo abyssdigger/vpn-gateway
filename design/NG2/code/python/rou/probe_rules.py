@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Network
 
-from .availability_routing import AvailabilityWindowPolicy
+from .availability_collector import AvailabilityChannelPolicy
 from .interface_identity import InterfaceIdentity
 from .network_rules import (
     DispatchRuleSpec,
@@ -35,7 +35,7 @@ class AvailabilityProbeRequest:
     target: IPv4Address
     mechanism: ProbeMechanism = ProbeMechanism.ICMP
     enabled: bool = True
-    policy: AvailabilityWindowPolicy = field(kw_only=True)
+    policy: AvailabilityChannelPolicy = field(kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.probe_id:
@@ -48,9 +48,9 @@ class AvailabilityProbeRequest:
             raise ValueError("probe mechanism must be a ProbeMechanism")
         if type(self.enabled) is not bool:
             raise ValueError("probe enabled must be boolean")
-        if not isinstance(self.policy, AvailabilityWindowPolicy):
+        if not isinstance(self.policy, AvailabilityChannelPolicy):
             raise ValueError(
-                "probe policy must be AvailabilityWindowPolicy"
+                "probe policy must be AvailabilityChannelPolicy"
             )
 
 

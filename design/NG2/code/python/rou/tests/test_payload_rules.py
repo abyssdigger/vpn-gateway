@@ -68,13 +68,13 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
                 PayloadPath(InterfaceIdentity("vpns01", 11)),
                 PayloadPath(InterfaceIdentity("vpns02", 12)),
             ),
-            confirmed_live_prefix_length=2,
+            no_problem_prefix_length=2,
         )
 
         spec = self._calculate(profile)
 
         self.assertEqual(
-            spec.routing_domains[0].confirmed_live_prefix_length,
+            spec.routing_domains[0].no_problem_prefix_length,
             2,
         )
 

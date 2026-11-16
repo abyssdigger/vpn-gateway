@@ -118,17 +118,24 @@ Implemented lower/runtime slices now include:
   composition;
 - target-confirmed LOCAL_PROCESS ICMP routing/nft materialization;
 - ProbeRulesCalculator and shared NetworkRules convergence state;
-- AvailabilityProbeManager generation-bound good-news/window evidence;
-- ProbeExecutionPlan projection and RequestEvent lifecycle;
-- long-lived LinuxProbeExecutionAgent with bounded per-plane sends, batched window
-  boundaries and generation-scoped READY/ERROR/INACTIVE diagnostics;
+- AvailabilityProbeManager restricted to ProbeRules/readiness, physical generation and
+  ProbeExecutionPlan lifecycle;
+- ProbeExecutionPlan with deduplicated physical planes and logical tick channels;
+- long-lived LinuxProbeExecutionAgent with bounded per-plane sends, one collapsed logical
+  tick per due channel and generation-scoped READY/ERROR/INACTIVE diagnostics;
 - compatibility Adapter hiding the diagnostic single-shot REPLY/NO_REPLY/ERROR contract
   below the production send boundary;
 - single-shot capability-free Linux ICMP probe Driver retained as target-proven lower
   mechanism/evidence;
-- RuntimeStateManager availability -> payload-priority wiring.
+- bounded availability collector inside PayloadTrafficManager using
+  `availability_problems`, saturating good-news counters and boolean tick latches;
+- direct effective-order calculation and the same sole payload reconcile executor for
+  availability-driven route priority.
 
-EventEnvelope delivery ordering and remaining runtime assembly stay separate review units.
+Removed executable availability artifacts include `availability_routing.py`,
+`payload_traffic_intent.py` and the old availability-specific
+`runtime_state_manager.py` slice. Remaining work is runtime assembly/status wiring, not
+another availability evidence layer.
 
 Rootless tests:
 
