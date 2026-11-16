@@ -1548,12 +1548,40 @@ Instead, the architecture records only required postconditions:
 
 Required orchestration semantics:
 
-1. establish a protective network boundary before declaring payload ready;
-2. create/start components only after their prerequisites exist;
-3. during shutdown, quiesce ongoing activity before deleting state it depends on where
-   dependency requires this order;
-4. attempt cleanup of independent owned domains even if another cleanup fails;
-5. preserve all material failures for observability.
+1. acquire/establish instance ownership/exclusion needed to prevent competing mutation;
+2. before trusting a new candidate configuration, observe and cleanup/contain stale owned
+   state from an incomplete or previous instance using only ownership markers/invariants that
+   do not depend on successfully parsing the new config;
+3. if stale owned state cannot be safely cleaned or contained, do not proceed as though a
+   known baseline exists; retain/re-establish protective restriction and report the failure;
+4. load and validate the candidate Device/Profile configuration before dependent actuation;
+5. construct/verify the managed network domain and protective fail-closed boundary before
+   declaring payload ready;
+6. create/start runtime components only after their prerequisites exist;
+7. external VPN process/interface presence is **not** a general startup-success prerequisite:
+   an enabled Profile may reach ready structural policy with zero current paths and remains
+   fail-closed until valid bindings appear;
+8. materialize current Profile policy from valid bindings and verify required safety/readiness
+   postconditions from fresh observation;
+9. only then report successful start/readiness;
+10. during shutdown, quiesce ongoing activity before deleting state it depends on where
+    dependency requires this order;
+11. attempt cleanup of independent owned domains even if another cleanup fails;
+12. preserve all material failures for observability.
+
+Startup/stop interaction is phase-bounded:
+
+- stop/shutdown handlers must be effective before startup begins creating owned mutable state;
+- if a stop is requested during STARTING, finish/abort the current bounded phase safely and do
+  not begin later startup phases;
+- once startup may have created forwarding-capable or other safety-relevant owned state, stop
+  must execute containment/cleanup rather than exit and abandon partial state;
+- a stop between lower-state apply and readiness publication must not leave owned forwarding
+  active after process exit.
+
+This is the recovered semantic value of the historical
+`LOCK -> CLEANUP -> LOAD/VALIDATE -> APPLY -> RUN` ordering. The exact CLI/service-manager
+mechanism and exact phase implementation are replaceable.
 
 ## 12.1. Product lifecycle control surface
 
