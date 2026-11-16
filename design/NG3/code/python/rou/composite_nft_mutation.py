@@ -298,6 +298,8 @@ def _distance(value: CompositeNftPolicyComparison) -> int:
         + len(value.device_firewall.missing)
         + len(value.device_firewall.stale_chains)
         + len(value.device_firewall.stale_jumps)
+        + len(value.local_publication.missing)
+        + len(value.local_publication.stale)
         + len(value.conflicts)
     )
 
