@@ -1,3 +1,7 @@
+from .availability_priority import (
+    AvailabilityPriorityError,
+    calculate_effective_path_order,
+)
 from .availability_confirmation import (
     AvailabilityConfirmationState,
     AvailabilityOutcome,
@@ -49,6 +53,7 @@ from .route_priority import (
 __all__ = [
     "AvailabilityConfirmationState",
     "AvailabilityOutcome",
+    "AvailabilityPriorityError",
     "BindingProjectionError",
     "ConfigError",
     "DeviceBindingIntent",
@@ -72,6 +77,7 @@ __all__ = [
     "StructuralConfig",
     "WaitingCandidate",
     "apply_availability_evidence",
+    "calculate_effective_path_order",
     "build_payload_profile_requests",
     "classify_inbound_profile",
     "classify_outbound_profile",
