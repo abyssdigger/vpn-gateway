@@ -109,6 +109,16 @@ from .payload_forward_observation import (
     PayloadForwardRuleKind,
     observe_payload_forward,
 )
+from .payload_forward_desired import (
+    PayloadForwardDesiredError,
+    PayloadForwardDesiredState,
+    PayloadForwardRuleSpec,
+)
+from .payload_forward_compare import (
+    PayloadForwardComparison,
+    PayloadForwardComparisonError,
+    compare_payload_forward,
+)
 from .payload_nat_mutation import (
     PayloadNatMutationResult,
     PayloadNatMutationStatus,
@@ -263,6 +273,11 @@ __all__ = [
     "PayloadForwardRemoteField",
     "PayloadForwardRuleConflict",
     "PayloadForwardRuleKind",
+    "PayloadForwardDesiredError",
+    "PayloadForwardDesiredState",
+    "PayloadForwardRuleSpec",
+    "PayloadForwardComparison",
+    "PayloadForwardComparisonError",
     "ObservedPayloadMasquerade",
     "PayloadNatComparison",
     "PayloadNatObservationError",
@@ -273,6 +288,7 @@ __all__ = [
     "LinuxPayloadNatBackend",
     "compare_payload_nat",
     "observe_payload_forward",
+    "compare_payload_forward",
     "converge_payload_nat_step_once",
     "PAYLOAD_FORWARD_CHAIN",
     "PAYLOAD_FORWARD_COMMENT",
