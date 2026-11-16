@@ -97,6 +97,10 @@ from .route_priority_realization import (
     RoutePriorityMetricSpace,
     RoutePriorityRealizationError,
 )
+from .route_priority_domain_builder import (
+    RoutePriorityDomainBuildError,
+    build_route_priority_domain_realizations,
+)
 
 __all__ = [
     "AvailabilityConfirmationState",
@@ -133,6 +137,7 @@ __all__ = [
     "RouteMetricPlatformSpace",
     "RoutePriorityConvergenceError",
     "RoutePriorityDeleteDuplicate",
+    "RoutePriorityDomainBuildError",
     "RoutePriorityDomainId",
     "RoutePriorityDomainOutcome",
     "RoutePriorityDomainRequest",
@@ -157,6 +162,7 @@ __all__ = [
     "apply_availability_evidence",
     "calculate_effective_path_order",
     "build_payload_profile_requests",
+    "build_route_priority_domain_realizations",
     "classify_inbound_profile",
     "classify_outbound_profile",
     "converge_route_priority_once",
