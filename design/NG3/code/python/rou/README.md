@@ -50,6 +50,7 @@ Implemented:
 - pure exact-before-release cross-domain structural phase planner covering desired guards, stale RPDB retirement, stale route cleanup, desired path routes, nft convergence and RPDB activation last;
 - guarded cross-domain structural NetworkPolicyExecutor with one link-bracketed route/RPDB+nft snapshot, persistent closed ForwardingGate during mixed state, strict fresh postcondition progress, final forwarding activation only from exact state and immediate safety re-close when post-activation verification fails;
 - explicit bounded structural transaction coordinator that repeats only verified `STEP_APPLIED` one-step results, stops immediately on terminal failure or unfinished inter-attempt regression, has no arbitrary retry budget, and derives termination from the non-negative strictly decreasing structural distance;
+- bounded network-policy activation subassembly that confirms payload containment, bootstraps/repairs only a safely bounded invariant nft scaffold, runs the complete structural transaction, reports READY only from confirmed exact state, and independently re-confirms ForwardingGate=DISABLED after lower failure without retrying the failed operation;
 - Linux cross-domain backend that observes route JSON + rule JSON + nft JSON inside one current-interface bracket and delegates mutation to the already evidenced route/RPDB and composite nft Drivers;
 - privileged cross-domain integration proving old-policy -> new-policy convergence without mixed-state forwarding, command-error-after-success recovery from fresh state, zero-path Profile blackhole behavior and same-name/new-ifindex fail-closed rejection before mutation;
 - rootless cross-contract structural-pipeline integration scenarios.
@@ -81,6 +82,7 @@ Code reviews for each unit are stored under `design/reviews/`.
 
 GitHub CI additionally runs privileged disposable-network-namespace integrations for the
 physical route-priority backend, managed-netns forwarding gate, nft owner/mutation units and
-the complete cross-domain structural convergence reference. The latter exercises real
-route/RPDB+nft transition ordering, verified forwarding activation, fail-closed zero-path
-behavior and current-interface-generation rejection.
+the complete cross-domain structural convergence and activation references. These exercise
+real route/RPDB+nft transition ordering, verified forwarding activation, fail-closed
+zero-path behavior, current-interface-generation rejection, absent-scaffold bootstrap and
+subsequent current-path activation through the same bounded assembly.
