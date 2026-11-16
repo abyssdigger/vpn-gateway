@@ -1597,6 +1597,40 @@ When the desired change alters only priority/order of the same eligible unicast 
 the Linux implementation uses owned ordinary metric space and must be able to identify one
 currently unused metric whenever a route move requires working space.
 
+### Priority convergence domain
+
+One executable priority-convergence attempt is scoped to **one independently observable
+route key** inside a Profile routing domain, not to an aggregate union of all Profile
+destinations.
+
+For the current IPv4 direction this means that a backend instance/planning snapshot
+represents one concrete owned route-key scope such as one destination prefix in the
+appropriate internal routing table/domain, together with the eligible logical paths for
+that route key.
+
+This boundary is required because a Profile may materialize multiple kernel route entries
+for different destinations. After a physical partial failure, one destination can contain a
+temporary duplicate or completed move while another destination is still at the old
+assignment. Aggregating such rows into one `logical_path -> metrics` map would lose
+authoritative state and could falsely justify deletion or success.
+
+Therefore:
+
+- each route-key domain is observed and converged from its own fresh kernel snapshot;
+- the path-level `logical_path -> observed metrics` model is valid only inside one such
+  route-key domain;
+- temporary progress may differ between route-key domains while convergence is in flight,
+  but every affected domain must preserve the pure-priority safety invariant: every eligible
+  path remains represented and no ineligible path is introduced;
+- completion of a Profile-level priority change is confirmed only after all affected
+  route-key domains have fresh postconditions matching the same desired logical-path order;
+- failure in one domain does not permit stale-plan replay in that or another domain; each
+  further attempt starts from fresh observation of the domain it will mutate.
+
+No requirement promises an atomic simultaneous metric permutation across all destination
+prefixes. The required observable invariants are preserved path membership/safety during
+the transition and the configured effective order after verified convergence.
+
 The unused/free metric is inferred operationally from freshly observed current state. It is
 not configuration, semantic state or a permanently materialized "hole".
 
