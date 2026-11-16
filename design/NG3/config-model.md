@@ -210,7 +210,20 @@ Consequences:
 
 # 5. Profile
 
-An enabled Profile expresses one user network need.
+An enabled Profile expresses one independent logical routing/payload-policy domain: a user
+network need that remains meaningful independently of the current VPN transport instances.
+
+Profile is **not**:
+
+- a VPN interface;
+- a VPN peer;
+- a tunnel/session;
+- a Linux route metric;
+- an availability probe target;
+- a container for concrete Linux rules.
+
+Device/binding layers provide transport capability; Profile describes what network behavior
+that capability is allowed to satisfy.
 
 Required semantic fields:
 
@@ -310,9 +323,57 @@ endpoints.
 - `VPNG-R2.R2.R1`
 - `VPNG-R3.R1.R1`
 
-# 6. Profile-scoped availability
+# 6. Profile runtime normalization
+
+After Device binding, one enabled Profile normalizes to a structural payload request:
+
+```text
+PayloadProfileRequest:
+    profile_id
+    direction
+    destinations[]
+    ordered_paths[]
+```
+
+The path list is obtained from currently valid bindings of enabled Devices in
+`Profile.device_order`.
+
+It may be empty.
+
+```text
+paths = 0
+    !=
+Profile disappeared
+```
+
+With zero paths the Profile remains the owner of its destinations and materializes
+fail-closed terminal behavior. Traffic must not fall through to ambient/main routing merely
+because no VPN path is currently usable/bound.
+
+The structural request is independent from availability. Availability may only change the
+effective ordering of existing paths.
+
+It must not change:
+
+- Profile destinations;
+- direction;
+- Device membership;
+- binding eligibility;
+- structural existence of the Profile.
+
+**Requirements:**
+- `VPNG-R1.R2.R4.R4.R2`
+- `VPNG-R1.R2.R4.R4.R3`
+- `VPNG-R2.R2.R2`
+- `VPNG-R3.R2.R1`
+- `VPNG-R4.R1.R1`
+
+# 7. Profile-scoped availability
 
 Availability is a property of one Profile/path use, not of a physical interface globally.
+
+Availability is not part of structural Profile membership. It is a negative priority
+modifier applied after the Profile's eligible path set has been obtained from binding.
 
 ```text
 availability subject
@@ -366,7 +427,7 @@ semantic contract, not the string parser shorthand, is what downstream component
 - `VPNG-R3.R6.R3.R1.C1`
 - `VPNG-R3.R6.R3.R2`
 
-# 7. Configuration normalization boundary
+# 8. Configuration normalization boundary
 
 The human-facing Device/Profile model is normalized before runtime network components consume
 it.
@@ -395,7 +456,7 @@ the user semantics above.
 
 In particular, runtime consumers must not need to parse TOML strings.
 
-# 8. Required validation behavior
+# 9. Required validation behavior
 
 At minimum, accepted configuration must enforce:
 
@@ -414,7 +475,7 @@ At minimum, accepted configuration must enforce:
 
 Disabled placeholders are the explicit exception to active-object field completeness.
 
-# 9. What is not inherited from NG1
+# 10. What is not inherited from NG1
 
 This recovered config model does not require NG3 to restore:
 
@@ -429,7 +490,7 @@ This recovered config model does not require NG3 to restore:
 
 Those require independent NG3 requirements if needed.
 
-# 10. Implementation consequences
+# 11. Implementation consequences
 
 This contract immediately creates implementation obligations for:
 
@@ -451,3 +512,14 @@ This contract immediately creates implementation obligations for:
 
 These are implementation obligations derived from the user contract, not independent reasons
 to introduce new runtime components.
+
+# 12. Historical Profile status work intentionally not imported
+
+Recovered discussions considered a final aggregated `ProfileState` composed from binding,
+payload-rule, publication and probe diagnostic facts.
+
+That aggregation semantics was explicitly unfinished.
+
+Therefore this config recovery does not invent a single Profile verdict or make probe
+diagnostics control routing through status. A stronger Profile-specific status model remains
+a separate future requirement/design unit if needed.
