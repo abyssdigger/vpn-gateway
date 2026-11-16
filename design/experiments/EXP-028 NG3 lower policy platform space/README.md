@@ -75,3 +75,13 @@ NG3 Linux platform constants.
 
 Historical RC/NG evidence for 201/202 and ordinary metrics is supporting evidence only; this
 experiment is the NG3 acceptance gate for the complete combined layout.
+
+
+## Result
+
+**COMPLETE — PASS.**
+
+Final evidence: GitHub Actions run `43825516374`.
+
+See `EXP-028-result-20261116.md` for accepted values, intermediate findings and the
+boundary checks.

@@ -1,3 +1,21 @@
+## EXP-028 — NG3 lower policy platform space
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** NG3 shared lower NetworkPolicyAdapter ownership/allocation layout  
+**Тип:** Linux routing-table/RPDB/protocol/metric/nft namespace representability  
+**Design:** [EXP-028 README](experiments/EXP-028%20NG3%20lower%20policy%20platform%20space/README.md)  
+**Result:** [EXP-028 result](experiments/EXP-028%20NG3%20lower%20policy%20platform%20space/EXP-028-result-20261116.md)
+
+Privileged CI подтвердил весь выбранный NG3 Linux resource layout, включая границы
+table/RPDB pools, реальные policy lookups, proto 201/202, normal metric 1,
+terminal blackhole metric `0xffffffff` и отдельный `table ip vpn_gate`.
+
+Дополнительно зафиксировано, что текущий iproute2 с `-N` может представлять
+`RTN_BLACKHOLE` как строку `"6"`; будущий strict structural route inventory обязан
+нормализовать route type семантически.
+
+---
+
 ## EXP-027 — NG2 route-priority bubble
 
 **Статус:** COMPLETE — PASS  

@@ -1808,6 +1808,59 @@ They must satisfy:
 
 The user configuration never contains these values.
 
+#### Accepted current Linux platform space
+
+EXP-028 passed in privileged GitHub Linux CI, including both first and last values of the
+declared table/RPDB pools. The current NG3 Linux reference implementation therefore uses:
+
+```text
+payload table pool:
+    [0x80000000, 0xC0000000)
+
+probe table pool:
+    [0xC0000000, 0x100000000)
+
+probe RPDB priority pool:
+    [0x2000, 0x4000)      # 8192..16383
+
+payload RPDB priority pool:
+    [0x4000, 0x6000)      # 16384..24575
+
+ambient/main lookup priority:
+    32766
+
+managed terminal/guard route protocol:
+    201
+
+managed path/unicast route protocol:
+    202
+
+first preference route metric:
+    1
+
+terminal guard route metric:
+    0xffffffff
+
+owned nftables namespace:
+    family ip
+    table vpn_gate
+```
+
+The high table ranges are role-classifiable by their top bits and avoid common low routing
+table IDs. The selected RPDB quarters deliberately leave priorities `1..8191` and
+`24576..32765` outside VPN-GATE ownership for other explicitly provisioned network-domain
+policy while keeping probe rules before payload rules and payload rules before the standard
+main lookup.
+
+EXP-028 also records an observation relevant to future strict structural inventory:
+with current iproute2 `-N`, `RTN_BLACKHOLE` may be rendered as numeric string `"6"`.
+Parsers must normalize the semantic route type rather than require only the word
+`"blackhole"`.
+
+These are current Linux implementation constants, not user-facing schema. A materially
+different kernel/iproute2/nftables platform must rerun the platform evidence gate rather
+than assuming the numeric contract is portable without verification.
+
 The executable pure allocator implements this contract over an injected
 `NetworkPolicyPlatformSpace` rather than hard-coding production constants. It:
 
