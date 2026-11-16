@@ -2,12 +2,20 @@ from __future__ import annotations
 
 import json
 import unittest
+from ipaddress import IPv4Network
 
 from rou.composite_nft_policy import (
     CompositeNftDesiredState,
     compare_composite_nft_policy,
 )
-from rou.device_firewall_desired import DeviceFirewallDesiredState
+from rou.binding import LogicalPathId
+from rou.device_firewall_desired import (
+    DeviceFirewallChainSpec,
+    DeviceFirewallDesiredState,
+    DeviceFirewallRuleSpec,
+)
+from rou.device_firewall_structure import DeviceFirewallRuleAction
+from rou.interface_identity import InterfaceIdentity
 from rou.nft_namespace_inventory import (
     NG3_NFT_OWNER_COMMENT,
     NftNamespaceObject,
@@ -15,8 +23,18 @@ from rou.nft_namespace_inventory import (
     NftNamespaceStatus,
 )
 from rou.nft_payload_scaffold import PAYLOAD_NFT_SCAFFOLD
-from rou.payload_forward_desired import PayloadForwardDesiredState
-from rou.payload_nat_desired import PayloadNatDesiredState
+from rou.payload_forward_desired import (
+    PayloadForwardDesiredState,
+    PayloadForwardRuleSpec,
+)
+from rou.payload_forward_observation import (
+    PayloadForwardRemoteField,
+    PayloadForwardRuleKind,
+)
+from rou.payload_nat_desired import (
+    PayloadMasqueradeSpec,
+    PayloadNatDesiredState,
+)
 
 
 def obj(kind: str, payload: dict, order: int) -> NftNamespaceObject:
@@ -75,6 +93,120 @@ class CompositeNftPolicyTests(unittest.TestCase):
             observation(),
             (),
             EMPTY,
+        )
+        self.assertTrue(result.desired_confirmed)
+        self.assertEqual(result.conflicts, ())
+
+
+    def test_profile_device_and_nat_coexist_as_one_confirmed_scope(self):
+        host = InterfaceIdentity("host0", 10)
+        vpn = InterfaceIdentity("vpn0", 20)
+        path_id = LogicalPathId("device", 0, 0)
+
+        forward_spec = PayloadForwardRuleSpec(
+            kind=PayloadForwardRuleKind.NEW,
+            ingress=host,
+            egress=vpn,
+            remote_field=PayloadForwardRemoteField.DESTINATION,
+            remote_prefix=IPv4Network("10.0.0.0/8"),
+        )
+        nat_spec = PayloadMasqueradeSpec(path_id, host, vpn)
+        terminal = DeviceFirewallRuleSpec(
+            match_expr_json=(),
+            action=DeviceFirewallRuleAction.DROP,
+            action_json='{"drop":null}',
+            terminal_fallthrough=True,
+        )
+        device_spec = DeviceFirewallChainSpec(
+            ingress=host,
+            egress=vpn,
+            child_chain_name="dfw_out",
+            rules=(terminal,),
+        )
+        desired = CompositeNftDesiredState(
+            profile_forward=PayloadForwardDesiredState((forward_spec,)),
+            payload_nat=PayloadNatDesiredState((nat_spec,)),
+            device_firewall=DeviceFirewallDesiredState((device_spec,)),
+        )
+
+        forward = obj(
+            "rule",
+            {
+                "family": "ip",
+                "table": "vpn_gate",
+                "chain": "payload_forward",
+                "handle": 40,
+                "comment": "vpn-gate:ng3:payload-forward-new-v1",
+                "expr": [
+                    {"match": {"op": "in", "left": {"ct": {"key": "state"}}, "right": "new"}},
+                    {"match": {"op": "==", "left": {"meta": {"key": "iif"}}, "right": "host0"}},
+                    {"match": {"op": "==", "left": {"meta": {"key": "oif"}}, "right": "vpn0"}},
+                    {"match": {"op": "==", "left": {"payload": {"protocol": "ip", "field": "daddr"}}, "right": {"prefix": {"addr": "10.0.0.0", "len": 8}}}},
+                    {"accept": None},
+                ],
+            },
+            40,
+        )
+        nat = obj(
+            "rule",
+            {
+                "family": "ip",
+                "table": "vpn_gate",
+                "chain": "payload_postrouting",
+                "handle": 41,
+                "comment": "vpn-gate:ng3:payload-nat-v1",
+                "expr": [
+                    {"match": {"op": "==", "left": {"meta": {"key": "iif"}}, "right": "host0"}},
+                    {"match": {"op": "==", "left": {"meta": {"key": "oif"}}, "right": "vpn0"}},
+                    {"masquerade": None},
+                ],
+            },
+            41,
+        )
+        child = obj(
+            "chain",
+            {
+                "family": "ip",
+                "table": "vpn_gate",
+                "name": "dfw_out",
+                "handle": 42,
+                "comment": "vpn-gate:ng3:device-fw-child-v1",
+            },
+            42,
+        )
+        jump = obj(
+            "rule",
+            {
+                "family": "ip",
+                "table": "vpn_gate",
+                "chain": "payload_forward",
+                "handle": 43,
+                "comment": "vpn-gate:ng3:device-fw-jump-v1",
+                "expr": [
+                    {"match": {"op": "==", "left": {"meta": {"key": "iif"}}, "right": "host0"}},
+                    {"match": {"op": "==", "left": {"meta": {"key": "oif"}}, "right": "vpn0"}},
+                    {"jump": {"target": "dfw_out"}},
+                ],
+            },
+            43,
+        )
+        fallthrough = obj(
+            "rule",
+            {
+                "family": "ip",
+                "table": "vpn_gate",
+                "chain": "dfw_out",
+                "handle": 44,
+                "comment": "vpn-gate:ng3:device-fw-fallthrough-v1",
+                "expr": [{"drop": None}],
+            },
+            44,
+        )
+
+        result = compare_composite_nft_policy(
+            observation(child, jump, forward, nat, fallthrough),
+            (host, vpn),
+            desired,
         )
         self.assertTrue(result.desired_confirmed)
         self.assertEqual(result.conflicts, ())
