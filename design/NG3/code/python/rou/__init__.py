@@ -35,6 +35,11 @@ from .profile_classification import (
     classify_inbound_profile,
     classify_outbound_profile,
 )
+from .route_priority import (
+    RoutePriorityMove,
+    RoutePriorityPlanError,
+    plan_route_priority_moves,
+)
 
 __all__ = [
     "BindingProjectionError",
@@ -53,6 +58,8 @@ __all__ = [
     "PayloadProfileRequest",
     "ProfileClassificationError",
     "ProfileStructuralIntent",
+    "RoutePriorityMove",
+    "RoutePriorityPlanError",
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
@@ -61,6 +68,7 @@ __all__ = [
     "classify_inbound_profile",
     "classify_outbound_profile",
     "parse_ip_link_inventory",
+    "plan_route_priority_moves",
     "parse_structural_config",
     "project_device_bindings",
 ]
