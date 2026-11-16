@@ -1893,6 +1893,373 @@ payload policy forwards nothing.
 Concrete allow rules are added only by a later, fully normalized payload-policy projection.
 They must not be inferred from historical TOML examples.
 
+###### EXP-035 — проверка низкоуровневого nft-контракта NEW forwarding
+
+**Implements:**
+- `VPNG0002-R2.R1.R2` — remote destination/source определяется направлением NEW flow;
+- `VPNG0002-R2.R3.R3` — разрешение инициирования flow зависит от direction;
+- `VPNG0002-R2.R5.R1` — most-specific Profile selection нельзя подменять произвольным порядком allow rules;
+- `VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3` — физические ingress/egress идентичности должны быть текущими;
+- `VPNG0004-R4.R1`, `VPNG0004-R4.R2`, `VPNG0004-R4.R3.R2` — неподтверждённый или ошибочный lower rule не может расширять forwarding.
+
+**Constrained by:**
+- `VPNG0002-R2.R3.C1` — первая версия не принимает многопутевой inbound/bidirectional Profile;
+- `VPNG0001-R1.R2.R4.R6.C1` — не выводить незакрытую пользовательскую grammar из lower nft синтаксиса.
+
+**Scope:** только технический эксперимент с одной разрешающей rule shape для
+host-boundary -> конкретный VPN endpoint: `meta iif` и `meta oif`
+по числовым ifindices, точный IPv4 destination prefix, `ct state new`
+и `accept`. Проверить nft JSON и фактическое поведение в
+одноразовом network namespace с закрывающей `policy drop`.
+
+Это **не** архитектурное принятие полного payload filter policy:
+правила return flow, inbound permission, пересекающиеся префиксы с
+most-specific конкуренцией, Device envelope и probe isolation остаются
+обязанностями отдельной normalized policy projection. Даже если
+эксперимент PASS, одиночный allow pattern нельзя публиковать как
+полную компиляцию Profile. Его можно использовать как проверенную
+lower primitive для последующего проектирования строгого owner
+classifier и композиции.
+
+**Components / interactions:** существующий нижний Linux nft
+Driver/Adapter выполняет экспериментальные команды; pure
+`NftNamespaceObservation` поставляет canonical JSON. Новый runtime
+Manager/Agent/Executor, state store и event contract не вводятся.
+Эксперимент необходим, потому что exact numeric-ifindex filter match
+с prefix и conntrack нельзя считать доказанным только на основании
+EXP-033 (тот проверял postrouting masquerade).
+
+**External environment:** GitHub Actions privileged Linux runner,
+`iproute2`, `nftables`, `conntrack` и ICMP в disposable namespaces.
+Сопоставление с Debian target остаётся отдельной проверкой
+совместимости при необходимости, а не обязательным условием
+проведения этого эксперимента.
+
+**Simplification / evidence:** один узкий набор rule/negative controls;
+проверить hit и отсутствие bypass с иного ingress, иного egress,
+вне-prefix traffic и same-name-new-ifindex. Не создавать
+обобщённый firewall AST, runtime parse grammar, persistent index map,
+retry engine или вторую policy-classification логику.
+
+**Gate:** до PASS эксперимента нельзя считать эту lower-rule shape
+платформенно подтверждённой; даже PASS не разрешает materialization
+непроверенной полной Profile permission или открытие `ForwardingGate`.
+
+**EXP-035 result:** PASS on privileged GitHub Linux CI. Numeric current
+`meta iif/oif` plus `ct state new` and exact IPv4 destination prefix
+matched only the intended NEW packet. Different ingress, different egress,
+outside-prefix traffic and same-name/new-ifindex replacement did not match.
+Current interface operands rendered symbolically; the stale old oif rendered
+as a decimal-string ifindex. This evidence accepts the lower primitive only;
+full payload filter semantics remain gated as stated above.
+
+###### EXP-036 — проверка prefix-scoped stateful return primitive
+
+**Implements:**
+- `VPNG0002-R2.R1.R2` — remote prefix сохраняет одинаковый смысл в обоих направлениях;
+- `VPNG0002-R2.R3.R3` — return traffic уже разрешённого flow может обслуживаться statefully;
+- `VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3` — обратный packet path привязан к текущей concrete interface generation;
+- `VPNG0004-R4.R1`, `VPNG0004-R4.R2`, `VPNG0004-R4.R3.R2` — stale/неподтверждённый return state не должен расширять forwarding.
+
+**Constrained by:**
+- `VPNG0002-R2.R3.C1` — Release 1 inbound/bidirectional max-path constraint остаётся;
+- `VPNG0001-R1.R2.R4.R6.C1` — lower nft expression не выбирает user grammar.
+
+Для outbound NEW primitive из EXP-035 кандидат stateful reverse primitive
+должен быть **prefix-scoped**, а не только `ct state established,related`:
+`meta iif = current path`, `meta oif = host boundary`,
+`ip saddr = тот же remote prefix`, `ct state established,related`.
+Иначе retained conntrack для старого/другого remote prefix мог бы получить
+широкое разрешение через тот же interface pair после structural change.
+
+EXP-036 должен проверить реальный bidirectional ICMP flow, отсутствие
+разрешения для unsolicited reverse NEW, отсутствие return для remote source
+вне prefix даже при отдельно разрешённом outbound NEW test packet, и
+same-name/new-ifindex replacement. После замены новый outbound NEW rule
+может быть создан для нового oif, но старый reverse rule по old iif не
+должен пропустить reply; новый reverse rule должен восстановить flow.
+
+Это по-прежнему **lower primitive evidence**, а не полный filter compiler:
+inbound NEW, Device envelope intersection, multi-Profile canonical projection
+и full owner convergence остаются отдельными units.
+
+**EXP-036 result:** PASS on privileged GitHub Linux CI. The prefix-scoped
+reverse rule admitted a real established reply, rejected unsolicited reverse
+NEW and an established reply whose remote source was outside the prefix, and
+failed closed after same-name interface replacement until a current-ifindex
+reverse rule was installed. Actual nft JSON renders the state set as
+`["established","related"]`; live/stale interface rendering follows the
+same symbolic/decimal-index rule established by EXP-033/035.
+
+###### Authoritative payload_forward observation — design gate
+
+**Component:** read-only direct Calculator over the owned nft table and one fresh,
+unambiguous interface inventory.
+
+**Implements:**
+- `VPNG0002-R2.R1.R2`;
+- `VPNG0002-R2.R3.R3`;
+- `VPNG0002-R2.R5.R1`;
+- `VPNG0001-R1.R3.R2`;
+- `VPNG0001-R1.R3.R3`;
+- `VPNG0004-R4.R1`;
+- `VPNG0004-R4.R2`;
+- `VPNG0004-R4.R5`.
+
+**Constrained by:**
+- `VPNG0002-R2.R3.C1`;
+- `VPNG0001-R1.R2.R4.R6.C1`.
+
+The observer does **not** compile Profile policy. It only classifies exact
+lower rule shapes already proven by EXP-035/036 and preserves the semantic
+fields required for a later desired-state comparison:
+
+```text
+NEW:
+    ct state new
+    exact iif
+    exact oif
+    one remote IPv4 prefix match (saddr or daddr)
+    accept
+    exact NEW owner comment
+
+RETURN:
+    ct state { established, related }
+    exact iif
+    exact oif
+    one remote IPv4 prefix match (saddr or daddr)
+    accept
+    exact RETURN owner comment
+```
+
+Counters used by EXP-035/036 are instrumentation, not required policy.
+The production owner shape therefore omits `counter`; accepting arbitrary
+counter-bearing rules as production-owned would widen cleanup authority for
+no accepted requirement.
+
+Before implementation, EXP-037 must resolve two representation facts:
+how nft JSON renders `/32` `ip saddr/daddr` matches, and the exact
+no-counter expression arrays. The observer may normalize only evidence-backed
+forms. Unknown comment, state set, prefix representation, extra expression,
+action or field is an explicit conflict, never silently ignored.
+
+Interface operands follow EXP-033/035/036: current names resolve through the
+fresh inventory; decimal ifindices may resolve to a current identity only when
+that exact index is present, otherwise remain stale numeric identity.
+A same-name replacement never equals the old numeric generation.
+
+**Scenario:** strict owner inventory must be able to distinguish current
+recognized payload forwarding objects from stale recognized objects and
+unknown/conflicting rules before any structural cleanup or activation.
+
+**Necessity / simplification:** a pure Calculator is required because the
+scaffold currently leaves all rules unclassified. No compiler, mutation,
+policy ordering, handle cache, event owner, retry loop or firewall AST is
+introduced. Rule handles identify observed objects only.
+
+**Evidence plan:** EXP-037 for final no-counter JSON forms and `/32`;
+rootless parser regression for NEW/RETURN, saddr/daddr, current/stale
+interfaces, malformed state/prefix/comment/action/extra expressions,
+duplicate handles and duplicate physical rules; privileged integration reads
+the actual EXP-037 rules through the production observer.
+
+**Gate:** EXP-037 is PASS. Implementation of the strict read-only observer is
+therefore allowed. Passing the observer unit still does not authorize full
+Profile filter materialization.
+
+**EXP-037 evidence:** no-counter NEW/RETURN owner rules contain exactly five
+expressions. `/32` remote matches render as a plain IPv4 address string;
+non-host prefixes such as the tested `/24` render as a prefix object.
+The observer accepts only these evidence-backed canonical forms.
+
+**Gate amendment after EXP-037:** `VPNG0002-R2.R1.R1` permits arbitrary
+strict IPv4 CIDR destinations, including `0.0.0.0/0`. EXP-037 closed only
+`/32`; EXP-035/036 closed `/24`. Before implementation the observer gate
+must additionally resolve nft canonicalization for `/0` and boundary
+prefix lengths. EXP-038 is therefore required. If nft optimizes `/0`
+by removing the payload-prefix expression, the observer design must be revised
+rather than pretending the missing expression is equivalent by assumption.
+
+**EXP-038 result:** PASS on privileged GitHub Linux CI. `/0`, `/1` and
+
+###### Exact payload_forward desired data and actual-vs-desired comparison
+
+**Component:** immutable lower desired data + pure Direct Calculator. This is
+**not** the Profile/Device policy compiler.
+
+**Implements:**
+- `VPNG0002-R2.R1.R1`;
+- `VPNG0002-R2.R1.R2`;
+- `VPNG0002-R2.R3.R3`;
+- `VPNG0002-R2.R5.R1`;
+- `VPNG0001-R1.R3.R2`;
+- `VPNG0001-R1.R3.R3`;
+- `VPNG0004-R4.R1`;
+- `VPNG0004-R4.R2`;
+- `VPNG0004-R4.R5`.
+
+**Constrained by:**
+- `VPNG0002-R2.R3.C1`;
+- `VPNG0001-R1.R2.R4.R6.C1`.
+
+The higher semantic Calculator will eventually produce a complete, deduplicated
+physical rule set after applying Profile direction/destinations, path bindings,
+most-specific policy and normalized Device envelope. That compiler is **not**
+part of this unit because the envelope lower projection is not yet closed.
+
+This unit defines only one exact physical desired rule:
+
+```text
+PayloadForwardRuleSpec:
+    kind = NEW | RETURN
+    ingress = current InterfaceIdentity
+    egress = current InterfaceIdentity
+    remote_field = saddr | daddr
+    remote_prefix = strict IPv4Network
+```
+
+and an immutable `PayloadForwardDesiredState` containing a physically unique
+set of such specs. It has no Profile ID, Device ID or rule handle because those
+are not part of physical nft rule identity. Semantic provenance remains above
+this lower contract.
+
+The comparator takes:
+
+```text
+strict observed payload_forward rules
++ one fresh interface inventory
++ exact lower desired state
+    ->
+confirmed desired specs
+missing desired specs
+stale recognized physical rules
+conflicts
+```
+
+A recognized current-identity rule that is not in desired state is `stale`,
+not confirmed. A stale-interface-generation rule is also `stale`. Any
+observer conflict remains a conflict. Desired rules whose endpoints are not
+present in the same current interface inventory are invalid input rather than
+permission to add a rule to an unverified endpoint.
+
+**Necessity / simplification:** this comparison is required before safe cleanup
+or physical materialization, but it deliberately avoids creating a second
+Profile classifier or guessing Device envelope semantics. No I/O, mutation,
+stored handles, retry state or lifecycle component.
+
+**Evidence:** rootless exact comparison tests over NEW/RETURN, duplicate desired
+physical rules, unexpected recognized current rules, stale numeric generations,
+missing rules, conflicts and non-current desired endpoints. Existing live
+observer evidence remains sufficient; no new kernel fact is introduced.
+
+**Gate:** PASS for lower desired data/comparison only. Full semantic compilation
+and physical filter mutation remain separate gated units.
+
+###### Forward semantic compiler — next-unit design constraint
+
+**Implements:** `VPNG0002-R2.R1.R2`, `VPNG0002-R2.R3.R3`,
+`VPNG0002-R2.R5.R1`, `VPNG0001-R1.R2.R4.R6.R2`,
+`VPNG0004-R4.R1`, `VPNG0004-R4.R3.R2`.
+
+A naive union of Profile CIDR allow rules is not equivalent to accepted
+most-specific classification. Example: a broad outbound Profile may allow
+path B while a more-specific outbound Profile owning the packet allows only
+path A. If the broad rule remains `daddr broad + oif B -> accept`, routing
+drift or a mixed transition could forward the more-specific packet through B,
+even though the selected Profile forbids that path.
+
+The positive-only/default-drop lower model therefore requires the semantic
+compiler to produce **disjoint effective remote-prefix fragments** before
+creating physical allow rules:
+
+- outbound: partition remote IPv4 space across all outbound/bidirectional
+  candidate Profiles by the accepted global most-specific rule, then attach
+  only the selected Profile's allowed paths to each fragment;
+- inbound: for each concrete ingress logical path, first restrict candidates
+  to inbound/bidirectional Profiles allowing that path, then partition remote
+  source space by most-specific Profile for that path;
+- return rules use the same selected fragments with reversed interface roles
+  and the reverse remote field.
+
+With disjoint fragments, all lower rules remain positive accepts under the
+default-drop chain and rule order stays semantically irrelevant, matching the
+accepted unordered `PayloadForwardDesiredState`.
+
+**Device-envelope gate:** the complete compiler still cannot be accepted yet.
+The recovered envelope concept can restrict source/destination prefixes,
+protocol and ports, while the final normalized grammar/lower contract remains
+unresolved. The current lower `PayloadForwardRuleSpec` intentionally models
+only remote prefix + direction/path state and therefore cannot honestly claim
+to enforce an enabled envelope carrying protocol/port restrictions.
+
+A future bounded compiler unit may explicitly cover **no-envelope** semantics
+only, but it must be labeled as an implementation slice, not silently redefine
+Release 1 product scope. Complete compiler acceptance requires the normalized
+Device envelope contract (or an explicit accepted product decision that the
+capability is not part of that release).
+
+No deny-rule ordering, nft jump graph or generic firewall AST is introduced
+merely to solve prefix overlap; canonical CIDR subtraction is the simpler
+candidate and must be proven against the existing point classifiers before
+materialization.
+
+###### Profile most-specific CIDR partition Calculator
+
+**Component type:** pure Direct Calculator. This is Profile classification
+in bulk form, **not** final effective permission and not nft compilation.
+
+**Implements:**
+- `VPNG0002-R2.R1.R2`;
+- `VPNG0002-R2.R3.R3`;
+- `VPNG0002-R2.R5.R1`;
+- `VPNG0004-R4.R1`.
+
+Input is the existing set of `PayloadProfileRequest` objects and, for inbound
+partitioning, one concrete `LogicalPathId`. Output is a canonical set of
+disjoint `(profile_id, remote_prefix_fragment)` entries.
+
+Outbound partition considers only outbound/bidirectional Profiles and applies
+the same global most-specific selection as `classify_outbound_profile`.
+Inbound partition first restricts to inbound/bidirectional Profiles containing
+the supplied ingress path, then applies the same most-specific selection as
+`classify_inbound_profile`.
+
+A broader Profile fragment is split by every more-specific prefix owned by a
+different candidate Profile. Nested prefixes belonging to the same Profile are
+semantically redundant for selection and may collapse. Exact same prefix
+owned by different candidate Profiles is an error, never arbitrary order.
+
+The partition is **Profile permission only**. Device envelope intersection,
+path-specific lower rules and protocol/port restrictions are downstream
+responsibilities. An envelope can narrow fragments but cannot use this
+Calculator to expand Profile permission.
+
+**Necessity:** positive-only nft rules must not rely on rule ordering or
+routing correctness to reproduce most-specific Profile selection. A disjoint
+partition provides an independently testable semantic basis for later lower
+rule generation.
+
+**Simplification:** use standard strict IPv4 CIDR subtraction/collapse only.
+No ACL AST, decision tree runtime, persistent prefix trie, rule ordering,
+network I/O or mutation.
+
+**Evidence:** rootless tests compare partition ownership against the existing
+point classifiers over every address in bounded test networks, including
+nested prefixes, default route, same-Profile redundancy and path-relative
+inbound selection.
+
+
+
+
+`/31` remain explicit prefix objects; `/32` is a plain IPv4 address string.
+The same forms are used by NEW daddr and RETURN saddr matches. The strict
+observer implementation gate is therefore open for all accepted IPv4 CIDR
+prefix lengths.
+
+
+
+
+
 `payload_postrouting` exists as the stable owner boundary for supported payload source-NAT
 realization. It is valid and intentionally empty when no accepted Device/path requires NAT.
 Its base-chain policy is `accept`; the presence of the chain alone never creates NAT.
