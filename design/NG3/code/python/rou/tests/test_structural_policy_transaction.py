@@ -170,6 +170,29 @@ class StructuralPolicyTransactionTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertIn("strict structural distance", result.diagnostic)
 
+    def test_fresh_confirmed_attempt_wins_over_prior_distance_regression(self):
+        a0, a1, b0, b1 = (Marker() for _ in range(4))
+        scripted = [
+            mutation(StructuralPolicyMutationStatus.STEP_APPLIED, a0, a1),
+            mutation(StructuralPolicyMutationStatus.CONFIRMED, b0, b1),
+        ]
+        distances = {
+            a0: 5,
+            a1: 4,
+            b0: 6,
+            b1: 0,
+        }
+
+        result, calls = self.run_script(scripted, distances)
+
+        self.assertEqual(
+            result.status,
+            StructuralPolicyTransactionStatus.CONFIRMED,
+        )
+        self.assertTrue(result.confirmed)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(result.final_distance, 0)
+
     def test_external_progress_between_attempts_is_allowed(self):
         a0, a1, b0, b1 = (Marker() for _ in range(4))
         scripted = [
