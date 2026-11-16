@@ -34,6 +34,7 @@ Implemented:
 - EXP-032-backed pure payload nft scaffold contract/comparison for exact fail-closed FORWARD and empty postrouting NAT base-chain metadata;
 - guarded physical payload nft scaffold bootstrap/repair that closes/rechecks the managed-netns ForwardingGate and refuses mutation through conflicts or unclassified nft objects;
 - EXP-033-backed normalized Device NAT intent and pure payload masquerade desired projection using exact current boundary/egress InterfaceIdentity values, without selecting external TOML grammar;
+- EXP-033-backed read-only authoritative NAT chain observation/comparison classifying exact current, missing, stale and conflicting masquerade rules against the normalized desired state; no NAT rule add/delete or mutation authority;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:

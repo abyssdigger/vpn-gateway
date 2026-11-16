@@ -90,6 +90,14 @@ from .payload_nat_desired import (
     PayloadNatProjectionError,
     build_payload_nat_desired_state,
 )
+from .payload_nat_observation import (
+    PAYLOAD_NAT_RULE_COMMENT,
+    ObservedPayloadMasquerade,
+    PayloadNatComparison,
+    PayloadNatObservationError,
+    PayloadNatRuleConflict,
+    compare_payload_nat,
+)
 from .payload_profile import (
     PayloadProfileProjectionError,
     PayloadProfileRequest,
@@ -228,6 +236,12 @@ __all__ = [
     "NftNamespaceObservation",
     "NftNamespaceStatus",
     "NumericResourcePool",
+    "PAYLOAD_NAT_RULE_COMMENT",
+    "ObservedPayloadMasquerade",
+    "PayloadNatComparison",
+    "PayloadNatObservationError",
+    "PayloadNatRuleConflict",
+    "compare_payload_nat",
     "PAYLOAD_FORWARD_CHAIN",
     "PAYLOAD_FORWARD_COMMENT",
     "PAYLOAD_NFT_SCAFFOLD",
