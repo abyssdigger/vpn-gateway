@@ -3,10 +3,10 @@ from __future__ import annotations
 import unittest
 
 from rou.binding import LogicalPathId
+from rou.route_priority import RoutePriorityMove
 from rou.route_priority_convergence import (
-    RoutePriorityAdd,
     RoutePriorityConvergenceError,
-    RoutePriorityDelete,
+    RoutePriorityDeleteDuplicate,
     plan_route_priority_convergence,
 )
 
@@ -16,106 +16,102 @@ B = LogicalPathId("oc", 0, 1)
 C = LogicalPathId("wg", 0, 0)
 
 
-def apply(observed, mutations):
+def apply(observed, steps):
     state = {path_id: set(metrics) for path_id, metrics in observed.items()}
-    for mutation in mutations:
-        if isinstance(mutation, RoutePriorityAdd):
+
+    for step in steps:
+        if isinstance(step, RoutePriorityDeleteDuplicate):
+            assert step.metric in state[step.path_id]
+            assert len(state[step.path_id]) > 1
+            state[step.path_id].remove(step.metric)
+        else:
+            assert isinstance(step, RoutePriorityMove)
+            assert state[step.path_id] == {step.from_metric}
             occupied = {
                 metric
                 for path_metrics in state.values()
                 for metric in path_metrics
             }
-            assert mutation.metric not in occupied
-            state[mutation.path_id].add(mutation.metric)
-        else:
-            assert isinstance(mutation, RoutePriorityDelete)
-            assert mutation.metric in state[mutation.path_id]
-            assert len(state[mutation.path_id]) > 1
-            state[mutation.path_id].remove(mutation.metric)
+            assert step.to_metric not in occupied
+
+            # A semantic Move models add-new -> verify -> delete-old. Both
+            # copies exist transiently; the eligible path is never absent.
+            state[step.path_id].add(step.to_metric)
+            assert state[step.path_id]
+            state[step.path_id].remove(step.from_metric)
 
         assert all(path_metrics for path_metrics in state.values())
+
     return state
 
 
 class RoutePriorityConvergenceTests(unittest.TestCase):
-    def test_clean_swap_uses_safe_add_delete_sequence(self):
+    def test_clean_swap_reuses_semantic_make_before_break_moves(self):
         observed = {A: (10,), B: (20,)}
         desired = {A: 20, B: 10}
-        mutations = plan_route_priority_convergence(
+        steps = plan_route_priority_convergence(
             observed, desired, (10, 20, 30)
         )
         self.assertEqual(
-            mutations,
+            steps,
             (
-                RoutePriorityAdd(A, 30),
-                RoutePriorityDelete(A, 10),
-                RoutePriorityAdd(B, 10),
-                RoutePriorityDelete(B, 20),
-                RoutePriorityAdd(A, 20),
-                RoutePriorityDelete(A, 30),
+                RoutePriorityMove(A, 10, 30),
+                RoutePriorityMove(B, 20, 10),
+                RoutePriorityMove(A, 30, 20),
             ),
         )
-        self.assertEqual(
-            apply(observed, mutations),
-            {A: {20}, B: {10}},
-        )
+        self.assertEqual(apply(observed, steps), {A: {20}, B: {10}})
 
-    def test_reobserved_partial_add_does_not_replay_add(self):
+    def test_reobserved_partial_add_becomes_safe_duplicate_cleanup(self):
         observed = {A: (10, 30), B: (20,)}
         desired = {A: 20, B: 10}
-        mutations = plan_route_priority_convergence(
+        steps = plan_route_priority_convergence(
             observed, desired, (10, 20, 30)
         )
-        self.assertEqual(mutations[0], RoutePriorityDelete(A, 10))
-        self.assertNotIn(RoutePriorityAdd(A, 30), mutations)
-        self.assertEqual(
-            apply(observed, mutations),
-            {A: {20}, B: {10}},
-        )
+        self.assertEqual(steps[0], RoutePriorityDeleteDuplicate(A, 10))
+        self.assertNotIn(RoutePriorityMove(A, 10, 30), steps)
+        self.assertEqual(apply(observed, steps), {A: {20}, B: {10}})
 
-    def test_reobserved_completed_add_only_needs_stale_delete(self):
+    def test_reobserved_completed_add_only_needs_stale_cleanup(self):
         observed = {A: (10, 30), B: (20,)}
         desired = {A: 30, B: 20}
-        mutations = plan_route_priority_convergence(
+        steps = plan_route_priority_convergence(
             observed, desired, (10, 20, 30)
         )
-        self.assertEqual(mutations, (RoutePriorityDelete(A, 10),))
-        self.assertEqual(
-            apply(observed, mutations),
-            {A: {30}, B: {20}},
-        )
+        self.assertEqual(steps, (RoutePriorityDeleteDuplicate(A, 10),))
+        self.assertEqual(apply(observed, steps), {A: {30}, B: {20}})
 
     def test_reobserved_completed_move_continues_from_actual_state(self):
         observed = {A: (30,), B: (20,)}
         desired = {A: 20, B: 10}
-        mutations = plan_route_priority_convergence(
+        steps = plan_route_priority_convergence(
             observed, desired, (10, 20, 30)
         )
         self.assertEqual(
-            mutations,
+            steps,
             (
-                RoutePriorityAdd(B, 10),
-                RoutePriorityDelete(B, 20),
-                RoutePriorityAdd(A, 20),
-                RoutePriorityDelete(A, 30),
+                RoutePriorityMove(B, 20, 10),
+                RoutePriorityMove(A, 30, 20),
             ),
         )
-        self.assertEqual(
-            apply(observed, mutations),
-            {A: {20}, B: {10}},
-        )
+        self.assertEqual(apply(observed, steps), {A: {20}, B: {10}})
 
-    def test_duplicate_can_supply_working_space_when_no_metric_is_free(self):
+    def test_duplicate_frees_other_paths_target_before_clean_planning(self):
         observed = {A: (10, 30), B: (20,)}
         desired = {A: 20, B: 10}
-        mutations = plan_route_priority_convergence(
+        steps = plan_route_priority_convergence(
             observed, desired, (10, 20, 30)
         )
-        self.assertEqual(mutations[0], RoutePriorityDelete(A, 10))
-        self.assertEqual(
-            apply(observed, mutations),
-            {A: {20}, B: {10}},
+        self.assertEqual(steps[0], RoutePriorityDeleteDuplicate(A, 10))
+
+    def test_nonblocking_duplicate_retains_lower_metric_deterministically(self):
+        observed = {A: (10, 30), B: (20,)}
+        desired = {A: 40, B: 20}
+        steps = plan_route_priority_convergence(
+            observed, desired, (10, 20, 30, 40)
         )
+        self.assertEqual(steps[0], RoutePriorityDeleteDuplicate(A, 30))
+        self.assertEqual(apply(observed, steps), {A: {40}, B: {20}})
 
     def test_exact_desired_state_is_noop(self):
         self.assertEqual(
@@ -130,7 +126,7 @@ class RoutePriorityConvergenceTests(unittest.TestCase):
     def test_cycle_without_free_metric_or_duplicate_is_rejected(self):
         with self.assertRaisesRegex(
             RoutePriorityConvergenceError,
-            "free owned metric or a safely removable duplicate",
+            "free owned metric",
         ):
             plan_route_priority_convergence(
                 {A: (10,), B: (20,)},
@@ -178,6 +174,17 @@ class RoutePriorityConvergenceTests(unittest.TestCase):
         ):
             plan_route_priority_convergence(
                 {A: (10, 99)},
+                {A: 10},
+                (10, 20),
+            )
+
+    def test_duplicate_exact_metric_for_one_path_is_rejected(self):
+        with self.assertRaisesRegex(
+            RoutePriorityConvergenceError,
+            "duplicate route metrics",
+        ):
+            plan_route_priority_convergence(
+                {A: (10, 10)},
                 {A: 10},
                 (10, 20),
             )

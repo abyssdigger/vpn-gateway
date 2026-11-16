@@ -50,9 +50,8 @@ from .route_priority import (
     plan_route_priority_moves,
 )
 from .route_priority_convergence import (
-    RoutePriorityAdd,
     RoutePriorityConvergenceError,
-    RoutePriorityDelete,
+    RoutePriorityDeleteDuplicate,
     plan_route_priority_convergence,
 )
 
@@ -76,9 +75,8 @@ __all__ = [
     "PayloadProfileRequest",
     "ProfileClassificationError",
     "ProfileStructuralIntent",
-    "RoutePriorityAdd",
     "RoutePriorityConvergenceError",
-    "RoutePriorityDelete",
+    "RoutePriorityDeleteDuplicate",
     "RoutePriorityMove",
     "RoutePriorityPlanError",
     "SelectorBindingState",

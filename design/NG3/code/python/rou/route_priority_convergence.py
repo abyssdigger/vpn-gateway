@@ -4,6 +4,11 @@ from dataclasses import dataclass
 from typing import Iterable, Mapping
 
 from .binding import LogicalPathId
+from .route_priority import (
+    RoutePriorityMove,
+    RoutePriorityPlanError,
+    plan_route_priority_moves,
+)
 
 
 class RoutePriorityConvergenceError(ValueError):
@@ -11,113 +16,100 @@ class RoutePriorityConvergenceError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
-class RoutePriorityAdd:
+class RoutePriorityDeleteDuplicate:
+    """Delete one already-observed redundant copy of an eligible path."""
+
     path_id: LogicalPathId
     metric: int
 
 
-@dataclass(frozen=True, slots=True)
-class RoutePriorityDelete:
-    path_id: LogicalPathId
-    metric: int
-
-
-RoutePriorityMutation = RoutePriorityAdd | RoutePriorityDelete
+RoutePriorityConvergenceStep = RoutePriorityDeleteDuplicate | RoutePriorityMove
 
 
 def plan_route_priority_convergence(
     observed: Mapping[LogicalPathId, Iterable[int]],
     desired: Mapping[LogicalPathId, int],
     working_metrics: Iterable[int],
-) -> tuple[RoutePriorityMutation, ...]:
-    """Plan safe convergence from one fresh owned-route observation.
+) -> tuple[RoutePriorityConvergenceStep, ...]:
+    """Plan recovery/convergence from one fresh owned-route observation.
 
     The priority-only contract requires identical logical-path membership.
-    A path may be observed at more than one owned metric after a partially
-    completed make-before-break move. The returned mutations never delete
-    the last observed route copy for an eligible path.
+    A path may be observed at multiple owned metrics after a partially
+    completed make-before-break move.
 
-    The caller must execute the plan transactionally at its own boundary and
-    re-observe authoritative state after any partial failure before asking for
-    another plan. A returned plan is not postcondition evidence.
+    Duplicate cleanup is safe because it deletes only a copy of a path that
+    remains represented by another already-observed copy. Once one metric per
+    path remains, the existing RoutePriorityMove primitive is used. A Move is
+    intentionally semantic: its Executor realization is add-new -> verify ->
+    delete-old, not two independently replayable raw commands.
+
+    After a partial execution failure the caller must discard the remaining
+    steps, re-observe authoritative lower state and request a new plan.
+    Returning a plan is never postcondition evidence.
     """
     state = _normalize_observed(observed)
     target = dict(desired)
     metrics = _validate_inputs(state, target, working_metrics)
-    mutations: list[RoutePriorityMutation] = []
+    steps: list[RoutePriorityConvergenceStep] = []
 
-    while not _is_desired(state, target):
-        # If a path already owns its desired metric, every other copy is stale
-        # for this pure-priority target and may be removed without breaking
-        # path continuity.
-        cleanup = sorted(
-            (metric, path_id)
-            for path_id, path_metrics in state.items()
-            if target[path_id] in path_metrics and len(path_metrics) > 1
-            for metric in path_metrics
-            if metric != target[path_id]
-        )
-        if cleanup:
-            metric, path_id = cleanup[0]
-            _delete_copy(state, path_id, metric, mutations)
-            continue
+    desired_owner = {
+        metric: path_id
+        for path_id, metric in target.items()
+    }
 
-        occupied = _occupied_metrics(state)
+    # Normalize a re-observed partial make-before-break state to exactly one
+    # already-confirmed copy per path without ever deleting the last copy.
+    while any(len(path_metrics) > 1 for path_metrics in state.values()):
+        candidates: list[tuple[int, int, LogicalPathId, int]] = []
 
-        # A failed prior transaction may have left a duplicate copy occupying
-        # another path's desired metric. If the occupant has another copy,
-        # deleting this stale copy is already make-before-break safe and is
-        # preferable to creating yet another scratch copy.
-        unblock = sorted(
-            (target[path_id], path_id, occupied[target[path_id]])
-            for path_id in state
-            if target[path_id] not in state[path_id]
-            and target[path_id] in occupied
-            and len(state[occupied[target[path_id]]]) > 1
-        )
-        if unblock:
-            metric, _waiting_path, occupant = unblock[0]
-            _delete_copy(state, occupant, metric, mutations)
-            continue
+        for path_id in sorted(state):
+            path_metrics = state[path_id]
+            if len(path_metrics) <= 1:
+                continue
 
-        occupied = _occupied_metrics(state)
-        free = sorted(metrics - set(occupied))
+            own_target = target[path_id]
+            for metric in sorted(path_metrics):
+                # If this path already owns its desired metric, never select
+                # that desired copy as redundant.
+                if metric == own_target:
+                    continue
 
-        # Prefer a desired metric that is already free.
-        direct = sorted(
-            (target[path_id], path_id)
-            for path_id in state
-            if target[path_id] not in state[path_id]
-            and target[path_id] in free
-        )
-        if direct:
-            metric, path_id = direct[0]
-            _add_copy(state, path_id, metric, mutations)
-            continue
+                owner = desired_owner.get(metric)
+                blocks_other_target = owner is not None and owner != path_id
 
-        if not free:
+                # First free metrics desired by another path. Otherwise remove
+                # the highest stale metric so the currently better copy is
+                # retained while recovery continues.
+                if blocks_other_target:
+                    candidates.append((0, metric, path_id, metric))
+                else:
+                    candidates.append((1, -metric, path_id, metric))
+
+        if not candidates:
             raise RoutePriorityConvergenceError(
-                "priority convergence requires a free owned metric or a safely removable duplicate"
+                "duplicate normalization found no safely removable route copy"
             )
 
-        # Remaining mismatch is a cycle. Make one scratch copy of the path
-        # occupying the lowest blocked desired metric. The next iteration can
-        # safely remove the old copy and continue from the newly freed metric.
-        blocked = sorted(
-            (target[path_id], path_id, occupied[target[path_id]])
-            for path_id in state
-            if target[path_id] not in state[path_id]
-            and target[path_id] in occupied
-        )
-        if not blocked:
+        _priority, _metric_key, path_id, metric = min(candidates)
+        if len(state[path_id]) <= 1:
             raise RoutePriorityConvergenceError(
-                "convergence invariant failed: no progress candidate"
+                f"refusing to delete the last observed route for {path_id!r}"
             )
+        state[path_id].remove(metric)
+        steps.append(RoutePriorityDeleteDuplicate(path_id=path_id, metric=metric))
 
-        _blocked_metric, _waiting_path, occupant = blocked[0]
-        _add_copy(state, occupant, free[0], mutations)
+    current = {
+        path_id: next(iter(path_metrics))
+        for path_id, path_metrics in state.items()
+    }
 
-    return tuple(mutations)
+    try:
+        moves = plan_route_priority_moves(current, target, metrics)
+    except RoutePriorityPlanError as exc:
+        raise RoutePriorityConvergenceError(str(exc)) from exc
+
+    steps.extend(moves)
+    return tuple(steps)
 
 
 def _normalize_observed(
@@ -164,77 +156,32 @@ def _validate_inputs(
             "desired assignment contains duplicate metrics"
         )
 
-    desired_outside = sorted(set(desired_values) - metrics)
-    if desired_outside:
+    outside_desired = sorted(set(desired_values) - metrics)
+    if outside_desired:
         raise RoutePriorityConvergenceError(
-            f"desired assignment uses metric outside owned working set: {desired_outside}"
+            f"desired assignment uses metric outside owned working set: {outside_desired}"
         )
 
-    for path_id, path_metrics in state.items():
+    occupied: dict[int, LogicalPathId] = {}
+    for path_id in sorted(state):
+        path_metrics = state[path_id]
         if not path_metrics:
             raise RoutePriorityConvergenceError(
                 f"observed path {path_id!r} has no route; priority-only continuity is not provable"
             )
+
         outside = sorted(path_metrics - metrics)
         if outside:
             raise RoutePriorityConvergenceError(
                 f"observed path {path_id!r} uses metric outside owned working set: {outside}"
             )
 
-    _occupied_metrics(state)
-    return metrics
-
-
-def _occupied_metrics(
-    state: Mapping[LogicalPathId, set[int]],
-) -> dict[int, LogicalPathId]:
-    occupied: dict[int, LogicalPathId] = {}
-    for path_id in sorted(state):
-        for metric in sorted(state[path_id]):
-            owner = occupied.get(metric)
-            if owner is not None and owner != path_id:
+        for metric in sorted(path_metrics):
+            other = occupied.get(metric)
+            if other is not None and other != path_id:
                 raise RoutePriorityConvergenceError(
                     f"owned metric {metric} is observed for multiple logical paths"
                 )
             occupied[metric] = path_id
-    return occupied
 
-
-def _is_desired(
-    state: Mapping[LogicalPathId, set[int]],
-    desired: Mapping[LogicalPathId, int],
-) -> bool:
-    return all(state[path_id] == {desired[path_id]} for path_id in state)
-
-
-def _add_copy(
-    state: dict[LogicalPathId, set[int]],
-    path_id: LogicalPathId,
-    metric: int,
-    mutations: list[RoutePriorityMutation],
-) -> None:
-    occupied = _occupied_metrics(state)
-    if metric in occupied:
-        raise RoutePriorityConvergenceError(
-            f"add destination metric {metric} is not free"
-        )
-    state[path_id].add(metric)
-    mutations.append(RoutePriorityAdd(path_id=path_id, metric=metric))
-
-
-def _delete_copy(
-    state: dict[LogicalPathId, set[int]],
-    path_id: LogicalPathId,
-    metric: int,
-    mutations: list[RoutePriorityMutation],
-) -> None:
-    if metric not in state[path_id]:
-        raise RoutePriorityConvergenceError(
-            f"delete source metric {metric} is not observed for {path_id!r}"
-        )
-    if len(state[path_id]) <= 1:
-        raise RoutePriorityConvergenceError(
-            f"refusing to delete the last observed route for {path_id!r}"
-        )
-    state[path_id].remove(metric)
-    mutations.append(RoutePriorityDelete(path_id=path_id, metric=metric))
+    return metrics
