@@ -131,29 +131,35 @@ class RoutePriorityProfileTests(unittest.TestCase):
         self.assertFalse(result.domains[0].confirmed)
         self.assertTrue(result.domains[1].confirmed)
 
-    def test_attempt_error_can_still_end_confirmed_if_final_state_is_exact(self):
-        class ApplyThenRaiseBackend(FakeBackend):
+    def test_attempt_failure_can_still_end_confirmed_if_final_state_is_exact(self):
+        class ApplyWholeDesiredThenRaiseBackend(FakeBackend):
             def move_route_priority(self, move):
                 self.mutation_calls += 1
-                self.routes[move.path_id].add(move.to_metric)
-                self.routes[move.path_id].remove(move.from_metric)
-                if self.mutation_calls == 1:
-                    raise RuntimeError("transport reported failure after apply")
+                # Simulate a transport/backend error reported after the
+                # external system has nevertheless reached the full desired
+                # postcondition. The Executor attempt must still report its
+                # mutation failure, while the Profile coordinator bases final
+                # success on a later fresh authoritative observation.
+                self.routes[A] = {20}
+                self.routes[B] = {10}
+                raise RuntimeError("transport reported failure after apply")
 
-        backend = ApplyThenRaiseBackend({A: (10,), B: (20,)})
+        backend = ApplyWholeDesiredThenRaiseBackend({A: (10,), B: (20,)})
 
         result = converge_route_priority_profile_once(
             (request("p", "10.1.0.0/16", backend),)
         )
 
-        # First attempt stops after an error, so state is only partially moved
-        # and cannot yet equal the complete desired mapping.
         self.assertEqual(
             result.status,
-            RoutePriorityProfileStatus.UNCONFIRMED,
+            RoutePriorityProfileStatus.SUCCESS,
         )
-        self.assertFalse(result.domains[0].confirmed)
-        self.assertIsNotNone(result.domains[0].attempt_error)
+        outcome = result.domains[0]
+        self.assertTrue(outcome.confirmed)
+        self.assertIsNone(outcome.attempt_error)
+        self.assertIsNotNone(outcome.attempt)
+        self.assertEqual(outcome.attempt.status.value, "apply_failed")
+        self.assertIsNotNone(outcome.attempt.error)
 
     def test_no_domains_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "at least one"):
