@@ -608,7 +608,8 @@ checkpoint.
 ## Session-safety cadence
 
 Long development sessions may be interrupted by the execution environment after roughly
-45 minutes. Do not rely on subjective wall-clock tracking.
+45 minutes. The CD cycle is therefore a **session-safety window**, not a logical unit of
+design/development work and not a release/snapshot boundary.
 
 Each autonomous design/development cycle has a **cycle interval**:
 
@@ -616,66 +617,84 @@ Each autonomous design/development cycle has a **cycle interval**:
 - otherwise the default cycle interval is **35 minutes**.
 
 Call the selected value `CYCLE_INTERVAL`. After it is chosen for the cycle, all cadence
-logic below refers only to `CYCLE_INTERVAL`; do not substitute the default value back into
-later decisions.
+logic below refers only to `CYCLE_INTERVAL`.
 
-Each autonomous design/development cycle uses **Git commit timestamps as the checkpoint clock**
-and a dedicated GitHub-visible **code-cycle branch** as the external activity record.
+### Logical work versus CD window
+
+Logical work units, reviews, experiments, implementation slices and snapshots have their own
+natural boundaries independent of the CD window.
+
+- A logically complete block may be committed, reviewed and published as a snapshot at any
+  point inside a CD cycle.
+- Reaching the end of a CD cycle does **not** imply that a snapshot should be created.
+- Snapshot publication must not be delayed merely to coincide with the CD boundary.
+- Conversely, unfinished logical work may remain on the active cycle branch across a CD
+  boundary; the handoff exists precisely so the next cycle can resume it without re-reviewing
+  the whole repository.
+- If the current logical block completes materially before the nominal CD boundary and there
+  is no useful reason to start another block, the cycle may end early.
+- Large overruns beyond `CYCLE_INTERVAL` are undesirable because they increase the risk that
+  the interface/session fails before a usable handoff is delivered.
+
+### Cycle branch and clock
+
+Each CD cycle uses Git commit timestamps as an objective elapsed-time clock and a dedicated
+GitHub-visible working branch as the externally durable work trail.
 
 At the start of a cycle:
 
 1. determine and record `CYCLE_INTERVAL`;
-2. create or select a dedicated branch for that autonomous cycle, named clearly enough to
-   identify the current review/design/development cycle;
-3. all requirement, design, implementation, test, evidence, review and fix commits for the
-   cycle are written to that branch;
-4. **every commit must be present on GitHub immediately after it is created**; do not keep
-   a local-only sequence of commits for later batch push;
-5. the first commit created in the cycle becomes `CYCLE_START_COMMIT`;
-6. record its **committer timestamp** `T0`;
-7. after every subsequent commit in that cycle, read that commit's **committer timestamp**
-   `Tn` from GitHub;
-8. compute `Tn - T0`;
-9. if the elapsed time is greater than or equal to `CYCLE_INTERVAL`, set
-   `CHECKPOINT_PENDING=true`.
+2. create or select the dedicated branch for that CD window;
+3. all requirement, design, implementation, test, evidence, review and fix commits produced
+   during the window are written to that branch;
+4. every commit must be present on GitHub immediately after creation;
+5. the first commit created in the window becomes `CYCLE_START_COMMIT`;
+6. record its committer timestamp `T0`;
+7. after later commits read their GitHub committer timestamps `Tn` and track `Tn - T0`.
 
-The cycle branch is the authoritative externally observable activity trail. Chat/UI
-availability is not used to infer whether autonomous work is still running.
+The branch is the durable record of work. The CD handoff is intentionally **not** a Git
+project artifact.
 
-When `CHECKPOINT_PENDING=true`:
+### Handoff trigger and behavior
 
-- do not start another review unit;
-- finish the **current review unit completely** at its current scope:
-  requirement/design gates, implementation when applicable, required tests/evidence,
-  expert review and accepted fixes;
-- create/push the final checkpoint commit for that unit;
-- post a brief human-facing checkpoint/discussion;
+As elapsed time approaches `CYCLE_INTERVAL`, prioritize leaving enough execution margin to
+produce a reliable handoff. Do not intentionally run far past the interval merely to finish a
+large logical unit.
+
+When the session-safety boundary is reached or work is otherwise stopped for the current
+chat turn:
+
+- stop at the nearest safe technical point; do not manufacture a logical completion;
+- leave all already-created commits published on the active branch;
+- do not create a special Git checkpoint commit unless the work itself naturally requires a
+  commit;
+- do not create a snapshot solely because the CD window ended;
+- produce a compact **handoff file in the chat interface**, not in Git;
 - stop autonomous development until the next user turn.
 
-The selected `CYCLE_INTERVAL` is a checkpoint trigger, not a hard execution limit. The
-remaining execution margin is used to finish the current iteration cleanly.
-
-The checkpoint message must include:
+The handoff file should contain only enough context to resume cheaply:
 
 - `CYCLE_INTERVAL`;
-- `CYCLE_START_COMMIT` and its timestamp;
-- final checkpoint commit and timestamp;
-- elapsed cycle time;
-- what was completed;
-- tests/experiments/reviews that passed or failed;
-- the exact unfinished or blocked item, if any;
-- decisions that genuinely require human agreement;
-- the next intended review unit;
-- explicit current lists of all `decomp` links (with `pending|resolved` state), active
-  `unreal` links, and `[rejected_closure]` requirement states, with `none` written for empty
-  categories.
+- active branch and current branch head;
+- base/main snapshot from which the branch started when relevant;
+- what logical work was completed during the window;
+- exact unfinished work and current technical state;
+- tests/experiments/reviews that are currently green/red or still pending;
+- the short plan for the **current logical development unit**, not a new plan invented merely
+  for the next CD window;
+- decisions genuinely requiring human agreement, if any;
+- current accumulated requirement-state inventory: every `decomp` link with
+  `pending|resolved`, active `unreal`, and `[rejected_closure]`.
 
-A new autonomous cycle starts only after the next user turn, with a new cycle branch
-(or a clearly reset existing cycle branch when explicitly chosen), a newly selected
-`CYCLE_INTERVAL`, and a new `CYCLE_START_COMMIT`.
+The handoff is operational continuity metadata. It should not be committed to the repository
+unless its content independently becomes a real project artifact.
 
-This is a session-preservation mechanism, not a reason to create extra review documents or
-to interrupt a review unit halfway through.
+A new CD cycle starts after the next user turn. It may continue the same logical development
+unit on a new cycle branch or a clearly reset continuation branch, using the previous handoff
+to avoid a full repository review.
+
+This mechanism exists only to survive chat/session limits. It must not distort logical work
+boundaries, snapshot timing, review structure or repository history.
 
 ## Completion criteria
 
