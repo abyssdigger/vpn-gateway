@@ -11,7 +11,11 @@ from rou.forwarding_gate import ForwardingGateState
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.local_publication_policy import LocalPublicationDesiredState
-from rou.nft_namespace_inventory import parse_nft_namespace_ruleset
+from rou.nft_namespace_inventory import (
+    NftNamespaceObservation,
+    NftNamespaceStatus,
+    parse_nft_namespace_ruleset,
+)
 from rou.payload_forward_desired import PayloadForwardDesiredState
 from rou.payload_nat_desired import PayloadNatDesiredState
 from rou.payload_routing_desired import (
@@ -202,6 +206,33 @@ class StructuralPolicyMutationTests(unittest.TestCase):
             NG3_LINUX_POLICY_PLATFORM,
         )
         return gate, result
+
+    def test_absent_invariant_scaffold_is_precondition_not_conflict(self):
+        backend = FakeBackend(
+            StructuralPolicyPhysicalSnapshot(
+                interfaces=(HOST, VPN),
+                routing=StructuralRoutingObservation(
+                    routes=(),
+                    rules=(),
+                    conflicts=(),
+                ),
+                nft=NftNamespaceObservation(
+                    status=NftNamespaceStatus.ABSENT,
+                ),
+            )
+        )
+        gate, result = self.attempt(backend)
+
+        self.assertEqual(
+            result.status,
+            StructuralPolicyMutationStatus.PRECONDITION_FAILED,
+        )
+        self.assertEqual(
+            result.diagnostic,
+            "invariant nft scaffold is not confirmed",
+        )
+        self.assertEqual(backend.actions, [])
+        self.assertEqual(gate.state, ForwardingGateState.DISABLED)
 
     def test_one_nonfinal_step_keeps_forwarding_closed(self):
         backend = FakeBackend(
