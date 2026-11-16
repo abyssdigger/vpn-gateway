@@ -309,9 +309,12 @@ Recovered value grammar also used strict port forms:
 
 with inclusive `1..65535` bounds and rejection of reversed/invalid ranges.
 
-However the normative NG1 config document explicitly left the **final human-facing
-traffic-envelope TOML grammar unresolved**. These examples are prototype evidence, not
-automatic NG3 schema.
+NG3 now fixes the **semantic** capability as an ordered Device firewall with IN/OUT,
+ALLOW/DENY/REJECT, optional L3/L4 selectors, preserved user order, permissive omission and
+DROP fallthrough for an explicit policy. The exact **human-facing encoding** remains
+unresolved and is intentionally deferred to a configuration-format review. The historical
+`traffic_envelope` TOML below/above is prototype syntax evidence only, not automatic NG3
+schema.
 
 ### Device publications
 
@@ -706,8 +709,8 @@ This recovered config model does not require NG3 to restore:
 - NG1 runtime state classes;
 - NG1 metric allocator implementation;
 - transport publication machinery;
-- any guessed Device traffic-envelope grammar (the concept is retained; grammar remains
-  unresolved);
+- any guessed Device-firewall external grammar (ordered firewall semantics are accepted;
+  exact encoding remains unresolved);
 - any guessed Device publication grammar (the concept is retained; grammar remains
   unresolved);
 - old process topology.
