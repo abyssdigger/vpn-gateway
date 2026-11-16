@@ -60,6 +60,11 @@ from .route_priority_executor import (
     RoutePrioritySnapshot,
     converge_route_priority_once,
 )
+from .route_priority_inventory import (
+    RoutePriorityInventoryError,
+    RoutePriorityPathRoute,
+    parse_ip_route_priority_snapshot,
+)
 
 __all__ = [
     "AvailabilityConfirmationState",
@@ -85,6 +90,8 @@ __all__ = [
     "RoutePriorityDeleteDuplicate",
     "RoutePriorityExecutionResult",
     "RoutePriorityExecutionStatus",
+    "RoutePriorityInventoryError",
+    "RoutePriorityPathRoute",
     "RoutePrioritySnapshot",
     "RoutePriorityMove",
     "RoutePriorityPlanError",
@@ -99,6 +106,7 @@ __all__ = [
     "classify_outbound_profile",
     "converge_route_priority_once",
     "parse_ip_link_inventory",
+    "parse_ip_route_priority_snapshot",
     "plan_route_priority_convergence",
     "plan_route_priority_moves",
     "parse_structural_config",
