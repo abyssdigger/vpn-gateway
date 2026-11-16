@@ -56,6 +56,8 @@ NG3 requirement merely because it existed before.
 
    **[VPNG-R1.R2.R4.R2]** *Чтобы пользователь мог заранее описать будущую или временно неиспользуемую часть конфигурации без ее фактической активации.* | Device и Profile должны иметь явное `enabled` состояние без неявного default; disabled объект может существовать как именованный placeholder и не должен сам по себе создавать active routing/binding behavior.
 
+    **[VPNG-R1.R2.R4.R2.R1]** *Чтобы placeholder не требовал преждевременно заполнять еще не определенную будущую конфигурацию.* | Для `enabled = false` остальные поля Device/Profile могут отсутствовать и не должны проходить глубокую semantic validation, кроме корректности самой внешней структуры и идентичности объекта.
+
    **[VPNG-R1.R2.R4.R3]** *Чтобы один и тот же внешний VPN/network resource можно было переиспользовать в нескольких независимых пользовательских сетевых потребностях.* | Device должен быть отдельной от Profile сущностью; один Device может быть referenced несколькими Profiles, а Device-specific binding expectations не должны дублироваться внутри каждого Profile.
 
    **[VPNG-R1.R2.R4.R4]** *Чтобы Profile оставался описанием пользовательского намерения, а не снимком текущей Linux-реализации.* | Enabled Profile должен явно задавать direction, непустой набор remote destinations и непустой ordered список Device IDs; Profile не должен требовать от пользователя задания runtime interface names, Linux metrics или внутренних route/rule/firewall объектов.
