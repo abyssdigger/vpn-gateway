@@ -234,6 +234,12 @@ from .payload_routing_compare import (
     PayloadRoutingComparisonError,
     compare_payload_routing,
 )
+from .structural_policy_plan import (
+    StructuralPolicyMutationStep,
+    StructuralPolicyPlanError,
+    StructuralPolicyStepKind,
+    select_structural_policy_step,
+)
 from .network_policy_layout import (
     NetworkPolicyLayout,
     NetworkPolicyLayoutError,
@@ -485,6 +491,9 @@ __all__ = [
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
+    "StructuralPolicyMutationStep",
+    "StructuralPolicyPlanError",
+    "StructuralPolicyStepKind",
     "StructuralRoutingInventoryError",
     "StructuralRoutingObservation",
     "SubprocessCommandRunner",
@@ -501,6 +510,7 @@ __all__ = [
     "build_inbound_profile_partition",
     "build_outbound_profile_partition",
     "compare_payload_nft_scaffold",
+    "select_structural_policy_step",
     "compare_payload_routing",
     "converge_device_firewall_step_once",
     "converge_forwarding_gate_once",
