@@ -38,6 +38,7 @@ Current trace:
 | NetworkPolicyAdapter/Executor owned route-key inventory projection | `route_priority_inventory.py` | `NG3-2026-11-16-route-priority-inventory-code-review.md` |
 | NetworkPolicyExecutor bounded physical iproute2 priority backend | `iproute_priority_backend.py` | `NG3-2026-11-16-iproute-priority-backend-code-review.md` |
 | Profile-level multi-domain priority coordinator | `route_priority_profile.py` | `NG3-2026-11-16-route-priority-profile-coordinator-review.md` |
+| lower Adapter route-priority realization contract | `route_priority_realization.py` | `NG3-2026-11-16-route-priority-realization-contract-review.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
@@ -1585,6 +1586,29 @@ unconfirmed until structural realization/reconciliation can establish the requir
 
 This boundary also means that current `RoutePriorityPathRoute`, table/protocol values and
 metric working space are lower internal contracts/evidence, not new product knobs.
+
+The executable lower realization contract represents that internal data as:
+
+```text
+RoutePriorityDomainRealization:
+    RoutePriorityDomainId
+    table
+    owner_protocol
+    path_routes[]
+    RoutePriorityMetricSpace
+
+RoutePriorityMetricSpace:
+    preference_slots[]  # strictly increasing Linux metrics
+    scratch_metrics[]   # disjoint owned working space
+```
+
+Semantic `ordered_paths` are mapped to `preference_slots` in order. Because Linux prefers
+the lower route metric, the preference slots must be strictly increasing numerically.
+Multi-path realization requires at least one disjoint scratch metric so a cyclic permutation
+can preserve make-before-break behavior.
+
+The contract validates the internal representation but intentionally does not choose table,
+protocol or metric values. Their allocation remains a lower Adapter responsibility.
 
 # 10. NetworkPolicyExecutor
 
