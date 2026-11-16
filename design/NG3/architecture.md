@@ -37,6 +37,7 @@ Current trace:
 | NetworkPolicyExecutor single-attempt observe/apply/re-observe contract | `route_priority_executor.py` | `NG3-2026-11-16-route-priority-executor-attempt-code-review.md` |
 | NetworkPolicyAdapter/Executor owned route-key inventory projection | `route_priority_inventory.py` | `NG3-2026-11-16-route-priority-inventory-code-review.md` |
 | NetworkPolicyExecutor bounded physical iproute2 priority backend | `iproute_priority_backend.py` | `NG3-2026-11-16-iproute-priority-backend-code-review.md` |
+| Profile-level multi-domain priority coordinator | `route_priority_profile.py` | `NG3-2026-11-16-route-priority-profile-coordinator-review.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
@@ -1634,6 +1635,11 @@ Therefore:
   path remains represented and no ineligible path is introduced;
 - completion of a Profile-level priority change is confirmed only after all affected
   route-key domains have fresh postconditions matching the same desired logical-path order;
+- coordinator execution is deterministic over a canonical destination order, performs no
+  hidden retry, and does not infer Profile success from per-domain command return values;
+- after all bounded domain attempts finish, the coordinator performs a second fresh
+  verification pass across every affected domain; only that final aggregate postcondition
+  may mark the Profile priority change confirmed;
 - failure in one domain does not permit stale-plan replay in that or another domain; each
   further attempt starts from fresh observation of the domain it will mutate.
 

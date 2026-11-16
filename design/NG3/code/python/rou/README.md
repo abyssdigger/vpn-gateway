@@ -20,6 +20,7 @@ Implemented:
 - single-attempt route-priority Executor contract with mandatory re-observation after failure and fresh final postcondition verification;
 - strict owned route-key inventory projection from current iproute2 JSON and current interface/path identity;
 - bounded physical iproute2 route-priority backend with link-sandwiched observation, whole-domain verification and exact add/delete commands;
+- Profile-level multi-domain priority coordinator with deterministic domain order and final fresh verification of every destination domain;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
