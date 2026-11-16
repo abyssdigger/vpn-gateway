@@ -1216,6 +1216,46 @@ target and reports technical reply/no-reply/local-error facts. The Agent maps th
 TCP, UDP, HTTP and protocol-native liveness remain future possible Driver implementations,
 not current capabilities.
 
+## 8.1. Linux probe-plane implementation evidence gate
+
+Historical experiments constrain, but do not fully select, the Linux implementation behind
+the ICMP Driver.
+
+Reusable evidence:
+
+- EXP-024 proved on privileged CI and Debian 13 target that a probe process can be isolated
+  selectively inside the shared managed namespace by capturing process identity on OUTPUT
+  and carrying it into reverse INPUT through a dedicated conntrack mark;
+- EXP-024 also disproved `meta skuid` on INPUT as a usable receiving-socket discriminator
+  for this purpose;
+- EXP-025 proved on privileged CI and Debian 13 target that the marked conntrack entry can
+  survive concrete interface-generation replacement and be inherited by a later probe that
+  deliberately reuses the same tuple/ICMP identifier;
+- therefore exact path/interface-generation RPDB/nft regeneration alone is insufficient to
+  establish fresh probe-flow identity;
+- EXP-026 proved in privileged CI that deleting only the dedicated probe conntrack class by
+  mark can break that stale inheritance while preserving differently marked control state,
+  but the experiment record still lacks Debian 13 target confirmation.
+
+Consequences for implementation:
+
+```text
+if Linux ICMP Driver uses EXP-024-style conntrack-carried process identity
+    ->
+it must implement and verify an explicit probe-generation invalidation boundary
+    ->
+it must not rely only on (ifname, ifindex) replacement / nft regeneration
+```
+
+A namespace-wide conntrack flush is not accepted by this evidence.
+
+EXP-026 mark-filtered cleanup is the current narrow remediation candidate, not yet final
+target evidence. Production acceptance of that specific remediation requires either Debian
+13 confirmation or an explicit review decision that the privileged-CI evidence is sufficient.
+
+This is an implementation/evidence gate, not new user-visible availability semantics.
+
+
 # 9. NetworkPolicyAdapter
 
 **Component type:** Adapter
