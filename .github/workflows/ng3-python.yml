@@ -12,6 +12,7 @@ on:
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
       - "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/**"
       - "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/**"
+      - "design/experiments/EXP-040 NG3 managed INPUT OUTPUT drop scaffold/**"
   pull_request:
     paths:
       - "design/NG3/code/python/**"
@@ -23,6 +24,7 @@ on:
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
       - "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/**"
       - "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/**"
+      - "design/experiments/EXP-040 NG3 managed INPUT OUTPUT drop scaffold/**"
 
 jobs:
   unit:
@@ -151,6 +153,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-032 NG3 payload nft scaffold/exp032_payload_nft_scaffold.py"
+      - name: EXP-040 managed INPUT OUTPUT drop scaffold
+        run: >-
+          sudo python3
+          "design/experiments/EXP-040 NG3 managed INPUT OUTPUT drop scaffold/exp040_stack_io_drop.py"
       - name: NG3 payload nft scaffold comparison integration
         env:
           PYTHONPATH: design/NG3/code/python
