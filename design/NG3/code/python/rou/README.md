@@ -22,6 +22,7 @@ Implemented:
 - bounded physical iproute2 route-priority backend with link-sandwiched observation, whole-domain verification and exact add/delete commands;
 - Profile-level multi-domain priority coordinator with deterministic domain order and final fresh verification of every destination domain;
 - lower Adapter route-priority realization contract for internal table/protocol/path-route identity and validated Linux metric space;
+- deterministic shared lower network-policy allocator over injected table/RPDB/route-metric/nft platform resource space;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:

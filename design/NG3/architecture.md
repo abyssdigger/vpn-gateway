@@ -39,6 +39,7 @@ Current trace:
 | NetworkPolicyExecutor bounded physical iproute2 priority backend | `iproute_priority_backend.py` | `NG3-2026-11-16-iproute-priority-backend-code-review.md` |
 | Profile-level multi-domain priority coordinator | `route_priority_profile.py` | `NG3-2026-11-16-route-priority-profile-coordinator-review.md` |
 | lower Adapter route-priority realization contract | `route_priority_realization.py` | `NG3-2026-11-16-route-priority-realization-contract-review.md` |
+| shared lower network-policy deterministic allocation | `network_policy_layout.py` | `NG3-2026-11-16-network-policy-layout-allocator-review.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
@@ -1806,6 +1807,22 @@ They must satisfy:
   relies on them.
 
 The user configuration never contains these values.
+
+The executable pure allocator implements this contract over an injected
+`NetworkPolicyPlatformSpace` rather than hard-coding production constants. It:
+
+- ranks payload Profiles by canonical ID for table allocation;
+- ranks probe routing demands by `(profile_id, logical_path_id)`;
+- allocates payload dispatch priorities by longest-prefix-first destination order;
+- keeps payload/probe table and RPDB pools disjoint;
+- rejects Linux reserved table IDs and RPDB priority 0;
+- requires probe RPDB space to precede payload dispatch and payload dispatch to precede the
+  platform's ambient/main lookup;
+- derives the same Profile-local preference metric namespace independently in every Profile
+  table;
+- preserves zero-path Profiles with a table/guard allocation but no priority metric space;
+- exposes reserved pool membership independently of the current allocation map so stale
+  resources from a previous configuration remain classifiable for cleanup.
 
 # 10. NetworkPolicyExecutor
 
