@@ -6,7 +6,7 @@
 
 ## Result
 
-**PASS on privileged Linux CI; Debian 13 production-binary confirmation pending.**
+**PASS on privileged Linux CI and Debian 13 target with the intended `/usr/bin/ping`.**
 
 ## Boundary
 
@@ -114,7 +114,9 @@ actual intended executable without changing production code.
 
 ## Target confirmation
 
-From repository root on the Debian 13 target:
+Confirmed PASS on Debian GNU/Linux 13 (trixie), kernel `6.12.116+deb13-amd64`, using `/usr/bin/ping`.
+
+Reproduction from repository root:
 
 ```bash
 sudo env VPNG_NG2_PROBE_PING_PATH=/usr/bin/ping \
@@ -131,8 +133,8 @@ A target failure must retain the full traceback/diagnostic.
 
 ## Next boundary
 
-After target confirmation, the executor mechanism is sufficient for the first
-AvailabilityProbeManager sampling path.
+The executor mechanism target gate is closed. The remaining lower-mechanism gate before
+AvailabilityProbeManager sampling policy is stale conntrack-mark generation-lifetime verification.
 
 Cadence, retry and hysteresis remain deliberately unchosen and require their own product
 contract.

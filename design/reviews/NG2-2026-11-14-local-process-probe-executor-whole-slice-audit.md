@@ -7,8 +7,9 @@ single-shot ICMP executor
 
 ## Result
 
-**PASS for implemented/tested behavior, with two evidence gates remaining: Debian 13
-production executable confirmation and conntrack-mark generation-lifetime verification.**
+**PASS for the implemented local-process mechanism and production executor; EXP-025 has
+now confirmed a stale-conntrack generation defect that requires remediation before the
+generation-isolation claim is complete.**
 
 No unresolved code/architecture defect currently justifies additional lower-domain
 implementation before that target run.
@@ -302,49 +303,45 @@ GitHub gates on the latest code baseline:
 - existing NG2 payload dataplane integration: PASS;
 - NG1 Python validation/regression: PASS.
 
-## A17 — conntrack mark lifetime across probe generation changes is not yet proven
+## A17 — conntrack mark survives probe generation changes
 
-**New mechanism ambiguity; unresolved at this checkpoint.**
+**Target-confirmed architecture finding.**
 
-The selected reverse-path mechanism carries process identity in conntrack state. nft/RPDB
-generation verification is exact, but conntrack entries can outlive one single-shot ping
-process and interface/rules replacement does not obviously prove destruction of that flow
-state.
+EXP-025 deliberately fixed the ICMP tuple/identifier, created a marked generation-A flow,
+replaced `vpn0` with the same name/address topology but a new ifindex, and reused the same
+tuple.
 
-A stale marked ICMP entry could matter if a later probe reuses the same conntrack tuple
-(including ICMP identifier) after a rules/interface generation transition. Interface
-identity is not part of the ordinary conntrack tuple.
+Both privileged CI and Debian 13 target observed:
 
-The current Manager design correctly invalidates *userspace probe evidence* across rules
-and interface generations, but that does not by itself prove that stale kernel conntrack
-identity cannot be inherited by a later packet.
+```text
+generation-A marked conntrack entry after replacement = PRESENT
+tuple reuse counter deltas new=0 established=1
+EXP_025_RESULT=STALE-INHERITANCE
+```
 
-Do not guess a fix such as global conntrack flushing. The next kernel-mechanism experiment
-must determine:
+Debian 13 target interface generation changed from ifindex 8 to 10.
 
-1. whether the marked ICMP conntrack entry survives the relevant interface/rules
-   generation transition;
-2. whether a later ping can deliberately reuse the tuple/identifier;
-3. whether a delayed or synthetic reply can then satisfy the new INPUT rule through the
-   stale mark;
-4. if yes, what narrow owner-scoped generation mechanism is viable without flushing
-   unrelated conntrack state.
+Therefore conntrack-carried probe identity is not interface-generation-scoped. Exact
+RPDB/nft generation replacement and userspace evidence invalidation do not remove the old
+kernel flow identity.
 
-Until this is resolved, the LOCAL_PROCESS backend remains functionally green for all
-current tests but its generation-isolation proof is incomplete.
+EXP-026 is the focused remediation experiment. Privileged CI has already proved that
+deleting ICMP conntrack entries by the dedicated probe mark removes the probe class while
+preserving a different-mark control flow, restores NEW+mark-set after interface
+replacement, and keeps the control state usable.
+
+Debian 13 EXP-026 confirmation is the remaining mechanism gate before adopting that cleanup
+boundary.
 
 ## Remaining evidence/product gates
 
 ### External evidence gate
 
-Confirm LinuxIcmpProbeExecutor on Debian 13 using the intended production executable:
+The production `/usr/bin/ping` executor gate is closed on Debian 13: LP1..LP7 and
+`NG2_LINUX_LOCAL_PROCESS_INTEGRATION=PASS`.
 
-```bash
-sudo env VPNG_NG2_PROBE_PING_PATH=/usr/bin/ping \
-  python3 design/NG2/code/python/rou/tests/integration_linux_local_process.py
-```
-
-Required: LP1..LP7 and `NG2_LINUX_LOCAL_PROCESS_INTEGRATION=PASS`.
+The remaining external mechanism gate is Debian 13 confirmation of EXP-026 probe-class
+conntrack cleanup.
 
 ### Deliberately unresolved product/runtime policy
 
@@ -367,6 +364,5 @@ lower network/executor layer.
 
 Lower network-rules + single-shot execution architecture is coherent.
 
-Do not start scheduler/hysteresis implementation until both the target executor gate and
-the stale-conntrack generation gate are closed, and the execution policy contract is
-explicitly chosen.
+Do not start scheduler/hysteresis implementation until the stale-conntrack remediation
+gate is closed and the execution policy contract is explicitly chosen.

@@ -201,7 +201,7 @@ A result collected under an older rules/interface generation is stale evidence.
 
 ## 11. Still intentionally open
 
-Before scheduler/timing implementation, two evidence gates must close: Debian 13 confirmation with the intended production ping executable, and the stale conntrack-mark generation-lifetime experiment.
+Before scheduler/timing implementation, the remaining evidence gate is the stale conntrack-mark generation-lifetime experiment. Debian 13 confirmation with the intended `/usr/bin/ping` is complete.
 
 
 The following require an explicit later contract:
@@ -230,6 +230,7 @@ Current evidence:
 - projected generation loss retains dedicated uid guard across another owner's structural
   reconcile;
 - ProbeRulesStateCalculator: unit PASS;
-- LinuxIcmpProbeExecutor: unit + privileged CI integration PASS.
+- LinuxIcmpProbeExecutor: unit + privileged CI integration PASS;
+- LinuxIcmpProbeExecutor with `/usr/bin/ping`: Debian 13 target LP1..LP7 PASS.
 
 The intended Debian 13 production executable remains a separate target-confirmation gate.

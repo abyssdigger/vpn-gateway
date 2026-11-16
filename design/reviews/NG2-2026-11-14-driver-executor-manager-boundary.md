@@ -1,0 +1,74 @@
+# NG2 — Driver / Executor / Manager component boundary
+
+Date: 2026-11-14
+Status: agreed terminology boundary
+Scope: NG2 component roles
+
+## Driver
+
+A Driver directly interacts with an external managed object or environment.
+
+It performs a concrete control action or reads/observes concrete external state.
+A Driver does not choose desired state and does not own convergence toward a desired postcondition.
+
+The important property is responsibility, not implementation size: a Driver is mechanically obedient external interaction.
+NG2 must not atomize every one-line command into a single-use Driver wrapper.
+
+## Executor
+
+An Executor accepts a desired state or postcondition and is responsible for reaching and verifying it.
+
+An Executor may use one or more Driver components, or perform driver-level external interactions directly when extracting a separate Driver would add no useful boundary.
+
+Direct OS interaction therefore does not by itself make a component a Driver.
+The defining property of an Executor is responsibility for convergence / verified postcondition.
+
+## Manager
+
+A Manager owns domain lifecycle and policy.
+
+It decides what desired state should exist, when it changes, how long it remains current, and what higher-level state/event should be published.
+
+A Manager may delegate physical convergence to an Executor and raw observations/actions to Drivers.
+
+## Practical hierarchy
+
+Manager
+    chooses / owns desired lifecycle
+        |
+        v
+Executor
+    reaches + verifies desired postcondition
+        |
+        +--> Driver
+        |
+        +--> direct driver-level interaction
+
+The second branch is intentional. NG2 does not require artificial one-command Driver objects merely to preserve a formal layer.
+
+## Consequences for current names
+
+### LinuxIcmpProbeExecutor
+
+The current component executes one observation-producing ICMP operation and returns REPLY | NO_REPLY | ERROR.
+It does not own a desired external state and does not converge an endpoint toward REACHABLE.
+
+Under the agreed terminology its architectural role is Driver.
+The current class name should therefore be reviewed for rename to LinuxIcmpProbeDriver after the active conntrack experiments are closed.
+
+### LinuxNetworkDriver
+
+The current class performs a full structural desired-state transaction: protective close, materialization, fresh verification, optional reopen, final verification.
+
+That behavior is Executor-like under the agreed definition even though the implementation also performs direct driver-level commands itself.
+
+Its current name should be reviewed separately after the conntrack remediation is fixed.
+No rename is performed as part of EXP-025/026 because mechanism evidence and terminology refactor should remain separate units.
+
+## Conntrack cleanup placement
+
+If probe-class conntrack cleanup is adopted, the raw conntrack delete command is driver-level interaction.
+
+Responsibility for ordering that cleanup inside a complete verified structural transition belongs to the network Executor role, whether it invokes a separate reusable conntrack Driver or performs the command directly.
+
+AvailabilityProbeManager must not own that physical cleanup ordering.

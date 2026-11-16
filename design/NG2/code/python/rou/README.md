@@ -107,8 +107,6 @@ Not implemented yet:
 - richer predicate implication only where future use justifies it;
 - RuntimeStateManager Profile-state mapping;
 - AvailabilityProbeManager cadence/retry/hysteresis and Event publication;
-- target confirmation of the intended Debian 13 production ping executable for the
-  single-shot ICMP executor;
 - focused stale conntrack-mark generation-lifetime verification for LOCAL_PROCESS reverse-flow identity;
 - persistent technical allocation across daemon restart;
 - richer interface-origin dispatch;
