@@ -10,6 +10,7 @@ from rou.binding import (
 )
 from rou.domain import DeviceBindingIntent, ExpectedInterfaceSelector, SelectorKind
 from rou.interface_identity import InterfaceIdentity
+from rou.config import parse_structural_config
 
 
 def prefix(device_id: str = "oc", quota: int = 2, value: str = "vpns") -> DeviceBindingIntent:
@@ -164,6 +165,31 @@ class BindingProjectionTests(unittest.TestCase):
                 DeviceBindingState.empty(),
                 ids(("vpn0", 10),),
             )
+
+    def test_structural_config_binding_seam_preserves_selector_policy_order(self):
+        cfg = parse_structural_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["wg0", "vpns*/2"]
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+        result = project_device_bindings(
+            cfg.device_binding_intents,
+            DeviceBindingState.empty(),
+            ids(("vpns01", 12), ("wg0", 7), ("vpns00", 11)),
+        )
+        self.assertEqual(
+            [
+                (item.path_id.selector_index, item.path_id.slot_index, item.endpoint.ifname)
+                for item in result.bindings
+            ],
+            [(0, 0, "wg0"), (1, 0, "vpns01"), (1, 1, "vpns00")],
+        )
 
 
 if __name__ == "__main__":
