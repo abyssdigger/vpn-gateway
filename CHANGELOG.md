@@ -23,8 +23,12 @@ post-closure baseline:
   - real iproute2 add/verify/delete backend in the managed namespace;
   - Profile-level multi-destination convergence with final fresh verification of every
     route-key domain;
+  - lower Adapter realization contract for internal path-route identity, table/protocol
+    identity and Linux metric space;
+- rejected a standalone priority allocator in favor of the shared lower network-policy
+  ownership/allocation layout required by routing/RPDB/filtering/cleanup;
 - added the first NG3 Python GitHub Actions workflow;
-- final reviewed evidence at this point includes **144 rootless unit tests** and a
+- final reviewed evidence at this point includes **153 rootless unit tests** and a
   privileged disposable-network-namespace integration that proves real route priority
   swap, duplicate-state recovery and multi-domain Profile convergence.
 
