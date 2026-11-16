@@ -55,7 +55,7 @@ Current trace:
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
 
-- final Device NAT/envelope/publication user grammar;
+- final Device NAT/firewall/publication user grammar;
 - availability user timing grammar;
 - Netlink/poll scheduling and full VPNPathAdapter runtime collection;
 - general Linux route/RPDB/nft policy mutation beyond the bounded pure-priority route-key backend;
@@ -741,7 +741,7 @@ DeviceConfigIntent:
     enabled
     expected_interfaces[] = ordered(selector, quota)
     nat_intent
-    traffic_envelope?
+    device_firewall?
     publications?
 
 ProfileConfigIntent:
@@ -759,7 +759,7 @@ DeviceBindingIntent:
 DevicePolicyIntent:
     device_id
     nat_intent
-    traffic_envelope?
+    device_firewall?
     publications?
 
 PayloadProfileRequest:
@@ -801,7 +801,7 @@ Key normalization rules:
 - Device traffic envelope is normalized as a restrictive policy that can only narrow Profile
   permission;
 - Device transport publication intent is normalized separately from Profile payload routing;
-- exact final TOML grammar for envelope/publication remains an interface-review item and is
+- exact final external grammar for Device firewall/publication remains an interface-review item and is
   not inferred from historical prototype spellings;
 - availability subject identity is exactly `(profile_id, logical_path_id)`;
 - the same bound interface/path may therefore have independent availability state in
@@ -868,7 +868,7 @@ Transport publication semantics remain a Device/transport concern. The normalize
 describes an explicitly owned host-side publication boundary into the managed network domain;
 it is not part of Profile routing identity or availability health.
 
-Historical envelope/publication TOML examples are schema-design evidence only. Until an exact
+Historical traffic-envelope/publication TOML examples are schema-design evidence only. Until an exact
 NG3 grammar is accepted, `ConfigurationAdapter` must reject unsupported guessed forms rather
 than emulate old spellings heuristically.
 
@@ -930,8 +930,8 @@ Validation must reject at least:
 - duplicate exact destination ownership among enabled Profiles;
 - invalid/non-strict IPv4 destination CIDRs;
 - missing/invalid explicit Device NAT intent where the supported Device capability requires it;
-- Device envelope declarations that would expand rather than restrict Profile permission;
-- unsupported/ambiguous traffic-envelope or publication grammar;
+- Device firewall declarations that would expand rather than restrict Profile permission;
+- unsupported/ambiguous Device-firewall or publication grammar;
 - malformed or unsupported availability-check mechanism/target;
 - a target-less probe when subject/topology semantics cannot produce one unambiguous concrete
   normalized target;
@@ -1931,7 +1931,7 @@ sits inside the marked table.
 ##### Invariant payload nft scaffold
 
 The first-release payload nft namespace has two invariant base chains whose existence and
-metadata do not depend on the unresolved final user-facing Device envelope/NAT grammar.
+metadata do not depend on the unresolved final external Device firewall/NAT grammar.
 
 ```text
 chain payload_forward
@@ -2009,7 +2009,7 @@ host-boundary -> конкретный VPN endpoint: `meta iif` и `meta oif`
 
 Это **не** архитектурное принятие полного payload filter policy:
 правила return flow, inbound permission, пересекающиеся префиксы с
-most-specific конкуренцией, Device envelope и probe isolation остаются
+most-specific конкуренцией, Device firewall и probe isolation остаются
 обязанностями отдельной normalized policy projection. Даже если
 эксперимент PASS, одиночный allow pattern нельзя публиковать как
 полную компиляцию Profile. Его можно использовать как проверенную
@@ -2075,7 +2075,7 @@ same-name/new-ifindex replacement. После замены новый outbound N
 должен пропустить reply; новый reverse rule должен восстановить flow.
 
 Это по-прежнему **lower primitive evidence**, а не полный filter compiler:
-inbound NEW, Device envelope intersection, multi-Profile canonical projection
+inbound NEW, Device firewall composition, multi-Profile canonical projection
 и full owner convergence остаются отдельными units.
 
 **EXP-036 result:** PASS on privileged GitHub Linux CI. The prefix-scoped
@@ -2239,7 +2239,7 @@ permission to add a rule to an unverified endpoint.
 
 **Necessity / simplification:** this comparison is required before safe cleanup
 or physical materialization, but it deliberately avoids creating a second
-Profile classifier or guessing Device envelope semantics. No I/O, mutation,
+Profile classifier or pretending to represent the later ordered Device firewall semantics. No I/O, mutation,
 stored handles, retry state or lifecycle component.
 
 **Evidence:** rootless exact comparison tests over NEW/RETURN, duplicate desired
@@ -2394,7 +2394,7 @@ different candidate Profile. Nested prefixes belonging to the same Profile are
 semantically redundant for selection and may collapse. Exact same prefix
 owned by different candidate Profiles is an error, never arbitrary order.
 
-The partition is **Profile permission only**. Device envelope intersection,
+The partition is **Profile permission only**. Ordered Device firewall composition,
 path-specific lower rules and protocol/port restrictions are downstream
 responsibilities. An envelope can narrow fragments but cannot use this
 Calculator to expand Profile permission.
@@ -3216,7 +3216,7 @@ observed value == 0
 A successful write command without the confirming reread is not a barrier.
 
 This primitive is deliberately below the user configuration contract. It is not a policy
-knob and does not depend on Profile direction, NAT spelling, Device envelope grammar or
+knob and does not depend on Profile direction, NAT spelling, Device firewall grammar or
 current route allocation.
 
 The root barrier is global to managed IPv4 forwarding. Structural transitions may therefore
@@ -3230,7 +3230,7 @@ The global barrier is chosen intentionally instead of a per-Profile nft deny rul
 - it does not depend on correctly classifying overlapping Profile prefixes while state is
   mixed;
 - it remains effective when path bindings or RPDB allocations are being replaced;
-- it does not depend on the final NAT/traffic-envelope grammar;
+- it does not depend on the final NAT/Device-firewall grammar;
 - critically, it does not rely on the nft namespace being already trusted while nft
   ownership/conflict recovery is itself in progress.
 
@@ -3641,7 +3641,7 @@ internal Manager state.
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG0001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG0001-R1.R2` declarative operation | recovered strict Device/Profile user contract normalized by ConfigurationAdapter, including Device transport-policy intents; unresolved envelope/publication prototype grammar remains explicitly non-normative |
+| `VPNG0001-R1.R2` declarative operation | recovered strict Device/Profile user contract normalized by ConfigurationAdapter, including Device transport-policy intents; unresolved Device-firewall/publication external grammar remains explicitly non-normative |
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
@@ -3693,7 +3693,7 @@ Remaining interface freedom is narrower:
 - parser/serialization implementation details that do not change accepted TOML semantics;
 - final spelling/default semantics for configuration features not yet accepted;
 - any future live-change/reload capability, which is not currently promised;
-- Device traffic-envelope/publication fields that were explicitly outside the implemented
+- Device firewall/publication fields that were explicitly outside the implemented
   core config contract.
 
 These freedoms must not be expanded into a universal configuration framework without a new
