@@ -1964,12 +1964,14 @@ chain stack_input
     hook input
     priority 0
     policy drop
+    comment "vpn-gate:ng3:stack-input-v1"
 
 chain stack_output
     type filter
     hook output
     priority 0
     policy drop
+    comment "vpn-gate:ng3:stack-output-v1"
 ```
 
 **Implements:**
@@ -1982,11 +1984,15 @@ VPN-GATE-owned contributions. User Device rules never become arbitrary host `INP
 rules, and these managed-domain hooks do not imply ownership of the ordinary host namespace
 firewall.
 
-The existing EXP-032 scaffold evidence remains valid for `payload_forward` and
-`payload_postrouting`, but it predates the `stack_input/stack_output` requirement. Full
-Release-1 scaffold readiness therefore requires a later bounded owner-shape/evidence update
-for those two hooks before forwarding readiness can rely on DROP/DROP/DROP as confirmed
-physical state.
+EXP-040 passed on privileged Linux CI and accepts the exact
+`stack_input/stack_output` owner shapes above. Empty DROP chains remained terminal despite
+foreign unconditional-ACCEPT base chains before and after priority 0; explicit owned ICMP
+allow rules restored the tested local traffic.
+
+The invariant scaffold may therefore include all four accepted base chains
+(`stack_input`, `payload_forward`, `stack_output`, `payload_postrouting`).
+System/local allow contributions remain a separate policy unit and are not implied by the
+scaffold itself.
 
 Concrete payload rules are added only by a fully normalized payload-policy projection. They
 must not be inferred from historical TOML examples.
