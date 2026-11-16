@@ -67,9 +67,14 @@ def select_composite_nft_step(
         comparison.profile_forward.conflicts
         or comparison.payload_nat.conflicts
         or comparison.device_firewall.conflicts
+        or comparison.local_publication.conflicts
     ):
         raise CompositeNftPlanError(
             "sub-policy comparison has conflicts"
+        )
+    if not comparison.local_publication.desired_confirmed:
+        raise CompositeNftPlanError(
+            "local publication drift requires a separate local-mutation gate"
         )
 
     if comparison.profile_forward.stale:
