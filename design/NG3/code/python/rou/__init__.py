@@ -88,6 +88,11 @@ from .device_policy import (
     DeviceNatPolicyIntent,
     NatIntent,
 )
+from .payload_network_policy_desired import (
+    PayloadNetworkPolicyDesiredState,
+    PayloadNetworkPolicyProjectionError,
+    build_payload_network_policy_desired_state,
+)
 from .payload_nat_desired import (
     PayloadMasqueradeSpec,
     PayloadNatDesiredState,
@@ -490,6 +495,8 @@ __all__ = [
     "PayloadDispatchRule",
     "PayloadNftScaffoldPrepareResult",
     "PayloadNftScaffoldPrepareStatus",
+    "PayloadNetworkPolicyDesiredState",
+    "PayloadNetworkPolicyProjectionError",
     "PayloadMasqueradeSpec",
     "PayloadNatDesiredState",
     "PayloadNatProjectionError",
@@ -550,6 +557,7 @@ __all__ = [
     "allocate_network_policy_layout",
     "apply_availability_evidence",
     "calculate_effective_path_order",
+    "build_payload_network_policy_desired_state",
     "build_payload_nat_desired_state",
     "build_payload_profile_requests",
     "build_payload_routing_desired_state",
