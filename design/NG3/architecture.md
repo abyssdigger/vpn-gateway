@@ -50,6 +50,7 @@ Current trace:
 | exact-before-release cross-domain phase planner | `structural_policy_plan.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | semantic Profile forward compiler | `payload_forward_compiler.py` | `NG3-2026-11-17-profile-forward-compiler-review.md` |
 | multi-path Device firewall semantic compiler | `device_firewall_policy_compiler.py`, `device_firewall_compiler.py` | `NG3-2026-11-17-device-firewall-policy-compiler-review.md` |
+| complete payload lower desired-state assembly | `payload_network_policy_desired.py` | `NG3-2026-11-17-payload-network-policy-desired-review.md` |
 | guarded cross-domain structural Executor + Linux snapshot backend | `structural_policy_mutation.py`, `linux_structural_policy.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
