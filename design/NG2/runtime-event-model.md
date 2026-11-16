@@ -319,6 +319,11 @@ probe-rules generation, в которой он был получен. Если p
 изменилась, прежний REACHABLE/UNREACHABLE result не переносится в текущую projection и
 availability state остается UNKNOWN до нового валидного evidence.
 
+Если `probe_id` удален из нового полного `AvailabilityProbeSetRequest`, Manager публикует
+для него финальную `UNKNOWN` invalidation без observation generation перед локальным
+удалением state. Это не означает probe failure; цель — не оставить у latest-value
+subscriber старое REACHABLE/UNREACHABLE evidence для уже неактивного probe.
+
 ### 8.4. PayloadTrafficStateRequest
 
 **Kind:** RequestEvent  

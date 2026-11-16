@@ -55,6 +55,26 @@ class AvailabilityProbeSetRequest:
             raise ValueError("duplicate probe_id")
 
 
+def availability_probe_sets_semantically_equal(
+    left: AvailabilityProbeSetRequest,
+    right: AvailabilityProbeSetRequest,
+) -> bool:
+    """Compare logical probe-set snapshots independent of tuple ordering."""
+
+    if not isinstance(left, AvailabilityProbeSetRequest):
+        raise ValueError("left probe set must be AvailabilityProbeSetRequest")
+    if not isinstance(right, AvailabilityProbeSetRequest):
+        raise ValueError("right probe set must be AvailabilityProbeSetRequest")
+
+    return {
+        item.probe_id: item
+        for item in left.probes
+    } == {
+        item.probe_id: item
+        for item in right.probes
+    }
+
+
 class ProbeRulesCalculator:
     """Translate explicit active-probe intent into common NetworkRules semantics."""
 

@@ -1,43 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 
 from .linux_driver import LinuxCommandRunner
 from .linux_local_process import LinuxLocalProcessConfig
 from .linux_observation import parse_link_json
+from . import probe_attempt
 from .probe_rules import AvailabilityProbeRequest, ProbeMechanism
 
 
 class LinuxProbeDriverError(ValueError):
     pass
-
-
-class ProbeAttemptOutcome(str, Enum):
-    REPLY = "reply"
-    NO_REPLY = "no-reply"
-    ERROR = "error"
-
-
-@dataclass(frozen=True)
-class ProbeAttemptResult:
-    outcome: ProbeAttemptOutcome
-    diagnostic: str | None = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.outcome, ProbeAttemptOutcome):
-            raise LinuxProbeDriverError(
-                "probe attempt outcome must be ProbeAttemptOutcome"
-            )
-        if self.outcome is ProbeAttemptOutcome.ERROR:
-            if not self.diagnostic:
-                raise LinuxProbeDriverError(
-                    "probe execution error requires diagnostic"
-                )
-        elif self.diagnostic is not None:
-            raise LinuxProbeDriverError(
-                "non-error probe result must not carry diagnostic"
-            )
 
 
 @dataclass(frozen=True)
@@ -80,14 +53,14 @@ class LinuxIcmpProbeDriver:
         request: AvailabilityProbeRequest,
         *,
         timeout_seconds: int,
-    ) -> ProbeAttemptResult:
+    ) -> probe_attempt.ProbeAttemptResult:
         if not isinstance(request, AvailabilityProbeRequest):
             raise LinuxProbeDriverError(
                 "probe driver requires AvailabilityProbeRequest"
             )
         if request.mechanism is not ProbeMechanism.ICMP:
-            return ProbeAttemptResult(
-                ProbeAttemptOutcome.ERROR,
+            return probe_attempt.ProbeAttemptResult(
+                probe_attempt.ProbeAttemptOutcome.ERROR,
                 f"unsupported probe mechanism {request.mechanism!r}",
             )
         if (
@@ -100,8 +73,8 @@ class LinuxIcmpProbeDriver:
 
         try:
             if not self._generation_is_current(request):
-                return ProbeAttemptResult(
-                    ProbeAttemptOutcome.ERROR,
+                return probe_attempt.ProbeAttemptResult(
+                    probe_attempt.ProbeAttemptOutcome.ERROR,
                     "requested probe interface generation is not current",
                 )
 
@@ -130,19 +103,19 @@ class LinuxIcmpProbeDriver:
                 check=False,
             )
         except Exception as exc:
-            return ProbeAttemptResult(
-                ProbeAttemptOutcome.ERROR,
+            return probe_attempt.ProbeAttemptResult(
+                probe_attempt.ProbeAttemptOutcome.ERROR,
                 str(exc),
             )
 
         if completed.returncode == 0:
-            return ProbeAttemptResult(ProbeAttemptOutcome.REPLY)
+            return probe_attempt.ProbeAttemptResult(probe_attempt.ProbeAttemptOutcome.REPLY)
         if completed.returncode == 1:
-            return ProbeAttemptResult(ProbeAttemptOutcome.NO_REPLY)
+            return probe_attempt.ProbeAttemptResult(probe_attempt.ProbeAttemptOutcome.NO_REPLY)
 
         detail = completed.stderr.strip() or completed.stdout.strip()
-        return ProbeAttemptResult(
-            ProbeAttemptOutcome.ERROR,
+        return probe_attempt.ProbeAttemptResult(
+            probe_attempt.ProbeAttemptOutcome.ERROR,
             (
                 f"ping exited rc={completed.returncode}"
                 + (f": {detail}" if detail else "")

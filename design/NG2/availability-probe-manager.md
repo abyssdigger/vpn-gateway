@@ -86,12 +86,29 @@ Every request names a concrete `InterfaceIdentity(ifname, ifindex)`.
 Same-name/new-ifindex is a new generation.
 
 Probe execution independently rechecks the concrete generation immediately before the
-attempt. NetworkRules observation and executor generation checking are complementary:
+attempt. NetworkRules observation and Driver generation checking are complementary:
 neither is replaced by the other.
 
 Probe evidence must not survive a concrete-generation change.
 
-## 5. Single-shot ICMP executor
+The Manager represents this with an owner-wide **rules-readiness epoch**. The epoch is
+Manager-local and opaque to NetworkRulesSpec/Linux technical identity:
+
+- no epoch exists before fresh `KNOWN + MATCHED + READY`;
+- leaving READY invalidates all evidence from the current epoch;
+- a later fresh transition back to READY starts a new epoch;
+- accepting a semantically changed desired probe set invalidates the previous epoch;
+- a same-name/new-ifindex request therefore cannot reuse old evidence.
+
+The epoch is not a kernel/network generation identifier and is not encoded into uid,
+conntrack mark, routing tables or nft rules.
+
+A physical backend rebuild that leaves the Manager's semantic rules observation continuously
+fresh READY does not by itself invalidate already completed evidence. Future attempt safety
+remains the responsibility of the verified probe plane plus its lower-domain generation
+mechanism.
+
+## 5. Single-shot ICMP Driver
 
 The first executable worker is `LinuxIcmpProbeDriver`.
 
@@ -128,18 +145,18 @@ as gid and executable path.
 
 The semantic AvailabilityProbeSetRequest contains none of these Linux values.
 
-The uid must not be independently duplicated in Adapter and executor configuration.
+The uid must not be independently duplicated in Adapter and Driver configuration.
 
 ## 7. ping socket prerequisite
 
-The first Linux executor uses capability-free ping sockets.
+The first Linux Driver uses capability-free ping sockets.
 
 Before each single-shot attempt it idempotently writes and freshly verifies the
 namespace-local `net.ipv4.ping_group_range` for its configured gid.
 
 This prerequisite belongs to process execution, not NetworkRulesAdapter.
 
-The current executor does not restore an unknown previous value after each attempt.
+The current Driver does not restore an unknown previous value after each attempt.
 Shutdown ownership can be added when the complete Manager lifecycle is implemented.
 
 ## 8. Logical probes and physical planes
@@ -161,7 +178,22 @@ Several logical probes may therefore share one physical network plane.
 This does not imply shared timing/hysteresis semantics. Execution deduplication is a future
 optimization only if it preserves each logical probe contract.
 
-## 9. Audit/reconcile skeleton
+## 9. Implemented rules-control slice
+
+The first executable AvailabilityProbeManager slice is implemented independently of
+scheduling cadence.
+
+It owns:
+
+- latest accepted full AvailabilityProbeSetRequest;
+- semantic idempotence of repeated equivalent snapshots;
+- current desired ProbeRulesCalculator output;
+- NetworkRulesAdapter owner lifecycle;
+- ProbeRulesState calculation;
+- owner-wide rules-readiness epoch;
+- UNKNOWN publication while no authoritative probe evidence exists;
+- deterministic rules audit/repair;
+- fail-closed invalidation when a probe_id leaves the desired set.
 
 A deterministic rules audit pass is defined independently of scheduling cadence:
 
@@ -186,7 +218,31 @@ Probe execution consumes only the READY branch.
 
 The cadence that invokes rules audit is not fixed here.
 
+Equivalent full snapshots are order-insensitive by probe_id and do not create a new
+readiness epoch or force structural reapply when the current rules remain READY.
+
+When a probe_id is removed from the desired full snapshot, the Manager publishes one final
+UNKNOWN state with no observation generation before forgetting that probe locally. This
+prevents a latest-value subscriber from retaining stale REACHABLE/UNREACHABLE evidence for
+a probe that is no longer requested.
+
 ## 10. Event publication
+
+Executable payload types:
+
+```text
+AvailabilityProbeState
+    UNKNOWN | REACHABLE | UNREACHABLE
+
+ProbeObservationGeneration
+    opaque Manager-local positive sequence
+
+AvailabilityProbeStateInfo
+    probe_id
+    state
+    reason/details
+    observation_generation
+```
 
 AvailabilityProbeStateInfo is current state per logical `probe_id`.
 
@@ -199,10 +255,58 @@ the published availability state is UNKNOWN rather than inferred failure.
 
 A result collected under an older rules/interface generation is stale evidence.
 
-## 11. Still intentionally open
+UNKNOWN carries no authoritative observation generation.
+REACHABLE/UNREACHABLE must carry the ProbeObservationGeneration under which their evidence
+was accepted.
 
-Before scheduler/timing implementation, the remaining evidence gate is the stale conntrack-mark generation-lifetime experiment. Debian 13 confirmation with the intended `/usr/bin/ping` is complete.
 
+## 11. Single-attempt validity envelope
+
+The generic lower semantic Driver contract is:
+
+```text
+ProbeDriver.execute(
+    AvailabilityProbeRequest,
+    explicit timeout_seconds
+) -> ProbeAttemptResult
+
+ProbeAttemptOutcome
+    REPLY | NO_REPLY | ERROR
+```
+
+`LinuxIcmpProbeDriver` is the first concrete implementation.
+
+The implemented `attempt_once(probe_id, timeout_seconds=...)` path does not feed a raw
+outcome into result/hysteresis policy based only on a pre-attempt READY observation.
+
+Implemented order:
+
+```text
+fresh READY epoch
+    -> capture current ProbeObservationGeneration
+    -> ProbeDriver.execute(...)
+    -> NetworkRulesAdapter.renew_state(self)
+    -> ProbeRulesStateCalculator
+    -> require rules still READY for the captured epoch
+    -> only then pass REPLY / NO_REPLY to result policy
+```
+
+If the post-attempt observation is UNKNOWN/INVALID, the current epoch ends and
+`attempt_once()` returns no `ProbeAttemptObservation`. Later repair cannot retroactively
+validate that attempt.
+
+When both checks remain READY in the same epoch, the method returns a
+`ProbeAttemptObservation` containing the raw `ProbeAttemptResult`. The Manager still
+does not convert that value to REACHABLE/UNREACHABLE in the current slice.
+
+ProbeAttemptOutcome.ERROR is a local execution failure and is never directly equivalent to
+remote UNREACHABLE.
+
+## 12. Still intentionally open
+
+The remaining lower-domain evidence gate before production conntrack remediation is
+EXP-026 Debian 13 target confirmation. EXP-025 is already target-confirmed
+STALE-INHERITANCE, and the intended Debian 13 `/usr/bin/ping` executable is confirmed.
 
 The following require an explicit later contract:
 
@@ -214,23 +318,25 @@ The following require an explicit later contract:
 - jitter;
 - concurrency/serialization;
 - cancellation on superseding request;
-- exact observation-generation representation;
-- shutdown cleanup of process runtime prerequisites;
-- target-confirmed production ping executable.
+- shutdown cleanup of process runtime prerequisites.
 
-These are not inferred from payload policy or from EXP-024.
+The observation-generation representation is no longer open at the semantic level:
+AvailabilityProbeManager uses an owner-wide rules-readiness epoch as described above.
 
-## 12. Evidence
+These timing/result-policy choices are not inferred from payload policy or from EXP-024.
+
+## 13. Evidence
 
 Current evidence:
 
 - EXP-024: selective local-process routing/filter mechanism PASS on Debian 13;
 - production LOCAL_PROCESS NetworkRules backend: apply/renew/dataplane PASS;
-- generation-isolation proof still requires focused stale conntrack-mark lifetime verification across rules/interface generation replacement;
+- EXP-025: Debian 13 target-confirmed STALE-INHERITANCE across same-name/new-ifindex
+  replacement;
+- EXP-026: privileged-CI probe-class selective conntrack cleanup PASS; Debian 13 target
+  confirmation pending;
 - projected generation loss retains dedicated uid guard across another owner's structural
   reconcile;
 - ProbeRulesStateCalculator: unit PASS;
 - LinuxIcmpProbeDriver: unit + privileged CI integration PASS;
 - LinuxIcmpProbeDriver with `/usr/bin/ping`: Debian 13 target LP1..LP7 PASS.
-
-The intended Debian 13 production executable remains a separate target-confirmation gate.
