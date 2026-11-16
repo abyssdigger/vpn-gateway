@@ -1,3 +1,18 @@
+## EXP-029 — NG3 structural routing inventory shape
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** NG3 guarded structural routing desired-state boundary  
+**Тип:** iproute2 numeric route/RPDB authoritative inventory shape  
+**Design:** [EXP-029 README](experiments/EXP-029%20NG3%20structural%20routing%20inventory%20shape/README.md)  
+**Result:** [EXP-029 result](experiments/EXP-029%20NG3%20structural%20routing%20inventory%20shape/EXP-029-result-20261116.md)
+
+Privileged CI зафиксировал актуальную форму `iproute2 6.19 -N` для reserved NG3 resources:
+numeric-string table/protocol/type, bare `/32` route destination, RPDB `dst+dstlen`,
+explicit `src=all`, hexadecimal `fwmark/fwmask`.
+
+Эта форма принята как evidence gate для strict structural route/RPDB inventory parser.
+
+---
 ## EXP-028 — NG3 lower policy platform space
 
 **Статус:** COMPLETE — PASS  

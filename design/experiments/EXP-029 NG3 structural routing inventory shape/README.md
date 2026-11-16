@@ -50,3 +50,13 @@ All objects exist only in a disposable network namespace.
 
 The experiment must PASS in privileged CI and the recorded JSON form must be reviewed before
 the NG3 structural route/RPDB parser is implemented.
+
+
+## Result
+
+**COMPLETE — PASS.**
+
+GitHub Actions run: `43827772041`.
+
+The exact observed route/RPDB JSON and accepted normalization facts are recorded in
+`EXP-029-result-20261116.md`.

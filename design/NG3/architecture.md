@@ -2258,6 +2258,53 @@ This is why the pure-priority path remains a separate fast path: only there is p
 membership/filter/NAT unchanged and the semantic make-before-break proof sufficient without a
 structural barrier.
 
+### 10.2.3. Authoritative structural route/RPDB observation
+
+Structural recovery requires inventory of the **whole reserved lower namespace**, not only
+resources named by the current allocation map.
+
+The current Linux observation commands are:
+
+```text
+ip -j -N -4 route show table all
+ip -j -N -4 rule show
+```
+
+EXP-029 established the current iproute2 6.19 numeric JSON form relevant to the accepted NG3
+resource space:
+
+- non-main high table IDs are numeric strings;
+- route protocols are numeric strings;
+- ordinary unicast type may be omitted;
+- `RTN_BLACKHOLE` is numeric string `"6"`;
+- host-route `/32` destination may be rendered as a bare IPv4 address;
+- route scope is numeric string `"253"` for the tested direct-device routes;
+- RPDB `priority` is numeric;
+- RPDB lookup table is a numeric string;
+- payload destination selector is represented by `dst` address plus `dstlen`;
+- `src = "all"` is explicit in the tested rules;
+- probe `fwmark` / `fwmask` are hexadecimal strings.
+
+The structural observer must normalize these representation forms into typed semantic lower
+objects.
+
+Rows outside VPN-GATE reserved table/priority pools may be ignored by this owner-specific
+inventory. Rows **inside** reserved pools must not be silently ignored merely because their
+shape is unexpected.
+
+For a reserved object the observer returns either a recognized managed route/rule or an
+explicit ownership conflict / unsupported reserved shape.
+
+Observation failure, malformed JSON and ownership conflict are distinct from a valid empty
+managed inventory.
+
+The route observer resolves any managed `dev` through the same fresh `(ifname, ifindex)`
+interface inventory used elsewhere. Same-name interface replacement must therefore remain
+visible.
+
+This observation boundary is read-only. It does not authorize cleanup or activation by
+itself.
+
 # 11. Event contracts
 
 The architecture currently needs only semantic event edges required by Engine roles.
