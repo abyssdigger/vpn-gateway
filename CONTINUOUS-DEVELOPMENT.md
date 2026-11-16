@@ -170,8 +170,16 @@ When a requirement or constraint is insufficient:
       `[decomp: <blocker-ID> -> <deblocker-ID>]`;
     - keep the blocker part unchanged for causal traceability;
     - resume review of the blocked decomposition;
-12. return to component design only when the relevant requirement paths are sufficiently
-    concrete.
+12. if sufficiently concrete accepted R/C nodes make another Requirement impossible to satisfy:
+    - add `[unreachable because of: <R/C-ID>, <R/C-ID>, ...]` beside the unreachable Requirement;
+    - use the minimal sufficient set of normative causes;
+    - stop architecture/implementation for that Requirement;
+    - escalate for human requirement decision; do not search for an architecture workaround
+      that violates one of the causal R/C nodes;
+    - after an accepted semantic change, remove the active link only when the Requirement is
+      demonstrably reachable again;
+13. return to component design only when the relevant requirement paths are sufficiently
+    concrete and contain no active unreachable Requirement needed by the unit.
 
 A thought that occurs during implementation is **not** automatically a requirement.
 
@@ -209,6 +217,10 @@ rejected_closure -> pending_closure
 ```
 
 A node with `[decomp: ... -> pending]` cannot be `[pending_closure]` or `[closed]`.
+
+A Requirement with active `[unreachable because of: ...]` cannot be
+`[pending_closure]` or `[closed]`. This link records a requirement-tree inconsistency,
+not an architecture closure status.
 
 After architecture produces a closure candidate, mark `[pending_closure]` only after
 verifying an exact architecture reference. Replace it with `[closed]` only after sufficient
@@ -344,6 +356,8 @@ Implementation may begin only when all of the following hold for the affected sc
 - no unresolved product-semantic ambiguity is being hidden in implementation;
 - no active decomposition block exists on a requirement/constraint whose missing detail is
   necessary for the implementation scope;
+- no Requirement required by the implementation scope has an active
+  `[unreachable because of: ...]` link;
 - all material component responsibilities and interactions are traceable to requirements;
 - every requirement/constraint whose architecture is required by the implementation unit is
   marked `[closed]`; `[pending_closure]` and `[rejected_closure]` block implementation
