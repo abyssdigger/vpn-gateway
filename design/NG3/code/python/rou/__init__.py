@@ -138,6 +138,21 @@ from .device_firewall_compiler import (
     DeviceFirewallCompileError,
     compile_device_firewall_policy,
 )
+from .local_publication_policy import (
+    LocalPublicationDesiredState,
+    LocalPublicationHook,
+    LocalPublicationRuleSpec,
+    PublicationLocalEndpointIntent,
+    PublicationProtocol,
+    build_local_publication_desired,
+)
+from .local_publication_observation import (
+    LOCAL_PUBLICATION_RULE_COMMENT,
+    LocalPublicationComparison,
+    LocalPublicationConflict,
+    ObservedLocalPublicationRule,
+    compare_local_publication,
+)
 from .composite_nft_policy import (
     CompositeNftDesiredState,
     CompositeNftPolicyComparison,
@@ -292,6 +307,15 @@ __all__ = [
     "CompositeNftMutationResult",
     "CompositeNftMutationStatus",
     "CompositeNftPhysicalSnapshot",
+    "LocalPublicationDesiredState",
+    "LocalPublicationHook",
+    "LocalPublicationRuleSpec",
+    "PublicationLocalEndpointIntent",
+    "PublicationProtocol",
+    "LOCAL_PUBLICATION_RULE_COMMENT",
+    "LocalPublicationComparison",
+    "LocalPublicationConflict",
+    "ObservedLocalPublicationRule",
     "LinuxCompositeNftBackend",
     "CompositeNftDesiredState",
     "CompositeNftPolicyComparison",
@@ -391,6 +415,8 @@ __all__ = [
     "observe_payload_forward",
     "select_composite_nft_step",
     "converge_composite_nft_step_once",
+    "build_local_publication_desired",
+    "compare_local_publication",
     "compare_composite_nft_policy",
     "compare_device_firewall",
     "compile_device_firewall_policy",
