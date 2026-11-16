@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from enum import Enum
 from math import isfinite
 from threading import Condition, Lock, Thread, current_thread
@@ -17,6 +18,8 @@ from .probe_transport import (
     ProbeExecutionPlan,
 )
 
+
+_LOG = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ProbeSendResult:
@@ -355,7 +358,13 @@ class LinuxProbeExecutionAgent:
             return
 
         for info in ticks:
-            self._tick_publisher.publish(info)
+            try:
+                self._tick_publisher.publish(info)
+            except Exception:
+                _LOG.exception(
+                    "availability tick publisher raised for channel %s",
+                    info.channel.channel_id,
+                )
         for plane in sends:
             self._launch_send(plan, plane)
 
@@ -372,7 +381,10 @@ class LinuxProbeExecutionAgent:
                 if delay > 0:
                     self._condition.wait(timeout=delay)
                     continue
-            self.process_due()
+            try:
+                self.process_due()
+            except Exception:
+                _LOG.exception("probe execution Agent processing failed")
 
     def _launch_send(
         self,
@@ -462,9 +474,16 @@ class LinuxProbeExecutionAgent:
             self._publish_diagnostic_ready(plan, plane)
             if result.good_news:
                 for channel in consumers:
-                    self._good_news_publisher.publish(
-                        AvailabilityGoodNews(channel.priority)
-                    )
+                    try:
+                        self._good_news_publisher.publish(
+                            AvailabilityGoodNews(channel.priority)
+                        )
+                    except Exception:
+                        _LOG.exception(
+                            "availability good-news publisher raised "
+                            "for channel %s",
+                            channel.priority.channel_id,
+                        )
         finally:
             with self._condition:
                 self._in_flight.discard(key)
@@ -530,7 +549,18 @@ class LinuxProbeExecutionAgent:
                         return
                     self._latest_diagnostic[key] = info
 
-            self._diagnostic_publisher.publish(info)
+            try:
+                self._diagnostic_publisher.publish(info)
+            except Exception:
+                with self._diagnostic_lock:
+                    if self._latest_diagnostic.get(key) == info:
+                        self._latest_diagnostic.pop(key, None)
+                _LOG.exception(
+                    "probe execution diagnostic publisher raised "
+                    "for %s/%s",
+                    info.plane.path.ifname,
+                    info.plane.target,
+                )
 
     def _take_stale_diagnostics_locked(
         self,
@@ -571,4 +601,12 @@ class LinuxProbeExecutionAgent:
             return
         with self._diagnostic_publication_lock:
             for info in items:
-                self._diagnostic_publisher.publish(info)
+                try:
+                    self._diagnostic_publisher.publish(info)
+                except Exception:
+                    _LOG.exception(
+                        "inactive probe diagnostic publisher raised "
+                        "for %s/%s",
+                        info.plane.path.ifname,
+                        info.plane.target,
+                    )

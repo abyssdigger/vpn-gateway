@@ -431,7 +431,9 @@ class PayloadTrafficManager:
                     frozenset(problem_paths),
                 )
                 preferred_prefixes[profile.name] = (
-                    len(configured_order) - len(problem_paths)
+                    None
+                    if not problem_paths
+                    else len(configured_order) - len(problem_paths)
                 )
 
             result.append(

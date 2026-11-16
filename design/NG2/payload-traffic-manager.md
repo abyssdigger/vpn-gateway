@@ -264,16 +264,17 @@ RoutingDomainSpec.preferred_prefix_length: int | None
 
 This is **not** part of `PayloadTrafficStateRequest`.
 
-The Manager injects it into the already-calculated `NetworkRulesSpec` only when
-availability is active for that Profile.
+The Manager injects a non-None value into the already-calculated `NetworkRulesSpec`
+only while at least one path in that Profile currently has availability problems.
 
 Semantics for N paths:
 
 ```text
-None -> no auxiliary priority boundary is active
-N    -> all N paths are in the preferred prefix; no steady gap required
-K    -> first K paths are preferred; lower layer derives one free metric before path K+1
-0    -> no path is preferred by the auxiliary signal
+None -> no auxiliary priority boundary is active; this includes inactive/disabled
+        availability and active availability with zero current problem paths
+K    -> at least one problem path exists; first K paths are preferred and lower layer
+        derives one free metric before path K+1
+0    -> every eligible path is currently in the problem tail
 ```
 
 The name is intentionally generic. The lower Adapter does not need to know that the
