@@ -96,16 +96,16 @@ recovery_good_news
 All three values are positive.
 
 `failure_ticks` is the number of tick observations without any good news required to
-move a GOOD channel to BAD.
+set `availability_problems = true`.
 
 `recovery_good_news` is the number of consecutive valid good-news replies required to
-move a BAD channel to GOOD.
+clear `availability_problems`.
 
 "Consecutive" here does not mean one reply per timer interval. Delayed replies remain
 valid good news when they arrive. Several delayed replies may therefore complete recovery
 in one collector pass.
 
-A tick without any good news since the preceding tick breaks an incomplete BAD-channel
+A tick without any good news since the preceding tick breaks an incomplete problem-channel
 recovery sequence.
 
 ## 4. Input aggregation
@@ -130,8 +130,8 @@ pending_good_news =
 
 No larger value is semantically useful:
 
-- while GOOD, only zero versus non-zero matters;
-- while BAD, at most `recovery_good_news` replies can complete recovery.
+- while `availability_problems = false`, only zero versus non-zero matters;
+- while `availability_problems = true`, at most `recovery_good_news` replies can complete recovery.
 
 ### 4.2. Tick
 
@@ -154,7 +154,7 @@ There is no `elapsed_intervals` catch-up.
 The collector owns, per channel:
 
 ```text
-status: GOOD | BAD
+availability_problems: bool
 failure_misses
 recovery_progress
 good_news_since_tick
@@ -164,10 +164,14 @@ An implementation may encode `failure_misses` and `recovery_progress` using one 
 counter, but the semantic model above is normative and avoids off-by-one dependence on a
 particular encoding.
 
-Only one side of the state is active:
+Only one side of the hysteresis state is active:
 
-- GOOD uses `failure_misses`;
-- BAD uses `recovery_progress`.
+- `availability_problems = false` uses `failure_misses`;
+- `availability_problems = true` uses `recovery_progress`.
+
+Initial state is always `availability_problems = false`. Disabled probing also means
+`availability_problems = false` by definition. Availability is an optional negative
+priority modifier; absence of evidence never creates a problem state.
 
 `good_news_since_tick` is a one-bit latch recording whether at least one valid reply has
 been accepted since the preceding processed tick.
@@ -194,9 +198,9 @@ a tick never improves a channel
 good news never worsens a channel
 ```
 
-## 7. GOOD-channel rule
+## 7. No-problem channel rule
 
-A GOOD channel can become BAD only while processing a tick.
+A channel without availability problems can acquire them only while processing a tick.
 
 Good-news arrivals before the next tick merely latch:
 
@@ -212,7 +216,7 @@ if good_news_since_tick or pending_good_news > 0:
 else:
     failure_misses += 1
     if failure_misses >= failure_ticks:
-        status = BAD
+        availability_problems = true
         recovery_progress = 0
 
 good_news_since_tick = false
@@ -220,19 +224,19 @@ consume pending_good_news
 consume tick_pending
 ```
 
-The number of accumulated replies while GOOD is irrelevant beyond zero/non-zero.
+The number of accumulated replies while `availability_problems = false` is irrelevant beyond zero/non-zero.
 
 Therefore:
 
 ```text
-GOOD -> BAD
+false -> true
 ```
 
 is exclusively a tick-driven transition.
 
-## 8. BAD-channel rule
+## 8. Problem-channel rule
 
-A BAD channel can become GOOD only while processing good news.
+A channel with availability problems can clear them only while processing good news.
 
 Every accepted reply contributes independently:
 
@@ -243,7 +247,7 @@ if pending_good_news > 0:
     recovery_progress = min(recovery_progress, recovery_good_news)
 
     if recovery_progress >= recovery_good_news:
-        status = GOOD
+        availability_problems = false
         failure_misses = 0
 ```
 
@@ -251,7 +255,7 @@ Thus, with `recovery_good_news = 3`, three delayed replies arriving in one colle
 are sufficient for immediate recovery. The collector does not wait for two additional
 timer intervals merely to spread those replies across artificial observation windows.
 
-If the channel entered the pass BAD and a tick is also pending:
+If the channel entered the pass problem and a tick is also pending:
 
 ```text
 if no good news has been seen since the preceding tick
@@ -263,12 +267,12 @@ consume tick_pending
 ```
 
 If current good news completes recovery in the same pass, the simultaneous tick does not
-then apply GOOD-channel degradation logic to the newly GOOD state.
+then apply no-problem channel degradation logic to the newly cleared problem state.
 
 Therefore:
 
 ```text
-BAD -> GOOD
+true -> false
 ```
 
 is exclusively a good-news-driven transition.
@@ -281,7 +285,7 @@ Policy:
 recovery_good_news = 3
 ```
 
-The channel is BAD. Four probes are sent on successive physical cadences. The first three
+The channel has `availability_problems = true`. Four probes are sent on successive physical cadences. The first three
 timer periods produce no reply at the collector. During the fourth period three delayed
 valid replies arrive.
 
@@ -292,11 +296,11 @@ pending_good_news = 3
 tick_pending = true   # if the fourth tick is already pending
 ```
 
-The BAD rule consumes the three replies:
+The problem-channel rule consumes the three replies:
 
 ```text
 recovery_progress: 0 -> 3
-status: BAD -> GOOD
+availability_problems: true -> false
 ```
 
 The replies proved that three probes succeeded; transport delay did not turn them into
@@ -316,13 +320,13 @@ reply after that physical generation has been invalidated.
 This guard is below availability hysteresis. It must not be used to version timer windows,
 recovery policy, collector/materializer communication or route order.
 
-A logical-policy-only change resets the affected collector channel state directly. It does
-not require an `evidence_epoch`.
+A logical-policy-only change preserves `availability_problems`, resets hysteresis progress,
+and clears pending per-channel aggregates. It does not require an `evidence_epoch`.
 
 ## 11. Synchronous materializer boundary
 
 The collector remembers current channel statuses. Counter/latch changes that do not change
-a routing-relevant status do not require materialization.
+`availability_problems` do not require materialization.
 
 When the routing-relevant current snapshot changes, the collector calls the
 `PayloadTrafficManager` route-priority materializer synchronously:
@@ -381,15 +385,15 @@ It never:
 - adds an eligible payload path;
 - removes an eligible payload path;
 - changes binding membership;
-- changes filter/NAT membership merely because a channel is BAD.
+- changes filter/NAT membership merely because a channel is problem.
 
 The existing effective-order and metric-hole model remains normative:
 
-- GOOD paths form the preferred prefix in configured priority;
-- other paths retain relative effective order;
+- paths with `availability_problems = false` precede paths with problems;
+- configured priority is authoritative within each class;
+- startup/disabled probing leaves configured order untouched;
 - the free metric slot is emergent, not configured;
-- all GOOD => no steady gap;
-- all BAD/non-confirmed => first ordinary metric slot is free;
+- when no availability-driven reorder has occurred, no availability gap is materialized;
 - the route sorter is the sole transactional executor for priority rearrangement.
 
 ## 13. Execution-agent consequence

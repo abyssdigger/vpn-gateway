@@ -35,7 +35,7 @@ probing never changes payload route membership
 
 Отдельного исключения для «последнего» или «единственного» path нет: probing вообще не
 выполняет операций добавления или удаления payload routes. Изменение
-`CONFIRMED_LIVE / NOT_CONFIRMED_LIVE` влияет только на desired order и границу
+`availability_problems = false / true` влияет только на desired order и границу
 confirmed-live prefix.
 
 ## 2. Два независимых вопроса
@@ -61,8 +61,8 @@ path.
 Для routing priority достаточно различать:
 
 ```text
-CONFIRMED_LIVE
-NOT_CONFIRMED_LIVE
+availability_problems = false
+NOT_availability_problems = false
 ```
 
 Диагностика вправе дополнительно различать отсутствие ответа, локальную ошибку probe
@@ -99,8 +99,8 @@ Routing evidence aggregation is now normative in
 For routing priority each channel is projected only as:
 
 ```text
-GOOD
-BAD
+no-problem
+problem
 ```
 
 Diagnostic UNKNOWN/local execution error may still exist outside this routing projection.
@@ -108,12 +108,12 @@ Diagnostic UNKNOWN/local execution error may still exist outside this routing pr
 The essential asymmetric transitions are:
 
 ```text
-GOOD -> BAD    only while processing a tick
-BAD  -> GOOD   only while processing one or more good-news replies
+no-problem -> problem    only while processing a tick
+problem  -> no-problem   only while processing one or more good-news replies
 ```
 
 Good-news replies are colorless and countable. Several delayed valid replies may complete
-BAD -> GOOD recovery in one collector pass. A tick is only a pending fact; multiple
+problem -> no-problem recovery in one collector pass. A tick is only a pending fact; multiple
 undrained timer expirations collapse to one tick and are not replayed as elapsed windows.
 
 Local probe execution ERROR is diagnostic only. It neither creates a negative event nor
@@ -199,11 +199,11 @@ PayloadProfileRequest.ordered_paths
 `ordered_paths` остается полным eligible set. Никакой EMPTY/gap не является path,
 binding или частью пользовательской конфигурации.
 
-Граница между `CONFIRMED_LIVE` prefix и остальным effective order является runtime
+Граница между `availability_problems = false` prefix и остальным effective order является runtime
 availability state. Она передается внутри текущего runtime routing intent как
 
 ```text
-confirmed_live_prefix_length
+no_problem_prefix_length
 ```
 
 Это **не normalized configuration** и не отдельный gap object. Значение вычисляется из
@@ -266,7 +266,7 @@ all non-confirmed:
 
 Положение свободного metric не фиксируется в конфигурации и не materialized отдельным
 объектом. Оно однозначно выводится из текущего effective order и transient
-`confirmed_live_prefix_length`.
+`no_problem_prefix_length`.
 
 Terminal blackhole остается отдельным:
 

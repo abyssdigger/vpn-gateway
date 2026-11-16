@@ -103,7 +103,7 @@ inside `PayloadTrafficManager`, not by `AvailabilityProbeManager`.
 The producer-facing boundary is deliberately smaller than an asynchronous Event stream:
 current probe workers/timers update bounded per-channel aggregates
 (`pending_good_news`, `tick_pending`) through a short-lock input port and return. The
-Manager's single collector flow consumes those aggregate facts, updates current GOOD/BAD
+Manager's single collector flow consumes those aggregate facts, updates current availability-problems
 channel state, and invokes the existing route-priority materializer synchronously only
 when the routing-relevant snapshot changes.
 
@@ -223,7 +223,7 @@ Profile after the Manager's internal availability-priority materialization:
 `ProfileStateCalculator`.
 
 Availability priority больше не вычисляется upstream как готовый `ordered_paths`.
-`PayloadTrafficManager` владеет текущим GOOD/BAD channel state и выводит effective order
+`PayloadTrafficManager` владеет текущим availability-problems channel state и выводит effective order
 внутри своей managed domain. Availability по-прежнему не превращает observed path в
 binding ON/OFF и не меняет payload membership.
 
@@ -1023,7 +1023,7 @@ NG1 planner.py
 13. Синхронный dependency graph payload domain ацикличен.
 14. Нижняя domain за NetworkRulesAdapter не имеет independent synchronous back-edge в
     payload domain.
-15. `confirmed_live_prefix_length` является transient runtime routing intent, а не
+15. `no_problem_prefix_length` является transient runtime routing intent, а не
     пользовательской configuration и не persistent gap state; `None` означает отсутствие
     активной availability-derived boundary, тогда как `0` означает активную boundary без
     confirmed-live paths.
@@ -1051,7 +1051,7 @@ NG1 planner.py
 6. remaining runtime assembly above the implemented protective startup gate; forwarding
    closure до первого owner reconcile зафиксирован в `runtime-bootstrap.md`.
 
-Availability bubble wiring, transient `confirmed_live_prefix_length`, runtime
+Availability-problems priority wiring, transient `no_problem_prefix_length`, runtime
 probe-to-Profile evidence projection и single-executor payload queue/coalescing уже
 реализованы. Linux route-only materialization подтверждена EXP-027.
 
