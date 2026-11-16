@@ -1583,6 +1583,14 @@ target evidence. Production acceptance of that specific remediation requires eit
 
 This is an implementation/evidence gate, not new user-visible availability semantics.
 
+The current implementation deferral is recorded in
+`design/deferrals/NG3-probe-local-system-materialization.md`. Until one of that artifact's
+re-entry conditions is satisfied, the shared nft convergence boundary must not materialize
+probe-owned `stack_input` / `stack_output` rules or production probe-class conntrack
+cleanup from the EXP-024/026 candidate mechanism. This does not weaken the first-release ICMP
+availability requirement; it keeps the Linux implementation path explicitly blocked rather
+than guessed.
+
 
 ## 8.2. Probe network preconditions and shared lower policy boundary
 
