@@ -1953,6 +1953,37 @@ Current interface operands rendered symbolically; the stale old oif rendered
 as a decimal-string ifindex. This evidence accepts the lower primitive only;
 full payload filter semantics remain gated as stated above.
 
+###### EXP-036 — проверка prefix-scoped stateful return primitive
+
+**Implements:**
+- `VPNG0002-R2.R1.R2` — remote prefix сохраняет одинаковый смысл в обоих направлениях;
+- `VPNG0002-R2.R3.R3` — return traffic уже разрешённого flow может обслуживаться statefully;
+- `VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3` — обратный packet path привязан к текущей concrete interface generation;
+- `VPNG0004-R4.R1`, `VPNG0004-R4.R2`, `VPNG0004-R4.R3.R2` — stale/неподтверждённый return state не должен расширять forwarding.
+
+**Constrained by:**
+- `VPNG0002-R2.R3.C1` — Release 1 inbound/bidirectional max-path constraint остаётся;
+- `VPNG0001-R1.R2.R4.R6.C1` — lower nft expression не выбирает user grammar.
+
+Для outbound NEW primitive из EXP-035 кандидат stateful reverse primitive
+должен быть **prefix-scoped**, а не только `ct state established,related`:
+`meta iif = current path`, `meta oif = host boundary`,
+`ip saddr = тот же remote prefix`, `ct state established,related`.
+Иначе retained conntrack для старого/другого remote prefix мог бы получить
+широкое разрешение через тот же interface pair после structural change.
+
+EXP-036 должен проверить реальный bidirectional ICMP flow, отсутствие
+разрешения для unsolicited reverse NEW, отсутствие return для remote source
+вне prefix даже при отдельно разрешённом outbound NEW test packet, и
+same-name/new-ifindex replacement. После замены новый outbound NEW rule
+может быть создан для нового oif, но старый reverse rule по old iif не
+должен пропустить reply; новый reverse rule должен восстановить flow.
+
+Это по-прежнему **lower primitive evidence**, а не полный filter compiler:
+inbound NEW, Device envelope intersection, multi-Profile canonical projection
+и full owner convergence остаются отдельными units.
+
+
 
 `payload_postrouting` exists as the stable owner boundary for supported payload source-NAT
 realization. It is valid and intentionally empty when no accepted Device/path requires NAT.
