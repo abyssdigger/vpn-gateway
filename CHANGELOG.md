@@ -1,3 +1,36 @@
+## 2026-11-15 — NG2 non-attempt probe execution contract
+
+Defined the next execution boundary without restoring per-attempt availability semantics:
+
+- added generation-bound `ProbeExecutionPlan` projection from enabled logical probes;
+- shared physical planes use the smallest requested send interval while logical observation
+  windows remain separate per `probe_id`;
+- added typed `ProbeGoodNewsInfo` and `ProbeWindowBoundaryInfo` inputs to the existing
+  AvailabilityProbeManager evidence logic;
+- no production `NO_REPLY` event or attempt identity was introduced;
+- plan activation starts windows and performs an immediate first send; coincident later
+  boundaries are emitted before the next send, preventing a synthetic startup miss;
+- AvailabilityProbeManager now serializes request/audit/good-news/window callbacks across
+  generation changes so stale execution events cannot race into new evidence state;
+- concrete persistent sender/receiver process/socket machinery remains a lower implementation
+  unit and must implement this contract rather than promote the diagnostic single-shot
+  `LinuxIcmpProbeDriver`.
+
+---
+
+## 2026-11-15 — NG2 probing route-membership invariant
+
+Clarified the normative availability model after route-priority runtime wiring:
+
+- probing never adds or removes payload paths/routes; it changes only availability state,
+  desired order and the confirmed-live prefix boundary;
+- the older special-case wording that protected only the last/sole path was removed as
+  weaker and misleading;
+- a sole or last confirmed-live path follows the same rule as every other path: its route
+  remains materialized and only its priority state may change.
+
+---
+
 ## 2026-11-14 — NG2 availability runtime wiring and serialized payload transactions
 
 Completed the first executable runtime path from generation-bound availability evidence to

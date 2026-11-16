@@ -1,4 +1,5 @@
 from ipaddress import IPv4Address
+from threading import Event, Thread
 import unittest
 
 from rou.availability_probe_manager import AvailabilityProbeManager
@@ -14,6 +15,10 @@ from rou.network_rules import (
 from rou.probe_rules import (
     AvailabilityProbeRequest,
     AvailabilityProbeSetRequest,
+)
+from rou.probe_transport import (
+    ProbeGoodNewsInfo,
+    ProbeWindowBoundaryInfo,
 )
 
 
@@ -39,10 +44,20 @@ class FakeAdapter:
         self.renew_owners = []
         self.get_owners = []
         self.cleanup_owners = []
+        self.block_apply_number = None
+        self.apply_entered = Event()
+        self.apply_release = Event()
+        self.apply_release.set()
 
     def apply(self, owner, spec: NetworkRulesSpec) -> ActionResult:
         self.apply_owners.append(owner)
         self.apply_specs.append(spec)
+        if (
+            self.block_apply_number is not None
+            and len(self.apply_owners) == self.block_apply_number
+        ):
+            self.apply_entered.set()
+            self.apply_release.wait(timeout=5)
         if self.apply_success:
             self.state = NetworkRulesState(
                 StateKnowledge.KNOWN,
@@ -338,6 +353,61 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             self.publisher.events[-1].reason,
         )
 
+    def test_ready_generation_exposes_non_attempt_execution_plan(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+
+        plan = self.manager.execution_plan
+
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan.generation, self.manager.observation_generation)
+        self.assertEqual(len(plan.planes), 1)
+        self.assertEqual(plan.planes[0].path, self.path)
+        self.assertEqual(plan.windows[0].probe_id, "primary")
+
+    def test_no_ready_generation_exposes_no_execution_plan(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        disabled = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            enabled=False,
+            policy=primary.policy,
+        )
+
+        self.manager.handle_request(request(disabled))
+
+        self.assertIsNone(self.manager.execution_plan)
+
+    def test_generation_bound_execution_events_use_existing_evidence_logic(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        matched = self.manager.handle_good_news(
+            ProbeGoodNewsInfo(
+                primary.mechanism,
+                primary.path,
+                primary.target,
+                generation,
+            )
+        )
+        closed = self.manager.handle_window_boundary(
+            ProbeWindowBoundaryInfo(
+                primary.probe_id,
+                generation,
+            )
+        )
+
+        self.assertEqual(matched, 1)
+        self.assertTrue(closed)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.REACHABLE,
+        )
+
     def test_good_news_immediately_publishes_reachable(self):
         primary = probe("primary", self.path, "203.0.113.24")
         self.manager.handle_request(request(primary))
@@ -439,6 +509,55 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
                 ("first", AvailabilityProbeState.REACHABLE),
                 ("second", AvailabilityProbeState.REACHABLE),
             },
+        )
+
+    def test_generation_transition_serializes_concurrent_stale_good_news(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        stale = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        self.adapter.block_apply_number = 2
+        self.adapter.apply_release.clear()
+        changed = probe("primary", self.path, "203.0.113.25")
+
+        request_thread = Thread(
+            target=self.manager.handle_request,
+            args=(request(changed),),
+        )
+        request_thread.start()
+        self.assertTrue(self.adapter.apply_entered.wait(timeout=2))
+
+        result = []
+        good_news_thread = Thread(
+            target=lambda: result.append(
+                self.manager.handle_good_news(
+                    ProbeGoodNewsInfo(
+                        primary.mechanism,
+                        primary.path,
+                        primary.target,
+                        stale,
+                    )
+                )
+            )
+        )
+        good_news_thread.start()
+
+        self.assertTrue(good_news_thread.is_alive())
+
+        self.adapter.apply_release.set()
+        request_thread.join(timeout=2)
+        good_news_thread.join(timeout=2)
+
+        self.assertFalse(request_thread.is_alive())
+        self.assertFalse(good_news_thread.is_alive())
+        self.assertEqual(result, [0])
+        self.assertNotEqual(self.manager.observation_generation, stale)
+        self.assertFalse(
+            any(
+                item.state is AvailabilityProbeState.REACHABLE
+                for item in self.publisher.events
+            )
         )
 
     def test_stale_generation_good_news_and_boundary_are_ignored(self):
