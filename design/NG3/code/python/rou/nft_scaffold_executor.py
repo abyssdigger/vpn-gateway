@@ -26,7 +26,7 @@ class PayloadNftScaffoldBackend(Protocol):
         """Return one fresh full-ruleset ownership observation."""
 
     def create_payload_scaffold(self) -> None:
-        """Create the marked table and both invariant chains atomically."""
+        """Create the marked table and all invariant scaffold chains atomically."""
 
     def add_payload_scaffold_chains(
         self,
