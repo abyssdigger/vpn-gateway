@@ -96,6 +96,7 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
             if str(route.destination) == "198.51.100.7/32"
         )
         self.assertEqual(host_route.endpoint, PATH1)
+        self.assertEqual(host_route.scope, 253)
 
         probe_rule = next(rule for rule in value.rules if rule.priority == 0x2000)
         self.assertEqual(probe_rule.fwmark, 0x1234)
@@ -179,6 +180,25 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
         )
         self.assertEqual(value.routes[0].endpoint, replacement)
         self.assertNotEqual(value.routes[0].endpoint, PATH0)
+
+    def test_unrepresented_reserved_route_field_is_conflict(self):
+        bad = dict(EXP029_ROUTES[2])
+        bad["prefsrc"] = "192.0.2.9"
+        value = parse([bad], [])
+        self.assertEqual(value.routes, ())
+        self.assertEqual(len(value.conflicts), 1)
+        self.assertIn("unsupported reserved route fields", value.conflicts[0].reason)
+
+    def test_route_scope_is_preserved_and_invalid_scope_conflicts(self):
+        value = parse([EXP029_ROUTES[2]], [])
+        self.assertEqual(value.routes[0].scope, 253)
+
+        bad = dict(EXP029_ROUTES[2])
+        bad["scope"] = "999"
+        invalid = parse([bad], [])
+        self.assertEqual(invalid.routes, ())
+        self.assertEqual(len(invalid.conflicts), 1)
+        self.assertIn("outside u8", invalid.conflicts[0].reason)
 
     def test_reserved_route_on_absent_interface_is_conflict(self):
         value = parse(

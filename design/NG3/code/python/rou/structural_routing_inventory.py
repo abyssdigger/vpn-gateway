@@ -21,6 +21,7 @@ class ObservedManagedRoute:
     route_type: ManagedRouteType
     protocol: int
     metric: int
+    scope: int | None
     endpoint: InterfaceIdentity | None
     gateway: IPv4Address | None
     onlink: bool
@@ -177,6 +178,27 @@ def _parse_reserved_route(
     interfaces: dict[str, InterfaceIdentity],
     platform: NetworkPolicyPlatformSpace,
 ) -> ObservedManagedRoute:
+    allowed_fields = {
+        "type",
+        "dst",
+        "protocol",
+        "scope",
+        "metric",
+        "flags",
+        "table",
+        "gateway",
+        "dev",
+        "nexthops",
+        "nhid",
+        "multipath",
+        "via",
+    }
+    extras = sorted(set(row) - allowed_fields)
+    if extras:
+        raise StructuralRoutingInventoryError(
+            f"unsupported reserved route fields {extras!r}"
+        )
+
     for unsupported in ("nexthops", "nhid", "multipath", "via"):
         if unsupported in row:
             raise StructuralRoutingInventoryError(
@@ -187,6 +209,7 @@ def _parse_reserved_route(
     protocol = _required_decimal(row.get("protocol"), "route protocol")
     metric = _required_u32(row.get("metric"), "route metric")
     destination = _route_destination(row.get("dst"))
+    scope = _optional_scope(row.get("scope"))
 
     flags = row.get("flags", [])
     if not isinstance(flags, list) or any(
@@ -217,6 +240,7 @@ def _parse_reserved_route(
             route_type=route_type,
             protocol=protocol,
             metric=metric,
+            scope=scope,
             endpoint=None,
             gateway=None,
             onlink=False,
@@ -243,6 +267,7 @@ def _parse_reserved_route(
         route_type=route_type,
         protocol=protocol,
         metric=metric,
+        scope=scope,
         endpoint=endpoint,
         gateway=gateway,
         onlink=onlink,
@@ -357,6 +382,17 @@ def _required_decimal(value: object, label: str) -> int:
     return result
 
 
+def _optional_scope(value: object) -> int | None:
+    if value is None:
+        return None
+    scope = _required_decimal(value, "route scope")
+    if not 0 <= scope <= 255:
+        raise StructuralRoutingInventoryError(
+            "route scope is outside u8"
+        )
+    return scope
+
+
 def _required_u32(value: object, label: str) -> int:
     if type(value) is not int or not 0 <= value <= 0xFFFFFFFF:
         raise StructuralRoutingInventoryError(
@@ -467,6 +503,7 @@ def _route_key(route: ObservedManagedRoute) -> tuple[object, ...]:
         route.route_type.value,
         route.protocol,
         route.metric,
+        route.scope if route.scope is not None else -1,
         route.endpoint.ifname if route.endpoint else "",
         route.endpoint.ifindex if route.endpoint else -1,
         str(route.gateway) if route.gateway else "",
