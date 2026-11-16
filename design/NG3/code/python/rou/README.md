@@ -17,6 +17,7 @@ Implemented:
 - availability-only effective priority transformation with unchanged membership;
 - pure make-before-break route-priority move planning for unchanged path membership;
 - partial-state route-priority convergence from a fresh observed snapshot, including safe cleanup of already-confirmed duplicate route copies;
+- single-attempt route-priority Executor contract with mandatory re-observation after failure and fresh final postcondition verification;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:

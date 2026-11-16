@@ -34,6 +34,7 @@ Current trace:
 | AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md` |
 | NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
 | NetworkPolicyExecutor re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
+| NetworkPolicyExecutor single-attempt observe/apply/re-observe contract | `route_priority_executor.py` | `NG3-2026-11-16-route-priority-executor-attempt-code-review.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
@@ -1551,6 +1552,27 @@ one observable.
 
 The Executor converges the lower network domain from freshly observed current state to the
 caller-selected desired semantic state.
+
+The executable reference now separates a single physical-attempt contract from retry policy:
+
+```text
+fresh authoritative observation
+        ->
+pure convergence plan
+        ->
+apply semantic steps
+        ->
+fresh authoritative observation
+        ->
+exact postcondition check
+```
+
+A failed physical step terminates that attempt. The remaining plan is discarded, the
+Executor re-observes before returning failure, and any later attempt must re-plan from that
+new observation. The attempt helper contains no hidden retry loop.
+
+A successfully issued command sequence is not confirmation. Success requires a fresh final
+observation that exactly matches the desired one-route-per-logical-path assignment.
 
 Required properties:
 
