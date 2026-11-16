@@ -4264,6 +4264,100 @@ This is the recovered semantic value of the historical
 `LOCK -> CLEANUP -> LOAD/VALIDATE -> APPLY -> RUN` ordering. The exact CLI/service-manager
 mechanism and exact phase implementation are replaceable.
 
+## 12.0.1. Network-policy activation subassembly
+
+**Implements:**
+- `VPNG0004-R4.R4`;
+- `VPNG0004-R4.R5`;
+- `VPNG0005-R5.R1`;
+- `VPNG0005-R5.R6.R1`;
+- `VPNG0006-R6.R3`;
+- `VPNG0006-R6.R4`.
+
+**Constrained by:**
+- `VPNG0007-R7.R1`;
+- `VPNG0007-R7.R3.R1`.
+
+This is a bounded procedural subassembly inside startup/reconciliation. It is **not** the
+product `start` operation and does not own instance locking, managed-domain creation,
+configuration parsing, runtime scheduling, shutdown or user-facing status publication.
+
+Its input is already-normalized lower desired state:
+
+```text
+PayloadRoutingDesiredState
+CompositeNftDesiredState
+current Linux platform allocation
+```
+
+It does not invent missing Device NAT/firewall/publication grammar or derive semantic policy.
+
+The activation sequence is:
+
+```text
+1. converge/reread ForwardingGate = DISABLED
+2. while closed, observe nft namespace + invariant scaffold
+3. scaffold handling:
+   ABSENT
+       -> run existing guarded scaffold bootstrap once
+   OWNED + exact invariant scaffold
+       -> do not run scaffold-only repair
+       -> allow coexisting objects to be classified by the structural transaction
+   OWNED + missing invariant chains + no non-scaffold objects
+       -> run existing guarded scaffold repair once
+   marker/scaffold conflict
+       -> fail
+   incomplete scaffold + non-scaffold objects
+       -> fail: safe scaffold-only repair is not proven for that mixed state
+4. run the bounded complete structural transaction
+5. READY only when the structural transaction is CONFIRMED
+```
+
+The distinction in step 3 is necessary because
+`prepare_payload_nft_scaffold_once(...)` is intentionally a scaffold-only mutation unit.
+An exact scaffold may already contain legitimate Profile/Device/NAT/publication rules; those
+objects are not a reason to run scaffold repair and are instead classified by the complete
+cross-domain structural observer. Conversely, repairing an incomplete scaffold while other
+objects coexist is not silently generalized beyond the existing evidence.
+
+Any failure after the initial containment phase triggers one independent safety-containment
+attempt:
+
+```text
+converge/reread ForwardingGate = DISABLED
+```
+
+This containment attempt is not a retry of scaffold preparation or structural convergence.
+If containment is confirmed, the activation result preserves the original failing stage and
+lower diagnostic. If containment cannot be confirmed, the result is a distinct containment
+failure and readiness remains false.
+
+No failed scaffold operation or failed structural transaction is retried inside this
+subassembly. A later Manager reconciliation may invoke a new activation attempt from fresh
+state as required by `VPNG0005-R5.R3`.
+
+The result is a current bounded readiness projection:
+
+```text
+READY
+    structural transaction confirmed exact state and verified forwarding activation
+
+NOT READY
+    failing phase + lower result/diagnostic
+    + confirmed failure containment when obtainable
+```
+
+This projection is suitable input to later lifecycle/status assembly but is not itself a
+global lifecycle state machine.
+
+**Evidence plan:**
+
+- rootless tests for absent/exact/conflicting/partially repairable scaffold states;
+- rootless proof that lower failures are not retried and failure containment is distinct;
+- privileged disposable-network-namespace test beginning with no `vpn_gate` table:
+  bootstrap scaffold, activate a zero-path fail-closed policy without ambient fallback, then
+  activate a current VPN path through the same subassembly.
+
 ## 12.1. Product lifecycle control surface
 
 The lifecycle operations required by `VPNG0005-R5.R6` are exposed through a thin product
