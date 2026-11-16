@@ -20,6 +20,7 @@ from rou.device_firewall_structure import (
 from rou.interface_identity import InterfaceIdentity
 from rou.local_publication_observation import LocalPublicationComparison
 from rou.local_publication_policy import (
+    LocalPublicationDesiredState,
     LocalPublicationHook,
     LocalPublicationRuleSpec,
     PublicationProtocol,
@@ -199,10 +200,7 @@ class CompositeNftPlanTests(unittest.TestCase):
             local_address=IPv4Address("198.51.100.46"),
             local_port=44443,
         )
-        local_desired = __import__(
-            "rou.local_publication_policy",
-            fromlist=["LocalPublicationDesiredState"],
-        ).LocalPublicationDesiredState(
+        local_desired = LocalPublicationDesiredState(
             (local_input, local_output)
         )
 
