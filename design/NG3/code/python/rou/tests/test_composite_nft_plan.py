@@ -18,6 +18,7 @@ from rou.device_firewall_structure import (
     ObservedDeviceFirewallJump,
 )
 from rou.interface_identity import InterfaceIdentity
+from rou.local_publication_observation import LocalPublicationComparison
 from rou.nft_namespace_inventory import NftNamespaceStatus
 from rou.nft_payload_scaffold import (
     NftPayloadScaffoldComparison,
@@ -96,6 +97,12 @@ def comparison(
             missing=device_missing,
             stale_chains=device_stale_chains,
             stale_jumps=device_stale_jumps,
+            conflicts=(),
+        ),
+        local_publication=LocalPublicationComparison(
+            confirmed=(),
+            missing=(),
+            stale=(),
             conflicts=(),
         ),
         conflicts=(),
