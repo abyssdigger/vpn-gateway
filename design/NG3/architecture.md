@@ -2080,6 +2080,13 @@ prefix lengths. EXP-038 is therefore required. If nft optimizes `/0`
 by removing the payload-prefix expression, the observer design must be revised
 rather than pretending the missing expression is equivalent by assumption.
 
+**EXP-038 result:** PASS on privileged GitHub Linux CI. `/0`, `/1` and
+`/31` remain explicit prefix objects; `/32` is a plain IPv4 address string.
+The same forms are used by NEW daddr and RETURN saddr matches. The strict
+observer implementation gate is therefore open for all accepted IPv4 CIDR
+prefix lengths.
+
+
 
 
 

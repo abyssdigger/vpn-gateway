@@ -64,3 +64,17 @@ prefix-object form to all non-`/32` values is not sufficient evidence.
 The implementation gate is therefore **re-closed** until EXP-038 records
 canonical NEW/RETURN JSON for `/0`, `/1`, `/31`, and `/32`.
 This is technical parser evidence only; no product semantic change.
+
+
+## EXP-038 disposition
+
+EXP-038 PASS on GitHub Actions run 43869054646:
+
+- `/0`, `/1`, `/31` -> explicit nft prefix objects;
+- `/32` -> plain IPv4 address string;
+- NEW and RETURN use the same representation class;
+- no counter expression in production shape.
+
+The conditional implementation block is closed. The read-only strict observer
+may now be implemented under the existing design constraints. Full Profile
+filter compilation and mutation remain separately gated.

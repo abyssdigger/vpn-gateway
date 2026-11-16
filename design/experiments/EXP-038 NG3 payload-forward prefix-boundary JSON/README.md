@@ -1,6 +1,6 @@
 # EXP-038 — NG3 payload_forward IPv4 prefix-boundary JSON
 
-**Status:** PREPARED / UNPROVEN.
+**Status:** PASS on privileged GitHub Linux CI.
 
 ## Question
 
@@ -17,4 +17,4 @@ Disposable namespace; exact production NEW/RETURN rule skeletons only.
 Record complete JSON for both remote fields at each prefix length.
 No packet semantics are inferred beyond EXP-035/036.
 
-Observer implementation remains gated until this representation is reviewed.
+PASS evidence: `EXP-038-result-20261116.md`. Observer implementation gate is opened by the reviewed result.
