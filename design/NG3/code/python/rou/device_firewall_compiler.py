@@ -170,12 +170,20 @@ def _compile_rule(
             raise DeviceFirewallCompileError(
                 "normalized protocol is not proven by the current lower gate"
             )
-        matches.append(
-            _match_json(
-                {"meta": {"key": "l4proto"}},
-                protocol,
+        # nft canonicalization also removes protocol-only TCP when the final
+        # action is "reject with tcp reset": that action itself constrains the
+        # rule to TCP. The live guarded-mutation integration exposed this
+        # exact post-write shape.
+        if not (
+            rule.action is DeviceFirewallAction.REJECT
+            and protocol == "tcp"
+        ):
+            matches.append(
+                _match_json(
+                    {"meta": {"key": "l4proto"}},
+                    protocol,
+                )
             )
-        )
 
     if rule.action is DeviceFirewallAction.ALLOW:
         lower_action = DeviceFirewallRuleAction.RETURN
