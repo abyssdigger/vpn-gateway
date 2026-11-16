@@ -2616,14 +2616,91 @@ independently proves strict progress/exact desired state.
 The bounded slice recognizes the invariant scaffold, Profile NEW/RETURN rules and Device
 firewall objects. It intentionally refuses coexisting NAT or local/system rule classes with
 `CONFLICT`; this is a limitation of this reference slice, **not** a product constraint.
-Whole Release-1 policy convergence requires a later combined structural Executor that
-classifies and preserves all accepted owner classes together.
 
 The live guarded integration proves initial two-direction materialization, replacement via
 `delete jump -> delete chain -> create`, insertion before Profile acceptance, fresh
 postcondition verification and persistent `ip_forward=0` throughout. A first live run also
 exposed the protocol-only TCP-REJECT canonicalization mismatch; the desired compiler was
 corrected to the observed nft shape and the full workflow then passed.
+
+###### Combined Profile / Device firewall / NAT structural convergence
+
+The first combined lower-policy Executor now covers all currently materialized payload owner
+classes in the reserved nft table:
+
+```text
+invariant four-chain scaffold
+Profile payload_forward NEW/RETURN rules
+Device firewall child chains + jumps + ordered child rules
+payload_postrouting NAT rules
+```
+
+`CompositeNftDesiredState` is a composition of the existing exact lower desired contracts;
+it does not introduce a new policy language or re-interpret Profile, Device or NAT semantics.
+
+`compare_composite_nft_policy` runs all existing strict owner-specific comparisons against
+one fresh observation and then proves that every remaining object in the reserved table is
+classified by one accepted owner class. A rule or chain that is not covered by the current
+materialized classes is a whole-scope conflict even if each known sub-comparison is locally
+clean.
+
+This is deliberate for `stack_input` / `stack_output`: local/system allow contributions
+are not silently accepted by the combined payload Executor until their exact lower owner
+shape has its own evidence and implementation unit.
+
+EXP-045 proves the missing Profile write primitives in coexistence with Device and NAT:
+
+- a new Profile NEW/RETURN rule may use ordinary `add rule`; it remains after already
+  inserted Device jumps;
+- stale Profile rules may be deleted by exact observed handle;
+- those operations preserve Device child/jump objects and NAT contributions.
+
+The combined pure step planner chooses exactly one mutation in this order:
+
+```text
+1. stale Profile positive admission
+2. stale Device jump
+3. stale Device child chain
+4. stale NAT
+5. missing NAT
+6. missing Device child + inserted jump
+7. missing Profile positive admission
+```
+
+The addition order is intentional: a new positive Profile permission is exposed only after
+its required NAT and Device restriction have already been materialized. Device jump cleanup
+remains before child-chain cleanup because nft references must be removed first.
+
+`converge_composite_nft_step_once` is the combined guarded Executor. For every step it:
+
+1. closes and confirms the managed IPv4 ForwardingGate;
+2. obtains one link-bracketed whole-table snapshot;
+3. performs composite owner/desired comparison;
+4. chooses one pure planned step;
+5. rechecks the closed gate immediately before the write;
+6. performs exactly one lower mutation;
+7. obtains a fresh link-bracketed whole-table snapshot;
+8. requires stable interface identity inventory and strict distance reduction;
+9. rechecks the gate and never opens it.
+
+A successful command is never treated as proof. A command wrapper error may count as
+successful convergence only when the fresh composite observation independently proves
+strict progress.
+
+The Linux combined backend uses the already accepted Device and NAT Drivers and adds only
+the EXP-045-backed Profile add/delete primitives. It does not own local/system exceptions.
+
+The privileged combined integration starts from scaffold-only state, materializes NAT,
+two direction-specific Device chains/jumps and Profile NEW/RETURN, verifies that both Device
+jumps remain physically before Profile accepts, then converges all three policy classes back
+to scaffold-only state. The observed cleanup order is Profile rules -> Device jumps ->
+Device chains -> NAT. `ip_forward` remains disabled throughout. An unclassified
+`stack_input` rule produces `CONFLICT` with no mutation.
+
+This closes combined structural convergence for the currently materialized Profile,
+Device-firewall and NAT owner classes. Extending the same whole-scope Executor to
+local/system INPUT/OUTPUT exceptions remains a separate lower-evidence unit, not a product
+semantic decision.
 
 No deny-rule ordering or nft jump graph is introduced merely to solve Profile prefix
 overlap; the already accepted canonical CIDR partition remains the simpler Profile-gate

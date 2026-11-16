@@ -1,0 +1,178 @@
+from __future__ import annotations
+
+import unittest
+from ipaddress import IPv4Network
+
+from rou.binding import LogicalPathId
+from rou.composite_nft_plan import (
+    CompositeNftStepKind,
+    select_composite_nft_step,
+)
+from rou.composite_nft_policy import (
+    CompositeNftPolicyComparison,
+)
+from rou.device_firewall_compare import DeviceFirewallComparison
+from rou.device_firewall_desired import DeviceFirewallChainSpec
+from rou.device_firewall_structure import (
+    ObservedDeviceFirewallChain,
+    ObservedDeviceFirewallJump,
+)
+from rou.interface_identity import InterfaceIdentity
+from rou.nft_namespace_inventory import NftNamespaceStatus
+from rou.nft_payload_scaffold import (
+    NftPayloadScaffoldComparison,
+    PAYLOAD_NFT_SCAFFOLD,
+)
+from rou.payload_forward_compare import PayloadForwardComparison
+from rou.payload_forward_desired import PayloadForwardRuleSpec
+from rou.payload_forward_observation import (
+    ObservedPayloadForwardRule,
+    PayloadForwardRemoteField,
+    PayloadForwardRuleKind,
+)
+from rou.payload_nat_desired import PayloadMasqueradeSpec
+from rou.payload_nat_observation import (
+    ObservedPayloadMasquerade,
+    PayloadNatComparison,
+)
+
+
+HOST = InterfaceIdentity("host0", 10)
+VPN = InterfaceIdentity("vpn0", 20)
+PREFIX = IPv4Network("10.0.0.0/8")
+PROFILE_SPEC = PayloadForwardRuleSpec(
+    PayloadForwardRuleKind.NEW,
+    HOST,
+    VPN,
+    PayloadForwardRemoteField.DESTINATION,
+    PREFIX,
+)
+NAT_SPEC = PayloadMasqueradeSpec(
+    LogicalPathId("device", 0, 0),
+    HOST,
+    VPN,
+)
+DEVICE_SPEC = DeviceFirewallChainSpec(
+    ingress=HOST,
+    egress=VPN,
+    child_chain_name="dfw_out",
+    rules=(),
+)
+SCAFFOLD = NftPayloadScaffoldComparison(
+    namespace_status=NftNamespaceStatus.OWNED,
+    confirmed_chains=PAYLOAD_NFT_SCAFFOLD,
+    missing_chains=(),
+    conflicts=(),
+    unclassified_objects=(),
+)
+
+
+def comparison(
+    *,
+    profile_missing=(),
+    profile_stale=(),
+    nat_missing=(),
+    nat_stale=(),
+    device_missing=(),
+    device_stale_chains=(),
+    device_stale_jumps=(),
+):
+    return CompositeNftPolicyComparison(
+        scaffold=SCAFFOLD,
+        profile_forward=PayloadForwardComparison(
+            confirmed=(),
+            missing=profile_missing,
+            stale=profile_stale,
+            conflicts=(),
+        ),
+        payload_nat=PayloadNatComparison(
+            confirmed=(),
+            missing=nat_missing,
+            stale=nat_stale,
+            conflicts=(),
+        ),
+        device_firewall=DeviceFirewallComparison(
+            confirmed=(),
+            missing=device_missing,
+            stale_chains=device_stale_chains,
+            stale_jumps=device_stale_jumps,
+            conflicts=(),
+        ),
+        conflicts=(),
+    )
+
+
+class CompositeNftPlanTests(unittest.TestCase):
+    def test_cleanup_precedence_starts_with_stale_profile_admission(self):
+        stale_profile = ObservedPayloadForwardRule(
+            10,
+            PayloadForwardRuleKind.NEW,
+            HOST,
+            VPN,
+            PayloadForwardRemoteField.DESTINATION,
+            PREFIX,
+        )
+        stale_jump = ObservedDeviceFirewallJump(
+            11, 1, HOST, VPN, "dfw_old",
+        )
+        stale_chain = ObservedDeviceFirewallChain(
+            "dfw_old", 12, 2, (),
+        )
+        stale_nat = ObservedPayloadMasquerade(13, HOST, VPN)
+        step = select_composite_nft_step(
+            comparison(
+                profile_stale=(stale_profile,),
+                nat_stale=(stale_nat,),
+                device_stale_chains=(stale_chain,),
+                device_stale_jumps=(stale_jump,),
+            )
+        )
+        self.assertEqual(step.kind, CompositeNftStepKind.DELETE_PROFILE_RULE)
+        self.assertEqual(step.handle, 10)
+
+    def test_device_jump_precedes_chain_and_nat_cleanup(self):
+        stale_jump = ObservedDeviceFirewallJump(
+            11, 1, HOST, VPN, "dfw_old",
+        )
+        stale_chain = ObservedDeviceFirewallChain(
+            "dfw_old", 12, 2, (),
+        )
+        stale_nat = ObservedPayloadMasquerade(13, HOST, VPN)
+        step = select_composite_nft_step(
+            comparison(
+                nat_stale=(stale_nat,),
+                device_stale_chains=(stale_chain,),
+                device_stale_jumps=(stale_jump,),
+            )
+        )
+        self.assertEqual(step.kind, CompositeNftStepKind.DELETE_DEVICE_JUMP)
+
+    def test_addition_precedence_is_nat_then_device_then_profile(self):
+        step = select_composite_nft_step(
+            comparison(
+                profile_missing=(PROFILE_SPEC,),
+                nat_missing=(NAT_SPEC,),
+                device_missing=(DEVICE_SPEC,),
+            )
+        )
+        self.assertEqual(step.kind, CompositeNftStepKind.ADD_NAT_RULE)
+
+        step = select_composite_nft_step(
+            comparison(
+                profile_missing=(PROFILE_SPEC,),
+                device_missing=(DEVICE_SPEC,),
+            )
+        )
+        self.assertEqual(step.kind, CompositeNftStepKind.CREATE_DEVICE_CHAIN)
+
+        step = select_composite_nft_step(
+            comparison(profile_missing=(PROFILE_SPEC,))
+        )
+        self.assertEqual(step.kind, CompositeNftStepKind.ADD_PROFILE_RULE)
+
+    def test_exact_state_has_no_step(self):
+        self.assertIsNone(select_composite_nft_step(comparison()))
+
+
+if __name__ == "__main__":
+    unittest.main()

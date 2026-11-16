@@ -38,15 +38,20 @@ Implemented:
 - EXP-033-backed read-only authoritative NAT chain observation/comparison classifying exact current, missing, stale and conflicting masquerade rules against the normalized desired state; no NAT rule add/delete or mutation authority;
 - EXP-035/036/037/038-backed strict read-only `payload_forward` owner observer for no-counter NEW/RETURN rules across the full IPv4 CIDR prefix-length range, with explicit current-interface-identity vs stale-generation classification; recognized shape is not desired-policy confirmation or mutation authority;
 - exact immutable lower `payload_forward` desired rule data plus pure actual-vs-desired comparison yielding confirmed/missing/stale/conflicts; this layer deliberately does not compile Profile direction, most-specific selection or Device envelope semantics;
-- bounded guarded NAT-only one-step Executor + Linux nft Driver with exact whole-scope postconditions, strict refusal of foreign/forward-rule objects, verified closed ForwardingGate, and no forwarding activation; this is reference evidence, not the complete structural policy Executor;
+- bounded guarded NAT-only one-step Executor + Linux nft Driver with exact whole-scope postconditions, strict refusal of foreign/forward-rule objects, verified closed ForwardingGate, and no forwarding activation; retained as narrow reference evidence;
+- EXP-041/042/043/044-backed ordered Device firewall child-chain owner/observer/desired/compiler/mutation slice, including active REJECT realization and mandatory Device-jump insertion before Profile acceptance;
+- EXP-045-backed combined read-only nft owner/desired comparison for the invariant scaffold plus Profile forward, Device firewall and payload NAT owner classes;
+- pure combined mutation-step planner with restrictive cleanup first and new Profile positive admission last;
+- guarded combined Profile/Device/NAT nft Executor + Linux backend using one link-bracketed whole-table snapshot before and after each write, persistent closed ForwardingGate, exact postcondition progress and no forwarding activation;
+- privileged combined coexistence integration covering materialization to exact state, complete cleanup back to scaffold-only, Device-before-Profile ordering and fail-closed refusal of unclassified stack-local rules;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
 
 - no Device Engine;
 - no Netlink event state/history/replay;
-- no general Linux structural route/RPDB/nft policy executor beyond the reviewed pure-priority route-key slice;
-- no complete structural NetworkPolicyExecutor for terminal guards, RPDB dispatch and nft payload/probe policy yet;
+- no complete cross-domain structural NetworkPolicyExecutor coordinating route/RPDB plus nft policy yet;
+- no materialized local/system stack_input/stack_output exception owner class yet; exact control/probe/publication/integration rules remain behind their lower evidence gates;
 - no full daemon/lifecycle assembly;
 - no production probe execution;
 - no final user-facing NAT / traffic-envelope / publication grammar;
