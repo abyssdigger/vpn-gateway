@@ -1342,6 +1342,56 @@ target evidence. Production acceptance of that specific remediation requires eit
 This is an implementation/evidence gate, not new user-visible availability semantics.
 
 
+## 8.2. Probe network preconditions and shared lower policy boundary
+
+**Implements:**
+- `VPNG-R3.R6`
+- `VPNG-R3.R6.R1`
+- `VPNG-R3.R6.R2`
+- `VPNG-R4.R1`
+- `VPNG-R4.R2`
+- `VPNG-R4.R5`
+- `VPNG-R7.R3`
+- `VPNG-R7.R3.R1`
+- `VPNG-R7.R3.R2`
+
+A path-specific availability observation is valid only when its local network preconditions
+ensure that the probe is actually constrained to the intended path and cannot silently escape
+through another Device or ordinary routing.
+
+The availability side owns the semantic lifecycle/readiness of those observation
+preconditions:
+
+```text
+active normalized availability channels
+        ->
+required probe-owner network policy
+        ->
+shared lower NetworkPolicyAdapter / Executor
+        ->
+verified probe execution precondition
+        ->
+physical probe attempt
+```
+
+This does not turn `AvailabilityProbeAgent` into the owner of the remote network condition.
+The Agent still observes that external condition; it may use lower Machinery to prepare and
+verify its local measurement environment.
+
+Payload-policy and probe-policy desired state are distinct semantic owner scopes even when
+they share the same lower Linux realization boundary.
+
+The lower network-policy contract must therefore preserve owner identity/scope and reject or
+fail closed on unsafe inter-owner conflict before physical application.
+
+A separate physical `ProbeRulesAdapter` is not introduced merely to preserve ownership.
+The shared Adapter may realize both owners as long as its semantic contract keeps them
+distinct.
+
+When no enabled observation channel requires a probe-owner policy scope, that scope is
+removed through the same verified cleanup boundary rather than being left as implicit
+ambient state.
+
 # 9. NetworkPolicyAdapter
 
 **Component type:** Adapter
@@ -1358,7 +1408,11 @@ This is an implementation/evidence gate, not new user-visible availability seman
 - `VPNG-R7.R3.R2`
 - `VPNG-R7.R5`
 
-The Adapter is the boundary from payload semantics into the lower network-policy domain.
+The Adapter is the shared boundary from owner-scoped semantic network policy into the lower
+network-policy domain.
+
+Current semantic owners include at least payload policy and probe-observation policy. Sharing
+the physical Adapter does not merge those owners.
 
 Its contract must express semantic operations such as:
 
@@ -1418,11 +1472,16 @@ The Executor distinguishes two transition classes.
 - `VPNG-R3.R4`
 
 When the desired change alters only priority/order of the same eligible unicast path set,
-the Linux implementation uses an owned working range of `N+1` ordinary metric positions
-for `N` eligible routes.
+the Linux implementation uses owned ordinary metric space and must be able to identify one
+currently unused metric whenever a route move requires working space.
 
-Exactly one metric position is free in the working representation; it is emergent transaction
-state, not configuration.
+The unused/free metric is inferred operationally from freshly observed current state. It is
+not configuration, semantic state or a permanently materialized "hole".
+
+In particular, EXP-027 proved that an all-live steady state needs no configured/materialized
+gap: the next unused ordinary metric is sufficient for the first move. Other layouts may
+naturally expose a free metric between ordered regions as a consequence of the current route
+arrangement.
 
 The only move primitive is:
 
@@ -1444,8 +1503,19 @@ Between steps 1 and 3:
 After deletion, `Mold` becomes the new free metric position.
 
 The deterministic planner repeats this primitive until the current route ordering equals the
-desired ordering. The active transaction plan is immutable; newly arriving desired state is
-handled by a later transaction from freshly verified state.
+desired ordering.
+
+Priority mutation is serialized **per Profile/routing domain**:
+
+- only one priority transaction for that Profile/domain mutates its metric layout at a time;
+- the active transaction plan is immutable and is not cancelled halfway through;
+- newer desired orders may be coalesced to the latest desired order while the active
+  transaction completes;
+- after final verification, a later transaction starts from freshly observed materialized
+  state and the latest desired order;
+- replay of every intermediate availability transition is neither required nor desired;
+- unrelated Profiles/domains are not globally serialized merely because one Profile is
+  moving metrics.
 
 This is the NG3 re-derivation of the historical "metric hole" algorithm. Historical NG2
 EXP-027 already demonstrated the relevant Linux property: the same path can temporarily
@@ -1523,6 +1593,22 @@ state where that distinction affects behavior or safety.
 
 System-wide current status is composed by `RuntimeStatusAgent` from authoritative owner
 snapshots; see section 13.
+
+Publication success is separate from convergence success.
+
+If the Manager has already applied and freshly verified the required semantic state but
+publishing the resulting current projection fails transiently:
+
+- the verified semantic/physical operation is not blindly repeated solely because the
+  publisher failed;
+- the owner retains enough current verified projection to retry publication;
+- a later audit/reconciliation may republish the current projection without mutating already
+  matched lower state;
+- unexpected internal programming/runtime faults remain errors and are not converted into a
+  fake successful publication state.
+
+This follows `VPNG-R5.R3`, `VPNG-R6.R3`, `VPNG-R6.R4` and keeps mutation retry separate
+from information-delivery retry.
 
 # 12. Startup, shutdown and recovery
 
@@ -1643,7 +1729,8 @@ periodic audit / relevant event
         v
 observe authoritative actual state
         |
-        +-- already satisfied --> publish/retain confirmed projection
+        +-- already satisfied --> no physical mutation;
+        |                        publish/republish confirmed projection if needed
         |
         +-- drift / previous recoverable failure
                     |
