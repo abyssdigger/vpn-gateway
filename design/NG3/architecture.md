@@ -3792,7 +3792,7 @@ internal Manager state.
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG0001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG0001-R1.R2` declarative operation | recovered strict Device/Profile user contract normalized by ConfigurationAdapter, including Device transport-policy intents; unresolved Device-firewall/publication external grammar remains explicitly non-normative |
+| `VPNG0001-R1.R2` declarative operation | recovered strict Device/Profile user contract normalized by ConfigurationAdapter, including Device transport-policy intents; exact optional-policy external grammar is explicitly postponed in `design/deferrals/NG3-user-facing-policy-grammar.md` |
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
