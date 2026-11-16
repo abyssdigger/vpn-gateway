@@ -900,8 +900,28 @@ The exact serialized/internal logical-path ID format is implementation detail.
 
 No inactive/unreferenced Device participates in discovery/binding work.
 
-Endpoints that match no active selector, match ambiguously or exceed quota do not become
-managed logical paths.
+Endpoints that match no active selector or match ambiguously do not become managed logical
+paths.
+
+For one selector, at most its configured quota is bound.
+
+Linux concrete endpoint identity is `(ifname, ifindex)`; the same ifname with a new ifindex
+is a fresh endpoint instance.
+
+Quota admission preserves survivors:
+
+- a newly observed candidate never evicts an already bound survivor merely because its name
+  sorts earlier or it appeared in a later snapshot;
+- over-quota candidates remain observable but unbound;
+- once a bound disappearance is verified/committed, a waiting candidate may occupy the
+  freed slot on a later reconciliation;
+- waiting-candidate promotion preserves committed first-observed order;
+- simultaneously first-observed candidates retain fresh kernel-snapshot order, with
+  `ifindex` as the final tie-break;
+- lexical ifname sorting is not used as policy.
+
+This is bounded current binding state, not an event history: only the information needed to
+preserve current survivor/admission order is retained.
 
 This responsibility remains inside the existing PayloadTrafficManager for now because the
 binding projection has no independent actuation or product policy outside the current payload
