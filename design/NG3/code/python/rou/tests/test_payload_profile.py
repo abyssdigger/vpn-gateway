@@ -159,6 +159,48 @@ device_order = ["oc"]
         )
         self.assertEqual(first, second)
 
+    def test_profile_collection_order_is_not_policy(self):
+        first = parse_structural_config("""
+[profile.z]
+enabled = true
+direction = "outbound"
+destinations = ["192.0.2.0/24"]
+device_order = ["future"]
+
+[profile.a]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["future"]
+
+[device.future]
+enabled = false
+""")
+        second = parse_structural_config("""
+[device.future]
+enabled = false
+
+[profile.a]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["future"]
+
+[profile.z]
+enabled = true
+direction = "outbound"
+destinations = ["192.0.2.0/24"]
+device_order = ["future"]
+""")
+        self.assertEqual(
+            build_payload_profile_requests(first.profiles.values(), ()),
+            build_payload_profile_requests(second.profiles.values(), ()),
+        )
+        self.assertEqual(
+            [item.profile_id for item in build_payload_profile_requests(first.profiles.values(), ())],
+            ["a", "z"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
