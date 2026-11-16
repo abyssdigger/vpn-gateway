@@ -9,6 +9,7 @@ from rou.local_publication_observation import compare_local_publication
 from rou.local_publication_policy import (
     LocalPublicationDesiredState,
     LocalPublicationHook,
+    LocalPublicationRuleSpec,
     PublicationLocalEndpointIntent,
     PublicationProtocol,
     build_local_publication_desired,
@@ -133,6 +134,23 @@ class LocalPublicationPolicyTests(unittest.TestCase):
             {rule.hook for rule in desired.rules},
             {LocalPublicationHook.INPUT, LocalPublicationHook.OUTPUT},
         )
+
+    def test_partial_desired_endpoint_is_rejected(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "must contain INPUT and OUTPUT",
+        ):
+            LocalPublicationDesiredState(
+                (
+                    LocalPublicationRuleSpec(
+                        hook=LocalPublicationHook.INPUT,
+                        protocol=PublicationProtocol.TCP,
+                        host_boundary=HOST,
+                        local_address=ADDR,
+                        local_port=44443,
+                    ),
+                )
+            )
 
     def test_exact_tcp_pair_confirms(self):
         desired = build_local_publication_desired(
