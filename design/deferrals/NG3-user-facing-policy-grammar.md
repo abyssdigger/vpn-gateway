@@ -11,10 +11,13 @@ What remains undecided is the exact compact human-facing encoding.
 
 The affected semantic capabilities are:
 
+- Device VPN-side NAT intent exact spelling;
 - ordered Device firewall rules;
 - named VPN endpoint declarations/selectors;
 - Profile ordinary-side gateway NAT;
-- Device transport publication where exact NG3 spelling is still unresolved.
+- Device transport publication where exact NG3 spelling is still unresolved;
+- Profile availability-check exact external field/string spelling and any future user-facing
+  timing/unit knobs not already required by the accepted semantic contract.
 
 The governing constraints explicitly prohibit guessing historical prototype spelling:
 
@@ -28,6 +31,12 @@ been selected.
 ## Current accepted semantic inputs
 
 The later configuration-format review must preserve, at minimum:
+
+### Device VPN-side NAT
+
+- semantic modes are already `NONE | MASQUERADE`;
+- active Device NAT intent remains explicit;
+- exact external field/value spelling remains an interface decision.
 
 ### Device firewall
 
@@ -52,6 +61,14 @@ It must resolve through accepted transport-endpoint provenance/current path bind
 The encoding must represent explicit opt-in/opt-out Profile intent and must not conflate this
 with Device VPN-side `masquerade`.
 
+### Availability-check surface
+
+- Profile/path-scoped ICMP semantics and optional target semantics are already accepted;
+- explicit target must be preserved exactly and omitted target must normalize deterministically;
+- historical `interface_balancing = "icmp[/ip]"` spelling is evidence only;
+- no user-facing timing/unit field is required merely because runtime code has internal
+  cadence/hysteresis values.
+
 ### Publication
 
 The encoding must preserve accepted publication ownership and collision semantics without
@@ -62,6 +79,8 @@ silently inheriting obsolete prototype syntax.
 No decision is made here about:
 
 - slash/comma/quote compact grammar;
+- whether the historical Device `nat = "none|masquerade"` spelling is retained;
+- exact availability-check field spelling and any optional timing/unit presentation;
 - TOML scalar versus array/table representation;
 - exact field names for the new firewall or endpoint declarations;
 - named-endpoint path syntax;
