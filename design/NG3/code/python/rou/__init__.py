@@ -1,3 +1,8 @@
+from .availability_confirmation import (
+    AvailabilityConfirmationState,
+    AvailabilityOutcome,
+    apply_availability_evidence,
+)
 """VPN-GATE NG3 Python reference slice."""
 
 from .binding import (
@@ -42,6 +47,8 @@ from .route_priority import (
 )
 
 __all__ = [
+    "AvailabilityConfirmationState",
+    "AvailabilityOutcome",
     "BindingProjectionError",
     "ConfigError",
     "DeviceBindingIntent",
@@ -64,6 +71,7 @@ __all__ = [
     "SelectorKind",
     "StructuralConfig",
     "WaitingCandidate",
+    "apply_availability_evidence",
     "build_payload_profile_requests",
     "classify_inbound_profile",
     "classify_outbound_profile",
