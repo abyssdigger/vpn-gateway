@@ -20,6 +20,7 @@ on:
       - "design/experiments/EXP-044 NG3 Device firewall jump insertion/**"
       - "design/experiments/EXP-045 NG3 composite Profile forward mutation/**"
       - "design/experiments/EXP-046 NG3 publication local admission/**"
+      - "design/experiments/EXP-047 NG3 atomic local publication mutation/**"
       - "design/experiments/EXP-047 NG3 atomic publication local mutation/**"
   pull_request:
     paths:
@@ -265,6 +266,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-046 NG3 publication local admission/exp046_publication_local_admission.py"
+      - name: EXP-047 atomic local publication mutation
+        run: >-
+          sudo python3
+          "design/experiments/EXP-047 NG3 atomic local publication mutation/exp047_atomic_local_publication.py"
       - name: EXP-047 atomic publication local mutation
         run: >-
           sudo python3
