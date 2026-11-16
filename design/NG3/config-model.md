@@ -451,7 +451,24 @@ Meaning:
 
 Direction is explicit and is not inferred from topology.
 
-**Requirement:** `VPNG-R2.R3.R3`.
+First-release constraint:
+
+```text
+outbound
+    -> multi-path allowed
+
+inbound | bidirectional
+    -> maximum eligible logical-path capacity <= 1
+```
+
+Capacity is computed from currently enabled referenced Devices and their configured
+expected-interface selector quotas. A runtime moment with only one currently present
+interface does not make a capacity>1 Profile valid.
+
+**Requirements:**
+- `VPNG-R2.R3.R3`
+- `VPNG-R2.R3.C1`
+- `VPNG-R2.R3.C1.R1`.
 
 ## 5.2 destinations
 
@@ -665,6 +682,9 @@ At minimum, accepted configuration must enforce:
 - active Profile has explicit valid direction;
 - active Profile has non-empty strict IPv4 destinations;
 - active Profile has non-empty unique Device references;
+- first-release `inbound`/`bidirectional` Profile is rejected if the sum of selector quotas
+  across its currently enabled referenced Devices exceeds 1; this validation is based on
+  configured maximum eligible path capacity, not on current observed interface count;
 - unknown Device reference is rejected;
 - exact duplicate destination ownership across enabled Profiles is rejected;
 - overlapping destinations remain deterministic;
