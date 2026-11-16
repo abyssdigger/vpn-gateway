@@ -67,6 +67,15 @@ from .nft_payload_scaffold import (
     NftPayloadScaffoldError,
     compare_payload_nft_scaffold,
 )
+from .nft_scaffold_executor import (
+    PayloadNftScaffoldPrepareResult,
+    PayloadNftScaffoldPrepareStatus,
+    prepare_payload_nft_scaffold_once,
+)
+from .linux_nft_scaffold import (
+    LinuxNftScaffoldBackend,
+    SubprocessNftRunner,
+)
 from .direct_device_route import (
     DirectDeviceRouteRealizationError,
     realize_direct_device_path_routes,
@@ -192,6 +201,7 @@ __all__ = [
     "NG3_NFT_TABLE",
     "NftBaseChainSpec",
     "LinuxNftNamespaceBackend",
+    "LinuxNftScaffoldBackend",
     "NetworkPolicyLayout",
     "NetworkPolicyLayoutError",
     "NetworkPolicyPlatformSpace",
@@ -213,6 +223,8 @@ __all__ = [
     "PAYLOAD_POSTROUTING_COMMENT",
     "PathBinding",
     "PayloadDispatchRule",
+    "PayloadNftScaffoldPrepareResult",
+    "PayloadNftScaffoldPrepareStatus",
     "PayloadPolicyAllocation",
     "PayloadProfileProjectionError",
     "PayloadProfileRequest",
@@ -252,6 +264,7 @@ __all__ = [
     "StructuralRoutingInventoryError",
     "StructuralRoutingObservation",
     "SubprocessCommandRunner",
+    "SubprocessNftRunner",
     "WaitingCandidate",
     "allocate_network_policy_layout",
     "apply_availability_evidence",
@@ -273,6 +286,7 @@ __all__ = [
     "plan_route_priority_convergence",
     "plan_route_priority_moves",
     "parse_structural_config",
+    "prepare_payload_nft_scaffold_once",
     "project_device_bindings",
     "realize_direct_device_path_routes",
 ]

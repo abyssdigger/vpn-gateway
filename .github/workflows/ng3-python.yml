@@ -154,3 +154,10 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_nft_payload_scaffold.py
+      - name: NG3 payload nft scaffold prepare integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_nft_scaffold_prepare.py
