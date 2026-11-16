@@ -1,78 +1,51 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from math import isfinite
 from typing import Protocol
 
-from .availability_probe_policy import AvailabilityProbePolicy
 from .availability_probe_state import (
     AvailabilityProbeState,
     AvailabilityProbeStateInfo,
-    ProbeAttemptObservation,
     ProbeObservationGeneration,
 )
 from .network_rules import (
     ActionResult,
     NetworkRulesAdapter,
+    NetworkRulesConvergenceState,
     NetworkRulesSpec,
+    RulesConvergence,
+    StateKnowledge,
+    assess_network_rules_convergence,
     network_rules_semantically_equal,
 )
-from .probe_attempt import ProbeAttemptOutcome, ProbeDriver
 from .probe_rules import (
-    AvailabilityProbeRequest,
     AvailabilityProbeSetRequest,
     ProbeRulesCalculator,
     availability_probe_sets_semantically_equal,
 )
-from .probe_rules_state import (
-    Convergence,
-    Knowledge,
-    ProbeRulesState,
-    ProbeRulesStateCalculator,
-    Usability,
-)
-
-
 class AvailabilityProbeStatePublisher(Protocol):
     def publish(self, info: AvailabilityProbeStateInfo) -> None:
         ...
 
 
-@dataclass
-class _ProbeScheduleState:
-    next_due_at: float | None = None
-    reply_streak: int = 0
-    no_reply_streak: int = 0
-
-    def reset_streaks(self) -> None:
-        self.reply_streak = 0
-        self.no_reply_streak = 0
-
-
 class AvailabilityProbeManager:
-    """Rules-control slice of the active availability-probe Manager.
+    """Own the active-probe rules plane and its authoritative readiness epoch.
 
-    The Manager owns probe NetworkRules lifecycle, readiness epochs, the raw-attempt
-    validity envelope, minimal direct verdict projection and deterministic per-probe
-    cadence/hysteresis state.  It does not own wall-clock sleeping or threads.
+    Probe execution is intentionally not a synchronous dependency of this Manager.
+    Production evidence arrives through the good-news/window model that is integrated
+    separately.  This class currently owns only the already-proven NetworkRules lifecycle,
+    generation invalidation and publication invalidation boundary.
     """
 
     def __init__(
         self,
         adapter: NetworkRulesAdapter,
         publisher: AvailabilityProbeStatePublisher,
-        driver: ProbeDriver,
         *,
         rules_calculator: ProbeRulesCalculator | None = None,
-        state_calculator: ProbeRulesStateCalculator | None = None,
     ) -> None:
         self._adapter = adapter
         self._publisher = publisher
-        self._driver = driver
         self._rules_calculator = rules_calculator or ProbeRulesCalculator()
-        self._state_calculator = (
-            state_calculator or ProbeRulesStateCalculator()
-        )
 
         self._latest_request: AvailabilityProbeSetRequest | None = None
         self._latest_desired: NetworkRulesSpec | None = None
@@ -80,11 +53,10 @@ class AvailabilityProbeManager:
 
         self._generation_sequence = 0
         self._active_generation: ProbeObservationGeneration | None = None
-        self._schedule_state: dict[str, _ProbeScheduleState] = {}
 
     @property
     def observation_generation(self) -> ProbeObservationGeneration | None:
-        """Current owner-wide READY epoch for diagnostics and internal tests."""
+        """Current owner-wide READY epoch for diagnostics and evidence binding."""
 
         return self._active_generation
 
@@ -135,273 +107,6 @@ class AvailabilityProbeManager:
         self._synchronize_generation(rules_state)
         self._publish_unknown_current(rules_state)
 
-    def attempt_once(
-        self,
-        probe_id: str,
-        *,
-        timeout_seconds: int,
-    ) -> ProbeAttemptObservation | None:
-        """Run one explicit attempt without choosing scheduling or verdict policy.
-
-        Returns a raw attempt observation only when both pre- and post-attempt fresh
-        rules observations belong to the same READY Manager epoch. A None result means
-        no attempt observation is valid for availability policy.
-        """
-
-        request = self._latest_request
-        desired = self._latest_desired
-        if request is None or desired is None:
-            raise ValueError("cannot run probe attempt before a desired probe set")
-
-        by_id = {
-            item.probe_id: item
-            for item in request.probes
-        }
-        if probe_id not in by_id:
-            raise ValueError(f"unknown active probe_id {probe_id!r}")
-
-        pre_state = self._audit_rules(desired)
-        self._synchronize_generation(pre_state)
-        self._publish_unknown_current(pre_state)
-
-        generation = self._active_generation
-        if generation is None:
-            return None
-
-        result = self._driver.execute(
-            by_id[probe_id],
-            timeout_seconds=timeout_seconds,
-        )
-
-        self._adapter.renew_state(self)
-        post_state = self._current_rules_state(desired)
-
-        if not self._rules_ready(post_state):
-            self._invalidate_generation()
-            self._publish_unknown_current(post_state)
-            return None
-
-        if self._active_generation != generation:
-            self._publish_unknown_current(post_state)
-            return None
-
-        return ProbeAttemptObservation(
-            probe_id,
-            generation,
-            result,
-        )
-
-    def evaluate_once(
-        self,
-        probe_id: str,
-        *,
-        timeout_seconds: int,
-    ) -> AvailabilityProbeStateInfo | None:
-        """Run one valid attempt and project its raw result into current availability.
-
-        This is deliberately the direct one-attempt policy boundary:
-        REPLY -> REACHABLE, NO_REPLY -> UNREACHABLE, ERROR -> UNKNOWN.
-        It bypasses scheduled thresholds; run_due() owns cadence/hysteresis.
-        """
-
-        observation = self.attempt_once(
-            probe_id,
-            timeout_seconds=timeout_seconds,
-        )
-        if observation is None:
-            return None
-
-        if observation.result.outcome is ProbeAttemptOutcome.REPLY:
-            info = AvailabilityProbeStateInfo(
-                probe_id,
-                AvailabilityProbeState.REACHABLE,
-                reason="probe reply received",
-                observation_generation=observation.observation_generation,
-            )
-        elif observation.result.outcome is ProbeAttemptOutcome.NO_REPLY:
-            info = AvailabilityProbeStateInfo(
-                probe_id,
-                AvailabilityProbeState.UNREACHABLE,
-                reason="probe attempt received no reply",
-                observation_generation=observation.observation_generation,
-            )
-        else:
-            info = AvailabilityProbeStateInfo(
-                probe_id,
-                AvailabilityProbeState.UNKNOWN,
-                reason=(
-                    "local probe execution error: "
-                    f"{observation.result.diagnostic}"
-                ),
-            )
-
-        self._publish_if_changed(info)
-        self._schedule_state.setdefault(
-            probe_id,
-            _ProbeScheduleState(),
-        ).reset_streaks()
-        return info
-
-    def run_due(self, now_seconds: float) -> tuple[str, ...]:
-        """Run all scheduled probes due at one caller-supplied monotonic instant.
-
-        Execution is serialized in probe_id order.  The Manager never sleeps; an outer
-        runtime loop chooses when to call this method.
-        """
-
-        if (
-            isinstance(now_seconds, bool)
-            or not isinstance(now_seconds, (int, float))
-            or not isfinite(float(now_seconds))
-            or float(now_seconds) < 0
-        ):
-            raise ValueError(
-                "now_seconds must be a finite non-negative monotonic value"
-            )
-
-        request = self._latest_request
-        if request is None:
-            return ()
-
-        attempted: list[str] = []
-        for probe in sorted(request.probes, key=lambda item: item.probe_id):
-            policy = probe.policy
-            if policy is None:
-                continue
-
-            state = self._schedule_state.setdefault(
-                probe.probe_id,
-                _ProbeScheduleState(),
-            )
-            if (
-                state.next_due_at is not None
-                and float(now_seconds) < state.next_due_at
-            ):
-                continue
-
-            attempted.append(probe.probe_id)
-            use_retry_delay = self._evaluate_scheduled_probe(
-                probe,
-                policy,
-            )
-
-            state = self._schedule_state.setdefault(
-                probe.probe_id,
-                _ProbeScheduleState(),
-            )
-            delay = (
-                policy.retry_interval_seconds
-                if use_retry_delay
-                else policy.interval_seconds
-            )
-            state.next_due_at = float(now_seconds) + float(delay)
-
-        return tuple(attempted)
-
-    def _evaluate_scheduled_probe(
-        self,
-        probe: AvailabilityProbeRequest,
-        policy: AvailabilityProbePolicy,
-    ) -> bool:
-        """Evaluate one scheduled probe.
-
-        Returns True when the next check should use retry_interval_seconds.
-        """
-
-        observation = self.attempt_once(
-            probe.probe_id,
-            timeout_seconds=policy.timeout_seconds,
-        )
-        if observation is None:
-            return True
-
-        state = self._schedule_state.setdefault(
-            probe.probe_id,
-            _ProbeScheduleState(),
-        )
-
-        if observation.result.outcome is ProbeAttemptOutcome.ERROR:
-            state.reset_streaks()
-            self._publish_if_changed(
-                AvailabilityProbeStateInfo(
-                    probe.probe_id,
-                    AvailabilityProbeState.UNKNOWN,
-                    reason=(
-                        "local probe execution error: "
-                        f"{observation.result.diagnostic}"
-                    ),
-                )
-            )
-            return True
-
-        current = self._authoritative_current_info(
-            probe.probe_id,
-            observation.observation_generation,
-        )
-
-        if observation.result.outcome is ProbeAttemptOutcome.REPLY:
-            state.reply_streak += 1
-            state.no_reply_streak = 0
-
-            if (
-                current is not None
-                and current.state is AvailabilityProbeState.REACHABLE
-            ):
-                state.reset_streaks()
-                return False
-
-            if state.reply_streak < policy.recovery_threshold:
-                return True
-
-            state.reset_streaks()
-            self._publish_if_changed(
-                AvailabilityProbeStateInfo(
-                    probe.probe_id,
-                    AvailabilityProbeState.REACHABLE,
-                    reason="probe reply threshold satisfied",
-                    observation_generation=observation.observation_generation,
-                )
-            )
-            return False
-
-        state.no_reply_streak += 1
-        state.reply_streak = 0
-
-        if (
-            current is not None
-            and current.state is AvailabilityProbeState.UNREACHABLE
-        ):
-            state.reset_streaks()
-            return False
-
-        if state.no_reply_streak < policy.failure_threshold:
-            return True
-
-        state.reset_streaks()
-        self._publish_if_changed(
-            AvailabilityProbeStateInfo(
-                probe.probe_id,
-                AvailabilityProbeState.UNREACHABLE,
-                reason="probe no-reply threshold satisfied",
-                observation_generation=observation.observation_generation,
-            )
-        )
-        return False
-
-    def _authoritative_current_info(
-        self,
-        probe_id: str,
-        generation: ProbeObservationGeneration,
-    ) -> AvailabilityProbeStateInfo | None:
-        info = self._latest_published.get(probe_id)
-        if (
-            info is None
-            or info.state is AvailabilityProbeState.UNKNOWN
-            or info.observation_generation != generation
-        ):
-            return None
-        return info
-
     def audit(self) -> None:
         """Run one deterministic rules refresh/repair pass."""
 
@@ -422,7 +127,7 @@ class AvailabilityProbeManager:
     def _audit_rules(
         self,
         desired: NetworkRulesSpec,
-    ) -> ProbeRulesState:
+    ) -> NetworkRulesConvergenceState:
         self._adapter.renew_state(self)
         rules_state = self._current_rules_state(desired)
 
@@ -435,7 +140,7 @@ class AvailabilityProbeManager:
     def _apply_desired_and_observe(
         self,
         desired: NetworkRulesSpec,
-    ) -> ProbeRulesState:
+    ) -> NetworkRulesConvergenceState:
         action = self._adapter.apply(self, desired)
         if not action.success:
             self._adapter.renew_state(self)
@@ -444,21 +149,23 @@ class AvailabilityProbeManager:
     def _current_rules_state(
         self,
         desired: NetworkRulesSpec,
-    ) -> ProbeRulesState:
+    ) -> NetworkRulesConvergenceState:
         observed = self._adapter.get_last_state(self)
-        return self._state_calculator.calculate(desired, observed)
+        return assess_network_rules_convergence(desired, observed)
 
     @staticmethod
-    def _rules_ready(state: ProbeRulesState) -> bool:
+    def _rules_ready(state: NetworkRulesConvergenceState) -> bool:
         return (
-            state.knowledge is Knowledge.KNOWN
-            and state.convergence is Convergence.MATCHED
-            and state.usability is Usability.READY
+            state.knowledge is StateKnowledge.KNOWN
+            and state.convergence is RulesConvergence.MATCHED
         )
 
-    def _synchronize_generation(self, state: ProbeRulesState) -> None:
+    def _synchronize_generation(self, state: NetworkRulesConvergenceState) -> None:
         request = self._latest_request
-        if request is None or not request.probes:
+        if (
+            request is None
+            or not any(probe.enabled for probe in request.probes)
+        ):
             self._invalidate_generation()
             return
 
@@ -474,7 +181,6 @@ class AvailabilityProbeManager:
 
     def _invalidate_generation(self) -> None:
         self._active_generation = None
-        self._schedule_state.clear()
 
     def _invalidate_changed_logical_probes(
         self,
@@ -493,15 +199,10 @@ class AvailabilityProbeManager:
             for item in current.probes
         }
 
-        changed_ids = (
-            previous_by_id.keys()
-            & current_by_id.keys()
-        )
-        for probe_id in changed_ids:
+        for probe_id in previous_by_id.keys() & current_by_id.keys():
             if previous_by_id[probe_id] == current_by_id[probe_id]:
                 continue
             self._latest_published.pop(probe_id, None)
-            self._schedule_state.pop(probe_id, None)
 
     def _publish_removed_invalidations(
         self,
@@ -526,7 +227,7 @@ class AvailabilityProbeManager:
 
     def _publish_unknown_current(
         self,
-        rules_state: ProbeRulesState,
+        rules_state: NetworkRulesConvergenceState,
     ) -> None:
         request = self._latest_request
         if request is None:
@@ -539,6 +240,16 @@ class AvailabilityProbeManager:
         )
 
         for probe in sorted(request.probes, key=lambda item: item.probe_id):
+            if not probe.enabled:
+                self._publish_if_changed(
+                    AvailabilityProbeStateInfo(
+                        probe.probe_id,
+                        AvailabilityProbeState.UNKNOWN,
+                        reason="probe disabled",
+                    )
+                )
+                continue
+
             latest = self._latest_published.get(probe.probe_id)
             if (
                 self._rules_ready(rules_state)
@@ -549,12 +260,13 @@ class AvailabilityProbeManager:
             ):
                 continue
 
-            info = AvailabilityProbeStateInfo(
-                probe.probe_id,
-                AvailabilityProbeState.UNKNOWN,
-                reason=reason,
+            self._publish_if_changed(
+                AvailabilityProbeStateInfo(
+                    probe.probe_id,
+                    AvailabilityProbeState.UNKNOWN,
+                    reason=reason,
+                )
             )
-            self._publish_if_changed(info)
 
     def _publish_if_changed(
         self,

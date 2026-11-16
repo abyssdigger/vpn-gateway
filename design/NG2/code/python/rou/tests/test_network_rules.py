@@ -9,6 +9,7 @@ from rou.network_rules import (
     EndpointKind,
     NetworkEndpoint,
     NetworkRulesAdapter,
+    NetworkRulesConvergenceState,
     NetworkRulesError,
     NetworkRulesSpec,
     NetworkRulesState,
@@ -17,12 +18,14 @@ from rou.network_rules import (
     RoutingDomainSpec,
     SourceNatSpec,
     SourceNatTarget,
+    RulesConvergence,
     StateKnowledge,
     TerminalDisposition,
     TrafficAllowSpec,
     TrafficPredicate,
     TrafficProtocol,
     TrafficSelector,
+    assess_network_rules_convergence,
     network_rules_semantically_equal,
 )
 
@@ -181,6 +184,86 @@ class NetworkRulesContractTests(unittest.TestCase):
                 fresh=True,
             )
 
+
+    def test_shared_convergence_state_rejects_incoherent_axes(self):
+        with self.assertRaises(NetworkRulesError):
+            NetworkRulesConvergenceState(
+                StateKnowledge.UNKNOWN,
+                RulesConvergence.DIVERGED,
+            )
+        with self.assertRaises(NetworkRulesError):
+            NetworkRulesConvergenceState(
+                StateKnowledge.KNOWN,
+                RulesConvergence.UNKNOWN,
+            )
+
+    def test_shared_convergence_assessment_requires_fresh_authoritative_state(self):
+        desired = NetworkRulesSpec()
+
+        unknown = assess_network_rules_convergence(
+            desired,
+            NetworkRulesState(
+                StateKnowledge.UNKNOWN,
+                None,
+                fresh=False,
+            ),
+        )
+        stale = assess_network_rules_convergence(
+            desired,
+            NetworkRulesState(
+                StateKnowledge.KNOWN,
+                desired,
+                fresh=False,
+            ),
+        )
+        matched = assess_network_rules_convergence(
+            desired,
+            NetworkRulesState(
+                StateKnowledge.KNOWN,
+                desired,
+                fresh=True,
+            ),
+        )
+        diverged = assess_network_rules_convergence(
+            desired,
+            NetworkRulesState(
+                StateKnowledge.KNOWN,
+                NetworkRulesSpec(
+                    routing_domains=(
+                        RoutingDomainSpec(
+                            "x",
+                            (),
+                            (),
+                            TerminalDisposition.DROP,
+                        ),
+                    ),
+                ),
+                fresh=True,
+            ),
+        )
+
+        self.assertEqual(
+            unknown,
+            NetworkRulesConvergenceState(
+                StateKnowledge.UNKNOWN,
+                RulesConvergence.UNKNOWN,
+            ),
+        )
+        self.assertEqual(stale, unknown)
+        self.assertEqual(
+            matched,
+            NetworkRulesConvergenceState(
+                StateKnowledge.KNOWN,
+                RulesConvergence.MATCHED,
+            ),
+        )
+        self.assertEqual(
+            diverged,
+            NetworkRulesConvergenceState(
+                StateKnowledge.KNOWN,
+                RulesConvergence.DIVERGED,
+            ),
+        )
 
     def test_semantic_equality_ignores_domain_and_allow_collection_order(self):
         a = InterfaceIdentity("vpns00", 10)

@@ -35,6 +35,7 @@ from ipaddress import IPv4Network
 NS = "vpng2-adapter-ci"
 DEST = IPv4Network("198.51.100.0/24")
 DEST2 = IPv4Network("203.0.113.0/24")
+DEST3 = IPv4Network("192.0.2.0/24")
 
 
 def host(*argv: str, check: bool = True, input_text: str | None = None):
@@ -79,7 +80,7 @@ def make_namespace():
     cleanup()
     host("ip", "netns", "add", NS)
     host("ip", "-n", NS, "link", "set", "lo", "up")
-    for name in ("host0", "vpns00"):
+    for name in ("host0", "vpns00", "vpns01"):
         host("ip", "-n", NS, "link", "add", name, "type", "dummy")
         host("ip", "-n", NS, "link", "set", name, "up")
 
@@ -138,6 +139,54 @@ def spec(
                 target=SourceNatTarget.EGRESS_ADDRESS,
             ),
         ),
+    )
+
+
+def priority_spec(
+    ordered_paths: tuple[InterfaceIdentity, ...],
+) -> NetworkRulesSpec:
+    local = NetworkEndpoint.local_network()
+    destination = TrafficPredicate.match(
+        TrafficSelector(destination=DEST3)
+    )
+    policy_paths = tuple(
+        sorted(
+            ordered_paths,
+            key=lambda identity: (
+                identity.ifname,
+                identity.ifindex,
+            ),
+        )
+    )
+    traffic = []
+    flows = []
+    for identity in policy_paths:
+        path = NetworkEndpoint.interface_path(identity)
+        traffic.append(
+            TrafficAllowSpec(local, path, destination)
+        )
+        flows.append(
+            FlowInitiationAllowSpec(local, path, destination)
+        )
+
+    return NetworkRulesSpec(
+        routing_domains=(
+            RoutingDomainSpec(
+                "priority-test",
+                (DEST3,),
+                ordered_paths,
+                TerminalDisposition.DROP,
+            ),
+        ),
+        dispatch_rules=(
+            DispatchRuleSpec(
+                DEST3,
+                "priority-test",
+                source=local,
+            ),
+        ),
+        traffic_allows=tuple(traffic),
+        flow_initiation_allows=tuple(flows),
     )
 
 
@@ -346,6 +395,97 @@ def main() -> int:
         if adapter.get_last_state(owner2).rules != wanted2:
             raise RuntimeError("second owner did not receive exact fresh state")
         print("PASS A2: second owner shares generation with owner-scoped domain")
+
+        # A pure path-priority permutation must use the narrow route-only path.
+        priority_owner = object()
+        alternate = identity("vpns01")
+        priority_initial = priority_spec((old, alternate))
+        priority_applied = adapter.apply(priority_owner, priority_initial)
+        if not priority_applied.success:
+            raise RuntimeError(
+                "priority-test initial apply failed: "
+                f"{priority_applied.diagnostic}"
+            )
+
+        priority_reordered = priority_spec((alternate, old))
+        host_runner.calls.clear()
+        priority_changed = adapter.apply(
+            priority_owner,
+            priority_reordered,
+        )
+        if not priority_changed.success:
+            raise RuntimeError(
+                "priority-test reorder failed: "
+                f"{priority_changed.diagnostic}"
+            )
+
+        inner_calls = [
+            argv[4:]
+            for argv in host_runner.calls
+            if argv[:4] == ("ip", "netns", "exec", NS)
+        ]
+        forwarding_writes = [
+            argv
+            for argv in inner_calls
+            if argv[:3] == ("sysctl", "-q", "-w")
+            and argv[-1].startswith("net.ipv4.ip_forward=")
+        ]
+        if forwarding_writes:
+            raise RuntimeError(
+                "route-priority fast path touched forwarding barrier: "
+                f"{forwarding_writes}"
+            )
+
+        route_replaces = [
+            argv
+            for argv in inner_calls
+            if argv[:3] == ("ip", "route", "replace")
+        ]
+        if len(route_replaces) != 2:
+            raise RuntimeError(
+                "route-priority fast path did not perform two slot replacements: "
+                f"{route_replaces}"
+            )
+
+        nft_mutations = [
+            argv
+            for argv in inner_calls
+            if (
+                argv[:3] == ("nft", "-f", "-")
+                or argv[:3] == ("nft", "delete", "table")
+            )
+        ]
+        if nft_mutations:
+            raise RuntimeError(
+                "route-priority fast path mutated nft policy: "
+                f"{nft_mutations}"
+            )
+
+        priority_routes = {
+            item.get("metric"): item.get("dev")
+            for item in tagged_routes()
+            if item.get("protocol") in (202, "202")
+            and item.get("dst") == DEST3.with_prefixlen
+        }
+        if priority_routes != {
+            10: "vpns01",
+            20: "vpns00",
+        }:
+            raise RuntimeError(
+                "route-priority fast path produced wrong metric order: "
+                f"{priority_routes}"
+            )
+        if adapter.get_last_state(priority_owner).rules != priority_reordered:
+            raise RuntimeError(
+                "route-priority fast path did not commit reordered owner state"
+            )
+        print(
+            "PASS A3: pure path reorder used verified route-only fast path "
+            "without forwarding or nft mutation"
+        )
+
+        if not adapter.cleanup(priority_owner).success:
+            raise RuntimeError("priority-test owner cleanup failed")
 
         # Same-name/new-ifindex must invalidate the old generation.
         host("ip", "-n", NS, "link", "del", "vpns00")

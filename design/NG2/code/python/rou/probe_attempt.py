@@ -1,12 +1,14 @@
+"""Standalone single-shot diagnostic probe contract.
+
+This module is retained as executable evidence for the already-proven Linux probe process
+mechanics. Production NG2 availability routing is not attempt-oriented and
+AvailabilityProbeManager does not depend on this contract.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol
-
-from .probe_rules import AvailabilityProbeRequest
-
-
 class ProbeAttemptOutcome(str, Enum):
     REPLY = "reply"
     NO_REPLY = "no-reply"
@@ -34,13 +36,3 @@ class ProbeAttemptResult:
             )
 
 
-class ProbeDriver(Protocol):
-    """Semantic Driver for one active-probe attempt."""
-
-    def execute(
-        self,
-        request: AvailabilityProbeRequest,
-        *,
-        timeout_seconds: int,
-    ) -> ProbeAttemptResult:
-        ...

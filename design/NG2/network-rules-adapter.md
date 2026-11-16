@@ -315,7 +315,29 @@ fresh observation/reconcile.
 Incremental optimization is intentionally deferred until this exact structural path is
 stable.
 
-## 12. Public Linux NetworkRulesAdapter
+## 12. Route-priority fast path
+
+EXP-027 подтверждает отдельный безопасный narrow case: если effective desired state
+отличается только permutation тех же unicast paths по тем же routing-domain metric slots,
+Linux backend может не закрывать forwarding и не перестраивать nft/RPDB.
+
+Fast path обязан:
+
+1. свежо доказать, что текущая полная managed projection совпадает с committed desired;
+2. убедиться, что prerequisites, nft filter/NAT, allocation, RPDB, terminal routes и path
+   membership неизменны;
+3. materialize changed metric slots top-down через `ip route replace`;
+4. свежо доказать полное конечное desired state;
+5. при любой ошибке перейти в обычный structural fail-closed rebuild.
+
+Fast path является внутренней оптимизацией Adapter/Executor. Caller по-прежнему вызывает
+тот же `apply(owner, spec)` и не выбирает transition kind.
+
+Текущий classifier разрешает fast path только для чистой перестановки существующих
+unicast paths. Изменение membership, destination, dispatch, nft policy, prerequisites или
+allocation автоматически оставляет operation на structural path.
+
+## 13. Public Linux NetworkRulesAdapter
 
 The current executable Adapter:
 
@@ -333,7 +355,7 @@ The current executable Adapter:
 A failed physical mutation marks all registered owner states UNKNOWN because the backend is
 shared.
 
-## 13. Evidence gates
+## 14. Evidence gates
 
 Current automated gates include:
 
@@ -350,7 +372,7 @@ Current automated gates include:
 Existing EXP-012 and EXP-017 remain supporting architecture evidence; the NG2 live gates
 exercise the new compiler and Executor directly.
 
-## 14. Local-process semantic extension
+## 15. Local-process semantic extension
 
 The semantic NetworkRules contract also admits `LOCAL_PROCESS` endpoints for
 AvailabilityProbeManager ownership.
@@ -380,11 +402,10 @@ The Adapter does not own probe-process execution prerequisites such as
 `ping_group_range`, process gid, capabilities or launcher lifecycle. Those belong to the
 future probe-process runtime/launcher boundary.
 
-## 15. Deferred work
+## 16. Deferred work
 
 Not part of the current structural baseline:
 
-- incremental transition optimizer;
 - richer interface-origin dispatch;
 - persistent allocation across daemon restart;
 - broader predicate-implication analysis above the backend;

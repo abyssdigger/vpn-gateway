@@ -13,6 +13,7 @@ from .linux_nft import (
 )
 from .linux_prerequisites import LinuxNamespacePrerequisites
 from .linux_routing import (
+    LinuxRouteKind,
     LinuxRoutingAllocationState,
     LinuxRoutingDesired,
     compile_linux_routing_desired,
@@ -45,6 +46,75 @@ class LinuxNetworkDesired:
     filter: NftFilterDesired | None
     nat: NftNatDesired | None
     ip_forward_required: bool
+
+
+def linux_network_route_priority_only_change(
+    current: LinuxNetworkDesired,
+    desired: LinuxNetworkDesired,
+) -> bool:
+    """Return True only for a pure permutation of existing unicast path slots."""
+
+    if (
+        current.prerequisites != desired.prerequisites
+        or current.filter != desired.filter
+        or current.nat != desired.nat
+        or current.ip_forward_required != desired.ip_forward_required
+        or current.routing.allocation != desired.routing.allocation
+        or current.routing.dispatch_rules != desired.routing.dispatch_rules
+        or current.routing.terminal_rule != desired.routing.terminal_rule
+        or current.routing.verification_tables
+        != desired.routing.verification_tables
+    ):
+        return False
+
+    current_terminal = {
+        route
+        for route in current.routing.routes
+        if route.kind is not LinuxRouteKind.UNICAST
+    }
+    desired_terminal = {
+        route
+        for route in desired.routing.routes
+        if route.kind is not LinuxRouteKind.UNICAST
+    }
+    if current_terminal != desired_terminal:
+        return False
+
+    def slots(routing: LinuxRoutingDesired):
+        out = {}
+        groups: dict[tuple, set[InterfaceIdentity]] = {}
+        for route in routing.routes:
+            if route.kind is not LinuxRouteKind.UNICAST:
+                continue
+            assert route.path is not None
+            slot = (
+                route.domain,
+                route.table_id,
+                route.destination,
+                route.protocol,
+                route.metric,
+            )
+            if slot in out:
+                return None, None
+            out[slot] = route.path
+            group = (
+                route.domain,
+                route.table_id,
+                route.destination,
+            )
+            groups.setdefault(group, set()).add(route.path)
+        return out, groups
+
+    current_slots, current_groups = slots(current.routing)
+    desired_slots, desired_groups = slots(desired.routing)
+    if current_slots is None or desired_slots is None:
+        return False
+    if current_slots.keys() != desired_slots.keys():
+        return False
+    if current_groups != desired_groups:
+        return False
+
+    return current_slots != desired_slots
 
 
 def _register(

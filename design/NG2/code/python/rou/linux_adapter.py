@@ -8,6 +8,7 @@ from .interface_identity import InterfaceIdentity
 from .linux_network import (
     LinuxNetworkDesired,
     compile_linux_network_desired,
+    linux_network_route_priority_only_change,
     project_network_rules_to_interfaces,
 )
 from .linux_routing import LinuxRoutingAllocationState
@@ -33,6 +34,13 @@ class LinuxNetworkBackend(Protocol):
 
     def materialize_structural(
         self,
+        desired: LinuxNetworkDesired,
+    ) -> LinuxDriverResult:
+        ...
+
+    def materialize_route_priority(
+        self,
+        current: LinuxNetworkDesired,
         desired: LinuxNetworkDesired,
     ) -> LinuxDriverResult:
         ...
@@ -69,7 +77,11 @@ class LinuxNetworkRulesAdapter:
         token, candidate = self._owners.preview_replace(owner, spec)
 
         try:
-            projected = self._project(candidate)
+            interfaces = self._backend.observe_interfaces()
+            projected = project_network_rules_to_interfaces(
+                compose_network_rules(candidate),
+                interfaces,
+            )
             projected_requested = self._rules_for_token(
                 projected,
                 token,
@@ -104,7 +116,41 @@ class LinuxNetworkRulesAdapter:
                 f"cannot compile candidate network rules: {exc}",
             )
 
-        result = self._backend.materialize_structural(desired)
+        current_desired: LinuxNetworkDesired | None = None
+        try:
+            committed = self._owners.snapshot()
+            committed_projected = project_network_rules_to_interfaces(
+                compose_network_rules(committed),
+                interfaces,
+            )
+            current_desired = compile_linux_network_desired(
+                committed_projected,
+                self._routing_allocation,
+                local_interface=self._local_interface,
+                local_process=self._local_process,
+                local_process_guard_required=self._has_local_process_intent(
+                    committed
+                ),
+            )
+        except Exception:
+            # The structural path remains the conservative fallback if the
+            # committed projection cannot be reconstructed for fast-path proof.
+            current_desired = None
+
+        if (
+            current_desired is not None
+            and linux_network_route_priority_only_change(
+                current_desired,
+                desired,
+            )
+        ):
+            result = self._backend.materialize_route_priority(
+                current_desired,
+                desired,
+            )
+        else:
+            result = self._backend.materialize_structural(desired)
+
         if not result.success:
             self._mark_all_unknown(result.diagnostic)
             self._last_state[token] = self._unknown_state(result.diagnostic)

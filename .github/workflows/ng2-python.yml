@@ -90,6 +90,13 @@ jobs:
         with:
           name: ng2-probe-isolation
           path: /tmp/ng2-probe-isolation.txt
+      - name: EXP-027 route-priority bubble
+        env:
+          PYTHONPATH: design/NG2/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG2/code/python/rou/tests/integration_route_priority_bubble.py
       - name: NG2 Linux nft ICMP selector syntax
         env:
           PYTHONPATH: design/NG2/code/python

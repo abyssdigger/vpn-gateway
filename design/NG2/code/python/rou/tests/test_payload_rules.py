@@ -58,6 +58,49 @@ class PayloadRulesCalculatorTests(unittest.TestCase):
         )
         self.assertIsNone(spec.dispatch_rules[0].source.interface)
 
+    def test_path_priority_reorder_does_not_reorder_filter_or_nat_policy(self):
+        first_path = PayloadPath(
+            InterfaceIdentity("vpns00", 10),
+            nat_mode=PayloadNatMode.MASQUERADE,
+        )
+        second_path = PayloadPath(
+            InterfaceIdentity("vpns01", 11),
+            nat_mode=PayloadNatMode.MASQUERADE,
+        )
+
+        first = self._calculate(
+            PayloadProfileRequest(
+                "profile-a",
+                PayloadDirection.OUTBOUND,
+                (IPv4Network("10.0.0.0/8"),),
+                (second_path, first_path),
+            )
+        )
+        second = self._calculate(
+            PayloadProfileRequest(
+                "profile-a",
+                PayloadDirection.OUTBOUND,
+                (IPv4Network("10.0.0.0/8"),),
+                (first_path, second_path),
+            )
+        )
+
+        self.assertEqual(
+            first.routing_domains[0].ordered_paths,
+            (second_path.identity, first_path.identity),
+        )
+        self.assertEqual(
+            second.routing_domains[0].ordered_paths,
+            (first_path.identity, second_path.identity),
+        )
+        self.assertEqual(first.dispatch_rules, second.dispatch_rules)
+        self.assertEqual(first.traffic_allows, second.traffic_allows)
+        self.assertEqual(
+            first.flow_initiation_allows,
+            second.flow_initiation_allows,
+        )
+        self.assertEqual(first.source_nat, second.source_nat)
+
     def test_zero_path_keeps_terminal_fail_close(self):
         profile = PayloadProfileRequest(
             "profile-a",

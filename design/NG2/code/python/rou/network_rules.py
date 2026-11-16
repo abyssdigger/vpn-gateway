@@ -398,6 +398,30 @@ class StateKnowledge(str, Enum):
     UNKNOWN = "unknown"
 
 
+class RulesConvergence(str, Enum):
+    MATCHED = "matched"
+    DIVERGED = "diverged"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class NetworkRulesConvergenceState:
+    knowledge: StateKnowledge
+    convergence: RulesConvergence
+
+    def __post_init__(self) -> None:
+        if self.knowledge is StateKnowledge.UNKNOWN:
+            if self.convergence is not RulesConvergence.UNKNOWN:
+                raise NetworkRulesError(
+                    "unknown rules knowledge requires unknown convergence"
+                )
+            return
+        if self.convergence is RulesConvergence.UNKNOWN:
+            raise NetworkRulesError(
+                "known rules knowledge requires convergence assessment"
+            )
+
+
 @dataclass(frozen=True)
 class NetworkRulesState:
     knowledge: StateKnowledge
@@ -412,6 +436,34 @@ class NetworkRulesState:
             raise NetworkRulesError("unknown state must not claim rules")
         if self.knowledge is StateKnowledge.UNKNOWN and self.fresh:
             raise NetworkRulesError("unknown state cannot be authoritative fresh state")
+
+
+def assess_network_rules_convergence(
+    desired: NetworkRulesSpec,
+    observed: NetworkRulesState,
+) -> NetworkRulesConvergenceState:
+    """Assess fresh semantic equality shared by all NetworkRules consumers."""
+
+    authoritative = (
+        observed.knowledge is StateKnowledge.KNOWN
+        and observed.fresh
+        and observed.rules is not None
+    )
+    if not authoritative:
+        return NetworkRulesConvergenceState(
+            StateKnowledge.UNKNOWN,
+            RulesConvergence.UNKNOWN,
+        )
+
+    assert observed.rules is not None
+    return NetworkRulesConvergenceState(
+        StateKnowledge.KNOWN,
+        (
+            RulesConvergence.MATCHED
+            if network_rules_semantically_equal(observed.rules, desired)
+            else RulesConvergence.DIVERGED
+        ),
+    )
 
 
 @dataclass(frozen=True)

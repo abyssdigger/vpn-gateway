@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Network
 
-from .availability_probe_policy import AvailabilityProbePolicy
+from .availability_routing import AvailabilityWindowPolicy
 from .interface_identity import InterfaceIdentity
 from .network_rules import (
     DispatchRuleSpec,
@@ -34,7 +34,8 @@ class AvailabilityProbeRequest:
     path: InterfaceIdentity
     target: IPv4Address
     mechanism: ProbeMechanism = ProbeMechanism.ICMP
-    policy: AvailabilityProbePolicy | None = None
+    enabled: bool = True
+    policy: AvailabilityWindowPolicy = field(kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.probe_id:
@@ -45,12 +46,11 @@ class AvailabilityProbeRequest:
             raise ValueError("probe target must be an IPv4Address")
         if not isinstance(self.mechanism, ProbeMechanism):
             raise ValueError("probe mechanism must be a ProbeMechanism")
-        if (
-            self.policy is not None
-            and not isinstance(self.policy, AvailabilityProbePolicy)
-        ):
+        if type(self.enabled) is not bool:
+            raise ValueError("probe enabled must be boolean")
+        if not isinstance(self.policy, AvailabilityWindowPolicy):
             raise ValueError(
-                "probe policy must be AvailabilityProbePolicy or None"
+                "probe policy must be AvailabilityWindowPolicy"
             )
 
 
@@ -103,6 +103,7 @@ class ProbeRulesCalculator:
                 probe.target,
             )
             for probe in request.probes
+            if probe.enabled
         }
 
         for mechanism, identity, target_address in sorted(

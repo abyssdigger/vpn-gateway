@@ -190,7 +190,7 @@ Profile:
 
 Эти paths не являются самостоятельным verdict о здоровье Profile. RuntimeStateManager
 комбинирует их с `rules_state`, binding/availability и другими system-level facts в
-`ProfileStateCalculator`.
+`ProfileStateCalculator`. Availability уже учтена upstream в desired `ordered_paths`; она не превращает observed path в binding ON/OFF внутри PayloadTrafficManager.
 
 Foreign observed routing domains не публикуются как requested Profiles; их наличие
 отражается через divergence/safety rules-state assessment.
@@ -790,27 +790,34 @@ Calculator не имеет права выводить `SAFE`, `DEGRADED` или
 Поэтому новое разрешение может быть `UNSAFE`, даже если другой defect одновременно мешает
 пакету реально пройти.
 
-### 9.5. Future common state-type review
+### 9.5. Shared convergence base
 
-Для `AvailabilityProbeManager` ожидается симметричная пара:
+Повторный comparison review после availability de-complexification показал, что первые две
+оси действительно принципиально одинаковы для всех владельцев NetworkRules:
 
 ```text
-ProbeRulesCalculator
-ProbeRulesStateCalculator
+StateKnowledge
+RulesConvergence
+    MATCHED | DIVERGED | UNKNOWN
 ```
 
-и собственный `ProbeRulesState`.
+Они вынесены в общий `NetworkRulesConvergenceState` и вычисляются общим
+`assess_network_rules_convergence()`.
 
-ProbeRules semantic lower boundary, Linux LOCAL_PROCESS materialization and
-`ProbeRulesStateCalculator` теперь реализованы и наблюдаемы.
+Отдельный `ProbeRulesState` удален: его прежний `Usability` не нес самостоятельной
+информации и полностью выводился из convergence
+(`MATCHED -> READY`, `DIVERGED -> INVALID`).
 
-Обязательный comparison review двух state-моделей выполнен. Результат: общий
-`RulesState` **не вводится**, потому что предметная семантика различается. Payload
-divergence может быть доказанно SAFE/DEGRADED/ISOLATED, тогда как divergence probe rules
-делает availability evidence INVALID независимо от того, является ли permission delta
-restrictive или widening.
+Полный общий `RulesState` при этом **не вводится**. Payload сохраняет предметные
+дополнительные оси `Safety` и `Service`, потому что только payload domain требуется
+различать safe restriction, permission widening, degraded/isolated service и неизвестную
+семантику divergence.
 
-Общим оставлен только generic `network_rules_semantically_equal()` helper.
+Probe Manager для разрешения evidence достаточно общего условия:
+
+```text
+StateKnowledge.KNOWN + RulesConvergence.MATCHED
+```
 
 ## 10. Error semantics
 
@@ -873,8 +880,20 @@ MSS/MTU clamping не добавляется без отдельного док�
 ### EXP-023
 
 Подтверждает, что Profile-local availability может изменяться при неизменной interface
-identity. Это влияет на `PayloadTrafficStateRequest`, но probe execution остается за
-`AvailabilityProbeManager`.
+identity. В текущей NG2 модели это влияет на priority внутри
+`PayloadTrafficStateRequest.ordered_paths`, но не на binding membership. Probe execution
+остается за `AvailabilityProbeManager`.
+
+### EXP-027
+
+Подтверждает route-slot materialization для availability-driven priority permutation:
+
+- ordinary prefix и `default`;
+- fixed metrics 10/20/30/40;
+- top-down `ip route replace`;
+- временные duplicate paths допустимы;
+- terminal blackhole сохраняется;
+- staging routing table для обычной permutation не требуется.
 
 ## 12. Mapping старого NG1 к NG2
 
@@ -939,8 +958,8 @@ NG1 planner.py
    RuntimeStateManager;
 2. audit/retry scheduling policy вокруг уже реализованного deterministic `audit()` pass;
 3. richer divergent predicate implication только там, где появится реальная необходимость;
-4. AvailabilityProbeManager execution/timing policy above the implemented probe
-   rules/state and single-shot executor;
+4. runtime wiring availability bubble policy в `ordered_paths`; Linux route-only
+   materialization уже подтверждена EXP-027 и реализована как verified fast path;
 5. remaining runtime assembly above the implemented protective startup gate; forwarding
    closure до первого owner reconcile зафиксирован в `runtime-bootstrap.md`.
 
