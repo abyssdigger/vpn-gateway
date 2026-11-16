@@ -282,12 +282,43 @@ while True:
         assert len(found) == 3, found
         tcp_rule, udp_rule, icmp_rule = found
 
+        # Protocol-unspecified REJECT: replace the test rules with one generic IPv4 reject
+        # and prove it remains active rather than degrading to silent DROP.
+        nft_script(
+            managed,
+            f"""flush chain ip vpn_gate payload_forward
+add rule ip vpn_gate payload_forward ip daddr {target} reject comment "{RULE_COMMENT}"
+""",
+        )
+        generic_ping = ns(
+            ordinary,
+            "ping",
+            "-n",
+            "-c",
+            "1",
+            "-W",
+            "2",
+            target,
+            check=False,
+        )
+        generic_output = generic_ping.stdout + "\n" + generic_ping.stderr
+        assert generic_ping.returncode != 0, generic_output
+        assert (
+            "Destination Port Unreachable" in generic_output
+            or "Destination Unreachable" in generic_output
+        ), generic_output
+        generic_rules = chain_rules(managed)
+        assert len(generic_rules) == 1, generic_rules
+        generic_rule = generic_rules[0]
+
         print("EXP043_TCP_REJECT_JSON=" + json.dumps(tcp_rule, sort_keys=True))
         print("EXP043_UDP_REJECT_JSON=" + json.dumps(udp_rule, sort_keys=True))
         print("EXP043_ICMP_REJECT_JSON=" + json.dumps(icmp_rule, sort_keys=True))
+        print("EXP043_GENERIC_REJECT_JSON=" + json.dumps(generic_rule, sort_keys=True))
         print("EXP043_TCP_ACTIVE_REFUSED=1")
         print("EXP043_UDP_ACTIVE_REFUSED=1")
         print("EXP043_ICMP_ACTIVE_UNREACHABLE=1")
+        print("EXP043_GENERIC_ACTIVE_UNREACHABLE=1")
         print("EXP-043 Device firewall active REJECT: PASS")
         return 0
     finally:
