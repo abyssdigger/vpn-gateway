@@ -110,8 +110,10 @@ def _partition(
         return ()
 
     owners: dict[IPv4Network, str] = {}
-    collapsed_by_profile: dict[str, tuple[IPv4Network, ...]] = {}
+    profile_ids: set[str] = set()
+    entries_list: list[tuple[str, IPv4Network]] = []
     for profile in candidates:
+        profile_ids.add(profile.profile_id)
         for network in profile.destinations:
             previous = owners.get(network)
             if previous is not None and previous != profile.profile_id:
@@ -120,16 +122,13 @@ def _partition(
                     f"Profiles: {previous!r}, {profile.profile_id!r}"
                 )
             owners[network] = profile.profile_id
+            # Do not collapse nested destinations before cross-Profile
+            # subtraction. A nested prefix owned by the same Profile may
+            # legitimately regain ownership inside an intervening,
+            # less-specific prefix owned by another Profile.
+            entries_list.append((profile.profile_id, network))
 
-        collapsed_by_profile[profile.profile_id] = tuple(
-            collapse_addresses(profile.destinations)
-        )
-
-    entries = tuple(
-        (profile_id, network)
-        for profile_id, networks in collapsed_by_profile.items()
-        for network in networks
-    )
+    entries = tuple(entries_list)
 
     fragments: list[ProfilePrefixFragment] = []
     for owner, network in entries:
@@ -169,7 +168,7 @@ def _partition(
         )
 
     collapsed_fragments: list[ProfilePrefixFragment] = []
-    for owner in sorted(collapsed_by_profile):
+    for owner in sorted(profile_ids):
         owner_networks = tuple(
             fragment.remote_prefix
             for fragment in fragments
