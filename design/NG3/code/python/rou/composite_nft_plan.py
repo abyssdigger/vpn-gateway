@@ -7,6 +7,11 @@ from enum import Enum
 
 from .composite_nft_policy import CompositeNftPolicyComparison
 from .device_firewall_desired import DeviceFirewallChainSpec
+from .local_publication_mutation import (
+    LocalPublicationMutationStep,
+    select_local_publication_step,
+)
+from .local_publication_policy import LocalPublicationDesiredState
 from .payload_forward_desired import PayloadForwardRuleSpec
 from .payload_nat_desired import PayloadMasqueradeSpec
 
@@ -19,6 +24,7 @@ class CompositeNftStepKind(str, Enum):
     ADD_NAT_RULE = "add_nat_rule"
     CREATE_DEVICE_CHAIN = "create_device_chain"
     ADD_PROFILE_RULE = "add_profile_rule"
+    APPLY_LOCAL_PUBLICATION = "apply_local_publication"
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +35,7 @@ class CompositeNftMutationStep:
     profile_rule: PayloadForwardRuleSpec | None = None
     nat_rule: PayloadMasqueradeSpec | None = None
     device_chain: DeviceFirewallChainSpec | None = None
+    local_publication_step: LocalPublicationMutationStep | None = None
 
     def __post_init__(self) -> None:
         fields = (
@@ -37,6 +44,7 @@ class CompositeNftMutationStep:
             self.profile_rule is not None,
             self.nat_rule is not None,
             self.device_chain is not None,
+            self.local_publication_step is not None,
         )
         if sum(fields) != 1:
             raise ValueError("exactly one mutation step operand is required")
@@ -48,11 +56,15 @@ class CompositeNftPlanError(ValueError):
 
 def select_composite_nft_step(
     comparison: CompositeNftPolicyComparison,
+    local_publication_desired: LocalPublicationDesiredState | None = None,
 ) -> CompositeNftMutationStep | None:
     """Select one fail-closed structural convergence step.
 
-    Existing positive Profile admission is removed first. New positive Profile
-    admission is installed last, after required NAT and Device restriction.
+    Stale local publication accepts are removed before payload cleanup because
+    ForwardingGate does not protect local traffic. Existing positive Profile
+    admission is then removed before other payload cleanup. New positive Profile
+    admission is installed after required NAT and Device restriction. Missing
+    local publication admission is installed last as its own atomic nft transaction.
     Device jump cleanup precedes child-chain cleanup to preserve nft references.
     """
     if not isinstance(comparison, CompositeNftPolicyComparison):
@@ -72,9 +84,25 @@ def select_composite_nft_step(
         raise CompositeNftPlanError(
             "sub-policy comparison has conflicts"
         )
-    if not comparison.local_publication.desired_confirmed:
+    if local_publication_desired is None:
+        local_publication_desired = LocalPublicationDesiredState(())
+    if not isinstance(local_publication_desired, LocalPublicationDesiredState):
         raise CompositeNftPlanError(
-            "local publication drift requires a separate local-mutation gate"
+            "local_publication_desired must be LocalPublicationDesiredState"
+        )
+
+    if comparison.local_publication.stale:
+        local_step = select_local_publication_step(
+            comparison.local_publication,
+            local_publication_desired,
+        )
+        if local_step is None:
+            raise CompositeNftPlanError(
+                "stale local publication state has no repair step"
+            )
+        return CompositeNftMutationStep(
+            kind=CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
+            local_publication_step=local_step,
         )
 
     if comparison.profile_forward.stale:
@@ -143,6 +171,20 @@ def select_composite_nft_step(
         return CompositeNftMutationStep(
             kind=CompositeNftStepKind.ADD_PROFILE_RULE,
             profile_rule=target,
+        )
+
+    if comparison.local_publication.missing:
+        local_step = select_local_publication_step(
+            comparison.local_publication,
+            local_publication_desired,
+        )
+        if local_step is None:
+            raise CompositeNftPlanError(
+                "missing local publication state has no repair step"
+            )
+        return CompositeNftMutationStep(
+            kind=CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
+            local_publication_step=local_step,
         )
 
     return None
