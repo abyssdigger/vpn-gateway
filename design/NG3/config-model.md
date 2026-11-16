@@ -152,6 +152,21 @@ Unreferenced Devices do not create runtime binding work.
 
 Endpoints beyond selector quota are not silently admitted.
 
+Runtime binding additionally preserves the previously accepted deterministic admission
+semantics:
+
+- Linux concrete endpoint identity is `(ifname, ifindex)`;
+- same-name/new-ifindex is a fresh concrete endpoint;
+- already bound survivors are not reordered/evicted by newcomers;
+- over-quota candidates may be observed for diagnostics but are not policy paths;
+- after verified removal frees capacity, waiting candidates are promoted deterministically
+  by committed first-observed order;
+- simultaneous fresh candidates keep kernel-snapshot order with ifindex tie-break;
+- lexical ifname order is not user priority.
+
+These rules implement the user's configured selector/quota order without turning incidental
+interface naming into hidden policy.
+
 **Requirements:**
 - `VPNG-R1.R3.R4`
 - `VPNG-R1.R3.R4.R1`
