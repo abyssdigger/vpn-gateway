@@ -34,11 +34,11 @@ The following operations are **routine autonomous development work** and do not 
 - Develop coherent review units, write and run the cheapest sufficient tests/evidence, perform required expert review, record findings/dispositions/verdicts, and apply accepted fixes.
 - **Publish every commit to GitHub immediately**, including code, design, tests, reviews, fixes, and checkpoints. No unpublished local commit series.
 - After each commit, use its actual GitHub committer timestamp to check `Tn - T0` against `CYCLE_INTERVAL`; at the threshold, complete the current review unit, publish its checkpoint, report the precise restart state, and stop pending the next user turn.
-- Publish the final state of each completed development cycle to `main` as **one linear snapshot commit**, using that cycle branch's committed tree. The branch retains all intermediate commits and is not merged with its history into `main`.
+- Publish each deliberately selected **completed logical development block** to `main` as exactly **one linear snapshot commit** according to `CD-SNAPSHOT-R1..R7` in `CONTINUOUS-DEVELOPMENT.md`. A CD/session-safety cycle is not a snapshot boundary. The working branch retains all intermediate commits and its history is never merged into `main`.
 
-**Mainline snapshots are records of development checkpoints, not product-acceptance certificates.** A branch tip on the active development lineage is a legitimate snapshot point even if its name contains `pre-review` or `draft`. Do not impose a retroactive expert-review acceptance test on selection of historical checkpoint snapshots. Duplicate branch-tip SHAs produce one snapshot. Diverged/superseded branch tips whose work is already reflected in the continuing main development lineage are not separately snapshotted.
+**Mainline snapshots are compact logical-development checkpoints, not raw branch history and not product-release certificates.** The exact source commit is explicit and may precede the current working-branch HEAD when later unfinished work already exists.
 
-Before a routine snapshot, confirm the source/target HEADs, lineage, existing mainline snapshots, and absence of conflicting updates. Never copy unfinished work as the accepted outcome of an earlier checkpoint. Mark absorbed cycle branches with the agreed `-absorbed` suffix where the repository tooling supports an actual rename without losing the branch or its history; do not create misleading duplicate aliases in lieu of a rename.
+Before every routine snapshot, mechanically verify the `CD-SNAPSHOT-R5` conditions: expected previous `main` snapshot, exact source commit, identical source/candidate tree hash, candidate parent equal to previous snapshot, and exactly one commit of mainline advancement. Never copy unfinished descendant work into an earlier logical snapshot and never import the source branch's intermediate commit chain.
 
 ## Exceptional Git history or branch restructuring
 
