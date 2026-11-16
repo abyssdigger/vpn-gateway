@@ -52,6 +52,7 @@ from .network_policy_layout import (
     RouteMetricPlatformSpace,
     allocate_network_policy_layout,
 )
+from .linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from .profile_classification import (
     ProfileClassificationError,
     classify_inbound_profile,
@@ -117,6 +118,7 @@ __all__ = [
     "NetworkPolicyLayout",
     "NetworkPolicyLayoutError",
     "NetworkPolicyPlatformSpace",
+    "NG3_LINUX_POLICY_PLATFORM",
     "NumericResourcePool",
     "PathBinding",
     "PayloadDispatchRule",
