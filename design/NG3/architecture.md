@@ -44,7 +44,7 @@ The implementation intentionally stops before unresolved or separately-gated bou
 - ICMP execution/probe-plane production mechanism;
 - full lifecycle/deployment assembly.
 
-This mapping implements the traceability intent of `VPNG-R7.R6.1` without promoting
+This mapping implements the traceability intent of `VPNG-R7.R6.R1` without promoting
 reference code into new product semantics.
 
 # 1. Architecture scope of this pass
