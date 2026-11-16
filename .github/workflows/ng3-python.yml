@@ -6,11 +6,13 @@ on:
       - "design/NG3/code/python/**"
       - ".github/workflows/ng3-python.yml"
       - "design/experiments/EXP-028 NG3 lower policy platform space/**"
+      - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
   pull_request:
     paths:
       - "design/NG3/code/python/**"
       - ".github/workflows/ng3-python.yml"
       - "design/experiments/EXP-028 NG3 lower policy platform space/**"
+      - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
 
 jobs:
   unit:
@@ -66,3 +68,20 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-028 NG3 lower policy platform space/exp028_lower_policy_space.py"
+
+
+  linux-structural-inventory-shape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2
+      - name: EXP-029 structural routing inventory shape
+        run: >-
+          sudo python3
+          "design/experiments/EXP-029 NG3 structural routing inventory shape/exp029_inventory_shape.py"
