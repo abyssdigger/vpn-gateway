@@ -445,9 +445,20 @@ def main() -> int:
         )
         assert (
             drift.status
-            is StructuralPolicyMutationStatus.POSTCONDITION_FAILED
+            is StructuralPolicyMutationStatus.CONFLICT
         ), (drift.status, drift.diagnostic)
+        assert drift.diagnostic == "desired forward endpoints are not current"
         assert gate.observe_forwarding_gate() is ForwardingGateState.DISABLED
+        rows = raw_run(
+            "ip", "-n", managed, "-j", "-N", "-4",
+            "route", "show", "table", str(NEW_TABLE),
+        ).stdout
+        import json
+        managed_rows = json.loads(rows)
+        assert not any(
+            str(row.get("protocol")) == "202"
+            for row in managed_rows
+        ), managed_rows
         assert udp_probe(host_ns) is None
         print("STRUCTURAL_CROSS_DOMAIN_SAME_NAME_NEW_IFINDEX_FAIL_CLOSED=PASS")
 
