@@ -123,6 +123,17 @@ from .payload_forward_compare import (
     PayloadForwardComparisonError,
     compare_payload_forward,
 )
+from .device_firewall_desired import (
+    DeviceFirewallChainSpec,
+    DeviceFirewallDesiredError,
+    DeviceFirewallDesiredState,
+    DeviceFirewallRuleSpec,
+)
+from .device_firewall_compare import (
+    DeviceFirewallComparison,
+    DeviceFirewallComparisonError,
+    compare_device_firewall,
+)
 from .device_firewall_structure import (
     DEVICE_FIREWALL_CHILD_COMMENT,
     DEVICE_FIREWALL_FALLTHROUGH_COMMENT,
@@ -254,6 +265,12 @@ __all__ = [
     "DEVICE_FIREWALL_FALLTHROUGH_COMMENT",
     "DEVICE_FIREWALL_JUMP_COMMENT",
     "DEVICE_FIREWALL_RULE_COMMENT",
+    "DeviceFirewallChainSpec",
+    "DeviceFirewallDesiredError",
+    "DeviceFirewallDesiredState",
+    "DeviceFirewallRuleSpec",
+    "DeviceFirewallComparison",
+    "DeviceFirewallComparisonError",
     "DeviceFirewallRuleAction",
     "DeviceFirewallStructureConflict",
     "DeviceFirewallStructureError",
@@ -327,6 +344,7 @@ __all__ = [
     "LinuxPayloadNatBackend",
     "compare_payload_nat",
     "observe_payload_forward",
+    "compare_device_firewall",
     "compare_payload_forward",
     "observe_device_firewall_structure",
     "converge_payload_nat_step_once",
