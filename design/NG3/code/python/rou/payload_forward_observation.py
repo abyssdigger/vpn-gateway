@@ -9,6 +9,7 @@ import json
 from typing import Iterable
 
 from .interface_identity import InterfaceIdentity
+from .device_firewall_structure import DEVICE_FIREWALL_JUMP_COMMENT
 from .nft_namespace_inventory import NftNamespaceObject, NftNamespaceObservation
 from .nft_payload_scaffold import (
     PAYLOAD_FORWARD_CHAIN,
@@ -133,6 +134,11 @@ def observe_payload_forward(
             )
             continue
         if chain != PAYLOAD_FORWARD_CHAIN:
+            continue
+        # Device-firewall jumps are a separate owner class in this same base
+        # chain. Their exact shape is classified by the Device firewall
+        # structural observer and must not be misclassified as Profile rules.
+        if payload.get("comment") == DEVICE_FIREWALL_JUMP_COMMENT:
             continue
 
         handle = payload.get("handle")
