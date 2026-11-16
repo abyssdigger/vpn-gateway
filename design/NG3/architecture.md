@@ -1986,6 +1986,82 @@ EXP-033 also proved real source translation, ingress scoping and same-name repla
 behavior. The exact nft rule comment is `vpn-gate:ng3:payload-nat-v1`; the rule handle is
 incidental.
 
+###### Authoritative payload NAT rule observation
+
+The strict NAT observer operates only after table/scaffold ownership is confirmed and consumes:
+
+```text
+canonical nft objects from table ip vpn_gate
++
+one fresh current InterfaceIdentity inventory
+```
+
+Every rule in `payload_postrouting` is inside VPN-GATE's owned policy boundary and must be
+classified. It is not safe to ignore a rule merely because its comment is unfamiliar.
+
+The only currently accepted payload NAT rule shape is:
+
+```text
+chain = payload_postrouting
+comment = "vpn-gate:ng3:payload-nat-v1"
+
+expr[0]:
+    meta iif == <interface operand>
+
+expr[1]:
+    meta oif == <interface operand>
+
+expr[2]:
+    masquerade
+
+no additional semantic expressions
+```
+
+Rule `handle` is retained as exact current kernel-object identity for a later mutation
+planner, but it is not semantic desired-state identity.
+
+Interface operands normalize as follows:
+
+```text
+ifname string:
+    resolve through fresh current interface inventory
+    -> current InterfaceIdentity
+
+decimal-string ifindex:
+    if exact current ifindex exists, resolve to that InterfaceIdentity
+    otherwise retain as stale/unresolved numeric interface identity
+
+other textual/numeric form:
+    conflict
+```
+
+A stale/unresolved numeric identity never confirms a desired current
+`PayloadMasqueradeSpec`.
+
+The observer must report an explicit conflict for:
+
+- missing/wrong NAT owner comment;
+- wrong chain/table/family;
+- missing or repeated iif/oif match;
+- name/index operand that cannot be normalized unambiguously;
+- any extra match/action/expression;
+- NAT action other than plain masquerade;
+- duplicate normalized physical NAT rule.
+
+Thus actual-vs-desired comparison can classify:
+
+```text
+confirmed desired masquerade contribution
+missing desired contribution
+stale recognized owned contribution
+conflicting/unrepresentable owned NAT rule
+```
+
+and can do so without equating same-name/new-ifindex endpoints.
+
+Observation remains read-only. Physical NAT add/delete is not accepted until this parser and
+comparison contract are executable and reviewed.
+
 The scaffold is deliberately independent from the root structural barrier:
 
 - structural rebuild happens while verified `ip_forward=0`;
