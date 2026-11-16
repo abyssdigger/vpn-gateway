@@ -126,6 +126,13 @@ class NftNamespaceInventoryTests(unittest.TestCase):
         self.assertTrue(
             all("vpn_gate" in item.canonical_json for item in value.objects)
         )
+        # Canonical object sorting remains stable for existing consumers, while
+        # source_order preserves the physical nft JSON sequence for ordered
+        # policy observers.
+        self.assertEqual(
+            [item.source_order for item in value.objects],
+            [2, 1],
+        )
 
     def test_foreign_family_or_table_objects_are_ignored(self):
         value = parse_nft_namespace_ruleset(
