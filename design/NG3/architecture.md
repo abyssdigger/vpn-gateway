@@ -1957,8 +1957,33 @@ deduplicated by the exact `(host boundary identity, path endpoint identity)` pai
 This lower contract does not choose the final human-facing `nat` field spelling. It consumes
 an already normalized semantic intent.
 
-The exact nft numeric-ifindex syntax/JSON form and real source-translation behavior are
-evidence-gated before executable adoption.
+EXP-033 passed on the current Linux/nftables target.
+
+The rule was created with numeric interface indices and behaved as exact ifindex identity.
+Current nft JSON representation is intentionally normalized as follows:
+
+- while the stored ifindex resolves to a current interface, the operand is rendered as that
+  interface name even with `nft -n -j list ruleset`;
+- after the interface disappears, the same stored operand is rendered as a decimal-string
+  ifindex;
+- recreating the same interface name with a new ifindex does not make the stale rule match.
+
+Therefore authoritative NAT observation must normalize an nft meta-interface operand using a
+fresh current interface inventory:
+
+```text
+textual ifname
+    -> current InterfaceIdentity(ifname, ifindex)
+
+decimal-string operand
+    -> unresolved/stale numeric ifindex unless that exact index is independently present
+```
+
+It must never compare only textual interface names.
+
+EXP-033 also proved real source translation, ingress scoping and same-name replacement
+behavior. The exact nft rule comment is `vpn-gate:ng3:payload-nat-v1`; the rule handle is
+incidental.
 
 The scaffold is deliberately independent from the root structural barrier:
 

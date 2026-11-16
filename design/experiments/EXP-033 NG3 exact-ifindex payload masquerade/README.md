@@ -43,3 +43,13 @@ All namespaces, interfaces and nft state are disposable.
 
 All hypotheses must pass in privileged GitHub CI before exact-ifindex masquerade becomes the
 executable lower NAT contract.
+
+
+## Result
+
+**COMPLETE — PASS.**
+
+Final GitHub Actions run: `43841279078`.
+
+See `EXP-033-result-20261116.md` for packet behavior and the nft interface-operand
+representation finding.

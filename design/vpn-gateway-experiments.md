@@ -1,3 +1,21 @@
+## EXP-033 — NG3 exact-ifindex payload masquerade
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** payload NAT lower realization contract  
+**Тип:** nft exact-ifindex source NAT + replacement identity  
+**Design:** [EXP-033 README](experiments/EXP-033%20NG3%20exact-ifindex%20payload%20masquerade/README.md)  
+**Result:** [EXP-033 result](experiments/EXP-033%20NG3%20exact-ifindex%20payload%20masquerade/EXP-033-result-20261116.md)
+
+Privileged packet test подтвердил реальный MASQUERADE по exact ingress/egress ifindex,
+исключение другого ingress и отсутствие match у stale rule после same-name/new-ifindex
+replacement.
+
+Дополнительно установлено: nft JSON показывает текущий ifindex operand как ifname, а после
+исчезновения интерфейса — как decimal-string старого ifindex. Авторитетное наблюдение NAT
+поэтому обязано сочетать ruleset JSON со fresh interface inventory.
+
+---
+
 ## EXP-032 — NG3 payload nft scaffold
 
 **Статус:** COMPLETE — PASS  
