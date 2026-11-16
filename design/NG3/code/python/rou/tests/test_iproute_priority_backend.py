@@ -176,6 +176,56 @@ class IproutePriorityBackendTests(unittest.TestCase):
         ]
         self.assertEqual(deletes, [])
 
+    def test_move_stops_before_delete_if_other_path_drifts_after_add(self):
+        runner = ScriptedRunner(
+            [
+                routes_json((10,), (20,)),
+                routes_json((10, 30), (20, 40)),
+            ]
+        )
+        with self.assertRaisesRegex(
+            IproutePriorityBackendError,
+            "whole-domain state",
+        ):
+            backend(runner).move_route_priority(RoutePriorityMove(A, 10, 30))
+
+        deletes = [
+            command
+            for command in runner.commands
+            if "route" in command and "del" in command
+        ]
+        self.assertEqual(deletes, [])
+
+    def test_move_refuses_preexisting_duplicate_on_other_path(self):
+        runner = ScriptedRunner([routes_json((10,), (20, 40))])
+        with self.assertRaisesRegex(
+            IproutePriorityBackendError,
+            "one current metric per logical path",
+        ):
+            backend(runner).move_route_priority(RoutePriorityMove(A, 10, 30))
+
+        adds = [
+            command
+            for command in runner.commands
+            if "route" in command and "add" in command
+        ]
+        self.assertEqual(adds, [])
+
+    def test_duplicate_delete_detects_unrelated_drift_in_postcondition(self):
+        runner = ScriptedRunner(
+            [
+                routes_json((10, 30), (20,)),
+                routes_json((30,), (40,)),
+            ]
+        )
+        with self.assertRaisesRegex(
+            IproutePriorityBackendError,
+            "whole-domain state",
+        ):
+            backend(runner).delete_duplicate_route(
+                RoutePriorityDeleteDuplicate(A, 10)
+            )
+
     def test_duplicate_delete_is_prechecked_and_verified(self):
         runner = ScriptedRunner(
             [

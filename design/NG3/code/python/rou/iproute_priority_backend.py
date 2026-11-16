@@ -94,6 +94,7 @@ class IproutePriorityBackend:
         spec = self._spec(step.path_id)
         before = self.observe_route_priority()
         self._require_all_paths_present(before)
+        self._require_unique_metric_ownership(before)
 
         metrics = before.routes[step.path_id]
         if step.metric not in metrics or len(metrics) <= 1:
@@ -106,17 +107,31 @@ class IproutePriorityBackend:
         )
 
         after = self.observe_route_priority()
-        self._require_all_paths_present(after)
-        if step.metric in after.routes[step.path_id]:
-            raise IproutePriorityBackendError(
-                "duplicate route still present after exact delete"
-            )
+        expected_after = {
+            path_id: frozenset(metrics)
+            for path_id, metrics in before.routes.items()
+        }
+        expected_after[step.path_id] = frozenset(
+            metric
+            for metric in before.routes[step.path_id]
+            if metric != step.metric
+        )
+        self._require_exact_snapshot(
+            after,
+            expected_after,
+            "duplicate-delete postcondition",
+        )
 
     def move_route_priority(self, move: RoutePriorityMove) -> None:
         spec = self._spec(move.path_id)
 
         before = self.observe_route_priority()
         self._require_all_paths_present(before)
+        self._require_unique_metric_ownership(before)
+        if any(len(metrics) != 1 for metrics in before.routes.values()):
+            raise IproutePriorityBackendError(
+                "semantic move requires one current metric per logical path"
+            )
 
         if before.routes[move.path_id] != frozenset((move.from_metric,)):
             raise IproutePriorityBackendError(
@@ -135,24 +150,34 @@ class IproutePriorityBackend:
         )
 
         after_add = self.observe_route_priority()
-        self._require_all_paths_present(after_add)
-        if after_add.routes[move.path_id] != frozenset(
+        expected_after_add = {
+            path_id: frozenset(metrics)
+            for path_id, metrics in before.routes.items()
+        }
+        expected_after_add[move.path_id] = frozenset(
             (move.from_metric, move.to_metric)
-        ):
-            raise IproutePriorityBackendError(
-                "new route copy was not authoritatively verified before delete"
-            )
+        )
+        self._require_exact_snapshot(
+            after_add,
+            expected_after_add,
+            "add-before-delete verification",
+        )
 
         self.runner.run(
             self._route_mutation_command("del", spec, move.from_metric)
         )
 
         after_delete = self.observe_route_priority()
-        self._require_all_paths_present(after_delete)
-        if after_delete.routes[move.path_id] != frozenset((move.to_metric,)):
-            raise IproutePriorityBackendError(
-                "move postcondition was not authoritatively verified"
-            )
+        expected_after_delete = {
+            path_id: frozenset(metrics)
+            for path_id, metrics in before.routes.items()
+        }
+        expected_after_delete[move.path_id] = frozenset((move.to_metric,))
+        self._require_exact_snapshot(
+            after_delete,
+            expected_after_delete,
+            "move postcondition",
+        )
 
     def _verify_relevant_interface_stability(
         self,
@@ -178,6 +203,33 @@ class IproutePriorityBackend:
                 raise IproutePriorityBackendError(
                     f"relevant interface {name!r} no longer matches bound identity"
                 )
+
+    def _require_unique_metric_ownership(
+        self,
+        snapshot: RoutePrioritySnapshot,
+    ) -> None:
+        owner_by_metric: dict[int, object] = {}
+        for path_id, metrics in snapshot.routes.items():
+            for metric in metrics:
+                owner = owner_by_metric.get(metric)
+                if owner is not None and owner != path_id:
+                    raise IproutePriorityBackendError(
+                        f"metric {metric} is owned by multiple logical paths"
+                    )
+                owner_by_metric[metric] = path_id
+
+    def _require_exact_snapshot(
+        self,
+        snapshot: RoutePrioritySnapshot,
+        expected: dict[object, frozenset[int]],
+        context: str,
+    ) -> None:
+        if dict(snapshot.routes) != expected:
+            raise IproutePriorityBackendError(
+                f"{context} does not match authoritative whole-domain state"
+            )
+        self._require_all_paths_present(snapshot)
+        self._require_unique_metric_ownership(snapshot)
 
     def _require_all_paths_present(
         self,
