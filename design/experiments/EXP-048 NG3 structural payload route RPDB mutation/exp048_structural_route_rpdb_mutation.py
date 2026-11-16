@@ -155,7 +155,7 @@ def payload_rule_present(namespace: str, ingress: str) -> bool:
         and str(row.get("table")) == str(PAYLOAD_TABLE)
         and row.get("iif") == ingress
         and row.get("dst") == TARGET
-        and row.get("dstlen") == 32
+        and row.get("dstlen") in (None, 32)
         for row in rule_rows(namespace)
     )
 
