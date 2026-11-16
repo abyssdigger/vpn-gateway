@@ -54,6 +54,12 @@ from .route_priority_convergence import (
     RoutePriorityDeleteDuplicate,
     plan_route_priority_convergence,
 )
+from .route_priority_executor import (
+    RoutePriorityExecutionResult,
+    RoutePriorityExecutionStatus,
+    RoutePrioritySnapshot,
+    converge_route_priority_once,
+)
 
 __all__ = [
     "AvailabilityConfirmationState",
@@ -77,6 +83,9 @@ __all__ = [
     "ProfileStructuralIntent",
     "RoutePriorityConvergenceError",
     "RoutePriorityDeleteDuplicate",
+    "RoutePriorityExecutionResult",
+    "RoutePriorityExecutionStatus",
+    "RoutePrioritySnapshot",
     "RoutePriorityMove",
     "RoutePriorityPlanError",
     "SelectorBindingState",
@@ -88,6 +97,7 @@ __all__ = [
     "build_payload_profile_requests",
     "classify_inbound_profile",
     "classify_outbound_profile",
+    "converge_route_priority_once",
     "parse_ip_link_inventory",
     "plan_route_priority_convergence",
     "plan_route_priority_moves",
