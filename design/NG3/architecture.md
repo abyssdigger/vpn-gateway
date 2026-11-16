@@ -396,24 +396,34 @@ The product-facing path identity is stable for the configuration lifecycle. Runt
 identity may change when the administrator recreates/replaces the externally provisioned VPN
 channel.
 
-The normalized internal contract therefore contains a logical path identity plus enough
-binding intent to locate the expected concrete endpoint. The exact user-facing syntax that
-produces this normalized contract is intentionally not defined here.
+The human configuration names Devices, not every logical path.
 
-A concrete endpoint becomes the current endpoint for a logical path only after the binding
-has been observed and verified.
+Logical path identity is derived during Device binding normalization from:
+
+```text
+Device ID
++ expected-interface selector position
++ stable slot within selector quota
+```
+
+The concrete runtime endpoint is the current binding of that logical identity.
+
+A replacement endpoint may become the current endpoint for the same logical path only after
+the new binding has been observed and verified.
 
 ### VPNPathAdapter
 
 **Component type:** Adapter
 
 **Implements:**
+- `VPNG-R1.R3.R1`
 - `VPNG-R1.R3.R2`
 - `VPNG-R1.R3.R3`
 - `VPNG-R1.R3.R4`
 - `VPNG-R1.R3.R4.R1`
 - `VPNG-R1.R3.R4.R2`
 - `VPNG-R1.R3.R4.R3`
+- `VPNG-R1.R3.R4.R3.R1`
 - `VPNG-R1.R3.R4.R4`
 - `VPNG-R4.R6.R1.R4`
 - `VPNG-R7.R3`
@@ -852,6 +862,7 @@ Availability is not allowed to:
 - `VPNG-R1.R3.R4.R1`
 - `VPNG-R1.R3.R4.R2`
 - `VPNG-R1.R3.R4.R3`
+- `VPNG-R1.R3.R4.R3.R1`
 - `VPNG-R1.R3.R4.R4`
 - `VPNG-R3.R1.R1`
 
@@ -873,16 +884,19 @@ into bounded current logical paths.
 The projection preserves surviving slot assignments when new endpoints appear, so ordinary
 environment change does not arbitrarily reorder existing paths.
 
-Each accepted bound path has semantic identity sufficient to distinguish:
+Each accepted bound path has a stable logical identity:
 
 ```text
-Device ID
-+ expected-interface selector position
-+ stable slot within selector quota
-+ current concrete endpoint binding
+logical_path_id :=
+    Device ID
+    + expected-interface selector position
+    + stable slot within selector quota
 ```
 
-The exact serialized/internal ID format is implementation detail.
+The current concrete endpoint binding is separate mutable state and is not part of the
+logical identity itself.
+
+The exact serialized/internal logical-path ID format is implementation detail.
 
 No inactive/unreferenced Device participates in discovery/binding work.
 
