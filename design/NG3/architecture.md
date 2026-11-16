@@ -2081,6 +2081,80 @@ by removing the payload-prefix expression, the observer design must be revised
 rather than pretending the missing expression is equivalent by assumption.
 
 **EXP-038 result:** PASS on privileged GitHub Linux CI. `/0`, `/1` and
+
+###### Exact payload_forward desired data and actual-vs-desired comparison
+
+**Component:** immutable lower desired data + pure Direct Calculator. This is
+**not** the Profile/Device policy compiler.
+
+**Implements:**
+- `VPNG0002-R2.R1.R1`;
+- `VPNG0002-R2.R1.R2`;
+- `VPNG0002-R2.R3.R3`;
+- `VPNG0002-R2.R5.R1`;
+- `VPNG0001-R1.R3.R2`;
+- `VPNG0001-R1.R3.R3`;
+- `VPNG0004-R4.R1`;
+- `VPNG0004-R4.R2`;
+- `VPNG0004-R4.R5`.
+
+**Constrained by:**
+- `VPNG0002-R2.R3.C1`;
+- `VPNG0001-R1.R2.R4.R6.C1`.
+
+The higher semantic Calculator will eventually produce a complete, deduplicated
+physical rule set after applying Profile direction/destinations, path bindings,
+most-specific policy and normalized Device envelope. That compiler is **not**
+part of this unit because the envelope lower projection is not yet closed.
+
+This unit defines only one exact physical desired rule:
+
+```text
+PayloadForwardRuleSpec:
+    kind = NEW | RETURN
+    ingress = current InterfaceIdentity
+    egress = current InterfaceIdentity
+    remote_field = saddr | daddr
+    remote_prefix = strict IPv4Network
+```
+
+and an immutable `PayloadForwardDesiredState` containing a physically unique
+set of such specs. It has no Profile ID, Device ID or rule handle because those
+are not part of physical nft rule identity. Semantic provenance remains above
+this lower contract.
+
+The comparator takes:
+
+```text
+strict observed payload_forward rules
++ one fresh interface inventory
++ exact lower desired state
+    ->
+confirmed desired specs
+missing desired specs
+stale recognized physical rules
+conflicts
+```
+
+A recognized current-identity rule that is not in desired state is `stale`,
+not confirmed. A stale-interface-generation rule is also `stale`. Any
+observer conflict remains a conflict. Desired rules whose endpoints are not
+present in the same current interface inventory are invalid input rather than
+permission to add a rule to an unverified endpoint.
+
+**Necessity / simplification:** this comparison is required before safe cleanup
+or physical materialization, but it deliberately avoids creating a second
+Profile classifier or guessing Device envelope semantics. No I/O, mutation,
+stored handles, retry state or lifecycle component.
+
+**Evidence:** rootless exact comparison tests over NEW/RETURN, duplicate desired
+physical rules, unexpected recognized current rules, stale numeric generations,
+missing rules, conflicts and non-current desired endpoints. Existing live
+observer evidence remains sufficient; no new kernel fact is introduced.
+
+**Gate:** PASS for lower desired data/comparison only. Full semantic compilation
+and physical filter mutation remain separate gated units.
+
 `/31` remain explicit prefix objects; `/32` is a plain IPv4 address string.
 The same forms are used by NEW daddr and RETURN saddr matches. The strict
 observer implementation gate is therefore open for all accepted IPv4 CIDR
