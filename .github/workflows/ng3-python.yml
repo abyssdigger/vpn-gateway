@@ -216,3 +216,7 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-036 NG3 prefix-scoped stateful return/exp036_prefix_scoped_return.py"
+      - name: EXP-037 production-shape payload_forward JSON
+        run: >-
+          sudo python3
+          "design/experiments/EXP-037 NG3 production-shape payload-forward JSON/exp037_payload_forward_json.py"
