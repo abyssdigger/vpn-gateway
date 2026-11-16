@@ -2219,14 +2219,75 @@ In particular, installing a new RPDB dispatch rule can make a newly prepared Pro
 reachable. That activation must not occur before the filtering/NAT state required by the
 same new semantic policy is safe.
 
-Therefore the physical structural transaction has this ordering contract:
+#### Root barrier primitive
+
+The first-release structural barrier is the managed network namespace's own IPv4 forwarding
+gate:
+
+```text
+net.ipv4.ip_forward = 0
+```
+
+This sysctl belongs to the isolated managed network domain, not to the ordinary host network
+namespace.
+
+The Executor may begin allowing structural mutation only after:
+
+```text
+write ip_forward = 0
+        ->
+fresh reread
+        ->
+observed value == 0
+```
+
+A successful write command without the confirming reread is not a barrier.
+
+This primitive is deliberately below the user configuration contract. It is not a policy
+knob and does not depend on Profile direction, NAT spelling, Device envelope grammar or
+current route allocation.
+
+The root barrier is global to managed IPv4 forwarding. Structural transitions may therefore
+temporarily interrupt forwarding for Profiles whose individual semantic policy did not
+change. Release 1 does not promise continuity across a structural policy transition; the
+separate pure-priority fast path remains the mechanism for non-disruptive priority-only
+changes.
+
+The global barrier is chosen intentionally instead of a per-Profile nft deny rule:
+
+- it does not depend on correctly classifying overlapping Profile prefixes while state is
+  mixed;
+- it remains effective when path bindings or RPDB allocations are being replaced;
+- it does not depend on the final NAT/traffic-envelope grammar;
+- critically, it does not rely on the nft namespace being already trusted while nft
+  ownership/conflict recovery is itself in progress.
+
+If the Executor cannot verify `ip_forward=0`, it must not begin or continue an allowing
+structural rebuild. From a previously verified state the requested structural transition is
+aborted. During startup/recovery from UNKNOWN state, inability to establish the barrier is a
+hard failure and no new allowing state is materialized.
+
+The managed namespace forwarding gate therefore becomes explicit lower owned state:
+
+```text
+ForwardingGate:
+    desired = enabled | disabled
+    observed = 0 | 1 | unknown
+```
+
+Only `observed = 0` is sufficient as the structural barrier.
+
+#### Structural transaction ordering
+
+With the root barrier verified, the physical structural transaction has this ordering
+contract:
 
 ```text
 fresh lower observation
         ->
-establish/verify restrictive barrier for affected traffic
+set/reread managed-netns ip_forward = 0
         ->
-prepare/verify new inactive routing tables
+prepare/verify new guarded routing tables
     - terminal guards first
     - desired ordinary path routes
         ->
@@ -2236,7 +2297,7 @@ install/switch/verify RPDB dispatch
         ->
 verify complete desired routing + nft postcondition
         ->
-release restrictive barrier
+set/reread managed-netns ip_forward = 1
         ->
 fresh final verification
         ->
