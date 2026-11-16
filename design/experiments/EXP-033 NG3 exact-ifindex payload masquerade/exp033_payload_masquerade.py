@@ -54,9 +54,13 @@ def ifindex(namespace: str, ifname: str) -> int:
     return index
 
 
-def ruleset(namespace: str) -> dict:
+def ruleset(namespace: str, *, numeric: bool = False) -> dict:
+    argv = ["nft", "-j"]
+    if numeric:
+        argv.append("-n")
+    argv.extend(("list", "ruleset"))
     value = json.loads(
-        ns(namespace, "nft", "-j", "list", "ruleset").stdout
+        ns(namespace, *argv).stdout
     )
     assert isinstance(value, dict), value
     return value
@@ -182,6 +186,31 @@ def main() -> int:
         rules = nat_rules(value)
         assert len(rules) == 1, rules
         print("EXP033_NAT_RULE_JSON=" + json.dumps(rules[0], sort_keys=True))
+
+        numeric_value = ruleset(gate, numeric=True)
+        numeric_rules = nat_rules(numeric_value)
+        assert len(numeric_rules) == 1, numeric_rules
+        numeric_rule = numeric_rules[0]
+        print(
+            "EXP033_NAT_RULE_NUMERIC_JSON="
+            + json.dumps(numeric_rule, sort_keys=True)
+        )
+
+        matches = [
+            expr["match"]
+            for expr in numeric_rule.get("expr", [])
+            if isinstance(expr, dict)
+            and isinstance(expr.get("match"), dict)
+        ]
+        by_key = {
+            match["left"]["meta"]["key"]: match["right"]
+            for match in matches
+            if isinstance(match.get("left"), dict)
+            and isinstance(match["left"].get("meta"), dict)
+            and match["left"]["meta"].get("key") in ("iif", "oif")
+        }
+        assert by_key.get("iif") == host_iif, (by_key, host_iif)
+        assert by_key.get("oif") == path_oif, (by_key, path_oif)
 
         # H4: a different ingress does not match the host-boundary iif index.
         assert not ping(other, "10.33.2.2"), (
