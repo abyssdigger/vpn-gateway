@@ -191,3 +191,10 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           "design/experiments/EXP-034 NG3 exact-handle payload NAT reconciliation/exp034_exact_nat_handle.py"
+      - name: NG3 bounded guarded payload NAT mutation integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_payload_nat_mutation.py
