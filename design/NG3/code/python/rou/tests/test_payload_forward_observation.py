@@ -347,6 +347,21 @@ class PayloadForwardObservationTests(unittest.TestCase):
         self.assertTrue(result.conflict_free)
         self.assertEqual(len(result.current_identity_rules), 1)
 
+    def test_device_firewall_jump_is_delegated_to_separate_observer(self):
+        jump = rule(
+            handle=40,
+            comment="vpn-gate:ng3:device-fw-jump-v1",
+            expr=[
+                iface("iif", "host0"),
+                iface("oif", "vpn0"),
+                {"jump": {"target": "device_fw_test"}},
+            ],
+        )
+        result = self.observe(jump, rule(handle=31))
+        self.assertTrue(result.conflict_free)
+        self.assertEqual(len(result.current_identity_rules), 1)
+        self.assertEqual(result.current_identity_rules[0].handle, 31)
+
     def test_missing_scaffold_is_hard_failure(self):
         rows = {
             "nftables": [
