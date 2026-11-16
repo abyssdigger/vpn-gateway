@@ -1,3 +1,50 @@
+## 2026-11-16 — NG3 primary-requirement model and priority-convergence implementation
+
+Reworked the project requirement model and continued NG3 implementation from the accepted
+post-closure baseline:
+
+- generalized `design/requirements-model.md` around externally sourced primary project
+  requirements using `Basis / Основание + Statement`, while derived Requirements keep
+  `Purpose + Statement` and Constraints keep `Reason + Statement`;
+- introduced stable primary IDs such as `VPNG0003` with derived paths such as
+  `VPNG0003-R3.R2`, plus an explicit actor-completeness requirement-review gate;
+- migrated the current NG3 requirement tree to **7 primary roots / 128 total normative
+  nodes** and updated architecture/config trace references without losing closure;
+- completed a full rationale/Basis/Reason review and corrected constraint rationale and
+  actor ambiguities without changing the accepted Release 1 product envelope;
+- synchronized `CONTINUOUS-DEVELOPMENT.md` with the new Basis/Purpose/Reason semantics;
+- made immediate GitHub publication of **every commit** an explicit
+  `PROJECT-CONVENTIONS.md` rule and corrected the conventions document to identify NG3,
+  not NG2, as the current normative generation;
+- extended the NG3 Python reference from clean-state priority planning through:
+  - partial make-before-break state convergence;
+  - one-attempt observe/apply/re-observe Executor semantics;
+  - strict owned route-key inventory projection;
+  - real iproute2 add/verify/delete backend in the managed namespace;
+  - Profile-level multi-destination convergence with final fresh verification of every
+    route-key domain;
+- added the first NG3 Python GitHub Actions workflow;
+- final reviewed evidence at this point includes **144 rootless unit tests** and a
+  privileged disposable-network-namespace integration that proves real route priority
+  swap, duplicate-state recovery and multi-domain Profile convergence.
+
+Mechanical current-tree validation confirms:
+
+```text
+normative nodes:            128
+unique IDs:                 128
+primary roots:                7
+Constraints:                  6
+requirements missing arch:    0
+architecture unknown IDs:     0
+config unknown IDs:           0
+legacy VPNG-R... IDs:         0
+primary roots without Basis:  0
+Constraints using Purpose:    0
+```
+
+---
+
 ## 2026-11-15 — NG2 process-local failure hardening
 
 Recovered and completed the interrupted publisher-failure work:
