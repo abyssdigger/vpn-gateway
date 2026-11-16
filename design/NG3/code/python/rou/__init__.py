@@ -70,6 +70,14 @@ from .iproute_priority_backend import (
     IproutePriorityBackendError,
     SubprocessCommandRunner,
 )
+from .route_priority_profile import (
+    RoutePriorityDomainId,
+    RoutePriorityDomainOutcome,
+    RoutePriorityDomainRequest,
+    RoutePriorityProfileResult,
+    RoutePriorityProfileStatus,
+    converge_route_priority_profile_once,
+)
 
 __all__ = [
     "AvailabilityConfirmationState",
@@ -95,6 +103,9 @@ __all__ = [
     "ProfileStructuralIntent",
     "RoutePriorityConvergenceError",
     "RoutePriorityDeleteDuplicate",
+    "RoutePriorityDomainId",
+    "RoutePriorityDomainOutcome",
+    "RoutePriorityDomainRequest",
     "RoutePriorityExecutionResult",
     "RoutePriorityExecutionStatus",
     "RoutePriorityInventoryError",
@@ -102,6 +113,8 @@ __all__ = [
     "RoutePrioritySnapshot",
     "RoutePriorityMove",
     "RoutePriorityPlanError",
+    "RoutePriorityProfileResult",
+    "RoutePriorityProfileStatus",
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
@@ -113,6 +126,7 @@ __all__ = [
     "classify_inbound_profile",
     "classify_outbound_profile",
     "converge_route_priority_once",
+    "converge_route_priority_profile_once",
     "parse_ip_link_inventory",
     "parse_ip_route_priority_snapshot",
     "plan_route_priority_convergence",
