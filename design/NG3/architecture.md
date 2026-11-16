@@ -43,7 +43,94 @@ This pass intentionally does **not** yet define:
 
 Those gaps remain requirements without invented architecture.
 
-## 1.1. Architecture-wide implementation requirements
+## 1.1. Managed network isolation boundary ("стакан")
+
+**Implements:**
+- `VPNG-R4.R6`
+- `VPNG-R4.R2`
+- `VPNG-R4.R4`
+- `VPNG-R5.R1`
+- `VPNG-R5.R4`
+- `VPNG-R7.R3`
+- `VPNG-R7.R3.R2`
+
+NG3 selects an isolated managed network domain as the architectural boundary for the router
+data plane.
+
+For the Linux implementation direction, the minimal current realization is a dedicated
+network namespace containing the VPN-GATE-owned virtual network environment.
+
+Inside this domain belong the network objects whose semantics are owned by VPN-GATE,
+including:
+
+- payload routing state;
+- filtering/NAT state required by accepted policy;
+- managed ingress/egress links;
+- VPN data-plane adapters/endpoints used as VPN paths;
+- probe data-plane state when probing a path requires it.
+
+The host network namespace is outside this managed domain. Interaction with the host must
+occur only through explicit boundary links/contracts.
+
+The purpose of this boundary is not "use netns because NG1 used netns". It is to realize
+`VPNG-R4.R6`: unrelated host network state must not become implicit product state or be
+mutated as a side effect of internal routing changes.
+
+The namespace is therefore an architecture choice. If another mechanism can later satisfy
+the same isolation/ownership requirements more simply, the requirement does not protect the
+namespace itself.
+
+### Architectural consequence for external VPN channels
+
+**Constrained by:**
+- `VPNG-R1.R3.C1`
+- `VPNG-R1.R3.C2`
+- `VPNG-R1.R3.C2`
+
+**Implements:**
+- `VPNG-R1.R3.C1.R1`
+- `VPNG-R1.R3.C2.R1`
+
+An administrator-provisioned VPN channel is useful to NG3 only when its data-plane endpoint
+is available inside the isolated managed network domain.
+
+The architecture therefore rejects the host-only shape:
+
+```text
+host namespace:
+    vpn0  <-- VPN endpoint used directly by VPN-GATE routing
+```
+
+as the normal managed-path model.
+
+The intended shape is:
+
+```text
+host / external provisioning environment
+        |
+        | explicit onboarding boundary
+        v
++----------------------------------+
+| NG3 isolated managed network     |
+|                                  |
+|   vpn data-plane endpoint        |
+|          |                       |
+|   payload routing/filtering      |
+|          |                       |
+|   explicit host-side boundary    |
++----------------------------------+
+```
+
+This section intentionally does **not** specify whether onboarding uses interface creation
+inside the namespace, interface movement, process placement, protocol-specific setup or
+another mechanism.
+
+That choice belongs to the later supported-channel integration design and must be justified
+by its own requirements/constraints and evidence.
+
+
+
+## 1.2. Architecture-wide implementation requirements
 
 The structure and maintenance rules of this report itself implement cross-cutting NG3
 requirements that do not belong to one runtime component.
@@ -216,14 +303,15 @@ merely because older generations contained VPN process-management machinery.
 The product-side boundary must eventually define enough administrator-facing contract to make
 an externally provisioned channel:
 
+- place its data-plane endpoint inside the isolated managed network domain;
 - identifiable as a concrete VPN-GATE path;
 - observable to the extent required by routing, safety and status requirements;
 - usable by payload policy;
 - documentable as a repeatable administrator procedure.
 
-The exact representation of that contract is intentionally open. A Linux interface name,
-process identity, protocol-specific handle or another mechanism must not be selected until
-the supported deployment requirements make that choice necessary.
+The exact representation of that contract is intentionally open. A Linux interface move,
+process placement, interface name, protocol-specific handle or another mechanism must not be
+selected until the supported deployment requirements make that choice necessary.
 
 # 4. PayloadTrafficManager
 
@@ -635,10 +723,12 @@ left open until deeper lifecycle requirements demand one.
 | `VPNG-R1.R3` VPN-channel service | external channel boundary established; exact onboarding contract incomplete |
 | `VPNG-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG-R1.R3.C1.R1` admin instructions/contract | requirement identified; concrete supported-channel instructions still missing |
+| `VPNG-R1.R3.C2` isolated VPN data-plane endpoint | architecture constraint derived from managed-network isolation |
+| `VPNG-R1.R3.C2.R1` isolated-channel onboarding result | required result known; concrete mechanism intentionally unresolved |
 | `VPNG-R2` subtree — payload policy | semantic ownership represented; normalized config schema missing |
 | `VPNG-R3.R1`–`VPNG-R3.R5`, `VPNG-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
 | `VPNG-R3.R6` subtree — path-usability evidence | active observation selected via AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
-| `VPNG-R4` subtree — safety | lower boundary/executor responsibilities represented; concrete kernel strategy absent |
+| `VPNG-R4` subtree — safety | lower boundary/executor responsibilities represented; managed network isolation selected; concrete lower mutation strategy otherwise incomplete |
 | `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5` lifecycle | postconditions recorded; orchestration component intentionally absent |
 | `VPNG-R5.R2`, `VPNG-R5.R3` recovery | represented locally by Manager/Adapter/Executor contracts |
 | `VPNG-R6.R1` configured intent visibility | **not yet architected** |

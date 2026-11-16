@@ -130,10 +130,26 @@ When a requirement is insufficient:
 6. for every new `C` node:
    - record its `Reason`;
    - state what is constrained and how;
+   - identify who must compensate for the limitation;
+   - if work/knowledge is shifted to a user, administrator or external system, add the
+     necessary child requirement under that constraint;
+   - that child requirement must state what the product must provide so the external
+     participant can perform the adaptation correctly and reproducibly (for example an
+     instruction, API, configuration contract, validation rule or diagnostic surface);
    - lift its observable effect upward;
    - verify the resulting effective product envelope;
 7. define acceptance evidence at the cheapest sufficient level;
-8. only then return to component design.
+8. if further decomposition of the affected node depends on insufficiently decomposed
+   semantics in another requirement/constraint branch:
+   - add `[decomp: <blocker-ID> -> pending]` to the blocked node;
+   - stop only that decomposition path;
+   - continue independent requirement/design work;
+9. when the blocker or one of its descendants later provides enough specificity:
+   - replace `pending` in the same link with the concrete deblocker ID:
+     `[decomp: <blocker-ID> -> <deblocker-ID>]`;
+   - keep the blocker part unchanged for causal traceability;
+   - resume review of the blocked decomposition;
+10. only then return to component design when the relevant requirement paths are sufficiently concrete.
 
 A thought that occurs during implementation is **not** automatically a requirement.
 
@@ -141,6 +157,22 @@ If it is not needed to satisfy an accepted product purpose, it remains outside t
 scope unless explicitly accepted as a new requirement.
 
 A requirement must never be invented merely to preserve an existing component or mechanism.
+
+## Requirement artifact maintenance
+
+The current requirement tree is the normative source of requirement state.
+
+When requirement/constraint text or decomposition links change:
+
+- keep the existing stable ID unless the entity itself was incorrectly identified;
+- update the node in place rather than creating a shadow copy;
+- preserve causal decomposition links as `[decomp: blocker -> pending|deblocker]`;
+- revalidate affected descendants, constraints, architecture references and evidence;
+- use Git history as the current editorial change record.
+
+Do not introduce a separate semantic requirement-change journal until a concrete project
+need requires querying semantic transitions independently from Git history. Such a journal
+is a future requirements-management feature, not a prerequisite for current design work.
 
 ## Human acceptance of requirement decisions
 
@@ -252,8 +284,12 @@ Implementation may begin only when all of the following hold for the affected sc
 - every requirement has meaningful `Purpose + Statement`;
 - every accepted constraint has meaningful `Reason + Statement`;
 - no unresolved product-semantic ambiguity is being hidden in implementation;
+- no active decomposition block exists on a requirement/constraint whose missing detail is
+  necessary for the implementation scope;
 - all material component responsibilities and interactions are traceable to requirements;
 - discovered constraints have been lifted far enough to expose their product effect;
+- any user/administrator/external-system adaptation caused by an accepted constraint is
+  explicit as a requirement/contract rather than an undocumented workaround;
 - the effective product envelope remains useful for the intended real scenarios;
 - the simplification review found no unnecessary mechanism that should be removed first;
 - required human decisions, if any, are accepted;
