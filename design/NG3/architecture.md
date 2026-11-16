@@ -55,7 +55,7 @@ Current trace:
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
 
-- final Device NAT/envelope/publication user grammar;
+- final Device NAT/firewall/publication user grammar;
 - availability user timing grammar;
 - Netlink/poll scheduling and full VPNPathAdapter runtime collection;
 - general Linux route/RPDB/nft policy mutation beyond the bounded pure-priority route-key backend;
@@ -531,7 +531,69 @@ The semantic content of `normalized_binding_intent` is defined: it must identify
 current concrete endpoint for one logical path. The exact external selector spelling and
 protocol-specific discovery mechanics remain replaceable interface/integration details.
 
-### 3.2.1. Bound endpoint versus route realization
+### 3.2.1. Transport endpoint provenance
+
+**Implements:**
+- `VPNG0001-R1.R3.R5`
+- `VPNG0001-R1.R3.R5.C1.R1`
+
+**Constrained by:**
+- `VPNG0001-R1.R3.R5.C1`
+
+Transport endpoint provenance is a bounded optional fact attached to the **current verified
+path binding**, not part of stable `LogicalPathId` identity:
+
+```text
+current PathBinding
+    = LogicalPathId + current InterfaceIdentity(ifname, ifindex)
+
+optional current transport provenance
+    = transport endpoint/peer identity
+      proven by the accepted integration discovery/onboarding contract
+      for exactly that current PathBinding
+```
+
+The fact answers a different question from the tunnel's inner/network-layer peer address and
+from an availability probe target. A public OpenConnect server address, a WireGuard peer
+endpoint, an inner point-to-point address and a Profile-specific ICMP target are not assumed
+to be interchangeable.
+
+`VPNPathAdapter` is the technical observation boundary for this provenance because it already
+owns observation and verification of the concrete external endpoint. A supported integration
+may enrich the current binding observation with transport provenance when its accepted lower
+contract provides sufficient evidence. The Adapter must return provenance as absent/unresolved
+rather than infer it from an interface prefix, slot number, reused ifname, ambient route or an
+unrelated inner peer address.
+
+Provenance validity is scoped to the exact current concrete binding. Replacement of the
+concrete endpoint invalidates the old provenance together with the old binding; no separate
+global generation counter or provenance history is introduced.
+
+Potential consumers remain separate semantic owners:
+
+- `AvailabilityTargetCalculator` may use confirmed transport provenance when an accepted
+  integration-specific target derivation formula requires it;
+- a future endpoint-scoped Device firewall policy may resolve a logical/named endpoint through
+  confirmed provenance and then materialize the rule against the current concrete path;
+- status/diagnostics may display confirmed provenance without becoming its source of truth.
+
+The first release does **not** require this fact for ordinary path binding, routing, explicit
+availability targets or other functions whose accepted semantics do not depend on it. A
+consumer that requires provenance must fail/diagnose that dependent function when provenance
+is unavailable; it must not broaden scope to all paths or guess a peer.
+
+The exact human-facing named-endpoint syntax is deliberately postponed to the later
+configuration-format review. No named-endpoint grammar is selected here.
+
+**EXP-039 result:** PASS on privileged Linux CI. A real userspace-held
+`IFF_POINTOPOINT` TUN exposed its inner point-to-point address peer, but changing the
+userspace transport socket peer left generic `ip -j -d link` and `ip -j addr` observation
+unchanged and neither transport address appeared there. Therefore transport endpoint
+identity is not an organic generic property of a point-to-point TUN interface.
+Integration-specific provenance is required; generic interface discovery must not claim to
+recover a transport peer merely from point-to-point interface state.
+
+### 3.2.2. Bound endpoint versus route realization
 
 A verified `PathBinding(logical_path_id, InterfaceIdentity)` proves **which current
 endpoint** represents the path. It does not, by itself, prove the complete Linux route
@@ -679,7 +741,7 @@ DeviceConfigIntent:
     enabled
     expected_interfaces[] = ordered(selector, quota)
     nat_intent
-    traffic_envelope?
+    device_firewall?
     publications?
 
 ProfileConfigIntent:
@@ -689,6 +751,7 @@ ProfileConfigIntent:
     destinations[]
     device_order[]
     availability_check?
+    ordinary_gateway_nat_intent?
 
 DeviceBindingIntent:
     device_id
@@ -697,7 +760,7 @@ DeviceBindingIntent:
 DevicePolicyIntent:
     device_id
     nat_intent
-    traffic_envelope?
+    device_firewall?
     publications?
 
 PayloadProfileRequest:
@@ -725,7 +788,8 @@ Key normalization rules:
 - active Devices are derived as enabled Devices referenced by at least one enabled Profile;
 - `DeviceBindingIntent` retains ordered expected-interface selectors and quotas;
 - `ProfileConfigIntent` retains explicit direction, remote destinations and ordered Device
-  references;
+  references; optional ordinary-side gateway NAT remains a separate Profile-scoped semantic
+  intent whose exact external spelling is deferred;
 - `PayloadProfileRequest` contains the concrete ordered logical paths obtained after binding
   while preserving Profile identity/direction/destinations;
 - current concrete logical paths are derived from accepted Device bindings, not written
@@ -736,10 +800,11 @@ Key normalization rules:
 - derived implementation values such as aggregate Device quota, ifindex, route metrics and
   table/rule priorities are not required from the user;
 - Device NAT intent is explicit; no implicit active-Device NAT default is assumed;
-- Device traffic envelope is normalized as a restrictive policy that can only narrow Profile
-  permission;
+- Device firewall is normalized as an ordered first-match policy that can only narrow Profile
+  permission; omitted policy is permissive at the Device layer and explicit policy has
+  terminal no-match DROP;
 - Device transport publication intent is normalized separately from Profile payload routing;
-- exact final TOML grammar for envelope/publication remains an interface-review item and is
+- exact final external grammar for Device firewall/publication remains an interface-review item and is
   not inferred from historical prototype spellings;
 - availability subject identity is exactly `(profile_id, logical_path_id)`;
 - the same bound interface/path may therefore have independent availability state in
@@ -789,23 +854,24 @@ masquerade
 
 There is no implicit active-Device NAT default.
 
-Traffic envelope semantics:
+Device firewall semantics:
 
 ```text
 effective payload permission
     = Profile permission
-      INTERSECT
-      Device envelope
+      AND
+      ordered Device firewall verdict == ALLOW
 ```
 
-The envelope can remove permission but cannot create destinations, directions or path
-eligibility absent from Profile policy.
+The Device firewall can remove permission but cannot create destinations, directions or path
+eligibility absent from Profile policy. Its normalized rules preserve user order and carry
+direction/action plus optional L3/L4 match fields; exact external grammar remains deferred.
 
 Transport publication semantics remain a Device/transport concern. The normalized intent
 describes an explicitly owned host-side publication boundary into the managed network domain;
 it is not part of Profile routing identity or availability health.
 
-Historical envelope/publication TOML examples are schema-design evidence only. Until an exact
+Historical traffic-envelope/publication TOML examples are schema-design evidence only. Until an exact
 NG3 grammar is accepted, `ConfigurationAdapter` must reject unsupported guessed forms rather
 than emulate old spellings heuristically.
 
@@ -867,8 +933,8 @@ Validation must reject at least:
 - duplicate exact destination ownership among enabled Profiles;
 - invalid/non-strict IPv4 destination CIDRs;
 - missing/invalid explicit Device NAT intent where the supported Device capability requires it;
-- Device envelope declarations that would expand rather than restrict Profile permission;
-- unsupported/ambiguous traffic-envelope or publication grammar;
+- Device firewall declarations that would expand rather than restrict Profile permission;
+- unsupported/ambiguous Device-firewall or publication grammar;
 - malformed or unsupported availability-check mechanism/target;
 - a target-less probe when subject/topology semantics cannot produce one unambiguous concrete
   normalized target;
@@ -1247,7 +1313,7 @@ The Calculator must preserve these invariants:
 - direction is explicit and independent;
 - configured preference follows Profile.device_order -> expected-interface order -> stable
   slot;
-- Device traffic envelope is intersected with Profile permission before lower Adapter
+- ordered Device firewall verdict is composed with Profile permission before lower Adapter
   materialization and can never widen Profile permission;
 - per-path NAT intent comes from the owning Device policy and is independent from availability;
 - transport publication intent is not interpreted as Profile payload permission;
@@ -1868,7 +1934,7 @@ sits inside the marked table.
 ##### Invariant payload nft scaffold
 
 The first-release payload nft namespace has two invariant base chains whose existence and
-metadata do not depend on the unresolved final user-facing Device envelope/NAT grammar.
+metadata do not depend on the unresolved final external Device firewall/NAT grammar.
 
 ```text
 chain payload_forward
@@ -1890,8 +1956,40 @@ chain payload_postrouting
 managed network domain. Its default `drop` is structural fail-closed behavior: an empty
 payload policy forwards nothing.
 
-Concrete allow rules are added only by a later, fully normalized payload-policy projection.
-They must not be inferred from historical TOML examples.
+The newly accepted managed-stack default-policy requirements add two further filter hooks:
+
+```text
+chain stack_input
+    type filter
+    hook input
+    priority 0
+    policy drop
+
+chain stack_output
+    type filter
+    hook output
+    priority 0
+    policy drop
+```
+
+**Implements:**
+- `VPNG0004-R4.R6.R1.R5`;
+- `VPNG0004-R4.R6.R1.R5.R1`.
+
+These chains are appliance/control-plane policy, not the user's Device firewall. Required
+loopback, probe, publication or integration-specific local exceptions are explicit
+VPN-GATE-owned contributions. User Device rules never become arbitrary host `INPUT/OUTPUT`
+rules, and these managed-domain hooks do not imply ownership of the ordinary host namespace
+firewall.
+
+The existing EXP-032 scaffold evidence remains valid for `payload_forward` and
+`payload_postrouting`, but it predates the `stack_input/stack_output` requirement. Full
+Release-1 scaffold readiness therefore requires a later bounded owner-shape/evidence update
+for those two hooks before forwarding readiness can rely on DROP/DROP/DROP as confirmed
+physical state.
+
+Concrete payload rules are added only by a fully normalized payload-policy projection. They
+must not be inferred from historical TOML examples.
 
 ###### EXP-035 — проверка низкоуровневого nft-контракта NEW forwarding
 
@@ -1914,7 +2012,7 @@ host-boundary -> конкретный VPN endpoint: `meta iif` и `meta oif`
 
 Это **не** архитектурное принятие полного payload filter policy:
 правила return flow, inbound permission, пересекающиеся префиксы с
-most-specific конкуренцией, Device envelope и probe isolation остаются
+most-specific конкуренцией, Device firewall и probe isolation остаются
 обязанностями отдельной normalized policy projection. Даже если
 эксперимент PASS, одиночный allow pattern нельзя публиковать как
 полную компиляцию Profile. Его можно использовать как проверенную
@@ -1980,7 +2078,7 @@ same-name/new-ifindex replacement. После замены новый outbound N
 должен пропустить reply; новый reverse rule должен восстановить flow.
 
 Это по-прежнему **lower primitive evidence**, а не полный filter compiler:
-inbound NEW, Device envelope intersection, multi-Profile canonical projection
+inbound NEW, Device firewall composition, multi-Profile canonical projection
 и full owner convergence остаются отдельными units.
 
 **EXP-036 result:** PASS on privileged GitHub Linux CI. The prefix-scoped
@@ -2102,10 +2200,11 @@ rather than pretending the missing expression is equivalent by assumption.
 - `VPNG0002-R2.R3.C1`;
 - `VPNG0001-R1.R2.R4.R6.C1`.
 
-The higher semantic Calculator will eventually produce a complete, deduplicated
-physical rule set after applying Profile direction/destinations, path bindings,
-most-specific policy and normalized Device envelope. That compiler is **not**
-part of this unit because the envelope lower projection is not yet closed.
+The higher semantic Calculator eventually composes Profile direction/destinations, path
+bindings, most-specific Profile selection and the later accepted ordered Device firewall.
+This historical lower unit predates that complete composition and therefore remains only the
+exact positive Profile NEW/RETURN physical-rule sub-contract; it must not be described as the
+complete Device firewall compiler.
 
 This unit defines only one exact physical desired rule:
 
@@ -2144,7 +2243,7 @@ permission to add a rule to an unverified endpoint.
 
 **Necessity / simplification:** this comparison is required before safe cleanup
 or physical materialization, but it deliberately avoids creating a second
-Profile classifier or guessing Device envelope semantics. No I/O, mutation,
+Profile classifier or pretending to represent the later ordered Device firewall semantics. No I/O, mutation,
 stored handles, retry state or lifecycle component.
 
 **Evidence:** rootless exact comparison tests over NEW/RETURN, duplicate desired
@@ -2185,23 +2284,93 @@ With disjoint fragments, all lower rules remain positive accepts under the
 default-drop chain and rule order stays semantically irrelevant, matching the
 accepted unordered `PayloadForwardDesiredState`.
 
-**Device-envelope gate:** the complete compiler still cannot be accepted yet.
-The recovered envelope concept can restrict source/destination prefixes,
-protocol and ports, while the final normalized grammar/lower contract remains
-unresolved. The current lower `PayloadForwardRuleSpec` intentionally models
-only remote prefix + direction/path state and therefore cannot honestly claim
-to enforce an enabled envelope carrying protocol/port restrictions.
+**Ordered Device firewall composition — accepted semantic architecture**
 
-A future bounded compiler unit may explicitly cover **no-envelope** semantics
-only, but it must be labeled as an implementation slice, not silently redefine
-Release 1 product scope. Complete compiler acceptance requires the normalized
-Device envelope contract (or an explicit accepted product decision that the
-capability is not part of that release).
+**Implements:**
+- `VPNG0001-R1.R2.R4.R6.R2`;
+- `VPNG0001-R1.R2.R4.R6.R2.R1`;
+- `VPNG0001-R1.R2.R4.R6.R2.R2`;
+- `VPNG0001-R1.R2.R4.R6.R2.R3`;
+- `VPNG0001-R1.R2.R4.R6.R2.R4`;
+- `VPNG0001-R1.R2.R4.R6.R2.R5`.
 
-No deny-rule ordering, nft jump graph or generic firewall AST is introduced
-merely to solve prefix overlap; canonical CIDR subtraction is the simpler
-candidate and must be proven against the existing point classifiers before
-materialization.
+**Constrained by:**
+- `VPNG0001-R1.R2.R4.R6.C1`;
+- `VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
+
+The positive-only Profile partition remains the **hard Profile permission gate**, but it is
+no longer the whole Device firewall. The accepted composition is:
+
+```text
+packet on exact managed host-boundary <-> current Device path pair
+        |
+        v
+ordered Device firewall chain
+        |
+        +-- DENY   -> drop
+        +-- REJECT -> active reject
+        +-- ALLOW  -> return to Profile gate
+        |
+        +-- explicit-policy no match -> drop
+        +-- omitted-policy default   -> return
+        |
+        v
+Profile NEW/RETURN hard gate
+        |
+        +-- permitted -> accept
+        +-- otherwise -> payload_forward policy drop
+```
+
+This order is required because Device `ALLOW` is only permission to continue to the
+generated Profile guard; it is **not** an nft `accept` that can widen Profile permission.
+Conversely, Device `DENY/REJECT` is terminal and can narrow traffic that Profile would
+otherwise permit.
+
+Linux/nftables performs packet-by-packet ordered evaluation. VPN-GATE only validates,
+normalizes, compiles, orders and converges the rules.
+
+User order is semantic inside the Device chain. A broad early rule remains broad; the
+compiler must not reorder a later specific rule ahead of it. Direction is compiled relative
+to the exact current path binding:
+
+```text
+OUT: iif = current host boundary, oif = current Device path
+IN:  iif = current Device path,   oif = current host boundary
+```
+
+Source/destination address and port predicates match literal payload packet fields at this
+FORWARD point. The existing Device `MASQUERADE` contract runs later in postrouting, so
+outbound source fields are still pre-NAT here. External VPN transport addresses are not
+payload source/destination fields.
+
+The Device chain is traversed before both Profile NEW admission and the prefix-scoped
+ESTABLISHED/RELATED return primitive. Therefore an explicit Device firewall applies to
+actual packets in both directions and can terminate an already established flow; there is
+no implicit Device-layer established-flow bypass ahead of user rules. Profile statefulness
+still determines whether a returned flow is in Profile permission after Device `ALLOW`.
+
+Omitted Device firewall configuration is normalized to the semantic equivalent of
+unrestricted `IN ALLOW any` plus `OUT ALLOW any`. An explicit non-empty policy has a
+terminal no-match `drop`. Exact external TOML punctuation/spelling remains deferred by
+`VPNG0001-R1.R2.R4.R6.C1`.
+
+The current `PayloadForwardRuleSpec` and strict observer remain valid evidence/data for the
+positive Profile NEW/RETURN sub-contract only. They are no longer a complete representation
+of final `payload_forward` ownership once Device jump/ordered chains are materialized.
+A later lower-policy unit must extend owner observation/desired state for jump, return,
+drop/reject and ordered child-chain objects before physical Device firewall mutation is
+authorized.
+
+Endpoint-scoped Device rules are a future extension. They must resolve a configured logical
+endpoint through confirmed transport provenance to the exact current binding; runtime
+ifnames are not user-facing selectors. Under
+`VPNG0001-R1.R2.R4.R6.R2.R5.C1`, this does not block ordinary Release-1 Device firewall
+rules.
+
+No deny-rule ordering or nft jump graph is introduced merely to solve Profile prefix
+overlap; the already accepted canonical CIDR partition remains the simpler Profile-gate
+mechanism. Ordered chains exist because user-authored Device firewall order is now itself an
+accepted product semantic.
 
 ###### Profile most-specific CIDR partition Calculator
 
@@ -2229,7 +2398,7 @@ different candidate Profile. Nested prefixes belonging to the same Profile are
 semantically redundant for selection and may collapse. Exact same prefix
 owned by different candidate Profiles is an error, never arbitrary order.
 
-The partition is **Profile permission only**. Device envelope intersection,
+The partition is **Profile permission only**. Ordered Device firewall composition,
 path-specific lower rules and protocol/port restrictions are downstream
 responsibilities. An envelope can narrow fragments but cannot use this
 Calculator to expand Profile permission.
@@ -2558,6 +2727,153 @@ physical backend integration for real add/delete with `ip_forward=0`.
 Only after independent expert review may this partial lower slice be
 considered executable reference evidence. It must never reopen the root
 forwarding barrier.
+
+##### Ordinary-side Profile gateway NAT boundary
+
+**Implements:**
+- `VPNG0001-R1.R2.R4.R4.R4`;
+- `VPNG0001-R1.R2.R4.R4.R4.R1`;
+- `VPNG0004-R4.R6.R1.R6`;
+- `VPNG0004-R4.R6.R1.R6.R1`.
+
+**Constrained by:**
+- `VPNG0001-R1.R2.R4.R4.R4.C1`.
+
+This is a second source-NAT purpose and must not be conflated with Device
+`NatIntent.MASQUERADE`.
+
+```text
+Device VPN-side NAT
+    ordinary -> managed firewall -> Device/path postrouting masquerade -> VPN
+
+Profile ordinary-side gateway NAT
+    VPN -> managed Device/Profile firewall -> explicit host boundary
+        -> host forwarding toward ordinary network
+        -> optional Profile-scoped gateway source NAT
+```
+
+The first exists to make ordinary-originated traffic usable through a VPN path. The second
+exists only when an ordinary-network next hop needs replies to return through the VPN-GATE
+host without being taught routes to remote VPN prefixes.
+
+A packet whose destination is the VPN-GATE host itself is locally delivered on the host side
+and does not require the gateway-forwarding NAT contribution. The semantic intent therefore
+does not mean "SNAT every inbound VPN packet"; it means "SNAT the already-permitted
+VPN-originated packet when the host forwards it onward through the owned ordinary-side
+gateway boundary".
+
+The normalized upper intent is conceptually:
+
+```text
+ProfileGatewayNatIntent:
+    profile_id
+    mode = NONE | MASQUERADE
+```
+
+This type name is architectural shorthand, not accepted external configuration syntax.
+
+The Device/Profile firewall runs before the packet leaves the managed network domain.
+Consequently source address/port filtering still sees the original remote payload sender.
+Ordinary-side gateway NAT must never be moved ahead of that managed policy boundary.
+
+###### Profile association across the host boundary
+
+Per-Profile gateway NAT cannot safely reclassify packets on the host merely by remote source
+prefix.
+
+Inbound Profile classification is path-relative:
+
+```text
+actual ingress logical path
+    +
+remote source prefix
+    ->
+selected Profile
+```
+
+Two Profiles may therefore overlap in remote prefix space while being unambiguous because
+they admit different ingress paths. Once several managed paths converge on one ordinary host
+boundary, source CIDR alone no longer carries that provenance.
+
+The lower boundary must consequently preserve a verifiable association:
+
+```text
+selected Profile inside managed policy
+        +
+packet crossing explicit host boundary
+        ->
+BoundaryProfileAssociation(profile_id, packet/flow)
+        ->
+ProfileGatewayNatOwner(profile_id)
+```
+
+`BoundaryProfileAssociation` is a semantic lower contract, not a selection of Linux
+mechanism. A reserved packet mark, a distinct boundary resource, conntrack metadata or
+another mechanism may be accepted later only after evidence proves that it preserves the
+already-selected Profile without colliding with routing/probe/host policy.
+
+The host-side NAT implementation must not infer the Profile from:
+
+- source CIDR alone;
+- boundary ifname alone when the boundary is shared;
+- current VPN ifname that is no longer present in the host-side packet path;
+- Device identity without the Profile classification result.
+
+If the exact current packet/flow association cannot be confirmed, that Profile's gateway NAT
+is unready and must not be applied.
+
+###### Ownership and component boundary
+
+The semantic owner remains the existing payload/Profile policy owner. No new long-lived
+Manager is introduced.
+
+The existing `NetworkPolicyAdapter` gains a **separate host-boundary lower realization
+sub-contract** because this mutable state is outside the managed network namespace:
+
+```text
+observe ProfileGatewayNatOwner(profile_id)
+apply desired Profile gateway NAT + verify
+cleanup owned Profile gateway NAT + verify absence
+```
+
+This host-boundary owner scope is disjoint from the managed-domain
+`table ip vpn_gate` owner scope. It may mutate only explicitly reserved boundary objects
+required for the selected Profile gateway NAT and must treat unrelated host firewall/routing
+state as foreign.
+
+The exact host-side nft table/chain identity, packet-association carrier and command ordering
+remain implementation/evidence decisions. They are not user-facing knobs.
+
+A structural transition that changes Profile gateway NAT or its boundary association is not
+eligible for the pure route-priority fast path. The affected forwarding must remain
+restrictive until managed policy, association and host-boundary NAT postconditions are all
+freshly verified.
+
+###### Return path and failure semantics
+
+For a forwarded VPN-originated packet, successful ordinary-side source NAT makes the
+ordinary-network destination reply to the VPN-GATE host gateway address. Normal conntrack
+reverse NAT then restores the remote destination on the reply before routing it back toward
+the explicit managed boundary.
+
+This capability does not replace the existing requirement that traffic for managed remote
+prefixes be routed into the VPN-GATE boundary. It only avoids requiring each downstream
+ordinary host to know those remote routes.
+
+Failure or ambiguity in host-side NAT observation, owner classification or Profile
+association cannot be treated as "NAT probably active". The Profile gateway-NAT function is
+reported unconfirmed/unready and no new boundary NAT permission is activated from guessed
+state.
+
+**Simplification:** no universal host-firewall Manager, per-packet userspace proxy, endpoint
+provisioning service, durable association journal or guessed host-route editor is introduced.
+
+**Evidence gate:** before physical implementation, a bounded experiment must prove the
+selected Linux mechanism for carrying the already-selected Profile association across the
+namespace/boundary and for applying/reversing host-side masquerade without affecting
+unrelated host traffic. The experiment must include overlapping remote prefixes on distinct
+ingress paths so that source-prefix-only reclassification would fail, plus host-local traffic
+that must not receive gateway NAT.
 
 The scaffold is deliberately independent from the root structural barrier:
 
@@ -3051,7 +3367,7 @@ observed value == 0
 A successful write command without the confirming reread is not a barrier.
 
 This primitive is deliberately below the user configuration contract. It is not a policy
-knob and does not depend on Profile direction, NAT spelling, Device envelope grammar or
+knob and does not depend on Profile direction, NAT spelling, Device firewall grammar or
 current route allocation.
 
 The root barrier is global to managed IPv4 forwarding. Structural transitions may therefore
@@ -3065,7 +3381,7 @@ The global barrier is chosen intentionally instead of a per-Profile nft deny rul
 - it does not depend on correctly classifying overlapping Profile prefixes while state is
   mixed;
 - it remains effective when path bindings or RPDB allocations are being replaced;
-- it does not depend on the final NAT/traffic-envelope grammar;
+- it does not depend on the final NAT/Device-firewall grammar;
 - critically, it does not rely on the nft namespace being already trusted while nft
   ownership/conflict recovery is itself in progress.
 
@@ -3476,7 +3792,7 @@ internal Manager state.
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG0001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG0001-R1.R2` declarative operation | recovered strict Device/Profile user contract normalized by ConfigurationAdapter, including Device transport-policy intents; unresolved envelope/publication prototype grammar remains explicitly non-normative |
+| `VPNG0001-R1.R2` declarative operation | recovered strict Device/Profile user contract normalized by ConfigurationAdapter, including Device transport-policy intents; unresolved Device-firewall/publication external grammar remains explicitly non-normative |
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
@@ -3528,7 +3844,7 @@ Remaining interface freedom is narrower:
 - parser/serialization implementation details that do not change accepted TOML semantics;
 - final spelling/default semantics for configuration features not yet accepted;
 - any future live-change/reload capability, which is not currently promised;
-- Device traffic-envelope/publication fields that were explicitly outside the implemented
+- Device firewall/publication fields that were explicitly outside the implemented
   core config contract.
 
 These freedoms must not be expanded into a universal configuration framework without a new
