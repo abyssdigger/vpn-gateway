@@ -78,6 +78,11 @@ from .route_priority_profile import (
     RoutePriorityProfileStatus,
     converge_route_priority_profile_once,
 )
+from .route_priority_realization import (
+    RoutePriorityDomainRealization,
+    RoutePriorityMetricSpace,
+    RoutePriorityRealizationError,
+)
 
 __all__ = [
     "AvailabilityConfirmationState",
@@ -106,15 +111,18 @@ __all__ = [
     "RoutePriorityDomainId",
     "RoutePriorityDomainOutcome",
     "RoutePriorityDomainRequest",
+    "RoutePriorityDomainRealization",
     "RoutePriorityExecutionResult",
     "RoutePriorityExecutionStatus",
     "RoutePriorityInventoryError",
+    "RoutePriorityMetricSpace",
     "RoutePriorityPathRoute",
     "RoutePrioritySnapshot",
     "RoutePriorityMove",
     "RoutePriorityPlanError",
     "RoutePriorityProfileResult",
     "RoutePriorityProfileStatus",
+    "RoutePriorityRealizationError",
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
