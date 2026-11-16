@@ -111,12 +111,36 @@ def observation(*rules):
             "chain": {
                 "family": "ip",
                 "table": "vpn_gate",
+                "name": "stack_input",
+                "type": "filter",
+                "hook": "input",
+                "prio": 0,
+                "policy": "drop",
+                "comment": "vpn-gate:ng3:stack-input-v1",
+            }
+        },
+        {
+            "chain": {
+                "family": "ip",
+                "table": "vpn_gate",
                 "name": "payload_forward",
                 "type": "filter",
                 "hook": "forward",
                 "prio": 0,
                 "policy": "drop",
                 "comment": "vpn-gate:ng3:payload-forward-v1",
+            }
+        },
+        {
+            "chain": {
+                "family": "ip",
+                "table": "vpn_gate",
+                "name": "stack_output",
+                "type": "filter",
+                "hook": "output",
+                "prio": 0,
+                "policy": "drop",
+                "comment": "vpn-gate:ng3:stack-output-v1",
             }
         },
         {
