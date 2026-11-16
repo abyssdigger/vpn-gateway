@@ -122,15 +122,17 @@ Destination list order is not routing policy.
 
 ## TIP-C7 — Semantics and prototype spelling are separate layers
 
-Recovered semantics may be normative while final human syntax remains open.
+Accepted semantics may be normative while exact optional-policy syntax is deliberately postponed.
 
 Current examples:
 
-- Device NAT meaning none / masquerade is recovered;
-- Device envelope is restrictive intersection with Profile policy;
+- Device NAT semantics are `NONE | MASQUERADE`, while exact external spelling is deferred;
+- Device firewall is ordered first-match policy whose ALLOW cannot widen Profile permission;
 - transport publication belongs to Device/transport boundary;
-- old envelope/publication TOML is prototype evidence, not automatic NG3 schema v1;
-- timing/unit field names remain a later human-facing grammar decision.
+- historical NAT/traffic-envelope/publication spellings are prototype evidence, not automatic NG3 schema;
+- availability semantic target behavior is accepted, while exact field spelling and any future timing/unit knobs remain interface decisions;
+- all currently postponed optional-policy spellings are inventoried in
+  `design/deferrals/NG3-user-facing-policy-grammar.md`.
 
 # 3. Device and binding
 
@@ -150,9 +152,11 @@ Total Device capacity is derived.
 
 ## TIP-D4 — Device policy can narrow, never widen Profile permission
 
-    effective permission = Profile permission INTERSECT Device envelope
+    effective permission = Profile permission
+                           AND ordered Device firewall verdict == ALLOW
 
-NAT/publication are transport concerns, not availability or Profile identity.
+Device firewall can narrow but never widen Profile permission. NAT/publication are transport
+concerns, not availability or Profile identity.
 
 ## TIP-B1 — Events are wakeups, not truth
 

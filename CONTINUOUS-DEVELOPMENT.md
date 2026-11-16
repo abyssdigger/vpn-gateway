@@ -171,7 +171,7 @@ When a requirement or constraint is insufficient:
     - keep the blocker part unchanged for causal traceability;
     - resume review of the blocked decomposition;
 12. if sufficiently concrete accepted R/C nodes make another Requirement impossible to satisfy:
-    - add `[unreachable because of <R/C-ID>, <R/C-ID>, ...]` beside the unreachable Requirement;
+    - add `[unreal: <R/C-ID>, <R/C-ID>, ...]` beside the unreachable Requirement;
     - use the minimal sufficient set of normative causes;
     - stop architecture/implementation for that Requirement;
     - escalate for human requirement decision; do not search for an architecture workaround
@@ -179,7 +179,7 @@ When a requirement or constraint is insufficient:
     - after an accepted semantic change, remove the active link only when the Requirement is
       demonstrably reachable again;
 13. return to component design only when the relevant requirement paths are sufficiently
-    concrete and contain no active unreachable Requirement needed by the unit.
+    concrete and contain no active unreal Requirement needed by the unit.
 
 A thought that occurs during implementation is **not** automatically a requirement.
 
@@ -218,7 +218,7 @@ rejected_closure -> pending_closure
 
 A node with `[decomp: ... -> pending]` cannot be `[pending_closure]` or `[closed]`.
 
-A Requirement with active `[unreachable because of ...]` cannot be
+A Requirement with active `[unreal: ...]` cannot be
 `[pending_closure]` or `[closed]`. This link records a requirement-tree inconsistency,
 not an architecture closure status.
 
@@ -357,7 +357,7 @@ Implementation may begin only when all of the following hold for the affected sc
 - no active decomposition block exists on a requirement/constraint whose missing detail is
   necessary for the implementation scope;
 - no Requirement required by the implementation scope has an active
-  `[unreachable because of ...]` link;
+  `[unreal: ...]` link;
 - all material component responsibilities and interactions are traceable to requirements;
 - every requirement/constraint whose architecture is required by the implementation unit is
   marked `[closed]`; `[pending_closure]` and `[rejected_closure]` block implementation
@@ -570,7 +570,10 @@ Autonomous internal development reviews normally use **one document** containing
 - scope;
 - findings;
 - disposition of every finding;
-- final verdict.
+- final verdict;
+- explicit accumulated requirement-state inventory listing every current `decomp` link
+  (mark each as `pending` or `resolved`), every active `unreal` link and every
+  `[rejected_closure]` node; write `none` for an empty category rather than omitting it.
 
 Create a separate response document only when the review originated externally, must remain
 immutable/verbatim, or the disposition is produced materially later/by a different reviewer.
@@ -662,7 +665,10 @@ The checkpoint message must include:
 - tests/experiments/reviews that passed or failed;
 - the exact unfinished or blocked item, if any;
 - decisions that genuinely require human agreement;
-- the next intended review unit.
+- the next intended review unit;
+- explicit current lists of all `decomp` links (with `pending|resolved` state), active
+  `unreal` links, and `[rejected_closure]` requirement states, with `none` written for empty
+  categories.
 
 A new autonomous cycle starts only after the next user turn, with a new cycle branch
 (or a clearly reset existing cycle branch when explicitly chosen), a newly selected

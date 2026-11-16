@@ -101,30 +101,24 @@ def canonical(kind, payload):
 
 
 def chain(name):
-    if name == PAYLOAD_FORWARD_CHAIN:
-        payload = {
-            "family": "ip",
-            "table": "vpn_gate",
-            "name": name,
-            "handle": 1,
-            "type": "filter",
-            "hook": "forward",
-            "prio": 0,
-            "policy": "drop",
-            "comment": "vpn-gate:ng3:payload-forward-v1",
-        }
-    else:
-        payload = {
-            "family": "ip",
-            "table": "vpn_gate",
-            "name": name,
-            "handle": 2,
-            "type": "nat",
-            "hook": "postrouting",
-            "prio": 100,
-            "policy": "accept",
-            "comment": "vpn-gate:ng3:payload-postrouting-v1",
-        }
+    specs = {spec.name: spec for spec in PAYLOAD_NFT_SCAFFOLD}
+    spec = specs[name]
+    handle = next(
+        index
+        for index, candidate in enumerate(PAYLOAD_NFT_SCAFFOLD, start=1)
+        if candidate.name == name
+    )
+    payload = {
+        "family": "ip",
+        "table": "vpn_gate",
+        "name": name,
+        "handle": handle,
+        "type": spec.chain_type,
+        "hook": spec.hook,
+        "prio": spec.priority,
+        "policy": spec.policy,
+        "comment": spec.comment,
+    }
     return canonical("chain", payload)
 
 
@@ -137,8 +131,7 @@ def owned(*objects):
 
 
 EXACT = owned(
-    chain(PAYLOAD_FORWARD_CHAIN),
-    chain(PAYLOAD_POSTROUTING_CHAIN),
+    *(chain(spec.name) for spec in PAYLOAD_NFT_SCAFFOLD)
 )
 ABSENT = NftNamespaceObservation(status=NftNamespaceStatus.ABSENT)
 
@@ -175,7 +168,13 @@ class NftScaffoldExecutorTests(unittest.TestCase):
         self.assertTrue(result.mutation_attempted)
 
     def test_missing_chain_is_repaired_without_replacing_table(self):
-        partial = owned(chain(PAYLOAD_FORWARD_CHAIN))
+        partial = owned(
+            *(
+                chain(spec.name)
+                for spec in PAYLOAD_NFT_SCAFFOLD
+                if spec.name != PAYLOAD_POSTROUTING_CHAIN
+            )
+        )
         gate = FakeGate(
             (
                 ForwardingGateState.DISABLED,
@@ -311,12 +310,17 @@ class NftScaffoldExecutorTests(unittest.TestCase):
         self.assertIn('comment "vpn-gate:ng3:owner-v1"', runner.scripts[0])
         self.assertIn("policy drop", runner.scripts[0])
 
-        backend.add_payload_scaffold_chains(
-            (PAYLOAD_NFT_SCAFFOLD[1],)
+        postrouting = next(
+            spec
+            for spec in PAYLOAD_NFT_SCAFFOLD
+            if spec.name == PAYLOAD_POSTROUTING_CHAIN
         )
+        backend.add_payload_scaffold_chains((postrouting,))
         self.assertEqual(len(runner.scripts), 2)
         self.assertIn("payload_postrouting", runner.scripts[1])
-        self.assertNotIn("payload_forward", runner.scripts[1])
+        for spec in PAYLOAD_NFT_SCAFFOLD:
+            if spec.name != PAYLOAD_POSTROUTING_CHAIN:
+                self.assertNotIn(spec.name, runner.scripts[1])
 
 
 if __name__ == "__main__":

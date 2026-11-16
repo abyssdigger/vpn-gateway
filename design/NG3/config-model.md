@@ -143,9 +143,10 @@ Examples of strict validation already recovered:
 - unknown object references are errors while known disabled references are valid;
 - positive quantities such as prefix-selector quota must be strictly greater than zero.
 
-Timing/unit field names remain unresolved at the human-facing layer. Internal names such as
-`interval_seconds` or `failure_ticks` must not be copied into user config merely because
-they exist in runtime types.
+No accepted NG3 requirement currently requires user-facing availability timing/unit knobs.
+Internal names such as `interval_seconds` or `failure_ticks` therefore must not be copied into
+user config merely because they exist in runtime types. If such knobs are later required,
+their external spelling belongs to the deferred configuration-format review.
 
 # 4. Device
 
@@ -241,8 +242,9 @@ interface naming into hidden policy.
 
 ## 4.1. Device policy concepts recovered from historical design
 
-The following concepts are considered stable enough to retain as product-model input while
-their final NG3 human-facing grammar remains under review.
+The following concepts have accepted NG3 semantics. Their exact optional-policy
+human-facing spelling is postponed under
+`design/deferrals/NG3-user-facing-policy-grammar.md` where noted.
 
 ### NAT intent
 
@@ -263,9 +265,9 @@ Semantics:
 
 NAT belongs to transport/path policy, not availability/health.
 
-The spelling `nat = "none|masquerade"` is the last agreed prototype and is strong schema
-evidence. NG3 requirements already retain the semantic obligation that NAT intent be explicit;
-the final schema review must decide whether this exact spelling becomes normative. No
+The spelling `nat = "none|masquerade"` is the last agreed prototype and strong schema
+candidate evidence. NG3 requirements already fix the semantic obligation that NAT intent be
+explicit; the exact external spelling is postponed to the user-facing grammar review. No
 `snat = <address>` capability is recovered from the prototype.
 
 ### Device traffic envelope
@@ -309,12 +311,11 @@ Recovered value grammar also used strict port forms:
 
 with inclusive `1..65535` bounds and rejection of reversed/invalid ranges.
 
-NG3 now fixes the **semantic** capability as an ordered Device firewall with IN/OUT,
+NG3 fixes the **semantic** capability as an ordered Device firewall with IN/OUT,
 ALLOW/DENY/REJECT, optional L3/L4 selectors, preserved user order, permissive omission and
-DROP fallthrough for an explicit policy. The exact **human-facing encoding** remains
-unresolved and is intentionally deferred to a configuration-format review. The historical
-`traffic_envelope` TOML below/above is prototype syntax evidence only, not automatic NG3
-schema.
+DROP fallthrough for an explicit policy. The exact **human-facing encoding** is explicitly
+postponed in `design/deferrals/NG3-user-facing-policy-grammar.md`. The historical
+`traffic_envelope` TOML example is prototype syntax evidence only, not NG3 schema.
 
 ### Device publications
 
@@ -346,7 +347,8 @@ Recovered value rules included:
 - TCP and UDP are separate protocol domains.
 
 Historical NG1 explicitly left the **final human-facing publication grammar unresolved**.
-NG3 must not declare this prototype syntax normative merely because it was discussed.
+NG3 keeps publication semantics accepted while postponing exact external spelling under the
+user-facing grammar deferral; the prototype syntax is not normative.
 
 ### Requirement trace
 
@@ -359,8 +361,8 @@ The recovered Device policy/config semantics refine:
 - `VPNG0001-R1.R2.R4.R6.C1`;
 - `VPNG0001-R1.R2.R5` and its canonical-config children.
 
-These nodes remain open until the full Device/config + experiment recovery review is
-performed.
+These requirement/constraint nodes are now closed in the NG3 tree. Remaining exact external
+spelling decisions are interface deferrals, not open product semantics.
 
 ### Ordering
 
@@ -635,8 +637,9 @@ There is no universal global default target.
 
 Before probe runtime receives work, target normalization must have produced a concrete IPv4.
 
-The exact historical field spelling is retained here as recovered interface context. The
-semantic contract, not the string parser shorthand, is what downstream components consume.
+The historical availability field spelling is retained here only as interface evidence. Its
+exact external spelling is postponed; the accepted semantic contract, not that shorthand,
+is what downstream components consume.
 
 **Requirements:**
 - `VPNG0001-R1.R2.R4.R4.R1`

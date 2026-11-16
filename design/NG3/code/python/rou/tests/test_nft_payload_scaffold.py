@@ -28,37 +28,35 @@ def obj(kind, payload):
 
 
 def chain(name, *, bad=None):
-    if name == PAYLOAD_FORWARD_CHAIN:
-        payload = {
-            "family": "ip",
-            "table": "vpn_gate",
-            "name": name,
-            "handle": 1,
-            "type": "filter",
-            "hook": "forward",
-            "prio": 0,
-            "policy": "drop",
-            "comment": "vpn-gate:ng3:payload-forward-v1",
-        }
-    else:
-        payload = {
-            "family": "ip",
-            "table": "vpn_gate",
-            "name": name,
-            "handle": 2,
-            "type": "nat",
-            "hook": "postrouting",
-            "prio": 100,
-            "policy": "accept",
-            "comment": "vpn-gate:ng3:payload-postrouting-v1",
-        }
+    specs = {spec.name: spec for spec in PAYLOAD_NFT_SCAFFOLD}
+    spec = specs[name]
+    handle = next(
+        index
+        for index, candidate in enumerate(PAYLOAD_NFT_SCAFFOLD, start=1)
+        if candidate.name == name
+    )
+    payload = {
+        "family": "ip",
+        "table": "vpn_gate",
+        "name": name,
+        "handle": handle,
+        "type": spec.chain_type,
+        "hook": spec.hook,
+        "prio": spec.priority,
+        "policy": spec.policy,
+        "comment": spec.comment,
+    }
     if bad:
         payload.update(bad)
     return obj("chain", payload)
 
 
+def exact_objects():
+    return tuple(chain(spec.name) for spec in PAYLOAD_NFT_SCAFFOLD)
+
+
 class NftPayloadScaffoldTests(unittest.TestCase):
-    def test_absent_namespace_reports_both_chains_missing(self):
+    def test_absent_namespace_reports_all_chains_missing(self):
         result = compare_payload_nft_scaffold(
             NftNamespaceObservation(
                 status=NftNamespaceStatus.ABSENT,
@@ -68,14 +66,11 @@ class NftPayloadScaffoldTests(unittest.TestCase):
         self.assertEqual(result.missing_chains, PAYLOAD_NFT_SCAFFOLD)
         self.assertEqual(result.conflicts, ())
 
-    def test_exact_exp032_metadata_confirms_scaffold(self):
+    def test_exact_exp032_exp040_metadata_confirms_scaffold(self):
         result = compare_payload_nft_scaffold(
             NftNamespaceObservation(
                 status=NftNamespaceStatus.OWNED,
-                objects=(
-                    chain(PAYLOAD_POSTROUTING_CHAIN),
-                    chain(PAYLOAD_FORWARD_CHAIN),
-                ),
+                objects=tuple(reversed(exact_objects())),
                 observed_comment="vpn-gate:ng3:owner-v1",
             )
         )
@@ -87,7 +82,11 @@ class NftPayloadScaffoldTests(unittest.TestCase):
         result = compare_payload_nft_scaffold(
             NftNamespaceObservation(
                 status=NftNamespaceStatus.OWNED,
-                objects=(chain(PAYLOAD_FORWARD_CHAIN),),
+                objects=tuple(
+                    chain(spec.name)
+                    for spec in PAYLOAD_NFT_SCAFFOLD
+                    if spec.name != PAYLOAD_POSTROUTING_CHAIN
+                ),
                 observed_comment="vpn-gate:ng3:owner-v1",
             )
         )
@@ -99,13 +98,16 @@ class NftPayloadScaffoldTests(unittest.TestCase):
         self.assertEqual(result.conflicts, ())
 
     def test_wrong_invariant_chain_metadata_is_conflict(self):
+        objects = []
+        for spec in PAYLOAD_NFT_SCAFFOLD:
+            if spec.name == PAYLOAD_FORWARD_CHAIN:
+                objects.append(chain(spec.name, bad={"policy": "accept"}))
+            else:
+                objects.append(chain(spec.name))
         result = compare_payload_nft_scaffold(
             NftNamespaceObservation(
                 status=NftNamespaceStatus.OWNED,
-                objects=(
-                    chain(PAYLOAD_FORWARD_CHAIN, bad={"policy": "accept"}),
-                    chain(PAYLOAD_POSTROUTING_CHAIN),
-                ),
+                objects=tuple(objects),
                 observed_comment="vpn-gate:ng3:owner-v1",
             )
         )
@@ -114,14 +116,16 @@ class NftPayloadScaffoldTests(unittest.TestCase):
         self.assertIn("policy", result.conflicts[0].reason)
 
     def test_handle_change_does_not_change_scaffold_identity(self):
-        forward = chain(PAYLOAD_FORWARD_CHAIN, bad={"handle": 999})
+        objects = []
+        for spec in PAYLOAD_NFT_SCAFFOLD:
+            if spec.name == PAYLOAD_FORWARD_CHAIN:
+                objects.append(chain(spec.name, bad={"handle": 999}))
+            else:
+                objects.append(chain(spec.name))
         result = compare_payload_nft_scaffold(
             NftNamespaceObservation(
                 status=NftNamespaceStatus.OWNED,
-                objects=(
-                    forward,
-                    chain(PAYLOAD_POSTROUTING_CHAIN),
-                ),
+                objects=tuple(objects),
                 observed_comment="vpn-gate:ng3:owner-v1",
             )
         )
@@ -150,12 +154,7 @@ class NftPayloadScaffoldTests(unittest.TestCase):
         result = compare_payload_nft_scaffold(
             NftNamespaceObservation(
                 status=NftNamespaceStatus.OWNED,
-                objects=(
-                    chain(PAYLOAD_FORWARD_CHAIN),
-                    chain(PAYLOAD_POSTROUTING_CHAIN),
-                    rule,
-                    future_chain,
-                ),
+                objects=exact_objects() + (rule, future_chain),
                 observed_comment="vpn-gate:ng3:owner-v1",
             )
         )
@@ -183,11 +182,7 @@ class NftPayloadScaffoldTests(unittest.TestCase):
         result = compare_payload_nft_scaffold(
             NftNamespaceObservation(
                 status=NftNamespaceStatus.OWNED,
-                objects=(
-                    chain(PAYLOAD_FORWARD_CHAIN),
-                    duplicate,
-                    chain(PAYLOAD_POSTROUTING_CHAIN),
-                ),
+                objects=exact_objects() + (duplicate,),
                 observed_comment="vpn-gate:ng3:owner-v1",
             )
         )
