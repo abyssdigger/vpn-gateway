@@ -1529,7 +1529,9 @@ cleanup owned policy and verify absence
 The upper Manager must not know:
 
 - route-table allocation;
+- route-owner protocol identifiers;
 - rule priorities;
+- physical gateway/onlink representation of a bound logical path;
 - nft syntax;
 - sysctl syntax;
 - kernel command ordering;
@@ -1537,6 +1539,52 @@ The upper Manager must not know:
 
 Those details belong below the Adapter boundary unless a future product requirement makes
 one observable.
+
+### 9.1. Semantic-to-physical route-priority realization boundary
+
+`PayloadProfileRequest` is intentionally insufficient to construct an iproute2 command by
+itself.
+
+It contains semantic policy:
+
+```text
+profile_id
+direction
+destinations[]
+ordered logical paths[]
+```
+
+The physical pure-priority backend additionally needs lower realization data:
+
+```text
+route-key destination / internal routing domain
+logical path -> current RoutePriorityPathRoute
+    current endpoint identity
+    gateway?
+    onlink
+internal table allocation
+internal route-owner protocol
+owned working metric space
+```
+
+These lower values are **not** derived by PayloadTrafficManager and are not added to the
+human configuration merely because the Linux backend needs them.
+
+The NetworkPolicyAdapter/lower realization layer must combine:
+
+- the Manager's semantic Profile/path order;
+- current verified path binding/transport realization;
+- internal owned-resource allocation;
+
+into the physical route-key domain requests consumed by NetworkPolicyExecutor.
+
+A missing or ambiguous physical realization for an otherwise allowed logical path is not
+permission to invent a gateway, use ambient routing, or drop that path silently. It moves
+the affected lower policy out of the pure-priority path and must remain fail-closed /
+unconfirmed until structural realization/reconciliation can establish the required state.
+
+This boundary also means that current `RoutePriorityPathRoute`, table/protocol values and
+metric working space are lower internal contracts/evidence, not new product knobs.
 
 # 10. NetworkPolicyExecutor
 
