@@ -107,6 +107,39 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
         self.assertEqual(payload_rule.ingress, HOST)
         self.assertEqual(str(payload_rule.destination), "10.77.0.0/16")
 
+    def test_bare_payload_rule_host_destination_without_dstlen_is_slash32(self):
+        rules = [
+            {
+                "priority": 0x4000,
+                "src": "all",
+                "dst": "203.0.113.48",
+                "iif": "host0",
+                "table": str(0x80000000),
+            }
+        ]
+        value = parse([], rules)
+        self.assertEqual(value.conflicts, ())
+        self.assertEqual(len(value.rules), 1)
+        self.assertEqual(
+            str(value.rules[0].destination),
+            "203.0.113.48/32",
+        )
+
+    def test_missing_dstlen_does_not_accept_prefix_text(self):
+        rules = [
+            {
+                "priority": 0x4000,
+                "src": "all",
+                "dst": "203.0.113.0/24",
+                "iif": "host0",
+                "table": str(0x80000000),
+            }
+        ]
+        value = parse([], rules)
+        self.assertEqual(value.rules, ())
+        self.assertEqual(len(value.conflicts), 1)
+        self.assertIn("bare IPv4 host", value.conflicts[0].reason)
+
     def test_foreign_low_table_and_priority_rows_are_ignored(self):
         routes = EXP029_ROUTES + [
             {

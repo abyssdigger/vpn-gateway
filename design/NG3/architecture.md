@@ -3884,43 +3884,75 @@ the fresh reread value rather than process exit status alone.
 
 #### Structural transaction ordering
 
-With the root barrier verified, the physical structural transaction has this ordering
-contract:
+With the root barrier verified, the first-release physical structural transaction uses an
+**exact-before-release** ordering:
 
 ```text
 fresh lower observation
         ->
 set/reread managed-netns ip_forward = 0
         ->
-prepare/verify new guarded routing tables
-    - terminal guards first
-    - desired ordinary path routes
+prepare/verify every desired terminal guard
         ->
-prepare/verify required nft filtering/NAT state
+delete/verify stale payload RPDB dispatch
         ->
-install/switch/verify RPDB dispatch
+delete/verify stale payload routes
         ->
-verify complete desired routing + nft postcondition
+prepare/verify desired ordinary path routes
+        ->
+converge/verify required nft filtering/NAT/local-system state
+        ->
+install/verify missing desired RPDB dispatch
+        ->
+verify exact desired payload routing + nft state
+    - no missing payload route/rule
+    - no stale payload route/rule
+    - no payload-owner conflict
+    - nft desired state exact
         ->
 set/reread managed-netns ip_forward = 1
         ->
-fresh final verification
+fresh final exact routing + nft verification
         ->
-cleanup stale old allocation/state when safe
+confirmed
 ```
 
-The exact barrier mechanism is part of the forthcoming nft/structural Executor unit, but its
-semantic postcondition is already fixed:
+The semantic postcondition remains:
 
 > while structural state is mixed or unconfirmed, affected traffic cannot traverse a policy
 > that is forbidden by either the previously accepted or newly accepted policy.
 
-A route-table preparation helper may create an otherwise unreachable new table before nft
-activation, because no new RPDB rule reaches it yet. It may not switch dispatch as a
-standalone optimization.
+This refinement removes an ambiguity in the earlier draft ordering that placed generic
+"stale cleanup" after barrier release. The current authoritative
+`PayloadRoutingComparison.confirmed` contract is exact: stale payload routes or RPDB rules
+are not a confirmed desired state. More importantly, a stale RPDB rule or a stale path route
+can remain reachable and can represent behavior forbidden by the new policy.
 
-Similarly, stale old table/rule cleanup must not occur merely because the new commands were
-issued; the new complete postcondition must first be authoritatively verified.
+Release 1 already permits forwarding interruption during structural change. Therefore the
+smallest safe implementation is to retire stale payload routing state **under the verified
+closed root barrier**, not to expose a mixed old/new routing set and clean it later.
+
+Terminal guards are prepared before stale route cleanup. This preserves a restrictive table
+fallback for every desired Profile table before ordinary route membership is rewritten.
+Stale RPDB dispatch is then removed before stale routes so obsolete tables cease to be
+selected by payload dispatch while their contents are retired.
+
+A route-table preparation helper may still create a new guarded table before nft activation,
+because no missing desired RPDB rule reaches it yet. EXP-048 proves this physically: adding
+the terminal guard and desired path route did not change real host traffic until the RPDB
+dispatch rule was installed.
+
+EXP-048 also proves the converse safety property: with RPDB dispatch active, deleting the
+ordinary path route leaves the terminal blackhole authoritative and prevents fallback to
+ambient/main routing.
+
+RPDB addition is therefore an activation step, never a standalone preparation optimization.
+It occurs only after guarded routes and the required nft policy are exact.
+
+Delayed cleanup after barrier release is not part of the first-release structural Executor.
+A future optimization may defer cleanup only for state independently proven unreachable and
+semantically irrelevant; such an optimization requires its own evidence and must not weaken
+the exact-before-release postcondition.
 
 This is why the pure-priority path remains a separate fast path: only there is path
 membership/filter/NAT unchanged and the semantic make-before-break proof sufficient without a
@@ -3949,7 +3981,9 @@ resource space:
 - route scope is numeric string `"253"` for the tested direct-device routes;
 - RPDB `priority` is numeric;
 - RPDB lookup table is a numeric string;
-- payload destination selector is represented by `dst` address plus `dstlen`;
+- payload destination selector is represented by `dst` plus `dstlen` for prefixes;
+- EXP-048 additionally proves that a payload RPDB host destination may be rendered as a bare
+  IPv4 `dst` with omitted `dstlen`, which is normalized narrowly as `/32`;
 - `src = "all"` is explicit in the tested rules;
 - probe `fwmark` / `fwmask` are hexadecimal strings.
 

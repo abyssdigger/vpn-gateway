@@ -7,6 +7,7 @@ on:
       - ".github/workflows/ng3-python.yml"
       - "design/experiments/EXP-028 NG3 lower policy platform space/**"
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
+      - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
@@ -27,6 +28,7 @@ on:
       - ".github/workflows/ng3-python.yml"
       - "design/experiments/EXP-028 NG3 lower policy platform space/**"
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
+      - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
@@ -106,6 +108,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-029 NG3 structural routing inventory shape/exp029_inventory_shape.py"
+      - name: EXP-048 structural payload route RPDB mutation
+        run: >-
+          sudo python3
+          "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/exp048_structural_route_rpdb_mutation.py"
 
 
   linux-forwarding-barrier:
