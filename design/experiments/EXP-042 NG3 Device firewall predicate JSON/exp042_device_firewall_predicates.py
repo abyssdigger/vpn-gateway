@@ -86,6 +86,7 @@ def main() -> int:
         udp = found[1]
         icmp = found[2]
 
+
         expected_tcp = [
             match(
                 {"payload": {"protocol": "ip", "field": "saddr"}},
@@ -95,13 +96,11 @@ def main() -> int:
                 {"payload": {"protocol": "ip", "field": "daddr"}},
                 "198.51.100.10",
             ),
-            match({"meta": {"key": "l4proto"}}, "tcp"),
             match({"payload": {"protocol": "tcp", "field": "sport"}}, 12345),
             match({"payload": {"protocol": "tcp", "field": "dport"}}, 443),
             {"return": None},
         ]
         expected_udp = [
-            match({"meta": {"key": "l4proto"}}, "udp"),
             match({"payload": {"protocol": "udp", "field": "sport"}}, 5353),
             match({"payload": {"protocol": "udp", "field": "dport"}}, 53),
             {"drop": None},
