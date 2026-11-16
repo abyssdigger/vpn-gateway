@@ -81,6 +81,10 @@ from .direct_device_route import (
     realize_direct_device_path_routes,
 )
 from .device_policy import (
+    DeviceFirewallAction,
+    DeviceFirewallDirection,
+    DeviceFirewallPolicyIntent,
+    DeviceFirewallRuleIntent,
     DeviceNatPolicyIntent,
     NatIntent,
 )
@@ -257,6 +261,10 @@ __all__ = [
     "ObservedDeviceFirewallChain",
     "ObservedDeviceFirewallJump",
     "ObservedDeviceFirewallRule",
+    "DeviceFirewallAction",
+    "DeviceFirewallDirection",
+    "DeviceFirewallPolicyIntent",
+    "DeviceFirewallRuleIntent",
     "DeviceNatPolicyIntent",
     "DirectDeviceRouteRealizationError",
     "Direction",
