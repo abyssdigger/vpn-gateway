@@ -9,6 +9,8 @@ from .device_firewall_desired import DeviceFirewallChainSpec
 from .interface_inventory import parse_ip_link_inventory
 from .linux_device_firewall import LinuxDeviceFirewallBackend
 from .linux_nft_scaffold import NftScriptRunner
+from .linux_local_publication import LinuxLocalPublicationBackend
+from .local_publication_mutation import LocalPublicationMutationStep
 from .linux_payload_nat import LinuxPayloadNatBackend
 from .nft_namespace_inventory import parse_nft_namespace_ruleset
 from .payload_forward_desired import PayloadForwardRuleSpec
@@ -105,6 +107,12 @@ class LinuxCompositeNftBackend:
     def add_nat_rule(self, spec: PayloadMasqueradeSpec) -> None:
         self._nat_backend().add_nat_rule(spec)
 
+    def apply_local_publication_step(
+        self,
+        step: LocalPublicationMutationStep,
+    ) -> None:
+        self._local_publication_backend().apply_local_publication_step(step)
+
     def _device_backend(self) -> LinuxDeviceFirewallBackend:
         return LinuxDeviceFirewallBackend(
             runner=self.runner,
@@ -113,6 +121,12 @@ class LinuxCompositeNftBackend:
 
     def _nat_backend(self) -> LinuxPayloadNatBackend:
         return LinuxPayloadNatBackend(
+            runner=self.runner,
+            namespace=self.namespace,
+        )
+
+    def _local_publication_backend(self) -> LinuxLocalPublicationBackend:
+        return LinuxLocalPublicationBackend(
             runner=self.runner,
             namespace=self.namespace,
         )
