@@ -32,10 +32,10 @@ rules or other internal networking objects.
 A Device may be reused by multiple Profiles.
 
 **Requirements:**
-- `VPNG-R1.R2.R4`
-- `VPNG-R1.R2.R4.R1`
-- `VPNG-R1.R2.R4.R3`
-- `VPNG-R1.R2.R4.R4`
+- `VPNG0001-R1.R2.R4`
+- `VPNG0001-R1.R2.R4.R1`
+- `VPNG0001-R1.R2.R4.R3`
+- `VPNG0001-R1.R2.R4.R4`
 
 # 2. Current human-facing representation
 
@@ -77,7 +77,7 @@ Current ID grammar:
 
 IDs are opaque strings.
 
-**Requirement:** `VPNG-R1.R2.R4.R1.C1`.
+**Requirement:** `VPNG0001-R1.R2.R4.R1.C1`.
 
 # 3. enabled and placeholders
 
@@ -103,9 +103,9 @@ operationally while disabled.
 An unknown Device reference is invalid.
 
 **Requirements:**
-- `VPNG-R1.R2.R4.R2`
-- `VPNG-R1.R2.R4.R2.R1`
-- `VPNG-R1.R2.R4.R5`
+- `VPNG0001-R1.R2.R4.R2`
+- `VPNG0001-R1.R2.R4.R2.R1`
+- `VPNG0001-R1.R2.R4.R5`
 
 # 3.1. Recovered configuration-language principles
 
@@ -233,11 +233,11 @@ These rules implement the user's configured selector/quota order without turning
 interface naming into hidden policy.
 
 **Requirements:**
-- `VPNG-R1.R3.R4`
-- `VPNG-R1.R3.R4.R1`
-- `VPNG-R1.R3.R4.R2`
-- `VPNG-R1.R3.R4.R3`
-- `VPNG-R1.R3.R4.R4`
+- `VPNG0001-R1.R3.R4`
+- `VPNG0001-R1.R3.R4.R1`
+- `VPNG0001-R1.R3.R4.R2`
+- `VPNG0001-R1.R3.R4.R3`
+- `VPNG0001-R1.R3.R4.R4`
 
 ## 4.1. Device policy concepts recovered from historical design
 
@@ -349,12 +349,12 @@ NG3 must not declare this prototype syntax normative merely because it was discu
 
 The recovered Device policy/config semantics refine:
 
-- `VPNG-R1.R2.R4.R6`;
-- `VPNG-R1.R2.R4.R6.R1`;
-- `VPNG-R1.R2.R4.R6.R2`;
-- `VPNG-R1.R2.R4.R6.R3`;
-- `VPNG-R1.R2.R4.R6.C1`;
-- `VPNG-R1.R2.R5` and its canonical-config children.
+- `VPNG0001-R1.R2.R4.R6`;
+- `VPNG0001-R1.R2.R4.R6.R1`;
+- `VPNG0001-R1.R2.R4.R6.R2`;
+- `VPNG0001-R1.R2.R4.R6.R3`;
+- `VPNG0001-R1.R2.R4.R6.C1`;
+- `VPNG0001-R1.R2.R5` and its canonical-config children.
 
 These nodes remain open until the full Device/config + experiment recovery review is
 performed.
@@ -399,12 +399,12 @@ Consequences:
   interface index.
 
 **Requirements:**
-- `VPNG-R1.R2.R2`
-- `VPNG-R1.R3.R1`
-- `VPNG-R1.R3.R3`
-- `VPNG-R1.R3.R4.R3`
-- `VPNG-R1.R3.R4.R3.R1`
-- `VPNG-R3.R1.R1`
+- `VPNG0001-R1.R2.R2`
+- `VPNG0001-R1.R3.R1`
+- `VPNG0001-R1.R3.R3`
+- `VPNG0001-R1.R3.R4.R3`
+- `VPNG0001-R1.R3.R4.R3.R1`
+- `VPNG0003-R3.R1.R1`
 
 # 5. Profile
 
@@ -466,9 +466,9 @@ expected-interface selector quotas. A runtime moment with only one currently pre
 interface does not make a capacity>1 Profile valid.
 
 **Requirements:**
-- `VPNG-R2.R3.R3`
-- `VPNG-R2.R3.C1`
-- `VPNG-R2.R3.C1.R1`.
+- `VPNG0002-R2.R3.R3`
+- `VPNG0002-R2.R3.C1`
+- `VPNG0002-R2.R3.C1.R1`.
 
 ## 5.2 destinations
 
@@ -501,9 +501,9 @@ An exact prefix cannot belong to more than one enabled Profile.
 Different-length overlap is allowed only with deterministic most-specific classification.
 
 **Requirements:**
-- `VPNG-R2.R1.R1`
-- `VPNG-R2.R1.R2`
-- `VPNG-R2.R5.R1`
+- `VPNG0002-R2.R1.R1`
+- `VPNG0002-R2.R1.R2`
+- `VPNG0002-R2.R5.R1`
 
 ## 5.3 device_order
 
@@ -535,8 +535,8 @@ Newly appearing runtime endpoints must not arbitrarily reorder surviving already
 endpoints.
 
 **Requirements:**
-- `VPNG-R2.R2.R1`
-- `VPNG-R3.R1.R1`
+- `VPNG0002-R2.R2.R1`
+- `VPNG0003-R3.R1.R1`
 
 # 6. Profile runtime normalization
 
@@ -577,11 +577,11 @@ It must not change:
 - structural existence of the Profile.
 
 **Requirements:**
-- `VPNG-R1.R2.R4.R4.R2`
-- `VPNG-R1.R2.R4.R4.R3`
-- `VPNG-R2.R2.R2`
-- `VPNG-R3.R2.R1`
-- `VPNG-R4.R1.R1`
+- `VPNG0001-R1.R2.R4.R4.R2`
+- `VPNG0001-R1.R2.R4.R4.R3`
+- `VPNG0002-R2.R2.R2`
+- `VPNG0003-R3.R2.R1`
+- `VPNG0004-R4.R1.R1`
 
 # 7. Profile-scoped availability
 
@@ -636,11 +636,11 @@ The exact historical field spelling is retained here as recovered interface cont
 semantic contract, not the string parser shorthand, is what downstream components consume.
 
 **Requirements:**
-- `VPNG-R1.R2.R4.R4.R1`
-- `VPNG-R3.R6.R1`
-- `VPNG-R3.R6.R3.R1`
-- `VPNG-R3.R6.R3.R1.C1`
-- `VPNG-R3.R6.R3.R2`
+- `VPNG0001-R1.R2.R4.R4.R1`
+- `VPNG0003-R3.R6.R1`
+- `VPNG0003-R3.R6.R3.R1`
+- `VPNG0003-R3.R6.R3.R1.C1`
+- `VPNG0003-R3.R6.R3.R2`
 
 # 8. Configuration normalization boundary
 

@@ -49,6 +49,40 @@ from .route_priority import (
     RoutePriorityPlanError,
     plan_route_priority_moves,
 )
+from .route_priority_convergence import (
+    RoutePriorityConvergenceError,
+    RoutePriorityDeleteDuplicate,
+    plan_route_priority_convergence,
+)
+from .route_priority_executor import (
+    RoutePriorityExecutionResult,
+    RoutePriorityExecutionStatus,
+    RoutePrioritySnapshot,
+    converge_route_priority_once,
+)
+from .route_priority_inventory import (
+    RoutePriorityInventoryError,
+    RoutePriorityPathRoute,
+    parse_ip_route_priority_snapshot,
+)
+from .iproute_priority_backend import (
+    IproutePriorityBackend,
+    IproutePriorityBackendError,
+    SubprocessCommandRunner,
+)
+from .route_priority_profile import (
+    RoutePriorityDomainId,
+    RoutePriorityDomainOutcome,
+    RoutePriorityDomainRequest,
+    RoutePriorityProfileResult,
+    RoutePriorityProfileStatus,
+    converge_route_priority_profile_once,
+)
+from .route_priority_realization import (
+    RoutePriorityDomainRealization,
+    RoutePriorityMetricSpace,
+    RoutePriorityRealizationError,
+)
 
 __all__ = [
     "AvailabilityConfirmationState",
@@ -64,24 +98,46 @@ __all__ = [
     "ExpectedInterfaceSelector",
     "InterfaceIdentity",
     "InterfaceInventoryError",
+    "IproutePriorityBackend",
+    "IproutePriorityBackendError",
     "LogicalPathId",
     "PathBinding",
     "PayloadProfileProjectionError",
     "PayloadProfileRequest",
     "ProfileClassificationError",
     "ProfileStructuralIntent",
+    "RoutePriorityConvergenceError",
+    "RoutePriorityDeleteDuplicate",
+    "RoutePriorityDomainId",
+    "RoutePriorityDomainOutcome",
+    "RoutePriorityDomainRequest",
+    "RoutePriorityDomainRealization",
+    "RoutePriorityExecutionResult",
+    "RoutePriorityExecutionStatus",
+    "RoutePriorityInventoryError",
+    "RoutePriorityMetricSpace",
+    "RoutePriorityPathRoute",
+    "RoutePrioritySnapshot",
     "RoutePriorityMove",
     "RoutePriorityPlanError",
+    "RoutePriorityProfileResult",
+    "RoutePriorityProfileStatus",
+    "RoutePriorityRealizationError",
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
+    "SubprocessCommandRunner",
     "WaitingCandidate",
     "apply_availability_evidence",
     "calculate_effective_path_order",
     "build_payload_profile_requests",
     "classify_inbound_profile",
     "classify_outbound_profile",
+    "converge_route_priority_once",
+    "converge_route_priority_profile_once",
     "parse_ip_link_inventory",
+    "parse_ip_route_priority_snapshot",
+    "plan_route_priority_convergence",
     "plan_route_priority_moves",
     "parse_structural_config",
     "project_device_bindings",

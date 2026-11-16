@@ -9,8 +9,7 @@ Continuous work uses two independent normative models together:
 - `design/component-model.md` defines the permitted component roles and interaction
   semantics.
 
-The requirements model answers what the product must provide, for what purpose, and where
-its promise is constrained.
+The requirements model answers where primary product obligations come from, what the product must provide, why derived obligations are needed, and where its promise is constrained.
 
 The component model answers which components may own the required responsibilities and how
 they may interact.
@@ -80,17 +79,21 @@ justify it.
 
 For every affected requirement:
 
-1. read its full ancestry;
-2. read both mandatory parts of every relevant requirement:
-   - `Purpose`: **зачем** это требуется;
+1. read its full ancestry through the primary project requirement;
+2. for every relevant primary project requirement read both mandatory parts:
+   - `Basis / Основание`: **откуда** это требование взято;
+   - `Statement`: что именно проект обязан обеспечить;
+3. for every relevant derived requirement read both mandatory parts:
+   - `Purpose`: **зачем** это требуется для вышестоящего обязательства;
    - `Statement`: что именно система обязана обеспечить;
-3. read all applicable constraints and their mandatory parts:
+4. read all applicable constraints and their mandatory parts:
    - `Reason`: **почему** ограничение существует;
    - `Statement`: что именно ограничено и как действует это ограничение;
-4. verify that the intended change stays within the existing scope and meaning;
-5. verify that the requirement is concrete enough to distinguish acceptable from
+5. verify that every normative action has an explicit or unambiguous actor;
+6. verify that the intended change stays within the existing scope and meaning;
+7. verify that the requirement is concrete enough to distinguish acceptable from
    unacceptable behavior at the level being designed;
-6. identify the cheapest sufficient acceptance evidence, even if the exact test or
+8. identify the cheapest sufficient acceptance evidence, even if the exact test or
    experiment will be implemented later.
 
 A requirement is insufficient for the current design when implementation would have to
@@ -99,12 +102,14 @@ invent material semantics not derivable from it.
 A requirement/constraint chain is also insufficient when its mandatory semantic first part
 cannot be stated clearly:
 
-- requirement: `Purpose` / **Зачем?**
-- constraint: `Reason` / **Почему?**
+- primary requirement: `Basis / Основание` / **Откуда это взято?**
+- derived requirement: `Purpose` / **Зачем это нужно?**
+- constraint: `Reason` / **Почему это ограничение существует?**
 
-If that answer is not natural, unambiguous and derivable from accepted ancestry without
-appealing to a preferred architecture, stop autonomous refinement and escalate the affected
-ancestry chain for human discussion.
+A primary `Basis` must be externally verifiable; it is not derived from ancestry.
+A derived `Purpose` and a Constraint `Reason` must be natural, unambiguous and causally
+supported by accepted ancestry/scope rather than a preferred architecture. If the applicable
+answer cannot be established, stop autonomous refinement and escalate the affected chain.
 
 Typical signals are:
 
@@ -117,8 +122,9 @@ Typical signals are:
 - a supposedly necessary edge case has no confirmed real product scenario;
 - the implementation needs a new assumption about supported environment or usage;
 - a newly discovered limitation changes the effective product envelope;
-- a new idea is attractive but has no accepted `Purpose`;
-- the proposed `Purpose` merely paraphrases the `Statement`;
+- a proposed new primary promise has no verifiable external `Basis`;
+- a new derived idea is attractive but has no accepted `Purpose`;
+- the proposed derived `Purpose` merely paraphrases its own `Statement` instead of explaining its parent need;
 - the proposed `Reason` explains an implementation choice rather than why the constraint
   exists.
 
@@ -131,18 +137,19 @@ Return to requirement work for the affected scope.
 When a requirement or constraint is insufficient:
 
 1. state exactly what decision cannot be derived from the current tree;
-2. walk the affected ancestry and verify that every relevant `Purpose/Reason` remains clear;
-3. if any `Purpose/Reason` is not naturally and unambiguously derivable, stop autonomous
-   refinement and escalate that chain for human discussion;
+2. walk the affected ancestry to its primary root, verify that every primary `Basis` remains verifiable and every relevant derived `Purpose/Reason` remains clear;
+3. if a primary `Basis` cannot be verified, or any derived `Purpose/Reason` is not naturally and unambiguously supported, stop autonomous refinement and escalate that chain for human discussion;
 4. identify the highest existing requirement/constraint whose meaning is affected;
 5. determine whether the missing information is:
    - a refinement of an existing requirement;
    - a constraint on an existing requirement;
    - or a genuinely new product promise;
 6. add or change only the minimum requirement/constraint nodes necessary;
-7. for every new or changed `R` node:
-   - verify that it refines rather than expands or rewrites the parent;
-   - verify that its `Purpose` is honestly derived from accepted ancestry;
+7. for every new or changed Requirement:
+   - if it is a primary root, require a concrete externally verifiable `Basis`;
+   - otherwise verify that it refines rather than expands or rewrites the parent;
+   - verify that its derived `Purpose` is honestly supported by accepted ancestry;
+   - verify actor completeness for normative actions;
 8. for every new or changed `C` node:
    - record a clear `Reason`;
    - state what is constrained and how;
@@ -168,8 +175,7 @@ When a requirement or constraint is insufficient:
 
 A thought that occurs during implementation is **not** automatically a requirement.
 
-If it is not needed to satisfy an accepted product purpose, it remains outside the current
-scope unless explicitly accepted as a new requirement.
+If it is not needed to satisfy an accepted primary/derived product obligation, it remains outside the current scope unless explicitly accepted as a new requirement with the required Basis/Purpose.
 
 A requirement must never be invented merely to preserve an existing component or mechanism.
 
@@ -230,10 +236,10 @@ resolved autonomously.
 
 Human agreement is required before proceeding when requirement work would:
 
-- create or modify an `R/C` whose `Purpose/Reason` is not naturally and unambiguously
-  derivable from the accepted ancestry;
+- create a primary Requirement without a concrete externally verifiable `Basis`;
+- create or modify a derived `R/C` whose `Purpose/Reason` is not naturally and unambiguously supported by the accepted ancestry/scope;
 - expose disagreement about why a requirement exists or why a constraint is legitimate;
-- add or materially change an L1 product promise;
+- add or materially change a primary project promise;
 - introduce a new user-visible capability;
 - choose between multiple materially different user-visible semantics;
 - materially narrow the useful product envelope by accepting a constraint;
