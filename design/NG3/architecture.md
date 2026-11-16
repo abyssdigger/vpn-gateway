@@ -851,17 +851,18 @@ masquerade
 
 There is no implicit active-Device NAT default.
 
-Traffic envelope semantics:
+Device firewall semantics:
 
 ```text
 effective payload permission
     = Profile permission
-      INTERSECT
-      Device envelope
+      AND
+      ordered Device firewall verdict == ALLOW
 ```
 
-The envelope can remove permission but cannot create destinations, directions or path
-eligibility absent from Profile policy.
+The Device firewall can remove permission but cannot create destinations, directions or path
+eligibility absent from Profile policy. Its normalized rules preserve user order and carry
+direction/action plus optional L3/L4 match fields; exact external grammar remains deferred.
 
 Transport publication semantics remain a Device/transport concern. The normalized intent
 describes an explicitly owned host-side publication boundary into the managed network domain;
@@ -1952,8 +1953,40 @@ chain payload_postrouting
 managed network domain. Its default `drop` is structural fail-closed behavior: an empty
 payload policy forwards nothing.
 
-Concrete allow rules are added only by a later, fully normalized payload-policy projection.
-They must not be inferred from historical TOML examples.
+The newly accepted managed-stack default-policy requirements add two further filter hooks:
+
+```text
+chain stack_input
+    type filter
+    hook input
+    priority 0
+    policy drop
+
+chain stack_output
+    type filter
+    hook output
+    priority 0
+    policy drop
+```
+
+**Implements:**
+- `VPNG0004-R4.R6.R1.R5`;
+- `VPNG0004-R4.R6.R1.R5.R1`.
+
+These chains are appliance/control-plane policy, not the user's Device firewall. Required
+loopback, probe, publication or integration-specific local exceptions are explicit
+VPN-GATE-owned contributions. User Device rules never become arbitrary host `INPUT/OUTPUT`
+rules, and these managed-domain hooks do not imply ownership of the ordinary host namespace
+firewall.
+
+The existing EXP-032 scaffold evidence remains valid for `payload_forward` and
+`payload_postrouting`, but it predates the `stack_input/stack_output` requirement. Full
+Release-1 scaffold readiness therefore requires a later bounded owner-shape/evidence update
+for those two hooks before forwarding readiness can rely on DROP/DROP/DROP as confirmed
+physical state.
+
+Concrete payload rules are added only by a fully normalized payload-policy projection. They
+must not be inferred from historical TOML examples.
 
 ###### EXP-035 — проверка низкоуровневого nft-контракта NEW forwarding
 
@@ -2247,23 +2280,92 @@ With disjoint fragments, all lower rules remain positive accepts under the
 default-drop chain and rule order stays semantically irrelevant, matching the
 accepted unordered `PayloadForwardDesiredState`.
 
-**Device-envelope gate:** the complete compiler still cannot be accepted yet.
-The recovered envelope concept can restrict source/destination prefixes,
-protocol and ports, while the final normalized grammar/lower contract remains
-unresolved. The current lower `PayloadForwardRuleSpec` intentionally models
-only remote prefix + direction/path state and therefore cannot honestly claim
-to enforce an enabled envelope carrying protocol/port restrictions.
+**Ordered Device firewall composition — accepted semantic architecture**
 
-A future bounded compiler unit may explicitly cover **no-envelope** semantics
-only, but it must be labeled as an implementation slice, not silently redefine
-Release 1 product scope. Complete compiler acceptance requires the normalized
-Device envelope contract (or an explicit accepted product decision that the
-capability is not part of that release).
+**Implements:**
+- `VPNG0001-R1.R2.R4.R6.R2`;
+- `VPNG0001-R1.R2.R4.R6.R2.R1`;
+- `VPNG0001-R1.R2.R4.R6.R2.R2`;
+- `VPNG0001-R1.R2.R4.R6.R2.R3`;
+- `VPNG0001-R1.R2.R4.R6.R2.R4`.
 
-No deny-rule ordering, nft jump graph or generic firewall AST is introduced
-merely to solve prefix overlap; canonical CIDR subtraction is the simpler
-candidate and must be proven against the existing point classifiers before
-materialization.
+**Constrained by:**
+- `VPNG0001-R1.R2.R4.R6.C1`;
+- `VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
+
+The positive-only Profile partition remains the **hard Profile permission gate**, but it is
+no longer the whole Device firewall. The accepted composition is:
+
+```text
+packet on exact managed host-boundary <-> current Device path pair
+        |
+        v
+ordered Device firewall chain
+        |
+        +-- DENY   -> drop
+        +-- REJECT -> active reject
+        +-- ALLOW  -> return to Profile gate
+        |
+        +-- explicit-policy no match -> drop
+        +-- omitted-policy default   -> return
+        |
+        v
+Profile NEW/RETURN hard gate
+        |
+        +-- permitted -> accept
+        +-- otherwise -> payload_forward policy drop
+```
+
+This order is required because Device `ALLOW` is only permission to continue to the
+generated Profile guard; it is **not** an nft `accept` that can widen Profile permission.
+Conversely, Device `DENY/REJECT` is terminal and can narrow traffic that Profile would
+otherwise permit.
+
+Linux/nftables performs packet-by-packet ordered evaluation. VPN-GATE only validates,
+normalizes, compiles, orders and converges the rules.
+
+User order is semantic inside the Device chain. A broad early rule remains broad; the
+compiler must not reorder a later specific rule ahead of it. Direction is compiled relative
+to the exact current path binding:
+
+```text
+OUT: iif = current host boundary, oif = current Device path
+IN:  iif = current Device path,   oif = current host boundary
+```
+
+Source/destination address and port predicates match literal payload packet fields at this
+FORWARD point. The existing Device `MASQUERADE` contract runs later in postrouting, so
+outbound source fields are still pre-NAT here. External VPN transport addresses are not
+payload source/destination fields.
+
+The Device chain is traversed before both Profile NEW admission and the prefix-scoped
+ESTABLISHED/RELATED return primitive. Therefore an explicit Device firewall applies to
+actual packets in both directions and can terminate an already established flow; there is
+no implicit Device-layer established-flow bypass ahead of user rules. Profile statefulness
+still determines whether a returned flow is in Profile permission after Device `ALLOW`.
+
+Omitted Device firewall configuration is normalized to the semantic equivalent of
+unrestricted `IN ALLOW any` plus `OUT ALLOW any`. An explicit non-empty policy has a
+terminal no-match `drop`. Exact external TOML punctuation/spelling remains deferred by
+`VPNG0001-R1.R2.R4.R6.C1`.
+
+The current `PayloadForwardRuleSpec` and strict observer remain valid evidence/data for the
+positive Profile NEW/RETURN sub-contract only. They are no longer a complete representation
+of final `payload_forward` ownership once Device jump/ordered chains are materialized.
+A later lower-policy unit must extend owner observation/desired state for jump, return,
+drop/reject and ordered child-chain objects before physical Device firewall mutation is
+authorized.
+
+Endpoint-scoped Device rules are a future extension. They must resolve a configured logical
+endpoint through confirmed transport provenance to the exact current binding; runtime
+ifnames are not user-facing selectors. Under
+`VPNG0001-R1.R2.R4.R6.R2.R5.C1`, this does not block ordinary Release-1 Device firewall
+rules.
+
+No deny-rule ordering or nft jump graph is introduced merely to solve Profile prefix
+overlap; the already accepted canonical CIDR partition remains the simpler Profile-gate
+mechanism. Ordered chains exist because user-authored Device firewall order is now itself an
+accepted product semantic.
 
 ###### Profile most-specific CIDR partition Calculator
 
