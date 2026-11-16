@@ -1983,6 +1983,15 @@ same-name/new-ifindex replacement. После замены новый outbound N
 inbound NEW, Device envelope intersection, multi-Profile canonical projection
 и full owner convergence остаются отдельными units.
 
+**EXP-036 result:** PASS on privileged GitHub Linux CI. The prefix-scoped
+reverse rule admitted a real established reply, rejected unsolicited reverse
+NEW and an established reply whose remote source was outside the prefix, and
+failed closed after same-name interface replacement until a current-ifindex
+reverse rule was installed. Actual nft JSON renders the state set as
+`["established","related"]`; live/stale interface rendering follows the
+same symbolic/decimal-index rule established by EXP-033/035.
+
+
 
 
 `payload_postrouting` exists as the stable owner boundary for supported payload source-NAT
