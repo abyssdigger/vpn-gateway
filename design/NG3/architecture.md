@@ -36,6 +36,7 @@ Current trace:
 | NetworkPolicyExecutor re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
 | NetworkPolicyExecutor single-attempt observe/apply/re-observe contract | `route_priority_executor.py` | `NG3-2026-11-16-route-priority-executor-attempt-code-review.md` |
 | NetworkPolicyAdapter/Executor owned route-key inventory projection | `route_priority_inventory.py` | `NG3-2026-11-16-route-priority-inventory-code-review.md` |
+| NetworkPolicyExecutor bounded physical iproute2 priority backend | `iproute_priority_backend.py` | `NG3-2026-11-16-iproute-priority-backend-code-review.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
@@ -43,7 +44,7 @@ The implementation intentionally stops before unresolved or separately-gated bou
 - final Device NAT/envelope/publication user grammar;
 - availability user timing grammar;
 - Netlink/poll scheduling and full VPNPathAdapter runtime collection;
-- Linux route/RPDB/nft mutation and postcondition verification;
+- general Linux route/RPDB/nft policy mutation beyond the bounded pure-priority route-key backend;
 - ICMP execution/probe-plane production mechanism;
 - full lifecycle/deployment assembly.
 
@@ -1692,6 +1693,24 @@ Its normalized recovery semantics are:
 
 The convergence planner itself is not postcondition evidence. Confirmation still belongs to
 the physical Executor/Adapter boundary after Linux mutation and re-observation.
+
+The current executable Linux backend now closes that boundary for the **pure-priority
+single-route-key** subset:
+
+- route observation is bracketed by two current interface inventories;
+- relevant `(ifname, ifindex)` identities must remain stable across that observation window;
+- every mutation re-observes the whole route-key domain before and after the physical step;
+- add-before-delete is accepted only when the fresh after-add snapshot equals the exact
+  expected whole-domain state;
+- delete-old is followed by another fresh exact whole-domain postcondition check;
+- duplicate cleanup is likewise prechecked and verified against the whole domain;
+- any unrelated route drift inside the same domain invalidates the semantic step rather than
+  being ignored;
+- the backend issues exact argv-based iproute2 commands inside the managed namespace and does
+  not use shell interpolation.
+
+This physical slice does not yet imply completion of structural policy mutation, RPDB/nft
+materialization, multi-domain Profile orchestration or daemon lifecycle.
 
 Priority mutation is serialized **per Profile/routing domain**:
 

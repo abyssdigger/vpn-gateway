@@ -19,14 +19,14 @@ Implemented:
 - partial-state route-priority convergence from a fresh observed snapshot, including safe cleanup of already-confirmed duplicate route copies;
 - single-attempt route-priority Executor contract with mandatory re-observation after failure and fresh final postcondition verification;
 - strict owned route-key inventory projection from current iproute2 JSON and current interface/path identity;
+- bounded physical iproute2 route-priority backend with link-sandwiched observation, whole-domain verification and exact add/delete commands;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
 
 - no Device Engine;
 - no Netlink event state/history/replay;
-- no Linux route/RPDB/nft execution;
-- no authoritative kernel owned-route snapshot parser/collector yet;
+- no general Linux structural route/RPDB/nft policy executor beyond the reviewed pure-priority route-key slice;
 - no full daemon/lifecycle assembly;
 - no production probe execution;
 - no final user-facing NAT / traffic-envelope / publication grammar;
@@ -45,3 +45,9 @@ python3 -m unittest discover \
 ```
 
 Code reviews for each unit are stored under `design/reviews/`.
+
+
+GitHub CI additionally runs a privileged disposable-network-namespace integration for the
+physical route-priority backend. That integration exercises real iproute2 add/delete,
+make-before-break priority movement and recovery from an already materialized duplicate
+route state.
