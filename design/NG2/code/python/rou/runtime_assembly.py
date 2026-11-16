@@ -297,18 +297,66 @@ class LinuxNetworkPolicyRuntime:
 
     def audit(self) -> None:
         self._require_active()
+        probe_error: Exception | None = None
         try:
             self.availability.probe_manager.audit()
-        finally:
+        except Exception as exc:
+            probe_error = exc
+
+        try:
             self.payload_manager.audit()
+        except Exception as payload_error:
+            if probe_error is not None:
+                raise ExceptionGroup(
+                    "network-policy audit failed for both owners",
+                    (probe_error, payload_error),
+                )
+            raise
+
+        if probe_error is not None:
+            raise probe_error
 
     def stop(self) -> NetworkPolicyRuntimeStopResult:
         self._stopped = True
-        probe_result: ActionResult
+        probe_error: Exception | None = None
+        probe_result: ActionResult | None = None
         try:
             probe_result = self.availability.stop()
-        finally:
+        except Exception as exc:
+            probe_error = exc
+
+        try:
             payload_result = self.payload_manager.shutdown()
+        except Exception as payload_error:
+            if probe_error is not None:
+                raise ExceptionGroup(
+                    "network-policy cleanup failed for both owners",
+                    (probe_error, payload_error),
+                )
+            if probe_result is not None and not probe_result.success:
+                diagnostic = (
+                    f": {probe_result.diagnostic}"
+                    if probe_result.diagnostic
+                    else ""
+                )
+                payload_error.add_note(
+                    "probe cleanup also returned failure" + diagnostic
+                )
+            raise
+
+        if probe_error is not None:
+            if not payload_result.success:
+                diagnostic = (
+                    f": {payload_result.diagnostic}"
+                    if payload_result.diagnostic
+                    else ""
+                )
+                probe_error.add_note(
+                    "payload cleanup also returned failure" + diagnostic
+                )
+            raise probe_error
+
+        assert probe_result is not None
         return NetworkPolicyRuntimeStopResult(
             probe_result,
             payload_result,

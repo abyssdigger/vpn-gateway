@@ -123,7 +123,45 @@ invalidates current diagnostics with `INACTIVE`.
 
 Diagnostic state never directly changes route priority.
 
-## 7. Shutdown
+## 7. Process-local publication failures
+
+The Agent treats publisher exceptions as failures of an adjacent process-local consumer,
+not as probe verdicts.
+
+Rules:
+
+- a failing `AvailabilityTick` callback is logged and does not prevent due physical sends;
+- one failing `AvailabilityGoodNews` callback does not block fanout to other current
+  logical consumers of the same physical plane;
+- READY/ERROR diagnostic publication failure is logged and does not suppress good news;
+- a failed READY/ERROR publication is removed from duplicate-suppression state so the same
+  diagnostic may be retried when observed again;
+- failed INACTIVE diagnostic publication is logged but is not persisted in a reliable
+  delivery queue.
+
+No callback failure creates availability state, retry epochs or an EventEnvelope backlog.
+
+Known callback failures are isolated at their exact publication boundary. Unexpected
+internal Agent exceptions are **not** swallowed by a broad scheduler-loop catch; they
+remain visible as implementation failures.
+
+## 8. Scheduler thread lifecycle
+
+`start()` is idempotent while the scheduler thread is running.
+
+If construction/start of the scheduler thread raises synchronously, the Agent restores
+its non-running bookkeeping before re-raising. A later ordinary `start()` may retry.
+
+If the scheduler thread exits because of an unexpected internal exception, that exception
+remains visible through normal Python thread exception reporting. The thread's `finally`
+path clears the current running/thread identity, so a later explicit `start()` may create
+a replacement scheduler thread.
+
+This bookkeeping recovery does not convert unexpected internal exceptions into local
+probe diagnostics and does not add automatic restart policy; outer runtime/service policy
+may decide whether a restart is appropriate.
+
+## 9. Shutdown
 
 `stop()`:
 
@@ -135,7 +173,7 @@ Diagnostic state never directly changes route priority.
 Already-running bounded workers may complete, but stale generation/plan checks prevent
 their results from becoming current good news.
 
-## 8. Removed machinery
+## 10. Removed machinery
 
 The Agent no longer has:
 

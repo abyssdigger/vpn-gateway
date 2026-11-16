@@ -1,7 +1,9 @@
 from ipaddress import IPv4Address
 from threading import Event
+import threading
 import time
 import unittest
+from unittest.mock import patch
 
 from rou.availability_collector import (
     AvailabilityHysteresisPolicy,
@@ -110,6 +112,25 @@ class SelectiveGoodNewsPublisher:
         if info.channel.channel_id == self.failing_channel:
             raise RuntimeError("publisher boom")
         self.events.append(info)
+
+
+class StartFailThread:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def start(self):
+        raise RuntimeError("thread start boom")
+
+
+class SwitchableClock:
+    def __init__(self, value=100.0):
+        self.value = value
+        self.fail = False
+
+    def __call__(self):
+        if self.fail:
+            raise RuntimeError("clock boom")
+        return self.value
 
 
 class FakeDriver:
@@ -426,15 +447,94 @@ class LinuxProbeExecutionAgentTests(unittest.TestCase):
             timeout_seconds=2,
             clock=lambda: 100.0,
         )
+        self.driver.result = ProbeSendResult(True)
 
         agent.update_plan(plan())
         agent.process_due(100.0)
-        self.wait_for(self.driver.calls, 1)
 
-        agent.process_due(110.0)
-        self.wait_for(diag.events, 1)
+        # Good news is emitted after the failed READY diagnostic publication,
+        # so observing it proves the first worker advanced past that callback.
+        self.wait_for(self.good.events, 1)
 
-        self.assertIs(diag.events[0].health, ProbeExecutionHealth.READY)
+        # Advance through successive due times. If the first retry races the
+        # worker's finally block, that due send may report an overrun; a later
+        # due time must still launch a fresh physical send.
+        deadline = time.monotonic() + 2
+        now = 110.0
+        while len(self.driver.calls) < 2 and time.monotonic() < deadline:
+            agent.process_due(now)
+            now += 10.0
+            time.sleep(0.005)
+
+        self.assertGreaterEqual(len(self.driver.calls), 2)
+
+        deadline = time.monotonic() + 2
+        while (
+            not any(
+                item.health is ProbeExecutionHealth.READY
+                for item in diag.events
+            )
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.005)
+
+        self.assertTrue(
+            any(
+                item.health is ProbeExecutionHealth.READY
+                for item in diag.events
+            )
+        )
+
+    def test_thread_start_failure_does_not_leave_agent_running(self):
+        agent = LinuxProbeExecutionAgent(
+            self.driver,
+            self.good,
+            self.tick,
+            self.diag,
+            timeout_seconds=2,
+            clock=lambda: 100.0,
+        )
+
+        with patch("rou.linux_probe_execution.Thread", StartFailThread):
+            with self.assertRaisesRegex(RuntimeError, "thread start boom"):
+                agent.start()
+
+        # A normal retry must create the real scheduler thread rather than
+        # returning early because the failed start left stale running state.
+        agent.start()
+        agent.stop()
+
+    def test_unexpected_scheduler_exception_allows_visible_restart(self):
+        clock = SwitchableClock()
+        agent = LinuxProbeExecutionAgent(
+            self.driver,
+            self.good,
+            self.tick,
+            self.diag,
+            timeout_seconds=2,
+            clock=clock,
+        )
+        agent.update_plan(plan())
+
+        observed = Event()
+        original_hook = threading.excepthook
+
+        def capture_thread_exception(args):
+            if isinstance(args.exc_value, RuntimeError):
+                observed.set()
+
+        threading.excepthook = capture_thread_exception
+        try:
+            clock.fail = True
+            agent.start()
+            self.assertTrue(observed.wait(timeout=2))
+
+            clock.fail = False
+            agent.start()
+            self.assertTrue(self.driver.entered.wait(timeout=2))
+        finally:
+            agent.stop()
+            threading.excepthook = original_hook
 
     def test_stop_is_idempotent_and_quiesces_schedule(self):
         self.agent.update_plan(plan())
