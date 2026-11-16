@@ -197,7 +197,7 @@ def main() -> int:
             managed,
             f"""flush chain ip vpn_gate {CHILD}
 add rule ip vpn_gate {CHILD} ip daddr 10.41.2.2 return comment "{RULE_COMMENT}"
-add rule ip vpn_gate {CHILD} ip saddr 10.41.2.0/29 return comment "{REVERSE_COMMENT}"
+add rule ip vpn_gate {CHILD} ip saddr 10.41.2.0/29 return comment "{RULE_COMMENT}"
 add rule ip vpn_gate {CHILD} ip daddr 10.41.2.4 reject comment "{RULE_COMMENT}"
 add rule ip vpn_gate {CHILD} drop comment "{FALLTHROUGH_COMMENT}"
 """,
