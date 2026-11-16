@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — Architecture Report
 
 **Status:** NG3 architecture, complete current requirement closure  
-**Cycle:** `ng3-design-cycle-20261116-final-gates-40m`  
+**Cycle:** `ng3-design-cycle-20261116-config-intent-model-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
 
@@ -396,20 +396,35 @@ The product-facing path identity is stable for the configuration lifecycle. Runt
 identity may change when the administrator recreates/replaces the externally provisioned VPN
 channel.
 
-The normalized internal contract therefore contains a logical path identity plus enough
-binding intent to locate the expected concrete endpoint. The exact user-facing syntax that
-produces this normalized contract is intentionally not defined here.
+The human configuration names Devices, not every logical path.
 
-A concrete endpoint becomes the current endpoint for a logical path only after the binding
-has been observed and verified.
+Logical path identity is derived during Device binding normalization from:
+
+```text
+Device ID
++ expected-interface selector position
++ stable slot within selector quota
+```
+
+The concrete runtime endpoint is the current binding of that logical identity.
+
+A replacement endpoint may become the current endpoint for the same logical path only after
+the new binding has been observed and verified.
 
 ### VPNPathAdapter
 
 **Component type:** Adapter
 
 **Implements:**
+- `VPNG-R1.R3.R1`
 - `VPNG-R1.R3.R2`
 - `VPNG-R1.R3.R3`
+- `VPNG-R1.R3.R4`
+- `VPNG-R1.R3.R4.R1`
+- `VPNG-R1.R3.R4.R2`
+- `VPNG-R1.R3.R4.R3`
+- `VPNG-R1.R3.R4.R3.R1`
+- `VPNG-R1.R3.R4.R4`
 - `VPNG-R4.R6.R1.R4`
 - `VPNG-R7.R3`
 - `VPNG-R7.R5`
@@ -417,16 +432,22 @@ has been observed and verified.
 The Adapter is the boundary between logical VPN-path semantics and the externally
 provisioned concrete VPN endpoint.
 
-Conceptual contract:
+Conceptual boundary:
 
 ```text
-observe_binding(logical_path_id, normalized_binding_intent)
+observe_device_endpoints(active DeviceBindingIntent set)
+    -> observed candidate endpoints in managed domain
+
+verify_path_binding(logical_path_id, concrete endpoint)
     -> matched current endpoint
      | absent
      | ambiguous
      | wrong managed domain
      | structurally unusable
 ```
+
+The Adapter observes lower-domain facts. It does not decide Profile policy or Device
+preference.
 
 A successful result must prove at least:
 
@@ -454,21 +475,51 @@ protocol-specific discovery mechanics remain replaceable interface/integration d
 - `VPNG-R1.R2.R1`
 - `VPNG-R1.R2.R2`
 - `VPNG-R1.R2.R3`
+- `VPNG-R1.R2.R4`
+- `VPNG-R1.R2.R4.R1`
+- `VPNG-R1.R2.R4.R1.C1`
+- `VPNG-R1.R2.R4.R2`
+- `VPNG-R1.R2.R4.R2.R1`
+- `VPNG-R1.R2.R4.R3`
+- `VPNG-R1.R2.R4.R4`
+- `VPNG-R1.R2.R4.R4.R1`
+- `VPNG-R1.R2.R4.R5`
 - `VPNG-R1.R3.C1.R1`
 - `VPNG-R2.R1`
+- `VPNG-R2.R1.R1`
+- `VPNG-R2.R1.R2`
 - `VPNG-R2.R2`
+- `VPNG-R2.R2.R1`
 - `VPNG-R2.R3`
 - `VPNG-R2.R3.R1`
 - `VPNG-R2.R3.R2`
+- `VPNG-R2.R3.R3`
 - `VPNG-R2.R4`
 - `VPNG-R2.R5`
+- `VPNG-R2.R5.R1`
 - `VPNG-R4.R1`
 - `VPNG-R7.R3.R1`
 - `VPNG-R7.R3.R2`
 - `VPNG-R7.R5`
 
-NG3 uses a declarative external configuration boundary. Users/admins describe product intent;
-they do not provide an ordered recipe of Linux networking operations.
+NG3 uses the recovered human-facing Device/Profile configuration model recorded in
+`design/NG3/config-model.md`.
+
+Users/admins describe product intent; they do not provide an ordered recipe of Linux
+networking operations.
+
+The human model is intentionally two-layered:
+
+```text
+Device
+    = expected external VPN/network resource
+
+Profile
+    = desired network behavior using ordered Devices
+```
+
+A Device may be shared by multiple Profiles. Profile configuration contains no runtime route
+metrics, kernel rules or concrete lower-network command sequence.
 
 ### ConfigurationAdapter
 
@@ -484,62 +535,68 @@ that candidate configuration.
 The architecture intentionally avoids a global mutable "runtime configuration object".
 Instead, the adapter produces explicit domain contracts needed by accepted requirements.
 
-The first required normalized contracts are:
+The human-facing parse result is normalized into explicit domain contracts:
 
 ```text
-VPNPathIntent:
-    logical_path_id
-    binding_intent
+DeviceConfigIntent:
+    device_id
+    enabled
+    expected_interfaces[] = ordered(selector, quota)
 
-PayloadPolicyIntent:
-    traffic_selector
-    direction_permissions
-    allowed_path_ids
-    configured_preference
+ProfileConfigIntent:
+    profile_id
+    enabled
+    direction
+    destinations[]
+    device_order[]
+    availability_check?
+
+DeviceBindingIntent:
+    device_id
+    expected_interfaces[]
+
+ProfilePolicyIntent:
+    profile_id
+    direction
+    destinations[]
+    ordered_device_ids[]
 
 AvailabilityCheckConfig:
-    availability_subject_id
-    policy_context_id
-    logical_path_id
+    profile_id
     mechanism
     target = explicit IPv4 | omitted
 
 AvailabilityProbeIntent:
-    availability_subject_id
+    availability_subject_id = (profile_id, logical_path_id)
     logical_path_id
     mechanism
     target = concrete IPv4
 ```
 
-where:
+Key normalization rules:
 
-- `logical_path_id` is the stable product identity from `VPNG-R1.R3.R1`;
-- `binding_intent` contains only the information required by `VPNPathAdapter` to resolve
-  one concrete endpoint inside the managed network domain;
-- `traffic_selector` identifies the traffic class to which one policy intent applies;
-- `direction_permissions` independently represents ordinary-network -> VPN and
-  VPN -> ordinary-network permission;
-- `allowed_path_ids` is the explicit set of logical VPN paths eligible for that traffic;
-- `configured_preference` orders only those already allowed paths;
-- `availability_subject_id` identifies one policy/traffic-context use of one logical VPN
-  path; it is not physical interface identity;
-- the same logical path/interface may therefore have different availability subjects in
-  different policy contexts;
-- `AvailabilityCheckConfig.mechanism` is the user-selected meaning of "how this subject is
-  checked"; first-release accepted value is `icmp`;
-- `target` is optional only at the external configuration boundary;
-- an explicit target must be preserved unchanged into normalized probe intent;
-- when target is omitted, normalization must derive one concrete IPv4 deterministically from
-  already accepted policy/path/Device/interface/binding/peer topology semantics for that
-  availability subject;
-- there is no universal global default probe IP;
-- before probe runtime receives a request, normalization must produce one concrete IPv4
-  target for every enabled probe;
-- the exact external field name/string syntax is an interface choice;
-- the exact external syntax and concrete selector forms are implementation/interface choices
-  and may be refined independently without changing the semantic contracts.
+- Device/Profile IDs remain stable opaque user identifiers;
+- disabled Device/Profile placeholders do not require active-object semantic completeness;
+- active Devices are derived as enabled Devices referenced by at least one enabled Profile;
+- `DeviceBindingIntent` retains ordered expected-interface selectors and quotas;
+- `ProfilePolicyIntent` retains explicit direction, remote destinations and ordered Device
+  references;
+- current concrete logical paths are derived from accepted Device bindings, not written
+  directly into Profile config;
+- availability subject identity is exactly `(profile_id, logical_path_id)`;
+- the same bound interface/path may therefore have independent availability state in
+  different Profiles;
+- first-release availability mechanism is ICMP;
+- an explicit target is preserved exactly;
+- bare ICMP is resolved by `AvailabilityTargetCalculator` from Profile/path/Device/binding
+  topology before probe runtime;
+- probe runtime always receives one concrete IPv4 target.
 
-Payload policy and VPN path binding remain separate normalized contracts.
+The recovered external TOML structure, identifier grammar, expected-interface selector forms
+and Profile fields are normative interface behavior in `design/NG3/config-model.md`.
+
+Payload policy, Device binding and availability remain separate normalized contracts even
+though they originate from one human configuration.
 
 ### AvailabilityTargetCalculator
 
@@ -588,14 +645,22 @@ the user to provide an additional target merely to make bare `icmp` work.
 
 Validation must reject at least:
 
-- missing required logical identity;
-- duplicate/ambiguous logical path identity;
-- binding intent insufficient to resolve a supported endpoint;
-- unsupported availability-check mechanism;
-- malformed explicit check target;
-- a target-less probe when the available subject/topology semantics cannot produce one
-  unambiguous concrete normalized target;
+- invalid/duplicate Device or Profile IDs;
+- enabled Device without non-empty valid expected-interface selectors;
+- ambiguous active expected-interface selectors;
+- enabled Profile without direction, destinations or device_order;
+- unknown Device references;
+- duplicate Device references inside one Profile;
+- duplicate exact destination ownership among enabled Profiles;
+- invalid/non-strict IPv4 destination CIDRs;
+- malformed or unsupported availability-check mechanism/target;
+- a target-less probe when subject/topology semantics cannot produce one unambiguous concrete
+  normalized target;
 - contradictory declarations that cannot produce one deterministic semantic result.
+
+Known disabled Device references are valid and are skipped operationally.
+
+Disabled Device/Profile placeholders bypass active-object deep semantic validation.
 
 A rejected configuration is not partially materialized.
 
@@ -690,7 +755,7 @@ Keeping them together therefore follows both the product semantics and
 
 ## 4.3. Availability state inside the Manager
 
-For each availability subject (one policy/traffic context + logical VPN path), the Manager
+For each availability subject (one Profile + logical VPN path), the Manager
 may keep only the bounded semantic state necessary to implement `VPNG-R3.R3`,
 `VPNG-R3.R4`, `VPNG-R3.R5.R1` and `VPNG-R3.R5.R2`:
 
@@ -790,18 +855,96 @@ Availability is not allowed to:
 - `VPNG-R3.R2`
 - `VPNG-R3.R7`
 
+## 4.5. Device binding projection
+
+**Implements:**
+- `VPNG-R1.R3.R4`
+- `VPNG-R1.R3.R4.R1`
+- `VPNG-R1.R3.R4.R2`
+- `VPNG-R1.R3.R4.R3`
+- `VPNG-R1.R3.R4.R3.R1`
+- `VPNG-R1.R3.R4.R4`
+- `VPNG-R3.R1.R1`
+
+`PayloadTrafficManager` owns the current shared Device-binding projection used by all
+Profiles.
+
+For each active Device it combines:
+
+```text
+ordered expected-interface selectors/quotas
++
+freshly observed candidate endpoints
++
+previous current binding projection
+```
+
+into bounded current logical paths.
+
+The projection preserves surviving slot assignments when new endpoints appear, so ordinary
+environment change does not arbitrarily reorder existing paths.
+
+Each accepted bound path has a stable logical identity:
+
+```text
+logical_path_id :=
+    Device ID
+    + expected-interface selector position
+    + stable slot within selector quota
+```
+
+The current concrete endpoint binding is separate mutable state and is not part of the
+logical identity itself.
+
+The exact serialized/internal logical-path ID format is implementation detail.
+
+No inactive/unreferenced Device participates in discovery/binding work.
+
+Endpoints that match no active selector or match ambiguously do not become managed logical
+paths.
+
+For one selector, at most its configured quota is bound.
+
+Linux concrete endpoint identity is `(ifname, ifindex)`; the same ifname with a new ifindex
+is a fresh endpoint instance.
+
+Quota admission preserves survivors:
+
+- a newly observed candidate never evicts an already bound survivor merely because its name
+  sorts earlier or it appeared in a later snapshot;
+- over-quota candidates remain observable but unbound;
+- once a bound disappearance is verified/committed, a waiting candidate may occupy the
+  freed slot on a later reconciliation;
+- waiting-candidate promotion preserves committed first-observed order;
+- simultaneously first-observed candidates retain fresh kernel-snapshot order, with
+  `ifindex` as the final tie-break;
+- lexical ifname sorting is not used as policy.
+
+This is bounded current binding state, not an event history: only the information needed to
+preserve current survivor/admission order is retained.
+
+This responsibility remains inside the existing PayloadTrafficManager for now because the
+binding projection has no independent actuation or product policy outside the current payload
+path set. A separate Device-binding Engine would require evidence of an independent ongoing
+responsibility that cannot be represented here.
+
 # 5. PayloadPolicyCalculator
 
 **Component type:** Calculator
 
 **Implements:**
 - `VPNG-R2.R1`
+- `VPNG-R2.R1.R1`
+- `VPNG-R2.R1.R2`
 - `VPNG-R2.R2`
+- `VPNG-R2.R2.R1`
 - `VPNG-R2.R3`
 - `VPNG-R2.R3.R1`
 - `VPNG-R2.R3.R2`
+- `VPNG-R2.R3.R3`
 - `VPNG-R2.R4`
 - `VPNG-R2.R5`
+- `VPNG-R2.R5.R1`
 - `VPNG-R7.R3.R1`
 - `VPNG-R7.R5`
 
@@ -813,17 +956,31 @@ It is pure: the same inputs produce the same projection.
 This component is justified because policy interpretation is independently testable and must
 not depend on hidden network history.
 
-Its normalized input is `PayloadPolicyIntent`.
+Its semantic inputs are:
+
+```text
+enabled ProfilePolicyIntent set
++
+current Device binding projection
+```
+
+It produces one normalized payload-policy projection per enabled Profile.
 
 The Calculator must preserve these invariants:
 
-- traffic membership comes only from `traffic_selector`;
-- path eligibility comes only from `allowed_path_ids`;
-- direction permissions are independent and explicit;
-- configured preference cannot add an ineligible path;
+- Profile remote membership comes only from its strict IPv4 destinations;
+- ordinary->VPN NEW classification uses remote destination;
+- VPN->ordinary NEW classification first restricts Profiles by actual ingress Device/path,
+  then uses remote source prefix;
+- exact duplicate destination ownership across enabled Profiles is invalid;
+- different-length overlaps resolve deterministically by most-specific applicable Profile;
+- path eligibility comes only from Profile.device_order plus current valid bindings of those
+  Devices;
+- direction is explicit and independent;
+- configured preference follows Profile.device_order -> expected-interface order -> stable
+  slot;
 - availability state is not an input to structural membership or permission;
-- ambiguous overlapping policy must either resolve deterministically according to the
-  accepted policy contract or be rejected before materialization.
+- availability can later reorder only already-eligible logical paths.
 
 # 6. AvailabilityPriorityCalculator
 
@@ -1368,13 +1525,13 @@ internal Manager state.
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG-R1.R2` declarative operation | configuration side represented by ConfigurationAdapter; lifecycle control side represented by thin product control surface |
+| `VPNG-R1.R2` declarative operation | recovered Device/Profile TOML contract normalized by ConfigurationAdapter; lifecycle controls remain separate |
 | `VPNG-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
 | `VPNG-R1.R3.C2` isolated VPN data-plane endpoint | architecture constraint derived from managed-network isolation |
 | `VPNG-R1.R3.C2.R1` isolated-channel onboarding result | placement result architecture accepted; concrete provisioning commands remain implementation-specific |
-| `VPNG-R2` subtree — payload policy | normalized `PayloadPolicyIntent` and pure structural policy calculation accepted; external syntax remains implementation detail |
+| `VPNG-R2` subtree — payload policy | Profile destinations/direction/device_order compile deterministically through PayloadPolicyCalculator |
 | `VPNG-R3.R1`–`VPNG-R3.R5`, `VPNG-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
 | `VPNG-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; explicit target or deterministic Profile/path-topology derivation normalized to concrete IPv4 before probe runtime |
 | `VPNG-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
@@ -1412,21 +1569,25 @@ never become necessary.
 The configuration boundary itself is now defined and the VPN-path binding contract is
 architecturally closed.
 
-Remaining configuration detail is implementation/interface freedom:
+The core Device/Profile human-facing configuration contract is now recovered and recorded in
+`design/NG3/config-model.md`.
 
-- concrete external syntax used to express selectors, path IDs, direction permissions and
-  availability checks;
-- parser/serialization mechanics;
-- any future live-change capability, which is not currently promised.
+Remaining interface freedom is narrower:
 
-The semantic contracts are already defined. These freedoms must not be expanded into a
-universal configuration framework without a new requirement.
+- parser/serialization implementation details that do not change accepted TOML semantics;
+- final spelling/default semantics for configuration features not yet accepted;
+- any future live-change/reload capability, which is not currently promised;
+- Device traffic-envelope/publication fields that were explicitly outside the implemented
+  core config contract.
+
+These freedoms must not be expanded into a universal configuration framework without a new
+requirement.
 
 ## 16.2. Availability target derivation
 
 The product semantics and architecture boundary are now defined:
 
-- availability is subject-specific (policy/traffic context + logical VPN path);
+- availability is subject-specific (Profile + logical VPN path);
 - explicit target is preserved exactly;
 - bare ICMP derives one concrete target deterministically from already accepted
   subject/path/Device/interface/binding/peer topology semantics;
