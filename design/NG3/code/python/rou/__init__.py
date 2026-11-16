@@ -49,6 +49,12 @@ from .route_priority import (
     RoutePriorityPlanError,
     plan_route_priority_moves,
 )
+from .route_priority_convergence import (
+    RoutePriorityAdd,
+    RoutePriorityConvergenceError,
+    RoutePriorityDelete,
+    plan_route_priority_convergence,
+)
 
 __all__ = [
     "AvailabilityConfirmationState",
@@ -70,6 +76,9 @@ __all__ = [
     "PayloadProfileRequest",
     "ProfileClassificationError",
     "ProfileStructuralIntent",
+    "RoutePriorityAdd",
+    "RoutePriorityConvergenceError",
+    "RoutePriorityDelete",
     "RoutePriorityMove",
     "RoutePriorityPlanError",
     "SelectorBindingState",
@@ -82,6 +91,7 @@ __all__ = [
     "classify_inbound_profile",
     "classify_outbound_profile",
     "parse_ip_link_inventory",
+    "plan_route_priority_convergence",
     "plan_route_priority_moves",
     "parse_structural_config",
     "project_device_bindings",
