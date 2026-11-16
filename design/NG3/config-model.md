@@ -159,6 +159,40 @@ Endpoints beyond selector quota are not silently admitted.
 - `VPNG-R1.R3.R4.R3`
 - `VPNG-R1.R3.R4.R4`
 
+## 4.1. Logical paths derived from Device slots
+
+Users do not name every runtime/logical VPN path in Profile configuration.
+
+For an active Device, normalized path identity is derived from the stable configured binding
+shape:
+
+```text
+logical_path_id :=
+    device_id
+    + expected_interface selector position
+    + stable slot within selector quota
+```
+
+The currently observed Linux/VPN endpoint is a binding of that identity, not the identity
+itself.
+
+Consequences:
+
+- replacing the concrete endpoint can preserve the logical path identity;
+- adding another endpoint must not rename/reorder surviving slots;
+- Profile policy may reference a Device while runtime policy expands that Device into its
+  currently valid logical paths;
+- status and availability can name the logical path without depending on transient ifname or
+  interface index.
+
+**Requirements:**
+- `VPNG-R1.R2.R2`
+- `VPNG-R1.R3.R1`
+- `VPNG-R1.R3.R3`
+- `VPNG-R1.R3.R4.R3`
+- `VPNG-R1.R3.R4.R3.R1`
+- `VPNG-R3.R1.R1`
+
 # 5. Profile
 
 An enabled Profile expresses one user network need.
