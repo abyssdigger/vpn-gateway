@@ -37,13 +37,21 @@ def spec_b():
     )
 
 
-def parse(rows, *, destination=DEST, paths=None, interfaces=None):
+def parse(
+    rows,
+    *,
+    destination=DEST,
+    paths=None,
+    interfaces=None,
+    protocol_filtered=False,
+):
     return parse_ip_route_priority_snapshot(
         json.dumps(rows),
         destination=destination,
         owner_protocol=PROTO,
         path_routes=(spec_a(), spec_b()) if paths is None else paths,
         interfaces=(EP_A, EP_B) if interfaces is None else interfaces,
+        protocol_filtered=protocol_filtered,
     )
 
 
@@ -235,7 +243,7 @@ class RoutePriorityInventoryTests(unittest.TestCase):
             )
 
     def test_multipath_or_nonunicast_owned_row_is_rejected(self):
-        with self.assertRaisesRegex(RoutePriorityInventoryError, "multipath"):
+        with self.assertRaisesRegex(RoutePriorityInventoryError, "unsupported"):
             parse(
                 [
                     {
@@ -271,6 +279,102 @@ class RoutePriorityInventoryTests(unittest.TestCase):
             "duplicates metric",
         ):
             parse([row, dict(row)])
+
+    def test_protocol_filtered_query_accepts_omitted_protocol(self):
+        snapshot = parse(
+            [
+                {
+                    "dst": "10.0.0.0/8",
+                    "dev": "wg0",
+                    "metric": 20,
+                }
+            ],
+            protocol_filtered=True,
+        )
+        self.assertEqual(snapshot.routes[B], frozenset((20,)))
+
+    def test_protocol_filtered_query_rejects_explicit_mismatch(self):
+        with self.assertRaisesRegex(
+            RoutePriorityInventoryError,
+            "does not match filtered owner protocol",
+        ):
+            parse(
+                [
+                    {
+                        "dst": "10.0.0.0/8",
+                        "dev": "wg0",
+                        "protocol": 99,
+                        "metric": 20,
+                    }
+                ],
+                protocol_filtered=True,
+            )
+
+    def test_unfiltered_omitted_protocol_is_foreign_not_owned(self):
+        snapshot = parse(
+            [
+                {
+                    "dst": "10.0.0.0/8",
+                    "dev": "wg0",
+                    "metric": 20,
+                }
+            ]
+        )
+        self.assertEqual(snapshot.routes[B], frozenset())
+
+    def test_unrepresentable_route_fields_fail_owned_inventory(self):
+        for key, value in (
+            ("nhid", 7),
+            ("multipath", [{"dev": "wg0"}]),
+            ("via", {"family": "inet6", "addr": "::1"}),
+        ):
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(
+                    RoutePriorityInventoryError,
+                    "unsupported",
+                ):
+                    parse(
+                        [
+                            {
+                                "dst": "10.0.0.0/8",
+                                "dev": "wg0",
+                                "protocol": 202,
+                                "metric": 20,
+                                key: value,
+                            }
+                        ]
+                    )
+
+    def test_unrepresented_owned_route_flag_is_rejected(self):
+        with self.assertRaisesRegex(
+            RoutePriorityInventoryError,
+            "unrepresented flags",
+        ):
+            parse(
+                [
+                    {
+                        "dst": "10.0.0.0/8",
+                        "dev": "wg0",
+                        "protocol": 202,
+                        "metric": 20,
+                        "flags": ["linkdown"],
+                    }
+                ]
+            )
+
+    def test_path_route_constructor_validates_runtime_types(self):
+        with self.assertRaisesRegex(ValueError, "gateway"):
+            RoutePriorityPathRoute(
+                path_id=A,
+                endpoint=EP_A,
+                gateway="172.20.0.1",  # type: ignore[arg-type]
+            )
+        with self.assertRaisesRegex(ValueError, "onlink"):
+            RoutePriorityPathRoute(
+                path_id=A,
+                endpoint=EP_A,
+                onlink=1,  # type: ignore[arg-type]
+            )
 
     def test_malformed_json_is_observation_error_not_empty_snapshot(self):
         with self.assertRaisesRegex(
