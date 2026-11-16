@@ -138,6 +138,12 @@ from .device_firewall_compiler import (
     DeviceFirewallCompileError,
     compile_device_firewall_policy,
 )
+from .composite_nft_policy import (
+    CompositeNftDesiredState,
+    CompositeNftPolicyComparison,
+    CompositeNftPolicyConflict,
+    compare_composite_nft_policy,
+)
 from .device_firewall_mutation import (
     DeviceFirewallMutationResult,
     DeviceFirewallMutationStatus,
@@ -267,6 +273,9 @@ __all__ = [
     "AvailabilityOutcome",
     "AvailabilityPriorityError",
     "BindingProjectionError",
+    "CompositeNftDesiredState",
+    "CompositeNftPolicyComparison",
+    "CompositeNftPolicyConflict",
     "ConfigError",
     "DeviceBindingIntent",
     "DeviceBindingProjection",
@@ -360,6 +369,7 @@ __all__ = [
     "LinuxPayloadNatBackend",
     "compare_payload_nat",
     "observe_payload_forward",
+    "compare_composite_nft_policy",
     "compare_device_firewall",
     "compile_device_firewall_policy",
     "compare_payload_forward",
