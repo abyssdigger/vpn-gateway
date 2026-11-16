@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from ipaddress import IPv4Address
-
-from .interface_identity import InterfaceIdentity
 from .local_publication_observation import (
     LocalPublicationComparison,
     ObservedLocalPublicationRule,
@@ -16,34 +13,6 @@ from .local_publication_policy import (
     LocalPublicationRuleSpec,
     PublicationProtocol,
 )
-
-
-@dataclass(frozen=True, slots=True)
-class LocalPublicationEndpointSpec:
-    protocol: PublicationProtocol
-    host_boundary: InterfaceIdentity
-    local_address: IPv4Address
-    local_port: int
-
-    @property
-    def input_rule(self) -> LocalPublicationRuleSpec:
-        return LocalPublicationRuleSpec(
-            LocalPublicationHook.INPUT,
-            self.protocol,
-            self.host_boundary,
-            self.local_address,
-            self.local_port,
-        )
-
-    @property
-    def output_rule(self) -> LocalPublicationRuleSpec:
-        return LocalPublicationRuleSpec(
-            LocalPublicationHook.OUTPUT,
-            self.protocol,
-            self.host_boundary,
-            self.local_address,
-            self.local_port,
-        )
 
 
 @dataclass(frozen=True, order=True, slots=True)
