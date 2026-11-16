@@ -35,8 +35,8 @@ mechanism
 concrete InterfaceIdentity
 IPv4 target
 enabled
-AvailabilityChannelPolicy
-    interval_seconds
+interval_seconds
+AvailabilityHysteresisPolicy
     failure_ticks
     recovery_good_news
 ```
@@ -49,7 +49,9 @@ Physical ProbeRules are deduplicated by:
 (mechanism, InterfaceIdentity, target)
 ```
 
-Timing/hysteresis policy is not part of physical NetworkRules semantics.
+Neither cadence nor hysteresis is part of physical NetworkRules semantics. Cadence is
+execution demand; hysteresis is projected separately into the payload-facing
+AvailabilityPriorityChannel.
 
 ## 3. Physical generation
 
@@ -93,8 +95,9 @@ ProbeExecutionPlan
 
 Physical plane cadence is the fastest interval requested by its enabled logical consumers.
 
-A logical channel carries its current complete descriptor and
-`AvailabilityChannelPolicy`; there is no logical evidence epoch.
+A logical execution channel carries physical send identity/cadence plus a
+probe-independent `AvailabilityPriorityChannel` descriptor for good-news/tick output.
+There is no logical evidence epoch.
 
 `None` means execution must quiesce.
 
@@ -111,8 +114,10 @@ A change that does not alter physical ProbeRules, for example only:
 
 does not create a new physical generation.
 
-It can still publish a changed execution plan so the Agent sees current logical channels
-and tick cadence.
+It can still publish a changed execution plan so the Agent sees current logical channels.
+A hysteresis-only change updates the priority descriptor but does not restart physical or
+tick cadence; an `interval_seconds` change changes cadence without changing physical
+ProbeRules generation.
 
 Availability hysteresis reset/preservation rules are handled by
 `PayloadTrafficManager`, not here.

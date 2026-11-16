@@ -1,7 +1,7 @@
 from ipaddress import IPv4Address
 import unittest
 
-from rou.availability_collector import AvailabilityChannelPolicy
+from rou.availability_collector import AvailabilityHysteresisPolicy
 from rou.availability_probe_manager import AvailabilityProbeManager
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
@@ -58,7 +58,8 @@ def probe(probe_id, path, target, *, enabled=True, interval=10, failure=3, recov
         path,
         IPv4Address(target),
         enabled=enabled,
-        policy=AvailabilityChannelPolicy(interval, failure, recovery),
+        interval_seconds=interval,
+        hysteresis=AvailabilityHysteresisPolicy(failure, recovery),
     )
 
 
@@ -84,7 +85,7 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
         self.assertEqual(len(self.execution.events), 1)
         plan = self.execution.events[0]
         self.assertEqual(plan.generation, self.manager.observation_generation)
-        self.assertEqual(plan.channels[0].probe_id, "primary")
+        self.assertEqual(plan.channels[0].priority.channel_id, "primary")
 
     def test_equivalent_request_preserves_generation_and_does_not_republish(self):
         wanted = request(probe("primary", self.path, "203.0.113.24"))
@@ -117,8 +118,8 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
         self.assertEqual(self.manager.observation_generation, generation)
         self.assertEqual(len(self.execution.events), 1)
         self.assertEqual(
-            self.execution.events[0].channels[0].policy,
-            changed.policy,
+            self.execution.events[0].channels[0].priority.policy,
+            changed.hysteresis,
         )
 
     def test_physical_change_quiesces_old_plan_before_new_generation(self):
@@ -151,7 +152,8 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
                     first.path,
                     first.target,
                     enabled=False,
-                    policy=first.policy,
+                    interval_seconds=first.interval_seconds,
+                    hysteresis=first.hysteresis,
                 )
             )
         )
@@ -172,7 +174,7 @@ class AvailabilityProbeManagerTests(unittest.TestCase):
         self.assertEqual(len(self.adapter.apply_owners), apply_count)
         self.assertEqual(self.manager.observation_generation, generation)
         self.assertEqual(
-            [item.probe_id for item in self.execution.events[-1].channels],
+            [item.priority.channel_id for item in self.execution.events[-1].channels],
             ["first", "second"],
         )
 

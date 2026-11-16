@@ -3,7 +3,10 @@ from threading import Event
 import time
 import unittest
 
-from rou.availability_collector import AvailabilityChannelPolicy
+from rou.availability_collector import (
+    AvailabilityHysteresisPolicy,
+    AvailabilityPriorityChannel,
+)
 from rou.availability_probe_state import ProbeObservationGeneration
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_probe_execution import (
@@ -24,16 +27,25 @@ from rou.probe_transport import (
 
 A = InterfaceIdentity("vpns00", 10)
 TARGET = IPv4Address("203.0.113.24")
-POLICY = AvailabilityChannelPolicy(10, 3, 2)
+HYSTERESIS = AvailabilityHysteresisPolicy(3, 2)
 
 
-def channel(probe_id="primary", *, policy=POLICY):
+def channel(
+    channel_id="primary",
+    *,
+    interval=10,
+    hysteresis=HYSTERESIS,
+):
     return LogicalProbeChannel(
-        probe_id,
+        AvailabilityPriorityChannel(
+            channel_id,
+            A,
+            True,
+            hysteresis,
+        ),
         ProbeMechanism.ICMP,
-        A,
         TARGET,
-        policy,
+        interval,
     )
 
 
@@ -46,11 +58,17 @@ def plane(interval=10.0):
     )
 
 
-def plan(sequence=1, *, policy=POLICY, plane_interval=10.0):
+def plan(
+    sequence=1,
+    *,
+    interval=10,
+    hysteresis=HYSTERESIS,
+    plane_interval=10.0,
+):
     return ProbeExecutionPlan(
         ProbeObservationGeneration(sequence),
         (plane(plane_interval),),
-        (channel(policy=policy),),
+        (channel(interval=interval, hysteresis=hysteresis),),
     )
 
 
@@ -127,7 +145,10 @@ class ProbeExecutionScheduleTests(unittest.TestCase):
         self.assertEqual(sends, (plane(),))
 
         ticks, sends = schedule.pop_due(110.0)
-        self.assertEqual([item.channel.probe_id for item in ticks], ["primary"])
+        self.assertEqual(
+            [item.channel.channel_id for item in ticks],
+            ["primary"],
+        )
         self.assertEqual(sends, (plane(),))
 
     def test_delayed_scheduler_emits_one_tick_not_elapsed_count(self):
@@ -141,18 +162,32 @@ class ProbeExecutionScheduleTests(unittest.TestCase):
         self.assertEqual(sends, (plane(),))
         self.assertEqual(schedule.next_deadline(), 140.0)
 
-    def test_policy_change_restarts_only_logical_tick_phase(self):
+    def test_cadence_change_restarts_only_logical_tick_phase(self):
         schedule = ProbeExecutionSchedule()
         schedule.reconcile(plan(), 100.0)
         schedule.pop_due(100.0)
 
-        changed = AvailabilityChannelPolicy(30, 7, 4)
-        schedule.reconcile(plan(policy=changed), 105.0)
+        schedule.reconcile(plan(interval=30), 105.0)
 
         ticks, sends = schedule.pop_due(110.0)
         self.assertEqual(ticks, ())
         self.assertEqual(sends, (plane(),))
         self.assertEqual(schedule.next_deadline(), 120.0)
+
+    def test_hysteresis_change_does_not_change_tick_cadence(self):
+        schedule = ProbeExecutionSchedule()
+        schedule.reconcile(plan(), 100.0)
+        schedule.pop_due(100.0)
+
+        schedule.reconcile(
+            plan(hysteresis=AvailabilityHysteresisPolicy(7, 4)),
+            105.0,
+        )
+
+        ticks, sends = schedule.pop_due(110.0)
+
+        self.assertEqual(len(ticks), 1)
+        self.assertEqual(sends, (plane(),))
 
     def test_generation_change_restarts_send_immediately(self):
         schedule = ProbeExecutionSchedule()
@@ -188,12 +223,10 @@ class LinuxProbeExecutionAgentTests(unittest.TestCase):
         self.assertGreaterEqual(len(seq), count)
 
     def test_reply_fans_out_to_current_logical_consumers(self):
-        second = LogicalProbeChannel(
+        second = channel(
             "second",
-            ProbeMechanism.ICMP,
-            A,
-            TARGET,
-            AvailabilityChannelPolicy(20, 2, 3),
+            interval=20,
+            hysteresis=AvailabilityHysteresisPolicy(2, 3),
         )
         current = ProbeExecutionPlan(
             ProbeObservationGeneration(1),
@@ -207,9 +240,13 @@ class LinuxProbeExecutionAgentTests(unittest.TestCase):
         self.wait_for(self.good.events, 2)
 
         self.assertEqual(
-            {item.channel.probe_id for item in self.good.events},
+            {item.channel.channel_id for item in self.good.events},
             {"primary", "second"},
         )
+        for item in self.good.events:
+            self.assertFalse(hasattr(item.channel, "target"))
+            self.assertFalse(hasattr(item.channel, "mechanism"))
+            self.assertFalse(hasattr(item.channel, "interval_seconds"))
 
     def test_no_reply_is_not_an_availability_event(self):
         self.agent.update_plan(plan())
@@ -226,7 +263,10 @@ class LinuxProbeExecutionAgentTests(unittest.TestCase):
         self.agent.process_due(135.0)
 
         self.assertEqual(len(self.tick.events), 1)
-        self.assertEqual(self.tick.events[0].channel.probe_id, "primary")
+        self.assertEqual(
+            self.tick.events[0].channel.channel_id,
+            "primary",
+        )
 
     def test_slow_send_does_not_overlap_same_plane(self):
         self.driver.block = True

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Network
 
-from .availability_collector import AvailabilityChannelPolicy
+from .availability_collector import AvailabilityHysteresisPolicy
 from .interface_identity import InterfaceIdentity
 from .network_rules import (
     DispatchRuleSpec,
@@ -35,7 +35,8 @@ class AvailabilityProbeRequest:
     target: IPv4Address
     mechanism: ProbeMechanism = ProbeMechanism.ICMP
     enabled: bool = True
-    policy: AvailabilityChannelPolicy = field(kw_only=True)
+    interval_seconds: float = field(kw_only=True)
+    hysteresis: AvailabilityHysteresisPolicy = field(kw_only=True)
 
     def __post_init__(self) -> None:
         if not self.probe_id:
@@ -48,9 +49,15 @@ class AvailabilityProbeRequest:
             raise ValueError("probe mechanism must be a ProbeMechanism")
         if type(self.enabled) is not bool:
             raise ValueError("probe enabled must be boolean")
-        if not isinstance(self.policy, AvailabilityChannelPolicy):
+        if (
+            isinstance(self.interval_seconds, bool)
+            or not isinstance(self.interval_seconds, (int, float))
+            or self.interval_seconds <= 0
+        ):
+            raise ValueError("probe interval_seconds must be positive")
+        if not isinstance(self.hysteresis, AvailabilityHysteresisPolicy):
             raise ValueError(
-                "probe policy must be AvailabilityChannelPolicy"
+                "probe hysteresis must be AvailabilityHysteresisPolicy"
             )
 
 

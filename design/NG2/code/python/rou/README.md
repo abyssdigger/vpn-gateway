@@ -127,15 +127,27 @@ Implemented lower/runtime slices now include:
   below the production send boundary;
 - single-shot capability-free Linux ICMP probe Driver retained as target-proven lower
   mechanism/evidence;
+- structural `PayloadTrafficStateRequest` with no availability fields;
+- probe-independent `AvailabilityPriorityConfig` / `AvailabilityPriorityChannel`
+  payload-priority contract;
+- split probe cadence (`interval_seconds`) from payload hysteresis
+  (`failure_ticks`, `recovery_good_news`);
 - bounded availability collector inside PayloadTrafficManager using
   `availability_problems`, saturating good-news counters and boolean tick latches;
+- inactive availability is a true payload no-op; lower routing gets no preferred-prefix
+  hint until an enabled assigned channel exists;
 - direct effective-order calculation and the same sole payload reconcile executor for
-  availability-driven route priority.
+  auxiliary route priority;
+- generic lower `preferred_prefix_length` hint, not an availability-named payload field.
 
 Removed executable availability artifacts include `availability_routing.py`,
 `payload_traffic_intent.py` and the old availability-specific
-`runtime_state_manager.py` slice. Remaining work is runtime assembly/status wiring, not
-another availability evidence layer.
+`runtime_state_manager.py` slice. PayloadTrafficManager no longer imports
+`probe_rules` or `probe_transport`; target/mechanism/cadence stop at the probe side.
+
+Remaining work is runtime assembly/status wiring: produce the physical probe request and
+the independent availability-priority config from the same normalized configuration, then
+wire Agent observations directly to PayloadTrafficManager.
 
 Rootless tests:
 

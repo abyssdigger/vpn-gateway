@@ -264,13 +264,13 @@ def project_network_rules_to_interfaces(
                     if path in available
                 ),
                 terminal_disposition=domain.terminal_disposition,
-                no_problem_prefix_length=(
+                preferred_prefix_length=(
                     None
-                    if domain.no_problem_prefix_length is None
+                    if domain.preferred_prefix_length is None
                     else sum(
                         1
                         for path in domain.ordered_paths[
-                            : domain.no_problem_prefix_length
+                            : domain.preferred_prefix_length
                         ]
                         if path in available
                     )

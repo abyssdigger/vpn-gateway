@@ -3,8 +3,12 @@ from threading import Event, Thread
 import unittest
 
 from rou.availability_collector import (
-    AvailabilityChannelPolicy,
-    ProfileProbeAssignment,
+    AvailabilityGoodNews,
+    AvailabilityHysteresisPolicy,
+    AvailabilityPriorityChannel,
+    AvailabilityPriorityConfig,
+    AvailabilityTick,
+    ProfileAvailabilityAssignment,
 )
 from rou.interface_identity import InterfaceIdentity
 from rou.network_rules import (
@@ -26,17 +30,6 @@ from rou.payload_rules_state import (
     Service,
 )
 from rou.payload_traffic_manager import PayloadTrafficManager
-from rou.probe_rules import (
-    AvailabilityProbeRequest,
-    AvailabilityProbeSetRequest,
-    ProbeMechanism,
-)
-from rou.probe_transport import (
-    LogicalProbeChannel,
-    ProbeGoodNewsInfo,
-    ProbeTickInfo,
-)
-
 
 class RecordingPublisher:
     def __init__(self):
@@ -532,7 +525,7 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
         self.adapter = FakeAdapter()
         self.publisher = RecordingPublisher()
         self.manager = PayloadTrafficManager(self.adapter, self.publisher)
-        self.policy = AvailabilityChannelPolicy(10, 2, 3)
+        self.policy = AvailabilityHysteresisPolicy(2, 3)
 
         self.payload = PayloadTrafficStateRequest(
             (
@@ -548,65 +541,56 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
                 ),
             )
         )
-        self.probes = AvailabilityProbeSetRequest(
+        self.config = AvailabilityPriorityConfig(
             (
-                AvailabilityProbeRequest(
-                    "a",
-                    self.a,
-                    IPv4Address("203.0.113.10"),
-                    policy=self.policy,
-                ),
-                AvailabilityProbeRequest(
-                    "b",
-                    self.b,
-                    IPv4Address("203.0.113.11"),
-                    policy=self.policy,
-                ),
-                AvailabilityProbeRequest(
-                    "c",
-                    self.c,
-                    IPv4Address("203.0.113.12"),
-                    policy=self.policy,
-                ),
-            )
-        )
-        self.assignments = (
-            ProfileProbeAssignment("corp", ("a", "b", "c")),
+                AvailabilityPriorityChannel("a", self.a, True, self.policy),
+                AvailabilityPriorityChannel("b", self.b, True, self.policy),
+                AvailabilityPriorityChannel("c", self.c, True, self.policy),
+            ),
+            (
+                ProfileAvailabilityAssignment("corp", ("a", "b", "c")),
+            ),
         )
 
         self.manager.handle_request(self.payload)
-        self.manager.configure_availability(self.probes, self.assignments)
-
-    def channel(self, probe_id):
-        probe = next(
-            item for item in self.probes.probes
-            if item.probe_id == probe_id
+        self.assertIsNone(
+            self.adapter.state.rules.routing_domains[0].preferred_prefix_length
         )
-        return LogicalProbeChannel(
-            probe.probe_id,
-            probe.mechanism,
-            probe.path,
-            probe.target,
-            probe.policy,
+        self.manager.configure_availability(self.config)
+
+    def channel(self, channel_id):
+        return next(
+            item for item in self.config.channels
+            if item.channel_id == channel_id
         )
 
     def order(self):
         return self.adapter.state.rules.routing_domains[0].ordered_paths
 
-    def tick(self, probe_id):
-        return self.manager.handle_probe_tick(
-            ProbeTickInfo(self.channel(probe_id))
+    def tick(self, channel_id):
+        return self.manager.handle_availability_tick(
+            AvailabilityTick(self.channel(channel_id))
         )
 
-    def good(self, probe_id):
-        return self.manager.handle_probe_good_news(
-            ProbeGoodNewsInfo(self.channel(probe_id))
+    def good(self, channel_id):
+        return self.manager.handle_availability_good_news(
+            AvailabilityGoodNews(self.channel(channel_id))
         )
 
-    def test_initial_and_enabled_probing_preserve_configured_order(self):
+    def test_inactive_availability_is_true_payload_noop(self):
+        manager = PayloadTrafficManager(FakeAdapter(), RecordingPublisher())
+        adapter = manager._adapter
+
+        manager.handle_request(self.payload)
+
+        domain = adapter.state.rules.routing_domains[0]
+        self.assertEqual(domain.ordered_paths, (self.a, self.b, self.c))
+        self.assertIsNone(domain.preferred_prefix_length)
+
+    def test_active_availability_preserves_configured_order_initially(self):
         self.assertEqual(self.order(), (self.a, self.b, self.c))
         self.assertEqual(
-            self.adapter.state.rules.routing_domains[0].no_problem_prefix_length,
+            self.adapter.state.rules.routing_domains[0].preferred_prefix_length,
             3,
         )
 
@@ -618,7 +602,7 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
 
         self.assertEqual(self.order(), (self.b, self.c, self.a))
         self.assertEqual(
-            self.adapter.state.rules.routing_domains[0].no_problem_prefix_length,
+            self.adapter.state.rules.routing_domains[0].preferred_prefix_length,
             2,
         )
 
@@ -633,7 +617,7 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
 
         self.assertEqual(self.order(), (self.a, self.b, self.c))
         self.assertEqual(
-            self.adapter.state.rules.routing_domains[0].no_problem_prefix_length,
+            self.adapter.state.rules.routing_domains[0].preferred_prefix_length,
             3,
         )
 
@@ -642,147 +626,119 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
         self.tick("a")
         self.good("a")
         self.good("a")
-        self.tick("a")   # consumes the armed good-news trigger
-        self.tick("a")   # no good news since the preceding tick: reset progress
+        self.tick("a")
+        self.tick("a")
         self.good("a")
 
         self.assertEqual(self.order(), (self.b, self.c, self.a))
 
-    def test_disabled_probe_has_no_availability_problem_by_definition(self):
+    def test_disabled_channel_has_no_availability_problem_by_definition(self):
         self.tick("a")
         self.tick("a")
         self.assertEqual(self.order(), (self.b, self.c, self.a))
 
-        disabled = AvailabilityProbeSetRequest(
+        disabled = AvailabilityPriorityConfig(
             tuple(
-                AvailabilityProbeRequest(
-                    item.probe_id,
+                AvailabilityPriorityChannel(
+                    item.channel_id,
                     item.path,
-                    item.target,
-                    mechanism=item.mechanism,
-                    enabled=(item.probe_id != "a"),
-                    policy=item.policy,
+                    item.channel_id != "a",
+                    item.policy,
                 )
-                for item in self.probes.probes
-            )
+                for item in self.config.channels
+            ),
+            self.config.assignments,
         )
-        self.manager.configure_availability(disabled, self.assignments)
+        self.manager.configure_availability(disabled)
 
         self.assertEqual(self.order(), (self.a, self.b, self.c))
 
-    def test_policy_only_change_preserves_problem_flag_but_resets_progress(self):
+    def test_policy_change_preserves_problem_flag_but_resets_progress(self):
         self.tick("a")
         self.tick("a")
         self.good("a")
         self.good("a")
 
-        changed_policy = AvailabilityChannelPolicy(10, 5, 4)
-        changed = AvailabilityProbeSetRequest(
+        changed_policy = AvailabilityHysteresisPolicy(5, 4)
+        changed = AvailabilityPriorityConfig(
             tuple(
-                AvailabilityProbeRequest(
-                    item.probe_id,
+                AvailabilityPriorityChannel(
+                    item.channel_id,
                     item.path,
-                    item.target,
-                    mechanism=item.mechanism,
-                    enabled=item.enabled,
-                    policy=(
+                    item.enabled,
+                    (
                         changed_policy
-                        if item.probe_id == "a"
+                        if item.channel_id == "a"
                         else item.policy
                     ),
                 )
-                for item in self.probes.probes
-            )
+                for item in self.config.channels
+            ),
+            self.config.assignments,
         )
-        self.manager.configure_availability(changed, self.assignments)
+        self.manager.configure_availability(changed)
+        self.config = changed
 
         self.assertEqual(self.order(), (self.b, self.c, self.a))
 
-        changed_a = next(
-            item for item in changed.probes
-            if item.probe_id == "a"
-        )
-        changed_channel = LogicalProbeChannel(
-            changed_a.probe_id,
-            changed_a.mechanism,
-            changed_a.path,
-            changed_a.target,
-            changed_a.policy,
-        )
         for _ in range(3):
-            self.manager.handle_probe_good_news(
-                ProbeGoodNewsInfo(changed_channel)
-            )
+            self.good("a")
         self.assertEqual(self.order(), (self.b, self.c, self.a))
 
-        self.manager.handle_probe_good_news(
-            ProbeGoodNewsInfo(changed_channel)
-        )
+        self.good("a")
         self.assertEqual(self.order(), (self.a, self.b, self.c))
 
-    def test_path_with_multiple_probes_is_problem_only_when_all_are_problem(self):
-        extra = AvailabilityProbeRequest(
+    def test_path_with_multiple_channels_is_problem_only_when_all_are_problem(self):
+        extra = AvailabilityPriorityChannel(
             "a-secondary",
             self.a,
-            IPv4Address("203.0.113.110"),
-            policy=self.policy,
+            True,
+            self.policy,
         )
-        probes = AvailabilityProbeSetRequest(self.probes.probes + (extra,))
-        assignments = (
-            ProfileProbeAssignment(
-                "corp",
-                ("a", "a-secondary", "b", "c"),
+        config = AvailabilityPriorityConfig(
+            self.config.channels + (extra,),
+            (
+                ProfileAvailabilityAssignment(
+                    "corp",
+                    ("a", "a-secondary", "b", "c"),
+                ),
             ),
         )
-        self.manager.configure_availability(probes, assignments)
-
-        primary = LogicalProbeChannel(
-            self.probes.probes[0].probe_id,
-            self.probes.probes[0].mechanism,
-            self.probes.probes[0].path,
-            self.probes.probes[0].target,
-            self.probes.probes[0].policy,
-        )
-        secondary = LogicalProbeChannel(
-            extra.probe_id,
-            extra.mechanism,
-            extra.path,
-            extra.target,
-            extra.policy,
-        )
+        self.manager.configure_availability(config)
+        self.config = config
 
         for _ in range(2):
-            self.manager.handle_probe_tick(ProbeTickInfo(primary))
+            self.tick("a")
         self.assertEqual(self.order(), (self.a, self.b, self.c))
 
         for _ in range(2):
-            self.manager.handle_probe_tick(ProbeTickInfo(secondary))
+            self.tick("a-secondary")
         self.assertEqual(self.order(), (self.b, self.c, self.a))
 
-    def test_old_channel_callback_is_ignored_after_definition_change(self):
+    def test_stale_channel_descriptor_is_ignored_after_policy_change(self):
         stale = self.channel("a")
-        changed = AvailabilityProbeSetRequest(
+        changed = AvailabilityPriorityConfig(
             tuple(
-                AvailabilityProbeRequest(
-                    item.probe_id,
+                AvailabilityPriorityChannel(
+                    item.channel_id,
                     item.path,
+                    item.enabled,
                     (
-                        IPv4Address("203.0.113.99")
-                        if item.probe_id == "a"
-                        else item.target
+                        AvailabilityHysteresisPolicy(7, 5)
+                        if item.channel_id == "a"
+                        else item.policy
                     ),
-                    mechanism=item.mechanism,
-                    enabled=item.enabled,
-                    policy=item.policy,
                 )
-                for item in self.probes.probes
-            )
+                for item in self.config.channels
+            ),
+            self.config.assignments,
         )
-        self.manager.configure_availability(changed, self.assignments)
+        self.manager.configure_availability(changed)
+        self.config = changed
 
         self.assertFalse(
-            self.manager.handle_probe_good_news(
-                ProbeGoodNewsInfo(stale)
+            self.manager.handle_availability_good_news(
+                AvailabilityGoodNews(stale)
             )
         )
 
@@ -810,23 +766,6 @@ class PayloadTrafficAvailabilityTests(unittest.TestCase):
         release.set()
         worker.join(2)
         self.assertFalse(worker.is_alive())
-        self.assertEqual(
-            max(
-                1,
-                sum(
-                    1
-                    for spec in self.adapter.apply_specs
-                    if spec.routing_domains
-                ),
-            ),
-            len(
-                [
-                    spec
-                    for spec in self.adapter.apply_specs
-                    if spec.routing_domains
-                ]
-            ),
-        )
 
 
 if __name__ == "__main__":

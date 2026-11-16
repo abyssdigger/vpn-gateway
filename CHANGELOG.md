@@ -1,3 +1,32 @@
+## 2026-11-15 — NG2 payload/probing decoupling
+
+Cleaned the remaining payload-domain coupling left from earlier availability designs:
+
+- `PayloadProfileRequest` / `PayloadTrafficStateRequest` are structural-only again;
+  the availability-derived prefix field was removed;
+- introduced probe-independent `AvailabilityPriorityConfig`,
+  `AvailabilityPriorityChannel`, `AvailabilityGoodNews` and `AvailabilityTick`;
+- PayloadTrafficManager no longer imports/stores physical probe request/transport types;
+  target, mechanism and cadence do not cross the payload boundary;
+- split probe cadence from payload hysteresis:
+  `interval_seconds` remains execution-side while payload owns only
+  `failure_ticks` and `recovery_good_news`;
+- renamed `ProfileProbeAssignment` to `ProfileAvailabilityAssignment`;
+- inactive/disabled availability is now a true payload priority no-op and emits no lower
+  routing boundary;
+- renamed the lower generic routing hint from `no_problem_prefix_length` to
+  `preferred_prefix_length`;
+- hysteresis-only changes preserve probe tick cadence while resetting payload hysteresis
+  progress;
+- pre-test cleanup delta was net **-29 production Python lines** and **-9 test lines**,
+  with no new production module;
+- NG2 Python workflow run **617** passed **279 unit tests** and the full privileged Linux
+  integration matrix, including EXP-025/026/027, Adapter, LOCAL_PROCESS and dataplane.
+
+Payload-management documentation was then rewritten around the tested contracts.
+
+---
+
 ## 2026-11-15 — NG2 availability simplification
 
 Superseded the observation-window/evidence pipeline with the final optional

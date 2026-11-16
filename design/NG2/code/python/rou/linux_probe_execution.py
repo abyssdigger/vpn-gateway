@@ -10,12 +10,11 @@ from typing import Callable, Protocol
 from .availability_probe_state import ProbeObservationGeneration
 from .linux_probe_driver import LinuxIcmpProbeDriver
 from .probe_attempt import ProbeAttemptOutcome
+from .availability_collector import AvailabilityGoodNews, AvailabilityTick
 from .probe_transport import (
     LogicalProbeChannel,
     PhysicalProbePlane,
     ProbeExecutionPlan,
-    ProbeGoodNewsInfo,
-    ProbeTickInfo,
 )
 
 
@@ -79,12 +78,12 @@ class LinuxDiagnosticPingSendAdapter:
 
 
 class ProbeGoodNewsPublisher(Protocol):
-    def publish(self, info: ProbeGoodNewsInfo) -> None:
+    def publish(self, info: AvailabilityGoodNews) -> None:
         ...
 
 
 class ProbeTickPublisher(Protocol):
-    def publish(self, info: ProbeTickInfo) -> None:
+    def publish(self, info: AvailabilityTick) -> None:
         ...
 
 
@@ -192,16 +191,16 @@ class ProbeExecutionSchedule:
             new_planes[key] = _PlaneSchedule(plane, next_send)
 
         for channel in plan.channels:
-            old = old_ticks.get(channel.probe_id)
+            old = old_ticks.get(channel.priority.channel_id)
             if (
                 not generation_changed
                 and old is not None
-                and old.channel == channel
+                and old.channel.interval_seconds == channel.interval_seconds
             ):
                 next_tick = old.next_tick
             else:
-                next_tick = now + float(channel.policy.interval_seconds)
-            new_ticks[channel.probe_id] = _TickSchedule(channel, next_tick)
+                next_tick = now + float(channel.interval_seconds)
+            new_ticks[channel.priority.channel_id] = _TickSchedule(channel, next_tick)
 
         self._plan = plan
         self._planes = new_planes
@@ -220,7 +219,7 @@ class ProbeExecutionSchedule:
     def pop_due(
         self,
         now: float,
-    ) -> tuple[tuple[ProbeTickInfo, ...], tuple[PhysicalProbePlane, ...]]:
+    ) -> tuple[tuple[AvailabilityTick, ...], tuple[PhysicalProbePlane, ...]]:
         if self._plan is None:
             return (), ()
         if (
@@ -231,13 +230,13 @@ class ProbeExecutionSchedule:
             raise ValueError("schedule time must be finite numeric")
         now = float(now)
 
-        ticks: list[ProbeTickInfo] = []
+        ticks: list[AvailabilityTick] = []
         for probe_id in sorted(self._ticks):
             item = self._ticks[probe_id]
             if item.next_tick > now:
                 continue
-            ticks.append(ProbeTickInfo(item.channel))
-            interval = float(item.channel.policy.interval_seconds)
+            ticks.append(AvailabilityTick(item.channel.priority))
+            interval = float(item.channel.interval_seconds)
             elapsed = int((now - item.next_tick) // interval) + 1
             item.next_tick += elapsed * interval
 
@@ -451,7 +450,7 @@ class LinuxProbeExecutionAgent:
                     for channel in current.channels
                     if (
                         channel.mechanism is plane.mechanism
-                        and channel.path == plane.path
+                        and channel.priority.path == plane.path
                         and channel.target == plane.target
                     )
                 )
@@ -464,7 +463,7 @@ class LinuxProbeExecutionAgent:
             if result.good_news:
                 for channel in consumers:
                     self._good_news_publisher.publish(
-                        ProbeGoodNewsInfo(channel)
+                        AvailabilityGoodNews(channel.priority)
                     )
         finally:
             with self._condition:

@@ -1,1060 +1,444 @@
-# VPN-GATE NG2 — PayloadTrafficManager decomposition
+# VPN-GATE NG2 — PayloadTrafficManager
 
-**Статус:** нормативный проект NG2  
-**Дата:** 2026-11-14  
-**Область:** steady-state payload traffic management  
-**Общие модели:** `design/component-model.md`, `design/NG2/runtime-event-model.md`
+**Status:** normative NG2 design  
+**Date:** 2026-11-15  
+**Scope:** steady-state payload policy, optional availability priority, and network-rules convergence  
+**Related:** `design/component-model.md`, `design/NG2/network-rules-adapter.md`,
+`design/NG2/availability-collector-materializer.md`
 
-Документ фиксирует границы и контракты компонентов `PayloadTrafficManager`.
+## 1. Role
 
-Цель декомпозиции — отделить:
+`PayloadTrafficManager` is the Manager Engine that owns the current payload forwarding
+policy.
 
-1. payload semantics VPN-GATE;
-2. преобразование payload intent в абстрактные network rules;
-3. безопасную материализацию network rules в конкретный сетевой стек.
+It is responsible for:
 
-Linux route/RPDB/nft/sysctl mechanics не являются частью payload domain.
+- current structural/admin payload intent;
+- configured path priority for each Profile;
+- optional availability-derived priority adjustment;
+- translation of payload semantics into common `NetworkRulesSpec`;
+- one serialized reconcile/materialization executor;
+- drift observation/repair;
+- publication of `PayloadTrafficStateInfo`.
 
-## 1. Архитектурная схема
-
-```text
-                    asynchronous event space
-
-                 PayloadTrafficStateRequest
-                            |
-                            v
-                 +-----------------------+
-                 | PayloadTrafficManager |
-                 +-----+------------+----+
-                       |            |
-                 sync  |            | sync
-                       v            v
-          +------------------+   +-----------------------+
-          | PayloadRules     |   | NetworkRulesAdapter   |
-          | Calculator       |   +-----------------------+
-          +------------------+       ^              |
-                                     |              |
-                               sync  |              | hidden lower domain
-                                     |              v
-          +------------------+       |        network stack / drivers
-          | PayloadRulesState     |<------+
-          | Calculator       |
-          +------------------+
-                       |
-                       v
-                 PayloadTrafficStateInfo
-
-                    asynchronous event space
-```
-
-Все Machinery в текущем VPN-GATE NG2 ожидаются Direct. Никаких Indirect-компонентов в
-этой декомпозиции нет.
-
-Синхронный dependency graph:
-
-```text
-PayloadTrafficManager
-    -> PayloadRulesCalculator
-    -> PayloadRulesStateCalculator
-    -> NetworkRulesAdapter
-```
-
-ацикличен. Внутреннее устройство `NetworkRulesAdapter` находится за Adapter boundary и
-не входит в граф payload domain.
-
-## 2. Предмет управления PayloadTrafficManager
-
-`PayloadTrafficManager` управляет **семантически наблюдаемой политикой прохождения
-payload traffic**.
-
-В его область входят:
-
-- какие Profiles должны иметь payload forwarding;
-- через какие concrete interface identities каждый Profile сейчас может передавать
-  payload;
-- приоритет путей;
-- Profile destinations;
-- разрешенные направления новых соединений;
-- Device traffic envelopes;
-- payload NAT intent;
-- требование terminal fail-close для недоставленного трафика;
-- итоговая семантически значимая проекция фактически материализованной payload policy.
-
-В его область **не** входят:
+It does **not** own:
 
 - VPN process lifecycle;
-- interface discovery;
-- availability probe execution;
-- publication relay workers;
-- numeric Linux routing-table IDs;
-- numeric RPDB priorities;
-- numeric route metrics;
-- nft table/chain names;
-- nft syntax;
-- route/nft/sysctl command ordering;
-- transition/barrier phases;
-- конкретные network-stack verification commands.
+- interface discovery/binding;
+- probe execution, target selection or cadence;
+- Linux table IDs, RPDB priorities or route metrics;
+- nft syntax/names;
+- kernel mutation ordering;
+- lower-domain verification commands.
 
-## 2.1. Availability collector ownership
+Those responsibilities stay outside the payload domain.
 
-Availability routing hysteresis is part of payload-priority policy and is therefore owned
-inside `PayloadTrafficManager`, not by `AvailabilityProbeManager`.
+## 2. Inputs
 
-The producer-facing boundary is deliberately smaller than an asynchronous Event stream:
-current probe workers/timers update bounded per-channel aggregates
-(`pending_good_news`, `tick_pending`) under a short lock. If the sole reconcile
-executor is busy, ingress returns immediately. If it is free, the ingress caller may
-become that executor and drain the aggregate collector synchronously.
+Payload has two independent control inputs.
 
-The Manager updates current `availability_problems` state and invokes the existing
-route-priority materializer only when the resulting effective payload request changed.
-
-The normative state machine and aggregation rules are defined in
-`design/NG2/availability-collector-materializer.md`.
-
-Availability-driven route reorders use the same sole transactional executor as all other
-route mutations. They do not introduce a second pending route-plan queue or a concurrent
-route executor.
-
-## 3. PayloadTrafficManager
-
-### 3.1. Тип
-
-`PayloadTrafficManager` — **Manager**, следовательно Engine.
-
-Он подписывается на RequestEvents, самостоятельно поддерживает свою managed domain,
-использует Machinery синхронно и публикует InfoEvents.
-
-### 3.2. Input
-
-Основной вход:
+### 2.1. Structural payload intent
 
 ```text
 PayloadTrafficStateRequest
+    profiles[]
+        name
+        direction
+        destinations
+        ordered_paths[]
+            InterfaceIdentity
+            traffic envelope
+            NAT mode
 ```
 
-Request является полной актуальной desired projection и supersede'ит предыдущую revision.
+This Request is purely structural/admin intent.
 
-Семантически request содержит:
+It does **not** contain:
+
+- availability channels;
+- probing configuration;
+- availability verdicts;
+- preferred-prefix/gap position;
+- route metrics;
+- Linux materialization data.
+
+The configured `ordered_paths` is the baseline administrative priority.
+
+### 2.2. Optional availability-priority input
+
+Availability is a separate auxiliary input:
 
 ```text
-Profiles participating in payload traffic
-Profile destinations
-Profile direction policy
-current usable/bound concrete interfaces per Profile
-configured/base ordering of usable paths
-availability channel assignment/policy required for runtime priority
-Device traffic envelopes
-Device NAT policy
-other payload-semantic requirements
+AvailabilityPriorityConfig
+    channels[]
+        channel_id
+        path
+        enabled
+        AvailabilityHysteresisPolicy
+            failure_ticks
+            recovery_good_news
+
+    assignments[]
+        profile_name
+        channel_ids[]
 ```
 
-Request не содержит технической materialization information.
+This contract is deliberately probe-independent.
 
-### 3.3. Internal current state
+It contains no:
 
-Manager хранит только явно значимое текущее состояние и минимальное состояние
-сериализации:
+- target address;
+- probe mechanism;
+- probe cadence;
+- physical generation;
+- attempt identity;
+- timestamp.
+
+Probe execution may be the producer of this signal, but payload priority does not depend
+on probe transport semantics.
+
+If no enabled assigned channel participates in a Profile, availability is inactive for that
+Profile and must be a true semantic no-op.
+
+### 2.3. Availability observations
+
+Runtime observations are also probe-independent:
 
 ```text
-latest_desired_network_rules
-latest_published_payload_state
-
-single reconcile executor ownership
-latest pending structural desired projection
-pending audit flag
-availability channel state and bounded producer aggregates
-last verified route-priority materialized snapshot
+AvailabilityGoodNews(current AvailabilityPriorityChannel)
+AvailabilityTick(current AvailabilityPriorityChannel)
 ```
 
-Состояние сериализации является техническим состоянием Manager, а не semantic history
-маршрутов. Оно существует только для гарантии, что две materialization transaction одного
-PayloadTrafficManager не выполняются одновременно.
+The full immutable channel descriptor is carried only as a cheap stale-definition guard.
+Payload accepts an observation only if it exactly matches the current channel descriptor.
 
-Исходный `PayloadTrafficStateRequest` после успешного Direct Calculator projection не
-хранится: его текущая управляющая семантика полностью представлена
-`latest_desired_network_rules`. Это исключает дублирование двух форм одного current
-intent.
+No EventEnvelope/epoch is required for this local boundary.
 
-Допустим технологический cache, если он полностью восстанавливается из текущего desired
-ruleset и свежего состояния Adapter.
+## 3. Availability is not payload membership
 
-Manager не хранит как собственную semantic history:
+Availability is only a priority modifier.
 
-- committed numeric metrics;
-- previous Linux table allocations;
-- previous nft generations;
-- previous transition kind;
-- persisted interface admission history.
+It must never:
 
-### 3.4. Output
+- add a payload path;
+- remove a payload path;
+- change binding eligibility;
+- change a Profile destination;
+- alter traffic envelope or NAT policy.
 
-Manager публикует:
+Initial state is:
 
 ```text
-PayloadTrafficStateInfo
+availability_problems = false
 ```
 
-Только при семантически значимом изменении.
+Disabled availability is also equivalent to no availability problem.
 
-InfoEvent отражает фактически наблюдаемую payload policy, а не историю внутренних
-операций.
+Configured order therefore remains authoritative at startup and whenever availability is
+inactive.
 
-Точный текущий payload:
+The channel state machine is normative in
+`design/NG2/availability-collector-materializer.md`.
+
+## 4. Availability aggregation by Profile/path
+
+One Profile may associate multiple availability channels with the same path.
+
+For one Profile/path:
+
+- disabled channels do not participate;
+- if no enabled assigned channel exists for that path, availability has no opinion;
+- a path is considered to have availability problems only when **all enabled assigned
+  channels for that path** currently have `availability_problems=true`.
+
+One non-problem enabled channel is sufficient to keep the path in the normal class.
+
+This is intentionally less aggressive than "any failed probe demotes the path."
+
+## 5. Effective path order
+
+The Manager calculates current effective order from:
+
+```text
+configured order
+last verified effective order
+current set of problem paths
+```
+
+Rules:
+
+1. structural/admin change rebases to current configured order;
+2. paths without availability problems form the leading prefix in configured priority;
+3. paths with problems remain present;
+4. problem paths preserve their current relative order;
+5. if all paths have problems, current relative order is retained;
+6. if no path has problems, effective order equals configured order.
+
+The last verified effective order is retained because it is route-materialization state
+needed to preserve relative ordering. It is not probe/evidence history.
+
+## 6. Bounded availability input
+
+Per channel:
+
+```text
+pending_good_news: 0..recovery_good_news
+tick_pending: bool
+```
+
+Good news saturates at the recovery threshold.
+
+Repeated undrained ticks collapse to one pending fact.
+
+The Manager owns one short serialization lock:
+
+- producer ingress updates bounded state under the lock;
+- if the reconcile executor is already active, ingress returns;
+- otherwise that caller may become the executor;
+- the lock is never held over Calculator or Adapter I/O.
+
+No ping queue, tick queue, collector thread, materializer-ready event or availability
+route-plan queue is required.
+
+## 7. Single reconcile executor
+
+All payload work shares one serialized executor:
+
+```text
+structural request
+availability config
+availability observation
+audit
+        |
+        v
+single reconcile loop
+        |
+        v
+NetworkRulesAdapter
+```
+
+A running Adapter transaction is immutable.
+
+New inputs arriving while it runs may update latest pending state, but cannot interleave
+the current lower transaction.
+
+Coalescing rules:
+
+- newer structural request supersedes older pending structural request;
+- newer availability config supersedes older pending availability config;
+- good news/ticks accumulate in bounded per-channel state;
+- audit is deferred behind newer pending policy work.
+
+There is no second route-priority executor.
+
+## 8. PayloadRulesCalculator
+
+`PayloadRulesCalculator` is a Direct pure Calculator:
+
+```text
+calculate(PayloadTrafficStateRequest) -> NetworkRulesSpec
+```
+
+It translates only structural payload semantics:
+
+- Profile routing domains;
+- destinations;
+- current ordered paths;
+- terminal fail-close action;
+- dispatch;
+- direction/new-flow admission;
+- traffic envelopes;
+- NAT intent.
+
+It does not know availability configuration or hysteresis.
+
+It does not allocate Linux-specific identifiers or generate Linux commands.
+
+## 9. Lower routing priority hint
+
+The common lower routing domain has an optional technical field:
+
+```text
+RoutingDomainSpec.preferred_prefix_length: int | None
+```
+
+This is **not** part of `PayloadTrafficStateRequest`.
+
+The Manager injects it into the already-calculated `NetworkRulesSpec` only when
+availability is active for that Profile.
+
+Semantics for N paths:
+
+```text
+None -> no auxiliary priority boundary is active
+N    -> all N paths are in the preferred prefix; no steady gap required
+K    -> first K paths are preferred; lower layer derives one free metric before path K+1
+0    -> no path is preferred by the auxiliary signal
+```
+
+The name is intentionally generic. The lower Adapter does not need to know that the
+preferred-prefix hint happened to originate from availability.
+
+The free metric slot remains emergent lower-domain state; it is not stored/configured as
+an object.
+
+## 10. Desired-state construction
+
+For one reconcile:
+
+```text
+PayloadTrafficStateRequest
+        |
+        v
+calculate effective ordered_paths
+        |
+        v
+PayloadRulesCalculator
+        |
+        v
+NetworkRulesSpec
+        |
+        +-- if availability active:
+        |      inject preferred_prefix_length
+        |
+        v
+desired NetworkRulesSpec
+```
+
+If the resulting desired `NetworkRulesSpec` is semantically identical to the current
+desired rules, no materialization is started.
+
+Drift is checked by `audit()`, not by replaying identical RequestEvents.
+
+## 11. NetworkRulesAdapter boundary
+
+The Manager uses the common Direct Adapter:
+
+```text
+apply(owner, spec) -> ActionResult
+renew_state(owner) -> ActionResult
+get_last_state(owner) -> NetworkRulesState
+cleanup(owner) -> ActionResult
+```
+
+`ActionResult` reports operation success/failure only. It is not a payload verdict.
+
+A successful `apply()` means the Adapter freshly verified the requested semantic
+projection.
+
+A failed operation is followed by observation and state calculation; the Manager never
+invents a synthetic FAILED payload state solely from the operation result.
+
+Linux mutation/verification internals remain behind this boundary.
+
+## 12. Payload state
+
+The Manager publishes:
 
 ```text
 PayloadTrafficStateInfo
     rules_state: PayloadRulesState
+        knowledge
+        convergence
+        safety
+        service
 
     profiles[]
         profile_name
         observed_paths: tuple[InterfaceIdentity, ...] | UNKNOWN
 ```
 
-`rules_state` сообщает aggregate состояние правил по независимым осям.
+`observed_paths` is the actual observed materialized routing order for the requested
+Profile.
 
-Per-Profile `observed_paths` сообщает только фактическую routing projection requested
-Profile after the Manager's internal availability-priority materialization:
+It is valid payload state even if an optional availability signal influenced that order.
 
-- при authoritative observation — concrete ordered paths;
-- authoritative отсутствие logical domain — пустой tuple;
-- неизвестное/stale observation — UNKNOWN.
+No probe verdict, reachability state, availability counter or availability diagnostic is
+part of `PayloadTrafficStateInfo`.
 
-Эти paths не являются самостоятельным verdict о здоровье Profile. RuntimeStateManager
-может комбинировать их с `rules_state`, binding и другими system-level facts в
-`ProfileStateCalculator`.
+`PayloadRulesState` remains multidimensional:
 
-Availability priority больше не вычисляется upstream как готовый `ordered_paths`.
-`PayloadTrafficManager` владеет текущим availability-problems channel state и выводит effective order
-внутри своей managed domain. Availability по-прежнему не превращает observed path в
-binding ON/OFF и не меняет payload membership.
+- knowledge: `KNOWN | UNKNOWN`;
+- convergence: `MATCHED | DIVERGED | UNKNOWN`;
+- safety: `SAFE | UNSAFE | UNKNOWN`;
+- service: `READY | DEGRADED | ISOLATED | UNKNOWN`.
 
-Foreign observed routing domains не публикуются как requested Profiles; их наличие
-отражается через divergence/safety rules-state assessment.
+## 13. Audit and drift repair
 
-Raw `NetworkRulesState` и Linux-specific representation через event boundary не проходят.
-
-Payload rules не сводятся к одному enum. Их состояние оценивается по независимым осям:
+`audit()` performs one deterministic pass:
 
 ```text
-PayloadRulesState
-    knowledge
-        KNOWN | UNKNOWN
+renew_state()
+get_last_state()
+calculate PayloadRulesState
 
-    convergence
-        MATCHED | DIVERGED | UNKNOWN
+if convergence != MATCHED:
+    apply(current desired)
+    observe again
 
-    safety
-        SAFE | UNSAFE | UNKNOWN
-
-    service
-        READY | DEGRADED | ISOLATED | UNKNOWN
+publish semantic state if changed
 ```
 
-Смыслы осей:
+Repair is driven by convergence, not service severity.
 
-- **knowledge** — имеется ли достаточно авторитетное текущее наблюдение ruleset;
-- **convergence** — совпадает ли observed ruleset с desired ruleset;
-- **safety** — доказано ли, что observed ruleset не разрешает запрещенное desired policy
-  поведение;
-- **service** — какой уровень payload service доказан observed ruleset.
+Therefore a correctly materialized isolated/zero-path request does not create a repair
+loop merely because service is isolated.
 
-Оси намеренно независимы. В частности, `KNOWN + DIVERGED + UNSAFE` является нормальным
-представимым состоянием; физическая работоспособность трафика не превращает unsafe ruleset
-в `READY`.
+## 14. Failure semantics
 
-`DEGRADED` допускается только для доказанно safe, но неполной service projection.
-`ISOLATED` означает доказанно закрытый payload service. Когда требуемое свойство нельзя
-доказать из observed semantic rules, соответствующая ось принимает `UNKNOWN`.
+Pure Calculator rejection means invalid/unrepresentable input and occurs before lower
+mutation.
 
-Operation failure сам по себе не является значением ни одной из этих осей.
+Adapter failure means only that the requested synchronous lower operation did not complete
+with a verified success.
 
-### 3.5. Request handling
+After failure the Manager observes what can actually be proven and publishes that state.
 
-При новой request revision сначала выполняется pure projection:
+Unexpected lower exceptions must release reconcile ownership so the Manager cannot remain
+permanently wedged.
 
-```text
-desired_rules = PayloadRulesCalculator.calculate(request)
-```
+## 15. Core invariants
 
-После этого действует единый serial reconcile executor.
+1. Structural payload intent is independent of availability.
+2. Availability never changes payload membership.
+3. Probe target/mechanism/cadence never enter the payload domain.
+4. Availability disabled/absent is a true priority no-op.
+5. PayloadTrafficManager owns exactly one reconcile/materialization executor.
+6. A lower transaction cannot be modified while running.
+7. Current desired state persists until superseded.
+8. Drift repair does not require a new RequestEvent.
+9. PayloadTrafficManager does not know Linux allocation identifiers.
+10. NetworkRulesAdapter does not know Profile satisfaction or availability hysteresis.
+11. Same-name/new-ifindex remains a distinct concrete `InterfaceIdentity`.
+12. `preferred_prefix_length` is lower routing intent, not user/payload configuration.
+13. The free route metric slot is emergent and never persistent configuration.
+14. Payload state output contains observed payload facts, not probe verdicts.
 
-Если executor свободен, он становится владельцем очереди и начинает materialization.
-Если transaction уже выполняется, новая revision **не** входит в текущий Adapter call:
-она только заменяет `latest pending desired`.
+## 16. Evidence
 
-```text
-active desired A
-    |
-    +--> NetworkRulesAdapter.apply(A)  # immutable call
+Relevant evidence retained:
 
-while A is active:
-    request B -> pending B
-    request C -> pending C             # B coalesced away
+- EXP-012: drift/fail-closed structural repair and verification;
+- EXP-017: same-name/new-ifindex generation identity;
+- EXP-023: availability may change while interface identity remains stable;
+- EXP-027: route-only priority permutation with make-before-break metric moves;
+- current privileged Linux Adapter/LOCAL_PROCESS/dataplane integrations.
 
-A completed
-    |
-    v
-apply(C)
-```
+The payload/probing decoupling itself introduces no new kernel claim. It was validated by
+the existing deterministic and privileged suites.
 
-Очередь защищена коротким mutex, но mutex не удерживается во время Calculator/Adapter I/O.
-Поэтому:
+## 17. Remaining work
 
-- re-entrant Event Delivery не создает deadlock;
-- concurrent delivery из нескольких threads не запускает второй executor;
-- current Adapter transaction остается неизменной;
-- промежуточные superseded desired snapshots не materialized;
-- audit также сериализуется тем же executor и выполняется после более нового pending
-  desired.
+Payload management itself has no open availability-state redesign.
 
-Один reconcile pass:
+Remaining runtime work is assembly:
 
-```text
-1. accepts selected desired_rules as latest_desired_network_rules
-2. NetworkRulesAdapter.apply(self, desired_rules)
-3. if apply failed: NetworkRulesAdapter.renewState(self)
-4. network_state = NetworkRulesAdapter.getLastState(self)
-5. PayloadRulesStateCalculator.calculate(desired_rules, network_state)
-6. project PayloadTrafficStateInfo
-7. publish only if semantic InfoEvent payload changed
-8. drain latest pending desired / pending audit
-```
+- produce structural `PayloadTrafficStateRequest`;
+- produce `AvailabilityPriorityConfig` from normalized runtime configuration;
+- send the physical probe request separately to `AvailabilityProbeManager`;
+- wire `ProbeExecutionAgent` good-news/tick output to PayloadTrafficManager;
+- project probe execution diagnostics into status/diagnostics;
+- schedule audit/retry policy around the already deterministic `audit()`.
 
-Pure Calculator rejection happens before request попадает в pending/current managed intent
-и до любой Adapter mutation. Manager не хранит параллельно исходный request и его compiled
-form, поэтому между ними не может возникнуть внутренний drift.
-
-Valid RequestEvents ожидаются от доверенного RuntimeStateManager;
-invalid/unrepresentable input рассматривается как processing error, а не как частично
-принятый intent.
-
-Если `apply()` возвращает FAILURE, решение о дальнейшей реакции принадлежит Manager.
-
-Обычная реакция:
-
-```text
-apply(self, ...) -> FAILURE
-renewState(self) -> SUCCESS | FAILURE
-getLastState(self)
-PayloadRulesStateCalculator(desired_rules, network_state)
-project/publish actual state
-retry according to local policy
-```
-
-Результат `renewState()` также не подменяет observation. Даже если обе операции вернули
-FAILURE, Manager публикует то состояние, которое можно доказать из `getLastState()`
-(обычно UNKNOWN/stale), а не синтетический FAILED verdict.
-
-Adapter failure не является implicit command для RuntimeStateManager.
-
-### 3.6. Drift/audit loop
-
-Пока текущий request не superseded, он остается управляющим intent.
-
-Один audit/reconcile pass:
-
-```text
-1. renewState(self)
-2. getLastState(self)
-3. PayloadRulesStateCalculator(current desired, observed)
-4. if convergence != MATCHED:
-       apply(self, current desired)
-       if apply failed:
-           renewState(self)
-       getLastState(self)
-       recalculate PayloadRulesState
-5. project PayloadTrafficStateInfo
-6. publish only if semantic state changed
-```
-
-Repair определяется **convergence**, а не service severity.
-
-Поэтому:
-
-- `MATCHED + READY` — repair не нужен;
-- `MATCHED + DEGRADED` — repair не нужен;
-- `MATCHED + ISOLATED` — repair не нужен;
-- `DIVERGED` или `convergence=UNKNOWN` — выполняется попытка materialize current desired.
-
-Это критично для zero-path request: защитная изоляция может быть полностью корректной
-materialization текущего intent и не должна сама по себе запускать бесконечный repair loop.
-
-Для repair не требуется новый RequestEvent.
-
-Scheduler/cadence audit loop находится вне этого review unit: `audit()` реализует только
-один deterministic reconcile pass.
-
-## 4. PayloadRulesCalculator
-
-### 4.1. Тип
-
-`PayloadRulesCalculator` — Direct Calculator.
-
-Он не выполняет I/O, не публикует Events и не имеет скрытой исторической зависимости.
-
-### 4.2. Contract
-
-```text
-calculate(PayloadTrafficStateRequest) -> NetworkRulesSpec
-```
-
-Одинаковый explicit input обязан давать эквивалентный semantic output.
-
-### 4.3. Responsibility
-
-Calculator переводит payload domain в network-rules domain.
-
-Он определяет:
-
-- logical routing domains для Profiles;
-- destinations каждого routing domain;
-- ordered usable paths;
-- logical dispatch/selection rules;
-- terminal action для недоставленного трафика;
-- new-flow admission policy;
-- Device traffic-envelope effects;
-- NAT intent;
-- необходимость payload packet forwarding как capability.
-
-### 4.4. What it must not calculate
-
-Calculator не назначает:
-
-- Linux table IDs;
-- RPDB numeric priorities;
-- route metrics;
-- route protocol numbers;
-- nft names/priorities;
-- nft textual rules;
-- sysctl paths;
-- mutation ordering;
-- transition classifications.
-
-### 4.5. Path ordering
-
-Payload domain выражает только semantic preference:
-
-```text
-path A
-path B
-path C
-```
-
-или эквивалентное partial/total ordering.
-
-Конкретное numeric representation приоритета принадлежит NetworkRulesAdapter.
-
-Следовательно, старые NG1 `TrafficRuntimeState.normal_metrics` и
-`MetricAssignment.metric` не являются частью этого Calculator contract.
-
-## 5. NetworkRulesSpec
-
-`NetworkRulesSpec` — контракт на границе payload domain -> network-rules domain.
-
-Это **не** Linux desired state.
-
-Концептуально он содержит:
-
-```text
-NetworkRulesSpec
-    routing_domains
-        logical_domain_id
-        destinations
-        ordered_paths
-        terminal_disposition
-
-    dispatch_policy
-
-    traffic_allows
-        source/destination semantic endpoints
-        effective packet predicates
-
-    flow_initiation_allows
-        source/destination semantic endpoints
-        effective packet predicates
-
-    source_nat
-        source semantic endpoint
-        egress semantic endpoint
-        effective packet predicate
-        translation target = EGRESS_ADDRESS
-
-    forwarding_requirement
-```
-
-Filtering contract является allow-only: отсутствие разрешения означает deny. Явные deny
-rules из payload domain в Adapter не передаются.
-
-Два набора разрешений имеют разный смысл:
-
-- `traffic_allows` описывает, какие байты вообще допустимы между semantic endpoints;
-- `flow_initiation_allows` дополнительно описывает, какой допустимый трафик может
-  инициировать новый stateful flow.
-
-Routing fail-close также выражается семантически: `DROP` / `REJECT`, а не Linux route
-types. В частности, payload zero-path использует `DROP`; конкретный `blackhole` route,
-его metric и прочая materialization принадлежат Adapter.
-
-Новый flow должен удовлетворять обоим наборам. Обратный трафик уже разрешенного flow не
-моделируется верхней предметной областью отдельно: conntrack/stateful realization,
-`ESTABLISHED/RELATED`, invalid-state handling и порядок firewall rules принадлежат
-network-stack domain за Adapter.
-
-Device traffic envelope полностью разрешается в `PayloadRulesCalculator` до Adapter.
-В том числе first-match `allow/drop + default` политика преобразуется в effective
-allow-predicate; Adapter не знает понятий Profile direction и Device envelope.
-
-Payload NAT policy также разрешается до Adapter. Текущее payload-понятие
-`MASQUERADE` преобразуется в semantic source translation:
-
-```text
-source = LOCAL_NETWORK
-egress = concrete path
-target = EGRESS_ADDRESS
-predicate = effective Profile destination
-```
-
-Adapter не получает nft `postrouting`/ `masquerade` vocabulary. Он обязан реализовать
-семантику source translation выбранным backend mechanism. `NONE` представлен отсутствием
-source-NAT intent.
-
-Верхний контракт также не называет инфраструктурный Linux-интерфейс вроде `host0`.
-Host-facing сторона представляется semantic endpoint `LOCAL_NETWORK`, а ее конкретная
-Linux materialization принадлежит Adapter.
-
-Concrete VPN-path interface identity остается generation-aware:
-
-```text
-(ifname, ifindex)
-```
-
-потому что различение same-name/new-ifindex является частью системной семантики,
-подтвержденной EXP-017.
-
-### 5.1. Что намеренно отсутствует
-
-В `NetworkRulesSpec` отсутствуют:
-
-```text
-table_id
-rpdb_priority
-route_metric
-route_protocol_number
-nft_table_name
-nft_chain_name
-nft_rule_text
-sysctl_command
-transition_kind
-barrier_phase
-```
-
-## 6. NetworkRulesAdapter
-
-### 6.1. Тип
-
-`NetworkRulesAdapter` — Direct Adapter.
-
-Он является границей между:
-
-```text
-payload/network-rules semantic model
-        |
-        v
-concrete networking subsystem
-```
-
-Все, что находится за этой границей, для PayloadTrafficManager считается внутренней
-реализацией Adapter.
-
-### 6.2. Trusted contract
-
-Компоненты разрабатываются совместно и по умолчанию доверяют друг другу.
-
-Caller не диктует Adapter:
-
-- безопасный mutation order;
-- когда закрывать forwarding barrier;
-- как проверять nft generation;
-- как аллоцировать Linux identifiers;
-- как проводить rollback/rebuild;
-- какие Drivers использовать.
-
-Adapter обязан сам корректно реализовать собственную domain semantics.
-
-### 6.3. Public methods
-
-Минимальный контракт:
-
-```text
-apply(owner, spec: NetworkRulesSpec) -> ActionResult
-
-renewState(owner) -> ActionResult
-
-getLastState(owner) -> NetworkRulesState
-
-cleanup(owner) -> ActionResult
-```
-
-`owner` — opaque identity экземпляра caller. Обычный caller передает собственную identity
-(`self` / `&self` в терминах реализации). Adapter использует ее только для разделения
-ownership и не интерпретирует имя, тип или предметный смысл caller.
-
-Нормативно:
-
-- тот же instance identity означает тот же owned scope;
-- другой instance identity означает другой owned scope;
-- identity действует только в пределах lifetime caller instance;
-- `NetworkRulesSpec` не содержит owner/scope и описывает только требуемые правила;
-- один owner не может удалить или перезаписать effective state другого owner.
-
-`cleanup(owner)` является lifecycle-operation, а не удалением ссылки из cache. Она
-идемпотентна. SUCCESS означает, что Adapter больше не имеет effective state или ресурсов
-данного owner, способных влиять на внешнюю среду; при необходимости Adapter пересобирает
-общую physical policy без удаленного owner.
-
-Дополнительные методы допустимы только при отдельной смысловой необходимости.
-
-### 6.4. ActionResult
-
-`ActionResult` отвечает только на вопрос об операции, вызванной caller:
-
-```text
-SUCCESS
-FAILURE + diagnostic
-```
-
-Он не заменяет `NetworkRulesState`.
-
-#### apply()
-
-```text
-apply(owner, spec) -> SUCCESS
-```
-
-означает:
-
-> Adapter завершил операцию materialization по своему контракту и свежо подтвердил, что
-> управляемая им network-rules projection соответствует переданному spec.
-
-На SUCCESS:
-
-- desired rules materialized;
-- required post-apply verification completed;
-- `getLastState()` отражает свежую подтвержденную projection.
-
-```text
-apply(spec) -> FAILURE
-```
-
-означает:
-
-> Adapter не смог гарантировать успешное завершение requested materialization.
-
-FAILURE не сообщает caller, какое итоговое semantic состояние payload domain следует
-вывести. Это решает Manager после observation.
-
-Adapter не имеет права выдавать SUCCESS на основании только успешного выполнения команд без
-fresh verification.
-
-#### renewState()
-
-```text
-renewState(owner) -> SUCCESS
-```
-
-означает:
-
-> Adapter свежо наблюдал весь принадлежащий ему network-rules scope и обновил explicit
-> last-state projection.
-
-```text
-renewState() -> FAILURE
-```
-
-означает:
-
-> Adapter не смог получить достаточно полное/надежное текущее наблюдение.
-
-После FAILURE `getLastState()` обязан явно отражать, что current state не является
-authoritative fresh observation.
-
-#### getLastState()
-
-`getLastState(owner)`:
-
-- не выполняет внешнего I/O;
-- возвращает последнюю явно поддерживаемую Adapter projection;
-- не скрывает от caller факт UNKNOWN/stale observation;
-- не требует знания неявной истории Adapter calls.
-
-Это explicit state contract и не противоречит externally-stateless Machinery.
-
-## 7. NetworkRulesState
-
-`NetworkRulesState` — нормализованная наблюдаемая проекция network-rules domain.
-
-Он не должен протекать Linux implementation details наверх.
-
-Концептуально:
-
-```text
-NetworkRulesState
-    knowledge
-        KNOWN | UNKNOWN
-
-    observed_rules
-        same semantic vocabulary as NetworkRulesSpec where representable
-
-    diagnostics
-        optional opaque/detail information
-```
-
-Если техническое состояние нельзя надежно преобразовать обратно в semantic network-rules
-model, Adapter возвращает `knowledge = UNKNOWN`, а технические подробности оставляет
-диагностике.
-
-PayloadTrafficManager не обязан разбирать raw nft/iproute output.
-
-## 8. Внутренняя ответственность NetworkRulesAdapter
-
-Эта секция фиксирует обязательные свойства Adapter, но не раскрывает их как caller API.
-
-Adapter самостоятельно отвечает за:
-
-### 8.1. Technical allocation
-
-Преобразование logical identifiers в concrete Linux representation:
-
-- Profile/logical routing domain -> routing table ID;
-- semantic dispatch order -> RPDB priorities;
-- ordered paths -> safe numeric route metrics/other kernel representation;
-- logical filter/NAT policies -> nft objects.
-
-Стабильность технических назначений может поддерживаться на основании наблюдаемой внешней
-среды и внутреннего explicit cache Adapter.
-
-PayloadTrafficManager не хранит такую историю.
-
-### 8.2. Safe transition
-
-Adapter знает свойства конкретного сетевого стека и сам выбирает безопасную mutation
-sequence.
-
-Внутри допустимы:
-
-```text
-incremental transition
-structural rebuild
-barrier close
-route/rule mutation
-NAT-before-admission ordering
-fresh verification
-barrier reopen
-best-effort protective close on failure
-```
-
-Эти понятия не являются payload-domain contract.
-
-### 8.3. Fresh verification
-
-Любой SUCCESS materialization должен подтверждаться новым observation после mutation.
-
-Это напрямую следует из EXP-012.
-
-### 8.4. Generation-aware interface materialization
-
-Concrete dynamic interface references должны учитывать `(ifname, ifindex)`.
-
-EXP-017 запрещает считать same-name/new-ifindex той же самой interface generation.
-
-### 8.5. Drift representation
-
-Чужое/неожиданное состояние внутри owned scope не должно молча canonicalize'иться как
-desired.
-
-Если Adapter не может надежно представить или классифицировать observed state, он сообщает
-UNKNOWN через `NetworkRulesState`.
-
-### 8.6. Owner isolation и physical composition
-
-Semantic state разных owners хранится и наблюдается раздельно.
-
-Если Linux backend требует общий enforcement point, Adapter самостоятельно композитит
-актуальные allow rules всех owners в physical policy. Типовая materialization может иметь
-отдельные owner chains, возвращающие управление для чужого трафика, и общий terminal deny.
-
-Это backend mechanics. PayloadTrafficManager, AvailabilityProbeManager и другие callers
-не знают друг о друге и не передают в `NetworkRulesSpec` сведения о соседних owners.
-
-`apply(owner, ...)`, `renewState(owner)` и `cleanup(owner)` обязаны сохранять state
-остальных owners.
-
-## 9. PayloadRulesStateCalculator
-
-### 9.1. Тип
-
-`PayloadRulesStateCalculator` — Direct Calculator.
-
-Он оценивает **состояние правил обработки payload**, а не состояние payload data plane
-вообще.
-
-### 9.2. Contract
-
-```text
-calculate(
-    desired: NetworkRulesSpec,
-    observed: NetworkRulesState
-) -> PayloadRulesState
-```
-
-Исходный `PayloadTrafficStateRequest` не является входом этого Calculator. Все
-payload-domain требования, нужные для оценки ruleset, уже выражены
-`PayloadRulesCalculator` в desired `NetworkRulesSpec`.
-
-### 9.3. Responsibility
-
-Calculator переводит normalized network-rules observation обратно в payload-rules
-semantics и независимо оценивает:
-
-```text
-knowledge
-convergence
-safety
-service
-```
-
-Он не выполняет I/O, не вызывает Adapter и не исправляет drift.
-
-### 9.4. Conservative proof rule
-
-Calculator не имеет права выводить `SAFE`, `DEGRADED` или `ISOLATED` по
-недоказанному предположению.
-
-Минимальные правила:
-
-- неавторитетное observation -> `knowledge = UNKNOWN`;
-- authoritative semantic equality -> `MATCHED + SAFE + READY`;
-- authoritative semantic inequality -> `DIVERGED`;
-- `UNSAFE` требует доказанного расширения разрешений относительно desired;
-- `SAFE` при divergence требует доказательства, что observed policy является только
-  ограничением desired policy;
-- `DEGRADED` требует доказанного safe partial service;
-- `ISOLATED` требует доказанного отсутствия payload service;
-- если отношение rulesets нельзя доказать, соответствующие `safety/service` остаются
-  `UNKNOWN`.
-
-Такой conservative contract позволяет начать с узкого доказуемого классификатора и
-расширять его только вместе с тестами/evidence, не превращая syntactic difference в
-необоснованную semantic оценку.
-
-Текущий реализованный proof set дополнительно фиксирует:
-
-- semantic equality не зависит от порядка routing domains, destinations внутри domain и
-  allow-only filtering rules; ordered paths и dispatch order остаются значимыми;
-- удаление paths с сохранением их relative order и/или удаление существующих allow rules
-  может доказать `SAFE`, если dispatch и NAT semantics не изменены;
-- такое доказательство restriction **не** доказывает `DEGRADED` service: service остается
-  `UNKNOWN`, пока отдельный service proof не покажет реальную потерю capability;
-- byte-level allow для endpoint pair, которого desired policy вообще не разрешает, является
-  доказанным permission widening и дает `UNSAFE`;
-- более тонкие predicate widening/narrowing внутри уже существующего endpoint pair пока не
-  классифицируются без отдельного implication proof.
-
-`Safety` относится к permissions ruleset, а не к случайной текущей достижимости пакета.
-Поэтому новое разрешение может быть `UNSAFE`, даже если другой defect одновременно мешает
-пакету реально пройти.
-
-### 9.5. Shared convergence base
-
-Повторный comparison review после availability de-complexification показал, что первые две
-оси действительно принципиально одинаковы для всех владельцев NetworkRules:
-
-```text
-StateKnowledge
-RulesConvergence
-    MATCHED | DIVERGED | UNKNOWN
-```
-
-Они вынесены в общий `NetworkRulesConvergenceState` и вычисляются общим
-`assess_network_rules_convergence()`.
-
-Отдельный `ProbeRulesState` удален: его прежний `Usability` не нес самостоятельной
-информации и полностью выводился из convergence
-(`MATCHED -> READY`, `DIVERGED -> INVALID`).
-
-Полный общий `RulesState` при этом **не вводится**. Payload сохраняет предметные
-дополнительные оси `Safety` и `Service`, потому что только payload domain требуется
-различать safe restriction, permission widening, degraded/isolated service и неизвестную
-семантику divergence.
-
-Probe Manager для разрешения evidence достаточно общего условия:
-
-```text
-StateKnowledge.KNOWN + RulesConvergence.MATCHED
-```
-
-## 10. Error semantics
-
-### 10.1. Machinery failure
-
-Calculator failure означает invalid/unrepresentable explicit input и рассматривается как
-Manager-local processing failure.
-
-Adapter action FAILURE означает только неуспех конкретной synchronous operation.
-
-### 10.2. Manager reaction
-
-Только PayloadTrafficManager решает:
-
-- retry immediately;
-- retry later;
-- request fresh state;
-- publish DEGRADED/ISOLATED/UNKNOWN;
-- логировать/escalate diagnostic failure.
-
-Нижняя Machinery не публикует PayloadTrafficStateInfo самостоятельно.
-
-## 11. Evidence constraints
-
-### EXP-012
-
-Подтверждает для Adapter:
-
-- drift must be observed;
-- structural/unknown repair requires protective barrier;
-- verification after apply is mandatory;
-- forwarding may reopen only after complete fresh verification;
-- failure path must remain fail-closed.
-
-### EXP-013 / EXP-016
-
-Подтверждают Linux route/FIB mechanics.
-
-Они не возвращают отмененные NG1 concepts:
-
-- shadow unavailable routes;
-- UNAVAILABLE_METRIC;
-- userspace sequential fallback semantics.
-
-### EXP-017
-
-Подтверждает numeric-ifindex generation-aware filtering и необходимость отличать
-same-name/new-ifindex.
-
-### EXP-014
-
-Multi-path inbound flow pinning не считается production-proven capability.
-
-Текущая декомпозиция не вводит новый flow-pinning mechanism.
-
-### EXP-015
-
-MSS/MTU clamping не добавляется без отдельного доказательства необходимости.
-
-### EXP-023
-
-Подтверждает, что Profile-local availability может изменяться при неизменной interface
-identity. В текущей NG2 модели это влияет на priority внутри
-`PayloadTrafficStateRequest.ordered_paths`, но не на binding membership. Probe execution
-остается за `AvailabilityProbeManager`.
-
-### EXP-027
-
-Подтверждает route-slot materialization для availability-driven priority permutation:
-
-- ordinary prefix и `default`;
-- один path может временно существовать на двух metrics;
-- каждый move выполняется make-before-break:
-  `add duplicate -> delete old copy`;
-- полный eligible path set присутствует на каждом промежуточном шаге;
-- незанятый metric перемещается автоматически на место старой copy;
-- all-live не требует persistent gap: первым scratch становится следующий свободный
-  ordinary metric;
-- terminal blackhole сохраняется;
-- staging routing table для обычной permutation не требуется.
-
-## 12. Mapping старого NG1 к NG2
-
-Предварительная карта ответственности:
-
-```text
-NG1 device_engine.py
-    -> НЕ PayloadTrafficManager
-       selection/binding moved to RuntimeStateManager calculators
-
-NG1 traffic_state.py
-    -> metric-history architecture removed from PayloadTrafficManager
-       technical allocation belongs behind NetworkRulesAdapter
-
-NG1 route_intent.py
-NG1 firewall_intent.py
-    -> semantic material for PayloadRulesCalculator
-
-NG1 kernel_allocation.py
-NG1 kernel_state.py
-NG1 kernel_mutation.py
-NG1 transition.py
-    -> NetworkRulesAdapter hidden lower domain
-
-NG1 nft_policy.py
-    -> split:
-       semantic policy compilation -> PayloadRulesCalculator where genuinely payload-specific
-       nft materialization/observe/verify -> behind NetworkRulesAdapter
-
-NG1 planner.py
-    -> central orchestration disappears
-       payload-domain orchestration -> PayloadTrafficManager
-       network transaction/materialization -> NetworkRulesAdapter
-```
-
-## 13. Инварианты
-
-1. PayloadTrafficManager не знает concrete Linux allocation identifiers.
-2. PayloadTrafficManager не командует transaction phases Adapter.
-3. NetworkRulesAdapter не знает Profile satisfaction policy.
-4. Adapter action result не подменяет observation state.
-5. `apply() == SUCCESS` требует fresh verified materialization.
-6. `renewState()` и `getLastState()` являются явным state contract.
-7. Caller не зависит от скрытой истории Adapter.
-8. Technical allocation history не является PayloadTrafficManager state.
-9. Same-name/new-ifindex считается новой concrete interface identity.
-10. Operation failure интерпретирует Manager, не Adapter.
-11. Current request действует до superseding revision.
-12. Drift repair не требует нового RequestEvent.
-13. Синхронный dependency graph payload domain ацикличен.
-14. Нижняя domain за NetworkRulesAdapter не имеет independent synchronous back-edge в
-    payload domain.
-15. `no_problem_prefix_length` является transient runtime routing intent, а не
-    пользовательской configuration и не persistent gap state; `N` означает отсутствие
-    availability-проблем у всех N paths и отсутствие steady gap, `0` — проблемы у всех
-    paths при сохранении их текущего относительного порядка.
-16. Для одного PayloadTrafficManager одновременно существует ровно один reconcile
-    executor. Внутри него route-priority move plan каждого routing-domain immutable до
-    завершения Adapter call; superseding availability state меняет только latest pending
-    desired state и не вмешивается в текущую transaction.
-17. Re-entrant и concurrent RequestEvent delivery не создают второй payload materializer:
-    очередь/ownership executor защищены отдельно от длительного Adapter I/O.
-
-## 14. Пока открыто
-
-Текущий `NetworkRulesSpec / NetworkRulesState` contract и concrete Linux lower domain
-зафиксированы отдельно в `design/NG2/network-rules-adapter.md`.
-
-Для payload/runtime слоя остаются открыты:
-
-1. mapping `PayloadTrafficStateInfo` в окончательный `ProfileStateInfo` внутри
-   RuntimeStateManager;
-2. audit/retry scheduling policy вокруг уже реализованного deterministic `audit()` pass;
-3. richer divergent predicate implication только там, где появится реальная необходимость;
-4. general Event Delivery Environment ordering only for asynchronous streams that still
-   need it; availability good-news/tick ingress does not;
-5. remaining runtime assembly above the implemented protective startup gate: fanout of
-   structural availability configuration, Agent -> PayloadTrafficManager input wiring and
-   status/diagnostic projection.
-
-Availability-problems priority wiring, transient `no_problem_prefix_length`, direct
-probe-to-Profile assignment and single-executor payload queue/coalescing are implemented. Linux route-only materialization подтверждена EXP-027.
-
-Adapter boundary остается фиксированной: Linux transaction machinery не должна снова
-протекать в PayloadTrafficManager.
+General Event Delivery revision/ordering remains relevant only to asynchronous streams
+that actually need it; it is not part of the local availability ingress.
