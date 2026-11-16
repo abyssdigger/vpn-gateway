@@ -15,6 +15,9 @@ on:
       - "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/**"
       - "design/experiments/EXP-040 NG3 managed INPUT OUTPUT drop scaffold/**"
       - "design/experiments/EXP-041 NG3 ordered Device firewall child chain/**"
+      - "design/experiments/EXP-042 NG3 Device firewall predicate JSON/**"
+      - "design/experiments/EXP-043 NG3 Device firewall active reject/**"
+      - "design/experiments/EXP-044 NG3 Device firewall jump insertion/**"
   pull_request:
     paths:
       - "design/NG3/code/python/**"
@@ -239,6 +242,18 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-041 NG3 ordered Device firewall child chain/exp041_device_firewall_child.py"
+      - name: EXP-042 Device firewall predicate JSON
+        run: >-
+          sudo python3
+          "design/experiments/EXP-042 NG3 Device firewall predicate JSON/exp042_device_firewall_predicates.py"
+      - name: EXP-043 Device firewall active REJECT
+        run: >-
+          sudo python3
+          "design/experiments/EXP-043 NG3 Device firewall active reject/exp043_device_firewall_reject.py"
+      - name: EXP-044 Device firewall jump insertion
+        run: >-
+          sudo python3
+          "design/experiments/EXP-044 NG3 Device firewall jump insertion/exp044_device_firewall_jump_insert.py"
       - name: NG3 strict payload_forward observer integration
         env:
           PYTHONPATH: design/NG3/code/python
@@ -246,6 +261,13 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_payload_forward_observation.py
+      - name: NG3 guarded Device firewall mutation integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_device_firewall_mutation.py
 
   linux-endpoint-provenance:
     runs-on: ubuntu-latest

@@ -81,6 +81,10 @@ from .direct_device_route import (
     realize_direct_device_path_routes,
 )
 from .device_policy import (
+    DeviceFirewallAction,
+    DeviceFirewallDirection,
+    DeviceFirewallPolicyIntent,
+    DeviceFirewallRuleIntent,
     DeviceNatPolicyIntent,
     NatIntent,
 )
@@ -119,6 +123,28 @@ from .payload_forward_compare import (
     PayloadForwardComparisonError,
     compare_payload_forward,
 )
+from .device_firewall_desired import (
+    DeviceFirewallChainSpec,
+    DeviceFirewallDesiredError,
+    DeviceFirewallDesiredState,
+    DeviceFirewallRuleSpec,
+)
+from .device_firewall_compare import (
+    DeviceFirewallComparison,
+    DeviceFirewallComparisonError,
+    compare_device_firewall,
+)
+from .device_firewall_compiler import (
+    DeviceFirewallCompileError,
+    compile_device_firewall_policy,
+)
+from .device_firewall_mutation import (
+    DeviceFirewallMutationResult,
+    DeviceFirewallMutationStatus,
+    DeviceFirewallPhysicalSnapshot,
+    converge_device_firewall_step_once,
+)
+from .linux_device_firewall import LinuxDeviceFirewallBackend
 from .device_firewall_structure import (
     DEVICE_FIREWALL_CHILD_COMMENT,
     DEVICE_FIREWALL_FALLTHROUGH_COMMENT,
@@ -250,6 +276,17 @@ __all__ = [
     "DEVICE_FIREWALL_FALLTHROUGH_COMMENT",
     "DEVICE_FIREWALL_JUMP_COMMENT",
     "DEVICE_FIREWALL_RULE_COMMENT",
+    "DeviceFirewallChainSpec",
+    "DeviceFirewallDesiredError",
+    "DeviceFirewallDesiredState",
+    "DeviceFirewallRuleSpec",
+    "DeviceFirewallComparison",
+    "DeviceFirewallComparisonError",
+    "DeviceFirewallCompileError",
+    "DeviceFirewallMutationResult",
+    "DeviceFirewallMutationStatus",
+    "DeviceFirewallPhysicalSnapshot",
+    "LinuxDeviceFirewallBackend",
     "DeviceFirewallRuleAction",
     "DeviceFirewallStructureConflict",
     "DeviceFirewallStructureError",
@@ -257,6 +294,10 @@ __all__ = [
     "ObservedDeviceFirewallChain",
     "ObservedDeviceFirewallJump",
     "ObservedDeviceFirewallRule",
+    "DeviceFirewallAction",
+    "DeviceFirewallDirection",
+    "DeviceFirewallPolicyIntent",
+    "DeviceFirewallRuleIntent",
     "DeviceNatPolicyIntent",
     "DirectDeviceRouteRealizationError",
     "Direction",
@@ -319,6 +360,8 @@ __all__ = [
     "LinuxPayloadNatBackend",
     "compare_payload_nat",
     "observe_payload_forward",
+    "compare_device_firewall",
+    "compile_device_firewall_policy",
     "compare_payload_forward",
     "observe_device_firewall_structure",
     "converge_payload_nat_step_once",
@@ -389,6 +432,7 @@ __all__ = [
     "build_outbound_profile_partition",
     "compare_payload_nft_scaffold",
     "compare_payload_routing",
+    "converge_device_firewall_step_once",
     "converge_forwarding_gate_once",
     "classify_outbound_profile",
     "converge_route_priority_once",
