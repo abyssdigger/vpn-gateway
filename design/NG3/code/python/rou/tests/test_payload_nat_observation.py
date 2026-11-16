@@ -71,7 +71,7 @@ class PayloadNatObservationTests(unittest.TestCase):
     def test_missing_rule_is_missing_not_conflict(self):
         result = self.compare()
         self.assertEqual(result.missing, (SPEC,))
-        self.assertTrue(result.mutation_safe)
+        self.assertTrue(result.conflict_free)
 
     def test_missing_old_ifindex_cannot_impersonate_same_name_replacement(self):
         successor = PayloadMasqueradeSpec(SPEC.path_id, HOST, NEW)
@@ -92,7 +92,7 @@ class PayloadNatObservationTests(unittest.TestCase):
         result = self.compare(rule(comment="unowned"))
         self.assertEqual(result.missing, (SPEC,))
         self.assertIn("comment", result.conflicts[0].reason)
-        self.assertFalse(result.mutation_safe)
+        self.assertFalse(result.conflict_free)
 
     def test_unexpected_action_is_conflict(self):
         result = self.compare(rule(expr=[match("iif", "host0"), match("oif", "tun0"), {"snat": {"addr": "192.0.2.1"}}]))
@@ -123,7 +123,7 @@ class PayloadNatObservationTests(unittest.TestCase):
     def test_numeric_boolean_and_unknown_fields_are_conflicts(self):
         for bad in [rule(oif=9), rule(oif=True), rule(extra="unexpected")]:
             with self.subTest(bad=bad):
-                self.assertFalse(self.compare(bad).mutation_safe)
+                self.assertFalse(self.compare(bad).conflict_free)
 
     def test_non_nat_chain_rule_does_not_interfere(self):
         other = rule(chain="payload_forward")
@@ -137,6 +137,13 @@ class PayloadNatObservationTests(unittest.TestCase):
         with self.assertRaisesRegex(PayloadNatObservationError, "scaffold"):
             compare_payload_nat(parse_nft_namespace_ruleset(json.dumps(rows)),
                                 (HOST, OLD), PayloadNatDesiredState((SPEC,)))
+
+    def test_missing_rule_chain_is_explicit_conflict(self):
+        malformed = rule()
+        del malformed["rule"]["chain"]
+        result = self.compare(malformed)
+        self.assertFalse(result.conflict_free)
+        self.assertIn("chain", result.conflicts[0].reason)
 
     def test_ambiguous_inventory_is_hard_failure(self):
         with self.assertRaisesRegex(PayloadNatObservationError, "ambiguous"):
