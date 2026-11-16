@@ -48,6 +48,12 @@ class PayloadNatComparison:
 
     @property
     def conflict_free(self) -> bool:
+        """No conflicts inside the observed payload NAT chain only.
+
+        This does not certify full nft-table ownership or authorize mutation:
+        unrelated owned objects, whole-policy verification and ForwardingGate
+        remain separate structural safety gates.
+        """
         return not self.conflicts
 
 
