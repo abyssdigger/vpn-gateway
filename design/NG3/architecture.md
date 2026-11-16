@@ -1893,6 +1893,59 @@ payload policy forwards nothing.
 Concrete allow rules are added only by a later, fully normalized payload-policy projection.
 They must not be inferred from historical TOML examples.
 
+###### EXP-035 — проверка низкоуровневого nft-контракта NEW forwarding
+
+**Implements:**
+- `VPNG0002-R2.R1.R2` — remote destination/source определяется направлением NEW flow;
+- `VPNG0002-R2.R3.R3` — разрешение инициирования flow зависит от direction;
+- `VPNG0002-R2.R5.R1` — most-specific Profile selection нельзя подменять произвольным порядком allow rules;
+- `VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3` — физические ingress/egress идентичности должны быть текущими;
+- `VPNG0004-R4.R1`, `VPNG0004-R4.R2`, `VPNG0004-R4.R3.R2` — неподтверждённый или ошибочный lower rule не может расширять forwarding.
+
+**Constrained by:**
+- `VPNG0002-R2.R3.C1` — первая версия не принимает многопутевой inbound/bidirectional Profile;
+- `VPNG0001-R1.R2.R4.R6.C1` — не выводить незакрытую пользовательскую grammar из lower nft синтаксиса.
+
+**Scope:** только технический эксперимент с одной разрешающей rule shape для
+host-boundary -> конкретный VPN endpoint: `meta iif` и `meta oif`
+по числовым ifindices, точный IPv4 destination prefix, `ct state new`
+и `accept`. Проверить nft JSON и фактическое поведение в
+одноразовом network namespace с закрывающей `policy drop`.
+
+Это **не** архитектурное принятие полного payload filter policy:
+правила return flow, inbound permission, пересекающиеся префиксы с
+most-specific конкуренцией, Device envelope и probe isolation остаются
+обязанностями отдельной normalized policy projection. Даже если
+эксперимент PASS, одиночный allow pattern нельзя публиковать как
+полную компиляцию Profile. Его можно использовать как проверенную
+lower primitive для последующего проектирования строгого owner
+classifier и композиции.
+
+**Components / interactions:** существующий нижний Linux nft
+Driver/Adapter выполняет экспериментальные команды; pure
+`NftNamespaceObservation` поставляет canonical JSON. Новый runtime
+Manager/Agent/Executor, state store и event contract не вводятся.
+Эксперимент необходим, потому что exact numeric-ifindex filter match
+с prefix и conntrack нельзя считать доказанным только на основании
+EXP-033 (тот проверял postrouting masquerade).
+
+**External environment:** GitHub Actions privileged Linux runner,
+`iproute2`, `nftables`, `conntrack` и ICMP в disposable namespaces.
+Сопоставление с Debian target остаётся отдельной проверкой
+совместимости при необходимости, а не обязательным условием
+проведения этого эксперимента.
+
+**Simplification / evidence:** один узкий набор rule/negative controls;
+проверить hit и отсутствие bypass с иного ingress, иного egress,
+вне-prefix traffic и same-name-new-ifindex. Не создавать
+обобщённый firewall AST, runtime parse grammar, persistent index map,
+retry engine или вторую policy-classification логику.
+
+**Gate:** до PASS эксперимента нельзя считать эту lower-rule shape
+платформенно подтверждённой; даже PASS не разрешает materialization
+непроверенной полной Profile permission или открытие `ForwardingGate`.
+
+
 `payload_postrouting` exists as the stable owner boundary for supported payload source-NAT
 realization. It is valid and intentionally empty when no accepted Device/path requires NAT.
 Its base-chain policy is `accept`; the presence of the chain alone never creates NAT.
