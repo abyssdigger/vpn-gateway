@@ -21,6 +21,11 @@ from .domain import (
     StructuralConfig,
 )
 from .interface_identity import InterfaceIdentity
+from .payload_profile import (
+    PayloadProfileProjectionError,
+    PayloadProfileRequest,
+    build_payload_profile_requests,
+)
 
 __all__ = [
     "BindingProjectionError",
@@ -34,11 +39,14 @@ __all__ = [
     "InterfaceIdentity",
     "LogicalPathId",
     "PathBinding",
+    "PayloadProfileProjectionError",
+    "PayloadProfileRequest",
     "ProfileStructuralIntent",
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
     "WaitingCandidate",
+    "build_payload_profile_requests",
     "parse_structural_config",
     "project_device_bindings",
 ]
