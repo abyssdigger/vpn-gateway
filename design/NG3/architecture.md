@@ -2535,6 +2535,63 @@ inbound partitioning. The pure structural pipeline now extends through
 `config -> binding -> PayloadProfileRequest -> PayloadForwardDesiredState`.
 
 
+###### Complete current payload lower desired-state assembly
+
+**Component:** pure Calculator/composition boundary.
+
+This unit does not add user semantics. It composes the already-normalized current payload
+inputs into the exact two lower desired objects consumed by the activation subassembly:
+
+```text
+PayloadProfileRequest set
++ NetworkPolicyLayout
++ current RoutePriorityPathRoute set
++ current host-boundary InterfaceIdentity
++ normalized DeviceNatPolicyIntent set
++ normalized DeviceFirewallPolicyIntent set
++ normalized PublicationLocalEndpointIntent set
+    ->
+PayloadNetworkPolicyDesiredState:
+    routing = PayloadRoutingDesiredState
+    nft = CompositeNftDesiredState
+```
+
+The composition delegates rather than reinterprets:
+
+- routing/RPDB -> `build_payload_routing_desired_state(...)`;
+- Profile permission -> `compile_payload_forward_policy(...)`;
+- Device NAT -> `build_payload_nat_desired_state(...)`;
+- Device firewall -> `compile_device_firewall_policies(...)`;
+- publication-local -> `build_local_publication_desired(...)`.
+
+For every Device that currently backs a payload path, normalized NAT and firewall semantics
+must be explicit inputs even when they mean no extra behavior:
+
+```text
+NAT omitted/disabled semantics      -> DeviceNatPolicyIntent(..., NONE)
+firewall omitted semantics          -> DeviceFirewallPolicyIntent(..., rules=None)
+```
+
+Missing normalized Device policy for a current path is therefore an input error, never an
+implicit allow/default.
+
+Publication-local intents are independent positive local/system contributions, but every
+intent supplied to this payload assembly must reference the same current host-boundary
+identity used by routing and Profile policy. A different boundary generation is rejected
+instead of creating a split desired state.
+
+The shared `NetworkPolicyLayout` may also contain reserved probe allocations. This payload
+Calculator consumes only its payload allocation/dispatch fields. It does not materialize
+probe route/RPDB/nft state and must not be described as complete probe policy.
+
+The output is immutable lower desired data. The Calculator performs no observation,
+mutation, readiness decision, retry or lifecycle orchestration.
+
+**Evidence plan:** rootless tests for zero-path fail-closed composition, one current path with
+NAT/firewall/publication, missing normalized Device policy, publication boundary mismatch and
+determinism under input-order changes. Existing owner-specific compiler tests remain
+authoritative for each lower shape.
+
 **Ordered Device firewall composition — accepted semantic architecture**
 
 **Implements:**
