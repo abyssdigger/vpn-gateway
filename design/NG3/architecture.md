@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — Architecture Report
 
-**Status:** NG3 architecture, complete current requirement closure  
-**Cycle:** `ng3-design-cycle-20261116-config-intent-model-40m`  
+**Status:** NG3 architecture, Profile semantics recovery in progress  
+**Cycle:** `ng3-design-cycle-20261116-profile-semantics-recovery-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
 
@@ -220,6 +220,7 @@ alternative, without changing path membership.
 Relevant requirements:
 - `VPNG-R3.R1`
 - `VPNG-R3.R2`
+- `VPNG-R3.R2.R1`
 - `VPNG-R3.R3`
 - `VPNG-R3.R4`
 - `VPNG-R3.R5`
@@ -483,6 +484,8 @@ protocol-specific discovery mechanics remain replaceable interface/integration d
 - `VPNG-R1.R2.R4.R3`
 - `VPNG-R1.R2.R4.R4`
 - `VPNG-R1.R2.R4.R4.R1`
+- `VPNG-R1.R2.R4.R4.R2`
+- `VPNG-R1.R2.R4.R4.R3`
 - `VPNG-R1.R2.R4.R5`
 - `VPNG-R1.R3.C1.R1`
 - `VPNG-R2.R1`
@@ -490,6 +493,7 @@ protocol-specific discovery mechanics remain replaceable interface/integration d
 - `VPNG-R2.R1.R2`
 - `VPNG-R2.R2`
 - `VPNG-R2.R2.R1`
+- `VPNG-R2.R2.R2`
 - `VPNG-R2.R3`
 - `VPNG-R2.R3.R1`
 - `VPNG-R2.R3.R2`
@@ -555,11 +559,19 @@ DeviceBindingIntent:
     device_id
     expected_interfaces[]
 
-ProfilePolicyIntent:
+ProfileConfigIntent:
+    profile_id
+    enabled
+    direction
+    destinations[]
+    device_order[]
+    availability_check?
+
+PayloadProfileRequest:
     profile_id
     direction
     destinations[]
-    ordered_device_ids[]
+    ordered_paths[]
 
 AvailabilityCheckConfig:
     profile_id
@@ -579,7 +591,7 @@ Key normalization rules:
 - disabled Device/Profile placeholders do not require active-object semantic completeness;
 - active Devices are derived as enabled Devices referenced by at least one enabled Profile;
 - `DeviceBindingIntent` retains ordered expected-interface selectors and quotas;
-- `ProfilePolicyIntent` retains explicit direction, remote destinations and ordered Device
+- `PayloadProfileRequest` retains explicit direction, remote destinations and ordered Device
   references;
 - current concrete logical paths are derived from accepted Device bindings, not written
   directly into Profile config;
@@ -681,6 +693,49 @@ file syntax or a specific VPN protocol.
 No ConfigManager, live-reload Engine, configuration database or generic plugin registry is
 introduced. Those require separate accepted requirements if they become necessary.
 
+## 3.4. Profile as independent payload-policy domain
+
+**Implements:**
+- `VPNG-R1.R2.R4.R4.R2`
+- `VPNG-R1.R2.R4.R4.R3`
+- `VPNG-R2.R2.R2`
+- `VPNG-R3.R2.R1`
+- `VPNG-R4.R1.R1`
+
+A Profile is preserved as a semantic domain even when its current concrete path set is empty.
+
+Normalization is therefore two-stage:
+
+```text
+ProfileConfigIntent
+    + current valid Device bindings
+        ->
+PayloadProfileRequest:
+    profile_id
+    direction
+    destinations[]
+    ordered_paths[]
+```
+
+`ordered_paths` may be empty.
+
+An empty path set does **not** remove the Profile from structural policy. Its destinations
+remain classified to that Profile and materialize a fail-closed terminal result rather than
+falling through to ambient/main routing.
+
+Availability is applied after this structural request exists. It may reorder
+`ordered_paths` through negative priority modification, but it cannot rewrite:
+
+- Profile identity;
+- destinations;
+- direction;
+- Device membership;
+- binding eligibility;
+- structural existence of the Profile domain.
+
+Profile is not a VPN session/interface/peer, route metric, probe target or Linux-rule
+container. Those remain separate lower or adjacent contracts.
+
 # 4. PayloadTrafficManager
 
 **Component type:** Manager
@@ -699,6 +754,7 @@ introduced. Those require separate accepted requirements if they become necessar
 - `VPNG-R3.R5`
 - `VPNG-R3.R7`
 - `VPNG-R4.R1`
+- `VPNG-R4.R1.R1`
 - `VPNG-R4.R2`
 - `VPNG-R5.R2`
 - `VPNG-R5.R3`
@@ -711,8 +767,11 @@ introduced. Those require separate accepted requirements if they become necessar
 
 ## 4.1. Responsibility
 
-The Manager owns the current semantic payload-policy projection for the traffic domain that
-has already been normalized into its input contract.
+The Manager owns the current semantic payload-policy projection for normalized Profiles.
+
+Its structural input is a set of `PayloadProfileRequest` objects. A request remains present
+even when `ordered_paths` is empty, so fail-closed Profile membership is not lost when
+bindings disappear.
 
 It owns:
 
@@ -959,12 +1018,13 @@ not depend on hidden network history.
 Its semantic inputs are:
 
 ```text
-enabled ProfilePolicyIntent set
+enabled ProfileConfigIntent set
 +
 current Device binding projection
 ```
 
-It produces one normalized payload-policy projection per enabled Profile.
+It first produces one `PayloadProfileRequest` per enabled Profile, then the structural
+network-policy projection for those requests.
 
 The Calculator must preserve these invariants:
 
@@ -976,6 +1036,8 @@ The Calculator must preserve these invariants:
 - different-length overlaps resolve deterministically by most-specific applicable Profile;
 - path eligibility comes only from Profile.device_order plus current valid bindings of those
   Devices;
+- zero eligible paths still preserve the Profile/destination domain with fail-closed terminal
+  behavior;
 - direction is explicit and independent;
 - configured preference follows Profile.device_order -> expected-interface order -> stable
   slot;
@@ -1516,6 +1578,12 @@ Truthfulness rules:
 The presentation mechanism is outside this component contract. CLI, API, text output or
 another user-facing surface may render the same current `RuntimeStatusSnapshot` without
 changing status semantics.
+
+Historical work discussed a dedicated aggregated `ProfileState` combining binding,
+payload-rules, publication and probe diagnostics. That aggregation was explicitly not
+finalized in the recovered material and is **not** imported as an NG3 requirement here.
+Current R6 remains satisfied by truthful composition of authoritative snapshots; any stronger
+Profile-specific verdict model requires separate requirement work.
 
 A final status query therefore does not require direct knowledge of kernel commands or
 internal Manager state.
