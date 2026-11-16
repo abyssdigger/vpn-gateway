@@ -1899,6 +1899,67 @@ Its base-chain policy is `accept`; the presence of the chain alone never creates
 The two chain comments are lower schema/version markers. A same-name chain with missing or
 different marker, hook, type, priority or policy is an ownership/shape conflict.
 
+##### Payload source-NAT lower contract
+
+The internal normalized NAT semantic is already fixed independently of its final external
+TOML spelling:
+
+```text
+NatIntent.NONE
+NatIntent.MASQUERADE
+```
+
+For one current logical path owned by a Device:
+
+```text
+NONE
+    -> no VPN-GATE payload NAT contribution for that path
+
+MASQUERADE
+    -> one postrouting masquerade contribution for payload
+       entering from the managed ordinary/host boundary
+       and leaving through that path's current concrete endpoint
+```
+
+The physical match must bind to the exact current interface identities, not merely reusable
+interface names.
+
+The intended Linux/nft match is therefore based on numeric current interface indices:
+
+```text
+meta iif == host_boundary.ifindex
+meta oif == path_endpoint.ifindex
+masquerade
+```
+
+A same-name/new-ifindex endpoint must not inherit a stale NAT contribution before the new
+binding is accepted and structural policy is rebuilt.
+
+The NAT contribution intentionally does not repeat Profile destination prefixes.
+
+Reason:
+
+1. `payload_forward` is evaluated before postrouting and owns payload permission;
+2. only traffic already admitted by the complete forwarding policy can reach the NAT action;
+3. one Device/path may be shared by multiple Profiles;
+4. duplicating destinations into NAT would create a second policy-classification surface
+   with no requirement benefit.
+
+The host-boundary ingress match also keeps locally generated probe/control traffic out of
+payload NAT.
+
+NAT intent is structural and availability-independent. Availability may reorder eligible
+paths but cannot create/remove a Device NAT contribution.
+
+If several Profiles share the same current path, their identical NAT contribution is
+deduplicated by the exact `(host boundary identity, path endpoint identity)` pair.
+
+This lower contract does not choose the final human-facing `nat` field spelling. It consumes
+an already normalized semantic intent.
+
+The exact nft numeric-ifindex syntax/JSON form and real source-translation behavior are
+evidence-gated before executable adoption.
+
 The scaffold is deliberately independent from the root structural barrier:
 
 - structural rebuild happens while verified `ip_forward=0`;
