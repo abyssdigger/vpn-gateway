@@ -21,6 +21,7 @@ from rou.network_rules import (
     NetworkRulesSpec,
     RoutingDomainSpec,
     TerminalDisposition,
+    TrafficProtocol,
 )
 from rou.network_rules_composition import (
     OwnedNetworkRules,
@@ -244,6 +245,44 @@ class LinuxRoutingAllocationTests(unittest.TestCase):
         )
 
         self.assertIsNone(desired.terminal_rule)
+
+    def test_local_process_dispatch_is_explicitly_unsupported_until_backend_extension(self):
+        target = IPv4Network("203.0.113.24/32")
+        path = NetworkEndpoint.interface_path(
+            InterfaceIdentity("vpns00", 10)
+        )
+        rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "probe",
+                    (target,),
+                    (path.interface,),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+            dispatch_rules=(
+                DispatchRuleSpec(
+                    target,
+                    "probe",
+                    source=NetworkEndpoint.local_process(),
+                    bound_output=path,
+                    protocol=TrafficProtocol.ICMP,
+                ),
+            ),
+        )
+        composed = compose_network_rules(
+            (OwnedNetworkRules(OwnerToken(1), rules),)
+        )
+
+        with self.assertRaisesRegex(
+            LinuxRoutingError,
+            "dispatch only from LOCAL_NETWORK",
+        ):
+            compile_linux_routing_desired(
+                composed,
+                LinuxRoutingAllocationState(),
+                local_interface="host0",
+            )
 
     def test_interface_dispatch_source_is_explicitly_unsupported(self):
         path = NetworkEndpoint.interface_path(

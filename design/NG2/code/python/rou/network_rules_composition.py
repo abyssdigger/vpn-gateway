@@ -8,6 +8,7 @@ from .network_rules import (
     EndpointKind,
     NetworkEndpoint,
     NetworkRulesSpec,
+    TrafficProtocol,
 )
 
 
@@ -50,6 +51,8 @@ class OwnedDispatchRule:
     source: NetworkEndpoint
     destination: IPv4Network
     routing_domain: OwnedRoutingDomainRef
+    bound_output: NetworkEndpoint | None = None
+    protocol: TrafficProtocol | None = None
 
 
 @dataclass(frozen=True)
@@ -160,10 +163,12 @@ class OwnerRulesRegistry:
 def _endpoint_key(endpoint: NetworkEndpoint) -> tuple:
     if endpoint.kind is EndpointKind.LOCAL_NETWORK:
         return (0, "", 0)
+    if endpoint.kind is EndpointKind.LOCAL_PROCESS:
+        return (1, "", 0)
 
     assert endpoint.interface is not None
     return (
-        1,
+        2,
         endpoint.interface.ifname,
         endpoint.interface.ifindex,
     )
@@ -171,8 +176,18 @@ def _endpoint_key(endpoint: NetworkEndpoint) -> tuple:
 
 def _dispatch_selector_key(
     rule: DispatchRuleSpec,
-) -> tuple[NetworkEndpoint, IPv4Network]:
-    return (rule.source, rule.destination)
+) -> tuple[
+    NetworkEndpoint,
+    IPv4Network,
+    NetworkEndpoint | None,
+    TrafficProtocol | None,
+]:
+    return (
+        rule.source,
+        rule.destination,
+        rule.bound_output,
+        rule.protocol,
+    )
 
 
 def _dispatch_sort_key(rule: OwnedDispatchRule) -> tuple:
@@ -180,6 +195,10 @@ def _dispatch_sort_key(rule: OwnedDispatchRule) -> tuple:
         -rule.destination.prefixlen,
         int(rule.destination.network_address),
         _endpoint_key(rule.source),
+        ()
+        if rule.bound_output is None
+        else _endpoint_key(rule.bound_output),
+        "" if rule.protocol is None else rule.protocol.value,
         rule.owner.value,
         rule.routing_domain.name,
     )
@@ -201,7 +220,15 @@ def compose_network_rules(
     )
 
     dispatch: list[OwnedDispatchRule] = []
-    selectors: dict[tuple[NetworkEndpoint, IPv4Network], OwnerToken] = {}
+    selectors: dict[
+        tuple[
+            NetworkEndpoint,
+            IPv4Network,
+            NetworkEndpoint | None,
+            TrafficProtocol | None,
+        ],
+        OwnerToken,
+    ] = {}
 
     for owned in ordered_owners:
         for rule in owned.rules.dispatch_rules:
@@ -224,6 +251,8 @@ def compose_network_rules(
                         owned.owner,
                         rule.routing_domain,
                     ),
+                    bound_output=rule.bound_output,
+                    protocol=rule.protocol,
                 )
             )
 

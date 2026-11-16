@@ -6,6 +6,7 @@ from rou.interface_identity import InterfaceIdentity
 from rou.linux_driver import (
     CommandResult,
     LinuxNetworkDriver,
+    NetworkNamespaceLinuxRunner,
 )
 from rou.linux_network import compile_linux_network_desired
 from rou.linux_routing import LinuxRoutingAllocationState
@@ -30,6 +31,7 @@ class StatefulFakeRunner:
     def __init__(self, desired):
         self.desired = desired
         self.forwarding = False
+        self.sysctls = {}
         self.materialized = False
         self.commands = []
         self.nft_filter = False
@@ -40,15 +42,22 @@ class StatefulFakeRunner:
         self.commands.append((argv, input_text, check))
 
         if argv[:3] == ("sysctl", "-q", "-w"):
-            self.forwarding = argv[3].endswith("=1")
+            assignment = argv[3]
+            key, value = assignment.split("=", 1)
+            key = key.replace("/", ".")
+            if key == "net.ipv4.ip_forward":
+                self.forwarding = value == "1"
+            else:
+                self.sysctls[key] = value
             return CommandResult(0, "", "")
 
-        if argv == ("sysctl", "-n", "net.ipv4.ip_forward"):
-            return CommandResult(
-                0,
-                "1\n" if self.forwarding else "0\n",
-                "",
-            )
+        if argv[:2] == ("sysctl", "-n"):
+            key = argv[2].replace("/", ".")
+            if key == "net.ipv4.ip_forward":
+                value = "1" if self.forwarding else "0"
+            else:
+                value = self.sysctls.get(key, "1")
+            return CommandResult(0, value + "\n", "")
 
         if argv == ("ip", "-j", "link", "show"):
             return CommandResult(
@@ -295,7 +304,135 @@ def _desired():
     )
 
 
+class RecordingHostRunner:
+    def __init__(self):
+        self.calls = []
+
+    def run(self, argv, *, input_text=None, check=True):
+        self.calls.append((argv, input_text, check))
+        return CommandResult(0, "ok", "")
+
+
+class NetworkNamespaceLinuxRunnerTests(unittest.TestCase):
+    def test_runner_prefixes_command_and_preserves_stdin_and_check(self):
+        host = RecordingHostRunner()
+        runner = NetworkNamespaceLinuxRunner(host, "rou0")
+
+        result = runner.run(
+            ("nft", "-f", "-"),
+            input_text="table ip test {}\n",
+            check=False,
+        )
+
+        self.assertEqual(result.stdout, "ok")
+        self.assertEqual(
+            host.calls,
+            [
+                (
+                    ("ip", "netns", "exec", "rou0", "nft", "-f", "-"),
+                    "table ip test {}\n",
+                    False,
+                )
+            ],
+        )
+
+    def test_runner_rejects_empty_namespace_name(self):
+        with self.assertRaisesRegex(ValueError, "must be non-empty"):
+            NetworkNamespaceLinuxRunner(RecordingHostRunner(), "")
+
+
 class LinuxNetworkDriverTests(unittest.TestCase):
+    def test_verified_protective_close_sets_and_observes_forwarding_off(self):
+        desired = _desired()
+        runner = StatefulFakeRunner(desired)
+        runner.forwarding = True
+        driver = LinuxNetworkDriver(runner)
+
+        result = driver.close_forwarding_verified()
+
+        self.assertTrue(result.success, result.diagnostic)
+        self.assertFalse(runner.forwarding)
+        self.assertEqual(
+            [item[0] for item in runner.commands[:3]],
+            [
+                ("sysctl", "-q", "-w", "net.ipv4.ip_forward=0"),
+                (
+                    "sysctl",
+                    "-q",
+                    "-w",
+                    "net/ipv6/conf/all/forwarding=0",
+                ),
+                (
+                    "sysctl",
+                    "-q",
+                    "-w",
+                    "net/ipv6/conf/default/forwarding=0",
+                ),
+            ],
+        )
+        self.assertIn(
+            (
+                ("sysctl", "-n", "net.ipv4.ip_forward"),
+                None,
+                True,
+            ),
+            runner.commands,
+        )
+
+    def test_verified_protective_close_rejects_ipv6_forwarding_readback(self):
+        desired = _desired()
+
+        class LyingIpv6Runner(StatefulFakeRunner):
+            def run(self, argv, *, input_text=None, check=True):
+                if argv == (
+                    "sysctl",
+                    "-n",
+                    "net/ipv6/conf/all/forwarding",
+                ):
+                    self.commands.append((argv, input_text, check))
+                    return CommandResult(0, "1\n", "")
+                return super().run(
+                    argv,
+                    input_text=input_text,
+                    check=check,
+                )
+
+        runner = LyingIpv6Runner(desired)
+        driver = LinuxNetworkDriver(runner)
+
+        result = driver.close_forwarding_verified()
+
+        self.assertFalse(result.success)
+        self.assertIn(
+            "net.ipv6.conf.all.forwarding='1'",
+            result.diagnostic,
+        )
+
+    def test_verified_protective_close_fails_when_readback_is_not_closed(self):
+        desired = _desired()
+
+        class LyingForwardingRunner(StatefulFakeRunner):
+            def run(self, argv, *, input_text=None, check=True):
+                if argv == ("sysctl", "-n", "net.ipv4.ip_forward"):
+                    self.commands.append((argv, input_text, check))
+                    return CommandResult(0, "1\n", "")
+                return super().run(
+                    argv,
+                    input_text=input_text,
+                    check=check,
+                )
+
+        runner = LyingForwardingRunner(desired)
+        driver = LinuxNetworkDriver(runner)
+
+        result = driver.close_forwarding_verified()
+
+        self.assertFalse(result.success)
+        self.assertIn(
+            "verification observed net.ipv4.ip_forward=1",
+            result.diagnostic,
+        )
+
     def test_structural_apply_closes_barrier_and_freshly_verifies(self):
         desired = _desired()
         runner = StatefulFakeRunner(desired)
@@ -324,6 +461,27 @@ class LinuxNetworkDriverTests(unittest.TestCase):
             if argv == ("ip", "-j", "link", "show")
         ]
         self.assertGreaterEqual(len(link_reads), 6)
+
+    def test_structural_apply_repairs_and_verifies_namespace_prerequisites(self):
+        desired = _desired()
+        runner = StatefulFakeRunner(desired)
+        driver = LinuxNetworkDriver(runner)
+
+        result = driver.materialize_structural(desired)
+
+        self.assertTrue(result.success, result.diagnostic)
+        for key, expected in desired.prerequisites.expected_sysctls:
+            self.assertEqual(runner.sysctls.get(key), expected)
+
+        runner.sysctls["net.ipv4.conf.vpns00.rp_filter"] = "1"
+        verification = driver.verify_current(desired)
+        self.assertFalse(verification.ok)
+        self.assertTrue(
+            any(
+                "net.ipv4.conf.vpns00.rp_filter" in error
+                for error in verification.errors
+            )
+        )
 
     def test_failure_best_effort_closes_forwarding(self):
         desired = _desired()

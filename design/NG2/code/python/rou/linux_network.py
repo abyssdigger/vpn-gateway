@@ -9,6 +9,7 @@ from .linux_nft import (
     compile_nft_filter_desired,
     compile_nft_nat_desired,
 )
+from .linux_prerequisites import LinuxNamespacePrerequisites
 from .linux_routing import (
     LinuxRoutingAllocationState,
     LinuxRoutingDesired,
@@ -33,6 +34,7 @@ class LinuxNetworkDesiredError(ValueError):
 
 @dataclass(frozen=True)
 class LinuxNetworkDesired:
+    prerequisites: LinuxNamespacePrerequisites
     routing: LinuxRoutingDesired
     filter: NftFilterDesired | None
     nat: NftNatDesired | None
@@ -192,7 +194,17 @@ def compile_linux_network_desired(
     *,
     local_interface: str,
 ) -> LinuxNetworkDesired:
-    validate_linux_interface_generations(composed)
+    interface_identities = validate_linux_interface_generations(composed)
+    prerequisites = LinuxNamespacePrerequisites(
+        tuple(
+            dict.fromkeys(
+                (
+                    local_interface,
+                    *(item.ifname for item in interface_identities),
+                )
+            )
+        )
+    )
 
     routing = compile_linux_routing_desired(
         composed,
@@ -202,6 +214,7 @@ def compile_linux_network_desired(
 
     if not composed.owners:
         return LinuxNetworkDesired(
+            prerequisites=prerequisites,
             routing=routing,
             filter=None,
             nat=None,
@@ -223,6 +236,7 @@ def compile_linux_network_desired(
     )
 
     return LinuxNetworkDesired(
+        prerequisites=prerequisites,
         routing=routing,
         filter=filter_desired,
         nat=nat_desired,

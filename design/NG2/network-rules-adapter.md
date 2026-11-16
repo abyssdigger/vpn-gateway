@@ -137,7 +137,34 @@ subsets until their own normal RequestEvents update them.
 This permits ordinary sequential multi-owner generation updates without cross-owner policy
 mutation.
 
-## 7. Routing compilation
+## 7. Namespace prerequisites
+
+The first production backend is deliberately IPv4-only. Before any structural generation
+may reopen IPv4 forwarding, the Adapter/Driver lower domain must materialize and freshly
+verify these namespace prerequisites:
+
+- `net.ipv4.conf.all.rp_filter=0`;
+- `net.ipv4.conf.default.rp_filter=0`;
+- `net.ipv4.conf.<local/path>.rp_filter=0` for the local interface and every concrete
+  interface generation referenced by the composed rules;
+- `net.ipv6.conf.all.forwarding=0`;
+- `net.ipv6.conf.default.forwarding=0`;
+- `net.ipv6.conf.default.disable_ipv6=1`;
+- `net.ipv6.conf.<local/path>.disable_ipv6=1` for the same concrete interfaces.
+
+Global/default values protect the namespace and future interfaces; per-interface values
+cover interfaces that already existed before the current structural transaction.
+
+Per-interface sysctl access uses slash-form paths so an interface name containing a dot is
+not misparsed as sysctl hierarchy.
+
+These are technical Linux prerequisites, not `NetworkRulesSpec` semantics. They remain
+below the Adapter boundary.
+
+Drift in any required value makes exact verification fail. Structural repair applies the
+prerequisites only after `ip_forward=0` and verifies them before forwarding can reopen.
+
+## 8. Routing compilation
 
 Each owner-scoped logical routing domain receives a Linux table ID.
 
@@ -163,9 +190,9 @@ to the namespace main table even if filtering is later damaged. Full cleanup rem
 The first backend supports dispatch only from semantic LOCAL_NETWORK. Unsupported
 interface-origin dispatch is rejected explicitly.
 
-## 8. Filtering and NAT compilation
+## 9. Filtering and NAT compilation
 
-### 8.1. Filtering
+### 9.1. Filtering
 
 Filtering is materialized into one owned IPv4 nft table with default-drop forwarding.
 
@@ -183,7 +210,7 @@ cannot accidentally synthesize a permission that neither requested.
 Semantic TrafficPredicate is compiled below the Adapter boundary into nft expressions;
 payload envelope concepts never reach this layer.
 
-### 8.2. Source NAT
+### 9.2. Source NAT
 
 Current source NAT support is LOCAL_NETWORK to concrete INTERFACE with target
 EGRESS_ADDRESS, materialized as narrow masquerade rules with owner/generation markers.
@@ -191,9 +218,9 @@ EGRESS_ADDRESS, materialized as narrow masquerade rules with owner/generation ma
 The local ingress interface is included in the rule so locally generated namespace traffic
 does not accidentally enter payload NAT policy.
 
-## 9. Exact observation and verification
+## 10. Exact observation and verification
 
-### 9.1. Routing
+### 10.1. Routing
 
 Verification checks:
 
@@ -208,7 +235,7 @@ Verification checks:
 
 Foreign untagged routes outside the owned tables remain outside this Adapter's domain.
 
-### 9.2. nft
+### 10.2. nft
 
 EXP-017 showed that nft may render a live numeric interface reference back as an interface
 name.
@@ -222,21 +249,23 @@ A marker match alone is insufficient; canonical policy match alone is also insuf
 
 The first Driver deliberately implements only one safe structural path:
 
-    1. ip_forward = 0
-    2. fresh observation
-    3. remove owned RPDB rules
-    4. flush tracked + restart-discovered owned routing tables
-    5. install desired routes
-    6. install dispatch rules
-    7. install terminal host-ingress guard
-    8. replace NAT table
-    9. replace filter table last
-    10. fresh exact verification while forwarding remains closed
-    11. enable forwarding only if desired policy requires it
-    12. fresh exact final verification
+    1. protectively close IPv4 and IPv6 forwarding
+    2. materialize required namespace prerequisites (rp_filter / IPv6 disablement)
+    3. fresh observation
+    4. remove owned RPDB rules
+    5. flush tracked + restart-discovered owned routing tables
+    6. install desired routes
+    7. install dispatch rules
+    8. install terminal host-ingress guard
+    9. replace NAT table
+    10. replace filter table last
+    11. fresh exact verification, including namespace prerequisites, while forwarding
+        remains closed
+    12. enable IPv4 forwarding only if desired policy requires it
+    13. fresh exact final verification
 
-Any failure after mutation begins performs a best-effort protective ip_forward = 0 and
-returns FAILURE.
+Any failure after mutation begins performs a best-effort protective dual-stack forwarding
+close and returns FAILURE.
 
 There is no speculative rollback to a guessed prior state. Recovery is driven by the next
 fresh observation/reconcile.
@@ -276,7 +305,28 @@ Current automated gates include:
 Existing EXP-012 and EXP-017 remain supporting architecture evidence; the NG2 live gates
 exercise the new compiler and Driver directly.
 
-## 13. Deferred work
+## 13. Local-process semantic extension
+
+The semantic NetworkRules contract also admits `LOCAL_PROCESS` endpoints for future
+AvailabilityProbeManager ownership.
+
+A local-process dispatch is intentionally stricter than host-ingress dispatch and requires:
+
+- destination;
+- explicit protocol;
+- concrete bound output interface.
+
+This preserves the isolated probe-plane property established by EXP-022/023.
+
+The first Linux backend does **not** materialize this endpoint yet. It rejects
+`LOCAL_PROCESS` dispatch explicitly until EXP-024 is confirmed on the Debian 13 target
+and routing/nft observation are extended as one physical-policy unit.
+
+The intended lower-domain mapping uses process identity only at local OUTPUT, carries the
+admitted flow identity through conntrack state and matches the reverse INPUT flow by that
+technical state. Numeric uid/conntrack mark do not belong to the semantic spec.
+
+## 14. Deferred work
 
 Not part of the current structural baseline:
 

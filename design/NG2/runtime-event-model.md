@@ -8,7 +8,9 @@
 Документ описывает события и Engines верхнего уровня VPN-GATE NG2. Внутренняя
 декомпозиция Managers и их Machinery рассматривается отдельными документами.
 
-Bootstrap/startup/shutdown пока находятся вне scope.
+Bootstrap/startup/shutdown находятся вне steady-state scope этого документа. Минимальная
+protective startup boundary для Linux network policy зафиксирована отдельно в
+`design/NG2/runtime-bootstrap.md`.
 
 ## 1. Основная петля
 
@@ -272,16 +274,22 @@ Calculators.
 
 Определяет полный набор probes, которые runtime сейчас требует поддерживать.
 
-Концептуальный probe:
+Первый исполнимый normalized machinery contract для ICMP:
 
 ```text
 probe_id
-mechanism
-concrete interface identity
-target
-mechanism-specific parameters
-semantic scope/correlation
+ICMP mechanism
+concrete InterfaceIdentity
+IPv4 target
 ```
+
+`probe_id` остается logical correlation identity верхнего availability domain. Чистый
+`ProbeRulesCalculator` дедуплицирует network plane по физическому
+`(mechanism, InterfaceIdentity, target)`.
+
+Это не user-facing config grammar. Timing/hysteresis и semantic Profile/Device correlation
+остаются выше ProbeRulesCalculator. Будущие mechanisms добавляют свои normalized параметры
+отдельным review unit.
 
 Новая revision заменяет предыдущий desired set.
 

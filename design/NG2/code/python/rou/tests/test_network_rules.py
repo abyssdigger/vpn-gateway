@@ -36,6 +36,47 @@ class NetworkRulesContractTests(unittest.TestCase):
         self.assertIs(endpoint.kind, EndpointKind.LOCAL_NETWORK)
         self.assertIsNone(endpoint.interface)
 
+    def test_local_process_endpoint_is_semantic_not_linux_identity(self):
+        endpoint = NetworkEndpoint.local_process()
+        self.assertIs(endpoint.kind, EndpointKind.LOCAL_PROCESS)
+        self.assertIsNone(endpoint.interface)
+
+    def test_local_process_dispatch_requires_bound_output_and_protocol(self):
+        target = IPv4Network("203.0.113.24/32")
+        with self.assertRaisesRegex(
+            NetworkRulesError,
+            "bound output interface",
+        ):
+            DispatchRuleSpec(
+                target,
+                "probe",
+                source=NetworkEndpoint.local_process(),
+                protocol=TrafficProtocol.ICMP,
+            )
+
+        path = NetworkEndpoint.interface_path(
+            InterfaceIdentity("vpns00", 10)
+        )
+        with self.assertRaisesRegex(
+            NetworkRulesError,
+            "explicit protocol",
+        ):
+            DispatchRuleSpec(
+                target,
+                "probe",
+                source=NetworkEndpoint.local_process(),
+                bound_output=path,
+            )
+
+        rule = DispatchRuleSpec(
+            target,
+            "probe",
+            source=NetworkEndpoint.local_process(),
+            bound_output=path,
+            protocol=TrafficProtocol.ICMP,
+        )
+        self.assertEqual(rule.bound_output, path)
+
     def test_dispatch_must_reference_known_domain(self):
         with self.assertRaises(NetworkRulesError):
             NetworkRulesSpec(

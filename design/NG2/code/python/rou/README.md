@@ -1,7 +1,7 @@
 # VPN-GATE NG2 Python reference
 
-Current status: executable NG2 payload semantic control loop plus reviewed structural
-Linux NetworkRulesAdapter baseline.
+Current status: executable NG2 payload semantic control loop plus reviewed Linux
+network-policy and fail-closed runtime lower assembly baseline.
 
 Semantic whole-slice review: **PASS** —
 `design/reviews/NG2-2026-11-14-semantic-slice-whole-code-audit.md`.
@@ -64,9 +64,15 @@ Implemented:
   - numeric-ifindex nft filtering and source NAT;
   - exact route/RPDB/nft/sysctl verification;
   - exact nft table inventory ownership in the dedicated ROU namespace;
-  - full structural rebuild behind `ip_forward=0`;
+  - full structural rebuild behind protective IPv4/IPv6 forwarding closure;
+  - exact IPv4-only namespace prerequisites: rp_filter disabled and IPv6 forwarding disabled;
   - best-effort protective close on mutation failure;
   - idempotent per-owner cleanup preserving surviving owners;
+- protective runtime bootstrap:
+  - closes IPv4 forwarding before exposing the Linux NetworkRulesAdapter;
+  - requires fresh readback proving `net.ipv4.ip_forward=0`;
+  - leaves stale physical policy closed until the first normal owner reconcile;
+  - privileged restart integration starts from stale nft state plus forwarding enabled;
 - privileged Linux integration gates:
   - exact apply/renew/cleanup;
   - same-name/new-ifindex detection;
@@ -100,13 +106,17 @@ Not implemented yet:
 
 - richer predicate implication only where future use justifies it;
 - RuntimeStateManager Profile-state mapping;
-- Runtime/bootstrap assembly around the concrete Linux Adapter;
+- Linux instance infrastructure lifecycle and full fail-closed instance -> Adapter
+  startup composition;
 - persistent technical allocation across daemon restart;
 - richer interface-origin dispatch;
 - incremental transition optimizer, only after a separate review/evidence unit.
 
-Next implementation boundary: runtime/bootstrap assembly around the reviewed structural
-Linux Adapter. Incremental transition optimization remains deferred.
+ProbeRules now has a reviewed pure ICMP semantic calculator over LOCAL_PROCESS rules.
+Linux LOCAL_PROCESS materialization remains intentionally fail-closed pending Debian 13
+confirmation of EXP-024; ProbeRulesState remains deferred until physical apply/renew
+observation exists. RuntimeStateManager and other upper-domain assembly remain separate
+review units. Incremental transition optimization remains deferred.
 
 Rootless tests:
 

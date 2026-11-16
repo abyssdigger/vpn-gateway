@@ -9,8 +9,12 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from rou.interface_identity import InterfaceIdentity
-from rou.linux_adapter import LinuxNetworkRulesAdapter
-from rou.linux_driver import CommandResult, LinuxNetworkDriver
+from rou.linux_driver import (
+    CommandResult,
+    LinuxNetworkDriver,
+    NetworkNamespaceLinuxRunner,
+)
+from rou.runtime_bootstrap import bootstrap_linux_network_rules_adapter
 from rou.network_rules import (
     DispatchRuleSpec,
     FlowInitiationAllowSpec,
@@ -43,17 +47,13 @@ def host(*argv: str, check: bool = True, input_text: str | None = None):
     )
 
 
-class NamespaceRunner:
+class RecordingHostRunner:
     def __init__(self):
         self.calls: list[tuple[str, ...]] = []
 
     def run(self, argv, *, input_text=None, check=True):
         self.calls.append(argv)
         completed = host(
-            "ip",
-            "netns",
-            "exec",
-            NS,
             *argv,
             check=False,
             input_text=input_text,
@@ -65,7 +65,7 @@ class NamespaceRunner:
         )
         if check and result.returncode != 0:
             raise RuntimeError(
-                f"namespace command failed rc={result.returncode}: "
+                f"host command failed rc={result.returncode}: "
                 f"{argv!r}: {result.stderr.strip()}"
             )
         return result
@@ -204,12 +204,68 @@ def main() -> int:
         raise SystemExit("integration test must run as root")
 
     make_namespace()
-    runner = NamespaceRunner()
+    host_runner = RecordingHostRunner()
+    runner = NetworkNamespaceLinuxRunner(host_runner, NS)
     driver = LinuxNetworkDriver(runner)
-    adapter = LinuxNetworkRulesAdapter(
+
+    # Simulate process restart with stale physical policy and forwarding still open.
+    host(
+        "ip", "netns", "exec", NS,
+        "sysctl", "-q", "-w", "net.ipv4.ip_forward=1",
+    )
+    host(
+        "ip", "netns", "exec", NS,
+        "sysctl", "-q", "-w", "net/ipv6/conf/all/forwarding=1",
+    )
+    host(
+        "ip", "netns", "exec", NS,
+        "sysctl", "-q", "-w", "net/ipv6/conf/default/forwarding=1",
+    )
+    host(
+        "ip", "netns", "exec", NS,
+        "nft", "add", "table", "inet", "stale_before_bootstrap",
+    )
+
+    bootstrapped = bootstrap_linux_network_rules_adapter(
         driver,
         local_interface="host0",
     )
+    if not bootstrapped.success or bootstrapped.adapter is None:
+        raise RuntimeError(
+            "runtime bootstrap failed: "
+            f"{bootstrapped.diagnostic}"
+        )
+    adapter = bootstrapped.adapter
+
+    forward = host(
+        "ip", "netns", "exec", NS,
+        "sysctl", "-n", "net.ipv4.ip_forward",
+    ).stdout.strip()
+    if forward != "0":
+        raise RuntimeError(
+            f"bootstrap exposed Adapter with ip_forward={forward!r}"
+        )
+    for key in (
+        "net.ipv6.conf.all.forwarding",
+        "net.ipv6.conf.default.forwarding",
+    ):
+        value = host(
+            "ip", "netns", "exec", NS,
+            "sysctl", "-n", key,
+        ).stdout.strip()
+        if value != "0":
+            raise RuntimeError(
+                f"bootstrap exposed Adapter with {key}={value!r}"
+            )
+    nft_tables = host(
+        "ip", "netns", "exec", NS, "nft", "list", "tables"
+    ).stdout
+    if "stale_before_bootstrap" not in nft_tables:
+        raise RuntimeError(
+            "bootstrap unexpectedly mutated stale policy before owner reconcile"
+        )
+    print("PASS BOOT: stale restart state is dual-stack closed before Adapter publication")
+
     owner = object()
     owner2 = object()
 
@@ -240,6 +296,32 @@ def main() -> int:
         ).stdout
         if "vpng2_filter" not in nft_tables or "vpng2_nat" not in nft_tables:
             raise RuntimeError("owned nft tables are missing")
+        if "stale_before_bootstrap" in nft_tables:
+            raise RuntimeError(
+                "first Adapter reconcile did not remove stale nft policy"
+            )
+
+        expected_sysctls = {
+            "net.ipv4.conf.all.rp_filter": "0",
+            "net.ipv4.conf.default.rp_filter": "0",
+            "net.ipv4.conf.host0.rp_filter": "0",
+            "net.ipv4.conf.vpns00.rp_filter": "0",
+            "net.ipv6.conf.all.forwarding": "0",
+            "net.ipv6.conf.default.forwarding": "0",
+            "net.ipv6.conf.default.disable_ipv6": "1",
+            "net.ipv6.conf.host0.disable_ipv6": "1",
+            "net.ipv6.conf.vpns00.disable_ipv6": "1",
+        }
+        for key, expected in expected_sysctls.items():
+            actual = host(
+                "ip", "netns", "exec", NS,
+                "sysctl", "-n", key,
+            ).stdout.strip()
+            if actual != expected:
+                raise RuntimeError(
+                    f"namespace prerequisite {key}={actual!r}, expected {expected!r}"
+                )
+        print("PASS A0: IPv4-only namespace prerequisites verify live")
 
         rules = owned_rules()
         terminal = [
@@ -332,19 +414,32 @@ def main() -> int:
             "ip", "netns", "exec", NS,
             "nft", "add", "table", "inet", "foreign_ci",
         )
+        host(
+            "ip", "netns", "exec", NS,
+            "sysctl", "-q", "-w", "net/ipv4/conf/vpns00/rp_filter=1",
+        )
         if adapter.renew_state(owner).success:
             raise RuntimeError(
                 "route/foreign-nft drift was not detected"
             )
 
-        runner.calls.clear()
+        host_runner.calls.clear()
         repaired = adapter.apply(owner, wanted)
         if not repaired.success:
             raise RuntimeError(f"route drift repair failed: {repaired.diagnostic}")
         forwarding_writes = [
             argv[-1]
-            for argv in runner.calls
-            if argv[:3] == ("sysctl", "-q", "-w")
+            for argv in host_runner.calls
+            if argv[:7]
+            == (
+                "ip",
+                "netns",
+                "exec",
+                NS,
+                "sysctl",
+                "-q",
+                "-w",
+            )
         ]
         if not forwarding_writes or forwarding_writes[0] != "net.ipv4.ip_forward=0":
             raise RuntimeError(
@@ -359,8 +454,17 @@ def main() -> int:
         ).stdout
         if "foreign_ci" in nft_tables:
             raise RuntimeError("structural repair left foreign nft table")
+        rp_filter = host(
+            "ip", "netns", "exec", NS,
+            "sysctl", "-n", "net/ipv4/conf/vpns00/rp_filter",
+        ).stdout.strip()
+        if rp_filter != "0":
+            raise RuntimeError(
+                f"structural repair left vpns00 rp_filter={rp_filter!r}"
+            )
         print(
-            "PASS D: route + foreign-nft drift repaired behind forwarding barrier"
+            "PASS D: route + foreign-nft + sysctl drift repaired behind "
+            "forwarding barrier"
         )
 
         default_owner = object()

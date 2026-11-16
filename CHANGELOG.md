@@ -1,3 +1,82 @@
+## 2026-11-14 — NG2 ProbeRules semantic boundary and EXP-024
+
+Extended the common NetworkRules semantic layer far enough to represent the proven active
+probe plane without introducing a second Linux policy reconciler:
+
+- ProbeRules boundary review confirmed that a separate physical Adapter would conflict with
+  the structural NetworkRulesAdapter's exclusive nft ownership;
+- EXP-024 tested selective shared-namespace probe-process isolation while unrelated local
+  traffic remained on ordinary routing;
+- direct INPUT socket-owner matching was rejected experimentally: the reply reached the
+  exact INPUT candidate rule but `meta skuid` did not identify the receiving ping socket;
+- carrying admitted OUTPUT process identity through a conntrack mark passed privileged CI:
+  bound probe success, unbound alternate-path rejection, wrong-target rejection and
+  unaffected unrelated local traffic;
+- `NetworkEndpoint.LOCAL_PROCESS` and bound-output/protocol dispatch semantics were added
+  without exposing Linux uid/mark in the semantic contract;
+- the concrete Linux compiler deliberately still rejects LOCAL_PROCESS until EXP-024 is
+  confirmed on the Debian 13 target;
+- common TrafficSelector gained exact ICMP message types; production nft output is
+  kernel-syntax checked in privileged CI;
+- `ProbeRulesCalculator` now derives exact ICMP echo request/reply policy and deduplicates
+  logical probes that share one physical target/interface/mechanism plane;
+- same target on different concrete interface generations remains distinct;
+- ProbeRulesState remains deferred until physical LOCAL_PROCESS apply/renew observation
+  exists, after which the mandatory comparison with PayloadRulesState must be performed;
+- focused reviews and whole-slice audit passed.
+
+---
+
+## 2026-11-14 — NG2 Linux instance infrastructure lifecycle
+
+Migrated the proven NG1 namespace/veth infrastructure boundary into NG2 without restoring
+NG1 policy machinery:
+
+- schema-v1 topology remains namespace + host veth + fixed inner `host0` with explicit
+  IPv4 addresses and namespace default route;
+- existing namespaces are dual-stack protectively closed before structural verification;
+- fresh creation owns only namespace/veth/address/main-route infrastructure and creates no
+  nft policy;
+- partial instance state and structural drift fail closed rather than being silently
+  adopted/repaired;
+- existing-instance verification now proves reciprocal cross-namespace veth peer identity
+  from kernel `ifindex/link_index` metadata;
+- destroy closes forwarding best effort, removes owned infrastructure and freshly verifies
+  absence;
+- privileged CI covers fresh create, no-nft ownership, restart containment, drift rejection,
+  teardown and partial-state rejection;
+- focused review `NG2-2026-11-14-runtime-instance-lifecycle-review.md` passed.
+
+---
+
+## 2026-11-14 — NG2 protective runtime bootstrap and namespace assembly
+
+Closed the startup forwarding window above the structural Linux Adapter and added the
+first production runtime assembly path:
+
+- runtime bootstrap now requires a fresh readback proving
+  `net.ipv4.ip_forward=0` before exposing `LinuxNetworkRulesAdapter`;
+- failed/unverified protective close returns no Adapter;
+- bootstrap deliberately leaves stale physical policy behind the closed forwarding barrier
+  until the first normal owner reconcile;
+- privileged restart integration starts from stale nft state plus forwarding enabled,
+  proves bootstrap closure, then proves the first Adapter reconcile removes stale policy
+  before reopening forwarding;
+- `NetworkNamespaceLinuxRunner` executes the Linux Driver inside one pre-existing named
+  ROU namespace using argv-only `ip netns exec`, preserving stdin/check semantics;
+- namespace execution does not acquire namespace/veth lifecycle ownership;
+- production assembly helper builds namespace runner -> Linux Driver -> protective
+  bootstrap -> Linux Adapter for an existing namespace;
+- privileged Linux Adapter integration now exercises the production namespace runner
+  rather than a parallel test-only implementation;
+- focused reviews `NG2-2026-11-14-runtime-bootstrap-review.md` and
+  `NG2-2026-11-14-runtime-namespace-assembly-review.md` passed.
+
+Remaining runtime work starts above this boundary; namespace/veth lifecycle ownership,
+host-side transport plumbing and RuntimeStateManager assembly remain separate units.
+
+---
+
 ## 2026-11-14 — NG2 Linux lower-domain whole-code audit
 
 Completed the post-implementation audit of the structural Linux Adapter lower domain:

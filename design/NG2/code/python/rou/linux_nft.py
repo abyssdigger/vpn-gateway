@@ -397,6 +397,20 @@ def _selector_atoms(selector: TrafficSelector) -> tuple[_Atom, ...]:
             )
         )
 
+    if selector.icmp_types:
+        values = tuple(sorted(item.value for item in selector.icmp_types))
+        rendered = (
+            str(values[0])
+            if len(values) == 1
+            else "{ " + ", ".join(str(item) for item in values) + " }"
+        )
+        atoms.append(
+            _Atom(
+                f"icmp type {rendered}",
+                f"icmp type != {rendered}",
+            )
+        )
+
     return tuple(atoms)
 
 

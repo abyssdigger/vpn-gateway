@@ -801,10 +801,14 @@ ProbeRulesStateCalculator
 
 и собственный `ProbeRulesState`.
 
-После появления обеих реальных state-моделей обязателен отдельный review: если их оси и
-семантика окажутся принципиально одинаковыми, следует вынести общий тип состояния rules.
-До этого момента общий `RulesState` не вводится, чтобы не обобщать совпадение формы раньше
-доказанного совпадения предметной семантики.
+ProbeRules semantic lower boundary теперь определена отдельно, но реальная
+`ProbeRulesState` всё ещё отсутствует: Linux local-process materialization ожидает
+target-confirmation EXP-024.
+
+После появления обеих **исполняемых и наблюдаемых** state-моделей обязателен отдельный
+review: если их оси и семантика окажутся принципиально одинаковыми, следует вынести общий
+тип состояния rules. До этого момента общий `RulesState` не вводится, чтобы не обобщать
+совпадение формы раньше доказанного совпадения предметной семантики.
 
 ## 10. Error semantics
 
@@ -934,8 +938,8 @@ NG1 planner.py
 2. audit/retry scheduling policy вокруг уже реализованного deterministic `audit()` pass;
 3. richer divergent predicate implication только там, где появится реальная необходимость;
 4. после реализации `ProbeRulesState` — review на предмет общего rules-state type;
-5. runtime/bootstrap assembly, обеспечивающий protective forwarding closure до первого
-   owner reconcile после запуска/перезапуска.
+5. remaining runtime assembly above the implemented protective startup gate; forwarding
+   closure до первого owner reconcile зафиксирован в `runtime-bootstrap.md`.
 
 Adapter boundary остается фиксированной: Linux transaction machinery не должна снова
 протекать в PayloadTrafficManager.

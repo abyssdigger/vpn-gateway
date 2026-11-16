@@ -25,6 +25,7 @@ from .linux_observation import (
     parse_rule_json,
     verify_linux_routing,
 )
+from .linux_prerequisites import verify_linux_namespace_prerequisites
 from .linux_routing import (
     FIRST_RULE_PRIORITY,
     MAX_RULE_PRIORITY,
@@ -89,8 +90,36 @@ class SubprocessLinuxRunner:
         return result
 
 
+class NetworkNamespaceLinuxRunner:
+    """Run Linux network commands inside one pre-existing named namespace."""
+
+    def __init__(
+        self,
+        host_runner: LinuxCommandRunner,
+        namespace: str,
+    ) -> None:
+        if not namespace:
+            raise ValueError("network namespace name must be non-empty")
+        self._host_runner = host_runner
+        self._namespace = namespace
+
+    def run(
+        self,
+        argv: tuple[str, ...],
+        *,
+        input_text: str | None = None,
+        check: bool = True,
+    ) -> CommandResult:
+        return self._host_runner.run(
+            ("ip", "netns", "exec", self._namespace, *argv),
+            input_text=input_text,
+            check=check,
+        )
+
+
 @dataclass(frozen=True)
 class LinuxNetworkObservation:
+    prerequisites: tuple[tuple[str, str], ...]
     routing: LinuxRoutingObservation
     filter: NftTableObservation | None
     nat: NftTableObservation | None
@@ -130,6 +159,13 @@ def verify_linux_network(
 
     if expected_ip_forward is None:
         expected_ip_forward = desired.ip_forward_required
+
+    errors.extend(
+        verify_linux_namespace_prerequisites(
+            desired.prerequisites,
+            observed.prerequisites,
+        )
+    )
 
     routing = verify_linux_routing(
         desired.routing,
@@ -231,14 +267,14 @@ class LinuxNetworkDriver:
             ).stdout
         )
 
-        forward_text = self._runner.run(
-            ("sysctl", "-n", "net.ipv4.ip_forward")
-        ).stdout.strip()
-        if forward_text not in {"0", "1"}:
-            raise LinuxDriverError(
-                "net.ipv4.ip_forward observation is not 0/1: "
-                f"{forward_text!r}"
+        forwarding = self._observe_forwarding()
+        prerequisites = tuple(
+            (
+                key,
+                self._runner.run(command).stdout.strip(),
             )
+            for key, command in desired.prerequisites.observation_commands
+        )
 
         nft_tables = parse_nft_tables(
             self._runner.run(
@@ -264,11 +300,12 @@ class LinuxNetworkDriver:
             )
 
         return LinuxNetworkObservation(
+            prerequisites=prerequisites,
             routing=LinuxRoutingObservation(
                 interfaces=interfaces,
                 routes=routes,
                 rules=rules,
-                ip_forward=forward_text == "1",
+                ip_forward=forwarding,
             ),
             filter=nft_filter,
             nat=nft_nat,
@@ -284,6 +321,33 @@ class LinuxNetworkDriver:
             self.observe(desired),
         )
 
+    def close_forwarding_verified(self) -> LinuxDriverResult:
+        """Protectively close IPv4/IPv6 forwarding and freshly verify the result."""
+
+        try:
+            self._close_forwarding()
+            if self._observe_forwarding():
+                raise LinuxDriverError(
+                    "protective forwarding close verification observed "
+                    "net.ipv4.ip_forward=1"
+                )
+            for key in (
+                "net/ipv6/conf/all/forwarding",
+                "net/ipv6/conf/default/forwarding",
+            ):
+                value = self._runner.run(("sysctl", "-n", key)).stdout.strip()
+                if value != "0":
+                    raise LinuxDriverError(
+                        "protective forwarding close verification observed "
+                        f"{key.replace('/', '.')}={value!r}"
+                    )
+            return LinuxDriverResult(True)
+        except Exception as exc:
+            return LinuxDriverResult(
+                False,
+                f"cannot prove protective forwarding close: {exc}",
+            )
+
     def materialize_structural(
         self,
         desired: LinuxNetworkDesired,
@@ -291,7 +355,9 @@ class LinuxNetworkDriver:
         """Full fail-closed rebuild with fresh closed/open verification."""
 
         try:
-            self._set_forwarding(False)
+            self._close_forwarding()
+            for command in desired.prerequisites.apply_commands:
+                self._runner.run(command)
             before = self.observe(desired)
 
             tagged_tables = {
@@ -413,7 +479,7 @@ class LinuxNetworkDriver:
                 )
 
             if desired.ip_forward_required:
-                self._set_forwarding(True)
+                self._set_ipv4_forwarding(True)
 
             final = self.observe(desired)
             verification = verify_linux_network(
@@ -431,7 +497,7 @@ class LinuxNetworkDriver:
         except Exception as exc:
             diagnostic = str(exc)
             try:
-                self._set_forwarding(False)
+                self._close_forwarding()
             except Exception as close_exc:
                 diagnostic += (
                     "; protective forwarding close also failed: "
@@ -439,7 +505,7 @@ class LinuxNetworkDriver:
                 )
             return LinuxDriverResult(False, diagnostic)
 
-    def _set_forwarding(self, enabled: bool) -> None:
+    def _set_ipv4_forwarding(self, enabled: bool) -> None:
         self._runner.run(
             (
                 "sysctl",
@@ -449,6 +515,36 @@ class LinuxNetworkDriver:
                 + ("1" if enabled else "0"),
             )
         )
+
+    def _close_forwarding(self) -> None:
+        self._set_ipv4_forwarding(False)
+        self._runner.run(
+            (
+                "sysctl",
+                "-q",
+                "-w",
+                "net/ipv6/conf/all/forwarding=0",
+            )
+        )
+        self._runner.run(
+            (
+                "sysctl",
+                "-q",
+                "-w",
+                "net/ipv6/conf/default/forwarding=0",
+            )
+        )
+
+    def _observe_forwarding(self) -> bool:
+        forward_text = self._runner.run(
+            ("sysctl", "-n", "net.ipv4.ip_forward")
+        ).stdout.strip()
+        if forward_text not in {"0", "1"}:
+            raise LinuxDriverError(
+                "net.ipv4.ip_forward observation is not 0/1: "
+                f"{forward_text!r}"
+            )
+        return forward_text == "1"
 
     def _flush_table(self, table_id: int) -> None:
         result = self._runner.run(
