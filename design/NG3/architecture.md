@@ -1821,6 +1821,67 @@ The dedicated nft namespace is cleanup identity for VPN-GATE packet-policy objec
 pre-existing incompatible object in that reserved namespace is a marker conflict, not a
 candidate for silent adoption or deletion.
 
+##### nft namespace ownership marker
+
+The first-release Linux nft namespace has one fixed table identity:
+
+```text
+family: ip
+table:  vpn_gate
+```
+
+Table-name reservation alone is not sufficient evidence that a pre-existing table belongs
+to this product.
+
+An owned NG3 table therefore carries one exact versioned table comment:
+
+```text
+vpn-gate:ng3:owner-v1
+```
+
+The table-level observation states are:
+
+```text
+ABSENT
+    no table ip vpn_gate exists
+
+OWNED
+    exactly one table ip vpn_gate exists
+    and its table comment == "vpn-gate:ng3:owner-v1"
+
+CONFLICT
+    table ip vpn_gate exists
+    but the ownership marker is absent, malformed or different
+```
+
+The marker is an ownership prerequisite, not blanket deletion authority.
+
+Even an `OWNED` table must have its contained chains/rules/sets/objects inventoried against
+accepted VPN-GATE shapes before cleanup or replacement. Any unexpected contained object
+remains an explicit ownership conflict rather than something to delete merely because it
+sits inside the marked table.
+
+Observation uses full JSON ruleset inventory rather than treating a failed
+`list table` command as proof of absence:
+
+```text
+nft -j list ruleset
+```
+
+This keeps:
+
+- valid table absence;
+- malformed/unsupported owned-table shape;
+- command/JSON observation failure;
+
+as distinct states.
+
+The marker is lower implementation state. It is not user configuration and does not encode a
+Profile/Device ID.
+
+Before implementation, current target nftables must prove that the table comment is
+round-trippable in JSON inventory and distinguishable from a same-name unmarked table.
+
 #### Deterministic allocation and configuration change
 
 Allocation is deterministic for one accepted semantic owner set.
