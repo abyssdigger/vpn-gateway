@@ -10,8 +10,12 @@ from .nft_namespace_inventory import (
 )
 
 
+STACK_INPUT_CHAIN = "stack_input"
+STACK_INPUT_COMMENT = "vpn-gate:ng3:stack-input-v1"
 PAYLOAD_FORWARD_CHAIN = "payload_forward"
 PAYLOAD_FORWARD_COMMENT = "vpn-gate:ng3:payload-forward-v1"
+STACK_OUTPUT_CHAIN = "stack_output"
+STACK_OUTPUT_COMMENT = "vpn-gate:ng3:stack-output-v1"
 PAYLOAD_POSTROUTING_CHAIN = "payload_postrouting"
 PAYLOAD_POSTROUTING_COMMENT = "vpn-gate:ng3:payload-postrouting-v1"
 
@@ -32,12 +36,28 @@ class NftBaseChainSpec:
 
 PAYLOAD_NFT_SCAFFOLD = (
     NftBaseChainSpec(
+        name=STACK_INPUT_CHAIN,
+        chain_type="filter",
+        hook="input",
+        priority=0,
+        policy="drop",
+        comment=STACK_INPUT_COMMENT,
+    ),
+    NftBaseChainSpec(
         name=PAYLOAD_FORWARD_CHAIN,
         chain_type="filter",
         hook="forward",
         priority=0,
         policy="drop",
         comment=PAYLOAD_FORWARD_COMMENT,
+    ),
+    NftBaseChainSpec(
+        name=STACK_OUTPUT_CHAIN,
+        chain_type="filter",
+        hook="output",
+        priority=0,
+        policy="drop",
+        comment=STACK_OUTPUT_COMMENT,
     ),
     NftBaseChainSpec(
         name=PAYLOAD_POSTROUTING_CHAIN,
