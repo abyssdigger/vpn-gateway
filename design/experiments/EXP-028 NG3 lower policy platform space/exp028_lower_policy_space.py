@@ -121,7 +121,7 @@ def main() -> int:
         assert normal.get("metric") == FIRST_METRIC, normal
         assert normal.get("dev") == "path0", normal
 
-        assert guard.get("type") in ("blackhole", 6), guard
+        assert guard.get("type") in ("blackhole", 6, "6"), guard
         assert route_protocol(guard) == GUARD_PROTO, guard
         assert guard.get("metric") == GUARD_METRIC, guard
         assert guard.get("dst") == "default", guard
