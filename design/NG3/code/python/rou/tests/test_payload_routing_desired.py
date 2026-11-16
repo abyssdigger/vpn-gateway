@@ -14,6 +14,7 @@ from rou.network_policy_layout import (
     allocate_network_policy_layout,
 )
 from rou.payload_profile import PayloadProfileRequest
+from rou.route_priority_inventory import RoutePriorityPathRoute
 from rou.payload_routing_desired import (
     ManagedRouteType,
     PayloadRoutingProjectionError,
@@ -206,6 +207,85 @@ class PayloadRoutingDesiredStateTests(unittest.TestCase):
                 bad,
                 routes,
                 HOST,
+            )
+
+    def test_extra_stale_path_realization_is_rejected(self):
+        corp = profile("corp", ("10.0.0.0/8",), (A,))
+        routes = realize_direct_device_path_routes(
+            (
+                PathBinding(A, EP_A),
+                PathBinding(B, EP_B),
+            )
+        )
+        with self.assertRaisesRegex(
+            PayloadRoutingProjectionError,
+            "exactly match",
+        ):
+            build((corp,), routes)
+
+    def test_one_endpoint_cannot_realize_two_payload_paths(self):
+        corp = profile("corp", ("10.0.0.0/8",), (A, B))
+        routes = (
+            RoutePriorityPathRoute(A, EP_A),
+            RoutePriorityPathRoute(B, EP_A),
+        )
+        with self.assertRaisesRegex(
+            PayloadRoutingProjectionError,
+            "multiple logical paths",
+        ):
+            build((corp,), routes)
+
+    def test_noncanonical_or_duplicate_dispatch_priorities_are_rejected(self):
+        corp = profile(
+            "corp",
+            ("10.0.0.0/8", "10.1.0.0/16"),
+            (A,),
+        )
+        layout = allocate_network_policy_layout(
+            (corp,),
+            (),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        routes = realize_direct_device_path_routes((PathBinding(A, EP_A),))
+
+        reversed_rules = tuple(reversed(layout.dispatch_rules))
+        bad_order = NetworkPolicyLayout(
+            payload=layout.payload,
+            probe=layout.probe,
+            dispatch_rules=reversed_rules,
+            nft_family=layout.nft_family,
+            nft_table=layout.nft_table,
+        )
+        with self.assertRaisesRegex(
+            PayloadRoutingProjectionError,
+            "canonical longest-prefix ordering",
+        ):
+            build_payload_routing_desired_state(
+                (corp,), bad_order, routes, HOST
+            )
+
+        first, second = layout.dispatch_rules
+        duplicate_priority = NetworkPolicyLayout(
+            payload=layout.payload,
+            probe=layout.probe,
+            dispatch_rules=(
+                first,
+                PayloadDispatchRule(
+                    profile_id=second.profile_id,
+                    destination=second.destination,
+                    priority=first.priority,
+                    table=second.table,
+                ),
+            ),
+            nft_family=layout.nft_family,
+            nft_table=layout.nft_table,
+        )
+        with self.assertRaisesRegex(
+            PayloadRoutingProjectionError,
+            "priorities must be unique",
+        ):
+            build_payload_routing_desired_state(
+                (corp,), duplicate_priority, routes, HOST
             )
 
     def test_host_boundary_requires_full_interface_identity(self):

@@ -184,6 +184,7 @@ def build_payload_routing_desired_state(
         )
 
     route_by_path: dict[LogicalPathId, RoutePriorityPathRoute] = {}
+    endpoint_owner: dict[InterfaceIdentity, LogicalPathId] = {}
     for route in path_routes:
         if not isinstance(route, RoutePriorityPathRoute):
             raise PayloadRoutingProjectionError(
@@ -193,7 +194,24 @@ def build_payload_routing_desired_state(
             raise PayloadRoutingProjectionError(
                 f"duplicate path route realization for {route.path_id!r}"
             )
+        previous = endpoint_owner.get(route.endpoint)
+        if previous is not None and previous != route.path_id:
+            raise PayloadRoutingProjectionError(
+                f"one endpoint is realized for multiple logical paths: "
+                f"{previous!r}, {route.path_id!r}"
+            )
         route_by_path[route.path_id] = route
+        endpoint_owner[route.endpoint] = route.path_id
+
+    required_path_ids = {
+        path_id
+        for profile in current_profiles
+        for path_id in profile.ordered_paths
+    }
+    if set(route_by_path) != required_path_ids:
+        raise PayloadRoutingProjectionError(
+            "physical path-route set does not exactly match current semantic payload paths"
+        )
 
     _validate_dispatch_rules(
         current_profiles,
@@ -278,12 +296,25 @@ def _validate_dispatch_rules(
     rules: tuple[PayloadDispatchRule, ...],
     allocations: dict[str, PayloadPolicyAllocation],
 ) -> None:
-    expected = {
-        (profile.profile_id, destination)
+    canonical = sorted(
+        (
+            profile.profile_id,
+            destination,
+        )
         for profile in profiles
         for destination in profile.destinations
-    }
+    )
+    canonical.sort(
+        key=lambda item: (
+            -item[1].prefixlen,
+            int(item[1].network_address),
+            item[0],
+        )
+    )
+    expected = set(canonical)
     observed: set[tuple[str, IPv4Network]] = set()
+    priorities: list[int] = []
+    observed_order: list[tuple[str, IPv4Network]] = []
 
     for rule in rules:
         if not isinstance(rule, PayloadDispatchRule):
@@ -296,6 +327,15 @@ def _validate_dispatch_rules(
                 f"duplicate payload dispatch rule for {key!r}"
             )
         observed.add(key)
+        observed_order.append(key)
+        if (
+            type(rule.priority) is not int
+            or not 1 <= rule.priority < 0x1_0000_0000
+        ):
+            raise PayloadRoutingProjectionError(
+                "dispatch rule priority must be an integer in [1, 2^32-1]"
+            )
+        priorities.append(rule.priority)
 
         allocation = allocations.get(rule.profile_id)
         if allocation is None or allocation.table != rule.table:
@@ -307,6 +347,18 @@ def _validate_dispatch_rules(
         raise PayloadRoutingProjectionError(
             "dispatch-rule set does not match current Profile destinations"
         )
+    if observed_order != canonical:
+        raise PayloadRoutingProjectionError(
+            "dispatch-rule order does not match canonical longest-prefix ordering"
+        )
+    if len(set(priorities)) != len(priorities):
+        raise PayloadRoutingProjectionError(
+            "dispatch rule priorities must be unique"
+        )
+    if priorities != sorted(priorities):
+        raise PayloadRoutingProjectionError(
+            "dispatch rule priorities must increase with canonical dispatch order"
+        )
 
 
 def _route_sort_key(route: ManagedRouteSpec) -> tuple[object, ...]:
@@ -316,5 +368,7 @@ def _route_sort_key(route: ManagedRouteSpec) -> tuple[object, ...]:
         route.destination.prefixlen,
         route.route_type.value,
         route.metric,
-        route.path_id or LogicalPathId("", 0, 0),
+        route.path_id.device_id if route.path_id is not None else "",
+        route.path_id.selector_index if route.path_id is not None else -1,
+        route.path_id.slot_index if route.path_id is not None else -1,
     )
