@@ -2063,8 +2063,14 @@ interfaces, malformed state/prefix/comment/action/extra expressions,
 duplicate handles and duplicate physical rules; privileged integration reads
 the actual EXP-037 rules through the production observer.
 
-**Gate:** implementation may begin only after EXP-037 PASS. Passing the
-observer unit still does not authorize full Profile filter materialization.
+**Gate:** EXP-037 is PASS. Implementation of the strict read-only observer is
+therefore allowed. Passing the observer unit still does not authorize full
+Profile filter materialization.
+
+**EXP-037 evidence:** no-counter NEW/RETURN owner rules contain exactly five
+expressions. `/32` remote matches render as a plain IPv4 address string;
+non-host prefixes such as the tested `/24` render as a prefix object.
+The observer accepts only these evidence-backed canonical forms.
 
 
 

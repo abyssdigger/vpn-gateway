@@ -1,6 +1,6 @@
 # EXP-037 — NG3 production-shape payload_forward JSON
 
-**Status:** PREPARED / UNPROVEN.
+**Status:** PASS on privileged GitHub Linux CI.
 
 ## Hypothesis
 
@@ -16,5 +16,4 @@ no-counter RETURN rule with `/32` selectors, list canonical JSON, and verify
 the expressions/actions and owner comments. Packet semantics are already
 covered by EXP-035/036; this experiment closes parser representation only.
 
-A PASS authorizes the strict read-only observer shape, not full policy
-materialization.
+PASS evidence: `EXP-037-result-20261116.md`. The result authorizes the strict read-only observer shape, not full policy materialization.
