@@ -153,6 +153,13 @@ from .local_publication_observation import (
     ObservedLocalPublicationRule,
     compare_local_publication,
 )
+from .local_publication_mutation import (
+    LocalPublicationDeleteRef,
+    LocalPublicationMutationStep,
+    LocalPublicationPlanError,
+    select_local_publication_step,
+)
+from .linux_local_publication import LinuxLocalPublicationBackend
 from .composite_nft_policy import (
     CompositeNftDesiredState,
     CompositeNftPolicyComparison,
@@ -307,6 +314,10 @@ __all__ = [
     "CompositeNftMutationResult",
     "CompositeNftMutationStatus",
     "CompositeNftPhysicalSnapshot",
+    "LocalPublicationDeleteRef",
+    "LocalPublicationMutationStep",
+    "LocalPublicationPlanError",
+    "LinuxLocalPublicationBackend",
     "LocalPublicationDesiredState",
     "LocalPublicationHook",
     "LocalPublicationRuleSpec",
@@ -416,6 +427,7 @@ __all__ = [
     "select_composite_nft_step",
     "converge_composite_nft_step_once",
     "build_local_publication_desired",
+    "select_local_publication_step",
     "compare_local_publication",
     "compare_composite_nft_policy",
     "compare_device_firewall",
