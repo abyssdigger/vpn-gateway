@@ -347,20 +347,30 @@ verification phases
 
 Публикует системно значимое состояние payload traffic domain.
 
-Минимально требуются состояния, позволяющие понять:
-
-- соответствует ли domain текущему request;
-- доказана ли безопасная payload policy;
-- находится ли domain в защитно ограниченном состоянии.
-
-Рабочие названия:
+Текущий payload event contract:
 
 ```text
-READY
-CONVERGING
-ISOLATED
-UNKNOWN/FAILED    # точный enum будет зафиксирован в decomposition document
+PayloadTrafficStateInfo
+    rules_state: PayloadRulesState
+        knowledge
+        convergence
+        safety
+        service
+
+    profiles[]
+        profile_name
+        observed_paths: tuple[InterfaceIdentity, ...] | UNKNOWN
 ```
+
+`PayloadRulesState` является многомерным state, а не единым READY/FAILED enum.
+
+`observed_paths` — факт текущей materialized routing projection для requested Profile,
+не verdict о корректности Profile. При неизвестном authoritative rules observation paths
+тоже UNKNOWN; при авторитетном отсутствии requested logical routing domain публикуется
+пустой список paths.
+
+Raw `NetworkRulesState`, Linux route/RPDB/nft details и foreign logical domains в этот
+InfoEvent не входят.
 
 Manager вправе локально fail-close при недоказанной безопасности и затем опубликовать
 фактическое состояние.
@@ -589,7 +599,8 @@ PayloadTrafficManager
         |
         +-- locally restricts payload domain
         |
-        +-- PayloadTrafficStateInfo(ISOLATED)
+        +-- PayloadTrafficStateInfo
+                rules_state.service = ISOLATED
                     |
                     v
             RuntimeStateManager

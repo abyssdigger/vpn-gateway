@@ -1,3 +1,105 @@
+## 2026-11-14 — NG2 semantic-slice whole-code audit
+
+Completed a whole-code audit of the current NG2 semantic baseline with explicit component
+model and subject-domain isolation criteria:
+
+- removed unused retained PayloadTrafficStateRequest state from PayloadTrafficManager;
+- moved packet/predicate execution helpers out of the production NetworkRules contract and
+  into test-only code, leaving TrafficPredicate as declarative semantic AST;
+- removed the unused speculative DesiredRulesByOwner implementation and its tests; opaque
+  owner identity remains part of the Adapter API, while concrete owner storage/composition
+  will be chosen with the real Adapter backend;
+- corrected stale Manager/projector documentation and README status;
+- retained predicate boolean composition as justified payload-policy semantics rather than
+  backend syntax;
+- retained PayloadRulesState relation logic as payload-local until a real ProbeRulesState
+  model exists and can be compared;
+- confirmed EXP-012/017 boundaries remain intact and no Linux mutation mechanics leaked
+  above NetworkRulesAdapter;
+- internal review NG2-2026-11-14-semantic-slice-whole-code-audit.md passed.
+
+---
+
+## 2026-11-14 — NG2 PayloadTrafficManager drift/audit reconcile
+
+Completed and reviewed one deterministic PayloadTrafficManager audit pass:
+
+- audit refreshes current Adapter state using the same owner identity;
+- repair is triggered by rules convergence, not by payload service severity;
+- MATCHED zero-path / DEGRADED / ISOLATED states are not treated as drift;
+- DIVERGED or UNKNOWN convergence attempts materialization of current desired rules without
+  a new RequestEvent;
+- failed repair is freshly observed before publication;
+- immediate successful repair may suppress transient drift history because InfoEvents
+  represent current state;
+- recovery after a previously published isolated state produces a READY/MATCHED transition;
+- scheduler/cadence remains outside the semantic audit method;
+- internal review NG2-2026-11-14-payload-traffic-manager-audit-review.md passed.
+
+---
+
+## 2026-11-14 — NG2 PayloadTrafficManager request path
+
+Implemented and reviewed the first executable PayloadTrafficManager control path:
+
+- valid PayloadTrafficStateRequest is converted to desired NetworkRulesSpec before it is
+  accepted as current managed intent;
+- invalid/unrepresentable request does not mutate Adapter state;
+- NetworkRulesAdapter calls use the Manager instance itself as opaque owner identity;
+- apply/renew operation failures remain separate from observed payload-rules state;
+- stale observation after failed operations produces UNKNOWN rather than synthetic FAILED;
+- PayloadTrafficStateInfo publication goes only through the Event Delivery Environment port;
+- repeated semantically identical InfoEvents are deduplicated;
+- shutdown delegates Adapter cleanup with the same owner identity;
+- audit/retry scheduling remains intentionally separate from this request-path unit;
+- internal review NG2-2026-11-14-payload-traffic-manager-request-review.md passed.
+
+---
+
+## 2026-11-14 — NG2 payload rules relation and traffic-state projection
+
+Extended the reviewed payload-state model:
+
+- PayloadRulesState now enforces core cross-axis invariants;
+- semantic equality no longer depends on ordering of routing domains, destinations, or
+  allow-only filtering collections;
+- conservative divergent relation proofs can classify narrow SAFE restrictions and
+  provable UNSAFE endpoint-pair permission widening;
+- safe rules restriction does not automatically imply DEGRADED service;
+- PayloadTrafficStateInfo now publishes aggregate PayloadRulesState plus requested
+  Profiles' observed paths only;
+- unknown/stale rules knowledge suppresses current path claims;
+- authoritative absence of a requested logical domain is represented as an empty path
+  tuple, while foreign observed domains are not promoted to upper-domain Profiles;
+- raw NetworkRulesState and Linux/network-stack details remain below the event boundary;
+- internal reviews NG2-2026-11-14-payload-rules-relation-review.md and
+  NG2-2026-11-14-payload-traffic-state-info-review.md passed.
+
+---
+
+## 2026-11-14 — NG2 multidimensional PayloadRulesState
+
+Added and reviewed the first `PayloadRulesStateCalculator`:
+
+- renamed the earlier generic `PayloadStateCalculator` concept to
+  `PayloadRulesStateCalculator`, reflecting that it assesses rules handling payload rather
+  than the payload/data plane itself;
+- `PayloadRulesState` is explicitly multidimensional: `knowledge`, `convergence`,
+  `safety`, and `service`;
+- stale observations are non-authoritative and cannot produce a current assessment;
+- exact rules can be simultaneously `MATCHED` while service is `READY`, `DEGRADED`
+  or `ISOLATED`;
+- divergent proven isolation is classified `SAFE + ISOLATED`;
+- non-isolated divergence remains conservative `UNKNOWN` until a semantic relation can be
+  proven;
+- the calculator consumes only desired/observed network-rules contracts and does not
+  re-read payload config;
+- a future review is explicitly required after `ProbeRulesState` exists to determine
+  whether both state models justify a common rules-state type;
+- internal review `NG2-2026-11-14-payload-rules-state-review.md` passed.
+
+---
+
 ## 2026-11-14 — NG2 Adapter owner identity registry
 
 Added and reviewed the first Adapter-internal owner-lifecycle utility:

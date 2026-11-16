@@ -37,7 +37,7 @@ Linux route/RPDB/nft/sysctl mechanics не являются частью payload
                                sync  |              | hidden lower domain
                                      |              v
           +------------------+       |        network stack / drivers
-          | PayloadState     |<------+
+          | PayloadRulesState     |<------+
           | Calculator       |
           +------------------+
                        |
@@ -55,7 +55,7 @@ Linux route/RPDB/nft/sysctl mechanics не являются частью payload
 ```text
 PayloadTrafficManager
     -> PayloadRulesCalculator
-    -> PayloadStateCalculator
+    -> PayloadRulesStateCalculator
     -> NetworkRulesAdapter
 ```
 
@@ -134,14 +134,18 @@ Request не содержит технической materialization information
 Manager хранит только явно значимое текущее состояние:
 
 ```text
-latest_request
 latest_desired_network_rules
 latest_published_payload_state
-local retry/audit scheduling state
+local retry/audit scheduling state   # when scheduler is implemented
 ```
 
-Допустим технологический cache, если он полностью восстанавливается из текущего request и
-свежего состояния Adapter.
+Исходный `PayloadTrafficStateRequest` после успешного Direct Calculator projection не
+хранится: его текущая управляющая семантика полностью представлена
+`latest_desired_network_rules`. Это исключает дублирование двух форм одного current
+intent.
+
+Допустим технологический cache, если он полностью восстанавливается из текущего desired
+ruleset и свежего состояния Adapter.
 
 Manager не хранит как собственную semantic history:
 
@@ -161,48 +165,94 @@ PayloadTrafficStateInfo
 
 Только при семантически значимом изменении.
 
-InfoEvent отражает фактически установленную payload policy, а не историю внутренних
+InfoEvent отражает фактически наблюдаемую payload policy, а не историю внутренних
 операций.
 
-Минимально проекция должна позволять верхнему runtime установить:
-
-- соответствует ли фактическая payload policy текущему request;
-- какие Profile capabilities фактически доступны;
-- находится ли payload domain в защитно ограниченном состоянии;
-- известно ли вообще текущее состояние с достаточной уверенностью.
-
-Рабочие категории состояния:
+Точный текущий payload:
 
 ```text
-READY
-DEGRADED
-ISOLATED
-UNKNOWN
+PayloadTrafficStateInfo
+    rules_state: PayloadRulesState
+
+    profiles[]
+        profile_name
+        observed_paths: tuple[InterfaceIdentity, ...] | UNKNOWN
 ```
 
-Точный serialization enum может быть уточнен отдельно, но семантика различий нормативна:
+`rules_state` сообщает aggregate состояние правил по независимым осям.
 
-- **READY** — запрошенная payload policy полностью материализована и подтверждена;
-- **DEGRADED** — подтверждена безопасная, но неполная относительно request payload policy;
-- **ISOLATED** — payload forwarding фактически защитно закрыт;
-- **UNKNOWN** — Manager не может доказать текущее состояние с достаточной полнотой.
+Per-Profile `observed_paths` сообщает только фактическую routing projection requested
+Profile:
 
-Operation failure сам по себе не является state category.
+- при authoritative observation — concrete ordered paths;
+- authoritative отсутствие logical domain — пустой tuple;
+- неизвестное/stale observation — UNKNOWN.
+
+Эти paths не являются самостоятельным verdict о здоровье Profile. RuntimeStateManager
+комбинирует их с `rules_state`, binding/availability и другими system-level facts в
+`ProfileStateCalculator`.
+
+Foreign observed routing domains не публикуются как requested Profiles; их наличие
+отражается через divergence/safety rules-state assessment.
+
+Raw `NetworkRulesState` и Linux-specific representation через event boundary не проходят.
+
+Payload rules не сводятся к одному enum. Их состояние оценивается по независимым осям:
+
+```text
+PayloadRulesState
+    knowledge
+        KNOWN | UNKNOWN
+
+    convergence
+        MATCHED | DIVERGED | UNKNOWN
+
+    safety
+        SAFE | UNSAFE | UNKNOWN
+
+    service
+        READY | DEGRADED | ISOLATED | UNKNOWN
+```
+
+Смыслы осей:
+
+- **knowledge** — имеется ли достаточно авторитетное текущее наблюдение ruleset;
+- **convergence** — совпадает ли observed ruleset с desired ruleset;
+- **safety** — доказано ли, что observed ruleset не разрешает запрещенное desired policy
+  поведение;
+- **service** — какой уровень payload service доказан observed ruleset.
+
+Оси намеренно независимы. В частности, `KNOWN + DIVERGED + UNSAFE` является нормальным
+представимым состоянием; физическая работоспособность трафика не превращает unsafe ruleset
+в `READY`.
+
+`DEGRADED` допускается только для доказанно safe, но неполной service projection.
+`ISOLATED` означает доказанно закрытый payload service. Когда требуемое свойство нельзя
+доказать из observed semantic rules, соответствующая ось принимает `UNKNOWN`.
+
+Operation failure сам по себе не является значением ни одной из этих осей.
 
 ### 3.5. Request handling
 
 При новой request revision Manager:
 
 ```text
-1. stores latest request
-2. PayloadRulesCalculator.calculate(request)
+1. desired_rules = PayloadRulesCalculator.calculate(request)
+2. accepts latest_desired_network_rules as the current managed intent
 3. NetworkRulesAdapter.apply(self, desired_rules)
-4. inspects action result
-5. obtains authoritative last Adapter state for self
-6. PayloadStateCalculator.calculate(request, desired_rules, network_state)
-7. publishes changed PayloadTrafficStateInfo
-8. schedules retry/audit if current state does not satisfy request
+4. if apply failed: NetworkRulesAdapter.renewState(self)
+5. network_state = NetworkRulesAdapter.getLastState(self)
+6. PayloadRulesStateCalculator.calculate(desired_rules, network_state)
+7. project PayloadTrafficStateInfo
+8. publish only if semantic InfoEvent payload changed
+9. schedule retry/audit later if current state does not satisfy request
 ```
+
+Pure Calculator rejection happens before the request becomes current managed intent and
+before any Adapter mutation. Manager не хранит параллельно исходный request и его compiled
+form, поэтому между ними не может возникнуть внутренний drift. Valid RequestEvents
+ожидаются от доверенного RuntimeStateManager; invalid/unrepresentable input
+рассматривается как processing error, а не как частично принятый intent.
 
 Если `apply()` возвращает FAILURE, решение о дальнейшей реакции принадлежит Manager.
 
@@ -210,12 +260,16 @@ Operation failure сам по себе не является state category.
 
 ```text
 apply(self, ...) -> FAILURE
-renewState(self)
+renewState(self) -> SUCCESS | FAILURE
 getLastState(self)
-PayloadStateCalculator(...)
-publish actual state
+PayloadRulesStateCalculator(desired_rules, network_state)
+project/publish actual state
 retry according to local policy
 ```
+
+Результат `renewState()` также не подменяет observation. Даже если обе операции вернули
+FAILURE, Manager публикует то состояние, которое можно доказать из `getLastState()`
+(обычно UNKNOWN/stale), а не синтетический FAILED verdict.
 
 Adapter failure не является implicit command для RuntimeStateManager.
 
@@ -223,22 +277,38 @@ Adapter failure не является implicit command для RuntimeStateManage
 
 Пока текущий request не superseded, он остается управляющим intent.
 
-Manager периодически или по локальному trigger проверяет managed domain:
+Один audit/reconcile pass:
 
 ```text
-renewState(self)
-    |
-getLastState(self)
-    |
-compare/interpret against current desired rules
-    |
-if drift:
-    apply(current desired rules)
-    |
-publish changed semantic state
+1. renewState(self)
+2. getLastState(self)
+3. PayloadRulesStateCalculator(current desired, observed)
+4. if convergence != MATCHED:
+       apply(self, current desired)
+       if apply failed:
+           renewState(self)
+       getLastState(self)
+       recalculate PayloadRulesState
+5. project PayloadTrafficStateInfo
+6. publish only if semantic state changed
 ```
 
+Repair определяется **convergence**, а не service severity.
+
+Поэтому:
+
+- `MATCHED + READY` — repair не нужен;
+- `MATCHED + DEGRADED` — repair не нужен;
+- `MATCHED + ISOLATED` — repair не нужен;
+- `DIVERGED` или `convergence=UNKNOWN` — выполняется попытка materialize current desired.
+
+Это критично для zero-path request: защитная изоляция может быть полностью корректной
+materialization текущего intent и не должна сама по себе запускать бесконечный repair loop.
+
 Для repair не требуется новый RequestEvent.
+
+Scheduler/cadence audit loop находится вне этого review unit: `audit()` реализует только
+один deterministic reconcile pass.
 
 ## 4. PayloadRulesCalculator
 
@@ -645,45 +715,96 @@ Semantic state разных owners хранится и наблюдается р
 `apply(owner, ...)`, `renewState(owner)` и `cleanup(owner)` обязаны сохранять state
 остальных owners.
 
-## 9. PayloadStateCalculator
+## 9. PayloadRulesStateCalculator
 
 ### 9.1. Тип
 
-`PayloadStateCalculator` — Direct Calculator.
+`PayloadRulesStateCalculator` — Direct Calculator.
+
+Он оценивает **состояние правил обработки payload**, а не состояние payload data plane
+вообще.
 
 ### 9.2. Contract
 
 ```text
 calculate(
-    request: PayloadTrafficStateRequest,
     desired: NetworkRulesSpec,
     observed: NetworkRulesState
-) -> PayloadTrafficState
+) -> PayloadRulesState
 ```
+
+Исходный `PayloadTrafficStateRequest` не является входом этого Calculator. Все
+payload-domain требования, нужные для оценки ruleset, уже выражены
+`PayloadRulesCalculator` в desired `NetworkRulesSpec`.
 
 ### 9.3. Responsibility
 
-Calculator переводит фактическую network-rules projection обратно в payload semantics.
+Calculator переводит normalized network-rules observation обратно в payload-rules
+semantics и независимо оценивает:
 
-Он определяет:
+```text
+knowledge
+convergence
+safety
+service
+```
 
-- полностью ли request materialized;
-- какие Profile paths/capabilities подтверждены;
-- является ли наблюдаемая policy безопасной, но неполной;
-- закрыт ли payload forwarding;
-- достаточно ли данных для authoritative state.
+Он не выполняет I/O, не вызывает Adapter и не исправляет drift.
 
-### 9.4. Rules
+### 9.4. Conservative proof rule
 
-Если `NetworkRulesState.knowledge == UNKNOWN`, Calculator не имеет права вывести READY.
+Calculator не имеет права выводить `SAFE`, `DEGRADED` или `ISOLATED` по
+недоказанному предположению.
 
-READY требует semantic equivalence observed rules и desired spec.
+Минимальные правила:
 
-DEGRADED допустим только если Calculator способен доказать безопасную неполную payload
-projection.
+- неавторитетное observation -> `knowledge = UNKNOWN`;
+- authoritative semantic equality -> `MATCHED + SAFE + READY`;
+- authoritative semantic inequality -> `DIVERGED`;
+- `UNSAFE` требует доказанного расширения разрешений относительно desired;
+- `SAFE` при divergence требует доказательства, что observed policy является только
+  ограничением desired policy;
+- `DEGRADED` требует доказанного safe partial service;
+- `ISOLATED` требует доказанного отсутствия payload service;
+- если отношение rulesets нельзя доказать, соответствующие `safety/service` остаются
+  `UNKNOWN`.
 
-ISOLATED означает доказанное отсутствие payload forwarding capability, а не просто
-operation failure.
+Такой conservative contract позволяет начать с узкого доказуемого классификатора и
+расширять его только вместе с тестами/evidence, не превращая syntactic difference в
+необоснованную semantic оценку.
+
+Текущий реализованный proof set дополнительно фиксирует:
+
+- semantic equality не зависит от порядка routing domains, destinations внутри domain и
+  allow-only filtering rules; ordered paths и dispatch order остаются значимыми;
+- удаление paths с сохранением их relative order и/или удаление существующих allow rules
+  может доказать `SAFE`, если dispatch и NAT semantics не изменены;
+- такое доказательство restriction **не** доказывает `DEGRADED` service: service остается
+  `UNKNOWN`, пока отдельный service proof не покажет реальную потерю capability;
+- byte-level allow для endpoint pair, которого desired policy вообще не разрешает, является
+  доказанным permission widening и дает `UNSAFE`;
+- более тонкие predicate widening/narrowing внутри уже существующего endpoint pair пока не
+  классифицируются без отдельного implication proof.
+
+`Safety` относится к permissions ruleset, а не к случайной текущей достижимости пакета.
+Поэтому новое разрешение может быть `UNSAFE`, даже если другой defect одновременно мешает
+пакету реально пройти.
+
+### 9.5. Future common state-type review
+
+Для `AvailabilityProbeManager` ожидается симметричная пара:
+
+```text
+ProbeRulesCalculator
+ProbeRulesStateCalculator
+```
+
+и собственный `ProbeRulesState`.
+
+После появления обеих реальных state-моделей обязателен отдельный review: если их оси и
+семантика окажутся принципиально одинаковыми, следует вынести общий тип состояния rules.
+До этого момента общий `RulesState` не вводится, чтобы не обобщать совпадение формы раньше
+доказанного совпадения предметной семантики.
 
 ## 10. Error semantics
 
@@ -815,11 +936,15 @@ NG1 planner.py
 2. `NetworkRulesState`:
    - степень normalization observed state;
    - representation unrepresentable/foreign state;
-3. `PayloadTrafficStateInfo`:
-   - точный per-Profile payload;
-   - окончательные enum/reason codes;
-4. audit/retry timing policy PayloadTrafficManager;
-5. внутреннюю декомпозицию `NetworkRulesAdapter` в его собственной предметной области.
+3. точную доказуемую классификацию divergent `PayloadRulesState`:
+   - conservative subset / safe degradation;
+   - proven isolation;
+   - proven permission widening / unsafe;
+4. mapping `PayloadTrafficStateInfo` в окончательный `ProfileStateInfo` внутри
+   RuntimeStateManager;
+5. audit/retry timing policy PayloadTrafficManager;
+6. внутреннюю декомпозицию `NetworkRulesAdapter` в его собственной предметной области;
+7. после реализации `ProbeRulesState` — review на предмет общего rules-state type.
 
 До этого момента Adapter boundary считается фиксированной: Linux transaction machinery не
 должна снова протекать в PayloadTrafficManager.
