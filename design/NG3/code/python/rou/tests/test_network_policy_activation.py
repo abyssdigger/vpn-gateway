@@ -101,9 +101,14 @@ def failed_transaction(diagnostic="synthetic structural failure"):
 
 class NetworkPolicyActivationTests(unittest.TestCase):
     def invoke(self, gate, scaffold, transaction):
+        def run_structural(*args):
+            if transaction.confirmed:
+                gate.state = ForwardingGateState.ENABLED
+            return transaction
+
         with patch(
             "rou.network_policy_activation.converge_structural_policy",
-            return_value=transaction,
+            side_effect=run_structural,
         ) as structural:
             result = activate_network_policy(
                 gate,
