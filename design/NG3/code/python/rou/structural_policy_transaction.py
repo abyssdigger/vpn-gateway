@@ -56,7 +56,8 @@ def converge_structural_policy(
 
     - every STEP_APPLIED attempt must strictly reduce distance;
     - the next fresh attempt may start at the same or a lower distance;
-    - any inter-attempt distance increase stops this transaction as REGRESSED;
+    - any inter-attempt distance increase stops an unfinished transaction as
+      REGRESSED; an already-CONFIRMED fresh attempt remains authoritative;
     - any terminal one-step status other than STEP_APPLIED/CONFIRMED stops
       immediately as FAILED.
 
