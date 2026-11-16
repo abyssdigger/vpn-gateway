@@ -96,6 +96,16 @@ For every affected requirement:
 A requirement is insufficient for the current design when implementation would have to
 invent material semantics not derivable from it.
 
+A requirement/constraint chain is also insufficient when its mandatory semantic first part
+cannot be stated clearly:
+
+- requirement: `Purpose` / **Зачем?**
+- constraint: `Reason` / **Почему?**
+
+If that answer is not natural, unambiguous and derivable from accepted ancestry without
+appealing to a preferred architecture, stop autonomous refinement and escalate the affected
+ancestry chain for human discussion.
+
 Typical signals are:
 
 - two or more materially different user-visible behaviors would all satisfy the current
@@ -107,7 +117,10 @@ Typical signals are:
 - a supposedly necessary edge case has no confirmed real product scenario;
 - the implementation needs a new assumption about supported environment or usage;
 - a newly discovered limitation changes the effective product envelope;
-- a new idea is attractive but has no accepted `Purpose`.
+- a new idea is attractive but has no accepted `Purpose`;
+- the proposed `Purpose` merely paraphrases the `Statement`;
+- the proposed `Reason` explains an implementation choice rather than why the constraint
+  exists.
 
 If any of these occurs, do **not** resolve it inside implementation merely to keep coding.
 
@@ -115,41 +128,43 @@ Return to requirement work for the affected scope.
 
 ## Requirement refinement procedure
 
-When a requirement is insufficient:
+When a requirement or constraint is insufficient:
 
 1. state exactly what decision cannot be derived from the current tree;
-2. identify the highest existing requirement whose meaning is affected;
-3. determine whether the missing information is:
+2. walk the affected ancestry and verify that every relevant `Purpose/Reason` remains clear;
+3. if any `Purpose/Reason` is not naturally and unambiguously derivable, stop autonomous
+   refinement and escalate that chain for human discussion;
+4. identify the highest existing requirement/constraint whose meaning is affected;
+5. determine whether the missing information is:
    - a refinement of an existing requirement;
    - a constraint on an existing requirement;
    - or a genuinely new product promise;
-4. add or change only the minimum requirement nodes necessary;
-5. verify every new `R` node against its parent:
-   - it must refine rather than expand or rewrite the parent;
-   - its `Purpose` must remain honestly derived from the parent purpose;
-6. for every new `C` node:
-   - record its `Reason`;
+6. add or change only the minimum requirement/constraint nodes necessary;
+7. for every new or changed `R` node:
+   - verify that it refines rather than expands or rewrites the parent;
+   - verify that its `Purpose` is honestly derived from accepted ancestry;
+8. for every new or changed `C` node:
+   - record a clear `Reason`;
    - state what is constrained and how;
    - identify who must compensate for the limitation;
    - if work/knowledge is shifted to a user, administrator or external system, add the
      necessary child requirement under that constraint;
    - that child requirement must state what the product must provide so the external
-     participant can perform the adaptation correctly and reproducibly (for example an
-     instruction, API, configuration contract, validation rule or diagnostic surface);
-   - lift its observable effect upward;
+     participant can perform the adaptation correctly and reproducibly;
+   - lift the observable effect upward;
    - verify the resulting effective product envelope;
-7. define acceptance evidence at the cheapest sufficient level;
-8. if further decomposition of the affected node depends on insufficiently decomposed
-   semantics in another requirement/constraint branch:
-   - add `[decomp: <blocker-ID> -> pending]` to the blocked node;
-   - stop only that decomposition path;
-   - continue independent requirement/design work;
-9. when the blocker or one of its descendants later provides enough specificity:
-   - replace `pending` in the same link with the concrete deblocker ID:
-     `[decomp: <blocker-ID> -> <deblocker-ID>]`;
-   - keep the blocker part unchanged for causal traceability;
-   - resume review of the blocked decomposition;
-10. only then return to component design when the relevant requirement paths are sufficiently concrete.
+9. define acceptance evidence at the cheapest sufficient level;
+10. if further decomposition depends on insufficient semantics in another `R/C` branch:
+    - add `[decomp: <blocker-ID> -> pending]` to the blocked node;
+    - stop only that decomposition path;
+    - continue independent requirement/design work;
+11. when the blocker or one of its descendants later provides enough specificity:
+    - replace `pending` in the same link with the concrete deblocker ID:
+      `[decomp: <blocker-ID> -> <deblocker-ID>]`;
+    - keep the blocker part unchanged for causal traceability;
+    - resume review of the blocked decomposition;
+12. return to component design only when the relevant requirement paths are sufficiently
+    concrete.
 
 A thought that occurs during implementation is **not** automatically a requirement.
 
@@ -167,8 +182,42 @@ When requirement/constraint text or decomposition links change:
 - keep the existing stable ID unless the entity itself was incorrectly identified;
 - update the node in place rather than creating a shadow copy;
 - preserve causal decomposition links as `[decomp: blocker -> pending|deblocker]`;
+- use one architecture-closure label per requirement/constraint:
+  `[pending_closure]`, `[closed]` or `[rejected_closure]`;
+- `[pending_closure]` means an architecture candidate exists but acceptance is pending;
+- `[closed]` means the closure candidate passed sufficient acceptance;
+- `[rejected_closure]` means the closure candidate failed acceptance and the affected
+  implementation remains blocked;
+- do not copy architecture-decision IDs or architecture link lists into requirements;
+- to determine how a closed requirement is realized, search architecture artifacts for the
+  exact requirement/constraint ID;
 - revalidate affected descendants, constraints, architecture references and evidence;
+- remove/revalidate `[closed]` after a semantic change before implementation continues;
 - use Git history as the current editorial change record.
+
+The normal closure lifecycle is:
+
+```text
+open -> pending_closure -> closed | rejected_closure
+rejected_closure -> pending_closure
+```
+
+A node with `[decomp: ... -> pending]` cannot be `[pending_closure]` or `[closed]`.
+
+After architecture produces a closure candidate, mark `[pending_closure]` only after
+verifying an exact architecture reference. Replace it with `[closed]` only after sufficient
+acceptance/review evidence. Replace it with `[rejected_closure]` when acceptance shows the
+candidate is insufficient or unacceptable.
+
+The closure check is deliberately asymmetric:
+
+```text
+pending_closure R/C without architecture reference -> ERROR
+closed R/C without architecture reference          -> ERROR
+architecture reference to unlabeled R/C             -> ALLOWED
+```
+
+An architecture reference alone never changes closure state.
 
 Do not introduce a separate semantic requirement-change journal until a concrete project
 need requires querying semantic transitions independently from Git history. Such a journal
@@ -181,6 +230,9 @@ resolved autonomously.
 
 Human agreement is required before proceeding when requirement work would:
 
+- create or modify an `R/C` whose `Purpose/Reason` is not naturally and unambiguously
+  derivable from the accepted ancestry;
+- expose disagreement about why a requirement exists or why a constraint is legitimate;
 - add or materially change an L1 product promise;
 - introduce a new user-visible capability;
 - choose between multiple materially different user-visible semantics;
@@ -287,6 +339,14 @@ Implementation may begin only when all of the following hold for the affected sc
 - no active decomposition block exists on a requirement/constraint whose missing detail is
   necessary for the implementation scope;
 - all material component responsibilities and interactions are traceable to requirements;
+- every requirement/constraint whose architecture is required by the implementation unit is
+  marked `[closed]`; `[pending_closure]` and `[rejected_closure]` block implementation
+  of the dependent behavior;
+- every `[pending_closure]` and `[closed]` node has an exact reference in the architecture;
+- every `[rejected_closure]` node has explicit rejection evidence/review;
+- the mechanical closure check reports every `[pending_closure]` or `[closed]` node
+  without an architecture reference as an error, while allowing architecture references to
+  unlabeled nodes;
 - discovered constraints have been lifted far enough to expose their product effect;
 - any user/administrator/external-system adaptation caused by an accepted constraint is
   explicit as a requirement/contract rather than an undocumented workaround;

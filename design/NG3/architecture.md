@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — Architecture Report
 
 **Status:** partial NG3 architecture, design-cycle draft  
-**Cycle:** `ng3-design-cycle-20261115-40m`  
+**Cycle:** `ng3-design-cycle-20261115-managed-domain-contract-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
 
@@ -14,6 +14,9 @@ as evidence that a mechanism is technically plausible or as a source of failure 
 every NG3 architectural element below must be justified again by NG3 requirement IDs.
 
 # 1. Architecture scope of this pass
+
+**Implements:**
+- `VPNG-R1`
 
 This pass attempts architecture only for the requirements that are already sufficiently
 defined to justify concrete responsibilities:
@@ -47,6 +50,11 @@ Those gaps remain requirements without invented architecture.
 
 **Implements:**
 - `VPNG-R4.R6`
+- `VPNG-R4.R6.R1`
+- `VPNG-R4.R6.R1.R1`
+- `VPNG-R4.R6.R1.R2`
+- `VPNG-R4.R6.R1.R3`
+- `VPNG-R4.R6.R1.R4`
 - `VPNG-R4.R2`
 - `VPNG-R4.R4`
 - `VPNG-R5.R1`
@@ -60,6 +68,12 @@ data plane.
 For the Linux implementation direction, the minimal current realization is a dedicated
 network namespace containing the VPN-GATE-owned virtual network environment.
 
+The explicit host/domain boundary is realized by dedicated boundary links rather than by
+using arbitrary host routes/interfaces as implicit product plumbing. For the current Linux
+architecture, a dedicated veth-style link is the minimal default for each required
+host/domain attachment because it gives one endpoint inside the managed namespace and one
+explicit peer outside it without merging the two routing domains.
+
 Inside this domain belong the network objects whose semantics are owned by VPN-GATE,
 including:
 
@@ -68,6 +82,22 @@ including:
 - managed ingress/egress links;
 - VPN data-plane adapters/endpoints used as VPN paths;
 - probe data-plane state when probing a path requires it.
+
+The managed-domain contract is:
+
+- **ownership:** mutable routing/policy state used only by VPN-GATE lives inside the managed
+  domain unless a boundary object is explicitly declared;
+- **host boundary:** host connectivity enters through named/dedicated boundary endpoints,
+  not through ambient host networking;
+- **VPN path placement:** a VPN path's data-plane endpoint used by managed forwarding is
+  present inside the managed domain;
+- **observation before use:** runtime code verifies the endpoint is present in the expected
+  domain before accepting it for managed forwarding;
+- **identity:** the exact rule that binds a configured logical VPN path to a concrete
+  endpoint remains unresolved and is intentionally delegated back to the requirement tree.
+
+This closes the architectural shape of the managed domain without inventing the still-open
+path-identity/configuration contract.
 
 The host network namespace is outside this managed domain. Interaction with the host must
 occur only through explicit boundary links/contracts.
@@ -84,7 +114,6 @@ namespace itself.
 
 **Constrained by:**
 - `VPNG-R1.R3.C1`
-- `VPNG-R1.R3.C2`
 - `VPNG-R1.R3.C2`
 
 **Implements:**
@@ -121,12 +150,18 @@ host / external provisioning environment
 +----------------------------------+
 ```
 
-This section intentionally does **not** specify whether onboarding uses interface creation
-inside the namespace, interface movement, process placement, protocol-specific setup or
-another mechanism.
+This section intentionally does **not** specify whether the VPN endpoint arrives by interface
+creation inside the namespace, interface movement, process placement, protocol-specific
+setup or another mechanism.
 
-That choice belongs to the later supported-channel integration design and must be justified
-by its own requirements/constraints and evidence.
+For the current scope, onboarding is architecturally closed only with respect to **where the
+result must end up**: the data-plane endpoint must be inside the managed domain and the host
+boundary must be explicit.
+
+Onboarding remains open with respect to **which concrete endpoint corresponds to which
+logical VPN path**. That identity/configuration decision is not derivable from the isolation
+requirements and is tracked in the requirement tree as a new decomposition block on
+`VPNG-R1.R3`.
 
 
 
@@ -285,6 +320,25 @@ managed network domain                               |
 The event-delivery mechanism is intentionally left abstract. NG3 requires the semantic edge,
 not a persistent bus, journal or replay system.
 
+The externally provisioned VPN-channel integration adds one narrow Machinery boundary:
+
+```text
+logical VPN path intent
+        |
+        v
++-----------------------+
+| VPNPathAdapter        |
+|       Adapter         |
++-----------------------+
+        |
+        v
+observed concrete endpoint
+inside managed network domain
+```
+
+The Adapter resolves and verifies a binding; it does not provision or configure the VPN
+session.
+
 ## 3.1. External VPN-channel boundary
 
 **Implements:**
@@ -312,6 +366,171 @@ an externally provisioned channel:
 The exact representation of that contract is intentionally open. A Linux interface move,
 process placement, interface name, protocol-specific handle or another mechanism must not be
 selected until the supported deployment requirements make that choice necessary.
+
+## 3.2. Logical VPN path binding
+
+**Implements:**
+- `VPNG-R1.R3.R1`
+- `VPNG-R1.R3.R2`
+- `VPNG-R1.R3.R3`
+- `VPNG-R4.R6.R1.R4`
+- `VPNG-R7.R3.R1`
+- `VPNG-R7.R3.R2`
+
+The architecture separates:
+
+```text
+logical path identity
+!=
+concrete current data-plane endpoint
+```
+
+The product-facing path identity is stable for the configuration lifecycle. Runtime endpoint
+identity may change when the administrator recreates/replaces the externally provisioned VPN
+channel.
+
+The normalized internal contract therefore contains a logical path identity plus enough
+binding intent to locate the expected concrete endpoint. The exact user-facing syntax that
+produces this normalized contract is intentionally not defined here.
+
+A concrete endpoint becomes the current endpoint for a logical path only after the binding
+has been observed and verified.
+
+### VPNPathAdapter
+
+**Component type:** Adapter
+
+**Implements:**
+- `VPNG-R1.R3.R2`
+- `VPNG-R1.R3.R3`
+- `VPNG-R4.R6.R1.R4`
+- `VPNG-R7.R3`
+- `VPNG-R7.R5`
+
+The Adapter is the boundary between logical VPN-path semantics and the externally
+provisioned concrete VPN endpoint.
+
+Conceptual contract:
+
+```text
+observe_binding(logical_path_id, normalized_binding_intent)
+    -> matched current endpoint
+     | absent
+     | ambiguous
+     | wrong managed domain
+     | structurally unusable
+```
+
+A successful result must prove at least:
+
+- the endpoint is inside the managed network domain;
+- the endpoint matches the normalized binding intent for the logical path;
+- exactly one current endpoint is selected;
+- a previously superseded endpoint is not returned as current.
+
+The Adapter does **not**:
+
+- create the VPN session;
+- configure protocol credentials;
+- choose payload eligibility;
+- decide path preference;
+- decide availability health;
+- invent the user configuration syntax.
+
+The exact endpoint selector carried by `normalized_binding_intent` remains intentionally
+open until `VPNG-R1.R2` is decomposed. This keeps runtime identity semantics defined while
+leaving the external declarative interface unresolved.
+
+## 3.3. Declarative configuration boundary
+
+**Implements:**
+- `VPNG-R1.R2.R1`
+- `VPNG-R1.R2.R2`
+- `VPNG-R1.R2.R3`
+- `VPNG-R1.R3.C1.R1`
+- `VPNG-R2.R1`
+- `VPNG-R2.R2`
+- `VPNG-R2.R3`
+- `VPNG-R2.R3.R1`
+- `VPNG-R2.R3.R2`
+- `VPNG-R2.R4`
+- `VPNG-R2.R5`
+- `VPNG-R4.R1`
+- `VPNG-R7.R3.R1`
+- `VPNG-R7.R3.R2`
+- `VPNG-R7.R5`
+
+NG3 uses a declarative external configuration boundary. Users/admins describe product intent;
+they do not provide an ordered recipe of Linux networking operations.
+
+### ConfigurationAdapter
+
+**Component type:** Adapter
+
+The Adapter translates an external configuration representation into validated, normalized
+domain intents.
+
+It is Direct Machinery: a successful return means the supplied configuration has been
+accepted and normalized; a failed return means no dependent network mutation may begin from
+that candidate configuration.
+
+The architecture intentionally avoids a global mutable "runtime configuration object".
+Instead, the adapter produces explicit domain contracts needed by accepted requirements.
+
+The first required normalized contracts are:
+
+```text
+VPNPathIntent:
+    logical_path_id
+    binding_intent
+
+PayloadPolicyIntent:
+    traffic_selector
+    direction_permissions
+    allowed_path_ids
+    configured_preference
+```
+
+where:
+
+- `logical_path_id` is the stable product identity from `VPNG-R1.R3.R1`;
+- `binding_intent` contains only the information required by `VPNPathAdapter` to resolve
+  one concrete endpoint inside the managed network domain;
+- `traffic_selector` identifies the traffic class to which one policy intent applies;
+- `direction_permissions` independently represents ordinary-network -> VPN and
+  VPN -> ordinary-network permission;
+- `allowed_path_ids` is the explicit set of logical VPN paths eligible for that traffic;
+- `configured_preference` orders only those already allowed paths;
+- the exact external syntax and concrete selector forms are implementation/interface choices
+  and may be refined independently without changing the semantic contracts.
+
+Payload policy and VPN path binding remain separate normalized contracts.
+
+Validation must reject at least:
+
+- missing required logical identity;
+- duplicate/ambiguous logical path identity;
+- binding intent insufficient to resolve a supported endpoint;
+- contradictory declarations that cannot produce one deterministic semantic result.
+
+A rejected configuration is not partially materialized.
+
+### Administrator onboarding contract
+
+For each supported externally provisioned VPN-channel integration, administrator
+documentation must explain:
+
+1. how to provision the external VPN channel according to its own mechanism;
+2. what result must exist inside the managed network domain;
+3. how to declare the logical `path_id` and binding intent through the product
+   configuration boundary;
+4. how to determine that VPN-GATE accepted or rejected the binding.
+
+This closes the architecture of `VPNG-R1.R3.C1.R1` without choosing the final configuration
+file syntax or a specific VPN protocol.
+
+No ConfigManager, live-reload Engine, configuration database or generic plugin registry is
+introduced. Those require separate accepted requirements if they become necessary.
 
 # 4. PayloadTrafficManager
 
@@ -405,7 +624,57 @@ No unbounded attempt history, evidence journal or replay log is justified.
 - `VPNG-R3.R5.R2`
 - `VPNG-R7.R1.R1`
 
-The exact evidence input semantics are not finalized in this pass; see design gaps.
+The Manager consumes semantic availability evidence, not raw probe execution results.
+
+Normalized evidence:
+
+```text
+AvailabilityEvidence:
+    logical_path_id
+    observation_context
+    outcome = positive | negative | no_evidence
+```
+
+where:
+
+- `positive` is accepted evidence that the observed path property is currently usable;
+- `negative` is accepted evidence that the observed path property is currently unusable;
+- `no_evidence` means the observation attempt does not justify changing path state
+  (for example, a local execution failure that does not itself prove path failure).
+
+Only fresh evidence for the current logical path/context enters hysteresis.
+
+For each logical path the Manager keeps bounded confirmation state:
+
+```text
+availability_problem: bool
+degradation_progress: 0..degradation_threshold
+recovery_progress:    0..recovery_threshold
+```
+
+The thresholds are finite local availability-policy parameters. They are not assumed to be
+user-configurable unless a later requirement says so.
+
+Transition semantics:
+
+- while `availability_problem == false`:
+  - negative evidence advances bounded degradation progress;
+  - positive evidence clears degradation progress;
+  - `no_evidence` does not fabricate path evidence;
+  - reaching the degradation threshold establishes the problem;
+- while `availability_problem == true`:
+  - positive evidence advances bounded recovery progress;
+  - negative evidence clears recovery progress;
+  - `no_evidence` does not fabricate recovery;
+  - reaching the recovery threshold clears the problem.
+
+On either state transition, obsolete progress is reset.
+
+No observation history, time window, replay log or unbounded attempt count is retained.
+
+This closes adaptation semantics independently from the still-open question of which concrete
+observation mechanism is adequate to produce `positive/negative` evidence for supported
+failure scenarios.
 
 ## 4.4. Availability affects priority only
 
@@ -445,6 +714,9 @@ Availability is not allowed to:
 - `VPNG-R2.R1`
 - `VPNG-R2.R2`
 - `VPNG-R2.R3`
+- `VPNG-R2.R3.R1`
+- `VPNG-R2.R3.R2`
+- `VPNG-R2.R4`
 - `VPNG-R2.R5`
 - `VPNG-R7.R3.R1`
 - `VPNG-R7.R5`
@@ -457,8 +729,17 @@ It is pure: the same inputs produce the same projection.
 This component is justified because policy interpretation is independently testable and must
 not depend on hidden network history.
 
-The exact normalized input schema remains intentionally unspecified until the configuration
-requirements are decomposed further.
+Its normalized input is `PayloadPolicyIntent`.
+
+The Calculator must preserve these invariants:
+
+- traffic membership comes only from `traffic_selector`;
+- path eligibility comes only from `allowed_path_ids`;
+- direction permissions are independent and explicit;
+- configured preference cannot add an ineligible path;
+- availability state is not an input to structural membership or permission;
+- ambiguous overlapping policy must either resolve deterministically according to the
+  accepted policy contract or be rejected before materialization.
 
 # 6. AvailabilityPriorityCalculator
 
@@ -661,10 +942,14 @@ The architecture currently needs only semantic event edges required by Engine ro
 The event must identify the logical path and carry only the bounded observation information
 needed by the Manager.
 
-The exact positive/negative evidence shape is unresolved. Local inability to execute the
-observation mechanism is not automatically treated as path failure: by
-`VPNG-R3.R6.R3`, evidence used for path adaptation must actually observe a relevant path
-property.
+The event carries normalized `AvailabilityEvidence`.
+
+Local inability to execute the observation mechanism produces `no_evidence` plus diagnostic
+state unless the observation contract proves that the failure itself demonstrates path
+unusability.
+
+By `VPNG-R3.R6.R3`, only evidence that observes a relevant path property may become
+`positive` or `negative`.
 
 No requirement currently justifies:
 
@@ -696,10 +981,16 @@ long-lived semantic component.
 Instead, the architecture records only required postconditions:
 
 **Implements:**
+- `VPNG-R1.R2`
 - `VPNG-R4.R4`
+- `VPNG-R5`
 - `VPNG-R5.R1`
 - `VPNG-R5.R4`
 - `VPNG-R5.R5`
+- `VPNG-R5.R6`
+- `VPNG-R5.R6.R1`
+- `VPNG-R5.R6.R2`
+- `VPNG-R5.R6.R3`
 - `VPNG-R7.R1`
 
 Required orchestration semantics:
@@ -711,32 +1002,182 @@ Required orchestration semantics:
 4. attempt cleanup of independent owned domains even if another cleanup fails;
 5. preserve all material failures for observability.
 
-Whether these steps remain procedural assembly or require a dedicated Engine is intentionally
-left open until deeper lifecycle requirements demand one.
+## 12.1. Product lifecycle control surface
 
-# 13. Requirement coverage in this architecture pass
+The lifecycle operations required by `VPNG-R5.R6` are exposed through a thin product
+control surface.
+
+The architecture does not require that surface to be a specific CLI, service manager,
+socket or API. Those are replaceable interface mechanisms.
+
+Semantically:
+
+```text
+start
+    -> run startup orchestration
+    -> report success only after required readiness/safety postconditions
+
+stop
+    -> run quiesce + cleanup orchestration
+    -> report success only after required cleanup postconditions
+
+restart
+    -> stop/cleanup as required
+    -> start from the resulting authoritative state
+    -> never report success while previous required cleanup remains unresolved
+```
+
+The control surface is not a long-lived domain Engine and owns no independent lifecycle
+policy. It invokes procedural assembly/orchestration whose postconditions are already
+defined by the lifecycle requirements.
+
+This keeps product control operations explicit while avoiding a LifecycleManager that has no
+independently required semantic state.
+
+For the current scope, procedural lifecycle orchestration remains the accepted architecture.
+A dedicated Engine would require a later requirement proving an ongoing semantic
+responsibility that cannot be represented by these direct operations.
+
+## 12.2. Local Manager reconciliation
+
+**Implements:**
+- `VPNG-R5.R2`
+- `VPNG-R5.R2.R1`
+- `VPNG-R5.R3`
+- `VPNG-R5.R3.R1`
+- `VPNG-R7.R1`
+- `VPNG-R7.R1.R1`
+
+Any Manager that owns mutable external state keeps the current accepted desired semantic
+state and periodically re-observes its own managed domain while the corresponding function
+is active.
+
+The reconciliation loop is local to the Manager:
+
+```text
+current desired state
+        +
+periodic audit / relevant event
+        |
+        v
+observe authoritative actual state
+        |
+        +-- already satisfied --> publish/retain confirmed projection
+        |
+        +-- drift / previous recoverable failure
+                    |
+                    v
+             converge through Adapter
+                    |
+                    v
+             verify postcondition
+```
+
+The periodic audit is a fallback for silent drift. Relevant external or internal events may
+trigger earlier reconciliation, but correctness does not depend on receiving such an event.
+
+The exact audit interval is a local implementation parameter unless a later product
+requirement makes recovery latency user-visible.
+
+No global scheduler, durable retry queue, missed-tick replay or retry-history journal is
+introduced.
+
+If an audit occurs while reconciliation is already active, at most one future reconciliation
+need must be retained; multiple equivalent triggers may be coalesced because the next
+reconciliation always starts from freshly observed actual state.
+
+A recoverable failure does not enqueue the failed command sequence for replay. The Manager
+retains desired semantic state and on a later reconciliation re-observes reality and computes
+a new convergence operation from current state.
+
+This architecture makes retry idempotence a property of semantic reconciliation rather than
+command replay.
+
+# 13. RuntimeStatusAgent
+
+**Component type:** Agent
+
+**Implements:**
+- `VPNG-R6`
+- `VPNG-R6.R1`
+- `VPNG-R6.R2`
+- `VPNG-R6.R3`
+- `VPNG-R6.R4`
+- `VPNG-R7.R1`
+- `VPNG-R7.R1.R1`
+- `VPNG-R7.R3.R1`
+- `VPNG-R7.R5`
+
+The Agent observes current projections published by the Engines that own product domains and
+composes a user-facing current status snapshot.
+
+It is deliberately an Agent rather than a Manager because it does not actuate or own the
+represented domains.
+
+Inputs are current-snapshot InfoEvents, including where applicable:
+
+- accepted/configured intent reported by the owner that accepted it;
+- current logical VPN-path binding/effective path information;
+- current payload policy/effective ordering;
+- availability observation/diagnostic state;
+- lifecycle/readiness/cleanup failures;
+- lower-domain convergence failures that prevent required postconditions.
+
+The Agent stores only the latest relevant snapshot per authoritative source. It does not
+store event history, reconstruct past transitions or become a system-of-record.
+
+Conceptual output:
+
+```text
+RuntimeStatusSnapshot:
+    configured_intent
+    confirmed_effective_state
+    availability_state
+    readiness
+    blocking_problems
+    unknown_or_unconfirmed_fields
+```
+
+Truthfulness rules:
+
+- a desired/configured value is never reported as confirmed actual merely because it was
+  requested;
+- missing or stale authoritative information is represented as unknown/unconfirmed;
+- a local source retains ownership of its semantic truth; the StatusAgent only composes;
+- conflicting snapshots are surfaced as an inconsistency/problem rather than resolved by a
+  hidden status policy;
+- current status contains no unbounded history.
+
+The presentation mechanism is outside this component contract. CLI, API, text output or
+another user-facing surface may render the same current `RuntimeStatusSnapshot` without
+changing status semantics.
+
+A final status query therefore does not require direct knowledge of kernel commands or
+internal Manager state.
+
+# 14. Requirement coverage in this architecture pass
 
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG-R1.R2` declarative operation | **not yet architected**: configuration boundary missing |
-| `VPNG-R1.R3` VPN-channel service | external channel boundary established; exact onboarding contract incomplete |
+| `VPNG-R1.R2` declarative operation | configuration side represented by ConfigurationAdapter; lifecycle control side represented by thin product control surface |
+| `VPNG-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
-| `VPNG-R1.R3.C1.R1` admin instructions/contract | requirement identified; concrete supported-channel instructions still missing |
+| `VPNG-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
 | `VPNG-R1.R3.C2` isolated VPN data-plane endpoint | architecture constraint derived from managed-network isolation |
-| `VPNG-R1.R3.C2.R1` isolated-channel onboarding result | required result known; concrete mechanism intentionally unresolved |
+| `VPNG-R1.R3.C2.R1` isolated-channel onboarding result | placement result architecture accepted; concrete provisioning commands remain implementation-specific |
 | `VPNG-R2` subtree — payload policy | semantic ownership represented; normalized config schema missing |
 | `VPNG-R3.R1`–`VPNG-R3.R5`, `VPNG-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
 | `VPNG-R3.R6` subtree — path-usability evidence | active observation selected via AvailabilityProbeAgent + ActiveProbeDriver; evidence semantics incomplete |
 | `VPNG-R4` subtree — safety | lower boundary/executor responsibilities represented; managed network isolation selected; concrete lower mutation strategy otherwise incomplete |
-| `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5` lifecycle | postconditions recorded; orchestration component intentionally absent |
-| `VPNG-R5.R2`, `VPNG-R5.R3` recovery | represented locally by Manager/Adapter/Executor contracts |
-| `VPNG-R6.R1` configured intent visibility | **not yet architected** |
-| `VPNG-R6.R2`, `VPNG-R6.R4` payload effective state | component-level projection represented |
-| `VPNG-R6.R3` system failure visibility | partial diagnostics only; **final aggregation missing** |
+| `VPNG-R5.R1`, `VPNG-R5.R4`, `VPNG-R5.R5`, `VPNG-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
+| `VPNG-R5.R2`, `VPNG-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
+| `VPNG-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
+| `VPNG-R6.R2`, `VPNG-R6.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
+| `VPNG-R6.R3` system failure visibility | RuntimeStatusAgent aggregates current blocking diagnostics without becoming policy owner |
 | `VPNG-R7` subtree — implementation quality | applied as cross-cutting architecture rules |
 
-# 14. Deliberately omitted machinery
+# 15. Deliberately omitted machinery
 
 The following are deliberately absent from this first architecture because no accepted NG3
 requirement currently makes them necessary:
@@ -756,30 +1197,26 @@ requirement currently makes them necessary:
 This omission is an implementation of `VPNG-R7.R1`, not a claim that such machinery can
 never become necessary.
 
-# 15. Design gaps that block deeper architecture
+# 16. Design gaps that block deeper architecture
 
-## 15.1. Configuration model
+## 16.1. Remaining configuration semantics
 
-Affected requirements:
-- `VPNG-R1.R2`
-- `VPNG-R2.R1`
-- `VPNG-R2.R2`
-- `VPNG-R2.R3`
-- `VPNG-R2.R4`
-- `VPNG-R2.R5`
-- `VPNG-R6.R1`
+The configuration boundary itself is now defined and the VPN-path binding contract is
+architecturally closed.
 
-Missing requirement detail:
+Remaining configuration detail is limited primarily to external representation and lifecycle:
 
-- how users identify traffic classes;
-- how VPN paths are referenced;
-- how directions are expressed;
-- how conflicting/overlapping declarations are surfaced;
-- which configuration changes must be supported live.
+- the concrete external syntax used to express `traffic_selector`, path IDs and direction
+  permissions;
+- whether any configuration changes must be supported live;
+- final user-visible configured-intent projection under `VPNG-R6.R1`.
 
-Until this is refined, NG3 must not invent a universal normalized config schema.
+The semantic payload-policy contract itself is now defined by `PayloadPolicyIntent`.
 
-## 15.2. Availability evidence semantics
+These gaps must be refined by their owning requirement branches rather than by expanding
+`ConfigurationAdapter` into a universal configuration framework.
+
+## 16.2. Availability evidence semantics
 
 Affected requirements:
 - `VPNG-R3.R3`
@@ -787,37 +1224,32 @@ Affected requirements:
 - `VPNG-R3.R5`
 - `VPNG-R3.R6`
 
-Current requirements are sufficient to reject stale/misbound evidence and to require an
-adequate observation property, but they do not yet define the full confirmation policy.
+Confirmation/hysteresis semantics and the normalized event contract are now defined.
 
-Missing requirement detail:
+The remaining open issue is narrower:
 
-- what exactly constitutes sufficient negative path evidence;
-- how delayed positive evidence interacts with an evaluation boundary;
-- whether confirmation thresholds are user-configurable product semantics or internal
-  policy.
+- which concrete observed property and mechanism are sufficient to classify a result as
+  `positive` or `negative` for the supported failure scenarios.
 
-A local observation-execution failure is currently treated as diagnostic rather than path
-evidence unless a lower requirement/evidence proves that such a failure itself demonstrates
-path unusability.
+A local observation-execution failure remains diagnostic/`no_evidence` unless the selected
+observation contract proves that such a failure itself demonstrates path unusability.
 
-This gap blocks final event contract and hysteresis algorithm.
+This gap blocks closure of `VPNG-R3.R6.R3` and therefore the R3 parent, but not the
+adaptation state machine.
 
-## 15.3. User-visible status aggregation
+## 16.3. User-visible status presentation
 
-Affected requirements:
-- `VPNG-R6.R1`
-- `VPNG-R6.R2`
-- `VPNG-R6.R3`
-- `VPNG-R6.R4`
+Status aggregation semantics and ownership are now defined by `RuntimeStatusAgent`.
 
-Current components can expose local current state, but the requirements do not yet define
-the final user-facing status model, aggregation ownership or presentation boundary.
+Still intentionally open as interface implementation detail:
 
-No RuntimeStateManager/StatusManager is introduced until that responsibility is made
-concrete.
+- concrete CLI/API/text presentation format;
+- formatting and filtering for different operator surfaces.
 
-## 15.4. Complete lifecycle ownership
+These do not require another domain component unless later product requirements make
+presentation behavior itself semantic.
+
+## 16.4. Lifecycle ownership
 
 Affected requirements:
 - `VPNG-R5.R1`
@@ -825,17 +1257,19 @@ Affected requirements:
 - `VPNG-R5.R3`
 - `VPNG-R5.R4`
 - `VPNG-R5.R5`
+- `VPNG-R5.R6`
 
-The required postconditions are clear enough to constrain components but not yet sufficient
-to prove that a separate long-lived lifecycle component is necessary.
+Lifecycle control semantics and autonomous local reconciliation are now explicit. They
+still do not justify a separate global lifecycle component.
 
 For the first release, VPN tunnel/session creation is outside this lifecycle scope by
-`VPNG-R1.R3.C1`; lifecycle here concerns VPN-GATE-owned state and its use of already
-provisioned channels.
+`VPNG-R1.R3.C1`; lifecycle concerns VPN-GATE-owned state and its use of already provisioned
+channels.
 
-Procedural assembly remains the simpler default.
+Procedural assembly plus the thin product control surface remains the simpler accepted
+architecture.
 
-## 15.5. Administrator-facing VPN-channel onboarding contract
+## 16.5. Administrator-facing VPN-channel onboarding contract
 
 Affected requirements:
 - `VPNG-R1.R3`
