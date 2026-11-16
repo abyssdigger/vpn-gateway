@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from rou.binding import LogicalPathId
 from rou.composite_nft_mutation import (
@@ -27,6 +27,11 @@ from rou.iproute_priority_backend import SubprocessCommandRunner
 from rou.linux_composite_nft import LinuxCompositeNftBackend
 from rou.linux_forwarding_gate import LinuxForwardingGateBackend
 from rou.linux_nft_scaffold import SubprocessNftRunner
+from rou.local_publication_policy import (
+    PublicationLocalEndpointIntent,
+    PublicationProtocol,
+    build_local_publication_desired,
+)
 from rou.payload_forward_desired import (
     PayloadForwardDesiredState,
     PayloadForwardRuleSpec,
@@ -90,6 +95,16 @@ def main():
         )
         host = identity(namespace, "host0")
         path = identity(namespace, "tun0")
+        publication_ip = IPv4Address("198.51.100.48")
+        ns_run(
+            namespace,
+            "ip",
+            "addr",
+            "add",
+            f"{publication_ip}/32",
+            "dev",
+            "lo",
+        )
 
         ns_run(
             namespace,
@@ -177,7 +192,23 @@ def main():
             out_chain_name="dfw_out",
             in_chain_name="dfw_in",
         )
-        desired = CompositeNftDesiredState(profile, nat, device)
+        local_publication = build_local_publication_desired(
+            (
+                PublicationLocalEndpointIntent(
+                    "device",
+                    PublicationProtocol.TCP,
+                    publication_ip,
+                    44443,
+                    host,
+                ),
+            )
+        )
+        desired = CompositeNftDesiredState(
+            profile,
+            nat,
+            device,
+            local_publication,
+        )
 
         ns_run(namespace, "sysctl", "-w", "net.ipv4.ip_forward=1")
         created = converge(gate, backend, desired)
@@ -192,6 +223,7 @@ def main():
             CompositeNftStepKind.CREATE_DEVICE_CHAIN,
             CompositeNftStepKind.ADD_PROFILE_RULE,
             CompositeNftStepKind.ADD_PROFILE_RULE,
+            CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
         ], created_steps
         assert gate.observe_forwarding_gate() is ForwardingGateState.DISABLED
 
@@ -207,6 +239,20 @@ def main():
         assert "device-fw-jump-v1" in forward_rules[1], forward_rules
         assert "payload-forward-" in forward_rules[2], forward_rules
         assert "payload-forward-" in forward_rules[3], forward_rules
+        local_input = [
+            item.canonical_json
+            for item in snapshot.observation.objects
+            if item.kind == "rule"
+            and '"chain":"stack_input"' in item.canonical_json
+        ]
+        local_output = [
+            item.canonical_json
+            for item in snapshot.observation.objects
+            if item.kind == "rule"
+            and '"chain":"stack_output"' in item.canonical_json
+        ]
+        assert len(local_input) == 1 and "local-publication-v1" in local_input[0]
+        assert len(local_output) == 1 and "local-publication-v1" in local_output[0]
 
         empty = CompositeNftDesiredState(
             PayloadForwardDesiredState(()),
@@ -220,6 +266,7 @@ def main():
             if item.step is not None
         ]
         assert removed_steps == [
+            CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
             CompositeNftStepKind.DELETE_PROFILE_RULE,
             CompositeNftStepKind.DELETE_PROFILE_RULE,
             CompositeNftStepKind.DELETE_DEVICE_JUMP,
@@ -251,7 +298,7 @@ def main():
         assert not conflict.mutation_attempted
         assert gate.observe_forwarding_gate() is ForwardingGateState.DISABLED
 
-        print("NG3 live combined Profile Device NAT nft convergence: PASS")
+        print("NG3 live combined Profile Device NAT local-publication nft convergence: PASS")
     finally:
         subprocess.run(
             ("ip", "netns", "del", namespace),
