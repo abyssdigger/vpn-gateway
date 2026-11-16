@@ -924,27 +924,18 @@ NG1 planner.py
 
 ## 14. Пока открыто
 
-Следующий проход должен определить точный data contract:
+Текущий `NetworkRulesSpec / NetworkRulesState` contract и concrete Linux lower domain
+зафиксированы отдельно в `design/NG2/network-rules-adapter.md`.
 
-1. `NetworkRulesSpec`:
-   - representation routing domains;
-   - path ordering;
-   - dispatch semantics;
-   - flow policy;
-   - NAT policy;
-   - terminal actions;
-2. `NetworkRulesState`:
-   - степень normalization observed state;
-   - representation unrepresentable/foreign state;
-3. точную доказуемую классификацию divergent `PayloadRulesState`:
-   - conservative subset / safe degradation;
-   - proven isolation;
-   - proven permission widening / unsafe;
-4. mapping `PayloadTrafficStateInfo` в окончательный `ProfileStateInfo` внутри
+Для payload/runtime слоя остаются открыты:
+
+1. mapping `PayloadTrafficStateInfo` в окончательный `ProfileStateInfo` внутри
    RuntimeStateManager;
-5. audit/retry timing policy PayloadTrafficManager;
-6. внутреннюю декомпозицию `NetworkRulesAdapter` в его собственной предметной области;
-7. после реализации `ProbeRulesState` — review на предмет общего rules-state type.
+2. audit/retry scheduling policy вокруг уже реализованного deterministic `audit()` pass;
+3. richer divergent predicate implication только там, где появится реальная необходимость;
+4. после реализации `ProbeRulesState` — review на предмет общего rules-state type;
+5. runtime/bootstrap assembly, обеспечивающий protective forwarding closure до первого
+   owner reconcile после запуска/перезапуска.
 
-До этого момента Adapter boundary считается фиксированной: Linux transaction machinery не
-должна снова протекать в PayloadTrafficManager.
+Adapter boundary остается фиксированной: Linux transaction machinery не должна снова
+протекать в PayloadTrafficManager.
