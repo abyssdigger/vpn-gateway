@@ -508,6 +508,8 @@ protocol-specific discovery mechanics remain replaceable interface/integration d
 - `VPNG-R2.R3.R1`
 - `VPNG-R2.R3.R2`
 - `VPNG-R2.R3.R3`
+- `VPNG-R2.R3.C1`
+- `VPNG-R2.R3.C1.R1`
 - `VPNG-R2.R4`
 - `VPNG-R2.R5`
 - `VPNG-R2.R5.R1`
@@ -738,6 +740,8 @@ Validation must reject at least:
 - enabled Device without non-empty valid expected-interface selectors;
 - ambiguous active expected-interface selectors;
 - enabled Profile without direction, destinations or device_order;
+- first-release `inbound`/`bidirectional` Profile whose maximum eligible logical-path
+  capacity from currently enabled referenced Devices exceeds 1;
 - unknown Device references;
 - duplicate Device references inside one Profile;
 - duplicate exact destination ownership among enabled Profiles;
@@ -1130,45 +1134,57 @@ The Calculator must preserve these invariants:
 - availability state is not an input to structural membership or permission;
 - availability can later reorder only already-eligible logical paths.
 
-## 5.1. Multi-path inbound/bidirectional return-path gate
+## 5.1. First-release inbound/bidirectional path-capacity constraint
 
-**Affected requirements:**
+**Implements:**
 - `VPNG-R2`
 - `VPNG-R2.R3`
 - `VPNG-R2.R3.R3`
+- `VPNG-R2.R3.C1`
+- `VPNG-R2.R3.C1.R1`
 
-The recovered Profile contract allows `inbound` and `bidirectional`, and a Profile may have
-more than one eligible path.
+First release deliberately does not promise remote-initiated multi-path return-path behavior.
 
-The current architecture does **not** yet claim complete closure for the case where a
-remote-initiated flow enters through one of several simultaneously eligible paths and its
-return traffic must be kept compatible with that ingress path.
+During configuration normalization, for every enabled Profile with:
 
-Historical evidence status:
+```text
+direction = inbound | bidirectional
+```
 
-- EXP-014 was prepared specifically to test multi-path remote-initiated flow pinning;
-- EXP-014 was not completed;
-- no later recovered experiment establishes equivalent target behavior.
+the product computes the maximum eligible logical-path capacity implied by the currently
+enabled Devices referenced by that Profile:
 
-Therefore NG3 must not silently assume any of the following:
+```text
+Profile max path capacity
+    =
+sum(
+    selector quota
+    for every expected-interface selector
+    of every currently enabled referenced Device
+)
+```
 
-- ordinary current priority routing is sufficient for return-path correctness;
-- asymmetric return is always acceptable for every supported transport/profile;
-- connmark/fwmark return steering is already proven;
-- the first release is automatically limited to one inbound path.
+Exact selectors contribute quota 1. Prefix selectors contribute their explicit positive
+quota.
 
-This is a human product/evidence gate.
+If the resulting capacity is greater than 1, configuration normalization fails before
+dependent network actuation with a diagnostic explaining that first-release
+inbound/bidirectional multi-path is unsupported.
 
-Two legitimate resolution classes exist, neither of which may be selected autonomously:
+Consequences:
 
-1. **support multi-path inbound/bidirectional** — accept an architecture for return-path
-   handling and obtain sufficient evidence (EXP-014 or equivalent);
-2. **constrain first-release support** — add an explicit product Constraint with natural
-   Reason/Statement and define how configuration/runtime exposes/rejects the unsupported
-   case.
+- current runtime presence of only one interface does **not** make a capacity>1 Profile
+  acceptable;
+- a disabled referenced Device contributes no current capacity; enabling it later is itself a
+  configuration change and triggers validation again;
+- outbound-only Profiles are not constrained by this rule and may remain multi-path;
+- runtime disappearance/reappearance inside an already accepted capacity<=1 Profile does not
+  change the product contract;
+- no runtime fallback guesses return-path semantics if an unsupported topology is presented.
 
-Until one class is accepted, `VPNG-R2.R3` and `VPNG-R2.R3.R3` remain open for
-architecture closure.
+Historical EXP-014 remains the primary evidence candidate for a future release that restores
+multi-path inbound/bidirectional support. Its result must not alter Release 1 behavior unless
+requirements are explicitly revised.
 
 # 6. AvailabilityPriorityCalculator
 
