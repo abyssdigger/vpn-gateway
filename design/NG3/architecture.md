@@ -788,7 +788,8 @@ Key normalization rules:
 - active Devices are derived as enabled Devices referenced by at least one enabled Profile;
 - `DeviceBindingIntent` retains ordered expected-interface selectors and quotas;
 - `ProfileConfigIntent` retains explicit direction, remote destinations and ordered Device
-  references;
+  references; optional ordinary-side gateway NAT remains a separate Profile-scoped semantic
+  intent whose exact external spelling is deferred;
 - `PayloadProfileRequest` contains the concrete ordered logical paths obtained after binding
   while preserving Profile identity/direction/destinations;
 - current concrete logical paths are derived from accepted Device bindings, not written
@@ -799,8 +800,9 @@ Key normalization rules:
 - derived implementation values such as aggregate Device quota, ifindex, route metrics and
   table/rule priorities are not required from the user;
 - Device NAT intent is explicit; no implicit active-Device NAT default is assumed;
-- Device traffic envelope is normalized as a restrictive policy that can only narrow Profile
-  permission;
+- Device firewall is normalized as an ordered first-match policy that can only narrow Profile
+  permission; omitted policy is permissive at the Device layer and explicit policy has
+  terminal no-match DROP;
 - Device transport publication intent is normalized separately from Profile payload routing;
 - exact final external grammar for Device firewall/publication remains an interface-review item and is
   not inferred from historical prototype spellings;
@@ -1311,7 +1313,7 @@ The Calculator must preserve these invariants:
 - direction is explicit and independent;
 - configured preference follows Profile.device_order -> expected-interface order -> stable
   slot;
-- Device traffic envelope is intersected with Profile permission before lower Adapter
+- ordered Device firewall verdict is composed with Profile permission before lower Adapter
   materialization and can never widen Profile permission;
 - per-path NAT intent comes from the owning Device policy and is independent from availability;
 - transport publication intent is not interpreted as Profile payload permission;
@@ -2198,10 +2200,11 @@ rather than pretending the missing expression is equivalent by assumption.
 - `VPNG0002-R2.R3.C1`;
 - `VPNG0001-R1.R2.R4.R6.C1`.
 
-The higher semantic Calculator will eventually produce a complete, deduplicated
-physical rule set after applying Profile direction/destinations, path bindings,
-most-specific policy and normalized Device envelope. That compiler is **not**
-part of this unit because the envelope lower projection is not yet closed.
+The higher semantic Calculator eventually composes Profile direction/destinations, path
+bindings, most-specific Profile selection and the later accepted ordered Device firewall.
+This historical lower unit predates that complete composition and therefore remains only the
+exact positive Profile NEW/RETURN physical-rule sub-contract; it must not be described as the
+complete Device firewall compiler.
 
 This unit defines only one exact physical desired rule:
 
