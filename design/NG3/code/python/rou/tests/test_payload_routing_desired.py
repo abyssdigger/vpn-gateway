@@ -150,7 +150,7 @@ class PayloadRoutingDesiredStateTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             PayloadRoutingProjectionError,
-            "no physical route realization",
+            "physical path-route set does not exactly match",
         ):
             build((corp,), routes)
 
