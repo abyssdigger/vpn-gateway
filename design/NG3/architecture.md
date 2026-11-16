@@ -39,6 +39,13 @@ Current trace:
 | NetworkPolicyExecutor bounded physical iproute2 priority backend | `iproute_priority_backend.py` | `NG3-2026-11-16-iproute-priority-backend-code-review.md` |
 | Profile-level multi-domain priority coordinator | `route_priority_profile.py` | `NG3-2026-11-16-route-priority-profile-coordinator-review.md` |
 | lower Adapter route-priority realization contract | `route_priority_realization.py` | `NG3-2026-11-16-route-priority-realization-contract-review.md` |
+| shared lower network-policy deterministic allocation | `network_policy_layout.py` | `NG3-2026-11-16-network-policy-layout-allocator-review.md` |
+| accepted NG3 Linux platform resource space | `linux_policy_platform.py` | `EXP-028-result-20261116.md` |
+| semantic Profile/allocation -> route-key priority realization | `route_priority_domain_builder.py` | `NG3-2026-11-16-route-priority-domain-builder-review.md` |
+| explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
+| complete payload route/RPDB desired-state projection | `payload_routing_desired.py` | `NG3-2026-11-16-payload-routing-desired-state-review.md` |
+| strict whole-reserved route/RPDB structural observation | `structural_routing_inventory.py` | `NG3-2026-11-16-structural-routing-inventory-review.md` |
+| pure payload actual-vs-desired structural comparison | `payload_routing_compare.py` | `NG3-2026-11-16-payload-routing-comparison-review.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The implementation intentionally stops before unresolved or separately-gated boundaries:
@@ -518,6 +525,65 @@ The Adapter does **not**:
 The semantic content of `normalized_binding_intent` is defined: it must identify one
 current concrete endpoint for one logical path. The exact external selector spelling and
 protocol-specific discovery mechanics remain replaceable interface/integration details.
+
+### 3.2.1. Bound endpoint versus route realization
+
+A verified `PathBinding(logical_path_id, InterfaceIdentity)` proves **which current
+endpoint** represents the path. It does not, by itself, prove the complete Linux route
+next-hop shape for every possible supported VPN integration.
+
+The lower VPN integration contract therefore additionally produces:
+
+```text
+PathBinding
+    + integration-specific verified topology/contract
+        ->
+RoutePriorityPathRoute:
+    logical_path_id
+    current InterfaceIdentity
+    gateway = IPv4 | none
+    onlink = true | false
+```
+
+The route realization must be consistent with the same current concrete endpoint identity
+used by the binding.
+
+The generic NetworkPolicyAdapter must not guess `gateway` or `onlink` from:
+
+- interface name;
+- Device ID;
+- historical transport type;
+- the mere presence of an IPv4 peer address;
+- ambient host routes.
+
+A supported integration may expose a simpler realization when evidence/onboarding proves it.
+
+#### Direct-device integration capability
+
+For an integration whose accepted lower contract states that protected destinations are
+routed directly through the bound interface, the realization is:
+
+```text
+gateway = none
+onlink  = false
+dev     = current bound InterfaceIdentity.ifname
+```
+
+Historical EXP-009 H5 is concrete evidence that this shape works for the tested OpenConnect
+point-to-point endpoint. WireGuard remains governed by its own cryptokey-routing
+(`AllowedIPs`) contract; a WireGuard onboarding profile may use direct-device realization
+only when its external configuration makes the Profile destinations valid for that
+interface.
+
+Direct-device is therefore an explicit **integration capability**, not a universal property
+of every interface matched by `expected_interfaces`.
+
+If the selected integration cannot produce one unambiguous current route realization for a
+bound logical path, that path is not structurally ready for payload route materialization.
+The lower policy remains unconfirmed/fail-closed; the Adapter does not invent a gateway.
+
+No new user-facing route field is introduced by this boundary. Route realization belongs to
+the supported integration/onboarding contract beneath the Device/Profile policy model.
 
 ## 3.3. Declarative configuration boundary
 
@@ -1628,6 +1694,254 @@ Therefore the next allocator unit is gated by the structural lower-policy layout
 The existing realization types are consumers of that future allocation contract, not the
 authority that chooses global Linux resource namespaces.
 
+### 9.2. Shared lower network-policy ownership/allocation layout
+
+**Implements:**
+- `VPNG0001-R1.R1`
+- `VPNG0003-R3.R6`
+- `VPNG0004-R4.R1`
+- `VPNG0004-R4.R1.R1`
+- `VPNG0004-R4.R2`
+- `VPNG0004-R4.R5`
+- `VPNG0004-R4.R6.R1.R1`
+- `VPNG0005-R5.R2`
+- `VPNG0005-R5.R4`
+- `VPNG0005-R5.R5`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R3.R1`
+- `VPNG0007-R7.R3.R2`
+
+The lower Linux policy namespace is allocated from **semantic owner scopes**, not from
+user-visible identifiers copied directly into kernel object names.
+
+Current owner kinds are:
+
+```text
+PayloadPolicyOwner(profile_id)
+
+ProbePolicyOwner(
+    availability_subject_id = (profile_id, logical_path_id)
+)
+```
+
+The owner key is semantic identity. Kernel resource numbers are internal realization.
+
+#### Routing-table ownership
+
+Each enabled payload Profile owns one internal routing table even when its current concrete
+path set is empty. Keeping the table/domain present preserves the accepted rule that a
+zero-path Profile remains a fail-closed policy domain instead of disappearing into ambient
+routing.
+
+A Profile table contains the structural routes for all of that Profile's remote
+destinations plus a terminal fail-closed route. Pure-priority convergence mutates only the
+ordinary path-route metrics inside that already-selected table.
+
+Probe policy does not automatically receive one table per subject merely because the owner
+exists. A probe-owner table is allocated only when the accepted physical probe mechanism
+needs an independent path-routing domain. This keeps owner identity explicit without
+pre-allocating unused kernel machinery.
+
+Payload and probe table allocations come from disjoint lower resource pools.
+
+#### RPDB ownership
+
+Payload dispatch rules are generated from the normalized `(destination, Profile)` set and
+are ordered deterministically by:
+
+```text
+prefix length descending
+network address ascending
+Profile ID ascending only as a final deterministic tie-break
+```
+
+Exact duplicate destination ownership is already rejected by configuration normalization,
+so the final tie-break does not create policy semantics.
+
+The payload RPDB pool must execute before ambient/main lookup for managed host-boundary
+traffic. Probe rules, when required by the selected probe mechanism, use a disjoint
+higher-precedence owner pool and an explicit probe discriminator; they do not reuse payload
+dispatch identity.
+
+Rule priority numbers are internal allocation, not configuration.
+
+#### Route ownership markers
+
+Linux route protocol values are role markers, not Profile/subject identifiers.
+
+The lower platform contract reserves distinct marker roles for:
+
+```text
+managed path/unicast route
+managed terminal/guard route
+```
+
+The exact numeric protocol values are platform constants and must be evidence-gated before
+production use. Historical 201/202 behavior is reusable evidence but does not by itself make
+those numbers an NG3 normative choice.
+
+Owner scope is determined by the combination of allocated table/domain, route role/shape and
+semantic allocation record. A protocol marker alone is never sufficient proof that an
+arbitrary route may be deleted.
+
+#### Metric ownership
+
+For a payload Profile with `N` currently realized paths, the lower allocation supplies:
+
+```text
+N strictly increasing preference metrics
+>= 1 disjoint scratch metric when N > 1
+one terminal guard metric lower in preference than every preference/scratch metric
+```
+
+Availability changes only permute which already-eligible logical path owns each preference
+slot. They do not allocate a second availability-specific metric namespace.
+
+A zero-path Profile requires no preference/scratch metrics but still retains its terminal
+fail-closed route.
+
+The allocator must reject an unrepresentable path count before mutation. It must not silently
+truncate paths or reuse a guard metric as scratch space.
+
+#### nftables ownership
+
+Packet filtering/NAT realization uses a dedicated VPN-GATE-owned nftables namespace inside
+the managed network domain.
+
+Payload and probe policy remain separate semantic owner scopes inside that namespace even
+when one physical nft table is sufficient.
+
+The lower allocator must not embed arbitrary user IDs directly into nft object names merely
+for ownership. Stable internal owner tokens/indices may be used when per-owner objects are
+required.
+
+The dedicated nft namespace is cleanup identity for VPN-GATE packet-policy objects. A
+pre-existing incompatible object in that reserved namespace is a marker conflict, not a
+candidate for silent adoption or deletion.
+
+#### Deterministic allocation and configuration change
+
+Allocation is deterministic for one accepted semantic owner set.
+
+A minimal implementation may rank canonical owner keys and assign the next available entry
+from an ordered platform resource pool. Persistent hash maps or durable allocation journals
+are not required merely to preserve numeric IDs across a configuration change.
+
+No product requirement promises stable table/rule/metric numbers across a structural
+configuration transition.
+
+If a configuration change changes owner membership or allocation rank, the change is a
+**structural** network-policy transition. It must pass through the accepted restrictive
+barrier/reconciliation path; it is not eligible for the pure-priority fast path.
+
+#### Cleanup and conflict rule
+
+Reserved lower resource spaces are not permission for blind deletion.
+
+Cleanup/recovery must:
+
+1. inventory the reserved resource scope;
+2. prove each candidate resource matches an accepted VPN-GATE owner/role shape;
+3. delete/reconcile only proved owned resources;
+4. treat an unexpected object inside a reserved table/priority/protocol/nft namespace as an
+   observable ownership conflict and fail closed rather than silently deleting foreign
+   state.
+
+This applies equally to current and stale allocations from a previous accepted
+configuration.
+
+Because table/rule allocations may change across a structural configuration transition,
+cleanup identity must be derivable from the reserved lower namespace and exact resource
+shape, not solely from the current configuration's allocation map.
+
+#### Platform resource-space contract
+
+Concrete numeric pools are lower Linux platform constants.
+
+They must satisfy:
+
+- disjoint payload/probe table pools;
+- disjoint RPDB owner pools with the required precedence relative to ambient/main lookup;
+- route protocol marker values that are representable and observable through the accepted
+  inventory mechanism;
+- enough metric space for the largest accepted currently realized path set plus scratch and
+  terminal guard;
+- no arbitrary small product limit when a larger kernel resource space can be used safely;
+- privileged evidence for the actual chosen Linux numeric ranges before production code
+  relies on them.
+
+The user configuration never contains these values.
+
+#### Accepted current Linux platform space
+
+EXP-028 passed in privileged GitHub Linux CI, including both first and last values of the
+declared table/RPDB pools. The current NG3 Linux reference implementation therefore uses:
+
+```text
+payload table pool:
+    [0x80000000, 0xC0000000)
+
+probe table pool:
+    [0xC0000000, 0x100000000)
+
+probe RPDB priority pool:
+    [0x2000, 0x4000)      # 8192..16383
+
+payload RPDB priority pool:
+    [0x4000, 0x6000)      # 16384..24575
+
+ambient/main lookup priority:
+    32766
+
+managed terminal/guard route protocol:
+    201
+
+managed path/unicast route protocol:
+    202
+
+first preference route metric:
+    1
+
+terminal guard route metric:
+    0xffffffff
+
+owned nftables namespace:
+    family ip
+    table vpn_gate
+```
+
+The high table ranges are role-classifiable by their top bits and avoid common low routing
+table IDs. The selected RPDB quarters deliberately leave priorities `1..8191` and
+`24576..32765` outside VPN-GATE ownership for other explicitly provisioned network-domain
+policy while keeping probe rules before payload rules and payload rules before the standard
+main lookup.
+
+EXP-028 also records an observation relevant to future strict structural inventory:
+with current iproute2 `-N`, `RTN_BLACKHOLE` may be rendered as numeric string `"6"`.
+Parsers must normalize the semantic route type rather than require only the word
+`"blackhole"`.
+
+These are current Linux implementation constants, not user-facing schema. A materially
+different kernel/iproute2/nftables platform must rerun the platform evidence gate rather
+than assuming the numeric contract is portable without verification.
+
+The executable pure allocator implements this contract over an injected
+`NetworkPolicyPlatformSpace` rather than hard-coding production constants. It:
+
+- ranks payload Profiles by canonical ID for table allocation;
+- ranks probe routing demands by `(profile_id, logical_path_id)`;
+- allocates payload dispatch priorities by longest-prefix-first destination order;
+- keeps payload/probe table and RPDB pools disjoint;
+- rejects Linux reserved table IDs and RPDB priority 0;
+- requires probe RPDB space to precede payload dispatch and payload dispatch to precede the
+  platform's ambient/main lookup;
+- derives the same Profile-local preference metric namespace independently in every Profile
+  table;
+- preserves zero-path Profiles with a table/guard allocation but no priority metric space;
+- exposes reserved pool membership independently of the current allocation map so stale
+  resources from a previous configuration remain classifiable for cleanup.
+
 # 10. NetworkPolicyExecutor
 
 **Component type:** Executor
@@ -1848,6 +2162,150 @@ forbidden by either the old or new accepted policy.
 
 After partial failure it re-observes authoritative lower state before planning further
 mutation.
+
+### 10.2.1. Complete structural routing desired state
+
+Before a structural transaction is applied, the lower Adapter/Calculator must be able to
+derive a complete desired routing projection for the affected payload owner set.
+
+For each enabled Profile the projection contains:
+
+```text
+one allocated Profile table
+
+one terminal fail-closed route:
+    table = Profile table
+    type = BLACKHOLE
+    destination = default
+    protocol = guard marker
+    metric = terminal guard metric
+
+for every Profile destination and current realized logical path:
+    one desired path route
+    table = Profile table
+    destination = Profile destination
+    protocol = path marker
+    metric = current semantic preference slot
+    endpoint/gateway/onlink = verified integration realization
+
+for every Profile destination:
+    one host-boundary RPDB dispatch rule
+    iif = current verified managed host-boundary endpoint
+    to = Profile destination
+    table = Profile table
+    priority = deterministic allocation
+```
+
+A zero-path Profile therefore still has:
+
+- its allocated table;
+- its terminal guard;
+- its destination dispatch rules;
+
+and has no ordinary path routes. Dispatching its traffic into that table must terminate in
+the guard rather than fall through to ambient/main routing.
+
+The lower desired projection is data only. Constructing it does not mutate Linux state and
+does not claim the policy is active.
+
+The verified managed host-boundary endpoint is an internal runtime fact, not a user-visible
+route/rule field.
+
+### 10.2.2. Structural activation barrier
+
+A structural transition is wider than route-table preparation.
+
+In particular, installing a new RPDB dispatch rule can make a newly prepared Profile table
+reachable. That activation must not occur before the filtering/NAT state required by the
+same new semantic policy is safe.
+
+Therefore the physical structural transaction has this ordering contract:
+
+```text
+fresh lower observation
+        ->
+establish/verify restrictive barrier for affected traffic
+        ->
+prepare/verify new inactive routing tables
+    - terminal guards first
+    - desired ordinary path routes
+        ->
+prepare/verify required nft filtering/NAT state
+        ->
+install/switch/verify RPDB dispatch
+        ->
+verify complete desired routing + nft postcondition
+        ->
+release restrictive barrier
+        ->
+fresh final verification
+        ->
+cleanup stale old allocation/state when safe
+```
+
+The exact barrier mechanism is part of the forthcoming nft/structural Executor unit, but its
+semantic postcondition is already fixed:
+
+> while structural state is mixed or unconfirmed, affected traffic cannot traverse a policy
+> that is forbidden by either the previously accepted or newly accepted policy.
+
+A route-table preparation helper may create an otherwise unreachable new table before nft
+activation, because no new RPDB rule reaches it yet. It may not switch dispatch as a
+standalone optimization.
+
+Similarly, stale old table/rule cleanup must not occur merely because the new commands were
+issued; the new complete postcondition must first be authoritatively verified.
+
+This is why the pure-priority path remains a separate fast path: only there is path
+membership/filter/NAT unchanged and the semantic make-before-break proof sufficient without a
+structural barrier.
+
+### 10.2.3. Authoritative structural route/RPDB observation
+
+Structural recovery requires inventory of the **whole reserved lower namespace**, not only
+resources named by the current allocation map.
+
+The current Linux observation commands are:
+
+```text
+ip -j -N -4 route show table all
+ip -j -N -4 rule show
+```
+
+EXP-029 established the current iproute2 6.19 numeric JSON form relevant to the accepted NG3
+resource space:
+
+- non-main high table IDs are numeric strings;
+- route protocols are numeric strings;
+- ordinary unicast type may be omitted;
+- `RTN_BLACKHOLE` is numeric string `"6"`;
+- host-route `/32` destination may be rendered as a bare IPv4 address;
+- route scope is numeric string `"253"` for the tested direct-device routes;
+- RPDB `priority` is numeric;
+- RPDB lookup table is a numeric string;
+- payload destination selector is represented by `dst` address plus `dstlen`;
+- `src = "all"` is explicit in the tested rules;
+- probe `fwmark` / `fwmask` are hexadecimal strings.
+
+The structural observer must normalize these representation forms into typed semantic lower
+objects.
+
+Rows outside VPN-GATE reserved table/priority pools may be ignored by this owner-specific
+inventory. Rows **inside** reserved pools must not be silently ignored merely because their
+shape is unexpected.
+
+For a reserved object the observer returns either a recognized managed route/rule or an
+explicit ownership conflict / unsupported reserved shape.
+
+Observation failure, malformed JSON and ownership conflict are distinct from a valid empty
+managed inventory.
+
+The route observer resolves any managed `dev` through the same fresh `(ifname, ifindex)`
+interface inventory used elsewhere. Same-name interface replacement must therefore remain
+visible.
+
+This observation boundary is read-only. It does not authorize cleanup or activation by
+itself.
 
 # 11. Event contracts
 
