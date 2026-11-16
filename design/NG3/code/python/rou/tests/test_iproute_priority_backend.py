@@ -165,7 +165,7 @@ class IproutePriorityBackendTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(
             IproutePriorityBackendError,
-            "not authoritatively verified before delete",
+            "add-before-delete verification",
         ):
             backend(runner).move_route_priority(RoutePriorityMove(A, 10, 30))
 
