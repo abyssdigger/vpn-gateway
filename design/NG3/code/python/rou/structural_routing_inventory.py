@@ -462,12 +462,20 @@ def _rule_destination(dst: object, dstlen: object) -> IPv4Network:
         raise StructuralRoutingInventoryError(
             "payload rule destination is missing"
         )
-    if type(dstlen) is not int or not 0 <= dstlen <= 32:
+    if dstlen is None:
+        if "/" in dst:
+            raise StructuralRoutingInventoryError(
+                "payload rule without dstlen must use bare IPv4 host destination"
+            )
+        effective_dstlen = 32
+    elif type(dstlen) is int and 0 <= dstlen <= 32:
+        effective_dstlen = dstlen
+    else:
         raise StructuralRoutingInventoryError(
-            "payload rule dstlen must be integer in [0, 32]"
+            "payload rule dstlen must be integer in [0, 32] or omitted for bare /32"
         )
     try:
-        network = ip_network(f"{dst}/{dstlen}", strict=True)
+        network = ip_network(f"{dst}/{effective_dstlen}", strict=True)
     except ValueError as exc:
         raise StructuralRoutingInventoryError(
             f"invalid payload rule destination: {exc}"
