@@ -220,3 +220,7 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-037 NG3 production-shape payload-forward JSON/exp037_payload_forward_json.py"
+      - name: EXP-038 payload_forward prefix-boundary JSON
+        run: >-
+          sudo python3
+          "design/experiments/EXP-038 NG3 payload-forward prefix-boundary JSON/exp038_prefix_boundary_json.py"
