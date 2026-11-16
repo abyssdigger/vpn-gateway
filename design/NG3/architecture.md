@@ -48,6 +48,7 @@ Current trace:
 | pure payload actual-vs-desired structural comparison | `payload_routing_compare.py` | `NG3-2026-11-16-payload-routing-comparison-review.md` |
 | EXP-048-backed structural route/RPDB mutation Driver | `linux_structural_routing.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md`, `EXP-048-result-20261116.md` |
 | exact-before-release cross-domain phase planner | `structural_policy_plan.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
+| semantic Profile forward compiler | `payload_forward_compiler.py` | `NG3-2026-11-17-profile-forward-compiler-review.md` |
 | guarded cross-domain structural Executor + Linux snapshot backend | `structural_policy_mutation.py`, `linux_structural_policy.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
@@ -2472,7 +2473,7 @@ observer evidence remains sufficient; no new kernel fact is introduced.
 **Gate:** PASS for lower desired data/comparison only. Full semantic compilation
 and physical filter mutation remain separate gated units.
 
-###### Forward semantic compiler — next-unit design constraint
+###### Forward semantic compiler — implemented pure Calculator
 
 **Implements:** `VPNG0002-R2.R1.R2`, `VPNG0002-R2.R3.R3`,
 `VPNG0002-R2.R5.R1`, `VPNG0001-R1.R2.R4.R6.R2`,
@@ -2501,6 +2502,37 @@ creating physical allow rules:
 With disjoint fragments, all lower rules remain positive accepts under the
 default-drop chain and rule order stays semantically irrelevant, matching the
 accepted unordered `PayloadForwardDesiredState`.
+
+The executable Calculator is `payload_forward_compiler.py`:
+
+```text
+PayloadProfileRequest set
++ exact current logical-path -> RoutePriorityPathRoute realization
++ current host-boundary InterfaceIdentity
+    ->
+PayloadForwardDesiredState
+```
+
+It reuses the accepted outbound and per-ingress inbound prefix partitions rather than
+reimplementing most-specific selection.
+
+For each outbound fragment/path it emits NEW `host -> path` with destination-prefix match
+and RETURN `path -> host` with source-prefix match. For each inbound fragment after
+ingress-path restriction it emits NEW `path -> host` with source-prefix match and RETURN
+`host -> path` with destination-prefix match.
+
+Zero-path Profiles emit no positive rules and therefore remain fail-closed under the
+`payload_forward` base-chain DROP policy. The supplied physical path realization set must
+match the semantic current path set exactly; one current endpoint cannot back multiple
+logical paths, and the host boundary cannot be reused as a VPN path endpoint.
+
+This Calculator does not compile Device firewall, NAT or publication policy.
+
+**Evidence:** rootless compiler tests cover outbound/inbound/bidirectional, zero-path,
+physical membership/endpoint identity, global outbound overlap subtraction and per-ingress
+inbound partitioning. The pure structural pipeline now extends through
+`config -> binding -> PayloadProfileRequest -> PayloadForwardDesiredState`.
+
 
 **Ordered Device firewall composition — accepted semantic architecture**
 
