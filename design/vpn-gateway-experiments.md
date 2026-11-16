@@ -28,7 +28,8 @@ blackhole остается на месте. All-live не требует persist
 **Статус:** PRELIMINARY PASS на privileged GitHub Linux CI; Debian 13 target confirmation required  
 **Architecture baseline:** EXP-025 target-confirmed STALE-INHERITANCE  
 **Тип:** probe-generation remediation / conntrack isolation  
-**Design:** [EXP-026 README](experiments/EXP-026%20NG2%20probe%20conntrack%20cleanup/README.md)
+**Design:** [EXP-026 README](experiments/EXP-026%20NG2%20probe%20conntrack%20cleanup/README.md)  
+**Future evidence register:** [NG3 Release 2 evidence backlog](NG3/release2-evidence-backlog.md)
 
 Цель: проверить узкую remediation для stale probe conntrack identity без global conntrack
 flush.
@@ -229,7 +230,8 @@ trigger, способного сделать ECMP fallback эффективны�
 
 **Статус:** PREPARED — future extension gate  
 **Architecture baseline:** NG1 Draft 5 after 2026-11-12 correction review  
-**Design:** [EXP-014 README](experiments/EXP-014%20NG1%20remote-initiated%20flow%20pinning/README.md)
+**Design:** [EXP-014 README](experiments/EXP-014%20NG1%20remote-initiated%20flow%20pinning/README.md)  
+**Future evidence register:** [NG3 Release 2 evidence backlog](NG3/release2-evidence-backlog.md)
 
 Цель: доказать connmark/fwmark return steering, retired-mark fail-close и conntrack
 lifecycle перед любым будущим снятием production-ограничения
