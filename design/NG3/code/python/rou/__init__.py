@@ -138,6 +138,13 @@ from .device_firewall_compiler import (
     DeviceFirewallCompileError,
     compile_device_firewall_policy,
 )
+from .device_firewall_mutation import (
+    DeviceFirewallMutationResult,
+    DeviceFirewallMutationStatus,
+    DeviceFirewallPhysicalSnapshot,
+    converge_device_firewall_step_once,
+)
+from .linux_device_firewall import LinuxDeviceFirewallBackend
 from .device_firewall_structure import (
     DEVICE_FIREWALL_CHILD_COMMENT,
     DEVICE_FIREWALL_FALLTHROUGH_COMMENT,
@@ -276,6 +283,10 @@ __all__ = [
     "DeviceFirewallComparison",
     "DeviceFirewallComparisonError",
     "DeviceFirewallCompileError",
+    "DeviceFirewallMutationResult",
+    "DeviceFirewallMutationStatus",
+    "DeviceFirewallPhysicalSnapshot",
+    "LinuxDeviceFirewallBackend",
     "DeviceFirewallRuleAction",
     "DeviceFirewallStructureConflict",
     "DeviceFirewallStructureError",
@@ -421,6 +432,7 @@ __all__ = [
     "build_outbound_profile_partition",
     "compare_payload_nft_scaffold",
     "compare_payload_routing",
+    "converge_device_firewall_step_once",
     "converge_forwarding_gate_once",
     "classify_outbound_profile",
     "converge_route_priority_once",
