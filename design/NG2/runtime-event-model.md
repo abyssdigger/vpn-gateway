@@ -1,5 +1,11 @@
 # VPN-GATE NG2 — событийная модель runtime
 
+> **2026-11-15 availability-path update:** the active-probe collector -> route-materializer
+> path is intentionally synchronous and aggregate-based as specified by
+> `design/NG2/availability-collector-materializer.md`. It does not require EventEnvelope
+> revision/epoch ordering. The general Event Delivery model below remains applicable to
+> genuinely asynchronous latest-value streams elsewhere in runtime.
+
 **Статус:** нормативный проект NG2  
 **Дата:** 2026-11-13  
 **Область:** steady-state runtime после успешного startup и до начала shutdown  
@@ -65,30 +71,17 @@ Runtime не требует единого процедурного global recon
 
 Latest-value storage является cache текущего мира, а не историческим журналом.
 
-Первый executable slice уже реализует availability-driven payload priority. Он хранит:
+RuntimeStateManager остается владельцем общей structural/configuration
+проекции, но больше не является посредником availability hysteresis для route priority.
 
-```text
-current configured payload snapshot
-current AvailabilityProbeSetRequest
-latest AvailabilityProbeStateInfo by probe_id
-runtime-derived ProfileProbeAssignment
-current effective PayloadTrafficStateRequest
-```
+Runtime-derived association logical probes with Profiles может по-прежнему вычисляться и
+валидироваться из configuration/interface state, однако текущие GOOD/BAD counters/latches
+не проходят цепочку `AvailabilityProbeStateInfo -> RuntimeStateManager ->
+PayloadTrafficStateRequest`.
 
-`ProfileProbeAssignment(profile_name, probe_ids)` является runtime-derived association,
-а не полем physical ProbeRules и не Linux policy. Один logical probe может быть источником
-evidence для нескольких Profiles. Assignment валидируется до публикации: каждый probe
-должен существовать и его concrete path должен входить в eligible set соответствующего
-Profile.
-
-Current executable handlers сериализуют latest-value state одним re-entrant lock внутри
-RuntimeStateManager. Поэтому concurrent callbacks не могут одновременно пересчитывать и
-публиковать противоречащие друг другу effective snapshots; synchronous feedback через тот
-же thread при этом не deadlock'ится.
-
-Это **не** заменяет EventEnvelope ordering. Поздно доставленная старая revision может
-прийти уже после завершения более новой handler invocation; отсечение такого события
-остается ответственностью epoch/revision filter Event Delivery/runtime ingress.
+Raw current good-news/tick observations поступают в bounded input port
+`PayloadTrafficManager`, который сам владеет availability collector state для route
+priority. Поэтому EventEnvelope ordering не требуется для этой availability path.
 
 ### 2.2. InterfaceObservationAgent
 
@@ -113,58 +106,35 @@ Agent не выполняет Device admission и не определяет Prof
 
 ### 2.3. AvailabilityProbeManager
 
-`AvailabilityProbeManager` управляет подсистемой активных availability probes.
-
-Его managed domain:
+`AvailabilityProbeManager` управляет physical active-probe domain:
 
 - desired logical probe set;
-- probe-specific network environment;
-- execution-side probe evidence;
-- rules/interface-generation validity;
-- публикация текущего availability evidence.
+- probe-specific NetworkRules;
+- rules/readiness lifecycle;
+- current concrete physical generation;
+- execution demand for `ProbeExecutionAgent`.
 
-Он **не** определяет Profile binding membership и не удаляет payload path по результату
-probe.
-
-Routing-level смысл evidence зафиксирован отдельно в
-`design/NG2/availability-routing-model.md`: подтвержденно живой path может получить более
-высокий приоритет среди уже bound/eligible paths, но probing вообще не меняет payload
-route membership.
+Он не владеет routing hysteresis, GOOD/BAD channel counters или payload route priority.
 
 ### 2.4. ProbeExecutionAgent
 
-`ProbeExecutionAgent` исполняет generation-bound active-probe demand.
+`ProbeExecutionAgent` исполняет current physical probe demand.
 
-Он получает latest-value RequestEvent:
-
-```text
-ProbeExecutionPlan | None
-```
-
-от `AvailabilityProbeManager`.
-
-Agent владеет:
-
-- monotonic send/window cadence;
-- immediate first send;
-- boundary-before-next-send phase ordering;
-- bounded physical send workers;
-- generation filtering результатов;
-- local execution diagnostics.
-
-Он публикует:
+Он владеет physical send cadence, bounded workers, stale physical-generation rejection и
+local execution diagnostics. Для availability collector он производит только:
 
 ```text
-ProbeGoodNewsInfo
-ProbeWindowBoundaryInfo
-ProbeExecutionDiagnosticInfo
+good_news(current channel)
+tick(current logical channel)
 ```
 
-`NO_REPLY` не существует как production Event. Local execution error также не является
-routing verdict.
+Good news increment bounded counters; tick sets a boolean pending fact. Neither input is a
+journal item requiring replay ordering. `NO_REPLY` remains absence of good news; local
+execution ERROR remains diagnostic only.
 
-Конкретная Linux реализация и lifecycle описаны в
-`design/NG2/probe-execution-agent.md`.
+Logical observation windows, `evidence_epoch`, `elapsed_intervals` and boundary
+catch-up are not part of the target runtime model. Exact aggregation and transition rules
+are normative in `design/NG2/availability-collector-materializer.md`.
 
 ### 2.5. PayloadTrafficManager
 
@@ -355,9 +325,10 @@ ICMP mechanism
 concrete InterfaceIdentity
 IPv4 target
 enabled
-AvailabilityWindowPolicy
+AvailabilityChannelPolicy
     interval_seconds
-    failure_intervals
+    failure_ticks
+    recovery_good_news
 ```
 
 `enabled=false` сохраняет настроенный logical probe, но запрещает автономное probing.
@@ -369,41 +340,20 @@ consumers общего plane не меняет его. Logical probe config пр
 `(mechanism, InterfaceIdentity, target)`. Timing/enable policy не является physical
 NetworkRules semantics.
 
-Production availability policy не коррелирует reply с semantic attempt id. Любая валидная
-good news для текущего probe plane сбрасывает negative integral; отсутствие good news
-накапливается по observation intervals.
+Production availability policy не коррелирует reply с semantic attempt id. Valid replies
+являются colorless good-news units; logical timer firing является только pending tick
+fact. GOOD/BAD hysteresis принадлежит PayloadTrafficManager collector и задается
+`design/NG2/availability-collector-materializer.md`.
 
 Новая revision заменяет предыдущий desired set.
 
-### 8.3. AvailabilityProbeStateInfo
+### 8.3. Availability diagnostic projection
 
-**Kind:** InfoEvent  
-**Publisher:** AvailabilityProbeManager  
-**Subscribers:** RuntimeStateManager  
-**Subject:** probe_id  
-**Publication mode:** current state per probe
+`AvailabilityProbeStateInfo` больше не является routing-control Event contract.
 
-Содержит текущую диагностическую projection:
-
-```text
-probe_id
-state
-reason/details
-observation generation
-```
-
-`REACHABLE` означает актуальное положительное evidence для текущей concrete
-interface/probe-rules generation.
-
-`UNREACHABLE` и `UNKNOWN` различаются для диагностики, но для payload priority оба
-означают отсутствие подтвержденной живости. Ни одно из этих состояний само по себе не
-удаляет binding и не запрещает последний eligible payload path.
-
-Если probe rules перестают быть READY либо concrete interface generation меняется,
-предыдущее положительное evidence не переносится в новую generation.
-
-Если `probe_id` удален из полного desired snapshot, Manager публикует финальную UNKNOWN
-invalidation перед локальным удалением state.
+Во время миграции implementation может продолжать публиковать probe diagnostics/status,
+но RuntimeStateManager не использует их для вычисления route priority. Routing-relevant
+GOOD/BAD state находится внутри PayloadTrafficManager collector.
 
 ### 8.4. PayloadTrafficStateRequest
 
@@ -418,12 +368,12 @@ invalidation перед локальным удалением state.
 ```text
 Profiles participating in payload
 selected/bound concrete interfaces per Profile
+configured/base path order per Profile
+availability channel assignment/policy per Profile
 Profile directions
 Profile destinations
 Device traffic-policy references
 required payload forwarding intent
-per-Profile effective ordered_paths
-per-Profile transient confirmed_live_prefix_length
 ```
 
 Не содержит технических command sequences:
@@ -439,9 +389,10 @@ verification phases
 
 Все это принадлежит внутренней реализации PayloadTrafficManager и его Machinery.
 
-`confirmed_live_prefix_length` является derived runtime value из availability snapshot,
-не полем normalized user configuration. Оно сообщает только границу confirmed-live prefix;
-никакой EMPTY route/metric object в RequestEvent не существует.
+Effective availability order и transient live-prefix boundary являются внутренним current
+state PayloadTrafficManager. Они не являются полями normalized user configuration и не
+передаются как готовая availability projection через PayloadTrafficStateRequest. Никакой
+EMPTY route/metric object в RequestEvent не существует.
 
 ### 8.5. PayloadTrafficStateInfo
 
@@ -596,88 +547,18 @@ Binding исчезает по структурной/административ�
 
 Вход:
 
-- config и configured path priority;
+- config и configured/base path priority;
 - binding matrix;
-- availability probe states;
-- current effective/observed path order;
-- другие системно значимые runtime facts.
+- availability channel assignment/policy;
+- другие structural runtime facts.
 
 Выход:
 
-- semantic desired payload projection для `PayloadTrafficStateRequest`.
+- semantic structural payload projection для `PayloadTrafficStateRequest`.
 
-Для каждого Profile availability влияет только на `ordered_paths` уже bound paths и
-derived `confirmed_live_prefix_length`.
-
-Executable decomposition:
-
-```text
-AvailabilityProbeStateInfo[]
-        +
-AvailabilityProbeSetRequest
-        +
-ProfileProbeAssignment[]
-        |
-        v
-ProbeProfileEvidenceCalculator
-        |
-        v
-ProfileAvailabilityEvidence[]
-        |
-        + configured payload snapshot
-        + previous configured snapshot
-        + current effective payload snapshot
-        |
-        v
-PayloadTrafficIntentCalculator
-        |
-        v
-PayloadTrafficStateRequest
-```
-
-Calculators остаются externally stateless: previous/current snapshots являются explicit
-input, а их latest-value storage принадлежит RuntimeStateManager.
-
-На startup, при изменении binding membership или configured priority базой становится
-новый configured eligible order. Probe history не переопределяет новое административное
-намерение.
-
-Нормативная policy — bubble promotion:
-
-- подтвержденно живые paths всплывают наверх в configured priority;
-- остальные paths сохраняются;
-- если подтвержденно живой альтернативы нет, текущий order не меняется;
-- если availability-derived boundary для Profile не активна, используется configured
-  order и `confirmed_live_prefix_length=None`;
-- active boundary без positive evidence дает
-  `confirmed_live_prefix_length=0`, но не удаляет ни одного path.
-
-Linux/kernel materialization в Calculator не входит.
-
-### 10.5. PublicationIntentCalculator
-
-Вход:
-
-- normalized configuration;
-- runtime facts, реально влияющие на publication policy.
-
-Выход:
-
-- desired publication projection.
-
-### 10.6. ProfileStateCalculator
-
-Вход:
-
-- Profile requirements;
-- binding matrix;
-- current payload traffic state;
-- current publication state, если она влияет на конкретный Profile contract;
-- другие реальные system-level facts.
-
-Выход:
-
-- текущее Profile state и diagnostic reasons.
+Calculator больше не принимает current availability probe states и не вычисляет готовый
+effective `ordered_paths`. GOOD/BAD current state, effective order и live-prefix boundary
+принадлежат PayloadTrafficManager collector/materializer flow.
 
 ## 11. Recalculation RuntimeStateManager
 
@@ -726,61 +607,44 @@ InterfaceObservationAgent
 
 ### 12.2. Availability evidence changes
 
-Before good-news can exist, AvailabilityProbeManager exposes generation-bound execution
-demand derived from its current READY epoch:
+`AvailabilityProbeManager` derives generation-bound execution demand from current READY
+ProbeRules. `ProbeExecutionAgent` executes physical sends and logical tick cadence.
+
+Producer-facing observations are aggregated directly into bounded
+PayloadTrafficManager-owned channel input:
 
 ```text
-AvailabilityProbeSetRequest + ProbeObservationGeneration
-        |
-        v
-ProbeExecutionPlanCalculator
-        |
-        v
-ProbeExecutionPlan
-    physical send cadence per deduplicated plane
-    logical window cadence per probe_id
+valid current reply -> pending_good_news += 1 (saturating)
+logical timer fire  -> tick_pending = true
 ```
 
-This is not an attempt scheduler. `AvailabilityProbeManager` publishes the current plan
-to `ProbeExecutionAgent`; `None` explicitly quiesces execution when the READY generation
-is lost.
+The producer call only updates bounded state under a short lock and returns. It never
+waits for route materialization.
 
-The Agent emits only valid-reply good-news and logical window boundaries. No `NO_REPLY`
-InfoEvent exists in the production contract. Delayed logical boundaries are batched with
-`elapsed_intervals`, while missed physical sends are never replayed as a burst.
-
-Activation starts the first windows and immediately sends once on every physical plane.
-When a later send deadline coincides with a window boundary, the boundary is emitted first
-and the send belongs to the next window. The execution source serializes good-news and
-boundary publications for a generation; future EventEnvelope revision ordering preserves
-that order across asynchronous delivery.
+The PayloadTrafficManager collector later processes the accumulated facts as one
+simultaneous observation, updates current GOOD/BAD channel state, and if the
+routing-relevant snapshot changed invokes the sole route-priority materializer
+synchronously.
 
 ```text
-valid generation-bound physical reply
+ProbeExecutionAgent
+        |
+        +-- good news / tick
+        v
+PayloadTrafficManager bounded input
         |
         v
-AvailabilityProbeManager
+availability collector state
         |
-        +-- AvailabilityProbeStateInfo
-                |
-                v
-        RuntimeStateManager
-                |
-        ProbeProfileEvidenceCalculator
-                |
-        PayloadTrafficIntentCalculator
-                |
-      ordered_paths / live-prefix changes
-                |
-                +-- PayloadTrafficStateRequest
-                +-- ProfileStateInfo
+        v
+effective route priority
+        |
+        v
+sole transactional route materializer
 ```
 
-Binding matrix при этом не меняется.
-
-Если существует подтвержденно живой альтернативный path, он может подняться выше paths
-без положительного evidence. Если такой альтернативы нет, probing не создает новый outage
-и текущий payload order сохраняется.
+No `NO_REPLY`, logical window boundary, elapsed-window replay or EventEnvelope ordering
+is required on this path. Binding matrix remains unchanged by availability.
 
 ### 12.3. PayloadTrafficManager fail-close
 
@@ -804,23 +668,12 @@ Recovery является тем же обычным control loop, если от
 
 ## 13. Correlation
 
-Пример causal chain:
+Availability collector correctness does not depend on causal reconstruction. Good-news
+multiplicity and a pending tick are bounded aggregate facts, and collector ->
+route-materializer execution is synchronous inside PayloadTrafficManager.
 
-```text
-AvailabilityProbeStateInfo
-    -> RuntimeStateManager
-    -> PayloadTrafficStateRequest R23
-    -> PayloadTrafficManager
-    -> lower Machinery
-    -> observed payload rules/state changes
-    -> PayloadTrafficStateInfo I51
-    -> RuntimeStateManager
-    -> ProfileStateInfo I52
-```
-
-Не требуется переносить транзитивный correlation identifier через всю цепочку.
-
-Корректность определяется текущими projections, а не восстановлением causal history.
+General Event correlation remains diagnostic-only for the asynchronous runtime streams
+that still use Events.
 
 ## 14. Что не является верхнеуровневым event contract
 
@@ -840,86 +693,50 @@ AvailabilityProbeStateInfo
 Если RuntimeStateManager начинает требовать эти детали, следует проверить границу
 соответствующего Manager.
 
-## 15. Event graph
+## 15. Runtime graph
 
 ```text
-+---------------------------+
-| InterfaceObservationAgent |
-+-------------+-------------+
-              |
-     InterfaceInventoryInfo
-              |
-              v
-      +---------------------+
-      | RuntimeStateManager |
-      +---+-------------+---+
-          |             |
-          |             +--------------------+
-          |                                  |
-AvailabilityProbeSetRequest       PayloadTrafficStateRequest
-          |                                  |
-          v                                  v
-+-------------------------+       +------------------------+
-| AvailabilityProbeManager|       | PayloadTrafficManager  |
-+-----+---------------+---+       +-----------+------------+
-      |               |                       |
-      |      ProbeExecutionPlan               |
-      |               |                       |
-      |               v                       |
-      |      +---------------------+           |
-      |      | ProbeExecutionAgent |           |
-      |      +----------+----------+           |
-      |                 |                      |
-      |     GoodNews / WindowBoundary          |
-      |                 |                      |
-      +<----------------+                      |
-             |                                |
-AvailabilityProbeStateInfo         PayloadTrafficStateInfo
-             |                                |
-             +--------------->+<---------------+
-                              |
-                    RuntimeStateManager
-
+InterfaceObservationAgent
+        |
+        v
 RuntimeStateManager
         |
-        +-- PublicationStateRequest --> PublicationManager
-        |                               |
-        |                        PublicationStateInfo
-        |                               |
-        +<------------------------------+
-        |
-        +-- ProfileStateInfo --> status/log/UI
+        +-- AvailabilityProbeSetRequest --> AvailabilityProbeManager
+        |                                      |
+        |                               ProbeExecutionPlan
+        |                                      |
+        |                                      v
+        |                              ProbeExecutionAgent
+        |                                      |
+        |                              good news / tick
+        |                                      |
+        +-- PayloadTrafficStateRequest          v
+                |                     PayloadTrafficManager
+                |                     bounded collector input
+                +--------------------------->   |
+                                                v
+                                      synchronous route
+                                        materializer
+                                                |
+                                      PayloadTrafficStateInfo
+                                                |
+                                                v
+                                      RuntimeStateManager
 ```
 
-Все feedback cycles верхнего уровня замыкаются Events.
+The good-news/tick edge is an aggregate producer input, not a replayable Event journal.
+The collector/materializer edge is synchronous Machinery flow inside PayloadTrafficManager.
 
 ## 16. Следующая декомпозиция
 
-Уже исполняются:
+Архитектурно зафиксированы:
 
-- AvailabilityProbeManager good-news/window state;
-- generation-bound `ProbeExecutionPlan` RequestEvent lifecycle;
-- LinuxProbeExecutionAgent cadence/send/diagnostic lifecycle;
-- RuntimeStateManager availability -> payload priority slice;
-- PayloadTrafficIntentCalculator;
-- thread-safe single-executor serialization в PayloadTrafficManager.
+- physical ProbeRules/readiness ownership в AvailabilityProbeManager;
+- bounded physical sends and stale-generation rejection in ProbeExecutionAgent;
+- bounded colorless good-news counter + boolean tick input;
+- GOOD/BAD collector policy inside PayloadTrafficManager;
+- synchronous use of the sole route-priority materializer;
+- no EventEnvelope requirement on the availability collector/materializer path.
 
-Следующие отдельные units:
-
-1. Event Delivery Environment implementation с epoch/revision ordering;
-2. daemon/runtime assembly реального ProbeExecutionAgent event wiring;
-3. PublicationManager и его Machinery;
-4. точные remaining state/reason codes и Profile consumption execution diagnostics;
-5. serialization/schema versioning;
-6. restart/resubscription/state-refresh protocol;
-7. Profile status model.
-
-Текущий RuntimeStateManager самостоятельно сериализует concurrent/re-entrant handler
-execution и тем самым защищает latest-value calculation от одновременной mutation.
-Unit/integration harness доказывает semantic flow, но это не заменяет будущий
-EventEnvelope revision filter. Именно envelope обязан защищать RuntimeStateManager от
-**последовательной, но поздней** доставки старого InfoEvent после superseding
-revision/generation.
-
-Future Device lifecycle management остается отдельным будущим расширением и не является
-частью текущего NG2 runtime.
+Current code still implements the superseded logical-window/evidence-epoch model. The next
+coherent implementation unit is its replacement by this bounded aggregate collector.

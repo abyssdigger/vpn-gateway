@@ -95,6 +95,25 @@ payload traffic**.
 - transition/barrier phases;
 - конкретные network-stack verification commands.
 
+## 2.1. Availability collector ownership
+
+Availability routing hysteresis is part of payload-priority policy and is therefore owned
+inside `PayloadTrafficManager`, not by `AvailabilityProbeManager`.
+
+The producer-facing boundary is deliberately smaller than an asynchronous Event stream:
+current probe workers/timers update bounded per-channel aggregates
+(`pending_good_news`, `tick_pending`) through a short-lock input port and return. The
+Manager's single collector flow consumes those aggregate facts, updates current GOOD/BAD
+channel state, and invokes the existing route-priority materializer synchronously only
+when the routing-relevant snapshot changes.
+
+The normative state machine and aggregation rules are defined in
+`design/NG2/availability-collector-materializer.md`.
+
+Availability-driven route reorders use the same sole transactional executor as all other
+route mutations. They do not introduce a second pending route-plan queue or a concurrent
+route executor.
+
 ## 3. PayloadTrafficManager
 
 ### 3.1. Тип
@@ -121,7 +140,8 @@ Profiles participating in payload traffic
 Profile destinations
 Profile direction policy
 current usable/bound concrete interfaces per Profile
-ordering/preference of usable paths
+configured/base ordering of usable paths
+availability channel assignment/policy required for runtime priority
 Device traffic envelopes
 Device NAT policy
 other payload-semantic requirements
@@ -139,8 +159,10 @@ latest_desired_network_rules
 latest_published_payload_state
 
 single reconcile executor ownership
-latest pending desired projection
+latest pending structural desired projection
 pending audit flag
+availability channel state and bounded producer aggregates
+last verified route-priority materialized snapshot
 ```
 
 Состояние сериализации является техническим состоянием Manager, а не semantic history
@@ -190,15 +212,20 @@ PayloadTrafficStateInfo
 `rules_state` сообщает aggregate состояние правил по независимым осям.
 
 Per-Profile `observed_paths` сообщает только фактическую routing projection requested
-Profile:
+Profile after the Manager's internal availability-priority materialization:
 
 - при authoritative observation — concrete ordered paths;
 - authoritative отсутствие logical domain — пустой tuple;
 - неизвестное/stale observation — UNKNOWN.
 
 Эти paths не являются самостоятельным verdict о здоровье Profile. RuntimeStateManager
-комбинирует их с `rules_state`, binding/availability и другими system-level facts в
-`ProfileStateCalculator`. Availability уже учтена upstream в desired `ordered_paths`; она не превращает observed path в binding ON/OFF внутри PayloadTrafficManager.
+может комбинировать их с `rules_state`, binding и другими system-level facts в
+`ProfileStateCalculator`.
+
+Availability priority больше не вычисляется upstream как готовый `ordered_paths`.
+`PayloadTrafficManager` владеет текущим GOOD/BAD channel state и выводит effective order
+внутри своей managed domain. Availability по-прежнему не превращает observed path в
+binding ON/OFF и не меняет payload membership.
 
 Foreign observed routing domains не публикуются как requested Profiles; их наличие
 отражается через divergence/safety rules-state assessment.

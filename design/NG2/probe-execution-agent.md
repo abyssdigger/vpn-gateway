@@ -1,5 +1,11 @@
 # VPN-GATE NG2 — ProbeExecutionAgent
 
+> **2026-11-15 normative update:** logical observation windows are removed from the target
+> architecture. `design/NG2/availability-collector-materializer.md` supersedes the
+> `LogicalProbeWindow`, `evidence_epoch`, boundary batching and `elapsed_intervals`
+> portions below. Physical send cadence, stale physical-generation rejection, bounded
+> workers and local diagnostics remain normative.
+
 **Status:** active NG2 design  
 **Date:** 2026-11-15  
 **Scope:** production execution of generation-bound active probe demand  
@@ -15,15 +21,9 @@ policy and does not decide whether a payload path is eligible, reachable or remo
 Its inputs are latest-value `ProbeExecutionPlan | None` RequestEvents from
 `AvailabilityProbeManager`.
 
-Its outputs are:
-
-```text
-ProbeGoodNewsInfo
-ProbeWindowBoundaryInfo
-ProbeExecutionDiagnosticInfo
-```
-
-The first two feed availability evidence. Diagnostics are operational state only.
+Its availability-facing outputs are colorless good-news observations and logical ticks.
+It also publishes local execution diagnostics. Good-news/tick inputs are aggregated by the
+PayloadTrafficManager collector; they are not replayable event-journal records.
 
 ## 2. Ownership split
 
@@ -32,16 +32,15 @@ The first two feed availability evidence. Diagnostics are operational state only
 - logical probe requests;
 - ProbeRules lifecycle;
 - READY `ProbeObservationGeneration`;
-- evidence windows and hysteresis;
-- `REACHABLE / UNREACHABLE / UNKNOWN` publication.
+- physical ProbeRules/readiness generation;
+- current execution demand.
 
 `ProbeExecutionAgent` owns:
 
 - current execution plan lifecycle;
-- monotonic cadence;
+- monotonic physical-send and logical-tick cadence;
 - physical send launch;
 - generation-scoped worker acceptance;
-- serialization of good-news/window publication;
 - local execution diagnostics.
 
 The Agent does **not** own:
@@ -54,56 +53,32 @@ The Agent does **not** own:
 
 ## 3. Request lifecycle
 
-A non-`None` plan means:
+A non-`None` plan means: execute this complete current physical/logical probe demand.
 
-> execute this complete generation-bound probe demand.
+`None` means: quiesce it.
 
-`None` means:
+A physical ProbeRules generation loss quiesces current demand before a later lower-domain
+transition. A later fresh READY generation installs replacement demand.
 
-> quiesce all current probe execution demand.
-
-On physical ProbeRules generation loss,
-`AvailabilityProbeManager` publishes `None` before starting a later lower-domain
-transition. A later fresh READY generation publishes a replacement plan.
-
-Logical-only changes may replace a plan without changing
-`ProbeObservationGeneration`.
-
-Each logical window also carries an opaque positive `evidence_epoch` owned by
-`AvailabilityProbeManager`. The epoch changes whenever that logical probe definition
-changes, including a `failure_intervals`-only change that does not alter physical cadence.
-
-Unchanged plane cadence keeps its existing phase. A logical window keeps its phase only
-when both interval and `evidence_epoch` are unchanged. A changed/new evidence epoch begins
-a fresh logical interval without leaking `failure_intervals` into the Agent.
+Logical policy changes do not require an `evidence_epoch`. Routing hysteresis state is
+outside this Agent.
 
 ## 4. Cadence
 
-Plan activation:
+The Agent schedules two technical activities:
 
 ```text
-start logical windows
-send once immediately on every physical plane
+physical send deadline -> launch at most one current send
+logical tick deadline   -> set current channel tick_pending = true
 ```
 
-At a later coincident deadline:
+A late wake-up does not replay historical activity:
 
-```text
-1. publish due window boundary
-2. launch the send for the next window
-```
+- missed physical sends are not burst-replayed;
+- repeated undrained logical ticks collapse to one pending fact in the collector input;
+- the next deadlines advance to the future in O(1).
 
-The Agent uses anchored monotonic deadlines.
-
-If execution wakes late:
-
-- elapsed logical windows are batched into one
-  `ProbeWindowBoundaryInfo(elapsed_intervals=N)`;
-- exactly one current physical send is launched;
-- historical missed sends are not replayed as a burst;
-- both deadline advances are O(1).
-
-Thus a suspend/resume cannot create an unbounded event or process catch-up storm.
+There is no elapsed-window catch-up.
 
 ## 5. Physical send boundary
 
@@ -111,10 +86,7 @@ The production Agent depends on:
 
 ```text
 ProbeSendDriver.execute_send(...)
-    -> ProbeSendResult(
-           good_news: bool,
-           local_error: str | None
-       )
+    -> ProbeSendResult(good_news: bool, local_error: str | None)
 ```
 
 No `NO_REPLY` type crosses this boundary.
@@ -128,72 +100,48 @@ NO_REPLY -> good_news=false, local_error=None
 ERROR    -> good_news=false, local_error=<diagnostic>
 ```
 
-This is intentionally an Adapter around historical diagnostic machinery. The production
-Agent does not consume `ProbeAttemptResult`.
-
-The long-lived entity is the Agent. Individual `ping -c 1` workers remain bounded
-technical sends. This reuses the already proven capability-free Linux mechanism instead of
-introducing an unvalidated raw/ping-socket implementation merely to make the worker
-process itself persistent.
+Individual `ping -c 1` workers remain bounded technical sends.
 
 ## 6. Send concurrency
 
 At most one send may be in flight for one physical plane/generation.
 
-If the next send deadline arrives before the previous send completes:
+If the next send deadline arrives before the previous send completes, no second worker is
+launched for that plane and local diagnostic state records the overrun. Different physical
+planes may execute concurrently.
 
-- no second process/thread is launched for that plane;
-- local diagnostic state becomes `ERROR` with an overrun reason;
-- observation windows continue normally;
-- routing receives no immediate negative event.
+## 7. Availability input publication
 
-This bounds execution resources even when technical send latency exceeds configured
-cadence.
+A successful reply contributes one colorless good-news unit to every current logical
+consumer of that physical plane.
 
-Different physical planes may execute concurrently.
+The receiving bounded input saturates at that channel's configured
+`recovery_good_news`. No attempt identity, timestamp or semantic send sequence is
+published.
 
-## 7. Evidence publication
+A logical cadence firing only sets that channel's `tick_pending` flag. A second firing
+while the flag is already set adds nothing.
 
-A successful technical reply emits:
+The Agent does not need to order good news against ticks. The collector deliberately treats
+the accumulated good-news count and pending-tick fact in one pass as simultaneous
+observations.
 
-```text
-ProbeGoodNewsInfo(
-    mechanism,
-    InterfaceIdentity,
-    target,
-    ProbeObservationGeneration
-)
-```
+A result from an obsolete physical generation or from a plane no longer in the current
+plan is discarded.
 
-A successful local execution without reply emits no availability event.
+## 8. Removed window machinery
 
-A local execution error emits no availability event.
-
-Good-news and window-boundary publication share one Agent-local serialization lock. This
-provides a definite source order inside one execution generation. Future
-`EventEnvelope.revision` ordering must preserve that order across asynchronous delivery.
-
-A result from an obsolete generation or from a plane no longer in the current plan is
-discarded.
-
-## 8. Window batching
-
-`ProbeWindowBoundaryInfo` carries:
+The target Agent has no:
 
 ```text
-probe_id
-generation
-elapsed_intervals >= 1
+LogicalProbeWindow.evidence_epoch
+ProbeWindowBoundaryInfo.elapsed_intervals
+boundary catch-up
+boundary-before-next-send semantic ordering
+good-news/window source-order lock
 ```
 
-`AvailabilityProbeManager` first verifies both physical `generation` and logical
-`evidence_epoch`, then `AvailabilityWindowState.close_intervals()` applies the same
-integral semantics in O(1). A boundary already emitted for an older logical definition is
-therefore stale even when the physical READY generation did not change.
-
-If good news existed in the first elapsed window and several further windows elapsed
-during suspension, the first boundary consumes that good news and the remaining windows
-count as misses. No attempt correlation is introduced.
+Physical generation remains only as a stale-worker safety guard.
 
 ## 9. Local diagnostics
 
