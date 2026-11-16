@@ -43,6 +43,14 @@ from .payload_profile import (
     PayloadProfileRequest,
     build_payload_profile_requests,
 )
+from .payload_routing_desired import (
+    ManagedRouteSpec,
+    ManagedRouteType,
+    ManagedRuleSpec,
+    PayloadRoutingDesiredState,
+    PayloadRoutingProjectionError,
+    build_payload_routing_desired_state,
+)
 from .network_policy_layout import (
     NetworkPolicyLayout,
     NetworkPolicyLayoutError,
@@ -124,6 +132,9 @@ __all__ = [
     "IproutePriorityBackend",
     "IproutePriorityBackendError",
     "LogicalPathId",
+    "ManagedRouteSpec",
+    "ManagedRouteType",
+    "ManagedRuleSpec",
     "NetworkPolicyLayout",
     "NetworkPolicyLayoutError",
     "NetworkPolicyPlatformSpace",
@@ -134,6 +145,8 @@ __all__ = [
     "PayloadPolicyAllocation",
     "PayloadProfileProjectionError",
     "PayloadProfileRequest",
+    "PayloadRoutingDesiredState",
+    "PayloadRoutingProjectionError",
     "ProbePolicyAllocation",
     "ProbePolicyOwner",
     "ProbeRoutingDemand",
@@ -167,6 +180,7 @@ __all__ = [
     "apply_availability_evidence",
     "calculate_effective_path_order",
     "build_payload_profile_requests",
+    "build_payload_routing_desired_state",
     "build_route_priority_domain_realizations",
     "classify_inbound_profile",
     "classify_outbound_profile",
