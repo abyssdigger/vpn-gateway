@@ -1610,6 +1610,24 @@ can preserve make-before-break behavior.
 The contract validates the internal representation but intentionally does not choose table,
 protocol or metric values. Their allocation remains a lower Adapter responsibility.
 
+That allocation must not be designed as an isolated priority-only namespace. Table IDs,
+route-owner protocol, rule priorities and metric ownership are part of the same lower
+network-policy ownership layout that will also realize structural routing/RPDB/filtering
+state.
+
+Therefore the next allocator unit is gated by the structural lower-policy layout:
+
+- it may reserve/derive internal identifiers deterministically;
+- it must keep owner scopes unambiguous for observation, mutation and cleanup;
+- it must prevent collisions between independent Profiles/domains and probe/payload owner
+  scopes;
+- it must provide enough owned metric space for the accepted make-before-break algorithm;
+- it must not reuse historical NG1/NG2 constants merely because they existed;
+- it must remain entirely below the human-facing configuration contract.
+
+The existing realization types are consumers of that future allocation contract, not the
+authority that chooses global Linux resource namespaces.
+
 # 10. NetworkPolicyExecutor
 
 **Component type:** Executor
