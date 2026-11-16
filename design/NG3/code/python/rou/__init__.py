@@ -254,6 +254,10 @@ from .network_policy_layout import (
     allocate_network_policy_layout,
 )
 from .linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
+from .linux_structural_routing import (
+    LinuxStructuralRoutingBackend,
+    LinuxStructuralRoutingError,
+)
 from .profile_classification import (
     ProfileClassificationError,
     classify_inbound_profile,
@@ -428,6 +432,8 @@ __all__ = [
     "PayloadNatMutationStatus",
     "PayloadNatPhysicalSnapshot",
     "LinuxPayloadNatBackend",
+    "LinuxStructuralRoutingError",
+    "LinuxStructuralRoutingBackend",
     "compare_payload_nat",
     "observe_payload_forward",
     "select_composite_nft_step",
