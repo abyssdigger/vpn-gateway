@@ -52,6 +52,8 @@ NG3 requirement merely because it existed before.
 
    **[VPNG-R1.R2.R4.R1]** *Чтобы пользователь мог стабильно ссылаться на одну и ту же логическую сущность из других частей конфигурации, status и diagnostics.* | Каждый Device и Profile должен иметь стабильный уникальный user-visible ID; ссылки между сущностями должны использовать этот ID, а runtime interface name, metric или случайный object identity не должны подменять пользовательскую идентичность.
 
+    **[VPNG-R1.R2.R4.R1.C1]** *Чтобы Device/Profile IDs оставались однозначными без quoting/escaping в human-facing configuration, CLI и diagnostics.* | В текущем human-facing contract Device/Profile ID ограничен формой `[a-z0-9][a-z0-9-]*`; dots, underscores, whitespace и uppercase не поддерживаются, leading digit допустим, а ID должен трактоваться как opaque string, не как число или системный identifier.
+
    **[VPNG-R1.R2.R4.R2]** *Чтобы пользователь мог заранее описать будущую или временно неиспользуемую часть конфигурации без ее фактической активации.* | Device и Profile должны иметь явное `enabled` состояние без неявного default; disabled объект может существовать как именованный placeholder и не должен сам по себе создавать active routing/binding behavior.
 
    **[VPNG-R1.R2.R4.R3]** *Чтобы один и тот же внешний VPN/network resource можно было переиспользовать в нескольких независимых пользовательских сетевых потребностях.* | Device должен быть отдельной от Profile сущностью; один Device может быть referenced несколькими Profiles, а Device-specific binding expectations не должны дублироваться внутри каждого Profile.
@@ -78,6 +80,8 @@ NG3 requirement merely because it existed before.
 
    **[VPNG-R1.R3.R4.R3]** *Чтобы временное отсутствие или появление дополнительных runtime interfaces не меняло пользовательский смысл Device.* | Runtime binding должен отличать user-declared expected-interface capacity от фактически обнаруженных endpoints; отсутствие ожидаемого endpoint не создает другой Device, а endpoint сверх selector quota не должен неявно становиться управляемым путем.
 
+   **[VPNG-R1.R3.R4.R4]** *Чтобы объявление Device само по себе не запускало управление сетевым ресурсом, который пользователь пока ни для чего не использует.* | Device считается active для discovery/binding только если он enabled и referenced хотя бы одним enabled Profile; disabled или не referenced Device не должен создавать active binding/path behavior.
+
   **[VPNG-R1.R3.C1]** *В первом релизе развертывание и базовая настройка VPN-инфраструктуры остаются ответственностью администратора и внешней эксплуатационной среды.* | VPN-GATE первого релиза не обязан самостоятельно создавать и конфигурировать VPN-каналы; администратор должен заранее развернуть и настроить поддерживаемый VPN-канал так, чтобы VPN-GATE мог принять его в обслуживание. [closed]
 
    **[VPNG-R1.R3.C1.R1]** *Чтобы администратор мог выполнить возложенную на него часть без знания внутренних деталей реализации VPN-GATE.* | Для каждого поддерживаемого способа внешнего развертывания VPN-канала должны быть предоставлены инструкции и необходимый контракт, позволяющие сделать канал однозначно видимым и пригодным для управления и использования VPN-GATE. [closed]
@@ -97,6 +101,8 @@ NG3 requirement merely because it existed before.
  **[VPNG-R2.R1]** *Чтобы можно было однозначно отличить управляемый VPN-GATE трафик от остального трафика системы.* | Политика должна однозначно определять, какой трафик входит в область управления VPN-GATE.
 
   **[VPNG-R2.R1.R1]** *Чтобы Profile мог прямо выражать remote network need пользователя.* | Enabled Profile должен задавать непустой набор strict IPv4 CIDR `destinations`, определяющий его remote/VPN-side prefixes; list order не должен иметь routing semantics, а некорректные/нестрогие CIDR не должны молча canonicalize-иться.
+
+  **[VPNG-R2.R1.R2]** *Чтобы одна Profile destination semantics одинаково определяла нужную remote сеть в обоих направлениях передачи.* | Для ordinary/host-to-VPN NEW traffic Profile выбирается по remote destination prefix; для VPN-to-ordinary/host NEW traffic — по remote source prefix только среди Profiles, разрешающих фактический ingress Device/path.
 
  **[VPNG-R2.R2]** *Чтобы динамическое состояние системы не могло само расширять разрешенный пользователем набор VPN-путей.* | Для каждого управляемого класса трафика политика должна однозначно определять набор VPN-путей, через которые этот трафик разрешено передавать.
 
