@@ -255,6 +255,11 @@ from .structural_policy_plan import (
     StructuralPolicyStepKind,
     select_structural_policy_step,
 )
+from .network_policy_activation import (
+    NetworkPolicyActivationResult,
+    NetworkPolicyActivationStatus,
+    activate_network_policy,
+)
 from .network_policy_layout import (
     NetworkPolicyLayout,
     NetworkPolicyLayoutError,
@@ -411,6 +416,8 @@ __all__ = [
     "LinuxNftNamespaceBackend",
     "LinuxNftScaffoldBackend",
     "NatIntent",
+    "NetworkPolicyActivationResult",
+    "NetworkPolicyActivationStatus",
     "NetworkPolicyLayout",
     "NetworkPolicyLayoutError",
     "NetworkPolicyPlatformSpace",
@@ -527,6 +534,7 @@ __all__ = [
     "SubprocessCommandRunner",
     "SubprocessNftRunner",
     "WaitingCandidate",
+    "activate_network_policy",
     "allocate_network_policy_layout",
     "apply_availability_evidence",
     "calculate_effective_path_order",
