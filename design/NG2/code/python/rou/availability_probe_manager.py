@@ -38,6 +38,11 @@ class AvailabilityProbeStatePublisher(Protocol):
         ...
 
 
+class ProbeExecutionPlanPublisher(Protocol):
+    def publish(self, plan: ProbeExecutionPlan | None) -> None:
+        ...
+
+
 class AvailabilityProbeManager:
     """Own the active-probe rules plane and its authoritative readiness epoch.
 
@@ -54,6 +59,7 @@ class AvailabilityProbeManager:
         *,
         rules_calculator: ProbeRulesCalculator | None = None,
         execution_plan_calculator: ProbeExecutionPlanCalculator | None = None,
+        execution_plan_publisher: ProbeExecutionPlanPublisher | None = None,
     ) -> None:
         self._adapter = adapter
         self._publisher = publisher
@@ -62,6 +68,9 @@ class AvailabilityProbeManager:
         self._execution_plan_calculator = (
             execution_plan_calculator or ProbeExecutionPlanCalculator()
         )
+        self._execution_plan_publisher = execution_plan_publisher
+        self._latest_execution_plan_published: ProbeExecutionPlan | None = None
+        self._execution_plan_was_published = False
 
         self._latest_request: AvailabilityProbeSetRequest | None = None
         self._latest_desired: NetworkRulesSpec | None = None
@@ -70,6 +79,8 @@ class AvailabilityProbeManager:
         self._generation_sequence = 0
         self._active_generation: ProbeObservationGeneration | None = None
         self._window_states: dict[str, AvailabilityWindowState] = {}
+        self._logical_evidence_epoch_sequence = 0
+        self._logical_evidence_epochs: dict[str, int] = {}
 
     @property
     def observation_generation(self) -> ProbeObservationGeneration | None:
@@ -88,11 +99,7 @@ class AvailabilityProbeManager:
         """
 
         with self._state_lock:
-            request = self._latest_request
-            generation = self._active_generation
-            if request is None or generation is None:
-                return None
-            return self._execution_plan_calculator.calculate(request, generation)
+            return self._current_execution_plan_locked()
 
     def handle_request(self, request: AvailabilityProbeSetRequest) -> None:
         """Accept one full desired probe snapshot and reconcile its network plane."""
@@ -125,6 +132,11 @@ class AvailabilityProbeManager:
                 )
             )
 
+            self._synchronize_logical_evidence_epochs(
+                previous_request,
+                request,
+            )
+
             if physical_changed:
                 self._invalidate_generation()
             else:
@@ -147,6 +159,7 @@ class AvailabilityProbeManager:
 
         self._synchronize_generation(rules_state)
         self._synchronize_window_states()
+        self._publish_execution_plan_if_changed()
         self._publish_unknown_current(rules_state)
 
     def handle_good_news(self, info: ProbeGoodNewsInfo) -> int:
@@ -238,7 +251,13 @@ class AvailabilityProbeManager:
             raise ValueError(
                 "window-boundary event must be ProbeWindowBoundaryInfo"
             )
-        return self.close_interval(info.probe_id, info.generation)
+        with self._state_lock:
+            return self._close_intervals_locked(
+                info.probe_id,
+                info.generation,
+                info.elapsed_intervals,
+                evidence_epoch=info.evidence_epoch,
+            )
 
     def close_interval(
         self,
@@ -255,9 +274,31 @@ class AvailabilityProbeManager:
         probe_id: str,
         generation: ProbeObservationGeneration,
     ) -> bool:
-        """Apply a boundary while holding the Manager state lock."""
+        """Apply one boundary while holding the Manager state lock."""
+
+        return self._close_intervals_locked(
+            probe_id,
+            generation,
+            1,
+            evidence_epoch=self._logical_evidence_epochs.get(probe_id),
+        )
+
+    def _close_intervals_locked(
+        self,
+        probe_id: str,
+        generation: ProbeObservationGeneration,
+        count: int,
+        *,
+        evidence_epoch: int | None,
+    ) -> bool:
+        """Apply one or more elapsed boundaries while holding the state lock."""
 
         if self._active_generation is None or generation != self._active_generation:
+            return False
+        if type(count) is not int or count <= 0:
+            raise ValueError("boundary count must be a positive integer")
+        expected_epoch = self._logical_evidence_epochs.get(probe_id)
+        if expected_epoch is None or evidence_epoch != expected_epoch:
             return False
 
         request = self._latest_request
@@ -279,7 +320,7 @@ class AvailabilityProbeManager:
             probe.probe_id,
             AvailabilityWindowState(),
         )
-        state.close_interval(probe.policy)
+        state.close_intervals(probe.policy, count)
 
         if state.confirmed_live:
             self._publish_if_changed(
@@ -312,6 +353,7 @@ class AvailabilityProbeManager:
             rules_state = self._audit_rules(desired)
             self._synchronize_generation(rules_state)
             self._synchronize_window_states()
+            self._publish_execution_plan_if_changed()
             self._publish_unknown_current(rules_state)
 
     def shutdown(self) -> ActionResult:
@@ -377,8 +419,44 @@ class AvailabilityProbeManager:
             )
 
     def _invalidate_generation(self) -> None:
+        had_generation = self._active_generation is not None
         self._active_generation = None
         self._window_states.clear()
+        if had_generation:
+            # Quiesce execution demand before any subsequent lower-domain transition.
+            self._publish_execution_plan_if_changed()
+
+    def _current_execution_plan_locked(self) -> ProbeExecutionPlan | None:
+        request = self._latest_request
+        generation = self._active_generation
+        if request is None or generation is None:
+            return None
+        return self._execution_plan_calculator.calculate(
+            request,
+            generation,
+            evidence_epochs=self._logical_evidence_epochs,
+        )
+
+    def _publish_execution_plan_if_changed(self) -> None:
+        publisher = self._execution_plan_publisher
+        if publisher is None:
+            return
+
+        current = self._current_execution_plan_locked()
+        if (
+            self._execution_plan_was_published
+            and current == self._latest_execution_plan_published
+        ):
+            return
+
+        # Do not publish a synthetic initial quiescent state. Once execution has
+        # been activated, however, None is a real RequestEvent meaning "stop".
+        if not self._execution_plan_was_published and current is None:
+            return
+
+        publisher.publish(current)
+        self._latest_execution_plan_published = current
+        self._execution_plan_was_published = True
 
     def _synchronize_window_states(self) -> None:
         request = self._latest_request
@@ -399,6 +477,38 @@ class AvailabilityProbeManager:
                 probe_id,
                 AvailabilityWindowState(),
             )
+
+    def _synchronize_logical_evidence_epochs(
+        self,
+        previous: AvailabilityProbeSetRequest | None,
+        current: AvailabilityProbeSetRequest,
+    ) -> None:
+        previous_by_id = (
+            {
+                item.probe_id: item
+                for item in previous.probes
+            }
+            if previous is not None
+            else {}
+        )
+        current_by_id = {
+            item.probe_id: item
+            for item in current.probes
+        }
+
+        for probe_id in tuple(self._logical_evidence_epochs):
+            if probe_id not in current_by_id:
+                self._logical_evidence_epochs.pop(probe_id, None)
+
+        for probe_id, item in current_by_id.items():
+            if (
+                probe_id not in self._logical_evidence_epochs
+                or previous_by_id.get(probe_id) != item
+            ):
+                self._logical_evidence_epoch_sequence += 1
+                self._logical_evidence_epochs[probe_id] = (
+                    self._logical_evidence_epoch_sequence
+                )
 
     def _invalidate_changed_logical_probes(
         self,

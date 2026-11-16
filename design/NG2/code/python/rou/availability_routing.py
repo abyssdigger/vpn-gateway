@@ -56,22 +56,35 @@ class AvailabilityWindowState:
     def close_interval(self, policy: AvailabilityWindowPolicy) -> bool:
         """Close one observation window and return whether live state changed."""
 
+        return self.close_intervals(policy, 1)
+
+    def close_intervals(
+        self,
+        policy: AvailabilityWindowPolicy,
+        count: int,
+    ) -> bool:
+        """Close one or more elapsed windows without replaying each boundary."""
+
         if not isinstance(policy, AvailabilityWindowPolicy):
             raise ValueError(
                 "policy must be an AvailabilityWindowPolicy"
             )
+        if type(count) is not int or count <= 0:
+            raise ValueError("interval count must be a positive integer")
 
         previous = self.confirmed_live
+        remaining = count
 
         if self.good_news_since_boundary:
             self.good_news_since_boundary = False
             self.missed_intervals = 0
             self.confirmed_live = True
-            return self.confirmed_live != previous
+            remaining -= 1
 
-        self.missed_intervals += 1
-        if self.missed_intervals >= policy.failure_intervals:
-            self.confirmed_live = False
+        if remaining:
+            self.missed_intervals += remaining
+            if self.missed_intervals >= policy.failure_intervals:
+                self.confirmed_live = False
 
         return self.confirmed_live != previous
 

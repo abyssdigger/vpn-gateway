@@ -101,10 +101,161 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
         self.path = InterfaceIdentity("vpns00", 10)
         self.adapter = FakeAdapter()
         self.publisher = RecordingPublisher()
+        self.execution_publisher = RecordingPublisher()
         self.manager = AvailabilityProbeManager(
             self.adapter,
             self.publisher,
+            execution_plan_publisher=self.execution_publisher,
         )
+
+    def test_first_ready_request_publishes_execution_plan(self):
+        wanted = request(
+            probe("primary", self.path, "203.0.113.24")
+        )
+
+        self.manager.handle_request(wanted)
+
+        self.assertEqual(len(self.execution_publisher.events), 1)
+        plan = self.execution_publisher.events[0]
+        self.assertIsNotNone(plan)
+        self.assertEqual(plan.generation, self.manager.observation_generation)
+        self.assertEqual(len(plan.planes), 1)
+        self.assertEqual(plan.windows[0].probe_id, "primary")
+
+    def test_equivalent_request_does_not_republish_execution_plan(self):
+        wanted = request(
+            probe("primary", self.path, "203.0.113.24")
+        )
+        self.manager.handle_request(wanted)
+        self.execution_publisher.events.clear()
+
+        self.manager.handle_request(wanted)
+
+        self.assertEqual(self.execution_publisher.events, [])
+
+    def test_physical_generation_change_quiesces_before_new_plan(self):
+        self.manager.handle_request(
+            request(probe("primary", self.path, "203.0.113.24"))
+        )
+        first = self.execution_publisher.events[-1]
+        self.execution_publisher.events.clear()
+
+        self.manager.handle_request(
+            request(probe("primary", self.path, "203.0.113.25"))
+        )
+
+        self.assertEqual(len(self.execution_publisher.events), 2)
+        self.assertIsNone(self.execution_publisher.events[0])
+        second = self.execution_publisher.events[1]
+        self.assertIsNotNone(second)
+        self.assertNotEqual(second.generation, first.generation)
+        self.assertEqual(
+            second.planes[0].target,
+            IPv4Address("203.0.113.25"),
+        )
+
+    def test_failure_threshold_only_change_restarts_logical_window_epoch(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        first_plan = self.execution_publisher.events[-1]
+        first_window = first_plan.windows[0]
+        self.execution_publisher.events.clear()
+
+        changed = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            policy=AvailabilityWindowPolicy(
+                primary.policy.interval_seconds,
+                2,
+            ),
+        )
+        self.manager.handle_request(request(changed))
+
+        self.assertEqual(self.manager.observation_generation, generation)
+        self.assertEqual(len(self.execution_publisher.events), 1)
+        second_plan = self.execution_publisher.events[0]
+        second_window = second_plan.windows[0]
+        self.assertEqual(
+            second_window.interval_seconds,
+            first_window.interval_seconds,
+        )
+        self.assertNotEqual(
+            second_window.evidence_epoch,
+            first_window.evidence_epoch,
+        )
+
+    def test_stale_logical_window_boundary_is_rejected_after_policy_change(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        first_plan = self.execution_publisher.events[-1]
+        stale_epoch = first_plan.windows[0].evidence_epoch
+
+        changed = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            policy=AvailabilityWindowPolicy(
+                primary.policy.interval_seconds,
+                2,
+            ),
+        )
+        self.manager.handle_request(request(changed))
+        current_plan = self.execution_publisher.events[-1]
+        current_epoch = current_plan.windows[0].evidence_epoch
+        self.assertNotEqual(stale_epoch, current_epoch)
+        self.publisher.events.clear()
+
+        stale_processed = self.manager.handle_window_boundary(
+            ProbeWindowBoundaryInfo(
+                primary.probe_id,
+                generation,
+                evidence_epoch=stale_epoch,
+                elapsed_intervals=2,
+            )
+        )
+
+        self.assertFalse(stale_processed)
+        self.assertEqual(self.publisher.events, [])
+
+        current_processed = self.manager.handle_window_boundary(
+            ProbeWindowBoundaryInfo(
+                primary.probe_id,
+                generation,
+                evidence_epoch=current_epoch,
+                elapsed_intervals=2,
+            )
+        )
+
+        self.assertTrue(current_processed)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNREACHABLE,
+        )
+
+    def test_logical_cadence_change_republishes_plan_without_generation_change(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.execution_publisher.events.clear()
+
+        changed = AvailabilityProbeRequest(
+            primary.probe_id,
+            primary.path,
+            primary.target,
+            policy=AvailabilityWindowPolicy(30, 2),
+        )
+        self.manager.handle_request(request(changed))
+
+        self.assertEqual(self.manager.observation_generation, generation)
+        self.assertEqual(len(self.execution_publisher.events), 1)
+        changed_plan = self.execution_publisher.events[0]
+        self.assertEqual(changed_plan.generation, generation)
+        self.assertEqual(changed_plan.planes[0].interval_seconds, 30.0)
+        self.assertEqual(changed_plan.windows[0].interval_seconds, 30.0)
 
     def test_first_request_uses_manager_as_owner_and_opens_ready_epoch(self):
         wanted = request(
@@ -450,6 +601,27 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
             generation,
         )
 
+    def test_batched_window_boundary_reaches_failure_threshold_once(self):
+        primary = probe("primary", self.path, "203.0.113.24")
+        self.manager.handle_request(request(primary))
+        generation = self.manager.observation_generation
+        self.publisher.events.clear()
+
+        processed = self.manager.handle_window_boundary(
+            ProbeWindowBoundaryInfo(
+                primary.probe_id,
+                generation,
+                elapsed_intervals=3,
+            )
+        )
+
+        self.assertTrue(processed)
+        self.assertEqual(len(self.publisher.events), 1)
+        self.assertIs(
+            self.publisher.events[0].state,
+            AvailabilityProbeState.UNREACHABLE,
+        )
+
     def test_good_news_resets_negative_integral(self):
         primary = probe("primary", self.path, "203.0.113.24")
         self.manager.handle_request(request(primary))
@@ -661,6 +833,7 @@ class AvailabilityProbeManagerRulesTests(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertIsNone(self.manager.observation_generation)
+        self.assertIsNone(self.execution_publisher.events[-1])
         self.assertEqual(len(self.adapter.cleanup_owners), 1)
         self.assertIs(self.adapter.cleanup_owners[0], self.manager)
 

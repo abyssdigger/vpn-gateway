@@ -128,10 +128,45 @@ probe.
 
 Routing-level смысл evidence зафиксирован отдельно в
 `design/NG2/availability-routing-model.md`: подтвержденно живой path может получить более
-высокий приоритет среди уже bound/eligible paths, а отсутствие подтверждения не является
-командой удалить последний путь.
+высокий приоритет среди уже bound/eligible paths, но probing вообще не меняет payload
+route membership.
 
-### 2.4. PayloadTrafficManager
+### 2.4. ProbeExecutionAgent
+
+`ProbeExecutionAgent` исполняет generation-bound active-probe demand.
+
+Он получает latest-value RequestEvent:
+
+```text
+ProbeExecutionPlan | None
+```
+
+от `AvailabilityProbeManager`.
+
+Agent владеет:
+
+- monotonic send/window cadence;
+- immediate first send;
+- boundary-before-next-send phase ordering;
+- bounded physical send workers;
+- generation filtering результатов;
+- local execution diagnostics.
+
+Он публикует:
+
+```text
+ProbeGoodNewsInfo
+ProbeWindowBoundaryInfo
+ProbeExecutionDiagnosticInfo
+```
+
+`NO_REPLY` не существует как production Event. Local execution error также не является
+routing verdict.
+
+Конкретная Linux реализация и lifecycle описаны в
+`design/NG2/probe-execution-agent.md`.
+
+### 2.5. PayloadTrafficManager
 
 `PayloadTrafficManager` управляет payload network policy VPN-GATE. Его внутренняя
 декомпозиция и Machinery contracts зафиксированы в
@@ -155,7 +190,7 @@ Routing-level смысл evidence зафиксирован отдельно в
 Внутренняя безопасная материализация rules, verification, barriers и работа с Linux
 networking скрыты внутри Manager/Machinery и не входят в event contract верхнего уровня.
 
-### 2.5. PublicationManager
+### 2.6. PublicationManager
 
 `PublicationManager` управляет transport publication subsystem:
 
@@ -706,13 +741,17 @@ ProbeExecutionPlan
     logical window cadence per probe_id
 ```
 
-This is not an attempt scheduler. The eventual execution subsystem may emit only valid
-reply good-news and logical window boundaries. No `NO_REPLY` InfoEvent exists in the
-production contract.
+This is not an attempt scheduler. `AvailabilityProbeManager` publishes the current plan
+to `ProbeExecutionAgent`; `None` explicitly quiesces execution when the READY generation
+is lost.
+
+The Agent emits only valid-reply good-news and logical window boundaries. No `NO_REPLY`
+InfoEvent exists in the production contract. Delayed logical boundaries are batched with
+`elapsed_intervals`, while missed physical sends are never replayed as a burst.
 
 Activation starts the first windows and immediately sends once on every physical plane.
 When a later send deadline coincides with a window boundary, the boundary is emitted first
-and the send belongs to the next window. The execution source must serialize good-news and
+and the send belongs to the next window. The execution source serializes good-news and
 boundary publications for a generation; future EventEnvelope revision ordering preserves
 that order across asynchronous delivery.
 
@@ -822,7 +861,18 @@ AvailabilityProbeSetRequest       PayloadTrafficStateRequest
           v                                  v
 +-------------------------+       +------------------------+
 | AvailabilityProbeManager|       | PayloadTrafficManager  |
-+------------+------------+       +-----------+------------+
++-----+---------------+---+       +-----------+------------+
+      |               |                       |
+      |      ProbeExecutionPlan               |
+      |               |                       |
+      |               v                       |
+      |      +---------------------+           |
+      |      | ProbeExecutionAgent |           |
+      |      +----------+----------+           |
+      |                 |                      |
+      |     GoodNews / WindowBoundary          |
+      |                 |                      |
+      +<----------------+                      |
              |                                |
 AvailabilityProbeStateInfo         PayloadTrafficStateInfo
              |                                |
@@ -848,17 +898,18 @@ RuntimeStateManager
 Уже исполняются:
 
 - AvailabilityProbeManager good-news/window state;
+- generation-bound `ProbeExecutionPlan` RequestEvent lifecycle;
+- LinuxProbeExecutionAgent cadence/send/diagnostic lifecycle;
 - RuntimeStateManager availability -> payload priority slice;
 - PayloadTrafficIntentCalculator;
 - thread-safe single-executor serialization в PayloadTrafficManager.
 
 Следующие отдельные units:
 
-1. concrete production probe sender/receiver machinery for the now-explicit
-   `ProbeExecutionPlan` contract;
-2. PublicationManager и его Machinery;
-3. точные remaining state/reason codes;
-4. Event Delivery Environment implementation с epoch/revision ordering;
+1. Event Delivery Environment implementation с epoch/revision ordering;
+2. daemon/runtime assembly реального ProbeExecutionAgent event wiring;
+3. PublicationManager и его Machinery;
+4. точные remaining state/reason codes и Profile consumption execution diagnostics;
 5. serialization/schema versioning;
 6. restart/resubscription/state-refresh protocol;
 7. Profile status model.

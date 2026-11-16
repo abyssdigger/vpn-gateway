@@ -106,8 +106,8 @@ Not implemented yet:
 
 - richer predicate implication only where future use justifies it;
 - RuntimeStateManager Profile-state mapping;
-- AvailabilityProbeManager cadence/retry/hysteresis and Event publication;
-- focused stale conntrack-mark generation-lifetime verification for LOCAL_PROCESS reverse-flow identity;
+- EventEnvelope epoch/revision ordering and production Event Delivery wiring;
+- Profile/status consumption of probe execution diagnostics;
 - persistent technical allocation across daemon restart;
 - richer interface-origin dispatch;
 - incremental transition optimizer, only after a separate review/evidence unit.
@@ -117,11 +117,18 @@ Implemented lower/runtime slices now include:
 - Linux instance namespace/veth lifecycle and fail-closed instance -> Adapter startup
   composition;
 - target-confirmed LOCAL_PROCESS ICMP routing/nft materialization;
-- ProbeRulesCalculator and ProbeRulesStateCalculator;
-- separate PayloadRulesState and ProbeRulesState after mandatory comparison review;
-- single-shot capability-free Linux ICMP probe Driver, green in privileged CI.
+- ProbeRulesCalculator and shared NetworkRules convergence state;
+- AvailabilityProbeManager generation-bound good-news/window evidence;
+- ProbeExecutionPlan projection and RequestEvent lifecycle;
+- long-lived LinuxProbeExecutionAgent with bounded per-plane sends, batched window
+  boundaries and generation-scoped READY/ERROR/INACTIVE diagnostics;
+- compatibility Adapter hiding the diagnostic single-shot REPLY/NO_REPLY/ERROR contract
+  below the production send boundary;
+- single-shot capability-free Linux ICMP probe Driver retained as target-proven lower
+  mechanism/evidence;
+- RuntimeStateManager availability -> payload-priority wiring.
 
-RuntimeStateManager and remaining upper-domain assembly stay separate review units.
+EventEnvelope delivery ordering and remaining runtime assembly stay separate review units.
 
 Rootless tests:
 

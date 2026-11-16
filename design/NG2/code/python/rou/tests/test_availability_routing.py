@@ -69,6 +69,27 @@ class AvailabilityWindowStateTests(unittest.TestCase):
         self.assertEqual(state.missed_intervals, 3)
         self.assertFalse(state.confirmed_live)
 
+    def test_batched_elapsed_windows_preserve_good_news_then_count_misses(self):
+        state = AvailabilityWindowState()
+        policy = AvailabilityWindowPolicy(10, 3)
+
+        state.note_good_news()
+        changed = state.close_intervals(policy, 4)
+
+        self.assertTrue(changed)
+        self.assertFalse(state.confirmed_live)
+        self.assertEqual(state.missed_intervals, 3)
+        self.assertFalse(state.good_news_since_boundary)
+
+    def test_batched_elapsed_windows_reject_invalid_count(self):
+        state = AvailabilityWindowState()
+        policy = AvailabilityWindowPolicy(10, 3)
+
+        for count in (0, -1, 1.5, True):
+            with self.subTest(count=count):
+                with self.assertRaises(ValueError):
+                    state.close_intervals(policy, count)
+
     def test_good_news_cancels_incomplete_negative_integral(self):
         state = AvailabilityWindowState(confirmed_live=True)
         policy = AvailabilityWindowPolicy(10, 3)
