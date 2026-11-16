@@ -2203,6 +2203,53 @@ merely to solve prefix overlap; canonical CIDR subtraction is the simpler
 candidate and must be proven against the existing point classifiers before
 materialization.
 
+###### Profile most-specific CIDR partition Calculator
+
+**Component type:** pure Direct Calculator. This is Profile classification
+in bulk form, **not** final effective permission and not nft compilation.
+
+**Implements:**
+- `VPNG0002-R2.R1.R2`;
+- `VPNG0002-R2.R3.R3`;
+- `VPNG0002-R2.R5.R1`;
+- `VPNG0004-R4.R1`.
+
+Input is the existing set of `PayloadProfileRequest` objects and, for inbound
+partitioning, one concrete `LogicalPathId`. Output is a canonical set of
+disjoint `(profile_id, remote_prefix_fragment)` entries.
+
+Outbound partition considers only outbound/bidirectional Profiles and applies
+the same global most-specific selection as `classify_outbound_profile`.
+Inbound partition first restricts to inbound/bidirectional Profiles containing
+the supplied ingress path, then applies the same most-specific selection as
+`classify_inbound_profile`.
+
+A broader Profile fragment is split by every more-specific prefix owned by a
+different candidate Profile. Nested prefixes belonging to the same Profile are
+semantically redundant for selection and may collapse. Exact same prefix
+owned by different candidate Profiles is an error, never arbitrary order.
+
+The partition is **Profile permission only**. Device envelope intersection,
+path-specific lower rules and protocol/port restrictions are downstream
+responsibilities. An envelope can narrow fragments but cannot use this
+Calculator to expand Profile permission.
+
+**Necessity:** positive-only nft rules must not rely on rule ordering or
+routing correctness to reproduce most-specific Profile selection. A disjoint
+partition provides an independently testable semantic basis for later lower
+rule generation.
+
+**Simplification:** use standard strict IPv4 CIDR subtraction/collapse only.
+No ACL AST, decision tree runtime, persistent prefix trie, rule ordering,
+network I/O or mutation.
+
+**Evidence:** rootless tests compare partition ownership against the existing
+point classifiers over every address in bounded test networks, including
+nested prefixes, default route, same-Profile redundancy and path-relative
+inbound selection.
+
+
+
 
 `/31` remain explicit prefix objects; `/32` is a plain IPv4 address string.
 The same forms are used by NEW daddr and RETURN saddr matches. The strict
