@@ -57,6 +57,10 @@ class InterfaceInventoryTests(unittest.TestCase):
         self.assertNotEqual(first, second)
         self.assertEqual(first[0].ifname, second[0].ifname)
 
+    def test_interface_identity_rejects_bool_ifindex_directly(self):
+        with self.assertRaisesRegex(ValueError, "positive integer"):
+            InterfaceIdentity("vpn0", True)
+
 
 if __name__ == "__main__":
     unittest.main()
