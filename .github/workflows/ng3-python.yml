@@ -19,6 +19,7 @@ on:
       - "design/experiments/EXP-043 NG3 Device firewall active reject/**"
       - "design/experiments/EXP-044 NG3 Device firewall jump insertion/**"
       - "design/experiments/EXP-045 NG3 composite Profile forward mutation/**"
+      - "design/experiments/EXP-046 NG3 publication local admission/**"
   pull_request:
     paths:
       - "design/NG3/code/python/**"
@@ -259,6 +260,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-045 NG3 composite Profile forward mutation/exp045_profile_forward_mutation.py"
+      - name: EXP-046 publication local admission
+        run: >-
+          sudo python3
+          "design/experiments/EXP-046 NG3 publication local admission/exp046_publication_local_admission.py"
       - name: NG3 strict payload_forward observer integration
         env:
           PYTHONPATH: design/NG3/code/python
