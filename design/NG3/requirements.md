@@ -256,6 +256,11 @@ NG3 requirement merely because it existed before.
    **[VPNG0004-R4.R6.R1.R3]** *Чтобы VPN-путь подчинялся тем же routing, policy и safety правилам, что и остальная управляемая сеть.* | Data-plane endpoint каждого VPN-пути, используемого VPN-GATE для managed forwarding, должен быть доступен внутри управляемого сетевого домена как его внутренний path endpoint; endpoint, существующий только в обычном host network space, не должен использоваться напрямую как управляемый VPN-путь. [closed]
 
    **[VPNG0004-R4.R6.R1.R4]** *Чтобы продукт не считал внешнюю интеграцию корректной только потому, что администратор выполнил некоторую настройку.* | До использования внешнего boundary endpoint или VPN path endpoint VPN-GATE должен иметь возможность проверить, что требуемый endpoint присутствует в правильном управляемом домене, однозначно соответствует ожидаемой роли/идентичности и пригоден для дальнейшего применения policy; несоответствие должно оставаться безопасным и наблюдаемым. [closed]
+
+
+   **[VPNG0004-R4.R6.R1.R5]** *Чтобы наличие сетевого стека и локальных/forwarding hooks внутри managed domain само по себе не создавало неописанную разрешающую поверхность при неполной policy.* | VPN-GATE должен до объявления managed payload forwarding готовым поддерживать в своём managed network domain default filter policies `INPUT=DROP`, `OUTPUT=DROP` и `FORWARD=DROP`; разрешения поверх этих defaults должны быть явными owned contributions, подтверждаемыми из текущей принятой policy и внутренних product needs.
+
+    **[VPNG0004-R4.R6.R1.R5.R1]** *Чтобы пользовательский Device firewall ограничивал VPN payload, не заставляя пользователя одновременно администрировать внутренний control/probe plane VPN-GATE.* | Пользовательские Device firewall rules должны влиять только на managed payload forwarding, а необходимые локальные `INPUT/OUTPUT` исключения для поддерживаемых VPN-GATE control, probe, publication или integration функций должен формировать и владеть сам VPN-GATE; такие исключения не должны становиться разрешением произвольного payload forwarding или изменением firewall обычного host network namespace.
    ↳ [decomp: VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2]
 
 ## Lifecycle and recovery
