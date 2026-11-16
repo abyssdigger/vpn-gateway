@@ -182,7 +182,7 @@ def main() -> int:
     chain {CHILD} {{
         comment "{CHILD_COMMENT}"
         ip daddr 10.41.2.2 drop comment "{RULE_COMMENT}"
-        ip saddr 10.41.2.0/29 return comment "{REVERSE_COMMENT}"
+        ip saddr 10.41.2.0/29 return comment "{RULE_COMMENT}"
         drop comment "{FALLTHROUGH_COMMENT}"
     }}
 }}
@@ -198,7 +198,7 @@ def main() -> int:
             f"""flush chain ip vpn_gate {CHILD}
 add rule ip vpn_gate {CHILD} ip daddr 10.41.2.2 return comment "{RULE_COMMENT}"
 add rule ip vpn_gate {CHILD} ip saddr 10.41.2.0/29 return comment "{REVERSE_COMMENT}"
-add rule ip vpn_gate {CHILD} ip daddr 10.41.2.4 reject comment "{REJECT_COMMENT}"
+add rule ip vpn_gate {CHILD} ip daddr 10.41.2.4 reject comment "{RULE_COMMENT}"
 add rule ip vpn_gate {CHILD} drop comment "{FALLTHROUGH_COMMENT}"
 """,
         )
@@ -234,8 +234,8 @@ add rule ip vpn_gate {CHILD} drop comment "{FALLTHROUGH_COMMENT}"
 
         expected_child_comments = [
             RULE_COMMENT,
-            REVERSE_COMMENT,
-            REJECT_COMMENT,
+            RULE_COMMENT,
+            RULE_COMMENT,
             FALLTHROUGH_COMMENT,
         ]
         assert [rule.get("comment") for rule in child_rules] == expected_child_comments, child_rules
