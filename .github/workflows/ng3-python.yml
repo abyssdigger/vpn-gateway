@@ -17,6 +17,7 @@ on:
       - "design/experiments/EXP-041 NG3 ordered Device firewall child chain/**"
       - "design/experiments/EXP-042 NG3 Device firewall predicate JSON/**"
       - "design/experiments/EXP-043 NG3 Device firewall active reject/**"
+      - "design/experiments/EXP-044 NG3 Device firewall jump insertion/**"
   pull_request:
     paths:
       - "design/NG3/code/python/**"
@@ -249,6 +250,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-043 NG3 Device firewall active reject/exp043_device_firewall_reject.py"
+      - name: EXP-044 Device firewall jump insertion
+        run: >-
+          sudo python3
+          "design/experiments/EXP-044 NG3 Device firewall jump insertion/exp044_device_firewall_jump_insert.py"
       - name: NG3 strict payload_forward observer integration
         env:
           PYTHONPATH: design/NG3/code/python
