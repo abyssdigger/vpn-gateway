@@ -2160,6 +2160,103 @@ forbidden by either the old or new accepted policy.
 After partial failure it re-observes authoritative lower state before planning further
 mutation.
 
+### 10.2.1. Complete structural routing desired state
+
+Before a structural transaction is applied, the lower Adapter/Calculator must be able to
+derive a complete desired routing projection for the affected payload owner set.
+
+For each enabled Profile the projection contains:
+
+```text
+one allocated Profile table
+
+one terminal fail-closed route:
+    table = Profile table
+    type = BLACKHOLE
+    destination = default
+    protocol = guard marker
+    metric = terminal guard metric
+
+for every Profile destination and current realized logical path:
+    one desired path route
+    table = Profile table
+    destination = Profile destination
+    protocol = path marker
+    metric = current semantic preference slot
+    endpoint/gateway/onlink = verified integration realization
+
+for every Profile destination:
+    one host-boundary RPDB dispatch rule
+    iif = current verified managed host-boundary endpoint
+    to = Profile destination
+    table = Profile table
+    priority = deterministic allocation
+```
+
+A zero-path Profile therefore still has:
+
+- its allocated table;
+- its terminal guard;
+- its destination dispatch rules;
+
+and has no ordinary path routes. Dispatching its traffic into that table must terminate in
+the guard rather than fall through to ambient/main routing.
+
+The lower desired projection is data only. Constructing it does not mutate Linux state and
+does not claim the policy is active.
+
+The verified managed host-boundary endpoint is an internal runtime fact, not a user-visible
+route/rule field.
+
+### 10.2.2. Structural activation barrier
+
+A structural transition is wider than route-table preparation.
+
+In particular, installing a new RPDB dispatch rule can make a newly prepared Profile table
+reachable. That activation must not occur before the filtering/NAT state required by the
+same new semantic policy is safe.
+
+Therefore the physical structural transaction has this ordering contract:
+
+```text
+fresh lower observation
+        ->
+establish/verify restrictive barrier for affected traffic
+        ->
+prepare/verify new inactive routing tables
+    - terminal guards first
+    - desired ordinary path routes
+        ->
+prepare/verify required nft filtering/NAT state
+        ->
+install/switch/verify RPDB dispatch
+        ->
+verify complete desired routing + nft postcondition
+        ->
+release restrictive barrier
+        ->
+fresh final verification
+        ->
+cleanup stale old allocation/state when safe
+```
+
+The exact barrier mechanism is part of the forthcoming nft/structural Executor unit, but its
+semantic postcondition is already fixed:
+
+> while structural state is mixed or unconfirmed, affected traffic cannot traverse a policy
+> that is forbidden by either the previously accepted or newly accepted policy.
+
+A route-table preparation helper may create an otherwise unreachable new table before nft
+activation, because no new RPDB rule reaches it yet. It may not switch dispatch as a
+standalone optimization.
+
+Similarly, stale old table/rule cleanup must not occur merely because the new commands were
+issued; the new complete postcondition must first be authoritatively verified.
+
+This is why the pure-priority path remains a separate fast path: only there is path
+membership/filter/NAT unchanged and the semantic make-before-break proof sufficient without a
+structural barrier.
+
 # 11. Event contracts
 
 The architecture currently needs only semantic event edges required by Engine roles.
