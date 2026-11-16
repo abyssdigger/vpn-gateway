@@ -26,6 +26,7 @@ Implemented:
 - accepted EXP-028 Linux platform constants for table/RPDB/protocol/metric/nft namespaces;
 - semantic Profile/allocation to per-destination route-priority domain assembly without inferring gateway/onlink semantics;
 - explicit opt-in direct-device VPN integration route realizer from verified PathBinding objects;
+- complete immutable payload route/RPDB desired-state projection with terminal guards, per-destination path routes and host-boundary dispatch rules;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
