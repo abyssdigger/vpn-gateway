@@ -2447,6 +2447,48 @@ ifnames are not user-facing selectors. Under
 `VPNG0001-R1.R2.R4.R6.R2.R5.C1`, this does not block ordinary Release-1 Device firewall
 rules.
 
+###### Device firewall lower structural ownership
+
+EXP-041 proves the lower nft control-flow primitives required by the accepted composition:
+
+- `payload_forward` may jump to one ordinary owned child chain for the exact current
+  host-boundary/path pair;
+- Device `ALLOW` is represented by child-chain `return`, so evaluation continues to the
+  later Profile hard gate rather than accepting directly;
+- Device `DENY` may terminate with `drop`;
+- explicit-policy no-match is represented by a final terminal child `drop`;
+- nft preserves the physical order of child rules;
+- a `reject` action is structurally observable, while its final normalized
+  protocol-appropriate realization remains separately gated.
+
+The lower owner markers accepted for this structural layer are:
+
+```text
+child chain:   vpn-gate:ng3:device-fw-child-v1
+base jump:     vpn-gate:ng3:device-fw-jump-v1
+explicit rule: vpn-gate:ng3:device-fw-rule-v1
+fallthrough:   vpn-gate:ng3:device-fw-fallthrough-v1
+```
+
+The generic nft namespace inventory preserves each contained object's physical
+`source_order` in addition to canonical JSON. Existing unordered consumers may continue to
+canonicalize locally; ordered Device firewall observation must use the preserved physical
+order.
+
+The structural observer recognizes:
+
+- owned ordinary child-chain shape;
+- exact current/stale interface identity for Device jumps;
+- ordered explicit child rules whose final action is `return`, `drop` or `reject`;
+- exactly positioned terminal fallthrough `drop`;
+- conflicts such as a jump to a non-owned child chain, wrong owner markers, unsupported
+  rule actions or fallthrough before later rules.
+
+This is **structural ownership evidence only**. Match predicates are retained as canonical
+JSON and are not yet promoted into normalized Device-firewall semantics. Therefore this
+observer is not by itself authority to delete/rewrite arbitrary recognized rules, and it
+does not close the separate protocol/port-predicate or final REJECT realization gates.
+
 No deny-rule ordering or nft jump graph is introduced merely to solve Profile prefix
 overlap; the already accepted canonical CIDR partition remains the simpler Profile-gate
 mechanism. Ordered chains exist because user-authored Device firewall order is now itself an
