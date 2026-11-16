@@ -1,13 +1,19 @@
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
+from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_network import (
     LinuxNetworkDesiredError,
     compile_linux_network_desired,
     project_network_rules_to_interfaces,
 )
 from rou.linux_routing import LinuxRoutingAllocationState
+from rou.probe_rules import (
+    AvailabilityProbeRequest,
+    AvailabilityProbeSetRequest,
+    ProbeRulesCalculator,
+)
 from rou.network_rules import (
     DispatchRuleSpec,
     FlowInitiationAllowSpec,
@@ -16,8 +22,10 @@ from rou.network_rules import (
     RoutingDomainSpec,
     TerminalDisposition,
     TrafficAllowSpec,
+    IcmpType,
     TrafficPredicate,
     TrafficProtocol,
+    TrafficSelector,
 )
 from rou.network_rules_composition import (
     OwnedNetworkRules,
@@ -280,6 +288,159 @@ class LinuxNetworkDesiredTests(unittest.TestCase):
         self.assertEqual(actual.routing_domains[0].ordered_paths, ())
         self.assertEqual(actual.dispatch_rules, ())
         self.assertEqual(actual.traffic_allows, ())
+
+
+    def test_probe_rules_compile_with_explicit_linux_local_process_config(self):
+        identity = InterfaceIdentity("vpns00", 10)
+        rules = ProbeRulesCalculator().calculate(
+            AvailabilityProbeSetRequest(
+                (
+                    AvailabilityProbeRequest(
+                        "probe",
+                        identity,
+                        IPv4Address("203.0.113.24"),
+                    ),
+                )
+            )
+        )
+
+        desired = compile_linux_network_desired(
+            compose_network_rules(
+                (OwnedNetworkRules(OwnerToken(1), rules),)
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
+        )
+
+        self.assertEqual(len(desired.routing.dispatch_rules), 1)
+        self.assertIsNotNone(desired.filter)
+        self.assertFalse(desired.ip_forward_required)
+
+    def test_local_process_allow_without_matching_dispatch_is_rejected(self):
+        identity = InterfaceIdentity("vpns00", 10)
+        path = NetworkEndpoint.interface_path(identity)
+        target = IPv4Network("203.0.113.24/32")
+        rules = NetworkRulesSpec(
+            traffic_allows=(
+                TrafficAllowSpec(
+                    NetworkEndpoint.local_process(),
+                    path,
+                    TrafficPredicate.match(
+                        TrafficSelector(
+                            destination=target,
+                            protocol=TrafficProtocol.ICMP,
+                            icmp_types=(IcmpType.ECHO_REQUEST,),
+                        )
+                    ),
+                ),
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            LinuxNetworkDesiredError,
+            "lacks matching owner-scoped isolated dispatch",
+        ):
+            compile_linux_network_desired(
+                compose_network_rules(
+                    (OwnedNetworkRules(OwnerToken(1), rules),)
+                ),
+                LinuxRoutingAllocationState(),
+                local_interface="host0",
+                local_process=LinuxLocalProcessConfig(
+                    uid=65534,
+                    ct_mark=0x24,
+                ),
+            )
+
+    def test_local_process_broad_predicate_is_rejected(self):
+        identity = InterfaceIdentity("vpns00", 10)
+        path = NetworkEndpoint.interface_path(identity)
+        target = IPv4Network("203.0.113.24/32")
+        rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "probe",
+                    (target,),
+                    (identity,),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+            dispatch_rules=(
+                DispatchRuleSpec(
+                    target,
+                    "probe",
+                    source=NetworkEndpoint.local_process(),
+                    bound_output=path,
+                    protocol=TrafficProtocol.ICMP,
+                ),
+            ),
+            traffic_allows=(
+                TrafficAllowSpec(
+                    NetworkEndpoint.local_process(),
+                    path,
+                    TrafficPredicate.always(),
+                ),
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            LinuxNetworkDesiredError,
+            "exact probe MATCH predicates",
+        ):
+            compile_linux_network_desired(
+                compose_network_rules(
+                    (OwnedNetworkRules(OwnerToken(1), rules),)
+                ),
+                LinuxRoutingAllocationState(),
+                local_interface="host0",
+                local_process=LinuxLocalProcessConfig(
+                    uid=65534,
+                    ct_mark=0x24,
+                ),
+            )
+
+    def test_local_process_dispatch_only_remains_fail_closed(self):
+        identity = InterfaceIdentity("vpns00", 10)
+        path = NetworkEndpoint.interface_path(identity)
+        target = IPv4Network("203.0.113.24/32")
+        rules = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "probe",
+                    (target,),
+                    (identity,),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+            dispatch_rules=(
+                DispatchRuleSpec(
+                    target,
+                    "probe",
+                    source=NetworkEndpoint.local_process(),
+                    bound_output=path,
+                    protocol=TrafficProtocol.ICMP,
+                ),
+            ),
+        )
+
+        desired = compile_linux_network_desired(
+            compose_network_rules(
+                (OwnedNetworkRules(OwnerToken(1), rules),)
+            ),
+            LinuxRoutingAllocationState(),
+            local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
+        )
+
+        self.assertIn("meta skuid 65534 drop", desired.filter.definition)
+        self.assertNotIn("ct mark set 0x24 accept", desired.filter.definition)
 
     def test_two_generations_same_name_cannot_coexist_in_linux_desired(self):
         old = InterfaceIdentity("vpns00", 10)

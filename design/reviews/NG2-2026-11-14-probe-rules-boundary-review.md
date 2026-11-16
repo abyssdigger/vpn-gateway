@@ -161,28 +161,31 @@ rejection and unaffected unrelated local traffic.
 This supplies a concrete lower-domain implementation direction without putting uid or
 conntrack mark into the semantic probe request.
 
-Debian 13 target confirmation remains required before calling the materialization
-target-proven, but the architecture choice is no longer blocked.
+The same EXP-024 harness subsequently passed on the Debian 13 target. The selected
+OUTPUT process-identity + conntrack-carried reverse-flow mechanism is therefore
+target-confirmed.
 
-## 8. Rules-state comparison remains intentionally pending
+## 8. Rules-state follow-up completed
 
-This review does **not** create `ProbeRulesState` yet.
+This original boundary review did **not** create `ProbeRulesState` at that stage.
 
-A state calculator without an executable/observable ProbeRules materialization would only
-copy PayloadRulesState shape by assumption, exactly the premature abstraction the earlier
-review prohibited.
+At the time of this review a state calculator was intentionally deferred because no real
+ProbeRules materialization existed. That evidence gate is now closed: the production
+LOCAL_PROCESS backend has passed real apply, exact renew and dataplane integration.
 
-The common-state review remains mandatory after real ProbeRules observation exists.
+That follow-up is now complete: ProbeRulesStateCalculator was implemented after real
+physical apply/renew evidence, and the mandatory PayloadRulesState / ProbeRulesState
+comparison rejected a common RulesState because the domain semantics differ.
 
 ## Final verdict
 
-**PASS for the architecture boundary; target mechanism confirmation remains pending.**
+**PASS for the architecture boundary; EXP-024 target mechanism confirmation is complete.**
 
 Do not introduce a second Linux policy reconciler.
 
-The common NetworkRules semantic contract may now be extended with local-process traffic
-and bound-output/protocol dispatch semantics. Linux uid and conntrack mark remain technical
-lower-domain state.
+The common NetworkRules semantic contract has since been extended with local-process
+traffic and bound-output/protocol dispatch semantics. Linux uid and conntrack mark remain
+technical lower-domain state.
 
-The common PayloadRulesState / future ProbeRulesState comparison still waits for the real
+The completed PayloadRulesState / ProbeRulesState comparison was based on the real
 ProbeRules state calculator.

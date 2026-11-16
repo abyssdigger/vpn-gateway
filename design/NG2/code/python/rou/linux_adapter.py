@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from .linux_driver import LinuxDriverResult, LinuxNetworkVerification
+from .linux_local_process import LinuxLocalProcessConfig
 from .interface_identity import InterfaceIdentity
 from .linux_network import (
     LinuxNetworkDesired,
@@ -12,6 +13,7 @@ from .linux_network import (
 from .linux_routing import LinuxRoutingAllocationState
 from .network_rules import (
     ActionResult,
+    EndpointKind,
     NetworkRulesSpec,
     NetworkRulesState,
     StateKnowledge,
@@ -50,9 +52,11 @@ class LinuxNetworkRulesAdapter:
         backend: LinuxNetworkBackend,
         *,
         local_interface: str,
+        local_process: LinuxLocalProcessConfig | None = None,
     ) -> None:
         self._backend = backend
         self._local_interface = local_interface
+        self._local_process = local_process
         self._owners = OwnerRulesRegistry()
         self._routing_allocation = LinuxRoutingAllocationState()
         self._last_state: dict[OwnerToken, NetworkRulesState] = {}
@@ -91,6 +95,8 @@ class LinuxNetworkRulesAdapter:
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
+                local_process=self._local_process,
+                local_process_guard_required=self._has_local_process_intent(candidate),
             )
         except Exception as exc:
             return ActionResult(
@@ -115,11 +121,16 @@ class LinuxNetworkRulesAdapter:
             return ActionResult(False, "owner is not registered")
 
         try:
-            projected = self._project(self._owners.snapshot())
+            owners = self._owners.snapshot()
+            projected = self._project(owners)
             desired = compile_linux_network_desired(
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
+                local_process=self._local_process,
+                local_process_guard_required=self._has_local_process_intent(
+                    owners
+                ),
             )
             verification = self._backend.verify_current(desired)
         except Exception as exc:
@@ -156,6 +167,8 @@ class LinuxNetworkRulesAdapter:
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
+                local_process=self._local_process,
+                local_process_guard_required=self._has_local_process_intent(candidate),
             )
         except Exception as exc:
             return ActionResult(
@@ -182,11 +195,16 @@ class LinuxNetworkRulesAdapter:
         diagnostic: str,
     ) -> ActionResult:
         try:
-            projected = self._project(self._owners.snapshot())
+            owners = self._owners.snapshot()
+            projected = self._project(owners)
             desired = compile_linux_network_desired(
                 projected,
                 self._routing_allocation,
                 local_interface=self._local_interface,
+                local_process=self._local_process,
+                local_process_guard_required=self._has_local_process_intent(
+                    owners
+                ),
             )
         except Exception as exc:
             combined = diagnostic + f"; committed reconcile compile failed: {exc}"
@@ -223,6 +241,28 @@ class LinuxNetworkRulesAdapter:
             compose_network_rules(owners),
             interfaces,
         )
+
+    @staticmethod
+    def _has_local_process_intent(
+        owners: tuple[OwnedNetworkRules, ...],
+    ) -> bool:
+        for owned in owners:
+            rules = owned.rules
+            if any(
+                rule.source.kind is EndpointKind.LOCAL_PROCESS
+                for rule in rules.dispatch_rules
+            ):
+                return True
+            if any(
+                rule.source.kind is EndpointKind.LOCAL_PROCESS
+                or rule.destination.kind is EndpointKind.LOCAL_PROCESS
+                for rule in (
+                    *rules.traffic_allows,
+                    *rules.flow_initiation_allows,
+                )
+            ):
+                return True
+        return False
 
     @staticmethod
     def _rules_for_token(

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .linux_adapter import LinuxNetworkBackend, LinuxNetworkRulesAdapter
+from .linux_local_process import LinuxLocalProcessConfig
 from .linux_instance import (
     LinuxInstanceSpec,
     ensure_linux_instance,
@@ -39,6 +40,7 @@ def bootstrap_linux_network_rules_adapter(
     backend: LinuxRuntimeBootstrapBackend,
     *,
     local_interface: str,
+    local_process: LinuxLocalProcessConfig | None = None,
 ) -> LinuxRuntimeBootstrapResult:
     """Return an Adapter only after freshly verified forwarding closure."""
 
@@ -54,6 +56,7 @@ def bootstrap_linux_network_rules_adapter(
         adapter=LinuxNetworkRulesAdapter(
             backend,
             local_interface=local_interface,
+            local_process=local_process,
         ),
     )
 
@@ -63,6 +66,7 @@ def bootstrap_linux_network_rules_adapter_in_namespace(
     *,
     local_interface: str,
     host_runner: LinuxCommandRunner | None = None,
+    local_process: LinuxLocalProcessConfig | None = None,
 ) -> LinuxRuntimeBootstrapResult:
     """Bootstrap the Adapter inside one pre-existing named network namespace."""
 
@@ -78,6 +82,7 @@ def bootstrap_linux_network_rules_adapter_in_namespace(
     return bootstrap_linux_network_rules_adapter(
         driver,
         local_interface=local_interface,
+        local_process=local_process,
     )
 
 
@@ -85,6 +90,7 @@ def bootstrap_linux_network_rules_adapter_for_instance(
     spec: LinuxInstanceSpec,
     *,
     host_runner: LinuxCommandRunner | None = None,
+    local_process: LinuxLocalProcessConfig | None = None,
 ) -> LinuxRuntimeBootstrapResult:
     """Ensure fail-closed instance infrastructure, then publish its Adapter."""
 
@@ -105,4 +111,5 @@ def bootstrap_linux_network_rules_adapter_for_instance(
         spec.namespace,
         local_interface="host0",
         host_runner=runner,
+        local_process=local_process,
     )

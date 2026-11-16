@@ -19,9 +19,11 @@ from rou.network_rules import (
     SourceNatTarget,
     StateKnowledge,
     TerminalDisposition,
+    TrafficAllowSpec,
     TrafficPredicate,
     TrafficProtocol,
     TrafficSelector,
+    network_rules_semantically_equal,
 )
 
 
@@ -178,6 +180,113 @@ class NetworkRulesContractTests(unittest.TestCase):
                 None,
                 fresh=True,
             )
+
+
+    def test_semantic_equality_ignores_domain_and_allow_collection_order(self):
+        a = InterfaceIdentity("vpns00", 10)
+        b = InterfaceIdentity("vpns01", 11)
+        local = NetworkEndpoint.local_network()
+        path_a = NetworkEndpoint.interface_path(a)
+        path_b = NetworkEndpoint.interface_path(b)
+        allow_a = TrafficAllowSpec(
+            local,
+            path_a,
+            TrafficPredicate.always(),
+        )
+        allow_b = TrafficAllowSpec(
+            local,
+            path_b,
+            TrafficPredicate.always(),
+        )
+        first = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "a",
+                    (IPv4Network("10.0.0.0/8"),),
+                    (a,),
+                    TerminalDisposition.DROP,
+                ),
+                RoutingDomainSpec(
+                    "b",
+                    (IPv4Network("192.168.0.0/16"),),
+                    (b,),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+            traffic_allows=(allow_a, allow_b),
+        )
+        reordered = NetworkRulesSpec(
+            routing_domains=tuple(reversed(first.routing_domains)),
+            traffic_allows=(allow_b, allow_a),
+        )
+
+        self.assertTrue(
+            network_rules_semantically_equal(first, reordered)
+        )
+
+    def test_semantic_equality_preserves_ordered_path_priority(self):
+        a = InterfaceIdentity("vpns00", 10)
+        b = InterfaceIdentity("vpns01", 11)
+        target = IPv4Network("10.0.0.0/8")
+        first = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "corp",
+                    (target,),
+                    (a, b),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+        )
+        reversed_paths = NetworkRulesSpec(
+            routing_domains=(
+                RoutingDomainSpec(
+                    "corp",
+                    (target,),
+                    (b, a),
+                    TerminalDisposition.DROP,
+                ),
+            ),
+        )
+
+        self.assertFalse(
+            network_rules_semantically_equal(first, reversed_paths)
+        )
+
+    def test_semantic_equality_preserves_dispatch_priority_order(self):
+        local = NetworkEndpoint.local_network()
+        narrow = IPv4Network("10.1.0.0/16")
+        broad = IPv4Network("10.0.0.0/8")
+        domains = (
+            RoutingDomainSpec(
+                "narrow",
+                (narrow,),
+                (),
+                TerminalDisposition.DROP,
+            ),
+            RoutingDomainSpec(
+                "broad",
+                (broad,),
+                (),
+                TerminalDisposition.DROP,
+            ),
+        )
+        rules = (
+            DispatchRuleSpec(narrow, "narrow", source=local),
+            DispatchRuleSpec(broad, "broad", source=local),
+        )
+        first = NetworkRulesSpec(
+            routing_domains=domains,
+            dispatch_rules=rules,
+        )
+        reversed_dispatch = NetworkRulesSpec(
+            routing_domains=domains,
+            dispatch_rules=tuple(reversed(rules)),
+        )
+
+        self.assertFalse(
+            network_rules_semantically_equal(first, reversed_dispatch)
+        )
 
     def test_adapter_contract_has_explicit_cleanup(self):
         self.assertTrue(hasattr(NetworkRulesAdapter, "cleanup"))

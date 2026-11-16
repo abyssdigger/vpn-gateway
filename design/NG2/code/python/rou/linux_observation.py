@@ -257,23 +257,19 @@ def _rule_uid_range(
     *,
     position: int,
 ) -> tuple[int, int] | None:
-    raw = item.get("uidrange")
-    if raw is None:
+    start = item.get("uid_start")
+    end = item.get("uid_end")
+    if start is None and end is None:
         return None
-    if isinstance(raw, str):
-        parts = raw.split("-", 1)
-        if len(parts) != 2 or not all(part.isdecimal() for part in parts):
-            raise LinuxObservationError(
-                f"rule[{position}].uidrange has unsupported value {raw!r}"
-            )
-        return int(parts[0]), int(parts[1])
-    if isinstance(raw, dict):
-        start = raw.get("start")
-        end = raw.get("end")
-        if type(start) is int and type(end) is int and 0 <= start <= end:
-            return start, end
+    if (
+        type(start) is int
+        and type(end) is int
+        and 0 <= start <= end
+    ):
+        return start, end
     raise LinuxObservationError(
-        f"rule[{position}].uidrange has unsupported value {raw!r}"
+        f"rule[{position}] has invalid uid_start/uid_end "
+        f"{start!r}/{end!r}"
     )
 
 

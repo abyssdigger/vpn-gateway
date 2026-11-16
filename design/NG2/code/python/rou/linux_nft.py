@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 import json
+import re
 
 from .interface_identity import InterfaceIdentity
+from .linux_local_process import LinuxLocalProcessConfig
 from .network_rules import (
     EndpointKind,
     FlowInitiationAllowSpec,
@@ -192,6 +194,23 @@ def normalize_nft_text(
         )
         line = line.replace("ct state invalid", "ct state 0x1")
         line = line.replace("ct state new", "ct state 0x8")
+        line = re.sub(
+            r"\bct mark set 0x0*([0-9a-fA-F]+)\b",
+            r"ct mark set 0x\1",
+            line,
+        )
+        line = re.sub(
+            r"\bct mark 0x0*([0-9a-fA-F]+)\b",
+            r"ct mark 0x\1",
+            line,
+        )
+        if "icmp type " in line:
+            line = line.replace("ip protocol icmp ", "")
+        line = re.sub(
+            r"\b((?:[0-9]{1,3}\.){3}[0-9]{1,3})/32\b",
+            r"\1",
+            line,
+        )
 
         for identity in interface_identities:
             line = line.replace(
@@ -622,6 +641,90 @@ def _rule_lines(
     return tuple(out)
 
 
+def _is_local_process_pair(
+    source: NetworkEndpoint,
+    destination: NetworkEndpoint,
+) -> bool:
+    return (
+        source.kind is EndpointKind.LOCAL_PROCESS
+        or destination.kind is EndpointKind.LOCAL_PROCESS
+    )
+
+
+def _local_process_pair(
+    source: NetworkEndpoint,
+    destination: NetworkEndpoint,
+) -> tuple[str, InterfaceIdentity]:
+    if (
+        source.kind is EndpointKind.LOCAL_PROCESS
+        and destination.kind is EndpointKind.INTERFACE
+    ):
+        assert destination.interface is not None
+        return "output", destination.interface
+
+    if (
+        source.kind is EndpointKind.INTERFACE
+        and destination.kind is EndpointKind.LOCAL_PROCESS
+    ):
+        assert source.interface is not None
+        return "input", source.interface
+
+    raise LinuxNftError(
+        "current nft local-process backend supports only "
+        "LOCAL_PROCESS <-> INTERFACE traffic endpoint pairs"
+    )
+
+
+def _local_process_rule_lines(
+    *,
+    owner: OwnerToken,
+    policy: str,
+    rule_id: str,
+    direction: str,
+    identity: InterfaceIdentity,
+    predicate: TrafficPredicate,
+    action_terms: tuple[str, ...],
+    local_process: LinuxLocalProcessConfig,
+) -> tuple[tuple[str, NftRuleMarker], ...]:
+    ref = NftInterfaceRef(
+        InterfaceRefKind.OIF if direction == "output" else InterfaceRefKind.IIF,
+        identity.ifindex,
+    )
+    dnf = _predicate_dnf(predicate)
+
+    out: list[tuple[str, NftRuleMarker]] = []
+    for index, clause in enumerate(dnf):
+        comment = _comment(
+            owner,
+            policy,
+            rule_id,
+            index,
+            ref,
+        )
+        terms = [
+            (
+                f"meta skuid {local_process.uid} oif {identity.ifindex}"
+                if direction == "output"
+                else f"iif {identity.ifindex}"
+            ),
+            *(item.text for item in clause),
+            *action_terms,
+            f'comment "{comment}"',
+        ]
+        out.append(
+            (
+                " ".join(terms),
+                NftRuleMarker(
+                    comment,
+                    owner,
+                    policy,
+                    ref,
+                ),
+            )
+        )
+    return tuple(out)
+
+
 def _same_endpoints(
     traffic: TrafficAllowSpec,
     flow: FlowInitiationAllowSpec,
@@ -640,10 +743,14 @@ def _owner_new_flow_rules(
     out: list[tuple[str, NftRuleMarker]] = []
 
     for traffic_index, traffic in enumerate(owned.rules.traffic_allows):
+        if _is_local_process_pair(traffic.source, traffic.destination):
+            continue
         for flow_index, flow in enumerate(
             owned.rules.flow_initiation_allows
         ):
             if not _same_endpoints(traffic, flow):
+                continue
+            if _is_local_process_pair(flow.source, flow.destination):
                 continue
 
             predicate = TrafficPredicate.all_of(
@@ -665,10 +772,112 @@ def _owner_new_flow_rules(
     return tuple(out)
 
 
+def _owner_local_process_rules(
+    owned: OwnedNetworkRules,
+    *,
+    local_process: LinuxLocalProcessConfig,
+) -> tuple[
+    tuple[tuple[str, NftRuleMarker], ...],
+    tuple[tuple[str, NftRuleMarker], ...],
+]:
+    output: list[tuple[str, NftRuleMarker]] = []
+    input_lines: list[tuple[str, NftRuleMarker]] = []
+
+    for traffic_index, traffic in enumerate(owned.rules.traffic_allows):
+        if not _is_local_process_pair(
+            traffic.source,
+            traffic.destination,
+        ):
+            continue
+
+        direction, identity = _local_process_pair(
+            traffic.source,
+            traffic.destination,
+        )
+
+        if direction == "output":
+            output.extend(
+                _local_process_rule_lines(
+                    owner=owned.owner,
+                    policy="local-established",
+                    rule_id=f"t{traffic_index}",
+                    direction="output",
+                    identity=identity,
+                    predicate=traffic.predicate,
+                    action_terms=(
+                        "ct state established,related",
+                        f"ct mark 0x{local_process.ct_mark:x}",
+                        "accept",
+                    ),
+                    local_process=local_process,
+                )
+            )
+
+            for flow_index, flow in enumerate(
+                owned.rules.flow_initiation_allows
+            ):
+                if not _same_endpoints(traffic, flow):
+                    continue
+                predicate = TrafficPredicate.all_of(
+                    traffic.predicate,
+                    flow.predicate,
+                )
+                output.extend(
+                    _local_process_rule_lines(
+                        owner=owned.owner,
+                        policy="local-new",
+                        rule_id=f"t{traffic_index}f{flow_index}",
+                        direction="output",
+                        identity=identity,
+                        predicate=predicate,
+                        action_terms=(
+                            "ct state new",
+                            f"ct mark set 0x{local_process.ct_mark:x}",
+                            "accept",
+                        ),
+                        local_process=local_process,
+                    )
+                )
+            continue
+
+        input_lines.extend(
+            _local_process_rule_lines(
+                owner=owned.owner,
+                policy="local-reply",
+                rule_id=f"t{traffic_index}",
+                direction="input",
+                identity=identity,
+                predicate=traffic.predicate,
+                action_terms=(
+                    "ct state established,related",
+                    f"ct mark 0x{local_process.ct_mark:x}",
+                    "accept",
+                ),
+                local_process=local_process,
+            )
+        )
+        input_lines.extend(
+            _local_process_rule_lines(
+                owner=owned.owner,
+                policy="local-reply-drop",
+                rule_id=f"t{traffic_index}",
+                direction="input",
+                identity=identity,
+                predicate=traffic.predicate,
+                action_terms=("drop",),
+                local_process=local_process,
+            )
+        )
+
+    return tuple(output), tuple(input_lines)
+
+
 def compile_nft_filter_desired(
     composed: ComposedNetworkRules,
     *,
     local_interface: str,
+    local_process: LinuxLocalProcessConfig | None = None,
+    local_process_guard_required: bool = False,
 ) -> NftFilterDesired:
     """Compile owner-composed allow policy into one stateful nft filter table."""
 
@@ -676,10 +885,29 @@ def compile_nft_filter_desired(
 
     traffic_lines: list[str] = []
     new_lines: list[str] = []
+    local_output_lines: list[str] = []
+    local_input_lines: list[str] = []
     markers: list[NftRuleMarker] = []
+    local_process_present = local_process_guard_required or any(
+        rule.source.kind is EndpointKind.LOCAL_PROCESS
+        for rule in composed.dispatch_rules
+    ) or any(
+        _is_local_process_pair(rule.source, rule.destination)
+        for owned in composed.owners
+        for rule in (
+            *owned.rules.traffic_allows,
+            *owned.rules.flow_initiation_allows,
+        )
+    )
+    if local_process_present and local_process is None:
+        raise LinuxNftError(
+            "LOCAL_PROCESS filtering requires configured Linux local-process identity"
+        )
 
     for owned in composed.owners:
         for index, rule in enumerate(owned.rules.traffic_allows):
+            if _is_local_process_pair(rule.source, rule.destination):
+                continue
             for line, marker in _rule_lines(
                 owner=owned.owner,
                 policy="traffic",
@@ -697,6 +925,21 @@ def compile_nft_filter_desired(
             local_interface=local_interface,
         ):
             new_lines.append(line)
+            markers.append(marker)
+
+        local_output, local_input = (
+            _owner_local_process_rules(
+                owned,
+                local_process=local_process,
+            )
+            if local_process is not None
+            else ((), ())
+        )
+        for line, marker in local_output:
+            local_output_lines.append(line)
+            markers.append(marker)
+        for line, marker in local_input:
+            local_input_lines.append(line)
             markers.append(marker)
 
     lines = [
@@ -717,9 +960,29 @@ def compile_nft_filter_desired(
         "ct state new jump new_flows",
         "ct state new accept",
         "}",
-        "}",
-        "",
     ]
+
+    if local_process_present:
+        lines.extend(
+            [
+                "chain local_output {",
+                "type filter hook output priority 0; policy accept;",
+                *local_output_lines,
+                f"meta skuid {local_process.uid} drop",
+                "}",
+                "chain local_input {",
+                "type filter hook input priority 0; policy accept;",
+                *local_input_lines,
+                "}",
+            ]
+        )
+
+    lines.extend(
+        [
+            "}",
+            "",
+        ]
+    )
 
     definition = "\n".join(lines)
     identities = _interface_identities(

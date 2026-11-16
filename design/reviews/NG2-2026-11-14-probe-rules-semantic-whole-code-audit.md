@@ -58,14 +58,17 @@ Primary/secondary probes to the same target therefore remain distinct.
 
 EXP-024's uid and conntrack mark are first-backend technical machinery only.
 
-### S5 — concrete Linux backend must remain explicitly incomplete
+### S5 — concrete Linux backend was intentionally incomplete at this audit point
 
-**Disposition:** retained with regression.
+**Disposition:** historical gate now closed.
 
-The Linux routing compiler rejects `LOCAL_PROCESS` dispatch.
+At the time of this semantic audit the Linux routing compiler rejected `LOCAL_PROCESS`
+dispatch to prevent partial materialization.
 
-This prevents the new semantic model from becoming a partially implemented probe plane
-whose firewall/routing semantics differ from EXP-024.
+EXP-024 subsequently passed on the Debian 13 target and a complete routing+nft
+LOCAL_PROCESS backend was implemented and reviewed separately. The historical fail-closed
+staging decision remains valid; the current backend status is documented in
+`NG2-2026-11-14-linux-local-process-backend-review.md`.
 
 ### S6 — one unused compiler import appeared during ICMP selector work
 
@@ -74,15 +77,15 @@ whose firewall/routing semantics differ from EXP-024.
 `linux_nft.py` imported `IcmpType` but only consumes selector values generically.
 The unused import was removed.
 
-### S7 — ProbeRulesState is still intentionally absent
+### S7 — ProbeRulesState was intentionally absent at this audit point
 
-**Disposition:** retained.
+**Disposition:** historical gate now closed.
 
-Without physical LOCAL_PROCESS apply/renew observation there is no evidence-based
-`ProbeRulesStateCalculator`.
+Physical LOCAL_PROCESS apply/renew observation now exists. `ProbeRulesStateCalculator`
+was implemented from that evidence and reviewed independently.
 
-The mandatory comparison with `PayloadRulesState` remains pending and must happen only
-after the second real state model exists.
+The mandatory comparison with `PayloadRulesState` was completed afterward; the models
+have different domain semantics, so no common `RulesState` was introduced.
 
 ## Current derived ICMP plane
 
@@ -131,6 +134,5 @@ Green gates on this development line cover:
 
 The pure ProbeRules semantic slice is coherent and does not require another abstraction.
 
-Next blocked implementation unit is the Linux LOCAL_PROCESS physical backend. Its design is
-known from EXP-024, but target evidence on Debian 13 remains required before that unit is
-declared production-proven.
+The originally blocked Linux LOCAL_PROCESS unit and the subsequent ProbeRulesState/common-
+state reviews are now complete. See the later focused reviews for current status.

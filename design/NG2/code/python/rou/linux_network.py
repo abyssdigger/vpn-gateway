@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Network
 
 from .interface_identity import InterfaceIdentity
+from .linux_local_process import LinuxLocalProcessConfig
 from .linux_nft import (
     NftFilterDesired,
     NftNatDesired,
@@ -17,9 +19,13 @@ from .linux_routing import (
 )
 from .network_rules import (
     EndpointKind,
+    IcmpType,
     NetworkEndpoint,
     NetworkRulesSpec,
+    PredicateKind,
     RoutingDomainSpec,
+    TrafficPredicate,
+    TrafficProtocol,
 )
 from .network_rules_composition import (
     ComposedNetworkRules,
@@ -92,6 +98,11 @@ def validate_linux_interface_generations(
         for domain in owned.rules.routing_domains:
             for path in domain.ordered_paths:
                 _register(path, by_name, by_index)
+
+        for rule in owned.rules.dispatch_rules:
+            _visit_endpoint(rule.source, by_name, by_index)
+            if rule.bound_output is not None:
+                _visit_endpoint(rule.bound_output, by_name, by_index)
 
         for rule in owned.rules.traffic_allows:
             _visit_endpoint(rule.source, by_name, by_index)
@@ -195,12 +206,155 @@ def project_network_rules_to_interfaces(
     return compose_network_rules(tuple(projected))
 
 
+def _probe_target_from_predicate(
+    predicate: TrafficPredicate,
+    *,
+    outbound: bool,
+) -> IPv4Network:
+    if predicate.kind is not PredicateKind.MATCH or predicate.selector is None:
+        raise LinuxNetworkDesiredError(
+            "Linux LOCAL_PROCESS backend requires exact probe MATCH predicates"
+        )
+    selector = predicate.selector
+    if selector.protocol is not TrafficProtocol.ICMP:
+        raise LinuxNetworkDesiredError(
+            "Linux LOCAL_PROCESS backend is target-proven only for ICMP"
+        )
+    if selector.source_ports or selector.destination_ports:
+        raise LinuxNetworkDesiredError(
+            "Linux LOCAL_PROCESS ICMP probe predicates must not carry ports"
+        )
+
+    if outbound:
+        if (
+            selector.source is not None
+            or selector.destination is None
+            or selector.destination.prefixlen != 32
+            or selector.icmp_types != (IcmpType.ECHO_REQUEST,)
+        ):
+            raise LinuxNetworkDesiredError(
+                "Linux LOCAL_PROCESS outbound policy must be exact /32 ICMP echo-request"
+            )
+        return selector.destination
+
+    if (
+        selector.destination is not None
+        or selector.source is None
+        or selector.source.prefixlen != 32
+        or selector.icmp_types != (IcmpType.ECHO_REPLY,)
+    ):
+        raise LinuxNetworkDesiredError(
+            "Linux LOCAL_PROCESS inbound policy must be exact /32 ICMP echo-reply"
+        )
+    return selector.source
+
+
+def _validate_local_process_probe_policy(
+    composed: ComposedNetworkRules,
+) -> None:
+    planes = {
+        (
+            rule.owner,
+            rule.bound_output.interface,
+            rule.destination,
+            rule.protocol,
+        )
+        for rule in composed.dispatch_rules
+        if rule.source.kind is EndpointKind.LOCAL_PROCESS
+        and rule.bound_output is not None
+        and rule.bound_output.kind is EndpointKind.INTERFACE
+        and rule.bound_output.interface is not None
+    }
+
+    for owned in composed.owners:
+        for rule in owned.rules.traffic_allows:
+            source_local = rule.source.kind is EndpointKind.LOCAL_PROCESS
+            destination_local = (
+                rule.destination.kind is EndpointKind.LOCAL_PROCESS
+            )
+            if not source_local and not destination_local:
+                continue
+            if source_local == destination_local:
+                raise LinuxNetworkDesiredError(
+                    "Linux LOCAL_PROCESS traffic must pair with one concrete interface"
+                )
+
+            if source_local:
+                if rule.destination.kind is not EndpointKind.INTERFACE:
+                    raise LinuxNetworkDesiredError(
+                        "Linux LOCAL_PROCESS outbound traffic requires interface destination"
+                    )
+                assert rule.destination.interface is not None
+                target = _probe_target_from_predicate(
+                    rule.predicate,
+                    outbound=True,
+                )
+                plane = (
+                    owned.owner,
+                    rule.destination.interface,
+                    target,
+                    TrafficProtocol.ICMP,
+                )
+            else:
+                if rule.source.kind is not EndpointKind.INTERFACE:
+                    raise LinuxNetworkDesiredError(
+                        "Linux LOCAL_PROCESS inbound traffic requires interface source"
+                    )
+                assert rule.source.interface is not None
+                target = _probe_target_from_predicate(
+                    rule.predicate,
+                    outbound=False,
+                )
+                plane = (
+                    owned.owner,
+                    rule.source.interface,
+                    target,
+                    TrafficProtocol.ICMP,
+                )
+
+            if plane not in planes:
+                raise LinuxNetworkDesiredError(
+                    "LOCAL_PROCESS traffic allow lacks matching owner-scoped isolated dispatch"
+                )
+
+        for rule in owned.rules.flow_initiation_allows:
+            if (
+                rule.source.kind is not EndpointKind.LOCAL_PROCESS
+                and rule.destination.kind is not EndpointKind.LOCAL_PROCESS
+            ):
+                continue
+            if (
+                rule.source.kind is not EndpointKind.LOCAL_PROCESS
+                or rule.destination.kind is not EndpointKind.INTERFACE
+            ):
+                raise LinuxNetworkDesiredError(
+                    "Linux LOCAL_PROCESS flow initiation is supported only outbound"
+                )
+            assert rule.destination.interface is not None
+            target = _probe_target_from_predicate(
+                rule.predicate,
+                outbound=True,
+            )
+            if (
+                owned.owner,
+                rule.destination.interface,
+                target,
+                TrafficProtocol.ICMP,
+            ) not in planes:
+                raise LinuxNetworkDesiredError(
+                    "LOCAL_PROCESS flow initiation lacks matching owner-scoped isolated dispatch"
+                )
+
+
 def compile_linux_network_desired(
     composed: ComposedNetworkRules,
     committed_routing: LinuxRoutingAllocationState,
     *,
     local_interface: str,
+    local_process: LinuxLocalProcessConfig | None = None,
+    local_process_guard_required: bool = False,
 ) -> LinuxNetworkDesired:
+    _validate_local_process_probe_policy(composed)
     interface_identities = validate_linux_interface_generations(composed)
     prerequisites = LinuxNamespacePrerequisites(
         tuple(
@@ -217,6 +371,9 @@ def compile_linux_network_desired(
         composed,
         committed_routing,
         local_interface=local_interface,
+        local_process_uid=(
+            None if local_process is None else local_process.uid
+        ),
     )
 
     if not composed.owners:
@@ -231,6 +388,8 @@ def compile_linux_network_desired(
     filter_desired = compile_nft_filter_desired(
         composed,
         local_interface=local_interface,
+        local_process=local_process,
+        local_process_guard_required=local_process_guard_required,
     )
     nat_desired = compile_nft_nat_desired(
         composed,

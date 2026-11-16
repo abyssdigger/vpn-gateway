@@ -2,6 +2,7 @@ from ipaddress import IPv4Network
 import unittest
 
 from rou.interface_identity import InterfaceIdentity
+from rou.linux_local_process import LinuxLocalProcessConfig
 from rou.linux_nft import (
     InterfaceRefKind,
     LinuxNftError,
@@ -13,16 +14,20 @@ from rou.linux_nft import (
     verify_nft_table,
 )
 from rou.network_rules import (
+    DispatchRuleSpec,
     FlowInitiationAllowSpec,
+    IcmpType,
     NetworkEndpoint,
     NetworkRulesSpec,
     PortRange,
+    RoutingDomainSpec,
     SourceNatSpec,
     SourceNatTarget,
     TrafficAllowSpec,
     TrafficPredicate,
     TrafficProtocol,
     TrafficSelector,
+    TerminalDisposition,
 )
 from rou.network_rules_composition import (
     OwnedNetworkRules,
@@ -32,6 +37,7 @@ from rou.network_rules_composition import (
 
 
 LOCAL = NetworkEndpoint.local_network()
+LOCAL_PROCESS = NetworkEndpoint.local_process()
 
 
 def _path(name: str, ifindex: int) -> NetworkEndpoint:
@@ -228,6 +234,115 @@ class LinuxNftFilterTests(unittest.TestCase):
                 for marker in desired.markers
             )
         )
+
+
+    def test_local_process_icmp_uses_selective_output_and_conntrack_marked_input(self):
+        path = _path("vpns00", 10)
+        request = TrafficPredicate.match(
+            TrafficSelector(
+                destination=IPv4Network("203.0.113.24/32"),
+                protocol=TrafficProtocol.ICMP,
+                icmp_types=(IcmpType.ECHO_REQUEST,),
+            )
+        )
+        reply = TrafficPredicate.match(
+            TrafficSelector(
+                source=IPv4Network("203.0.113.24/32"),
+                protocol=TrafficProtocol.ICMP,
+                icmp_types=(IcmpType.ECHO_REPLY,),
+            )
+        )
+        owned = _owned(
+            1,
+            traffic=(
+                TrafficAllowSpec(LOCAL_PROCESS, path, request),
+                TrafficAllowSpec(path, LOCAL_PROCESS, reply),
+            ),
+            flows=(
+                FlowInitiationAllowSpec(LOCAL_PROCESS, path, request),
+            ),
+        )
+
+        desired = compile_nft_filter_desired(
+            compose_network_rules((owned,)),
+            local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
+        )
+
+        self.assertIn(
+            "type filter hook output priority 0; policy accept;",
+            desired.definition,
+        )
+        self.assertIn(
+            "meta skuid 65534 oif 10",
+            desired.definition,
+        )
+        self.assertIn(
+            "ct mark set 0x24 accept",
+            desired.definition,
+        )
+        self.assertIn(
+            "meta skuid 65534 drop",
+            desired.definition,
+        )
+        self.assertIn(
+            "type filter hook input priority 0; policy accept;",
+            desired.definition,
+        )
+        self.assertIn(
+            "iif 10 ip saddr 203.0.113.24/32 ip protocol icmp icmp type 0",
+            desired.definition,
+        )
+        self.assertIn(
+            "ct mark 0x24 accept",
+            desired.definition,
+        )
+        self.assertIn(
+            "local-reply-drop",
+            desired.definition,
+        )
+
+    def test_local_process_dispatch_without_allow_still_guards_probe_uid(self):
+        path = _path("vpns00", 10)
+        target = IPv4Network("203.0.113.24/32")
+        owned = OwnedNetworkRules(
+            OwnerToken(1),
+            NetworkRulesSpec(
+                routing_domains=(
+                    RoutingDomainSpec(
+                        "probe",
+                        (target,),
+                        (path.interface,),
+                        TerminalDisposition.DROP,
+                    ),
+                ),
+                dispatch_rules=(
+                    DispatchRuleSpec(
+                        target,
+                        "probe",
+                        source=LOCAL_PROCESS,
+                        bound_output=path,
+                        protocol=TrafficProtocol.ICMP,
+                    ),
+                ),
+            ),
+        )
+
+        desired = compile_nft_filter_desired(
+            compose_network_rules((owned,)),
+            local_interface="host0",
+            local_process=LinuxLocalProcessConfig(
+                uid=65534,
+                ct_mark=0x24,
+            ),
+        )
+
+        self.assertIn("chain local_output", desired.definition)
+        self.assertIn("meta skuid 65534 drop", desired.definition)
+        self.assertNotIn("ct mark set 0x24 accept", desired.definition)
 
     def test_interface_to_interface_pair_is_explicitly_unsupported(self):
         first = _path("vpns00", 10)
