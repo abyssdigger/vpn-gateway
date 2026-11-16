@@ -27,3 +27,23 @@ jobs:
           python3 -m unittest discover
           -s design/NG3/code/python/rou/tests
           -p 'test_*.py' -v
+
+
+  linux-route-priority:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2
+      - name: NG3 route-priority Linux integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_route_priority_backend.py

@@ -65,6 +65,11 @@ from .route_priority_inventory import (
     RoutePriorityPathRoute,
     parse_ip_route_priority_snapshot,
 )
+from .iproute_priority_backend import (
+    IproutePriorityBackend,
+    IproutePriorityBackendError,
+    SubprocessCommandRunner,
+)
 
 __all__ = [
     "AvailabilityConfirmationState",
@@ -80,6 +85,8 @@ __all__ = [
     "ExpectedInterfaceSelector",
     "InterfaceIdentity",
     "InterfaceInventoryError",
+    "IproutePriorityBackend",
+    "IproutePriorityBackendError",
     "LogicalPathId",
     "PathBinding",
     "PayloadProfileProjectionError",
@@ -98,6 +105,7 @@ __all__ = [
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
+    "SubprocessCommandRunner",
     "WaitingCandidate",
     "apply_availability_evidence",
     "calculate_effective_path_order",
