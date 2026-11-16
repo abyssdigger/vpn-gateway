@@ -681,8 +681,6 @@ review does not depend on branch-aware search.
 
 ## 32. Device/config evidence boundary relevant to current recovery
 
-## 32. Device/config evidence boundary relevant to current recovery
-
 Historical material confirms that Device was a transport-capability concept with:
 
 - stable user-visible ID;
