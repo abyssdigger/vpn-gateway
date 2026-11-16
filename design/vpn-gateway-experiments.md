@@ -1,3 +1,20 @@
+## EXP-031 — NG3 nft namespace owner marker
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** NG3 nft namespace ownership marker review  
+**Тип:** nft table-level ownership marker / JSON observation  
+**Design:** [EXP-031 README](experiments/EXP-031%20NG3%20nft%20namespace%20owner%20marker/README.md)  
+**Result:** [EXP-031 result](experiments/EXP-031%20NG3%20nft%20namespace%20owner%20marker/EXP-031-result-20261116.md)
+
+Текущий nftables подтвердил exact table comment
+`vpn-gate:ng3:owner-v1` в `nft -j list ruleset`; same-name table без marker наблюдается
+отдельно, foreign tables сохраняются независимо.
+
+Marker принят только как table-level ownership prerequisite; он не разрешает blind cleanup
+неизвестных объектов внутри table.
+
+---
+
 ## EXP-030 — NG3 managed-netns forwarding barrier
 
 **Статус:** COMPLETE — PASS  

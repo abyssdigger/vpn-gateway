@@ -46,3 +46,12 @@ All nft state exists only inside a disposable network namespace.
 
 All hypotheses must pass in privileged GitHub CI and the exact JSON representation must be
 recorded before the marker becomes executable ownership evidence.
+
+
+## Result
+
+**COMPLETE — PASS.**
+
+GitHub Actions run: `43838055259`.
+
+See `EXP-031-result-20261116.md` for exact marked/unmarked JSON representation.

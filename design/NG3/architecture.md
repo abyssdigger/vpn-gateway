@@ -1879,8 +1879,24 @@ as distinct states.
 The marker is lower implementation state. It is not user configuration and does not encode a
 Profile/Device ID.
 
-Before implementation, current target nftables must prove that the table comment is
-round-trippable in JSON inventory and distinguishable from a same-name unmarked table.
+EXP-031 passed against the current nftables target.
+
+The marked table is currently observed as:
+
+```json
+{"comment":"vpn-gate:ng3:owner-v1","family":"ip","handle":2,"name":"vpn_gate"}
+```
+
+and an unmarked same-name table as:
+
+```json
+{"family":"ip","handle":3,"name":"vpn_gate"}
+```
+
+The numeric handle is incidental kernel identity and is not part of the ownership marker.
+
+The executable observer must therefore compare `family`, `name` and exact `comment`,
+while retaining contained objects separately for later strict shape classification.
 
 #### Deterministic allocation and configuration change
 
