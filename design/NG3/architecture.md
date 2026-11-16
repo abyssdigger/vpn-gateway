@@ -1991,6 +1991,81 @@ reverse rule was installed. Actual nft JSON renders the state set as
 `["established","related"]`; live/stale interface rendering follows the
 same symbolic/decimal-index rule established by EXP-033/035.
 
+###### Authoritative payload_forward observation — design gate
+
+**Component:** read-only direct Calculator over the owned nft table and one fresh,
+unambiguous interface inventory.
+
+**Implements:**
+- `VPNG0002-R2.R1.R2`;
+- `VPNG0002-R2.R3.R3`;
+- `VPNG0002-R2.R5.R1`;
+- `VPNG0001-R1.R3.R2`;
+- `VPNG0001-R1.R3.R3`;
+- `VPNG0004-R4.R1`;
+- `VPNG0004-R4.R2`;
+- `VPNG0004-R4.R5`.
+
+**Constrained by:**
+- `VPNG0002-R2.R3.C1`;
+- `VPNG0001-R1.R2.R4.R6.C1`.
+
+The observer does **not** compile Profile policy. It only classifies exact
+lower rule shapes already proven by EXP-035/036 and preserves the semantic
+fields required for a later desired-state comparison:
+
+```text
+NEW:
+    ct state new
+    exact iif
+    exact oif
+    one remote IPv4 prefix match (saddr or daddr)
+    accept
+    exact NEW owner comment
+
+RETURN:
+    ct state { established, related }
+    exact iif
+    exact oif
+    one remote IPv4 prefix match (saddr or daddr)
+    accept
+    exact RETURN owner comment
+```
+
+Counters used by EXP-035/036 are instrumentation, not required policy.
+The production owner shape therefore omits `counter`; accepting arbitrary
+counter-bearing rules as production-owned would widen cleanup authority for
+no accepted requirement.
+
+Before implementation, EXP-037 must resolve two representation facts:
+how nft JSON renders `/32` `ip saddr/daddr` matches, and the exact
+no-counter expression arrays. The observer may normalize only evidence-backed
+forms. Unknown comment, state set, prefix representation, extra expression,
+action or field is an explicit conflict, never silently ignored.
+
+Interface operands follow EXP-033/035/036: current names resolve through the
+fresh inventory; decimal ifindices may resolve to a current identity only when
+that exact index is present, otherwise remain stale numeric identity.
+A same-name replacement never equals the old numeric generation.
+
+**Scenario:** strict owner inventory must be able to distinguish current
+recognized payload forwarding objects from stale recognized objects and
+unknown/conflicting rules before any structural cleanup or activation.
+
+**Necessity / simplification:** a pure Calculator is required because the
+scaffold currently leaves all rules unclassified. No compiler, mutation,
+policy ordering, handle cache, event owner, retry loop or firewall AST is
+introduced. Rule handles identify observed objects only.
+
+**Evidence plan:** EXP-037 for final no-counter JSON forms and `/32`;
+rootless parser regression for NEW/RETURN, saddr/daddr, current/stale
+interfaces, malformed state/prefix/comment/action/extra expressions,
+duplicate handles and duplicate physical rules; privileged integration reads
+the actual EXP-037 rules through the production observer.
+
+**Gate:** implementation may begin only after EXP-037 PASS. Passing the
+observer unit still does not authorize full Profile filter materialization.
+
 
 
 
