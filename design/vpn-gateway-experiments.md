@@ -1,3 +1,19 @@
+## EXP-032 — NG3 payload nft scaffold
+
+**Статус:** COMPLETE — PASS  
+**Architecture baseline:** invariant payload nft scaffold review  
+**Тип:** nft base-chain metadata + terminal-drop packet behavior  
+**Design:** [EXP-032 README](experiments/EXP-032%20NG3%20payload%20nft%20scaffold/README.md)  
+**Result:** [EXP-032 result](experiments/EXP-032%20NG3%20payload%20nft%20scaffold/EXP-032-result-20261116.md)
+
+Privileged CI подтвердил exact metadata двух invariant chains, terminal behavior
+`payload_forward policy drop` даже при foreign ACCEPT base chains до/после него, explicit
+allow behavior и отсутствие NAT rules в пустом postrouting chain.
+
+Scaffold принят без определения final Profile allow/envelope и Device masquerade rules.
+
+---
+
 ## EXP-031 — NG3 nft namespace owner marker
 
 **Статус:** COMPLETE — PASS  

@@ -1906,8 +1906,27 @@ The scaffold is deliberately independent from the root structural barrier:
 
 A foreign nft base chain outside `table ip vpn_gate` is not adopted or deleted by this
 scaffold. For safety, the payload forward chain must still prevent a foreign unconditional
-`accept` chain at another priority from bypassing its default drop. This netfilter behavior
-is evidence-gated before the scaffold becomes executable.
+`accept` chain at another priority from bypassing its default drop.
+
+EXP-032 passed on the current Linux/nftables target.
+
+The accepted JSON metadata is:
+
+```json
+{"comment":"vpn-gate:ng3:payload-forward-v1","family":"ip","handle":1,"hook":"forward","name":"payload_forward","policy":"drop","prio":0,"table":"vpn_gate","type":"filter"}
+
+{"comment":"vpn-gate:ng3:payload-postrouting-v1","family":"ip","handle":2,"hook":"postrouting","name":"payload_postrouting","policy":"accept","prio":100,"table":"vpn_gate","type":"nat"}
+```
+
+Handles are incidental and excluded from scaffold identity.
+
+The live packet test also proved:
+
+- an empty `payload_forward policy drop` blocks transit;
+- foreign unconditional-accept base chains at priorities `-100` and `100` do not bypass
+  that drop;
+- explicit allow rules inside `payload_forward` can permit the tested path;
+- the empty `payload_postrouting` chain contains no NAT rule.
 
 Observation uses full JSON ruleset inventory rather than treating a failed
 `list table` command as proof of absence:
