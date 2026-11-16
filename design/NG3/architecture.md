@@ -1,6 +1,6 @@
 # VPN-GATE NG3 — Architecture Report
 
-**Status:** NG3 architecture, Device/Profile configuration refinement  
+**Status:** NG3 architecture, complete current requirement closure  
 **Cycle:** `ng3-design-cycle-20261116-config-intent-model-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
