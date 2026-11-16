@@ -259,7 +259,8 @@ def main() -> int:
         assert udp_probe(host) == "alt", "prepared path table activated without RPDB"
 
         run(*rule_command(managed, "add", mh_if))
-        assert payload_rule_present(managed, mh_if)
+        current_rules = rule_rows(managed)
+        assert payload_rule_present(managed, mh_if), current_rules
         assert udp_probe(host) == "vpn", "RPDB dispatch did not switch to prepared VPN table"
 
         run(*path_command(managed, "del", mv_if))
