@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — Architecture Report
 
-**Status:** NG3 architecture, Profile semantics recovery in progress  
-**Cycle:** `ng3-design-cycle-20261116-profile-semantics-recovery-40m`  
+**Status:** NG3 architecture, current Release 1 closure with executable reference slices  
+**Cycle:** `ng3-design-cycle-20261116-post-closure-implementation-readiness-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
 
@@ -12,6 +12,40 @@ It is not a source of new product semantics.
 No NG2 component is inherited merely because it existed. Historical NG2 design may be used
 as evidence that a mechanism is technically plausible or as a source of failure modes, but
 every NG3 architectural element below must be justified again by NG3 requirement IDs.
+
+## Current executable reference evidence
+
+The architecture now has bounded executable reference slices under
+`design/NG3/code/python/rou/`.
+
+These slices are implementation/evidence for accepted contracts. They are **not** a claim
+that the Release 1 daemon, Linux actuation layer or deployment lifecycle is complete.
+
+Current trace:
+
+| Architecture responsibility / contract | Executable reference | Review evidence |
+| --- | --- | --- |
+| ConfigurationAdapter structural Device/Profile normalization | `domain.py`, `config.py` | `NG3-2026-11-16-structural-config-code-review.md` |
+| authoritative VPNPathAdapter interface-identity observation boundary | `interface_identity.py`, `interface_inventory.py` | `NG3-2026-11-16-interface-inventory-code-review.md` |
+| shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
+| PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
+| PayloadPolicyCalculator NEW-flow Profile classification | `profile_classification.py` | `NG3-2026-11-16-profile-classification-code-review.md` |
+| PayloadTrafficManager bounded availability confirmation state | `availability_confirmation.py` | `NG3-2026-11-16-availability-confirmation-code-review.md` |
+| AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md` |
+| NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
+| cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
+
+The implementation intentionally stops before unresolved or separately-gated boundaries:
+
+- final Device NAT/envelope/publication user grammar;
+- availability user timing grammar;
+- Netlink/poll scheduling and full VPNPathAdapter runtime collection;
+- Linux route/RPDB/nft mutation and postcondition verification;
+- ICMP execution/probe-plane production mechanism;
+- full lifecycle/deployment assembly.
+
+This mapping implements the traceability intent of `VPNG-R7.R6.1` without promoting
+reference code into new product semantics.
 
 # 1. Architecture scope of this pass
 
