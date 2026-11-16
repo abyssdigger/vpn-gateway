@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Live combined structural nft convergence for Profile + Device + NAT."""
+"""Live combined structural nft convergence for Profile + Device + NAT + local publication."""
 
 import os
 import subprocess
