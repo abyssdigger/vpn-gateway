@@ -208,6 +208,26 @@ class DeviceFirewallCompilerTests(unittest.TestCase):
             '{"reject":{"type":"tcp reset"}}',
         )
 
+    def test_protocol_only_tcp_reject_omits_redundant_l4proto(self):
+        rule = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.IN,
+            action=DeviceFirewallAction.REJECT,
+            protocol="tcp",
+        )
+        value = compile_device_firewall_policy(
+            DeviceFirewallPolicyIntent("wg-main", (rule,)),
+            HOST,
+            VPN,
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+        )
+        compiled = value.chains[1].rules[0]
+        self.assertEqual(compiled.match_expr_json, ())
+        self.assertEqual(
+            compiled.action_json,
+            '{"reject":{"type":"tcp reset"}}',
+        )
+
     def test_non_tcp_and_generic_reject_compile_to_icmp_unreachable(self):
         cases = (
             DeviceFirewallRuleIntent(
