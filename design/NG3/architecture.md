@@ -585,9 +585,12 @@ is unavailable; it must not broaden scope to all paths or guess a peer.
 The exact human-facing named-endpoint syntax is deliberately postponed to the later
 configuration-format review. No named-endpoint grammar is selected here.
 
-**Evidence gate:** EXP-039 checks whether transport endpoint identity is an organic generic
-property of a Linux point-to-point TUN interface or requires integration-specific provenance.
-Until that evidence is reviewed, no generic interface-discovery implementation may claim to
+**EXP-039 result:** PASS on privileged Linux CI. A real userspace-held
+`IFF_POINTOPOINT` TUN exposed its inner point-to-point address peer, but changing the
+userspace transport socket peer left generic `ip -j -d link` and `ip -j addr` observation
+unchanged and neither transport address appeared there. Therefore transport endpoint
+identity is not an organic generic property of a point-to-point TUN interface.
+Integration-specific provenance is required; generic interface discovery must not claim to
 recover a transport peer merely from point-to-point interface state.
 
 ### 3.2.2. Bound endpoint versus route realization
