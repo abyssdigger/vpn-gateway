@@ -29,6 +29,7 @@ Important non-goals of the current reference:
 - no Device Engine;
 - no Netlink event state/history/replay;
 - no general Linux structural route/RPDB/nft policy executor beyond the reviewed pure-priority route-key slice;
+- no shared lower network-policy allocator/layout for route tables, owner protocol, RPDB priorities and metric namespaces yet;
 - no full daemon/lifecycle assembly;
 - no production probe execution;
 - no final user-facing NAT / traffic-envelope / publication grammar;
