@@ -170,7 +170,7 @@ class LinuxStructuralRoutingBackendTests(unittest.TestCase):
                     fwmask=0xFFFF,
                 )
             )
-        self.assertEqual(runner.commands, ())
+        self.assertEqual(runner.commands, [])
 
 
 if __name__ == "__main__":
