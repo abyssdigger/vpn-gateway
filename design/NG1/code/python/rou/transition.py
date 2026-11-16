@@ -90,9 +90,11 @@ def assess_binding_lifecycle(
 
     This recognizes proven binding-set changes and route-only additive repair in schema
     version 1.
-    Availability transitions remain architecturally incremental, but the production
-    availability trigger is deferred; future DeviceManager work must persist enough
-    availability history to prove that transition equivalently.
+
+    Future Profile-binding ON/OFF control is external to Device binding lifetime. When
+    implemented, its TrafficEngine changes must be classified from explicit previous/new
+    Profile-pair control state rather than inferred from DeviceEngine or persisted
+    availability history.
 
     Firewall/NAT backend details are deliberately outside this classifier. The caller
     supplies proof that observed policy is exactly a previous or desired verified

@@ -1,5 +1,10 @@
 # EXP-019 — NG1 WireGuard availability evidence
 
+> **Current interpretation:** this experiment proves that WireGuard interface presence is
+> insufficient as a path-liveness condition. It does not define global interface
+> availability. In the current model an active probe may be one condition used to decide
+> whether a concrete WireGuard binding is AVAILABLE in a particular Profile.
+
 **Status:** PASS — raw WireGuard availability evidence  
 **Architecture baseline:** NG1 Draft 5 + EXP-016  
 **Type:** real WireGuard-in-netns liveness experiment

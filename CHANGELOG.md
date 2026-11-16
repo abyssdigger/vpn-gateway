@@ -1,3 +1,167 @@
+## 2026-11-14 — NG2 first executable network-rules slice
+
+Started the NG2 Python reference under `design/NG2/code/python/rou`:
+
+- introduced `NetworkRulesSpec` routing/dispatch contracts;
+- kept Adapter ownership/context as a separate `NetworkRulesScope` method argument rather
+  than embedding caller usage into the common rules structure;
+- added generation-aware interface references and explicit Adapter state/result contracts;
+- added the first `PayloadRulesCalculator` routing slice with ordered paths,
+  longest-prefix dispatch, zero-path terminal blackhole, and duplicate-destination
+  ambiguity rejection;
+- added 11 rootless unit tests across the two new modules.
+
+Filtering, NAT and the Linux Adapter implementation remain intentionally deferred to the
+next slices rather than being copied wholesale from NG1.
+
+---
+
+## 2026-11-14 — NG2 PayloadTrafficManager contracts
+
+Defined `design/NG2/payload-traffic-manager.md`:
+
+- `PayloadTrafficManager` remains the payload-domain Engine;
+- `PayloadRulesCalculator` maps payload intent to abstract `NetworkRulesSpec`;
+- `PayloadStateCalculator` maps observed network-rules state back to payload semantics;
+- `NetworkRulesAdapter` is a Direct semantic boundary with explicit
+  `apply/renewState/getLastState` contracts;
+- Adapter action result is separated from observed state;
+- Linux numeric allocation, safe transition/barrier logic, mutation ordering and fresh
+  verification are hidden behind the Adapter boundary;
+- legacy NG1 metric-history and central Planner responsibilities are assigned to their NG2
+  domains instead of being preserved as PayloadTrafficManager state.
+
+The generic component model was also refined: Machinery is expected to be Direct by
+default; Indirect semantics are exceptional, explicitly marked and treated as a design
+review warning.
+
+---
+
+## 2026-11-13 — NG2 Engines/Machinery taxonomy and runtime boundary correction
+
+The reusable component model was refined into two component families:
+
+- `Engines` are asynchronous event-space participants: `Manager` and `Agent`;
+- `Machinery` is invoked from another execution flow: `Calculator`, `Adapter`,
+  and `Driver`;
+- Machinery is additionally classified as `Direct` or `Indirect` depending on whether
+  the requested result returns through the call or arrives later through event space;
+- Machinery is externally stateless to its caller even when its hidden implementation is
+  internally stateful;
+- `Adapter` now denotes a semantic/domain boundary and may hide an arbitrarily complex
+  lower subsystem;
+- `Driver` denotes the direct technical boundary to an external mechanism;
+- the complete synchronous dependency graph inside each visible domain must be a DAG, and
+  an adapted lower domain must not establish an independent synchronous back-edge into the
+  caller's domain.
+
+The NG2 runtime model was corrected accordingly:
+
+- future VPN process/device lifecycle management is no longer modeled as a current
+  `DeviceManager`;
+- active path checks are owned by `AvailabilityProbeManager`, whose managed domain is the
+  probe subsystem rather than endpoint availability itself;
+- `TrafficManager` is narrowed/named `PayloadTrafficManager`;
+- probe, payload-traffic and publication domains remain separate even when they reuse the
+  same lower network-rule Machinery.
+
+---
+
+## 2026-11-13 — NG2 component and runtime event model
+
+VPN-GATE enters NG2 as a component-architecture redesign rather than a mechanical NG1
+refactor.
+
+The reusable architecture vocabulary is now defined independently in
+`design/component-model.md`:
+
+- `Manager` is a semantic boundary over a managed domain and publishes its current
+  externally relevant state;
+- `Agent` is the observe-only specialization of Manager;
+- `Adapter` is a synchronous technical boundary and never participates in the event graph
+  by itself;
+- `Calculator` is an explicit pure data transformation;
+- internal communication uses `InfoEvent` and `RequestEvent` over an abstract Event
+  Delivery Environment;
+- statefulness is an implementation property of Agent/Manager rather than a separate
+  architectural `Engine` role;
+- synchronous Adapter dependencies must form a DAG; feedback cycles are closed through
+  asynchronous event boundaries.
+
+A non-normative comparison with established pub/sub EDA, Kubernetes controllers/operators,
+MAPE-K, Event-Carried State Transfer and Ports & Adapters is recorded in
+`design/component-model-analogues.md`.
+
+The first NG2 normative runtime contract is in `design/NG2/runtime-event-model.md`. It
+covers steady-state runtime only, defines `RuntimeStateManager`, the top-level Agents and
+Managers, the current-snapshot/calculator flow, event envelope and the initial event
+catalog. Bootstrap, shutdown and internal Manager decomposition are intentionally deferred.
+
+NG1 remains historical architecture/evidence and is not rewritten to match NG2.
+
+---
+
+## 2026-11-13 — NG1 Profile-facing interface balancing direction
+
+The availability/control design now records `interface_balancing` as the provisional
+Profile-facing configuration direction. Explicit forms such as
+`icmp/172.21.201.19` or `tcp/172.21.201.19:443` express whether a concrete binding
+actually provides what that Profile needs; the result remains Profile-local rather than
+global Device/interface health.
+
+Target-less forms such as `interface_balancing = "icmp"` are reserved conceptually for
+future path-specific target derivation from already-known Device/interface/peer/Profile
+information. That derivation algorithm, exact grammar, DNS semantics and timing/hysteresis
+remain intentionally undecided.
+
+## 2026-11-13 — NG1 Profile-binding availability model reset
+
+Availability semantics were generalized before implementing the production detector:
+
+- availability is now a current relation between one Profile and one concrete bound
+  interface; the runtime result is ON/OFF rather than global
+  UNKNOWN/AVAILABLE/UNAVAILABLE on a Device binding;
+- DeviceEngine owns binding only. Availability/control conditions are external and may
+  include link usability, active endpoint probes, manual inhibits, schedules or future
+  Profile/interface-specific predicates;
+- availability/control state is never persisted; retrospective state belongs in logs;
+- deterministic metric projection remains independent of ON/OFF;
+- the old UNAVAILABLE_METRIC and persistent shadow payload fallback were removed from the
+  production code and tests;
+- the former ECMP hash-policy production prerequisite was removed with that fallback;
+  EXP-013 and EXP-016 remain historical Linux/FIB evidence;
+- EXP-019/020 are retained as path-liveness evidence and EXP-021 passed on target Debian 13,
+  proving a narrow unprivileged ICMP condition plus the exact-ifindex-reuse boundary;
+- EXP-022 is prepared to prove an isolated RPDB/routing/nft probe plane before any
+  user-facing availability configuration grammar is frozen.
+
+The current production core is therefore again the deterministic baseline: Device
+bindings, stable Profile-local metrics, normal routes and terminal blackholes. Generic
+Profile-binding ON/OFF materialization remains future work after EXP-022.
+
+---
+
+## 2026-11-12 — NG1 autonomous dead-code and CI cleanup
+
+Post-implementation audit cleanup completed without changing production routing/firewall
+semantics:
+
+- removed the unused legacy iptables filter/NAT modules and their dedicated unit/integration
+  tests from the production ROU package;
+- removed dead `observe_nft_generation_refs()` and
+  `classify_device_to_host_profile()` helpers and collapsed the package-level export facade;
+- `rou up` now leaves appliance preparation to systemd `ExecStartPre=rou prepare`
+  instead of running the same preparation twice;
+- public documentation now distinguishes administrator commands from the
+  systemd-internal `prepare|contain|run` hooks;
+- core NG1 CI no longer installs legacy/VPN experiment packages or runs EXP-020;
+  EXP-020 remains archived experiment evidence;
+- pushes to `code-cycle-*` branches now trigger NG1 CI automatically;
+- ROU v0 and RC2/RC3 migration/inheritance history moved from the normative architecture
+  to `design/NG1/ng1-history.md`.
+
+---
+
 ## 2026-11-12 — EXP-019 PASS: WireGuard raw availability evidence
 
 Future DeviceManager research established that WireGuard interface presence and

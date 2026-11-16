@@ -9,7 +9,7 @@ Companion documents:
 - `design/NG1/NG1-2026-11-11-config-brainstorm-brief.md`
 - `design/NG1/NG1-2026-11-11-production-config-resolution.md`
 
-NG1 is a next-generation design, not an incremental RC3 revision. The base abstraction changes from a host-integrated VPN gateway to a self-contained virtual VPN router appliance.
+NG1 defines a self-contained virtual VPN router appliance rather than a host-integrated VPN gateway.
 
 ## 1. Components
 
@@ -22,7 +22,7 @@ ROU is the primary NG1 component.
 
 BOU is deliberately replaceable: any firewall/router able to correctly handle the external ROU interface may fulfill the role. A native VPN-GATE BOU is planned later, optimized for **PEACEFUL** and **AGGRESSIVE** modes.
 
-BOU evolved conceptually from the earlier RC2/RC3 boundary-controller / boundaryd idea. In NG1 the old boundary layer is no longer part of the router core; it becomes an independent host-side firewall/router concern.
+The boundary layer is not part of the router core; it is an independent host-side firewall/router concern.
 
 ## 2. ROU as a self-contained appliance
 
@@ -234,7 +234,7 @@ rou show is a read-only administrative view. It should eventually expose at leas
 - profiles and directions;
 - profile routing tables;
 - Devices, expected-interface selectors and their quotas;
-- bound/over-quota concrete interfaces and normalized availability;
+- bound/over-quota concrete interfaces and, when implemented, Profile-binding ON/OFF control state;
 - Profile-local metric assignments;
 - VPN transport state where observable;
 - routing/firewall verification;
@@ -311,10 +311,6 @@ ROU owns and verifies at least these namespace prerequisites:
 - strict reverse-path filtering must not invalidate policy-routed/asymmetric VPN traffic:
   ROU-owned payload interfaces use an explicitly safe `rp_filter` policy (disabled by
   default for this model; a proven equivalent loose policy may be substituted later);
-- `net.ipv4.fib_multipath_hash_policy=1` is ROU-owned, applied and exactly verified
-  rather than inherited from the host/kernel default. EXP-016 proved on the target kernel
-  class used by CI that policy 1 is namespace-isolated, deterministic for one 5-tuple and
-  uses L4 flow variation across ECMP members;
 - a newly appearing Device interface is not admitted for payload forwarding until required
   per-interface sysctl state is verified;
 - IPv6 is disabled on ROU-owned payload interfaces in the first production model,
@@ -352,7 +348,6 @@ Every enabled Profile owns its own routing table.
 A Profile table contains:
 
 - routes through bound Device interfaces selected for that Profile;
-- availability fallback materialization where applicable;
 - one terminal fail-closed `blackhole default` route.
 
 ROU owns the complete table. Foreign state inside a Profile table is not part of the
@@ -605,8 +600,7 @@ not inherit policy from the retired interface. If the observed nft policy cannot
 to be either the previous or desired verified generation, the transition is structural and
 uses the global barrier.
 
-Legacy iptables materialization remains historical/regression evidence only; it is not a
-production NG1 backend.
+nftables is the sole production NG1 packet-policy backend.
 
 ## 6. Static domain model
 
@@ -735,38 +729,62 @@ For allocation purposes the aggregate Device quota is derived as:
 
 This aggregate is not separately configured.
 
-### 7.3 Device availability
+### 7.3 Profile-binding availability
 
-A bound interface may carry normalized availability information independent of kernel
-link presence:
+Availability is a relation between one enabled Profile and one concrete bound interface,
+not a global property of a Device or interface.
 
-    UNKNOWN
-    AVAILABLE
-    UNAVAILABLE
+The normative statement is:
 
-This exists specifically for cases such as WireGuard, where an interface may remain
-present and administratively healthy while the remote side is unreachable.
+    <interface> is AVAILABLE in <Profile>
 
-How remote availability is determined is a future feature and may be Device-specific.
-Publication state, transport-specific observations and other raw evidence remain internal
-to DeviceEngine; downstream components receive only normalized availability.
+when every availability condition configured for that `(Profile, concrete binding)` pair is
+currently satisfied. The runtime control result exposed to TrafficEngine is deliberately
+small:
 
-Availability does not break the bound-interface lifetime.
+    ON
+    OFF
 
-EXP-019 provides WireGuard-specific raw evidence for future DeviceManager work:
+`ON` means the concrete binding may currently participate in that Profile's payload
+materialization. `OFF` means it may not.
 
-- a WireGuard interface can remain present/up with the same `(ifname,ifindex)` while its
-  remote underlay path is unusable;
-- an active probe bound to the WireGuard path can distinguish loss and recovery without
-  replacing the interface generation;
-- latest-successful-handshake age alone is not a sufficient prompt liveness trigger:
-  short path loss and successful payload recovery were observed with the same recorded
-  latest-handshake timestamp.
+The decision is external to Profile semantics and external to DeviceEngine binding
+lifetime. DeviceEngine answers which concrete interfaces are bound to Devices. A separate
+Profile-binding control layer evaluates whether each such binding is currently available
+to each Profile that references its Device.
 
-This evidence does not define the production detector. Probe target, cadence, failure/
-recovery thresholds and any Device-specific configuration belong to future DeviceManager
-design. DeviceEngine continues to export only normalized UNKNOWN/AVAILABLE/UNAVAILABLE.
+The administrator expresses desired control in configuration; the Profile does not know
+how the decision is produced. Conditions may include, for example:
 
+- the concrete interface exists and is administratively usable;
+- an explicitly configured endpoint is reachable through that concrete interface;
+- no manual administrative inhibit is active for the pair;
+- a schedule permits the pair;
+- future Profile/interface-specific predicates.
+
+An active ICMP probe is therefore only one possible availability **condition**. It is not
+the definition of availability itself.
+
+When a Profile has no additional availability control configured, the baseline binding
+condition is sufficient for `ON`. When additional conditions are requested, a fresh pair
+starts `OFF` and becomes `ON` only after every required condition has been positively
+satisfied. Absence of negative evidence is not positive confirmation.
+
+Profile-binding control state is strictly current runtime state:
+
+- it is never persisted or restored across daemon restart;
+- retrospective history belongs in logs;
+- restart reconstructs Device bindings and reevaluates the current conditions afresh.
+
+A transition between `ON` and `OFF` does not end the Device binding lifetime and does not
+change deterministic metric assignment. The same bound interface may simultaneously be
+`ON` in one Profile and `OFF` in another.
+
+EXP-019 and EXP-020 prove that interface/process presence alone is insufficient for some
+VPN paths. EXP-021 proves that an ICMP condition can be narrow, unprivileged and bound to
+one interface path, and also proves that numeric ifindex can be reused after interface
+recreation. Therefore no old availability/control result may be inferred from a reused
+`(ifname,ifindex)` after an unobserved lifetime boundary.
 ### 7.4 Device traffic envelope
 
 `traffic_envelope` is the administrator-authored firewall policy of a Device/tunnel, as
@@ -916,11 +934,11 @@ payload routes, so BLACKHOLE_METRIC is part of the normative priority contract.
 
 ## 11. Profile Device order and metric allocation
 
-device_order[] is an ordered list of Device identifiers and contains no additional
-Profile-local Device parameters.
+`device_order[]` is an ordered list of Device identifiers and contains no runtime
+availability/control state.
 
 A Device may be shared by any number of enabled Profiles. Its use is explicit in each
-Profile through device_order[].
+Profile through `device_order[]`.
 
 Metric priority has two static levels:
 
@@ -935,24 +953,20 @@ Metric allocation is internal to ROU:
 
     FIRST_NORMAL_METRIC = 1
     METRIC_STEP = 1
+    BLACKHOLE_METRIC = 65536
 
-For every route metric used by an active Profile table, the required ordering is:
-
-    normal metric < UNAVAILABLE_METRIC < BLACKHOLE_METRIC
-
-The exact numeric tail constants are implementation/platform constants, but the ordering
-is normative. Normal metric-space validation must reserve both tail values.
+Normal metrics occupy the range below `BLACKHOLE_METRIC`; there is no reserved
+availability/fallback metric.
 
 Only **active Devices** participate in current metric allocation: an active Device is an
 enabled Device referenced by at least one enabled Profile. A known disabled Device remains
-in device_order as configuration policy but receives no current metric range and consumes
-no current metric space. If no enabled/bound Device remains usable for a Profile, that
-Profile remains valid but operationally fail-closed.
+in `device_order` as configuration policy but receives no current metric range and consumes
+no current metric space.
 
 For each enabled Profile, each active referenced Device receives a Profile-local metric
-range whose width is the derived Device.interface_quota. That Device range is subdivided,
-in expected_interfaces order, into fixed ranges sized by each
-ExpectedInterface.interface_quota.
+range whose width is the derived `Device.interface_quota`. That Device range is subdivided,
+in `expected_interfaces` order, into fixed ranges sized by each
+`ExpectedInterface.interface_quota`.
 
 Within one PREFIX expectation range, a bound survivor keeps its assigned slot for its
 continuous bound lifetime. A new interface receives a currently free slot in that range;
@@ -967,99 +981,86 @@ Metric assignment belongs to:
 
     (Profile, ifname, ifindex)
 
-not to Device or interface globally.
+not to Device or interface globally. It is projected from configuration plus Device
+bindings and is independent of Profile-binding ON/OFF control. If a bound interface is
+temporarily `OFF` for a Profile, its payload materialization may be absent while its
+deterministic metric assignment remains unchanged. Returning to `ON` therefore restores
+the same normal metric without availability-specific slot ownership.
 
-The assignment remains stable for the whole continuous period in which the same runtime
-interface remains bound and the Profile continues to use that Device. Availability changes
-do not change its normal slot. A removed assignment is not reusable until the removal has
-been verified and committed.
+A removed binding's metric assignment is not reusable until the removal has been verified
+and committed. No stable-metric promise spans a configuration change that alters the
+active Device set or its ordered quota layout.
 
-For every enabled Profile, bootstrap must verify that the sum of the derived aggregate
-quotas of all **active** Devices in device_order fits the available normal metric space
-after reserving UNAVAILABLE_METRIC and BLACKHOLE_METRIC.
+For every enabled Profile, bootstrap must verify that the sum of derived aggregate quotas
+of all active Devices in `device_order` fits below `BLACKHOLE_METRIC`.
+## 12. Profile-binding control and payload materialization
 
-If a previously disabled Device is enabled by a future CandidateConfig, metric ranges may
-be re-projected as part of that verified configuration transition. No stable-metric
-promise spans a configuration change that alters the active Device set or its ordered
-quota layout.
+The baseline production routing model is deterministic and contains only:
 
-## 12. Unavailable-path fallback
+- normal Profile routes for bound interfaces that have a metric assignment;
+- one terminal Profile blackhole.
 
-Availability is planner input.
+There is no shadow payload fallback tier and no `UNAVAILABLE_METRIC`.
 
-AVAILABLE and UNKNOWN paths remain in the normal routing tier and use their stable normal
-metric. UNKNOWN means only that DeviceEngine has no positive availability determination;
-it does not mean proven health.
+Future Profile-binding availability/control is an optional overlay on this baseline. Its
+input is the externally evaluated current result:
 
-Only a path positively classified UNAVAILABLE is demoted below every normal path
-regardless of Device order.
+    (Profile, concrete binding) -> ON | OFF
 
-The agreed model reserves one common:
+TrafficEngine consumes the result, not the reasons or detector mechanics.
 
-    UNAVAILABLE_METRIC
+For a pair that is `ON`, the Profile-specific payload state for that binding may be
+materialized. For a pair that is `OFF`, the binding remains owned by DeviceEngine but must
+not be exposed as a usable payload path for that Profile. If all candidate pairs of a
+Profile are `OFF`, its terminal blackhole provides the fail-closed routing result.
 
-for the fallback tier.
+The control overlay must be applied consistently to **all Profile-specific state** for the
+pair, not merely to routes. In particular a future implementation must reconcile route
+materialization together with generated Profile direction policy and any Profile-derived
+NAT contribution so that `OFF` cannot leave a partially usable path. Device-scoped state
+that exists independently of one Profile, such as binding identity or the Device traffic
+envelope itself, remains a separate ownership concern.
 
-**EXP-013 completed with Phase A PASS and Phase B PASS.** The production materialization
-model is therefore fixed as a persistent shadow fallback:
+Profile-binding ON/OFF does not alter Device discovery, binding admission, quota,
+candidate ordering or metric projection.
 
-- every bound interface used by a Profile is continuously represented in the Profile's
-  fallback route at UNAVAILABLE_METRIC;
-- UNKNOWN and AVAILABLE paths additionally have their stable normal route;
-- transition to UNAVAILABLE removes only that path's normal route;
-- transition from UNAVAILABLE back to UNKNOWN/AVAILABLE restores its normal route at the
-  same stable normal metric;
-- one fallback member is represented as a direct-device route;
-- two or more fallback members are represented as one equal-cost direct-device multipath
-  route at UNAVAILABLE_METRIC;
-- the terminal blackhole remains below the fallback tier, including for 0.0.0.0/0.
+### 12.1 Availability condition plane
 
-The equal-cost fallback is **ECMP/hash selection, not sequential failover**. EXP-013 B4
-confirmed with real OpenConnect payload that if the selected fallback member is
-functionally dead while its interface remains present, Linux does not retry the same flow
-through another healthy equal-cost member. This is intentional last-resort semantics and
-must not be described as ordered failover.
+Conditions that must continue operating while a pair is `OFF` cannot depend on the
+Profile payload route they control. Active probes therefore require a service/control
+plane isolated from Profile payload tables.
 
-EXP-013 A3 confirmed that disappearance of one member interface causes Linux to remove the
-whole direct-device multipath route rather than shrink it to surviving members.
-TrafficEngine therefore rebuilds fallback membership from a fresh binding snapshot after
-such a change.
+EXP-022 proves the dedicated availability probe plane using separate routing/RPDB and
+narrow firewall state. The proven properties include:
 
-This ordinary binding lifecycle transition does **not** require the global protective
-forwarding barrier. Surviving normal routes remain, and while the shadow fallback is
-absent/rebuilt the terminal Profile fail-close plus terminal host0 RPDB action prevent
-fall-through to main. The transition may cause a brief Profile-local outage but not a
-fail-open path.
+- probe traffic cannot escape through another Device;
+- payload traffic cannot consume probe-only routes;
+- a probe continues while the corresponding Profile pair is `OFF`;
+- same-name/new-ifindex does not inherit a working stale probe plane;
+- exact numeric ifindex reuse can reactivate stale RPDB+nft selectors once the missing
+  probe route is recreated, so numeric ifindex is not a durable generation identity.
 
-Likewise, ordinary binding appearance and normalized availability transitions are
-incremental reconciliation events and do not require global `ip_forward=0`.
+No probe/control-plane routes are placed in Profile payload tables. After any observation
+continuity break or binding recreation, the current probe-plane generation must be rebuilt
+and verified as a whole rather than inferred from matching `(ifname,ifindex)`.
 
-The global protective barrier is reserved for structural/unknown owned-state drift, crash
-recovery from unverified state, and policy transitions that cannot be proven safe as an
-incremental update.
+### 12.2 State and transition semantics
 
-Example for one destination with three bound interfaces, all UNKNOWN:
+Profile-binding control is ephemeral current state and is never part of durable
+`PlannerRuntimeState`.
 
-    metric 1      -> direct route via member A
-    metric 2      -> direct route via member B
-    metric 3      -> direct route via member C
-    metric 65535  -> one shadow ECMP fallback with members A+B+C
-    metric 65536  -> terminal blackhole
+A daemon restart discards all prior ON/OFF results. Device binding and deterministic metric
+history follow their own existing persistence rules; availability/control conditions are
+reevaluated from current evidence.
 
-The same persistent shadow fallback exists while the paths are AVAILABLE; an UNAVAILABLE
-classification removes only that member's normal-tier route and leaves its shadow
-membership unchanged.
+The eventual implementation may treat a proven ON/OFF change as an incremental
+Profile-local transition only after its complete previous/new route and packet-policy
+generations can be verified. Until that transition contract is implemented and proven,
+the current production code remains the baseline model without additional Profile-binding
+control.
 
-UNKNOWN availability does not terminate a bound-interface lifetime and does not demote a
-path.
-
-The fallback mechanism is implemented in the first production code intentionally, while
-the **trigger** that positively classifies a bound interface as UNAVAILABLE is deliberately
-deferred to future DeviceManager/Device-specific detector work. Until such a detector is
-implemented, ordinary bound interfaces remain UNKNOWN unless an explicit test/provider
-injects stronger evidence. Future detectors may move an interface between UNKNOWN,
-AVAILABLE and UNAVAILABLE without changing its normal metric assignment.
-
+EXP-013 remains valid evidence about Linux direct-device ECMP/fallback mechanics, but its
+former persistent-shadow production decision is superseded by this model.
 ## 13. DeviceEngine
 
 **DeviceEngine** owns the ROU-side mechanisms that make existing Devices usable:
@@ -1070,7 +1071,6 @@ AVAILABLE and UNAVAILABLE without changing its normal metric assignment.
 - enforce each ExpectedInterface.interface_quota and preserve survivor admission;
 - maintain DeviceBindingState;
 - maintain publication sockets/relay;
-- normalize Device-specific evidence into bound-interface availability;
 - publish an immutable DeviceBindingSnapshot to downstream logic.
 
 DeviceEngine does not manage the Device itself. In particular the first production model
@@ -1300,13 +1300,16 @@ must maintain independent per-peer association state.
 Production reconciliation distinguishes **ordinary lifecycle transition** from
 **structural/unknown drift**.
 
-Ordinary lifecycle transitions include verified binding appearance/disappearance and
-normalized availability changes. They are repaired incrementally with RPDB dispatch
-retained.
+Ordinary lifecycle transitions include verified binding appearance/disappearance. They are
+repaired incrementally with RPDB dispatch retained.
+
+Future Profile-binding ON/OFF changes are a distinct Profile-local control transition and
+may use the same incremental path only after complete previous/new route and packet-policy
+generations can be proven.
 
 Lifecycle route mutation is a semantic diff, **not a full Profile-table flush**. The
 terminal blackhole default in every affected Profile table must remain continuously
-installed while stale normal/fallback routes are deleted and missing routes are added.
+installed while stale normal routes are deleted and missing routes are added.
 This is required because Profiles may overlap: if a more-specific Profile table were
 temporarily empty, RPDB lookup could continue to a later broader Profile rule and cross a
 policy boundary. Preserving the table-local terminal blackhole prevents that fall-through.
@@ -1337,187 +1340,15 @@ protective barrier:
 This global barrier is intentionally conservative for unknown state, not a normal response
 to every Device connection/disconnection.
 
-## 20. First executable ROU prototype boundary
+## 20. Historical implementation record
 
-The first executable ROU implementation is intentionally narrower than the full NG1
-configuration model. It is a lifecycle and integrity prototype, not the first generic
-configuration release.
+The ROU v0 prototype record, RC2/RC3 inheritance notes and v0-to-production migration
+history are maintained separately in [ng1-history.md](ng1-history.md). They are evidence
+and implementation history only; they do not define production NG1 semantics.
 
-ROU v0 may hard-code:
+## 21. Production operational boundaries
 
-- one ROU instance and namespace;
-- one host-facing veth pair;
-- one OUTBOUND profile;
-- one OpenConnect/ocserv prefix binding;
-- the binding network and capacity;
-- one protected test destination;
-- one profile routing table and RPDB rule;
-- one TCP and one UDP publication on the same external/internal ocserv port;
-- the existing known-good ocserv configuration as the source for a derived runtime config.
-
-The purpose is to prove the complete appliance control loop before adding a broad parser.
-
-ROU v0 must distinguish two classes of change:
-
-1. **normal binding lifecycle** — eligible `vpnsXX` interfaces may appear, disappear and
-   reappear as clients connect and disconnect;
-2. **structural owned-state drift** — unexpected mutation of ROU-owned profile routing,
-   RPDB, firewall/NAT or appliance infrastructure.
-
-For the first implementation, any change requiring structural reprojection uses a
-protective forwarding barrier:
-
-    set net.ipv4.ip_forward=0
-        -> project complete owned state
-        -> verify complete owned state
-        -> set net.ipv4.ip_forward=1
-
-This deliberately trades transient availability for a small and strong safety model while
-the control loop is being validated.
-
-A disappearing VPN binding is not itself corruption. Reconciliation recalculates admitted
-bindings and fail-closed profile state from a fresh namespace snapshot. If no usable
-binding remains, the profile table retains its blackholes and forwarding to that profile
-remains fail-closed.
-
-Initial live gates for ROU v0 are:
-
-- clean creation from no namespace/veth;
-- real ocserv startup and client reconnection through publication;
-- correct materialization of the VPN interface inside the namespace;
-- normal preferred-binding disappearance and survivor behavior;
-- zero-binding fail-closed behavior;
-- recovery after injected owned route/RPDB/firewall drift;
-- detection of structural appliance drift that cannot be safely repaired in place;
-- graceful shutdown and complete removal of owned host/netns resources.
-
-General configuration parsing, multiple profiles, arbitrary selectors/transports, warm
-capacity and BOU integration are explicitly deferred until these lifecycle gates pass.
-
-### 20.1 Implemented ROU v0
-
-The executable reference implementation is:
-
-    design/NG1/code/python/rou_v0/
-
-It is a clean NG1 implementation rather than an adaptation of the RC3 daemon. RC2/RC3
-were used as evidence for already-proven kernel behavior and failure modes.
-
-The implementation currently hard-codes the v0 lab boundary defined above and includes:
-
-- namespace/veth creation and destruction;
-- derived ocserv runtime configuration and process lifecycle inside the ROU namespace;
-- host-side TCP publication relay;
-- host-side UDP publication with independent per-external-peer associations;
-- fresh-snapshot discovery of concrete `vpns+` interfaces by `(ifname, ifindex)`;
-- capacity-2 metric allocation with survivor stability and delayed metric reuse across a
-  verified REMOVE commit;
-- a dedicated profile routing table with direct-dev unicast routes, protected blackhole and
-  terminal blackhole default;
-- an `iif host0` RPDB dispatch rule;
-- OUTBOUND-only filter semantics and per-binding MASQUERADE;
-- complete owned-state reconciliation under the forwarding barrier;
-- semantic route/RPDB verification using `ip -j`;
-- canonical filter/NAT verification using `iptables-legacy-save`;
-- fatal isolation/cleanup on non-repairable appliance-infrastructure loss;
-- read-only JSON status plus a single-instance runtime lock.
-
-The EXP-011 one-peer UDP limitation is therefore not carried into v0: each external UDP
-peer has its own connected internal UDP socket and return-path association.
-
-### 20.2 Verification boundary
-
-Rootless checks completed before the first live run:
-
-- Python bytecode compilation;
-- unit tests covering binding projection, capacity/overflow, delayed metric reuse,
-  same-name/new-ifindex identity, fail-closed route/firewall projection and bootstrap
-  handling of an absent profile table;
-- two-peer UDP relay smoke;
-- shell syntax validation of the live harness.
-
-EXP-012 then completed the full live lifecycle/integrity gate on the dedicated Debian 13
-test VM with `OVERALL=PASS`.
-
-The successful live run proved:
-
-- clean namespace/veth creation and teardown;
-- real ocserv startup inside ROU;
-- simultaneous DTLS for both real OpenConnect clients through independent UDP peer
-  associations;
-- two-path profile materialization and real payload forwarding;
-- preferred-binding disappearance with survivor metric preservation and payload failover;
-- fresh binding return without survivor churn;
-- explicit zero-path fail-closed routing;
-- route and firewall drift repair under an observable `ip_forward=0` barrier;
-- fatal isolation/teardown after structural `host0` loss.
-
-Three defects discovered during the live gate were corrected without weakening the
-hypotheses: bootstrap flushing of a not-yet-created profile table, ocserv sec-mod
-chroot-visible runtime socket placement, and an H8 harness command that initially targeted
-the wrong routing table.
-
-EXP-012 therefore closes the hard-coded ROU v0 verification boundary. Generic
-configuration/domain-model work may proceed from this implementation while preserving the
-verified lifecycle, fail-closed, allocation and integrity semantics.
-
-## 21. Inheritance from RC2/RC3
-
-NG1 changes topology and ownership, but it does **not** discard the engineering work already completed in RC2 and RC3.
-
-RC2/RC3 contain substantial reusable material:
-
-- live experiments against real Linux routing, iptables, WireGuard and OpenConnect behavior;
-- fail-closed experiments and recovery observations;
-- route/metric and blackhole behavior;
-- interface disappearance/reappearance and ifindex identity lessons;
-- reconciliation and fresh-snapshot design;
-- ADD/REMOVE transition ordering;
-- verification-before-commit rules;
-- ownership and drift-repair lessons;
-- IPv4/IPv6 prerequisite checks;
-- configuration parsing/validation patterns;
-- selector and binding-domain work;
-- profile status and availability semantics;
-- extensive Python reference code and regression tests;
-- independent architecture/code reviews and the decisions made from them.
-
-This material is a **design and experiment library**, not obsolete history.
-
-NG1 work should explicitly mine RC2/RC3 before inventing or re-testing behavior that was already established.
-
-At the same time RC3 is not normative for NG1. Any RC3 rule depending on the old host-integrated topology, shared host routing namespace, old firewall ownership or other superseded assumptions must be re-evaluated before reuse.
-
-In short:
-
-> NG1 reuses proven observations, invariants and implementation techniques from RC2/RC3 while deliberately replacing their top-level topology and ownership model.
-
-Primary source material includes the existing experiment log under design/vpn-gateway-experiments.md, the RC2/RC3 architecture documents, reviews and the RC3 Python implementation.
-
-### 21.1 ROU v0 -> production migration boundary
-
-ROU v0 is executable evidence, not the production object model.
-
-**Reuse/prove forward from v0:**
-
-- namespace/veth lifecycle and teardown containment;
-- publication relay behavior, including independent UDP peer associations;
-- fresh observation and verification-before-commit;
-- protective forwarding barrier for structural reprojection;
-- direct-device routing observations;
-- canonical firewall/NAT inspection techniques;
-- fatal containment after unrecoverable appliance-infrastructure loss.
-
-**Rewrite/generalize for production:**
-
-- hard-coded binding/capacity -> Device/ExpectedInterface;
-- one OUTBOUND Profile -> multiple Profiles with stateful direction semantics;
-- fixed route metrics -> two-level Profile-local metric ranges;
-- v0 filter shortcuts -> generated Profile guard + Device envelope;
-- hard-coded configuration -> validated ActiveConfig;
-- one transport instance -> generic Device binding/publication state.
-
-### 21.2 Production testing strategy
+### 21.1 Production testing strategy
 
 Production evidence is layered:
 
@@ -1532,7 +1363,7 @@ Rootless CI runs on every PR/push. Kernel/live gates remain explicit experiment 
 and are rerun when code first relies on the behavior they prove or target kernel/network
 tool assumptions materially change.
 
-### 21.3 Scale and representability
+### 21.2 Scale and representability
 
 The first production model does not invent small arbitrary limits for Profiles, Devices or
 bindings.
@@ -1551,7 +1382,7 @@ truncated.
 Performance/stress limits beyond representability are measured from implementation tests
 and documented from evidence rather than guessed as architecture constants.
 
-### 21.4 Coexistence with host VPNs
+### 21.3 Coexistence with host VPNs
 
 ROU does not special-case unrelated VPN software in the host namespace.
 
@@ -1586,9 +1417,9 @@ ROU does not seize or rewrite unrelated host VPN routes.
 21. Bound survivors are never reordered by newcomers; over-quota promotion follows committed first-observed order with kernel-snapshot order and ifindex tie-break for simultaneous fresh candidates.
 22. Over-quota/unbound matching interfaces are observable but receive no payload route or payload ACCEPT state.
 23. Device publication belongs to Device binding and ROU, not Profile routing or BOU, and publication workers are supervised ROU-owned state.
-24. Device-specific raw transport evidence does not cross into TrafficEngine; DeviceEngine exports normalized interface availability.
-25. Bound-interface availability supports UNKNOWN, AVAILABLE and UNAVAILABLE independently of interface presence.
-26. UNKNOWN and AVAILABLE use the normal routing tier; only positive UNAVAILABLE classification causes fallback demotion.
+24. DeviceEngine exports Device binding state only; Profile-binding availability/control is evaluated outside DeviceEngine.
+25. Availability is Profile-local: the meaningful statement is that a concrete bound interface is AVAILABLE in a concrete Profile; the runtime pair result is ON or OFF.
+26. Profile-binding ON/OFF is current ephemeral state, is never persisted, and may differ for the same concrete binding across Profiles.
 27. Profile contains name, enabled, direction, destinations[] and device_order[]; runtime interface details are absent from Profile config.
 28. destinations[] denotes strict canonical remote/VPN-side IPv4 prefixes; host-bit correction is never implicit.
 29. Duplicate remote prefixes are forbidden globally across enabled Profiles; overlap at different prefix lengths is allowed.
@@ -1605,13 +1436,13 @@ ROU does not seize or rewrite unrelated host VPN routes.
 40. Metric allocation begins at 1 with step 1 and is internal to ROU.
 41. Only active Devices consume current Profile-local metric ranges; disabled Device references consume no current metric space.
 42. Each active Profile-local Device metric range is sized by derived Device.interface_quota and subdivided by ExpectedInterface quotas.
-43. Every normal metric is strictly lower than UNAVAILABLE_METRIC, which is strictly lower than BLACKHOLE_METRIC.
-44. Metric-space validation reserves UNAVAILABLE_METRIC and BLACKHOLE_METRIC before admitting normal quota ranges.
+43. Every normal metric is strictly lower than BLACKHOLE_METRIC; no availability-specific metric tier is reserved.
+44. Metric-space validation reserves BLACKHOLE_METRIC before admitting normal quota ranges.
 45. Metric assignment belongs to (Profile, ifname, ifindex) and remains stable for the continuous bound lifetime within one ActiveConfig generation.
-46. Availability changes do not change the normal metric slot.
+46. Profile-binding ON/OFF does not participate in metric allocation; a continuously bound interface retains its deterministic Profile-local normal metric.
 47. Removed metric assignments are not reusable before verified commit of removal.
-48. UNAVAILABLE paths share one final fallback metric; EXP-013 proved persistent shadow direct-device fallback materialization, with one member as a direct route and multiple members as equal-cost ECMP multipath.
-49. DeviceEngine owns Device binding/discovery/quota/publication state; TrafficEngine owns Profile routing, generated direction guard, Device envelope materialization, firewall/NAT and fail-closed transit state.
+48. No shadow payload fallback is materialized; an OFF pair contributes no usable payload path to that Profile, while control-plane checks remain independent of Profile payload routes.
+49. DeviceEngine owns Device binding/discovery/quota/publication state; an external Profile-binding control layer evaluates ON/OFF; TrafficEngine owns the resulting Profile routing and packet-policy materialization plus fail-closed transit state.
 50. PlannerEngine coordinates desired state and transitions without merging Engine ownership domains.
 51. Runtime decisions use fresh EnvironmentSnapshot observations; events are wakeups only.
 52. Apply success is not commit; fresh observation and complete verification precede committed-state changes.
@@ -1620,11 +1451,11 @@ ROU does not seize or rewrite unrelated host VPN routes.
 55. Runtime/diagnostic artifacts use subject-area prefixes planner-*, device-* and traffic-*.
 56. Future DeviceManager may change Device lifecycle/configuration but is independent of DeviceEngine.
 57. Future warm reservation is Profile demand aggregated globally across shared Devices.
-58. RC2/RC3 and ROU v0/EXP-012 remain evidence and implementation-history sources; superseded BindingSpec/capacity terminology is not normative for production NG1.
+58. Prototype shortcuts and superseded terminology never override the production Device/Profile model and invariants defined in this document.
 59. The first production payload model disables IPv6 on ROU-owned payload interfaces rather than relying only on disabled IPv6 forwarding.
 60. Higher-priority local-table delivery of host0 traffic addressed to ROU-owned local endpoints is intentional and is not an escape from the forwarded-payload fail-closed guard.
 61. NEW-flow direction policy is never omission-only: each enabled (Profile, Device, remote-prefix) pair materializes an explicit ACCEPT or DROP verdict for each relevant direction, ordered longest-prefix-first.
-62. Ordinary binding appearance/disappearance and normalized availability changes are incremental lifecycle transitions and do not require the global protective barrier; structural/unknown owned-state drift and unverified recovery do.
+62. Ordinary binding appearance/disappearance remains an incremental lifecycle transition. Future Profile-binding ON/OFF transitions may be incremental only after their complete previous/new route and packet-policy generations are explicitly proven; structural/unknown drift and unverified recovery use the protective barrier.
 63. Router and instance human-facing TOML require schema_version=1; unknown or missing versions are rejected.
 64. Every enabled Device explicitly selects payload NAT mode none or masquerade; NAT is Device-scoped and MASQUERADE is restricted to bound interfaces plus remote prefixes of enabled Profiles referencing that Device.
 65. Device publications use the schema-v1 ext-port-or-range/protocol[>internal-port-or-range] grammar; active external endpoints may not overlap for one protocol, and internal endpoints may not overlap across different active Devices.
@@ -1636,9 +1467,9 @@ ROU does not seize or rewrite unrelated host VPN routes.
 71. Capacity greater than one for remote-initiated Profiles requires a separately proven flow-pinning extension; destination dispatch alone is insufficient return steering.
 72. ROU-owned INPUT is default-DROP and admits only loopback, local ESTABLISHED/RELATED, and host0 to configured internal publication endpoints; Device interfaces have no implicit ROU-local access.
 73. ROU-owned OUTPUT is default-DROP and admits only loopback, local ESTABLISHED/RELATED, and locally generated traffic whose egress is host0.
-74. The persistent shadow fallback is implemented before its production availability trigger; positive UNAVAILABLE classification is intentionally deferred to future DeviceManager/Device-specific detector work.
-75. net.ipv4.fib_multipath_hash_policy=1 is an applied/verified namespace prerequisite, proven by EXP-016; it must not be silently inherited from the host/kernel default.
+74. Availability conditions are optional external Profile-binding controls. Ping is one possible condition, not the definition of availability; no availability state or result is persisted.
+75. EXP-016 remains evidence for Linux ECMP behavior, but fib_multipath_hash_policy is not a production prerequisite while NG1 has no ECMP shadow payload fallback.
 76. Incremental lifecycle route repair never flushes a Profile table or removes its terminal blackhole; the blackhole remains continuously installed so a temporarily missing more-specific route cannot fall through to a broader overlapping Profile rule.
-77. Production nft policy matches dynamic bound interfaces by numeric ifindex and verifies compiler-owned generation markers for those numeric references; same-name/new-ifindex is a fresh lifecycle generation, while an unprovable policy generation remains structural/unknown drift.
+77. Production nft policy matches dynamic bound interfaces by numeric ifindex and verifies compiler-owned markers during continuous observation. EXP-021 proves exact numeric ifindex reuse is possible, and EXP-022 proves stale RPDB+nft selectors can become effective again after such reuse if a missing route is restored. After an unobserved lifetime boundary, matching (ifname,ifindex) is not proof that the old interface generation survived; current control-plane state must be rebuilt and verified.
 78. Incremental binding admission installs route state first, required NAT second, and generated FORWARD admission last; a newly routable MASQUERADE Device is never intentionally admitted before translation state exists.
 79. With unchanged bindings/RPDB/policy, an observed owned-route set that is a strict subset of the unchanged desired route generation may be repaired additively without the global barrier only when every terminal Profile blackhole remains installed; any extra/stale owned route remains structural drift.

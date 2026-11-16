@@ -36,7 +36,7 @@ This package implements the ROU control plane after the ROU v0 / EXP-010..013 ev
 - RTNETLINK `ip monitor` wakeup source;
 - normalized namespace/veth instance lifecycle;
 - crash-recoverable runtime composition and single-instance locking;
-- `rou check|prepare|contain|up|down|show|run` CLI;
+- public `rou check|up|down|show` CLI plus systemd-internal `prepare|contain|run` hooks;
 - reference installer and hardened `rouvpn@.service`.
 
 ## Deliberately deferred / experimentally gated
@@ -62,7 +62,6 @@ python3 -m unittest discover -s design/NG1/code/python/rou/tests -p 'test_*.py' 
 GitHub kernel integration additionally exercises disposable namespaces for:
 
 - instance create/verify/repair/destroy;
-- legacy iptables filter/NAT round-trip as regression evidence only;
 - lifecycle route diff with overlapping Profiles and persistent table-local blackhole;
 - EXP-017 numeric-ifindex same-name/new-ifindex isolation;
 - production nft policy round-trip;
@@ -89,8 +88,8 @@ removes the owned appliance after proving the service inactive.
 
 ## Backend status
 
-nftables is the only production packet-policy backend for NG1. Legacy iptables modules and
-integration tests remain temporarily as regression/historical evidence and do not define
-new production semantics.
+nftables is the only production packet-policy backend for NG1. Historical iptables evidence
+remains in the archived RC2/RC3 and experiment material; it is not shipped in the production
+ROU package or exercised by core NG1 CI.
 
 EXP-017 is PASS and closed the ifindex-generation backend gate.

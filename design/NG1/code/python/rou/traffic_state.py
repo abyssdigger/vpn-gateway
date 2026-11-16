@@ -75,8 +75,9 @@ def project_normal_metrics(
     apply/verify/commit. This prevents metric reuse before the kernel state that owned the
     old slot is proven absent.
 
-    UNAVAILABLE fallback is projected separately by route_intent.py; this function owns
-    only stable normal-tier metric allocation.
+    Profile-binding availability/control is external to metric allocation. A bound
+    interface keeps the same deterministic metric assignment regardless of whether a
+    future control layer currently exposes that pair to payload routing.
     """
 
     LOG.debug(

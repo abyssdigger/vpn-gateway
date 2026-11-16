@@ -18,12 +18,6 @@ class MatchKind(str, Enum):
     PREFIX = "prefix"
 
 
-class Availability(str, Enum):
-    UNKNOWN = "unknown"
-    AVAILABLE = "available"
-    UNAVAILABLE = "unavailable"
-
-
 class NatMode(str, Enum):
     NONE = "none"
     MASQUERADE = "masquerade"

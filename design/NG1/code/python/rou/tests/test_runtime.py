@@ -14,7 +14,6 @@ from rou.device_engine import (
 from rou.domain import (
     NatMode,
     ActiveConfig,
-    Availability,
     Device,
     Direction,
     ExpectedInterface,
@@ -121,19 +120,6 @@ class DeviceEngineTests(unittest.TestCase):
         self.assertEqual(
             second.snapshot.over_quota[0].identity,
             InterfaceIdentity("vpns00", 20),
-        )
-
-    def test_availability_is_normalized_without_changing_binding(self):
-        identity = InterfaceIdentity("vpns00", 10)
-        result = reconcile_devices(
-            make_config(1),
-            DeviceBindingState.empty(),
-            environment(("vpns00", 10)),
-            {identity: Availability.UNAVAILABLE},
-        )
-        self.assertEqual(
-            result.snapshot.bound[0].availability,
-            Availability.UNAVAILABLE,
         )
 
     def test_inactive_device_is_not_discovered(self):

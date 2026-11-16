@@ -9,7 +9,6 @@ from rou.metrics import (
     BLACKHOLE_METRIC,
     FIRST_NORMAL_METRIC,
     MAX_NORMAL_METRIC,
-    UNAVAILABLE_METRIC,
     compile_all_metric_layouts,
 )
 
@@ -17,8 +16,8 @@ from rou.metrics import (
 class MetricLayoutTests(unittest.TestCase):
     def test_tail_order(self):
         self.assertEqual(FIRST_NORMAL_METRIC, 1)
-        self.assertLess(MAX_NORMAL_METRIC, UNAVAILABLE_METRIC)
-        self.assertLess(UNAVAILABLE_METRIC, BLACKHOLE_METRIC)
+        self.assertEqual(MAX_NORMAL_METRIC, 65535)
+        self.assertLess(MAX_NORMAL_METRIC, BLACKHOLE_METRIC)
 
     def test_device_then_expected_interface_order(self):
         cfg = parse_active_config('''
@@ -116,13 +115,13 @@ device_order = ["huge"]
         ranges = compile_all_metric_layouts(cfg)['corp']
         self.assertEqual(ranges[-1].end, MAX_NORMAL_METRIC)
 
-    def test_normal_capacity_cannot_consume_unavailable_metric(self):
+    def test_normal_capacity_cannot_consume_blackhole_metric(self):
         with self.assertRaisesRegex(ConfigError, 'normal metric'):
             parse_active_config(f'''
 schema_version = 1
 [device.huge]
 enabled = true
-expected_interfaces = ["vpn*/{UNAVAILABLE_METRIC}"]
+expected_interfaces = ["vpn*/{BLACKHOLE_METRIC}"]
 nat = "none"
 
 [profile.corp]

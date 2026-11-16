@@ -8,7 +8,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
 from rou.domain import (
     ActiveConfig,
-    Availability,
     Device,
     Direction,
     EnvelopeAction,
@@ -82,7 +81,6 @@ class NftPolicyTests(unittest.TestCase):
                     "oc",
                     0,
                     InterfaceIdentity("vpns00", ifindex),
-                    Availability.UNKNOWN,
                 ),
             ),
             (
@@ -90,7 +88,6 @@ class NftPolicyTests(unittest.TestCase):
                     "oc",
                     0,
                     InterfaceIdentity("vpns01", 11),
-                    Availability.UNKNOWN,
                 ),
             ),
         )

@@ -1,5 +1,10 @@
 # EXP-013 — NG1 unavailable-path common-metric fallback
 
+> **Current architecture note:** the experimental PASS remains valid evidence of Linux
+> direct-device fallback/ECMP behavior, but the former persistent-shadow production
+> decision is superseded. Current NG1 has no shadow payload fallback and no
+> `UNAVAILABLE_METRIC`; Profile-binding OFF removes the pair from payload materialization.
+
 Status: **PASS — Phase A PASS; Phase B PASS; NG1 unavailable-path implementation gate closed**
 
 Architecture baseline: **NG1 Draft 3**

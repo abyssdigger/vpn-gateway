@@ -219,7 +219,6 @@ def cmd_up(
             "already_active": True,
         }
 
-    ensure_instance(instance.instance, backend)
     try:
         _systemctl(backend, "enable", "--now", service)
         active = _systemctl(
@@ -373,7 +372,6 @@ def cmd_show(
                     "expected_index": item.expected_index,
                     "ifname": item.identity.ifname,
                     "ifindex": item.identity.ifindex,
-                    "availability": item.availability.value,
                 }
                 for item in status.projection.bindings.bound
             ],

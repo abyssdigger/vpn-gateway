@@ -8,7 +8,6 @@ from .environment import EnvironmentSnapshot
 
 
 HOST_INTERFACE = "host0"
-ECMP_HASH_POLICY = "1"
 
 
 @dataclass(frozen=True)
@@ -31,12 +30,6 @@ def prerequisite_commands(
     commands: list[tuple[str, ...]] = [
         ("sysctl", "-q", "-w", "net/ipv4/conf/all/rp_filter=0"),
         ("sysctl", "-q", "-w", "net/ipv4/conf/default/rp_filter=0"),
-        (
-            "sysctl",
-            "-q",
-            "-w",
-            f"net/ipv4/fib_multipath_hash_policy={ECMP_HASH_POLICY}",
-        ),
         ("sysctl", "-q", "-w", "net/ipv6/conf/all/forwarding=0"),
         ("sysctl", "-q", "-w", "net/ipv6/conf/default/forwarding=0"),
         ("sysctl", "-q", "-w", "net/ipv6/conf/default/disable_ipv6=1"),
@@ -87,13 +80,6 @@ def verify_namespace_prerequisites(
         actual = values.get(key)
         if actual != expected:
             errors.append(f"{key}={actual!r}, expected {expected!r}")
-
-    hash_policy = values.get("net.ipv4.fib_multipath_hash_policy")
-    if hash_policy != ECMP_HASH_POLICY:
-        errors.append(
-            "net.ipv4.fib_multipath_hash_policy="
-            f"{hash_policy!r}, expected {ECMP_HASH_POLICY!r}"
-        )
 
     for ifname in _payload_ifnames(bindings):
         expected_per_if = {

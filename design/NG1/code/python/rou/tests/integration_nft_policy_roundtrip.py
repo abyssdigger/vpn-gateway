@@ -12,7 +12,6 @@ from rou.command_backend import NamespaceBackend, SubprocessBackend
 from rou.device_engine import BoundInterface, DeviceBindingSnapshot, InterfaceIdentity
 from rou.domain import (
     ActiveConfig,
-    Availability,
     Device,
     Direction,
     EnvelopeAction,
@@ -114,7 +113,6 @@ def main() -> int:
                     "oc",
                     0,
                     InterfaceIdentity("vpns00", ifindex),
-                    Availability.UNKNOWN,
                 ),
             ),
             (),
