@@ -599,7 +599,7 @@ def _apply_step(
         raise ValueError(f"unsupported structural step {step.kind!r}")
 
 
-def _distance(value: StructuralPolicyComparison) -> int:
+def structural_policy_distance(value: StructuralPolicyComparison) -> int:
     return (
         len(value.routing.missing_routes)
         + len(value.routing.stale_routes)
@@ -626,7 +626,7 @@ def _strict_progress(
     return (
         not after.routing.conflicts
         and not after.nft.conflicts
-        and _distance(after) < _distance(before)
+        and structural_policy_distance(after) < structural_policy_distance(before)
     )
 
 

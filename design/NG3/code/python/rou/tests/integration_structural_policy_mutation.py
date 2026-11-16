@@ -39,6 +39,10 @@ from rou.structural_policy_mutation import (
     converge_structural_policy_step_once,
 )
 from rou.structural_policy_plan import StructuralPolicyStepKind
+from rou.structural_policy_transaction import (
+    StructuralPolicyTransactionStatus,
+    converge_structural_policy,
+)
 
 
 TARGET = IPv4Address("203.0.113.57")
@@ -461,6 +465,25 @@ def main() -> int:
         ), managed_rows
         assert udp_probe(host_ns) is None
         print("STRUCTURAL_CROSS_DOMAIN_SAME_NAME_NEW_IFINDEX_FAIL_CLOSED=PASS")
+
+        transaction = converge_structural_policy(
+            gate,
+            backend,
+            routing_desired(host, new_vpn),
+            nft_desired(host, new_vpn),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        assert (
+            transaction.status
+            is StructuralPolicyTransactionStatus.CONFIRMED
+        ), (transaction.status, transaction.diagnostic)
+        assert transaction.confirmed
+        assert len(transaction.attempts) >= 2
+        assert transaction.initial_distance is not None
+        assert transaction.final_distance == 0
+        assert gate.observe_forwarding_gate() is ForwardingGateState.ENABLED
+        assert udp_probe(host_ns) == "vpn"
+        print("STRUCTURAL_CROSS_DOMAIN_TRANSACTION_COORDINATOR=PASS")
 
         print("NG3 cross-domain structural convergence integration: PASS")
         return 0
