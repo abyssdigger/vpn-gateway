@@ -522,6 +522,65 @@ The semantic content of `normalized_binding_intent` is defined: it must identify
 current concrete endpoint for one logical path. The exact external selector spelling and
 protocol-specific discovery mechanics remain replaceable interface/integration details.
 
+### 3.2.1. Bound endpoint versus route realization
+
+A verified `PathBinding(logical_path_id, InterfaceIdentity)` proves **which current
+endpoint** represents the path. It does not, by itself, prove the complete Linux route
+next-hop shape for every possible supported VPN integration.
+
+The lower VPN integration contract therefore additionally produces:
+
+```text
+PathBinding
+    + integration-specific verified topology/contract
+        ->
+RoutePriorityPathRoute:
+    logical_path_id
+    current InterfaceIdentity
+    gateway = IPv4 | none
+    onlink = true | false
+```
+
+The route realization must be consistent with the same current concrete endpoint identity
+used by the binding.
+
+The generic NetworkPolicyAdapter must not guess `gateway` or `onlink` from:
+
+- interface name;
+- Device ID;
+- historical transport type;
+- the mere presence of an IPv4 peer address;
+- ambient host routes.
+
+A supported integration may expose a simpler realization when evidence/onboarding proves it.
+
+#### Direct-device integration capability
+
+For an integration whose accepted lower contract states that protected destinations are
+routed directly through the bound interface, the realization is:
+
+```text
+gateway = none
+onlink  = false
+dev     = current bound InterfaceIdentity.ifname
+```
+
+Historical EXP-009 H5 is concrete evidence that this shape works for the tested OpenConnect
+point-to-point endpoint. WireGuard remains governed by its own cryptokey-routing
+(`AllowedIPs`) contract; a WireGuard onboarding profile may use direct-device realization
+only when its external configuration makes the Profile destinations valid for that
+interface.
+
+Direct-device is therefore an explicit **integration capability**, not a universal property
+of every interface matched by `expected_interfaces`.
+
+If the selected integration cannot produce one unambiguous current route realization for a
+bound logical path, that path is not structurally ready for payload route materialization.
+The lower policy remains unconfirmed/fail-closed; the Adapter does not invent a gateway.
+
+No new user-facing route field is introduced by this boundary. Route realization belongs to
+the supported integration/onboarding contract beneath the Device/Profile policy model.
+
 ## 3.3. Declarative configuration boundary
 
 **Implements:**
