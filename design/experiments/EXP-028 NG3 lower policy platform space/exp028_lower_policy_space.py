@@ -7,9 +7,13 @@ import sys
 
 
 PAYLOAD_TABLE_FIRST = 0x80000000
+PAYLOAD_TABLE_LAST = 0xBFFFFFFF
 PROBE_TABLE_FIRST = 0xC0000000
+PROBE_TABLE_LAST = 0xFFFFFFFF
 PROBE_RULE_FIRST = 0x2000
+PROBE_RULE_LAST = 0x3FFF
 PAYLOAD_RULE_FIRST = 0x4000
+PAYLOAD_RULE_LAST = 0x5FFF
 AMBIENT_MAIN_RULE = 32766
 PATH_PROTO = 202
 GUARD_PROTO = 201
@@ -95,6 +99,21 @@ def main() -> int:
             "dev", "path1",
         )
 
+        # Boundary representatives prove that the full declared table pools,
+        # not only their first IDs, are representable.
+        run(
+            "ip", "-n", ns, "-4", "route", "add", "blackhole", "10.78.0.0/16",
+            "table", str(PAYLOAD_TABLE_LAST),
+            "proto", str(GUARD_PROTO),
+            "metric", str(GUARD_METRIC),
+        )
+        run(
+            "ip", "-n", ns, "-4", "route", "add", "blackhole", "198.51.101.7/32",
+            "table", str(PROBE_TABLE_LAST),
+            "proto", str(GUARD_PROTO),
+            "metric", str(GUARD_METRIC),
+        )
+
         payload_routes = ip_json(
             ns, "-4", "route", "show", "table", str(PAYLOAD_TABLE_FIRST)
         )
@@ -132,6 +151,19 @@ def main() -> int:
         assert probe.get("metric") == FIRST_METRIC, probe
         assert probe.get("dev") == "path1", probe
 
+        payload_last = ip_json(
+            ns, "-4", "route", "show", "table", str(PAYLOAD_TABLE_LAST)
+        )
+        probe_last = ip_json(
+            ns, "-4", "route", "show", "table", str(PROBE_TABLE_LAST)
+        )
+        assert len(payload_last) == 1, payload_last
+        assert len(probe_last) == 1, probe_last
+        assert route_protocol(payload_last[0]) == GUARD_PROTO, payload_last
+        assert route_protocol(probe_last[0]) == GUARD_PROTO, probe_last
+        assert payload_last[0].get("metric") == GUARD_METRIC, payload_last
+        assert probe_last[0].get("metric") == GUARD_METRIC, probe_last
+
         # Filtered protocol inventory must still find the selected owned route.
         filtered = ip_json(
             ns,
@@ -157,6 +189,20 @@ def main() -> int:
             "lookup", str(PAYLOAD_TABLE_FIRST),
         )
 
+        run(
+            "ip", "-n", ns, "-4", "rule", "add",
+            "priority", str(PROBE_RULE_LAST),
+            "fwmark", "0x2",
+            "lookup", str(PROBE_TABLE_LAST),
+        )
+        run(
+            "ip", "-n", ns, "-4", "rule", "add",
+            "priority", str(PAYLOAD_RULE_LAST),
+            "iif", "host0",
+            "to", "10.78.0.0/16",
+            "lookup", str(PAYLOAD_TABLE_LAST),
+        )
+
         rules = ip_json(ns, "-4", "rule", "show")
         priorities = [
             int(row["priority"])
@@ -164,9 +210,17 @@ def main() -> int:
             if "priority" in row
         ]
         assert PROBE_RULE_FIRST in priorities, rules
+        assert PROBE_RULE_LAST in priorities, rules
         assert PAYLOAD_RULE_FIRST in priorities, rules
+        assert PAYLOAD_RULE_LAST in priorities, rules
         assert AMBIENT_MAIN_RULE in priorities, rules
-        assert PROBE_RULE_FIRST < PAYLOAD_RULE_FIRST < AMBIENT_MAIN_RULE
+        assert (
+            PROBE_RULE_FIRST
+            <= PROBE_RULE_LAST
+            < PAYLOAD_RULE_FIRST
+            <= PAYLOAD_RULE_LAST
+            < AMBIENT_MAIN_RULE
+        )
 
         # Route lookup proves that the actual rules select the high-ID tables.
         probe_get = ip_json(
