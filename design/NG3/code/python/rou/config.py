@@ -6,10 +6,10 @@ import tomllib
 from typing import Any
 
 from .domain import (
-    DeviceConfigIntent,
+    DeviceStructuralIntent,
     Direction,
     ExpectedInterfaceSelector,
-    ProfileConfigIntent,
+    ProfileStructuralIntent,
     SelectorKind,
     StructuralConfig,
 )
@@ -99,13 +99,13 @@ def _enabled(body: dict[str, Any], where: str) -> bool:
     return value
 
 
-def _parse_device(device_id: str, raw: Any) -> DeviceConfigIntent:
+def _parse_device(device_id: str, raw: Any) -> DeviceStructuralIntent:
     _validate_id(device_id, "Device")
     where = f"device.{device_id}"
     body = _mapping(raw, where)
     enabled = _enabled(body, where)
     if not enabled:
-        return DeviceConfigIntent(device_id=device_id, enabled=False)
+        return DeviceStructuralIntent(device_id=device_id, enabled=False)
 
     _reject_unknown_keys(body, _DEVICE_STRUCTURAL_KEYS, where)
     values = body.get("expected_interfaces")
@@ -123,20 +123,20 @@ def _parse_device(device_id: str, raw: Any) -> DeviceConfigIntent:
     )
     _validate_selector_overlap(expected, where)
 
-    return DeviceConfigIntent(
+    return DeviceStructuralIntent(
         device_id=device_id,
         enabled=True,
         expected_interfaces=expected,
     )
 
 
-def _parse_profile(profile_id: str, raw: Any) -> ProfileConfigIntent:
+def _parse_profile(profile_id: str, raw: Any) -> ProfileStructuralIntent:
     _validate_id(profile_id, "Profile")
     where = f"profile.{profile_id}"
     body = _mapping(raw, where)
     enabled = _enabled(body, where)
     if not enabled:
-        return ProfileConfigIntent(profile_id=profile_id, enabled=False)
+        return ProfileStructuralIntent(profile_id=profile_id, enabled=False)
 
     _reject_unknown_keys(body, _PROFILE_STRUCTURAL_KEYS, where)
 
@@ -168,7 +168,7 @@ def _parse_profile(profile_id: str, raw: Any) -> ProfileConfigIntent:
     if len(set(order)) != len(order):
         raise ConfigError(f"{where}.device_order contains duplicates")
 
-    return ProfileConfigIntent(
+    return ProfileStructuralIntent(
         profile_id=profile_id,
         enabled=True,
         direction=direction,
@@ -250,8 +250,8 @@ def _validate_selector_overlap(
 
 
 def _validate_profile_references(
-    devices: dict[str, DeviceConfigIntent],
-    profiles: dict[str, ProfileConfigIntent],
+    devices: dict[str, DeviceStructuralIntent],
+    profiles: dict[str, ProfileStructuralIntent],
 ) -> None:
     for profile in profiles.values():
         if not profile.enabled:
@@ -265,8 +265,8 @@ def _validate_profile_references(
 
 
 def _active_device_ids(
-    devices: dict[str, DeviceConfigIntent],
-    profiles: dict[str, ProfileConfigIntent],
+    devices: dict[str, DeviceStructuralIntent],
+    profiles: dict[str, ProfileStructuralIntent],
 ) -> frozenset[str]:
     referenced = {
         device_id
@@ -282,7 +282,7 @@ def _active_device_ids(
 
 
 def _validate_active_selector_overlap(
-    devices: dict[str, DeviceConfigIntent],
+    devices: dict[str, DeviceStructuralIntent],
     active_device_ids: frozenset[str],
 ) -> None:
     flattened: list[
@@ -307,7 +307,7 @@ def _validate_active_selector_overlap(
 
 
 def _validate_destination_ownership(
-    profiles: dict[str, ProfileConfigIntent],
+    profiles: dict[str, ProfileStructuralIntent],
 ) -> None:
     owners: dict[ipaddress.IPv4Network, str] = {}
     for profile in profiles.values():
@@ -324,8 +324,8 @@ def _validate_destination_ownership(
 
 
 def _validate_first_release_inbound_capacity(
-    devices: dict[str, DeviceConfigIntent],
-    profiles: dict[str, ProfileConfigIntent],
+    devices: dict[str, DeviceStructuralIntent],
+    profiles: dict[str, ProfileStructuralIntent],
 ) -> None:
     for profile in profiles.values():
         if (
