@@ -3,10 +3,10 @@
 from .config import ConfigError, parse_structural_config
 from .domain import (
     DeviceBindingIntent,
-    DeviceConfigIntent,
+    DeviceStructuralIntent,
     Direction,
     ExpectedInterfaceSelector,
-    ProfileConfigIntent,
+    ProfileStructuralIntent,
     SelectorKind,
     StructuralConfig,
 )
@@ -14,10 +14,10 @@ from .domain import (
 __all__ = [
     "ConfigError",
     "DeviceBindingIntent",
-    "DeviceConfigIntent",
+    "DeviceStructuralIntent",
     "Direction",
     "ExpectedInterfaceSelector",
-    "ProfileConfigIntent",
+    "ProfileStructuralIntent",
     "SelectorKind",
     "StructuralConfig",
     "parse_structural_config",
