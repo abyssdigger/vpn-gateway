@@ -2155,6 +2155,55 @@ observer evidence remains sufficient; no new kernel fact is introduced.
 **Gate:** PASS for lower desired data/comparison only. Full semantic compilation
 and physical filter mutation remain separate gated units.
 
+###### Forward semantic compiler — next-unit design constraint
+
+**Implements:** `VPNG0002-R2.R1.R2`, `VPNG0002-R2.R3.R3`,
+`VPNG0002-R2.R5.R1`, `VPNG0001-R1.R2.R4.R6.R2`,
+`VPNG0004-R4.R1`, `VPNG0004-R4.R3.R2`.
+
+A naive union of Profile CIDR allow rules is not equivalent to accepted
+most-specific classification. Example: a broad outbound Profile may allow
+path B while a more-specific outbound Profile owning the packet allows only
+path A. If the broad rule remains `daddr broad + oif B -> accept`, routing
+drift or a mixed transition could forward the more-specific packet through B,
+even though the selected Profile forbids that path.
+
+The positive-only/default-drop lower model therefore requires the semantic
+compiler to produce **disjoint effective remote-prefix fragments** before
+creating physical allow rules:
+
+- outbound: partition remote IPv4 space across all outbound/bidirectional
+  candidate Profiles by the accepted global most-specific rule, then attach
+  only the selected Profile's allowed paths to each fragment;
+- inbound: for each concrete ingress logical path, first restrict candidates
+  to inbound/bidirectional Profiles allowing that path, then partition remote
+  source space by most-specific Profile for that path;
+- return rules use the same selected fragments with reversed interface roles
+  and the reverse remote field.
+
+With disjoint fragments, all lower rules remain positive accepts under the
+default-drop chain and rule order stays semantically irrelevant, matching the
+accepted unordered `PayloadForwardDesiredState`.
+
+**Device-envelope gate:** the complete compiler still cannot be accepted yet.
+The recovered envelope concept can restrict source/destination prefixes,
+protocol and ports, while the final normalized grammar/lower contract remains
+unresolved. The current lower `PayloadForwardRuleSpec` intentionally models
+only remote prefix + direction/path state and therefore cannot honestly claim
+to enforce an enabled envelope carrying protocol/port restrictions.
+
+A future bounded compiler unit may explicitly cover **no-envelope** semantics
+only, but it must be labeled as an implementation slice, not silently redefine
+Release 1 product scope. Complete compiler acceptance requires the normalized
+Device envelope contract (or an explicit accepted product decision that the
+capability is not part of that release).
+
+No deny-rule ordering, nft jump graph or generic firewall AST is introduced
+merely to solve prefix overlap; canonical CIDR subtraction is the simpler
+candidate and must be proven against the existing point classifiers before
+materialization.
+
+
 `/31` remain explicit prefix objects; `/32` is a plain IPv4 address string.
 The same forms are used by NEW daddr and RETURN saddr matches. The strict
 observer implementation gate is therefore open for all accepted IPv4 CIDR
