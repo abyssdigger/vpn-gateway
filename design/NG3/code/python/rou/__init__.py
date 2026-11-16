@@ -234,6 +234,15 @@ from .payload_routing_compare import (
     PayloadRoutingComparisonError,
     compare_payload_routing,
 )
+from .structural_policy_mutation import (
+    StructuralPolicyComparison,
+    StructuralPolicyMutationResult,
+    StructuralPolicyMutationStatus,
+    StructuralPolicyPhysicalSnapshot,
+    compare_structural_policy,
+    converge_structural_policy_step_once,
+)
+from .linux_structural_policy import LinuxStructuralPolicyBackend
 from .structural_policy_plan import (
     StructuralPolicyMutationStep,
     StructuralPolicyPlanError,
@@ -497,6 +506,11 @@ __all__ = [
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
+    "LinuxStructuralPolicyBackend",
+    "StructuralPolicyComparison",
+    "StructuralPolicyMutationResult",
+    "StructuralPolicyMutationStatus",
+    "StructuralPolicyPhysicalSnapshot",
     "StructuralPolicyMutationStep",
     "StructuralPolicyPlanError",
     "StructuralPolicyStepKind",
@@ -516,6 +530,8 @@ __all__ = [
     "build_inbound_profile_partition",
     "build_outbound_profile_partition",
     "compare_payload_nft_scaffold",
+    "compare_structural_policy",
+    "converge_structural_policy_step_once",
     "select_structural_policy_step",
     "compare_payload_routing",
     "converge_device_firewall_step_once",
