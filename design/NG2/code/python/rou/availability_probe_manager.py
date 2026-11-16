@@ -14,7 +14,7 @@ from .network_rules import (
     NetworkRulesSpec,
     network_rules_semantically_equal,
 )
-from .probe_attempt import ProbeDriver
+from .probe_attempt import ProbeAttemptOutcome, ProbeDriver
 from .probe_rules import (
     AvailabilityProbeSetRequest,
     ProbeRulesCalculator,
@@ -37,9 +37,9 @@ class AvailabilityProbeStatePublisher(Protocol):
 class AvailabilityProbeManager:
     """Rules-control slice of the active availability-probe Manager.
 
-    Scheduling and attempt-result policy are intentionally not implemented here.
-    This slice owns probe NetworkRules lifecycle and the rules-readiness epoch that
-    future authoritative probe evidence must carry.
+    Scheduling, retry and hysteresis are intentionally not implemented here.
+    This slice owns probe NetworkRules lifecycle, the rules-readiness epoch and the
+    minimal single-attempt availability verdict boundary.
     """
 
     def __init__(
@@ -165,6 +165,53 @@ class AvailabilityProbeManager:
             result,
         )
 
+    def evaluate_once(
+        self,
+        probe_id: str,
+        *,
+        timeout_seconds: int,
+    ) -> AvailabilityProbeStateInfo | None:
+        """Run one valid attempt and project its raw result into current availability.
+
+        This is deliberately a one-attempt policy boundary only:
+        REPLY -> REACHABLE, NO_REPLY -> UNREACHABLE, ERROR -> UNKNOWN.
+        Retry, cadence, hysteresis and stale-time semantics remain outside this slice.
+        """
+
+        observation = self.attempt_once(
+            probe_id,
+            timeout_seconds=timeout_seconds,
+        )
+        if observation is None:
+            return None
+
+        if observation.result.outcome is ProbeAttemptOutcome.REPLY:
+            info = AvailabilityProbeStateInfo(
+                probe_id,
+                AvailabilityProbeState.REACHABLE,
+                reason="probe reply received",
+                observation_generation=observation.observation_generation,
+            )
+        elif observation.result.outcome is ProbeAttemptOutcome.NO_REPLY:
+            info = AvailabilityProbeStateInfo(
+                probe_id,
+                AvailabilityProbeState.UNREACHABLE,
+                reason="probe attempt received no reply",
+                observation_generation=observation.observation_generation,
+            )
+        else:
+            info = AvailabilityProbeStateInfo(
+                probe_id,
+                AvailabilityProbeState.UNKNOWN,
+                reason=(
+                    "local probe execution error: "
+                    f"{observation.result.diagnostic}"
+                ),
+            )
+
+        self._publish_if_changed(info)
+        return info
+
     def audit(self) -> None:
         """Run one deterministic rules refresh/repair pass."""
 
@@ -274,12 +321,28 @@ class AvailabilityProbeManager:
         )
 
         for probe in sorted(request.probes, key=lambda item: item.probe_id):
+            latest = self._latest_published.get(probe.probe_id)
+            if (
+                self._rules_ready(rules_state)
+                and self._active_generation is not None
+                and latest is not None
+                and latest.state is not AvailabilityProbeState.UNKNOWN
+                and latest.observation_generation == self._active_generation
+            ):
+                continue
+
             info = AvailabilityProbeStateInfo(
                 probe.probe_id,
                 AvailabilityProbeState.UNKNOWN,
                 reason=reason,
             )
-            if self._latest_published.get(probe.probe_id) == info:
-                continue
-            self._publisher.publish(info)
-            self._latest_published[probe.probe_id] = info
+            self._publish_if_changed(info)
+
+    def _publish_if_changed(
+        self,
+        info: AvailabilityProbeStateInfo,
+    ) -> None:
+        if self._latest_published.get(info.probe_id) == info:
+            return
+        self._publisher.publish(info)
+        self._latest_published[info.probe_id] = info

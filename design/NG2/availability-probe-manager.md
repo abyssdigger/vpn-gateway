@@ -122,11 +122,18 @@ ERROR
 
 These are raw attempt outcomes.
 
-`NO_REPLY` is not by itself the final availability state; cadence/retry/hysteresis policy
-is applied above the executor.
+The first explicit verdict baseline is intentionally minimal and lives above this Driver:
+
+```text
+REPLY    -> REACHABLE
+NO_REPLY -> UNREACHABLE
+ERROR    -> UNKNOWN
+```
+
+This is a one-attempt baseline, not a hidden retry/hysteresis contract.
 
 Local failures such as generation mismatch, process prerequisite failure or ping execution
-error return ERROR, not NO_REPLY.
+error return ERROR, not NO_REPLY. ERROR therefore never becomes remote UNREACHABLE.
 
 ## 6. Linux technical identity
 
@@ -218,6 +225,10 @@ Probe execution consumes only the READY branch.
 
 The cadence that invokes rules audit is not fixed here.
 
+The Manager also exposes `evaluate_once()` as the first policy-bearing boundary. It reuses
+`attempt_once()` and materializes only the minimal one-attempt verdict mapping. The raw
+`attempt_once()` API remains policy-free and independently testable.
+
 Equivalent full snapshots are order-insensitive by probe_id and do not create a new
 readiness epoch or force structural reapply when the current rules remain READY.
 
@@ -296,13 +307,48 @@ If the post-attempt observation is UNKNOWN/INVALID, the current epoch ends and
 validate that attempt.
 
 When both checks remain READY in the same epoch, the method returns a
-`ProbeAttemptObservation` containing the raw `ProbeAttemptResult`. The Manager still
-does not convert that value to REACHABLE/UNREACHABLE in the current slice.
+`ProbeAttemptObservation` containing the raw `ProbeAttemptResult`.
+
+`evaluate_once()` is layered strictly above that raw boundary:
+
+```text
+attempt_once()
+    |
+    +-- no valid observation ---------> keep/publish UNKNOWN
+    |
+    +-- REPLY ------------------------> REACHABLE
+    +-- NO_REPLY ---------------------> UNREACHABLE
+    +-- ERROR ------------------------> UNKNOWN
+```
+
+A READY rules audit preserves an already authoritative REACHABLE/UNREACHABLE publication
+when its `observation_generation` is still the current Manager epoch. Audit must not create
+a transient UNKNOWN before every new attempt.
 
 ProbeAttemptOutcome.ERROR is a local execution failure and is never directly equivalent to
 remote UNREACHABLE.
 
-## 12. Still intentionally open
+## 12. Minimal verdict baseline
+
+The current executable baseline deliberately chooses no counters and no timers.
+
+One valid attempt is enough to publish one current verdict for the active readiness epoch:
+
+- REPLY publishes REACHABLE with the current ProbeObservationGeneration;
+- NO_REPLY publishes UNREACHABLE with the current ProbeObservationGeneration;
+- ERROR publishes UNKNOWN without an observation generation;
+- an attempt discarded by the validity envelope publishes no remote verdict.
+
+Repeated semantically identical verdicts are publication-idempotent.
+
+Any rules/request transition that opens a new readiness epoch invalidates an older
+REACHABLE/UNREACHABLE publication and returns the affected probe to UNKNOWN until new valid
+evidence exists.
+
+This baseline is intentionally replaceable by a later retry/hysteresis policy without
+changing ProbeDriver or ProbeAttemptObservation.
+
+## 13. Still intentionally open
 
 The remaining lower-domain evidence gate before production conntrack remediation is
 EXP-026 Debian 13 target confirmation. EXP-025 is already target-confirmed
@@ -325,7 +371,7 @@ AvailabilityProbeManager uses an owner-wide rules-readiness epoch as described a
 
 These timing/result-policy choices are not inferred from payload policy or from EXP-024.
 
-## 13. Evidence
+## 14. Evidence
 
 Current evidence:
 
