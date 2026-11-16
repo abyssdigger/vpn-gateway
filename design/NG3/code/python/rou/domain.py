@@ -40,7 +40,7 @@ class ExpectedInterfaceSelector:
 
 
 @dataclass(frozen=True, slots=True)
-class DeviceConfigIntent:
+class DeviceStructuralIntent:
     device_id: str
     enabled: bool
     expected_interfaces: tuple[ExpectedInterfaceSelector, ...] = ()
@@ -51,7 +51,7 @@ class DeviceConfigIntent:
 
 
 @dataclass(frozen=True, slots=True)
-class ProfileConfigIntent:
+class ProfileStructuralIntent:
     profile_id: str
     enabled: bool
     direction: Direction | None = None
@@ -67,8 +67,8 @@ class DeviceBindingIntent:
 
 @dataclass(frozen=True, slots=True)
 class StructuralConfig:
-    devices: Mapping[str, DeviceConfigIntent]
-    profiles: Mapping[str, ProfileConfigIntent]
+    devices: Mapping[str, DeviceStructuralIntent]
+    profiles: Mapping[str, ProfileStructuralIntent]
     active_device_ids: frozenset[str]
     device_binding_intents: tuple[DeviceBindingIntent, ...]
 
@@ -76,8 +76,8 @@ class StructuralConfig:
     def build(
         cls,
         *,
-        devices: dict[str, DeviceConfigIntent],
-        profiles: dict[str, ProfileConfigIntent],
+        devices: dict[str, DeviceStructuralIntent],
+        profiles: dict[str, ProfileStructuralIntent],
         active_device_ids: frozenset[str],
     ) -> "StructuralConfig":
         bindings = tuple(
