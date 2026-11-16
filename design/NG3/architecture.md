@@ -1130,6 +1130,46 @@ The Calculator must preserve these invariants:
 - availability state is not an input to structural membership or permission;
 - availability can later reorder only already-eligible logical paths.
 
+## 5.1. Multi-path inbound/bidirectional return-path gate
+
+**Affected requirements:**
+- `VPNG-R2`
+- `VPNG-R2.R3`
+- `VPNG-R2.R3.R3`
+
+The recovered Profile contract allows `inbound` and `bidirectional`, and a Profile may have
+more than one eligible path.
+
+The current architecture does **not** yet claim complete closure for the case where a
+remote-initiated flow enters through one of several simultaneously eligible paths and its
+return traffic must be kept compatible with that ingress path.
+
+Historical evidence status:
+
+- EXP-014 was prepared specifically to test multi-path remote-initiated flow pinning;
+- EXP-014 was not completed;
+- no later recovered experiment establishes equivalent target behavior.
+
+Therefore NG3 must not silently assume any of the following:
+
+- ordinary current priority routing is sufficient for return-path correctness;
+- asymmetric return is always acceptable for every supported transport/profile;
+- connmark/fwmark return steering is already proven;
+- the first release is automatically limited to one inbound path.
+
+This is a human product/evidence gate.
+
+Two legitimate resolution classes exist, neither of which may be selected autonomously:
+
+1. **support multi-path inbound/bidirectional** — accept an architecture for return-path
+   handling and obtain sufficient evidence (EXP-014 or equivalent);
+2. **constrain first-release support** — add an explicit product Constraint with natural
+   Reason/Statement and define how configuration/runtime exposes/rejects the unsupported
+   case.
+
+Until one class is accepted, `VPNG-R2.R3` and `VPNG-R2.R3.R3` remain open for
+architecture closure.
+
 # 6. AvailabilityPriorityCalculator
 
 **Component type:** Calculator
