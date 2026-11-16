@@ -2072,6 +2072,14 @@ expressions. `/32` remote matches render as a plain IPv4 address string;
 non-host prefixes such as the tested `/24` render as a prefix object.
 The observer accepts only these evidence-backed canonical forms.
 
+**Gate amendment after EXP-037:** `VPNG0002-R2.R1.R1` permits arbitrary
+strict IPv4 CIDR destinations, including `0.0.0.0/0`. EXP-037 closed only
+`/32`; EXP-035/036 closed `/24`. Before implementation the observer gate
+must additionally resolve nft canonicalization for `/0` and boundary
+prefix lengths. EXP-038 is therefore required. If nft optimizes `/0`
+by removing the payload-prefix expression, the observer design must be revised
+rather than pretending the missing expression is equivalent by assumption.
+
 
 
 

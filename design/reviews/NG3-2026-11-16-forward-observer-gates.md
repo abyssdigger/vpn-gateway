@@ -52,3 +52,15 @@ then expert review.
 
 **Component-design gate: PASS conditional on EXP-037; implementation remains
 GATED until that experiment passes.**
+
+
+## Amendment — EXP-038 prefix-boundary representation
+
+After EXP-037 PASS, review identified a remaining external representation gap:
+the accepted Profile destination contract allows any strict IPv4 CIDR, and
+`/0` may be optimized specially by nft. Generalizing the observed `/24`
+prefix-object form to all non-`/32` values is not sufficient evidence.
+
+The implementation gate is therefore **re-closed** until EXP-038 records
+canonical NEW/RETURN JSON for `/0`, `/1`, `/31`, and `/32`.
+This is technical parser evidence only; no product semantic change.
