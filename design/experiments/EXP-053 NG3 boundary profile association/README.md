@@ -166,3 +166,29 @@ accept:
 - alpha runtime `+snat` materialization.
 
 Those require the subsequent architecture/code review.
+
+
+## Result
+
+The skb-mark carrier hypothesis is **rejected**.
+
+GitHub Actions run `44172894659`, job `134356422918` observed:
+
+```text
+EXP053_ACCEPTED_ONLY_ASSOCIATION=PASS
+EXP053_PROFILE_A_REPLY=PASS
+EXP053_PROFILE_B_REPLY=PASS
+EXP053_ASSOC_COUNTERS=managed_a:1:managed_b:1:host_a:0:host_b:0
+```
+
+Both managed association rules executed exactly once, proving that Profile selection reached
+the later post-filter association chain. Neither mark was observable after the veth crossed
+into the ordinary host namespace.
+
+This is consistent with the Linux cross-network-namespace skb scrub boundary, which clears
+`skb->mark` when an skb is injected into another network namespace.
+
+Therefore ordinary nft packet mark is not a valid `BoundaryProfileAssociation` carrier for
+the current managed-netns/host-veth architecture.
+
+No production code or architecture carrier is selected from this experiment.
