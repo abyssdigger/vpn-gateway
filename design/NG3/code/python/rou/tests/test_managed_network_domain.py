@@ -10,6 +10,7 @@ from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
     destroy_managed_network_domain,
     ensure_managed_network_domain,
+    preflight_managed_network_domain,
     verify_managed_network_domain,
 )
 
@@ -296,6 +297,37 @@ class ManagedNetworkDomainTests(unittest.TestCase):
                 host_address=IPv4Interface("192.0.2.1/30"),
                 inner_address=IPv4Interface("192.0.2.2/30"),
             )
+
+    def test_absent_preflight_confirms_absence_without_creation(self):
+        runner = FakeRunner()
+
+        result = preflight_managed_network_domain(SPEC, runner)
+
+        self.assertTrue(result.confirmed)
+        self.assertFalse(result.existing)
+        self.assertIsNone(result.verification)
+        self.assertFalse(runner.namespace)
+        self.assertFalse(runner.host_link)
+        self.assertNotIn(
+            ("ip", "netns", "add", SPEC.namespace),
+            runner.commands,
+        )
+
+    def test_existing_preflight_contains_and_verifies_without_mutation(self):
+        runner = FakeRunner()
+        runner.install_exact()
+        runner.forwarding = ForwardingGateState.ENABLED
+
+        result = preflight_managed_network_domain(SPEC, runner)
+
+        self.assertTrue(result.confirmed)
+        self.assertTrue(result.existing)
+        self.assertTrue(result.verification.confirmed)
+        self.assertEqual(runner.forwarding, ForwardingGateState.DISABLED)
+        self.assertNotIn(
+            ("ip", "netns", "add", SPEC.namespace),
+            runner.commands,
+        )
 
     def test_exact_existing_domain_is_contained_then_confirmed(self):
         runner = FakeRunner()
