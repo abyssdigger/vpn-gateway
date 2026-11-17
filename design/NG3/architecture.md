@@ -59,6 +59,7 @@ Current trace:
 | bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
 | bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
 | bounded controller restart composition | `controller_restart.py` | `NG3-2026-11-17-controller-restart-review.md` |
+| phase-bounded STARTING termination checkpoints | `controller_startup.py`, shared owned-domain cleanup in `controller_stop.py` | `NG3-2026-11-17-starting-termination-review.md` |
 | managed-netns structural forwarding gate | `forwarding_gate.py`, `linux_forwarding_gate.py` | `NG3-2026-11-16-forwarding-gate-code-review.md`, `EXP-030-result-20261116.md` |
 | nft table-level ownership observation | `nft_namespace_inventory.py` | `NG3-2026-11-16-nft-namespace-inventory-code-review.md`, `EXP-031-result-20261116.md` |
 | invariant payload nft scaffold comparison | `nft_payload_scaffold.py` | `NG3-2026-11-16-payload-nft-scaffold-code-review.md`, `EXP-032-result-20261116.md` |
@@ -4800,7 +4801,7 @@ operation; the future stop/cleanup boundary must quiesce/contain/cleanup before 
 
 This assembly still does not define:
 
-- signal handling/checkpoints;
+- the external POSIX-signal/service-manager adapter that supplies the stop-request predicate;
 - runtime Manager reconciliation scheduling;
 - user-facing readiness/status publication mechanism;
 - final external policy grammar.
@@ -4910,6 +4911,106 @@ rather than bypassing the normal single-controller exclusion contract.
 There is no restart-specific retry, rollback journal, saved kernel snapshot or partial-start
 resume state. Failure after successful stop leaves the result exactly as the ordinary startup
 operation reports it; a later operator action may start again from authoritative state.
+
+## 12.0.6. Phase-bounded STARTING termination checkpoints
+
+**Implements:**
+- `VPNG0005-R5.R1`;
+- `VPNG0005-R5.R4`;
+- `VPNG0005-R5.R5`;
+- `VPNG0005-R5.R6.R1`;
+- `VPNG0005-R5.R6.R2`;
+- `VPNG0006-R6.R3`.
+
+**Constrained by:**
+- `VPNG0007-R7.R1`.
+
+The core startup assembly does not own POSIX signal installation or service-manager mechanics.
+It accepts one replaceable read-only process-control input:
+
+```text
+stop_requested() -> bool
+```
+
+The deployment/process adapter must make that input effective before invoking startup if it
+needs asynchronous SIGTERM/SIGINT or equivalent stop handling. A signal handler must not run
+network mutations; it only records the request. The synchronous controller remains the sole
+owner of cleanup ordering.
+
+The startup checkpoints are after bounded phases, never in the middle of a lower mutation:
+
+```text
+entry
+    -> stop requested: return STOPPED; acquire no lock
+
+acquire lifetime lock
+    -> stop requested: release lock; return STOPPED
+
+managed-domain preflight
+    -> checkpoint
+
+candidate policy load/validation
+    -> checkpoint
+
+managed-domain ensure
+    -> checkpoint
+
+fresh interface observation
+    -> checkpoint
+
+pure desired-state build
+    -> checkpoint
+
+network-policy activation
+    -> FINAL STARTING checkpoint BEFORE READY
+```
+
+At every checkpoint after confirmed managed-domain preflight, a stop request invokes the same
+owned-domain cleanup primitive used by product stop:
+
+```text
+attempt ForwardingGate=DISABLED
+    ->
+independently attempt managed-domain teardown
+    ->
+confirmed namespace + host-boundary absence
+    ->
+release lifetime lock
+```
+
+No later startup phase may begin after a checkpoint observes the request.
+
+The final checkpoint is safety-critical. If activation has just confirmed an exact active
+forwarding policy but a stop request is already pending, startup must not construct/publish a
+READY session. It immediately enters cleanup while still holding the original controller
+lifetime lock.
+
+A successful interrupted cleanup returns startup `STOPPED`; this is not startup success and
+does not expose a READY session.
+
+If interrupted cleanup cannot confirm its required postcondition, startup returns an explicit
+`STOP_CLEANUP_FAILED` result carrying a stopping context that retains the acquired lifetime
+lock. The caller may inspect/retry cleanup through that retained ownership context; startup
+must not silently release the lock or continue to READY.
+
+Ordinary startup phase failure remains an ordinary startup failure. A concurrent stop request
+does not rewrite a failed phase into success. Existing phase-specific failure containment
+still applies, and no later startup phase is entered.
+
+This unit intentionally does **not** define a POSIX-signal class, event loop, background
+thread, retry loop or daemon state machine. Those are replaceable process-interface
+mechanisms. The invariant being implemented is only:
+
+```text
+asynchronous stop request
+    -> observed at the nearest completed bounded startup phase
+    -> no later startup phase
+    -> if owned managed-domain work has begun, bounded cleanup under the same lock
+    -> never READY after an already-observed stop request
+```
+
+Historical RC2/RC3 signal-safe STARTING checkpoints are evidence that this interaction is a
+real lifecycle boundary; their daemon/event-loop implementation is not inherited.
 
 ## 12.1. Product lifecycle control surface
 
