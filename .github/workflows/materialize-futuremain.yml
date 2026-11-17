@@ -1,0 +1,390 @@
+name: Materialize and validate futuremain
+
+on:
+  push:
+    branches:
+      - ng3-housekeeping-cycle-20261117-futuremain-materialization
+    paths:
+      - .github/workflows/materialize-futuremain.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Reconstruct clean futuremain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ROOT=edeac340fab70bfe8df3a5f2a034fdf3ca7af8be
+          TIP=a4183fc8a88fce1ba4d9942f8be201d286dd9322
+          SNAP75=b28f3e647d51b3c9f97190eb2daedaf253a68a88
+          TARGET=futuremain
+
+          git config user.name 'VPNG futuremain materializer'
+          git config user.email 'futuremain-materializer@users.noreply.github.com'
+
+          if git ls-remote --exit-code --heads origin "refs/heads/${TARGET}" >/dev/null 2>&1; then
+            echo "::error::${TARGET} already exists; refusing to overwrite"
+            exit 1
+          fi
+
+          git checkout --orphan "${TARGET}" "${ROOT}"
+
+          git rm -r --ignore-unmatch \
+            design/RC2 design/RC3 design/NG1 design/NG2 design/experiments
+          git rm --ignore-unmatch \
+            .github/workflows/rc3-python.yml \
+            .github/workflows/ng1-python.yml \
+            .github/workflows/ng2-python.yml
+
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              design/reviews/NG3-*|design/reviews/README.md)
+                ;;
+              *)
+                git rm -f -- "$path"
+                ;;
+            esac
+          done < <(git ls-files -z 'design/reviews/*')
+
+          git commit --no-gpg-sign -C "${ROOT}"
+          NEW_ROOT=$(git rev-parse HEAD)
+          echo "NEW_ROOT=${NEW_ROOT}"
+
+          python3 - <<'PY'
+          import subprocess
+
+          ROOT = 'edeac340fab70bfe8df3a5f2a034fdf3ca7af8be'
+
+          def entries(ref):
+              raw = subprocess.check_output(['git', 'ls-tree', '-rz', ref])
+              result = []
+              for record in raw.split(b'\0'):
+                  if not record:
+                      continue
+                  meta, path = record.split(b'\t', 1)
+                  mode, typ, sha = meta.decode().split()
+                  result.append((path.decode(), mode, typ, sha))
+              return result
+
+          def excluded(path):
+              if path.startswith(('design/RC2/', 'design/RC3/', 'design/NG1/', 'design/NG2/')):
+                  return True
+              if path in {
+                  '.github/workflows/rc3-python.yml',
+                  '.github/workflows/ng1-python.yml',
+                  '.github/workflows/ng2-python.yml',
+              }:
+                  return True
+              if path.startswith('design/experiments/'):
+                  top = path.split('/', 2)[2].split('/', 1)[0]
+                  return ' NG3 ' not in top
+              if path.startswith('design/reviews/'):
+                  name = path.rsplit('/', 1)[-1]
+                  return not (name.startswith('NG3-') or name == 'README.md')
+              return False
+
+          expected = [e for e in entries(ROOT) if not excluded(e[0])]
+          actual = entries('HEAD')
+          if expected != actual:
+              print('root tree mismatch')
+              print('expected-only:', sorted(set(expected) - set(actual))[:30])
+              print('actual-only:', sorted(set(actual) - set(expected))[:30])
+              raise SystemExit(1)
+          print(f'ROOT_FILTERED_ENTRIES={len(actual)}')
+          PY
+
+          mapfile -t replay < <(git rev-list --reverse --first-parent "${ROOT}..${TIP}")
+          if [ "${#replay[@]}" -ne 44 ]; then
+            echo "::error::expected 44 replay commits after snapshot 31, got ${#replay[@]}"
+            exit 1
+          fi
+
+          for orig in "${replay[@]}"; do
+            git diff-tree -r --no-commit-id --raw "${orig}^" "${orig}" > /tmp/original.delta
+            git cherry-pick "${orig}"
+            new=$(git rev-parse HEAD)
+            git diff-tree -r --no-commit-id --raw "${new}^" "${new}" > /tmp/replayed.delta
+            if ! cmp -s /tmp/original.delta /tmp/replayed.delta; then
+              echo "::error::delta mismatch while replaying ${orig} -> ${new}"
+              diff -u /tmp/original.delta /tmp/replayed.delta || true
+              exit 1
+            fi
+          done
+
+          python3 - <<'PY'
+          import subprocess
+
+          TIP = 'a4183fc8a88fce1ba4d9942f8be201d286dd9322'
+
+          def entries(ref):
+              raw = subprocess.check_output(['git', 'ls-tree', '-rz', ref])
+              result = []
+              for record in raw.split(b'\0'):
+                  if not record:
+                      continue
+                  meta, path = record.split(b'\t', 1)
+                  mode, typ, sha = meta.decode().split()
+                  result.append((path.decode(), mode, typ, sha))
+              return result
+
+          def excluded(path):
+              if path.startswith(('design/RC2/', 'design/RC3/', 'design/NG1/', 'design/NG2/')):
+                  return True
+              if path in {
+                  '.github/workflows/rc3-python.yml',
+                  '.github/workflows/ng1-python.yml',
+                  '.github/workflows/ng2-python.yml',
+              }:
+                  return True
+              if path.startswith('design/experiments/'):
+                  top = path.split('/', 2)[2].split('/', 1)[0]
+                  return ' NG3 ' not in top
+              if path.startswith('design/reviews/'):
+                  name = path.rsplit('/', 1)[-1]
+                  return not (name.startswith('NG3-') or name == 'README.md')
+              return False
+
+          expected = [e for e in entries(TIP) if not excluded(e[0])]
+          actual = entries('HEAD')
+          if expected != actual:
+              print('snapshot-74 filtered tree mismatch')
+              print('expected-only:', sorted(set(expected) - set(actual))[:30])
+              print('actual-only:', sorted(set(actual) - set(expected))[:30])
+              raise SystemExit(1)
+          print(f'SNAPSHOT74_FILTERED_ENTRIES={len(actual)}')
+          PY
+
+          git checkout "${SNAP75}" -- \
+            .github/workflows/actual-main-hygiene.yml \
+            .github/workflows/ng3-python.yml \
+            CHANGELOG.md \
+            CONTINUOUS-DEVELOPMENT.md \
+            LINEAGE.md \
+            PROJECT-CONVENTIONS.md
+
+          expected_paths=$(printf '%s\n' \
+            .github/workflows/actual-main-hygiene.yml \
+            .github/workflows/ng3-python.yml \
+            CHANGELOG.md \
+            CONTINUOUS-DEVELOPMENT.md \
+            LINEAGE.md \
+            PROJECT-CONVENTIONS.md | sort)
+          actual_paths=$(git diff --cached --name-only | sort)
+          if [ "$actual_paths" != "$expected_paths" ]; then
+            echo "::error::unexpected normalization path set"
+            printf 'expected:\n%s\nactual:\n%s\n' "$expected_paths" "$actual_paths"
+            exit 1
+          fi
+
+          git commit --no-gpg-sign -m 'Futuremain: normalize active lineage after exact snapshot-74 replay'
+
+          future_tree=$(git rev-parse 'HEAD^{tree}')
+          main75_tree=$(git rev-parse "${SNAP75}^{tree}")
+          echo "FUTURE_TREE=${future_tree}"
+          echo "MAIN75_TREE=${main75_tree}"
+          if [ "$future_tree" != "$main75_tree" ]; then
+            echo "::error::futuremain final tree differs from main snapshot 75"
+            git diff --stat "${SNAP75}" HEAD || true
+            git diff --name-status "${SNAP75}" HEAD || true
+            exit 1
+          fi
+
+          root_count=$(git rev-list --max-parents=0 HEAD | wc -l)
+          commit_count=$(git rev-list --count HEAD)
+          if [ "$root_count" -ne 1 ] || [ "$commit_count" -ne 46 ]; then
+            echo "::error::unexpected reconstructed history shape roots=${root_count} commits=${commit_count}"
+            exit 1
+          fi
+
+          reconstructed_root=$(git rev-list --max-parents=0 HEAD)
+          if git cat-file -p "$reconstructed_root" | grep -q '^parent '; then
+            echo "::error::reconstructed snapshot 31 is not parentless"
+            exit 1
+          fi
+
+          git push origin HEAD:refs/heads/futuremain
+
+          {
+            echo '### futuremain materialization'
+            echo
+            echo "- reconstructed root: ${reconstructed_root}"
+            echo "- final commit: $(git rev-parse HEAD)"
+            echo "- final tree: ${future_tree}"
+            echo "- main snapshot 75 tree: ${main75_tree}"
+            echo '- tree equality: PASS'
+            echo '- exact replay delta gate: PASS'
+            echo '- history shape: 46 commits, one parentless root'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  lineage:
+    needs: materialize
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: futuremain
+          fetch-depth: 0
+      - name: Verify clean ancestry and snapshot-75 tree equivalence
+        shell: bash
+        run: |
+          set -euo pipefail
+          SNAP75=b28f3e647d51b3c9f97190eb2daedaf253a68a88
+          test "$(git rev-parse 'HEAD^{tree}')" = "$(git rev-parse "${SNAP75}^{tree}")"
+          test "$(git rev-list --max-parents=0 HEAD | wc -l)" -eq 1
+          test "$(git rev-list --count HEAD)" -eq 46
+          root=$(git rev-list --max-parents=0 HEAD)
+          ! git cat-file -p "$root" | grep -q '^parent '
+
+          bad=0
+          while IFS= read -r path; do
+            case "$path" in
+              design/RC*/*|design/NG1/*|design/NG2/*)
+                echo "forbidden legacy path: $path"
+                bad=1
+                ;;
+              .github/workflows/rc*-python.yml|.github/workflows/ng1-python.yml|.github/workflows/ng2-python.yml)
+                echo "forbidden legacy workflow: $path"
+                bad=1
+                ;;
+              design/experiments/*)
+                case "$path" in
+                  design/experiments/*" NG3 "*/*) ;;
+                  *) echo "forbidden legacy experiment: $path"; bad=1 ;;
+                esac
+                ;;
+              design/reviews/*)
+                case "$path" in
+                  design/reviews/NG3-*.md|design/reviews/README.md) ;;
+                  *) echo "forbidden legacy review: $path"; bad=1 ;;
+                esac
+                ;;
+            esac
+          done < <(git ls-files)
+          test "$bad" -eq 0
+
+          mapfile -t workflows < <(git ls-files '.github/workflows/*' | sort)
+          expected=(
+            '.github/workflows/actual-main-hygiene.yml'
+            '.github/workflows/ng3-python.yml'
+          )
+          test "${workflows[*]}" = "${expected[*]}"
+
+  ng3-tests:
+    needs: materialize
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: futuremain
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables procps
+      - name: Compile and unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q design/NG3/code/python/rou
+          PYTHONPATH=design/NG3/code/python python3 -m unittest discover -s design/NG3/code/python/rou/tests -p 'test_*.py' -v
+      - name: Linux integrations and accepted experiments
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_route_priority_backend.py
+          sudo python3 'design/experiments/EXP-028 NG3 lower policy platform space/exp028_lower_policy_space.py'
+          sudo python3 'design/experiments/EXP-029 NG3 structural routing inventory shape/exp029_inventory_shape.py'
+          sudo python3 'design/experiments/EXP-048 NG3 structural payload route RPDB mutation/exp048_structural_route_rpdb_mutation.py'
+          sudo python3 'design/experiments/EXP-030 NG3 managed-netns forwarding barrier/exp030_forwarding_barrier.py'
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_forwarding_gate_backend.py
+          sudo python3 'design/experiments/EXP-031 NG3 nft namespace owner marker/exp031_nft_owner_marker.py'
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_nft_namespace_inventory.py
+          sudo python3 'design/experiments/EXP-032 NG3 payload nft scaffold/exp032_payload_nft_scaffold.py'
+          sudo python3 'design/experiments/EXP-040 NG3 managed INPUT OUTPUT drop scaffold/exp040_stack_io_drop.py'
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_nft_payload_scaffold.py
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_nft_scaffold_prepare.py
+          sudo python3 'design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/exp033_payload_masquerade.py'
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_payload_nat_observation.py
+          sudo --preserve-env=PYTHONPATH python3 'design/experiments/EXP-034 NG3 exact-handle payload NAT reconciliation/exp034_exact_nat_handle.py'
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_payload_nat_mutation.py
+          sudo python3 'design/experiments/EXP-035 NG3 exact-ifindex NEW-forward admission/exp035_new_forward_admission.py'
+          sudo python3 'design/experiments/EXP-036 NG3 prefix-scoped stateful return/exp036_prefix_scoped_return.py'
+          sudo python3 'design/experiments/EXP-037 NG3 production-shape payload-forward JSON/exp037_payload_forward_json.py'
+          sudo python3 'design/experiments/EXP-038 NG3 payload-forward prefix-boundary JSON/exp038_prefix_boundary_json.py'
+          sudo python3 'design/experiments/EXP-041 NG3 ordered Device firewall child chain/exp041_device_firewall_child.py'
+          sudo python3 'design/experiments/EXP-042 NG3 Device firewall predicate JSON/exp042_device_firewall_predicates.py'
+          sudo python3 'design/experiments/EXP-043 NG3 Device firewall active reject/exp043_device_firewall_reject.py'
+          sudo python3 'design/experiments/EXP-044 NG3 Device firewall jump insertion/exp044_device_firewall_jump_insert.py'
+          sudo python3 'design/experiments/EXP-045 NG3 composite Profile forward mutation/exp045_profile_forward_mutation.py'
+          sudo python3 'design/experiments/EXP-046 NG3 publication local admission/exp046_publication_local_admission.py'
+          sudo python3 'design/experiments/EXP-047 NG3 atomic local publication mutation/exp047_atomic_local_publication.py'
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_payload_forward_observation.py
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_device_firewall_mutation.py
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_composite_nft_mutation.py
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_structural_policy_mutation.py
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_network_policy_activation.py
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_managed_network_domain.py
+          sudo --preserve-env=PYTHONPATH python3 design/NG3/code/python/rou/tests/integration_controller_startup.py
+          sudo python3 'design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/exp039_tun_transport_provenance.py'
+      - name: EXP-049 and EXP-050 real OpenVPN systemd evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker rm -f ng3-exp049 >/dev/null 2>&1 || true
+          trap 'docker rm -f ng3-exp049 >/dev/null 2>&1 || true' EXIT
+          docker run -d --name ng3-exp049 --privileged --cgroupns=host \
+            --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -v "$GITHUB_WORKSPACE:/work" -w /work debian:13 bash -lc '
+              set -e
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y systemd systemd-sysv dbus python3 iproute2 iputils-ping nftables procps openvpn openssl
+              mkdir -p /dev/net
+              if [ ! -e /dev/net/tun ]; then mknod /dev/net/tun c 10 200; fi
+              exec /sbin/init
+            '
+          for attempt in $(seq 1 90); do
+            if docker exec ng3-exp049 systemctl show-environment >/dev/null 2>&1; then break; fi
+            if [ "$attempt" -eq 90 ]; then docker logs ng3-exp049; exit 1; fi
+            sleep 1
+          done
+          docker exec ng3-exp049 bash -lc "set -e; PYTHONPATH=design/NG3/code/python python3 'design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/exp049_openvpn_onboarding.py'"
+          docker exec ng3-exp049 bash -lc "set -e; PYTHONPATH=design/NG3/code/python python3 'design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/exp050_openvpn_systemd_lifecycle.py'"
+      - name: EXP-051 installed alpha smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker rm -f ng3-alpha >/dev/null 2>&1 || true
+          trap 'docker rm -f ng3-alpha >/dev/null 2>&1 || true' EXIT
+          docker run -d --name ng3-alpha --privileged --cgroupns=host \
+            --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -v "$GITHUB_WORKSPACE:/work" -w /work debian:13 bash -lc '
+              set -e
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y systemd systemd-sysv dbus python3 iproute2 iputils-ping nftables procps openvpn openssl
+              mkdir -p /dev/net
+              if [ ! -e /dev/net/tun ]; then mknod /dev/net/tun c 10 200; fi
+              exec /sbin/init
+            '
+          for attempt in $(seq 1 90); do
+            if docker exec ng3-alpha systemctl show-environment >/dev/null 2>&1; then break; fi
+            if [ "$attempt" -eq 90 ]; then docker logs ng3-alpha; exit 1; fi
+            sleep 1
+          done
+          docker exec ng3-alpha bash -lc "set -e; python3 'design/experiments/EXP-051 NG3 first functioning alpha/exp051_alpha_smoke.py'"
