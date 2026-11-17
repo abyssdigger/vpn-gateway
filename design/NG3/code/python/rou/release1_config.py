@@ -106,6 +106,7 @@ class DeviceRelease1Config:
 @dataclass(frozen=True, slots=True)
 class ProfileRelease1Config:
     ordinary_gateway_nat: bool
+    route_return: bool
     availability_check: AvailabilityCheckConfig | None
 
 
@@ -139,17 +140,17 @@ def parse_release1_config(text: str) -> Release1Config:
     raw_profiles = _table(raw.get("profile", {}), "profile")
 
     normalized_profiles: dict[str, Any] = {}
-    profile_modes: dict[str, tuple[Direction, bool]] = {}
+    profile_modes: dict[str, tuple[Direction, bool, bool]] = {}
     for profile_id, raw_body in raw_profiles.items():
         body = _table(raw_body, f"profile.{profile_id}")
         normalized = dict(body)
         if _is_enabled(body):
-            direction, gateway_nat = _parse_direction(
+            direction, gateway_nat, route_return = _parse_direction(
                 body.get("direction"),
                 f"profile.{profile_id}.direction",
             )
             normalized["direction"] = direction.value
-            profile_modes[profile_id] = (direction, gateway_nat)
+            profile_modes[profile_id] = (direction, gateway_nat, route_return)
         normalized_profiles[profile_id] = normalized
 
     normalized_root = {
@@ -229,11 +230,12 @@ def parse_release1_config(text: str) -> Release1Config:
     for profile_id, raw_body in raw_profiles.items():
         body = _table(raw_body, f"profile.{profile_id}")
         if not structural.profiles[profile_id].enabled:
-            profiles[profile_id] = ProfileRelease1Config(False, None)
+            profiles[profile_id] = ProfileRelease1Config(False, False, None)
             continue
-        _, gateway_nat = profile_modes[profile_id]
+        _, gateway_nat, route_return = profile_modes[profile_id]
         profiles[profile_id] = ProfileRelease1Config(
             ordinary_gateway_nat=gateway_nat,
+            route_return=route_return,
             availability_check=_parse_availability(
                 body.get("availability_check"),
                 f"profile.{profile_id}.availability_check",
@@ -257,24 +259,33 @@ def _is_enabled(body: dict[str, Any]) -> bool:
     return body.get("enabled") is True
 
 
-def _parse_direction(value: Any, where: str) -> tuple[Direction, bool]:
-    if value == "outbound":
-        return Direction.OUTBOUND, False
-    if value == "inbound":
-        return Direction.INBOUND, False
-    if value == "bidirectional":
-        return Direction.BIDIRECTIONAL, False
-    if value == "inbound+snat":
-        return Direction.INBOUND, True
-    if value == "bidirectional+snat":
-        return Direction.BIDIRECTIONAL, True
+def _parse_direction(value: Any, where: str) -> tuple[Direction, bool, bool]:
+    forms = {
+        "outbound": (Direction.OUTBOUND, False, False),
+        "inbound": (Direction.INBOUND, False, False),
+        "inbound+snat": (Direction.INBOUND, True, False),
+        "inbound+route-return": (Direction.INBOUND, False, True),
+        "inbound+snat+route-return": (Direction.INBOUND, True, True),
+        "bidirectional": (Direction.BIDIRECTIONAL, False, False),
+        "bidirectional+snat": (Direction.BIDIRECTIONAL, True, False),
+        "bidirectional+route-return": (Direction.BIDIRECTIONAL, False, True),
+        "bidirectional+snat+route-return": (Direction.BIDIRECTIONAL, True, True),
+    }
+    if isinstance(value, str) and value in forms:
+        return forms[value]
+    if isinstance(value, str) and value.startswith("outbound+") and "route-return" in value:
+        raise Release1ConfigError(
+            f"{where}: +route-return is meaningful only for remote-initiated traffic"
+        )
     if value == "outbound+snat":
         raise Release1ConfigError(
             f"{where}: +snat is meaningful only for VPN-to-ordinary traffic"
         )
     raise Release1ConfigError(
-        f"{where} must be outbound, inbound, bidirectional, "
-        "inbound+snat or bidirectional+snat"
+        f"{where} must be one canonical Release-1 direction form: outbound, inbound, "
+        "inbound+snat, inbound+route-return, inbound+snat+route-return, "
+        "bidirectional, bidirectional+snat, bidirectional+route-return or "
+        "bidirectional+snat+route-return"
     )
 
 

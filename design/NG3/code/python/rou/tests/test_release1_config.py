@@ -58,6 +58,7 @@ availability_check = "icmp/10.30.0.1"
             Direction.INBOUND,
         )
         self.assertTrue(cfg.profiles["remote-admin"].ordinary_gateway_nat)
+        self.assertFalse(cfg.profiles["remote-admin"].route_return)
         self.assertEqual(
             str(cfg.profiles["remote-admin"].availability_check.target),
             "10.30.0.1",
@@ -147,6 +148,81 @@ use_outbound_nat = false
 [profile.bad]
 enabled = true
 direction = "outbound+snat"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+
+    def test_direction_route_return_suffix_is_bounded_and_canonical(self):
+        cfg = parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[profile.support]
+enabled = true
+direction = "bidirectional+snat+route-return"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+        self.assertEqual(
+            cfg.structural.profiles["support"].direction,
+            Direction.BIDIRECTIONAL,
+        )
+        self.assertTrue(cfg.profiles["support"].ordinary_gateway_nat)
+        self.assertTrue(cfg.profiles["support"].route_return)
+
+        cfg2 = parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+
+[profile.support]
+enabled = true
+direction = "inbound+route-return"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+        self.assertFalse(cfg2.profiles["support"].ordinary_gateway_nat)
+        self.assertTrue(cfg2.profiles["support"].route_return)
+
+        with self.assertRaisesRegex(Release1ConfigError, "remote-initiated"):
+            parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[profile.bad]
+enabled = true
+direction = "outbound+route-return"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+
+        with self.assertRaises(Release1ConfigError):
+            parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+
+[profile.bad]
+enabled = true
+direction = "inbound+route-return+snat"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+
+    def test_direction_non_string_still_reports_config_error(self):
+        with self.assertRaises(Release1ConfigError):
+            parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+
+[profile.bad]
+enabled = true
+direction = ["inbound"]
 destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
 """)

@@ -16,6 +16,7 @@ Current experiment directories:
 | EXP-050 | bounded VPN lifecycle applicability |
 | EXP-051 | first functioning alpha |
 | EXP-052 | host-side server publication DNAT lower evidence |
+| EXP-053 | host-side conntrack return steering into managed stack |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.

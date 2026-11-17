@@ -66,6 +66,7 @@ Current trace:
 | guarded physical payload nft scaffold preparation | `nft_scaffold_executor.py`, `linux_nft_scaffold.py` | `NG3-2026-11-16-nft-scaffold-prepare-code-review.md` |
 | normalized Device NAT intent -> payload masquerade desired projection | `device_policy.py`, `payload_nat_desired.py` | `NG3-2026-11-16-payload-nat-desired-code-review.md`, `EXP-033-result-20261116.md` |
 | host-side Device server publication | `host_publication_policy.py`, `linux_host_publication.py`, alpha runtime composition | `NG3-2026-11-17-host-server-publication-dnat-review.md`, EXP-052, EXP-051 extension |
+| host-boundary bootstrap/return policy projection | `host_boundary_policy.py`, `linux_host_boundary_policy.py` | EXP-053, current host-return-steering cycle review |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The executable reference implementation still stops before separately-gated runtime
@@ -309,6 +310,95 @@ crash/failure containment may still close forwarding and remove the owned infras
 This contract deliberately reuses the already live-proven NG2 namespace/veth lifecycle facts
 (peer verification, partial-state refusal and no policy ownership) while adapting them to the
 current NG3 ForwardingGate and leaving external configuration syntax unfixed.
+
+### 1.1.1-A. Host-boundary bootstrap and return routing
+
+**Implements:**
+- `VPNG0002-R2.R3.R1.R1`;
+- `VPNG0002-R2.R3.R1.R1.R1`;
+- `VPNG0002-R2.R3.R3.R1`;
+- `VPNG0002-R2.R3.R3.R1.R1`;
+- `VPNG0004-R4.R6.R1.R1`;
+- `VPNG0004-R4.R6.R1.R2`.
+
+The isolated managed domain does not remove the ordinary VPN bootstrap problem: host/LAN
+traffic must first be delivered into the explicit VPN-GATE boundary before Profile routing can
+act on it. NG3 therefore defines a separate **host-boundary policy owner**. This owner is not
+part of `ManagedNetworkDomain` infrastructure lifecycle and does not own the host routing
+table generally.
+
+For every enabled Profile that permits ordinary-side initiation:
+
+```text
+outbound | bidirectional
+    -> host bootstrap route contribution for each Profile destination
+       toward the verified managed-domain inner peer / host boundary
+```
+
+The contribution is narrow product state analogous to routes installed by conventional VPN
+clients. VPN-GATE creates, verifies and removes only its own contribution. It does not attempt
+to arbitrate arbitrary administrator policy or continuously repair unrelated host routing.
+An administrator who deletes or overrides a live VPN-GATE bootstrap route has violated the
+runtime operating contract; VPN-GATE may diagnose/fail rather than becoming a general host
+route-policy supervisor.
+
+Remote-initiated flows use a different default path. EXP-053 proves the Linux lower
+mechanism:
+
+```text
+packet enters ordinary host from managed boundary
+    -> stamp connection association in PREROUTING
+
+reverse packet:
+    forwarded reply -> restore connection association in PREROUTING
+    host-local reply -> restore it in nft type-route OUTPUT
+
+restored packet mark
+    -> dedicated RPDB owner rule/table
+    -> managed boundary
+```
+
+Therefore:
+
+```text
+inbound
+    -> no host destination route to the remote prefix is required for return traffic
+
+bidirectional
+    -> host destination route already exists for ordinary-side initiation;
+       inbound return may still use stateful steering by default
+```
+
+The host return-steering owner is boundary policy, not a license to manage arbitrary host
+firewall/routing. Its nft table/chains, fwmark, RPDB rule and return table must live in an
+explicit VPN-GATE-reserved owner namespace and must be freshly verifiable.
+
+The canonical `+route-return` Profile modifier disables this stateful return steering for
+that Profile. In that mode, return reachability is provided by ordinary host routing through
+the managed boundary. The modifier does **not** mean Linux `NOTRACK`, does not disable
+conntrack globally, and does not alter Profile firewall state semantics.
+
+#### Full-tunnel bootstrap
+
+`0.0.0.0/0` is a valid Profile destination. A naive host default replacement can route the
+VPN transport's own underlay packets back into the managed stack. Full-tunnel host bootstrap
+must therefore preserve underlay reachability before activating catch-all payload routing,
+using the same bounded principle as conventional VPN clients:
+
+```text
+observe current ordinary route to each required external VPN transport endpoint
+    -> materialize exact endpoint exception(s) through that ordinary path
+    -> activate catch-all bootstrap routing toward managed boundary
+```
+
+For a client-side Device, current exact underlay endpoints are already explicit in accepted
+`allow_vpn_client` configuration. If a required underlay endpoint/path cannot be resolved
+unambiguously, full-tunnel bootstrap is not activated. The owner must not guess a fallback.
+
+This architecture does not require VPN-GATE to protect its host route contributions from a
+privileged administrator any more strongly than conventional VPN software does.
+
+**Evidence:** `EXP-053-result-20261118.md`.
 
 ### Architectural consequence for external VPN channels
 

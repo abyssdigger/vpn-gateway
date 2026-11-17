@@ -510,8 +510,12 @@ Canonical Release-1 values:
 outbound
 inbound
 inbound+snat
+inbound+route-return
+inbound+snat+route-return
 bidirectional
 bidirectional+snat
+bidirectional+route-return
+bidirectional+snat+route-return
 ```
 
 Meaning:
@@ -522,15 +526,20 @@ Meaning:
 - `bidirectional`: both sides may initiate;
 - `+snat` requests Profile-scoped ordinary-side gateway source NAT only for the
   VPN-to-ordinary leg after the managed firewall boundary;
-- admitted return traffic may be handled statefully.
+- remote-initiated return traffic uses stateful host-boundary return steering by default;
+- `+route-return` opts out of that steering and requires ordinary host routing through the
+  managed boundary for the return leg;
+- admitted return traffic otherwise remains stateful.
 
 `outbound+snat` is invalid because the suffix controls a VPN-to-ordinary leg that an
-outbound-only Profile does not authorize. There is no separate Release-1 `gateway_nat`
-field.
+outbound-only Profile does not authorize. `outbound+route-return` is invalid because
+outbound-only Profile does not authorize remote-initiated flows. There is no separate
+Release-1 `gateway_nat` or return-routing field.
 
+Canonical combined ordering is `+snat+route-return`; reversed suffix order is rejected.
 Direction is explicit and is not inferred from topology. Configuration normalization strips
-the `+snat` suffix into a separate ordinary-side gateway NAT intent before structural
-routing consumes the base direction.
+the suffixes into separate ordinary-side gateway NAT and route-return intents before
+structural routing consumes the base direction.
 
 First-release constraint:
 
