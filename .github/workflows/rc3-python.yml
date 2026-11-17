@@ -2,9 +2,9 @@ name: RC3 Python validation
 
 on:
   push:
-    branches: [ main ]
+    branches: [ legacy-main-rc ]
   pull_request:
-    branches: [ main ]
+    branches: [ legacy-main-rc ]
 
 permissions:
   contents: read
