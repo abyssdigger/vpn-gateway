@@ -148,7 +148,10 @@ When a requirement or constraint is insufficient:
 7. for every new or changed Requirement:
    - if it is a primary root, require a concrete externally verifiable `Basis`;
    - otherwise verify that it refines rather than expands or rewrites the parent;
-   - verify that its derived `Purpose` is honestly supported by accepted ancestry;
+   - verify that its derived `Purpose` is causally supported by the immediate parent
+     `Statement`, not merely by a distant ancestor or a generally desirable outcome;
+   - if the same `Purpose` would still independently justify the child after mentally removing
+     the immediate parent, re-check whether the child belongs elsewhere in the tree;
    - verify actor completeness for normative actions;
 8. for every new or changed `C` node:
    - record a clear `Reason`;
@@ -178,14 +181,30 @@ When a requirement or constraint is insufficient:
       that violates one of the causal R/C nodes;
     - after an accepted semantic change, remove the active link only when the Requirement is
       demonstrably reachable again;
-13. return to component design only when the relevant requirement paths are sufficiently
-    concrete and contain no active unreal Requirement needed by the unit.
+13. if accepted R/C nodes make another Requirement or Constraint itself no longer a correct
+    normative decision, even if it remains technically implementable:
+    - add `[broken: <R/C-ID>, <R/C-ID>, ...]` beside the broken R/C;
+    - use the minimal sufficient normative causal set;
+    - do not implement or preserve the broken rule merely because it was previously accepted;
+    - re-open the affected requirement semantics and its descendants/architecture/evidence;
+    - remove the active link only after an accepted semantic change repairs, replaces or
+      removes the broken node;
+14. return to component design only when the relevant requirement paths are sufficiently
+    concrete and contain no active `unreal` or `broken` node needed by the unit.
 
 A thought that occurs during implementation is **not** automatically a requirement.
 
 If it is not needed to satisfy an accepted primary/derived product obligation, it remains outside the current scope unless explicitly accepted as a new requirement with the required Basis/Purpose.
 
 A requirement must never be invented merely to preserve an existing component or mechanism.
+
+Conversely, substantial development must also be requirement-driven. Before starting a
+non-trivial implementation, experiment or evidence unit, identify the exact accepted R/C whose
+implementation, verification or closure requires that work. An experiment may establish a
+fact needed by the tree, but must not become an independent source of product semantics.
+
+If no honest R/C trace exists, stop that development unit or perform requirement refinement
+first.
 
 ## Requirement artifact maintenance
 
@@ -196,6 +215,8 @@ When requirement/constraint text or decomposition links change:
 - keep the existing stable ID unless the entity itself was incorrectly identified;
 - update the node in place rather than creating a shadow copy;
 - preserve causal decomposition links as `[decomp: blocker -> pending|deblocker]`;
+- preserve active normative-causality links as `[unreal: ...]` or `[broken: ...]` until the
+  underlying requirement-tree conflict has actually been resolved;
 - use one architecture-closure label per requirement/constraint:
   `[pending_closure]`, `[closed]` or `[rejected_closure]`;
 - `[pending_closure]` means an architecture candidate exists but acceptance is pending;
@@ -221,6 +242,10 @@ A node with `[decomp: ... -> pending]` cannot be `[pending_closure]` or `[closed
 A Requirement with active `[unreal: ...]` cannot be
 `[pending_closure]` or `[closed]`. This link records a requirement-tree inconsistency,
 not an architecture closure status.
+
+Any R/C with active `[broken: ...]` likewise cannot be `[pending_closure]` or `[closed]`.
+The node itself requires semantic repair/replacement/removal before dependent implementation
+continues.
 
 After architecture produces a closure candidate, mark `[pending_closure]` only after
 verifying an exact architecture reference. Replace it with `[closed]` only after sufficient
@@ -358,6 +383,7 @@ Implementation may begin only when all of the following hold for the affected sc
   necessary for the implementation scope;
 - no Requirement required by the implementation scope has an active
   `[unreal: ...]` link;
+- no R/C required by the implementation scope has an active `[broken: ...]` link;
 - all material component responsibilities and interactions are traceable to requirements;
 - every requirement/constraint whose architecture is required by the implementation unit is
   marked `[closed]`; `[pending_closure]` and `[rejected_closure]` block implementation
@@ -572,8 +598,9 @@ Autonomous internal development reviews normally use **one document** containing
 - disposition of every finding;
 - final verdict;
 - explicit accumulated requirement-state inventory listing every current `decomp` link
-  (mark each as `pending` or `resolved`), every active `unreal` link and every
-  `[rejected_closure]` node; write `none` for an empty category rather than omitting it.
+  (mark each as `pending` or `resolved`), every active `unreal` link, every active `broken`
+  link and every `[rejected_closure]` node; write `none` for an empty category rather than
+  omitting it.
 
 Create a separate response document only when the review originated externally, must remain
 immutable/verbatim, or the disposition is produced materially later/by a different reviewer.
@@ -684,7 +711,7 @@ The handoff file should contain only enough context to resume cheaply:
   for the next CD window;
 - decisions genuinely requiring human agreement, if any;
 - current accumulated requirement-state inventory: every `decomp` link with
-  `pending|resolved`, active `unreal`, and `[rejected_closure]`.
+  `pending|resolved`, active `unreal`, active `broken`, and `[rejected_closure]`.
 
 The handoff is operational continuity metadata. It should not be committed to the repository
 unless its content independently becomes a real project artifact.
