@@ -30,6 +30,13 @@ from .domain import (
     StructuralConfig,
 )
 from .interface_identity import InterfaceIdentity
+from .instance_lock import (
+    ControllerInstanceBusyError,
+    ControllerInstanceLock,
+    ControllerInstanceLockError,
+    InstanceLockSpec,
+    acquire_controller_instance_lock,
+)
 from .interface_inventory import (
     InterfaceInventoryError,
     parse_ip_link_inventory,
@@ -380,6 +387,10 @@ __all__ = [
     "LocalPublicationConflict",
     "ObservedLocalPublicationRule",
     "LinuxCompositeNftBackend",
+    "ControllerInstanceBusyError",
+    "ControllerInstanceLock",
+    "ControllerInstanceLockError",
+    "InstanceLockSpec",
     "CompositeNftDesiredState",
     "CompositeNftPolicyComparison",
     "CompositeNftPolicyConflict",
@@ -569,6 +580,7 @@ __all__ = [
     "SubprocessCommandRunner",
     "SubprocessNftRunner",
     "WaitingCandidate",
+    "acquire_controller_instance_lock",
     "activate_network_policy",
     "allocate_network_policy_layout",
     "apply_availability_evidence",
