@@ -128,8 +128,10 @@ Current canonical forms include:
 
 - Device `use_outbound_nat = true|false` -> `MASQUERADE | NONE`;
 - Device `allow_vpn_client` for exact VPN client transport/control flows;
-- ordered one-line Device `firewall = [...]`;
-- Device `publish_vpn_server`;
+- ordered one-line Device `firewall = [...]` with compact non-overlapping
+  `N,A-B,...` TCP/UDP port bundles;
+- Device `publish_vpn_server` with the same bundle grammar and equal-cardinality
+  positional 1:1 mapping when an internal bundle is explicit;
 - Profile direction `+snat` for ordinary-side gateway NAT;
 - Profile `availability_check = "icmp[/IPv4]"`.
 
