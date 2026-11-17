@@ -10,6 +10,10 @@ from rou.controller_startup import (
     ControllerStartupStatus,
     start_controller_once,
 )
+from rou.controller_stop import (
+    ControllerStopResult,
+    ControllerStopStatus,
+)
 from rou.device_firewall_desired import DeviceFirewallDesiredState
 from rou.forwarding_gate import (
     ForwardingGateExecutionResult,
@@ -85,6 +89,37 @@ CONTAINED = ForwardingGateExecutionResult(
     final=ForwardingGateState.DISABLED,
     mutation_attempted=False,
 )
+
+UNCONTAINED = ForwardingGateExecutionResult(
+    status=ForwardingGateExecutionStatus.POSTCONDITION_FAILED,
+    desired=ForwardingGateState.DISABLED,
+    initial=ForwardingGateState.ENABLED,
+    final=ForwardingGateState.ENABLED,
+    mutation_attempted=True,
+    diagnostic="still enabled",
+)
+
+STOPPED_CLEANUP = ControllerStopResult(
+    status=ControllerStopStatus.STOPPED,
+    containment=CONTAINED,
+)
+FAILED_STOP_CLEANUP = ControllerStopResult(
+    status=ControllerStopStatus.CLEANUP_FAILED_CONTAINED,
+    containment=CONTAINED,
+    cleanup_error="namespace remains",
+)
+
+
+class StopSequence:
+    def __init__(self, *values):
+        self.values = list(values)
+        self.calls = 0
+
+    def __call__(self):
+        self.calls += 1
+        if self.values:
+            return self.values.pop(0)
+        return False
 
 
 class FakeLock:
@@ -166,6 +201,8 @@ class ControllerStartupTests(unittest.TestCase):
         ensure_error=None,
         loader_error=None,
         containment=CONTAINED,
+        stop_requested=None,
+        stop_cleanup=STOPPED_CLEANUP,
     ):
         events = []
         lock = FakeLock()
@@ -198,6 +235,12 @@ class ControllerStartupTests(unittest.TestCase):
             events.append("activate")
             return activation
 
+        def cleanup_owned(*args):
+            events.append("cleanup_owned")
+            if stop_cleanup.stopped:
+                lock.release()
+            return stop_cleanup
+
         with (
             patch(
                 "rou.controller_startup.acquire_controller_instance_lock",
@@ -219,6 +262,10 @@ class ControllerStartupTests(unittest.TestCase):
                 "rou.controller_startup._contain",
                 return_value=containment,
             ) as containment_mock,
+            patch(
+                "rou.controller_startup.cleanup_controller_owned_domain_once",
+                side_effect=cleanup_owned,
+            ),
         ):
             result = start_controller_once(
                 object(),
@@ -226,6 +273,7 @@ class ControllerStartupTests(unittest.TestCase):
                 runner,
                 NG3_LINUX_POLICY_PLATFORM,
                 loader,
+                stop_requested=stop_requested,
             )
 
         return (
@@ -261,6 +309,217 @@ class ControllerStartupTests(unittest.TestCase):
         )
 
         result.session.lock.release()
+
+    def test_stop_requested_before_ownership_does_not_acquire_lock(self):
+        stop = StopSequence(True)
+
+        result, events, lock, preflight_mock, ensure_mock, activation_mock, _ = (
+            self.run_startup(stop_requested=stop)
+        )
+
+        self.assertEqual(result.status, ControllerStartupStatus.STOPPED)
+        self.assertTrue(result.stopped)
+        self.assertEqual(events, [])
+        preflight_mock.assert_not_called()
+        ensure_mock.assert_not_called()
+        activation_mock.assert_not_called()
+        self.assertTrue(lock.acquired)
+        self.assertEqual(lock.release_count, 0)
+
+    def test_stop_requested_after_lock_releases_without_domain_work(self):
+        stop = StopSequence(False, True)
+
+        result, events, lock, preflight_mock, ensure_mock, activation_mock, _ = (
+            self.run_startup(stop_requested=stop)
+        )
+
+        self.assertEqual(result.status, ControllerStartupStatus.STOPPED)
+        self.assertEqual(events, ["lock"])
+        preflight_mock.assert_not_called()
+        ensure_mock.assert_not_called()
+        activation_mock.assert_not_called()
+        self.assertFalse(lock.acquired)
+        self.assertEqual(lock.release_count, 1)
+
+    def test_every_post_preflight_phase_boundary_stops_before_next_phase(self):
+        cases = (
+            (
+                "preflight",
+                3,
+                ["lock", "preflight", "cleanup_owned"],
+            ),
+            (
+                "policy_load",
+                4,
+                ["lock", "preflight", "load_policy", "cleanup_owned"],
+            ),
+            (
+                "domain_ensure",
+                5,
+                [
+                    "lock",
+                    "preflight",
+                    "load_policy",
+                    "ensure_domain",
+                    "cleanup_owned",
+                ],
+            ),
+            (
+                "interface_observation",
+                6,
+                [
+                    "lock",
+                    "preflight",
+                    "load_policy",
+                    "ensure_domain",
+                    "observe_interfaces",
+                    "cleanup_owned",
+                ],
+            ),
+            (
+                "desired_build",
+                7,
+                [
+                    "lock",
+                    "preflight",
+                    "load_policy",
+                    "ensure_domain",
+                    "observe_interfaces",
+                    "build_desired",
+                    "cleanup_owned",
+                ],
+            ),
+            (
+                "activation",
+                8,
+                [
+                    "lock",
+                    "preflight",
+                    "load_policy",
+                    "ensure_domain",
+                    "observe_interfaces",
+                    "build_desired",
+                    "activate",
+                    "cleanup_owned",
+                ],
+            ),
+        )
+
+        for name, call_number, expected_events in cases:
+            with self.subTest(phase=name):
+                stop = StopSequence(
+                    *([False] * (call_number - 1)),
+                    True,
+                )
+                result, events, lock, *_ = self.run_startup(
+                    stop_requested=stop,
+                )
+
+                self.assertEqual(
+                    result.status,
+                    ControllerStartupStatus.STOPPED,
+                )
+                self.assertEqual(events, expected_events)
+                self.assertFalse(lock.acquired)
+                self.assertEqual(lock.release_count, 1)
+                self.assertEqual(stop.calls, call_number)
+
+    def test_stop_checkpoint_after_preflight_blocks_policy_load_and_cleans(self):
+        stop = StopSequence(False, False, True)
+
+        result, events, lock, _, ensure_mock, activation_mock, _ = self.run_startup(
+            stop_requested=stop,
+        )
+
+        self.assertEqual(result.status, ControllerStartupStatus.STOPPED)
+        self.assertEqual(events, ["lock", "preflight", "cleanup_owned"])
+        ensure_mock.assert_not_called()
+        activation_mock.assert_not_called()
+        self.assertFalse(lock.acquired)
+        self.assertIsNotNone(result.stop)
+        self.assertTrue(result.stop.stopped)
+
+    def test_stop_checkpoint_after_domain_ensure_blocks_interface_observation(self):
+        stop = StopSequence(False, False, False, False, True)
+
+        result, events, lock, *_ = self.run_startup(stop_requested=stop)
+
+        self.assertEqual(result.status, ControllerStartupStatus.STOPPED)
+        self.assertEqual(
+            events,
+            [
+                "lock",
+                "preflight",
+                "load_policy",
+                "ensure_domain",
+                "cleanup_owned",
+            ],
+        )
+        self.assertFalse(lock.acquired)
+
+    def test_stop_after_activation_never_publishes_ready_session(self):
+        stop = StopSequence(
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+        )
+
+        result, events, lock, *_ = self.run_startup(stop_requested=stop)
+
+        self.assertEqual(result.status, ControllerStartupStatus.STOPPED)
+        self.assertFalse(result.ready)
+        self.assertIsNone(result.session)
+        self.assertEqual(
+            events,
+            [
+                "lock",
+                "preflight",
+                "load_policy",
+                "ensure_domain",
+                "observe_interfaces",
+                "build_desired",
+                "activate",
+                "cleanup_owned",
+            ],
+        )
+        self.assertIs(result.activation, READY_ACTIVATION)
+        self.assertFalse(lock.acquired)
+
+    def test_interrupted_cleanup_failure_retains_lock_and_context(self):
+        stop = StopSequence(
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            False,
+            True,
+        )
+
+        result, events, lock, *_ = self.run_startup(
+            stop_requested=stop,
+            stop_cleanup=FAILED_STOP_CLEANUP,
+        )
+
+        self.assertEqual(
+            result.status,
+            ControllerStartupStatus.STOP_CLEANUP_FAILED,
+        )
+        self.assertFalse(result.ready)
+        self.assertFalse(result.stopped)
+        self.assertIsNone(result.session)
+        self.assertIsNotNone(result.stopping)
+        self.assertIs(result.stopping.lock, lock)
+        self.assertIs(result.stopping.stop, FAILED_STOP_CLEANUP)
+        self.assertTrue(lock.acquired)
+        self.assertEqual(lock.release_count, 0)
+        self.assertEqual(events[-2:], ["activate", "cleanup_owned"])
 
     def test_invalid_candidate_does_not_create_absent_domain(self):
         (

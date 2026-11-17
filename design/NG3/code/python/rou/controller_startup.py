@@ -42,6 +42,10 @@ from .network_policy_layout import NetworkPolicyPlatformSpace
 from .payload_network_policy_desired import (
     PayloadNetworkPolicyDesiredState,
 )
+from .controller_stop import (
+    ControllerStopResult,
+    cleanup_controller_owned_domain_once,
+)
 
 
 class PreparedPayloadPolicy(Protocol):
@@ -58,8 +62,15 @@ class ValidatedPolicyLoader(Protocol):
         """Load/validate candidate config and return a pure current-state builder."""
 
 
+class ControllerStopRequested(Protocol):
+    def __call__(self) -> bool:
+        """Return whether graceful stop has been requested; must not mutate network state."""
+
+
 class ControllerStartupStatus(str, Enum):
     READY = "ready"
+    STOPPED = "stopped"
+    STOP_CLEANUP_FAILED = "stop_cleanup_failed"
     LOCK_BUSY = "lock_busy"
     LOCK_FAILED = "lock_failed"
     DOMAIN_PREFLIGHT_FAILED = "domain_preflight_failed"
@@ -91,6 +102,18 @@ class ControllerStartupSession:
             raise ValueError("startup session requires READY network-policy activation")
 
 
+@dataclass(slots=True)
+class ControllerStartupStoppingContext:
+    lock: ControllerInstanceLock
+    stop: ControllerStopResult
+
+    def __post_init__(self) -> None:
+        if self.stop.stopped:
+            raise ValueError("stopping context requires incomplete stop cleanup")
+        if not self.lock.acquired:
+            raise ValueError("stopping context requires retained lifetime lock")
+
+
 @dataclass(frozen=True, slots=True)
 class ControllerStartupResult:
     status: ControllerStartupStatus
@@ -100,6 +123,8 @@ class ControllerStartupResult:
     activation: NetworkPolicyActivationResult | None = None
     failure_containment: ForwardingGateExecutionResult | None = None
     failure_status: ControllerStartupStatus | None = None
+    stop: ControllerStopResult | None = None
+    stopping: ControllerStartupStoppingContext | None = None
     diagnostic: str | None = None
 
     @property
@@ -111,6 +136,18 @@ class ControllerStartupResult:
             and self.session.activation.ready
         )
 
+    @property
+    def stopped(self) -> bool:
+        return (
+            self.status is ControllerStartupStatus.STOPPED
+            and self.session is None
+            and self.stopping is None
+        )
+
+
+def _never_stop_requested() -> bool:
+    return False
+
 
 def start_controller_once(
     lock_spec: InstanceLockSpec,
@@ -118,8 +155,18 @@ def start_controller_once(
     runner: NftScriptRunner,
     platform: NetworkPolicyPlatformSpace,
     load_validated_policy: ValidatedPolicyLoader,
+    stop_requested: ControllerStopRequested | None = None,
 ) -> ControllerStartupResult:
-    """Run one bounded startup attempt and retain the lock only on READY."""
+    """Run one bounded startup attempt with phase-boundary graceful-stop checkpoints."""
+    requested = stop_requested or _never_stop_requested
+
+    if requested():
+        return ControllerStartupResult(
+            status=ControllerStartupStatus.STOPPED,
+            session=None,
+            diagnostic="stop requested before controller ownership",
+        )
+
     try:
         lock = acquire_controller_instance_lock(lock_spec)
     except ControllerInstanceBusyError as exc:
@@ -137,6 +184,58 @@ def start_controller_once(
 
     preflight: ManagedNetworkDomainPreflightResult | None = None
     domain: ManagedNetworkDomainEnsureResult | None = None
+
+    if requested():
+        lock.release()
+        return ControllerStartupResult(
+            status=ControllerStartupStatus.STOPPED,
+            session=None,
+            diagnostic="stop requested after controller ownership and before managed-domain work",
+        )
+
+    def interrupted_stop(phase: str) -> ControllerStartupResult | None:
+        if not requested():
+            return None
+
+        stopped = cleanup_controller_owned_domain_once(
+            lock,
+            domain_spec,
+            runner,
+        )
+        if stopped.stopped:
+            return ControllerStartupResult(
+                status=ControllerStartupStatus.STOPPED,
+                session=None,
+                preflight=preflight,
+                domain=domain,
+                stop=stopped,
+                diagnostic=f"stop requested after {phase}; owned cleanup confirmed",
+            )
+
+        stopping = (
+            ControllerStartupStoppingContext(
+                lock=lock,
+                stop=stopped,
+            )
+            if lock.acquired
+            else None
+        )
+        return ControllerStartupResult(
+            status=ControllerStartupStatus.STOP_CLEANUP_FAILED,
+            session=None,
+            preflight=preflight,
+            domain=domain,
+            stop=stopped,
+            stopping=stopping,
+            diagnostic=(
+                f"stop requested after {phase}; "
+                + (
+                    "owned cleanup incomplete with lifetime lock retained"
+                    if stopping is not None
+                    else "owned cleanup completed but lifetime lock release failed"
+                )
+            ),
+        )
 
     def fail(
         status: ControllerStartupStatus,
@@ -170,6 +269,10 @@ def start_controller_once(
             f"{type(exc).__name__}: {exc}",
         )
 
+    interrupted = interrupted_stop("managed-domain preflight")
+    if interrupted is not None:
+        return interrupted
+
     try:
         prepared = load_validated_policy()
     except Exception as exc:
@@ -178,6 +281,10 @@ def start_controller_once(
             "candidate policy load/validation failed: "
             f"{type(exc).__name__}: {exc}",
         )
+
+    interrupted = interrupted_stop("candidate policy load/validation")
+    if interrupted is not None:
+        return interrupted
 
     try:
         domain = ensure_managed_network_domain(
@@ -190,6 +297,10 @@ def start_controller_once(
             "managed-domain ensure failed: "
             f"{type(exc).__name__}: {exc}",
         )
+
+    interrupted = interrupted_stop("managed-domain ensure")
+    if interrupted is not None:
+        return interrupted
 
     host_boundary = domain.verification.host_boundary
     if host_boundary is None:
@@ -245,6 +356,10 @@ def start_controller_once(
             failure_status=ControllerStartupStatus.INTERFACE_OBSERVATION_FAILED,
         )
 
+    interrupted = interrupted_stop("fresh interface observation")
+    if interrupted is not None:
+        return interrupted
+
     try:
         desired = prepared.build_current(
             host_boundary,
@@ -273,6 +388,10 @@ def start_controller_once(
             containment=containment,
             failure_status=ControllerStartupStatus.DESIRED_BUILD_FAILED,
         )
+
+    interrupted = interrupted_stop("desired-state build")
+    if interrupted is not None:
+        return interrupted
 
     gate = LinuxForwardingGateBackend(
         runner,
@@ -319,6 +438,19 @@ def start_controller_once(
                 else ""
             ),
             activation=activation,
+        )
+
+    interrupted = interrupted_stop("network-policy activation")
+    if interrupted is not None:
+        return ControllerStartupResult(
+            status=interrupted.status,
+            session=None,
+            preflight=interrupted.preflight,
+            domain=interrupted.domain,
+            activation=activation,
+            stop=interrupted.stop,
+            stopping=interrupted.stopping,
+            diagnostic=interrupted.diagnostic,
         )
 
     session = ControllerStartupSession(
