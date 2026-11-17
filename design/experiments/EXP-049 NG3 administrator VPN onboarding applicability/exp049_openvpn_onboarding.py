@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from ipaddress import IPv4Interface
+from ipaddress import IPv4Address, IPv4Interface
 import json
 import os
 from pathlib import Path
@@ -26,6 +26,10 @@ from rou.device_policy import (
 from rou.direct_device_route import realize_direct_device_path_routes
 from rou.instance_lock import InstanceLockSpec
 from rou.interface_inventory import parse_ip_link_inventory
+from rou.local_integration_policy import (
+    IntegrationLocalTransportIntent,
+    IntegrationTransportProtocol,
+)
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.managed_network_domain import (
@@ -327,6 +331,16 @@ class PreparedPolicy:
             (DeviceNatPolicyIntent("ovpn", NatIntent.MASQUERADE),),
             (DeviceFirewallPolicyIntent("ovpn", rules=None),),
             (),
+            (
+                IntegrationLocalTransportIntent(
+                    integration_id="openvpn-exp049",
+                    protocol=IntegrationTransportProtocol.UDP,
+                    host_boundary=host_boundary,
+                    local_address=INNER_ADDR.ip,
+                    remote_address=IPv4Address(SERVER_UNDERLAY),
+                    remote_port=OPENVPN_PORT,
+                ),
+            ),
         )
 
         self.observed_binding = binding
@@ -474,6 +488,14 @@ def run_cycle(
             f"EXP049_CYCLE_{cycle}_STACK_OUTPUT="
             + json.dumps(stack_output.strip())
         )
+        stack_input = ns_command(
+            MANAGED,
+            "nft", "list", "chain", "ip", "vpn_gate", "stack_input",
+        ).stdout
+        print(
+            f"EXP049_CYCLE_{cycle}_STACK_INPUT="
+            + json.dumps(stack_input.strip())
+        )
 
         payload_ok = host_ping(VPN_SERVER_ADDR)
         print(
@@ -575,10 +597,9 @@ def main() -> int:
 
         print("EXP049_RESULT=FAIL")
         print(
-            "EXP049_FINDING=real OpenVPN endpoint onboarding/binding succeeds, "
-            "but accepted NG3 activation blocks the VPN client's local underlay "
-            "traffic through terminal stack_input/stack_output policy without a "
-            "concrete supported-integration local/system allow contribution"
+            "EXP049_FINDING=real OpenVPN endpoint onboarding/binding or "
+            "integration-local transport admission did not satisfy the complete "
+            "applicability contract"
         )
         return 1
     finally:
