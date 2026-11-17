@@ -400,7 +400,39 @@ Until at least one Release-1 integration passes this gate, the architecture is i
 composable but the product-level claim that an administrator can actually supply a usable
 external VPN channel remains an open evidence gate.
 
+### 1.1.3. Dependent bounded-VPN lifecycle evidence gate
 
+**Implements:**
+- `VPNG0007-R7.R7.R1`
+- `VPNG0007-R7.R7.R1.R1`
+
+The project must not infer a generic bounded-VPN lifecycle contract from namespace mechanics or
+from the existence of a plausible VPN launcher.
+
+The evidence order is strict:
+
+```text
+EXP-049 PASS on one concrete real integration
+    ->
+use that same implementation/version + onboarding mechanism
+    ->
+EXP-050 start/stop/restart + changed-config + aggressive-config lifecycle evidence
+    ->
+only then decide the bounded-VPN lifecycle/ownership contract
+```
+
+EXP-050 is therefore planned now but **BLOCKED** until EXP-049 passes. A FAIL of EXP-049
+returns the affected integration assumptions to requirement/architecture review instead of
+being bypassed by a different lifecycle mechanism.
+
+EXP-050 must include VPN-specific configurations that attempt network-side effects inside the
+managed domain. Its purpose is not to predeclare those effects legal or illegal, but to
+establish where they execute, how they interact with VPN-GATE-owned policy, whether safety can
+be bypassed, and which behaviors must later become supported, rejected or documented.
+
+This evidence gate adds no current product promise that VPN-GATE owns the VPN process
+lifecycle. That semantic decision remains intentionally downstream of the real-integration
+evidence.
 
 ## 1.2. Architecture-wide implementation requirements
 
@@ -413,6 +445,7 @@ requirements that do not belong to one runtime component.
 - `VPNG0007-R7.R4`
 - `VPNG0007-R7.R6.R1`
 - `VPNG0007-R7.R6.R2`
+- `VPNG0007-R7.R7`
 
 Consequences for this architecture:
 
@@ -421,7 +454,10 @@ Consequences for this architecture:
 - independent component scopes are intended to support parallel review/development units;
 - every material architectural block links back to the requirement tree;
 - any requirement/constraint change requires revalidation of the affected architecture
-  before implementation continues.
+  before implementation continues;
+- every substantial implementation/experiment unit must identify the exact accepted R/C whose
+  implementation, verification or closure requires that work; evidence does not create
+  product semantics by itself.
 
 # 2. Real scenarios used by this design
 
@@ -4856,13 +4892,19 @@ A successful domain teardown is a stronger terminal postcondition than a failed 
 observation: once the named namespace and host boundary are freshly confirmed absent, no
 VPN-GATE-owned managed forwarding domain remains connected to host traffic.
 
-External VPN channel lifecycle remains administrator/integration-owned under
-`VPNG0001-R1.R3.C1`. Stop does not enumerate/kill external VPN processes and does not issue
-protocol-specific deletion of VPN path interfaces. The owned-domain teardown may make an
-external endpoint that lived inside that domain unusable/disconnected as a consequence of
-removing VPN-GATE's boundary; supported integrations must document and prove their onboarding
-and cleanup/re-entry behavior through the applicability contract / EXP-049 rather than
-turning external VPN lifecycle into an implicit controller responsibility.
+`VPNG0001-R1.R3.C1` establishes administrator ownership of VPN provisioning and
+VPN-specific configuration; it does **not** establish that the runtime lifecycle of a VPN
+process executing inside the managed domain must remain administrator-owned.
+
+The current bounded-stop implementation does not enumerate/kill an external VPN process
+because no real supported in-stack VPN lifecycle has yet passed the applicability/evidence
+sequence. This is a provisional implementation boundary, not a normative ownership rule.
+
+A supported integration must first pass EXP-049 and then the dependent EXP-050 lifecycle
+experiment. Until that evidence exists, architecture must not claim either that VPN-GATE owns
+such process lifecycle or that administrator-only lifecycle is sufficient for managed-domain
+teardown. The current stop proof remains valid for the presently implemented VPN-GATE-owned
+resources only.
 
 The current bounded stop has no generic callback list, retry queue or cleanup registry. When
 future runtime Managers/Agents become executable, their independently required quiesce/release
