@@ -82,6 +82,23 @@ class ManagedNetworkDomainVerification:
 
 
 @dataclass(frozen=True, slots=True)
+class ManagedNetworkDomainPreflightResult:
+    existing: bool
+    verification: ManagedNetworkDomainVerification | None
+
+    @property
+    def confirmed(self) -> bool:
+        return (
+            (not self.existing and self.verification is None)
+            or (
+                self.existing
+                and self.verification is not None
+                and self.verification.confirmed
+            )
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ManagedNetworkDomainEnsureResult:
     created: bool
     verification: ManagedNetworkDomainVerification
@@ -213,11 +230,11 @@ def verify_managed_network_domain(
     )
 
 
-def ensure_managed_network_domain(
+def preflight_managed_network_domain(
     spec: ManagedNetworkDomainSpec,
     runner: ManagedNetworkDomainRunner,
-) -> ManagedNetworkDomainEnsureResult:
-    """Create absent infrastructure or verify an already complete contained domain."""
+) -> ManagedNetworkDomainPreflightResult:
+    """Contain/verify existing infrastructure without creating absent state."""
     namespace_exists = spec.namespace in _namespace_names(runner)
     host_exists = _single_link(
         _link_rows(runner),
@@ -228,17 +245,9 @@ def ensure_managed_network_domain(
         _require_containment(spec, runner)
 
     if not namespace_exists and not host_exists:
-        _create_managed_network_domain(spec, runner)
-        verification = verify_managed_network_domain(spec, runner)
-        if not verification.confirmed:
-            _best_effort_destroy_created(spec, runner)
-            raise ManagedNetworkDomainError(
-                "created managed network domain failed verification: "
-                + "; ".join(verification.errors)
-            )
-        return ManagedNetworkDomainEnsureResult(
-            created=True,
-            verification=verification,
+        return ManagedNetworkDomainPreflightResult(
+            existing=False,
+            verification=None,
         )
 
     if namespace_exists != host_exists:
@@ -253,9 +262,37 @@ def ensure_managed_network_domain(
             "existing managed network domain failed exact verification: "
             + "; ".join(verification.errors)
         )
+    return ManagedNetworkDomainPreflightResult(
+        existing=True,
+        verification=verification,
+    )
+
+
+def ensure_managed_network_domain(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> ManagedNetworkDomainEnsureResult:
+    """Create absent infrastructure or verify an already complete contained domain."""
+    preflight = preflight_managed_network_domain(spec, runner)
+
+    if not preflight.existing:
+        _create_managed_network_domain(spec, runner)
+        verification = verify_managed_network_domain(spec, runner)
+        if not verification.confirmed:
+            _best_effort_destroy_created(spec, runner)
+            raise ManagedNetworkDomainError(
+                "created managed network domain failed verification: "
+                + "; ".join(verification.errors)
+            )
+        return ManagedNetworkDomainEnsureResult(
+            created=True,
+            verification=verification,
+        )
+
+    assert preflight.verification is not None
     return ManagedNetworkDomainEnsureResult(
         created=False,
-        verification=verification,
+        verification=preflight.verification,
     )
 
 
