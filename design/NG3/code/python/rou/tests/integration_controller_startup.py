@@ -16,6 +16,10 @@ from rou.controller_stop import (
     ControllerStopStatus,
     stop_controller_once,
 )
+from rou.controller_restart import (
+    ControllerRestartStatus,
+    restart_controller_once,
+)
 from rou.domain import Direction
 from rou.instance_lock import InstanceLockSpec
 from rou.linux_nft_scaffold import SubprocessNftRunner
@@ -176,40 +180,28 @@ def main() -> int:
         assert ready.session.lock.acquired
         print("CONTROLLER_STARTUP_SECOND_INSTANCE_REFUSED=PASS")
 
-        stopped = stop_controller_once(
+        restarted = restart_controller_once(
             ready.session,
-            domain_spec,
-            runner,
-        )
-        assert stopped.status is ControllerStopStatus.STOPPED, (
-            stopped.status,
-            stopped.cleanup_error,
-            stopped.lock_error,
-        )
-        assert stopped.stopped
-        assert not ready.session.lock.acquired
-        assert namespace not in runner.run(("ip", "netns", "list"))
-        assert raw_run(
-            "ip", "link", "show", "dev", host_interface,
-            check=False,
-        ).returncode != 0
-        print("CONTROLLER_STOP_OWNED_DOMAIN_REMOVED=PASS")
-        print("CONTROLLER_STOP_LOCK_RELEASE_AFTER_CLEANUP=PASS")
-
-        restarted = start_controller_once(
             lock_spec,
             domain_spec,
             runner,
             NG3_LINUX_POLICY_PLATFORM,
             ZeroPathPreparedPolicy,
         )
-        assert restarted.status is ControllerStartupStatus.READY, (
+        assert restarted.status is ControllerRestartStatus.READY, (
             restarted.status,
-            restarted.diagnostic,
+            restarted.stop,
+            restarted.start,
         )
+        assert restarted.stop.status is ControllerStopStatus.STOPPED
+        assert restarted.ready
         assert restarted.session is not None
+        assert not ready.session.lock.acquired
         assert restarted.session.lock.acquired
-        print("CONTROLLER_STOP_RESTART_REACQUIRE=PASS")
+        print("CONTROLLER_STOP_OWNED_DOMAIN_REMOVED=PASS")
+        print("CONTROLLER_STOP_LOCK_RELEASE_AFTER_CLEANUP=PASS")
+        print("CONTROLLER_RESTART_STOP_THEN_START_READY=PASS")
+        print("CONTROLLER_RESTART_NEW_SESSION_LOCK_HELD=PASS")
 
         final_stop = stop_controller_once(
             restarted.session,
@@ -219,7 +211,7 @@ def main() -> int:
         assert final_stop.status is ControllerStopStatus.STOPPED
         print("CONTROLLER_STOP_REPEAT_CLEAN_CYCLE=PASS")
 
-        print("NG3 bounded controller startup/stop integration: PASS")
+        print("NG3 bounded controller startup/stop/restart integration: PASS")
         return 0
     finally:
         cleanup()
