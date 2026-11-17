@@ -31,3 +31,60 @@ legacy-main-rc:design/RC3/architecture.md
 Legacy files are not copied back into active `main` merely to make a historical relative
 link resolve. If historical evidence becomes materially relevant to a new NG3 decision,
 reference the preserved legacy branch/commit explicitly.
+
+## Closed active-main split cycle
+
+The first active-line split is closed at main snapshot 75:
+
+```text
+b28f3e647d51b3c9f97190eb2daedaf253a68a88
+tree 1297e5d42b7bb3816bfc6478b3ffc20549cf42e9
+```
+
+That snapshot proves the desired clean active tree and CI separation, but it deliberately
+retains the old repository ancestry. It is therefore a safe working main and a reference
+state, not yet the final ancestry shape.
+
+Any future ancestry reconstruction is performed on a separate candidate branch and must not
+move `main` until the complete candidate history has been independently reviewed.
+
+### Future-main reconstruction invariant
+
+The preserved former-main NG3 snapshot line begins at:
+
+```text
+snapshot 31/44  edeac340fab70bfe8df3a5f2a034fdf3ca7af8be
+```
+
+whose original parent is the last pre-NG3 snapshot:
+
+```text
+snapshot 30/44  d50652b7d2e8f671c18823ffcb588103257baa0d
+```
+
+A future clean-ancestry candidate must reconstruct the NG3 line from snapshot 31 onward.
+Snapshot 31 becomes the parentless root by applying its exact original commit delta
+(`30 -> 31`) to an empty tree. Every later reconstructed commit must preserve the exact
+original commit delta against its corresponding original parent.
+
+This applies both to numbered snapshots and to meaningful inter-snapshot process commits.
+In particular, the standalone `AGENTS.md` process commit
+`211aefdc03a529162bb28385def6d21cc19db5aa` between snapshots 44 and 45 is part of the
+reconstructed sequence because omitting it would change the delta of snapshot 45.
+
+For each reconstructed commit the review manifest must contain:
+
+```text
+original identity / label
+original parent
+original commit
+reconstructed parent
+reconstructed commit
+delta-equivalence verdict
+```
+
+Any delta mismatch is a stop condition. It must not be repaired by silently changing the
+reconstructed snapshot.
+
+The reconstruction candidate may be named `futuremain`; until a separate cutover decision,
+the current `main` remains authoritative and unchanged.
