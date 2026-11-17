@@ -4,6 +4,14 @@
 **Cycle:** `ng3-housekeeping-cycle-20261117-main-lineage-close-35m`  
 **Baseline:** main snapshot 75, `b28f3e647d51b3c9f97190eb2daedaf253a68a88`
 
+> **Corrective note — 2026-11-17:** the handoff below originally proposed applying only the
+> `30 -> 31` delta to an empty tree. Validation of snapshot 32 proved that model invalid:
+> snapshot 32 modifies generation-independent files already present before NG3. The accepted
+> reconstruction basis is now the **full snapshot-31 tree after deterministic removal of
+> inherited RC/NG1/NG2 generation payload**, followed by exact replay of later NG3-era commit
+> deltas. See `NG3-2026-11-17-futuremain-root-model-correction-review.md`. The original
+> empty-tree statement below is superseded and retained only as historical review context.
+
 ## Scope
 
 This review closes the current repository-lineage housekeeping cycle on the existing
