@@ -36,7 +36,7 @@ Alpha controller:
   - `198.19.255.1/30 <-> 198.19.255.2/30`;
 - canonical grammar уже принята; alpha materializes Device `use_outbound_nat`, ordinary
   Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
-- `availability_check` и Profile `+snat` распознаются как canonical syntax, но alpha
+- `availability_check`, Profile `+snat` и `+route-return` распознаются как canonical syntax, но alpha
   fail-fast отклоняет их до завершения соответствующих lower runtime paths;
 - host-side publication требует уже существующего внешнего host forwarding; alpha проверяет
   `net.ipv4.ip_forward` и явные host IPv4/interface selectors, но не включает global host
