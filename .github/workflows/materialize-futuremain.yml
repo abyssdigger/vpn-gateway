@@ -37,9 +37,9 @@ jobs:
 
           git checkout --orphan "${TARGET}" "${ROOT}"
 
-          git rm -r --ignore-unmatch \
+          git rm -r -f --ignore-unmatch \
             design/RC2 design/RC3 design/NG1 design/NG2 design/experiments
-          git rm --ignore-unmatch \
+          git rm -f --ignore-unmatch \
             .github/workflows/rc3-python.yml \
             .github/workflows/ng1-python.yml \
             .github/workflows/ng2-python.yml
