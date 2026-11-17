@@ -109,9 +109,25 @@ def ruleset(rule=RULE):
 
 
 class FakeRunner:
-    def __init__(self, *, forwarding="1", nft=None):
+    def __init__(
+        self,
+        *,
+        forwarding="1",
+        nft=None,
+        links=None,
+        addresses=None,
+    ):
         self.forwarding = forwarding
         self.nft = nft or json.dumps({"nftables": [{"metainfo": {}}]})
+        self.links = links or [{"ifname": "eth0", "flags": ["UP", "LOWER_UP"]}]
+        self.addresses = addresses or [
+            {
+                "ifname": "eth0",
+                "addr_info": [
+                    {"family": "inet", "local": "198.51.100.10", "prefixlen": 24}
+                ],
+            }
+        ]
         self.scripts = []
 
     def run(self, argv):
@@ -119,6 +135,10 @@ class FakeRunner:
             return self.forwarding + "\n"
         if "nft" in argv and "list" in argv and "ruleset" in argv:
             return self.nft
+        if "ip" in argv and "link" in argv and "show" in argv:
+            return json.dumps(self.links)
+        if "ip" in argv and "addr" in argv and "show" in argv:
+            return json.dumps(self.addresses)
         raise AssertionError(argv)
 
     def run_script(self, argv, script):
@@ -163,6 +183,42 @@ class LinuxHostPublicationTests(unittest.TestCase):
         self.assertEqual(result.status, HostPublicationConvergenceStatus.APPLIED)
         self.assertTrue(result.confirmed)
         self.assertIn("delete table", runner.scripts[0][1])
+
+
+    def test_missing_interface_selector_is_unready(self):
+        runner = FakeRunner(links=[{"ifname": "eth1", "flags": ["UP"]}])
+        result = converge_host_publication_once(
+            LinuxHostPublicationBackend(runner),
+            DESIRED,
+        )
+        self.assertEqual(result.status, HostPublicationConvergenceStatus.UNREADY)
+        self.assertIn("interface 'eth0' is absent", result.diagnostic)
+        self.assertEqual(runner.scripts, [])
+
+    def test_down_interface_selector_is_unready(self):
+        runner = FakeRunner(links=[{"ifname": "eth0", "flags": ["BROADCAST"]}])
+        result = converge_host_publication_once(
+            LinuxHostPublicationBackend(runner),
+            DESIRED,
+        )
+        self.assertEqual(result.status, HostPublicationConvergenceStatus.UNREADY)
+        self.assertIn("interface 'eth0' is not UP", result.diagnostic)
+
+    def test_missing_exact_ipv4_selector_is_unready(self):
+        ipv4_rule = HostPublicationRuleSpec(
+            protocol=PublicationProtocol.TCP,
+            selector_kind=HostPublicationSelectorKind.IPV4,
+            selector_value=IPv4Address("198.51.100.99"),
+            host_port=443,
+            internal_address=IPv4Address("192.0.2.2"),
+            internal_port=8443,
+        )
+        result = converge_host_publication_once(
+            LinuxHostPublicationBackend(FakeRunner()),
+            HostPublicationDesiredState((ipv4_rule,)),
+        )
+        self.assertEqual(result.status, HostPublicationConvergenceStatus.UNREADY)
+        self.assertIn("198.51.100.99 is not assigned locally", result.diagnostic)
 
     def test_foreign_rule_in_owned_table_is_conflict(self):
         root = json.loads(ruleset())

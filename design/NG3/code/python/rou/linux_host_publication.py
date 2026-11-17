@@ -82,6 +82,52 @@ class LinuxHostPublicationBackend:
         raw = self.runner.run(self._cmd("nft", "-j", "-y", "list", "ruleset"))
         return _parse_observation(raw, forwarding)
 
+    def prerequisite_diagnostics(
+        self,
+        desired: HostPublicationDesiredState,
+    ) -> tuple[str, ...]:
+        """Freshly verify external host facts required by explicit selectors.
+
+        This is observation only. It never creates interfaces, assigns addresses
+        or enables host forwarding.
+        """
+        if not isinstance(desired, HostPublicationDesiredState):
+            raise ValueError("desired must be HostPublicationDesiredState")
+        if not desired.rules:
+            return ()
+
+        diagnostics: list[str] = []
+        if not self._forwarding():
+            diagnostics.append("host IPv4 forwarding prerequisite is disabled")
+
+        links = _parse_host_links(
+            self.runner.run(self._cmd("ip", "-j", "link", "show"))
+        )
+        addresses = _parse_host_ipv4_addresses(
+            self.runner.run(self._cmd("ip", "-j", "-4", "addr", "show"))
+        )
+
+        for rule in desired.rules:
+            if rule.selector_kind is HostPublicationSelectorKind.INTERFACE:
+                name = str(rule.selector_value)
+                flags = links.get(name)
+                if flags is None:
+                    diagnostics.append(
+                        f"host publication interface {name!r} is absent"
+                    )
+                elif "UP" not in flags:
+                    diagnostics.append(
+                        f"host publication interface {name!r} is not UP"
+                    )
+            elif rule.selector_kind is HostPublicationSelectorKind.IPV4:
+                address = rule.selector_value
+                if address not in addresses:
+                    diagnostics.append(
+                        f"host publication IPv4 {address} is not assigned locally"
+                    )
+
+        return tuple(dict.fromkeys(diagnostics))
+
     def replace(self, desired: HostPublicationDesiredState) -> None:
         if not isinstance(desired, HostPublicationDesiredState):
             raise ValueError("desired must be HostPublicationDesiredState")
@@ -150,18 +196,25 @@ def converge_host_publication_once(
             diagnostic="; ".join(initial.conflicts),
         )
 
+    try:
+        prerequisites = backend.prerequisite_diagnostics(desired)
+    except Exception as exc:
+        return HostPublicationConvergenceResult(
+            status=HostPublicationConvergenceStatus.FAILED,
+            initial=initial,
+            final=initial,
+            mutation_attempted=False,
+            diagnostic=f"host publication prerequisite observation failed: {exc}",
+        )
+
     exact = _matches(initial, desired)
     if exact:
         status = (
             HostPublicationConvergenceStatus.CONFIRMED
-            if not desired.rules or initial.forwarding_enabled
+            if not prerequisites
             else HostPublicationConvergenceStatus.UNREADY
         )
-        diagnostic = (
-            None
-            if status is HostPublicationConvergenceStatus.CONFIRMED
-            else "host IPv4 forwarding prerequisite is disabled"
-        )
+        diagnostic = None if not prerequisites else "; ".join(prerequisites)
         return HostPublicationConvergenceResult(
             status=status,
             initial=initial,
@@ -173,13 +226,13 @@ def converge_host_publication_once(
     # Removing all desired publication must remain possible even if forwarding
     # is unavailable. Adding/changing positive host mappings requires the
     # external forwarding prerequisite to be present first.
-    if desired.rules and not initial.forwarding_enabled:
+    if prerequisites:
         return HostPublicationConvergenceResult(
             status=HostPublicationConvergenceStatus.UNREADY,
             initial=initial,
             final=initial,
             mutation_attempted=False,
-            diagnostic="host IPv4 forwarding prerequisite is disabled",
+            diagnostic="; ".join(prerequisites),
         )
 
     try:
@@ -210,13 +263,23 @@ def converge_host_publication_once(
             mutation_attempted=True,
             diagnostic="host publication fresh postcondition does not match desired state",
         )
-    if desired.rules and not final.forwarding_enabled:
+    try:
+        final_prerequisites = backend.prerequisite_diagnostics(desired)
+    except Exception as exc:
+        return HostPublicationConvergenceResult(
+            status=HostPublicationConvergenceStatus.FAILED,
+            initial=initial,
+            final=final,
+            mutation_attempted=True,
+            diagnostic=f"host publication final prerequisite observation failed: {exc}",
+        )
+    if final_prerequisites:
         return HostPublicationConvergenceResult(
             status=HostPublicationConvergenceStatus.UNREADY,
             initial=initial,
             final=final,
             mutation_attempted=True,
-            diagnostic="host IPv4 forwarding prerequisite became disabled",
+            diagnostic="; ".join(final_prerequisites),
         )
     return HostPublicationConvergenceResult(
         status=HostPublicationConvergenceStatus.APPLIED,
@@ -515,3 +578,53 @@ def _observed_sort_key(rule: HostPublicationRuleSpec) -> tuple[object, ...]:
         int(rule.internal_address),
         rule.internal_port,
     )
+
+
+def _parse_host_links(raw: str) -> dict[str, frozenset[str]]:
+    try:
+        rows = json.loads(raw)
+    except (TypeError, ValueError):
+        raise ValueError("invalid host link JSON") from None
+    if not isinstance(rows, list):
+        raise ValueError("host link JSON must be an array")
+    result: dict[str, frozenset[str]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("host link row must be an object")
+        name = row.get("ifname")
+        flags = row.get("flags")
+        if not isinstance(name, str) or not name:
+            raise ValueError("host link has invalid ifname")
+        if not isinstance(flags, list) or any(not isinstance(flag, str) for flag in flags):
+            raise ValueError(f"host link {name!r} has invalid flags")
+        if name in result:
+            raise ValueError(f"duplicate host link {name!r}")
+        result[name] = frozenset(flags)
+    return result
+
+
+def _parse_host_ipv4_addresses(raw: str) -> frozenset[IPv4Address]:
+    try:
+        rows = json.loads(raw)
+    except (TypeError, ValueError):
+        raise ValueError("invalid host IPv4 address JSON") from None
+    if not isinstance(rows, list):
+        raise ValueError("host IPv4 address JSON must be an array")
+    result: set[IPv4Address] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("host address row must be an object")
+        info = row.get("addr_info", [])
+        if not isinstance(info, list):
+            raise ValueError("host addr_info must be an array")
+        for item in info:
+            if not isinstance(item, dict) or item.get("family") != "inet":
+                continue
+            local = item.get("local")
+            if not isinstance(local, str):
+                raise ValueError("host IPv4 local address must be text")
+            try:
+                result.add(IPv4Address(local))
+            except ValueError:
+                raise ValueError(f"invalid host IPv4 address {local!r}") from None
+    return frozenset(result)
