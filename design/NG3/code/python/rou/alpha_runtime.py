@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from enum import Enum
-from ipaddress import IPv4Interface
+from ipaddress import IPv4Address, IPv4Interface
 import os
 from pathlib import Path
 import signal
@@ -40,7 +40,10 @@ from .device_policy import (
     NatIntent,
 )
 from .direct_device_route import realize_direct_device_path_routes
-from .forwarding_gate import ForwardingGateState
+from .forwarding_gate import (
+    ForwardingGateState,
+    converge_forwarding_gate_once,
+)
 from .instance_lock import InstanceLockSpec
 from .integration_config import (
     IntegrationTransportConfig,
@@ -95,7 +98,7 @@ class AlphaPreparedPolicy:
     """Accepted config + current Device binding state for the alpha Manager."""
 
     config_text: str
-    local_address: object
+    local_address: IPv4Address
     binding_state: DeviceBindingState
     structural: object
     integrations: tuple[IntegrationTransportConfig, ...]
@@ -216,12 +219,35 @@ def reconcile_alpha_payload_once(
     """Freshly audit one Manager-owned payload domain and converge only on drift."""
     verification = verify_managed_network_domain(domain_spec, runner)
     if not verification.confirmed or verification.host_boundary is None:
+        containment_detail = "not attempted"
+        try:
+            containment = converge_forwarding_gate_once(
+                LinuxForwardingGateBackend(runner, domain_spec.namespace),
+                ForwardingGateState.DISABLED,
+            )
+            containment_detail = (
+                "confirmed"
+                if containment.confirmed
+                else (
+                    "not confirmed"
+                    + (
+                        f": {containment.diagnostic}"
+                        if containment.diagnostic
+                        else ""
+                    )
+                )
+            )
+        except Exception as exc:
+            containment_detail = (
+                f"failed: {type(exc).__name__}: {exc}"
+            )
         return AlphaReconcileResult(
             AlphaReconcileStatus.FAILED,
             None,
             diagnostic=(
                 "managed network domain failed exact verification: "
                 + "; ".join(verification.errors)
+                + f"; fail-closed containment={containment_detail}"
             ),
         )
 
@@ -272,11 +298,7 @@ def reconcile_alpha_payload_once(
                 AlphaReconcileStatus.EXACT,
                 desired,
             )
-    except (
-        StructuralPolicyPreconditionError,
-        StructuralPolicyConflictError,
-        Exception,
-    ):
+    except Exception:
         # The guarded activation boundary below re-observes from authoritative
         # state, closes forwarding first and classifies the concrete failure.
         pass
