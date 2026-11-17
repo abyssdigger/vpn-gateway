@@ -313,12 +313,14 @@ KillMode=control-group
 
 
 def systemd_client_log() -> str:
-    return systemctl(
-        "journalctl",
-        "--unit",
-        CLIENT_UNIT,
-        "--no-pager",
-        "--lines=120",
+    return command(
+        (
+            "journalctl",
+            "--unit",
+            CLIENT_UNIT,
+            "--no-pager",
+            "--lines=120",
+        ),
         check=False,
     ).stdout
 
