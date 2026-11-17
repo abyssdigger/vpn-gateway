@@ -1,6 +1,6 @@
 # EXP-049 — administrator VPN endpoint onboarding applicability
 
-**Status:** PLANNED — acceptance evidence gate not yet executed
+**Status:** FAILED — OpenVPN placement/binding passed, current NG3 local/system policy blocks VPN transport after activation
 
 ## Requirement traceability
 
@@ -108,6 +108,9 @@ A run is not converted to PASS by adding ad-hoc product internals. Findings are 
   endpoint placement/visibility shape;
 - **binding gap** — the endpoint exists but current NG3 discovery/binding cannot identify it
   under accepted semantics;
+- **integration-policy gap** — placement/binding work, but VPN-GATE-owned local/system or other
+  managed-domain policy required by the supported integration is not yet materially defined or
+  implemented, so the channel cannot remain usable through the accepted forwarding contract;
 - **architecture contradiction** — the managed-domain boundary and the real integration cannot
   coexist without changing accepted R/C semantics;
 - **environmental failure** — the disposable target cannot execute an otherwise valid step;
@@ -131,8 +134,15 @@ not be hidden as a documentation defect.
 
 ## Current disposition
 
-**PLANNED.**
+**FAILED on 2026-11-17.**
 
-This experiment is now an explicit Release-1 applicability gate. It need not run in the same
-CD cycle that introduced the requirement, but the gate must remain visible until a supported
-integration has PASS evidence.
+The Debian 13 / OpenVPN 2.6.14 run proved real in-namespace VPN process/TUN placement, fresh
+production observation and exact logical-path binding twice. Both runs then failed controlled
+payload after production NG3 activation because `stack_input` / `stack_output` terminal
+DROP had no concrete supported-integration local/system allow contribution, blocking the
+OpenVPN UDP underlay.
+
+See `EXP-049-result-20261117.md` and GitHub Actions run `44038446087`.
+
+The gate remains open. Do not execute EXP-050 until EXP-049 is rerun and passes after the
+supported-integration local/system policy gap is closed.
