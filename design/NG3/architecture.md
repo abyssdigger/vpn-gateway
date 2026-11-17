@@ -4867,6 +4867,49 @@ future runtime Managers/Agents become executable, their independently required q
 operations must be added as concrete cleanup domains under `VPNG0005-R5.R5`, preserving the
 same rule: one cleanup-area failure does not suppress attempts in other independent areas.
 
+## 12.0.5. Bounded controller restart composition
+
+**Implements:**
+- `VPNG0005-R5.R6.R3`;
+- `VPNG0006-R6.R3`.
+
+**Constrained by:**
+- `VPNG0005-R5.R6.R2`;
+- `VPNG0007-R7.R1`.
+
+Restart adds no new lifecycle mechanism. It composes the already accepted stop and startup
+operations:
+
+```text
+restart(current READY session)
+    ->
+stop_controller_once(...)
+    ->
+if stop != STOPPED:
+    report restart STOP_FAILED
+    do not invoke startup
+    ->
+start_controller_once(...)
+    ->
+if start READY:
+    report restart READY with the new startup session
+else:
+    report restart START_FAILED with the exact startup result
+```
+
+A successful stop releases the prior lifetime lock only after owned-domain absence is
+confirmed. The following startup therefore reacquires controller ownership through the normal
+hardened lock path and re-establishes all startup postconditions from fresh state.
+
+Restart does not retain a special cross-stop ownership token and does not hide a lock-busy
+result from the new startup attempt. If another legitimate controller acquires the deployment
+lock after the successful stop and before the new start, this restart attempt fails visibly
+rather than bypassing the normal single-controller exclusion contract.
+
+There is no restart-specific retry, rollback journal, saved kernel snapshot or partial-start
+resume state. Failure after successful stop leaves the result exactly as the ordinary startup
+operation reports it; a later operator action may start again from authoritative state.
+
 ## 12.1. Product lifecycle control surface
 
 The lifecycle operations required by `VPNG0005-R5.R6` are exposed through a thin product
