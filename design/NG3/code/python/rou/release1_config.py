@@ -55,24 +55,14 @@ class Release1ConfigError(ConfigError):
 
 
 @dataclass(frozen=True, slots=True)
-class PortInterval:
-    first: int
-    last: int
-
-    @property
-    def is_single(self) -> bool:
-        return self.first == self.last
-
-
-@dataclass(frozen=True, slots=True)
 class FirewallRuleConfig:
     direction: str
     action: str
     protocol: str | None = None
     source_ipv4_cidr: ipaddress.IPv4Network | None = None
-    source_port: PortInterval | None = None
+    source_port: int | None = None
     destination_ipv4_cidr: ipaddress.IPv4Network | None = None
-    destination_port: PortInterval | None = None
+    destination_port: int | None = None
     comment: str | None = None
 
 
@@ -270,17 +260,17 @@ def _parse_direction(value: Any, where: str) -> tuple[Direction, bool]:
         return Direction.INBOUND, False
     if value == "bidirectional":
         return Direction.BIDIRECTIONAL, False
-    if value == "inbound+masquerade":
+    if value == "inbound+snat":
         return Direction.INBOUND, True
-    if value == "bidirectional+masquerade":
+    if value == "bidirectional+snat":
         return Direction.BIDIRECTIONAL, True
-    if value == "outbound+masquerade":
+    if value == "outbound+snat":
         raise Release1ConfigError(
-            f"{where}: +masquerade is meaningful only for VPN-to-ordinary traffic"
+            f"{where}: +snat is meaningful only for VPN-to-ordinary traffic"
         )
     raise Release1ConfigError(
         f"{where} must be outbound, inbound, bidirectional, "
-        "inbound+masquerade or bidirectional+masquerade"
+        "inbound+snat or bidirectional+snat"
     )
 
 
@@ -474,7 +464,7 @@ def _parse_firewall_rule(value: str, where: str) -> FirewallRuleConfig:
 def _network_and_port(
     value: str,
     where: str,
-) -> tuple[ipaddress.IPv4Network, PortInterval | None]:
+) -> tuple[ipaddress.IPv4Network, int | None]:
     network_text = value
     port_text = None
     if ":" in value:
@@ -490,24 +480,8 @@ def _network_and_port(
     if not isinstance(network, ipaddress.IPv4Network):
         raise Release1ConfigError(f"{where} must be IPv4")
     return network, (
-        None if port_text is None else _port_interval(port_text, where)
+        None if port_text is None else _port(port_text, f"{where} port")
     )
-
-
-def _port_interval(value: str, where: str) -> PortInterval:
-    if "-" not in value:
-        port = _port(value, f"{where} port")
-        return PortInterval(port, port)
-    parts = value.split("-")
-    if len(parts) != 2:
-        raise Release1ConfigError(f"{where} has invalid port range")
-    first = _port(parts[0], f"{where} range start")
-    last = _port(parts[1], f"{where} range end")
-    if first > last:
-        raise Release1ConfigError(
-            f"{where} port range start must be <= end"
-        )
-    return PortInterval(first, last)
 
 
 def _parse_availability(
