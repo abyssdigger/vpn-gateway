@@ -369,7 +369,16 @@ Do not fold these into one universal runtime rewrite.
 
 ### `decomp`
 
-Six accumulated links, all resolved.
+Accumulated links:
+
+1. `VPNG0005-R5 -> VPNG0005-R5.R6` — resolved.
+2. `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` — resolved.
+3. `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` — resolved.
+4. `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2` — resolved.
+5. `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` — resolved second occurrence in the
+   requirement tree.
+6. `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` — resolved second occurrence in the
+   requirement tree.
 
 Pending `decomp`: **none**.
 
