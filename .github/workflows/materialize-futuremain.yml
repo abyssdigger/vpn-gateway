@@ -168,7 +168,13 @@ jobs:
             CHANGELOG.md \
             CONTINUOUS-DEVELOPMENT.md \
             LINEAGE.md \
-            PROJECT-CONVENTIONS.md
+            PROJECT-CONVENTIONS.md \
+            design/reviews/NG3-2026-11-15-initial-requirements-architecture-review.md \
+            design/reviews/NG3-2026-11-16-device-profile-config-intent-review.md \
+            design/reviews/NG3-2026-11-16-final-gates-40m-checkpoint.md \
+            design/reviews/NG3-2026-11-16-final-human-gates-resolution-review.md \
+            design/reviews/README.md \
+            design/vpn-gateway-experiments.md
 
           expected_paths=$(printf '%s\n' \
             .github/workflows/actual-main-hygiene.yml \
@@ -176,7 +182,13 @@ jobs:
             CHANGELOG.md \
             CONTINUOUS-DEVELOPMENT.md \
             LINEAGE.md \
-            PROJECT-CONVENTIONS.md | sort)
+            PROJECT-CONVENTIONS.md \
+            design/reviews/NG3-2026-11-15-initial-requirements-architecture-review.md \
+            design/reviews/NG3-2026-11-16-device-profile-config-intent-review.md \
+            design/reviews/NG3-2026-11-16-final-gates-40m-checkpoint.md \
+            design/reviews/NG3-2026-11-16-final-human-gates-resolution-review.md \
+            design/reviews/README.md \
+            design/vpn-gateway-experiments.md | sort)
           actual_paths=$(git diff --cached --name-only | sort)
           if [ "$actual_paths" != "$expected_paths" ]; then
             echo "::error::unexpected normalization path set"
