@@ -305,7 +305,7 @@ table ip exp055_host {{
 
     chain gateway_snat {{
         type nat hook postrouting priority srcnat; policy accept;
-        iifname "{H_BOUNDARY_IF}" oifname "{H_LAN_IF}" ip saddr 10.88.0.0/24 masquerade counter comment "exp055-snat"
+        iifname "{H_BOUNDARY_IF}" oifname "{H_LAN_IF}" ip saddr 10.88.0.0/24 counter masquerade comment "exp055-snat"
     }}
 }}
 """,
