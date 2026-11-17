@@ -462,6 +462,16 @@ def run_cycle(
             NG3_LINUX_POLICY_PLATFORM,
             load_policy,
         )
+        if startup.status is not ControllerStartupStatus.READY:
+            ruleset = ns_command(
+                MANAGED,
+                "nft", "-j", "list", "ruleset",
+                check=False,
+            ).stdout
+            print(
+                f"EXP049_CYCLE_{cycle}_ACTIVATION_FAILURE_RULESET="
+                + json.dumps(ruleset)
+            )
         assert startup.status is ControllerStartupStatus.READY, (
             startup.status,
             startup.diagnostic,
