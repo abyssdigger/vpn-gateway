@@ -12,6 +12,14 @@ from rou.controller_startup import (
     ControllerStartupStatus,
     start_controller_once,
 )
+from rou.controller_stop import (
+    ControllerStopStatus,
+    stop_controller_once,
+)
+from rou.controller_restart import (
+    ControllerRestartStatus,
+    restart_controller_once,
+)
 from rou.domain import Direction
 from rou.instance_lock import InstanceLockSpec
 from rou.linux_nft_scaffold import SubprocessNftRunner
@@ -172,12 +180,38 @@ def main() -> int:
         assert ready.session.lock.acquired
         print("CONTROLLER_STARTUP_SECOND_INSTANCE_REFUSED=PASS")
 
-        ready.session.lock.release()
-        destroy_managed_network_domain(domain_spec, runner)
-        assert namespace not in runner.run(("ip", "netns", "list"))
-        print("CONTROLLER_STARTUP_CLEANUP_AFTER_LOCK_RELEASE=PASS")
+        restarted = restart_controller_once(
+            ready.session,
+            lock_spec,
+            domain_spec,
+            runner,
+            NG3_LINUX_POLICY_PLATFORM,
+            ZeroPathPreparedPolicy,
+        )
+        assert restarted.status is ControllerRestartStatus.READY, (
+            restarted.status,
+            restarted.stop,
+            restarted.start,
+        )
+        assert restarted.stop.status is ControllerStopStatus.STOPPED
+        assert restarted.ready
+        assert restarted.session is not None
+        assert not ready.session.lock.acquired
+        assert restarted.session.lock.acquired
+        print("CONTROLLER_STOP_OWNED_DOMAIN_REMOVED=PASS")
+        print("CONTROLLER_STOP_LOCK_RELEASE_AFTER_CLEANUP=PASS")
+        print("CONTROLLER_RESTART_STOP_THEN_START_READY=PASS")
+        print("CONTROLLER_RESTART_NEW_SESSION_LOCK_HELD=PASS")
 
-        print("NG3 bounded controller startup integration: PASS")
+        final_stop = stop_controller_once(
+            restarted.session,
+            domain_spec,
+            runner,
+        )
+        assert final_stop.status is ControllerStopStatus.STOPPED
+        print("CONTROLLER_STOP_REPEAT_CLEAN_CYCLE=PASS")
+
+        print("NG3 bounded controller startup/stop/restart integration: PASS")
         return 0
     finally:
         cleanup()

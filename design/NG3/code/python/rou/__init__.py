@@ -164,6 +164,16 @@ from .controller_startup import (
     ValidatedPolicyLoader,
     start_controller_once,
 )
+from .controller_stop import (
+    ControllerStopResult,
+    ControllerStopStatus,
+    stop_controller_once,
+)
+from .controller_restart import (
+    ControllerRestartResult,
+    ControllerRestartStatus,
+    restart_controller_once,
+)
 from .device_firewall_compare import (
     DeviceFirewallComparison,
     DeviceFirewallComparisonError,
@@ -402,6 +412,10 @@ __all__ = [
     "ControllerStartupResult",
     "ControllerStartupSession",
     "ControllerStartupStatus",
+    "ControllerStopResult",
+    "ControllerStopStatus",
+    "ControllerRestartResult",
+    "ControllerRestartStatus",
     "PreparedPayloadPolicy",
     "ValidatedPolicyLoader",
     "ControllerInstanceLockError",
@@ -614,6 +628,8 @@ __all__ = [
     "compare_structural_policy",
     "converge_structural_policy_step_once",
     "start_controller_once",
+    "stop_controller_once",
+    "restart_controller_once",
     "structural_policy_distance",
     "converge_structural_policy",
     "select_structural_policy_step",
