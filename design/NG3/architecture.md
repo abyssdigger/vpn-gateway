@@ -185,6 +185,123 @@ The namespace is therefore an architecture choice. If another mechanism can late
 the same isolation/ownership requirements more simply, the requirement does not protect the
 namespace itself.
 
+### 1.1.1. Managed network-domain bootstrap — executable Linux lower contract
+
+**Implements:**
+- `VPNG0004-R4.R6`;
+- `VPNG0004-R4.R6.R1`;
+- `VPNG0004-R4.R6.R1.R1`;
+- `VPNG0004-R4.R6.R1.R2`;
+- `VPNG0004-R4.R6.R1.R4`;
+- `VPNG0005-R5.R1`;
+- `VPNG0005-R5.R4`;
+- `VPNG0007-R7.R1`;
+- `VPNG0007-R7.R3.R1`.
+
+The Linux bootstrap consumes an **already-normalized internal** infrastructure specification:
+
+```text
+ManagedNetworkDomainSpec:
+    namespace
+    host_interface
+    inner_interface
+    host_address: IPv4Interface
+    inner_address: IPv4Interface
+```
+
+These fields are not accepted external TOML syntax. Final instance/config grammar remains
+separate implementation work.
+
+The host/inner addresses must be distinct usable addresses in the same IPv4 subnet. Namespace
+and interface names must satisfy Linux-safe bounded identifier syntax. The two interface names
+must differ.
+
+The lifecycle owns only:
+
+- the named network namespace;
+- the host-side boundary veth;
+- the namespace-side boundary veth;
+- the two explicit IPv4 addresses;
+- namespace loopback UP state;
+- namespace main-table default route via the host-side address.
+
+It does **not** own:
+
+- payload routes/RPDB;
+- nft policy;
+- VPN path interfaces;
+- publication sockets/relays;
+- host firewall/NAT.
+
+Only two initial presence shapes are accepted:
+
+```text
+namespace absent + host boundary absent
+    -> fresh create
+
+namespace present + host boundary present
+    -> first confirm ForwardingGate=DISABLED
+    -> exact read-only infrastructure verification
+
+namespace present XOR host boundary present
+    -> structural failure
+    -> if namespace exists, forwarding remains protectively closed
+```
+
+Existing divergent infrastructure is not repaired or adopted in place. Wrong link type,
+wrong/missing address, wrong default route, missing loopback/UP state or non-reciprocal veth
+peer identity is a conflict/failure. A later explicit teardown/recreate operation may replace
+it; `ensure` never guesses ownership.
+
+Fresh creation is:
+
+```text
+require namespace + host boundary absent
+    -> create namespace
+    -> immediately converge/reread ForwardingGate=DISABLED
+    -> create veth pair
+    -> move inner endpoint into namespace
+    -> assign exact IPv4 addresses
+    -> host veth UP
+    -> namespace lo + inner veth UP
+    -> install namespace default via host address / inner veth
+    -> fresh exact verification
+```
+
+Failure after namespace creation performs best-effort deletion of the just-created namespace
+and any surviving host-side boundary, then propagates failure. No nft table or payload route
+is created by this lifecycle.
+
+Exact verification requires current kernel evidence that:
+
+- namespace and host boundary exist;
+- both boundary endpoints are veth and UP;
+- both configured IPv4 addresses are present;
+- namespace loopback is UP;
+- namespace default route points through the configured host address and inner interface;
+- host and inner veth endpoints expose reciprocal `ifindex/link_index`, proving they are the
+  same current veth pair.
+
+The verified inner endpoint is returned as the current host-boundary `InterfaceIdentity`
+for downstream binding/payload desired-state assembly. No stored ifindex registry is needed.
+
+Destroy is infrastructure cleanup, not semantic policy cleanup:
+
+```text
+if namespace exists:
+    best-effort ForwardingGate=DISABLED
+delete namespace best effort
+delete surviving host boundary best effort
+fresh verify namespace + host boundary absent
+```
+
+Normal product shutdown should release higher network-policy owners first when possible;
+crash/failure containment may still close forwarding and remove the owned infrastructure.
+
+This contract deliberately reuses the already live-proven NG2 namespace/veth lifecycle facts
+(peer verification, partial-state refusal and no policy ownership) while adapting them to the
+current NG3 ForwardingGate and leaving external configuration syntax unfixed.
+
 ### Architectural consequence for external VPN channels
 
 **Constrained by:**
