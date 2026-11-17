@@ -237,19 +237,14 @@ verb 3
         f"""[device.ovpn]
 enabled = true
 expected_interfaces = ["{VPN_IF}"]
+use_outbound_nat = false
+allow_vpn_client = "udp:{OPENVPN_LOCAL_PORT}>{SERVER_UNDERLAY}:{OPENVPN_PORT}"
 
 [profile.alpha]
 enabled = true
 direction = "outbound"
 destinations = ["{VPN_SERVER_ADDR}/32"]
 device_order = ["ovpn"]
-
-[integration.openvpn-alpha]
-device = "ovpn"
-protocol = "udp"
-remote_ipv4 = "{SERVER_UNDERLAY}"
-remote_port = {OPENVPN_PORT}
-local_port = {OPENVPN_LOCAL_PORT}
 """,
         encoding="utf-8",
     )
