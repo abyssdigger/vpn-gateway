@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from ipaddress import IPv4Address, IPv4Interface
+from ipaddress import IPv4Interface
 import json
 import os
 from pathlib import Path
@@ -28,10 +28,8 @@ from rou.device_policy import (
 from rou.direct_device_route import realize_direct_device_path_routes
 from rou.instance_lock import InstanceLockSpec
 from rou.interface_inventory import parse_ip_link_inventory
-from rou.local_integration_policy import (
-    IntegrationLocalTransportIntent,
-    IntegrationTransportProtocol,
-)
+from rou.integration_config import parse_integration_transport_config
+from rou.local_integration_policy import IntegrationLocalTransportIntent
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.managed_network_domain import (
@@ -75,6 +73,12 @@ enabled = true
 direction = "outbound"
 destinations = ["{VPN_SERVER_ADDR}/32"]
 device_order = ["ovpn"]
+
+[integration.openvpn-exp049]
+device = "ovpn"
+protocol = "udp"
+remote_ipv4 = "{SERVER_UNDERLAY}"
+remote_port = {OPENVPN_PORT}
 """
 
 
@@ -325,6 +329,28 @@ class PreparedPolicy:
             (),
             NG3_LINUX_POLICY_PLATFORM,
         )
+        integration_cfg = parse_integration_transport_config(self.config_text)
+        known_devices = set(cfg.devices)
+        for item in integration_cfg:
+            if item.device_id not in known_devices:
+                raise AssertionError(
+                    f"integration {item.integration_id!r} references unknown Device "
+                    f"{item.device_id!r}"
+                )
+        integration_intents = tuple(
+            IntegrationLocalTransportIntent(
+                integration_id=item.integration_id,
+                protocol=item.protocol,
+                host_boundary=host_boundary,
+                local_address=INNER_ADDR.ip,
+                remote_address=item.remote_address,
+                remote_port=item.remote_port,
+                local_port=item.local_port,
+            )
+            for item in integration_cfg
+            if item.device_id in cfg.active_device_ids
+        )
+
         desired = build_payload_network_policy_desired_state(
             profiles,
             layout,
@@ -333,16 +359,7 @@ class PreparedPolicy:
             (DeviceNatPolicyIntent("ovpn", NatIntent.MASQUERADE),),
             (DeviceFirewallPolicyIntent("ovpn", rules=None),),
             (),
-            (
-                IntegrationLocalTransportIntent(
-                    integration_id="openvpn-exp049",
-                    protocol=IntegrationTransportProtocol.UDP,
-                    host_boundary=host_boundary,
-                    local_address=INNER_ADDR.ip,
-                    remote_address=IPv4Address(SERVER_UNDERLAY),
-                    remote_port=OPENVPN_PORT,
-                ),
-            ),
+            integration_intents,
         )
 
         self.observed_binding = binding
