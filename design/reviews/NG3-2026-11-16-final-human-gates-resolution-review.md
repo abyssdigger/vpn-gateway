@@ -103,7 +103,7 @@ This continues until desired priority order is reached.
 
 ### Historical evidence for H2
 
-NG2 `design/NG2/availability-routing-model.md` and the NG2 handoff record this exact
+NG2 `legacy-main-ng1-2:design/NG2/availability-routing-model.md` and the NG2 handoff record this exact
 make-before-break model.
 
 EXP-027 demonstrated the material Linux claims:
