@@ -40,6 +40,15 @@ from .forwarding_gate import (
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
+from .managed_network_domain import (
+    ManagedNetworkDomainEnsureResult,
+    ManagedNetworkDomainError,
+    ManagedNetworkDomainSpec,
+    ManagedNetworkDomainVerification,
+    destroy_managed_network_domain,
+    ensure_managed_network_domain,
+    verify_managed_network_domain,
+)
 from .linux_forwarding_gate import (
     LinuxForwardingGateBackend,
     LinuxForwardingGateError,
@@ -419,6 +428,10 @@ __all__ = [
     "IproutePriorityBackendError",
     "LinuxForwardingGateBackend",
     "LinuxForwardingGateError",
+    "ManagedNetworkDomainEnsureResult",
+    "ManagedNetworkDomainError",
+    "ManagedNetworkDomainSpec",
+    "ManagedNetworkDomainVerification",
     "LogicalPathId",
     "ManagedRouteSpec",
     "ManagedRouteType",
@@ -482,6 +495,9 @@ __all__ = [
     "compare_device_firewall",
     "compile_device_firewall_policies",
     "compile_device_firewall_policy",
+    "destroy_managed_network_domain",
+    "ensure_managed_network_domain",
+    "verify_managed_network_domain",
     "compile_payload_forward_policy",
     "compare_payload_forward",
     "observe_device_firewall_structure",
