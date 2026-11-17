@@ -44,10 +44,11 @@ class HostPublicationMappingIntent:
         elif self.selector_kind is HostPublicationSelectorKind.INTERFACE:
             if (
                 not isinstance(self.selector_value, str)
-                or not self.selector_value
-                or len(self.selector_value.encode("utf-8")) > 15
+                or not _is_safe_interface_name(self.selector_value)
             ):
-                raise ValueError("interface selector must carry Linux interface name")
+                raise ValueError(
+                    "interface selector must carry canonical safe Linux interface name"
+                )
         else:
             raise ValueError("unsupported selector kind")
         for name, value in (
@@ -176,4 +177,13 @@ def _rule_sort_key(rule: HostPublicationRuleSpec) -> tuple[object, ...]:
         value,
         int(rule.internal_address),
         rule.internal_port,
+    )
+
+
+def _is_safe_interface_name(value: str) -> bool:
+    return (
+        bool(value)
+        and value.isascii()
+        and len(value.encode("ascii")) <= 15
+        and all(ch.isalnum() or ch in "_.-" for ch in value)
     )

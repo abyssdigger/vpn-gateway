@@ -32,6 +32,13 @@ def intent(
 
 
 class HostPublicationPolicyTests(unittest.TestCase):
+    def test_interface_selector_rejects_nft_script_metacharacters(self):
+        with self.assertRaisesRegex(ValueError, "canonical safe Linux interface name"):
+            intent(
+                kind=HostPublicationSelectorKind.INTERFACE,
+                value='eth0\\nadd table ip injected',
+            )
+
     def test_identical_physical_contribution_deduplicates_across_devices(self):
         desired = build_host_publication_desired(
             (intent(device="a"), intent(device="b"))
