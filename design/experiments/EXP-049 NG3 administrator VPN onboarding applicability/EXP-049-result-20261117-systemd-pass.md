@@ -2,8 +2,8 @@
 
 **Date:** 2026-11-17  
 **Verdict:** **PASS**  
-**Evidence commit:** `d3ceaa43b9a74ab7329f2b13f2e9af1af6627216`  
-**GitHub Actions run:** `44069971041`  
+**Evidence commit:** `12942efbb8de40b0381f1de454aecf23c8a1a5fb`  
+**GitHub Actions run:** `44072821011`  
 **Target userspace:** Debian GNU/Linux 13.7  
 **VPN:** OpenVPN 2.6.14
 
@@ -56,6 +56,11 @@ Owner marker:
 `vpn-gate:ng3:local-integration-v1`
 
 Unrelated ICMP underlay traffic remains blocked after activation.
+
+The generic lower model also supports integrations without a stable local transport port by
+using the same exact remote/address/boundary selectors plus bounded
+`ct state established,related` on reverse INPUT. That broader model is not needed by the
+final OpenVPN evidence because this supported OpenVPN shape fixes the client port explicitly.
 
 ## Two clean cycles
 
