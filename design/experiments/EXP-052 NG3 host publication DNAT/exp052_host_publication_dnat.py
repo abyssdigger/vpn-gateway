@@ -214,6 +214,8 @@ def setup() -> None:
     ns(ALT, "ip", "addr", "add", f"{ALT_CLIENT_IP}/30", "dev", ALT_CLIENT)
     ns(ALT, "ip", "link", "set", ALT_CLIENT, "up")
     ns(ALT, "ip", "route", "add", f"{HOST_PRIMARY}/32", "via", ALT_HOST_IP)
+    ns(ALT, "ip", "route", "add", "198.51.100.0/29", "via", ALT_HOST_IP)
+    ns(CLIENT, "ip", "route", "add", f"{ALT_CLIENT_IP}/32", "via", HOST_PRIMARY)
 
     ns(HOST, "ip", "addr", "add", f"{ALT_HOST_IP}/30", "dev", ALT_HOST)
     ns(HOST, "ip", "link", "set", ALT_HOST, "up")
@@ -232,9 +234,9 @@ def setup() -> None:
 table ip vpn_gate_exp052 {{
     chain publication_prerouting {{
         type nat hook prerouting priority dstnat; policy accept;
-        iifname "{EXT_HOST}" tcp dport 44443 dnat to {MANAGED_IP}:8443 comment "{OWNER}:if"
-        ip daddr {HOST_PRIMARY} udp dport 44444 dnat to {MANAGED_IP}:8444 comment "{OWNER}:ip"
-        tcp dport 44445 dnat to {MANAGED_IP}:8445 comment "{OWNER}:any"
+        fib daddr type local iifname "{EXT_HOST}" tcp dport 44443 dnat to {MANAGED_IP}:8443 comment "{OWNER}:if"
+        fib daddr type local ip daddr {HOST_PRIMARY} udp dport 44444 dnat to {MANAGED_IP}:8444 comment "{OWNER}:ip"
+        fib daddr type local tcp dport 44445 dnat to {MANAGED_IP}:8445 comment "{OWNER}:any"
     }}
 }}
 """
@@ -283,6 +285,17 @@ def main() -> int:
         assert "CONNECT_EX=" in blocked.stdout
         print("EXP052_INTERFACE_SELECTOR_NEGATIVE=PASS")
 
+        transit_if = start_python(ALT, TCP_SERVER, ALT_CLIENT_IP, "44443", "TRANSIT_IF")
+        servers.append(transit_if)
+        transit_if_out = ns(
+            CLIENT, "python3", "-c", TCP_CLIENT, ALT_CLIENT_IP, "44443", "transit-if"
+        )
+        assert f"PEER={ALT_CLIENT_IP}:44443" in transit_if_out.stdout
+        transit_if_server = finish_server(transit_if, "TRANSIT_IF_PEER")
+        assert f"TRANSIT_IF_PEER={CLIENT_IP}:" in transit_if_server, transit_if_server
+        servers.remove(transit_if)
+        print("EXP052_INTERFACE_SELECTOR_TRANSIT_UNTOUCHED=PASS")
+
         ok = ns(CLIENT, "python3", "-c", TCP_CLIENT, HOST_PRIMARY, "44443", "tcp-if")
         assert f"PEER={HOST_PRIMARY}:44443" in ok.stdout
         server_out = finish_server(tcp_if, "TCP_IF_PEER")
@@ -304,6 +317,17 @@ def main() -> int:
         assert f"UDP_IP_PEER={CLIENT_IP}:" in udp_server_out, udp_server_out
         servers.remove(udp_ip)
         print("EXP052_IPV4_SELECTOR_UDP=PASS")
+
+        transit_any = start_python(ALT, TCP_SERVER, ALT_CLIENT_IP, "44445", "TRANSIT_ANY")
+        servers.append(transit_any)
+        transit_any_out = ns(
+            CLIENT, "python3", "-c", TCP_CLIENT, ALT_CLIENT_IP, "44445", "transit-any"
+        )
+        assert f"PEER={ALT_CLIENT_IP}:44445" in transit_any_out.stdout
+        transit_any_server = finish_server(transit_any, "TRANSIT_ANY_PEER")
+        assert f"TRANSIT_ANY_PEER={CLIENT_IP}:" in transit_any_server, transit_any_server
+        servers.remove(transit_any)
+        print("EXP052_ANY_SELECTOR_TRANSIT_UNTOUCHED=PASS")
 
         tcp_any = start_python(MANAGED, TCP_SERVER, MANAGED_IP, "8445", "TCP_ANY")
         servers.append(tcp_any)

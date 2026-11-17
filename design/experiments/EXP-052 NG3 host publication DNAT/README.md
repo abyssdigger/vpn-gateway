@@ -74,7 +74,7 @@ the managed listener on 192.0.2.2:8443. The managed listener observes the origin
 client source address, and the client observes the reply as coming from the original
 198.51.100.1:44443 endpoint.
 
-The same destination arriving through another host interface must not match.
+The same destination arriving through another host interface must not match. Traffic entering through the selected interface for a non-local transit destination on the same port must also remain untouched.
 
 ### H2 — exact IPv4-selected UDP translation
 
@@ -86,14 +86,20 @@ The same port addressed to 198.51.100.5 must not match.
 ### H3 — omitted selector means no additional host address/interface restriction
 
 TCP to the second host address 198.51.100.5:44445 is translated to
-192.0.2.2:8445 when the rule carries no interface/address selector.
+192.0.2.2:8445 when the rule carries no interface/address selector. Omitted selector still means host-local publication, not capture of arbitrary transit traffic with the same destination port.
 
 ### H4 — unrelated host-local traffic remains unrelated
 
 A host-local TCP listener on 198.51.100.1:45555 remains reachable unchanged. The publication
 table must not redirect or otherwise capture that flow.
 
-### H5 — owned lower representation is explicit and disposable
+### H5 — unrelated transit remains unrelated
+
+TCP transit from the primary external client to 203.0.113.2 on publication ports must pass through the disposable host namespace to the real transit listener and must not be DNATed. This is the negative ownership gate for both the interface-selected and selector-less forms.
+
+The selected lower rule therefore requires a pre-DNAT local-destination proof (`fib daddr type local`) for publication forms that do not already identify one exact local IPv4 address.
+
+### H6 — owned lower representation is explicit and disposable
 
 The nft JSON inventory contains exactly the experiment-owned table, one NAT prerouting base
 chain and three owner-marked DNAT rules. Deleting the disposable host namespace removes the
@@ -110,7 +116,7 @@ The harness:
 4. enables `net.ipv4.ip_forward=1` only in the disposable host namespace;
 5. installs one experiment-owned nftables table with three DNAT rules;
 6. starts internal TCP/UDP listeners and one unrelated host-local listener;
-7. runs H1-H4 positive/negative packet checks;
+7. runs H1-H5 positive/negative packet checks, including same-port foreign transit;
 8. validates the nft JSON owner representation;
 9. removes every disposable namespace in `finally`.
 
@@ -122,7 +128,7 @@ sudo python3 "design/experiments/EXP-052 NG3 host publication DNAT/exp052_host_p
 
 ## PASS criterion
 
-EXP-052 is PASS only if H1-H5 all pass in one run.
+EXP-052 is PASS only if H1-H6 all pass in one run.
 
 A PASS permits the next architecture/implementation unit to select a narrow host-boundary
 publication realization based on this mechanism. It does not by itself prove the complete
