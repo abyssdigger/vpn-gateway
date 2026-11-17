@@ -334,7 +334,7 @@ def _parse_publication(
     if match is None:
         raise Release1ConfigError(
             f"{where} must be tcp|udp[/host-IPv4|host-interface]:"
-            "host-port[>internal-port]"
+            "host-port-bundle[>internal-port-bundle]"
         )
     protocol, selector_text, host_text, internal_text = match.groups()
     host_ports = _parse_port_bundle(host_text, f"{where} host ports")
