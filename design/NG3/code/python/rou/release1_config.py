@@ -15,6 +15,7 @@ from typing import Any, Mapping
 
 from .config import ConfigError, _parse_structural_root
 from .domain import Direction, StructuralConfig
+from .port_bundle import PortBundle, PortSpan
 
 
 _TOP_LEVEL_KEYS = frozenset({"device", "profile"})
@@ -46,7 +47,7 @@ _CLIENT_RE = re.compile(
     r"^(tcp|udp)(?::([0-9]+))?>([^:>]+):([0-9]+)$"
 )
 _PUBLICATION_RE = re.compile(
-    r"^(tcp|udp)(?:/([^:>]+))?:([0-9]+)(?:>([0-9]+))?$"
+    r"^(tcp|udp)(?:/([^:>]+))?:([^>]+)(?:>([^>]+))?$"
 )
 
 
@@ -60,9 +61,9 @@ class FirewallRuleConfig:
     action: str
     protocol: str | None = None
     source_ipv4_cidr: ipaddress.IPv4Network | None = None
-    source_port: int | None = None
+    source_ports: PortBundle | None = None
     destination_ipv4_cidr: ipaddress.IPv4Network | None = None
-    destination_port: int | None = None
+    destination_ports: PortBundle | None = None
     comment: str | None = None
 
 
@@ -84,8 +85,8 @@ class PublicationHostSelector:
 class VpnServerPublicationConfig:
     protocol: str
     host_selector: PublicationHostSelector
-    host_port: int
-    internal_port: int
+    host_ports: PortBundle
+    internal_ports: PortBundle
 
 
 @dataclass(frozen=True, slots=True)
@@ -336,17 +337,23 @@ def _parse_publication(
             "host-port[>internal-port]"
         )
     protocol, selector_text, host_text, internal_text = match.groups()
-    host_port = _port(host_text, f"{where} host port")
+    host_ports = _parse_port_bundle(host_text, f"{where} host ports")
+    internal_ports = (
+        host_ports
+        if internal_text is None
+        else _parse_port_bundle(internal_text, f"{where} internal ports")
+    )
+    if host_ports.cardinality != internal_ports.cardinality:
+        raise Release1ConfigError(
+            f"{where} host/internal port bundles must have equal cardinality "
+            "for positional 1:1 mapping"
+        )
     selector = _publication_selector(selector_text, where)
     return VpnServerPublicationConfig(
         protocol=protocol,
         host_selector=selector,
-        host_port=host_port,
-        internal_port=(
-            host_port
-            if internal_text is None
-            else _port(internal_text, f"{where} internal port")
-        ),
+        host_ports=host_ports,
+        internal_ports=internal_ports,
     )
 
 
@@ -417,9 +424,9 @@ def _parse_firewall_rule(value: str, where: str) -> FirewallRuleConfig:
         index += 1
 
     source_network = None
-    source_port = None
+    source_ports = None
     destination_network = None
-    destination_port = None
+    destination_ports = None
     seen: set[str] = set()
 
     while index < len(tokens):
@@ -438,14 +445,14 @@ def _parse_firewall_rule(value: str, where: str) -> FirewallRuleConfig:
             raise Release1ConfigError(
                 f"{where} {clause} clause requires an IPv4 CIDR"
             )
-        network, port = _network_and_port(tokens[index], f"{where} {clause}")
+        network, ports = _network_and_ports(tokens[index], f"{where} {clause}")
         index += 1
         if clause == "from":
-            source_network, source_port = network, port
+            source_network, source_ports = network, ports
         else:
-            destination_network, destination_port = network, port
+            destination_network, destination_ports = network, ports
 
-    if (source_port is not None or destination_port is not None) and (
+    if (source_ports is not None or destination_ports is not None) and (
         protocol not in _TRANSPORT_PROTOCOLS
     ):
         raise Release1ConfigError(
@@ -457,17 +464,17 @@ def _parse_firewall_rule(value: str, where: str) -> FirewallRuleConfig:
         action=action,
         protocol=protocol,
         source_ipv4_cidr=source_network,
-        source_port=source_port,
+        source_ports=source_ports,
         destination_ipv4_cidr=destination_network,
-        destination_port=destination_port,
+        destination_ports=destination_ports,
         comment=comment,
     )
 
 
-def _network_and_port(
+def _network_and_ports(
     value: str,
     where: str,
-) -> tuple[ipaddress.IPv4Network, int | None]:
+) -> tuple[ipaddress.IPv4Network, PortBundle | None]:
     network_text = value
     port_text = None
     if ":" in value:
@@ -483,8 +490,37 @@ def _network_and_port(
     if not isinstance(network, ipaddress.IPv4Network):
         raise Release1ConfigError(f"{where} must be IPv4")
     return network, (
-        None if port_text is None else _port(port_text, f"{where} port")
+        None
+        if port_text is None
+        else _parse_port_bundle(port_text, f"{where} ports")
     )
+
+
+def _parse_port_bundle(value: str, where: str) -> PortBundle:
+    if not isinstance(value, str) or not value or any(ch.isspace() for ch in value):
+        raise Release1ConfigError(
+            f"{where} must be a compact comma-separated port bundle without spaces"
+        )
+    spans = []
+    for index, item in enumerate(value.split(",")):
+        if not item:
+            raise Release1ConfigError(f"{where} contains an empty item")
+        if "-" in item:
+            parts = item.split("-")
+            if len(parts) != 2:
+                raise Release1ConfigError(f"{where}[{index}] has invalid range syntax")
+            first = _port(parts[0], f"{where}[{index}] range start")
+            last = _port(parts[1], f"{where}[{index}] range end")
+        else:
+            first = last = _port(item, f"{where}[{index}]")
+        try:
+            spans.append(PortSpan(first, last))
+        except ValueError as exc:
+            raise Release1ConfigError(f"{where}[{index}]: {exc}") from None
+    try:
+        return PortBundle(tuple(spans))
+    except ValueError as exc:
+        raise Release1ConfigError(f"{where}: {exc}") from None
 
 
 def _parse_availability(
