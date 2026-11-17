@@ -1,0 +1,72 @@
+name: Actual main lineage guard
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  lineage-hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject legacy artifacts in the active lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=0
+
+          reject() {
+            echo "::error file=$1::legacy artifact is not allowed on the active main lineage"
+            bad=1
+          }
+
+          while IFS= read -r path; do
+            case "$path" in
+              design/RC*/*|design/NG1/*|design/NG2/*)
+                reject "$path"
+                ;;
+              .github/workflows/rc*-python.yml|.github/workflows/ng1-python.yml|.github/workflows/ng2-python.yml)
+                reject "$path"
+                ;;
+              design/experiments/*)
+                case "$path" in
+                  design/experiments/*" NG3 "*/*) ;;
+                  *) reject "$path" ;;
+                esac
+                ;;
+              design/reviews/*)
+                case "$path" in
+                  design/reviews/NG3-*.md|design/reviews/README.md) ;;
+                  *) reject "$path" ;;
+                esac
+                ;;
+              design/deferrals/*)
+                case "$path" in
+                  design/deferrals/NG3-*.md) ;;
+                  *) reject "$path" ;;
+                esac
+                ;;
+            esac
+          done < <(git ls-files)
+
+          mapfile -t workflows < <(git ls-files '.github/workflows/*' | sort)
+          expected=(
+            ".github/workflows/actual-main-hygiene.yml"
+            ".github/workflows/ng3-python.yml"
+          )
+          if [[ "${workflows[*]}" != "${expected[*]}" ]]; then
+            echo "::error::unexpected workflow set on active lineage"
+            printf 'actual:   %s\n' "${workflows[*]}"
+            printf 'expected: %s\n' "${expected[*]}"
+            bad=1
+          fi
+
+          if (( bad != 0 )); then
+            exit 1
+          fi
+
+          echo "ACTUAL_MAIN_LEGACY_ARTIFACTS=0"
