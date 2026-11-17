@@ -145,8 +145,9 @@ Examples of strict validation already recovered:
 
 No accepted NG3 requirement currently requires user-facing availability timing/unit knobs.
 Internal names such as `interval_seconds` or `failure_ticks` therefore must not be copied into
-user config merely because they exist in runtime types. If such knobs are later required,
-their external spelling belongs to the deferred configuration-format review.
+user config merely because they exist in runtime types. If a later accepted requirement makes
+such knobs user policy, that future capability must receive its own configuration-format
+review rather than extending Release-1 syntax implicitly.
 
 # 4. Device
 
@@ -846,12 +847,12 @@ This recovered config model does not require NG3 to restore:
 - PlannerEngine;
 - NG1 runtime state classes;
 - NG1 metric allocator implementation;
-- transport publication machinery;
-- any guessed Device-firewall external grammar (ordered firewall semantics are accepted;
-  exact encoding remains unresolved);
-- any guessed Device publication grammar (the concept is retained; grammar remains
-  unresolved);
+- NG1 transport publication machinery merely because it existed there;
+- historical Device-firewall spellings such as `traffic_envelope`;
+- historical Device publication shorthand or range grammar;
 - old process topology.
+
+NG3 instead uses the independently accepted canonical Release-1 grammar in this document.
 
 Those require independent NG3 requirements if needed.
 
