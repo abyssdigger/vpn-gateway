@@ -2,6 +2,7 @@ from ipaddress import IPv4Address
 import unittest
 
 from rou.alpha_runtime import AlphaPreparedPolicy
+from rou.host_publication_policy import HostPublicationSelectorKind
 from rou.interface_identity import InterfaceIdentity
 from rou.payload_routing_desired import ManagedRouteType
 
@@ -118,6 +119,52 @@ remote_port = 11940
                 ),
                 local_address=IPv4Address("198.19.255.2"),
             )
+
+    def test_alpha_materializes_canonical_server_publication_both_halves(self):
+        replacement = (
+            'use_outbound_nat = false\n'
+            'publish_vpn_server = [\n'
+            '    "tcp/eth0:443,8000-8001>8443,18000-18001",\n'
+            '    "udp:53",\n'
+            ']\n'
+        )
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG.replace("use_outbound_nat = false\n", replacement),
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        host_boundary = InterfaceIdentity("vnga-inner0", 7)
+        desired = prepared.build_current(
+            host_boundary,
+            (InterfaceIdentity("lo", 1), host_boundary),
+        )
+        self.assertEqual(len(desired.nft.local_publication.rules), 8)
+
+        host = prepared.build_host_publication_desired()
+        self.assertEqual(len(host.rules), 4)
+        first = next(rule for rule in host.rules if rule.host_port == 443)
+        self.assertIs(first.selector_kind, HostPublicationSelectorKind.INTERFACE)
+        self.assertEqual(first.selector_value, "eth0")
+        self.assertEqual(first.internal_port, 8443)
+        self.assertEqual(str(first.internal_address), "198.19.255.2")
+        udp = next(rule for rule in host.rules if rule.protocol.value == "udp")
+        self.assertIs(udp.selector_kind, HostPublicationSelectorKind.ANY)
+        self.assertEqual(udp.host_port, 53)
+        self.assertEqual(udp.internal_port, 53)
+
+    def test_alpha_rejects_ambiguous_server_publication_projection(self):
+        replacement = (
+            'use_outbound_nat = false\n'
+            'publish_vpn_server = [\n'
+            '    "tcp:443>8443",\n'
+            '    "tcp/198.51.100.10:443>9443",\n'
+            ']\n'
+        )
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG.replace("use_outbound_nat = false\n", replacement),
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        with self.assertRaisesRegex(Exception, "ambiguous host publication"):
+            prepared.build_host_publication_desired()
 
     def test_alpha_materializes_canonical_device_nat_and_firewall(self):
         prepared = AlphaPreparedPolicy.from_text(
