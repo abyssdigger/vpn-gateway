@@ -81,7 +81,7 @@ move:
 During the move all eligible paths remain present; one path may temporarily have two route
 copies with different metrics.
 
-Historical NG2 `design/NG2/availability-routing-model.md`, NG2 handoff and EXP-027 provide
+Historical NG2 `legacy-main-ng1-2:design/NG2/availability-routing-model.md`, NG2 handoff and EXP-027 provide
 reusable evidence for the materially identical Linux route behavior.
 
 New requirement nodes:

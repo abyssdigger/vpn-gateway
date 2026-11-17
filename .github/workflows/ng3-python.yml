@@ -2,6 +2,7 @@ name: NG3 Python
 
 on:
   push:
+    branches-ignore: [ legacy-main-rc, legacy-main-ng1-2, legacy-main-ng3 ]
     paths:
       - "design/NG3/code/python/**"
       - ".github/workflows/ng3-python.yml"
@@ -27,6 +28,7 @@ on:
       - "design/experiments/EXP-046 NG3 publication local admission/**"
       - "design/experiments/EXP-047 NG3 atomic local publication mutation/**"
   pull_request:
+    branches: [ main ]
     paths:
       - "design/NG3/code/python/**"
       - ".github/workflows/ng3-python.yml"

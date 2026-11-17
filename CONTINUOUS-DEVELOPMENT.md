@@ -757,8 +757,9 @@ the most expensive stand.
 
 ## Backend direction
 
-For NG1 production packet filtering and NAT policy, nftables is the production backend.
+Backend choices are owned by the current normative architecture and executable evidence, not
+by an older generation remaining in the repository tree.
 
-Legacy iptables-based code may remain temporarily as regression/historical evidence but
-must not define new production semantics and must not remain in the production Planner/
-runtime ownership path.
+For the current NG3 line, packet filtering/NAT lower policy is nftables-based as defined by
+the NG3 architecture and accepted experiments. Historical backend code remains on legacy
+branches and does not define current production semantics.

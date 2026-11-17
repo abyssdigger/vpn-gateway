@@ -25,7 +25,7 @@ The review does not review production code. NG3 currently has no implementation 
 The review explicitly considered:
 
 ```text
-design/NG2/HANDOFF.md
+legacy-main-ng1-2:design/NG2/HANDOFF.md
 branch: code-cycle-20261115-publisher-failure-recovery-40m
 handoff review-input commit: a8d17ffd0c4fd2bef37e2ce231d4d9d8f4c89e0b
 ```
