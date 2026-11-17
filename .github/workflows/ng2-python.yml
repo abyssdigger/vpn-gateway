@@ -2,10 +2,12 @@ name: NG2 Python
 
 on:
   push:
+    branches: [ legacy-main-ng1-2 ]
     paths:
       - "design/NG2/code/python/**"
       - ".github/workflows/ng2-python.yml"
   pull_request:
+    branches: [ legacy-main-ng1-2 ]
     paths:
       - "design/NG2/code/python/**"
       - ".github/workflows/ng2-python.yml"
