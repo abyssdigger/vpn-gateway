@@ -34,6 +34,8 @@ VPN_CLIENT_ADDR = "10.253.0.2"
 VPN_SERVER_ADDR = "10.253.0.1"
 OPENVPN_PORT = 11940
 OPENVPN_LOCAL_PORT = 11941
+PUBLICATION_HOST_PORT = 14443
+PUBLICATION_INTERNAL_PORT = 24443
 
 
 def command(argv, *, check=True):
@@ -175,6 +177,7 @@ def setup_server_namespace():
 def cleanup():
     systemctl("stop", VPN_UNIT, check=False)
     systemctl("stop", ALPHA_UNIT, check=False)
+    command(("nft", "delete", "table", "ip", "vpn_gate_publication"), check=False)
     command(("ip", "netns", "del", MANAGED), check=False)
     command(("ip", "link", "del", HOST_BOUNDARY), check=False)
     command(("ip", "netns", "del", SERVER_NS), check=False)
@@ -239,6 +242,7 @@ enabled = true
 expected_interfaces = ["{VPN_IF}"]
 use_outbound_nat = false
 allow_vpn_client = "udp:{OPENVPN_LOCAL_PORT}>{SERVER_UNDERLAY}:{OPENVPN_PORT}"
+publish_vpn_server = "tcp/{SERVER_HOST}:{PUBLICATION_HOST_PORT}>{PUBLICATION_INTERNAL_PORT}"
 
 [profile.alpha]
 enabled = true
@@ -250,6 +254,70 @@ device_order = ["ovpn"]
     )
     return server
 
+
+PUBLICATION_SERVER = r'''
+import socket, sys
+addr = sys.argv[1]
+port = int(sys.argv[2])
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind((addr, port))
+s.listen(1)
+print('READY', flush=True)
+conn, peer = s.accept()
+conn.settimeout(5)
+data = conn.recv(4096)
+print(f'PEER={peer[0]}:{peer[1]}', flush=True)
+conn.sendall(b'PUBACK:' + data)
+conn.close()
+s.close()
+'''
+
+PUBLICATION_CLIENT = r'''
+import socket, sys
+addr = sys.argv[1]
+port = int(sys.argv[2])
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.settimeout(5)
+s.connect((addr, port))
+s.sendall(b'publication-e2e')
+data = s.recv(4096)
+peer = s.getpeername()
+print(f'PEER={peer[0]}:{peer[1]}')
+print('DATA=' + data.decode())
+assert data == b'PUBACK:publication-e2e'
+s.close()
+'''
+
+
+def spawn_publication_listener():
+    proc = subprocess.Popen(
+        (
+            'ip', 'netns', 'exec', MANAGED,
+            'python3', '-u', '-c', PUBLICATION_SERVER,
+            INNER_ADDR, str(PUBLICATION_INTERNAL_PORT),
+        ),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert proc.stdout is not None
+    ready = proc.stdout.readline().strip()
+    if ready != 'READY':
+        out, err = proc.communicate(timeout=3)
+        raise RuntimeError(
+            f'publication listener did not become ready: {ready!r} {out!r} {err!r}'
+        )
+    return proc
+
+
+def publication_probe():
+    return ns_command(
+        SERVER_NS,
+        'python3', '-c', PUBLICATION_CLIENT,
+        SERVER_HOST_CIDR.split('/')[0],
+        str(PUBLICATION_HOST_PORT),
+    )
 
 def spawn_server(config, log_path):
     log = log_path.open("w", encoding="utf-8")
@@ -294,6 +362,7 @@ def main():
     root = Path(tempfile.mkdtemp(prefix="exp051-alpha-"))
     server_proc = None
     server_log = None
+    publication_proc = None
     original_forward = command(("sysctl", "-n", "net.ipv4.ip_forward")).stdout.strip()
 
     cleanup()
@@ -326,6 +395,42 @@ def main():
         assert Path(f"/run/netns/{MANAGED}").exists()
         assert interface_exists(MANAGED, INNER_BOUNDARY)
         print("EXP051_ALPHA_CONTROLLER_READY=PASS")
+
+        # Server publication is a Device transport property and must be complete
+        # even before a concrete VPN endpoint appears. Prove both the ordinary
+        # host DNAT owner and the managed local INPUT/OUTPUT admission.
+        host_publication = command(
+            ("nft", "list", "table", "ip", "vpn_gate_publication")
+        ).stdout
+        assert "host-publication-owner-v1" in host_publication
+        assert f'tcp dport {PUBLICATION_HOST_PORT}' in host_publication
+        assert f'dnat to {INNER_ADDR}:{PUBLICATION_INTERNAL_PORT}' in host_publication
+
+        managed_input = ns_command(
+            MANAGED,
+            "nft", "list", "chain", "ip", "vpn_gate", "stack_input",
+        ).stdout
+        managed_output = ns_command(
+            MANAGED,
+            "nft", "list", "chain", "ip", "vpn_gate", "stack_output",
+        ).stdout
+        assert "local-publication-v1" in managed_input
+        assert f"tcp dport {PUBLICATION_INTERNAL_PORT}" in managed_input
+        assert "local-publication-v1" in managed_output
+        assert f"tcp sport {PUBLICATION_INTERNAL_PORT}" in managed_output
+
+        publication_proc = spawn_publication_listener()
+        publication = publication_probe()
+        assert (
+            f"PEER={SERVER_HOST_CIDR.split('/')[0]}:{PUBLICATION_HOST_PORT}"
+            in publication.stdout
+        )
+        assert "DATA=PUBACK:publication-e2e" in publication.stdout
+        pub_out, pub_err = publication_proc.communicate(timeout=5)
+        assert publication_proc.returncode == 0, pub_err
+        assert f"PEER={SERVER_UNDERLAY}:" in pub_out, pub_out
+        publication_proc = None
+        print("EXP051_SERVER_PUBLICATION_E2E=PASS")
 
         # Before VPN start there is no payload path, but the exact transport
         # contribution must already be present so the VPN can establish.
@@ -432,6 +537,11 @@ def main():
             ("ip", "link", "show", "dev", HOST_BOUNDARY),
             check=False,
         ).returncode != 0
+        assert command(
+            ("nft", "list", "table", "ip", "vpn_gate_publication"),
+            check=False,
+        ).returncode != 0
+        print("EXP051_SERVER_PUBLICATION_STOP_CLEAN=PASS")
         print("EXP051_STACK_STOP_CLEAN=PASS")
         print("EXP051_RESULT=PASS")
         return 0
@@ -447,6 +557,13 @@ def main():
         print("EXP051_SERVER_LOG=" + json.dumps(tail))
         raise
     finally:
+        if publication_proc is not None and publication_proc.poll() is None:
+            publication_proc.terminate()
+            try:
+                publication_proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                publication_proc.kill()
+                publication_proc.wait(timeout=3)
         cleanup()
         terminate(server_proc, server_log)
         command(("sysctl", "-w", f"net.ipv4.ip_forward={original_forward}"), check=False)
