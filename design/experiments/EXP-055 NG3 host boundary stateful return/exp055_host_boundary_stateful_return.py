@@ -103,7 +103,11 @@ def addr_up(namespace: str, interface: str, cidr: str) -> None:
 
 
 def nft(namespace: str, text: str) -> None:
-    ns(namespace, "nft", "-f", "-", input_text=text)
+    result = ns(namespace, "nft", "-f", "-", input_text=text, check=False)
+    if result.returncode != 0:
+        raise AssertionError(
+            f"nft failed rc={result.returncode}: {result.stderr}\nscript:\n{text}"
+        )
 
 
 UDP_SERVER = r"""
