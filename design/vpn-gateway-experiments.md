@@ -15,6 +15,7 @@ Current experiment directories:
 | EXP-049 | administrator VPN onboarding applicability |
 | EXP-050 | bounded VPN lifecycle applicability |
 | EXP-051 | first functioning alpha |
+| EXP-052 | host-side server publication DNAT lower evidence |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.

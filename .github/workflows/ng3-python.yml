@@ -12,6 +12,7 @@ on:
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
       - "design/experiments/EXP-051 NG3 first functioning alpha/**"
+      - "design/experiments/EXP-052 NG3 host publication DNAT/**"
       - "design/NG3/deployment/alpha/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
@@ -38,6 +39,7 @@ on:
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
       - "design/experiments/EXP-051 NG3 first functioning alpha/**"
+      - "design/experiments/EXP-052 NG3 host publication DNAT/**"
       - "design/NG3/deployment/alpha/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
@@ -444,3 +446,18 @@ jobs:
             set -e
             python3 "design/experiments/EXP-051 NG3 first functioning alpha/exp051_alpha_smoke.py"
           '
+
+  linux-host-publication-dnat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-052 host-side server publication DNAT
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-052 NG3 host publication DNAT/exp052_host_publication_dnat.py"

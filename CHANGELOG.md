@@ -1,5 +1,18 @@
 # VPN-GATE active-line changelog
 
+## 2026-11-17 — NG3 server publication runtime
+
+Canonical Device `publish_vpn_server` is now materialized end-to-end by the reference
+alpha/beta runtime.
+
+- added strict owner-scoped host nft DNAT plus existing managed local publication admission;
+- proved interface, exact-IPv4 and selector-less mapping with foreign-transit exclusion;
+- added authoritative host forwarding/interface/address prerequisite checks without acquiring
+  ordinary-host ownership;
+- rejects ambiguous overlapping publication mappings before any runtime mutation;
+- installed EXP-051 evidence passes real external TCP publication, ordinary VPN lifecycle and
+  verified host-owner cleanup.
+
 ## 2026-11-17 — actual-main lineage bootstrap
 
 The active `main` tree was separated from historical generation payload.

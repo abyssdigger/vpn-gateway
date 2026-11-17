@@ -53,7 +53,19 @@ from .forwarding_gate import (
 from .instance_lock import InstanceLockSpec
 from .interface_identity import InterfaceIdentity
 from .interface_inventory import parse_ip_link_inventory
+from .host_publication_policy import (
+    HostPublicationDesiredState,
+    HostPublicationMappingIntent,
+    HostPublicationSelectorKind,
+    build_host_publication_desired,
+)
 from .linux_forwarding_gate import LinuxForwardingGateBackend
+from .linux_host_publication import (
+    HostPublicationConvergenceResult,
+    HostPublicationConvergenceStatus,
+    LinuxHostPublicationBackend,
+    converge_host_publication_once,
+)
 from .linux_nft_scaffold import (
     LinuxNftScaffoldBackend,
     SubprocessNftRunner,
@@ -63,6 +75,10 @@ from .linux_structural_policy import LinuxStructuralPolicyBackend
 from .local_integration_policy import (
     IntegrationLocalTransportIntent,
     IntegrationTransportProtocol,
+)
+from .local_publication_policy import (
+    PublicationLocalEndpointIntent,
+    PublicationProtocol,
 )
 from .managed_network_domain import (
     ManagedNetworkDomainSpec,
@@ -129,18 +145,19 @@ class AlphaPreparedPolicy:
                     "is not yet assembled end-to-end by the alpha runtime"
                 )
 
-        for device_id in config.structural.active_device_ids:
-            if config.devices[device_id].publish_vpn_server:
-                raise AlphaRuntimeError(
-                    f"device {device_id!r} requests publish_vpn_server, which "
-                    "is not yet fully materialized by the alpha runtime"
-                )
-
-        return cls(
+        prepared = cls(
             local_address=local_address,
             binding_state=DeviceBindingState.empty(),
             config=config,
         )
+        try:
+            prepared.build_host_publication_desired()
+        except Exception as exc:
+            raise AlphaRuntimeError(
+                "host publication projection failed before runtime mutation: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        return prepared
 
     def build_current(
         self,
@@ -215,6 +232,18 @@ class AlphaPreparedPolicy:
                 self.config.devices[device_id].allow_vpn_client
             )
         )
+        publication_intents = tuple(
+            PublicationLocalEndpointIntent(
+                device_id=device_id,
+                protocol=PublicationProtocol(item.protocol),
+                local_address=self.local_address,
+                internal_port=internal_port,
+                host_boundary=host_boundary,
+            )
+            for device_id in sorted(self.config.structural.active_device_ids)
+            for item in self.config.devices[device_id].publish_vpn_server
+            for internal_port in item.internal_ports.expanded()
+        )
 
         return build_payload_network_policy_desired_state(
             profiles,
@@ -223,9 +252,32 @@ class AlphaPreparedPolicy:
             host_boundary,
             nat_policies,
             firewall_policies,
-            (),
+            publication_intents,
             integration_intents,
         )
+
+    def build_host_publication_desired(self) -> HostPublicationDesiredState:
+        intents = []
+        for device_id in sorted(self.config.structural.active_device_ids):
+            for item in self.config.devices[device_id].publish_vpn_server:
+                selector = HostPublicationSelectorKind(item.host_selector.kind)
+                for host_port, internal_port in zip(
+                    item.host_ports.expanded(),
+                    item.internal_ports.expanded(),
+                    strict=True,
+                ):
+                    intents.append(
+                        HostPublicationMappingIntent(
+                            device_id=device_id,
+                            protocol=PublicationProtocol(item.protocol),
+                            selector_kind=selector,
+                            selector_value=item.host_selector.value,
+                            host_port=host_port,
+                            internal_address=self.local_address,
+                            internal_port=internal_port,
+                        )
+                    )
+        return build_host_publication_desired(intents)
 
 
 class AlphaReconcileStatus(str, Enum):
@@ -238,7 +290,9 @@ class AlphaReconcileStatus(str, Enum):
 class AlphaReconcileResult:
     status: AlphaReconcileStatus
     desired: PayloadNetworkPolicyDesiredState | None
+    host_publication_desired: HostPublicationDesiredState | None = None
     activation: NetworkPolicyActivationResult | None = None
+    host_publication: HostPublicationConvergenceResult | None = None
     diagnostic: str | None = None
 
     @property
@@ -306,6 +360,7 @@ def reconcile_alpha_payload_once(
             verification.host_boundary,
             interfaces,
         )
+        host_publication_desired = prepared.build_host_publication_desired()
     except Exception as exc:
         return AlphaReconcileResult(
             AlphaReconcileStatus.FAILED,
@@ -332,9 +387,31 @@ def reconcile_alpha_payload_once(
         )
         gate = gate_backend.observe_forwarding_gate()
         if comparison.desired_confirmed and gate is ForwardingGateState.ENABLED:
+            host_result = converge_host_publication_once(
+                LinuxHostPublicationBackend(runner),
+                host_publication_desired,
+            )
+            if host_result.confirmed:
+                return AlphaReconcileResult(
+                    status=(
+                        AlphaReconcileStatus.RECONCILED
+                        if host_result.status
+                        is HostPublicationConvergenceStatus.APPLIED
+                        else AlphaReconcileStatus.EXACT
+                    ),
+                    desired=desired,
+                    host_publication_desired=host_publication_desired,
+                    host_publication=host_result,
+                )
             return AlphaReconcileResult(
-                AlphaReconcileStatus.EXACT,
-                desired,
+                status=AlphaReconcileStatus.FAILED,
+                desired=desired,
+                host_publication_desired=host_publication_desired,
+                host_publication=host_result,
+                diagnostic=(
+                    host_result.diagnostic
+                    or "host publication convergence is not confirmed"
+                ),
             )
     except Exception:
         # The guarded activation boundary below re-observes from authoritative
@@ -350,10 +427,28 @@ def reconcile_alpha_payload_once(
         NG3_LINUX_POLICY_PLATFORM,
     )
     if activation.ready:
+        host_result = converge_host_publication_once(
+            LinuxHostPublicationBackend(runner),
+            host_publication_desired,
+        )
+        if host_result.confirmed:
+            return AlphaReconcileResult(
+                status=AlphaReconcileStatus.RECONCILED,
+                desired=desired,
+                host_publication_desired=host_publication_desired,
+                activation=activation,
+                host_publication=host_result,
+            )
         return AlphaReconcileResult(
-            AlphaReconcileStatus.RECONCILED,
-            desired,
+            status=AlphaReconcileStatus.FAILED,
+            desired=desired,
+            host_publication_desired=host_publication_desired,
             activation=activation,
+            host_publication=host_result,
+            diagnostic=(
+                host_result.diagnostic
+                or "host publication convergence is not confirmed"
+            ),
         )
 
     return AlphaReconcileResult(
@@ -452,6 +547,38 @@ def run_alpha_runtime(
 
         assert startup.session is not None
         prepared = holder["policy"]
+        host_publication_desired = prepared.build_host_publication_desired()
+        host_publication_backend = LinuxHostPublicationBackend(runner)
+        host_start = converge_host_publication_once(
+            host_publication_backend,
+            host_publication_desired,
+        )
+        if not host_start.confirmed:
+            host_cleanup = converge_host_publication_once(
+                host_publication_backend,
+                HostPublicationDesiredState(()),
+            )
+            stopped = stop_controller_once(
+                startup.session,
+                domain_spec,
+                runner,
+            )
+            _log(
+                "VPNG_ALPHA_START_FAILED",
+                (
+                    "status=host_publication_unready "
+                    f"diagnostic={host_start.diagnostic!r} "
+                    f"host_cleanup={host_cleanup.status.value} "
+                    f"managed_cleanup={stopped.status.value}"
+                ),
+            )
+            return (
+                1
+                if host_cleanup.confirmed
+                and stopped.status is ControllerStopStatus.STOPPED
+                else 2
+            )
+
         _log(
             "VPNG_ALPHA_READY",
             (
@@ -490,6 +617,10 @@ def run_alpha_runtime(
                 last_diagnostic = result.diagnostic
 
         _notify_systemd("STOPPING=1\nSTATUS=VPN-GATE alpha stopping")
+        host_cleanup = converge_host_publication_once(
+            LinuxHostPublicationBackend(runner),
+            HostPublicationDesiredState(()),
+        )
         stopped = stop_controller_once(
             startup.session,
             domain_spec,
@@ -499,11 +630,18 @@ def run_alpha_runtime(
             "VPNG_ALPHA_STOP",
             (
                 f"status={stopped.status.value} "
+                f"host_publication_cleanup={host_cleanup.status.value} "
+                f"host_publication_error={host_cleanup.diagnostic!r} "
                 f"cleanup_error={stopped.cleanup_error!r} "
                 f"lock_error={stopped.lock_error!r}"
             ),
         )
-        return 0 if stopped.status is ControllerStopStatus.STOPPED else 2
+        return (
+            0
+            if host_cleanup.confirmed
+            and stopped.status is ControllerStopStatus.STOPPED
+            else 2
+        )
     finally:
         signal.signal(signal.SIGTERM, previous_sigterm)
         signal.signal(signal.SIGINT, previous_sigint)

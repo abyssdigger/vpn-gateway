@@ -46,6 +46,7 @@ Implemented:
 - EXP-045-backed combined read-only nft owner/desired comparison for the invariant scaffold plus Profile forward, Device firewall and payload NAT owner classes;
 - EXP-046-backed normalized Device-transport publication-local INPUT/OUTPUT intent, exact paired desired rules and strict owner observation using current host-boundary identity, exact local IPv4/protocol/port selectors and plain accept;
 - EXP-047-backed atomic publication-local mutation Driver using one transactional nft full-diff batch for stale exact-handle deletion plus missing exact-rule addition, without treating ForwardingGate as a local-plane safety barrier;
+- EXP-052-backed pure host-publication desired projection plus strict ordinary-host nft owner/observer/atomic replacement backend, including local-destination proof, selector availability checks, external host-forwarding prerequisite observation, overlap rejection and no host-global sysctl ownership;
 - pure combined mutation-step planner with stale local admission cleanup first, payload restrictive cleanup next, payload additions, and missing publication-local admission last;
 - guarded combined Profile/Device/NAT/publication-local nft Executor + Linux backend using one link-bracketed whole-table snapshot before and after each write, persistent closed ForwardingGate for payload safety, exact postcondition progress and no forwarding activation;
 - privileged combined coexistence integration covering materialization to exact state, atomic local-publication replacement, complete cleanup back to scaffold-only, Device-before-Profile ordering and fail-closed refusal of still-unclassified local owner classes;
@@ -72,7 +73,6 @@ Important non-goals of the current reference:
 - no full daemon/lifecycle assembly;
 - no production probe execution;
 - no Profile ordinary-side `+snat` physical materialization yet;
-- no full host-side `publish_vpn_server` materialization yet;
 - no availability probe runtime assembly or user timing knobs.
 
 Those omitted areas remain behind their current architecture/evidence gates and must not be

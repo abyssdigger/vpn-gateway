@@ -15,15 +15,19 @@ already accepted requirements and constraints:
 - `VPNG0005-R5.R1` / `VPNG0005-R5.R2` / `VPNG0005-R5.R3` — startup and local
   reconciliation from fresh authoritative state;
 - `VPNG0005-R5.R6.R2` / `VPNG0005-R5.R6.R3` — bounded stop/restart postconditions;
+- `VPNG0001-R1.R2.R4.R6.R3` — Device-owned server publication;
+- `VPNG0004-R4.R6.R1.R5.R1` — bounded managed local publication admission;
 - `VPNG0007-R7.R7` — implementation/evidence is requirements-driven.
 
-## Alpha limitation under test
+## Current alpha boundary under test
 
-The final external Device NAT/firewall/publication TOML grammar remains explicitly postponed.
+The canonical Release-1 Device NAT/firewall/publication grammar is accepted. This extension
+keeps the payload topology NAT-free but additionally requests a real
+`publish_vpn_server = "tcp/alpha-srv-host:14443>24443"`.
 
-EXP-051 therefore uses a NAT-free test topology with an explicit return route on the remote
-test side. The alpha runtime supplies internal `NatIntent.NONE` and omitted Device firewall.
-This is an alpha implementation limitation, not a new Release-1 product constraint or grammar.
+The ordinary host forwarding prerequisite is enabled by the disposable harness before
+controller startup. The runtime observes that prerequisite; it does not own or set the
+host-global forwarding sysctl.
 
 ## Test topology
 
@@ -59,7 +63,9 @@ The remote test namespace receives an explicit return route for host source
 2. Start `vpn-gate-alpha.service`; systemd start completes only after `READY=1`.
 3. Confirm `/run/netns/vpn-gate-alpha` and the managed boundary exist.
 4. Confirm zero-path startup is fail-closed but contains the exact OpenVPN transport allow.
-5. Start the actual stack-specific OpenVPN systemd unit.
+5. Before VPN start, confirm host publication owner + managed local publication admission and
+   pass real external TCP through 14443 -> 24443.
+6. Start the actual stack-specific OpenVPN systemd unit.
 6. Confirm its MainPID is inside the managed netns and `vpn0` appears.
 7. Without restarting VPN-GATE, wait for local reconciliation to observe/bind `vpn0`.
 8. Confirm host payload to `10.253.0.1` succeeds through the current path.
@@ -67,17 +73,18 @@ The remote test namespace receives an explicit return route for host source
    - new PID;
    - fresh `vpn0` generation;
    - payload recovers through ordinary periodic reconciliation.
-10. Stop `vpn-gate-alpha.service` and confirm:
+11. Stop `vpn-gate-alpha.service` and confirm:
     - bound OpenVPN unit inactive;
     - old VPN PID absent;
     - managed netns absent;
     - host boundary absent.
-11. Repeat only as needed to distinguish harness defects from runtime defects; do not hide
+12. Repeat only as needed to distinguish harness defects from runtime defects; do not hide
     product failures with test-only repair.
 
 ## Evidence
 
-**PASS on 2026-11-17.**
+**PASS on 2026-11-17.** Original first-alpha evidence is retained; the server-publication
+extension also passed on run `44167358884`, job `134336862209`.
 
 Final runtime evidence:
 
