@@ -378,7 +378,10 @@ def main():
             lambda: host_ping(VPN_SERVER_ADDR),
             timeout=30.0,
         )
+        first_alpha_journal = journal(ALPHA_UNIT)
+        assert "VPNG_ALPHA_RECONCILE status=reconciled" in first_alpha_journal
         print("EXP051_FIRST_PAYLOAD=PASS")
+        print("EXP051_FIRST_MANAGER_RECONCILE=PASS")
 
         first_ifindex = json.loads(
             command(
@@ -408,6 +411,14 @@ def main():
             "payload recovery after VPN-only restart",
             lambda: host_ping(VPN_SERVER_ADDR),
             timeout=30.0,
+        )
+        final_alpha_journal = journal(ALPHA_UNIT)
+        reconcile_markers = final_alpha_journal.count(
+            "VPNG_ALPHA_RECONCILE status=reconciled"
+        )
+        assert reconcile_markers >= 2, final_alpha_journal
+        print(
+            f"EXP051_MANAGER_RECONCILE_COUNT=PASS:{reconcile_markers}"
         )
         print(
             "EXP051_VPN_ONLY_RESTART_RECONCILED=PASS:"
