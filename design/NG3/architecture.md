@@ -5323,6 +5323,106 @@ a new convergence operation from current state.
 This architecture makes retry idempotence a property of semantic reconciliation rather than
 command replay.
 
+## 12.3. Первая исполняемая alpha-сборка runtime
+
+**Implements:**
+- `VPNG0001-R1.R2`;
+- `VPNG0001-R1.R3.C1.C1.R1`;
+- `VPNG0001-R1.R3.C1.C1.R3`;
+- `VPNG0004-R4.R4`;
+- `VPNG0004-R4.R5`;
+- `VPNG0005-R5.R1`;
+- `VPNG0005-R5.R2`;
+- `VPNG0005-R5.R3`;
+- `VPNG0005-R5.R6.R2`;
+- `VPNG0005-R5.R6.R3`;
+- `VPNG0007-R7.R1`;
+- `VPNG0007-R7.R7`.
+
+**Constrained by:**
+- `VPNG0001-R1.R2.R4.R6.C1`;
+- `VPNG0001-R1.R3.C1.C1`;
+- `VPNG0005-R5.C1`.
+
+Первый исполняемый alpha-runtime не вводит новую продуктовую семантику. Он соединяет уже
+принятые нижние контракты в один процесс `rou.alpha_runtime` и один systemd deployment
+slice.
+
+Startup использует существующий `start_controller_once(...)`. После подтвержденного READY
+процесс удерживает controller lifetime lock и запускает локальный
+`PayloadTrafficManager`-подобный audit/reconcile loop:
+
+```text
+accepted config loaded once at start
+    +
+retained DeviceBindingState
+    +
+periodic fresh managed-netns interface observation
+        ->
+fresh binding projection
+        ->
+pure current lower desired build
+        ->
+read-only exact structural audit
+        |
+        +-- exact + ForwardingGate ENABLED
+        |       -> no mutation
+        |
+        +-- drift / endpoint generation change / recoverable lower failure
+                -> guarded activate_network_policy(...)
+                -> close forwarding first
+                -> converge from fresh authoritative state
+                -> verify exact postcondition
+```
+
+Audit interval в alpha равен одной секунде и является локальным implementation parameter по
+§12.2, а не пользовательской latency guarantee. Config hot-reload не вводится: изменение
+конфигурации требует нового start/restart и тем самым не создает неоговоренную live-change
+semantics.
+
+Alpha deployment использует:
+
+```text
+vpn-gate-alpha.service
+    Type=notify
+    RuntimeDirectory=/run/vpn-gate-alpha
+    -> runtime создает /run/netns/vpn-gate-alpha
+    -> READY=1 только после подтвержденной fail-closed startup policy
+
+stack-specific VPN unit
+    BindsTo=vpn-gate-alpha.service
+    After=vpn-gate-alpha.service
+    NetworkNamespacePath=/run/netns/vpn-gate-alpha
+```
+
+`Type=notify` нужен для фактической ordering semantics: start job controller unit завершается
+только после появления managed namespace и подтвержденного startup postcondition, поэтому
+последующий VPN unit не пытается открыть еще не существующий `NetworkNamespacePath`.
+
+При штатном `systemctl stop vpn-gate-alpha.service` reverse systemd ordering сначала
+останавливает bound VPN unit/cgroup; затем controller получает stop, выполняет
+`stop_controller_once(...)` и подтверждает отсутствие managed namespace + host boundary.
+
+Текущий alpha deliberately ограничен тем, что final human-facing grammar Device
+NAT/firewall/publication все еще отложена `VPNG0001-R1.R2.R4.R6.C1`. Поэтому исполняемый
+slice использует:
+
+```text
+Device NAT       -> explicit internal NatIntent.NONE
+Device firewall  -> accepted omitted/permissive semantics
+publication      -> none
+```
+
+Это не новый Release-1 constraint. Alpha smoke использует remote-side return route и тем
+самым доказывает runtime assembly без угадывания запрещенной внешней NAT grammar.
+
+Если periodic audit обнаруживает exact managed-domain mismatch, alpha пытается прежде всего
+подтвердить `ForwardingGate=DISABLED` и публикует diagnostic в journal; он не усыновляет
+произвольные процессы или вручную поврежденные namespace artifacts.
+
+User-facing `RuntimeStatusAgent` в эту первую alpha-сборку еще не подключен. Journal markers
+являются implementation/evidence diagnostics и не объявляются финальным status interface.
+
 # 13. RuntimeStatusAgent
 
 **Component type:** Agent
@@ -5497,12 +5597,15 @@ Affected requirements:
 Lifecycle control semantics and autonomous local reconciliation are now explicit. They
 still do not justify a separate global lifecycle component.
 
-For the first release, VPN tunnel/session creation is outside this lifecycle scope by
-`VPNG0001-R1.R3.C1`; lifecycle concerns VPN-GATE-owned state and its use of already provisioned
-channels.
+For the first release, VPN provisioning and VPN-specific configuration remain outside
+VPN-GATE ownership by `VPNG0001-R1.R3.C1`. For a supported in-stack VPN process, however,
+EXP-049/050 establish the systemd-bounded lifecycle boundary: the administrator supplies the
+stack-specific unit/configuration, systemd supervises its process/cgroup, and deployment stop
+ordering removes the explicitly bound VPN runtime before VPN-GATE destroys the managed
+network domain.
 
-Procedural assembly plus the thin product control surface remains the simpler accepted
-architecture.
+Procedural controller assembly plus systemd dependency ordering remains the simpler accepted
+architecture; a separate global LifecycleManager is still unnecessary.
 
 ## 16.5. Administrator-facing VPN-channel onboarding implementation
 

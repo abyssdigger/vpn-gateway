@@ -1,0 +1,23 @@
+# First NG3 alpha configuration example.
+#
+# Device NAT/firewall/publication external grammar is intentionally not guessed here.
+# The alpha runtime slice currently uses explicit internal NatIntent.NONE and omitted
+# Device firewall. The remote network therefore needs a return route to the ordinary
+# source used by the deployment/test topology.
+
+[device.ovpn]
+enabled = true
+expected_interfaces = ["vpn0"]
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.253.0.0/24"]
+device_order = ["ovpn"]
+
+[integration.openvpn-alpha]
+device = "ovpn"
+protocol = "udp"
+remote_ipv4 = "203.0.113.10"
+remote_port = 1194
+local_port = 11941
