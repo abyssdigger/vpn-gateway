@@ -1,0 +1,68 @@
+name: Tag verified NG3 lineage divergence
+
+on:
+  push:
+    branches:
+      - ng3-housekeeping-cycle-20261117-futuremain-materialization
+    paths:
+      - .github/workflows/tag-verified-divergence.yml
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Create annotated verified-divergence tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OLD_MAIN=cf37cec19ccd08f7d8e0741f21e75c0f4ec2388c
+          FUTURE=b242fd9d74ba9a62b88f07225da6a61b62d7e4ab
+          SNAP75=b28f3e647d51b3c9f97190eb2daedaf253a68a88
+          EXPECTED_TREE=1297e5d42b7bb3816bfc6478b3ffc20549cf42e9
+          TAG=ng3-lineage-divergence-verified-20261117
+
+          git config user.name 'VPNG lineage housekeeping'
+          git config user.email 'lineage-housekeeping@users.noreply.github.com'
+
+          git fetch --force origin \
+            refs/heads/main:refs/remotes/origin/main \
+            refs/heads/futuremain:refs/remotes/origin/futuremain \
+            refs/heads/legacy-main-ng3:refs/remotes/origin/legacy-main-ng3 \
+            '+refs/tags/*:refs/tags/*'
+
+          test "$(git rev-parse refs/remotes/origin/main)" = "$OLD_MAIN"
+          test "$(git rev-parse refs/remotes/origin/futuremain)" = "$FUTURE"
+          test "$(git rev-parse "${SNAP75}^{tree}")" = "$EXPECTED_TREE"
+          test "$(git rev-parse "${FUTURE}^{tree}")" = "$EXPECTED_TREE"
+
+          if git show-ref --verify --quiet "refs/tags/${TAG}"; then
+            test "$(git rev-parse "${TAG}^{commit}")" = "$SNAP75"
+            echo 'tag already exists at expected commit'
+            exit 0
+          fi
+
+          git tag -a "$TAG" "$SNAP75" -m "Verified NG3 lineage divergence point
+
+          Old mixed-lineage main snapshot 75:
+            commit: $SNAP75
+
+          Clean reconstructed futuremain:
+            commit: $FUTURE
+
+          Verified identical tree:
+            $EXPECTED_TREE
+
+          Materialization and full NG3 validation:
+            GitHub Actions run 44156814997
+
+          This tag marks the old-line commit used as the byte-identical
+          cross-line verification point before the clean lineage became main."
+
+          git push origin "refs/tags/${TAG}"
