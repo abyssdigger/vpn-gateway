@@ -166,21 +166,40 @@ def _decode_rule(payload, by_name, by_index):
     else:
         local_address = _address_match(expr[1], local_field)
         remote_address = _address_match(expr[2], remote_field)
-    protocol, remote_port = _port_match(expr[3], remote_port_field)
-
     local_port = None
-    if len(expr) == 6:
-        if hook is IntegrationLocalHook.INPUT and _is_established_match(expr[4]):
-            local_port = None
-        else:
-            local_protocol, local_port = _port_match(expr[4], local_port_field)
-            if local_protocol is not protocol:
-                raise ValueError("integration-local protocol mismatch")
+    if len(expr) == 6 and not (
+        hook is IntegrationLocalHook.INPUT
+        and _is_established_match(expr[4])
+    ):
+        parsed_ports = (
+            _port_match_any(expr[3]),
+            _port_match_any(expr[4]),
+        )
+        remote_matches = [
+            item for item in parsed_ports if item[1] == remote_port_field
+        ]
+        local_matches = [
+            item for item in parsed_ports if item[1] == local_port_field
+        ]
+        if len(remote_matches) != 1 or len(local_matches) != 1:
+            raise ValueError(
+                "integration-local exact port selectors are incomplete/ambiguous"
+            )
+        protocol, _, remote_port = remote_matches[0]
+        local_protocol, _, local_port = local_matches[0]
+        if local_protocol is not protocol:
+            raise ValueError("integration-local protocol mismatch")
         action = expr[5]
     else:
-        if hook is IntegrationLocalHook.INPUT:
-            raise ValueError("integration-local INPUT without local port must carry conntrack state")
-        action = expr[4]
+        protocol, remote_port = _port_match(expr[3], remote_port_field)
+        if len(expr) == 6:
+            action = expr[5]
+        else:
+            if hook is IntegrationLocalHook.INPUT:
+                raise ValueError(
+                    "integration-local INPUT without local port must carry conntrack state"
+                )
+            action = expr[4]
 
     if hook is IntegrationLocalHook.INPUT and local_port is None:
         if len(expr) != 6 or not _is_established_match(expr[4]):
@@ -232,14 +251,17 @@ def _address_match(expr, field):
         raise ValueError("invalid integration-local IPv4 address") from None
 
 
-def _port_match(expr, field):
+def _port_match_any(expr):
     match = _match(expr)
     left = match["left"]
     right = match["right"]
     if not isinstance(left, dict) or set(left) != {"payload"}:
         raise ValueError("invalid integration-local port selector")
     payload = left["payload"]
-    if not isinstance(payload, dict) or payload.get("field") != field:
+    if not isinstance(payload, dict):
+        raise ValueError("invalid integration-local port payload selector")
+    field = payload.get("field")
+    if field not in {"sport", "dport"}:
         raise ValueError("invalid integration-local port field")
     try:
         protocol = IntegrationTransportProtocol(payload.get("protocol"))
@@ -247,7 +269,14 @@ def _port_match(expr, field):
         raise ValueError("unsupported integration-local protocol") from None
     if type(right) is not int or not 1 <= right <= 65535:
         raise ValueError("invalid integration-local port")
-    return protocol, right
+    return protocol, field, right
+
+
+def _port_match(expr, field):
+    protocol, observed_field, port = _port_match_any(expr)
+    if observed_field != field:
+        raise ValueError("invalid integration-local port field")
+    return protocol, port
 
 
 def _is_established_match(expr):
