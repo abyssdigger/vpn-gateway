@@ -25,7 +25,7 @@ Current trace:
 
 | Architecture responsibility / contract | Executable reference | Review evidence |
 | --- | --- | --- |
-| ConfigurationAdapter structural Device/Profile normalization | `domain.py`, `config.py` | `NG3-2026-11-16-structural-config-code-review.md` |
+| ConfigurationAdapter structural + canonical Release-1 normalization | `domain.py`, `config.py`, `release1_config.py` | `NG3-2026-11-16-structural-config-code-review.md`, `NG3-2026-11-17-release1-config-grammar-rust-boundary-review.md` |
 | authoritative VPNPathAdapter interface-identity observation boundary | `interface_identity.py`, `interface_inventory.py` | `NG3-2026-11-16-interface-inventory-code-review.md` |
 | shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
 | PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
@@ -67,13 +67,16 @@ Current trace:
 | normalized Device NAT intent -> payload masquerade desired projection | `device_policy.py`, `payload_nat_desired.py` | `NG3-2026-11-16-payload-nat-desired-code-review.md`, `EXP-033-result-20261116.md` |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
-The implementation intentionally stops before unresolved or separately-gated boundaries:
+The executable reference implementation still stops before separately-gated runtime
+boundaries:
 
-- final Device NAT/firewall/publication user grammar;
-- availability user timing grammar;
+- Profile ordinary-side `+snat` physical materialization;
+- full server publication mapping;
+- availability probe execution/runtime assembly;
 - Netlink/poll scheduling and full VPNPathAdapter runtime collection;
-- ICMP execution/probe-plane production mechanism;
-- full lifecycle/deployment assembly.
+- user-visible status presentation and production packaging.
+
+The ordinary Release-1 Device/Profile grammar itself is no longer unresolved.
 
 This mapping implements the traceability intent of `VPNG0007-R7.R6.R1` without promoting
 reference code into new product semantics.
@@ -112,7 +115,6 @@ defined to justify concrete responsibilities:
 This architecture intentionally does **not** yet define implementation details that no
 accepted requirement makes architectural semantics:
 
-- final external configuration field names / textual syntax;
 - automatic VPN-session provisioning/configuration, because `VPNG0001-R1.R3.C1` leaves that
   responsibility to the administrator in the first release;
 - concrete per-integration administrator command sequences/documents;
@@ -2274,7 +2276,7 @@ sits inside the marked table.
 ##### Invariant payload nft scaffold
 
 The first-release payload nft namespace has two invariant base chains whose existence and
-metadata do not depend on the unresolved final external Device firewall/NAT grammar.
+metadata do not depend on any particular accepted Device firewall/NAT values.
 
 ```text
 chain payload_forward
@@ -3035,8 +3037,8 @@ still determines whether a returned flow is in Profile permission after Device `
 
 Omitted Device firewall configuration is normalized to the semantic equivalent of
 unrestricted `IN ALLOW any` plus `OUT ALLOW any`. An explicit non-empty policy has a
-terminal no-match `drop`. Exact external TOML punctuation/spelling remains deferred by
-`VPNG0001-R1.R2.R4.R6.C1`.
+terminal no-match `drop`. Canonical external one-line rule syntax is fixed in
+`design/NG3/config-model.md`; this lower compiler consumes only normalized rule intents.
 
 The current `PayloadForwardRuleSpec` and strict observer remain valid evidence/data for the
 positive Profile NEW/RETURN sub-contract only. They are no longer a complete representation
@@ -3429,8 +3431,8 @@ different marker, hook, type, priority or policy is an ownership/shape conflict.
 
 ##### Payload source-NAT lower contract
 
-The internal normalized NAT semantic is already fixed independently of its final external
-TOML spelling:
+The internal normalized NAT semantic is produced from canonical
+`use_outbound_nat = false|true`:
 
 ```text
 NatIntent.NONE
@@ -5016,8 +5018,7 @@ This assembly still does not define:
 
 - the external POSIX-signal/service-manager adapter that supplies the stop-request predicate;
 - runtime Manager reconciliation scheduling;
-- user-facing readiness/status publication mechanism;
-- final external policy grammar.
+- user-facing readiness/status publication mechanism.
 
 ## 12.0.4. Bounded controller stop / owned-domain cleanup
 
