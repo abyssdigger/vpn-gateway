@@ -62,6 +62,8 @@ SERVER_UNDERLAY = "198.19.254.2"
 VPN_SERVER_ADDR = "10.253.0.1"
 VPN_CLIENT_ADDR = "10.253.0.2"
 OPENVPN_PORT = 11940
+DOMAIN_UNIT = "exp049-vpn-gate-domain.service"
+CLIENT_UNIT = "exp049-openvpn.service"
 
 STRUCTURAL_CONFIG = f"""
 [device.ovpn]
@@ -249,6 +251,7 @@ verb 3
 
 
 def spawn_openvpn(namespace: str, config: Path, log_path: Path):
+    """External test server helper only; supported client onboarding uses systemd."""
     log = log_path.open("w", encoding="utf-8")
     process = subprocess.Popen(
         ("ip", "netns", "exec", namespace, "openvpn", "--config", str(config)),
@@ -257,6 +260,76 @@ def spawn_openvpn(namespace: str, config: Path, log_path: Path):
         text=True,
     )
     return process, log
+
+
+def systemctl(*args: str, check: bool = True):
+    return command(("systemctl", *args), check=check)
+
+
+def systemd_unit_active(unit: str) -> bool:
+    return systemctl("is-active", "--quiet", unit, check=False).returncode == 0
+
+
+def systemd_main_pid(unit: str) -> int:
+    value = systemctl("show", "--property=MainPID", "--value", unit).stdout.strip()
+    if not value.isascii() or not value.isdecimal() or int(value) <= 0:
+        raise RuntimeError(f"{unit} has no positive MainPID: {value!r}")
+    return int(value)
+
+
+def write_systemd_units(client_config: Path) -> None:
+    unit_dir = Path("/run/systemd/system")
+    unit_dir.mkdir(parents=True, exist_ok=True)
+
+    (unit_dir / DOMAIN_UNIT).write_text(
+        """[Unit]
+Description=EXP-049 VPN-GATE managed-domain lifecycle anchor
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/true
+""",
+        encoding="utf-8",
+    )
+    (unit_dir / CLIENT_UNIT).write_text(
+        f"""[Unit]
+Description=EXP-049 stack-specific OpenVPN client
+BindsTo={DOMAIN_UNIT}
+After={DOMAIN_UNIT}
+
+[Service]
+Type=simple
+NetworkNamespacePath=/run/netns/{MANAGED}
+ExecStart=/usr/sbin/openvpn --config {client_config}
+Restart=no
+KillMode=control-group
+""",
+        encoding="utf-8",
+    )
+    systemctl("daemon-reload")
+
+
+def systemd_client_log() -> str:
+    return systemctl(
+        "journalctl",
+        "--unit",
+        CLIENT_UNIT,
+        "--no-pager",
+        "--lines=120",
+        check=False,
+    ).stdout
+
+
+def prove_systemd_namespace_attachment() -> int:
+    pid = systemd_main_pid(CLIENT_UNIT)
+    process_ns = os.readlink(f"/proc/{pid}/ns/net")
+    managed_ns = ns_command(MANAGED, "readlink", "/proc/self/ns/net").stdout.strip()
+    if process_ns != managed_ns:
+        raise AssertionError(
+            f"systemd MainPID netns mismatch: process={process_ns} managed={managed_ns}"
+        )
+    return pid
 
 
 def terminate_process(process, log) -> None:
@@ -387,9 +460,10 @@ def run_cycle(
     domain_spec,
     lock_spec,
 ) -> bool:
-    server_proc = client_proc = None
-    server_log = client_log = None
+    server_proc = None
+    server_log = None
     startup = None
+    client_started = False
 
     print(f"EXP049_CYCLE_{cycle}_BEGIN")
     setup_server_namespace()
@@ -397,6 +471,11 @@ def run_cycle(
     try:
         ensured = ensure_managed_network_domain(domain_spec, runner)
         assert ensured.confirmed
+
+        systemctl("reset-failed", DOMAIN_UNIT, CLIENT_UNIT, check=False)
+        systemctl("start", DOMAIN_UNIT)
+        assert systemd_unit_active(DOMAIN_UNIT)
+        print(f"EXP049_CYCLE_{cycle}_SYSTEMD_DOMAIN_ANCHOR=PASS")
 
         before_json = runner.run(("ip", "-n", MANAGED, "-j", "link", "show"))
         before = parse_ip_link_inventory(before_json)
@@ -421,29 +500,34 @@ def run_cycle(
         if not underlay_before:
             raise RuntimeError("managed-domain underlay cannot reach OpenVPN server")
 
-        client_proc, client_log = spawn_openvpn(
-            MANAGED,
-            client_config,
-            root / f"client-cycle-{cycle}.log",
-        )
+        systemctl("start", CLIENT_UNIT)
+        client_started = True
         try:
             wait_until(
                 "OpenVPN client vpn0",
                 lambda: interface_exists(MANAGED, VPN_IF),
             )
+            assert systemd_unit_active(CLIENT_UNIT)
+            main_pid = prove_systemd_namespace_attachment()
+            print(
+                f"EXP049_CYCLE_{cycle}_SYSTEMD_NAMESPACE_ATTACHMENT=PASS:"
+                f"MainPID={main_pid}"
+            )
         except Exception:
-            for label, path in (
-                ("server", root / f"server-cycle-{cycle}.log"),
-                ("client", root / f"client-cycle-{cycle}.log"),
-            ):
-                try:
-                    tail = path.read_text(encoding="utf-8", errors="replace")[-12000:]
-                except OSError as exc:
-                    tail = f"<cannot read log: {exc}>"
-                print(
-                    f"EXP049_CYCLE_{cycle}_{label.upper()}_LOG_TAIL="
-                    + json.dumps(tail)
-                )
+            try:
+                server_tail = (
+                    root / f"server-cycle-{cycle}.log"
+                ).read_text(encoding="utf-8", errors="replace")[-12000:]
+            except OSError as exc:
+                server_tail = f"<cannot read log: {exc}>"
+            print(
+                f"EXP049_CYCLE_{cycle}_SERVER_LOG_TAIL="
+                + json.dumps(server_tail)
+            )
+            print(
+                f"EXP049_CYCLE_{cycle}_CLIENT_JOURNAL_TAIL="
+                + json.dumps(systemd_client_log()[-12000:])
+            )
             raise
         wait_until(
             "pre-policy OpenVPN tunnel payload",
@@ -557,8 +641,14 @@ def run_cycle(
 
         return payload_ok
     finally:
-        terminate_process(client_proc, client_log)
-        client_proc = client_log = None
+        if client_started or systemd_unit_active(CLIENT_UNIT):
+            systemctl("stop", CLIENT_UNIT, check=False)
+            wait_until(
+                "OpenVPN systemd unit inactive",
+                lambda: not systemd_unit_active(CLIENT_UNIT),
+                timeout=10.0,
+            )
+            print(f"EXP049_CYCLE_{cycle}_SYSTEMD_CLIENT_STOP=PASS")
 
         if interface_exists(MANAGED, VPN_IF) if command(
             ("ip", "netns", "list"), check=False
@@ -575,6 +665,7 @@ def run_cycle(
         else:
             cleanup_managed(domain_spec, runner)
 
+        systemctl("stop", DOMAIN_UNIT, check=False)
         terminate_process(server_proc, server_log)
         teardown_server_namespace()
 
@@ -622,6 +713,8 @@ def main() -> int:
 
         generate_pki(root)
         server_config, client_config = write_openvpn_configs(root)
+        write_systemd_units(client_config)
+        print("EXP049_SYSTEMD_ONBOARDING_CONTRACT=READY")
 
         outcomes = []
         for cycle in (1, 2):
@@ -649,6 +742,8 @@ def main() -> int:
         )
         return 1
     finally:
+        systemctl("stop", CLIENT_UNIT, check=False)
+        systemctl("stop", DOMAIN_UNIT, check=False)
         cleanup_managed(domain_spec, runner)
         teardown_server_namespace()
         command(
