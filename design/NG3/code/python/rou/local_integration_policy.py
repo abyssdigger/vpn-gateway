@@ -78,7 +78,7 @@ class IntegrationLocalDesiredState:
             raise ValueError("rules must contain IntegrationLocalRuleSpec")
         if len(set(self.rules)) != len(self.rules):
             raise ValueError("duplicate desired integration-local rule")
-        object.__setattr__(self, "rules", tuple(sorted(self.rules)))
+        object.__setattr__(\n            self,\n            "rules",\n            tuple(\n                sorted(\n                    self.rules,\n                    key=lambda rule: (\n                        rule.hook.value,\n                        rule.protocol.value,\n                        rule.host_boundary.ifindex,\n                        int(rule.local_address),\n                        int(rule.remote_address),\n                        rule.remote_port,\n                        -1 if rule.local_port is None else rule.local_port,\n                    ),\n                )\n            ),\n        )
 
 
 def build_integration_local_desired(
