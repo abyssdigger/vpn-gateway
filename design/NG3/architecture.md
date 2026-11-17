@@ -4799,10 +4799,72 @@ operation; the future stop/cleanup boundary must quiesce/contain/cleanup before 
 This assembly still does not define:
 
 - signal handling/checkpoints;
-- stop/restart implementation;
 - runtime Manager reconciliation scheduling;
 - user-facing readiness/status publication mechanism;
 - final external policy grammar.
+
+## 12.0.4. Bounded controller stop / owned-domain cleanup
+
+**Implements:**
+- `VPNG0005-R5.R4`;
+- `VPNG0005-R5.R5`;
+- `VPNG0005-R5.R6.R2`;
+- `VPNG0006-R6.R3`.
+
+**Constrained by:**
+- `VPNG0001-R1.R3.C1`;
+- `VPNG0004-R4.R6.R1`;
+- `VPNG0007-R7.R1`.
+
+For the currently executable controller lifetime, a READY startup session owns no runtime
+Manager/Agent loops yet. Its stop boundary therefore remains procedural rather than inventing
+a generic quiesce framework.
+
+The bounded stop sequence is:
+
+```text
+require retained controller lifetime lock
+    ->
+attempt fresh ForwardingGate=DISABLED convergence
+    ->
+regardless of that result, attempt owned managed-domain teardown
+    ->
+fresh teardown postcondition:
+    named managed namespace absent
+    host boundary veth absent
+    ->
+only after confirmed teardown release controller lifetime lock
+```
+
+The teardown attempt is independent from the preceding containment result. Failure to confirm
+the gate must not suppress the stronger cleanup attempt of removing the owned network domain.
+Conversely, a teardown failure does not justify releasing the lifetime lock while this
+controller process remains alive.
+
+Results distinguish:
+
+- **STOPPED** — owned domain absence is confirmed; lifetime lock is released;
+- **CLEANUP_FAILED_CONTAINED** — teardown failed, but forwarding closure was independently
+  confirmed; lifetime lock remains held for explicit cleanup retry/diagnosis;
+- **CLEANUP_FAILED_UNCONTAINED** — teardown failed and forwarding closure is not confirmed;
+  lifetime lock remains held and the unsafe/incomplete postcondition is explicit.
+
+A successful domain teardown is a stronger terminal postcondition than a failed earlier gate
+observation: once the named namespace and host boundary are freshly confirmed absent, no
+VPN-GATE-owned managed forwarding domain remains connected to host traffic.
+
+External VPN channel lifecycle remains administrator/integration-owned under
+`VPNG0001-R1.R3.C1`. Stop does not enumerate/kill external VPN processes and does not issue
+protocol-specific deletion of VPN path interfaces. The owned-domain teardown may make an
+external endpoint that lived inside that domain unusable/disconnected as a consequence of
+removing VPN-GATE's boundary; supported integrations must document and prove their onboarding
+and cleanup/re-entry behavior through the applicability contract / EXP-049 rather than
+turning external VPN lifecycle into an implicit controller responsibility.
+
+The current bounded stop has no generic callback list, retry queue or cleanup registry. When
+future runtime Managers/Agents become executable, their independently required quiesce/release
+operations must be added as concrete cleanup domains under `VPNG0005-R5.R5`, preserving the
+same rule: one cleanup-area failure does not suppress attempts in other independent areas.
 
 ## 12.1. Product lifecycle control surface
 
