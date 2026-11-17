@@ -155,12 +155,15 @@ def parse_release1_config(text: str) -> Release1Config:
         "device": raw_devices,
         "profile": normalized_profiles,
     }
-    structural = _parse_structural_root(
-        normalized_root,
-        top_level_keys=_TOP_LEVEL_KEYS,
-        device_keys=_DEVICE_KEYS,
-        profile_keys=_PROFILE_KEYS,
-    )
+    try:
+        structural = _parse_structural_root(
+            normalized_root,
+            top_level_keys=_TOP_LEVEL_KEYS,
+            device_keys=_DEVICE_KEYS,
+            profile_keys=_PROFILE_KEYS,
+        )
+    except ConfigError as exc:
+        raise Release1ConfigError(str(exc)) from None
 
     ordinary_to_vpn_devices = {
         device_id
