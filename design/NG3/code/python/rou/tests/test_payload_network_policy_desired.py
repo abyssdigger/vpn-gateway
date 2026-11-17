@@ -63,7 +63,7 @@ def firewall(device_id, explicit=False):
                     direction=DeviceFirewallDirection.OUT,
                     action=DeviceFirewallAction.ALLOW,
                     protocol="tcp",
-                    destination_port=443,
+                    destination_ports=443,
                 ),
             )
             if explicit

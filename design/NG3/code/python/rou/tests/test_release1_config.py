@@ -2,6 +2,7 @@ import ipaddress
 import unittest
 
 from rou.domain import Direction
+from rou.port_bundle import PortBundle, PortSpan
 from rou.release1_config import Release1ConfigError, parse_release1_config
 
 
@@ -70,7 +71,7 @@ availability_check = "icmp/10.30.0.1"
         self.assertEqual(len(wg.allow_vpn_client), 1)
         self.assertEqual(wg.allow_vpn_client[0].local_port, 51820)
         self.assertEqual(wg.allow_vpn_client[0].remote_port, 51820)
-        self.assertEqual(wg.firewall[0].destination_port, 443)
+        self.assertEqual(wg.firewall[0].destination_ports, PortBundle.single(443))
         self.assertEqual(wg.firewall[0].comment, "HTTPS to corp")
 
         backup = cfg.devices["oc-backup"]
@@ -81,7 +82,7 @@ availability_check = "icmp/10.30.0.1"
         self.assertIsNone(server.use_outbound_nat)
         self.assertEqual(server.publish_vpn_server[0].host_selector.kind, "interface")
         self.assertEqual(server.publish_vpn_server[0].host_selector.value, "eth0")
-        self.assertEqual(server.publish_vpn_server[0].internal_port, 443)
+        self.assertEqual(server.publish_vpn_server[0].internal_ports, PortBundle.single(443))
         self.assertEqual(server.publish_vpn_server[1].host_selector.kind, "ipv4")
         self.assertEqual(
             server.publish_vpn_server[1].host_selector.value,
@@ -150,15 +151,15 @@ destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
 """)
 
-    def test_firewall_is_ordered_and_single_port_only(self):
+    def test_firewall_port_bundles_are_ordered_strict_and_non_overlapping(self):
         cfg = parse_release1_config("""
 [device.oc]
 enabled = true
 expected_interfaces = ["vpn0"]
 use_outbound_nat = false
 firewall = [
-    "out deny udp from 10.0.0.0/8:53 to 192.0.2.0/24:5353 # first",
-    "out allow tcp to 192.0.2.10/32:443",
+    "out deny udp from 10.0.0.0/8:53,1000-1003,8080 to 192.0.2.0/24:5353 # first",
+    "out allow tcp to 192.0.2.10/32:80,443,8000-8007",
 ]
 
 [profile.corp]
@@ -169,17 +170,39 @@ device_order = ["oc"]
 """)
         rules = cfg.devices["oc"].firewall
         self.assertEqual([rule.action for rule in rules], ["deny", "allow"])
-        self.assertEqual(rules[0].source_port, 53)
-        self.assertEqual(rules[0].destination_port, 5353)
+        self.assertEqual(
+            rules[0].source_ports,
+            PortBundle(
+                (
+                    PortSpan(53, 53),
+                    PortSpan(1000, 1003),
+                    PortSpan(8080, 8080),
+                )
+            ),
+        )
+        self.assertEqual(rules[0].destination_ports, PortBundle.single(5353))
         self.assertEqual(rules[0].comment, "first")
+        self.assertEqual(
+            rules[1].destination_ports.cardinality,
+            10,
+        )
 
-        with self.assertRaises(Release1ConfigError):
-            parse_release1_config("""
+        for invalid in (
+            "80,,443",
+            "80, 443",
+            "8007-8000",
+            "80,80",
+            "8000-8010,8005",
+            "9000-9010,9005-9020",
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(Release1ConfigError):
+                    parse_release1_config(f"""
 [device.oc]
 enabled = true
 expected_interfaces = ["vpn0"]
 use_outbound_nat = false
-firewall = ["out allow tcp to 192.0.2.0/24:8000-8001"]
+firewall = ["out allow tcp to 192.0.2.0/24:{invalid}"]
 
 [profile.corp]
 enabled = true
@@ -194,7 +217,7 @@ device_order = ["oc"]
 enabled = true
 expected_interfaces = ["vpn0"]
 use_outbound_nat = false
-firewall = ["out allow icmp to 192.0.2.0/24:8"]
+firewall = ["out allow icmp to 192.0.2.0/24:8,9"]
 
 [profile.corp]
 enabled = true
@@ -233,9 +256,58 @@ device_order = ["client"]
             "any",
         )
         self.assertEqual(
-            cfg.devices["server"].publish_vpn_server[0].internal_port,
-            44443,
+            cfg.devices["server"].publish_vpn_server[0].internal_ports,
+            PortBundle.single(44443),
         )
+
+        bundles = parse_release1_config("""
+[device.server]
+enabled = true
+expected_interfaces = ["ocsvr0"]
+publish_vpn_server = [
+    "udp/eth0:53,123,5000-5003",
+    "tcp/eth0:443,8000-8002,9000>8443,18000-18002,19000",
+]
+""").devices["server"].publish_vpn_server
+        self.assertEqual(bundles[0].host_ports, bundles[0].internal_ports)
+        self.assertEqual(bundles[0].host_ports.cardinality, 6)
+        self.assertEqual(bundles[1].host_ports.cardinality, 5)
+        self.assertEqual(bundles[1].internal_ports.cardinality, 5)
+        self.assertEqual(
+            list(zip(bundles[1].host_ports.expanded(), bundles[1].internal_ports.expanded())),
+            [
+                (443, 8443),
+                (8000, 18000),
+                (8001, 18001),
+                (8002, 18002),
+                (9000, 19000),
+            ],
+        )
+
+        with self.assertRaisesRegex(Release1ConfigError, "equal cardinality"):
+            parse_release1_config("""
+[device.server]
+enabled = true
+expected_interfaces = ["ocsvr0"]
+publish_vpn_server = "tcp/eth0:8000-8002>9000-9001"
+""")
+
+        with self.assertRaises(Release1ConfigError):
+            parse_release1_config("""
+[device.server]
+enabled = true
+expected_interfaces = ["ocsvr0"]
+publish_vpn_server = "udp/eth0:53,53"
+""")
+
+        with self.assertRaisesRegex(Release1ConfigError, "tcp\|udp"):
+            parse_release1_config("""
+[device.client]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+allow_vpn_client = "udp:11940-11941>198.51.100.20:11940"
+""")
 
         with self.assertRaisesRegex(Release1ConfigError, "exact IPv4"):
             parse_release1_config("""

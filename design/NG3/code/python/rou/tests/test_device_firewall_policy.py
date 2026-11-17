@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from ipaddress import IPv4Network
 
+from rou.port_bundle import PortBundle, PortSpan
 from rou.device_policy import (
     DeviceFirewallAction,
     DeviceFirewallDirection,
@@ -58,11 +59,24 @@ class DeviceFirewallPolicyIntentTests(unittest.TestCase):
             direction=DeviceFirewallDirection.IN,
             action=DeviceFirewallAction.REJECT,
             protocol="tcp",
-            source_port=1,
-            destination_port=65535,
+            source_ports=1,
+            destination_ports=65535,
         )
-        self.assertEqual(rule.source_port, 1)
-        self.assertEqual(rule.destination_port, 65535)
+        self.assertEqual(rule.source_ports, PortBundle.single(1))
+        self.assertEqual(rule.destination_ports, PortBundle.single(65535))
+
+        bundle = PortBundle((PortSpan(53, 53), PortSpan(1000, 1003), PortSpan(8080, 8080)))
+        normalized = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.IN,
+            action=DeviceFirewallAction.ALLOW,
+            protocol="udp",
+            source_ports=bundle,
+        )
+        self.assertEqual(normalized.source_ports, bundle)
+        self.assertEqual(normalized.source_ports.cardinality, 6)
+
+        with self.assertRaisesRegex(ValueError, "must not overlap"):
+            PortBundle((PortSpan(1000, 1010), PortSpan(1005, 1020)))
 
         for invalid in (0, 65536, "443"):
             with self.subTest(invalid=invalid):
@@ -70,7 +84,7 @@ class DeviceFirewallPolicyIntentTests(unittest.TestCase):
                     DeviceFirewallRuleIntent(
                         direction=DeviceFirewallDirection.IN,
                         action=DeviceFirewallAction.DENY,
-                        source_port=invalid,  # type: ignore[arg-type]
+                        source_ports=invalid,  # type: ignore[arg-type]
                     )
 
     def test_ipv4_selectors_are_typed_internal_semantics(self):

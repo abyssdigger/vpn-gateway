@@ -130,8 +130,8 @@ def _compile_rule(
 
     protocol = rule.protocol
     has_ports = (
-        rule.source_port is not None
-        or rule.destination_port is not None
+        rule.source_ports is not None
+        or rule.destination_ports is not None
     )
 
     if has_ports:
@@ -139,7 +139,7 @@ def _compile_rule(
             raise DeviceFirewallCompileError(
                 "port predicates require normalized tcp or udp protocol"
             )
-        if rule.source_port is not None:
+        if rule.source_ports is not None:
             matches.append(
                 _match_json(
                     {
@@ -148,10 +148,10 @@ def _compile_rule(
                             "field": "sport",
                         }
                     },
-                    rule.source_port,
+                    _port_bundle_operand(rule.source_ports),
                 )
             )
-        if rule.destination_port is not None:
+        if rule.destination_ports is not None:
             matches.append(
                 _match_json(
                     {
@@ -160,7 +160,7 @@ def _compile_rule(
                             "field": "dport",
                         }
                     },
-                    rule.destination_port,
+                    _port_bundle_operand(rule.destination_ports),
                 )
             )
         # EXP-042: nft canonicalization removes redundant meta l4proto
@@ -209,6 +209,25 @@ def _compile_rule(
         action=lower_action,
         action_json=action_json,
     )
+
+
+def _port_bundle_operand(bundle) -> object:
+    spans = bundle.spans
+    if len(spans) == 1:
+        span = spans[0]
+        if span.is_single:
+            return span.first
+        return {"range": [span.first, span.last]}
+    return {
+        "set": [
+            (
+                span.first
+                if span.is_single
+                else {"range": [span.first, span.last]}
+            )
+            for span in spans
+        ]
+    }
 
 
 def _ipv4_operand(network: IPv4Network) -> object:
