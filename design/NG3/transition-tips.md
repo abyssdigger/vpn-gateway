@@ -120,19 +120,25 @@ invalid/reversed ranges, guessed unsupported grammar.
 Semantic order exists in Profile.device_order and Device.expected_interfaces.
 Destination list order is not routing policy.
 
-## TIP-C7 — Semantics and prototype spelling are separate layers
+## TIP-C7 — Canonical Release-1 grammar is distinct from historical prototypes
 
-Accepted semantics may be normative while exact optional-policy syntax is deliberately postponed.
+The ordinary Release-1 optional-policy syntax is now fixed in `config-model.md`.
 
-Current examples:
+Current canonical forms include:
 
-- Device NAT semantics are `NONE | MASQUERADE`, while exact external spelling is deferred;
-- Device firewall is ordered first-match policy whose ALLOW cannot widen Profile permission;
-- transport publication belongs to Device/transport boundary;
-- historical NAT/traffic-envelope/publication spellings are prototype evidence, not automatic NG3 schema;
-- availability semantic target behavior is accepted, while exact field spelling and any future timing/unit knobs remain interface decisions;
-- all currently postponed optional-policy spellings are inventoried in
-  `design/deferrals/NG3-user-facing-policy-grammar.md`.
+- Device `use_outbound_nat = true|false` -> `MASQUERADE | NONE`;
+- Device `allow_vpn_client` for exact VPN client transport/control flows;
+- ordered one-line Device `firewall = [...]`;
+- Device `publish_vpn_server`;
+- Profile direction `+snat` for ordinary-side gateway NAT;
+- Profile `availability_check = "icmp[/IPv4]"`.
+
+Historical `nat`, `traffic_envelope`, publication shorthand, `interface_balancing` and
+top-level `integration.*` remain prototype/evidence syntax and are not aliases.
+
+Only endpoint-scoped Device firewall syntax remains independently deferred under its explicit
+Release-1 provenance constraint. Future availability timing knobs would require a new
+configuration-format decision if a requirement ever makes them user policy.
 
 # 3. Device and binding
 
