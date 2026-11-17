@@ -59,6 +59,7 @@ Current trace:
 | bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
 | bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
 | bounded controller restart composition | `controller_restart.py` | `NG3-2026-11-17-controller-restart-review.md` |
+| phase-bounded STARTING termination checkpoints | `controller_startup.py`, shared owned-domain cleanup in `controller_stop.py` | `NG3-2026-11-17-starting-termination-review.md` |
 | managed-netns structural forwarding gate | `forwarding_gate.py`, `linux_forwarding_gate.py` | `NG3-2026-11-16-forwarding-gate-code-review.md`, `EXP-030-result-20261116.md` |
 | nft table-level ownership observation | `nft_namespace_inventory.py` | `NG3-2026-11-16-nft-namespace-inventory-code-review.md`, `EXP-031-result-20261116.md` |
 | invariant payload nft scaffold comparison | `nft_payload_scaffold.py` | `NG3-2026-11-16-payload-nft-scaffold-code-review.md`, `EXP-032-result-20261116.md` |
@@ -4800,7 +4801,7 @@ operation; the future stop/cleanup boundary must quiesce/contain/cleanup before 
 
 This assembly still does not define:
 
-- signal handling/checkpoints;
+- the external POSIX-signal/service-manager adapter that supplies the stop-request predicate;
 - runtime Manager reconciliation scheduling;
 - user-facing readiness/status publication mechanism;
 - final external policy grammar.
