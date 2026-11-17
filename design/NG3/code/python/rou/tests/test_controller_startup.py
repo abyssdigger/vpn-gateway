@@ -341,6 +341,89 @@ class ControllerStartupTests(unittest.TestCase):
         self.assertFalse(lock.acquired)
         self.assertEqual(lock.release_count, 1)
 
+    def test_every_post_preflight_phase_boundary_stops_before_next_phase(self):
+        cases = (
+            (
+                "preflight",
+                3,
+                ["lock", "preflight", "cleanup_owned"],
+            ),
+            (
+                "policy_load",
+                4,
+                ["lock", "preflight", "load_policy", "cleanup_owned"],
+            ),
+            (
+                "domain_ensure",
+                5,
+                [
+                    "lock",
+                    "preflight",
+                    "load_policy",
+                    "ensure_domain",
+                    "cleanup_owned",
+                ],
+            ),
+            (
+                "interface_observation",
+                6,
+                [
+                    "lock",
+                    "preflight",
+                    "load_policy",
+                    "ensure_domain",
+                    "observe_interfaces",
+                    "cleanup_owned",
+                ],
+            ),
+            (
+                "desired_build",
+                7,
+                [
+                    "lock",
+                    "preflight",
+                    "load_policy",
+                    "ensure_domain",
+                    "observe_interfaces",
+                    "build_desired",
+                    "cleanup_owned",
+                ],
+            ),
+            (
+                "activation",
+                8,
+                [
+                    "lock",
+                    "preflight",
+                    "load_policy",
+                    "ensure_domain",
+                    "observe_interfaces",
+                    "build_desired",
+                    "activate",
+                    "cleanup_owned",
+                ],
+            ),
+        )
+
+        for name, call_number, expected_events in cases:
+            with self.subTest(phase=name):
+                stop = StopSequence(
+                    *([False] * (call_number - 1)),
+                    True,
+                )
+                result, events, lock, *_ = self.run_startup(
+                    stop_requested=stop,
+                )
+
+                self.assertEqual(
+                    result.status,
+                    ControllerStartupStatus.STOPPED,
+                )
+                self.assertEqual(events, expected_events)
+                self.assertFalse(lock.acquired)
+                self.assertEqual(lock.release_count, 1)
+                self.assertEqual(stop.calls, call_number)
+
     def test_stop_checkpoint_after_preflight_blocks_policy_load_and_cleans(self):
         stop = StopSequence(False, False, True)
 
