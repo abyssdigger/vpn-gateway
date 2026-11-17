@@ -390,15 +390,26 @@ record the exact external VPN implementation/version and the commands/configurat
 must include cleanup/repetition sufficient to show that the result is reproducible rather than
 a one-off pre-existing host state.
 
-The first such proof is planned as `EXP-049`. It may select one concrete integration that is
-otherwise intended to be supported by Release 1; proving one integration does not silently
-generalize the result to all VPN technologies. Each additional supported onboarding mechanism
-requires its own equivalent evidence or an explicitly reviewed proof that it is materially the
-same lower mechanism.
+The first such proof is `EXP-049`. Its 2026-11-17 Debian 13 / OpenVPN 2.6.14 run
+proved twice that a real userspace VPN process can run inside the managed namespace, create
+`vpn0`, and pass fresh production observation plus exact logical-path binding. The same run
+then failed controlled payload after production policy activation because the accepted
+terminal `stack_input` / `stack_output` DROP boundary had no concrete
+supported-integration local/system allow contribution for the OpenVPN transport.
 
-Until at least one Release-1 integration passes this gate, the architecture is internally
-composable but the product-level claim that an administrator can actually supply a usable
-external VPN channel remains an open evidence gate.
+Therefore the current closure for `VPNG0001-R1.R3.C1.R1.R1` is rejected by evidence. The
+finding is not an endpoint-placement or binding limitation and does not justify weakening the
+terminal local DROP boundary. A reviewed integration-specific local/system contribution must
+be derived from the supported onboarding contract and materialized through the existing owned
+policy boundary, then the unchanged applicability scenario must pass.
+
+Proving one integration later does not silently generalize the result to all VPN technologies.
+Each additional supported onboarding mechanism requires its own equivalent evidence or an
+explicitly reviewed proof that it is materially the same lower mechanism.
+
+Until at least one Release-1 integration passes this gate, the product-level claim that an
+administrator can actually supply a usable external VPN channel remains open and EXP-050
+remains blocked.
 
 ### 1.1.3. Dependent bounded-VPN lifecycle evidence gate
 
@@ -2280,6 +2291,31 @@ probe, publication and integration contributions are admitted only when the corr
 already-supported function reaches its own bounded implementation unit and can provide the
 necessary selectors. This keeps `INPUT=DROP` / `OUTPUT=DROP` fail-closed semantics intact
 without manufacturing new product behavior.
+
+###### Supported VPN integration local/system contribution — EXP-049 finding
+
+EXP-049 provides the first real supported-integration pressure on this boundary.
+
+On Debian 13 with OpenVPN 2.6.14:
+
+```text
+OpenVPN client inside managed namespace
+    -> real vpn0 + working tunnel before NG3 activation
+    -> fresh exact NG3 binding
+    -> production activation
+    -> empty stack_input / stack_output terminal DROP
+    -> OpenVPN UDP underlay blocked
+    -> admitted payload cannot traverse VPN
+```
+
+This confirms that an in-stack userspace VPN requires an explicit local/system contribution,
+but does **not** yet prove the minimum safe selector shape. In particular, the architecture
+must not respond by adding a blanket established-flow exception, allowing all local UDP, or
+discovering ambient sockets and granting policy automatically.
+
+The next closure unit must derive the narrow integration intent from the supported onboarding
+contract and prove its INPUT/OUTPUT realization. Until that unit passes and EXP-049 is rerun,
+the OpenVPN onboarding candidate is not a supported Release-1 integration.
 
 ###### Publication local/system contribution — EXP-046
 
