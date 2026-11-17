@@ -1,6 +1,6 @@
 # EXP-050 — NG3 bounded VPN lifecycle and aggressive-configuration applicability
 
-**Status:** BLOCKED — execute only after EXP-049 PASS on a concrete supported VPN integration
+**Status:** PASSED — OpenVPN 2.6.14 through the EXP-049 systemd onboarding mechanism
 
 ## Requirement traceability
 
@@ -128,7 +128,26 @@ evidence for that requirement/architecture decision.
 
 ## Current disposition
 
-**BLOCKED on EXP-049 PASS.**
+**PASSED on 2026-11-17.**
 
-Planning this experiment is allowed now because `VPNG0007-R7.R7.R1.R1` requires the
-evidence sequence; executing it before the prerequisite PASS is not.
+EXP-049 first passed with OpenVPN 2.6.14 launched by a distinct stack-specific systemd unit
+through `NetworkNamespacePath`, `BindsTo` and `After`. EXP-050 then used that same
+implementation and onboarding mechanism.
+
+Two clean lifecycle cycles passed:
+
+- initial start with process and `vpn0` inside the managed namespace;
+- same-config `systemctl restart` with a fresh process and fresh interface generation;
+- changed-config restart using `tun-mtu 1400`, again with a fresh interface generation;
+- aggressive route/hook configuration under the supported policy-neutral contract without
+  creating the attempted foreign route/RPDB/nft/sysctl state;
+- visible OpenVPN/systemd failure when an external hook required unsupported
+  `script-security 2`;
+- fail-closed forwarding containment, systemd dependency stop, empty VPN cgroup and endpoint
+  absence before managed-domain teardown;
+- final namespace/host-boundary absence.
+
+See `EXP-050-result-20261117-systemd-openvpn-pass.md`.
+
+This evidence supports the Release-1 bounded systemd lifecycle contract. It does not imply
+automatic adoption of arbitrary administrator VPN processes or arbitrary privileged VPN hooks.

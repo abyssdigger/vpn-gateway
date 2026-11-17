@@ -142,6 +142,7 @@ def select_structural_policy_step(
             nft_step = select_composite_nft_step(
                 nft,
                 nft_desired.local_publication,
+                nft_desired.local_integration,
             )
         except CompositeNftPlanError as exc:
             raise StructuralPolicyPlanError(str(exc)) from exc

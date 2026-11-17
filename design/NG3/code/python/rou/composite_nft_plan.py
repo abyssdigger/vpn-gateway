@@ -7,6 +7,11 @@ from enum import Enum
 
 from .composite_nft_policy import CompositeNftPolicyComparison
 from .device_firewall_desired import DeviceFirewallChainSpec
+from .local_integration_mutation import (
+    IntegrationLocalMutationStep,
+    select_integration_local_step,
+)
+from .local_integration_policy import IntegrationLocalDesiredState
 from .local_publication_mutation import (
     LocalPublicationMutationStep,
     select_local_publication_step,
@@ -25,6 +30,7 @@ class CompositeNftStepKind(str, Enum):
     CREATE_DEVICE_CHAIN = "create_device_chain"
     ADD_PROFILE_RULE = "add_profile_rule"
     APPLY_LOCAL_PUBLICATION = "apply_local_publication"
+    APPLY_LOCAL_INTEGRATION = "apply_local_integration"
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +42,7 @@ class CompositeNftMutationStep:
     nat_rule: PayloadMasqueradeSpec | None = None
     device_chain: DeviceFirewallChainSpec | None = None
     local_publication_step: LocalPublicationMutationStep | None = None
+    local_integration_step: IntegrationLocalMutationStep | None = None
 
     def __post_init__(self) -> None:
         fields = (
@@ -45,6 +52,7 @@ class CompositeNftMutationStep:
             self.nat_rule is not None,
             self.device_chain is not None,
             self.local_publication_step is not None,
+            self.local_integration_step is not None,
         )
         if sum(fields) != 1:
             raise ValueError("exactly one mutation step operand is required")
@@ -57,6 +65,7 @@ class CompositeNftPlanError(ValueError):
 def select_composite_nft_step(
     comparison: CompositeNftPolicyComparison,
     local_publication_desired: LocalPublicationDesiredState | None = None,
+    local_integration_desired: IntegrationLocalDesiredState | None = None,
 ) -> CompositeNftMutationStep | None:
     """Select one fail-closed structural convergence step.
 
@@ -80,6 +89,7 @@ def select_composite_nft_step(
         or comparison.payload_nat.conflicts
         or comparison.device_firewall.conflicts
         or comparison.local_publication.conflicts
+        or comparison.local_integration.conflicts
     ):
         raise CompositeNftPlanError(
             "sub-policy comparison has conflicts"
@@ -89,6 +99,26 @@ def select_composite_nft_step(
     if not isinstance(local_publication_desired, LocalPublicationDesiredState):
         raise CompositeNftPlanError(
             "local_publication_desired must be LocalPublicationDesiredState"
+        )
+    if local_integration_desired is None:
+        local_integration_desired = IntegrationLocalDesiredState(())
+    if not isinstance(local_integration_desired, IntegrationLocalDesiredState):
+        raise CompositeNftPlanError(
+            "local_integration_desired must be IntegrationLocalDesiredState"
+        )
+
+    if comparison.local_integration.stale:
+        local_step = select_integration_local_step(
+            comparison.local_integration,
+            local_integration_desired,
+        )
+        if local_step is None:
+            raise CompositeNftPlanError(
+                "stale local integration state has no repair step"
+            )
+        return CompositeNftMutationStep(
+            kind=CompositeNftStepKind.APPLY_LOCAL_INTEGRATION,
+            local_integration_step=local_step,
         )
 
     if comparison.local_publication.stale:
@@ -185,6 +215,20 @@ def select_composite_nft_step(
         return CompositeNftMutationStep(
             kind=CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
             local_publication_step=local_step,
+        )
+
+    if comparison.local_integration.missing:
+        local_step = select_integration_local_step(
+            comparison.local_integration,
+            local_integration_desired,
+        )
+        if local_step is None:
+            raise CompositeNftPlanError(
+                "missing local integration state has no repair step"
+            )
+        return CompositeNftMutationStep(
+            kind=CompositeNftStepKind.APPLY_LOCAL_INTEGRATION,
+            local_integration_step=local_step,
         )
 
     return None

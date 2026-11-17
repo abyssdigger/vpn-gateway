@@ -16,6 +16,8 @@ import time
 
 from rou.binding import DeviceBindingState, LogicalPathId, project_device_bindings
 from rou.config import parse_structural_config
+from rou.composite_nft_policy import compare_composite_nft_policy
+from rou.nft_namespace_inventory import parse_nft_namespace_ruleset
 from rou.controller_startup import ControllerStartupStatus, start_controller_once
 from rou.controller_stop import ControllerStopStatus, stop_controller_once
 from rou.device_policy import (
@@ -26,6 +28,8 @@ from rou.device_policy import (
 from rou.direct_device_route import realize_direct_device_path_routes
 from rou.instance_lock import InstanceLockSpec
 from rou.interface_inventory import parse_ip_link_inventory
+from rou.integration_config import parse_integration_transport_config
+from rou.local_integration_policy import IntegrationLocalTransportIntent
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.managed_network_domain import (
@@ -58,6 +62,9 @@ SERVER_UNDERLAY = "198.19.254.2"
 VPN_SERVER_ADDR = "10.253.0.1"
 VPN_CLIENT_ADDR = "10.253.0.2"
 OPENVPN_PORT = 11940
+OPENVPN_LOCAL_PORT = 11941
+DOMAIN_UNIT = "exp049-vpn-gate-domain.service"
+CLIENT_UNIT = "exp049-openvpn.service"
 
 STRUCTURAL_CONFIG = f"""
 [device.ovpn]
@@ -69,6 +76,13 @@ enabled = true
 direction = "outbound"
 destinations = ["{VPN_SERVER_ADDR}/32"]
 device_order = ["ovpn"]
+
+[integration.openvpn-exp049]
+device = "ovpn"
+protocol = "udp"
+remote_ipv4 = "{SERVER_UNDERLAY}"
+remote_port = {OPENVPN_PORT}
+local_port = {OPENVPN_LOCAL_PORT}
 """
 
 
@@ -203,6 +217,7 @@ local {SERVER_UNDERLAY}
 port {OPENVPN_PORT}
 ifconfig {VPN_SERVER_ADDR} {VPN_CLIENT_ADDR}
 tls-server
+float
 remote-cert-tls client
 ca {root / 'ca.crt'}
 cert {root / 'server.crt'}
@@ -220,7 +235,8 @@ verb 3
 dev-type tun
 proto udp4
 remote {SERVER_UNDERLAY} {OPENVPN_PORT}
-nobind
+lport {OPENVPN_LOCAL_PORT}
+route-noexec
 ifconfig {VPN_CLIENT_ADDR} {VPN_SERVER_ADDR}
 tls-client
 remote-cert-tls server
@@ -239,6 +255,7 @@ verb 3
 
 
 def spawn_openvpn(namespace: str, config: Path, log_path: Path):
+    """External test server helper only; supported client onboarding uses systemd."""
     log = log_path.open("w", encoding="utf-8")
     process = subprocess.Popen(
         ("ip", "netns", "exec", namespace, "openvpn", "--config", str(config)),
@@ -247,6 +264,78 @@ def spawn_openvpn(namespace: str, config: Path, log_path: Path):
         text=True,
     )
     return process, log
+
+
+def systemctl(*args: str, check: bool = True):
+    return command(("systemctl", *args), check=check)
+
+
+def systemd_unit_active(unit: str) -> bool:
+    return systemctl("is-active", "--quiet", unit, check=False).returncode == 0
+
+
+def systemd_main_pid(unit: str) -> int:
+    value = systemctl("show", "--property=MainPID", "--value", unit).stdout.strip()
+    if not value.isascii() or not value.isdecimal() or int(value) <= 0:
+        raise RuntimeError(f"{unit} has no positive MainPID: {value!r}")
+    return int(value)
+
+
+def write_systemd_units(client_config: Path) -> None:
+    unit_dir = Path("/run/systemd/system")
+    unit_dir.mkdir(parents=True, exist_ok=True)
+
+    (unit_dir / DOMAIN_UNIT).write_text(
+        """[Unit]
+Description=EXP-049 VPN-GATE managed-domain lifecycle anchor
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/true
+""",
+        encoding="utf-8",
+    )
+    (unit_dir / CLIENT_UNIT).write_text(
+        f"""[Unit]
+Description=EXP-049 stack-specific OpenVPN client
+BindsTo={DOMAIN_UNIT}
+After={DOMAIN_UNIT}
+
+[Service]
+Type=simple
+NetworkNamespacePath=/run/netns/{MANAGED}
+ExecStart=/usr/sbin/openvpn --config {client_config}
+Restart=no
+KillMode=control-group
+""",
+        encoding="utf-8",
+    )
+    systemctl("daemon-reload")
+
+
+def systemd_client_log() -> str:
+    return command(
+        (
+            "journalctl",
+            "--unit",
+            CLIENT_UNIT,
+            "--no-pager",
+            "--lines=120",
+        ),
+        check=False,
+    ).stdout
+
+
+def prove_systemd_namespace_attachment() -> int:
+    pid = systemd_main_pid(CLIENT_UNIT)
+    process_ns = os.readlink(f"/proc/{pid}/ns/net")
+    managed_ns = ns_command(MANAGED, "readlink", "/proc/self/ns/net").stdout.strip()
+    if process_ns != managed_ns:
+        raise AssertionError(
+            f"systemd MainPID netns mismatch: process={process_ns} managed={managed_ns}"
+        )
+    return pid
 
 
 def terminate_process(process, log) -> None:
@@ -319,6 +408,28 @@ class PreparedPolicy:
             (),
             NG3_LINUX_POLICY_PLATFORM,
         )
+        integration_cfg = parse_integration_transport_config(self.config_text)
+        known_devices = set(cfg.devices)
+        for item in integration_cfg:
+            if item.device_id not in known_devices:
+                raise AssertionError(
+                    f"integration {item.integration_id!r} references unknown Device "
+                    f"{item.device_id!r}"
+                )
+        integration_intents = tuple(
+            IntegrationLocalTransportIntent(
+                integration_id=item.integration_id,
+                protocol=item.protocol,
+                host_boundary=host_boundary,
+                local_address=INNER_ADDR.ip,
+                remote_address=item.remote_address,
+                remote_port=item.remote_port,
+                local_port=item.local_port,
+            )
+            for item in integration_cfg
+            if item.device_id in cfg.active_device_ids
+        )
+
         desired = build_payload_network_policy_desired_state(
             profiles,
             layout,
@@ -327,6 +438,7 @@ class PreparedPolicy:
             (DeviceNatPolicyIntent("ovpn", NatIntent.MASQUERADE),),
             (DeviceFirewallPolicyIntent("ovpn", rules=None),),
             (),
+            integration_intents,
         )
 
         self.observed_binding = binding
@@ -354,9 +466,10 @@ def run_cycle(
     domain_spec,
     lock_spec,
 ) -> bool:
-    server_proc = client_proc = None
-    server_log = client_log = None
+    server_proc = None
+    server_log = None
     startup = None
+    client_started = False
 
     print(f"EXP049_CYCLE_{cycle}_BEGIN")
     setup_server_namespace()
@@ -364,6 +477,11 @@ def run_cycle(
     try:
         ensured = ensure_managed_network_domain(domain_spec, runner)
         assert ensured.confirmed
+
+        systemctl("reset-failed", DOMAIN_UNIT, CLIENT_UNIT, check=False)
+        systemctl("start", DOMAIN_UNIT)
+        assert systemd_unit_active(DOMAIN_UNIT)
+        print(f"EXP049_CYCLE_{cycle}_SYSTEMD_DOMAIN_ANCHOR=PASS")
 
         before_json = runner.run(("ip", "-n", MANAGED, "-j", "link", "show"))
         before = parse_ip_link_inventory(before_json)
@@ -388,29 +506,34 @@ def run_cycle(
         if not underlay_before:
             raise RuntimeError("managed-domain underlay cannot reach OpenVPN server")
 
-        client_proc, client_log = spawn_openvpn(
-            MANAGED,
-            client_config,
-            root / f"client-cycle-{cycle}.log",
-        )
+        systemctl("start", CLIENT_UNIT)
+        client_started = True
         try:
             wait_until(
                 "OpenVPN client vpn0",
                 lambda: interface_exists(MANAGED, VPN_IF),
             )
+            assert systemd_unit_active(CLIENT_UNIT)
+            main_pid = prove_systemd_namespace_attachment()
+            print(
+                f"EXP049_CYCLE_{cycle}_SYSTEMD_NAMESPACE_ATTACHMENT=PASS:"
+                f"MainPID={main_pid}"
+            )
         except Exception:
-            for label, path in (
-                ("server", root / f"server-cycle-{cycle}.log"),
-                ("client", root / f"client-cycle-{cycle}.log"),
-            ):
-                try:
-                    tail = path.read_text(encoding="utf-8", errors="replace")[-12000:]
-                except OSError as exc:
-                    tail = f"<cannot read log: {exc}>"
-                print(
-                    f"EXP049_CYCLE_{cycle}_{label.upper()}_LOG_TAIL="
-                    + json.dumps(tail)
-                )
+            try:
+                server_tail = (
+                    root / f"server-cycle-{cycle}.log"
+                ).read_text(encoding="utf-8", errors="replace")[-12000:]
+            except OSError as exc:
+                server_tail = f"<cannot read log: {exc}>"
+            print(
+                f"EXP049_CYCLE_{cycle}_SERVER_LOG_TAIL="
+                + json.dumps(server_tail)
+            )
+            print(
+                f"EXP049_CYCLE_{cycle}_CLIENT_JOURNAL_TAIL="
+                + json.dumps(systemd_client_log()[-12000:])
+            )
             raise
         wait_until(
             "pre-policy OpenVPN tunnel payload",
@@ -448,6 +571,33 @@ def run_cycle(
             NG3_LINUX_POLICY_PLATFORM,
             load_policy,
         )
+        if startup.status is not ControllerStartupStatus.READY:
+            ruleset = ns_command(
+                MANAGED,
+                "nft", "-j", "list", "ruleset",
+                check=False,
+            ).stdout
+            print(
+                f"EXP049_CYCLE_{cycle}_ACTIVATION_FAILURE_RULESET="
+                + json.dumps(ruleset)
+            )
+            prepared_failure = holder.get("prepared")
+            if (
+                prepared_failure is not None
+                and prepared_failure.desired is not None
+            ):
+                failure_interfaces = parse_ip_link_inventory(
+                    runner.run(("ip", "-n", MANAGED, "-j", "link", "show"))
+                )
+                failure_comparison = compare_composite_nft_policy(
+                    parse_nft_namespace_ruleset(ruleset),
+                    failure_interfaces,
+                    prepared_failure.desired.nft,
+                )
+                print(
+                    f"EXP049_CYCLE_{cycle}_INTEGRATION_LOCAL_COMPARE="
+                    + repr(failure_comparison.local_integration)
+                )
         assert startup.status is ControllerStartupStatus.READY, (
             startup.status,
             startup.diagnostic,
@@ -474,6 +624,14 @@ def run_cycle(
             f"EXP049_CYCLE_{cycle}_STACK_OUTPUT="
             + json.dumps(stack_output.strip())
         )
+        stack_input = ns_command(
+            MANAGED,
+            "nft", "list", "chain", "ip", "vpn_gate", "stack_input",
+        ).stdout
+        print(
+            f"EXP049_CYCLE_{cycle}_STACK_INPUT="
+            + json.dumps(stack_input.strip())
+        )
 
         payload_ok = host_ping(VPN_SERVER_ADDR)
         print(
@@ -489,8 +647,14 @@ def run_cycle(
 
         return payload_ok
     finally:
-        terminate_process(client_proc, client_log)
-        client_proc = client_log = None
+        if client_started or systemd_unit_active(CLIENT_UNIT):
+            systemctl("stop", CLIENT_UNIT, check=False)
+            wait_until(
+                "OpenVPN systemd unit inactive",
+                lambda: not systemd_unit_active(CLIENT_UNIT),
+                timeout=10.0,
+            )
+            print(f"EXP049_CYCLE_{cycle}_SYSTEMD_CLIENT_STOP=PASS")
 
         if interface_exists(MANAGED, VPN_IF) if command(
             ("ip", "netns", "list"), check=False
@@ -507,6 +671,7 @@ def run_cycle(
         else:
             cleanup_managed(domain_spec, runner)
 
+        systemctl("stop", DOMAIN_UNIT, check=False)
         terminate_process(server_proc, server_log)
         teardown_server_namespace()
 
@@ -554,6 +719,8 @@ def main() -> int:
 
         generate_pki(root)
         server_config, client_config = write_openvpn_configs(root)
+        write_systemd_units(client_config)
+        print("EXP049_SYSTEMD_ONBOARDING_CONTRACT=READY")
 
         outcomes = []
         for cycle in (1, 2):
@@ -575,13 +742,14 @@ def main() -> int:
 
         print("EXP049_RESULT=FAIL")
         print(
-            "EXP049_FINDING=real OpenVPN endpoint onboarding/binding succeeds, "
-            "but accepted NG3 activation blocks the VPN client's local underlay "
-            "traffic through terminal stack_input/stack_output policy without a "
-            "concrete supported-integration local/system allow contribution"
+            "EXP049_FINDING=real OpenVPN endpoint onboarding/binding or "
+            "integration-local transport admission did not satisfy the complete "
+            "applicability contract"
         )
         return 1
     finally:
+        systemctl("stop", CLIENT_UNIT, check=False)
+        systemctl("stop", DOMAIN_UNIT, check=False)
         cleanup_managed(domain_spec, runner)
         teardown_server_namespace()
         command(

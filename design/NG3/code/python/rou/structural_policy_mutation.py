@@ -20,6 +20,7 @@ from .forwarding_gate import (
     converge_forwarding_gate_once,
 )
 from .interface_identity import InterfaceIdentity
+from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
 from .network_policy_layout import NetworkPolicyPlatformSpace
 from .nft_namespace_inventory import (
@@ -87,6 +88,10 @@ class StructuralPolicyMutationBackend(Protocol):
     def apply_local_publication_step(
         self,
         step: LocalPublicationMutationStep,
+    ) -> None: ...
+    def apply_integration_local_step(
+        self,
+        step: IntegrationLocalMutationStep,
     ) -> None: ...
 
 
@@ -615,6 +620,8 @@ def structural_policy_distance(value: StructuralPolicyComparison) -> int:
         + len(value.nft.device_firewall.stale_jumps)
         + len(value.nft.local_publication.missing)
         + len(value.nft.local_publication.stale)
+        + len(value.nft.local_integration.missing)
+        + len(value.nft.local_integration.stale)
         + len(value.nft.conflicts)
     )
 
