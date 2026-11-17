@@ -1,13 +1,17 @@
 """First executable NG3 alpha runtime assembly.
 
-This module intentionally assembles only already accepted Release-1 mechanisms:
-- structural Device/Profile + integration transport configuration;
+This module assembles the first executable NG3 runtime from accepted Release-1
+contracts. It consumes the canonical human-facing configuration grammar and
+materializes the lower capabilities already implemented by this reference slice:
+- structural Device/Profile policy;
 - direct-device VPN path realization;
-- omitted Device firewall;
-- explicit internal NatIntent.NONE for this alpha deployment slice;
+- Device outbound NAT;
+- ordinary Device firewall rules;
+- Device-owned VPN client transport/control local allow;
 - one local PayloadTrafficManager-style periodic reconciliation loop.
 
-It does not define the postponed final Device NAT/firewall/publication TOML grammar.
+Capabilities whose full lower path is not yet implemented here are rejected at
+configuration load rather than silently ignored.
 """
 
 from __future__ import annotations
@@ -25,7 +29,6 @@ import threading
 from typing import Iterable
 
 from .binding import DeviceBindingState, project_device_bindings
-from .config import parse_structural_config
 from .controller_startup import (
     ControllerStartupStatus,
     start_controller_once,
@@ -35,7 +38,10 @@ from .controller_stop import (
     stop_controller_once,
 )
 from .device_policy import (
+    DeviceFirewallAction,
+    DeviceFirewallDirection,
     DeviceFirewallPolicyIntent,
+    DeviceFirewallRuleIntent,
     DeviceNatPolicyIntent,
     NatIntent,
 )
@@ -45,10 +51,6 @@ from .forwarding_gate import (
     converge_forwarding_gate_once,
 )
 from .instance_lock import InstanceLockSpec
-from .integration_config import (
-    IntegrationTransportConfig,
-    parse_integration_transport_config,
-)
 from .interface_identity import InterfaceIdentity
 from .interface_inventory import parse_ip_link_inventory
 from .linux_forwarding_gate import LinuxForwardingGateBackend
@@ -58,7 +60,10 @@ from .linux_nft_scaffold import (
 )
 from .linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from .linux_structural_policy import LinuxStructuralPolicyBackend
-from .local_integration_policy import IntegrationLocalTransportIntent
+from .local_integration_policy import (
+    IntegrationLocalTransportIntent,
+    IntegrationTransportProtocol,
+)
 from .managed_network_domain import (
     ManagedNetworkDomainSpec,
     verify_managed_network_domain,
@@ -73,6 +78,7 @@ from .payload_network_policy_desired import (
     build_payload_network_policy_desired_state,
 )
 from .payload_profile import build_payload_profile_requests
+from .release1_config import Release1Config, parse_release1_config
 from .structural_policy_mutation import compare_structural_policy
 
 
@@ -91,12 +97,11 @@ class AlphaRuntimeError(RuntimeError):
 
 @dataclass(slots=True)
 class AlphaPreparedPolicy:
-    """Accepted config + current Device binding state for the alpha Manager."""
+    """Canonical accepted config + current Device binding state."""
 
     local_address: IPv4Address
     binding_state: DeviceBindingState
-    structural: object
-    integrations: tuple[IntegrationTransportConfig, ...]
+    config: Release1Config
 
     @classmethod
     def from_text(
@@ -105,22 +110,36 @@ class AlphaPreparedPolicy:
         *,
         local_address: IPv4Address,
     ) -> "AlphaPreparedPolicy":
-        structural = parse_structural_config(text)
-        integrations = parse_integration_transport_config(text)
+        config = parse_release1_config(text)
 
-        known_devices = set(structural.devices)
-        for item in integrations:
-            if item.device_id not in known_devices:
+        # These canonical Release-1 capabilities have accepted syntax/semantics,
+        # but this first executable slice does not yet own their complete lower
+        # materialization. Reject them explicitly instead of accepting-and-ignoring.
+        for profile_id, profile in config.profiles.items():
+            if not config.structural.profiles[profile_id].enabled:
+                continue
+            if profile.ordinary_gateway_nat:
                 raise AlphaRuntimeError(
-                    f"integration {item.integration_id!r} references unknown "
-                    f"Device {item.device_id!r}"
+                    f"profile {profile_id!r} requests +snat, which is not yet "
+                    "materialized by the alpha runtime"
+                )
+            if profile.availability_check is not None:
+                raise AlphaRuntimeError(
+                    f"profile {profile_id!r} requests availability_check, which "
+                    "is not yet assembled end-to-end by the alpha runtime"
+                )
+
+        for device_id in config.structural.active_device_ids:
+            if config.devices[device_id].publish_vpn_server:
+                raise AlphaRuntimeError(
+                    f"device {device_id!r} requests publish_vpn_server, which "
+                    "is not yet fully materialized by the alpha runtime"
                 )
 
         return cls(
             local_address=local_address,
             binding_state=DeviceBindingState.empty(),
-            structural=structural,
-            integrations=integrations,
+            config=config,
         )
 
     def build_current(
@@ -129,14 +148,14 @@ class AlphaPreparedPolicy:
         interfaces: tuple[InterfaceIdentity, ...],
     ) -> PayloadNetworkPolicyDesiredState:
         projection = project_device_bindings(
-            self.structural.device_binding_intents,
+            self.config.structural.device_binding_intents,
             self.binding_state,
             interfaces,
         )
         self.binding_state = projection.next_state
 
         profiles = build_payload_profile_requests(
-            self.structural.profiles.values(),
+            self.config.structural.profiles.values(),
             projection.bindings,
         )
         path_routes = realize_direct_device_path_routes(projection.bindings)
@@ -146,30 +165,55 @@ class AlphaPreparedPolicy:
             NG3_LINUX_POLICY_PLATFORM,
         )
 
-        # The final external Device NAT grammar is intentionally still gated.
-        # This alpha slice proves the runtime on a topology with an explicit
-        # reverse route and therefore has no Device source-NAT contribution.
         nat_policies = tuple(
-            DeviceNatPolicyIntent(device_id, NatIntent.NONE)
-            for device_id in sorted(self.structural.active_device_ids)
+            DeviceNatPolicyIntent(
+                device_id,
+                (
+                    NatIntent.MASQUERADE
+                    if self.config.devices[device_id].use_outbound_nat is True
+                    else NatIntent.NONE
+                ),
+            )
+            for device_id in sorted(self.config.structural.active_device_ids)
         )
         firewall_policies = tuple(
-            DeviceFirewallPolicyIntent(device_id, rules=None)
-            for device_id in sorted(self.structural.active_device_ids)
+            DeviceFirewallPolicyIntent(
+                device_id,
+                (
+                    None
+                    if self.config.devices[device_id].firewall is None
+                    else tuple(
+                        DeviceFirewallRuleIntent(
+                            direction=DeviceFirewallDirection(rule.direction),
+                            action=DeviceFirewallAction(rule.action),
+                            protocol=rule.protocol,
+                            source_port=rule.source_port,
+                            destination_port=rule.destination_port,
+                            source_ipv4_cidr=rule.source_ipv4_cidr,
+                            destination_ipv4_cidr=rule.destination_ipv4_cidr,
+                            comment=rule.comment,
+                        )
+                        for rule in self.config.devices[device_id].firewall
+                    )
+                ),
+            )
+            for device_id in sorted(self.config.structural.active_device_ids)
         )
 
         integration_intents = tuple(
             IntegrationLocalTransportIntent(
-                integration_id=item.integration_id,
-                protocol=item.protocol,
+                integration_id=f"{device_id}-vpn-client-{index}",
+                protocol=IntegrationTransportProtocol(item.protocol),
                 host_boundary=host_boundary,
                 local_address=self.local_address,
                 remote_address=item.remote_address,
                 remote_port=item.remote_port,
                 local_port=item.local_port,
             )
-            for item in self.integrations
-            if item.device_id in self.structural.active_device_ids
+            for device_id in sorted(self.config.structural.active_device_ids)
+            for index, item in enumerate(
+                self.config.devices[device_id].allow_vpn_client
+            )
         )
 
         return build_payload_network_policy_desired_state(
@@ -474,7 +518,7 @@ def _parse_args(argv: Iterable[str] | None = None):
         "--config",
         required=True,
         type=Path,
-        help="accepted NG3 Device/Profile + integration TOML",
+        help="canonical NG3 Release-1 Device/Profile TOML",
     )
     parser.add_argument(
         "--audit-interval",
