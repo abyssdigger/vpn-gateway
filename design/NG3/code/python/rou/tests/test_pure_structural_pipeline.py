@@ -6,17 +6,24 @@ import unittest
 from rou import (
     AvailabilityPriorityError,
     DeviceBindingState,
+    DeviceFirewallPolicyIntent,
+    DeviceNatPolicyIntent,
     InterfaceIdentity,
     LogicalPathId,
+    NatIntent,
     RoutePriorityPathRoute,
+    allocate_network_policy_layout,
+    build_payload_network_policy_desired_state,
     build_payload_profile_requests,
     calculate_effective_path_order,
     classify_inbound_profile,
     classify_outbound_profile,
     compile_payload_forward_policy,
+    NG3_LINUX_POLICY_PLATFORM,
     parse_ip_link_inventory,
     parse_structural_config,
     project_device_bindings,
+    realize_direct_device_path_routes,
 )
 
 
@@ -102,6 +109,32 @@ device_order = ["oc"]
             },
         )
 
+        direct_routes = realize_direct_device_path_routes(binding.bindings)
+        layout = allocate_network_policy_layout(
+            (request,),
+            (),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        desired = build_payload_network_policy_desired_state(
+            (request,),
+            layout,
+            direct_routes,
+            host_boundary,
+            (DeviceNatPolicyIntent("oc", NatIntent.NONE),),
+            (DeviceFirewallPolicyIntent("oc", rules=None),),
+            (),
+        )
+        self.assertEqual(
+            {item.path_id for item in direct_routes},
+            set(request.ordered_paths),
+        )
+        self.assertEqual(len(desired.routing.routes), 4)
+        self.assertEqual(len(desired.routing.rules), 1)
+        self.assertEqual(len(desired.nft.profile_forward.rules), 6)
+        self.assertEqual(desired.nft.payload_nat.masquerade_rules, ())
+        self.assertEqual(desired.nft.device_firewall.chains, ())
+        self.assertEqual(desired.nft.local_publication.rules, ())
+
     def test_zero_binding_profile_remains_classifiable_policy_domain(self):
         cfg = parse_structural_config("""
 [device.future]
@@ -141,6 +174,29 @@ device_order = ["future"]
             InterfaceIdentity("host0", 100),
         )
         self.assertEqual(forward.rules, ())
+
+        host_boundary = InterfaceIdentity("host0", 100)
+        direct_routes = realize_direct_device_path_routes(binding.bindings)
+        self.assertEqual(direct_routes, ())
+        layout = allocate_network_policy_layout(
+            (request,),
+            (),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        desired = build_payload_network_policy_desired_state(
+            (request,),
+            layout,
+            direct_routes,
+            host_boundary,
+            (),
+            (),
+            (),
+        )
+        self.assertEqual(len(desired.routing.routes), 1)
+        self.assertEqual(len(desired.routing.rules), 1)
+        self.assertEqual(desired.nft.profile_forward.rules, ())
+        self.assertEqual(desired.nft.payload_nat.masquerade_rules, ())
+        self.assertEqual(desired.nft.device_firewall.chains, ())
 
     def test_release1_inbound_pipeline_requires_actual_single_ingress_path(self):
         cfg = parse_structural_config("""
