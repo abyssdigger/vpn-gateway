@@ -49,11 +49,13 @@ from .forwarding_gate import (
 )
 from .managed_network_domain import (
     ManagedNetworkDomainEnsureResult,
+    ManagedNetworkDomainPreflightResult,
     ManagedNetworkDomainError,
     ManagedNetworkDomainSpec,
     ManagedNetworkDomainVerification,
     destroy_managed_network_domain,
     ensure_managed_network_domain,
+    preflight_managed_network_domain,
     verify_managed_network_domain,
 )
 from .linux_forwarding_gate import (
@@ -153,6 +155,14 @@ from .device_firewall_desired import (
     DeviceFirewallDesiredError,
     DeviceFirewallDesiredState,
     DeviceFirewallRuleSpec,
+)
+from .controller_startup import (
+    ControllerStartupResult,
+    ControllerStartupSession,
+    ControllerStartupStatus,
+    PreparedPayloadPolicy,
+    ValidatedPolicyLoader,
+    start_controller_once,
 )
 from .device_firewall_compare import (
     DeviceFirewallComparison,
@@ -389,6 +399,11 @@ __all__ = [
     "LinuxCompositeNftBackend",
     "ControllerInstanceBusyError",
     "ControllerInstanceLock",
+    "ControllerStartupResult",
+    "ControllerStartupSession",
+    "ControllerStartupStatus",
+    "PreparedPayloadPolicy",
+    "ValidatedPolicyLoader",
     "ControllerInstanceLockError",
     "InstanceLockSpec",
     "CompositeNftDesiredState",
@@ -440,6 +455,7 @@ __all__ = [
     "LinuxForwardingGateBackend",
     "LinuxForwardingGateError",
     "ManagedNetworkDomainEnsureResult",
+    "ManagedNetworkDomainPreflightResult",
     "ManagedNetworkDomainError",
     "ManagedNetworkDomainSpec",
     "ManagedNetworkDomainVerification",
@@ -508,6 +524,7 @@ __all__ = [
     "compile_device_firewall_policy",
     "destroy_managed_network_domain",
     "ensure_managed_network_domain",
+    "preflight_managed_network_domain",
     "verify_managed_network_domain",
     "compile_payload_forward_policy",
     "compare_payload_forward",
@@ -596,6 +613,7 @@ __all__ = [
     "compare_payload_nft_scaffold",
     "compare_structural_policy",
     "converge_structural_policy_step_once",
+    "start_controller_once",
     "structural_policy_distance",
     "converge_structural_policy",
     "select_structural_policy_step",
