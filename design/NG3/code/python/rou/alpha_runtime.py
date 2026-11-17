@@ -73,11 +73,7 @@ from .payload_network_policy_desired import (
     build_payload_network_policy_desired_state,
 )
 from .payload_profile import build_payload_profile_requests
-from .structural_policy_mutation import (
-    StructuralPolicyConflictError,
-    StructuralPolicyPreconditionError,
-    compare_structural_policy,
-)
+from .structural_policy_mutation import compare_structural_policy
 
 
 ALPHA_NAMESPACE = "vpn-gate-alpha"
@@ -97,7 +93,6 @@ class AlphaRuntimeError(RuntimeError):
 class AlphaPreparedPolicy:
     """Accepted config + current Device binding state for the alpha Manager."""
 
-    config_text: str
     local_address: IPv4Address
     binding_state: DeviceBindingState
     structural: object
@@ -108,7 +103,7 @@ class AlphaPreparedPolicy:
         cls,
         text: str,
         *,
-        local_address,
+        local_address: IPv4Address,
     ) -> "AlphaPreparedPolicy":
         structural = parse_structural_config(text)
         integrations = parse_integration_transport_config(text)
@@ -122,7 +117,6 @@ class AlphaPreparedPolicy:
                 )
 
         return cls(
-            config_text=text,
             local_address=local_address,
             binding_state=DeviceBindingState.empty(),
             structural=structural,
