@@ -229,21 +229,31 @@ def no_aggressive_state() -> tuple[bool, dict]:
         ("ip", "-n", e49.MANAGED, "route", "show", AGGRESSIVE_ROUTE),
         check=False,
     ).stdout.strip()
-    rule = e49.command(
+    rule_snapshot = e49.command(
         ("ip", "-n", e49.MANAGED, "rule", "show", "priority", "16384"),
         check=False,
     ).stdout.strip()
+    aggressive_rule = any(
+        "lookup main" in line
+        for line in rule_snapshot.splitlines()
+    )
     ruleset = e49.ns_command(
         e49.MANAGED, "nft", "list", "ruleset", check=False
     ).stdout
     marker = AGGRESSIVE_MARKER.exists()
     detail = {
         "route": route,
-        "rule": rule,
+        "rule_snapshot": rule_snapshot,
+        "aggressive_rule": aggressive_rule,
         "marker": marker,
         "nft_marker": AGGRESSIVE_NFT_COMMENT in ruleset,
     }
-    return not route and not rule and not marker and not detail["nft_marker"], detail
+    return (
+        not route
+        and not aggressive_rule
+        and not marker
+        and not detail["nft_marker"]
+    ), detail
 
 
 def clean_units() -> None:
