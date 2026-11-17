@@ -48,7 +48,7 @@ _spec.loader.exec_module(e49)
 e49.DOMAIN_UNIT = "exp050-vpn-gate-domain.service"
 e49.CLIENT_UNIT = "exp050-openvpn.service"
 
-FIXED_LOCAL_PORT = 11941
+CHANGED_TUN_MTU = 1400
 AGGRESSIVE_ROUTE = "203.0.113.250/32"
 AGGRESSIVE_MARKER = Path("/run/exp050-aggressive-hook-ran")
 AGGRESSIVE_NFT_COMMENT = "exp050-aggressive-hook"
@@ -66,10 +66,7 @@ def config_text(*, local_port: int | None = None) -> str:
 
 def changed_client_config(source: Path, target: Path) -> None:
     text = source.read_text(encoding="utf-8")
-    text = text.replace(
-        "nobind\nroute-noexec\n",
-        f"lport {FIXED_LOCAL_PORT}\nroute-noexec\n",
-    )
+    text += f"\ntun-mtu {CHANGED_TUN_MTU}\n"
     target.write_text(text, encoding="utf-8")
 
 
@@ -207,11 +204,20 @@ def prove_payload() -> None:
         raise AssertionError("controlled host payload did not traverse current VPN path")
 
 
-def socket_uses_fixed_port() -> bool:
-    output = e49.ns_command(
-        e49.MANAGED, "ss", "-H", "-u", "-n", "-p", check=False
+def endpoint_uses_changed_mtu() -> bool:
+    output = e49.command(
+        ("ip", "-n", e49.MANAGED, "-j", "link", "show", "dev", e49.VPN_IF),
+        check=False,
     ).stdout
-    return f":{FIXED_LOCAL_PORT}" in output
+    try:
+        rows = json.loads(output)
+    except json.JSONDecodeError:
+        return False
+    return (
+        isinstance(rows, list)
+        and len(rows) == 1
+        and rows[0].get("mtu") == CHANGED_TUN_MTU
+    )
 
 
 def no_aggressive_state() -> tuple[bool, dict]:
@@ -349,13 +355,13 @@ def run_lifecycle_cycle(
         assert not e49.interface_exists(e49.MANAGED, e49.VPN_IF)
 
         e49.write_systemd_units(changed_client)
-        current_config = config_text(local_port=FIXED_LOCAL_PORT)
+        current_config = config_text()
         e49.systemctl("start", e49.CLIENT_UNIT)
         changed_pid = wait_service_ready()
         assert changed_pid != second_pid
         e49.wait_until(
-            "changed OpenVPN fixed source port",
-            socket_uses_fixed_port,
+            "changed OpenVPN tunnel MTU",
+            endpoint_uses_changed_mtu,
             timeout=10.0,
         )
         changed_prepared, _ = reconcile_policy(current_config, domain_spec, runner)
@@ -363,7 +369,7 @@ def run_lifecycle_cycle(
         changed_endpoint = changed_prepared.observed_binding.bindings[0].endpoint
         print(
             f"EXP050_CYCLE_{cycle}_RESTART_CHANGED_CONFIG=PASS:"
-            f"pid={changed_pid}:local_port={FIXED_LOCAL_PORT}:"
+            f"pid={changed_pid}:tun_mtu={CHANGED_TUN_MTU}:"
             f"endpoint={changed_endpoint!r}"
         )
 
