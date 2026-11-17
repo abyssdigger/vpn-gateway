@@ -25,7 +25,7 @@ Current trace:
 
 | Architecture responsibility / contract | Executable reference | Review evidence |
 | --- | --- | --- |
-| ConfigurationAdapter structural + canonical Release-1 normalization | `domain.py`, `config.py`, `release1_config.py` | `NG3-2026-11-16-structural-config-code-review.md`, `NG3-2026-11-17-release1-config-grammar-rust-boundary-review.md` |
+| ConfigurationAdapter structural + canonical Release-1 normalization | `domain.py`, `config.py`, `release1_config.py`, `port_bundle.py` | `NG3-2026-11-16-structural-config-code-review.md`, `NG3-2026-11-17-release1-config-grammar-rust-boundary-review.md`, `NG3-2026-11-17-port-bundle-correction-review.md` |
 | authoritative VPNPathAdapter interface-identity observation boundary | `interface_identity.py`, `interface_inventory.py` | `NG3-2026-11-16-interface-inventory-code-review.md` |
 | shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
 | PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
@@ -49,7 +49,7 @@ Current trace:
 | EXP-048-backed structural route/RPDB mutation Driver | `linux_structural_routing.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md`, `EXP-048-result-20261116.md` |
 | exact-before-release cross-domain phase planner | `structural_policy_plan.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | semantic Profile forward compiler | `payload_forward_compiler.py` | `NG3-2026-11-17-profile-forward-compiler-review.md` |
-| multi-path Device firewall semantic compiler | `device_firewall_policy_compiler.py`, `device_firewall_compiler.py` | `NG3-2026-11-17-device-firewall-policy-compiler-review.md` |
+| multi-path Device firewall semantic compiler | `device_firewall_policy_compiler.py`, `device_firewall_compiler.py`, `linux_device_firewall.py` lower port-bundle rendering | `NG3-2026-11-17-device-firewall-policy-compiler-review.md`, `NG3-2026-11-17-port-bundle-correction-review.md`, `EXP-042-result-20261117-port-bundle-pass.md` |
 | complete payload lower desired-state assembly | `payload_network_policy_desired.py` | `NG3-2026-11-17-payload-network-policy-desired-review.md` |
 | guarded cross-domain structural Executor + Linux snapshot backend | `structural_policy_mutation.py`, `linux_structural_policy.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
