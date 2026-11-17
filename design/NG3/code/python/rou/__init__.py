@@ -160,6 +160,8 @@ from .controller_startup import (
     ControllerStartupResult,
     ControllerStartupSession,
     ControllerStartupStatus,
+    ControllerStartupStoppingContext,
+    ControllerStopRequested,
     PreparedPayloadPolicy,
     ValidatedPolicyLoader,
     start_controller_once,
@@ -167,6 +169,7 @@ from .controller_startup import (
 from .controller_stop import (
     ControllerStopResult,
     ControllerStopStatus,
+    cleanup_controller_owned_domain_once,
     stop_controller_once,
 )
 from .controller_restart import (
@@ -412,6 +415,8 @@ __all__ = [
     "ControllerStartupResult",
     "ControllerStartupSession",
     "ControllerStartupStatus",
+    "ControllerStartupStoppingContext",
+    "ControllerStopRequested",
     "ControllerStopResult",
     "ControllerStopStatus",
     "ControllerRestartResult",
@@ -628,6 +633,7 @@ __all__ = [
     "compare_structural_policy",
     "converge_structural_policy_step_once",
     "start_controller_once",
+    "cleanup_controller_owned_domain_once",
     "stop_controller_once",
     "restart_controller_once",
     "structural_policy_distance",
