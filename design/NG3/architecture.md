@@ -56,6 +56,7 @@ Current trace:
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md` |
 | controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
+| bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
 | managed-netns structural forwarding gate | `forwarding_gate.py`, `linux_forwarding_gate.py` | `NG3-2026-11-16-forwarding-gate-code-review.md`, `EXP-030-result-20261116.md` |
 | nft table-level ownership observation | `nft_namespace_inventory.py` | `NG3-2026-11-16-nft-namespace-inventory-code-review.md`, `EXP-031-result-20261116.md` |
 | invariant payload nft scaffold comparison | `nft_payload_scaffold.py` | `NG3-2026-11-16-payload-nft-scaffold-code-review.md`, `EXP-032-result-20261116.md` |
@@ -4684,6 +4685,85 @@ cleanup merely because it attempted startup.
 
 This contract intentionally carries forward the previously tested RC2/RC3 lock-path
 hardening while avoiding their external path/default as an NG3 product contract.
+
+## 12.0.3. Bounded controller startup assembly
+
+The first executable startup composition is procedural and phase-bounded. It does not create a
+LifecycleManager or runtime reconciliation loop.
+
+Inputs are lower/deployment contracts plus a config loader that, after successful validation,
+returns a pure current-state desired builder:
+
+```text
+InstanceLockSpec
+ManagedNetworkDomainSpec
+NetworkPolicyPlatformSpace
+Linux command runner
+
+load_validated_policy()
+    -> PreparedPayloadPolicy
+
+PreparedPayloadPolicy.build_current(
+    current host-boundary InterfaceIdentity,
+    fresh managed-domain InterfaceIdentity inventory
+)
+    -> PayloadNetworkPolicyDesiredState
+```
+
+The loader/builder seam is intentional:
+
+- candidate config load/validation must happen after controller lock + stale-domain
+  containment;
+- fresh domain creation must happen only after candidate config has validated;
+- current ifindex facts do not exist until the managed domain is present;
+- final NAT/firewall/publication external grammar and integration-specific path realization
+  remain outside lifecycle orchestration.
+
+The startup sequence is:
+
+```text
+1. acquire controller lifetime lock
+2. preflight managed domain WITHOUT creating it
+       existing -> ForwardingGate=DISABLED + exact infrastructure verify
+       absent   -> confirm namespace + host boundary both absent
+3. load/validate candidate normalized policy
+4. ensure managed domain
+       absent -> create contained infrastructure + exact verify
+       existing -> repeat contained exact verify
+5. fresh managed-domain link inventory
+6. pure build_current(host_boundary, interfaces) -> complete payload desired state
+7. activate_network_policy(...)
+8. READY only when activation is READY
+9. return startup session while retaining lifetime lock
+```
+
+A busy lock exits before domain/config/policy work.
+
+A config-validation failure occurs before fresh domain creation. If an old exact domain
+already existed, it remains protectively closed by preflight.
+
+After successful domain ensure, failure to observe current links or build desired state causes
+one explicit `ForwardingGate=DISABLED` containment verification before the lock is released.
+
+Activation failures reuse the activation subassembly's own failure-containment result and are
+not retried by startup.
+
+Startup failure does not automatically destroy a successfully verified managed domain. A
+contained exact domain is safe reusable infrastructure for a later start; destructive
+teardown belongs to explicit stop/cleanup orchestration. Fresh-domain creation failures still
+roll back inside the managed-domain lifecycle itself.
+
+A successful startup returns a session object containing the acquired lock and confirmed
+lower results. Releasing the lifetime lock while forwarding remains active is not a startup
+operation; the future stop/cleanup boundary must quiesce/contain/cleanup before releasing it.
+
+This assembly still does not define:
+
+- signal handling/checkpoints;
+- stop/restart implementation;
+- runtime Manager reconciliation scheduling;
+- user-facing readiness/status publication mechanism;
+- final external policy grammar.
 
 ## 12.1. Product lifecycle control surface
 

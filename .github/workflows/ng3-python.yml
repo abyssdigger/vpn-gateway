@@ -317,6 +317,13 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_managed_network_domain.py
+      - name: NG3 bounded controller startup integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_controller_startup.py
 
   linux-endpoint-provenance:
     runs-on: ubuntu-latest
