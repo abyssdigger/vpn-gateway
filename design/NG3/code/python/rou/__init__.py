@@ -34,6 +34,7 @@ from .release1_config import (
     Release1ConfigError,
     parse_release1_config,
 )
+from .port_bundle import PortBundle, PortSpan
 from .interface_identity import InterfaceIdentity
 from .instance_lock import (
     ControllerInstanceBusyError,
@@ -619,6 +620,8 @@ __all__ = [
     "ProfileClassificationError",
     "ProfilePrefixFragment",
     "ProfilePrefixPartitionError",
+    "PortBundle",
+    "PortSpan",
     "ProfileStructuralIntent",
     "ReservedOwnerKind",
     "ReservedPolicyConflict",
