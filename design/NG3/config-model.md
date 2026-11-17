@@ -746,7 +746,7 @@ firewall = [
 
 [device.oc-server]
 enabled = true
-expected_interfaces = ["vpns0"]
+expected_interfaces = ["ocsvr0"]
 publish_vpn_server = [
     "tcp/eth0:44443>443",
     "udp/eth0:44443>443",
