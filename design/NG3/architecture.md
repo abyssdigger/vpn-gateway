@@ -358,6 +358,45 @@ For the current scope, onboarding is architecturally closed with respect to both
 Concrete per-integration commands and external field names remain documentation/interface
 implementation work.
 
+### 1.1.2. Supported VPN onboarding applicability evidence gate
+
+**Implements:**
+- `VPNG0001-R1.R3.C1.R1.R1`
+
+A supported external VPN onboarding integration is not accepted merely because an interface
+placement mechanism appears plausible on paper. Before an integration may be called supported,
+the project must retain reproducible target-Linux evidence for the complete administrator-facing
+boundary:
+
+```text
+published administrator procedure
+    ->
+administrator-only external VPN setup/onboarding actions
+    ->
+VPN data-plane endpoint present inside the managed network domain
+    ->
+fresh VPNPathAdapter observation
+    ->
+exactly one expected logical-path binding
+    ->
+path admitted to the existing forwarding contract
+```
+
+The evidence must not depend on modifying VPN-GATE internals during the procedure. It must
+record the exact external VPN implementation/version and the commands/configuration used, and
+must include cleanup/repetition sufficient to show that the result is reproducible rather than
+a one-off pre-existing host state.
+
+The first such proof is planned as `EXP-049`. It may select one concrete integration that is
+otherwise intended to be supported by Release 1; proving one integration does not silently
+generalize the result to all VPN technologies. Each additional supported onboarding mechanism
+requires its own equivalent evidence or an explicitly reviewed proof that it is materially the
+same lower mechanism.
+
+Until at least one Release-1 integration passes this gate, the architecture is internally
+composable but the product-level claim that an administrator can actually supply a usable
+external VPN channel remains an open evidence gate.
+
 
 
 ## 1.2. Architecture-wide implementation requirements
