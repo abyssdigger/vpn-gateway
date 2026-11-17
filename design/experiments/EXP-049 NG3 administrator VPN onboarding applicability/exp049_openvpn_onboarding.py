@@ -164,6 +164,19 @@ def generate_pki(root: Path) -> None:
                 "-subj", f"/CN=EXP049-{name}",
             )
         )
+        ext = root / f"{name}.ext"
+        ext.write_text(
+            (
+                "basicConstraints=CA:FALSE\n"
+                "keyUsage=digitalSignature,keyEncipherment\n"
+                + (
+                    "extendedKeyUsage=serverAuth\n"
+                    if name == "server"
+                    else "extendedKeyUsage=clientAuth\n"
+                )
+            ),
+            encoding="utf-8",
+        )
         command(
             (
                 "openssl", "x509", "-req",
@@ -174,6 +187,7 @@ def generate_pki(root: Path) -> None:
                 "-out", root / f"{name}.crt",
                 "-days", "1",
                 "-sha256",
+                "-extfile", ext,
             )
         )
 
@@ -183,11 +197,13 @@ def write_openvpn_configs(root: Path) -> tuple[Path, Path]:
     client = root / "client.conf"
     server.write_text(
         f"""dev {SERVER_TUN}
+dev-type tun
 proto udp4
 local {SERVER_UNDERLAY}
 port {OPENVPN_PORT}
 ifconfig {VPN_SERVER_ADDR} {VPN_CLIENT_ADDR}
 tls-server
+remote-cert-tls client
 ca {root / 'ca.crt'}
 cert {root / 'server.crt'}
 key {root / 'server.key'}
@@ -201,11 +217,13 @@ verb 3
     )
     client.write_text(
         f"""dev {VPN_IF}
+dev-type tun
 proto udp4
 remote {SERVER_UNDERLAY} {OPENVPN_PORT}
 nobind
 ifconfig {VPN_CLIENT_ADDR} {VPN_SERVER_ADDR}
 tls-client
+remote-cert-tls server
 ca {root / 'ca.crt'}
 cert {root / 'client.crt'}
 key {root / 'client.key'}
