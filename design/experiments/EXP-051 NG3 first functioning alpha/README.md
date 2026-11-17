@@ -1,6 +1,6 @@
 # EXP-051 — first functioning NG3 alpha deployment smoke
 
-**Status:** PLANNED / executable on privileged Debian 13 systemd CI  
+**Status:** PASSED — first installed NG3 alpha controller + OpenVPN systemd stack  
 **Date:** 2026-11-17
 
 ## Requirement trace
@@ -76,6 +76,18 @@ The remote test namespace receives an explicit return route for host source
     product failures with test-only repair.
 
 ## Evidence
+
+**PASS on 2026-11-17.**
+
+Final runtime evidence:
+
+- runtime commit `5a1a9f53c8d861e9a616cf18bfa7107764f4a38d`;
+- GitHub Actions run `44082595411`;
+- alpha smoke job `134036710197`;
+- `EXP051_RESULT=PASS`;
+- two production reconciliation markers: first endpoint appearance and VPN-only restart.
+
+See `EXP-051-result-20261117-pass.md`.
 
 The harness is `exp051_alpha_smoke.py` and runs in the dedicated
 `linux-alpha-smoke` GitHub Actions job.
