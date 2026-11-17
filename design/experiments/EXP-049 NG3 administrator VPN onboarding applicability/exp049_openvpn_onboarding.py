@@ -362,15 +362,38 @@ def run_cycle(
             lambda: interface_exists(SERVER_NS, SERVER_TUN),
         )
 
+        underlay_before = ping(MANAGED, SERVER_UNDERLAY, count=1)
+        print(
+            f"EXP049_CYCLE_{cycle}_UNDERLAY_BEFORE_CLIENT="
+            + ("PASS" if underlay_before else "FAIL")
+        )
+        if not underlay_before:
+            raise RuntimeError("managed-domain underlay cannot reach OpenVPN server")
+
         client_proc, client_log = spawn_openvpn(
             MANAGED,
             client_config,
             root / f"client-cycle-{cycle}.log",
         )
-        wait_until(
-            "OpenVPN client vpn0",
-            lambda: interface_exists(MANAGED, VPN_IF),
-        )
+        try:
+            wait_until(
+                "OpenVPN client vpn0",
+                lambda: interface_exists(MANAGED, VPN_IF),
+            )
+        except Exception:
+            for label, path in (
+                ("server", root / f"server-cycle-{cycle}.log"),
+                ("client", root / f"client-cycle-{cycle}.log"),
+            ):
+                try:
+                    tail = path.read_text(encoding="utf-8", errors="replace")[-12000:]
+                except OSError as exc:
+                    tail = f"<cannot read log: {exc}>"
+                print(
+                    f"EXP049_CYCLE_{cycle}_{label.upper()}_LOG_TAIL="
+                    + json.dumps(tail)
+                )
+            raise
         wait_until(
             "pre-policy OpenVPN tunnel payload",
             lambda: ping(MANAGED, VPN_SERVER_ADDR, count=1),
