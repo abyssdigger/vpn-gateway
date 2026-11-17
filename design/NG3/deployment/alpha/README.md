@@ -15,7 +15,7 @@ Alpha controller:
 - создает и проверяет managed network namespace;
 - загружает каноническую Release-1 Device/Profile конфигурацию;
 - запускается безопасно даже при отсутствии текущего VPN endpoint;
-- материализует fail-closed network policy и точный local allow для VPN transport;
+- материализует fail-closed network policy, точный local allow для VPN client transport и полный `publish_vpn_server` путь: managed local admission + отдельный host-side DNAT owner;
 - удерживает controller lifetime lock;
 - раз в секунду выполняет локальный fresh audit;
 - при появлении, исчезновении или пересоздании VPN endpoint заново вычисляет binding и lower
@@ -34,11 +34,13 @@ Alpha controller:
   - `vnga-host0`;
   - `vnga-inner0`;
   - `198.19.255.1/30 <-> 198.19.255.2/30`;
-- grammar уже принята, но этот alpha runtime пока materializes только Device
-  `use_outbound_nat`, ordinary Device `firewall` и `allow_vpn_client`;
-- `availability_check`, Profile `+snat` и `publish_vpn_server` распознаются как
-  canonical syntax, но alpha fail-fast отклоняет их до завершения соответствующих lower
-  runtime paths;
+- canonical grammar уже принята; alpha materializes Device `use_outbound_nat`, ordinary
+  Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
+- `availability_check` и Profile `+snat` распознаются как canonical syntax, но alpha
+  fail-fast отклоняет их до завершения соответствующих lower runtime paths;
+- host-side publication требует уже существующего внешнего host forwarding; alpha проверяет
+  `net.ipv4.ip_forward` и явные host IPv4/interface selectors, но не включает global host
+  forwarding, не назначает host addresses и не поднимает host interfaces;
 - при `use_outbound_nat = false` удаленная сторона должна иметь нормальный обратный маршрут;
 - config hot reload не поддерживается: изменение `config.toml` требует restart controller;
 - RuntimeStatusAgent/UI еще не подключен; `journalctl` содержит только текущие alpha
@@ -80,6 +82,8 @@ enabled = true
 expected_interfaces = ["vpn0"]
 use_outbound_nat = false
 allow_vpn_client = "udp:11941>203.0.113.10:1194"
+# Optional when the host prerequisite/selector already exists:
+# publish_vpn_server = "tcp/eth0:443>8443"
 
 [profile.alpha]
 enabled = true
@@ -89,8 +93,11 @@ device_order = ["ovpn"]
 ```
 
 `allow_vpn_client` задает Device-owned transport/control facts только для bounded
-local/system admission. Он не заменяет VPN-specific OpenVPN/WireGuard/OpenConnect
-configuration и не разрешает payload forwarding.
+local/system admission. `publish_vpn_server` отдельно создает managed local publication
+admission и owner-scoped host DNAT mapping; отсутствие requested selector/host forwarding
+делает startup/reconciliation unready, а не дает runtime право менять global host setup.
+Оба поля не заменяют VPN-specific OpenVPN/WireGuard/OpenConnect configuration и сами по себе
+не разрешают Profile payload forwarding.
 
 ## OpenVPN example
 
@@ -138,7 +145,8 @@ systemctl status vpn-gate-alpha.service
 ```
 
 `Type=notify` означает, что `systemctl start` возвращает success только после подтвержденного
-controller READY: managed netns существует, startup network policy подтверждена.
+controller READY: managed netns существует, startup network policy подтверждена и, если
+запрошен `publish_vpn_server`, подтверждены managed local admission + host publication mapping.
 
 Затем stack-specific VPN:
 
@@ -201,12 +209,13 @@ EXP-051 запускает именно установленный controller un
 systemd environment и проверяет:
 
 - zero-path fail-closed startup;
-- точный transport admission до запуска VPN;
+- точный client-transport admission до запуска VPN;
+- реальную server publication через host DNAT + managed local admission до появления VPN endpoint;
 - VPN MainPID внутри managed netns;
 - первое runtime reconciliation после появления `vpn0`;
 - реальный controlled payload;
 - VPN-only restart без restart controller;
 - fresh ifindex generation + второе runtime reconciliation;
-- чистую остановку всего stack.
+- удаление host publication owner до managed-domain teardown и чистую остановку всего stack.
 
 См. `design/experiments/EXP-051 NG3 first functioning alpha/`.

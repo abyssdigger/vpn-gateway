@@ -135,3 +135,19 @@ EXP-052 is PASS only if H1-H6 all pass in one run.
 A PASS permits the next architecture/implementation unit to select a narrow host-boundary
 publication realization based on this mechanism. It does not by itself prove the complete
 runtime lifecycle, drift reconciliation or operator-status surface.
+
+
+## Final reference-backend evidence
+
+The experiment now drives the production-shaped Python reference backend rather than a
+hand-written nft script. Final run `44167358884`, job `134336862213`, confirms:
+
+- strict host owner convergence;
+- interface/IPv4/selector-less traffic semantics;
+- foreign transit remains untouched;
+- exact owner observation;
+- explicit owner cleanup back to table absence.
+
+Rootless unit coverage in the same run additionally verifies explicit selector loss
+(interface absent/down, exact IPv4 absent) becomes `UNREADY` without acquiring host
+interface/address/sysctl ownership.

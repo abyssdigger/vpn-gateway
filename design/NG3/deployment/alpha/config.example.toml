@@ -1,15 +1,17 @@
 # First NG3 alpha configuration example using the canonical Release-1 grammar.
 #
-# This alpha runtime materializes Device outbound NAT, ordinary Device firewall
-# and Device-owned VPN client transport/control allow. It still rejects
-# availability_check, Profile +snat and publish_vpn_server until those complete
-# lower runtime paths are assembled.
+# This alpha runtime materializes Device outbound NAT, ordinary Device firewall,
+# Device-owned VPN client transport/control allow and publish_vpn_server.
+# It still rejects availability_check and Profile +snat until those complete
+# lower runtime paths are assembled. Publication requires pre-existing host
+# forwarding and any explicit host IPv4/interface selector.
 
 [device.ovpn]
 enabled = true
 expected_interfaces = ["vpn0"]
 use_outbound_nat = false
 allow_vpn_client = "udp:11941>203.0.113.10:1194"
+# publish_vpn_server = "tcp/eth0:443>8443"
 
 [profile.alpha]
 enabled = true
