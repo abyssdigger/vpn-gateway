@@ -382,8 +382,8 @@ table ip exp054_managed {{
 
     chain boundary_profile_association {{
         type filter hook forward priority 10; policy accept;
-        iifname "{A_MANAGED_IF}" oifname "{MANAGED_BOUNDARY}" ip saddr {REMOTE_PREFIX} counter meta priority set {PROFILE_A_PRIORITY} comment "exp054-assoc-a"
-        iifname "{B_MANAGED_IF}" oifname "{MANAGED_BOUNDARY}" ip saddr {REMOTE_PREFIX} counter meta priority set {PROFILE_B_PRIORITY} comment "exp054-assoc-b"
+        iifname "{A_MANAGED_IF}" oifname "{MANAGED_BOUNDARY}" ip saddr {REMOTE_PREFIX} counter meta priority set "{PROFILE_A_PRIORITY}" comment "exp054-assoc-a"
+        iifname "{B_MANAGED_IF}" oifname "{MANAGED_BOUNDARY}" ip saddr {REMOTE_PREFIX} counter meta priority set "{PROFILE_B_PRIORITY}" comment "exp054-assoc-b"
     }}
 }}
 """,
@@ -397,13 +397,13 @@ table ip exp054_managed {{
 table ip exp054_host {{
     chain association_observe {{
         type filter hook prerouting priority -150; policy accept;
-        iifname "{HOST_BOUNDARY}" meta priority {PROFILE_A_PRIORITY} counter comment "exp054-seen-a"
-        iifname "{HOST_BOUNDARY}" meta priority {PROFILE_B_PRIORITY} counter comment "exp054-seen-b"
+        iifname "{HOST_BOUNDARY}" meta priority "{PROFILE_A_PRIORITY}" counter comment "exp054-seen-a"
+        iifname "{HOST_BOUNDARY}" meta priority "{PROFILE_B_PRIORITY}" counter comment "exp054-seen-b"
     }}
 
     chain profile_gateway_nat {{
         type nat hook postrouting priority srcnat; policy accept;
-        iifname "{HOST_BOUNDARY}" oifname "{HOST_LAN}" meta priority {PROFILE_A_PRIORITY} masquerade comment "exp054-snat-a"
+        iifname "{HOST_BOUNDARY}" oifname "{HOST_LAN}" meta priority "{PROFILE_A_PRIORITY}" masquerade comment "exp054-snat-a"
     }}
 }}
 """,
