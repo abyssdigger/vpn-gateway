@@ -58,11 +58,11 @@ class DeviceFirewallPolicyIntentTests(unittest.TestCase):
             direction=DeviceFirewallDirection.IN,
             action=DeviceFirewallAction.REJECT,
             protocol="tcp",
-            source_port=1,
-            destination_port=65535,
+            source_ports=1,
+            destination_ports=65535,
         )
-        self.assertEqual(rule.source_port, 1)
-        self.assertEqual(rule.destination_port, 65535)
+        self.assertEqual(rule.source_ports, 1)
+        self.assertEqual(rule.destination_ports, 65535)
 
         for invalid in (0, 65536, "443"):
             with self.subTest(invalid=invalid):
@@ -70,7 +70,7 @@ class DeviceFirewallPolicyIntentTests(unittest.TestCase):
                     DeviceFirewallRuleIntent(
                         direction=DeviceFirewallDirection.IN,
                         action=DeviceFirewallAction.DENY,
-                        source_port=invalid,  # type: ignore[arg-type]
+                        source_ports=invalid,  # type: ignore[arg-type]
                     )
 
     def test_ipv4_selectors_are_typed_internal_semantics(self):
