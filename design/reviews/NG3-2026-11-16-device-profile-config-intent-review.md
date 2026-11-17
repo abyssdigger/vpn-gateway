@@ -13,10 +13,10 @@ components merely because they existed.
 
 Recovered normative/implemented material:
 
-- `design/NG1/rou-config.md`;
-- `design/NG1/rou-concept.md`;
-- `design/NG1/NG1-2026-11-11-config-brainstorm-brief.md`;
-- `design/NG1/code/python/rou/domain.py`;
+- `legacy-main-ng1-2:design/NG1/rou-config.md`;
+- `legacy-main-ng1-2:design/NG1/rou-concept.md`;
+- `legacy-main-ng1-2:design/NG1/NG1-2026-11-11-config-brainstorm-brief.md`;
+- `legacy-main-ng1-2:design/NG1/code/python/rou/domain.py`;
 - `design/NG1/code/python/rou/config.py`;
 - NG1 runtime/config tests, especially selector/quota/survivor behavior;
 - recovered project-chat context for Profile-level `interface_balancing` / ICMP target
