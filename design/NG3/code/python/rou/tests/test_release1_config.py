@@ -213,6 +213,20 @@ destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
 """)
 
+    def test_direction_non_string_still_reports_config_error(self):
+        with self.assertRaises(Release1ConfigError):
+            parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+
+[profile.bad]
+enabled = true
+direction = ["inbound"]
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+
     def test_firewall_port_bundles_are_ordered_strict_and_non_overlapping(self):
         cfg = parse_release1_config("""
 [device.oc]
