@@ -1,6 +1,6 @@
 # EXP-049 — administrator VPN endpoint onboarding applicability
 
-**Status:** FAILED — OpenVPN placement/binding passed, current NG3 local/system policy blocks VPN transport after activation
+**Status:** PASSED — OpenVPN 2.6.14 via systemd NetworkNamespacePath, bounded local transport admission, two clean cycles
 
 ## Requirement traceability
 
@@ -134,15 +134,23 @@ not be hidden as a documentation defect.
 
 ## Current disposition
 
-**FAILED on 2026-11-17.**
+**PASSED on 2026-11-17.**
 
-The Debian 13 / OpenVPN 2.6.14 run proved real in-namespace VPN process/TUN placement, fresh
-production observation and exact logical-path binding twice. Both runs then failed controlled
-payload after production NG3 activation because `stack_input` / `stack_output` terminal
-DROP had no concrete supported-integration local/system allow contribution, blocking the
-OpenVPN UDP underlay.
+The original failed result remains retained in `EXP-049-result-20261117.md`: it exposed the
+missing supported-integration local/system policy.
 
-See `EXP-049-result-20261117.md` and GitHub Actions run `44038446087`.
+The repaired systemd onboarding mechanism passed on Debian 13 / OpenVPN 2.6.14 in two clean
+cycles:
 
-The gate remains open. Do not execute EXP-050 until EXP-049 is rerun and passes after the
-supported-integration local/system policy gap is closed.
+- distinct stack-specific systemd VPN service;
+- `BindsTo` + `After` managed-domain lifecycle anchor;
+- `NetworkNamespacePath` into the managed netns;
+- policy-neutral OpenVPN configuration with `route-noexec`;
+- explicit administrator-supplied integration transport facts;
+- bounded production local INPUT/OUTPUT admission;
+- fresh exact binding and controlled payload traversal;
+- normal `systemctl stop` and clean managed-domain teardown.
+
+See `EXP-049-result-20261117-systemd-pass.md`.
+
+This PASS unblocks EXP-050 only for the same OpenVPN/systemd onboarding mechanism.
