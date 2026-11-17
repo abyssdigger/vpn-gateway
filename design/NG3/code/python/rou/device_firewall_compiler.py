@@ -130,8 +130,8 @@ def _compile_rule(
 
     protocol = rule.protocol
     has_ports = (
-        rule.source_portss is not None
-        or rule.destination_portss is not None
+        rule.source_ports is not None
+        or rule.destination_ports is not None
     )
 
     if has_ports:
