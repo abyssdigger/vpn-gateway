@@ -22,6 +22,7 @@ from rou.iproute_priority_backend import SubprocessCommandRunner
 from rou.linux_device_firewall import LinuxDeviceFirewallBackend
 from rou.linux_forwarding_gate import LinuxForwardingGateBackend
 from rou.linux_nft_scaffold import SubprocessNftRunner
+from rou.port_bundle import PortBundle, PortSpan
 
 
 def run(*args, input_text=None):
@@ -119,7 +120,13 @@ def main():
                     direction=DeviceFirewallDirection.OUT,
                     action=DeviceFirewallAction.ALLOW,
                     protocol="tcp",
-                    destination_ports=443,
+                    destination_ports=PortBundle(
+                        (
+                            PortSpan(80, 80),
+                            PortSpan(443, 443),
+                            PortSpan(8000, 8007),
+                        )
+                    ),
                 ),
                 DeviceFirewallRuleIntent(
                     direction=DeviceFirewallDirection.OUT,
