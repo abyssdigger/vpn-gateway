@@ -21,7 +21,7 @@ class ConfigError(ValueError):
 
 _ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _PREFIX_RE = re.compile(r"^(.+)\*/([1-9][0-9]*)$")
-_TOP_LEVEL_KEYS = frozenset({"device", "profile"})
+_TOP_LEVEL_KEYS = frozenset({"device", "profile", "integration"})
 _DEVICE_STRUCTURAL_KEYS = frozenset({"enabled", "expected_interfaces"})
 _PROFILE_STRUCTURAL_KEYS = frozenset(
     {"enabled", "direction", "destinations", "device_order"}
@@ -31,8 +31,9 @@ _PROFILE_STRUCTURAL_KEYS = frozenset(
 def parse_structural_config(text: str) -> StructuralConfig:
     """Parse the bounded NG3 structural Device/Profile configuration slice.
 
-    Transport-policy fields (NAT/envelope/publications) and availability syntax are
-    intentionally outside this parser until their exact user-facing grammar is accepted.
+    Transport-policy fields (NAT/envelope/publications), supported-integration
+    transport facts and availability syntax are parsed by their bounded owners;
+    this structural parser accepts their top-level table without interpreting it.
     """
     try:
         raw = tomllib.loads(text)

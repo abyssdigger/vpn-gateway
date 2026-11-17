@@ -8,8 +8,10 @@ from .composite_nft_mutation import CompositeNftPhysicalSnapshot
 from .device_firewall_desired import DeviceFirewallChainSpec
 from .interface_inventory import parse_ip_link_inventory
 from .linux_device_firewall import LinuxDeviceFirewallBackend
+from .linux_local_integration import LinuxIntegrationLocalBackend
 from .linux_nft_scaffold import NftScriptRunner
 from .linux_local_publication import LinuxLocalPublicationBackend
+from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
 from .linux_payload_nat import LinuxPayloadNatBackend
 from .nft_namespace_inventory import parse_nft_namespace_ruleset
@@ -113,6 +115,12 @@ class LinuxCompositeNftBackend:
     ) -> None:
         self._local_publication_backend().apply_local_publication_step(step)
 
+    def apply_integration_local_step(
+        self,
+        step: IntegrationLocalMutationStep,
+    ) -> None:
+        self._integration_local_backend().apply_integration_local_step(step)
+
     def _device_backend(self) -> LinuxDeviceFirewallBackend:
         return LinuxDeviceFirewallBackend(
             runner=self.runner,
@@ -127,6 +135,12 @@ class LinuxCompositeNftBackend:
 
     def _local_publication_backend(self) -> LinuxLocalPublicationBackend:
         return LinuxLocalPublicationBackend(
+            runner=self.runner,
+            namespace=self.namespace,
+        )
+
+    def _integration_local_backend(self) -> LinuxIntegrationLocalBackend:
+        return LinuxIntegrationLocalBackend(
             runner=self.runner,
             namespace=self.namespace,
         )

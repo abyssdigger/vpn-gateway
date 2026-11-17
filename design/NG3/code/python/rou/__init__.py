@@ -190,6 +190,28 @@ from .device_firewall_compiler import (
     DeviceFirewallCompileError,
     compile_device_firewall_policy,
 )
+from .local_integration_policy import (
+    IntegrationLocalDesiredState,
+    IntegrationLocalHook,
+    IntegrationLocalRuleSpec,
+    IntegrationLocalTransportIntent,
+    IntegrationTransportProtocol,
+    build_integration_local_desired,
+)
+from .local_integration_observation import (
+    LOCAL_INTEGRATION_RULE_COMMENT,
+    IntegrationLocalComparison,
+    IntegrationLocalConflict,
+    ObservedIntegrationLocalRule,
+    compare_integration_local,
+)
+from .local_integration_mutation import (
+    IntegrationLocalDeleteRef,
+    IntegrationLocalMutationStep,
+    IntegrationLocalPlanError,
+    select_integration_local_step,
+)
+from .linux_local_integration import LinuxIntegrationLocalBackend
 from .local_publication_policy import (
     LocalPublicationDesiredState,
     LocalPublicationHook,
@@ -396,6 +418,19 @@ __all__ = [
     "CompositeNftMutationResult",
     "CompositeNftMutationStatus",
     "CompositeNftPhysicalSnapshot",
+    "IntegrationLocalDesiredState",
+    "IntegrationLocalHook",
+    "IntegrationLocalRuleSpec",
+    "IntegrationLocalTransportIntent",
+    "IntegrationTransportProtocol",
+    "IntegrationLocalDeleteRef",
+    "IntegrationLocalMutationStep",
+    "IntegrationLocalPlanError",
+    "IntegrationLocalComparison",
+    "IntegrationLocalConflict",
+    "ObservedIntegrationLocalRule",
+    "LOCAL_INTEGRATION_RULE_COMMENT",
+    "LinuxIntegrationLocalBackend",
     "LocalPublicationDeleteRef",
     "LocalPublicationMutationStep",
     "LocalPublicationPlanError",
@@ -534,6 +569,9 @@ __all__ = [
     "observe_payload_forward",
     "select_composite_nft_step",
     "converge_composite_nft_step_once",
+    "build_integration_local_desired",
+    "compare_integration_local",
+    "select_integration_local_step",
     "build_local_publication_desired",
     "select_local_publication_step",
     "compare_local_publication",

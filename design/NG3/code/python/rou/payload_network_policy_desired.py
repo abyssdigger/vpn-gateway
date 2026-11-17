@@ -15,6 +15,10 @@ from .device_policy import (
     DeviceNatPolicyIntent,
 )
 from .interface_identity import InterfaceIdentity
+from .local_integration_policy import (
+    IntegrationLocalTransportIntent,
+    build_integration_local_desired,
+)
 from .local_publication_policy import (
     PublicationLocalEndpointIntent,
     build_local_publication_desired,
@@ -65,6 +69,7 @@ def build_payload_network_policy_desired_state(
     nat_policies: Iterable[DeviceNatPolicyIntent],
     firewall_policies: Iterable[DeviceFirewallPolicyIntent],
     publication_intents: Iterable[PublicationLocalEndpointIntent],
+    integration_intents: Iterable[IntegrationLocalTransportIntent] = (),
 ) -> PayloadNetworkPolicyDesiredState:
     """Compose exact current payload lower desired state without I/O."""
     if not isinstance(layout, NetworkPolicyLayout):
@@ -81,6 +86,7 @@ def build_payload_network_policy_desired_state(
     current_nat_policies = tuple(nat_policies)
     current_firewall_policies = tuple(firewall_policies)
     current_publications = tuple(publication_intents)
+    current_integrations = tuple(integration_intents)
 
     for intent in current_publications:
         if not isinstance(intent, PublicationLocalEndpointIntent):
@@ -90,6 +96,16 @@ def build_payload_network_policy_desired_state(
         if intent.host_boundary != host_boundary:
             raise PayloadNetworkPolicyProjectionError(
                 "publication intent host boundary does not match current payload host boundary"
+            )
+
+    for intent in current_integrations:
+        if not isinstance(intent, IntegrationLocalTransportIntent):
+            raise PayloadNetworkPolicyProjectionError(
+                "integration_intents must contain IntegrationLocalTransportIntent"
+            )
+        if intent.host_boundary != host_boundary:
+            raise PayloadNetworkPolicyProjectionError(
+                "integration intent host boundary does not match current payload host boundary"
             )
 
     try:
@@ -147,6 +163,15 @@ def build_payload_network_policy_desired_state(
             f"publication-local projection failed: {exc}"
         ) from exc
 
+    try:
+        local_integration = build_integration_local_desired(
+            current_integrations,
+        )
+    except ValueError as exc:
+        raise PayloadNetworkPolicyProjectionError(
+            f"integration-local projection failed: {exc}"
+        ) from exc
+
     return PayloadNetworkPolicyDesiredState(
         routing=routing,
         nft=CompositeNftDesiredState(
@@ -154,5 +179,6 @@ def build_payload_network_policy_desired_state(
             payload_nat=nat,
             device_firewall=firewall,
             local_publication=local_publication,
+            local_integration=local_integration,
         ),
     )

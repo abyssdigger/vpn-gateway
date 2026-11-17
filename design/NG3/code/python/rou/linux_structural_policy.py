@@ -9,6 +9,7 @@ from .interface_inventory import parse_ip_link_inventory
 from .linux_composite_nft import LinuxCompositeNftBackend
 from .linux_nft_scaffold import NftScriptRunner
 from .linux_structural_routing import LinuxStructuralRoutingBackend
+from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
 from .network_policy_layout import NetworkPolicyPlatformSpace
 from .nft_namespace_inventory import parse_nft_namespace_ruleset
@@ -112,6 +113,12 @@ class LinuxStructuralPolicyBackend:
         step: LocalPublicationMutationStep,
     ) -> None:
         self._nft().apply_local_publication_step(step)
+
+    def apply_integration_local_step(
+        self,
+        step: IntegrationLocalMutationStep,
+    ) -> None:
+        self._nft().apply_integration_local_step(step)
 
     def _links(self):
         return parse_ip_link_inventory(

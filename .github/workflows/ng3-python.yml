@@ -9,6 +9,7 @@ on:
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
+      - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
@@ -31,6 +32,7 @@ on:
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
+      - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
@@ -344,9 +346,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: EXP-049 real OpenVPN onboarding on Debian 13
+      - name: EXP-049 real OpenVPN + systemd onboarding on Debian 13
         run: |
-          docker run --rm --privileged \
+          set -euo pipefail
+          docker rm -f ng3-exp049 >/dev/null 2>&1 || true
+          trap 'docker rm -f ng3-exp049 >/dev/null 2>&1 || true' EXIT
+
+          docker run -d --name ng3-exp049 --privileged --cgroupns=host \
+            --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
             -v "$GITHUB_WORKSPACE:/work" \
             -w /work \
             debian:13 \
@@ -354,12 +362,35 @@ jobs:
               set -e
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                systemd systemd-sysv dbus \
                 python3 iproute2 iputils-ping nftables procps openvpn openssl
               mkdir -p /dev/net
               if [ ! -e /dev/net/tun ]; then
                 mknod /dev/net/tun c 10 200
               fi
-              PYTHONPATH=design/NG3/code/python \
-                python3 "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/exp049_openvpn_onboarding.py"
+              exec /sbin/init
             '
+
+          for attempt in $(seq 1 90); do
+            if docker exec ng3-exp049 systemctl show-environment >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              docker logs ng3-exp049
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker exec ng3-exp049 bash -lc '
+            set -e
+            PYTHONPATH=design/NG3/code/python \
+              python3 "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/exp049_openvpn_onboarding.py"
+          '
+
+          docker exec ng3-exp049 bash -lc '
+            set -e
+            PYTHONPATH=design/NG3/code/python \
+              python3 "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/exp050_openvpn_systemd_lifecycle.py"
+          '
 
