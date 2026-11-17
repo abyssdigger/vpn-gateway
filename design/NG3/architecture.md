@@ -435,6 +435,8 @@ equivalence.
 - `VPNG0001-R1.R3.C1.C1.R1`
 - `VPNG0001-R1.R3.C1.C1.R2`
 - `VPNG0001-R1.R3.C1.C1.R3`
+- `VPNG0005-R5.C1`
+- `VPNG0005-R5.C1.R1`
 
 Release 1 uses systemd as the VPN process supervisor rather than introducing a VPN-GATE
 process manager.
