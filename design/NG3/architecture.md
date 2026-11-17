@@ -315,6 +315,7 @@ current NG3 ForwardingGate and leaving external configuration syntax unfixed.
 
 **Implements:**
 - `VPNG0002-R2.R3.R1.R1`;
+- `VPNG0002-R2.R3.R1.R1.R1`;
 - `VPNG0002-R2.R3.R3.R1`;
 - `VPNG0002-R2.R3.R3.R1.R1`;
 - `VPNG0004-R4.R6.R1.R1`;
