@@ -72,20 +72,29 @@ keys and implementation settings.
 
 ## Integration transport facts
 
-A VPN process inside the managed domain needs transport/control traffic to reach its remote
-VPN endpoint through the host boundary.
+A VPN client process inside the managed domain needs transport/control traffic to reach its
+remote VPN endpoint through the host boundary.
 
-For a supported first-release integration, VPN-GATE needs normalized facts sufficient for a
-bounded local allow:
+These facts belong to the Device in the canonical Release-1 configuration:
 
 ```toml
-[integration.<id>]
-device = "<device-id>"
-protocol = "udp" | "tcp"
-remote_ipv4 = "<exact IPv4>"
-remote_port = <1..65535>
-# optional when the VPN binds a stable local transport port:
-local_port = <1..65535>
+[device.corp]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = true
+allow_vpn_client = "udp:11941>198.51.100.7:1194"
+```
+
+When the VPN uses a dynamic local source port:
+
+```toml
+allow_vpn_client = "tcp>203.0.113.10:443"
+```
+
+Multiple exact client transports use an array. Grammar:
+
+```text
+tcp|udp[:<local-port>]><remote-IPv4>:<remote-port>
 ```
 
 The current lower shape admits only:
@@ -106,13 +115,15 @@ INPUT:
     exact local port when known
         -> accept
 
-or, when local_port is not fixed:
+or, when local port is not fixed:
     exact remote endpoint selectors
     + ct state established,related
         -> accept
 ```
 
 There is no fallback to blanket UDP/TCP or blanket established/related local acceptance.
+There is also no public top-level `[integration.*]` object in the canonical Release-1
+configuration.
 
 ## OpenVPN
 
@@ -133,13 +144,13 @@ For the supported policy-neutral shape:
 
 - the OpenVPN process starts inside the managed namespace;
 - route installation by OpenVPN is disabled with `route-noexec`;
-- a stable client transport port should be configured when practical and supplied as
-  `local_port`; the accepted EXP-049/050 OpenVPN shape uses one, which gives exact
+- a stable client transport port should be configured when practical and encoded in
+  `allow_vpn_client`; the accepted EXP-049/050 OpenVPN shape uses one, which gives exact
   INPUT/OUTPUT port selectors across service restart;
 - arbitrary external `up`/`down` scripts requiring elevated `script-security 2` are not
   part of the supported first-release integration;
 - host/external NAT, publication or underlay orchestration stays outside the managed namespace;
-- remote protocol/address/port facts are supplied to VPN-GATE for the integration-local allow.
+- remote protocol/address/port facts are supplied through the Device `allow_vpn_client` field.
 
 EXP-049 uses this shape with OpenVPN 2.6.14 on Debian 13.
 
