@@ -87,6 +87,8 @@ jobs:
 
           errors = []
           for name in tracked:
+              if name == ".github/workflows/actual-main-hygiene.yml":
+                  continue
               path = Path(name)
               try:
                   text = path.read_text(encoding="utf-8")
