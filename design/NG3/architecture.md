@@ -57,6 +57,8 @@ Current trace:
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md` |
 | controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
 | bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
+| bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
+| bounded controller restart composition | `controller_restart.py` | `NG3-2026-11-17-controller-restart-review.md` |
 | managed-netns structural forwarding gate | `forwarding_gate.py`, `linux_forwarding_gate.py` | `NG3-2026-11-16-forwarding-gate-code-review.md`, `EXP-030-result-20261116.md` |
 | nft table-level ownership observation | `nft_namespace_inventory.py` | `NG3-2026-11-16-nft-namespace-inventory-code-review.md`, `EXP-031-result-20261116.md` |
 | invariant payload nft scaffold comparison | `nft_payload_scaffold.py` | `NG3-2026-11-16-payload-nft-scaffold-code-review.md`, `EXP-032-result-20261116.md` |
@@ -357,6 +359,45 @@ For the current scope, onboarding is architecturally closed with respect to both
 
 Concrete per-integration commands and external field names remain documentation/interface
 implementation work.
+
+### 1.1.2. Supported VPN onboarding applicability evidence gate
+
+**Implements:**
+- `VPNG0001-R1.R3.C1.R1.R1`
+
+A supported external VPN onboarding integration is not accepted merely because an interface
+placement mechanism appears plausible on paper. Before an integration may be called supported,
+the project must retain reproducible target-Linux evidence for the complete administrator-facing
+boundary:
+
+```text
+published administrator procedure
+    ->
+administrator-only external VPN setup/onboarding actions
+    ->
+VPN data-plane endpoint present inside the managed network domain
+    ->
+fresh VPNPathAdapter observation
+    ->
+exactly one expected logical-path binding
+    ->
+path admitted to the existing forwarding contract
+```
+
+The evidence must not depend on modifying VPN-GATE internals during the procedure. It must
+record the exact external VPN implementation/version and the commands/configuration used, and
+must include cleanup/repetition sufficient to show that the result is reproducible rather than
+a one-off pre-existing host state.
+
+The first such proof is planned as `EXP-049`. It may select one concrete integration that is
+otherwise intended to be supported by Release 1; proving one integration does not silently
+generalize the result to all VPN technologies. Each additional supported onboarding mechanism
+requires its own equivalent evidence or an explicitly reviewed proof that it is materially the
+same lower mechanism.
+
+Until at least one Release-1 integration passes this gate, the architecture is internally
+composable but the product-level claim that an administrator can actually supply a usable
+external VPN channel remains an open evidence gate.
 
 
 
@@ -4760,10 +4801,115 @@ operation; the future stop/cleanup boundary must quiesce/contain/cleanup before 
 This assembly still does not define:
 
 - signal handling/checkpoints;
-- stop/restart implementation;
 - runtime Manager reconciliation scheduling;
 - user-facing readiness/status publication mechanism;
 - final external policy grammar.
+
+## 12.0.4. Bounded controller stop / owned-domain cleanup
+
+**Implements:**
+- `VPNG0005-R5.R4`;
+- `VPNG0005-R5.R5`;
+- `VPNG0005-R5.R6.R2`;
+- `VPNG0006-R6.R3`.
+
+**Constrained by:**
+- `VPNG0001-R1.R3.C1`;
+- `VPNG0004-R4.R6.R1`;
+- `VPNG0007-R7.R1`.
+
+For the currently executable controller lifetime, a READY startup session owns no runtime
+Manager/Agent loops yet. Its stop boundary therefore remains procedural rather than inventing
+a generic quiesce framework.
+
+The bounded stop sequence is:
+
+```text
+require retained controller lifetime lock
+    ->
+attempt fresh ForwardingGate=DISABLED convergence
+    ->
+regardless of that result, attempt owned managed-domain teardown
+    ->
+fresh teardown postcondition:
+    named managed namespace absent
+    host boundary veth absent
+    ->
+only after confirmed teardown release controller lifetime lock
+```
+
+The teardown attempt is independent from the preceding containment result. Failure to confirm
+the gate must not suppress the stronger cleanup attempt of removing the owned network domain.
+Conversely, a teardown failure does not justify releasing the lifetime lock while this
+controller process remains alive.
+
+Results distinguish:
+
+- **STOPPED** — owned domain absence is confirmed; lifetime lock is released;
+- **CLEANUP_FAILED_CONTAINED** — teardown failed, but forwarding closure was independently
+  confirmed; lifetime lock remains held for explicit cleanup retry/diagnosis;
+- **CLEANUP_FAILED_UNCONTAINED** — teardown failed and forwarding closure is not confirmed;
+  lifetime lock remains held and the unsafe/incomplete postcondition is explicit.
+
+A successful domain teardown is a stronger terminal postcondition than a failed earlier gate
+observation: once the named namespace and host boundary are freshly confirmed absent, no
+VPN-GATE-owned managed forwarding domain remains connected to host traffic.
+
+External VPN channel lifecycle remains administrator/integration-owned under
+`VPNG0001-R1.R3.C1`. Stop does not enumerate/kill external VPN processes and does not issue
+protocol-specific deletion of VPN path interfaces. The owned-domain teardown may make an
+external endpoint that lived inside that domain unusable/disconnected as a consequence of
+removing VPN-GATE's boundary; supported integrations must document and prove their onboarding
+and cleanup/re-entry behavior through the applicability contract / EXP-049 rather than
+turning external VPN lifecycle into an implicit controller responsibility.
+
+The current bounded stop has no generic callback list, retry queue or cleanup registry. When
+future runtime Managers/Agents become executable, their independently required quiesce/release
+operations must be added as concrete cleanup domains under `VPNG0005-R5.R5`, preserving the
+same rule: one cleanup-area failure does not suppress attempts in other independent areas.
+
+## 12.0.5. Bounded controller restart composition
+
+**Implements:**
+- `VPNG0005-R5.R6.R3`;
+- `VPNG0006-R6.R3`.
+
+**Constrained by:**
+- `VPNG0005-R5.R6.R2`;
+- `VPNG0007-R7.R1`.
+
+Restart adds no new lifecycle mechanism. It composes the already accepted stop and startup
+operations:
+
+```text
+restart(current READY session)
+    ->
+stop_controller_once(...)
+    ->
+if stop != STOPPED:
+    report restart STOP_FAILED
+    do not invoke startup
+    ->
+start_controller_once(...)
+    ->
+if start READY:
+    report restart READY with the new startup session
+else:
+    report restart START_FAILED with the exact startup result
+```
+
+A successful stop releases the prior lifetime lock only after owned-domain absence is
+confirmed. The following startup therefore reacquires controller ownership through the normal
+hardened lock path and re-establishes all startup postconditions from fresh state.
+
+Restart does not retain a special cross-stop ownership token and does not hide a lock-busy
+result from the new startup attempt. If another legitimate controller acquires the deployment
+lock after the successful stop and before the new start, this restart attempt fails visibly
+rather than bypassing the normal single-controller exclusion contract.
+
+There is no restart-specific retry, rollback journal, saved kernel snapshot or partial-start
+resume state. Failure after successful stop leaves the result exactly as the ordinary startup
+operation reports it; a later operator action may start again from authoritative state.
 
 ## 12.1. Product lifecycle control surface
 
