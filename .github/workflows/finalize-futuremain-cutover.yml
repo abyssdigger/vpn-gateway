@@ -1,0 +1,52 @@
+name: Finalize futuremain cutover
+
+on:
+  push:
+    branches:
+      - ng3-housekeeping-cycle-20261117-futuremain-materialization
+    paths:
+      - .github/workflows/finalize-futuremain-cutover.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify cutover and remove obsolete futuremain ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW_MAIN=b242fd9d74ba9a62b88f07225da6a61b62d7e4ab
+          OLD_MAIN=cf37cec19ccd08f7d8e0741f21e75c0f4ec2388c
+          SNAP75=b28f3e647d51b3c9f97190eb2daedaf253a68a88
+          TAG=ng3-lineage-divergence-verified-20261117
+
+          git fetch --force origin \
+            refs/heads/main:refs/remotes/origin/main \
+            refs/heads/futuremain:refs/remotes/origin/futuremain \
+            refs/heads/legacy-main-ng3:refs/remotes/origin/legacy-main-ng3 \
+            '+refs/tags/*:refs/tags/*'
+
+          test "$(git rev-parse refs/remotes/origin/main)" = "$NEW_MAIN"
+          test "$(git rev-parse refs/remotes/origin/futuremain)" = "$NEW_MAIN"
+          test "$(git rev-parse refs/remotes/origin/legacy-main-ng3)" = "$OLD_MAIN"
+          test "$(git rev-parse "${TAG}^{commit}")" = "$SNAP75"
+
+          if git merge-base "$NEW_MAIN" "$OLD_MAIN" >/dev/null 2>&1; then
+            echo '::error::new and archived main unexpectedly have a common ancestor'
+            exit 1
+          fi
+
+          git push origin --delete futuremain
+
+          if git ls-remote --exit-code --heads origin refs/heads/futuremain >/dev/null 2>&1; then
+            echo '::error::futuremain still exists after deletion'
+            exit 1
+          fi
+
+          echo 'cutover finalized: main=new clean lineage, legacy-main-ng3=old main, futuremain removed' >> "$GITHUB_STEP_SUMMARY"
