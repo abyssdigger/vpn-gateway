@@ -240,129 +240,172 @@ interface naming into hidden policy.
 - `VPNG0001-R1.R3.R4.R3`
 - `VPNG0001-R1.R3.R4.R4`
 
-## 4.1. Device policy concepts recovered from historical design
+## 4.1. Canonical Release-1 Device policy grammar
 
-The following concepts have accepted NG3 semantics. Their exact optional-policy
-human-facing spelling is postponed under
-`design/deferrals/NG3-user-facing-policy-grammar.md` where noted.
+The configuration-format review is complete for the ordinary Release-1 Device policy
+surface. Historical NG1/NG3 prototype spellings remain evidence only and are **not**
+compatibility aliases.
 
-### NAT intent
+### Outbound Device NAT
 
-Historical Device policy distinguished at least:
-
-```toml
-nat = "none"
-nat = "masquerade"
-```
-
-The last agreed prototype deliberately had **no implicit NAT default** for an active Device.
-
-Semantics:
-
-- `none`: VPN-GATE performs no payload source NAT for this Device/path;
-- `masquerade`: payload source NAT is applied through the current concrete path of the
-  Device.
-
-NAT belongs to transport/path policy, not availability/health.
-
-The spelling `nat = "none|masquerade"` is the last agreed prototype and strong schema
-candidate evidence. NG3 requirements already fix the semantic obligation that NAT intent be
-explicit; the exact external spelling is postponed to the user-facing grammar review. No
-`snat = <address>` capability is recovered from the prototype.
-
-### Device traffic envelope
-
-Device traffic envelope is administrator-authored restrictive policy over tunnel traffic.
-
-Its invariant is:
-
-```text
-effective permission
-    = Profile permission
-      INTERSECT
-      Device traffic envelope
-```
-
-The envelope may restrict traffic allowed by Profile semantics but must never expand Profile
-permission or bypass Profile direction/destination/path eligibility.
-
-Historical design included source/destination prefixes, protocol and ports.
-
-Recovered prototype example:
+For a Device that can currently serve an ordinary-to-VPN leg of an enabled Profile
+(`outbound` or `bidirectional`), the field is mandatory:
 
 ```toml
-[device.oc-main.traffic_envelope]
-default = "allow"
-
-[[device.oc-main.traffic_envelope.rules]]
-direction = "from-device"
-action = "drop"
-source = "10.20.0.0/16"
-protocol = "tcp"
-destination_ports = ["8007"]
+use_outbound_nat = true
 ```
 
-Recovered value grammar also used strict port forms:
+or:
+
+```toml
+use_outbound_nat = false
+```
+
+Normalization is exact:
 
 ```text
-"N"
-"A-B"
+false -> NatIntent.NONE
+true  -> NatIntent.MASQUERADE
 ```
 
-with inclusive `1..65535` bounds and rejection of reversed/invalid ranges.
+The field belongs to the Device because it changes the source representation of payload
+traffic as it leaves through that VPN transport/path. It is not an availability setting and
+is independent from Profile ordinary-side `+snat`.
 
-NG3 fixes the **semantic** capability as an ordered Device firewall with IN/OUT,
-ALLOW/DENY/REJECT, optional L3/L4 selectors, preserved user order, permissive omission and
-DROP fallthrough for an explicit policy. The exact **human-facing encoding** is explicitly
-postponed in `design/deferrals/NG3-user-facing-policy-grammar.md`. The historical
-`traffic_envelope` TOML example is prototype syntax evidence only, not NG3 schema.
+For a Device that participates only in inbound Profiles, the field is not required because
+there is no ordinary-to-VPN payload leg on which this NAT could operate.
 
-### Device publications
+Historical `nat = "none|masquerade"` is rejected by the canonical Release-1 parser.
 
-Publication belongs to Device/transport binding, not Profile routing.
+### Client-side VPN transport/control allow
 
-Conceptually it maps a host-side TCP/UDP transport endpoint to an internal transport endpoint
-inside the managed network domain so VPN transport configuration can remain stable.
+A VPN client process running inside the fail-closed managed domain may need a narrowly bounded
+underlay/control flow to reach its remote VPN server. This is part of the Device transport
+contract, not a separate top-level integration object.
 
-EXP-010/011 prove publication as a technical boundary, including real OpenConnect same-port
-TCP/UDP publication.
+Canonical forms:
 
-Recovered prototype publication syntax used compact values such as:
+```toml
+allow_vpn_client = "udp:11941>198.51.100.20:11940"
+```
+
+or, when the local source port is intentionally dynamic:
+
+```toml
+allow_vpn_client = "tcp>198.51.100.20:443"
+```
+
+Multiple flows use an array:
+
+```toml
+allow_vpn_client = [
+    "tcp>198.51.100.20:443",
+    "udp>198.51.100.20:443",
+]
+```
+
+Grammar:
 
 ```text
-<external>/<protocol>[><internal>]
-
-44443/tcp
-5678/udp>7890
-4700:4900/udp>55200:55400
+tcp|udp[:<local-port>]><remote-IPv4>:<remote-port>
 ```
 
-Recovered value rules included:
+Ports are integers in `1..65535`. The remote endpoint is an exact IPv4 address; hostnames
+and ambient socket discovery are not accepted as substitutes. When local port is omitted,
+the reverse allow remains bounded by exact remote/address/boundary facts plus established
+connection state as defined by the supported-integration local/system policy.
 
-- ports `1..65535`;
-- inclusive ranges;
-- equal cardinality for range-to-range mapping;
-- rejection of reversed/invalid ranges;
-- rejection of semantically ambiguous overlaps;
-- TCP and UDP are separate protocol domains.
+Top-level `[integration.*]` is not part of the Release-1 human-facing model.
 
-Historical NG1 explicitly left the **final human-facing publication grammar unresolved**.
-NG3 keeps publication semantics accepted while postponing exact external spelling under the
-user-facing grammar deferral; the prototype syntax is not normative.
+### Ordered Device firewall
+
+The Device firewall is an ordered array of one-line rules:
+
+```toml
+firewall = [
+    "out allow tcp to 10.20.0.0/16:443 # HTTPS to corp",
+    "out allow icmp to 10.20.0.0/16",
+    "in allow tcp from 10.20.0.0/16 to 10.0.0.10/32:22 # SSH to bastion",
+    "in reject tcp to 10.0.0.0/24:23",
+]
+```
+
+Rule grammar:
+
+```text
+<in|out> <allow|deny|reject>
+    [tcp|udp|icmp]
+    [from <IPv4-CIDR>[:port]]
+    [to <IPv4-CIDR>[:port]]
+    [ # <comment>]
+```
+
+The physical string is one line; the layout above is only explanatory.
+
+Rules:
+
+- `in|out` is relative to the VPN Device/path, not Linux INPUT/OUTPUT;
+- `out` means ordinary/host boundary -> VPN path;
+- `in` means VPN path -> ordinary/host boundary;
+- source/destination are literal packet fields at Device filtering time;
+- ports are single integers `1..65535` and require explicit `tcp` or `udp`;
+- ICMP cannot carry transport ports;
+- CIDRs are strict IPv4 networks;
+- rule order is semantic and first terminal match wins;
+- omitted `firewall` means no additional Device-layer restriction;
+- a non-empty explicit firewall has terminal no-match DROP;
+- the parser does not reorder, widen or silently repair rules.
+
+Endpoint-scoped Device firewall remains outside Release 1 under
+`VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
+
+### Server-side VPN publication
+
+Publication belongs to Device/transport policy, not Profile routing. The compact canonical
+field is:
+
+```toml
+publish_vpn_server = "udp:44443"
+```
+
+for same external/internal port, or:
+
+```toml
+publish_vpn_server = "udp/eth0:44443>1194"
+publish_vpn_server = "tcp/192.0.2.10:443>8443"
+```
+
+when an explicit host selector and/or port remap is needed. Multiple endpoints use an array.
+
+Grammar:
+
+```text
+tcp|udp[/<host-IPv4|host-interface>]:<host-port>[><internal-port>]
+```
+
+Omitted `>internal-port` means same-port mapping. Omitted host selector means the
+publication is not restricted by an additional user-selected host address/interface.
+Protocol domains remain distinct, and ports are integers in `1..65535`.
+
+The external publication mapping and the managed-domain local INPUT/OUTPUT admission are
+separate lower responsibilities derived from this one Device intent. A runtime that has not
+implemented the full publication path must reject/diagnose that requested capability rather
+than silently ignoring it.
 
 ### Requirement trace
 
-The recovered Device policy/config semantics refine:
+The canonical Device policy/config grammar implements:
 
 - `VPNG0001-R1.R2.R4.R6`;
 - `VPNG0001-R1.R2.R4.R6.R1`;
 - `VPNG0001-R1.R2.R4.R6.R2`;
 - `VPNG0001-R1.R2.R4.R6.R3`;
 - `VPNG0001-R1.R2.R4.R6.C1`;
+- `VPNG0001-R1.R3.C1.C1.R3`;
 - `VPNG0001-R1.R2.R5` and its canonical-config children.
 
-These requirement/constraint nodes are now closed in the NG3 tree. Remaining exact external
-spelling decisions are interface deferrals, not open product semantics.
+Historical `nat`, `traffic_envelope`, `publications` and top-level
+`[integration.*]` spellings are not accepted aliases.
 
 ### Ordering
 
