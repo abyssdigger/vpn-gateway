@@ -139,6 +139,11 @@ class AlphaPreparedPolicy:
                     f"profile {profile_id!r} requests +snat, which is not yet "
                     "materialized by the alpha runtime"
                 )
+            if profile.route_return:
+                raise AlphaRuntimeError(
+                    f"profile {profile_id!r} requests +route-return, which is not yet "
+                    "materialized by the alpha runtime"
+                )
             if profile.availability_check is not None:
                 raise AlphaRuntimeError(
                     f"profile {profile_id!r} requests availability_check, which "
