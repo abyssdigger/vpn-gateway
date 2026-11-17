@@ -146,19 +146,23 @@ def cgroup_empty_or_absent(unit: str) -> bool:
 
 
 def wait_service_ready() -> int:
-    e49.wait_until(
-        "systemd OpenVPN vpn0",
-        lambda: e49.interface_exists(e49.MANAGED, e49.VPN_IF),
-        timeout=20.0,
-    )
-    assert e49.systemd_unit_active(e49.CLIENT_UNIT)
-    pid = e49.prove_systemd_namespace_attachment()
-    e49.wait_until(
-        "OpenVPN tunnel payload",
-        lambda: e49.ping(e49.MANAGED, e49.VPN_SERVER_ADDR, count=1),
-        timeout=20.0,
-    )
-    return pid
+    try:
+        e49.wait_until(
+            "systemd OpenVPN vpn0",
+            lambda: e49.interface_exists(e49.MANAGED, e49.VPN_IF),
+            timeout=20.0,
+        )
+        assert e49.systemd_unit_active(e49.CLIENT_UNIT)
+        pid = e49.prove_systemd_namespace_attachment()
+        e49.wait_until(
+            "OpenVPN tunnel payload",
+            lambda: e49.ping(e49.MANAGED, e49.VPN_SERVER_ADDR, count=1),
+            timeout=20.0,
+        )
+        return pid
+    except Exception:
+        print("EXP050_CLIENT_JOURNAL_TAIL=" + json.dumps(e49.systemd_client_log()[-8000:]))
+        raise
 
 
 def prove_payload() -> None:
