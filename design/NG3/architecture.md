@@ -1136,9 +1136,12 @@ Key normalization rules:
 - `allow_vpn_client` is normalized as exact Device-owned VPN client transport/control facts;
   there is no public top-level `integration.*` object;
 - Device `firewall` is normalized as an ordered first-match policy that can only narrow
-  Profile permission; omitted policy is permissive at the Device layer and explicit policy
-  has terminal no-match DROP;
-- `publish_vpn_server` is normalized separately from Profile payload routing;
+  Profile permission; source/destination transport selectors use normalized ordered
+  non-overlapping `PortBundle` values, omitted policy is permissive at the Device layer and
+  explicit policy has terminal no-match DROP;
+- `publish_vpn_server` is normalized separately from Profile payload routing; host/internal
+  port bundles preserve declared item order and explicit translation requires equal expanded
+  cardinality for positional 1:1 mapping;
 - historical Device policy spellings are rejected rather than accepted as aliases;
 - availability subject identity is exactly `(profile_id, logical_path_id)`;
 - the same bound interface/path may therefore have independent availability state in
@@ -1188,10 +1191,15 @@ allow_vpn_client
 
 firewall[]
     -> ordered DeviceFirewallRuleIntent sequence
+    -> each TCP/UDP source/destination port selector is PortBundle
+       of ordered non-overlapping exact/range items
     -> omitted means permissive Device layer
     -> explicit no-match means DROP
 
 publish_vpn_server
+    -> ordered host PortBundle
+       + identity mapping when internal bundle is omitted
+       + equal-cardinality positional 1:1 host/internal mapping when explicit
     -> Device-owned host publication intent
        + managed-domain publication-local admission intent
 ```
@@ -3028,6 +3036,13 @@ Source/destination address and port predicates match literal payload packet fiel
 FORWARD point. The existing Device `MASQUERADE` contract runs later in postrouting, so
 outbound source fields are still pre-NAT here. External VPN transport addresses are not
 payload source/destination fields.
+
+A normalized firewall `PortBundle` is one set-membership predicate, not a list of separate
+policy rules and not a source/destination positional mapping. Lower nft realization uses the
+kernel-native expression shape: one exact port is a scalar operand, one inclusive range is a
+range operand, and a multi-item bundle is a set containing exact and/or range operands. This
+preserves one user rule / one terminal verdict and avoids expansion proportional to the
+number of individual ports in a range.
 
 The Device chain is traversed before both Profile NEW admission and the prefix-scoped
 ESTABLISHED/RELATED return primitive. Therefore an explicit Device firewall applies to
