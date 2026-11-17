@@ -1,0 +1,11 @@
+[Unit]
+Description=VPN-GATE alpha stack-specific OpenVPN client
+BindsTo=vpn-gate-alpha.service
+After=vpn-gate-alpha.service
+
+[Service]
+Type=simple
+NetworkNamespacePath=/run/netns/vpn-gate-alpha
+ExecStart=/usr/sbin/openvpn --config /etc/vpn-gate-alpha/openvpn.conf
+Restart=no
+KillMode=control-group
