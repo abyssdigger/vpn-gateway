@@ -271,7 +271,7 @@ def _parse_direction(value: Any, where: str) -> tuple[Direction, bool, bool]:
         "bidirectional+route-return": (Direction.BIDIRECTIONAL, False, True),
         "bidirectional+snat+route-return": (Direction.BIDIRECTIONAL, True, True),
     }
-    if value in forms:
+    if isinstance(value, str) and value in forms:
         return forms[value]
     if isinstance(value, str) and value.startswith("outbound+") and "route-return" in value:
         raise Release1ConfigError(
