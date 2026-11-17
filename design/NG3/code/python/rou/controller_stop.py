@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
-from .controller_startup import ControllerStartupSession
+from .instance_lock import ControllerInstanceLock
+
+if TYPE_CHECKING:
+    from .controller_startup import ControllerStartupSession
 from .forwarding_gate import (
     ForwardingGateExecutionResult,
     ForwardingGateState,
@@ -38,22 +42,15 @@ class ControllerStopResult:
         return self.status is ControllerStopStatus.STOPPED
 
 
-def stop_controller_once(
-    session: ControllerStartupSession,
+def cleanup_controller_owned_domain_once(
+    lock: ControllerInstanceLock,
     domain_spec: ManagedNetworkDomainSpec,
     runner: ManagedNetworkDomainRunner,
 ) -> ControllerStopResult:
-    """Run one bounded stop attempt for a retained READY startup session.
-
-    The lifetime lock must still belong to the caller. Forwarding containment is
-    attempted first, but a failed containment observation never suppresses the
-    independent stronger cleanup attempt of removing the owned managed domain.
-    The lock is released only after managed-domain absence has been confirmed by
-    destroy_managed_network_domain().
-    """
-    if not session.lock.acquired:
+    """Run one bounded owned-domain cleanup attempt under a retained lifetime lock."""
+    if not lock.acquired:
         raise ValueError(
-            "controller stop requires the still-acquired startup lifetime lock"
+            "controller cleanup requires a still-acquired lifetime lock"
         )
 
     containment = converge_forwarding_gate_once(
@@ -79,7 +76,7 @@ def stop_controller_once(
         )
 
     try:
-        session.lock.release()
+        lock.release()
     except Exception as exc:
         return ControllerStopResult(
             status=ControllerStopStatus.LOCK_RELEASE_FAILED,
@@ -90,4 +87,22 @@ def stop_controller_once(
     return ControllerStopResult(
         status=ControllerStopStatus.STOPPED,
         containment=containment,
+    )
+
+
+def stop_controller_once(
+    session: "ControllerStartupSession",
+    domain_spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> ControllerStopResult:
+    """Run one bounded stop attempt for a retained READY startup session."""
+    if not session.lock.acquired:
+        raise ValueError(
+            "controller stop requires the still-acquired startup lifetime lock"
+        )
+
+    return cleanup_controller_owned_domain_once(
+        session.lock,
+        domain_spec,
+        runner,
     )
