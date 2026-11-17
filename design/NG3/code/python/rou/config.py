@@ -40,16 +40,36 @@ def parse_structural_config(text: str) -> StructuralConfig:
     except (tomllib.TOMLDecodeError, TypeError) as exc:
         raise ConfigError(f"invalid TOML: {exc}") from None
 
-    _reject_unknown_keys(raw, _TOP_LEVEL_KEYS, "top level")
+    return _parse_structural_root(
+        raw,
+        top_level_keys=_TOP_LEVEL_KEYS,
+        device_keys=_DEVICE_STRUCTURAL_KEYS,
+        profile_keys=_PROFILE_STRUCTURAL_KEYS,
+    )
+
+
+def _parse_structural_root(
+    raw: dict[str, Any],
+    *,
+    top_level_keys: frozenset[str],
+    device_keys: frozenset[str],
+    profile_keys: frozenset[str],
+) -> StructuralConfig:
+    """Normalize the structural slice from an already parsed TOML document.
+
+    Bounded higher-level configuration adapters may use this helper only after
+    they validate every additional field they add to device_keys/profile_keys.
+    """
+    _reject_unknown_keys(raw, top_level_keys, "top level")
     raw_devices = _mapping(raw.get("device", {}), "device")
     raw_profiles = _mapping(raw.get("profile", {}), "profile")
 
     devices = {
-        device_id: _parse_device(device_id, body)
+        device_id: _parse_device(device_id, body, device_keys)
         for device_id, body in raw_devices.items()
     }
     profiles = {
-        profile_id: _parse_profile(profile_id, body)
+        profile_id: _parse_profile(profile_id, body, profile_keys)
         for profile_id, body in raw_profiles.items()
     }
 
@@ -100,7 +120,11 @@ def _enabled(body: dict[str, Any], where: str) -> bool:
     return value
 
 
-def _parse_device(device_id: str, raw: Any) -> DeviceStructuralIntent:
+def _parse_device(
+    device_id: str,
+    raw: Any,
+    allowed_keys: frozenset[str] = _DEVICE_STRUCTURAL_KEYS,
+) -> DeviceStructuralIntent:
     _validate_id(device_id, "Device")
     where = f"device.{device_id}"
     body = _mapping(raw, where)
@@ -108,7 +132,7 @@ def _parse_device(device_id: str, raw: Any) -> DeviceStructuralIntent:
     if not enabled:
         return DeviceStructuralIntent(device_id=device_id, enabled=False)
 
-    _reject_unknown_keys(body, _DEVICE_STRUCTURAL_KEYS, where)
+    _reject_unknown_keys(body, allowed_keys, where)
     values = body.get("expected_interfaces")
     if not isinstance(values, list) or not values:
         raise ConfigError(
@@ -131,7 +155,11 @@ def _parse_device(device_id: str, raw: Any) -> DeviceStructuralIntent:
     )
 
 
-def _parse_profile(profile_id: str, raw: Any) -> ProfileStructuralIntent:
+def _parse_profile(
+    profile_id: str,
+    raw: Any,
+    allowed_keys: frozenset[str] = _PROFILE_STRUCTURAL_KEYS,
+) -> ProfileStructuralIntent:
     _validate_id(profile_id, "Profile")
     where = f"profile.{profile_id}"
     body = _mapping(raw, where)
@@ -139,7 +167,7 @@ def _parse_profile(profile_id: str, raw: Any) -> ProfileStructuralIntent:
     if not enabled:
         return ProfileStructuralIntent(profile_id=profile_id, enabled=False)
 
-    _reject_unknown_keys(body, _PROFILE_STRUCTURAL_KEYS, where)
+    _reject_unknown_keys(body, allowed_keys, where)
 
     try:
         direction = Direction(body.get("direction"))
