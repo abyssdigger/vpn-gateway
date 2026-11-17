@@ -2597,6 +2597,103 @@ is not widened by the publication result.
 Concrete payload rules are added only by a fully normalized payload-policy projection. They
 must not be inferred from historical TOML examples.
 
+###### Host-side Device server publication mapping — EXP-052
+
+**Implements:**
+- `VPNG0001-R1.R2.R4.R6.R3`;
+- `VPNG0001-R1.R2`;
+- `VPNG0004-R4.R6.R1.R1`;
+- `VPNG0004-R4.R6.R1.R5.R1`;
+- `VPNG0007-R7.R1`, `VPNG0007-R7.R3`, `VPNG0007-R7.R5`.
+
+One canonical Device publication has two lower postconditions:
+
+```text
+normalized publish_vpn_server
+    |
+    +--> managed-domain local publication admission
+    |       EXP-046/047 owner in table ip vpn_gate
+    |
+    +--> host-boundary publication mapping
+            EXP-052-backed separate owner scope
+```
+
+The host-boundary mapping is not Profile routing and is not merged into the managed nft
+owner. The existing `NetworkPolicyAdapter` boundary gains a separate host-publication
+realization sub-contract; no additional Manager/Agent is introduced:
+
+```text
+observe HostPublicationOwner
+apply desired HostPublicationMapping + fresh verify
+cleanup owned HostPublicationOwner + fresh verify absence
+```
+
+The pure lower projection consumes only normalized configuration facts. For each publication
+it expands the already validated ordered host/internal `PortBundle` values positionally
+into exact pairs. It never reparses the user string and never uses declaration order as a
+conflict-resolution policy.
+
+One physical host mapping is identified by:
+
+```text
+protocol
+host selector
+host port
+current exact managed local publication IPv4
+internal port
+```
+
+Identical physical mappings may be set-deduplicated. Two contributions that claim the same
+effective external protocol/selector/host-port but require different internal targets are an
+unrepresentable lower-policy conflict and must not be resolved by rule order.
+
+For the accepted Linux nftables realization, the destination is rewritten only after proving
+that the original destination belongs to the host publication surface:
+
+```text
+exact host IPv4 selector:
+    fib daddr type local
+    ip daddr = exact configured IPv4
+    tcp|udp dport = exact host port
+
+host-interface selector:
+    fib daddr type local
+    iifname = configured host interface
+    tcp|udp dport = exact host port
+
+omitted selector:
+    fib daddr type local
+    tcp|udp dport = exact host port
+
+then:
+    dnat to <current-managed-local-IPv4>:<exact-internal-port>
+```
+
+The `fib daddr type local` predicate is an ownership boundary, not an optimization. EXP-052
+proves that without a local-destination gate the broader interface/port shapes would be
+capable of capturing unrelated transit, while the accepted shape preserves both selected
+publication and same-port foreign transit.
+
+EXP-052 also proves TCP/UDP reverse conntrack translation and preservation of the external
+client source at the managed listener. The mechanism therefore does not require a userspace
+per-flow publication relay for this reference realization. Historical EXP-010/011 remain
+valid topology/real-protocol evidence, not an implementation inheritance requirement.
+
+Host publication and managed local admission are observed independently. Runtime readiness
+for a requested publication requires both exact postconditions. Addition ordering places the
+host mapping last, after required managed local admission is confirmed. Removal/replacement
+removes stale owned host mappings before obsolete managed local admission is relaxed.
+
+The host-side owner may create, observe and remove only its explicitly reserved publication
+objects. Foreign host nft/routing state is neither adopted nor deleted.
+
+The DNAT data path requires suitable host forwarding. Current NG3 intentionally does not make
+the managed-domain `ForwardingGate` an owner of host-global forwarding state. EXP-052
+therefore does **not** authorize this publication sub-contract to write
+`net.ipv4.ip_forward` in the ordinary host namespace. The lower runtime may observe the
+deployment/integration prerequisite and report publication unready when it is absent.
+Changing ownership of host forwarding requires a separate requirement/design decision.
+
 ###### EXP-035 — проверка низкоуровневого nft-контракта NEW forwarding
 
 **Implements:**
