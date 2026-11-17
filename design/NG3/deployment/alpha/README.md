@@ -13,7 +13,7 @@ Alpha controller:
 
 - запускается как `vpn-gate-alpha.service`;
 - создает и проверяет managed network namespace;
-- загружает принятую Device/Profile + `integration.*` конфигурацию;
+- загружает каноническую Release-1 Device/Profile конфигурацию;
 - запускается безопасно даже при отсутствии текущего VPN endpoint;
 - материализует fail-closed network policy и точный local allow для VPN transport;
 - удерживает controller lifetime lock;
@@ -34,10 +34,12 @@ Alpha controller:
   - `vnga-host0`;
   - `vnga-inner0`;
   - `198.19.255.1/30 <-> 198.19.255.2/30`;
-- final human-facing Device NAT/firewall/publication grammar еще не принята;
-- поэтому alpha runtime использует internal `NatIntent.NONE`, omitted Device firewall и no
-  publication;
-- для payload без NAT удаленная сторона должна иметь нормальный обратный маршрут;
+- grammar уже принята, но этот alpha runtime пока materializes только Device
+  `use_outbound_nat`, ordinary Device `firewall` и `allow_vpn_client`;
+- `availability_check`, Profile `+snat` и `publish_vpn_server` распознаются как
+  canonical syntax, но alpha fail-fast отклоняет их до завершения соответствующих lower
+  runtime paths;
+- при `use_outbound_nat = false` удаленная сторона должна иметь нормальный обратный маршрут;
 - config hot reload не поддерживается: изменение `config.toml` требует restart controller;
 - RuntimeStatusAgent/UI еще не подключен; `journalctl` содержит только текущие alpha
   diagnostics;
@@ -76,23 +78,19 @@ Installer:
 [device.ovpn]
 enabled = true
 expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+allow_vpn_client = "udp:11941>203.0.113.10:1194"
 
 [profile.alpha]
 enabled = true
 direction = "outbound"
 destinations = ["10.253.0.0/24"]
 device_order = ["ovpn"]
-
-[integration.openvpn-alpha]
-device = "ovpn"
-protocol = "udp"
-remote_ipv4 = "203.0.113.10"
-remote_port = 1194
-local_port = 11941
 ```
 
-`integration.*` задает transport facts только для bounded local/system admission. Он не
-заменяет VPN-specific OpenVPN/WireGuard/OpenConnect configuration.
+`allow_vpn_client` задает Device-owned transport/control facts только для bounded
+local/system admission. Он не заменяет VPN-specific OpenVPN/WireGuard/OpenConnect
+configuration и не разрешает payload forwarding.
 
 ## OpenVPN example
 
@@ -106,7 +104,7 @@ local_port = 11941
 
 - `route-noexec`;
 - policy-neutral VPN configuration;
-- стабильный local transport port, если он используется в `integration.local_port`;
+- стабильный local transport port, если он указан в `allow_vpn_client`;
 - отсутствие privileged legacy hooks, меняющих VPN-GATE-owned route/RPDB/nft/sysctl state.
 
 Установить отдельный stack-specific wrapper:
@@ -189,6 +187,13 @@ VPNG_ALPHA_FATAL
 ```
 
 Это не финальный user-facing status API.
+
+## Implementation language boundary
+
+Текущий executable alpha controller остается Python reference runtime. Это явно разрешено
+`VPNG0007-R7.R8.C1` для ранних alpha/beta releases и не означает, что Python принят как
+окончательная production/stable runtime implementation. Целевая production boundary
+определена `VPNG0007-R7.R8` как Rust.
 
 ## Acceptance evidence
 
