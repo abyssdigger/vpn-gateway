@@ -16,6 +16,7 @@ from rou.device_policy import (
     DeviceFirewallRuleIntent,
 )
 from rou.interface_identity import InterfaceIdentity
+from rou.port_bundle import PortBundle, PortSpan
 
 
 HOST = InterfaceIdentity("host0", 10)
@@ -122,6 +123,44 @@ class DeviceFirewallCompilerTests(unittest.TestCase):
                 item["match"]["left"] == {"meta": {"key": "l4proto"}}
                 for item in expr
             )
+        )
+
+    def test_port_bundle_compiles_to_nft_range_and_set_operands(self):
+        rule = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.OUT,
+            action=DeviceFirewallAction.ALLOW,
+            protocol="tcp",
+            source_ports=PortBundle((PortSpan(1000, 1003),)),
+            destination_ports=PortBundle(
+                (
+                    PortSpan(80, 80),
+                    PortSpan(443, 443),
+                    PortSpan(8000, 8007),
+                )
+            ),
+        )
+        value = compile_device_firewall_policy(
+            DeviceFirewallPolicyIntent("wg-main", (rule,)),
+            HOST,
+            VPN,
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+        )
+        compiled = value.chains[0].rules[0]
+        expr = [json.loads(item) for item in compiled.match_expr_json]
+        self.assertEqual(
+            expr[0]["match"]["right"],
+            {"range": [1000, 1003]},
+        )
+        self.assertEqual(
+            expr[1]["match"]["right"],
+            {
+                "set": [
+                    80,
+                    443,
+                    {"range": [8000, 8007]},
+                ]
+            },
         )
 
     def test_protocol_only_uses_l4proto(self):
