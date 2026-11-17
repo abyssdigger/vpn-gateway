@@ -383,6 +383,7 @@ Implementation may begin only when all of the following hold for the affected sc
   necessary for the implementation scope;
 - no Requirement required by the implementation scope has an active
   `[unreal: ...]` link;
+- no R/C required by the implementation scope has an active `[broken: ...]` link;
 - all material component responsibilities and interactions are traceable to requirements;
 - every requirement/constraint whose architecture is required by the implementation unit is
   marked `[closed]`; `[pending_closure]` and `[rejected_closure]` block implementation
@@ -597,8 +598,9 @@ Autonomous internal development reviews normally use **one document** containing
 - disposition of every finding;
 - final verdict;
 - explicit accumulated requirement-state inventory listing every current `decomp` link
-  (mark each as `pending` or `resolved`), every active `unreal` link and every
-  `[rejected_closure]` node; write `none` for an empty category rather than omitting it.
+  (mark each as `pending` or `resolved`), every active `unreal` link, every active `broken`
+  link and every `[rejected_closure]` node; write `none` for an empty category rather than
+  omitting it.
 
 Create a separate response document only when the review originated externally, must remain
 immutable/verbatim, or the disposition is produced materially later/by a different reviewer.
@@ -709,7 +711,7 @@ The handoff file should contain only enough context to resume cheaply:
   for the next CD window;
 - decisions genuinely requiring human agreement, if any;
 - current accumulated requirement-state inventory: every `decomp` link with
-  `pending|resolved`, active `unreal`, and `[rejected_closure]`.
+  `pending|resolved`, active `unreal`, active `broken`, and `[rejected_closure]`.
 
 The handoff is operational continuity metadata. It should not be committed to the repository
 unless its content independently becomes a real project artifact.
