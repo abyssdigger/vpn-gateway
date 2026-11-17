@@ -86,8 +86,8 @@ class DeviceFirewallCompilerTests(unittest.TestCase):
             direction=DeviceFirewallDirection.OUT,
             action=DeviceFirewallAction.ALLOW,
             protocol="tcp",
-            source_port=12345,
-            destination_port=443,
+            source_ports=12345,
+            destination_ports=443,
             source_ipv4_cidr=IPv4Network("192.0.2.0/24"),
             destination_ipv4_cidr=IPv4Network("198.51.100.10/32"),
         )
@@ -155,7 +155,7 @@ class DeviceFirewallCompilerTests(unittest.TestCase):
         rule = DeviceFirewallRuleIntent(
             direction=DeviceFirewallDirection.OUT,
             action=DeviceFirewallAction.DENY,
-            destination_port=443,
+            destination_ports=443,
         )
         with self.assertRaisesRegex(
             DeviceFirewallCompileError,
@@ -192,7 +192,7 @@ class DeviceFirewallCompilerTests(unittest.TestCase):
             direction=DeviceFirewallDirection.OUT,
             action=DeviceFirewallAction.REJECT,
             protocol="tcp",
-            destination_port=443,
+            destination_ports=443,
         )
         value = compile_device_firewall_policy(
             DeviceFirewallPolicyIntent("wg-main", (rule,)),
