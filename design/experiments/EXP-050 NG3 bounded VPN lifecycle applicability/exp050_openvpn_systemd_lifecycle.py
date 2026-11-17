@@ -152,8 +152,12 @@ def wait_service_ready(*, require_pre_policy_ping: bool = False) -> int:
         assert e49.systemd_unit_active(e49.CLIENT_UNIT)
         pid = e49.prove_systemd_namespace_attachment()
         e49.wait_until(
-            "OpenVPN initialized session",
-            lambda: "Initialization Sequence Completed" in e49.systemd_client_log(),
+            "OpenVPN initialized current session",
+            lambda: any(
+                f"openvpn[{pid}]" in line
+                and "Initialization Sequence Completed" in line
+                for line in e49.systemd_client_log().splitlines()
+            ),
             timeout=20.0,
         )
         if require_pre_policy_ping:
