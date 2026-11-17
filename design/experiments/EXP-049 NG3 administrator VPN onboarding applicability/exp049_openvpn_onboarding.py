@@ -215,6 +215,7 @@ local {SERVER_UNDERLAY}
 port {OPENVPN_PORT}
 ifconfig {VPN_SERVER_ADDR} {VPN_CLIENT_ADDR}
 tls-server
+float
 remote-cert-tls client
 ca {root / 'ca.crt'}
 cert {root / 'server.crt'}
