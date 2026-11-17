@@ -45,10 +45,7 @@ tree a53a82a582e310c399f597223281f0daf617a3a6
 Generation payload excluded from the root:
 
 ```text
-design/RC2/**
-design/RC3/**
-design/NG1/**
-design/NG2/**
+design/{RC2,RC3,NG1,NG2}/**
 
 .github/workflows/rc3-python.yml
 .github/workflows/ng1-python.yml
@@ -119,10 +116,7 @@ payload classes.
 No snapshot from 31 through 74 modifies:
 
 ```text
-design/RC2/**
-design/RC3/**
-design/NG1/**
-design/NG2/**
+design/{RC2,RC3,NG1,NG2}/**
 .github/workflows/rc3-python.yml
 .github/workflows/ng1-python.yml
 .github/workflows/ng2-python.yml
