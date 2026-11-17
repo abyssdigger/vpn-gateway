@@ -1,0 +1,81 @@
+# EXP-051 — first functioning NG3 alpha deployment smoke
+
+**Status:** PLANNED / executable on privileged Debian 13 systemd CI  
+**Date:** 2026-11-17
+
+## Requirement trace
+
+This experiment does not add product semantics. It verifies the first deployment assembly of
+already accepted requirements and constraints:
+
+- `VPNG0001-R1.R1` / `VPNG0001-R1.R2` — controlled payload from accepted config;
+- `VPNG0001-R1.R3.C1.C1.R1` — stack-specific systemd VPN onboarding into managed netns;
+- `VPNG0001-R1.R3.C1.C1.R3` — bounded integration-local transport admission;
+- `VPNG0004-R4.R4` / `VPNG0004-R4.R5` — fail-closed verified network policy;
+- `VPNG0005-R5.R1` / `VPNG0005-R5.R2` / `VPNG0005-R5.R3` — startup and local
+  reconciliation from fresh authoritative state;
+- `VPNG0005-R5.R6.R2` / `VPNG0005-R5.R6.R3` — bounded stop/restart postconditions;
+- `VPNG0007-R7.R7` — implementation/evidence is requirements-driven.
+
+## Alpha limitation under test
+
+The final external Device NAT/firewall/publication TOML grammar remains explicitly postponed.
+
+EXP-051 therefore uses a NAT-free test topology with an explicit return route on the remote
+test side. The alpha runtime supplies internal `NatIntent.NONE` and omitted Device firewall.
+This is an alpha implementation limitation, not a new Release-1 product constraint or grammar.
+
+## Test topology
+
+```text
+host
+  vnga-host0 198.19.255.1/30
+      |
+      | managed boundary
+      |
+  /run/netns/vpn-gate-alpha
+      vnga-inner0 198.19.255.2/30
+      vpn0        10.253.0.2 <-> 10.253.0.1
+      OpenVPN client under systemd
+      |
+      | UDP 198.19.255.2:11941 -> 198.19.254.2:11940
+      |
+host forwarding
+      |
+  alpha-srv-host 198.19.254.1/30
+      |
+  alpha-srv netns
+      alpha-srv0  198.19.254.2/30
+      tun-srv     10.253.0.1 <-> 10.253.0.2
+      OpenVPN test server
+```
+
+The remote test namespace receives an explicit return route for host source
+`198.19.255.1/32` through `tun-srv`, so no payload masquerade is needed.
+
+## PASS criteria
+
+1. Install the actual alpha package/service files.
+2. Start `vpn-gate-alpha.service`; systemd start completes only after `READY=1`.
+3. Confirm `/run/netns/vpn-gate-alpha` and the managed boundary exist.
+4. Confirm zero-path startup is fail-closed but contains the exact OpenVPN transport allow.
+5. Start the actual stack-specific OpenVPN systemd unit.
+6. Confirm its MainPID is inside the managed netns and `vpn0` appears.
+7. Without restarting VPN-GATE, wait for local reconciliation to observe/bind `vpn0`.
+8. Confirm host payload to `10.253.0.1` succeeds through the current path.
+9. Restart only the OpenVPN unit and confirm:
+   - new PID;
+   - fresh `vpn0` generation;
+   - payload recovers through ordinary periodic reconciliation.
+10. Stop `vpn-gate-alpha.service` and confirm:
+    - bound OpenVPN unit inactive;
+    - old VPN PID absent;
+    - managed netns absent;
+    - host boundary absent.
+11. Repeat only as needed to distinguish harness defects from runtime defects; do not hide
+    product failures with test-only repair.
+
+## Evidence
+
+The harness is `exp051_alpha_smoke.py` and runs in the dedicated
+`linux-alpha-smoke` GitHub Actions job.
