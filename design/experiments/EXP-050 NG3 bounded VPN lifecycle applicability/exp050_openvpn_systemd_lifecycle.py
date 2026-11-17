@@ -282,7 +282,20 @@ def run_lifecycle_cycle(
 
         # 3. Restart with the same VPN-specific configuration.
         e49.systemctl("restart", e49.CLIENT_UNIT)
-        second_pid = wait_service_ready()
+        try:
+            second_pid = wait_service_ready()
+        except Exception:
+            try:
+                server_tail = (
+                    root / f"exp050-server-{cycle}.log"
+                ).read_text(encoding="utf-8", errors="replace")[-8000:]
+            except OSError as exc:
+                server_tail = f"<cannot read server log: {exc}>"
+            print(
+                f"EXP050_CYCLE_{cycle}_SERVER_LOG_TAIL="
+                + json.dumps(server_tail)
+            )
+            raise
         assert second_pid != first_pid
         assert not Path(f"/proc/{first_pid}").exists()
         same_prepared, _ = reconcile_policy(current_config, domain_spec, runner)
