@@ -29,6 +29,11 @@ from .domain import (
     SelectorKind,
     StructuralConfig,
 )
+from .release1_config import (
+    Release1Config,
+    Release1ConfigError,
+    parse_release1_config,
+)
 from .interface_identity import InterfaceIdentity
 from .instance_lock import (
     ControllerInstanceBusyError,
@@ -636,6 +641,8 @@ __all__ = [
     "RoutePriorityProfileResult",
     "RoutePriorityProfileStatus",
     "RoutePriorityRealizationError",
+    "Release1Config",
+    "Release1ConfigError",
     "SelectorBindingState",
     "SelectorKind",
     "StructuralConfig",
@@ -689,6 +696,7 @@ __all__ = [
     "parse_structural_routing_inventory",
     "plan_route_priority_convergence",
     "plan_route_priority_moves",
+    "parse_release1_config",
     "parse_structural_config",
     "prepare_payload_nft_scaffold_once",
     "project_device_bindings",
