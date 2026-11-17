@@ -49,11 +49,13 @@ from .forwarding_gate import (
 )
 from .managed_network_domain import (
     ManagedNetworkDomainEnsureResult,
+    ManagedNetworkDomainPreflightResult,
     ManagedNetworkDomainError,
     ManagedNetworkDomainSpec,
     ManagedNetworkDomainVerification,
     destroy_managed_network_domain,
     ensure_managed_network_domain,
+    preflight_managed_network_domain,
     verify_managed_network_domain,
 )
 from .linux_forwarding_gate import (
@@ -440,6 +442,7 @@ __all__ = [
     "LinuxForwardingGateBackend",
     "LinuxForwardingGateError",
     "ManagedNetworkDomainEnsureResult",
+    "ManagedNetworkDomainPreflightResult",
     "ManagedNetworkDomainError",
     "ManagedNetworkDomainSpec",
     "ManagedNetworkDomainVerification",
@@ -508,6 +511,7 @@ __all__ = [
     "compile_device_firewall_policy",
     "destroy_managed_network_domain",
     "ensure_managed_network_domain",
+    "preflight_managed_network_domain",
     "verify_managed_network_domain",
     "compile_payload_forward_policy",
     "compare_payload_forward",
