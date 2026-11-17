@@ -160,8 +160,12 @@ def _decode_rule(payload, by_name, by_index):
         raise ValueError("integration-local rule must contain five or six expressions")
 
     boundary = _interface_match(expr[0], iface_key, by_name, by_index)
-    local_address = _address_match(expr[1], local_field)
-    remote_address = _address_match(expr[2], remote_field)
+    if hook is IntegrationLocalHook.INPUT:
+        remote_address = _address_match(expr[1], remote_field)
+        local_address = _address_match(expr[2], local_field)
+    else:
+        local_address = _address_match(expr[1], local_field)
+        remote_address = _address_match(expr[2], remote_field)
     protocol, remote_port = _port_match(expr[3], remote_port_field)
 
     local_port = None
