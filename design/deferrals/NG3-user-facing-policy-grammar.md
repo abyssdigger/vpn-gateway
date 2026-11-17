@@ -31,6 +31,10 @@ There is no public top-level `[integration.*]` object in Release 1.
 Historical prototype spellings such as `nat`, `traffic_envelope`, `publications` and
 `interface_balancing` remain design evidence only and are not parser aliases.
 
+The resolved Release-1 grammar includes compact non-overlapping `N,A-B,...` port bundles for
+Device firewall and server publication. Explicit publication translation requires equal
+expanded bundle cardinality and positional 1:1 mapping. `allow_vpn_client` remains exact-port.
+
 The exact accepted forms, validation rules and complete example are normative in
 `design/NG3/config-model.md`.
 

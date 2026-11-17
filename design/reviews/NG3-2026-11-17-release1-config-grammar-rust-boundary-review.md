@@ -132,6 +132,13 @@ The executable alpha now consumes `parse_release1_config`:
 
 This is preferable to keeping compatibility aliases or adding another generic config object.
 
+> **Corrective note, later 2026-11-17 CD:** the statement below that firewall ranges were
+> an accidental over-generalization was itself a review mistake. The owner clarified that the
+> intended Release-1 grammar retains port ranges and additionally allows comma-separated exact
+> ports/ranges as one compact port bundle. The corrective review
+> `NG3-2026-11-17-port-bundle-correction-review.md` supersedes Finding 2 and the corresponding
+> simplification bullet; the rest of this historical review remains valid.
+
 ## Findings discovered during review
 
 ### 1. Wrong NAT suffix corrected
@@ -140,11 +147,11 @@ An intermediate draft used `+masquerade` for Profile ordinary-side NAT. That wou
 the direction/opposite-side function with Device outbound MASQUERADE. The accepted suffix is
 `+snat`.
 
-### 2. Firewall range over-generalization removed
+### 2. Firewall range over-generalization removed — **SUPERSEDED**
 
-An intermediate implementation accidentally inherited historical port-range syntax.
-Release-1 accepted grammar uses one optional integer port per source/destination selector.
-Ranges were removed from requirements/parser/tests.
+This finding was incorrect. It conflated “not re-discussed in that short grammar pass” with
+“deliberately removed.” The later corrective CD restores the intended port-range capability
+and extends it to compact ordered port bundles.
 
 ### 3. Canonical example initially violated selector ownership
 
@@ -204,7 +211,7 @@ Deliberately **not** introduced:
 - a public Integration object separate from Device;
 - a dedicated availability table when Release 1 has only one scalar criterion;
 - user timing/hysteresis knobs;
-- firewall port ranges;
+- ~~firewall port ranges~~ — **superseded by the port-bundle corrective CD**;
 - a generic firewall AST exposed to the user;
 - a dual Python/Rust runtime abstraction;
 - a plugin-language/FFI framework;

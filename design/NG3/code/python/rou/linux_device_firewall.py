@@ -190,13 +190,64 @@ def _render_predicate(rule: DeviceFirewallRuleSpec) -> str:
             parts.extend(("ip", field, _render_ip_operand(right)))
             continue
         if protocol in {"tcp", "udp"} and field in {"sport", "dport"}:
-            if type(right) is not int or not 1 <= right <= 65535:
-                raise ValueError("invalid lower Device firewall port")
-            parts.extend((protocol, field, str(right)))
+            parts.extend((protocol, field, _render_port_operand(right)))
             continue
         raise ValueError("unsupported lower Device firewall payload selector")
 
     return " ".join(parts)
+
+
+def _render_port_operand(value: object) -> str:
+    if type(value) is int:
+        if not 1 <= value <= 65535:
+            raise ValueError("invalid lower Device firewall port")
+        return str(value)
+
+    if not isinstance(value, dict) or len(value) != 1:
+        raise ValueError("invalid lower Device firewall port operand")
+
+    if set(value) == {"range"}:
+        first, last = _port_range(value["range"])
+        return f"{first}-{last}"
+
+    if set(value) == {"set"}:
+        items = value["set"]
+        if not isinstance(items, list) or not items:
+            raise ValueError("invalid lower Device firewall port set")
+        rendered: list[str] = []
+        intervals: list[tuple[int, int]] = []
+        for item in items:
+            if type(item) is int:
+                first = last = item
+                if not 1 <= item <= 65535:
+                    raise ValueError("invalid lower Device firewall port set item")
+                rendered.append(str(item))
+            elif isinstance(item, dict) and set(item) == {"range"}:
+                first, last = _port_range(item["range"])
+                rendered.append(f"{first}-{last}")
+            else:
+                raise ValueError("invalid lower Device firewall port set item")
+            for prior_first, prior_last in intervals:
+                if first <= prior_last and prior_first <= last:
+                    raise ValueError("overlapping lower Device firewall port set")
+            intervals.append((first, last))
+        return "{ " + ", ".join(rendered) + " }"
+
+    raise ValueError("invalid lower Device firewall port operand")
+
+
+def _port_range(value: object) -> tuple[int, int]:
+    if (
+        not isinstance(value, list)
+        or len(value) != 2
+        or type(value[0]) is not int
+        or type(value[1]) is not int
+        or not 1 <= value[0] <= 65535
+        or not 1 <= value[1] <= 65535
+        or value[0] > value[1]
+    ):
+        raise ValueError("invalid lower Device firewall port range")
+    return value[0], value[1]
 
 
 def _render_ip_operand(value: object) -> str:

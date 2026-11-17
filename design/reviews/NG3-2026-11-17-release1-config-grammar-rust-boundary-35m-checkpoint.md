@@ -49,10 +49,15 @@ Canonical EXP-051 rerun record:
 Review:
 `design/reviews/NG3-2026-11-17-release1-config-grammar-rust-boundary-review.md`.
 
+> **Corrective note:** the single-port-only conclusion in this checkpoint was later
+> identified as an omission, not an accepted product decision. Port ranges and compact
+> comma-separated port bundles are restored by the subsequent port-bundle CD.
+
 ## Review findings fixed in-cycle
 
 - corrected Profile NAT suffix from accidental `+masquerade` to accepted `+snat`;
-- removed accidental inheritance of old firewall port ranges; Release 1 uses single ports;
+- ~~removed accidental inheritance of old firewall port ranges; Release 1 uses single ports~~
+  — **superseded**: Release 1 supports strict compact port bundles;
 - fixed a full-example cross-Device selector overlap caught by unit validation;
 - stopped canonical Adapter from leaking lower `ConfigError`;
 - removed stale architecture/config documentation claiming ordinary grammar was still

@@ -324,9 +324,9 @@ The Device firewall is an ordered array of one-line rules:
 
 ```toml
 firewall = [
-    "out allow tcp to 10.20.0.0/16:443 # HTTPS to corp",
+    "out allow tcp to 10.20.0.0/16:80,443,8000-8007 # web bundle",
     "out allow icmp to 10.20.0.0/16",
-    "in allow tcp from 10.20.0.0/16 to 10.0.0.10/32:22 # SSH to bastion",
+    "in allow tcp from 10.20.0.0/16:1024-65535 to 10.0.0.10/32:22 # SSH to bastion",
     "in reject tcp to 10.0.0.0/24:23",
 ]
 ```
@@ -336,8 +336,8 @@ Rule grammar:
 ```text
 <in|out> <allow|deny|reject>
     [tcp|udp|icmp]
-    [from <IPv4-CIDR>[:port]]
-    [to <IPv4-CIDR>[:port]]
+    [from <IPv4-CIDR>[:port-bundle]]
+    [to <IPv4-CIDR>[:port-bundle]]
     [ # <comment>]
 ```
 
@@ -349,8 +349,13 @@ Rules:
 - `out` means ordinary/host boundary -> VPN path;
 - `in` means VPN path -> ordinary/host boundary;
 - source/destination are literal packet fields at Device filtering time;
-- ports are single integers `1..65535` and require explicit `tcp` or `udp`;
-- ICMP cannot carry transport ports;
+- a `port-bundle` is one or more comma-separated items with no whitespace;
+- one item is either exact `N` or inclusive range `A-B`;
+- every port is in `1..65535`, every range has `A <= B`;
+- the same physical port may appear only once in a bundle: duplicate exact values,
+  exact-within-range and overlapping ranges are rejected;
+- declared bundle item order is preserved;
+- port bundles require explicit `tcp` or `udp`; ICMP cannot carry transport ports;
 - CIDRs are strict IPv4 networks;
 - rule order is semantic and first terminal match wins;
 - omitted `firewall` means no additional Device-layer restriction;
@@ -372,8 +377,8 @@ publish_vpn_server = "udp:44443"
 for same external/internal port, or:
 
 ```toml
-publish_vpn_server = "udp/eth0:44443>1194"
-publish_vpn_server = "tcp/192.0.2.10:443>8443"
+publish_vpn_server = "udp/eth0:53,123,5000-5003"
+publish_vpn_server = "tcp/192.0.2.10:443,8000-8002,9000>8443,18000-18002,19000"
 ```
 
 when an explicit host selector and/or port remap is needed. Multiple endpoints use an array.
@@ -381,12 +386,29 @@ when an explicit host selector and/or port remap is needed. Multiple endpoints u
 Grammar:
 
 ```text
-tcp|udp[/<host-IPv4|host-interface>]:<host-port>[><internal-port>]
+tcp|udp[/<host-IPv4|host-interface>]:<host-port-bundle>[><internal-port-bundle>]
 ```
 
-Omitted `>internal-port` means same-port mapping. Omitted host selector means the
-publication is not restricted by an additional user-selected host address/interface.
-Protocol domains remain distinct, and ports are integers in `1..65535`.
+Publication port bundles use the same compact, non-overlapping `N,A-B,...` grammar as
+Device firewall port bundles.
+
+Omitted `>internal-port-bundle` means identity mapping: every host port maps to the same
+internal port. With an explicit internal bundle, both bundles are expanded in declared item
+order into ordered sequences of individual ports; their cardinalities must be equal and
+mapping is positional 1:1. For example:
+
+```text
+443,8000-8002,9000 > 8443,18000-18002,19000
+
+443  -> 8443
+8000 -> 18000
+8001 -> 18001
+8002 -> 18002
+9000 -> 19000
+```
+
+Omitted host selector means the publication is not restricted by an additional user-selected
+host address/interface. Protocol domains remain distinct.
 
 The external publication mapping and the managed-domain local INPUT/OUTPUT admission are
 separate lower responsibilities derived from this one Device intent. A runtime that has not
@@ -726,7 +748,7 @@ expected_interfaces = ["wg0"]
 use_outbound_nat = true
 allow_vpn_client = "udp:51820>198.51.100.10:51820"
 firewall = [
-    "out allow tcp to 10.20.0.0/16:443 # HTTPS to corp",
+    "out allow tcp to 10.20.0.0/16:80,443,8000-8007 # web bundle",
     "out allow icmp to 10.20.0.0/16",
     "in allow tcp from 10.20.0.0/16 to 10.0.0.10/32:22 # SSH to bastion",
 ]
@@ -748,8 +770,8 @@ firewall = [
 enabled = true
 expected_interfaces = ["ocsvr0"]
 publish_vpn_server = [
-    "tcp/eth0:44443>443",
-    "udp/eth0:44443>443",
+    "tcp/eth0:443,8000-8002,9000>8443,18000-18002,19000",
+    "udp/eth0:53,123,5000-5003",
 ]
 firewall = [
     "in allow tcp from 10.30.0.0/16 to 10.0.0.20/32:22",

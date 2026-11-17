@@ -25,7 +25,7 @@ Current trace:
 
 | Architecture responsibility / contract | Executable reference | Review evidence |
 | --- | --- | --- |
-| ConfigurationAdapter structural + canonical Release-1 normalization | `domain.py`, `config.py`, `release1_config.py` | `NG3-2026-11-16-structural-config-code-review.md`, `NG3-2026-11-17-release1-config-grammar-rust-boundary-review.md` |
+| ConfigurationAdapter structural + canonical Release-1 normalization | `domain.py`, `config.py`, `release1_config.py`, `port_bundle.py` | `NG3-2026-11-16-structural-config-code-review.md`, `NG3-2026-11-17-release1-config-grammar-rust-boundary-review.md`, `NG3-2026-11-17-port-bundle-correction-review.md` |
 | authoritative VPNPathAdapter interface-identity observation boundary | `interface_identity.py`, `interface_inventory.py` | `NG3-2026-11-16-interface-inventory-code-review.md` |
 | shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
 | PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
@@ -49,7 +49,7 @@ Current trace:
 | EXP-048-backed structural route/RPDB mutation Driver | `linux_structural_routing.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md`, `EXP-048-result-20261116.md` |
 | exact-before-release cross-domain phase planner | `structural_policy_plan.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | semantic Profile forward compiler | `payload_forward_compiler.py` | `NG3-2026-11-17-profile-forward-compiler-review.md` |
-| multi-path Device firewall semantic compiler | `device_firewall_policy_compiler.py`, `device_firewall_compiler.py` | `NG3-2026-11-17-device-firewall-policy-compiler-review.md` |
+| multi-path Device firewall semantic compiler | `device_firewall_policy_compiler.py`, `device_firewall_compiler.py`, `linux_device_firewall.py` lower port-bundle rendering | `NG3-2026-11-17-device-firewall-policy-compiler-review.md`, `NG3-2026-11-17-port-bundle-correction-review.md`, `EXP-042-result-20261117-port-bundle-pass.md` |
 | complete payload lower desired-state assembly | `payload_network_policy_desired.py` | `NG3-2026-11-17-payload-network-policy-desired-review.md` |
 | guarded cross-domain structural Executor + Linux snapshot backend | `structural_policy_mutation.py`, `linux_structural_policy.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
@@ -1136,9 +1136,12 @@ Key normalization rules:
 - `allow_vpn_client` is normalized as exact Device-owned VPN client transport/control facts;
   there is no public top-level `integration.*` object;
 - Device `firewall` is normalized as an ordered first-match policy that can only narrow
-  Profile permission; omitted policy is permissive at the Device layer and explicit policy
-  has terminal no-match DROP;
-- `publish_vpn_server` is normalized separately from Profile payload routing;
+  Profile permission; source/destination transport selectors use normalized ordered
+  non-overlapping `PortBundle` values, omitted policy is permissive at the Device layer and
+  explicit policy has terminal no-match DROP;
+- `publish_vpn_server` is normalized separately from Profile payload routing; host/internal
+  port bundles preserve declared item order and explicit translation requires equal expanded
+  cardinality for positional 1:1 mapping;
 - historical Device policy spellings are rejected rather than accepted as aliases;
 - availability subject identity is exactly `(profile_id, logical_path_id)`;
 - the same bound interface/path may therefore have independent availability state in
@@ -1188,10 +1191,15 @@ allow_vpn_client
 
 firewall[]
     -> ordered DeviceFirewallRuleIntent sequence
+    -> each TCP/UDP source/destination port selector is PortBundle
+       of ordered non-overlapping exact/range items
     -> omitted means permissive Device layer
     -> explicit no-match means DROP
 
 publish_vpn_server
+    -> ordered host PortBundle
+       + identity mapping when internal bundle is omitted
+       + equal-cardinality positional 1:1 host/internal mapping when explicit
     -> Device-owned host publication intent
        + managed-domain publication-local admission intent
 ```
@@ -3029,6 +3037,13 @@ FORWARD point. The existing Device `MASQUERADE` contract runs later in postrouti
 outbound source fields are still pre-NAT here. External VPN transport addresses are not
 payload source/destination fields.
 
+A normalized firewall `PortBundle` is one set-membership predicate, not a list of separate
+policy rules and not a source/destination positional mapping. Lower nft realization uses the
+kernel-native expression shape: one exact port is a scalar operand, one inclusive range is a
+range operand, and a multi-item bundle is a set containing exact and/or range operands. This
+preserves one user rule / one terminal verdict and avoids expansion proportional to the
+number of individual ports in a range.
+
 The Device chain is traversed before both Profile NEW admission and the prefix-scoped
 ESTABLISHED/RELATED return primitive. Therefore an explicit Device firewall applies to
 actual packets in both directions and can terminate an already established flow; there is
@@ -3109,17 +3124,19 @@ DeviceFirewallRuleIntent
     direction = IN | OUT
     action = ALLOW | DENY | REJECT
     protocol?
-    source_port?
-    destination_port?
+    source_ports: PortBundle?
+    destination_ports: PortBundle?
     source_ipv4_cidr?
     destination_ipv4_cidr?
     comment?
 ```
 
 Omitted policy remains distinct from an explicit policy. An explicit policy is non-empty and
-preserves literal rule order. The model validates only already accepted field semantics and
-basic type/range invariants; it deliberately does not select the external spelling or the
-final accepted protocol vocabulary.
+preserves literal rule order. `PortBundle` preserves declared exact/range item order and
+rejects duplicate/intersecting physical ports. The semantic model is independent from TOML
+punctuation; the canonical Release-1 external spelling is selected by
+`ConfigurationAdapter` and the current protocol vocabulary remains TCP/UDP/ICMP as defined
+by the accepted user grammar.
 
 A separate exact lower desired contract represents one owned child chain plus its exact
 host/path jump and ordered physical rules. Predicate expressions and final nft actions are

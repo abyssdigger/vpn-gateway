@@ -104,6 +104,59 @@ class LinuxDeviceFirewallBackendTests(unittest.TestCase):
             )
         )
 
+    def test_port_range_and_set_operands_render_as_nft_syntax(self):
+        runner = FakeRunner()
+        backend = LinuxDeviceFirewallBackend(runner, "managed")
+        spec = DeviceFirewallChainSpec(
+            ingress=HOST,
+            egress=VPN,
+            child_chain_name="dfw_out",
+            rules=(
+                DeviceFirewallRuleSpec(
+                    match_expr_json=(
+                        match(
+                            {"payload": {"protocol": "tcp", "field": "sport"}},
+                            {"range": [1000, 1003]},
+                        ),
+                        match(
+                            {"payload": {"protocol": "tcp", "field": "dport"}},
+                            {"set": [80, 443, {"range": [8000, 8007]}]},
+                        ),
+                    ),
+                    action=DeviceFirewallRuleAction.RETURN,
+                    action_json='{"return":null}',
+                ),
+            ),
+        )
+        backend.create_device_chain(spec)
+        self.assertIn(
+            "tcp sport 1000-1003 tcp dport { 80, 443, 8000-8007 } return",
+            runner.scripts[0],
+        )
+
+    def test_invalid_or_overlapping_port_set_is_rejected(self):
+        runner = FakeRunner()
+        backend = LinuxDeviceFirewallBackend(runner, "managed")
+        spec = DeviceFirewallChainSpec(
+            ingress=HOST,
+            egress=VPN,
+            child_chain_name="dfw_out",
+            rules=(
+                DeviceFirewallRuleSpec(
+                    match_expr_json=(
+                        match(
+                            {"payload": {"protocol": "tcp", "field": "dport"}},
+                            {"set": [80, {"range": [70, 90]}]},
+                        ),
+                    ),
+                    action=DeviceFirewallRuleAction.RETURN,
+                    action_json='{"return":null}',
+                ),
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "overlapping"):
+            backend.create_device_chain(spec)
+
     def test_generic_reject_renders_bare_reject(self):
         runner = FakeRunner()
         backend = LinuxDeviceFirewallBackend(runner, "managed")

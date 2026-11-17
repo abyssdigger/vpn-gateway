@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import Enum
 from ipaddress import IPv4Network
 
+from .port_bundle import PortBundle
+
 
 class NatIntent(str, Enum):
     """Normalized Device payload source-NAT semantics, not external config spelling."""
@@ -51,8 +53,8 @@ class DeviceFirewallRuleIntent:
     direction: DeviceFirewallDirection
     action: DeviceFirewallAction
     protocol: str | None = None
-    source_port: int | None = None
-    destination_port: int | None = None
+    source_ports: PortBundle | int | None = None
+    destination_ports: PortBundle | int | None = None
     source_ipv4_cidr: IPv4Network | None = None
     destination_ipv4_cidr: IPv4Network | None = None
     comment: str | None = None
@@ -66,15 +68,14 @@ class DeviceFirewallRuleIntent:
             not isinstance(self.protocol, str) or not self.protocol
         ):
             raise ValueError("protocol must be non-empty text when present")
-        for field_name, value in (
-            ("source_port", self.source_port),
-            ("destination_port", self.destination_port),
-        ):
-            if value is not None and (
-                type(value) is not int or not 1 <= value <= 65535
-            ):
+        for field_name in ("source_ports", "destination_ports"):
+            value = getattr(self, field_name)
+            if type(value) is int:
+                value = PortBundle.single(value)
+                object.__setattr__(self, field_name, value)
+            if value is not None and not isinstance(value, PortBundle):
                 raise ValueError(
-                    f"{field_name} must be an integer in [1, 65535] when present"
+                    f"{field_name} must be PortBundle or exact integer when present"
                 )
         for field_name, value in (
             ("source_ipv4_cidr", self.source_ipv4_cidr),
