@@ -62,6 +62,7 @@ SERVER_UNDERLAY = "198.19.254.2"
 VPN_SERVER_ADDR = "10.253.0.1"
 VPN_CLIENT_ADDR = "10.253.0.2"
 OPENVPN_PORT = 11940
+OPENVPN_LOCAL_PORT = 11941
 DOMAIN_UNIT = "exp049-vpn-gate-domain.service"
 CLIENT_UNIT = "exp049-openvpn.service"
 
@@ -81,6 +82,7 @@ device = "ovpn"
 protocol = "udp"
 remote_ipv4 = "{SERVER_UNDERLAY}"
 remote_port = {OPENVPN_PORT}
+local_port = {OPENVPN_LOCAL_PORT}
 """
 
 
@@ -233,7 +235,7 @@ verb 3
 dev-type tun
 proto udp4
 remote {SERVER_UNDERLAY} {OPENVPN_PORT}
-nobind
+lport {OPENVPN_LOCAL_PORT}
 route-noexec
 ifconfig {VPN_CLIENT_ADDR} {VPN_SERVER_ADDR}
 tls-client
