@@ -85,8 +85,10 @@ class CompositeNftPolicyComparison:
     payload_nat: PayloadNatComparison
     device_firewall: DeviceFirewallComparison
     local_publication: LocalPublicationComparison
-    local_integration: IntegrationLocalComparison
     conflicts: tuple[CompositeNftPolicyConflict, ...]
+    local_integration: IntegrationLocalComparison = field(
+        default_factory=lambda: IntegrationLocalComparison((), (), (), ())
+    )
 
     @property
     def desired_confirmed(self) -> bool:
