@@ -382,8 +382,8 @@ table ip exp053_managed {{
 
     chain boundary_profile_association {{
         type filter hook forward priority 10; policy accept;
-        iifname "{A_MANAGED_IF}" oifname "{MANAGED_BOUNDARY}" ip saddr {REMOTE_PREFIX} meta mark set {PROFILE_A_MARK} comment "exp053-assoc-a"
-        iifname "{B_MANAGED_IF}" oifname "{MANAGED_BOUNDARY}" ip saddr {REMOTE_PREFIX} meta mark set {PROFILE_B_MARK} comment "exp053-assoc-b"
+        iifname "{A_MANAGED_IF}" oifname "{MANAGED_BOUNDARY}" ip saddr {REMOTE_PREFIX} counter meta mark set {PROFILE_A_MARK} comment "exp053-assoc-a"
+        iifname "{B_MANAGED_IF}" oifname "{MANAGED_BOUNDARY}" ip saddr {REMOTE_PREFIX} counter meta mark set {PROFILE_B_MARK} comment "exp053-assoc-b"
     }}
 }}
 """,
@@ -472,18 +472,28 @@ def main() -> int:
 
         lan_out = finish_server(lan, "LAN")
         servers.remove(lan)
+
+        managed_a = rule_counter(MANAGED, "exp053-assoc-a")
+        managed_b = rule_counter(MANAGED, "exp053-assoc-b")
+        seen_a = rule_counter(HOST, "exp053-seen-a")
+        seen_b = rule_counter(HOST, "exp053-seen-b")
+        print(
+            "EXP053_ASSOC_COUNTERS="
+            f"managed_a:{managed_a}:managed_b:{managed_b}:"
+            f"host_a:{seen_a}:host_b:{seen_b}"
+        )
+        assert managed_a == 1, managed_a
+        assert managed_b == 1, managed_b
+        assert seen_a == 1, seen_a
+        assert seen_b == 1, seen_b
+        print("EXP053_MARK_CROSSES_BOUNDARY=PASS")
+
         assert f"LAN_PEER0={HOST_LAN_IP}:" in lan_out, lan_out
         assert f"LAN_DATA0=profile-a" in lan_out, lan_out
         assert f"LAN_PEER1={B_SOURCE}:" in lan_out, lan_out
         assert f"LAN_DATA1=profile-b" in lan_out, lan_out
         print("EXP053_PROFILE_A_SNAT_ONLY=PASS")
         print("EXP053_PROFILE_B_UNTRANSLATED=PASS")
-
-        seen_a = rule_counter(HOST, "exp053-seen-a")
-        seen_b = rule_counter(HOST, "exp053-seen-b")
-        assert seen_a == 1, seen_a
-        assert seen_b == 1, seen_b
-        print("EXP053_MARK_CROSSES_BOUNDARY=PASS")
 
         host_local = start_udp_server(
             HOST,
