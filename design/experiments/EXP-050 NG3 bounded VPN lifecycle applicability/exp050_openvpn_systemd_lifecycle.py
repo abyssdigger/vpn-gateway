@@ -145,7 +145,7 @@ def cgroup_empty_or_absent(unit: str) -> bool:
     return not procs.read_text(encoding="utf-8").strip()
 
 
-def wait_service_ready() -> int:
+def wait_service_ready(*, require_pre_policy_ping: bool = False) -> int:
     try:
         e49.wait_until(
             "systemd OpenVPN vpn0",
@@ -155,10 +155,16 @@ def wait_service_ready() -> int:
         assert e49.systemd_unit_active(e49.CLIENT_UNIT)
         pid = e49.prove_systemd_namespace_attachment()
         e49.wait_until(
-            "OpenVPN tunnel payload",
-            lambda: e49.ping(e49.MANAGED, e49.VPN_SERVER_ADDR, count=1),
+            "OpenVPN initialized session",
+            lambda: "Initialization Sequence Completed" in e49.systemd_client_log(),
             timeout=20.0,
         )
+        if require_pre_policy_ping:
+            e49.wait_until(
+                "pre-policy OpenVPN tunnel payload",
+                lambda: e49.ping(e49.MANAGED, e49.VPN_SERVER_ADDR, count=1),
+                timeout=20.0,
+            )
         return pid
     except Exception:
         print("EXP050_CLIENT_JOURNAL_TAIL=" + json.dumps(e49.systemd_client_log()[-8000:]))
@@ -252,7 +258,7 @@ def run_lifecycle_cycle(
 
         # 1. Start using the exact systemd onboarding mechanism that passed EXP-049.
         e49.systemctl("start", e49.CLIENT_UNIT)
-        first_pid = wait_service_ready()
+        first_pid = wait_service_ready(require_pre_policy_ping=True)
         first_prepared, _ = fresh_policy(current_config, domain_spec, runner)
 
         holder = {}
