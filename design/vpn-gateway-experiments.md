@@ -17,6 +17,9 @@ Current experiment directories:
 | EXP-051 | first functioning alpha |
 | EXP-052 | host-side server publication DNAT lower evidence |
 | EXP-053 | host-side conntrack return steering into managed stack |
+| EXP-054 | host underlay endpoint pinning before full-tunnel bootstrap |
+| EXP-055 | composite host-boundary actuation |
+| EXP-056 | host-ingress bootstrap bypass without main-table capture |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
