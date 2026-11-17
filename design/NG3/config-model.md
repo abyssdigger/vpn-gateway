@@ -481,12 +481,14 @@ device_order[]
 
 ## 5.1 direction
 
-Accepted values:
+Canonical Release-1 values:
 
 ```text
 outbound
 inbound
+inbound+snat
 bidirectional
+bidirectional+snat
 ```
 
 Meaning:
@@ -495,9 +497,17 @@ Meaning:
 - `inbound`: remote side through a permitted Profile Device/path may initiate NEW flows
   toward ordinary/host side;
 - `bidirectional`: both sides may initiate;
+- `+snat` requests Profile-scoped ordinary-side gateway source NAT only for the
+  VPN-to-ordinary leg after the managed firewall boundary;
 - admitted return traffic may be handled statefully.
 
-Direction is explicit and is not inferred from topology.
+`outbound+snat` is invalid because the suffix controls a VPN-to-ordinary leg that an
+outbound-only Profile does not authorize. There is no separate Release-1 `gateway_nat`
+field.
+
+Direction is explicit and is not inferred from topology. Configuration normalization strips
+the `+snat` suffix into a separate ordinary-side gateway NAT intent before structural
+routing consumes the base direction.
 
 First-release constraint:
 
@@ -653,19 +663,21 @@ wg0 is available for every Profile
 
 One interface can be usable for one Profile and unusable for another.
 
-The recovered Profile-level availability surface included compact forms such as:
+The canonical Release-1 field is a simple Profile scalar:
 
 ```toml
-interface_balancing = "icmp"
+availability_check = "icmp"
 ```
 
-and:
+or:
 
 ```toml
-interface_balancing = "icmp/172.21.201.19"
+availability_check = "icmp/172.21.201.19"
 ```
 
-The important accepted semantics are:
+Absence of the field means no active availability check for that Profile.
+
+Semantics:
 
 ```text
 icmp/<explicit-ip>
@@ -673,23 +685,103 @@ icmp/<explicit-ip>
 
 icmp
     -> deterministically derive one path-specific target
-       from already accepted Profile/path/Device/interface/binding/peer topology
+       for each availability subject from already accepted
+       Profile/path/Device/interface/binding/peer topology
 ```
 
-There is no universal global default target.
+There is no global Device `tunnel_endpoint` and no universal default target. This is
+important for selectors such as `expected_interfaces = ["wg*/3"]`: each admitted logical
+path may have a different current peer/topology and therefore a different derived target.
 
-Before probe runtime receives work, target normalization must have produced a concrete IPv4.
+Before probe runtime receives work, target normalization must have produced one concrete IPv4
+for the specific availability subject. If omitted-target derivation is unresolved or
+ambiguous, the requested check is not silently redirected to another address and the reason
+must be diagnosable.
 
-The historical availability field spelling is retained here only as interface evidence. Its
-exact external spelling is postponed; the accepted semantic contract, not that shorthand,
-is what downstream components consume.
+Release 1 intentionally exposes no availability interval, timeout, failure-count or
+hysteresis knobs. Those remain implementation policy unless a later accepted requirement
+makes them user policy.
+
+Historical `interface_balancing` spelling is not an alias and is rejected by the canonical
+parser.
 
 **Requirements:**
 - `VPNG0001-R1.R2.R4.R4.R1`
 - `VPNG0003-R3.R6.R1`
 - `VPNG0003-R3.R6.R3.R1`
 - `VPNG0003-R3.R6.R3.R1.C1`
+- `VPNG0003-R3.R6.R3.R1.C1.R1`
 - `VPNG0003-R3.R6.R3.R2`
+
+## 7.1. Complete canonical Release-1 example
+
+This example intentionally exercises every settled external configuration feature. A concrete
+deployment does not need to use every optional field.
+
+```toml
+[device.wg-main]
+enabled = true
+expected_interfaces = ["wg0"]
+use_outbound_nat = true
+allow_vpn_client = "udp:51820>198.51.100.10:51820"
+firewall = [
+    "out allow tcp to 10.20.0.0/16:443 # HTTPS to corp",
+    "out allow icmp to 10.20.0.0/16",
+    "in allow tcp from 10.20.0.0/16 to 10.0.0.10/32:22 # SSH to bastion",
+]
+
+[device.oc-backup]
+enabled = true
+expected_interfaces = ["vpn*/2"]
+use_outbound_nat = false
+allow_vpn_client = [
+    "tcp>198.51.100.20:443",
+    "udp>198.51.100.20:443",
+]
+firewall = [
+    "out allow tcp to 10.20.0.0/16:443",
+    "out allow icmp to 10.20.0.0/16",
+]
+
+[device.oc-server]
+enabled = true
+expected_interfaces = ["vpns0"]
+publish_vpn_server = [
+    "tcp/eth0:44443>443",
+    "udp/eth0:44443>443",
+]
+firewall = [
+    "in allow tcp from 10.30.0.0/16 to 10.0.0.20/32:22",
+]
+
+[profile.corporate]
+enabled = true
+direction = "outbound"
+destinations = ["10.20.0.0/16"]
+device_order = ["wg-main", "oc-backup"]
+availability_check = "icmp"
+
+[profile.remote-admin]
+enabled = true
+direction = "inbound+snat"
+destinations = ["10.30.0.0/16"]
+device_order = ["oc-server"]
+availability_check = "icmp/10.30.0.1"
+```
+
+Notes:
+
+- `expected_interfaces = ["vpn*/2"]` is valid; bare `"vpn*"` is not, because a prefix
+  selector requires an explicit positive quota;
+- `use_outbound_nat` controls ordinary-to-VPN payload source masquerade and is unrelated to
+  `direction = "inbound+snat"`;
+- `allow_vpn_client` allows the VPN implementation's own narrowly bounded client
+  transport/control flow inside the otherwise DROP-by-default managed local plane;
+- `publish_vpn_server` describes server-side host publication and is independent from
+  Profile routing;
+- Device `firewall` can only narrow the permission already created by Profile policy;
+- `availability_check` belongs directly to Profile because no Release-1 subfields/timing
+  knobs justify a dedicated table.
 
 # 8. Configuration normalization boundary
 
