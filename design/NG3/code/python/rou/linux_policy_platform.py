@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .linux_host_boundary_policy import HostBoundaryLinuxAllocation
 from .network_policy_layout import (
     NetworkPolicyPlatformSpace,
     NumericResourcePool,
@@ -33,4 +34,15 @@ NG3_LINUX_POLICY_PLATFORM = NetworkPolicyPlatformSpace(
     ),
     nft_family="ip",
     nft_table="vpn_gate",
+)
+
+
+# Ordinary-host namespace boundary owner. These are deliberately fixed Release-1
+# keys, not a host-global allocation service. If the administrator already owns a
+# conflicting key, host-boundary activation must fail rather than renumber silently.
+NG3_HOST_BOUNDARY_LINUX_ALLOCATION = HostBoundaryLinuxAllocation(
+    mark=0x56504E47,             # ASCII "VPNG"
+    return_table=0x7FFF0001,
+    return_rule_priority=0x1800,
+    route_protocol=203,
 )
