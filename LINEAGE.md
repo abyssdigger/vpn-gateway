@@ -70,10 +70,7 @@ that already existed when NG3 started, because later NG3 snapshots modify them. 
 only inherited generation payload present before NG3:
 
 ```text
-design/RC2/**
-design/RC3/**
-design/NG1/**
-design/NG2/**
+design/{RC2,RC3,NG1,NG2}/**
 .github/workflows/rc3-python.yml
 .github/workflows/ng1-python.yml
 .github/workflows/ng2-python.yml
