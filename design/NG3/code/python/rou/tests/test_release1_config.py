@@ -29,7 +29,7 @@ allow_vpn_client = [
 
 [device.oc-server]
 enabled = true
-expected_interfaces = ["vpns0"]
+expected_interfaces = ["ocsvr0"]
 publish_vpn_server = [
     "tcp/eth0:44443>443",
     "udp/192.0.2.10:44443>443",
@@ -216,7 +216,7 @@ allow_vpn_client = [
 
 [device.server]
 enabled = true
-expected_interfaces = ["vpns0"]
+expected_interfaces = ["ocsvr0"]
 publish_vpn_server = [
     "udp:44443",
     "tcp/eth0:443>8443",
