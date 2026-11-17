@@ -16,6 +16,8 @@ import time
 
 from rou.binding import DeviceBindingState, LogicalPathId, project_device_bindings
 from rou.config import parse_structural_config
+from rou.composite_nft_policy import compare_composite_nft_policy
+from rou.nft_namespace_inventory import parse_nft_namespace_ruleset
 from rou.controller_startup import ControllerStartupStatus, start_controller_once
 from rou.controller_stop import ControllerStopStatus, stop_controller_once
 from rou.device_policy import (
@@ -472,6 +474,23 @@ def run_cycle(
                 f"EXP049_CYCLE_{cycle}_ACTIVATION_FAILURE_RULESET="
                 + json.dumps(ruleset)
             )
+            prepared_failure = holder.get("prepared")
+            if (
+                prepared_failure is not None
+                and prepared_failure.desired is not None
+            ):
+                failure_interfaces = parse_ip_link_inventory(
+                    runner.run(("ip", "-n", MANAGED, "-j", "link", "show"))
+                )
+                failure_comparison = compare_composite_nft_policy(
+                    parse_nft_namespace_ruleset(ruleset),
+                    failure_interfaces,
+                    prepared_failure.desired.nft,
+                )
+                print(
+                    f"EXP049_CYCLE_{cycle}_INTEGRATION_LOCAL_COMPARE="
+                    + repr(failure_comparison.local_integration)
+                )
         assert startup.status is ControllerStartupStatus.READY, (
             startup.status,
             startup.diagnostic,
