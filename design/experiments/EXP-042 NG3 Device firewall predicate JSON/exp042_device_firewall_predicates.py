@@ -76,7 +76,7 @@ def main() -> int:
         meta l4proto icmp return comment "{RULE_COMMENT}"
         meta l4proto tcp return comment "{RULE_COMMENT}"
         meta l4proto udp return comment "{RULE_COMMENT}"
-        tcp sport 1000-1003 tcp dport { 80, 443, 8000-8007 } return comment "{RULE_COMMENT}"
+        tcp sport 1000-1003 tcp dport {{ 80, 443, 8000-8007 }} return comment "{RULE_COMMENT}"
     }}
 }}
 """,
