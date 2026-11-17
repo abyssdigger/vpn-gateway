@@ -119,7 +119,7 @@ def main():
                     direction=DeviceFirewallDirection.OUT,
                     action=DeviceFirewallAction.ALLOW,
                     protocol="tcp",
-                    destination_port=443,
+                    destination_ports=443,
                 ),
                 DeviceFirewallRuleIntent(
                     direction=DeviceFirewallDirection.OUT,
