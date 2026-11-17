@@ -9,6 +9,7 @@ on:
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
+      - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
@@ -31,6 +32,7 @@ on:
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
+      - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
@@ -384,5 +386,11 @@ jobs:
             set -e
             PYTHONPATH=design/NG3/code/python \
               python3 "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/exp049_openvpn_onboarding.py"
+          '
+
+          docker exec ng3-exp049 bash -lc '
+            set -e
+            PYTHONPATH=design/NG3/code/python \
+              python3 "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/exp050_openvpn_systemd_lifecycle.py"
           '
 
