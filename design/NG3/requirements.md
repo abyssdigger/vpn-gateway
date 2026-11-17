@@ -349,6 +349,12 @@ NG3 requirement merely because it existed before.
 
   **[VPNG0007-R7.R6.R2]** *Чтобы изменение смысла требования не оставляло архитектуру, формально ссылающуюся на уже другой contract.* | Изменение requirement/constraint требует повторной проверки архитектурных решений, ссылающихся на измененный узел или его затронутых потомков, до продолжения реализации. [closed]
 
+ **[VPNG0007-R7.R7]** *Чтобы развитие VPN-GATE оставалось управляемым, предсказуемым и доказуемым, а реализация или эксперимент не становились самостоятельным источником продуктовой семантики.* | Каждый существенный development/evidence unit должен быть необходим для реализации, проверки или честного закрытия конкретного принятого Requirement/Constraint и до начала работы иметь явную трассировку к этому R/C и ожидаемому результату evidence/review.
+
+  **[VPNG0007-R7.R7.R1]** *Чтобы разработка интеграции не закрепляла lifecycle, ownership или safety решения поверх недоказанной базовой возможности использовать реальный VPN внутри целевого stack.* | Зависимая разработка интеграции, предполагающая поддерживаемый VPN внутри managed network domain, должна начинаться только после воспроизводимого PASS базового applicability evidence, требуемого `VPNG0001-R1.R3.C1.R1.R1`; FAIL этого gate должен сначала вернуть затронутые integration assumptions в requirement/architecture review.
+
+   **[VPNG0007-R7.R7.R1.R1]** *Чтобы после подтверждения базовой запускабельности VPN проект не принял lifecycle/ownership контракт, работающий только на одном чистом запуске или на безобидной VPN-specific конфигурации.* | После PASS базового applicability gate проект должен на той же подтвержденной integration провести отдельный lifecycle experiment до принятия зависимой bounded-VPN lifecycle семантики: проверить start, stop, restart с неизмененной VPN-specific конфигурацией, restart с измененной VPN-specific конфигурацией, отсутствие зависимости нового запуска от runtime-состояния предыдущего экземпляра и поведение при aggressive VPN-specific configuration, включая hooks или другие механизмы, пытающиеся изменять routes, RPDB, NAT, firewall, sysctl или иное сетевое состояние внутри managed network domain.
+
 ## Initial acceptance/evidence expectations
 
 This table adds no new requirement semantics.
