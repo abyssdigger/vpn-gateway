@@ -133,8 +133,11 @@ For the supported policy-neutral shape:
 
 - the OpenVPN process starts inside the managed namespace;
 - route installation by OpenVPN is disabled with `route-noexec`;
-- arbitrary external `up`/`down` scripts requiring elevated `script-security` are not part
-  of the supported first-release integration;
+- a stable client transport port should be configured when practical and supplied as
+  `local_port`; the accepted EXP-049/050 OpenVPN shape uses one, which gives exact
+  INPUT/OUTPUT port selectors across service restart;
+- arbitrary external `up`/`down` scripts requiring elevated `script-security 2` are not
+  part of the supported first-release integration;
 - host/external NAT, publication or underlay orchestration stays outside the managed namespace;
 - remote protocol/address/port facts are supplied to VPN-GATE for the integration-local allow.
 
