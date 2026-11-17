@@ -286,8 +286,16 @@ Driver/Executor.
 
 ### decomp
 
-No new `decomp` links were created by this unit. Existing accepted/resolved links remain
-unchanged.
+No new `decomp` links were created by this unit. The accumulated unique links are all
+resolved because their decomposition targets are closed:
+
+- `VPNG0005-R5 -> VPNG0005-R5.R6` — resolved;
+- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` — resolved;
+- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` — resolved;
+- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2` — resolved.
+
+Repeated occurrences of the same link in the requirements tree do not create additional
+open decomposition state.
 
 ### unreal
 
