@@ -212,17 +212,29 @@ def start_controller_once(
                 diagnostic=f"stop requested after {phase}; owned cleanup confirmed",
             )
 
+        stopping = (
+            ControllerStartupStoppingContext(
+                lock=lock,
+                stop=stopped,
+            )
+            if lock.acquired
+            else None
+        )
         return ControllerStartupResult(
             status=ControllerStartupStatus.STOP_CLEANUP_FAILED,
             session=None,
             preflight=preflight,
             domain=domain,
             stop=stopped,
-            stopping=ControllerStartupStoppingContext(
-                lock=lock,
-                stop=stopped,
+            stopping=stopping,
+            diagnostic=(
+                f"stop requested after {phase}; "
+                + (
+                    "owned cleanup incomplete with lifetime lock retained"
+                    if stopping is not None
+                    else "owned cleanup completed but lifetime lock release failed"
+                )
             ),
-            diagnostic=f"stop requested after {phase}; owned cleanup incomplete",
         )
 
     def fail(
