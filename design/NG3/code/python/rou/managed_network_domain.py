@@ -149,26 +149,28 @@ def verify_managed_network_domain(
                 "host and namespace boundary interfaces are not reciprocal veth peers"
             )
 
-    host_addresses = _ipv4_addresses(
-        runner,
-        spec.host_interface,
-    )
-    if host_addresses != frozenset((spec.host_address,)):
-        errors.append(
-            "host boundary IPv4 address set does not exactly match "
-            f"{spec.host_address.with_prefixlen}"
+    if host is not None:
+        host_addresses = _ipv4_addresses(
+            runner,
+            spec.host_interface,
         )
+        if host_addresses != frozenset((spec.host_address,)):
+            errors.append(
+                "host boundary IPv4 address set does not exactly match "
+                f"{spec.host_address.with_prefixlen}"
+            )
 
-    inner_addresses = _ipv4_addresses(
-        runner,
-        spec.inner_interface,
-        namespace=spec.namespace,
-    )
-    if inner_addresses != frozenset((spec.inner_address,)):
-        errors.append(
-            "inner boundary IPv4 address set does not exactly match "
-            f"{spec.inner_address.with_prefixlen}"
+    if inner is not None:
+        inner_addresses = _ipv4_addresses(
+            runner,
+            spec.inner_interface,
+            namespace=spec.namespace,
         )
+        if inner_addresses != frozenset((spec.inner_address,)):
+            errors.append(
+                "inner boundary IPv4 address set does not exactly match "
+                f"{spec.inner_address.with_prefixlen}"
+            )
 
     routes = _json_array(
         runner.run(
