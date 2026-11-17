@@ -145,11 +145,19 @@ class AlphaPreparedPolicy:
                     "is not yet assembled end-to-end by the alpha runtime"
                 )
 
-        return cls(
+        prepared = cls(
             local_address=local_address,
             binding_state=DeviceBindingState.empty(),
             config=config,
         )
+        try:
+            prepared.build_host_publication_desired()
+        except Exception as exc:
+            raise AlphaRuntimeError(
+                "host publication projection failed before runtime mutation: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        return prepared
 
     def build_current(
         self,

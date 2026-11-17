@@ -159,12 +159,14 @@ remote_port = 11940
             '    "tcp/198.51.100.10:443>9443",\n'
             ']\n'
         )
-        prepared = AlphaPreparedPolicy.from_text(
-            CONFIG.replace("use_outbound_nat = false\n", replacement),
-            local_address=IPv4Address("198.19.255.2"),
-        )
-        with self.assertRaisesRegex(Exception, "ambiguous host publication"):
-            prepared.build_host_publication_desired()
+        with self.assertRaisesRegex(
+            Exception,
+            "host publication projection failed before runtime mutation",
+        ):
+            AlphaPreparedPolicy.from_text(
+                CONFIG.replace("use_outbound_nat = false\n", replacement),
+                local_address=IPv4Address("198.19.255.2"),
+            )
 
     def test_alpha_materializes_canonical_device_nat_and_firewall(self):
         prepared = AlphaPreparedPolicy.from_text(
