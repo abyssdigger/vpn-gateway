@@ -25,6 +25,7 @@ from .forwarding_gate import (
     converge_forwarding_gate_once,
 )
 from .interface_identity import InterfaceIdentity
+from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
 from .nft_namespace_inventory import NftNamespaceObservation
 from .payload_forward_desired import PayloadForwardRuleSpec
@@ -51,6 +52,10 @@ class CompositeNftMutationBackend(Protocol):
     def apply_local_publication_step(
         self,
         step: LocalPublicationMutationStep,
+    ) -> None: ...
+    def apply_integration_local_step(
+        self,
+        step: IntegrationLocalMutationStep,
     ) -> None: ...
 
 
@@ -160,6 +165,7 @@ def converge_composite_nft_step_once(
         step = select_composite_nft_step(
             initial,
             desired.local_publication,
+            desired.local_integration,
         )
     except CompositeNftPlanError as exc:
         return result(
@@ -298,6 +304,11 @@ def apply_composite_nft_step(
         backend.apply_local_publication_step(
             step.local_publication_step
         )
+    elif step.kind is CompositeNftStepKind.APPLY_LOCAL_INTEGRATION:
+        assert step.local_integration_step is not None
+        backend.apply_integration_local_step(
+            step.local_integration_step
+        )
     else:
         raise ValueError(f"unsupported composite nft step {step.kind!r}")
 
@@ -313,6 +324,8 @@ def _distance(value: CompositeNftPolicyComparison) -> int:
         + len(value.device_firewall.stale_jumps)
         + len(value.local_publication.missing)
         + len(value.local_publication.stale)
+        + len(value.local_integration.missing)
+        + len(value.local_integration.stale)
         + len(value.conflicts)
     )
 
