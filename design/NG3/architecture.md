@@ -1117,9 +1117,9 @@ Key normalization rules:
 - disabled Device/Profile placeholders do not require active-object semantic completeness;
 - active Devices are derived as enabled Devices referenced by at least one enabled Profile;
 - `DeviceBindingIntent` retains ordered expected-interface selectors and quotas;
-- `ProfileConfigIntent` retains explicit direction, remote destinations and ordered Device
-  references; optional ordinary-side gateway NAT remains a separate Profile-scoped semantic
-  intent whose exact external spelling is deferred;
+- `ProfileConfigIntent` retains remote destinations and ordered Device references; canonical
+  `direction` is normalized into base direction plus a separate Profile-scoped
+  ordinary-side gateway NAT intent when the accepted `+snat` suffix is present;
 - `PayloadProfileRequest` contains the concrete ordered logical paths obtained after binding
   while preserving Profile identity/direction/destinations;
 - current concrete logical paths are derived from accepted Device bindings, not written
@@ -1129,13 +1129,15 @@ Key normalization rules:
 - field order is semantic only where the contract explicitly declares policy order;
 - derived implementation values such as aggregate Device quota, ifindex, route metrics and
   table/rule priorities are not required from the user;
-- Device NAT intent is explicit; no implicit active-Device NAT default is assumed;
-- Device firewall is normalized as an ordered first-match policy that can only narrow Profile
-  permission; omitted policy is permissive at the Device layer and explicit policy has
-  terminal no-match DROP;
-- Device transport publication intent is normalized separately from Profile payload routing;
-- exact final external grammar for Device firewall/publication remains an interface-review item and is
-  not inferred from historical prototype spellings;
+- an enabled Device eligible for ordinary-to-VPN traffic has explicit
+  `use_outbound_nat = true|false`, normalized to `MASQUERADE|NONE`;
+- `allow_vpn_client` is normalized as exact Device-owned VPN client transport/control facts;
+  there is no public top-level `integration.*` object;
+- Device `firewall` is normalized as an ordered first-match policy that can only narrow
+  Profile permission; omitted policy is permissive at the Device layer and explicit policy
+  has terminal no-match DROP;
+- `publish_vpn_server` is normalized separately from Profile payload routing;
+- historical Device policy spellings are rejected rather than accepted as aliases;
 - availability subject identity is exactly `(profile_id, logical_path_id)`;
 - the same bound interface/path may therefore have independent availability state in
   different Profiles;
@@ -1145,8 +1147,9 @@ Key normalization rules:
   topology before probe runtime;
 - probe runtime always receives one concrete IPv4 target.
 
-The recovered external TOML structure, identifier grammar, expected-interface selector forms
-and Profile fields are normative interface behavior in `design/NG3/config-model.md`.
+The complete canonical Release-1 external TOML grammar is normative in
+`design/NG3/config-model.md` and is normalized by the ConfigurationAdapter before any
+dependent network mutation.
 
 Payload policy, Device binding and availability remain separate normalized contracts even
 though they originate from one human configuration.
@@ -1172,38 +1175,36 @@ DeviceConfigIntent
     -> DevicePolicyIntent
 ```
 
-NAT semantics currently recovered at product level:
+Canonical external-to-semantic normalization is:
 
 ```text
-none
-    -> no VPN-GATE payload source NAT on this Device/path
+use_outbound_nat = false -> NatIntent.NONE
+use_outbound_nat = true  -> NatIntent.MASQUERADE
 
-masquerade
-    -> source NAT through the current concrete path of this Device
-```
+allow_vpn_client
+    -> exact Device-owned integration local/system transport intents
 
-There is no implicit active-Device NAT default.
+firewall[]
+    -> ordered DeviceFirewallRuleIntent sequence
+    -> omitted means permissive Device layer
+    -> explicit no-match means DROP
 
-Device firewall semantics:
-
-```text
-effective payload permission
-    = Profile permission
-      AND
-      ordered Device firewall verdict == ALLOW
+publish_vpn_server
+    -> Device-owned host publication intent
+       + managed-domain publication-local admission intent
 ```
 
 The Device firewall can remove permission but cannot create destinations, directions or path
-eligibility absent from Profile policy. Its normalized rules preserve user order and carry
-direction/action plus optional L3/L4 match fields; exact external grammar remains deferred.
+eligibility absent from Profile policy. One-line user rules are parsed exactly once at the
+ConfigurationAdapter boundary; lower policy compilers never parse user strings.
 
-Transport publication semantics remain a Device/transport concern. The normalized intent
-describes an explicitly owned host-side publication boundary into the managed network domain;
-it is not part of Profile routing identity or availability health.
+Client transport/control permission and server publication are both Device transport
+properties but remain different normalized owner classes. `allow_vpn_client` does not become
+payload forwarding permission; `publish_vpn_server` does not become Profile routing.
 
-Historical traffic-envelope/publication TOML examples are schema-design evidence only. Until an exact
-NG3 grammar is accepted, `ConfigurationAdapter` must reject unsupported guessed forms rather
-than emulate old spellings heuristically.
+Historical `nat`, `traffic_envelope`, `publications` and top-level `integration.*`
+spellings are not compatibility aliases. Endpoint-scoped firewall syntax remains separately
+deferred under `VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
 
 ### AvailabilityTargetCalculator
 
@@ -1287,8 +1288,9 @@ documentation must explain:
    configuration boundary;
 4. how to determine that VPN-GATE accepted or rejected the binding.
 
-This closes the architecture of `VPNG0001-R1.R3.C1.R1` without choosing the final configuration
-file syntax or a specific VPN protocol.
+This closes the architecture of `VPNG0001-R1.R3.C1.R1` without choosing a specific VPN
+protocol. The Release-1 configuration spelling itself is now fixed by
+`design/NG3/config-model.md`.
 
 No ConfigManager, live-reload Engine, configuration database or generic plugin registry is
 introduced. Those require separate accepted requirements if they become necessary.
@@ -5339,6 +5341,10 @@ command replay.
 - `VPNG0007-R7.R1`;
 - `VPNG0007-R7.R7`.
 
+**Allowed early implementation by:**
+- `VPNG0007-R7.R8.C1`;
+- `VPNG0007-R7.R8.R3`.
+
 **Constrained by:**
 - `VPNG0001-R1.R2.R4.R6.C1`;
 - `VPNG0001-R1.R3.C1.C1`;
@@ -5403,18 +5409,14 @@ stack-specific VPN unit
 останавливает bound VPN unit/cgroup; затем controller получает stop, выполняет
 `stop_controller_once(...)` и подтверждает отсутствие managed namespace + host boundary.
 
-Текущий alpha deliberately ограничен тем, что final human-facing grammar Device
-NAT/firewall/publication все еще отложена `VPNG0001-R1.R2.R4.R6.C1`. Поэтому исполняемый
-slice использует:
+Первый alpha evidence slice был собран до принятия финальной Device grammar и поэтому
+исторически использовал internal `NatIntent.NONE`, omitted Device firewall, no publication
+и remote-side return route. После configuration-format review это является только описанием
+EXP-051 evidence topology, а не текущей Release-1 grammar или новым constraint.
 
-```text
-Device NAT       -> explicit internal NatIntent.NONE
-Device firewall  -> accepted omitted/permissive semantics
-publication      -> none
-```
-
-Это не новый Release-1 constraint. Alpha smoke использует remote-side return route и тем
-самым доказывает runtime assembly без угадывания запрещенной внешней NAT grammar.
+Canonical Release-1 configuration теперь определяется `design/NG3/config-model.md`.
+Ранний Python runtime может реализовывать только подмножество этих capability, но обязан
+явно отклонять запрошенную ещё не materialized capability вместо silent ignore.
 
 Если periodic audit обнаруживает exact managed-domain mismatch, alpha пытается прежде всего
 подтвердить `ForwardingGate=DISABLED` и публикует diagnostic в journal; он не усыновляет
@@ -5491,12 +5493,99 @@ Profile-specific verdict model requires separate requirement work.
 A final status query therefore does not require direct knowledge of kernel commands or
 internal Manager state.
 
+## 13.1. Target production runtime implementation boundary
+
+**Implements:**
+- `VPNG0007-R7.R8`;
+- `VPNG0007-R7.R8.R1`;
+- `VPNG0007-R7.R8.R2`;
+- `VPNG0007-R7.R8.R3`.
+
+**Constrained by:**
+- `VPNG0007-R7.R8.C1`.
+
+Rust is a target **implementation boundary**, not a new component role and not a source of
+product semantics. The component contracts, requirement trace and observable network
+behavior defined by this architecture remain authoritative across the implementation-language
+transition.
+
+The final production/stable runtime boundary includes code that participates in:
+
+```text
+configuration normalization
+lifecycle / runtime state
+policy calculation and reconciliation
+VPN-path observation
+OS/network-state observation and actuation
+```
+
+For the first release that claims conformance to this production boundary, those runtime
+responsibilities must execute from the Rust implementation. A Python module is not allowed to
+remain a hidden production-path dependency merely because it was the original executable
+reference.
+
+The current `design/NG3/code/python/rou/` implementation has a different role:
+
+```text
+accepted requirements + architecture contracts
+        |
+        +--> executable Python reference/evidence
+        |
+        +--> later Rust production implementation
+                |
+                +--> must preserve the same product semantics
+```
+
+By `VPNG0007-R7.R8.C1`, alpha/beta releases may ship the Python reference runtime while the
+product semantics and integration applicability are still being proven. Such a release must
+not be described as the final production/stable implementation boundary.
+
+Code outside the runtime boundary may continue to use the language most appropriate to its
+job. In particular, disposable experiments, CI/evidence harnesses, test fixtures,
+build/install tooling, code generation and research/reference implementations do not need to
+be rewritten solely to satisfy the runtime-language requirement.
+
+### Unsafe/FFI boundary
+
+Production Rust defaults to safe Rust. Any `unsafe` block or memory-unsafe FFI boundary must:
+
+- exist only where a required lower mechanism cannot be expressed through the safe boundary
+  already available;
+- be localized behind a narrow technical contract;
+- document the invariant that makes the unsafe operation sound;
+- have focused tests/evidence for that boundary;
+- not be used to bypass ownership/state invariants that can be expressed in safe Rust.
+
+A broad `unsafe` implementation is not considered compliance merely because the source
+language is Rust.
+
+### Migration/evidence rule
+
+Porting Python reference behavior to Rust is an implementation replacement, not a redesign.
+The Rust unit must trace to the same R/C and architecture contract as the behavior it
+replaces. A semantic difference discovered during porting is returned to requirement/design
+review instead of being justified as a language-port artifact.
+
+Sufficient evidence for the final production-language transition includes:
+
+- unit/contract evidence for the Rust implementation against the accepted normalized domain
+  contracts;
+- end-to-end regression of the product scenarios used to accept the corresponding Python
+  reference behavior;
+- packaging evidence that the claimed production runtime does not execute Python runtime
+  modules;
+- an auditable inventory of production `unsafe`/memory-unsafe FFI boundaries and their
+  local justifications.
+
+No dual-runtime abstraction, plugin language layer or generic FFI framework is introduced
+until a separate requirement requires it.
+
 # 14. Requirement coverage in this architecture pass
 
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG0001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG0001-R1.R2` declarative operation | recovered strict Device/Profile user contract normalized by ConfigurationAdapter, including Device transport-policy intents; exact optional-policy external grammar is explicitly postponed in `design/deferrals/NG3-user-facing-policy-grammar.md` |
+| `VPNG0001-R1.R2` declarative operation | canonical Release-1 Device/Profile grammar fixed in `config-model.md` and normalized by ConfigurationAdapter; only endpoint-scoped future firewall selector remains deferred |
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
@@ -5511,7 +5600,7 @@ internal Manager state.
 | `VPNG0006-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
 | `VPNG0006-R6.R2`, `VPNG0006-R6.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
 | `VPNG0006-R6.R3` system failure visibility | RuntimeStatusAgent aggregates current blocking diagnostics without becoming policy owner |
-| `VPNG0007-R7` subtree — implementation quality | applied as cross-cutting architecture rules |
+| `VPNG0007-R7` subtree — implementation quality | applied as cross-cutting architecture rules; target production runtime language boundary is Rust, with Python allowed for early/reference releases under R7.R8.C1 |
 
 # 15. Deliberately omitted machinery
 
@@ -5546,10 +5635,10 @@ The core Device/Profile human-facing configuration contract is now recovered and
 Remaining interface freedom is narrower:
 
 - parser/serialization implementation details that do not change accepted TOML semantics;
-- final spelling/default semantics for configuration features not yet accepted;
 - any future live-change/reload capability, which is not currently promised;
-- Device firewall/publication fields that were explicitly outside the implemented
-  core config contract.
+- future endpoint-scoped Device firewall syntax under its explicit Release-1 constraint;
+- lower implementation of accepted publication/gateway-NAT capabilities where architecture
+  already defines the semantic ownership but complete physical materialization remains work.
 
 These freedoms must not be expanded into a universal configuration framework without a new
 requirement.
