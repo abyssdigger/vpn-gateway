@@ -3124,17 +3124,19 @@ DeviceFirewallRuleIntent
     direction = IN | OUT
     action = ALLOW | DENY | REJECT
     protocol?
-    source_port?
-    destination_port?
+    source_ports: PortBundle?
+    destination_ports: PortBundle?
     source_ipv4_cidr?
     destination_ipv4_cidr?
     comment?
 ```
 
 Omitted policy remains distinct from an explicit policy. An explicit policy is non-empty and
-preserves literal rule order. The model validates only already accepted field semantics and
-basic type/range invariants; it deliberately does not select the external spelling or the
-final accepted protocol vocabulary.
+preserves literal rule order. `PortBundle` preserves declared exact/range item order and
+rejects duplicate/intersecting physical ports. The semantic model is independent from TOML
+punctuation; the canonical Release-1 external spelling is selected by
+`ConfigurationAdapter` and the current protocol vocabulary remains TCP/UDP/ICMP as defined
+by the accepted user grammar.
 
 A separate exact lower desired contract represents one owned child chain plus its exact
 host/path jump and ordered physical rules. Predicate expressions and final nft actions are
