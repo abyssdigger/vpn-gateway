@@ -62,6 +62,16 @@ class ZeroPathPreparedPolicy:
         )
 
 
+class StopOnCall:
+    def __init__(self, call_number: int):
+        self.call_number = call_number
+        self.calls = 0
+
+    def __call__(self) -> bool:
+        self.calls += 1
+        return self.calls == self.call_number
+
+
 def raw_run(*argv: str, check: bool = True):
     return subprocess.run(
         argv,
@@ -128,6 +138,35 @@ def main() -> int:
             check=False,
         ).returncode != 0
         print("CONTROLLER_STARTUP_INVALID_CONFIG_NO_DOMAIN_CREATE=PASS")
+
+        stop_after_activation = StopOnCall(8)
+        interrupted = start_controller_once(
+            lock_spec,
+            domain_spec,
+            runner,
+            NG3_LINUX_POLICY_PLATFORM,
+            ZeroPathPreparedPolicy,
+            stop_requested=stop_after_activation,
+        )
+        assert interrupted.status is ControllerStartupStatus.STOPPED, (
+            interrupted.status,
+            interrupted.diagnostic,
+        )
+        assert interrupted.stopped
+        assert interrupted.session is None
+        assert interrupted.activation is not None
+        assert interrupted.activation.ready
+        assert interrupted.stop is not None
+        assert interrupted.stop.stopped
+        assert stop_after_activation.calls == 8
+        assert namespace not in runner.run(("ip", "netns", "list"))
+        assert raw_run(
+            "ip", "link", "show", "dev", host_interface,
+            check=False,
+        ).returncode != 0
+        print("CONTROLLER_STARTING_STOP_AFTER_ACTIVATION_NO_READY=PASS")
+        print("CONTROLLER_STARTING_STOP_OWNED_DOMAIN_CLEANUP=PASS")
+        print("CONTROLLER_STARTING_STOP_LOCK_RELEASE_AFTER_CLEANUP=PASS")
 
         ready = start_controller_once(
             lock_spec,
@@ -211,7 +250,7 @@ def main() -> int:
         assert final_stop.status is ControllerStopStatus.STOPPED
         print("CONTROLLER_STOP_REPEAT_CLEAN_CYCLE=PASS")
 
-        print("NG3 bounded controller startup/stop/restart integration: PASS")
+        print("NG3 bounded controller startup/STARTING-stop/stop/restart integration: PASS")
         return 0
     finally:
         cleanup()
