@@ -55,6 +55,7 @@ Current trace:
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md` |
+| controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
 | managed-netns structural forwarding gate | `forwarding_gate.py`, `linux_forwarding_gate.py` | `NG3-2026-11-16-forwarding-gate-code-review.md`, `EXP-030-result-20261116.md` |
 | nft table-level ownership observation | `nft_namespace_inventory.py` | `NG3-2026-11-16-nft-namespace-inventory-code-review.md`, `EXP-031-result-20261116.md` |
 | invariant payload nft scaffold comparison | `nft_payload_scaffold.py` | `NG3-2026-11-16-payload-nft-scaffold-code-review.md`, `EXP-032-result-20261116.md` |
@@ -4620,6 +4621,69 @@ global lifecycle state machine.
 - privileged disposable-network-namespace test beginning with no `vpn_gate` table:
   bootstrap scaffold, activate a zero-path fail-closed policy without ambient fallback, then
   activate a current VPN path through the same subassembly.
+
+## 12.0.2. Controller instance exclusion and runtime-directory integrity
+
+This is an implementation-safety prerequisite for lifecycle assembly, not a new user-facing
+multi-instance feature.
+
+One process that has acquired the controller lifetime lock is the sole process allowed to
+orchestrate the managed-domain and network-policy owner boundaries for that deployment
+instance. A second process must fail immediately before cleanup, bootstrap or actuation.
+
+The lower normalized deployment input is:
+
+```text
+InstanceLockSpec:
+    runtime_directory: absolute path
+    expected_owner_uid
+```
+
+The lock filename is an internal fixed implementation name and is not independently
+configurable. The lifecycle layer may later select the runtime-directory path from packaging
+or service configuration; this unit does not define external TOML syntax.
+
+Before lock acquisition, the runtime directory is safely ensured/verified:
+
+- the path is absolute;
+- if absent and creatable, create it with mode `0700`;
+- the final path component must not be a symlink;
+- an existing object must be a directory;
+- mode must be exactly `0700`;
+- owner UID must equal the normalized expected service identity;
+- wrong owner/mode/type is a fatal error and is not silently repaired.
+
+The lock file is opened with:
+
+```text
+O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW
+mode 0600
+```
+
+After opening, `fstat` must confirm a regular file, mode `0600`, and the same expected
+owner UID.
+
+The process then attempts:
+
+```text
+flock(fd, LOCK_EX | LOCK_NB)
+```
+
+and keeps that file descriptor open for the whole controller lifetime.
+
+A busy lock is a distinct `another instance is running` failure. No wait/backoff/retry
+belongs to this boundary.
+
+The lock file may remain on disk after process exit. The kernel-held flock, not file
+existence/PID text, is authoritative, so a stale regular lock file does not block a later
+process after the previous descriptor is gone.
+
+Acquisition happens before any cleanup or managed-domain mutation. If a termination request
+arrives before lock acquisition, the process owns no gateway resources and must not perform
+cleanup merely because it attempted startup.
+
+This contract intentionally carries forward the previously tested RC2/RC3 lock-path
+hardening while avoiding their external path/default as an NG3 product contract.
 
 ## 12.1. Product lifecycle control surface
 
