@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from ipaddress import IPv4Interface
 import unittest
 from unittest.mock import patch
 
@@ -21,6 +22,7 @@ from rou.local_publication_policy import LocalPublicationDesiredState
 from rou.managed_network_domain import (
     ManagedNetworkDomainEnsureResult,
     ManagedNetworkDomainPreflightResult,
+    ManagedNetworkDomainSpec,
     ManagedNetworkDomainVerification,
 )
 from rou.network_policy_activation import NetworkPolicyActivationStatus
@@ -33,6 +35,14 @@ from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 
 HOST = InterfaceIdentity("host0", 10)
 VPN = InterfaceIdentity("vpn0", 20)
+
+DOMAIN_SPEC = ManagedNetworkDomainSpec(
+    namespace="managed",
+    host_interface="vgh0",
+    inner_interface="host0",
+    host_address=IPv4Interface("192.0.2.1/30"),
+    inner_address=IPv4Interface("192.0.2.2/30"),
+)
 
 DESIRED = PayloadNetworkPolicyDesiredState(
     routing=PayloadRoutingDesiredState(
@@ -212,7 +222,7 @@ class ControllerStartupTests(unittest.TestCase):
         ):
             result = start_controller_once(
                 object(),
-                object(),
+                DOMAIN_SPEC,
                 runner,
                 NG3_LINUX_POLICY_PLATFORM,
                 loader,
@@ -356,7 +366,7 @@ class ControllerStartupTests(unittest.TestCase):
 
     def test_failed_recontainment_has_distinct_status(self):
         failed_containment = ForwardingGateExecutionResult(
-            status=ForwardingGateExecutionStatus.FAILED,
+            status=ForwardingGateExecutionStatus.POSTCONDITION_FAILED,
             desired=ForwardingGateState.DISABLED,
             initial=ForwardingGateState.ENABLED,
             final=ForwardingGateState.ENABLED,
