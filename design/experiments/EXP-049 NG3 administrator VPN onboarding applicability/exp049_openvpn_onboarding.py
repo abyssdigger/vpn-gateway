@@ -233,6 +233,7 @@ dev-type tun
 proto udp4
 remote {SERVER_UNDERLAY} {OPENVPN_PORT}
 nobind
+route-noexec
 ifconfig {VPN_CLIENT_ADDR} {VPN_SERVER_ADDR}
 tls-client
 remote-cert-tls server
