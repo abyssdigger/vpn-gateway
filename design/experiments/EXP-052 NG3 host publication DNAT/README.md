@@ -101,9 +101,10 @@ The selected lower rule therefore requires a pre-DNAT local-destination proof (`
 
 ### H6 — owned lower representation is explicit and disposable
 
-The nft JSON inventory contains exactly the experiment-owned table, one NAT prerouting base
-chain and three owner-marked DNAT rules. Deleting the disposable host namespace removes the
-entire experiment-owned state.
+The reference `LinuxHostPublicationBackend` converges exactly one owned host-publication
+table, one NAT prerouting base chain and three owner-marked DNAT rules, then freshly observes
+the exact desired state. Explicit empty-desired convergence removes that owner table before
+disposable namespace teardown.
 
 ## Procedure
 
@@ -114,11 +115,12 @@ The harness:
 2. creates two external veth links plus one host/managed boundary veth;
 3. configures only explicit experiment addresses/routes;
 4. enables `net.ipv4.ip_forward=1` only in the disposable host namespace;
-5. installs one experiment-owned nftables table with three DNAT rules;
+5. invokes the reference `LinuxHostPublicationBackend` to converge three desired DNAT rules;
 6. starts internal TCP/UDP listeners and one unrelated host-local listener;
 7. runs H1-H5 positive/negative packet checks, including same-port foreign transit;
-8. validates the nft JSON owner representation;
-9. removes every disposable namespace in `finally`.
+8. validates the backend's strict nft JSON owner observation;
+9. converges empty desired state and confirms owner-table absence;
+10. removes every disposable namespace in `finally`.
 
 Run:
 

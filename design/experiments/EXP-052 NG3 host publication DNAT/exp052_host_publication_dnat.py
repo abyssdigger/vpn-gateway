@@ -3,11 +3,22 @@
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
-import sys
-from typing import Iterable
+from ipaddress import IPv4Address
+
+from rou.host_publication_policy import (
+    HostPublicationDesiredState,
+    HostPublicationMappingIntent,
+    HostPublicationSelectorKind,
+    build_host_publication_desired,
+)
+from rou.linux_host_publication import (
+    LinuxHostPublicationBackend,
+    converge_host_publication_once,
+)
+from rou.linux_nft_scaffold import SubprocessNftRunner
+from rou.local_publication_policy import PublicationProtocol
 
 
 PID = os.getpid()
@@ -31,7 +42,6 @@ ALT_CLIENT_IP = "203.0.113.2"
 MANAGED_IP = "192.0.2.2"
 HOST_INNER_IP = "192.0.2.1"
 
-OWNER = "vpn-gate:ng3:exp052-host-publication"
 
 
 def run(*args: str, input_text: str | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -184,10 +194,6 @@ def finish_server(proc: subprocess.Popen[str], marker: str) -> str:
     return text
 
 
-def nft_script(text: str) -> None:
-    ns(HOST, "nft", "-f", "-", input_text=text)
-
-
 def setup() -> None:
     for name in (HOST, CLIENT, ALT, MANAGED):
         add_namespace(name)
@@ -229,46 +235,58 @@ def setup() -> None:
 
     ns(HOST, "sysctl", "-q", "-w", "net.ipv4.ip_forward=1")
 
-    nft_script(
-        f"""
-table ip vpn_gate_exp052 {{
-    chain publication_prerouting {{
-        type nat hook prerouting priority dstnat; policy accept;
-        fib daddr type local iifname "{EXT_HOST}" tcp dport 44443 dnat to {MANAGED_IP}:8443 comment "{OWNER}:if"
-        fib daddr type local ip daddr {HOST_PRIMARY} udp dport 44444 dnat to {MANAGED_IP}:8444 comment "{OWNER}:ip"
-        fib daddr type local tcp dport 44445 dnat to {MANAGED_IP}:8445 comment "{OWNER}:any"
-    }}
-}}
-"""
+
+def publication_desired() -> HostPublicationDesiredState:
+    address = IPv4Address(MANAGED_IP)
+    return build_host_publication_desired(
+        (
+            HostPublicationMappingIntent(
+                device_id="exp052",
+                protocol=PublicationProtocol.TCP,
+                selector_kind=HostPublicationSelectorKind.INTERFACE,
+                selector_value=EXT_HOST,
+                host_port=44443,
+                internal_address=address,
+                internal_port=8443,
+            ),
+            HostPublicationMappingIntent(
+                device_id="exp052",
+                protocol=PublicationProtocol.UDP,
+                selector_kind=HostPublicationSelectorKind.IPV4,
+                selector_value=IPv4Address(HOST_PRIMARY),
+                host_port=44444,
+                internal_address=address,
+                internal_port=8444,
+            ),
+            HostPublicationMappingIntent(
+                device_id="exp052",
+                protocol=PublicationProtocol.TCP,
+                selector_kind=HostPublicationSelectorKind.ANY,
+                selector_value=None,
+                host_port=44445,
+                internal_address=address,
+                internal_port=8445,
+            ),
+        )
     )
 
 
-def assert_inventory() -> None:
-    raw = ns(HOST, "nft", "-j", "list", "table", "ip", "vpn_gate_exp052").stdout
-    data = json.loads(raw)
-    rows = data["nftables"]
-    table_count = sum(
-        1
-        for row in rows
-        if isinstance(row, dict)
-        and row.get("table", {}).get("name") == "vpn_gate_exp052"
+def publication_backend() -> LinuxHostPublicationBackend:
+    return LinuxHostPublicationBackend(
+        SubprocessNftRunner(),
+        network_namespace=HOST,
     )
-    chain_count = sum(
-        1
-        for row in rows
-        if isinstance(row, dict)
-        and row.get("chain", {}).get("name") == "publication_prerouting"
-    )
-    owned = [
-        row["rule"]
-        for row in rows
-        if isinstance(row, dict)
-        and isinstance(row.get("rule"), dict)
-        and str(row["rule"].get("comment", "")).startswith(OWNER)
-    ]
-    assert table_count == 1, table_count
-    assert chain_count == 1, chain_count
-    assert len(owned) == 3, owned
+
+
+def assert_inventory(
+    backend: LinuxHostPublicationBackend,
+    desired: HostPublicationDesiredState,
+) -> None:
+    observed = backend.observe()
+    assert observed.table_present, observed
+    assert observed.conflict_free, observed.conflicts
+    assert observed.rules == desired.rules, (observed.rules, desired.rules)
+    assert observed.forwarding_enabled
     print("EXP052_OWNER_INVENTORY=PASS")
 
 
@@ -276,6 +294,11 @@ def main() -> int:
     servers: list[subprocess.Popen[str]] = []
     try:
         setup()
+        backend = publication_backend()
+        desired = publication_desired()
+        convergence = converge_host_publication_once(backend, desired)
+        assert convergence.confirmed, convergence
+        print("EXP052_REFERENCE_BACKEND_CONVERGENCE=PASS")
 
         tcp_if = start_python(MANAGED, TCP_SERVER, MANAGED_IP, "8443", "TCP_IF")
         servers.append(tcp_if)
@@ -347,7 +370,16 @@ def main() -> int:
         servers.remove(host_local)
         print("EXP052_UNRELATED_HOST_LOCAL=PASS")
 
-        assert_inventory()
+        assert_inventory(backend, desired)
+
+        cleanup = converge_host_publication_once(
+            backend,
+            HostPublicationDesiredState(()),
+        )
+        assert cleanup.confirmed, cleanup
+        assert not backend.observe().table_present
+        print("EXP052_OWNER_CLEANUP=PASS")
+
         print("EXP052_RESULT=PASS")
         return 0
     finally:

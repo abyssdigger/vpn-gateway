@@ -456,6 +456,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y iproute2 nftables
       - name: EXP-052 host-side server publication DNAT
+        env:
+          PYTHONPATH: design/NG3/code/python
         run: >-
-          sudo python3
+          sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-052 NG3 host publication DNAT/exp052_host_publication_dnat.py"
