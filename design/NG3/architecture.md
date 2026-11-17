@@ -468,40 +468,94 @@ intervention. Observable invariant loss is fail-closed and diagnosable; Release 
 promise forensic adoption or cleanup of arbitrary processes/namespace references left by
 manual damage.
 
-### 1.1.3. Dependent bounded-VPN lifecycle evidence gate
+### 1.1.3. Release-1 bounded VPN lifecycle through systemd
 
 **Implements:**
-- `VPNG0007-R7.R7.R1`
-- `VPNG0007-R7.R7.R1.R1`
+- `VPNG0007-R7.R7.R1`;
+- `VPNG0007-R7.R7.R1.R1`;
+- `VPNG0005-R5.R4`;
+- `VPNG0005-R5.R5`;
+- `VPNG0005-R5.R6.R2`;
+- `VPNG0005-R5.R6.R3`.
 
-The project must not infer a generic bounded-VPN lifecycle contract from namespace mechanics or
-from the existence of a plausible VPN launcher.
+**Constrained by:**
+- `VPNG0001-R1.R3.C1.C1`;
+- `VPNG0005-R5.C1`.
 
-The evidence order is strict:
+EXP-050 passed twice with the same OpenVPN 2.6.14 / systemd onboarding mechanism that passed
+EXP-049. The accepted first-release lifecycle boundary is therefore:
 
 ```text
-EXP-049 PASS on one concrete real integration
-    ->
-use that same implementation/version + onboarding mechanism
-    ->
-EXP-050 start/stop/restart + changed-config + aggressive-config lifecycle evidence
-    ->
-only then decide the bounded-VPN lifecycle/ownership contract
+administrator
+    -> owns VPN-specific configuration
+    -> prepares the distinct stack-specific VPN unit/instance/drop-in
+
+systemd
+    -> supervises the explicitly bound VPN process/cgroup
+    -> performs VPN service start/stop/restart
+    -> enforces BindsTo/After dependency ordering
+
+VPN-GATE
+    -> owns managed network domain and fail-closed policy
+    -> owns bounded integration-local transport admission
+    -> freshly observes/binds/reconciles each VPN endpoint generation
 ```
 
-EXP-049 has now passed with OpenVPN 2.6.14 through the Release-1 systemd
-`NetworkNamespacePath` onboarding mechanism, so EXP-050 is executable only with that same
-implementation and mechanism. A later failure in EXP-050 must be treated as lifecycle evidence,
-not bypassed by switching launch mechanisms.
+VPN-GATE does **not** introduce a generic VPN PID registry, process-tree scanner or process
+supervisor.
 
-EXP-050 must include VPN-specific configurations that attempt network-side effects inside the
-managed domain. Its purpose is not to predeclare those effects legal or illegal, but to
-establish where they execute, how they interact with VPN-GATE-owned policy, whether safety can
-be bypassed, and which behaviors must later become supported, rejected or documented.
+A normal administrator `systemctl stop/start/restart <stack-vpn-unit>` operates on that VPN
+without leaving the managed namespace. EXP-050 proved same-config restart and changed-config
+restart with fresh OpenVPN processes and fresh `vpn0` generations:
 
-This evidence gate adds no current product promise that VPN-GATE owns the VPN process
-lifecycle. That semantic decision remains intentionally downstream of the real-integration
-evidence.
+```text
+same-config:
+    vpn0 ifindex 2 -> ifindex 3
+
+changed VPN-specific config:
+    vpn0 ifindex 3 -> ifindex 4
+    tun-mtu 1500 -> 1400
+```
+
+After each generation change, NG3 used fresh authoritative observation, rebound the current
+endpoint, reconciled current route/RPDB/nft state and carried controlled payload without
+requiring the old process or interface generation.
+
+The supported deployment stop order is:
+
+```text
+ForwardingGate = DISABLED
+    ->
+stop managed-domain/controller systemd lifecycle anchor
+    ->
+BindsTo + reverse After ordering stops explicitly bound stack VPN unit(s)
+    ->
+confirm VPN unit inactive + old PID absent + cgroup empty + endpoint absent
+    ->
+run VPN-GATE owned-domain cleanup
+    ->
+confirm managed namespace + host boundary absent
+    ->
+release controller ownership
+```
+
+The current in-process `stop_controller_once(...)` remains intentionally smaller: it cleans
+VPN-GATE-owned managed-domain resources and does not enumerate or kill arbitrary VPN
+processes. The deployment/systemd layer is responsible for stopping the **explicitly bound**
+stack-specific VPN units before invoking/finalizing domain cleanup. This is now an accepted
+layering boundary rather than an unresolved ownership question.
+
+Aggressive OpenVPN evidence also closes the first-release configuration boundary. The
+supported OpenVPN shape uses `route-noexec` and does not elevate arbitrary user scripts with
+`script-security 2`. A test hook attempting route/RPDB/nft/sysctl mutation was not executed;
+OpenVPN failed visibly and systemd reported the failed service. Equivalent privileged hooks
+that deliberately bypass these restrictions are outside the supported integration contract
+and are treated as administrator/root intervention, not state VPN-GATE must silently adopt.
+
+EXP-050 evidence is retained in
+`EXP-050-result-20261117-systemd-openvpn-pass.md`. The lifecycle mechanism is accepted for
+Release 1; VPN-specific policy-neutral restrictions still require per-integration
+documentation/evidence.
 
 ## 1.2. Architecture-wide implementation requirements
 
@@ -5015,15 +5069,17 @@ VPN-GATE-owned managed forwarding domain remains connected to host traffic.
 VPN-specific configuration; it does **not** establish that the runtime lifecycle of a VPN
 process executing inside the managed domain must remain administrator-owned.
 
-The current bounded-stop implementation does not enumerate/kill an external VPN process
-because no real supported in-stack VPN lifecycle has yet passed the applicability/evidence
-sequence. This is a provisional implementation boundary, not a normative ownership rule.
+The in-process bounded-stop implementation deliberately does not enumerate or kill VPN
+processes. EXP-049/050 now establish the Release-1 deployment boundary instead: only
+administrator-prepared stack-specific VPN systemd units explicitly bound to the managed-domain
+lifecycle participate, and systemd supervises/stops their cgroups before VPN-GATE destroys the
+managed domain.
 
-A supported integration must first pass EXP-049 and then the dependent EXP-050 lifecycle
-experiment. Until that evidence exists, architecture must not claim either that VPN-GATE owns
-such process lifecycle or that administrator-only lifecycle is sufficient for managed-domain
-teardown. The current stop proof remains valid for the presently implemented VPN-GATE-owned
-resources only.
+The complete supported deployment stop therefore closes forwarding first, stops the
+managed-domain lifecycle anchor, confirms the bound VPN unit/cgroup and endpoint are gone, and
+only then completes `stop_controller_once(...)` managed-domain teardown. Arbitrary
+administrator processes that were not bound through this contract are neither adopted nor
+silently killed.
 
 The current bounded stop has no generic callback list, retry queue or cleanup registry. When
 future runtime Managers/Agents become executable, their independently required quiesce/release
