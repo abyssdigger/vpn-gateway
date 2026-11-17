@@ -85,7 +85,11 @@ class ControllerStopTests(unittest.TestCase):
                 side_effect=destroy,
             ),
         ):
-            result = stop_controller_once(session, object(), object())
+            result = stop_controller_once(
+                session,
+                SimpleNamespace(namespace="vg-test"),
+                object(),
+            )
 
         return result, session.lock, events
 
@@ -141,7 +145,11 @@ class ControllerStopTests(unittest.TestCase):
             patch("rou.controller_stop.destroy_managed_network_domain") as destroy,
         ):
             with self.assertRaisesRegex(ValueError, "still-acquired"):
-                stop_controller_once(session, object(), object())
+                stop_controller_once(
+                    session,
+                    SimpleNamespace(namespace="vg-test"),
+                    object(),
+                )
 
         converge.assert_not_called()
         destroy.assert_not_called()
