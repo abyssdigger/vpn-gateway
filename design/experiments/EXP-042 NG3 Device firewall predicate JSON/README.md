@@ -27,7 +27,9 @@ For an ordinary nft child chain, record exact JSON for:
 5. TCP destination port;
 6. UDP source port;
 7. UDP destination port;
-8. terminal `return` / `drop`.
+8. inclusive TCP port range;
+9. mixed exact/range TCP port set;
+10. terminal `return` / `drop`.
 
 The tested TCP/UDP/ICMP tokens are technical examples for lower JSON evidence. PASS does not
 make them an external parser whitelist.
@@ -49,12 +51,16 @@ drop
 
 meta l4proto icmp
 return
+
+tcp sport 1000-1003
+tcp dport { 80, 443, 8000-8007 }
+return
 ```
 
 ## Decision
 
-PASS may be used by a later pure compiler to build exact nft match expressions from already
-normalized internal predicate semantics.
+PASS may be used by the pure compiler to build exact nft match expressions from already
+normalized internal predicate semantics, including scalar/range/set port operands.
 
 PASS does not:
 
