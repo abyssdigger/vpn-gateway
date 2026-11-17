@@ -178,7 +178,33 @@ def prove_payload() -> None:
             "via", str(e49.INNER_ADDR.ip), "dev", e49.HOST_BOUNDARY,
         )
     )
-    assert e49.host_ping(e49.VPN_SERVER_ADDR)
+    result = e49.command(
+        ("ping", "-c", "2", "-W", "1", e49.VPN_SERVER_ADDR),
+        check=False,
+    )
+    if result.returncode != 0:
+        snapshot = {
+            "links": e49.command(
+                ("ip", "-n", e49.MANAGED, "-j", "-d", "link", "show"),
+                check=False,
+            ).stdout,
+            "routes": e49.command(
+                ("ip", "-n", e49.MANAGED, "-4", "route", "show", "table", "all"),
+                check=False,
+            ).stdout,
+            "rules": e49.command(
+                ("ip", "-n", e49.MANAGED, "-4", "rule", "show"),
+                check=False,
+            ).stdout,
+            "nft": e49.ns_command(
+                e49.MANAGED, "nft", "list", "ruleset", check=False
+            ).stdout,
+            "client_journal": e49.systemd_client_log()[-8000:],
+            "ping_stdout": result.stdout,
+            "ping_stderr": result.stderr,
+        }
+        print("EXP050_PAYLOAD_FAILURE_SNAPSHOT=" + json.dumps(snapshot))
+        raise AssertionError("controlled host payload did not traverse current VPN path")
 
 
 def socket_uses_fixed_port() -> bool:
