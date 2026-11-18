@@ -20,6 +20,7 @@ HOST_BOUNDARY = "vnga-host0"
 INNER_BOUNDARY = "vnga-inner0"
 INNER_ADDR = "198.19.255.2"
 HOST_ADDR = "198.19.255.1"
+STATUS_PATH = Path("/run/vpn-gate-alpha/status.json")
 
 SERVER_NS = "alpha-srv"
 SERVER_HOST = "alpha-srv-host"
@@ -92,6 +93,10 @@ def interface_exists(namespace, ifname):
         ("ip", "-n", namespace, "link", "show", "dev", ifname),
         check=False,
     ).returncode == 0
+
+
+def runtime_status():
+    return json.loads(STATUS_PATH.read_text(encoding="utf-8"))
 
 
 def host_ping(address):
@@ -394,6 +399,15 @@ def main():
         assert active(ALPHA_UNIT)
         assert Path(f"/run/netns/{MANAGED}").exists()
         assert interface_exists(MANAGED, INNER_BOUNDARY)
+        status = runtime_status()
+        assert status["readiness"] == "ready", status
+        assert status["blocking_problems"] == [], status
+        assert status["unknown_or_unconfirmed_fields"] == [], status
+        assert status["configured_intent"]["profiles"][0]["profile_id"] == "alpha", status
+        assert status["confirmed_effective_state"][0]["profile_id"] == "alpha", status
+        assert status["confirmed_effective_state"][0]["ordered_paths"] == [], status
+        assert status["availability_state"][0]["state"] == "disabled", status
+        print("EXP051_RUNTIME_STATUS_ZERO_PATH=PASS")
         print("EXP051_ALPHA_CONTROLLER_READY=PASS")
 
         # Server publication is a Device transport property and must be complete
@@ -488,6 +502,13 @@ def main():
                 ("ip", "-n", MANAGED, "-j", "link", "show", "dev", VPN_IF)
             ).stdout
         )[0]["ifindex"]
+        first_status = runtime_status()
+        assert first_status["readiness"] == "ready", first_status
+        first_paths = first_status["confirmed_effective_state"][0]["ordered_paths"]
+        assert len(first_paths) == 1, first_status
+        assert first_paths[0]["ifname"] == VPN_IF, first_status
+        assert first_paths[0]["ifindex"] == first_ifindex, first_status
+        print("EXP051_RUNTIME_STATUS_FIRST_PATH=PASS")
 
         systemctl("restart", VPN_UNIT)
         wait_until(
@@ -517,6 +538,14 @@ def main():
             "VPNG_ALPHA_RECONCILE status=reconciled"
         )
         assert reconcile_markers >= 2, final_alpha_journal
+        final_status = runtime_status()
+        assert final_status["readiness"] == "ready", final_status
+        final_paths = final_status["confirmed_effective_state"][0]["ordered_paths"]
+        assert len(final_paths) == 1, final_status
+        assert final_paths[0]["ifname"] == VPN_IF, final_status
+        assert final_paths[0]["ifindex"] == second_ifindex, final_status
+        assert final_paths[0]["ifindex"] != first_ifindex, final_status
+        print("EXP051_RUNTIME_STATUS_NEW_GENERATION=PASS")
         print(
             f"EXP051_MANAGER_RECONCILE_COUNT=PASS:{reconcile_markers}"
         )

@@ -28,7 +28,7 @@ import sys
 import threading
 from typing import Iterable
 
-from .binding import DeviceBindingState, project_device_bindings
+from .binding import DeviceBindingState, PathBinding, project_device_bindings
 from .controller_startup import (
     ControllerStartupStatus,
     start_controller_once,
@@ -97,10 +97,16 @@ from .payload_network_policy_desired import (
     PayloadNetworkPolicyDesiredState,
     build_payload_network_policy_desired_state,
 )
-from .payload_profile import build_payload_profile_requests
+from .payload_profile import PayloadProfileRequest, build_payload_profile_requests
 from .release1_config import Release1Config, parse_release1_config
 from .structural_policy_mutation import compare_structural_policy
 from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
+from .runtime_status import (
+    RuntimeReadiness,
+    RuntimeStatusAgent,
+    build_configured_intent_status,
+    write_runtime_status_json,
+)
 
 
 ALPHA_NAMESPACE = "vpn-gate-alpha"
@@ -109,6 +115,7 @@ ALPHA_INNER_INTERFACE = "vnga-inner0"
 ALPHA_HOST_ADDRESS = IPv4Interface("198.19.255.1/30")
 ALPHA_INNER_ADDRESS = IPv4Interface("198.19.255.2/30")
 ALPHA_RUNTIME_DIRECTORY = Path("/run/vpn-gate-alpha")
+ALPHA_STATUS_PATH = ALPHA_RUNTIME_DIRECTORY / "status.json"
 ALPHA_AUDIT_INTERVAL_SECONDS = 1.0
 
 
@@ -123,6 +130,8 @@ class AlphaPreparedPolicy:
     local_address: IPv4Address
     binding_state: DeviceBindingState
     config: Release1Config
+    last_bindings: tuple[PathBinding, ...] = ()
+    last_profiles: tuple[PayloadProfileRequest, ...] = ()
 
     @classmethod
     def from_text(
@@ -255,7 +264,7 @@ class AlphaPreparedPolicy:
             for internal_port in item.internal_ports.expanded()
         )
 
-        return build_payload_network_policy_desired_state(
+        desired = build_payload_network_policy_desired_state(
             profiles,
             layout,
             path_routes,
@@ -266,6 +275,9 @@ class AlphaPreparedPolicy:
             integration_intents,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
         )
+        self.last_bindings = projection.bindings
+        self.last_profiles = profiles
+        return desired
 
     def build_host_publication_desired(self) -> HostPublicationDesiredState:
         intents = []
@@ -579,6 +591,11 @@ def run_alpha_runtime(
 
         assert startup.session is not None
         prepared = holder["policy"]
+        status_agent = RuntimeStatusAgent(
+            build_configured_intent_status(prepared.config)
+        )
+        write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+
         host_publication_desired = prepared.build_host_publication_desired()
         host_publication_backend = LinuxHostPublicationBackend(runner)
         host_start = converge_host_publication_once(
@@ -595,6 +612,14 @@ def run_alpha_runtime(
                 domain_spec,
                 runner,
             )
+            status_agent.mark_unconfirmed(
+                readiness=RuntimeReadiness.FAILED,
+                problem=(
+                    host_start.diagnostic
+                    or "host publication convergence is not confirmed"
+                ),
+            )
+            write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
             _log(
                 "VPNG_ALPHA_START_FAILED",
                 (
@@ -610,6 +635,12 @@ def run_alpha_runtime(
                 and stopped.status is ControllerStopStatus.STOPPED
                 else 2
             )
+
+        status_agent.confirm_effective(
+            prepared.last_profiles,
+            prepared.last_bindings,
+        )
+        write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
 
         _log(
             "VPNG_ALPHA_READY",
@@ -631,6 +662,20 @@ def run_alpha_runtime(
                 domain_spec,
                 runner,
             )
+            if result.ready:
+                status_agent.confirm_effective(
+                    prepared.last_profiles,
+                    prepared.last_bindings,
+                )
+            else:
+                status_agent.mark_unconfirmed(
+                    readiness=RuntimeReadiness.DEGRADED,
+                    problem=(
+                        result.diagnostic
+                        or f"alpha reconcile failed: {result.status.value}"
+                    ),
+                )
+            write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
             if (
                 result.status is not last_status
                 or result.diagnostic != last_diagnostic
@@ -648,6 +693,8 @@ def run_alpha_runtime(
                 last_status = result.status
                 last_diagnostic = result.diagnostic
 
+        status_agent.mark_stopping()
+        write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
         _notify_systemd("STOPPING=1\nSTATUS=VPN-GATE alpha stopping")
         host_cleanup = converge_host_publication_once(
             LinuxHostPublicationBackend(runner),
@@ -658,6 +705,21 @@ def run_alpha_runtime(
             domain_spec,
             runner,
         )
+        if (
+            host_cleanup.confirmed
+            and stopped.status is ControllerStopStatus.STOPPED
+        ):
+            status_agent.mark_stopped()
+        else:
+            status_agent.mark_unconfirmed(
+                readiness=RuntimeReadiness.FAILED,
+                problem=(
+                    "shutdown cleanup is not confirmed: "
+                    f"host={host_cleanup.status.value}, "
+                    f"managed={stopped.status.value}"
+                ),
+            )
+        write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
         _log(
             "VPNG_ALPHA_STOP",
             (
