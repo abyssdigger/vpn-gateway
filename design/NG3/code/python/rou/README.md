@@ -8,6 +8,7 @@ Implemented:
 - canonical IDs, explicit `enabled`, strict IPv4 destinations and selector/quota validation;
 - Release 1 inbound/bidirectional configured-capacity validation;
 - authoritative `ip -j link show` interface identity parsing;
+- stateless Linux `VPNPathAdapter` runtime observation that obtains one fresh complete managed-netns inventory per call, requires the verified host-boundary generation when supplied, and is used by controller startup plus alpha periodic reconcile;
 - concrete endpoint identity as `(ifname, ifindex)`;
 - pure stable-slot Device binding projection with bounded waiting-candidate order;
 - delayed waiting promotion only after a removal projection can become committed;
