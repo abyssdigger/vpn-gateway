@@ -134,7 +134,6 @@ class ControllerStartupResult:
     preflight: ManagedNetworkDomainPreflightResult | None = None
     domain: ManagedNetworkDomainEnsureResult | None = None
     boundary_contribution: ControllerBoundaryContribution | None = None
-    boundary_contribution: ControllerBoundaryContribution | None = None
     activation: NetworkPolicyActivationResult | None = None
     failure_containment: ForwardingGateExecutionResult | None = None
     failure_status: ControllerStartupStatus | None = None
@@ -200,6 +199,7 @@ def start_controller_once(
 
     preflight: ManagedNetworkDomainPreflightResult | None = None
     domain: ManagedNetworkDomainEnsureResult | None = None
+    boundary_contribution: ControllerBoundaryContribution | None = None
 
     if requested():
         lock.release()
