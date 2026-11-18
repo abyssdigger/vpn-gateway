@@ -2,7 +2,7 @@
 
 ## Status
 
-PREPARED — evidence pending.
+COMPLETE — **PASS**. See `EXP-064-result-20261118.md`.
 
 ## Context
 
