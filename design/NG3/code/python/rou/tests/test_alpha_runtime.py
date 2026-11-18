@@ -142,17 +142,17 @@ remote_port = 11940
                 local_address=IPv4Address("198.19.255.2"),
             )
 
-        with self.assertRaisesRegex(Exception, r"requests \+route-return"):
-            AlphaPreparedPolicy.from_text(
-                CONFIG.replace(
-                    'direction = "outbound"',
-                    'direction = "inbound+route-return"',
-                ).replace(
-                    'use_outbound_nat = false\n',
-                    "",
-                ),
-                local_address=IPv4Address("198.19.255.2"),
-            )
+        route_return = AlphaPreparedPolicy.from_text(
+            CONFIG.replace(
+                'direction = "outbound"',
+                'direction = "inbound+route-return"',
+            ).replace(
+                'use_outbound_nat = false\n',
+                "",
+            ),
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        self.assertTrue(route_return.config.profiles["alpha"].route_return)
 
     def test_alpha_materializes_canonical_server_publication_both_halves(self):
         replacement = (
