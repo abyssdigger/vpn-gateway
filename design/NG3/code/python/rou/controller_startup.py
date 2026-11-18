@@ -481,9 +481,9 @@ def start_controller_once(
                     retain_lock=cleanup_error is not None,
                 )
 
-    interrupted = interrupted_stop("boundary contribution convergence")
-    if interrupted is not None:
-        return interrupted
+        interrupted = interrupted_stop("boundary contribution convergence")
+        if interrupted is not None:
+            return interrupted
 
     gate = LinuxForwardingGateBackend(
         runner,
