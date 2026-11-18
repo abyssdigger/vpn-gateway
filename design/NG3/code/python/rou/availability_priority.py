@@ -39,7 +39,10 @@ def calculate_effective_path_order(
         raise AvailabilityPriorityError(
             "reserve Device set contains duplicate Device IDs"
         )
-    if any(not isinstance(device_id, str) or not device_id for device_id in reserve_input):
+    if any(
+        not isinstance(device_id, str) or not device_id
+        for device_id in reserve_input
+    ):
         raise AvailabilityPriorityError(
             "reserve Device IDs must be non-empty strings"
         )
