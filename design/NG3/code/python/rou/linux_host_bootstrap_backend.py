@@ -279,13 +279,17 @@ def _observe_rules(rows,allocation,desired):
         priority=_decimal(row.get("priority"))
         if priority not in reserved_priorities:
             continue
-        if _decimal(row.get("protocol"))!=allocation.rule_protocol:
-            conflicts.append(f"foreign rule occupies reserved host bootstrap priority {priority}")
-            continue
-        owned.append(priority)
+        protocol=_decimal(row.get("protocol"))
         expected_signature=expected.get(priority)
-        if expected_signature is not None and _rule_signature(row)==expected_signature:
-            matching.append(priority)
+        if protocol==allocation.rule_protocol:
+            owned.append(priority)
+            if expected_signature is not None and _rule_signature(row)==expected_signature:
+                matching.append(priority)
+            continue
+        if expected_signature is not None:
+            conflicts.append(
+                f"foreign rule occupies desired host bootstrap priority {priority}"
+            )
     return owned,matching,conflicts
 
 
