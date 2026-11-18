@@ -21,6 +21,7 @@ Current experiment directories:
 | EXP-055 | composite host-boundary actuation |
 | EXP-056 | host-ingress bootstrap bypass without main-table capture |
 | EXP-057 | nft-marked host bootstrap without main-table routes |
+| EXP-058 | dedicated bootstrap table preserving ordinary main specificity |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
