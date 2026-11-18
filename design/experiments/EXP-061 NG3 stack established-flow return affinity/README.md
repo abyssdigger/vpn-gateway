@@ -2,7 +2,7 @@
 
 ## Status
 
-PREPARED — evidence pending.
+PASS — see `EXP-061-result-20261118.md`.
 
 ## Requirements
 
