@@ -76,7 +76,12 @@ boundaries:
 - Profile ordinary-side `+snat` physical materialization;
 - availability probe execution/runtime assembly;
 - Netlink/poll scheduling and full VPNPathAdapter runtime collection;
-- user-visible status presentation and production packaging.
+- stable production packaging/version lifecycle and a stable external status API.
+
+Live current-state presentation is no longer one of these gaps: the executable alpha publishes
+the accepted `RuntimeStatusAgent` projection through its documented current-only JSON surface.
+That alpha surface remains replaceable interface machinery rather than the final stable
+Release-1 operator API.
 
 The ordinary Release-1 Device/Profile grammar itself is no longer unresolved.
 
