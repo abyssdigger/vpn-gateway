@@ -265,6 +265,89 @@ class NetworkPolicyActivationTests(unittest.TestCase):
         self.assertTrue(result.failure_containment.confirmed)
         self.assertIn("synthetic observation failure", result.diagnostic)
 
+
+    def test_stack_affinity_converges_before_structural_transaction(self):
+        gate = FakeGate()
+        scaffold = FakeScaffold(observation(scaffold_rows()))
+        events = []
+        affinity = Mock()
+        affinity.confirmed = True
+        affinity.diagnostic = None
+
+        def do_affinity(*args):
+            events.append("affinity")
+            return affinity
+
+        def do_structural(*args):
+            events.append("structural")
+            gate.state = ForwardingGateState.ENABLED
+            return confirmed_transaction()
+
+        with (
+            patch(
+                "rou.network_policy_activation.converge_stack_return_affinity_once",
+                side_effect=do_affinity,
+            ) as affinity_mock,
+            patch(
+                "rou.network_policy_activation.converge_structural_policy",
+                side_effect=do_structural,
+            ) as structural,
+        ):
+            result = activate_network_policy(
+                gate,
+                scaffold,
+                object(),
+                object(),
+                object(),
+                object(),
+                object(),
+                object(),
+            )
+
+        self.assertEqual(result.status, NetworkPolicyActivationStatus.READY)
+        self.assertEqual(events, ["affinity", "structural"])
+        affinity_mock.assert_called_once()
+        structural.assert_called_once()
+        self.assertIs(result.stack_return_affinity, affinity)
+
+    def test_stack_affinity_failure_blocks_structural_and_remains_contained(self):
+        gate = FakeGate()
+        scaffold = FakeScaffold(observation(scaffold_rows()))
+        affinity = Mock()
+        affinity.confirmed = False
+        affinity.diagnostic = "synthetic affinity conflict"
+
+        with (
+            patch(
+                "rou.network_policy_activation.converge_stack_return_affinity_once",
+                return_value=affinity,
+            ),
+            patch(
+                "rou.network_policy_activation.converge_structural_policy",
+            ) as structural,
+        ):
+            result = activate_network_policy(
+                gate,
+                scaffold,
+                object(),
+                object(),
+                object(),
+                object(),
+                object(),
+                object(),
+            )
+
+        self.assertEqual(
+            result.status,
+            NetworkPolicyActivationStatus.STACK_RETURN_AFFINITY_FAILED,
+        )
+        self.assertFalse(result.ready)
+        structural.assert_not_called()
+        self.assertTrue(result.failure_containment.confirmed)
+        self.assertEqual(gate.state, ForwardingGateState.DISABLED)
+        self.assertIn("synthetic affinity conflict", result.diagnostic)
+
+
     def test_structural_failure_is_not_retried_and_is_contained(self):
         gate = FakeGate()
         scaffold = FakeScaffold(observation(scaffold_rows()))
