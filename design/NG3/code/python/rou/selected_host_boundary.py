@@ -10,6 +10,7 @@ The old main-table bootstrap route representation is deliberately not used.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import json
 
 from .controller_boundary_contribution import ControllerBoundaryContribution
 from .host_boundary_route_convergence import (
@@ -27,6 +28,8 @@ from .linux_host_bootstrap_backend import (
 )
 from .linux_host_boundary_policy import (
     HostBoundaryLinuxDesired,
+    HostBoundaryReturnRouteSpec,
+    HostBoundaryRuleSpec,
     build_linux_host_boundary_desired,
 )
 from .linux_host_boundary_routes import LinuxHostBoundaryRouteBackend
@@ -48,6 +51,12 @@ from .linux_nft_scaffold import NftScriptRunner
 class SelectedHostBoundaryDesired:
     return_owner: HostBoundaryLinuxDesired
     bootstrap_owner: HostBootstrapLinuxDesired
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedHostBoundaryObservation:
+    exact: bool
+    conflicts: tuple[str, ...]
 
 
 def build_selected_host_boundary_desired(
@@ -95,9 +104,53 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
     bootstrap_backend: LinuxHostBootstrapBackend
     desired: SelectedHostBoundaryDesired
 
+    def observe(self) -> SelectedHostBoundaryObservation:
+        conflicts: list[str] = []
+
+        bootstrap = self.bootstrap_backend.observe(self.desired.bootstrap_owner)
+        conflicts.extend(
+            f"bootstrap: {item}" for item in bootstrap.conflicts
+        )
+
+        nft = self.return_nft_backend.observe(
+            self.desired.return_owner.return_nft
+        )
+        conflicts.extend(f"return nft: {item}" for item in nft.conflicts)
+
+        route_exact, route_conflicts = _observe_reserved_return_routes(
+            self.route_backend,
+            self.desired.return_owner.return_route,
+        )
+        rule_exact, rule_conflicts = _observe_reserved_return_rules(
+            self.route_backend,
+            self.desired.return_owner.return_rule,
+        )
+        conflicts.extend(route_conflicts)
+        conflicts.extend(rule_conflicts)
+
+        return SelectedHostBoundaryObservation(
+            exact=(
+                not conflicts
+                and bootstrap.exact
+                and nft.exact
+                and route_exact
+                and rule_exact
+            ),
+            conflicts=tuple(conflicts),
+        )
+
     def converge(self) -> None:
         if not isinstance(self.desired, SelectedHostBoundaryDesired):
             raise ValueError("desired must be SelectedHostBoundaryDesired")
+
+        initial = self.observe()
+        if initial.conflicts:
+            raise RuntimeError(
+                "selected host-boundary owner conflict: "
+                + "; ".join(initial.conflicts)
+            )
+        if initial.exact:
+            return
 
         # Stateful-return dependencies are dormant until the packet mark exists.
         prepare_host_boundary_route_dependencies_once(
@@ -113,6 +166,16 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
             self.bootstrap_backend,
             self.desired.bootstrap_owner,
         )
+        final = self.observe()
+        if final.conflicts:
+            raise RuntimeError(
+                "selected host-boundary postcondition conflict: "
+                + "; ".join(final.conflicts)
+            )
+        if not final.exact:
+            raise RuntimeError(
+                "selected host-boundary fresh postcondition is not exact"
+            )
 
     def cleanup(self) -> None:
         errors: list[str] = []
@@ -169,3 +232,114 @@ def build_selected_linux_host_boundary_contribution(
         bootstrap_backend=bootstrap_backend,
         desired=desired,
     )
+
+
+def _observe_reserved_return_routes(
+    backend: LinuxHostBoundaryRouteBackend,
+    desired: HostBoundaryReturnRouteSpec | None,
+) -> tuple[bool, list[str]]:
+    raw = backend.runner.run(
+        backend._cmd("ip", "-j", "-4", "route", "show", "table", "all")
+    )
+    try:
+        rows = json.loads(raw)
+    except (TypeError, ValueError):
+        raise RuntimeError("invalid host return route JSON") from None
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise RuntimeError("host return route JSON must be an array of objects")
+
+    table = NG3_HOST_BOUNDARY_LINUX_ALLOCATION.return_table
+    scoped = [
+        row for row in rows
+        if _decimal(row.get("table")) == table
+    ]
+    if desired is None:
+        if scoped:
+            return False, [
+                "reserved host return table is occupied while no return route is desired"
+            ]
+        return True, []
+
+    if len(scoped) != 1:
+        return False, [
+            "reserved host return table does not contain exactly one desired owner route"
+        ]
+    row = scoped[0]
+    exact = (
+        row.get("dst", "default") == "default"
+        and row.get("type", "unicast") == "unicast"
+        and row.get("dev") == desired.interface
+        and row.get("gateway") == str(desired.via)
+        and _decimal(row.get("protocol")) == desired.protocol
+        and row.get("metric") in (None, 0, "0")
+    )
+    if not exact:
+        return False, ["reserved host return route differs from exact desired owner"]
+    return True, []
+
+
+def _observe_reserved_return_rules(
+    backend: LinuxHostBoundaryRouteBackend,
+    desired: HostBoundaryRuleSpec | None,
+) -> tuple[bool, list[str]]:
+    raw = backend.runner.run(
+        backend._cmd("ip", "-j", "-4", "rule", "show")
+    )
+    try:
+        rows = json.loads(raw)
+    except (TypeError, ValueError):
+        raise RuntimeError("invalid host return rule JSON") from None
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise RuntimeError("host return rule JSON must be an array of objects")
+
+    priority = NG3_HOST_BOUNDARY_LINUX_ALLOCATION.return_rule_priority
+    scoped = [
+        row for row in rows
+        if _decimal(row.get("priority")) == priority
+    ]
+    if desired is None:
+        if scoped:
+            return False, [
+                "reserved host return RPDB priority is occupied while no return rule is desired"
+            ]
+        return True, []
+
+    if len(scoped) != 1:
+        return False, [
+            "reserved host return RPDB priority does not contain exactly one desired owner rule"
+        ]
+    row = scoped[0]
+    fwmark = _number(row.get("fwmark"))
+    mask = row.get("fwmask")
+    exact = (
+        row.get("src") in (None, "all")
+        and _decimal(row.get("table")) == desired.table
+        and fwmark == desired.mark
+        and (mask is None or _number(mask) == 0xFFFFFFFF)
+        and all(
+            key not in row
+            for key in ("iif", "oif", "dst", "sport", "dport", "ipproto")
+        )
+    )
+    if not exact:
+        return False, ["reserved host return RPDB rule differs from exact desired owner"]
+    return True, []
+
+
+def _decimal(value: object) -> int | None:
+    if type(value) is int:
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
+def _number(value: object) -> int | None:
+    if type(value) is int:
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value, 0)
+        except ValueError:
+            return None
+    return None
