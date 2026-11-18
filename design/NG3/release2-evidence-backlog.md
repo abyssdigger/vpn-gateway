@@ -87,8 +87,8 @@ architecture consequences:
 
 # 3. EXP-026 — probe-class conntrack cleanup
 
-**Role for Release 2:** supporting runtime/probe-generation evidence; not a substitute for
-EXP-014.
+**Role for Release 2:** optional supporting runtime/probe-generation hardening evidence; not a
+substitute for payload flow-affinity evidence and not a Release-1 dependency.
 
 Current status:
 
@@ -115,21 +115,10 @@ It does **not** prove:
 - remote-initiated return-path correctness;
 - general conntrack cleanup policy for payload flows.
 
-## Result slot
+## Optional future result slot
 
-After Debian 13 confirmation, record here:
-
-```text
-environment:
-commit:
-result:
-cleanup selector:
-probe entries removed:
-unrelated entries preserved:
-post-cleanup generation behavior:
-scope limitations:
-Release 2 consequence:
-```
+If a future release re-enters this mechanism and chooses to obtain Debian 13 target evidence,
+record the result here. No target run is currently required.
 
 # 4. Evidence separation rule
 
@@ -152,10 +141,10 @@ A PASS of EXP-014 cannot by itself close probe-generation cleanup.
 Release 1 remains valid regardless of the future outcome of EXP-014 because unsupported
 multi-path inbound/bidirectional configuration is rejected at normalization.
 
-Release 1 may also ship without Debian 13 confirmation of EXP-026 unless the selected
-production ICMP implementation specifically depends on EXP-024-style conntrack-carried probe
-identity plus EXP-026 remediation. In that case the existing implementation evidence gate
-still applies.
+Release 1 does not depend on Debian 13 confirmation or production adoption of EXP-026.
+The accepted probe implementation must instead prove current subject/path isolation and
+non-interference with payload routing/return affinity. EXP-026 may be re-entered if later
+evidence demonstrates material harm from stale probe conntrack identity.
 
 # 6. Release 2 promotion rule
 
