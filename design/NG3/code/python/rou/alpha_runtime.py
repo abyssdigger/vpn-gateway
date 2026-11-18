@@ -52,7 +52,6 @@ from .forwarding_gate import (
 )
 from .instance_lock import InstanceLockSpec
 from .interface_identity import InterfaceIdentity
-from .interface_inventory import parse_ip_link_inventory
 from .host_publication_policy import (
     HostPublicationDesiredState,
     HostPublicationMappingIntent,
@@ -60,6 +59,7 @@ from .host_publication_policy import (
     build_host_publication_desired,
 )
 from .linux_forwarding_gate import LinuxForwardingGateBackend
+from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .linux_host_publication import (
     HostPublicationConvergenceResult,
     HostPublicationConvergenceStatus,
@@ -367,18 +367,12 @@ def reconcile_alpha_payload_once(
         )
 
     try:
-        interfaces = parse_ip_link_inventory(
-            runner.run(
-                (
-                    "ip",
-                    "-n",
-                    domain_spec.namespace,
-                    "-j",
-                    "link",
-                    "show",
-                )
-            )
-        )
+        interfaces = LinuxVpnPathAdapter(
+            runner,
+            domain_spec.namespace,
+        ).observe_interfaces(
+            required_host_boundary=verification.host_boundary,
+        ).interfaces
         desired = prepared.build_current(
             verification.host_boundary,
             interfaces,
