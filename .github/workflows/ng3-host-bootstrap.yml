@@ -13,6 +13,7 @@ on:
       - "design/experiments/EXP-057 NG3 nft marked host bootstrap/**"
       - "design/experiments/EXP-058 NG3 bootstrap table main specificity/**"
       - "design/experiments/EXP-059 NG3 paired RPDB bootstrap/**"
+      - "design/experiments/EXP-060 NG3 selected host bootstrap backend/**"
   pull_request:
     branches: [ main ]
     paths:
@@ -27,23 +28,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - name: Install Linux networking tools
         run: |
           sudo apt-get update
           sudo apt-get install -y iproute2 iputils-ping nftables
-      - name: EXP-059 paired RPDB bootstrap
+      - name: Compile selected host-bootstrap code
+        run: python3 -m compileall -q design/NG3/code/python/rou
+      - name: EXP-059 paired RPDB mechanism
         run: >-
           sudo python3
           "design/experiments/EXP-059 NG3 paired RPDB bootstrap/exp059_paired_rpdb_bootstrap.py"
-      - name: EXP-056 host-ingress bootstrap bypass
+      - name: EXP-060 selected backend end to end
+        env:
+          PYTHONPATH: design/NG3/code/python
         run: >-
-          sudo python3
-          "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/exp056_host_ingress_bypass.py"
-      - name: EXP-058 bootstrap table preserves main specificity
-        run: >-
-          sudo python3
-          "design/experiments/EXP-058 NG3 bootstrap table main specificity/exp058_bootstrap_main_specificity.py"
-      - name: EXP-057 nft-marked host bootstrap
-        run: >-
-          sudo python3
-          "design/experiments/EXP-057 NG3 nft marked host bootstrap/exp057_nft_marked_bootstrap.py"
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-060 NG3 selected host bootstrap backend/exp060_selected_host_bootstrap.py"
