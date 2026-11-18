@@ -103,7 +103,7 @@ def setup():
 
     # Host-local evidence target is one VPN-GATE host-boundary address.
     ns(
-        REMOTES[1],"ip","route","add",LANE_NET[0][0]+"/32",
+        REMOTES[1],"ip","route","add",LANE_NET[1][0]+"/32",
         "via",PATH_STACK_IP[1],"dev",PATH_REMOTE[1],"src",REMOTE_IP[1]
     )
 
@@ -330,10 +330,10 @@ def main():
         servers.remove(lan)
 
         # Host-local destination for NAT-enabled stateful class: no gateway NAT applies.
-        host_local=start_server(HOST,LANE_NET[0][0],18642,1)
+        host_local=start_server(HOST,LANE_NET[1][0],18642,1)
         servers.append(host_local)
         before_local=counter("exp064-nat-1")
-        do_client(1,LANE_NET[0][0],18642,"LOCAL")
+        do_client(1,LANE_NET[1][0],18642,"LOCAL")
         observed=peer(host_local)
         after_local=counter("exp064-nat-1")
         if observed!=REMOTE_IP[1] or after_local!=before_local:
