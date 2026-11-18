@@ -23,7 +23,8 @@ O_IF, S_O = "e62o", "e62so"
 
 REMOTE = "10.0.0.2"
 ORD_IP = "192.0.2.2"
-PORT = 24620
+CONTROL_PORT = 24620
+AFFINITY_PORT = 24621
 PROFILE_TABLE = "2062"
 PIN_TABLE = "2162"
 PROFILE_RULE_PRIO = "4062"
@@ -95,7 +96,8 @@ def setup():
 table ip exp062_observe {{
   chain forward {{
     type filter hook forward priority filter; policy accept;
-    oifname "{S_A1}" ip daddr 10.0.0.0/16 counter comment "exp062-a1-remote"
+    oifname "{S_A1}" ip daddr 10.0.0.0/16 tcp sport {CONTROL_PORT} counter comment "exp062-a1-control"
+    oifname "{S_A1}" ip daddr 10.0.0.0/16 tcp sport {AFFINITY_PORT} counter comment "exp062-a1-affinity"
   }}
 }}
 """
@@ -125,21 +127,21 @@ def flush_conntrack():
     ns(STACK, "conntrack", "-F", check=False)
 
 
-def a1_remote_packets() -> int:
+def a1_remote_packets(comment: str) -> int:
     payload = json.loads(
         ns(STACK, "nft", "-j", "list", "table", "ip", "exp062_observe").stdout
     )
     packets = []
     for item in payload.get("nftables", []):
         rule = item.get("rule") if isinstance(item, dict) else None
-        if not isinstance(rule, dict) or rule.get("comment") != "exp062-a1-remote":
+        if not isinstance(rule, dict) or rule.get("comment") != comment:
             continue
         for expr in rule.get("expr", []):
             counter = expr.get("counter") if isinstance(expr, dict) else None
             if isinstance(counter, dict) and type(counter.get("packets")) is int:
                 packets.append(counter["packets"])
     if len(packets) != 1:
-        raise AssertionError(f"unexpected A1 observer state: {payload!r}")
+        raise AssertionError(f"unexpected A1 observer state for {comment}: {payload!r}")
     return packets[0]
 
 
@@ -174,7 +176,7 @@ SERVER = r"""
 import socket,sys
 s=socket.socket()
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-s.bind(("192.0.2.2", 24620))
+s.bind(("192.0.2.2", int(sys.argv[1])))
 s.listen(1)
 c,_=s.accept()
 c.settimeout(5)
@@ -197,7 +199,7 @@ import socket,sys
 s=socket.socket()
 s.settimeout(2)
 s.bind(("10.0.0.2",0))
-s.connect(("192.0.2.2",24620))
+s.connect(("192.0.2.2",int(sys.argv[1])))
 s.sendall(b"A")
 assert s.recv(1)==b"A"
 print("FIRST_OK", flush=True)
@@ -219,9 +221,9 @@ s.close()
 """
 
 
-def start_server():
+def start_server(port: int):
     return subprocess.Popen(
-        ("ip", "netns", "exec", ORD, sys.executable, "-c", SERVER),
+        ("ip", "netns", "exec", ORD, sys.executable, "-c", SERVER, str(port)),
         text=True,
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
@@ -230,9 +232,9 @@ def start_server():
     )
 
 
-def start_client():
+def start_client(port: int):
     return subprocess.Popen(
-        ("ip", "netns", "exec", A2, sys.executable, "-c", CLIENT),
+        ("ip", "netns", "exec", A2, sys.executable, "-c", CLIENT, str(port)),
         text=True,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -257,9 +259,9 @@ def run_control():
     remove_affinity()
     flush_conntrack()
     prefer_a2()
-    server = start_server()
+    server = start_server(CONTROL_PORT)
     time.sleep(0.1)
-    client = start_client()
+    client = start_client(CONTROL_PORT)
     try:
         first = read_line(client)
         if first != "FIRST_OK":
@@ -267,14 +269,14 @@ def run_control():
         print("EXP062_INITIAL_A2_FLOW=PASS")
 
         prefer_a1()
-        a1_before = a1_remote_packets()
+        a1_before = a1_remote_packets("exp062-a1-control")
         assert client.stdin is not None
         client.stdin.write("\n")
         client.stdin.flush()
         second = read_line(client)
         if second != "SECOND_FAIL":
             raise AssertionError(f"control flow unexpectedly survived preference switch: {second}")
-        a1_after = a1_remote_packets()
+        a1_after = a1_remote_packets("exp062-a1-control")
         if a1_after <= a1_before:
             raise AssertionError("control reply failed without any A1 remote-bound egress")
         print("EXP062_CONTROL_PREFERENCE_SWITCH_BREAKS_FLOW=PASS")
@@ -295,9 +297,9 @@ def run_affinity():
         raise AssertionError(f"marked lookup did not select A2: {marked!r}")
     print("EXP062_MARKED_LOOKUP_SELECTS_A2=PASS")
 
-    server = start_server()
+    server = start_server(AFFINITY_PORT)
     time.sleep(0.1)
-    client = start_client()
+    client = start_client(AFFINITY_PORT)
     try:
         first = read_line(client)
         if first != "FIRST_OK":
@@ -305,13 +307,13 @@ def run_affinity():
 
         prefer_a1()
         assert client.stdin is not None
-        a1_before_affinity = a1_remote_packets()
+        a1_before_affinity = a1_remote_packets("exp062-a1-affinity")
         client.stdin.write("\n")
         client.stdin.flush()
         second = read_line(client)
         if second != "SECOND_OK":
             raise AssertionError(f"affinity flow did not survive preference switch: {second}")
-        a1_after_affinity = a1_remote_packets()
+        a1_after_affinity = a1_remote_packets("exp062-a1-affinity")
         if a1_after_affinity != a1_before_affinity:
             raise AssertionError("affinity reply leaked through currently preferred A1")
         print("EXP062_AFFINITY_SURVIVES_PREFERENCE_SWITCH=PASS")
@@ -320,7 +322,7 @@ def run_affinity():
         # path unusable, then have the ordinary-side server generate a new packet
         # on that same flow; no new ingress packet is required from A2.
         ns(STACK, "ip", "link", "set", S_A2, "down")
-        a1_before_loss = a1_remote_packets()
+        a1_before_loss = a1_remote_packets("exp062-a1-affinity")
         client.stdin.write("\n")
         client.stdin.flush()
         assert server.stdin is not None
@@ -329,7 +331,7 @@ def run_affinity():
         third = read_line(client)
         if third != "THIRD_FAIL":
             raise AssertionError(f"pinned-path loss unexpectedly delivered server push: {third}")
-        a1_after_loss = a1_remote_packets()
+        a1_after_loss = a1_remote_packets("exp062-a1-affinity")
         if a1_after_loss != a1_before_loss:
             raise AssertionError("pinned-path loss fell through to alternate A1")
         print("EXP062_PINNED_PATH_LOSS_FAILS_CLOSED=PASS")
