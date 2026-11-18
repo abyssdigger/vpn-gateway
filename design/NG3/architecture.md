@@ -2010,6 +2010,19 @@ forwarded flow may be routed by the newly preferred metric. EXP-062's control ph
 demonstrated this generic Linux behavior: changing current preference without concrete-path
 affinity can break an established TCP exchange even though the original path still exists.
 
+The danger is not the route change as an abstract event; it is that different allowed paths
+need not be data-plane equivalent. A concrete current example is Device-owned outbound NAT:
+one path may require `MASQUERADE` while another path may require `NONE`, and the lower NAT
+owner is compiled against the exact egress endpoint. Paths may also differ in source-address,
+remote stateful firewall/NAT and tunnel-side semantics. Therefore a mid-flow route change can
+change the packet state observed by the remote side even when the destination remains
+reachable through both paths.
+
+Release 1 deliberately does not try to prove path-equivalence dynamically. Preserving the
+already selected live logical path is the smaller and more reliable invariant. A future
+optimization may permit migration only if it has separate evidence that the old and new paths
+are observationally equivalent for that flow at every relevant policy/transformation boundary.
+
 Therefore production availability-driven priority changes for outbound multi-path Profiles
 remain gated until the managed stack can preserve the concrete logical path selected by the
 flow's first routed packets.
