@@ -120,7 +120,7 @@ def main() -> int:
         backend.cleanup_owned()
         runner.run_script(
             ("ip", "netns", "exec", NS, "nft", "-f", "-"),
-            "table ip vpn_gate_return_affinity { comment \"foreign\" }\n",
+            "table ip vpn_gate_return_affinity {\n  comment \"foreign\"\n}\n",
         )
         conflict = backend.observe(desired)
         assert conflict.status is StackReturnAffinityOwnerStatus.CONFLICT
