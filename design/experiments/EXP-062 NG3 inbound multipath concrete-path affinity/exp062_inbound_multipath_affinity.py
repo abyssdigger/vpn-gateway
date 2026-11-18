@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import select
 import subprocess
@@ -110,6 +111,21 @@ def prefer_a1():
 
 def flush_conntrack():
     ns(STACK, "conntrack", "-F", check=False)
+
+
+def tx_packets(interface: str) -> int:
+    payload = json.loads(
+        ns(STACK, "ip", "-s", "-j", "link", "show", "dev", interface).stdout
+    )
+    if not isinstance(payload, list) or len(payload) != 1:
+        raise AssertionError(f"unexpected link stats payload for {interface}: {payload!r}")
+    stats = payload[0].get("stats64") or payload[0].get("stats")
+    if not isinstance(stats, dict):
+        raise AssertionError(f"missing link stats for {interface}: {payload!r}")
+    tx = stats.get("tx")
+    if not isinstance(tx, dict) or type(tx.get("packets")) is not int:
+        raise AssertionError(f"missing tx packet counter for {interface}: {payload!r}")
+    return tx["packets"]
 
 
 def install_affinity():
@@ -227,12 +243,16 @@ def run_control(server):
         print("EXP062_INITIAL_A2_FLOW=PASS")
 
         prefer_a1()
+        a1_before = tx_packets(S_A1)
         assert client.stdin is not None
         client.stdin.write("\n")
         client.stdin.flush()
         second = read_line(client)
         if second != "SECOND_FAIL":
             raise AssertionError(f"control flow unexpectedly survived preference switch: {second}")
+        a1_after = tx_packets(S_A1)
+        if a1_after <= a1_before:
+            raise AssertionError("control reply failed without any A1 egress")
         print("EXP062_CONTROL_PREFERENCE_SWITCH_BREAKS_FLOW=PASS")
         client.stdin.write("\n")
         client.stdin.flush()
@@ -260,20 +280,28 @@ def run_affinity(server):
 
         prefer_a1()
         assert client.stdin is not None
+        a1_before_affinity = tx_packets(S_A1)
         client.stdin.write("\n")
         client.stdin.flush()
         second = read_line(client)
         if second != "SECOND_OK":
             raise AssertionError(f"affinity flow did not survive preference switch: {second}")
+        a1_after_affinity = tx_packets(S_A1)
+        if a1_after_affinity != a1_before_affinity:
+            raise AssertionError("affinity reply leaked through currently preferred A1")
         print("EXP062_AFFINITY_SURVIVES_PREFERENCE_SWITCH=PASS")
 
         # Remove only the pinned concrete path. A1 remains up and preferred.
         ns(STACK, "ip", "link", "set", S_A2, "down")
+        a1_before_loss = tx_packets(S_A1)
         client.stdin.write("\n")
         client.stdin.flush()
         third = read_line(client)
         if third != "THIRD_FAIL":
             raise AssertionError(f"pinned-path loss silently migrated flow: {third}")
+        a1_after_loss = tx_packets(S_A1)
+        if a1_after_loss != a1_before_loss:
+            raise AssertionError("pinned-path loss fell through to alternate A1")
         print("EXP062_PINNED_PATH_LOSS_FAILS_CLOSED=PASS")
         client.wait(timeout=5)
     finally:
