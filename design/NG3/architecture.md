@@ -1244,7 +1244,8 @@ ProfileConfigIntent:
     enabled
     direction
     destinations[]
-    device_order[]
+    device_order[] = plain Device IDs in baseline order
+    reserve_device_ids[] = Profile-local subset of device_order
     availability_check?
     ordinary_gateway_nat_intent?
 
@@ -1283,7 +1284,9 @@ Key normalization rules:
 - active Devices are derived as enabled Devices referenced by at least one enabled Profile;
 - `DeviceBindingIntent` retains ordered expected-interface selectors and quotas;
 - `ProfileConfigIntent` retains remote destinations and ordered Device references; canonical
-  `direction` is normalized into base direction plus a separate Profile-scoped
+  `device_order` membership suffixes are normalized into plain Device IDs plus a separate
+  Profile-local reserve Device subset, so lower consumers never parse `:reserve`;
+  canonical `direction` is normalized into base direction plus a separate Profile-scoped
   ordinary-side gateway NAT intent when the accepted `+snat` suffix is present;
 - `PayloadProfileRequest` contains the concrete ordered logical paths obtained after binding
   while preserving Profile identity/direction/destinations;
