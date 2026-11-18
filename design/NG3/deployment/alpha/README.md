@@ -23,7 +23,9 @@ Alpha controller:
 - при drift закрывает forwarding перед structural convergence;
 - не требует restart controller после `systemctl restart` отдельного VPN service;
 - при stop выполняет bounded controller cleanup после того, как systemd dependency ordering
-  остановил bound VPN service.
+  остановил bound VPN service;
+- публикует текущую status-проекцию в `/run/vpn-gate-alpha/status.json`: accepted intent,
+  подтверждённые current paths, readiness, availability-state и current blocking problems.
 
 ## Ограничения этой alpha
 
@@ -43,8 +45,8 @@ Alpha controller:
   forwarding, не назначает host addresses и не поднимает host interfaces;
 - при `use_outbound_nat = false` удаленная сторона должна иметь нормальный обратный маршрут;
 - config hot reload не поддерживается: изменение `config.toml` требует restart controller;
-- RuntimeStatusAgent/UI еще не подключен; `journalctl` содержит только текущие alpha
-  diagnostics;
+- текущий RuntimeStatusAgent подключён через alpha JSON surface; путь/JSON presentation пока
+  являются alpha interface machinery, а не стабильным Release-1 API;
 - availability/failover runtime этой сборкой еще не считается end-to-end завершенным;
 - автоматического поиска/клонирования/редактирования vendor VPN units нет.
 
@@ -175,6 +177,23 @@ systemctl stop vpn-gate-alpha.service
 Через `BindsTo` + ordering systemd сначала останавливает bound VPN service/cgroup, после чего
 controller завершает managed-domain cleanup. Successful stop требует отсутствия managed netns
 и host boundary.
+
+## Текущий status
+
+Пока сервис запущен, оператор может прочитать:
+
+```text
+/run/vpn-gate-alpha/status.json
+```
+
+Это current-only snapshot, а не журнал. Он показывает отдельно accepted configured intent и
+`confirmed_effective_state`; при failed reconciliation подтверждённое effective state
+сбрасывается в `null`, а причина появляется в `blocking_problems` и
+`unknown_or_unconfirmed_fields`.
+
+Текущая alpha отклоняет `availability_check`, поэтому для поддерживаемого alpha-slice
+availability честно отображается как `disabled`. JSON schema/path пока не объявлены
+стабильным Release-1 внешним API.
 
 ## Диагностика
 
