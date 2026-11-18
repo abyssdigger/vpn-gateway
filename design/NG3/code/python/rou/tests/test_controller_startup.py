@@ -720,6 +720,30 @@ class ControllerStartupTests(unittest.TestCase):
         activation_mock.assert_not_called()
         self.assertFalse(lock.acquired)
 
+    def test_boundary_convergence_and_cleanup_failure_retains_lock(self):
+        events = []
+        boundary = FakeBoundaryContribution(
+            events,
+            fail_converge=True,
+            fail_cleanup=True,
+        )
+        result, startup_events, lock, *rest = self.run_startup(
+            boundary_contribution=boundary,
+        )
+        activation_mock = rest[2]
+        self.assertEqual(
+            result.status,
+            ControllerStartupStatus.FAILURE_CONTAINMENT_FAILED,
+        )
+        self.assertEqual(
+            result.failure_status,
+            ControllerStartupStatus.BOUNDARY_CONVERGENCE_FAILED,
+        )
+        self.assertEqual(events, ["boundary_converge", "boundary_cleanup"])
+        self.assertTrue(lock.acquired)
+        activation_mock.assert_not_called()
+        lock.release()
+
     def test_activation_failure_cleans_boundary_before_lock_release(self):
         events = []
         boundary = FakeBoundaryContribution(events)
