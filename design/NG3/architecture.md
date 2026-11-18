@@ -27,6 +27,7 @@ Current trace:
 | --- | --- | --- |
 | ConfigurationAdapter structural + canonical Release-1 normalization | `domain.py`, `config.py`, `release1_config.py`, `port_bundle.py` | `NG3-2026-11-16-structural-config-code-review.md`, `NG3-2026-11-17-release1-config-grammar-rust-boundary-review.md`, `NG3-2026-11-17-port-bundle-correction-review.md` |
 | authoritative VPNPathAdapter interface-identity observation boundary | `interface_identity.py`, `interface_inventory.py` | `NG3-2026-11-16-interface-inventory-code-review.md` |
+| Linux VPNPathAdapter fresh managed-netns runtime collection | `linux_vpn_path_adapter.py` | `NG3-2026-11-18-linux-vpn-path-adapter-runtime-review.md` |
 | shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
 | PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
 | PayloadPolicyCalculator NEW-flow Profile classification | `profile_classification.py` | `NG3-2026-11-16-profile-classification-code-review.md` |
@@ -75,7 +76,6 @@ boundaries:
 
 - Profile ordinary-side `+snat` physical materialization;
 - availability probe execution/runtime assembly;
-- Netlink/poll scheduling and full VPNPathAdapter runtime collection;
 - stable production packaging/version lifecycle and a stable external status API.
 
 Live current-state presentation is no longer one of these gaps: the executable alpha publishes
@@ -994,6 +994,17 @@ verify_path_binding(logical_path_id, concrete endpoint)
 
 The Adapter observes lower-domain facts. It does not decide Profile policy or Device
 preference.
+
+The executable Linux reference realizes this boundary with a stateless
+`LinuxVpnPathAdapter`. Every observation obtains one complete fresh managed-netns link
+inventory, parses exact `(ifname, ifindex)` identities and may require the already verified
+host-boundary generation to be present before the snapshot is consumed. The Adapter keeps no
+current inventory cache or generation registry.
+
+The alpha's periodic timer is only a wakeup cadence. Startup and every periodic reconcile call
+the same fresh Adapter observation path; a failed command/parse is an observation failure and
+is never converted to an empty endpoint set. Netlink events may later replace or supplement
+the wakeup mechanism without changing this authoritative snapshot contract.
 
 A successful result must prove at least:
 
