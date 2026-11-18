@@ -1894,6 +1894,7 @@ revises the requirements and selects the extension.
 **Implements:**
 - `VPNG0002-R2.R6`;
 - `VPNG0003-R3.R8`;
+- `VPNG0003-R3.R8.R1`;
 - `VPNG0003-R3.R8.C1`;
 - `VPNG0007-R7.R3.R4`;
 - `VPNG0007-R7.R3.R4.R1`.
@@ -2034,8 +2035,11 @@ The required lower semantics are intentionally narrow:
   path-affinity discriminator before route lookup;
 - a higher-precedence path-affinity lookup must select a guarded routing domain for that
   logical path;
-- if the pinned path disappears or becomes unusable, the flow may fail closed; no migration,
-  buffering or reliable-delivery machinery is required by `VPNG0003-R3.R8.C1`;
+- if the pinned path disappears or becomes unusable, the flow must not silently migrate to a
+  different logical path merely because that path can reach the same destination; without a
+  separately proved path-semantics equivalence it fails closed on the original association;
+- no buffering, replay or reliable-delivery machinery is required by
+  `VPNG0003-R3.R8.C1`;
 - probe-local conntrack state and probe routing discriminators must be disjoint from
   payload path-affinity ownership and must never be able to select a payload flow's return
   path.
