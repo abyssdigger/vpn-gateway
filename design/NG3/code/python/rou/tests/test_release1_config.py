@@ -508,7 +508,7 @@ device_order = ["backup", "primary"]
             ("primary", "backup"),
         )
         self.assertEqual(
-            cfg.profiles["corp"].reserve_devices,
+            cfg.profiles["corp"].reserve_device_ids,
             frozenset({"backup"}),
         )
         self.assertEqual(
@@ -516,7 +516,7 @@ device_order = ["backup", "primary"]
             ("backup", "primary"),
         )
         self.assertEqual(
-            cfg.profiles["bulk"].reserve_devices,
+            cfg.profiles["bulk"].reserve_device_ids,
             frozenset(),
         )
 
