@@ -38,8 +38,8 @@ class _RuleKey:
 class _NftInventory:
     present: bool
     owned: bool
-    classifiers: tuple[tuple[int, str, int], ...] = ()
-    restores: tuple[tuple[int, int], ...] = ()
+    classifiers: tuple[tuple[str, str, int], ...] = ()
+    restores: tuple[tuple[str, int], ...] = ()
     diagnostic: str | None = None
 
 
@@ -117,7 +117,7 @@ class LinuxStackReturnAffinityBackend:
         expected_classifiers = tuple(
             sorted(
                 (
-                    item.ingress.ifindex,
+                    item.ingress.name,
                     item.remote_prefix.with_prefixlen,
                     item.mark,
                 )
@@ -125,7 +125,7 @@ class LinuxStackReturnAffinityBackend:
             )
         )
         expected_restores = tuple(
-            sorted((desired.host_boundary.ifindex, item.mark) for item in desired.rules)
+            sorted((desired.host_boundary.name, item.mark) for item in desired.rules)
         )
 
         wants_owner = bool(desired.classifiers)
@@ -280,10 +280,12 @@ def _parse_reserved_rules(
         except ValueError:
             return (), "reserved affinity RPDB rule has non-numeric lookup table"
         unsupported = set(row) - {
-            "priority", "fwmark", "fwmask", "table", "action", "protocol",
+            "priority", "src", "fwmark", "fwmask", "table", "action", "protocol",
         }
         if unsupported:
             return (), f"reserved affinity RPDB rule has unsupported selectors {sorted(unsupported)!r}"
+        if row.get("src") not in {None, "all"}:
+            return (), "reserved affinity RPDB rule has unsupported source selector"
         action = row.get("action")
         if action not in {None, "to_tbl"}:
             return (), "reserved affinity RPDB rule has unsupported action"
@@ -385,8 +387,10 @@ def _match(expr: list[dict], left_kind: str, key: str) -> Any:
     raise ValueError(f"reserved affinity rule misses {left_kind}.{key} exact match")
 
 
-def _parse_classifier_expr(expr: list[dict]) -> tuple[int, str, int]:
-    ingress = _parse_int(_match(expr, "meta", "iif"), "classifier iif")
+def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int]:
+    ingress = _match(expr, "meta", "iif")
+    if not isinstance(ingress, str) or not ingress:
+        raise ValueError("classifier iif must resolve to an interface name")
     source = None
     for item in expr:
         if not isinstance(item, dict) or "match" not in item:
@@ -404,8 +408,20 @@ def _parse_classifier_expr(expr: list[dict]) -> tuple[int, str, int]:
     if source is None:
         raise ValueError("classifier source prefix match is missing")
     source = ipaddress.IPv4Network(source, strict=True).with_prefixlen
-    state = _match(expr, "ct", "state")
-    if state != "new" and state != ["new"]:
+    state_new = False
+    for item in expr:
+        if not isinstance(item, dict) or "match" not in item:
+            continue
+        match = item["match"]
+        if not isinstance(match, dict) or match.get("op") not in {"==", "in"}:
+            continue
+        left = match.get("left")
+        ct = left.get("ct") if isinstance(left, dict) else None
+        if isinstance(ct, dict) and ct.get("key") == "state":
+            right = match.get("right")
+            if right == "new" or right == ["new"]:
+                state_new = True
+    if not state_new:
         raise ValueError("classifier does not match ct state new")
     mark = None
     for item in expr:
@@ -424,8 +440,10 @@ def _parse_classifier_expr(expr: list[dict]) -> tuple[int, str, int]:
     return ingress, source, mark
 
 
-def _parse_restore_expr(expr: list[dict]) -> tuple[int, int]:
-    ingress = _parse_int(_match(expr, "meta", "iif"), "restore iif")
+def _parse_restore_expr(expr: list[dict]) -> tuple[str, int]:
+    ingress = _match(expr, "meta", "iif")
+    if not isinstance(ingress, str) or not ingress:
+        raise ValueError("restore iif must resolve to an interface name")
     mark = _parse_int(_match(expr, "ct", "mark"), "restore ct mark")
     restored = False
     for item in expr:
