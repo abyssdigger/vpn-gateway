@@ -4202,6 +4202,42 @@ The four-class vocabulary is fixed by accepted Release-1 semantics rather than b
 count. Concrete interface names/addresses and lifecycle allocation remain lower
 implementation details; they are not user-facing knobs.
 
+###### Managed-stack dispatch to the selected behavior lane
+
+The selected carrier does not require a second Profile classifier. The stack already preserves
+the accepted inbound Profile as its Release-1 return-affinity connection mark and has a
+higher-precedence mark-to-Profile-table RPDB rule. For a remote-initiated NEW flow, the same
+already-established Profile association may also select the initial packet's Profile table
+inside the managed namespace.
+
+That Profile table gains a preferred ordinary-side default route through the current endpoint
+for the Profile's normalized `HostBoundaryBehaviorLane`, while the existing terminal guard
+remains as the fail-closed fallback. Zero-current-path Profiles do not materialize a lane
+route.
+
+Conceptually:
+
+```text
+VPN ingress
+    -> path-relative Profile classifier
+    -> save Profile connection association
+    -> select the same Profile routing table for this inbound packet
+    -> Profile table:
+         remote destinations -> VPN path routes
+         ordinary-side default -> selected behavior lane
+         terminal guard -> fail closed
+```
+
+The packet mark used for this table selection is stack-local implementation state. It is not
+the cross-namespace carrier rejected by EXP-063 and is cleared/lost without consequence at
+the boundary; host behavior is derived only from the actual behavior-lane ingress.
+
+The pure projection is represented separately by
+`host_boundary_lane_routing.py`; it deliberately does not masquerade a behavior lane as a
+VPN `LogicalPathId`. Production activation remains gated until these lane routes and the
+corresponding ingress table selection are composed into the existing structural desired-state
+transaction behind the closed ForwardingGate.
+
 A structural transition that changes Profile gateway NAT or its boundary association is not
 eligible for the pure route-priority fast path. The affected forwarding must remain
 restrictive until managed policy, association and host-boundary NAT postconditions are all
