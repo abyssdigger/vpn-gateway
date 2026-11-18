@@ -82,6 +82,10 @@ def setup():
     for name in (STACK, HOST):
         ns(name, "sysctl", "-qw", "net.ipv4.conf.all.rp_filter=0")
         ns(name, "sysctl", "-qw", "net.ipv4.conf.default.rp_filter=0")
+    for interface in (S_A, S_B, S_H):
+        ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{interface}.rp_filter=0")
+    for interface in (H_S, H_L):
+        ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{interface}.rp_filter=0")
 
     ns(A, "ip", "route", "add", "192.0.2.0/30", "via", "172.16.10.1", "dev", A_S)
 
