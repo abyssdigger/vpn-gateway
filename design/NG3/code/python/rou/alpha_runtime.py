@@ -101,6 +101,10 @@ from .payload_profile import PayloadProfileRequest, build_payload_profile_reques
 from .release1_config import Release1Config, parse_release1_config
 from .structural_policy_mutation import compare_structural_policy
 from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
+from .selected_host_boundary import (
+    SelectedLinuxHostBoundaryContribution,
+    build_selected_linux_host_boundary_contribution,
+)
 from .runtime_status import (
     RuntimeReadiness,
     RuntimeStatusAgent,
@@ -151,11 +155,6 @@ class AlphaPreparedPolicy:
             if profile.ordinary_gateway_nat:
                 raise AlphaRuntimeError(
                     f"profile {profile_id!r} requests +snat, which is not yet "
-                    "materialized by the alpha runtime"
-                )
-            if profile.route_return:
-                raise AlphaRuntimeError(
-                    f"profile {profile_id!r} requests +route-return, which is not yet "
                     "materialized by the alpha runtime"
                 )
             if profile.availability_check is not None:
@@ -569,6 +568,17 @@ def run_alpha_runtime(
         holder["policy"] = prepared
         return prepared
 
+    def build_boundary_contribution(prepared, current_domain_spec):
+        if not isinstance(prepared, AlphaPreparedPolicy):
+            raise AlphaRuntimeError(
+                "alpha host-boundary contribution requires AlphaPreparedPolicy"
+            )
+        return build_selected_linux_host_boundary_contribution(
+            prepared.config,
+            current_domain_spec,
+            runner,
+        )
+
     try:
         startup = start_controller_once(
             InstanceLockSpec(
@@ -580,6 +590,7 @@ def run_alpha_runtime(
             NG3_LINUX_POLICY_PLATFORM,
             load_policy,
             stop_requested=stop_event.is_set,
+            build_boundary_contribution=build_boundary_contribution,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
         )
         if startup.status is not ControllerStartupStatus.READY:
@@ -591,6 +602,17 @@ def run_alpha_runtime(
 
         assert startup.session is not None
         prepared = holder["policy"]
+        boundary_contribution = startup.session.boundary_contribution
+        if (
+            boundary_contribution is not None
+            and not isinstance(
+                boundary_contribution,
+                SelectedLinuxHostBoundaryContribution,
+            )
+        ):
+            raise AlphaRuntimeError(
+                "alpha startup returned an unexpected host-boundary contribution"
+            )
         status_agent = RuntimeStatusAgent(
             build_configured_intent_status(prepared.config)
         )
@@ -657,10 +679,68 @@ def run_alpha_runtime(
         last_status: AlphaReconcileStatus | None = None
         last_diagnostic: str | None = None
         while not stop_event.wait(audit_interval_seconds):
-            result = reconcile_alpha_payload_once(
-                prepared,
-                domain_spec,
-                runner,
+            boundary_error: str | None = None
+            if boundary_contribution is not None:
+                try:
+                    boundary_observation = boundary_contribution.observe()
+                    if boundary_observation.conflicts:
+                        raise RuntimeError(
+                            "host-boundary owner conflict: "
+                            + "; ".join(boundary_observation.conflicts)
+                        )
+                    if not boundary_observation.exact:
+                        containment = converge_forwarding_gate_once(
+                            LinuxForwardingGateBackend(
+                                runner,
+                                domain_spec.namespace,
+                            ),
+                            ForwardingGateState.DISABLED,
+                        )
+                        if not containment.confirmed:
+                            raise RuntimeError(
+                                containment.diagnostic
+                                or "cannot contain managed forwarding before host-boundary repair"
+                            )
+                        boundary_contribution.converge()
+                except Exception as exc:
+                    # Never leave payload forwarding active when the host boundary
+                    # cannot be freshly observed/converged.
+                    containment_detail = ""
+                    try:
+                        containment = converge_forwarding_gate_once(
+                            LinuxForwardingGateBackend(
+                                runner,
+                                domain_spec.namespace,
+                            ),
+                            ForwardingGateState.DISABLED,
+                        )
+                        if not containment.confirmed:
+                            containment_detail = (
+                                "; forwarding containment is not confirmed"
+                            )
+                    except Exception as containment_exc:
+                        containment_detail = (
+                            "; forwarding containment failed: "
+                            f"{type(containment_exc).__name__}: {containment_exc}"
+                        )
+                    boundary_error = (
+                        f"host-boundary reconciliation failed: "
+                        f"{type(exc).__name__}: {exc}"
+                        + containment_detail
+                    )
+
+            result = (
+                AlphaReconcileResult(
+                    AlphaReconcileStatus.FAILED,
+                    None,
+                    diagnostic=boundary_error,
+                )
+                if boundary_error is not None
+                else reconcile_alpha_payload_once(
+                    prepared,
+                    domain_spec,
+                    runner,
+                )
             )
             if result.ready:
                 status_agent.confirm_effective(
