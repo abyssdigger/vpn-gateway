@@ -1,5 +1,9 @@
 name: NG3 Python
 
+concurrency:
+  group: ng3-python-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
     branches-ignore: [ legacy-main-rc, legacy-main-ng1-2, legacy-main-ng3 ]
