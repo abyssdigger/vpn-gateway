@@ -138,11 +138,11 @@ def build_host_boundary_lane_routes(
                 f"behavior lane {intent.lane.value!r} has no current endpoint"
             )
         metric_space = allocation.metric_space
-        metric = (
-            metric_space.first_preference_metric
-            if metric_space is not None
-            else 1
-        )
+        if metric_space is None:
+            # No current VPN path can produce remote-initiated traffic for this
+            # Profile; keep its ordinary-side lane dormant.
+            continue
+        metric = metric_space.preference_slots[0]
         routes.append(
             HostBoundaryLaneRouteSpec(
                 profile_id=intent.profile_id,
