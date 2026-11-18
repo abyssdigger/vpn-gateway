@@ -117,8 +117,9 @@ invalid/reversed ranges, guessed unsupported grammar.
 
 ## TIP-C6 — Order matters only where declared policy
 
-Semantic order exists in Profile.device_order and Device.expected_interfaces.
-Destination list order is not routing policy.
+Semantic baseline order exists in Profile.device_order and Device.expected_interfaces.
+A Profile-local `:reserve` membership suffix changes failback behavior, not baseline order or
+Device identity. Destination list order is not routing policy.
 
 ## TIP-C7 — Canonical Release-1 grammar is distinct from historical prototypes
 
@@ -133,6 +134,8 @@ Current canonical forms include:
 - Device `publish_vpn_server` with the same bundle grammar and equal-cardinality
   positional 1:1 mapping when an internal bundle is explicit;
 - Profile direction `+snat` for ordinary-side gateway NAT;
+- Profile `device_order` membership suffix `<deviceid>:reserve` for Profile-local
+  non-sticky fallback role; unsuffixed membership is sticky by default;
 - Profile `availability_check = "icmp[/IPv4]"`.
 
 Historical `nat`, `traffic_envelope`, publication shorthand, `interface_balancing` and
