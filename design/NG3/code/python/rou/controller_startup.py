@@ -20,8 +20,8 @@ from .instance_lock import (
     acquire_controller_instance_lock,
 )
 from .interface_identity import InterfaceIdentity
-from .interface_inventory import parse_ip_link_inventory
 from .linux_forwarding_gate import LinuxForwardingGateBackend
+from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .linux_nft_scaffold import (
     LinuxNftScaffoldBackend,
     NftScriptRunner,
@@ -346,19 +346,12 @@ def start_controller_once(
         )
 
     try:
-        interfaces = parse_ip_link_inventory(
-            runner.run(
-                (
-                    "ip", "-n", domain_spec.namespace,
-                    "-j", "link", "show",
-                )
-            )
-        )
-        if host_boundary not in interfaces:
-            raise ValueError(
-                "fresh managed-domain interface inventory does not contain "
-                "the verified host-boundary generation"
-            )
+        interfaces = LinuxVpnPathAdapter(
+            runner,
+            domain_spec.namespace,
+        ).observe_interfaces(
+            required_host_boundary=host_boundary,
+        ).interfaces
     except Exception as exc:
         containment = _contain(domain_spec, runner)
         status = (
