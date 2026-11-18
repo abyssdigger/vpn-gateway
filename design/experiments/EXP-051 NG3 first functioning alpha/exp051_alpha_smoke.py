@@ -480,12 +480,25 @@ def main():
                 "dev", SERVER_TUN,
             )
         )
-        command(
-            (
-                "ip", "route", "replace", f"{VPN_SERVER_ADDR}/32",
-                "via", INNER_ADDR, "dev", HOST_BOUNDARY,
-            )
-        )
+        main_remote = command(
+            ("ip", "-j", "-4", "route", "show", "table", "main", f"{VPN_SERVER_ADDR}/32")
+        ).stdout
+        assert json.loads(main_remote) == [], main_remote
+        selected_route = json.loads(
+            command(
+                ("ip", "-j", "-4", "route", "get", VPN_SERVER_ADDR)
+            ).stdout
+        )[0]
+        assert selected_route.get("dev") == HOST_BOUNDARY, selected_route
+        assert selected_route.get("gateway") == INNER_ADDR, selected_route
+        print("EXP051_SELECTED_HOST_BOOTSTRAP=PASS")
+
+        # +route-return must not install the stateful host-return nft owner.
+        assert command(
+            ("nft", "list", "table", "inet", "vpn_gate_host_return"),
+            check=False,
+        ).returncode != 0
+        print("EXP051_ROUTE_RETURN_STATEFUL_OWNER_ABSENT=PASS")
 
         wait_until(
             "alpha periodic reconciliation and controlled payload",
@@ -509,6 +522,22 @@ def main():
         assert first_paths[0]["ifname"] == VPN_IF, first_status
         assert first_paths[0]["ifindex"] == first_ifindex, first_status
         print("EXP051_RUNTIME_STATUS_FIRST_PATH=PASS")
+        # Remote-initiated host-local flow: the response must use the
+        # selected route-based host bootstrap because +route-return opted out
+        # of host conntrack return steering.
+        command(
+            (
+                "ip", "-n", SERVER_NS, "route", "replace", f"{HOST_ADDR}/32",
+                "via", VPN_CLIENT_ADDR, "dev", SERVER_TUN,
+            )
+        )
+        remote_host = ns_command(
+            SERVER_NS,
+            "ping", "-c", "2", "-W", "1", HOST_ADDR,
+            check=False,
+        )
+        assert remote_host.returncode == 0, remote_host.stderr
+        print("EXP051_ROUTE_RETURN_HOST_LOCAL_REPLY=PASS")
 
         systemctl("restart", VPN_UNIT)
         wait_until(
