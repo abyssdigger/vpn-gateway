@@ -2026,13 +2026,21 @@ are observationally equivalent for that flow at every relevant policy/transforma
 
 Therefore production availability-driven priority changes for outbound multi-path Profiles
 remain gated until the managed stack can preserve the concrete logical path selected by the
-flow's first routed packets.
+flow's first **outbound** routed packets.
+
+This is not an outbound analogue of inbound return steering. A reply to an outbound flow
+arrives from whichever concrete VPN path the remote/network actually used; VPN-GATE does not
+choose that ingress path. The problem is the next packet of the same flow in the
+ordinary/host -> VPN direction: it re-enters the managed stack from the host boundary and,
+without an established path association, an ordinary route lookup may follow a newly preferred
+metric and send that packet through another VPN.
 
 The required lower semantics are intentionally narrow:
 
-- one established flow may carry one concrete logical-path association;
-- subsequent host-boundary ingress for that flow must restore only that exact owned
-  path-affinity discriminator before route lookup;
+- one established outbound flow may carry one concrete logical-path association learned from
+  its selected VPN egress;
+- subsequent ordinary/host -> VPN packets of that flow entering through the host boundary
+  must restore only that exact owned path-affinity discriminator before route lookup;
 - a higher-precedence path-affinity lookup must select a guarded routing domain for that
   logical path;
 - if the pinned path disappears or becomes unusable, the flow must not silently migrate to a
