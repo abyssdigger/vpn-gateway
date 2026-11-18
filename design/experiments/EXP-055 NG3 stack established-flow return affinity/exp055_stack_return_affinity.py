@@ -98,7 +98,15 @@ table inet exp055_host {{
   }}
 }}
 """
-    ns(HOST, "nft", "-f", "-", check=False, input=host_nft)
+    completed = subprocess.run(
+        ("ip", "netns", "exec", HOST, "nft", "-f", "-"),
+        input=host_nft,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr)
 
 
 def install_stack_affinity():
