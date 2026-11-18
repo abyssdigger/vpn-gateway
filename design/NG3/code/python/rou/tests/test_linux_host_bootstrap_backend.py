@@ -90,6 +90,14 @@ class LinuxHostBootstrapBackendTests(unittest.TestCase):
         observed=LinuxHostBootstrapBackend(Runner("[]",rules),allocation()).observe(desired())
         self.assertIn("foreign rule", "; ".join(observed.conflicts))
 
+    def test_foreign_rule_at_unused_pool_priority_is_not_claimed(self):
+        rules=json.dumps([
+            {"priority":9000,"src":"all","table":100,"protocol":99},
+        ])
+        observed=LinuxHostBootstrapBackend(Runner("[]",rules),allocation()).observe(desired())
+        self.assertEqual(observed.conflicts,())
+        self.assertNotIn(9000,observed.rule_priorities)
+
     def test_driver_commands_include_owner_protocol(self):
         runner=Runner()
         backend=LinuxHostBootstrapBackend(runner,allocation())
@@ -117,6 +125,8 @@ class LinuxHostBootstrapBackendTests(unittest.TestCase):
         observed=LinuxHostBootstrapBackend(Runner("[]",rules),allocation()).observe(desired())
         self.assertEqual(observed.conflicts,())
         self.assertIn(8192,observed.rule_priorities)
+        self.assertIn(8192,observed.stale_rule_priorities)
+        self.assertIn(8192,observed.missing_rule_priorities)
 
 
 if __name__=="__main__":
