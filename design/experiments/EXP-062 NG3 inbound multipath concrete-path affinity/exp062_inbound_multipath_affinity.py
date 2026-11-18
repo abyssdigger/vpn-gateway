@@ -171,22 +171,25 @@ def remove_affinity():
 
 
 SERVER = r"""
-import socket
+import socket,sys
 s=socket.socket()
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind(("192.0.2.2", 24620))
-s.listen(4)
-while True:
-    c,_=s.accept()
-    c.settimeout(5)
-    try:
-        while True:
-            b=c.recv(1)
-            if not b: break
-            c.sendall(b)
-    except Exception:
-        pass
-    c.close()
+s.listen(1)
+c,_=s.accept()
+c.settimeout(5)
+for expected in (b"A", b"B"):
+    b=c.recv(1)
+    if b != expected:
+        raise SystemExit(2)
+    c.sendall(b)
+sys.stdin.readline()
+try:
+    c.sendall(b"C")
+except Exception:
+    pass
+c.close()
+s.close()
 """
 
 CLIENT = r"""
@@ -220,8 +223,10 @@ def start_server():
     return subprocess.Popen(
         ("ip", "netns", "exec", ORD, sys.executable, "-c", SERVER),
         text=True,
+        stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
+        bufsize=1,
     )
 
 
@@ -248,10 +253,12 @@ def read_line(proc, timeout=5):
     return line
 
 
-def run_control(server):
+def run_control():
     remove_affinity()
     flush_conntrack()
     prefer_a2()
+    server = start_server()
+    time.sleep(0.1)
     client = start_client()
     try:
         first = read_line(client)
@@ -269,17 +276,16 @@ def run_control(server):
             raise AssertionError(f"control flow unexpectedly survived preference switch: {second}")
         a1_after = a1_remote_packets()
         if a1_after <= a1_before:
-            raise AssertionError("control reply failed without any A1 egress")
+            raise AssertionError("control reply failed without any A1 remote-bound egress")
         print("EXP062_CONTROL_PREFERENCE_SWITCH_BREAKS_FLOW=PASS")
-        client.stdin.write("\n")
-        client.stdin.flush()
-        client.wait(timeout=5)
     finally:
         client.kill()
         client.wait()
+        server.kill()
+        server.wait()
 
 
-def run_affinity(server):
+def run_affinity():
     flush_conntrack()
     prefer_a2()
     install_affinity()
@@ -289,6 +295,8 @@ def run_affinity(server):
         raise AssertionError(f"marked lookup did not select A2: {marked!r}")
     print("EXP062_MARKED_LOOKUP_SELECTS_A2=PASS")
 
+    server = start_server()
+    time.sleep(0.1)
     client = start_client()
     try:
         first = read_line(client)
@@ -308,14 +316,19 @@ def run_affinity(server):
             raise AssertionError("affinity reply leaked through currently preferred A1")
         print("EXP062_AFFINITY_SURVIVES_PREFERENCE_SWITCH=PASS")
 
-        # Remove only the pinned concrete path. A1 remains up and preferred.
+        # The connection is already established. Now make only the pinned return
+        # path unusable, then have the ordinary-side server generate a new packet
+        # on that same flow; no new ingress packet is required from A2.
         ns(STACK, "ip", "link", "set", S_A2, "down")
         a1_before_loss = a1_remote_packets()
         client.stdin.write("\n")
         client.stdin.flush()
+        assert server.stdin is not None
+        server.stdin.write("\n")
+        server.stdin.flush()
         third = read_line(client)
         if third != "THIRD_FAIL":
-            raise AssertionError(f"pinned-path loss silently migrated flow: {third}")
+            raise AssertionError(f"pinned-path loss unexpectedly delivered server push: {third}")
         a1_after_loss = a1_remote_packets()
         if a1_after_loss != a1_before_loss:
             raise AssertionError("pinned-path loss fell through to alternate A1")
@@ -324,24 +337,20 @@ def run_affinity(server):
     finally:
         client.kill()
         client.wait()
+        server.kill()
+        server.wait()
         ns(STACK, "ip", "link", "set", S_A2, "up", check=False)
         remove_affinity()
 
 
 def main():
-    server = None
     try:
         setup()
-        server = start_server()
-        time.sleep(0.2)
-        run_control(server)
-        run_affinity(server)
+        run_control()
+        run_affinity()
         print("EXP062_RESULT=PASS")
         return 0
     finally:
-        if server is not None:
-            server.kill()
-            server.wait()
         for name in (ORD, STACK, A2, A1):
             del_ns(name)
 
