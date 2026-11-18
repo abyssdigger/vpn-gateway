@@ -24,6 +24,7 @@ Current experiment directories:
 | EXP-058 | dedicated bootstrap table preserving ordinary main specificity |
 | EXP-059 | paired RPDB bootstrap with suppress-prefixlength |
 | EXP-060 | selected paired-RPDB host bootstrap backend |
+| EXP-061 | stack established-flow return affinity across host boundary |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
