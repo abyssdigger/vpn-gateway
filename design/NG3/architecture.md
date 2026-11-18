@@ -4127,54 +4127,80 @@ Two Profiles may therefore overlap in remote prefix space while being unambiguou
 they admit different ingress paths. Once several managed paths converge on one ordinary host
 boundary, source CIDR alone no longer carries that provenance.
 
-The lower boundary must consequently preserve a verifiable association:
+The lower boundary must preserve the **host-side consequence** of the already-selected Profile,
+but EXP-063/064 show that arbitrary Profile identity does not need to cross the namespace
+boundary.
+
+The normalized Release-1 host-side behavior of a remote-initiated Profile is exactly two bits:
 
 ```text
-selected Profile inside managed policy
-        +
-packet crossing explicit host boundary
-        ->
-BoundaryProfileAssociation(profile_id, packet/flow)
-        ->
-ProfileGatewayNatOwner(profile_id)
+stateful return steering = enabled | route-return
+ordinary-side gateway NAT = disabled | enabled
 ```
 
-`BoundaryProfileAssociation` is a semantic lower contract, not a selection of Linux
-mechanism. A reserved packet mark, a distinct boundary resource, conntrack metadata or
-another mechanism may be accepted later only after evidence proves that it preserves the
-already-selected Profile without colliding with routing/probe/host policy.
+so the complete behavior space is four fixed classes:
 
-The host-side NAT implementation must not infer the Profile from:
+```text
+STATEFUL_NO_NAT
+STATEFUL_NAT
+ROUTE_NO_NAT
+ROUTE_NAT
+```
 
-- source CIDR alone;
-- boundary ifname alone when the boundary is shared;
-- current VPN ifname that is no longer present in the host-side packet path;
-- Device identity without the Profile classification result.
+The selected boundary contract is therefore:
 
-If the exact current packet/flow association cannot be confirmed, that Profile's gateway NAT
-is unready and must not be applied.
+```text
+actual VPN ingress + remote source
+        ->
+selected Profile inside managed policy
+        ->
+stack connection keeps Profile routing-domain association
+        +
+Profile normalized host behavior selects one fixed boundary lane
+        ->
+host ingress lane establishes host connection behavior class
+        ->
+host return/NAT behavior
+```
+
+The host never reconstructs the Profile from source CIDR and does not need a per-Profile host
+resource. Multiple Profiles with the same normalized host behavior share the same lane while
+remaining distinct inside the managed stack.
+
+EXP-063 disproved transient packet-mark handoff across the cross-netns veth boundary as a
+carrier: packets crossed, but the receiving namespace did not retain the exported packet mark.
+EXP-064 proved the fixed behavior-lane carrier across all four combinations, including
+overlapping remote prefixes, forwarded gateway NAT, route-return/stateful-return, stack-side
+established-flow affinity, host-local no-NAT and unrelated-host isolation.
+
+The lane identity is lower infrastructure, not user policy. Host-side behavior must not be
+inferred from source CIDR, current VPN ifname or Device identity. If the selected lane/owner
+state cannot be confirmed, the corresponding host-boundary behavior is unready.
 
 ###### Ownership and component boundary
 
 The semantic owner remains the existing payload/Profile policy owner. No new long-lived
 Manager is introduced.
 
-The existing `NetworkPolicyAdapter` gains a **separate host-boundary lower realization
-sub-contract** because this mutable state is outside the managed network namespace:
+The existing `NetworkPolicyAdapter` gains a **separate host-boundary behavior realization
+sub-contract** because the host-side mutable state is outside the managed network namespace:
 
 ```text
-observe ProfileGatewayNatOwner(profile_id)
-apply desired Profile gateway NAT + verify
-cleanup owned Profile gateway NAT + verify absence
+Profile normalized intent
+    -> fixed HostBoundaryBehaviorLane
+
+observe HostBoundaryBehaviorOwner
+apply desired active lanes + return/NAT behavior + verify
+cleanup owned behavior state + verify absence
 ```
 
-This host-boundary owner scope is disjoint from the managed-domain
-`table ip vpn_gate` owner scope. It may mutate only explicitly reserved boundary objects
-required for the selected Profile gateway NAT and must treat unrelated host firewall/routing
-state as foreign.
+This owner scope is disjoint from the managed-domain `table ip vpn_gate` owner scope. The
+host-side owner may mutate only explicit VPN-GATE lane/return/NAT resources and must treat
+unrelated host firewall/routing state as foreign.
 
-The exact host-side nft table/chain identity, packet-association carrier and command ordering
-remain implementation/evidence decisions. They are not user-facing knobs.
+The four-class vocabulary is fixed by accepted Release-1 semantics rather than by Profile
+count. Concrete interface names/addresses and lifecycle allocation remain lower
+implementation details; they are not user-facing knobs.
 
 A structural transition that changes Profile gateway NAT or its boundary association is not
 eligible for the pure route-priority fast path. The affected forwarding must remain
@@ -4200,12 +4226,11 @@ state.
 **Simplification:** no universal host-firewall Manager, per-packet userspace proxy, endpoint
 provisioning service, durable association journal or guessed host-route editor is introduced.
 
-**Evidence gate:** before physical implementation, a bounded experiment must prove the
-selected Linux mechanism for carrying the already-selected Profile association across the
-namespace/boundary and for applying/reversing host-side masquerade without affecting
-unrelated host traffic. The experiment must include overlapping remote prefixes on distinct
-ingress paths so that source-prefix-only reclassification would fail, plus host-local traffic
-that must not receive gateway NAT.
+**Evidence:** EXP-063 rejects transient cross-netns packet-mark handoff. EXP-064 proves the
+selected fixed behavior-lane mechanism, including overlapping remote prefixes on distinct
+ingress paths, all four return/NAT combinations, reverse NAT, host-local no-NAT and unrelated
+host isolation. Production ownership/convergence and managed-domain lane lifecycle remain
+separate implementation gates.
 
 The scaffold is deliberately independent from the root structural barrier:
 
