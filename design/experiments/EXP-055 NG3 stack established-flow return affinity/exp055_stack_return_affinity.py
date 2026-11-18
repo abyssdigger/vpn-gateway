@@ -77,6 +77,11 @@ def setup():
 
     ns(STACK, "sysctl", "-qw", "net.ipv4.ip_forward=1")
     ns(HOST, "sysctl", "-qw", "net.ipv4.ip_forward=1")
+    # Strict reverse-path filtering would reject the intentionally asymmetric
+    # source before the return-affinity mechanism is exercised.
+    for name in (STACK, HOST):
+        ns(name, "sysctl", "-qw", "net.ipv4.conf.all.rp_filter=0")
+        ns(name, "sysctl", "-qw", "net.ipv4.conf.default.rp_filter=0")
 
     ns(A, "ip", "route", "add", "192.0.2.0/30", "via", "172.16.10.1", "dev", A_S)
 
