@@ -1698,7 +1698,8 @@ because another path became more preferred.
 If an established flow's selected logical path remains current and usable, later availability
 or preference changes of other paths must not move that flow. If the selected path itself
 disappears or becomes unusable, Release 1 does not promise buffering, replay or seamless
-migration of the existing flow; subsequent traffic may use another currently permitted path.
+migration of that existing flow and does not silently move it to another path; a **new flow**
+may use another currently permitted/effective path.
 
 ## 4.5. Device binding projection
 
