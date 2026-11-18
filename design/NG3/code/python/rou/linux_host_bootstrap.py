@@ -104,7 +104,7 @@ def build_linux_host_bootstrap_desired(
     if not destinations:
         return HostBootstrapLinuxDesired(routes=(), bypass=None, pairs=())
 
-    priority_values = allocation.pair_priorities.allocate(len(destinations) * 2)
+    priority_values = allocation.pair_priorities.take(len(destinations) * 2)
     pairs = tuple(
         HostBootstrapRulePair(
             preserve=HostBootstrapPreserveRuleSpec(
