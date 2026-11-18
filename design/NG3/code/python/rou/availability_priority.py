@@ -14,17 +14,18 @@ def calculate_effective_path_order(
     problem_paths: Iterable[LogicalPathId],
     *,
     active_path: LogicalPathId | None = None,
-    reserve_paths: Iterable[LogicalPathId] = (),
+    reserve_device_ids: Iterable[str] = (),
 ) -> tuple[LogicalPathId, ...]:
     """Calculate sticky availability order without per-flow state.
 
     The caller owns the current Profile-level active path. Ordinary active paths
-    stay first while usable. A reserve active path yields to any usable path
-    with higher configured baseline preference.
+    stay first while usable. If the active path belongs to a Profile-local reserve
+    Device membership, it yields to any usable path with higher configured baseline
+    preference.
     """
     configured = tuple(configured_paths)
     problems_input = tuple(problem_paths)
-    reserve_input = tuple(reserve_paths)
+    reserve_input = tuple(reserve_device_ids)
 
     if len(set(configured)) != len(configured):
         raise AvailabilityPriorityError(
@@ -36,25 +37,22 @@ def calculate_effective_path_order(
         )
     if len(set(reserve_input)) != len(reserve_input):
         raise AvailabilityPriorityError(
-            "reserve path set contains duplicate logical path IDs"
+            "reserve Device set contains duplicate Device IDs"
+        )
+    if any(not isinstance(device_id, str) or not device_id for device_id in reserve_input):
+        raise AvailabilityPriorityError(
+            "reserve Device IDs must be non-empty strings"
         )
 
     configured_set = set(configured)
     problems = frozenset(problems_input)
-    reserves = frozenset(reserve_input)
+    reserve_devices = frozenset(reserve_input)
 
     unknown_problems = problems - configured_set
     if unknown_problems:
         raise AvailabilityPriorityError(
             "problem paths are outside configured membership: "
             f"{sorted(unknown_problems)!r}"
-        )
-
-    unknown_reserves = reserves - configured_set
-    if unknown_reserves:
-        raise AvailabilityPriorityError(
-            "reserve paths are outside configured membership: "
-            f"{sorted(unknown_reserves)!r}"
         )
 
     if active_path is not None and active_path not in configured_set:
@@ -67,7 +65,7 @@ def calculate_effective_path_order(
 
     if active_path is None or active_path in problems:
         usable_order = usable
-    elif active_path not in reserves:
+    elif active_path.device_id not in reserve_devices:
         usable_order = (active_path,) + tuple(
             path_id for path_id in usable if path_id != active_path
         )
