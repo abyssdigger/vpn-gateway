@@ -626,3 +626,17 @@ jobs:
         run: >-
           sudo python3
           "design/NG3/code/python/rou/tests/integration_stack_return_affinity_owner.py"
+
+
+  linux-profile-gateway-nat-association:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables conntrack
+      - name: EXP-063 Profile association gateway NAT
+        run: >-
+          sudo python3
+          "design/experiments/EXP-063 NG3 Profile association gateway NAT/exp063_profile_gateway_nat.py"
