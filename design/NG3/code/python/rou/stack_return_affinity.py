@@ -15,7 +15,7 @@ from typing import Iterable
 from .binding import LogicalPathId
 from .domain import Direction
 from .interface_identity import InterfaceIdentity
-from .network_policy_layout import NetworkPolicyLayout
+from .network_policy_layout import NetworkPolicyLayout, NumericResourcePool
 from .payload_profile import PayloadProfileRequest
 from .profile_prefix_partition import (
     ProfilePrefixPartitionError,
@@ -42,6 +42,80 @@ class StackReturnAffinityAllocation:
                 raise StackReturnAffinityError(
                     f"{label} must be an integer in [1, 2^32-1]"
                 )
+
+
+
+
+@dataclass(frozen=True, slots=True)
+class StackReturnAffinityPlatformSpace:
+    marks: NumericResourcePool
+    rule_priorities: NumericResourcePool
+
+    def __post_init__(self) -> None:
+        if self.marks.first == 0:
+            raise StackReturnAffinityError("affinity mark pool must not include mark 0")
+        if self.rule_priorities.first == 0:
+            raise StackReturnAffinityError(
+                "affinity RPDB priority pool must not include Linux local priority 0"
+            )
+
+
+def allocate_stack_return_affinity(
+    profiles: Iterable[PayloadProfileRequest],
+    layout: NetworkPolicyLayout,
+    platform: StackReturnAffinityPlatformSpace,
+) -> tuple[StackReturnAffinityAllocation, ...]:
+    if not isinstance(layout, NetworkPolicyLayout):
+        raise StackReturnAffinityError("layout must be NetworkPolicyLayout")
+    if not isinstance(platform, StackReturnAffinityPlatformSpace):
+        raise StackReturnAffinityError(
+            "platform must be StackReturnAffinityPlatformSpace"
+        )
+
+    current_profiles = tuple(profiles)
+    if any(not isinstance(profile, PayloadProfileRequest) for profile in current_profiles):
+        raise StackReturnAffinityError(
+            "profiles must contain PayloadProfileRequest"
+        )
+
+    active = tuple(
+        sorted(
+            (
+                profile
+                for profile in current_profiles
+                if profile.direction in {Direction.INBOUND, Direction.BIDIRECTIONAL}
+                and profile.ordered_paths
+            ),
+            key=lambda item: item.profile_id,
+        )
+    )
+    if len(active) != len({profile.profile_id for profile in active}):
+        raise StackReturnAffinityError("duplicate inbound Profile identity")
+
+    layout_ids = {item.profile_id for item in layout.payload}
+    profile_ids = {profile.profile_id for profile in current_profiles}
+    if layout_ids != profile_ids:
+        raise StackReturnAffinityError(
+            "layout payload Profile set must exactly match semantic Profiles"
+        )
+
+    marks = platform.marks.take(len(active))
+    priorities = platform.rule_priorities.take(len(active))
+    if layout.dispatch_rules and priorities:
+        first_dispatch = min(item.priority for item in layout.dispatch_rules)
+        if max(priorities) >= first_dispatch:
+            raise StackReturnAffinityError(
+                "affinity RPDB rules must execute before ordinary payload dispatch"
+            )
+
+    return tuple(
+        StackReturnAffinityAllocation(
+            profile_id=profile.profile_id,
+            mark=marks[index],
+            rule_priority=priorities[index],
+        )
+        for index, profile in enumerate(active)
+    )
 
 
 @dataclass(frozen=True, slots=True)
