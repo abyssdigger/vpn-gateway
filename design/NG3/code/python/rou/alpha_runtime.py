@@ -104,6 +104,7 @@ from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
 from .selected_host_boundary import (
     SelectedLinuxHostBoundaryContribution,
     build_selected_linux_host_boundary_contribution,
+    reconcile_selected_host_boundary_runtime_once,
 )
 from .runtime_status import (
     RuntimeReadiness,
@@ -679,67 +680,30 @@ def run_alpha_runtime(
         last_status: AlphaReconcileStatus | None = None
         last_diagnostic: str | None = None
         while not stop_event.wait(audit_interval_seconds):
-            boundary_error: str | None = None
-            if boundary_contribution is not None:
-                try:
-                    boundary_observation = boundary_contribution.observe()
-                    if boundary_observation.conflicts:
-                        raise RuntimeError(
-                            "host-boundary owner conflict: "
-                            + "; ".join(boundary_observation.conflicts)
-                        )
-                    if not boundary_observation.exact:
-                        containment = converge_forwarding_gate_once(
-                            LinuxForwardingGateBackend(
-                                runner,
-                                domain_spec.namespace,
-                            ),
-                            ForwardingGateState.DISABLED,
-                        )
-                        if not containment.confirmed:
-                            raise RuntimeError(
-                                containment.diagnostic
-                                or "cannot contain managed forwarding before host-boundary repair"
-                            )
-                        boundary_contribution.converge()
-                except Exception as exc:
-                    # Never leave payload forwarding active when the host boundary
-                    # cannot be freshly observed/converged.
-                    containment_detail = ""
-                    try:
-                        containment = converge_forwarding_gate_once(
-                            LinuxForwardingGateBackend(
-                                runner,
-                                domain_spec.namespace,
-                            ),
-                            ForwardingGateState.DISABLED,
-                        )
-                        if not containment.confirmed:
-                            containment_detail = (
-                                "; forwarding containment is not confirmed"
-                            )
-                    except Exception as containment_exc:
-                        containment_detail = (
-                            "; forwarding containment failed: "
-                            f"{type(containment_exc).__name__}: {containment_exc}"
-                        )
-                    boundary_error = (
-                        f"host-boundary reconciliation failed: "
-                        f"{type(exc).__name__}: {exc}"
-                        + containment_detail
-                    )
-
+            boundary_runtime = reconcile_selected_host_boundary_runtime_once(
+                LinuxForwardingGateBackend(
+                    runner,
+                    domain_spec.namespace,
+                ),
+                boundary_contribution,
+            )
             result = (
-                AlphaReconcileResult(
-                    AlphaReconcileStatus.FAILED,
-                    None,
-                    diagnostic=boundary_error,
-                )
-                if boundary_error is not None
-                else reconcile_alpha_payload_once(
+                reconcile_alpha_payload_once(
                     prepared,
                     domain_spec,
                     runner,
+                )
+                if boundary_runtime.confirmed
+                else AlphaReconcileResult(
+                    AlphaReconcileStatus.FAILED,
+                    None,
+                    diagnostic=(
+                        boundary_runtime.diagnostic
+                        or (
+                            "host-boundary reconciliation failed: "
+                            f"{boundary_runtime.status.value}"
+                        )
+                    ),
                 )
             )
             if result.ready:
