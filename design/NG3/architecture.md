@@ -4147,7 +4147,7 @@ ROUTE_NO_NAT
 ROUTE_NAT
 ```
 
-The selected boundary contract is therefore:
+The EXP-064 candidate boundary contract is therefore:
 
 ```text
 actual VPN ingress + remote source
@@ -4169,11 +4169,11 @@ remaining distinct inside the managed stack.
 
 EXP-063 disproved transient packet-mark handoff across the cross-netns veth boundary as a
 carrier: packets crossed, but the receiving namespace did not retain the exported packet mark.
-EXP-064 proved the fixed behavior-lane carrier across all four combinations, including
+EXP-064 proved the fixed behavior-lane carrier technically across all four combinations, including
 overlapping remote prefixes, forwarded gateway NAT, route-return/stateful-return, stack-side
 established-flow affinity, host-local no-NAT and unrelated-host isolation.
 
-The lane identity is lower infrastructure, not user policy. Host-side behavior must not be
+The lane identity is lower infrastructure, not user policy. However this candidate cannot be adopted while `VPNG0004-R4.R6.R1.R6.R1` is read literally as requiring full Profile identity to cross the boundary. Host-side behavior must not be
 inferred from source CIDR, current VPN ifname or Device identity. If the selected lane/owner
 state cannot be confirmed, the corresponding host-boundary behavior is unready.
 
@@ -4204,7 +4204,7 @@ implementation details; they are not user-facing knobs.
 
 ###### Managed-stack dispatch to the selected behavior lane
 
-The selected carrier does not require a second Profile classifier. The stack already preserves
+Conditional on resolving `VPNG0004-R4.R6.R1.R6.R1` in favor of Profile-derived host behavior rather than literal cross-boundary Profile identity, the EXP-064 carrier does not require a second Profile classifier. The stack already preserves
 the accepted inbound Profile as its Release-1 return-affinity connection mark and has a
 higher-precedence mark-to-Profile-table RPDB rule. For a remote-initiated NEW flow, the same
 already-established Profile association may also select the initial packet's Profile table
@@ -4263,7 +4263,7 @@ state.
 provisioning service, durable association journal or guessed host-route editor is introduced.
 
 **Evidence:** EXP-063 rejects transient cross-netns packet-mark handoff. EXP-064 proves the
-selected fixed behavior-lane mechanism, including overlapping remote prefixes on distinct
+fixed behavior-lane mechanism technically, including overlapping remote prefixes on distinct
 ingress paths, all four return/NAT combinations, reverse NAT, host-local no-NAT and unrelated
 host isolation. Production ownership/convergence and managed-domain lane lifecycle remain
 separate implementation gates.
