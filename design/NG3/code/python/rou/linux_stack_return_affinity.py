@@ -405,7 +405,7 @@ def _parse_classifier_expr(expr: list[dict]) -> tuple[int, str, int]:
         raise ValueError("classifier source prefix match is missing")
     source = ipaddress.IPv4Network(source, strict=True).with_prefixlen
     state = _match(expr, "ct", "state")
-    if state not in {"new", ["new"]}:
+    if state != "new" and state != ["new"]:
         raise ValueError("classifier does not match ct state new")
     mark = None
     for item in expr:
