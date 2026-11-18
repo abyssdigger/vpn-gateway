@@ -2097,7 +2097,8 @@ Inputs:
 - allowed paths in configured baseline order;
 - current established availability-problem paths;
 - current active path, if one remains current;
-- reserve-path identities derived from Profile-local Device memberships.
+- Profile-local reserve Device IDs; every current path whose `device_id` belongs to that
+  subset inherits the reserve role.
 
 Output:
 
