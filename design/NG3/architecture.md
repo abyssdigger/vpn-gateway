@@ -1552,8 +1552,10 @@ It owns:
 
 - current accepted structural payload intent;
 - current allowed path membership for that intent;
-- configured path preference;
+- configured baseline path preference;
+- Profile-local reserve roles normalized from Device memberships;
 - current bounded availability-adaptation state;
+- current active logical path for each Profile while that path remains usable;
 - current effective path order;
 - orchestration of desired payload network policy through the Adapter;
 - current verified payload-policy projection published for observers.
@@ -1636,6 +1638,13 @@ degradation_progress: 0..degradation_threshold
 recovery_progress:    0..recovery_threshold
 ```
 
+For each Profile with at least one currently usable path, the Manager may additionally retain
+one `current_active_path`. This is Profile-level routing state, not per-flow state. It exists
+only to prevent recovery of another path from causing an unnecessary failback. If the active
+path disappears or becomes availability-problematic, the active identity is replaced by the
+next effective usable path. No connection tuple, conntrack entry, transport session, packet
+history or path-equivalence record is required for this policy.
+
 The thresholds are finite local availability-policy parameters. They are not assumed to be
 user-configurable unless a later requirement says so.
 
@@ -1668,10 +1677,10 @@ path set.
 structural allowed paths
         |
         v
-configured preference
+baseline preference + Profile-local reserve roles
         |
         v
-availability priority modifier
+availability problem state + current active path
         |
         v
 effective order
@@ -1687,20 +1696,61 @@ Availability is not allowed to:
 **Implements:**
 - `VPNG0002-R2.R4`
 - `VPNG0003-R3.R2`
+- `VPNG0003-R3.R4`
+- `VPNG0003-R3.R4.R1`
+- `VPNG0003-R3.R4.R1.R1`
 - `VPNG0003-R3.R7`
 - `VPNG0003-R3.R8`
 - `VPNG0003-R3.R8.R1`
 - `VPNG0003-R3.R8.C1`
 
-The effective order is a selector for traffic that does not already carry an established
-path association. It is **not** permission to migrate an established managed flow merely
-because another path became more preferred.
+The Release-1 selection rule is route-level and deliberately bounded:
 
-If an established flow's selected logical path remains current and usable, later availability
-or preference changes of other paths must not move that flow. If the selected path itself
-disappears or becomes unusable, Release 1 does not promise buffering, replay or seamless
-migration of that existing flow and does not silently move it to another path; a **new flow**
-may use another currently permitted/effective path.
+```text
+usable path
+    = current allowed path without an established availability problem
+
+no usable current_active_path
+    -> choose the first usable path in baseline order
+
+usable current_active_path and active membership is ordinary
+    -> keep current_active_path first
+    -> order all other usable paths by baseline preference
+
+usable current_active_path and active membership is reserve
+    -> allow the first higher-baseline usable path to preempt
+    -> otherwise keep the reserve active path first
+
+problem/unusable paths
+    -> remain structurally present
+    -> follow usable paths in baseline relative order
+```
+
+Thus a recovered path returns to its natural baseline position among standby paths but cannot
+jump above a healthy ordinary active path. A reserve active path is the explicit exception:
+its Profile-local role says that fast failback to a recovered higher-baseline usable path is
+preferred over stickiness.
+
+This policy changes the route used by traffic only at an actual failover boundary or an
+explicit reserve failback boundary. It does not promise that transport sessions survive such a
+boundary. In particular, Release 1 does not require preservation of external source
+IP/port/NAT identity, buffering/replay, transport migration or per-flow concrete-path state
+after the active path itself becomes unusable.
+
+### Simplification review
+
+The previous outbound design required per-flow concrete-path affinity so that route-priority
+recovery could not migrate established flows. That mechanism is no longer necessary for the
+accepted Release-1 policy: ordinary recovery does not change the active route at all.
+
+The selected state is therefore bounded by Profile/path availability state plus one active
+path identity per Profile. VPN-GATE does not add a conntrack-like flow table, per-flow timeout
+lifecycle, path-equivalence proof machinery or flow-specific fail-closed routing merely to
+implement availability failover.
+
+EXP-062 remains valid evidence that concrete-path affinity is technically possible if a later
+product requirement needs finer-grained flow semantics; it is not a Release-1 availability
+prerequisite.
 
 ## 4.5. Device binding projection
 
@@ -1985,80 +2035,41 @@ The owner is now part of guarded production activation:
 **Evidence:** `EXP-061-result-20261118.md` plus privileged production-owner integration in
 `integration_stack_return_affinity_owner.py`.
 
-### General established-flow stability and current outbound gap
+### Outbound availability stability without per-flow affinity
 
-The accepted flow-stability rule is broader than remote-initiated return affinity:
+The earlier outbound gap was created by combining two assumptions: recovery immediately
+restored baseline route priority, while established flows were required never to move between
+non-equivalent paths. That combination forced a per-flow concrete-path association.
+
+The accepted Release-1 semantics remove the first assumption. When path A fails and B becomes
+active, recovery of A produces:
 
 ```text
-NEW managed flow
-    -> select one currently allowed/effective logical path
-
-established managed flow
-    -> keep that selected logical path
-       while the path remains current and usable
-
-changes to other paths / effective preference
-    -> affect selection for traffic without an established association
-    -> do not migrate the established flow
+baseline: A > B > C
+A fails:  B > C > A(problem)
+A recovers, B ordinary and healthy:
+          B > A > C
 ```
 
-The current inbound/bidirectional Release-1 case is already covered by the selected
-Profile-routing-domain affinity above because such a Profile can have at most one eligible
-logical path.
+No outbound flow lookup needs special affinity to keep using B because ordinary route lookup
+still selects B. If B later fails, switching away from B is an actual availability failover;
+Release 1 accepts that existing transport/session state may or may not survive that switch.
 
-The current outbound multi-path implementation is **not yet sufficient** for this rule.
-Its Profile table contains several allowed path routes and availability changes their metrics.
-Without a separate per-flow concrete-path association, later packets of an already established
-forwarded flow may be routed by the newly preferred metric. EXP-062's control phase already
-demonstrated this generic Linux behavior: changing current preference without concrete-path
-affinity can break an established TCP exchange even though the original path still exists.
+For an explicit reserve membership the administrator chooses the opposite trade-off:
 
-The danger is not the route change as an abstract event; it is that different allowed paths
-need not be data-plane equivalent. A concrete current example is Device-owned outbound NAT:
-one path may require `MASQUERADE` while another path may require `NONE`, and the lower NAT
-owner is compiled against the exact egress endpoint. Paths may also differ in source-address,
-remote stateful firewall/NAT and tunnel-side semantics. Therefore a mid-flow route change can
-change the packet state observed by the remote side even when the destination remains
-reachable through both paths.
+```text
+baseline: A > B:reserve > C
+A fails:  B > C > A(problem)
+A recovers:
+          A > B > C
+```
 
-Release 1 deliberately does not try to prove path-equivalence dynamically. Preserving the
-already selected live logical path is the smaller and more reliable invariant. A future
-optimization may permit migration only if it has separate evidence that the old and new paths
-are observationally equivalent for that flow at every relevant policy/transformation boundary.
+The reserve suffix is Profile-local and changes only failback behavior. It does not alter
+Device identity, structural membership or baseline ordering.
 
-Therefore production availability-driven priority changes for outbound multi-path Profiles
-remain gated until the managed stack can preserve the concrete logical path selected by the
-flow's first **outbound** routed packets.
-
-This is not an outbound analogue of inbound return steering. A reply to an outbound flow
-arrives from whichever concrete VPN path the remote/network actually used; VPN-GATE does not
-choose that ingress path. The problem is the next packet of the same flow in the
-ordinary/host -> VPN direction: it re-enters the managed stack from the host boundary and,
-without an established path association, an ordinary route lookup may follow a newly preferred
-metric and send that packet through another VPN.
-
-The required lower semantics are intentionally narrow:
-
-- one established outbound flow may carry one concrete logical-path association learned from
-  its selected VPN egress;
-- subsequent ordinary/host -> VPN packets of that flow entering through the host boundary
-  must restore only that exact owned path-affinity discriminator before route lookup;
-- a higher-precedence path-affinity lookup must select a guarded routing domain for that
-  logical path;
-- if the pinned path disappears or becomes unusable, the flow must not silently migrate to a
-  different logical path merely because that path can reach the same destination; without a
-  separately proved path-semantics equivalence it fails closed on the original association;
-- no buffering, replay or reliable-delivery machinery is required by
-  `VPNG0003-R3.R8.C1`;
-- probe-local conntrack state and probe routing discriminators must be disjoint from
-  payload path-affinity ownership and must never be able to select a payload flow's return
-  path.
-
-EXP-062 proves the core Linux fact that concrete-path conntrack affinity can survive an
-ordinary preference change and can fail closed on pinned-path loss. It does **not** by itself
-complete outbound realization because an outbound flow learns its selected path after the
-initial route lookup rather than from VPN ingress. Capturing that first selected egress path
-and integrating it into production ownership is the next bounded evidence/design unit.
+Consequently the outbound Release-1 availability path no longer has a per-flow-affinity
+readiness gate. Managed-stack return affinity for remote-initiated traffic remains a separate
+requirement under `VPNG0002-R2.R6` and is unchanged by this simplification.
 
 # 6. AvailabilityPriorityCalculator
 
@@ -2069,26 +2080,33 @@ and integrating it into production ownership is the next bounded evidence/design
 - `VPNG0003-R3.R2`
 - `VPNG0003-R3.R3`
 - `VPNG0003-R3.R4`
+- `VPNG0003-R3.R4.R1`
+- `VPNG0003-R3.R4.R1.R1`
 - `VPNG0003-R3.R7`
 - `VPNG0003-R3.R8`
+- `VPNG0003-R3.R8.R1`
+- `VPNG0003-R3.R8.C1`
 - `VPNG0007-R7.R1`
 - `VPNG0007-R7.R5`
 
 Inputs:
 
-- allowed paths;
-- configured deterministic preference;
-- current established availability-problem flags.
+- allowed paths in configured baseline order;
+- current established availability-problem paths;
+- current active path, if one remains current;
+- reserve-path identities derived from Profile-local Device memberships.
 
 Output:
 
 - effective ordered allowed path set.
 
-The Calculator does not decide whether a problem is established. That state belongs to the
-Manager because confirmation spans observations.
+The Calculator is pure and owns no history. The Manager owns availability confirmation and
+the single current-active identity and supplies both explicitly.
 
-The output always contains the same structurally allowed path membership. Availability can
-only change ordering.
+Validation is strict: problem, active and reserve path identities must belong to current
+structural membership. The output always contains exactly the same structurally allowed path
+membership. It reorders that membership using the rule in section 4.4; it does not create or
+delete policy permission.
 
 # 7. AvailabilityProbeAgent
 
