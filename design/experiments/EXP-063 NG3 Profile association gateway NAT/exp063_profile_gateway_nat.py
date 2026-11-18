@@ -246,6 +246,8 @@ def rule_counter(namespace: str, family: str, table: str, comment: str) -> int:
 def dump_diagnostics():
     for namespace, family, table, comment in (
         (STACK,"ip","exp063_stack","exp063-export-a"),
+        (HOST,"inet","exp063_host","exp063-host-ingress"),
+        (HOST,"inet","exp063_host","exp063-host-zero-tag"),
         (HOST,"inet","exp063_host","exp063-consume-a"),
         (HOST,"inet","exp063_host","exp063-profile-a-nat"),
         (HOST,"inet","exp063_host","exp063-return-a"),
