@@ -54,4 +54,4 @@ Canonical dispositions:
 | EXP-014 | PREPARED / UNPROVEN | superseded | Historical predecessor for remote-initiated multi-path return pinning; EXP-062 is the current scoped experiment. |
 | EXP-061 | PASS | selected | Selected Release-1 Profile-routing-domain return affinity evidence. |
 | EXP-062 | PASS | deferred | Concrete-path affinity is technically proven and retained as a possible future inbound/bidirectional multipath extension; the current baseline remains single-path until an explicit product decision re-enters this work. |
-| EXP-063 | pending | pending_decision | Current evidence gate for carrying already-established Profile association across the managed/host boundary for ordinary-side gateway NAT without host source-prefix reclassification. |
+| EXP-063 | FAIL | pending_decision | Transient packet-mark handoff across the cross-netns veth boundary failed: packets crossed, but the receiving host did not retain the exported mark. Capability remains open to another carrier. |
