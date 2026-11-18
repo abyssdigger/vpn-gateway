@@ -145,8 +145,8 @@ table ip exp063_stack {{
   }}
   chain postrouting {{
     type filter hook postrouting priority mangle; policy accept;
-    oifname "{S_H}" ct mark {STACK_CT_A} meta mark set {TRANS_A}
-    oifname "{S_H}" ct mark {STACK_CT_B} meta mark set {TRANS_B}
+    oifname "{S_H}" ct mark {STACK_CT_A} counter meta mark set {TRANS_A} comment "exp063-export-a"
+    oifname "{S_H}" ct mark {STACK_CT_B} counter meta mark set {TRANS_B} comment "exp063-export-b"
   }}
 }}
 """
@@ -156,10 +156,10 @@ table ip exp063_stack {{
 table inet exp063_host {{
   chain prerouting {{
     type filter hook prerouting priority mangle; policy accept;
-    iifname "{H_S}" meta mark {TRANS_A} ct mark set {HOST_CT_A} meta mark set 0
-    iifname "{H_S}" meta mark {TRANS_B} ct mark set {HOST_CT_B} meta mark set 0
-    iifname != "{H_S}" ct mark {HOST_CT_A} meta mark set {RETURN_MARK}
-    iifname != "{H_S}" ct mark {HOST_CT_B} meta mark set {RETURN_MARK}
+    iifname "{H_S}" meta mark {TRANS_A} counter ct mark set {HOST_CT_A} meta mark set 0 comment "exp063-consume-a"
+    iifname "{H_S}" meta mark {TRANS_B} counter ct mark set {HOST_CT_B} meta mark set 0 comment "exp063-consume-b"
+    iifname != "{H_S}" ct mark {HOST_CT_A} counter meta mark set {RETURN_MARK} comment "exp063-return-a"
+    iifname != "{H_S}" ct mark {HOST_CT_B} counter meta mark set {RETURN_MARK} comment "exp063-return-b"
   }}
   chain output {{
     type route hook output priority mangle; policy accept;
@@ -214,9 +214,12 @@ def start_server(namespace: str, addr_: str, port: int, count: int):
 
 
 def client(namespace: str, src: str, dst: str, port: int, payload: str):
-    r=ns(namespace,"python3","-c",CLIENT,src,dst,str(port),payload)
-    if "OK" not in r.stdout:
-        raise AssertionError(r.stdout+r.stderr)
+    r=ns(namespace,"python3","-c",CLIENT,src,dst,str(port),payload,check=False)
+    if r.returncode != 0 or "OK" not in r.stdout:
+        print("EXP063_CLIENT_STDOUT=" + repr(r.stdout), flush=True)
+        print("EXP063_CLIENT_STDERR=" + repr(r.stderr), flush=True)
+        dump_diagnostics()
+        raise AssertionError(f"client failed rc={r.returncode}")
 
 
 def read_peer(server) -> str:
@@ -225,6 +228,53 @@ def read_peer(server) -> str:
     if not line.startswith("PEER="):
         raise AssertionError(line)
     return line.split("=",1)[1]
+
+
+def rule_counter(namespace: str, family: str, table: str, comment: str) -> int:
+    doc=json.loads(ns(namespace,"nft","-j","list","table",family,table).stdout)
+    for row in doc.get("nftables",[]):
+        rule=row.get("rule") if isinstance(row,dict) else None
+        if not isinstance(rule,dict) or rule.get("comment")!=comment:
+            continue
+        for expr in rule.get("expr",[]):
+            counter=expr.get("counter") if isinstance(expr,dict) else None
+            if isinstance(counter,dict):
+                return int(counter.get("packets",0))
+    return -1
+
+
+def dump_diagnostics():
+    for namespace, family, table, comment in (
+        (STACK,"ip","exp063_stack","exp063-export-a"),
+        (HOST,"inet","exp063_host","exp063-consume-a"),
+        (HOST,"inet","exp063_host","exp063-profile-a-nat"),
+        (HOST,"inet","exp063_host","exp063-return-a"),
+    ):
+        try:
+            print(
+                "EXP063_DIAG_COUNTER "
+                + comment
+                + "="
+                + str(rule_counter(namespace,family,table,comment)),
+                flush=True,
+            )
+        except Exception as exc:
+            print("EXP063_DIAG_COUNTER_ERROR " + comment + "=" + repr(exc), flush=True)
+    for namespace, dst, mark in (
+        (HOST,LAN_IP,TRANS_A),
+        (HOST,LAN_IP,"0"),
+        (HOST,REMOTE_A,RETURN_MARK),
+        (STACK,REMOTE_A,STACK_CT_A),
+    ):
+        try:
+            result=ns(namespace,"ip","-4","route","get",dst,"mark",mark,check=False)
+            print(
+                f"EXP063_DIAG_ROUTE ns={namespace} dst={dst} mark={mark} "
+                f"rc={result.returncode} out={result.stdout!r} err={result.stderr!r}",
+                flush=True,
+            )
+        except Exception as exc:
+            print("EXP063_DIAG_ROUTE_ERROR=" + repr(exc), flush=True)
 
 
 def nat_counter() -> int:
