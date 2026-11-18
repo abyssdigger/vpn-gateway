@@ -70,22 +70,23 @@ class LinuxHostBootstrapBackend:
         observed_routes,route_conflicts=_observe_routes(
             route_rows,self.allocation,desired
         )
-        observed_rules,rule_conflicts=_observe_rules(
+        owned_rules,matching_rules,rule_conflicts=_observe_rules(
             rule_rows,self.allocation,desired
         )
 
         desired_routes=set(desired.routes)
         observed_route_set=set(observed_routes)
         desired_rule_priorities=_desired_rule_priorities(desired)
-        observed_rule_priorities=set(observed_rules)
+        owned_rule_priorities=set(owned_rules)
+        matching_rule_priorities=set(matching_rules)
 
         return HostBootstrapObservation(
             routes=tuple(sorted(observed_routes,key=_route_key)),
-            rule_priorities=tuple(sorted(observed_rule_priorities)),
+            rule_priorities=tuple(sorted(owned_rule_priorities)),
             missing_routes=tuple(sorted(desired_routes-observed_route_set,key=_route_key)),
             stale_routes=tuple(sorted(observed_route_set-desired_routes,key=_route_key)),
-            missing_rule_priorities=tuple(sorted(desired_rule_priorities-observed_rule_priorities)),
-            stale_rule_priorities=tuple(sorted(observed_rule_priorities-desired_rule_priorities)),
+            missing_rule_priorities=tuple(sorted(desired_rule_priorities-matching_rule_priorities)),
+            stale_rule_priorities=tuple(sorted(owned_rule_priorities-matching_rule_priorities)),
             conflicts=tuple(route_conflicts+rule_conflicts),
         )
 
@@ -271,7 +272,8 @@ def _observe_rules(rows,allocation,desired):
     reserved_priorities={allocation.bypass_priority}
     reserved_priorities.update(range(allocation.pair_priorities.first,allocation.pair_priorities.stop))
     expected=_expected_rule_signatures(desired)
-    observed=[]
+    owned=[]
+    matching=[]
     conflicts=[]
     for row in rows:
         priority=_decimal(row.get("priority"))
@@ -280,14 +282,11 @@ def _observe_rules(rows,allocation,desired):
         if _decimal(row.get("protocol"))!=allocation.rule_protocol:
             conflicts.append(f"foreign rule occupies reserved host bootstrap priority {priority}")
             continue
-        signature=_rule_signature(row)
+        owned.append(priority)
         expected_signature=expected.get(priority)
-        if expected_signature is not None and signature!=expected_signature:
-            # Owner-marked stale state is safe to delete/rebuild, not a foreign conflict.
-            observed.append(priority)
-            continue
-        observed.append(priority)
-    return observed,conflicts
+        if expected_signature is not None and _rule_signature(row)==expected_signature:
+            matching.append(priority)
+    return owned,matching,conflicts
 
 
 def _expected_rule_signatures(desired):
