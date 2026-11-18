@@ -587,15 +587,16 @@ def _create_managed_network_domain(
                 runner.run(("ip", "netns", "del", spec.namespace))
             except Exception:
                 pass
-        if (
-            created_veth
-            and _single_link(_link_rows(runner), spec.host_interface)
-            is not None
+        current_host_links = _link_rows(runner)
+        for host_interface in (
+            spec.host_interface,
+            *(item.host_interface for item in spec.additional_boundaries),
         ):
-            try:
-                runner.run(("ip", "link", "del", spec.host_interface))
-            except Exception:
-                pass
+            if _single_link(current_host_links, host_interface) is not None:
+                try:
+                    runner.run(("ip", "link", "del", host_interface))
+                except Exception:
+                    pass
         raise
 
 
