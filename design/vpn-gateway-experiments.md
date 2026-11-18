@@ -25,6 +25,31 @@ Current experiment directories:
 | EXP-059 | paired RPDB bootstrap with suppress-prefixlength |
 | EXP-060 | selected paired-RPDB host bootstrap backend |
 | EXP-061 | stack established-flow return affinity across host boundary |
+| EXP-062 | inbound multipath concrete-path affinity inside managed stack |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
+
+
+## Result vs disposition
+
+The experiment artifact owns the technical **Result**. The registry owns the later
+project-level **Disposition**. A disposition is assigned or changed only after the experiment
+has completed and its result has been discussed; it never changes the technical Result.
+
+Canonical dispositions:
+
+- `pending_decision` — experiment completed, adoption decision not yet made;
+- `selected` — evidence/mechanism is selected for current architecture;
+- `not_selected` — technically available evidence/mechanism is deliberately not adopted;
+- `deferred` — adoption decision or use is intentionally postponed behind a named gate;
+- `superseded` — a newer experiment/result replaces this one for the same decision;
+- `historical_only` — retained only as historical evidence/context.
+
+### Disposition ledger
+
+| Experiment | Result | Disposition | Note |
+| --- | --- | --- | --- |
+| EXP-014 | PREPARED / UNPROVEN | superseded | Historical predecessor for remote-initiated multi-path return pinning; EXP-062 is the current scoped experiment. |
+| EXP-061 | PASS | selected | Selected Release-1 Profile-routing-domain return affinity evidence. |
+| EXP-062 | PASS | pending_decision | Concrete-path affinity and fail-closed pinned-path loss are technically proven; adoption must be decided only after result discussion. |

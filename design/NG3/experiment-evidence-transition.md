@@ -374,13 +374,15 @@ Release 1 no longer depends on this experiment because it explicitly rejects
 `inbound`/`bidirectional` Profiles whose configured maximum eligible logical-path capacity
 exceeds 1.
 
-EXP-014 is retained as the primary future evidence candidate for Release 2
-multi-path inbound/bidirectional support.
+EXP-014 is retained as the historical predecessor for Release-2
+multi-path inbound/bidirectional return-path evidence. It has now been superseded as the active
+experiment vehicle by EXP-062, whose scope is narrower because EXP-053/EXP-061 already proved
+the host-boundary and Profile-routing-domain continuity layers separately.
 
 Constraint:
 
 Do not claim safe INBOUND/BIDIRECTIONAL capacity greater than one until requirements are
-revised and EXP-014 or materially equivalent target evidence is accepted.
+revised and EXP-062 or materially equivalent target evidence is accepted.
 
 ## 18. EXP-015 — MTU/MSS real TCP
 

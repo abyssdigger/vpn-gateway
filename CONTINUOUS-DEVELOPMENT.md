@@ -573,6 +573,23 @@ Every preserved experiment records at least:
 - result or blocked status;
 - architectural consequence.
 
+Experiment **Result** and post-result **Disposition** are separate facts:
+
+- `Result` records only the technical outcome established by the experiment itself
+  (for example `PASS`, `FAIL`, `INCONCLUSIVE`, or a blocked/unrun state);
+- `Disposition` records what the project decided to do with that completed evidence and
+  belongs in the central experiment registry, not in the experiment result;
+- completing an experiment initially leaves its disposition `pending_decision` until the
+  result has been discussed;
+- a technically successful experiment may therefore be `PASS` while its disposition is
+  `not_selected`; this means the mechanism is feasible but the project holder chose not to
+  adopt it;
+- changing a disposition must not rewrite or reinterpret the experiment Result.
+
+Use a small canonical disposition vocabulary unless a review explicitly extends it:
+`pending_decision`, `selected`, `not_selected`, `deferred`, `superseded`,
+`historical_only`.
+
 Failed or unavailable experiments remain visible evidence and are not hidden by simply
 rerunning until green.
 
