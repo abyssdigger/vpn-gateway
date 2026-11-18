@@ -1689,6 +1689,7 @@ Availability is not allowed to:
 - `VPNG0003-R3.R2`
 - `VPNG0003-R3.R7`
 - `VPNG0003-R3.R8`
+- `VPNG0003-R3.R8.R1`
 - `VPNG0003-R3.R8.C1`
 
 The effective order is a selector for traffic that does not already carry an established
@@ -4653,6 +4654,7 @@ The Executor distinguishes two transition classes.
 - `VPNG0003-R3.R3`
 - `VPNG0003-R3.R4`
 - `VPNG0003-R3.R8`
+- `VPNG0003-R3.R8.R1`
 
 When the desired change alters only priority/order of the same eligible unicast path set,
 the Linux implementation uses owned ordinary metric space and must be able to identify one
