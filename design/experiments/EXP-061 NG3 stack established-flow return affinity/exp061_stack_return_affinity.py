@@ -147,6 +147,11 @@ def remove_stack_affinity():
     ns(STACK, "ip", "route", "flush", "table", "1155", check=False)
 
 
+def flush_conntrack():
+    for name in (STACK, HOST):
+        ns(name, "conntrack", "-F", check=False)
+
+
 def ping(expect_success: bool):
     result = ns(
         A, "ping", "-I", REMOTE, "-c", "1", "-W", "1", LAN_IP, check=False
@@ -171,14 +176,17 @@ def main():
             raise AssertionError(f"host main unexpectedly contains remote route: {host_routes!r}")
         print("EXP061_HOST_NO_REMOTE_ROUTE=PASS")
 
+        flush_conntrack()
         ping(False)
         print("EXP061_WITHOUT_STACK_AFFINITY_FAILS=PASS")
 
+        flush_conntrack()
         install_stack_affinity()
         ping(True)
         print("EXP061_STACK_AFFINITY_RETURN=PASS")
 
         remove_stack_affinity()
+        flush_conntrack()
         ping(False)
         print("EXP061_AFFINITY_REMOVAL_RESTORES_FAILURE=PASS")
 
