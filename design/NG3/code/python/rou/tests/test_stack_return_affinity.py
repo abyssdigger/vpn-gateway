@@ -7,6 +7,7 @@ from rou.interface_identity import InterfaceIdentity
 from rou.network_policy_layout import (
     NetworkPolicyLayout,
     NumericResourcePool,
+    PayloadDispatchRule,
     PayloadPolicyAllocation,
 )
 from rou.payload_profile import PayloadProfileRequest
@@ -59,7 +60,20 @@ def layout():
             ),
         ),
         probe=(),
-        dispatch_rules=(),
+        dispatch_rules=(
+            PayloadDispatchRule(
+                profile_id="specific",
+                destination=IPv4Network("10.0.0.0/24"),
+                priority=1000,
+                table=1002,
+            ),
+            PayloadDispatchRule(
+                profile_id="broad",
+                destination=IPv4Network("10.0.0.0/16"),
+                priority=1001,
+                table=1001,
+            ),
+        ),
         nft_family="ip",
         nft_table="vpn_gate",
     )
