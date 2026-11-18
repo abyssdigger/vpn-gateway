@@ -26,8 +26,8 @@ established managed flow
         -> changes to availability/preference/other paths do not migrate the flow
 
 selected logical path disappears or becomes unusable
-        -> established flow is not silently migrated to another logical path
-        -> without separately proved path-semantic equivalence, it fails closed
+        -> destination reachability through another path is not enough
+        -> without separately proved path-semantic equivalence, established flow fails closed
         -> no promise of buffering, replay, reliable delivery or seamless flow migration
         -> in-flight traffic may be lost
         -> a new flow may use another currently allowed/effective path
