@@ -199,6 +199,7 @@ def start_controller_once(
 
     preflight: ManagedNetworkDomainPreflightResult | None = None
     domain: ManagedNetworkDomainEnsureResult | None = None
+    boundary_contribution: ControllerBoundaryContribution | None = None
 
     if requested():
         lock.release()
@@ -260,13 +261,16 @@ def start_controller_once(
         activation: NetworkPolicyActivationResult | None = None,
         containment: ForwardingGateExecutionResult | None = None,
         failure_status: ControllerStartupStatus | None = None,
+        retain_lock: bool = False,
     ) -> ControllerStartupResult:
-        lock.release()
+        if not retain_lock:
+            lock.release()
         return ControllerStartupResult(
             status=status,
             session=None,
             preflight=preflight,
             domain=domain,
+            boundary_contribution=boundary_contribution,
             activation=activation,
             failure_containment=containment,
             failure_status=failure_status,
@@ -474,11 +478,12 @@ def start_controller_once(
                     ),
                     containment=containment,
                     failure_status=ControllerStartupStatus.BOUNDARY_CONVERGENCE_FAILED,
+                    retain_lock=cleanup_error is not None,
                 )
 
-    interrupted = interrupted_stop("boundary contribution convergence")
-    if interrupted is not None:
-        return interrupted
+        interrupted = interrupted_stop("boundary contribution convergence")
+        if interrupted is not None:
+            return interrupted
 
     gate = LinuxForwardingGateBackend(
         runner,
@@ -519,6 +524,7 @@ def start_controller_once(
                 ),
                 activation=activation,
                 failure_status=ControllerStartupStatus.ACTIVATION_FAILED,
+                retain_lock=True,
             )
         if (
             activation.status

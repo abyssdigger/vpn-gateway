@@ -67,6 +67,7 @@ Current trace:
 | normalized Device NAT intent -> payload masquerade desired projection | `device_policy.py`, `payload_nat_desired.py` | `NG3-2026-11-16-payload-nat-desired-code-review.md`, `EXP-033-result-20261116.md` |
 | host-side Device server publication | `host_publication_policy.py`, `linux_host_publication.py`, alpha runtime composition | `NG3-2026-11-17-host-server-publication-dnat-review.md`, EXP-052, EXP-051 extension |
 | host-boundary bootstrap/return policy projection | `host_boundary_policy.py`, `linux_host_boundary_policy.py` | EXP-053, current host-return-steering cycle review |
+| managed-stack established-flow return affinity | `stack_return_affinity.py`, `linux_stack_return_affinity.py` | EXP-061, current stack-return-affinity cycle review |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
 The executable reference implementation still stops before separately-gated runtime
@@ -1845,6 +1846,84 @@ Consequences:
 Historical EXP-014 remains the primary evidence candidate for a future release that restores
 multi-path inbound/bidirectional support. Its result must not alter Release 1 behavior unless
 requirements are explicitly revised.
+
+## 5.2. Established-flow return affinity inside the managed stack
+
+**Implements:**
+- `VPNG0002-R2.R6`;
+- `VPNG0007-R7.R3.R4`;
+- `VPNG0007-R7.R3.R4.R1`.
+
+**Constrained by:**
+- `VPNG0002-R2.R3.C1`.
+
+The host-side return mechanism from EXP-053 solves only the host/managed-domain boundary.
+It returns a reply to the stack but does not by itself preserve which VPN routing domain
+accepted the original remote-initiated flow.
+
+This distinction is material when managed destinations overlap:
+
+```text
+channel A / Profile A: 10.0.0.0/16
+channel B / Profile B: 10.0.0.0/24
+
+remote 10.0.0.2 enters through A
+reply re-enters stack from host boundary
+ordinary NEW-flow classification -> B (/24)
+required established-flow return -> A
+```
+
+Therefore payload permission and established-flow routing affinity remain separate lower
+responsibilities. `payload_forward` may permit an established reply, but its address
+predicate is not allowed to substitute for preservation of the routing domain selected by
+the original inbound flow.
+
+EXP-061 proves the Release-1 Linux mechanism end to end across:
+
+```text
+VPN ingress
+    -> managed stack
+    -> ordinary host/LAN
+    -> ordinary host
+    -> managed stack
+    -> original VPN routing domain
+```
+
+The selected Release-1 projection is:
+
+```text
+VPN-originated NEW flow on an accepted ingress path
+    -> save Profile routing-domain association in stack conntrack mark
+
+reply re-enters from verified host boundary
+    -> restore reserved ct mark to packet fwmark
+
+higher-precedence affinity RPDB rule
+    -> original Profile routing table
+    -> current single eligible inbound path
+```
+
+The mark identifies the original **Profile routing domain**, not an arbitrary concrete path.
+That is sufficient only because `VPNG0002-R2.R3.C1` limits Release-1 inbound/bidirectional
+Profiles to at most one eligible logical path. A future multi-path release must not treat this
+as proof of concrete-path pinning; EXP-014 or equivalent evidence remains required.
+
+The lower owner is intentionally separate from the invariant `ip vpn_gate` nft permission
+table:
+
+- `stack_return_affinity.py` derives deterministic mark/RPDB allocation and exact ingress
+  classifier fragments from current Profile/path/layout facts;
+- `linux_stack_return_affinity.py` renders a dedicated
+  `ip vpn_gate_return_affinity` PREROUTING owner and exact fwmark RPDB rules;
+- reserved affinity RPDB priorities execute before ordinary Profile destination dispatch;
+- no physical rule is derived by reclassifying the reply only from its remote address.
+
+Current implementation boundary is deliberately lower-only: guarded authoritative
+observation/comparison/convergence of this owner and composition into the activation
+transaction must be added before the controller may enable forwarding with this owner.
+Blind replace/adoption of an existing reserved table or rule is not accepted.
+
+**Evidence:** `EXP-061-result-20261118.md`.
 
 # 6. AvailabilityPriorityCalculator
 
