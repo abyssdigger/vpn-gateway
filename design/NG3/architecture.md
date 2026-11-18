@@ -25,14 +25,14 @@ Current trace:
 
 | Architecture responsibility / contract | Executable reference | Review evidence |
 | --- | --- | --- |
-| ConfigurationAdapter structural + canonical Release-1 normalization | `domain.py`, `config.py`, `release1_config.py`, `port_bundle.py` | `NG3-2026-11-16-structural-config-code-review.md`, `NG3-2026-11-17-release1-config-grammar-rust-boundary-review.md`, `NG3-2026-11-17-port-bundle-correction-review.md` |
+| ConfigurationAdapter structural + canonical Release-1 normalization | `domain.py`, `config.py`, `release1_config.py`, `port_bundle.py` | `NG3-2026-11-16-structural-config-code-review.md`, `NG3-2026-11-17-release1-config-grammar-rust-boundary-review.md`, `NG3-2026-11-17-port-bundle-correction-review.md`, `NG3-2026-11-18-sticky-reserve-reference-code-review.md` |
 | authoritative VPNPathAdapter interface-identity observation boundary | `interface_identity.py`, `interface_inventory.py` | `NG3-2026-11-16-interface-inventory-code-review.md` |
 | Linux VPNPathAdapter fresh managed-netns runtime collection | `linux_vpn_path_adapter.py` | `NG3-2026-11-18-linux-vpn-path-adapter-runtime-review.md` |
 | shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
 | PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
 | PayloadPolicyCalculator NEW-flow Profile classification | `profile_classification.py` | `NG3-2026-11-16-profile-classification-code-review.md` |
 | PayloadTrafficManager bounded availability confirmation state | `availability_confirmation.py` | `NG3-2026-11-16-availability-confirmation-code-review.md` |
-| AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md` |
+| AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md`, `NG3-2026-11-18-sticky-reserve-reference-code-review.md` |
 | NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
 | NetworkPolicyExecutor re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
 | NetworkPolicyExecutor single-attempt observe/apply/re-observe contract | `route_priority_executor.py` | `NG3-2026-11-16-route-priority-executor-attempt-code-review.md` |
