@@ -45,7 +45,7 @@ class RuntimeStatusTests(unittest.TestCase):
         self.assertEqual(len(configured.devices), 1)
         device = configured.devices[0]
         self.assertEqual(device.device_id, "ovpn")
-        self.assertEqual(device.expected_interfaces, ("vpn/2",))
+        self.assertEqual(device.expected_interfaces, ("vpn*/2",))
         self.assertTrue(device.use_outbound_nat)
         self.assertEqual(
             device.vpn_client_transports,
