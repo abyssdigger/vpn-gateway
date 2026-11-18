@@ -170,7 +170,8 @@ def setup():
             f'ct state new ct mark set {hex(PROFILE_MARK[i])}'
         )
         stack_lines.append(
-            f'    ct mark {hex(PROFILE_MARK[i])} meta mark set ct mark'
+            f'    ct mark {hex(PROFILE_MARK[i])} counter meta mark set ct mark '
+            f'comment "exp064-stack-restore-{i}"'
         )
     stack_lines.extend(["  }","}",""])
     ns(STACK,"nft","-f","-",input_text="\n".join(stack_lines))
@@ -199,7 +200,8 @@ def setup():
     ])
     for i in sorted(STATEFUL):
         host_lines.append(
-            f'    ct mark {hex(HOST_CLASS[i])} meta mark set {hex(RETURN_MARK)}'
+            f'    ct mark {hex(HOST_CLASS[i])} counter meta mark set {hex(RETURN_MARK)} '
+            f'comment "exp064-output-return-{i}"'
         )
     host_lines.extend([
         "  }",
@@ -262,6 +264,24 @@ def do_client(i:int,dst:str,port:int,payload:str):
         raise AssertionError(f"client {i} failed: {r.stdout!r} {r.stderr!r}")
 
 
+def do_client_diagnostic(i:int,dst:str,port:int,payload:str):
+    r=ns(
+        REMOTES[i],"python3","-c",CLIENT,
+        REMOTE_IP[i],dst,str(port),payload,check=False
+    )
+    if r.returncode!=0 or "OK" not in r.stdout:
+        print("EXP064_LOCAL_CLIENT_STDERR="+repr(r.stderr),flush=True)
+        for label,value in (
+            ("host-classify",counter(f"exp064-class-{i}")),
+            ("host-output-return",counter(f"exp064-output-return-{i}")),
+            ("stack-profile-restore",table_counter(STACK,"ip","exp064_stack",f"exp064-stack-restore-{i}")),
+        ):
+            print(f"EXP064_LOCAL_DIAG {label}={value}",flush=True)
+        route=ns(HOST,"ip","-4","route","get",REMOTE_IP[i],"mark",hex(RETURN_MARK),check=False)
+        print("EXP064_LOCAL_DIAG host-return-route="+repr(route.stdout)+repr(route.stderr),flush=True)
+        raise AssertionError(f"local client {i} failed")
+
+
 def peer(server)->str:
     assert server.stdout is not None
     line=server.stdout.readline().strip()
@@ -270,8 +290,8 @@ def peer(server)->str:
     return line.split("=",1)[1]
 
 
-def counter(comment:str)->int:
-    doc=json.loads(ns(HOST,"nft","-j","list","table","inet","exp064_host").stdout)
+def table_counter(namespace:str,family:str,table:str,comment:str)->int:
+    doc=json.loads(ns(namespace,"nft","-j","list","table",family,table).stdout)
     for row in doc.get("nftables",[]):
         rule=row.get("rule") if isinstance(row,dict) else None
         if not isinstance(rule,dict) or rule.get("comment")!=comment:
@@ -281,6 +301,10 @@ def counter(comment:str)->int:
             if isinstance(value,dict):
                 return int(value.get("packets",0))
     return 0
+
+
+def counter(comment:str)->int:
+    return table_counter(HOST,"inet","exp064_host",comment)
 
 
 def main():
@@ -333,7 +357,7 @@ def main():
         host_local=start_server(HOST,LANE_NET[1][0],18642,1)
         servers.append(host_local)
         before_local=counter("exp064-nat-1")
-        do_client(1,LANE_NET[1][0],18642,"LOCAL")
+        do_client_diagnostic(1,LANE_NET[1][0],18642,"LOCAL")
         observed=peer(host_local)
         after_local=counter("exp064-nat-1")
         if observed!=REMOTE_IP[1] or after_local!=before_local:
