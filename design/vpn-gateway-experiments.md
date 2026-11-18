@@ -56,4 +56,4 @@ Canonical dispositions:
 | EXP-061 | PASS | selected | Selected Release-1 Profile-routing-domain return affinity evidence. |
 | EXP-062 | PASS | deferred | Concrete-path affinity is technically proven and retained as a possible future inbound/bidirectional multipath extension; the current baseline remains single-path until an explicit product decision re-enters this work. |
 | EXP-063 | FAIL | pending_decision | Transient packet-mark handoff across the cross-netns veth boundary failed: packets crossed, but the receiving host did not retain the exported mark. Capability remains open to another carrier. |
-| EXP-064 | pending | pending_decision | Replacement carrier experiment: fixed boundary lanes encode only the two host-side behavior bits (stateful return and gateway NAT), independent of Profile count. |
+| EXP-064 | PASS | pending_decision | Fixed behavior lanes technically preserve the two required host-side behavior bits without carrying arbitrary Profile identity across the namespace boundary; architecture selection remains pending review. |
