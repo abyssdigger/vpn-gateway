@@ -536,6 +536,48 @@ def main():
             "ping", "-c", "2", "-W", "1", HOST_ADDR,
             check=False,
         )
+        if remote_host.returncode != 0:
+            print(
+                "EXP051_ROUTE_RETURN_DIAG_SERVER_ROUTE="
+                + ns_command(
+                    SERVER_NS,
+                    "ip", "-j", "-4", "route", "get", HOST_ADDR,
+                    check=False,
+                ).stdout,
+                flush=True,
+            )
+            print(
+                "EXP051_ROUTE_RETURN_DIAG_HOST_ROUTE="
+                + command(
+                    ("ip", "-j", "-4", "route", "get", VPN_SERVER_ADDR),
+                    check=False,
+                ).stdout,
+                flush=True,
+            )
+            print(
+                "EXP051_ROUTE_RETURN_DIAG_FORWARD="
+                + ns_command(
+                    MANAGED,
+                    "nft", "list", "chain", "ip", "vpn_gate", "payload_forward",
+                    check=False,
+                ).stdout,
+                flush=True,
+            )
+            print(
+                "EXP051_ROUTE_RETURN_DIAG_AFFINITY="
+                + ns_command(
+                    MANAGED,
+                    "nft", "list", "table", "ip", "vpn_gate_return_affinity",
+                    check=False,
+                ).stdout,
+                flush=True,
+            )
+            print(
+                "EXP051_ROUTE_RETURN_DIAG_SERVER_PING="
+                + remote_host.stdout
+                + remote_host.stderr,
+                flush=True,
+            )
         assert remote_host.returncode == 0, remote_host.stderr
         print("EXP051_ROUTE_RETURN_HOST_LOCAL_REPLY=PASS")
 
