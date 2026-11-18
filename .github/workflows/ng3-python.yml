@@ -21,6 +21,7 @@ on:
       - "design/experiments/EXP-054 NG3 host underlay endpoint pinning/**"
       - "design/experiments/EXP-061 NG3 stack established-flow return affinity/**"
       - "design/experiments/EXP-062 NG3 inbound multipath concrete-path affinity/**"
+      - "design/experiments/EXP-063 NG3 Profile association gateway NAT/**"
       - "design/experiments/EXP-055 NG3 composite host boundary actuation/**"
       - "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/**"
       - "design/experiments/EXP-057 NG3 nft marked host bootstrap/**"
