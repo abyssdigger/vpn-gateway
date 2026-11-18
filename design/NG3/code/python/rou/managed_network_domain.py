@@ -29,6 +29,53 @@ class ManagedNetworkDomainRunner(Protocol):
         """Run one argv-only command or raise; return stdout text."""
 
 
+def _validate_boundary_link(
+    host_interface: str,
+    inner_interface: str,
+    host_address: IPv4Interface,
+    inner_address: IPv4Interface,
+) -> None:
+    for label, value in (
+        ("host_interface", host_interface),
+        ("inner_interface", inner_interface),
+    ):
+        if not isinstance(value, str) or not _IFNAME_RE.fullmatch(value):
+            raise ValueError(f"invalid {label} {value!r}")
+    if host_interface == inner_interface:
+        raise ValueError("host and inner interface names must differ")
+    if not isinstance(host_address, IPv4Interface):
+        raise ValueError("host_address must be IPv4Interface")
+    if not isinstance(inner_address, IPv4Interface):
+        raise ValueError("inner_address must be IPv4Interface")
+    if host_address.ip == inner_address.ip:
+        raise ValueError("host and inner addresses must differ")
+    if host_address.network != inner_address.network:
+        raise ValueError("host and inner addresses must belong to the same IPv4 network")
+    for label, address in (("host", host_address), ("inner", inner_address)):
+        network = address.network
+        if network.prefixlen <= 30 and address.ip in {
+            network.network_address,
+            network.broadcast_address,
+        }:
+            raise ValueError(f"{label} address is not usable in its subnet")
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedBoundaryLinkSpec:
+    host_interface: str
+    inner_interface: str
+    host_address: IPv4Interface
+    inner_address: IPv4Interface
+
+    def __post_init__(self) -> None:
+        _validate_boundary_link(
+            self.host_interface,
+            self.inner_interface,
+            self.host_address,
+            self.inner_address,
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class ManagedNetworkDomainSpec:
     namespace: str
@@ -36,6 +83,7 @@ class ManagedNetworkDomainSpec:
     inner_interface: str
     host_address: IPv4Interface
     inner_address: IPv4Interface
+    additional_boundaries: tuple[ManagedBoundaryLinkSpec, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.namespace, str) or not _NAMESPACE_RE.fullmatch(
@@ -73,12 +121,45 @@ class ManagedNetworkDomainSpec:
                     f"{label} address is not usable in its subnet"
                 )
 
+        if not isinstance(self.additional_boundaries, tuple) or any(
+            not isinstance(item, ManagedBoundaryLinkSpec)
+            for item in self.additional_boundaries
+        ):
+            raise ValueError(
+                "additional_boundaries must contain ManagedBoundaryLinkSpec values"
+            )
+        all_links = (
+            (self.host_interface, self.inner_interface, self.host_address, self.inner_address),
+            *(
+                (
+                    item.host_interface,
+                    item.inner_interface,
+                    item.host_address,
+                    item.inner_address,
+                )
+                for item in self.additional_boundaries
+            ),
+        )
+        names = [
+            name
+            for host_if, inner_if, _host_addr, _inner_addr in all_links
+            for name in (host_if, inner_if)
+        ]
+        if len(set(names)) != len(names):
+            raise ValueError("managed boundary interface names must be globally unique")
+        networks = [host_addr.network for _h, _i, host_addr, _ia in all_links]
+        for index, left in enumerate(networks):
+            for right in networks[index + 1:]:
+                if left.overlaps(right):
+                    raise ValueError("managed boundary IPv4 networks must not overlap")
+
 
 @dataclass(frozen=True, slots=True)
 class ManagedNetworkDomainVerification:
     confirmed: bool
     errors: tuple[str, ...]
     host_boundary: InterfaceIdentity | None = None
+    boundary_interfaces: tuple[InterfaceIdentity, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +270,67 @@ def verify_managed_network_domain(
                 f"{spec.inner_address.with_prefixlen}"
             )
 
+    boundary_interfaces: list[InterfaceIdentity] = []
+    if inner is not None and type(inner.get("ifindex")) is int:
+        try:
+            boundary_interfaces.append(
+                InterfaceIdentity(spec.inner_interface, inner["ifindex"])
+            )
+        except ValueError:
+            errors.append("inner boundary interface identity is invalid")
+
+    for extra in spec.additional_boundaries:
+        extra_host = _single_link(host_links, extra.host_interface)
+        extra_inner = _single_link(namespace_links, extra.inner_interface)
+        _verify_veth(extra_host, extra.host_interface, "additional host", errors)
+        _verify_veth(extra_inner, extra.inner_interface, "additional inner", errors)
+
+        if extra_host is not None and extra_inner is not None:
+            host_ifindex = extra_host.get("ifindex")
+            host_peer = extra_host.get("link_index")
+            inner_ifindex = extra_inner.get("ifindex")
+            inner_peer = extra_inner.get("link_index")
+            if not all(
+                type(value) is int
+                for value in (host_ifindex, host_peer, inner_ifindex, inner_peer)
+            ):
+                errors.append(
+                    f"additional boundary {extra.inner_interface!r} peer identity is not fully observable"
+                )
+            elif host_peer != inner_ifindex or inner_peer != host_ifindex:
+                errors.append(
+                    f"additional boundary {extra.inner_interface!r} is not a reciprocal veth pair"
+                )
+
+        if extra_host is not None:
+            observed = _ipv4_addresses(runner, extra.host_interface)
+            if observed != frozenset((extra.host_address,)):
+                errors.append(
+                    f"additional host boundary {extra.host_interface!r} IPv4 address set differs"
+                )
+        if extra_inner is not None:
+            observed = _ipv4_addresses(
+                runner,
+                extra.inner_interface,
+                namespace=spec.namespace,
+            )
+            if observed != frozenset((extra.inner_address,)):
+                errors.append(
+                    f"additional inner boundary {extra.inner_interface!r} IPv4 address set differs"
+                )
+            if type(extra_inner.get("ifindex")) is int:
+                try:
+                    boundary_interfaces.append(
+                        InterfaceIdentity(
+                            extra.inner_interface,
+                            extra_inner["ifindex"],
+                        )
+                    )
+                except ValueError:
+                    errors.append(
+                        f"additional inner boundary {extra.inner_interface!r} identity is invalid"
+                    )
+
     routes = _json_array(
         runner.run(
             (
@@ -213,20 +355,17 @@ def verify_managed_network_domain(
             "and inner boundary"
         )
 
-    host_boundary: InterfaceIdentity | None = None
-    if inner is not None and type(inner.get("ifindex")) is int:
-        try:
-            host_boundary = InterfaceIdentity(
-                spec.inner_interface,
-                inner["ifindex"],
-            )
-        except ValueError:
-            errors.append("inner boundary interface identity is invalid")
-
+    primary_boundary = (
+        boundary_interfaces[0]
+        if boundary_interfaces
+        and boundary_interfaces[0].ifname == spec.inner_interface
+        else None
+    )
     return ManagedNetworkDomainVerification(
         confirmed=not errors,
         errors=tuple(errors),
-        host_boundary=host_boundary if not errors else None,
+        host_boundary=primary_boundary if not errors else None,
+        boundary_interfaces=tuple(boundary_interfaces) if not errors else (),
     )
 
 
@@ -236,24 +375,33 @@ def preflight_managed_network_domain(
 ) -> ManagedNetworkDomainPreflightResult:
     """Contain/verify existing infrastructure without creating absent state."""
     namespace_exists = spec.namespace in _namespace_names(runner)
+    current_host_links = _link_rows(runner)
     host_exists = _single_link(
-        _link_rows(runner),
+        current_host_links,
         spec.host_interface,
     ) is not None
+    additional_host_exists = any(
+        _single_link(current_host_links, item.host_interface) is not None
+        for item in spec.additional_boundaries
+    )
 
     if namespace_exists:
         _require_containment(spec, runner)
 
-    if not namespace_exists and not host_exists:
+    if not namespace_exists and not host_exists and not additional_host_exists:
         return ManagedNetworkDomainPreflightResult(
             existing=False,
             verification=None,
         )
 
-    if namespace_exists != host_exists:
+    if namespace_exists != host_exists or (
+        not namespace_exists and additional_host_exists
+    ):
         raise ManagedNetworkDomainError(
             "managed network-domain infrastructure is partially present; "
-            f"namespace_exists={namespace_exists} host_boundary_exists={host_exists}"
+            f"namespace_exists={namespace_exists} "
+            f"host_boundary_exists={host_exists} "
+            f"additional_host_boundary_exists={additional_host_exists}"
         )
 
     verification = verify_managed_network_domain(spec, runner)
@@ -311,17 +459,26 @@ def destroy_managed_network_domain(
         except Exception:
             pass
 
-    if _single_link(_link_rows(runner), spec.host_interface) is not None:
-        try:
-            runner.run(("ip", "link", "del", spec.host_interface))
-        except Exception:
-            pass
+    for host_interface in (
+        spec.host_interface,
+        *(item.host_interface for item in spec.additional_boundaries),
+    ):
+        if _single_link(_link_rows(runner), host_interface) is not None:
+            try:
+                runner.run(("ip", "link", "del", host_interface))
+            except Exception:
+                pass
 
     errors = []
     if spec.namespace in _namespace_names(runner):
         errors.append(f"namespace {spec.namespace!r} still exists")
-    if _single_link(_link_rows(runner), spec.host_interface) is not None:
-        errors.append(f"host interface {spec.host_interface!r} still exists")
+    current_host_links = _link_rows(runner)
+    for host_interface in (
+        spec.host_interface,
+        *(item.host_interface for item in spec.additional_boundaries),
+    ):
+        if _single_link(current_host_links, host_interface) is not None:
+            errors.append(f"host interface {host_interface!r} still exists")
     if errors:
         raise ManagedNetworkDomainError("; ".join(errors))
 
@@ -387,21 +544,59 @@ def _create_managed_network_domain(
                 "dev", spec.inner_interface,
             )
         )
+
+        for extra in spec.additional_boundaries:
+            runner.run(
+                (
+                    "ip", "link", "add", extra.host_interface,
+                    "type", "veth",
+                    "peer", "name", extra.inner_interface,
+                )
+            )
+            runner.run(
+                (
+                    "ip", "link", "set", extra.inner_interface,
+                    "netns", spec.namespace,
+                )
+            )
+            runner.run(
+                (
+                    "ip", "addr", "add",
+                    extra.host_address.with_prefixlen,
+                    "dev", extra.host_interface,
+                )
+            )
+            runner.run(("ip", "link", "set", extra.host_interface, "up"))
+            runner.run(
+                (
+                    "ip", "-n", spec.namespace,
+                    "addr", "add",
+                    extra.inner_address.with_prefixlen,
+                    "dev", extra.inner_interface,
+                )
+            )
+            runner.run(
+                (
+                    "ip", "-n", spec.namespace,
+                    "link", "set", extra.inner_interface, "up",
+                )
+            )
     except Exception:
         if created_namespace:
             try:
                 runner.run(("ip", "netns", "del", spec.namespace))
             except Exception:
                 pass
-        if (
-            created_veth
-            and _single_link(_link_rows(runner), spec.host_interface)
-            is not None
+        current_host_links = _link_rows(runner)
+        for host_interface in (
+            spec.host_interface,
+            *(item.host_interface for item in spec.additional_boundaries),
         ):
-            try:
-                runner.run(("ip", "link", "del", spec.host_interface))
-            except Exception:
-                pass
+            if _single_link(current_host_links, host_interface) is not None:
+                try:
+                    runner.run(("ip", "link", "del", host_interface))
+                except Exception:
+                    pass
         raise
 
 

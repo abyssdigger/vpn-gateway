@@ -10,6 +10,7 @@ from rou.forwarding_gate import ForwardingGateState
 from rou.linux_forwarding_gate import LinuxForwardingGateBackend
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.managed_network_domain import (
+    ManagedBoundaryLinkSpec,
     ManagedNetworkDomainError,
     ManagedNetworkDomainSpec,
     destroy_managed_network_domain,
@@ -36,18 +37,28 @@ def main() -> int:
     suffix = str(os.getpid())[-6:]
     namespace = f"vg-ng3-domain-{suffix}"
     host_interface = f"vgd{suffix}"
+    extra_host_interface = f"vge{suffix}"
     spec = ManagedNetworkDomainSpec(
         namespace=namespace,
         host_interface=host_interface,
         inner_interface="host0",
         host_address=IPv4Interface("198.18.255.1/30"),
         inner_address=IPv4Interface("198.18.255.2/30"),
+        additional_boundaries=(
+            ManagedBoundaryLinkSpec(
+                host_interface=extra_host_interface,
+                inner_interface="host1",
+                host_address=IPv4Interface("198.18.255.5/30"),
+                inner_address=IPv4Interface("198.18.255.6/30"),
+            ),
+        ),
     )
     runner = SubprocessNftRunner()
 
     def cleanup() -> None:
         raw_run("ip", "netns", "del", namespace, check=False)
         raw_run("ip", "link", "del", host_interface, check=False)
+        raw_run("ip", "link", "del", extra_host_interface, check=False)
 
     cleanup()
     try:
@@ -59,6 +70,10 @@ def main() -> int:
             created.verification.host_boundary.ifname
             == spec.inner_interface
         )
+        assert tuple(
+            item.ifname
+            for item in created.verification.boundary_interfaces
+        ) == ("host0", "host1")
         assert (
             LinuxForwardingGateBackend(
                 runner,
@@ -129,7 +144,7 @@ def main() -> int:
         assert namespace not in runner.run(("ip", "netns", "list"))
         links = json.loads(runner.run(("ip", "-j", "link", "show")))
         assert not any(
-            row.get("ifname") == host_interface
+            row.get("ifname") in {host_interface, extra_host_interface}
             for row in links
         )
         print("MANAGED_DOMAIN_DESTROY=PASS")

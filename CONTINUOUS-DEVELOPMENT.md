@@ -680,8 +680,17 @@ natural boundaries independent of the CD window.
 - Conversely, unfinished logical work may remain on the active cycle branch across a CD
   boundary; the handoff exists precisely so the next cycle can resume it without re-reviewing
   the whole repository.
-- If the current logical block completes materially before the nominal CD boundary and there
-  is no useful reason to start another block, the cycle may end early.
+- If the current logical block is complete and recorded by a separate GitHub commit, and less
+  than three minutes remain before the nominal CD boundary, the CD cycle is complete.
+- Otherwise:
+  1. briefly plan the next logically adjacent development block;
+  2. continue work until the earlier of:
+     - the CD interval boundary;
+     - completion of that next logical block in a separate GitHub commit;
+  3. if that logical block completes, apply this rule again from the beginning.
+- The next block must already be sufficiently defined for autonomous development. If starting
+  it requires a new product-semantic or architectural decision that needs human agreement,
+  that decision boundary is a valid reason to end the CD cycle early.
 - Large overruns beyond `CYCLE_INTERVAL` are undesirable because they increase the risk that
   the interface/session fails before a usable handoff is delivered.
 

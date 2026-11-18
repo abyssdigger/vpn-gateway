@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 
+from .host_boundary_behavior import (
+    HostBoundaryBehaviorIntent,
+    HostBoundaryBehaviorProfile,
+    build_host_boundary_behavior_intents,
+)
 from .host_boundary_policy import (
     HostBoundaryPolicyPlan,
     HostBoundaryProfileIntent,
@@ -19,6 +24,7 @@ class Release1HostBoundaryIntent:
     plan: HostBoundaryPolicyPlan
     transport_endpoints: tuple[IPv4Address, ...]
     required_underlay_endpoints: tuple[IPv4Address, ...]
+    behavior: tuple[HostBoundaryBehaviorIntent, ...] = ()
 
 
 def build_release1_host_boundary_plan(
@@ -61,8 +67,19 @@ def build_release1_host_boundary_intent(
         )
     )
     required = required_underlay_endpoints(plan, endpoints)
+    behavior = build_host_boundary_behavior_intents(
+        HostBoundaryBehaviorProfile(
+            profile_id=profile_id,
+            direction=structural.direction,
+            route_return=config.profiles[profile_id].route_return,
+            gateway_nat=config.profiles[profile_id].ordinary_gateway_nat,
+        )
+        for profile_id, structural in config.structural.profiles.items()
+        if structural.enabled
+    )
     return Release1HostBoundaryIntent(
         plan=plan,
         transport_endpoints=endpoints,
         required_underlay_endpoints=required,
+        behavior=behavior,
     )

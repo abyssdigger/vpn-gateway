@@ -2,6 +2,7 @@ import unittest
 from ipaddress import IPv4Address
 
 from rou.release1_config import parse_release1_config
+from rou.host_boundary_behavior import HostBoundaryBehaviorLane
 from rou.host_underlay_policy import UnderlayEndpointPayloadConflict
 from rou.release1_host_boundary import build_release1_host_boundary_intent
 
@@ -99,6 +100,47 @@ device_order = ["server"]
         intent = build_release1_host_boundary_intent(cfg)
         self.assertEqual(intent.plan.bootstrap_routes, ())
         self.assertEqual(intent.required_underlay_endpoints, ())
+
+    def test_profile_suffixes_project_to_fixed_behavior_classes(self):
+        cfg = parse_release1_config("""
+[device.server]
+enabled = true
+expected_interfaces = ["vpn0"]
+
+[profile.a]
+enabled = true
+direction = "inbound"
+destinations = ["10.0.0.0/16"]
+device_order = ["server"]
+
+[profile.b]
+enabled = true
+direction = "inbound+snat"
+destinations = ["10.1.0.0/16"]
+device_order = ["server"]
+
+[profile.c]
+enabled = true
+direction = "inbound+route-return"
+destinations = ["10.2.0.0/16"]
+device_order = ["server"]
+
+[profile.d]
+enabled = true
+direction = "inbound+snat+route-return"
+destinations = ["10.3.0.0/16"]
+device_order = ["server"]
+""")
+        intent = build_release1_host_boundary_intent(cfg)
+        self.assertEqual(
+            tuple((item.profile_id, item.lane) for item in intent.behavior),
+            (
+                ("a", HostBoundaryBehaviorLane.STATEFUL_NO_NAT),
+                ("b", HostBoundaryBehaviorLane.STATEFUL_NAT),
+                ("c", HostBoundaryBehaviorLane.ROUTE_NO_NAT),
+                ("d", HostBoundaryBehaviorLane.ROUTE_NAT),
+            ),
+        )
 
     def test_inbound_route_return_can_require_pin(self):
         cfg = parse_release1_config("""
