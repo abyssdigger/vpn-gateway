@@ -123,10 +123,7 @@ class RuntimeStatusAgent:
         self._effective = build_effective_profile_status(profiles, bindings)
         self._readiness = readiness
         self._problems = ()
-        self._unknown = tuple(
-            field
-            for field in ()
-        )
+        self._unknown = ()
 
     def mark_unconfirmed(
         self,
@@ -184,9 +181,11 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
                 enabled=structural.enabled,
                 expected_interfaces=tuple(
                     (
-                        selector.value
-                        if selector.quota == 1
-                        else f"{selector.value}/{selector.quota}"
+                        (
+                            selector.value
+                            + ("*" if selector.kind.value == "prefix" else "")
+                            + ("" if selector.quota == 1 else f"/{selector.quota}")
+                        )
                     )
                     for selector in structural.expected_interfaces
                 ),
@@ -287,7 +286,8 @@ def write_runtime_status_json(path: Path, snapshot: RuntimeStatusSnapshot) -> No
         raise ValueError("snapshot must be RuntimeStatusSnapshot")
 
     parent = path.parent
-    parent.mkdir(parents=True, exist_ok=True)
+    if not parent.is_dir():
+        raise ValueError("status parent directory must already exist")
     payload = json.dumps(
         snapshot.to_dict(),
         sort_keys=True,
