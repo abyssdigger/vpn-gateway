@@ -27,7 +27,7 @@ Implemented:
 - accepted EXP-028 Linux platform constants for table/RPDB/protocol/metric/nft namespaces;
 - semantic Profile/allocation to per-destination route-priority domain assembly without inferring gateway/onlink semantics;
 - explicit opt-in direct-device VPN integration route realizer from verified PathBinding objects;
-- EXP-061-backed Release-1 stack established-flow return affinity: deterministic per-Profile mark/RPDB allocation, pure ingress classifier projection, and separate Linux nft/RPDB lower primitives; guarded convergence/startup composition remains a later gate;
+- EXP-061-backed Release-1 stack established-flow return affinity: deterministic per-Profile mark/RPDB allocation, pure ingress classifier projection, authoritative Linux nft/RPDB owner observation with absent/exact/stale/conflict classification, guarded convergence behind a freshly confirmed disabled ForwardingGate, exact postcondition verification, production startup/reconcile composition before structural forwarding activation, and no blind adoption of foreign reserved state;
 - complete immutable payload route/RPDB desired-state projection with terminal guards, per-destination path routes and host-boundary dispatch rules;
 - strict read-only structural route/RPDB inventory over the entire reserved NG3 table/priority namespaces, with explicit owner-scoped conflicts for unrepresentable reserved objects;
 - pure payload actual-vs-desired structural comparison producing confirmed/missing/stale route and RPDB sets without mutation;
