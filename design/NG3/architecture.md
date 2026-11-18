@@ -1689,6 +1689,7 @@ Availability is not allowed to:
 - `VPNG0003-R3.R2`
 - `VPNG0003-R3.R7`
 - `VPNG0003-R3.R8`
+- `VPNG0003-R3.R8.R1`
 - `VPNG0003-R3.R8.C1`
 
 The effective order is a selector for traffic that does not already carry an established
@@ -1698,7 +1699,8 @@ because another path became more preferred.
 If an established flow's selected logical path remains current and usable, later availability
 or preference changes of other paths must not move that flow. If the selected path itself
 disappears or becomes unusable, Release 1 does not promise buffering, replay or seamless
-migration of the existing flow; subsequent traffic may use another currently permitted path.
+migration of that existing flow and does not silently move it to another path; a **new flow**
+may use another currently permitted/effective path.
 
 ## 4.5. Device binding projection
 
@@ -1894,6 +1896,7 @@ revises the requirements and selects the extension.
 **Implements:**
 - `VPNG0002-R2.R6`;
 - `VPNG0003-R3.R8`;
+- `VPNG0003-R3.R8.R1`;
 - `VPNG0003-R3.R8.C1`;
 - `VPNG0007-R7.R3.R4`;
 - `VPNG0007-R7.R3.R4.R1`.
@@ -2025,17 +2028,28 @@ are observationally equivalent for that flow at every relevant policy/transforma
 
 Therefore production availability-driven priority changes for outbound multi-path Profiles
 remain gated until the managed stack can preserve the concrete logical path selected by the
-flow's first routed packets.
+flow's first **outbound** routed packets.
+
+This is not an outbound analogue of inbound return steering. A reply to an outbound flow
+arrives from whichever concrete VPN path the remote/network actually used; VPN-GATE does not
+choose that ingress path. The problem is the next packet of the same flow in the
+ordinary/host -> VPN direction: it re-enters the managed stack from the host boundary and,
+without an established path association, an ordinary route lookup may follow a newly preferred
+metric and send that packet through another VPN.
 
 The required lower semantics are intentionally narrow:
 
-- one established flow may carry one concrete logical-path association;
-- subsequent host-boundary ingress for that flow must restore only that exact owned
-  path-affinity discriminator before route lookup;
+- one established outbound flow may carry one concrete logical-path association learned from
+  its selected VPN egress;
+- subsequent ordinary/host -> VPN packets of that flow entering through the host boundary
+  must restore only that exact owned path-affinity discriminator before route lookup;
 - a higher-precedence path-affinity lookup must select a guarded routing domain for that
   logical path;
-- if the pinned path disappears or becomes unusable, the flow may fail closed; no migration,
-  buffering or reliable-delivery machinery is required by `VPNG0003-R3.R8.C1`;
+- if the pinned path disappears or becomes unusable, the flow must not silently migrate to a
+  different logical path merely because that path can reach the same destination; without a
+  separately proved path-semantics equivalence it fails closed on the original association;
+- no buffering, replay or reliable-delivery machinery is required by
+  `VPNG0003-R3.R8.C1`;
 - probe-local conntrack state and probe routing discriminators must be disjoint from
   payload path-affinity ownership and must never be able to select a payload flow's return
   path.
@@ -4640,6 +4654,7 @@ The Executor distinguishes two transition classes.
 - `VPNG0003-R3.R3`
 - `VPNG0003-R3.R4`
 - `VPNG0003-R3.R8`
+- `VPNG0003-R3.R8.R1`
 
 When the desired change alters only priority/order of the same eligible unicast path set,
 the Linux implementation uses owned ordinary metric space and must be able to identify one
