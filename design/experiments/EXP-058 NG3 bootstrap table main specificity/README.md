@@ -2,7 +2,7 @@
 
 ## Status
 
-PREPARED — evidence pending.
+COMPLETE — PASS (comparative fallback).
 
 ## Question
 
