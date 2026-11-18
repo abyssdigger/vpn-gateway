@@ -55,5 +55,5 @@ Canonical dispositions:
 | EXP-014 | PREPARED / UNPROVEN | superseded | Historical predecessor for remote-initiated multi-path return pinning; EXP-062 is the current scoped experiment. |
 | EXP-061 | PASS | selected | Selected Release-1 Profile-routing-domain return affinity evidence. |
 | EXP-062 | PASS | deferred | Concrete-path affinity is technically proven and retained as a possible future inbound/bidirectional multipath extension; the current baseline remains single-path until an explicit product decision re-enters this work. |
-| EXP-063 | FAIL | pending_decision | Transient packet-mark handoff across the cross-netns veth boundary failed: packets crossed, but the receiving host did not retain the exported mark. Capability remains open to another carrier. |
-| EXP-064 | PASS | pending_decision | Fixed behavior lanes technically preserve the two required host-side behavior bits without carrying arbitrary Profile identity across the namespace boundary; architecture selection remains pending review. |
+| EXP-063 | FAIL | not_selected | Transient packet-mark handoff across the cross-netns veth boundary failed and is rejected as the Profile/behavior association carrier. |
+| EXP-064 | PASS | selected | Selected Release-1 host-boundary carrier: fixed behavior lanes encode stateful-vs-route return and gateway-NAT yes/no while full Profile identity remains stack-side. |
