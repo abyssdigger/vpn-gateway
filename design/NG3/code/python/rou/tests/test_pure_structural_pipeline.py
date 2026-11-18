@@ -83,6 +83,20 @@ device_order = ["oc"]
         )
         self.assertEqual(set(effective), set(request.ordered_paths))
 
+        recovered = calculate_effective_path_order(
+            request.ordered_paths,
+            (),
+            active_path=effective[0],
+        )
+        self.assertEqual(
+            recovered,
+            (
+                LogicalPathId("oc", 1, 0),
+                LogicalPathId("oc", 0, 0),
+                LogicalPathId("oc", 1, 1),
+            ),
+        )
+
         host_boundary = InterfaceIdentity("host0", 100)
         route_facts = tuple(
             RoutePriorityPathRoute(item.path_id, item.endpoint)
