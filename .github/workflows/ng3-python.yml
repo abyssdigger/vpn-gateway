@@ -28,6 +28,7 @@ on:
       - "design/experiments/EXP-057 NG3 nft marked host bootstrap/**"
       - "design/experiments/EXP-058 NG3 bootstrap table main specificity/**"
       - "design/experiments/EXP-059 NG3 paired RPDB bootstrap/**"
+      - "design/experiments/EXP-060 NG3 selected host bootstrap backend/**"
       - "design/NG3/deployment/alpha/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
@@ -63,6 +64,7 @@ on:
       - "design/experiments/EXP-057 NG3 nft marked host bootstrap/**"
       - "design/experiments/EXP-058 NG3 bootstrap table main specificity/**"
       - "design/experiments/EXP-059 NG3 paired RPDB bootstrap/**"
+      - "design/experiments/EXP-060 NG3 selected host bootstrap backend/**"
       - "design/NG3/deployment/alpha/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
@@ -586,6 +588,27 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-059 NG3 paired RPDB bootstrap/exp059_paired_rpdb_bootstrap.py"
+
+
+  linux-selected-host-bootstrap-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables
+      - name: Compile selected host-bootstrap code
+        run: python3 -m compileall -q design/NG3/code/python/rou
+      - name: EXP-060 selected host bootstrap backend
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-060 NG3 selected host bootstrap backend/exp060_selected_host_bootstrap.py"
 
 
   linux-stack-return-affinity:
