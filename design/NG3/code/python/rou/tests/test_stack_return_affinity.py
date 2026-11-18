@@ -6,6 +6,7 @@ from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
 from rou.network_policy_layout import (
     NetworkPolicyLayout,
+    NumericResourcePool,
     PayloadPolicyAllocation,
 )
 from rou.payload_profile import PayloadProfileRequest
@@ -13,6 +14,8 @@ from rou.route_priority_inventory import RoutePriorityPathRoute
 from rou.stack_return_affinity import (
     StackReturnAffinityAllocation,
     StackReturnAffinityError,
+    StackReturnAffinityPlatformSpace,
+    allocate_stack_return_affinity,
     build_stack_return_affinity_desired,
 )
 
@@ -60,6 +63,41 @@ def layout():
         nft_family="ip",
         nft_table="vpn_gate",
     )
+
+
+class StackReturnAffinityAllocationTests(unittest.TestCase):
+    def test_allocation_is_profile_sorted_and_precedes_dispatch(self):
+        p1 = profile("specific", Direction.INBOUND, "10.0.0.0/24", PB)
+        p2 = profile("broad", Direction.INBOUND, "10.0.0.0/16", PA)
+        l = layout()
+        desired = allocate_stack_return_affinity(
+            (p1, p2),
+            l,
+            StackReturnAffinityPlatformSpace(
+                marks=NumericResourcePool(0x1000, 0x1010),
+                rule_priorities=NumericResourcePool(900, 1000),
+            ),
+        )
+        self.assertEqual(
+            [(item.profile_id, item.mark, item.rule_priority) for item in desired],
+            [
+                ("broad", 0x1000, 900),
+                ("specific", 0x1001, 901),
+            ],
+        )
+
+    def test_allocation_rejects_priority_not_before_dispatch(self):
+        p1 = profile("broad", Direction.INBOUND, "10.0.0.0/16", PA)
+        p2 = profile("specific", Direction.INBOUND, "10.0.0.0/24", PB)
+        with self.assertRaisesRegex(StackReturnAffinityError, "before ordinary payload dispatch"):
+            allocate_stack_return_affinity(
+                (p1, p2),
+                layout(),
+                StackReturnAffinityPlatformSpace(
+                    marks=NumericResourcePool(0x1000, 0x1010),
+                    rule_priorities=NumericResourcePool(1000, 1010),
+                ),
+            )
 
 
 class StackReturnAffinityTests(unittest.TestCase):
