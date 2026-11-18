@@ -4,11 +4,15 @@ import json
 from ipaddress import IPv4Interface
 import unittest
 
+from rou.forwarding_gate import ForwardingGateState
 from rou.managed_network_domain import ManagedNetworkDomainSpec
 from rou.release1_config import parse_release1_config
 from rou.selected_host_boundary import (
+    SelectedHostBoundaryObservation,
+    SelectedHostBoundaryRuntimeStatus,
     SelectedLinuxHostBoundaryContribution,
     build_selected_host_boundary_desired,
+    reconcile_selected_host_boundary_runtime_once,
 )
 
 
@@ -79,6 +83,37 @@ class NftBackend:
 
     def observe(self, desired):
         return self.observation
+
+
+class Gate:
+    def __init__(self, state=ForwardingGateState.ENABLED, *, fail_set=False):
+        self.state = state
+        self.fail_set = fail_set
+        self.set_calls = 0
+
+    def observe_forwarding_gate(self):
+        return self.state
+
+    def set_forwarding_gate(self, desired):
+        self.set_calls += 1
+        if self.fail_set:
+            raise RuntimeError("synthetic gate write failure")
+        self.state = desired
+
+
+class RuntimeContribution(SelectedLinuxHostBoundaryContribution):
+    def __init__(self, observations, *, fail_converge=False):
+        self.observations = list(observations)
+        self.fail_converge = fail_converge
+        self.converge_calls = 0
+
+    def observe(self):
+        return self.observations.pop(0)
+
+    def converge(self):
+        self.converge_calls += 1
+        if self.fail_converge:
+            raise RuntimeError("synthetic boundary convergence failure")
 
 
 class SelectedHostBoundaryTests(unittest.TestCase):
@@ -213,6 +248,59 @@ class SelectedHostBoundaryTests(unittest.TestCase):
         observed = contribution.observe()
         self.assertFalse(observed.exact)
         self.assertIn("reserved host return RPDB rule differs", observed.conflicts[0])
+
+
+    def test_runtime_exact_boundary_does_not_close_forwarding(self):
+        gate = Gate()
+        contribution = RuntimeContribution(
+            (SelectedHostBoundaryObservation(True, ()),)
+        )
+        result = reconcile_selected_host_boundary_runtime_once(
+            gate,
+            contribution,
+        )
+        self.assertEqual(result.status, SelectedHostBoundaryRuntimeStatus.EXACT)
+        self.assertTrue(result.confirmed)
+        self.assertEqual(gate.set_calls, 0)
+        self.assertEqual(contribution.converge_calls, 0)
+
+    def test_runtime_drift_closes_forwarding_before_repair(self):
+        gate = Gate()
+        contribution = RuntimeContribution(
+            (
+                SelectedHostBoundaryObservation(False, ()),
+                SelectedHostBoundaryObservation(True, ()),
+            )
+        )
+        result = reconcile_selected_host_boundary_runtime_once(
+            gate,
+            contribution,
+        )
+        self.assertEqual(
+            result.status,
+            SelectedHostBoundaryRuntimeStatus.RECONCILED,
+        )
+        self.assertTrue(result.confirmed)
+        self.assertIs(gate.state, ForwardingGateState.DISABLED)
+        self.assertEqual(gate.set_calls, 1)
+        self.assertEqual(contribution.converge_calls, 1)
+
+    def test_runtime_conflict_contains_without_adoption(self):
+        gate = Gate()
+        contribution = RuntimeContribution(
+            (SelectedHostBoundaryObservation(False, ("foreign owner",)),)
+        )
+        result = reconcile_selected_host_boundary_runtime_once(
+            gate,
+            contribution,
+        )
+        self.assertEqual(
+            result.status,
+            SelectedHostBoundaryRuntimeStatus.CONFLICT,
+        )
+        self.assertFalse(result.confirmed)
+        self.assertIs(gate.state, ForwardingGateState.DISABLED)
+        self.assertEqual(contribution.converge_calls, 0)
 
 
 if __name__ == "__main__":
