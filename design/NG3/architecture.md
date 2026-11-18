@@ -427,6 +427,20 @@ of strictly-more-specific `main` routes.
 The modifier does **not** mean Linux `NOTRACK`, does not disable conntrack globally and does
 not alter Profile firewall state semantics.
 
+The production-shaped controller/alpha composition now treats bootstrap and stateful return
+as one bounded **selected host-boundary contribution** while retaining their separate lower
+owners. Runtime audit first observes the complete contribution. Exact state is a no-op; any
+repair closes the managed ForwardingGate before host-boundary mutation, and conflicting
+reserved host state is fail-closed rather than adopted. The stateful return route/RPDB owner
+predates protocol-tagged host bootstrap ownership, so its reserved table/priority accepts only
+ABSENT or exact desired state; a different occupant is a conflict, not automatically deletable
+stale state. Cleanup disables selected bootstrap capture first, then removes return nft and
+return routing dependencies.
+
+The executable alpha now accepts canonical `+route-return` and exercises this composition
+through its ordinary startup/reconcile/stop lifecycle. This changes no grammar or semantics;
+it closes the previous alpha materialization gap.
+
 #### Evidence and rejected alternatives
 
 - EXP-053: stateful host return steering — PASS;
