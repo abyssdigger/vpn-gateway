@@ -243,7 +243,21 @@ def rule_counter(namespace: str, family: str, table: str, comment: str) -> int:
     return -1
 
 
+def link_rx_packets(namespace: str, interface: str) -> int:
+    doc=json.loads(ns(namespace,"ip","-s","-j","link","show","dev",interface).stdout)
+    if not isinstance(doc,list) or len(doc)!=1:
+        raise AssertionError(doc)
+    stats=doc[0].get("stats64") or doc[0].get("stats")
+    if not isinstance(stats,dict) or not isinstance(stats.get("rx"),dict):
+        raise AssertionError(doc)
+    return int(stats["rx"].get("packets",0))
+
+
 def dump_diagnostics():
+    try:
+        print("EXP063_DIAG_HOST_BOUNDARY_RX=" + str(link_rx_packets(HOST,H_S)), flush=True)
+    except Exception as exc:
+        print("EXP063_DIAG_HOST_BOUNDARY_RX_ERROR=" + repr(exc), flush=True)
     for namespace, family, table, comment in (
         (STACK,"ip","exp063_stack","exp063-export-a"),
         (HOST,"inet","exp063_host","exp063-host-ingress"),
