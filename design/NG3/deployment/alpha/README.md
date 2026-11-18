@@ -18,6 +18,7 @@ Alpha controller:
 - материализует fail-closed network policy, точный local allow для VPN client transport и полный `publish_vpn_server` путь: managed local admission + отдельный host-side DNAT owner;
 - удерживает controller lifetime lock;
 - раз в секунду выполняет локальный fresh audit;
+- использует stateless Linux VPNPathAdapter: каждый startup/audit получает новый полный authoritative interface snapshot, а секундный timer служит только wakeup cadence;
 - при появлении, исчезновении или пересоздании VPN endpoint заново вычисляет binding и lower
   desired state;
 - при drift закрывает forwarding перед structural convergence;
