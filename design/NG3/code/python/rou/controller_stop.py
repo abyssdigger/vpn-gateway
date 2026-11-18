@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from .controller_boundary_contribution import ControllerBoundaryContribution
 from .instance_lock import ControllerInstanceLock
 
 if TYPE_CHECKING:
@@ -46,6 +47,7 @@ def cleanup_controller_owned_domain_once(
     lock: ControllerInstanceLock,
     domain_spec: ManagedNetworkDomainSpec,
     runner: ManagedNetworkDomainRunner,
+    boundary_contribution: ControllerBoundaryContribution | None = None,
 ) -> ControllerStopResult:
     """Run one bounded owned-domain cleanup attempt under a retained lifetime lock."""
     if not lock.acquired:
@@ -58,11 +60,26 @@ def cleanup_controller_owned_domain_once(
         ForwardingGateState.DISABLED,
     )
 
-    cleanup_error: str | None = None
+    cleanup_errors: list[str] = []
+
+    if boundary_contribution is not None:
+        try:
+            boundary_contribution.cleanup()
+        except Exception as exc:
+            cleanup_errors.append(
+                "boundary contribution cleanup failed: "
+                f"{type(exc).__name__}: {exc}"
+            )
+
     try:
         destroy_managed_network_domain(domain_spec, runner)
     except Exception as exc:
-        cleanup_error = f"{type(exc).__name__}: {exc}"
+        cleanup_errors.append(
+            "managed-domain destroy failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    cleanup_error = "; ".join(cleanup_errors) if cleanup_errors else None
 
     if cleanup_error is not None:
         return ControllerStopResult(
@@ -105,4 +122,5 @@ def stop_controller_once(
         session.lock,
         domain_spec,
         runner,
+        session.boundary_contribution,
     )

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from .controller_boundary_contribution import ControllerBoundaryContribution
 from .forwarding_gate import (
     ForwardingGateExecutionResult,
     ForwardingGateState,
@@ -62,6 +63,15 @@ class ValidatedPolicyLoader(Protocol):
         """Load/validate candidate config and return a pure current-state builder."""
 
 
+class ControllerBoundaryContributionBuilder(Protocol):
+    def __call__(
+        self,
+        prepared: PreparedPayloadPolicy,
+        domain_spec: ManagedNetworkDomainSpec,
+    ) -> ControllerBoundaryContribution | None:
+        """Build one bounded optional host-boundary contribution."""
+
+
 class ControllerStopRequested(Protocol):
     def __call__(self) -> bool:
         """Return whether graceful stop has been requested; must not mutate network state."""
@@ -78,6 +88,8 @@ class ControllerStartupStatus(str, Enum):
     DOMAIN_ENSURE_FAILED = "domain_ensure_failed"
     INTERFACE_OBSERVATION_FAILED = "interface_observation_failed"
     DESIRED_BUILD_FAILED = "desired_build_failed"
+    BOUNDARY_BUILD_FAILED = "boundary_build_failed"
+    BOUNDARY_CONVERGENCE_FAILED = "boundary_convergence_failed"
     ACTIVATION_FAILED = "activation_failed"
     FAILURE_CONTAINMENT_FAILED = "failure_containment_failed"
 
@@ -90,6 +102,7 @@ class ControllerStartupSession:
     interfaces: tuple[InterfaceIdentity, ...]
     desired: PayloadNetworkPolicyDesiredState
     activation: NetworkPolicyActivationResult
+    boundary_contribution: ControllerBoundaryContribution | None = None
 
     def __post_init__(self) -> None:
         if not self.lock.acquired:
@@ -120,6 +133,7 @@ class ControllerStartupResult:
     session: ControllerStartupSession | None
     preflight: ManagedNetworkDomainPreflightResult | None = None
     domain: ManagedNetworkDomainEnsureResult | None = None
+    boundary_contribution: ControllerBoundaryContribution | None = None
     activation: NetworkPolicyActivationResult | None = None
     failure_containment: ForwardingGateExecutionResult | None = None
     failure_status: ControllerStartupStatus | None = None
@@ -156,6 +170,7 @@ def start_controller_once(
     platform: NetworkPolicyPlatformSpace,
     load_validated_policy: ValidatedPolicyLoader,
     stop_requested: ControllerStopRequested | None = None,
+    build_boundary_contribution: ControllerBoundaryContributionBuilder | None = None,
 ) -> ControllerStartupResult:
     """Run one bounded startup attempt with phase-boundary graceful-stop checkpoints."""
     requested = stop_requested or _never_stop_requested
@@ -201,6 +216,7 @@ def start_controller_once(
             lock,
             domain_spec,
             runner,
+            boundary_contribution,
         )
         if stopped.stopped:
             return ControllerStartupResult(
@@ -393,6 +409,77 @@ def start_controller_once(
     if interrupted is not None:
         return interrupted
 
+    if build_boundary_contribution is not None:
+        try:
+            boundary_contribution = build_boundary_contribution(
+                prepared,
+                domain_spec,
+            )
+            if (
+                boundary_contribution is not None
+                and not hasattr(boundary_contribution, "converge")
+            ):
+                raise TypeError(
+                    "boundary contribution must implement converge()/cleanup()"
+                )
+        except Exception as exc:
+            containment = _contain(domain_spec, runner)
+            return fail(
+                (
+                    ControllerStartupStatus.BOUNDARY_BUILD_FAILED
+                    if containment.confirmed
+                    else ControllerStartupStatus.FAILURE_CONTAINMENT_FAILED
+                ),
+                "boundary contribution build failed: "
+                f"{type(exc).__name__}: {exc}"
+                + (
+                    ""
+                    if containment.confirmed
+                    else "; failure containment is not confirmed"
+                ),
+                containment=containment,
+                failure_status=ControllerStartupStatus.BOUNDARY_BUILD_FAILED,
+            )
+
+        if boundary_contribution is not None:
+            try:
+                boundary_contribution.converge()
+            except Exception as exc:
+                cleanup_error = None
+                try:
+                    boundary_contribution.cleanup()
+                except Exception as cleanup_exc:
+                    cleanup_error = (
+                        f"{type(cleanup_exc).__name__}: {cleanup_exc}"
+                    )
+                containment = _contain(domain_spec, runner)
+                failed_safe = containment.confirmed and cleanup_error is None
+                return fail(
+                    (
+                        ControllerStartupStatus.BOUNDARY_CONVERGENCE_FAILED
+                        if failed_safe
+                        else ControllerStartupStatus.FAILURE_CONTAINMENT_FAILED
+                    ),
+                    "boundary contribution convergence failed: "
+                    f"{type(exc).__name__}: {exc}"
+                    + (
+                        ""
+                        if cleanup_error is None
+                        else f"; boundary cleanup failed: {cleanup_error}"
+                    )
+                    + (
+                        ""
+                        if containment.confirmed
+                        else "; failure containment is not confirmed"
+                    ),
+                    containment=containment,
+                    failure_status=ControllerStartupStatus.BOUNDARY_CONVERGENCE_FAILED,
+                )
+
+    interrupted = interrupted_stop("boundary contribution convergence")
+    if interrupted is not None:
+        return interrupted
+
     gate = LinuxForwardingGateBackend(
         runner,
         domain_spec.namespace,
@@ -414,6 +501,25 @@ def start_controller_once(
     )
 
     if not activation.ready:
+        boundary_cleanup_error = None
+        if boundary_contribution is not None:
+            try:
+                boundary_contribution.cleanup()
+            except Exception as exc:
+                boundary_cleanup_error = f"{type(exc).__name__}: {exc}"
+        if boundary_cleanup_error is not None:
+            return fail(
+                ControllerStartupStatus.FAILURE_CONTAINMENT_FAILED,
+                "network-policy activation failed and boundary cleanup failed: "
+                f"{boundary_cleanup_error}"
+                + (
+                    f"; activation: {activation.diagnostic}"
+                    if activation.diagnostic
+                    else ""
+                ),
+                activation=activation,
+                failure_status=ControllerStartupStatus.ACTIVATION_FAILED,
+            )
         if (
             activation.status
             is NetworkPolicyActivationStatus.FAILURE_CONTAINMENT_FAILED
@@ -460,6 +566,7 @@ def start_controller_once(
         interfaces=interfaces,
         desired=desired,
         activation=activation,
+        boundary_contribution=boundary_contribution,
     )
     return ControllerStartupResult(
         status=ControllerStartupStatus.READY,

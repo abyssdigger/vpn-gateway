@@ -316,89 +316,131 @@ current NG3 ForwardingGate and leaving external configuration syntax unfixed.
 **Implements:**
 - `VPNG0002-R2.R3.R1.R1`;
 - `VPNG0002-R2.R3.R1.R1.R1`;
+- `VPNG0002-R2.R3.R1.R1.R2`;
 - `VPNG0002-R2.R3.R3.R1`;
 - `VPNG0002-R2.R3.R3.R1.R1`;
 - `VPNG0004-R4.R6.R1.R1`;
 - `VPNG0004-R4.R6.R1.R2`.
 
-The isolated managed domain does not remove the ordinary VPN bootstrap problem: host/LAN
-traffic must first be delivered into the explicit VPN-GATE boundary before Profile routing can
-act on it. NG3 therefore defines a separate **host-boundary policy owner**. This owner is not
-part of `ManagedNetworkDomain` infrastructure lifecycle and does not own the host routing
-table generally.
+The isolated managed domain does not remove the ordinary VPN bootstrap problem: a packet
+initiated on the ordinary/host side must first be delivered into the explicit VPN-GATE
+boundary before Profile routing can act on it. NG3 therefore defines a separate
+**host-boundary policy owner**. It owns only explicit VPN-GATE tables/rules/nft state and does
+not own the ordinary host `main` table.
 
-For every enabled Profile that permits ordinary-side initiation:
+Bootstrap is required for:
 
 ```text
-outbound | bidirectional
-    -> host bootstrap route contribution for each Profile destination
-       toward the verified managed-domain inner peer / host boundary
+outbound
+bidirectional
+inbound+route-return
+bidirectional+route-return
 ```
 
-The contribution is narrow product state analogous to routes installed by conventional VPN
-clients. VPN-GATE creates, verifies and removes only its own contribution. It does not attempt
-to arbitrate arbitrary administrator policy or continuously repair unrelated host routing.
-An administrator who deletes or overrides a live VPN-GATE bootstrap route has violated the
-runtime operating contract; VPN-GATE may diagnose/fail rather than becoming a general host
-route-policy supervisor.
+The selected Release-1 Linux realization is backed by EXP-056 and EXP-059 and deliberately
+does **not** install Profile routes or endpoint pins into host `main`.
 
-Remote-initiated flows use a different default path. EXP-053 proves the Linux lower
-mechanism:
+#### Dedicated bootstrap table and paired RPDB rules
+
+One VPN-GATE-owned host bootstrap table contains one route toward the managed inner peer for
+each distinct bootstrap destination. `0.0.0.0/0` is represented as an ordinary default route
+inside this dedicated table; no split-default or default replacement is needed in `main`.
+
+Packets already emitted by the managed stack must bypass bootstrap before destination rules:
 
 ```text
-packet enters ordinary host from managed boundary
-    -> stamp connection association in PREROUTING
+iif <managed-host-boundary>
+    -> lookup main
+```
 
-reverse packet:
-    forwarded reply -> restore connection association in PREROUTING
-    host-local reply -> restore it in nft type-route OUTPUT
+This rule is the ordinary underlay/server-reply escape. It applies equally to:
 
-restored packet mark
-    -> dedicated RPDB owner rule/table
+- client VPN transport packets leaving the managed namespace;
+- replies from a published VPN server to dynamic external clients;
+- any other packet that has already crossed from the managed domain into the host.
+
+Therefore no exact underlay endpoint pin is required, and a managed exact `/32` destination
+may equal a VPN transport endpoint: ordinary/local initiation and stack-origin transport are
+distinguished by ingress direction.
+
+For each bootstrap destination prefix `P`, rule pairs are ordered by descending prefix
+length and then deterministic network/owner order:
+
+```text
+to P lookup main suppress_prefixlength prefixlen(P)
+to P lookup <VPNG-bootstrap-table>
+```
+
+The first rule asks the current ordinary `main` table for a route but suppresses any decision
+whose prefix is equal to or broader than `P`. Consequently:
+
+- an ordinary route **strictly more specific** than the matching managed destination wins;
+- an equal or less-specific ordinary route does not override explicit Profile policy;
+- connected LAN/uplink routes naturally survive a full-tunnel Profile;
+- an administrator route added after VPN-GATE activation is honored immediately when it is
+  strictly more specific; VPN-GATE does not copy or reconcile that route;
+- a nested more-specific managed destination is processed by its own earlier rule pair and can
+  still override a broader ordinary route.
+
+The dispatch rule then looks up the VPN-GATE bootstrap table. This is equivalent to the useful
+longest-prefix behavior of conventional VPN route injection without mutating host `main`.
+
+Reserved VPN-GATE RPDB priorities execute after the kernel local rule but before ambient main
+lookup. A foreign rule/object occupying an exact VPN-GATE-owned priority/table key is a
+diagnosable conflict; VPN-GATE does not renumber around arbitrary administrator policy or
+adopt foreign state. Administrator rules at higher precedence remain administrator
+responsibility, consistent with the conventional VPN operating boundary.
+
+#### Stateful remote-initiated return is a separate owner
+
+Bootstrap routing and stateful return intentionally remain separate. EXP-057 proved that one
+undifferentiated mark/table cannot satisfy both semantics: bootstrap must preserve a
+strictly-more-specific ordinary route, while return traffic for an already-associated
+remote-initiated flow must be forced back to the managed stack.
+
+EXP-053 remains the selected stateful-return mechanism:
+
+```text
+remote NEW enters host from managed boundary
+    -> save connection association in ct mark
+
+forwarded reply
+    -> restore packet mark in PREROUTING
+
+host-local reply
+    -> restore packet mark in nft type-route OUTPUT
+
+return fwmark
+    -> dedicated return RPDB rule/table
     -> managed boundary
 ```
 
-Therefore:
-
-```text
-inbound
-    -> no host destination route to the remote prefix is required for return traffic
-
-bidirectional
-    -> host destination route already exists for ordinary-side initiation;
-       inbound return may still use stateful steering by default
-```
-
-The host return-steering owner is boundary policy, not a license to manage arbitrary host
-firewall/routing. Its nft table/chains, fwmark, RPDB rule and return table must live in an
-explicit VPN-GATE-reserved owner namespace and must be freshly verifiable.
+The return fwmark rule executes before bootstrap bypass/prefix pairs. Thus an associated reply
+cannot accidentally fall through to a more-specific ordinary route.
 
 The canonical `+route-return` Profile modifier disables this stateful return steering for
-that Profile. In that mode, return reachability is provided by ordinary host routing through
-the managed boundary. The modifier does **not** mean Linux `NOTRACK`, does not disable
-conntrack globally, and does not alter Profile firewall state semantics.
+that Profile. Its unmarked reply is then handled by the ordinary bootstrap pair for the
+Profile destination and therefore follows route-based VPN semantics, including preservation
+of strictly-more-specific `main` routes.
 
-#### Full-tunnel bootstrap
+The modifier does **not** mean Linux `NOTRACK`, does not disable conntrack globally and does
+not alter Profile firewall state semantics.
 
-`0.0.0.0/0` is a valid Profile destination. A naive host default replacement can route the
-VPN transport's own underlay packets back into the managed stack. Full-tunnel host bootstrap
-must therefore preserve underlay reachability before activating catch-all payload routing,
-using the same bounded principle as conventional VPN clients:
+#### Evidence and rejected alternatives
 
-```text
-observe current ordinary route to each required external VPN transport endpoint
-    -> materialize exact endpoint exception(s) through that ordinary path
-    -> activate catch-all bootstrap routing toward managed boundary
-```
+- EXP-053: stateful host return steering — PASS;
+- EXP-054/055: exact endpoint pin + host-route fallback/composite — PASS, retained as
+  comparative fallback evidence;
+- EXP-056: managed-ingress ordinary-main bypass — PASS;
+- EXP-057: one shared bootstrap/return mark-table — FAIL and rejected;
+- EXP-058: dedicated table with copied `throw` routes — PASS but not selected because it
+  requires replication/reconciliation of ordinary route prefixes;
+- EXP-059: paired RPDB bootstrap with `suppress_prefixlength` — PASS and **selected**.
 
-For a client-side Device, current exact underlay endpoints are already explicit in accepted
-`allow_vpn_client` configuration. If a required underlay endpoint/path cannot be resolved
-unambiguously, full-tunnel bootstrap is not activated. The owner must not guess a fallback.
-
-This architecture does not require VPN-GATE to protect its host route contributions from a
-privileged administrator any more strongly than conventional VPN software does.
-
-**Evidence:** `EXP-053-result-20261118.md`.
+This architecture does not require VPN-GATE to protect its owned host-boundary rules/tables
+from a privileged administrator any more strongly than conventional VPN software protects its
+own installed routes. It does require exact owner observation and fail-fast conflict handling
+for the reserved VPN-GATE keys.
 
 ### Architectural consequence for external VPN channels
 

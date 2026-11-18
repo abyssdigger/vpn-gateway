@@ -51,11 +51,31 @@ class FakeLock:
 
 
 class ControllerStopTests(unittest.TestCase):
-    def session(self, lock=None):
-        return SimpleNamespace(lock=lock or FakeLock())
+    def session(self, lock=None, boundary_contribution=None):
+        return SimpleNamespace(
+            lock=lock or FakeLock(),
+            boundary_contribution=boundary_contribution,
+        )
 
-    def run_stop(self, *, containment=CONTAINED, cleanup_error=None, lock=None):
-        session = self.session(lock)
+    def run_stop(
+        self,
+        *,
+        containment=CONTAINED,
+        cleanup_error=None,
+        lock=None,
+        boundary_cleanup_error=None,
+        with_boundary=False,
+    ):
+        events = []
+        boundary = None
+        if with_boundary:
+            class Boundary:
+                def cleanup(self_inner):
+                    events.append("boundary_cleanup")
+                    if boundary_cleanup_error is not None:
+                        raise boundary_cleanup_error
+            boundary = Boundary()
+        session = self.session(lock, boundary)
         events = []
 
         def converge(*args, **kwargs):
@@ -101,6 +121,32 @@ class ControllerStopTests(unittest.TestCase):
         self.assertEqual(events, ["contain", "destroy", "release"])
         self.assertFalse(lock.acquired)
         self.assertEqual(lock.release_count, 1)
+
+    def test_success_contains_then_cleans_boundary_then_destroys(self):
+        result, lock, events = self.run_stop(with_boundary=True)
+
+        self.assertEqual(result.status, ControllerStopStatus.STOPPED)
+        self.assertEqual(
+            events,
+            ["contain", "boundary_cleanup", "destroy", "release"],
+        )
+        self.assertFalse(lock.acquired)
+
+    def test_boundary_cleanup_failure_still_attempts_destroy_and_retains_lock(self):
+        result, lock, events = self.run_stop(
+            with_boundary=True,
+            boundary_cleanup_error=RuntimeError("host bootstrap remains"),
+        )
+        self.assertEqual(
+            result.status,
+            ControllerStopStatus.CLEANUP_FAILED_CONTAINED,
+        )
+        self.assertEqual(
+            events,
+            ["contain", "boundary_cleanup", "destroy"],
+        )
+        self.assertTrue(lock.acquired)
+        self.assertIn("host bootstrap remains", result.cleanup_error)
 
     def test_failed_containment_does_not_suppress_stronger_cleanup(self):
         result, lock, events = self.run_stop(containment=UNCONTAINED)

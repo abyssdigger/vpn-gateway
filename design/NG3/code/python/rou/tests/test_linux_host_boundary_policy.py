@@ -3,9 +3,10 @@ from ipaddress import IPv4Address, IPv4Network
 
 from rou.domain import Direction
 from rou.host_boundary_policy import HostBoundaryProfileIntent, build_host_boundary_policy
+from rou.host_underlay_route import HostUnderlayPin
 from rou.linux_host_boundary_policy import (
-    FullTunnelUnderlayPinningRequired,
     HostBoundaryLinuxAllocation,
+    UnderlayPinningIncomplete,
     build_linux_host_boundary_desired,
 )
 
@@ -109,16 +110,92 @@ class LinuxHostBoundaryPolicyTests(unittest.TestCase):
         self.assertEqual(len(desired.bootstrap_routes), 1)
         self.assertIsNone(desired.nft_script)
 
-    def test_full_tunnel_fails_closed_until_underlay_pinning_is_supplied(self):
+    def test_captured_underlay_endpoint_requires_exact_observed_pin_set(self):
         plan = build_host_boundary_policy(
             (self.intent("full", Direction.OUTBOUND, "0.0.0.0/0"),)
         )
-        with self.assertRaises(FullTunnelUnderlayPinningRequired):
+        endpoint = IPv4Address("198.51.100.10")
+        with self.assertRaises(UnderlayPinningIncomplete):
             build_linux_host_boundary_desired(
                 plan,
                 host_interface="vnga-host0",
                 inner_gateway=IPv4Address("192.0.2.2"),
                 allocation=self.allocation(),
+                required_underlay_endpoints=(endpoint,),
+            )
+
+        pin = HostUnderlayPin(
+            endpoint=endpoint,
+            interface="eth0",
+            gateway=IPv4Address("192.0.2.1"),
+            source=IPv4Address("192.0.2.20"),
+            protocol=203,
+        )
+        desired = build_linux_host_boundary_desired(
+            plan,
+            host_interface="vnga-host0",
+            inner_gateway=IPv4Address("192.0.2.2"),
+            allocation=self.allocation(),
+            required_underlay_endpoints=(endpoint,),
+            underlay_pins=(pin,),
+        )
+        self.assertEqual(desired.underlay_pins, (pin,))
+        self.assertEqual(
+            [item.destination for item in desired.bootstrap_routes],
+            [IPv4Network("0.0.0.0/1"), IPv4Network("128.0.0.0/1")],
+        )
+
+    def test_full_tunnel_lowering_preserves_ordinary_default(self):
+        plan = build_host_boundary_policy(
+            (self.intent("full", Direction.OUTBOUND, "0.0.0.0/0"),)
+        )
+        desired = build_linux_host_boundary_desired(
+            plan,
+            host_interface="vnga-host0",
+            inner_gateway=IPv4Address("192.0.2.2"),
+            allocation=self.allocation(),
+        )
+        self.assertEqual(
+            [item.destination.with_prefixlen for item in desired.bootstrap_routes],
+            ["0.0.0.0/1", "128.0.0.0/1"],
+        )
+
+    def test_full_tunnel_lowering_deduplicates_explicit_split_prefix(self):
+        plan = build_host_boundary_policy(
+            (
+                self.intent("full", Direction.OUTBOUND, "0.0.0.0/0"),
+                self.intent("half", Direction.OUTBOUND, "0.0.0.0/1"),
+            )
+        )
+        desired = build_linux_host_boundary_desired(
+            plan,
+            host_interface="vnga-host0",
+            inner_gateway=IPv4Address("192.0.2.2"),
+            allocation=self.allocation(),
+        )
+        self.assertEqual(
+            [item.destination.with_prefixlen for item in desired.bootstrap_routes],
+            ["0.0.0.0/1", "128.0.0.0/1"],
+        )
+
+    def test_extra_underlay_pin_is_rejected(self):
+        plan = build_host_boundary_policy(
+            (self.intent("out", Direction.OUTBOUND, "10.0.0.0/8"),)
+        )
+        extra = HostUnderlayPin(
+            endpoint=IPv4Address("198.51.100.10"),
+            interface="eth0",
+            gateway=IPv4Address("192.0.2.1"),
+            source=None,
+            protocol=203,
+        )
+        with self.assertRaises(UnderlayPinningIncomplete):
+            build_linux_host_boundary_desired(
+                plan,
+                host_interface="vnga-host0",
+                inner_gateway=IPv4Address("192.0.2.2"),
+                allocation=self.allocation(),
+                underlay_pins=(extra,),
             )
 
 
