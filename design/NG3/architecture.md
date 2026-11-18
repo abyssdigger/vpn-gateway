@@ -31,7 +31,7 @@ Current trace:
 | shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
 | PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
 | PayloadPolicyCalculator NEW-flow Profile classification | `profile_classification.py` | `NG3-2026-11-16-profile-classification-code-review.md` |
-| PayloadTrafficManager bounded availability confirmation state | `availability_confirmation.py` | `NG3-2026-11-16-availability-confirmation-code-review.md` |
+| PayloadTrafficManager bounded availability confirmation + Profile active-route state | `availability_confirmation.py`, `availability_routing_state.py` | `NG3-2026-11-16-availability-confirmation-code-review.md`, `NG3-2026-11-18-availability-routing-state-review.md` |
 | AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md`, `NG3-2026-11-18-sticky-reserve-reference-code-review.md` |
 | NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
 | NetworkPolicyExecutor re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
