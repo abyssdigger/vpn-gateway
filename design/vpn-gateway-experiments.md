@@ -27,6 +27,7 @@ Current experiment directories:
 | EXP-061 | stack established-flow return affinity across host boundary |
 | EXP-062 | inbound multipath concrete-path affinity inside managed stack |
 | EXP-063 | Profile-association handoff for ordinary-side gateway NAT |
+| EXP-064 | fixed host-boundary behavior lanes for remote-initiated traffic |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -55,3 +56,4 @@ Canonical dispositions:
 | EXP-061 | PASS | selected | Selected Release-1 Profile-routing-domain return affinity evidence. |
 | EXP-062 | PASS | deferred | Concrete-path affinity is technically proven and retained as a possible future inbound/bidirectional multipath extension; the current baseline remains single-path until an explicit product decision re-enters this work. |
 | EXP-063 | FAIL | pending_decision | Transient packet-mark handoff across the cross-netns veth boundary failed: packets crossed, but the receiving host did not retain the exported mark. Capability remains open to another carrier. |
+| EXP-064 | pending | pending_decision | Replacement carrier experiment: fixed boundary lanes encode only the two host-side behavior bits (stateful return and gateway NAT), independent of Profile count. |
