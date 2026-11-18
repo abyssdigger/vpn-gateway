@@ -641,3 +641,17 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-063 NG3 Profile association gateway NAT/exp063_profile_gateway_nat.py"
+
+
+  linux-host-boundary-behavior-lanes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables conntrack
+      - name: EXP-064 host-boundary behavior lanes
+        run: >-
+          sudo python3
+          "design/experiments/EXP-064 NG3 host boundary behavior lanes/exp064_behavior_lanes.py"
