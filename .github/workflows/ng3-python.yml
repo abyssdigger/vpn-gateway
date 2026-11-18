@@ -19,7 +19,7 @@ on:
       - "design/experiments/EXP-052 NG3 host publication DNAT/**"
       - "design/experiments/EXP-053 NG3 host return steering/**"
       - "design/experiments/EXP-054 NG3 host underlay endpoint pinning/**"
-      - "design/experiments/EXP-055 NG3 stack established-flow return affinity/**"
+      - "design/experiments/EXP-061 NG3 stack established-flow return affinity/**"
       - "design/experiments/EXP-055 NG3 composite host boundary actuation/**"
       - "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/**"
       - "design/experiments/EXP-057 NG3 nft marked host bootstrap/**"
@@ -592,7 +592,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y iproute2 iputils-ping nftables
-      - name: EXP-055 stack established-flow return affinity
+      - name: EXP-061 stack established-flow return affinity
         run: >-
           sudo python3
-          "design/experiments/EXP-055 NG3 stack established-flow return affinity/exp055_stack_return_affinity.py"
+          "design/experiments/EXP-061 NG3 stack established-flow return affinity/exp061_stack_return_affinity.py"
