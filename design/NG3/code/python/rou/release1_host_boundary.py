@@ -21,9 +21,10 @@ class Release1HostBoundaryIntent:
     required_underlay_endpoints: tuple[IPv4Address, ...]
 
 
-def build_release1_host_boundary_intent(
+def build_release1_host_boundary_plan(
     config: Release1Config,
-) -> Release1HostBoundaryIntent:
+) -> HostBoundaryPolicyPlan:
+    """Selected mechanism-neutral Profile -> host-boundary semantic plan."""
     if not isinstance(config, Release1Config):
         raise ValueError("config must be Release1Config")
 
@@ -37,7 +38,16 @@ def build_release1_host_boundary_intent(
         for profile_id, structural in config.structural.profiles.items()
         if structural.enabled
     )
-    plan = build_host_boundary_policy(profiles)
+    return build_host_boundary_policy(profiles)
+
+
+def build_release1_host_boundary_intent(
+    config: Release1Config,
+) -> Release1HostBoundaryIntent:
+    if not isinstance(config, Release1Config):
+        raise ValueError("config must be Release1Config")
+
+    plan = build_release1_host_boundary_plan(config)
 
     endpoints = tuple(
         sorted(
