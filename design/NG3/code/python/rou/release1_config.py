@@ -108,7 +108,7 @@ class ProfileRelease1Config:
     ordinary_gateway_nat: bool
     route_return: bool
     availability_check: AvailabilityCheckConfig | None
-    reserve_devices: frozenset[str] = frozenset()
+    reserve_device_ids: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,7 +248,7 @@ def parse_release1_config(text: str) -> Release1Config:
                 body.get("availability_check"),
                 f"profile.{profile_id}.availability_check",
             ),
-            reserve_devices=profile_reserve_devices[profile_id],
+            reserve_device_ids=profile_reserve_devices[profile_id],
         )
 
     return Release1Config(
