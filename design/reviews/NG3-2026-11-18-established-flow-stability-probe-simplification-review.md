@@ -15,6 +15,7 @@ The project now distinguishes two very different concerns:
 Added:
 
 - `VPNG0003-R3.R8`
+- `VPNG0003-R3.R8.R1`
 - `VPNG0003-R3.R8.C1`
 
 Accepted semantics:
@@ -25,9 +26,11 @@ established managed flow
         -> changes to availability/preference/other paths do not migrate the flow
 
 selected logical path disappears or becomes unusable
+        -> established flow is not silently migrated to another logical path
+        -> without separately proved path-semantic equivalence, it fails closed
         -> no promise of buffering, replay, reliable delivery or seamless flow migration
         -> in-flight traffic may be lost
-        -> subsequent traffic may use another currently allowed/effective path
+        -> a new flow may use another currently allowed/effective path
 ```
 
 The Purpose is intentionally scoped to the parent path-preference requirement. The broader
@@ -42,8 +45,10 @@ equivalent to the original path.
 
 The current architecture already has a concrete counterexample: Device-owned outbound NAT.
 One path may materialize `MASQUERADE`, another may materialize `NONE`; lower NAT rules are
-bound to exact current egress endpoints. Paths may also differ in source-address, remote
-stateful firewall/NAT and tunnel-side semantics.
+bound to exact current egress endpoints. Paths may also differ in source-address, remote or
+intermediate stateful firewall/NAT and tunnel-side semantics. A mid-flow switch can therefore
+produce traffic that a remote or intermediate guard no longer recognizes as belonging to the
+established exchange.
 
 Therefore destination reachability through both paths is insufficient evidence that moving an
 established flow is harmless.
@@ -75,6 +80,12 @@ The current inbound/bidirectional Release-1 case is already protected because:
 - Release 1 permits at most one eligible logical path for inbound/bidirectional Profiles.
 
 The unresolved case is outbound multi-path.
+
+This is specifically **outbound forward-direction egress pinning**, not outbound return
+steering. A reply to an outbound flow arrives from whichever VPN/network path actually carries
+it; VPN-GATE does not choose that ingress. The risky event is a later
+ordinary/host -> VPN packet of the same flow entering the stack again and being routed by a
+newly preferred metric through another VPN.
 
 Availability-driven outbound priority changes therefore remain gated until per-flow concrete
 logical-path affinity is materialized.
