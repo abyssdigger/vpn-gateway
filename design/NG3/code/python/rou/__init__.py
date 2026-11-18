@@ -9,6 +9,11 @@ from .availability_confirmation import (
     AvailabilityOutcome,
     apply_availability_evidence,
 )
+from .availability_routing_state import (
+    AvailabilityRoutingProjection,
+    AvailabilityRoutingState,
+    project_availability_routing,
+)
 from .binding import (
     BindingProjectionError,
     DeviceBindingProjection,
@@ -417,6 +422,8 @@ __all__ = [
     "AvailabilityConfirmationState",
     "AvailabilityOutcome",
     "AvailabilityPriorityError",
+    "AvailabilityRoutingProjection",
+    "AvailabilityRoutingState",
     "BindingProjectionError",
     "CompositeNftMutationStep",
     "CompositeNftPlanError",
@@ -668,6 +675,7 @@ __all__ = [
     "activate_network_policy",
     "allocate_network_policy_layout",
     "apply_availability_evidence",
+    "project_availability_routing",
     "calculate_effective_path_order",
     "build_payload_network_policy_desired_state",
     "build_payload_nat_desired_state",
