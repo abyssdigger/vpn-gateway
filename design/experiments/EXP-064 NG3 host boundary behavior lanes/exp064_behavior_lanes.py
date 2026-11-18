@@ -112,6 +112,11 @@ def setup():
     addr(LAN,LAN_L,LAN_IP+"/30")
     ns(LAN,"ip","route","add","10.0.0.0/24","via",LAN_HOST_IP,"dev",LAN_L)
 
+    # Host-local reply generation needs an ordinary initial route before the
+    # type-route OUTPUT owner can reroute stateful replies. Deliberately point
+    # that ordinary default away from the managed stack, as in EXP-053.
+    ns(HOST,"ip","route","add","default","via",LAN_IP,"dev",LAN_H)
+
     ns(STACK,"sysctl","-qw","net.ipv4.ip_forward=1")
     ns(HOST,"sysctl","-qw","net.ipv4.ip_forward=1")
     for name,interfaces in (
