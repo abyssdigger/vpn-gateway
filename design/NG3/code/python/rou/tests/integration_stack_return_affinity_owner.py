@@ -94,6 +94,18 @@ def main() -> int:
         assert initial.status is StackReturnAffinityOwnerStatus.ABSENT
 
         applied = converge_stack_return_affinity_once(gate, backend, desired)
+        if not applied.confirmed:
+            print(f"STACK_AFFINITY_OWNER_APPLY_DIAGNOSTIC={applied!r}", flush=True)
+            print(
+                "STACK_AFFINITY_OWNER_NFT_JSON="
+                + runner.run(("ip", "netns", "exec", NS, "nft", "-j", "list", "ruleset")),
+                flush=True,
+            )
+            print(
+                "STACK_AFFINITY_OWNER_RULE_JSON="
+                + runner.run(("ip", "netns", "exec", NS, "ip", "-j", "-4", "rule", "show")),
+                flush=True,
+            )
         assert applied.confirmed
         assert backend.observe(desired).status is StackReturnAffinityOwnerStatus.EXACT
         print("STACK_AFFINITY_OWNER_APPLY=PASS")
