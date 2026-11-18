@@ -108,6 +108,7 @@ class ProfileRelease1Config:
     ordinary_gateway_nat: bool
     route_return: bool
     availability_check: AvailabilityCheckConfig | None
+    reserve_devices: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +142,7 @@ def parse_release1_config(text: str) -> Release1Config:
 
     normalized_profiles: dict[str, Any] = {}
     profile_modes: dict[str, tuple[Direction, bool, bool]] = {}
+    profile_reserve_devices: dict[str, frozenset[str]] = {}
     for profile_id, raw_body in raw_profiles.items():
         body = _table(raw_body, f"profile.{profile_id}")
         normalized = dict(body)
@@ -150,7 +152,13 @@ def parse_release1_config(text: str) -> Release1Config:
                 f"profile.{profile_id}.direction",
             )
             normalized["direction"] = direction.value
+            device_order, reserve_devices = _parse_device_memberships(
+                body.get("device_order"),
+                f"profile.{profile_id}.device_order",
+            )
+            normalized["device_order"] = list(device_order)
             profile_modes[profile_id] = (direction, gateway_nat, route_return)
+            profile_reserve_devices[profile_id] = reserve_devices
         normalized_profiles[profile_id] = normalized
 
     normalized_root = {
@@ -240,6 +248,7 @@ def parse_release1_config(text: str) -> Release1Config:
                 body.get("availability_check"),
                 f"profile.{profile_id}.availability_check",
             ),
+            reserve_devices=profile_reserve_devices[profile_id],
         )
 
     return Release1Config(
@@ -287,6 +296,42 @@ def _parse_direction(value: Any, where: str) -> tuple[Direction, bool, bool]:
         "bidirectional, bidirectional+snat, bidirectional+route-return or "
         "bidirectional+snat+route-return"
     )
+
+
+def _parse_device_memberships(
+    value: Any,
+    where: str,
+) -> tuple[tuple[str, ...], frozenset[str]]:
+    if not isinstance(value, list) or not value:
+        raise Release1ConfigError(f"{where} must be a non-empty array")
+
+    device_ids: list[str] = []
+    reserve_devices: set[str] = set()
+    for index, item in enumerate(value):
+        item_where = f"{where}[{index}]"
+        if not isinstance(item, str):
+            raise Release1ConfigError(f"{item_where} must be a string")
+
+        parts = item.split(":")
+        if len(parts) == 1:
+            device_id = parts[0]
+        elif len(parts) == 2 and parts[1] == "reserve":
+            device_id = parts[0]
+            reserve_devices.add(device_id)
+        else:
+            suffix = ":".join(parts[1:]) if len(parts) > 1 else ""
+            raise Release1ConfigError(
+                f"{item_where} has unsupported membership suffix {suffix!r}; "
+                'only ":reserve" is supported'
+            )
+        device_ids.append(device_id)
+
+    if len(set(device_ids)) != len(device_ids):
+        raise Release1ConfigError(
+            f"{where} contains duplicate Device membership after suffix normalization"
+        )
+
+    return tuple(device_ids), frozenset(reserve_devices)
 
 
 def _string_or_array(value: Any, where: str) -> tuple[str, ...]:
