@@ -101,6 +101,12 @@ def setup():
         addr(HOST,LANE_HOST[i],host_ip+"/30")
         addr(STACK,LANE_STACK[i],stack_ip+"/30")
 
+    # Host-local evidence target is one VPN-GATE host-boundary address.
+    ns(
+        REMOTES[1],"ip","route","add",LANE_NET[0][0]+"/32",
+        "via",PATH_STACK_IP[1],"dev",PATH_REMOTE[1],"src",REMOTE_IP[1]
+    )
+
     pair(HOST,LAN_H,LAN,LAN_L)
     addr(HOST,LAN_H,LAN_HOST_IP+"/30")
     addr(LAN,LAN_L,LAN_IP+"/30")
