@@ -16,7 +16,7 @@ D = LogicalPathId("wg", 1, 0)
 
 
 class AvailabilityPriorityTests(unittest.TestCase):
-    def test_no_problems_preserves_configured_order(self):
+    def test_no_state_preserves_configured_order(self):
         configured = (A, B, C)
         self.assertEqual(
             calculate_effective_path_order(configured, ()),
@@ -35,23 +35,82 @@ class AvailabilityPriorityTests(unittest.TestCase):
             (A, C, B, D),
         )
 
+    def test_recovery_does_not_preempt_healthy_ordinary_active_path(self):
+        configured = (A, B, C)
+        degraded = calculate_effective_path_order(
+            configured,
+            (A,),
+            active_path=B,
+        )
+        recovered = calculate_effective_path_order(
+            configured,
+            (),
+            active_path=B,
+        )
+        self.assertEqual(degraded, (B, C, A))
+        self.assertEqual(recovered, (B, A, C))
+
+    def test_ordinary_active_is_first_and_standby_keeps_baseline_order(self):
+        self.assertEqual(
+            calculate_effective_path_order(
+                (A, B, C, D),
+                (),
+                active_path=C,
+            ),
+            (C, A, B, D),
+        )
+
+    def test_reserve_active_yields_to_higher_baseline_usable_path(self):
+        self.assertEqual(
+            calculate_effective_path_order(
+                (A, B, C),
+                (),
+                active_path=B,
+                reserve_paths=(B,),
+            ),
+            (A, B, C),
+        )
+
+    def test_reserve_active_stays_first_when_all_higher_paths_have_problems(self):
+        self.assertEqual(
+            calculate_effective_path_order(
+                (A, B, C),
+                (A,),
+                active_path=B,
+                reserve_paths=(B,),
+            ),
+            (B, C, A),
+        )
+
+    def test_problematic_active_loses_sticky_position(self):
+        self.assertEqual(
+            calculate_effective_path_order(
+                (A, B, C),
+                (B,),
+                active_path=B,
+            ),
+            (A, C, B),
+        )
+
     def test_all_problem_paths_preserve_configured_order(self):
         configured = (A, B, C)
         self.assertEqual(
-            calculate_effective_path_order(configured, (C, A, B)),
+            calculate_effective_path_order(
+                configured,
+                (C, A, B),
+                active_path=B,
+            ),
             configured,
         )
 
-    def test_recovery_restores_configured_position(self):
-        configured = (A, B, C)
-        degraded = calculate_effective_path_order(configured, (A,))
-        recovered = calculate_effective_path_order(configured, ())
-        self.assertEqual(degraded, (B, C, A))
-        self.assertEqual(recovered, configured)
-
     def test_membership_is_unchanged(self):
         configured = (A, B, C, D)
-        effective = calculate_effective_path_order(configured, (B, D))
+        effective = calculate_effective_path_order(
+            configured,
+            (B, D),
+            active_path=A,
+            reserve_paths=(D,),
+        )
         self.assertEqual(set(effective), set(configured))
         self.assertEqual(len(effective), len(configured))
 
@@ -66,9 +125,33 @@ class AvailabilityPriorityTests(unittest.TestCase):
         with self.assertRaisesRegex(AvailabilityPriorityError, "duplicate"):
             calculate_effective_path_order((A, B), (A, A))
 
+    def test_duplicate_reserve_path_is_rejected(self):
+        with self.assertRaisesRegex(AvailabilityPriorityError, "duplicate"):
+            calculate_effective_path_order(
+                (A, B),
+                (),
+                reserve_paths=(B, B),
+            )
+
     def test_problem_path_outside_membership_is_rejected(self):
         with self.assertRaisesRegex(AvailabilityPriorityError, "outside"):
             calculate_effective_path_order((A, B), (C,))
+
+    def test_reserve_path_outside_membership_is_rejected(self):
+        with self.assertRaisesRegex(AvailabilityPriorityError, "outside"):
+            calculate_effective_path_order(
+                (A, B),
+                (),
+                reserve_paths=(C,),
+            )
+
+    def test_active_path_outside_membership_is_rejected(self):
+        with self.assertRaisesRegex(AvailabilityPriorityError, "outside"):
+            calculate_effective_path_order(
+                (A, B),
+                (),
+                active_path=C,
+            )
 
 
 if __name__ == "__main__":
