@@ -654,6 +654,31 @@ Ordinary bug fixes, test-harness corrections, internal data-structure choices,
 Rust-alignment refactors and unambiguous fail-closed hardening do not require a human
 checkpoint.
 
+## Process-correction gate
+
+A defect in the project's own operating process is not repaired by immediately editing the
+process documents or Git history.
+
+If the defect concerns methodology/process, Git/snapshot/branch policy, CD cadence, or another
+rule governing project work:
+
+1. stop the work that depends on the faulty rule;
+2. use read-only inspection to establish the actual current state and consequences;
+3. discuss with the user:
+   - the defective rule/process;
+   - why it caused or can cause incorrect project behavior;
+   - the proposed replacement/correction;
+   - every process/project artifact that would be changed;
+   - any already-created consequences that need repair;
+4. obtain explicit agreement before any corrective write.
+
+After agreement, the approved correction and approved consequence repair are ordinary
+execution of that decision.
+
+This gate does not apply to ordinary implementation bugs, test-harness corrections,
+internal refactors, or unambiguous fail-closed hardening unless they themselves change a
+project-process rule.
+
 ## Session-safety cadence
 
 Long development sessions may be interrupted by the execution environment after roughly
@@ -673,21 +698,26 @@ logic below refers only to `CYCLE_INTERVAL`.
 Logical work units, reviews, experiments, implementation slices and snapshots have their own
 natural boundaries independent of the CD window.
 
-- A logically complete block may be committed, reviewed and published as a snapshot at any
-  point inside a CD cycle.
-- Reaching the end of a CD cycle does **not** imply that a snapshot should be created.
-- Snapshot publication must not be delayed merely to coincide with the CD boundary.
+- A completed substantial logical block **must** be committed/reviewed as applicable and
+  published to `main` as one linear snapshot before the next logical block begins.
+- One CD cycle may therefore contain multiple mainline snapshots.
+- Reaching the end of a CD cycle does **not** by itself imply that a snapshot should be
+  created; an unfinished block remains unsnapshotted.
+- Snapshot publication must not be delayed merely to coincide with the CD boundary, and the
+  CD boundary must not be used to skip a snapshot of a block that already completed.
 - Conversely, unfinished logical work may remain on the active cycle branch across a CD
   boundary; the handoff exists precisely so the next cycle can resume it without re-reviewing
   the whole repository.
-- If the current logical block is complete and recorded by a separate GitHub commit, and less
-  than three minutes remain before the nominal CD boundary, the CD cycle is complete.
+- After a logical block completes, first publish its required linear snapshot to `main`.
+- If that completed block is snapshotted and less than three minutes remain before the nominal
+  CD boundary, the CD cycle is complete.
 - Otherwise:
   1. briefly plan the next logically adjacent development block;
   2. continue work until the earlier of:
      - the CD interval boundary;
      - completion of that next logical block in a separate GitHub commit;
-  3. if that logical block completes, apply this rule again from the beginning.
+  3. if that logical block completes, publish its required snapshot and apply this rule again
+     from the beginning.
 - The next block must already be sufficiently defined for autonomous development. If starting
   it requires a new product-semantic or architectural decision that needs human agreement,
   that decision boundary is a valid reason to end the CD cycle early.
