@@ -1688,6 +1688,17 @@ Availability is not allowed to:
 - `VPNG0002-R2.R4`
 - `VPNG0003-R3.R2`
 - `VPNG0003-R3.R7`
+- `VPNG0003-R3.R8`
+- `VPNG0003-R3.R8.C1`
+
+The effective order is a selector for traffic that does not already carry an established
+path association. It is **not** permission to migrate an established managed flow merely
+because another path became more preferred.
+
+If an established flow's selected logical path remains current and usable, later availability
+or preference changes of other paths must not move that flow. If the selected path itself
+disappears or becomes unusable, Release 1 does not promise buffering, replay or seamless
+migration of the existing flow; subsequent traffic may use another currently permitted path.
 
 ## 4.5. Device binding projection
 
@@ -1878,10 +1889,12 @@ multi-path inbound/bidirectional extension. EXP-062 is PASS but its registry dis
 deferred: Release 1 remains constrained to capacity<=1 until an explicit product decision
 revises the requirements and selects the extension.
 
-## 5.2. Established-flow return affinity inside the managed stack
+## 5.2. Established-flow path affinity inside the managed stack
 
 **Implements:**
 - `VPNG0002-R2.R6`;
+- `VPNG0003-R3.R8`;
+- `VPNG0003-R3.R8.C1`;
 - `VPNG0007-R7.R3.R4`;
 - `VPNG0007-R7.R3.R4.R1`.
 
@@ -1969,6 +1982,70 @@ The owner is now part of guarded production activation:
 **Evidence:** `EXP-061-result-20261118.md` plus privileged production-owner integration in
 `integration_stack_return_affinity_owner.py`.
 
+### General established-flow stability and current outbound gap
+
+The accepted flow-stability rule is broader than remote-initiated return affinity:
+
+```text
+NEW managed flow
+    -> select one currently allowed/effective logical path
+
+established managed flow
+    -> keep that selected logical path
+       while the path remains current and usable
+
+changes to other paths / effective preference
+    -> affect selection for traffic without an established association
+    -> do not migrate the established flow
+```
+
+The current inbound/bidirectional Release-1 case is already covered by the selected
+Profile-routing-domain affinity above because such a Profile can have at most one eligible
+logical path.
+
+The current outbound multi-path implementation is **not yet sufficient** for this rule.
+Its Profile table contains several allowed path routes and availability changes their metrics.
+Without a separate per-flow concrete-path association, later packets of an already established
+forwarded flow may be routed by the newly preferred metric. EXP-062's control phase already
+demonstrated this generic Linux behavior: changing current preference without concrete-path
+affinity can break an established TCP exchange even though the original path still exists.
+
+The danger is not the route change as an abstract event; it is that different allowed paths
+need not be data-plane equivalent. A concrete current example is Device-owned outbound NAT:
+one path may require `MASQUERADE` while another path may require `NONE`, and the lower NAT
+owner is compiled against the exact egress endpoint. Paths may also differ in source-address,
+remote stateful firewall/NAT and tunnel-side semantics. Therefore a mid-flow route change can
+change the packet state observed by the remote side even when the destination remains
+reachable through both paths.
+
+Release 1 deliberately does not try to prove path-equivalence dynamically. Preserving the
+already selected live logical path is the smaller and more reliable invariant. A future
+optimization may permit migration only if it has separate evidence that the old and new paths
+are observationally equivalent for that flow at every relevant policy/transformation boundary.
+
+Therefore production availability-driven priority changes for outbound multi-path Profiles
+remain gated until the managed stack can preserve the concrete logical path selected by the
+flow's first routed packets.
+
+The required lower semantics are intentionally narrow:
+
+- one established flow may carry one concrete logical-path association;
+- subsequent host-boundary ingress for that flow must restore only that exact owned
+  path-affinity discriminator before route lookup;
+- a higher-precedence path-affinity lookup must select a guarded routing domain for that
+  logical path;
+- if the pinned path disappears or becomes unusable, the flow may fail closed; no migration,
+  buffering or reliable-delivery machinery is required by `VPNG0003-R3.R8.C1`;
+- probe-local conntrack state and probe routing discriminators must be disjoint from
+  payload path-affinity ownership and must never be able to select a payload flow's return
+  path.
+
+EXP-062 proves the core Linux fact that concrete-path conntrack affinity can survive an
+ordinary preference change and can fail closed on pinned-path loss. It does **not** by itself
+complete outbound realization because an outbound flow learns its selected path after the
+initial route lookup rather than from VPN ingress. Capturing that first selected egress path
+and integrating it into production ownership is the next bounded evidence/design unit.
+
 # 6. AvailabilityPriorityCalculator
 
 **Component type:** Calculator
@@ -1979,6 +2056,7 @@ The owner is now part of guarded production activation:
 - `VPNG0003-R3.R3`
 - `VPNG0003-R3.R4`
 - `VPNG0003-R3.R7`
+- `VPNG0003-R3.R8`
 - `VPNG0007-R7.R1`
 - `VPNG0007-R7.R5`
 
@@ -2141,52 +2219,68 @@ target and reports technical reply/no-reply/local-error facts. The Agent maps th
 TCP, UDP, HTTP and protocol-native liveness remain future possible Driver implementations,
 not current capabilities.
 
-## 8.1. Linux probe-plane implementation evidence gate
+## 8.1. Linux probe-plane implementation evidence boundary
 
-Historical experiments constrain, but do not fully select, the Linux implementation behind
-the ICMP Driver.
+Historical experiments still constrain the Linux ICMP implementation, but fresh conntrack
+identity for every physical interface generation is no longer a Release-1 correctness goal
+by itself.
 
 Reusable evidence:
 
 - EXP-024 proved on privileged CI and Debian 13 target that a probe process can be isolated
   selectively inside the shared managed namespace by capturing process identity on OUTPUT
   and carrying it into reverse INPUT through a dedicated conntrack mark;
-- EXP-024 also disproved `meta skuid` on INPUT as a usable receiving-socket discriminator
-  for this purpose;
-- EXP-025 proved on privileged CI and Debian 13 target that the marked conntrack entry can
-  survive concrete interface-generation replacement and be inherited by a later probe that
-  deliberately reuses the same tuple/ICMP identifier;
-- therefore exact path/interface-generation RPDB/nft regeneration alone is insufficient to
-  establish fresh probe-flow identity;
-- EXP-026 proved in privileged CI that deleting only the dedicated probe conntrack class by
-  mark can break that stale inheritance while preserving differently marked control state,
-  but the experiment record still lacks Debian 13 target confirmation.
+- EXP-024 also disproved `meta skuid` on INPUT as a usable receiving-socket discriminator;
+- EXP-025 proved on privileged CI and Debian 13 target that a marked ICMP conntrack entry can
+  survive interface replacement and be inherited by a later probe that reuses the same
+  tuple/ICMP identifier;
+- EXP-026 proved in privileged CI that deleting the dedicated probe conntrack class by mark
+  breaks that inheritance while preserving differently marked control state.
 
-Consequences for implementation:
+EXP-025 demonstrates a real lower-level identity imperfection, but it does not demonstrate
+that a stale probe entry can synthesize a payload packet, migrate an established payload flow
+to another logical path, or by itself create an ICMP reply. The availability product semantics
+already contain two stronger boundaries:
+
+- an observation result is accepted only for the current availability subject/path/target
+  context;
+- one isolated positive/negative observation does not immediately change effective preference
+  because degradation/recovery use bounded confirmation accumulation.
+
+The accepted Release-1 decision is therefore **not** to require probe-class conntrack cleanup
+merely to guarantee a fresh technical conntrack identity for every probe generation.
+EXP-026 remains useful mechanism evidence and optional future hardening, but its target
+confirmation is not a prerequisite for Release-1 ICMP availability.
+
+The implementation must instead preserve the product-relevant isolation invariants:
 
 ```text
-if Linux ICMP Driver uses EXP-024-style conntrack-carried process identity
-    ->
-it must implement and verify an explicit probe-generation invalidation boundary
-    ->
-it must not rely only on (ifname, ifindex) replacement / nft regeneration
+probe-local state
+    must not select or migrate payload routing
+
+probe routing discriminator / table
+    must remain disjoint from payload and established-flow affinity ownership
+
+probe conntrack mark
+    must never be generically restored into a forwarded payload packet mark
+
+probe result
+    must still belong to the current subject + logical path + target context
 ```
 
-A namespace-wide conntrack flush is not accepted by this evidence.
+The probe owner remains confined to local `stack_output` / `stack_input` semantics and its
+separate probe-routing resources. Stack established-flow affinity restores only explicitly
+allocated payload-affinity marks at the host-boundary ingress; it does not perform a generic
+`ct mark -> packet mark` restore for arbitrary connection marks.
 
-EXP-026 mark-filtered cleanup is the current narrow remediation candidate, not yet final
-target evidence. Production acceptance of that specific remediation requires either Debian
-13 confirmation or an explicit review decision that the privileged-CI evidence is sufficient.
+A namespace-wide conntrack flush remains unacceptable. If later evidence shows that stale
+probe state can violate payload path affinity, escape the selected probe path, or cause a
+material availability failure not absorbed by the accepted confirmation semantics, EXP-026
+or another narrow invalidation mechanism may be re-entered.
 
-This is an implementation/evidence gate, not new user-visible availability semantics.
-
-The current implementation deferral is recorded in
-`design/deferrals/NG3-probe-local-system-materialization.md`. Until one of that artifact's
-re-entry conditions is satisfied, the shared nft convergence boundary must not materialize
-probe-owned `stack_input` / `stack_output` rules or production probe-class conntrack
-cleanup from the EXP-024/026 candidate mechanism. This does not weaken the first-release ICMP
-availability requirement; it keeps the Linux implementation path explicitly blocked rather
-than guessed.
+The former implementation deferral is retained as a historical decision record in
+`design/deferrals/NG3-probe-local-system-materialization.md`; it no longer blocks ordinary
+Release-1 ICMP probe materialization.
 
 
 ## 8.2. Probe network preconditions and shared lower policy boundary
@@ -4545,6 +4639,7 @@ The Executor distinguishes two transition classes.
 - `VPNG0003-R3.R2`
 - `VPNG0003-R3.R3`
 - `VPNG0003-R3.R4`
+- `VPNG0003-R3.R8`
 
 When the desired change alters only priority/order of the same eligible unicast path set,
 the Linux implementation uses owned ordinary metric space and must be able to identify one
@@ -4596,6 +4691,13 @@ Therefore:
 No requirement promises an atomic simultaneous metric permutation across all destination
 prefixes. The required observable invariants are preserved path membership/safety during
 the transition and the configured effective order after verified convergence.
+
+Metric convergence alone is **not** sufficient to satisfy established-flow stability for a
+multi-path Profile. The reordered metrics define selection for traffic without a preserved
+flow/path association. Before an availability-driven priority permutation is exposed for
+outbound multi-path traffic, the production path-affinity owner described in section 5.2
+must already be exact so packets belonging to an established flow continue to select their
+original logical path while it remains usable.
 
 The unused/free metric is inferred operationally from freshly observed current state. It is
 not configuration, semantic state or a permanently materialized "hole".

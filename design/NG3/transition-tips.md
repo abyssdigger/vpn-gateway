@@ -31,8 +31,8 @@ that originally needed them was removed.
 
 ## TIP-R4 — PREPARED is not evidence
 
-Current examples: multi-path inbound return pinning, MTU/MSS policy, target-systemd lifecycle,
-and Debian 13 confirmation of EXP-026.
+Current examples: multi-path inbound return pinning, MTU/MSS policy and any still-unproven
+target-systemd lifecycle claim. EXP-026 target confirmation is no longer a Release-1 gate.
 
 ## TIP-R5 — Preserve ownership semantics, not superseded component vocabulary
 
@@ -439,10 +439,12 @@ EXP-025 target-confirmed stale inheritance:
 
 An explicit probe-generation invalidation boundary is required if that mechanism is used.
 
-## TIP-Q5 — EXP-026 is a candidate, not target proof yet
+## TIP-Q5 — EXP-026 is valid mechanism evidence, not a Release-1 blocker
 
 Privileged CI proves mark-filtered cleanup can remove probe-class state while preserving
-different-mark control state and restoring NEW+mark-set. Debian 13 confirmation remains open.
+different-mark control state and restoring NEW+mark-set. Debian 13 confirmation remains absent,
+but the current Release-1 decision deliberately does not require that cleanup. Re-enter it only
+if stale probe state is shown to cause material payload/path or availability harm.
 
 ## TIP-O1 — Physical success and publication success are separate postconditions
 

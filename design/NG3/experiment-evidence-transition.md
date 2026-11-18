@@ -672,6 +672,13 @@ It also does not by itself decide product/architecture policy:
 Until target confirmation or an explicit evidence-policy decision is accepted, NG3 must not
 describe EXP-026 as target-confirmed PASS.
 
+**Current NG3 decision, 2026-11-18:** the evidence-policy decision has now been made. EXP-026
+remains non-target-confirmed, but Release 1 deliberately does not require its cleanup mechanism.
+Fresh lower conntrack identity for every probe generation is not itself a product postcondition.
+The selected implementation must instead prove current subject/path isolation and strict
+non-interference with payload routing/established-flow affinity. EXP-026 is re-entered only if
+material observable harm from stale probe conntrack state is demonstrated.
+
 ## 31. Experiment-ledger/search gap
 
 EXP-024, EXP-025 and EXP-026 were not missing from the development history.
@@ -740,7 +747,7 @@ internal types.
 | Current interface-generation firewall enforcement | EXP-017, EXP-021, EXP-022 |
 | Selective shared-namespace probe process isolation | EXP-024 |
 | Probe conntrack stale-generation risk | EXP-025 — target-confirmed negative finding |
-| Probe-class conntrack cleanup candidate | EXP-026 — CI PASS, target confirmation open |
+| Probe-class conntrack cleanup candidate | EXP-026 — CI PASS, target confirmation open; Release-1 adoption not selected |
 | Pure route-priority transition | EXP-027 |
 | ECMP only if reintroduced | EXP-013, EXP-016 |
 | Multi-path inbound return pinning | EXP-014 — UNPROVEN |

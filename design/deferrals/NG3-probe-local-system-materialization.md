@@ -1,158 +1,125 @@
-# NG3 deferral — probe local/system materialization
+# NG3 — probe local/system materialization decision record
 
-**Status:** POSTPONED IMPLEMENTATION PATH / RELEASE-1 READINESS GATE  
-**Created:** 2026-11-16  
+**Status:** SUPERSEDED RELEASE-1 GATE / retained evidence record  
+**Originally created:** 2026-11-16  
+**Superseding decision:** 2026-11-18  
 **Applies to:** Linux ICMP availability implementation and probe-owned local/system policy
 
-## Why this is a deferral, not an open product requirement
+## Current decision
 
-The NG3 requirement tree already closes the first-release availability semantics:
+The former requirement to prove and deploy an explicit probe-generation conntrack cleanup
+boundary is **not a Release-1 readiness gate**.
 
-- ICMP echo is the supported first-release active-check mechanism;
-- every availability result belongs to one `(Profile, logical path)` subject;
-- an enabled probe has one concrete normalized IPv4 target;
-- stale evidence must not affect a replacement path generation;
-- the probe must not silently escape through another path.
+Release 1 does not require every ICMP probe after a physical interface replacement to obtain a
+fresh kernel conntrack identity merely because the previous interface incarnation disappeared.
+The product-relevant requirements are narrower:
 
-Those product obligations remain mandatory.
+- the observation belongs to the current availability subject = (Profile, logical path);
+- it executes toward the current normalized target through the selected current probe path;
+- stale/in-flight results from a preceding subject/target/path-binding context are rejected;
+- probe-owned state must not select, migrate or otherwise change payload routing/return affinity;
+- isolated observations are filtered by the accepted degradation/recovery confirmation logic.
 
-What is not yet accepted is one complete **Linux physical implementation path** for
-probe-local INPUT/OUTPUT isolation across interface-generation changes.
+## Evidence retained
 
-## Existing evidence
+### EXP-024
 
-### EXP-024 — target-confirmed selective probe isolation
-
-EXP-024 passed privileged CI and Debian 13.
-
-It proves that the shared managed namespace can isolate a probe without imposing a blanket
-local default-DROP on unrelated processes by:
+Target-confirmed on Debian 13. It proved selective shared-namespace ICMP probe isolation using:
 
 ```text
 OUTPUT:
-    probe process identity
-    + exact current output path
-    + exact target/protocol
-        -> dedicated conntrack mark
+    probe process identity + exact current path + target/protocol
+        -> dedicated probe conntrack mark
         -> accept
 
 INPUT:
-    exact current ingress path
-    + exact remote source/reply protocol
-    + dedicated conntrack mark
+    exact current ingress path + expected source/reply protocol
+    + dedicated probe conntrack mark
         -> accept
 ```
 
-It also proves that `meta skuid` at INPUT is not a usable receiving-socket discriminator.
+It also disproved INPUT `meta skuid` as a receiving-socket discriminator.
 
-### EXP-025 — target-confirmed stale-generation failure
+### EXP-025
 
-EXP-025 passed on Debian 13 with the negative finding
-`STALE-INHERITANCE`.
+Target-confirmed negative finding: a marked ICMP conntrack entry may survive interface
+replacement and be reused by a later probe with the same tuple/ICMP identifier.
 
-A marked ICMP conntrack entry can survive concrete interface replacement and be reused by a
-later probe with the same tuple/identifier.
-
-Therefore:
+This proves:
 
 ```text
-fresh (ifname, ifindex)
-    + rebuilt RPDB/nft
-        !=
-fresh conntrack-carried probe identity
+fresh interface/rules
+    != necessarily
+fresh lower conntrack-carried probe identity
 ```
 
-Any production implementation that uses the EXP-024 mechanism needs an explicit
-generation-invalidation boundary.
+It does **not** prove that the stale entry can synthesize an ICMP reply, move a payload flow to
+another logical path, or change payload return-affinity ownership.
 
-### EXP-026 — narrow remediation candidate, target proof still open
+### EXP-026
 
-Privileged CI proves that:
+Privileged CI proved a narrow cleanup mechanism:
 
 ```text
-conntrack -D -p icmp -m <dedicated-probe-mark>
+delete ICMP conntrack entries carrying the dedicated probe mark
 ```
 
-can remove the probe conntrack class, preserve differently marked control state and force a
+The mechanism removed the probe class, preserved differently marked control state and forced a
 reused probe tuple back through NEW + mark-set behavior.
 
-However the repository still records:
+Debian 13 target confirmation remains absent. The project deliberately does **not** pursue that
+target confirmation for Release 1 because the cleanup itself is no longer required by the
+accepted product semantics.
+
+## Release-1 simplification
+
+Production ICMP materialization may use the EXP-024-style selective local isolation without
+adding probe-generation conntrack deletion, provided its implementation proves the following
+non-interference boundary:
 
 ```text
-privileged CI: PASS
-Debian 13 target confirmation: OPEN
+probe-local conntrack/packet state
+    cannot select a payload Profile/path
+
+probe routing resources
+    are disjoint from payload dispatch and established-flow affinity resources
+
+no generic probe ct-mark restoration
+    can write a routing mark onto forwarded payload traffic
 ```
 
-No target result artifact was found during the 2026-11-16 NG3 review.
+A namespace-wide conntrack flush remains prohibited.
 
-## Deferred implementation path
+A same logical path that disappears and later reappears is not promised lossless continuity of
+in-flight traffic. Availability exists to preserve access through remaining usable allowed
+paths, not to provide guaranteed delivery across path disappearance.
 
-The following must **not** yet be materialized as production NG3 state:
+## Re-entry
 
-- probe-owned `stack_output` allow/mark rules based on EXP-024;
-- probe-owned reverse `stack_input` allow rules based on the carried conntrack mark;
-- production conntrack cleanup by dedicated probe mark;
-- composite-owner mutation code that assumes EXP-026 is accepted target behavior.
+EXP-026 or another generation cleanup mechanism becomes relevant again only if new evidence
+shows a material observable failure, for example:
 
-This prohibition is intentionally narrower than the availability feature itself.
+- stale probe state can route payload through the wrong logical path/Profile;
+- stale probe state can make a probe escape through an unselected path;
+- repeated stale observations can defeat the accepted confirmation accumulator in a practical
+  supported scenario;
+- a future release explicitly requires stronger per-generation probe identity semantics.
 
-## Re-entry conditions
+Until such evidence exists, EXP-026 is retained as useful technical evidence/optional
+hardening, not production scope.
 
-This deferral is reopened when either path A or path B becomes true.
+## Current blocker moved elsewhere
 
-### Path A — confirm the current candidate
+Availability runtime is still not ready to activate for outbound multi-path Profiles, but the
+blocker is **payload established-flow path stability**, not probe conntrack cleanup.
 
-1. run the unmodified EXP-026 mechanism on the supported Debian 13 target;
-2. retain an explicit target result artifact;
-3. confirm that probe-mark cleanup removes only the intended probe class and preserves
-   unrelated conntrack state;
-4. explicitly accept probe-class-wide invalidation as the generation-boundary policy;
-5. then design/implement exact probe owner desired/observation/mutation inside the shared
-   network-policy convergence boundary.
+Under `VPNG0003-R3.R8`, changing effective preference must not migrate an established flow
+while its selected logical path remains current and usable. The current pure route-metric
+implementation lacks that outbound per-flow path pinning and must be fixed before availability
+priority changes are exposed.
 
-### Path B — replace the mechanism
+## Requirement-state classification
 
-Provide evidence for another Linux ICMP implementation that:
-
-- binds the observation to the exact current logical path;
-- cannot escape through an alternate Device;
-- does not require unsafe broad INPUT/OUTPUT permission;
-- does not inherit stale process/flow identity across path generation replacement;
-- preserves unrelated local traffic;
-- has an exact observable postcondition suitable for guarded convergence.
-
-A replacement mechanism is not required to use uid, conntrack mark or the EXP-024 topology.
-
-## Release-1 consequence
-
-This deferral is **not** permission to ship a first release without the accepted ICMP
-availability capability.
-
-Before production readiness, one implementation path must satisfy the accepted ICMP
-requirements. Release 1 may ignore EXP-026 only if the selected production mechanism does
-not depend on the EXP-024-style conntrack-carried identity that requires this remediation.
-
-## Blocking scope
-
-This deferral blocks:
-
-- production probe-local INPUT/OUTPUT materialization;
-- production probe conntrack-generation cleanup;
-- claiming the Linux ICMP Driver path is physically complete.
-
-It does not block:
-
-- publication-local rules already closed by EXP-046/047;
-- normalized availability configuration/target semantics;
-- pure availability subject/effective-priority logic;
-- payload Profile/Device/NAT convergence;
-- experiments or alternative implementation evidence.
-
-## Requirement-state inventory
-
-- active `decomp`: none pending; the six accumulated links remain resolved;
-- active `unreal`: none;
-- `[rejected_closure]`: none.
-
-The architecture closure remains accepted. This artifact records an implementation/evidence
-gate, not a failed requirement/architecture closure.
+This decision creates no `decomp`, `unreal`, `broken` or `[rejected_closure]` state.
+EXP-025 remains valid evidence; EXP-026 remains a valid mechanism result whose Release-1
+adoption is deliberately not selected.
