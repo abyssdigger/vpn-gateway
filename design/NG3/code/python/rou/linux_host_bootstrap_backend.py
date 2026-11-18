@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from ipaddress import IPv4Network, ip_network
+from ipaddress import IPv4Address, IPv4Network, ip_network
 
 from .iproute_priority_backend import CommandRunner
 from .linux_host_bootstrap import (
