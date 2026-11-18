@@ -27,6 +27,7 @@ from .linux_nft_scaffold import (
     NftScriptRunner,
 )
 from .linux_structural_policy import LinuxStructuralPolicyBackend
+from .linux_stack_return_affinity import LinuxStackReturnAffinityBackend
 from .managed_network_domain import (
     ManagedNetworkDomainEnsureResult,
     ManagedNetworkDomainPreflightResult,
@@ -40,6 +41,7 @@ from .network_policy_activation import (
     activate_network_policy,
 )
 from .network_policy_layout import NetworkPolicyPlatformSpace
+from .stack_return_affinity import StackReturnAffinityPlatformSpace
 from .payload_network_policy_desired import (
     PayloadNetworkPolicyDesiredState,
 )
@@ -171,6 +173,7 @@ def start_controller_once(
     load_validated_policy: ValidatedPolicyLoader,
     stop_requested: ControllerStopRequested | None = None,
     build_boundary_contribution: ControllerBoundaryContributionBuilder | None = None,
+    stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
 ) -> ControllerStartupResult:
     """Run one bounded startup attempt with phase-boundary graceful-stop checkpoints."""
     requested = stop_requested or _never_stop_requested
@@ -503,6 +506,16 @@ def start_controller_once(
         desired.routing,
         desired.nft,
         platform,
+        (
+            LinuxStackReturnAffinityBackend(
+                runner,
+                domain_spec.namespace,
+                stack_return_affinity_platform,
+            )
+            if desired.stack_return_affinity is not None
+            else None
+        ),
+        desired.stack_return_affinity,
     )
 
     if not activation.ready:
