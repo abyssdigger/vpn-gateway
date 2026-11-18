@@ -30,6 +30,12 @@ from .nft_scaffold_executor import (
 )
 from .payload_routing_desired import PayloadRoutingDesiredState
 from .structural_policy_mutation import StructuralPolicyMutationBackend
+from .stack_return_affinity import StackReturnAffinityDesired
+from .stack_return_affinity_convergence import (
+    StackReturnAffinityBackend,
+    StackReturnAffinityConvergenceResult,
+    converge_stack_return_affinity_once,
+)
 from .structural_policy_transaction import (
     StructuralPolicyTransactionResult,
     converge_structural_policy,
@@ -42,6 +48,7 @@ class NetworkPolicyActivationStatus(str, Enum):
     SCAFFOLD_OBSERVATION_FAILED = "scaffold_observation_failed"
     SCAFFOLD_CONFLICT = "scaffold_conflict"
     SCAFFOLD_PREPARE_FAILED = "scaffold_prepare_failed"
+    STACK_RETURN_AFFINITY_FAILED = "stack_return_affinity_failed"
     STRUCTURAL_FAILED = "structural_failed"
     FAILURE_CONTAINMENT_FAILED = "failure_containment_failed"
 
@@ -53,6 +60,7 @@ class NetworkPolicyActivationResult:
     scaffold: NftPayloadScaffoldComparison | None
     scaffold_prepare: PayloadNftScaffoldPrepareResult | None
     structural: StructuralPolicyTransactionResult | None
+    stack_return_affinity: StackReturnAffinityConvergenceResult | None = None
     failure_containment: ForwardingGateExecutionResult | None = None
     failure_status: NetworkPolicyActivationStatus | None = None
     diagnostic: str | None = None
@@ -73,6 +81,8 @@ def activate_network_policy(
     routing_desired: PayloadRoutingDesiredState,
     nft_desired: CompositeNftDesiredState,
     platform: NetworkPolicyPlatformSpace,
+    stack_return_affinity_backend: StackReturnAffinityBackend | None = None,
+    stack_return_affinity_desired: StackReturnAffinityDesired | None = None,
 ) -> NetworkPolicyActivationResult:
     """Contain, prepare the invariant scaffold if safely bounded, then converge.
 
@@ -166,6 +176,40 @@ def activate_network_policy(
         assert scaffold_prepare.final is not None
         scaffold = scaffold_prepare.final
 
+    affinity_result: StackReturnAffinityConvergenceResult | None = None
+    if stack_return_affinity_desired is not None:
+        if stack_return_affinity_backend is None:
+            return _failed_after_containment(
+                gate_backend,
+                initial_containment,
+                NetworkPolicyActivationStatus.STACK_RETURN_AFFINITY_FAILED,
+                scaffold=scaffold,
+                scaffold_prepare=scaffold_prepare,
+                diagnostic="stack return-affinity desired state has no backend",
+            )
+        affinity_result = converge_stack_return_affinity_once(
+            gate_backend,
+            stack_return_affinity_backend,
+            stack_return_affinity_desired,
+        )
+        if not affinity_result.confirmed:
+            return _failed_after_containment(
+                gate_backend,
+                initial_containment,
+                NetworkPolicyActivationStatus.STACK_RETURN_AFFINITY_FAILED,
+                scaffold=scaffold,
+                scaffold_prepare=scaffold_prepare,
+                stack_return_affinity=affinity_result,
+                diagnostic=(
+                    "stack return-affinity convergence failed"
+                    + (
+                        f": {affinity_result.diagnostic}"
+                        if affinity_result.diagnostic
+                        else ""
+                    )
+                ),
+            )
+
     structural = converge_structural_policy(
         gate_backend,
         structural_backend,
@@ -197,6 +241,7 @@ def activate_network_policy(
         scaffold=scaffold,
         scaffold_prepare=scaffold_prepare,
         structural=structural,
+        stack_return_affinity=affinity_result,
         diagnostic=structural.diagnostic,
     )
 
@@ -209,6 +254,7 @@ def _failed_after_containment(
     scaffold: NftPayloadScaffoldComparison | None,
     scaffold_prepare: PayloadNftScaffoldPrepareResult | None = None,
     structural: StructuralPolicyTransactionResult | None = None,
+    stack_return_affinity: StackReturnAffinityConvergenceResult | None = None,
     diagnostic: str,
 ) -> NetworkPolicyActivationResult:
     failure_containment = converge_forwarding_gate_once(
@@ -222,6 +268,7 @@ def _failed_after_containment(
             scaffold=scaffold,
             scaffold_prepare=scaffold_prepare,
             structural=structural,
+            stack_return_affinity=stack_return_affinity,
             failure_containment=failure_containment,
             failure_status=failure_status,
             diagnostic=(
@@ -235,6 +282,7 @@ def _failed_after_containment(
         scaffold=scaffold,
         scaffold_prepare=scaffold_prepare,
         structural=structural,
+        stack_return_affinity=stack_return_affinity,
         failure_containment=failure_containment,
         failure_status=failure_status,
         diagnostic=diagnostic,
