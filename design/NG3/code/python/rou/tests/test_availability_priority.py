@@ -66,7 +66,7 @@ class AvailabilityPriorityTests(unittest.TestCase):
                 (A, B, C),
                 (),
                 active_path=B,
-                reserve_paths=(B,),
+                reserve_device_ids=("oc",),
             ),
             (A, B, C),
         )
@@ -77,7 +77,7 @@ class AvailabilityPriorityTests(unittest.TestCase):
                 (A, B, C),
                 (A,),
                 active_path=B,
-                reserve_paths=(B,),
+                reserve_device_ids=("oc",),
             ),
             (B, C, A),
         )
@@ -109,7 +109,7 @@ class AvailabilityPriorityTests(unittest.TestCase):
             configured,
             (B, D),
             active_path=A,
-            reserve_paths=(D,),
+            reserve_device_ids=("wg",),
         )
         self.assertEqual(set(effective), set(configured))
         self.assertEqual(len(effective), len(configured))
@@ -125,24 +125,24 @@ class AvailabilityPriorityTests(unittest.TestCase):
         with self.assertRaisesRegex(AvailabilityPriorityError, "duplicate"):
             calculate_effective_path_order((A, B), (A, A))
 
-    def test_duplicate_reserve_path_is_rejected(self):
+    def test_duplicate_reserve_device_is_rejected(self):
         with self.assertRaisesRegex(AvailabilityPriorityError, "duplicate"):
             calculate_effective_path_order(
                 (A, B),
                 (),
-                reserve_paths=(B, B),
+                reserve_device_ids=("oc", "oc"),
             )
 
     def test_problem_path_outside_membership_is_rejected(self):
         with self.assertRaisesRegex(AvailabilityPriorityError, "outside"):
             calculate_effective_path_order((A, B), (C,))
 
-    def test_reserve_path_outside_membership_is_rejected(self):
-        with self.assertRaisesRegex(AvailabilityPriorityError, "outside"):
+    def test_invalid_reserve_device_id_is_rejected(self):
+        with self.assertRaisesRegex(AvailabilityPriorityError, "non-empty"):
             calculate_effective_path_order(
                 (A, B),
                 (),
-                reserve_paths=(C,),
+                reserve_device_ids=("",),
             )
 
     def test_active_path_outside_membership_is_rejected(self):
