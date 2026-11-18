@@ -66,6 +66,7 @@ Implemented:
 - bounded controller restart composition: current READY session -> bounded stop -> only after STOPPED invoke ordinary bounded startup from fresh authoritative state; stop failure blocks start and start failure is preserved without restart-specific retry;
 - Linux cross-domain backend that observes route JSON + rule JSON + nft JSON inside one current-interface bracket and delegates mutation to the already evidenced route/RPDB and composite nft Drivers;
 - privileged cross-domain integration proving old-policy -> new-policy convergence without mixed-state forwarding, command-error-after-success recovery from fresh state, zero-path Profile blackhole behavior and same-name/new-ifindex fail-closed rejection before mutation;
+- current-only `RuntimeStatusAgent` projection for accepted configured intent, confirmed current Profile/path state, availability/readiness and blocking problems, plus atomic alpha JSON presentation without history/replay or policy ownership;
 - rootless cross-contract structural-pipeline integration scenarios.
 
 Important non-goals of the current reference:
