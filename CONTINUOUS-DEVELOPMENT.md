@@ -150,6 +150,11 @@ When a requirement or constraint is insufficient:
    - otherwise verify that it refines rather than expands or rewrites the parent;
    - verify that its derived `Purpose` is causally supported by the immediate parent
      `Statement`, not merely by a distant ancestor or a generally desirable outcome;
+   - verify explicitly that every domain entity, scenario and promise named in `Purpose`
+     is already present in the accepted ancestor Statements of this branch; a `Purpose`
+     that first introduces implementation vocabulary, an internal entity, a future
+     decomposition concept or a broader scenario is a requirement finding and must be
+     lifted or reworded before closure;
    - if the same `Purpose` would still independently justify the child after mentally removing
      the immediate parent, re-check whether the child belongs elsewhere in the tree;
    - verify actor completeness for normative actions;
