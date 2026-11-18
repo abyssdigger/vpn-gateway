@@ -26,6 +26,7 @@ Current experiment directories:
 | EXP-060 | selected paired-RPDB host bootstrap backend |
 | EXP-061 | stack established-flow return affinity across host boundary |
 | EXP-062 | inbound multipath concrete-path affinity inside managed stack |
+| EXP-063 | Profile-association handoff for ordinary-side gateway NAT |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -53,3 +54,4 @@ Canonical dispositions:
 | EXP-014 | PREPARED / UNPROVEN | superseded | Historical predecessor for remote-initiated multi-path return pinning; EXP-062 is the current scoped experiment. |
 | EXP-061 | PASS | selected | Selected Release-1 Profile-routing-domain return affinity evidence. |
 | EXP-062 | PASS | deferred | Concrete-path affinity is technically proven and retained as a possible future inbound/bidirectional multipath extension; the current baseline remains single-path until an explicit product decision re-enters this work. |
+| EXP-063 | pending | pending_decision | Current evidence gate for carrying already-established Profile association across the managed/host boundary for ordinary-side gateway NAT without host source-prefix reclassification. |
