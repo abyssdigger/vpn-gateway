@@ -1,0 +1,49 @@
+name: NG3 Host Bootstrap Evidence
+
+concurrency:
+  group: ng3-host-bootstrap-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches-ignore: [ legacy-main-rc, legacy-main-ng1-2, legacy-main-ng3 ]
+    paths:
+      - ".github/workflows/ng3-host-bootstrap.yml"
+      - "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/**"
+      - "design/experiments/EXP-057 NG3 nft marked host bootstrap/**"
+      - "design/experiments/EXP-058 NG3 bootstrap table main specificity/**"
+      - "design/experiments/EXP-059 NG3 paired RPDB bootstrap/**"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - ".github/workflows/ng3-host-bootstrap.yml"
+      - "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/**"
+      - "design/experiments/EXP-057 NG3 nft marked host bootstrap/**"
+      - "design/experiments/EXP-058 NG3 bootstrap table main specificity/**"
+      - "design/experiments/EXP-059 NG3 paired RPDB bootstrap/**"
+
+jobs:
+  linux-host-bootstrap-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables
+      - name: EXP-056 host-ingress bootstrap bypass
+        run: >-
+          sudo python3
+          "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/exp056_host_ingress_bypass.py"
+      - name: EXP-057 nft-marked host bootstrap
+        run: >-
+          sudo python3
+          "design/experiments/EXP-057 NG3 nft marked host bootstrap/exp057_nft_marked_bootstrap.py"
+      - name: EXP-058 bootstrap table preserves main specificity
+        run: >-
+          sudo python3
+          "design/experiments/EXP-058 NG3 bootstrap table main specificity/exp058_bootstrap_main_specificity.py"
+      - name: EXP-059 paired RPDB bootstrap
+        run: >-
+          sudo python3
+          "design/experiments/EXP-059 NG3 paired RPDB bootstrap/exp059_paired_rpdb_bootstrap.py"
