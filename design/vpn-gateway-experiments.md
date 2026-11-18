@@ -52,4 +52,4 @@ Canonical dispositions:
 | --- | --- | --- | --- |
 | EXP-014 | PREPARED / UNPROVEN | superseded | Historical predecessor for remote-initiated multi-path return pinning; EXP-062 is the current scoped experiment. |
 | EXP-061 | PASS | selected | Selected Release-1 Profile-routing-domain return affinity evidence. |
-| EXP-062 | pending | pending_decision | Current experiment: concrete-path affinity with multiple eligible inbound paths; disposition must be decided only after result discussion. |
+| EXP-062 | PASS | pending_decision | Concrete-path affinity and fail-closed pinned-path loss are technically proven; adoption must be decided only after result discussion. |
