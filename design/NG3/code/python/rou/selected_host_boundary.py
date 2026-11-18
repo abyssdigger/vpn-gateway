@@ -10,9 +10,15 @@ The old main-table bootstrap route representation is deliberately not used.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from enum import Enum
 import json
 
 from .controller_boundary_contribution import ControllerBoundaryContribution
+from .forwarding_gate import (
+    ForwardingGateBackend,
+    ForwardingGateState,
+    converge_forwarding_gate_once,
+)
 from .host_boundary_route_convergence import (
     cleanup_host_boundary_route_dependencies_once,
     prepare_host_boundary_route_dependencies_once,
@@ -57,6 +63,29 @@ class SelectedHostBoundaryDesired:
 class SelectedHostBoundaryObservation:
     exact: bool
     conflicts: tuple[str, ...]
+
+
+class SelectedHostBoundaryRuntimeStatus(str, Enum):
+    EXACT = "exact"
+    RECONCILED = "reconciled"
+    CONFLICT = "conflict"
+    CONTAINMENT_FAILED = "containment_failed"
+    CONVERGENCE_FAILED = "convergence_failed"
+    POSTCONDITION_FAILED = "postcondition_failed"
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedHostBoundaryRuntimeResult:
+    status: SelectedHostBoundaryRuntimeStatus
+    observation: SelectedHostBoundaryObservation | None
+    diagnostic: str | None = None
+
+    @property
+    def confirmed(self) -> bool:
+        return self.status in {
+            SelectedHostBoundaryRuntimeStatus.EXACT,
+            SelectedHostBoundaryRuntimeStatus.RECONCILED,
+        }
 
 
 def build_selected_host_boundary_desired(
@@ -204,6 +233,106 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
 
         if errors:
             raise RuntimeError("; ".join(errors))
+
+
+def reconcile_selected_host_boundary_runtime_once(
+    gate_backend: ForwardingGateBackend,
+    contribution: SelectedLinuxHostBoundaryContribution | None,
+) -> SelectedHostBoundaryRuntimeResult:
+    """Audit/repair one selected host-boundary owner without mutating while forwarding."""
+    if contribution is None:
+        return SelectedHostBoundaryRuntimeResult(
+            SelectedHostBoundaryRuntimeStatus.EXACT,
+            SelectedHostBoundaryObservation(True, ()),
+        )
+    if not isinstance(contribution, SelectedLinuxHostBoundaryContribution):
+        raise ValueError(
+            "contribution must be SelectedLinuxHostBoundaryContribution or None"
+        )
+
+    try:
+        observed = contribution.observe()
+    except Exception as exc:
+        containment = converge_forwarding_gate_once(
+            gate_backend,
+            ForwardingGateState.DISABLED,
+        )
+        if not containment.confirmed:
+            return SelectedHostBoundaryRuntimeResult(
+                SelectedHostBoundaryRuntimeStatus.CONTAINMENT_FAILED,
+                None,
+                (
+                    f"host-boundary observation failed: {type(exc).__name__}: {exc}; "
+                    + (
+                        containment.diagnostic
+                        or "forwarding containment is not confirmed"
+                    )
+                ),
+            )
+        return SelectedHostBoundaryRuntimeResult(
+            SelectedHostBoundaryRuntimeStatus.CONVERGENCE_FAILED,
+            None,
+            f"host-boundary observation failed: {type(exc).__name__}: {exc}",
+        )
+
+    if observed.exact:
+        return SelectedHostBoundaryRuntimeResult(
+            SelectedHostBoundaryRuntimeStatus.EXACT,
+            observed,
+        )
+
+    containment = converge_forwarding_gate_once(
+        gate_backend,
+        ForwardingGateState.DISABLED,
+    )
+    if not containment.confirmed:
+        return SelectedHostBoundaryRuntimeResult(
+            SelectedHostBoundaryRuntimeStatus.CONTAINMENT_FAILED,
+            observed,
+            containment.diagnostic or "forwarding containment is not confirmed",
+        )
+
+    if observed.conflicts:
+        return SelectedHostBoundaryRuntimeResult(
+            SelectedHostBoundaryRuntimeStatus.CONFLICT,
+            observed,
+            "host-boundary owner conflict: " + "; ".join(observed.conflicts),
+        )
+
+    try:
+        contribution.converge()
+    except Exception as exc:
+        return SelectedHostBoundaryRuntimeResult(
+            SelectedHostBoundaryRuntimeStatus.CONVERGENCE_FAILED,
+            observed,
+            f"host-boundary convergence failed: {type(exc).__name__}: {exc}",
+        )
+
+    try:
+        final = contribution.observe()
+    except Exception as exc:
+        return SelectedHostBoundaryRuntimeResult(
+            SelectedHostBoundaryRuntimeStatus.POSTCONDITION_FAILED,
+            None,
+            f"host-boundary final observation failed: {type(exc).__name__}: {exc}",
+        )
+    if final.conflicts or not final.exact:
+        return SelectedHostBoundaryRuntimeResult(
+            SelectedHostBoundaryRuntimeStatus.POSTCONDITION_FAILED,
+            final,
+            (
+                "host-boundary final state is conflicting"
+                if final.conflicts
+                else "host-boundary final state is not exact"
+            ),
+        )
+
+    # Mutation happened while contained. The caller owns the later payload
+    # activation that may re-enable forwarding after all current domains verify.
+    return SelectedHostBoundaryRuntimeResult(
+        SelectedHostBoundaryRuntimeStatus.RECONCILED,
+        final,
+    )
 
 
 def build_selected_linux_host_boundary_contribution(
