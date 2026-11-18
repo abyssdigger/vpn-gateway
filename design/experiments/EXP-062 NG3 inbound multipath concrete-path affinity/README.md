@@ -2,7 +2,7 @@
 
 ## Status
 
-PASS — see `EXP-062-result-20261118.md`; registry disposition remains `pending_decision`.
+PASS — see `EXP-062-result-20261118.md`; registry disposition is `deferred`.
 
 ## Historical predecessor
 
@@ -34,8 +34,9 @@ On the target Linux data plane, can one remotely initiated TCP flow:
    unusable?
 
 This experiment resolves technical feasibility only. It does **not** decide whether VPN-GATE
-should adopt the mechanism. On completion its registry disposition remains
-`pending_decision` until the result is discussed.
+should adopt the mechanism. The completed result was discussed separately and the registry
+disposition is now `deferred`: this is retained as a possible future functional extension,
+not selected for the current single-path baseline.
 
 ## Topology
 
