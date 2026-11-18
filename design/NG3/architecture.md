@@ -1843,9 +1843,10 @@ Consequences:
   change the product contract;
 - no runtime fallback guesses return-path semantics if an unsupported topology is presented.
 
-Historical EXP-014 remains the primary evidence candidate for a future release that restores
-multi-path inbound/bidirectional support. Its result must not alter Release 1 behavior unless
-requirements are explicitly revised.
+EXP-062 supersedes historical EXP-014 as the current technical evidence for a possible future
+multi-path inbound/bidirectional extension. EXP-062 is PASS but its registry disposition is
+deferred: Release 1 remains constrained to capacity<=1 until an explicit product decision
+revises the requirements and selects the extension.
 
 ## 5.2. Established-flow return affinity inside the managed stack
 
@@ -1905,8 +1906,9 @@ higher-precedence affinity RPDB rule
 
 The mark identifies the original **Profile routing domain**, not an arbitrary concrete path.
 That is sufficient only because `VPNG0002-R2.R3.C1` limits Release-1 inbound/bidirectional
-Profiles to at most one eligible logical path. A future multi-path release must not treat this
-as proof of concrete-path pinning; EXP-014 or equivalent evidence remains required.
+Profiles to at most one eligible logical path. EXP-062 separately proves that concrete-path
+pinning is technically feasible for a future multi-path extension, but that evidence is
+deferred and does not change the Release-1 product envelope.
 
 The lower owner is intentionally separate from the invariant `ip vpn_gate` nft permission
 table:
@@ -1918,12 +1920,24 @@ table:
 - reserved affinity RPDB priorities execute before ordinary Profile destination dispatch;
 - no physical rule is derived by reclassifying the reply only from its remote address.
 
-Current implementation boundary is deliberately lower-only: guarded authoritative
-observation/comparison/convergence of this owner and composition into the activation
-transaction must be added before the controller may enable forwarding with this owner.
-Blind replace/adoption of an existing reserved table or rule is not accepted.
+The owner is now part of guarded production activation:
 
-**Evidence:** `EXP-061-result-20261118.md`.
+- authoritative nft/RPDB observation classifies the reserved owner as absent, exact, stale or
+  conflicting;
+- only absent/stale state already proven inside the reserved owner namespace may be
+  materialized/replaced;
+- conflicting/foreign state is never blind-adopted or overwritten;
+- mutation is allowed only after a fresh ForwardingGate=DISABLED observation;
+- exact postcondition and still-disabled barrier are re-observed after mutation;
+- structural policy activation, including forwarding enablement, runs only after affinity
+  convergence is confirmed;
+- alpha reconciliation includes affinity ownership in its no-op exact-state audit, so affinity
+  drift cannot be skipped merely because structural routing/nft state is exact;
+- normal stop/restart removes the entire owned managed namespace; failed teardown retains the
+  existing fail-closed/lock ownership semantics.
+
+**Evidence:** `EXP-061-result-20261118.md` plus privileged production-owner integration in
+`integration_stack_return_affinity_owner.py`.
 
 # 6. AvailabilityPriorityCalculator
 
