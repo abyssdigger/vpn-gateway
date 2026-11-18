@@ -21,6 +21,7 @@ Alpha controller:
 - при появлении, исчезновении или пересоздании VPN endpoint заново вычисляет binding и lower
   desired state;
 - при drift закрывает forwarding перед structural convergence;
+- materializes selected paired-RPDB host bootstrap и default stateful host-return owner; Profile `+route-return` оставляет route-based return через bootstrap без stateful host-return owner;
 - не требует restart controller после `systemctl restart` отдельного VPN service;
 - при stop выполняет bounded controller cleanup после того, как systemd dependency ordering
   остановил bound VPN service;
@@ -38,8 +39,9 @@ Alpha controller:
   - `198.19.255.1/30 <-> 198.19.255.2/30`;
 - canonical grammar уже принята; alpha materializes Device `use_outbound_nat`, ordinary
   Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
-- `availability_check`, Profile `+snat` и `+route-return` распознаются как canonical syntax, но alpha
-  fail-fast отклоняет их до завершения соответствующих lower runtime paths;
+- `availability_check` и Profile `+snat` распознаются как canonical syntax, но alpha fail-fast
+  отклоняет их до завершения соответствующих lower runtime paths; canonical `+route-return`
+  уже materialized через selected host-boundary bootstrap/return contribution;
 - host-side publication требует уже существующего внешнего host forwarding; alpha проверяет
   `net.ipv4.ip_forward` и явные host IPv4/interface selectors, но не включает global host
   forwarding, не назначает host addresses и не поднимает host interfaces;

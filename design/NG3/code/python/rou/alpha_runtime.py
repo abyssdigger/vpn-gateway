@@ -101,6 +101,11 @@ from .payload_profile import PayloadProfileRequest, build_payload_profile_reques
 from .release1_config import Release1Config, parse_release1_config
 from .structural_policy_mutation import compare_structural_policy
 from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
+from .selected_host_boundary import (
+    SelectedLinuxHostBoundaryContribution,
+    build_selected_linux_host_boundary_contribution,
+    reconcile_selected_host_boundary_runtime_once,
+)
 from .runtime_status import (
     RuntimeReadiness,
     RuntimeStatusAgent,
@@ -151,11 +156,6 @@ class AlphaPreparedPolicy:
             if profile.ordinary_gateway_nat:
                 raise AlphaRuntimeError(
                     f"profile {profile_id!r} requests +snat, which is not yet "
-                    "materialized by the alpha runtime"
-                )
-            if profile.route_return:
-                raise AlphaRuntimeError(
-                    f"profile {profile_id!r} requests +route-return, which is not yet "
                     "materialized by the alpha runtime"
                 )
             if profile.availability_check is not None:
@@ -569,6 +569,17 @@ def run_alpha_runtime(
         holder["policy"] = prepared
         return prepared
 
+    def build_boundary_contribution(prepared, current_domain_spec):
+        if not isinstance(prepared, AlphaPreparedPolicy):
+            raise AlphaRuntimeError(
+                "alpha host-boundary contribution requires AlphaPreparedPolicy"
+            )
+        return build_selected_linux_host_boundary_contribution(
+            prepared.config,
+            current_domain_spec,
+            runner,
+        )
+
     try:
         startup = start_controller_once(
             InstanceLockSpec(
@@ -580,6 +591,7 @@ def run_alpha_runtime(
             NG3_LINUX_POLICY_PLATFORM,
             load_policy,
             stop_requested=stop_event.is_set,
+            build_boundary_contribution=build_boundary_contribution,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
         )
         if startup.status is not ControllerStartupStatus.READY:
@@ -591,6 +603,17 @@ def run_alpha_runtime(
 
         assert startup.session is not None
         prepared = holder["policy"]
+        boundary_contribution = startup.session.boundary_contribution
+        if (
+            boundary_contribution is not None
+            and not isinstance(
+                boundary_contribution,
+                SelectedLinuxHostBoundaryContribution,
+            )
+        ):
+            raise AlphaRuntimeError(
+                "alpha startup returned an unexpected host-boundary contribution"
+            )
         status_agent = RuntimeStatusAgent(
             build_configured_intent_status(prepared.config)
         )
@@ -657,10 +680,31 @@ def run_alpha_runtime(
         last_status: AlphaReconcileStatus | None = None
         last_diagnostic: str | None = None
         while not stop_event.wait(audit_interval_seconds):
-            result = reconcile_alpha_payload_once(
-                prepared,
-                domain_spec,
-                runner,
+            boundary_runtime = reconcile_selected_host_boundary_runtime_once(
+                LinuxForwardingGateBackend(
+                    runner,
+                    domain_spec.namespace,
+                ),
+                boundary_contribution,
+            )
+            result = (
+                reconcile_alpha_payload_once(
+                    prepared,
+                    domain_spec,
+                    runner,
+                )
+                if boundary_runtime.confirmed
+                else AlphaReconcileResult(
+                    AlphaReconcileStatus.FAILED,
+                    None,
+                    diagnostic=(
+                        boundary_runtime.diagnostic
+                        or (
+                            "host-boundary reconciliation failed: "
+                            f"{boundary_runtime.status.value}"
+                        )
+                    ),
+                )
             )
             if result.ready:
                 status_agent.confirm_effective(
