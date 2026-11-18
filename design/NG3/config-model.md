@@ -597,21 +597,39 @@ Different-length overlap is allowed only with deterministic most-specific classi
 
 ## 5.3 device_order
 
-`device_order` is a non-empty ordered list of unique Device IDs.
+`device_order` is a non-empty ordered list of unique Profile-local Device memberships.
+
+An ordinary membership is written as the Device ID. A principally fallback membership may
+carry the canonical `:reserve` suffix:
 
 ```toml
 device_order = [
     "oc-main",
-    "wg-backup",
+    "wg-backup:reserve",
 ]
 ```
 
-Semantics:
+The suffix describes the Device's role **inside this Profile only**. It does not mutate the
+Device object and does not imply the same role in another Profile. All logical paths produced
+from that Device membership inherit the Profile-local reserve role.
+
+Canonical parsing normalizes each entry into:
+
+```text
+device_id
+reserve = true | false
+```
+
+and passes the plain Device ID to structural Device-reference validation. Therefore:
 
 - only referenced Devices are policy-eligible for the Profile;
-- unknown IDs are invalid;
+- unknown Device IDs are invalid;
 - known disabled Devices are valid references and are skipped while disabled;
-- list order is user policy.
+- an unknown membership suffix is a configuration error;
+- the same underlying Device ID may occur only once in one Profile, so
+  `["oc", "oc:reserve"]` is invalid;
+- absence of a suffix means ordinary sticky membership;
+- list order is the user's baseline preference policy.
 
 The baseline preference hierarchy is:
 
@@ -621,12 +639,21 @@ Profile.device_order
         -> stable runtime slot inside selector quota
 ```
 
+The reserve role does not alter that baseline hierarchy. It only permits failback when a
+reserve path currently occupies the active position and a more-preferred usable path has
+recovered. For ordinary membership, a recovered path returns to its baseline position among
+standby paths but does not preempt a still-usable active path.
+
 Newly appearing runtime endpoints must not arbitrarily reorder surviving already-bound
 endpoints.
 
 **Requirements:**
 - `VPNG0002-R2.R2.R1`
 - `VPNG0003-R3.R1.R1`
+- `VPNG0003-R3.R4.R1`
+- `VPNG0003-R3.R4.R1.R1`
+- `VPNG0003-R3.R8`
+- `VPNG0003-R3.R8.R1`
 
 # 6. Profile runtime normalization
 
@@ -641,7 +668,9 @@ PayloadProfileRequest:
 ```
 
 The path list is obtained from currently valid bindings of enabled Devices in
-`Profile.device_order`.
+`Profile.device_order`. Configuration normalization also retains the Profile-local reserve
+Device-membership set so the availability layer can derive the corresponding reserve logical
+paths without reparsing human configuration strings.
 
 It may be empty.
 
