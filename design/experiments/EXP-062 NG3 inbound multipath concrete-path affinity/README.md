@@ -2,7 +2,7 @@
 
 ## Status
 
-PREPARED — evidence pending.
+PASS — see `EXP-062-result-20261118.md`; registry disposition remains `pending_decision`.
 
 ## Historical predecessor
 
