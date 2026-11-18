@@ -479,6 +479,83 @@ device_order = ["oc"]
 availability_check = "tcp/192.0.2.1:443"
 """)
 
+    def test_device_order_reserve_suffix_is_profile_local_and_normalized(self):
+        cfg = parse_release1_config("""
+[device.primary]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[device.backup]
+enabled = true
+expected_interfaces = ["vpn1"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["primary", "backup:reserve"]
+
+[profile.bulk]
+enabled = true
+direction = "outbound"
+destinations = ["192.0.2.0/24"]
+device_order = ["backup", "primary"]
+""")
+        self.assertEqual(
+            cfg.structural.profiles["corp"].device_order,
+            ("primary", "backup"),
+        )
+        self.assertEqual(
+            cfg.profiles["corp"].reserve_devices,
+            frozenset({"backup"}),
+        )
+        self.assertEqual(
+            cfg.structural.profiles["bulk"].device_order,
+            ("backup", "primary"),
+        )
+        self.assertEqual(
+            cfg.profiles["bulk"].reserve_devices,
+            frozenset(),
+        )
+
+    def test_device_order_unknown_membership_suffix_is_rejected(self):
+        with self.assertRaisesRegex(
+            Release1ConfigError,
+            "unsupported membership suffix",
+        ):
+            parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc:cheap"]
+""")
+
+    def test_device_order_duplicate_after_suffix_normalization_is_rejected(self):
+        with self.assertRaisesRegex(
+            Release1ConfigError,
+            "duplicate Device membership",
+        ):
+            parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc", "oc:reserve"]
+""")
+
     def test_disabled_placeholders_remain_shallow(self):
         cfg = parse_release1_config("""
 [device.future]
