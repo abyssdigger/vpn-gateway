@@ -82,7 +82,7 @@ probe-local conntrack/packet state
     cannot select a payload Profile/path
 
 probe routing resources
-    are disjoint from payload dispatch and established-flow affinity resources
+    are disjoint from payload dispatch and managed-stack return-affinity resources
 
 no generic probe ct-mark restoration
     can write a routing mark onto forwarded payload traffic
@@ -108,15 +108,17 @@ shows a material observable failure, for example:
 Until such evidence exists, EXP-026 is retained as useful technical evidence/optional
 hardening, not production scope.
 
-## Current blocker moved elsewhere
+## Outbound per-flow blocker superseded
 
-Availability runtime is still not ready to activate for outbound multi-path Profiles, but the
-blocker is **payload established-flow path stability**, not probe conntrack cleanup.
+The later per-flow outbound-affinity gate is also no longer a Release-1 availability
+prerequisite. The accepted sticky active-route policy avoids recovery-driven route migration
+by keeping a healthy ordinary active path first; only an explicit Profile-local reserve
+membership permits recovery failback.
 
-Under `VPNG0003-R3.R8`, changing effective preference must not migrate an established flow
-while its selected logical path remains current and usable. The current pure route-metric
-implementation lacks that outbound per-flow path pinning and must be fixed before availability
-priority changes are exposed.
+Per-flow concrete-path affinity remains useful future mechanism evidence, but Release 1 does
+not need it merely to make outbound multi-path availability safe. Remaining availability
+readiness work is the ordinary implementation/integration of the accepted probe,
+confirmation, sticky-active and reserve policy contracts.
 
 ## Requirement-state classification
 
