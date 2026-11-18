@@ -39,6 +39,12 @@ from .payload_routing_desired import (
     build_payload_routing_desired_state,
 )
 from .route_priority_inventory import RoutePriorityPathRoute
+from .stack_return_affinity import (
+    StackReturnAffinityDesired,
+    StackReturnAffinityPlatformSpace,
+    allocate_stack_return_affinity,
+    build_stack_return_affinity_desired,
+)
 
 
 class PayloadNetworkPolicyProjectionError(ValueError):
@@ -49,6 +55,7 @@ class PayloadNetworkPolicyProjectionError(ValueError):
 class PayloadNetworkPolicyDesiredState:
     routing: PayloadRoutingDesiredState
     nft: CompositeNftDesiredState
+    stack_return_affinity: StackReturnAffinityDesired | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.routing, PayloadRoutingDesiredState):
@@ -58,6 +65,13 @@ class PayloadNetworkPolicyDesiredState:
         if not isinstance(self.nft, CompositeNftDesiredState):
             raise PayloadNetworkPolicyProjectionError(
                 "nft must be CompositeNftDesiredState"
+            )
+        if (
+            self.stack_return_affinity is not None
+            and not isinstance(self.stack_return_affinity, StackReturnAffinityDesired)
+        ):
+            raise PayloadNetworkPolicyProjectionError(
+                "stack_return_affinity must be StackReturnAffinityDesired or None"
             )
 
 
@@ -70,6 +84,7 @@ def build_payload_network_policy_desired_state(
     firewall_policies: Iterable[DeviceFirewallPolicyIntent],
     publication_intents: Iterable[PublicationLocalEndpointIntent],
     integration_intents: Iterable[IntegrationLocalTransportIntent] = (),
+    stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
 ) -> PayloadNetworkPolicyDesiredState:
     """Compose exact current payload lower desired state without I/O."""
     if not isinstance(layout, NetworkPolicyLayout):
@@ -172,6 +187,26 @@ def build_payload_network_policy_desired_state(
             f"integration-local projection failed: {exc}"
         ) from exc
 
+    stack_return_affinity = None
+    if stack_return_affinity_platform is not None:
+        try:
+            allocations = allocate_stack_return_affinity(
+                current_profiles,
+                layout,
+                stack_return_affinity_platform,
+            )
+            stack_return_affinity = build_stack_return_affinity_desired(
+                current_profiles,
+                current_path_routes,
+                host_boundary,
+                layout,
+                allocations,
+            )
+        except ValueError as exc:
+            raise PayloadNetworkPolicyProjectionError(
+                f"stack return-affinity projection failed: {exc}"
+            ) from exc
+
     return PayloadNetworkPolicyDesiredState(
         routing=routing,
         nft=CompositeNftDesiredState(
@@ -181,4 +216,5 @@ def build_payload_network_policy_desired_state(
             local_publication=local_publication,
             local_integration=local_integration,
         ),
+        stack_return_affinity=stack_return_affinity,
     )

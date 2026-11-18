@@ -70,7 +70,11 @@ from .linux_nft_scaffold import (
     LinuxNftScaffoldBackend,
     SubprocessNftRunner,
 )
-from .linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
+from .linux_policy_platform import (
+    NG3_LINUX_POLICY_PLATFORM,
+    NG3_STACK_RETURN_AFFINITY_PLATFORM,
+)
+from .linux_stack_return_affinity import LinuxStackReturnAffinityBackend
 from .linux_structural_policy import LinuxStructuralPolicyBackend
 from .local_integration_policy import (
     IntegrationLocalTransportIntent,
@@ -96,6 +100,7 @@ from .payload_network_policy_desired import (
 from .payload_profile import build_payload_profile_requests
 from .release1_config import Release1Config, parse_release1_config
 from .structural_policy_mutation import compare_structural_policy
+from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
 
 
 ALPHA_NAMESPACE = "vpn-gate-alpha"
@@ -259,6 +264,7 @@ class AlphaPreparedPolicy:
             firewall_policies,
             publication_intents,
             integration_intents,
+            stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
         )
 
     def build_host_publication_desired(self) -> HostPublicationDesiredState:
@@ -390,8 +396,22 @@ def reconcile_alpha_payload_once(
             desired.nft,
             NG3_LINUX_POLICY_PLATFORM,
         )
+        affinity_exact = True
+        if desired.stack_return_affinity is not None:
+            affinity_exact = (
+                LinuxStackReturnAffinityBackend(
+                    runner,
+                    domain_spec.namespace,
+                    NG3_STACK_RETURN_AFFINITY_PLATFORM,
+                ).observe(desired.stack_return_affinity).status
+                is StackReturnAffinityOwnerStatus.EXACT
+            )
         gate = gate_backend.observe_forwarding_gate()
-        if comparison.desired_confirmed and gate is ForwardingGateState.ENABLED:
+        if (
+            comparison.desired_confirmed
+            and affinity_exact
+            and gate is ForwardingGateState.ENABLED
+        ):
             host_result = converge_host_publication_once(
                 LinuxHostPublicationBackend(runner),
                 host_publication_desired,
@@ -430,6 +450,12 @@ def reconcile_alpha_payload_once(
         desired.routing,
         desired.nft,
         NG3_LINUX_POLICY_PLATFORM,
+        LinuxStackReturnAffinityBackend(
+            runner,
+            domain_spec.namespace,
+            NG3_STACK_RETURN_AFFINITY_PLATFORM,
+        ),
+        desired.stack_return_affinity,
     )
     if activation.ready:
         host_result = converge_host_publication_once(
@@ -542,6 +568,7 @@ def run_alpha_runtime(
             NG3_LINUX_POLICY_PLATFORM,
             load_policy,
             stop_requested=stop_event.is_set,
+            stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
         )
         if startup.status is not ControllerStartupStatus.READY:
             _log(

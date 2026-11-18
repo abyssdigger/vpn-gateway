@@ -84,6 +84,28 @@ class AlphaPreparedPolicyTests(unittest.TestCase):
         self.assertEqual(len(desired.nft.profile_forward.rules), 2)
         self.assertEqual(len(desired.nft.local_integration.rules), 2)
 
+    def test_inbound_current_path_materializes_stack_return_affinity(self):
+        config = CONFIG.replace(
+            'direction = "outbound"',
+            'direction = "inbound"',
+        ).replace(
+            'use_outbound_nat = false\n',
+            '',
+        )
+        prepared = AlphaPreparedPolicy.from_text(
+            config,
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        host_boundary = InterfaceIdentity("vnga-inner0", 7)
+        vpn0 = InterfaceIdentity("vpn0", 11)
+        desired = prepared.build_current(
+            host_boundary,
+            (InterfaceIdentity("lo", 1), host_boundary, vpn0),
+        )
+        self.assertIsNotNone(desired.stack_return_affinity)
+        self.assertEqual(len(desired.stack_return_affinity.classifiers), 1)
+        self.assertEqual(len(desired.stack_return_affinity.rules), 1)
+
     def test_legacy_integration_object_is_rejected(self):
         with self.assertRaisesRegex(Exception, "top level has unsupported"):
             AlphaPreparedPolicy.from_text(
