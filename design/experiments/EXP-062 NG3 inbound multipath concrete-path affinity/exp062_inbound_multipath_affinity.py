@@ -28,6 +28,7 @@ PROFILE_TABLE = "2062"
 PIN_TABLE = "2162"
 PROFILE_RULE_PRIO = "4062"
 PIN_RULE_PRIO = "3062"
+PIN_FAIL_RULE_PRIO = "3063"
 PIN_MARK = "0x62a2"
 
 
@@ -90,6 +91,17 @@ def setup():
     ns(ORD, "ip", "route", "add", "10.0.0.0/16", "via", "192.0.2.1", "dev", O_IF)
 
     ns(STACK, "ip", "rule", "add", "priority", PROFILE_RULE_PRIO, "to", "10.0.0.0/16", "lookup", PROFILE_TABLE)
+    observe = f"""
+table ip exp062_observe {{
+  chain forward {{
+    type filter hook forward priority filter; policy accept;
+    oifname "{S_A1}" ip daddr 10.0.0.0/16 counter comment "exp062-a1-remote"
+  }}
+}}
+"""
+    completed = ns(STACK, "nft", "-f", "-", check=False, input_text=observe)
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr)
     prefer_a2()
 
 
@@ -113,19 +125,22 @@ def flush_conntrack():
     ns(STACK, "conntrack", "-F", check=False)
 
 
-def tx_packets(interface: str) -> int:
+def a1_remote_packets() -> int:
     payload = json.loads(
-        ns(STACK, "ip", "-s", "-j", "link", "show", "dev", interface).stdout
+        ns(STACK, "nft", "-j", "list", "table", "ip", "exp062_observe").stdout
     )
-    if not isinstance(payload, list) or len(payload) != 1:
-        raise AssertionError(f"unexpected link stats payload for {interface}: {payload!r}")
-    stats = payload[0].get("stats64") or payload[0].get("stats")
-    if not isinstance(stats, dict):
-        raise AssertionError(f"missing link stats for {interface}: {payload!r}")
-    tx = stats.get("tx")
-    if not isinstance(tx, dict) or type(tx.get("packets")) is not int:
-        raise AssertionError(f"missing tx packet counter for {interface}: {payload!r}")
-    return tx["packets"]
+    packets = []
+    for item in payload.get("nftables", []):
+        rule = item.get("rule") if isinstance(item, dict) else None
+        if not isinstance(rule, dict) or rule.get("comment") != "exp062-a1-remote":
+            continue
+        for expr in rule.get("expr", []):
+            counter = expr.get("counter") if isinstance(expr, dict) else None
+            if isinstance(counter, dict) and type(counter.get("packets")) is int:
+                packets.append(counter["packets"])
+    if len(packets) != 1:
+        raise AssertionError(f"unexpected A1 observer state: {payload!r}")
+    return packets[0]
 
 
 def install_affinity():
@@ -133,6 +148,7 @@ def install_affinity():
     ns(STACK, "ip", "route", "add", "10.0.0.0/16", "via", "172.16.2.2", "dev", S_A2, "metric", "10", "table", PIN_TABLE)
     ns(STACK, "ip", "route", "add", "unreachable", "10.0.0.0/16", "metric", "1000", "table", PIN_TABLE)
     ns(STACK, "ip", "rule", "add", "priority", PIN_RULE_PRIO, "fwmark", PIN_MARK, "lookup", PIN_TABLE)
+    ns(STACK, "ip", "rule", "add", "priority", PIN_FAIL_RULE_PRIO, "fwmark", PIN_MARK, "type", "unreachable")
     nft = f"""
 table ip exp062_affinity {{
   chain prerouting {{
@@ -149,6 +165,7 @@ table ip exp062_affinity {{
 
 def remove_affinity():
     ns(STACK, "nft", "delete", "table", "ip", "exp062_affinity", check=False)
+    ns(STACK, "ip", "rule", "del", "priority", PIN_FAIL_RULE_PRIO, "fwmark", PIN_MARK, "type", "unreachable", check=False)
     ns(STACK, "ip", "rule", "del", "priority", PIN_RULE_PRIO, "fwmark", PIN_MARK, "lookup", PIN_TABLE, check=False)
     ns(STACK, "ip", "route", "flush", "table", PIN_TABLE, check=False)
 
@@ -243,14 +260,14 @@ def run_control(server):
         print("EXP062_INITIAL_A2_FLOW=PASS")
 
         prefer_a1()
-        a1_before = tx_packets(S_A1)
+        a1_before = a1_remote_packets()
         assert client.stdin is not None
         client.stdin.write("\n")
         client.stdin.flush()
         second = read_line(client)
         if second != "SECOND_FAIL":
             raise AssertionError(f"control flow unexpectedly survived preference switch: {second}")
-        a1_after = tx_packets(S_A1)
+        a1_after = a1_remote_packets()
         if a1_after <= a1_before:
             raise AssertionError("control reply failed without any A1 egress")
         print("EXP062_CONTROL_PREFERENCE_SWITCH_BREAKS_FLOW=PASS")
@@ -280,26 +297,26 @@ def run_affinity(server):
 
         prefer_a1()
         assert client.stdin is not None
-        a1_before_affinity = tx_packets(S_A1)
+        a1_before_affinity = a1_remote_packets()
         client.stdin.write("\n")
         client.stdin.flush()
         second = read_line(client)
         if second != "SECOND_OK":
             raise AssertionError(f"affinity flow did not survive preference switch: {second}")
-        a1_after_affinity = tx_packets(S_A1)
+        a1_after_affinity = a1_remote_packets()
         if a1_after_affinity != a1_before_affinity:
             raise AssertionError("affinity reply leaked through currently preferred A1")
         print("EXP062_AFFINITY_SURVIVES_PREFERENCE_SWITCH=PASS")
 
         # Remove only the pinned concrete path. A1 remains up and preferred.
         ns(STACK, "ip", "link", "set", S_A2, "down")
-        a1_before_loss = tx_packets(S_A1)
+        a1_before_loss = a1_remote_packets()
         client.stdin.write("\n")
         client.stdin.flush()
         third = read_line(client)
         if third != "THIRD_FAIL":
             raise AssertionError(f"pinned-path loss silently migrated flow: {third}")
-        a1_after_loss = tx_packets(S_A1)
+        a1_after_loss = a1_remote_packets()
         if a1_after_loss != a1_before_loss:
             raise AssertionError("pinned-path loss fell through to alternate A1")
         print("EXP062_PINNED_PATH_LOSS_FAILS_CLOSED=PASS")
