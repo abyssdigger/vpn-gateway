@@ -117,7 +117,7 @@ class LinuxStackReturnAffinityBackend:
         expected_classifiers = tuple(
             sorted(
                 (
-                    item.ingress.name,
+                    item.ingress.ifname,
                     item.remote_prefix.with_prefixlen,
                     item.mark,
                 )
@@ -125,7 +125,7 @@ class LinuxStackReturnAffinityBackend:
             )
         )
         expected_restores = tuple(
-            sorted((desired.host_boundary.name, item.mark) for item in desired.rules)
+            sorted((desired.host_boundary.ifname, item.mark) for item in desired.rules)
         )
 
         wants_owner = bool(desired.classifiers)
