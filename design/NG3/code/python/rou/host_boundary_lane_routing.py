@@ -9,7 +9,7 @@ Profile-affinity mark/RPDB association selects that table.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Address
 from typing import Iterable
 
 from .host_boundary_behavior import (
@@ -18,9 +18,6 @@ from .host_boundary_behavior import (
 )
 from .interface_identity import InterfaceIdentity
 from .network_policy_layout import NetworkPolicyLayout
-from .payload_routing_desired import ManagedRouteSpec, ManagedRouteType
-
-
 class HostBoundaryLaneRoutingError(ValueError):
     pass
 
@@ -44,11 +41,43 @@ class HostBoundaryLaneEndpoint:
             raise HostBoundaryLaneRoutingError("gateway must be IPv4Address")
 
 
+@dataclass(frozen=True, slots=True)
+class HostBoundaryLaneRouteSpec:
+    profile_id: str
+    table: int
+    endpoint: InterfaceIdentity
+    gateway: IPv4Address
+    protocol: int
+    metric: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.profile_id, str) or not self.profile_id:
+            raise HostBoundaryLaneRoutingError(
+                "profile_id must be non-empty text"
+            )
+        if type(self.table) is not int or not 1 <= self.table <= 0xFFFFFFFF:
+            raise HostBoundaryLaneRoutingError("table must be a positive u32")
+        if not isinstance(self.endpoint, InterfaceIdentity):
+            raise HostBoundaryLaneRoutingError(
+                "endpoint must be InterfaceIdentity"
+            )
+        if not isinstance(self.gateway, IPv4Address):
+            raise HostBoundaryLaneRoutingError("gateway must be IPv4Address")
+        if type(self.protocol) is not int or not 1 <= self.protocol <= 255:
+            raise HostBoundaryLaneRoutingError(
+                "protocol must be an integer in [1, 255]"
+            )
+        if type(self.metric) is not int or not 0 <= self.metric <= 0xFFFFFFFF:
+            raise HostBoundaryLaneRoutingError(
+                "metric must be an unsigned 32-bit integer"
+            )
+
+
 def build_host_boundary_lane_routes(
     behavior: Iterable[HostBoundaryBehaviorIntent],
     endpoints: Iterable[HostBoundaryLaneEndpoint],
     layout: NetworkPolicyLayout,
-) -> tuple[ManagedRouteSpec, ...]:
+) -> tuple[HostBoundaryLaneRouteSpec, ...]:
     """Project one preferred ordinary-side default into each active Profile table."""
     if not isinstance(layout, NetworkPolicyLayout):
         raise HostBoundaryLaneRoutingError(
@@ -108,17 +137,20 @@ def build_host_boundary_lane_routes(
             raise HostBoundaryLaneRoutingError(
                 f"behavior lane {intent.lane.value!r} has no current endpoint"
             )
+        metric_space = allocation.metric_space
+        metric = (
+            metric_space.first_preference_metric
+            if metric_space is not None
+            else 1
+        )
         routes.append(
-            ManagedRouteSpec(
+            HostBoundaryLaneRouteSpec(
+                profile_id=intent.profile_id,
                 table=allocation.table,
-                destination=IPv4Network("0.0.0.0/0"),
-                route_type=ManagedRouteType.UNICAST,
-                protocol=allocation.path_route_protocol,
-                metric=allocation.metric_space.first_preference_metric,
-                path_id=None,
                 endpoint=lane.endpoint,
                 gateway=lane.gateway,
-                onlink=False,
+                protocol=allocation.path_route_protocol,
+                metric=metric,
             )
         )
     return tuple(routes)
