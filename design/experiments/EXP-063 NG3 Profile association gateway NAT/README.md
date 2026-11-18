@@ -2,7 +2,7 @@
 
 ## Status
 
-PREPARED — evidence pending.
+COMPLETE — **FAIL**. See `EXP-063-result-20261118.md`.
 
 ## Requirements
 
