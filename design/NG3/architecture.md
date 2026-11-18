@@ -2107,9 +2107,10 @@ Output:
 The Calculator is pure and owns no history. The Manager owns availability confirmation and
 the single current-active identity and supplies both explicitly.
 
-Validation is strict: problem, active and reserve path identities must belong to current
-structural membership. The output always contains exactly the same structurally allowed path
-membership. It reorders that membership using the rule in section 4.4; it does not create or
+Validation is strict for path state: problem and active path identities must belong to
+current structural membership. Reserve Device IDs come from the already validated
+Profile-local Device membership and may legitimately have no currently bound path. The output
+always contains exactly the same structurally allowed path membership. It reorders that membership using the rule in section 4.4; it does not create or
 delete policy permission.
 
 # 7. AvailabilityProbeAgent
