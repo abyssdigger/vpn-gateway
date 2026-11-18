@@ -21,6 +21,7 @@ from rou import (
     compile_payload_forward_policy,
     NG3_LINUX_POLICY_PLATFORM,
     parse_ip_link_inventory,
+    parse_release1_config,
     parse_structural_config,
     project_device_bindings,
     realize_direct_device_path_routes,
@@ -82,6 +83,20 @@ device_order = ["oc"]
             ),
         )
         self.assertEqual(set(effective), set(request.ordered_paths))
+
+        recovered = calculate_effective_path_order(
+            request.ordered_paths,
+            (),
+            active_path=effective[0],
+        )
+        self.assertEqual(
+            recovered,
+            (
+                LogicalPathId("oc", 1, 0),
+                LogicalPathId("oc", 0, 0),
+                LogicalPathId("oc", 1, 1),
+            ),
+        )
 
         host_boundary = InterfaceIdentity("host0", 100)
         route_facts = tuple(
@@ -197,6 +212,55 @@ device_order = ["future"]
         self.assertEqual(desired.nft.profile_forward.rules, ())
         self.assertEqual(desired.nft.payload_nat.masquerade_rules, ())
         self.assertEqual(desired.nft.device_firewall.chains, ())
+
+    def test_release1_reserve_membership_drives_recovery_preemption(self):
+        cfg = parse_release1_config("""
+[device.primary]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[device.backup]
+enabled = true
+expected_interfaces = ["vpn1"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["primary", "backup:reserve"]
+""")
+        inventory = parse_ip_link_inventory(
+            '[{"ifindex":7,"ifname":"vpn0"},'
+            '{"ifindex":8,"ifname":"vpn1"}]'
+        )
+        binding = project_device_bindings(
+            cfg.structural.device_binding_intents,
+            DeviceBindingState.empty(),
+            inventory,
+        )
+        request = build_payload_profile_requests(
+            cfg.structural.profiles.values(),
+            binding.bindings,
+        )[0]
+        primary, backup = request.ordered_paths
+
+        degraded = calculate_effective_path_order(
+            request.ordered_paths,
+            (primary,),
+            active_path=backup,
+            reserve_device_ids=cfg.profiles["corp"].reserve_device_ids,
+        )
+        self.assertEqual(degraded, (backup, primary))
+
+        recovered = calculate_effective_path_order(
+            request.ordered_paths,
+            (),
+            active_path=backup,
+            reserve_device_ids=cfg.profiles["corp"].reserve_device_ids,
+        )
+        self.assertEqual(recovered, (primary, backup))
 
     def test_release1_inbound_pipeline_requires_actual_single_ingress_path(self):
         cfg = parse_structural_config("""

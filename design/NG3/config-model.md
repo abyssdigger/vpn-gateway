@@ -669,8 +669,8 @@ PayloadProfileRequest:
 
 The path list is obtained from currently valid bindings of enabled Devices in
 `Profile.device_order`. Configuration normalization also retains the Profile-local reserve
-Device-membership set so the availability layer can derive the corresponding reserve logical
-paths without reparsing human configuration strings.
+Device-membership set so the availability calculator can apply the role to every current
+logical path of those Devices without reparsing human configuration strings.
 
 It may be empty.
 
