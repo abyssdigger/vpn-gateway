@@ -20,6 +20,7 @@ Current experiment directories:
 | EXP-054 | host underlay endpoint pinning before full-tunnel bootstrap |
 | EXP-055 | composite host-boundary actuation |
 | EXP-056 | host-ingress bootstrap bypass without main-table capture |
+| EXP-057 | nft-marked host bootstrap without main-table routes |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
