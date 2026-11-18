@@ -66,7 +66,6 @@ class ManagedBoundaryLinkSpec:
     inner_interface: str
     host_address: IPv4Interface
     inner_address: IPv4Interface
-    additional_boundaries: tuple[ManagedBoundaryLinkSpec, ...] = ()
 
     def __post_init__(self) -> None:
         _validate_boundary_link(
@@ -84,6 +83,7 @@ class ManagedNetworkDomainSpec:
     inner_interface: str
     host_address: IPv4Interface
     inner_address: IPv4Interface
+    additional_boundaries: tuple[ManagedBoundaryLinkSpec, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.namespace, str) or not _NAMESPACE_RE.fullmatch(
