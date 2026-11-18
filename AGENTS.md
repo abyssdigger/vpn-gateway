@@ -26,6 +26,29 @@ Before implementing a material change:
 - Implementation begins only after the relevant requirement/design gates pass. A missing product decision returns to requirements work; a missing component contract returns to design; an uncertain kernel/platform fact requires an appropriately scoped experiment.
 - Do not silently promote implementation convenience to product scope or allow lower-domain concepts to leak across an Adapter boundary.
 
+## Process-correction gate
+
+If an error is discovered in methodology/process, Git/snapshot/branch policy, CD cadence, or
+another rule governing how project work is performed, **do not immediately repair it in
+GitHub**.
+
+Before any write:
+
+1. stop work affected by the faulty process;
+2. perform only the read-only inspection needed to characterize the problem;
+3. discuss with the user:
+   - what is wrong;
+   - why the current rule/process produces incorrect behavior;
+   - the proposed correction;
+   - which process/project artifacts would change;
+   - whether already-created consequences require repair;
+4. wait for explicit user agreement on the proposed correction.
+
+Only after that agreement may the process artifacts or the consequences of the process defect
+be changed. This gate applies to project/process rules and Git-history/snapshot policy; it does
+not turn ordinary implementation defects, test-harness fixes, or unambiguous fail-closed
+hardening into mandatory human checkpoints.
+
 ## Normal continuous-development workflow
 
 The following operations are **routine autonomous development work** and do not need separate user approval:
@@ -34,11 +57,11 @@ The following operations are **routine autonomous development work** and do not 
 - Develop coherent review units, write and run the cheapest sufficient tests/evidence, perform required expert review, record findings/dispositions/verdicts, and apply accepted fixes.
 - **Publish every commit to GitHub immediately**, including code, design, tests, reviews, fixes, and checkpoints. No unpublished local commit series.
 - After each commit, use its actual GitHub committer timestamp to check `Tn - T0` against `CYCLE_INTERVAL`; at the threshold, complete the current review unit, publish its checkpoint, report the precise restart state, and stop pending the next user turn.
-- Publish the final state of each completed development cycle to `main` as **one linear snapshot commit**, using that cycle branch's committed tree. The branch retains all intermediate commits and is not merged with its history into `main`.
+- After **each completed substantial logical work block**, publish that block's final committed tree to `main` as **one linear snapshot commit before starting the next logical block**. A CD cycle may therefore produce multiple mainline snapshots. A CD boundary by itself neither creates nor suppresses a snapshot. The working branch retains all intermediate commits and is not merged with its history into `main`.
 
 **Mainline snapshots are records of development checkpoints, not product-acceptance certificates.** A branch tip on the active development lineage is a legitimate snapshot point even if its name contains `pre-review` or `draft`. Do not impose a retroactive expert-review acceptance test on selection of historical checkpoint snapshots. Duplicate branch-tip SHAs produce one snapshot. Diverged/superseded branch tips whose work is already reflected in the continuing main development lineage are not separately snapshotted.
 
-Before a routine snapshot, confirm the source/target HEADs, lineage, existing mainline snapshots, and absence of conflicting updates. Never copy unfinished work as the accepted outcome of an earlier checkpoint. Mark absorbed cycle branches with the agreed `-absorbed` suffix where the repository tooling supports an actual rename without losing the branch or its history; do not create misleading duplicate aliases in lieu of a rename.
+Before a routine snapshot, confirm the source/target HEADs, lineage, existing mainline snapshots, and absence of conflicting updates. Never copy unfinished work as the accepted outcome of an earlier checkpoint. If a routine snapshot cannot be published unambiguously because of divergence, conflicting `main`, uncertain lineage, or required retrospective reordering, do not begin the next logical development block: stop at read-only analysis and use the applicable process/history gate first. Mark absorbed cycle branches with the agreed `-absorbed` suffix where the repository tooling supports an actual rename without losing the branch or its history; do not create misleading duplicate aliases in lieu of a rename.
 
 ## Exceptional Git history or branch restructuring
 
