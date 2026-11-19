@@ -38,6 +38,10 @@ A review unit is the smallest coherent product change that can be independently:
 A review unit may start as requirement/design work and contain no code at all. Implementation
 starts only after the requirement and design gates for the affected behavior are satisfied.
 
+A `development block` is one or more review units that together produce one completed
+logical result. Its snapshot publication is governed by `PROJECT-CONVENTIONS.md` §6.1.
+Neither a review unit nor a CD window automatically defines a development-block boundary.
+
 The normal cycle is:
 
 ```text
@@ -610,30 +614,13 @@ milestone makes it active work again.
 
 ## Review documentation
 
-External reviews are preserved verbatim under `design/reviews/` and receive a separate
-response/disposition document.
-
-Autonomous internal development reviews normally use **one document** containing:
-
-- scope;
-- findings;
-- disposition of every finding;
-- final verdict;
-- explicit accumulated requirement-state inventory listing every current `decomp` link
-  (mark each as `pending` or `resolved`), every active `unreal` link, every active `broken`
-  link and every `[rejected_closure]` node; write `none` for an empty category rather than
-  omitting it.
-
-Create a separate response document only when the review originated externally, must remain
-immutable/verbatim, or the disposition is produced materially later/by a different reviewer.
-
-Every finding is explicitly classified as one of:
-
-- accepted and fixed;
-- accepted and deferred behind a named gate/experiment;
-- rejected with technical justification.
-
-No finding is silently ignored.
+Review storage, immutable originals, response-file exceptions and canonical
+`Decision`/`Resolution` classification are governed by
+`PROJECT-CONVENTIONS.md` §2. An autonomous internal review normally uses one document
+containing scope, findings, the disposition of every finding, final verdict and the
+accumulated requirement-state inventory listing every current `decomp` link
+(`pending` or `resolved`), active `unreal`, active `broken`, and
+`[rejected_closure]`; write `none` when a category is empty.
 
 ## Human escalation
 
@@ -695,8 +682,9 @@ logic below refers only to `CYCLE_INTERVAL`.
 
 ### Logical work versus CD window
 
-Logical work units, reviews, experiments, implementation slices and snapshots have their own
-natural boundaries independent of the CD window.
+Review units, development blocks, experiments and snapshots retain their natural
+boundaries independently of the CD window. Snapshot publication and the definition
+of a completed development block belong to `PROJECT-CONVENTIONS.md` §6.1.
 
 ### User intervention pauses autonomous CD execution
 
@@ -711,33 +699,27 @@ If the intervention itself contains an explicit instruction for one specific rep
 change, that instruction authorizes only that change. Completing it does not implicitly
 resume the rest of the CD; the cycle remains paused until an explicit resume instruction.
 
-This pause does not end or reset the CD clock, logical work unit, branch, snapshot policy or
-`CYCLE_INTERVAL`. It is only a write-authorization boundary caused by human intervention.
+This pause does not end or reset the CD clock, current development block, branch,
+snapshot policy or `CYCLE_INTERVAL`. It is only a write-authorization boundary.
 
-- A completed substantial logical block **must** be committed/reviewed as applicable and
-  published to `main` as one linear snapshot before the next logical block begins.
-- One CD cycle may therefore contain multiple mainline snapshots.
-- Reaching the end of a CD cycle does **not** by itself imply that a snapshot should be
-  created; an unfinished block remains unsnapshotted.
-- Snapshot publication must not be delayed merely to coincide with the CD boundary, and the
-  CD boundary must not be used to skip a snapshot of a block that already completed.
-- Conversely, unfinished logical work may remain on the active cycle branch across a CD
-  boundary; the handoff exists precisely so the next cycle can resume it without re-reviewing
-  the whole repository.
-- After a logical block completes, first publish its required linear snapshot to `main`.
-- Completing the current logical block, subsystem or topic that originally triggered the CD
+A completed development block receives its required snapshot before another
+development block begins, subject to `PROJECT-CONVENTIONS.md` §6.1 and any explicit
+user-approved coordinated-work exception. A CD window does not create or suppress
+snapshots. Unfinished work may continue across CD windows via handoff.
+
+- Completing the current development block, subsystem or topic that originally triggered the CD
   does **not** by itself complete the CD window. Unless the user explicitly constrained the
   cycle to that one topic, the cycle scope is the current project development frontier.
 - If that completed block is snapshotted and less than three minutes remain before the nominal
   CD boundary, the CD cycle is complete.
 - Otherwise:
-  1. select the next highest-priority sufficiently defined and unblocked logical development
+  1. select the next highest-priority sufficiently defined and unblocked development
      block from the current project frontier; prefer a logically adjacent block when priority
      is otherwise equal;
   2. continue work until the earlier of:
      - the CD interval boundary;
-     - completion of that next logical block in a separate GitHub commit;
-  3. if that logical block completes, publish its required snapshot and apply this rule again
+     - completion of that next development block in a separate GitHub commit;
+  3. if that development block completes, publish its required snapshot and apply this rule again
      from the beginning.
 - A decision boundary ends the CD early only when continuing meaningful work actually requires
   human agreement. Finishing one subsystem, reaching a design boundary that can be resolved
@@ -746,7 +728,7 @@ This pause does not end or reset the CD clock, logical work unit, branch, snapsh
 - Early exit before the time/safety boundary is therefore limited to:
   - a required human product/process/architecture decision;
   - an external blocker that prevents further meaningful autonomous work;
-  - absence of any sufficiently defined unblocked logical development block;
+  - absence of any sufficiently defined unblocked development block;
   - the existing less-than-three-minutes safety-margin rule above.
 - These rules do not relax the `CYCLE_INTERVAL` boundary. As elapsed time approaches the
   interval, session safety and a usable handoff take precedence over starting or finishing more
@@ -782,15 +764,14 @@ project artifact.
 
 As elapsed time approaches `CYCLE_INTERVAL`, prioritize leaving enough execution margin to
 produce a reliable handoff. Do not intentionally run far past the interval merely to finish a
-large logical unit.
+development block.
 
 When the session-safety boundary is reached or work is otherwise stopped for the current
 chat turn:
 
 - stop at the nearest safe technical point; do not manufacture a logical completion;
 - leave all already-created commits published on the active branch;
-- do not create a special Git checkpoint commit unless the work itself naturally requires a
-  commit;
+- do not create a special commit unless the work itself naturally requires one;
 - do not create a snapshot solely because the CD window ended;
 - produce a compact **handoff file in the chat interface**, not in Git;
 - stop autonomous development until the next user turn.
@@ -800,10 +781,10 @@ The handoff file should contain only enough context to resume cheaply:
 - `CYCLE_INTERVAL` and `CYCLE_START_TIME`;
 - active branch and current branch head;
 - base/main snapshot from which the branch started when relevant;
-- what logical work was completed during the window;
+- which review units or development blocks completed during the window;
 - exact unfinished work and current technical state;
 - tests/experiments/reviews that are currently green/red or still pending;
-- the short plan for the **current logical development unit**, not a new plan invented merely
+- the short plan for the **current development block**, not a new plan invented merely
   for the next CD window;
 - decisions genuinely requiring human agreement, if any;
 - current accumulated requirement-state inventory: every `decomp` link with
@@ -812,11 +793,11 @@ The handoff file should contain only enough context to resume cheaply:
 The handoff is operational continuity metadata. It should not be committed to the repository
 unless its content independently becomes a real project artifact.
 
-A new CD cycle starts after the next user turn. It may continue the same logical development
-unit on a new cycle branch or a clearly reset continuation branch, using the previous handoff
+A new CD cycle starts after the next user turn. It may continue the same development
+block on a new cycle branch or a clearly reset continuation branch, using the previous handoff
 to avoid a full repository review.
 
-This mechanism exists only to survive chat/session limits. It must not distort logical work
+This mechanism exists only to survive chat/session limits. It must not distort development-block
 boundaries, snapshot timing, review structure or repository history.
 
 ## Completion criteria
