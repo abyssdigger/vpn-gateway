@@ -156,6 +156,18 @@ def run_probe_attempt_once(
             "preconditions must be ProbeAttemptPreconditions"
         )
 
+    agent.configure(intent, endpoint)
+    attempted_context = agent.begin_attempt()
+
+    # Confirmation evidence belongs to one exact observation context. A target,
+    # subject or concrete endpoint generation change starts at unknown
+    # immediately, even while the new lower policy is still converging.
+    base_state = (
+        state
+        if state.context == attempted_context
+        else ProbeSubjectRuntimeState(context=attempted_context)
+    )
+
     if not preconditions.confirmed:
         missing = []
         if not preconditions.routing_confirmed:
@@ -165,26 +177,14 @@ def run_probe_attempt_once(
         return ProbeAttemptResult(
             status=ProbeAttemptStatus.PRECONDITION_FAILED,
             previous_state=state,
-            next_state=state,
-            context=None,
+            next_state=base_state,
+            context=attempted_context,
             evidence=None,
             diagnostic=(
                 "probe lower precondition is not confirmed: "
                 + ", ".join(missing)
             ),
         )
-
-    agent.configure(intent, endpoint)
-    attempted_context = agent.begin_attempt()
-
-    # Confirmation evidence belongs to one exact observation context. A target,
-    # subject or concrete endpoint generation change starts at unknown rather
-    # than inheriting the old context's available/problem state.
-    base_state = (
-        state
-        if state.context == attempted_context
-        else ProbeSubjectRuntimeState(context=attempted_context)
-    )
 
     technical = driver.check(attempted_context)
     evidence = agent.accept_result(
