@@ -18,7 +18,7 @@ from .domain import Direction, StructuralConfig
 from .port_bundle import PortBundle, PortSpan
 
 
-_TOP_LEVEL_KEYS = frozenset({"device", "profile"})
+_TOP_LEVEL_KEYS = frozenset({"default_snat_address", "device", "profile"})
 _DEVICE_KEYS = frozenset(
     {
         "enabled",
@@ -107,8 +107,7 @@ class DeviceRelease1Config:
 
 @dataclass(frozen=True, slots=True)
 class ProfileRelease1Config:
-    ordinary_gateway_nat: bool
-    route_return: bool
+    effective_snat_address: ipaddress.IPv4Address | None
     availability_check: AvailabilityCheckConfig | None
     availability_uses_device_default: bool = False
     reserve_device_ids: frozenset[str] = frozenset()
@@ -119,6 +118,7 @@ class Release1Config:
     structural: StructuralConfig
     devices: Mapping[str, DeviceRelease1Config]
     profiles: Mapping[str, ProfileRelease1Config]
+    default_snat_address: ipaddress.IPv4Address | None = None
 
 
 def parse_release1_config(text: str) -> Release1Config:
@@ -140,19 +140,24 @@ def parse_release1_config(text: str) -> Release1Config:
             "top level has unsupported field(s): " + ", ".join(unknown_top)
         )
 
+    default_snat_address = _parse_optional_snat_address(
+        raw.get("default_snat_address"),
+        "default_snat_address",
+    )
     raw_devices = _table(raw.get("device", {}), "device")
     raw_profiles = _table(raw.get("profile", {}), "profile")
 
     normalized_profiles: dict[str, Any] = {}
-    profile_modes: dict[str, tuple[Direction, bool, bool]] = {}
+    profile_modes: dict[str, tuple[Direction, ipaddress.IPv4Address | None]] = {}
     profile_reserve_devices: dict[str, frozenset[str]] = {}
     for profile_id, raw_body in raw_profiles.items():
         body = _table(raw_body, f"profile.{profile_id}")
         normalized = dict(body)
         if _is_enabled(body):
-            direction, gateway_nat, route_return = _parse_direction(
+            direction, effective_snat_address = _parse_direction(
                 body.get("direction"),
                 f"profile.{profile_id}.direction",
+                default_snat_address=default_snat_address,
             )
             normalized["direction"] = direction.value
             device_order, reserve_devices = _parse_device_memberships(
@@ -160,7 +165,7 @@ def parse_release1_config(text: str) -> Release1Config:
                 f"profile.{profile_id}.device_order",
             )
             normalized["device_order"] = list(device_order)
-            profile_modes[profile_id] = (direction, gateway_nat, route_return)
+            profile_modes[profile_id] = (direction, effective_snat_address)
             profile_reserve_devices[profile_id] = reserve_devices
         normalized_profiles[profile_id] = normalized
 
@@ -247,20 +252,36 @@ def parse_release1_config(text: str) -> Release1Config:
     for profile_id, raw_body in raw_profiles.items():
         body = _table(raw_body, f"profile.{profile_id}")
         if not structural.profiles[profile_id].enabled:
-            profiles[profile_id] = ProfileRelease1Config(False, False, None)
+            profiles[profile_id] = ProfileRelease1Config(None, None)
             continue
-        _, gateway_nat, route_return = profile_modes[profile_id]
+        _, effective_snat_address = profile_modes[profile_id]
         availability_check, uses_device_default = _parse_profile_availability(
             body.get("availability_check"),
             f"profile.{profile_id}.availability_check",
         )
         profiles[profile_id] = ProfileRelease1Config(
-            ordinary_gateway_nat=gateway_nat,
-            route_return=route_return,
+            effective_snat_address=effective_snat_address,
             availability_check=availability_check,
             availability_uses_device_default=uses_device_default,
             reserve_device_ids=profile_reserve_devices[profile_id],
         )
+
+    untranslated_remote_ranges = tuple(
+        destination
+        for profile_id, structural_profile in structural.profiles.items()
+        if structural_profile.enabled
+        and profiles[profile_id].effective_snat_address is None
+        for destination in structural_profile.destinations
+    )
+    for profile_id, profile in profiles.items():
+        if profile.effective_snat_address is not None:
+            for destination in untranslated_remote_ranges:
+                if profile.effective_snat_address in destination:
+                    raise Release1ConfigError(
+                        f"profile.{profile_id} effective SNAT address "
+                        f"{profile.effective_snat_address} overlaps untranslated "
+                        f"remote source range {destination}"
+                    )
 
     for profile_id, profile in profiles.items():
         if not profile.availability_uses_device_default:
@@ -278,6 +299,7 @@ def parse_release1_config(text: str) -> Release1Config:
         structural=structural,
         devices=MappingProxyType(devices),
         profiles=MappingProxyType(profiles),
+        default_snat_address=default_snat_address,
     )
 
 
@@ -291,34 +313,84 @@ def _is_enabled(body: dict[str, Any]) -> bool:
     return body.get("enabled") is True
 
 
-def _parse_direction(value: Any, where: str) -> tuple[Direction, bool, bool]:
-    forms = {
-        "outbound": (Direction.OUTBOUND, False, False),
-        "inbound": (Direction.INBOUND, False, False),
-        "inbound+snat": (Direction.INBOUND, True, False),
-        "inbound+route-return": (Direction.INBOUND, False, True),
-        "inbound+snat+route-return": (Direction.INBOUND, True, True),
-        "bidirectional": (Direction.BIDIRECTIONAL, False, False),
-        "bidirectional+snat": (Direction.BIDIRECTIONAL, True, False),
-        "bidirectional+route-return": (Direction.BIDIRECTIONAL, False, True),
-        "bidirectional+snat+route-return": (Direction.BIDIRECTIONAL, True, True),
-    }
-    if isinstance(value, str) and value in forms:
-        return forms[value]
-    if isinstance(value, str) and value.startswith("outbound+") and "route-return" in value:
-        raise Release1ConfigError(
-            f"{where}: +route-return is meaningful only for remote-initiated traffic"
+def _parse_direction(
+    value: Any,
+    where: str,
+    *,
+    default_snat_address: ipaddress.IPv4Address | None,
+) -> tuple[Direction, ipaddress.IPv4Address | None]:
+    if value == "outbound":
+        return Direction.OUTBOUND, None
+    if value in {"inbound", "bidirectional"}:
+        return (
+            Direction.INBOUND if value == "inbound" else Direction.BIDIRECTIONAL,
+            None,
         )
-    if value == "outbound+snat":
+    if isinstance(value, str) and "route-return" in value:
+        raise Release1ConfigError(
+            f"{where}: +route-return is historical and no longer supported"
+        )
+    if isinstance(value, str) and value.startswith("outbound+snat"):
         raise Release1ConfigError(
             f"{where}: +snat is meaningful only for VPN-to-ordinary traffic"
         )
+
+    for base, direction in (
+        ("inbound", Direction.INBOUND),
+        ("bidirectional", Direction.BIDIRECTIONAL),
+    ):
+        bare = f"{base}+snat"
+        explicit_prefix = bare + ">"
+        if value == bare:
+            if default_snat_address is None:
+                raise Release1ConfigError(
+                    f"{where}: bare +snat requires top-level default_snat_address"
+                )
+            return direction, default_snat_address
+        if isinstance(value, str) and value.startswith(explicit_prefix):
+            address_text = value[len(explicit_prefix):]
+            address = _parse_snat_address(address_text, where)
+            return direction, address
+
     raise Release1ConfigError(
         f"{where} must be one canonical Release-1 direction form: outbound, inbound, "
-        "inbound+snat, inbound+route-return, inbound+snat+route-return, "
-        "bidirectional, bidirectional+snat, bidirectional+route-return or "
-        "bidirectional+snat+route-return"
+        "inbound+snat, inbound+snat>IPv4, bidirectional, bidirectional+snat or "
+        "bidirectional+snat>IPv4"
     )
+
+
+def _parse_optional_snat_address(
+    value: Any,
+    where: str,
+) -> ipaddress.IPv4Address | None:
+    if value is None:
+        return None
+    return _parse_snat_address(value, where)
+
+
+def _parse_snat_address(
+    value: Any,
+    where: str,
+) -> ipaddress.IPv4Address:
+    if not isinstance(value, str):
+        raise Release1ConfigError(f"{where} must contain an IPv4 unicast address")
+    try:
+        address = ipaddress.IPv4Address(value)
+    except ipaddress.AddressValueError:
+        raise Release1ConfigError(
+            f"{where} must contain an IPv4 unicast address"
+        ) from None
+    if (
+        address.is_unspecified
+        or address.is_multicast
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+    ):
+        raise Release1ConfigError(
+            f"{where} must contain an IPv4 unicast address usable on the managed boundary"
+        )
+    return address
 
 
 def _parse_device_memberships(
