@@ -37,7 +37,7 @@ class HostBootstrapLinuxAllocation:
 @dataclass(frozen=True, slots=True)
 class HostBootstrapRouteSpec:
     destination: IPv4Network
-    via: IPv4Address
+    via: IPv4Address | None
     interface: str
     table: int
     protocol: int
@@ -83,15 +83,15 @@ def build_linux_host_bootstrap_desired(
     plan: HostBoundaryPolicyPlan,
     *,
     host_interface: str,
-    inner_gateway: IPv4Address,
+    inner_gateway: IPv4Address | None,
     allocation: HostBootstrapLinuxAllocation,
 ) -> HostBootstrapLinuxDesired:
     if not isinstance(plan, HostBoundaryPolicyPlan):
         raise ValueError("plan must be HostBoundaryPolicyPlan")
     if not isinstance(host_interface, str) or not host_interface:
         raise ValueError("host_interface must be non-empty text")
-    if not isinstance(inner_gateway, IPv4Address):
-        raise ValueError("inner_gateway must be IPv4Address")
+    if inner_gateway is not None and not isinstance(inner_gateway, IPv4Address):
+        raise ValueError("inner_gateway must be IPv4Address or None")
     if not isinstance(allocation, HostBootstrapLinuxAllocation):
         raise ValueError("allocation must be HostBootstrapLinuxAllocation")
 
