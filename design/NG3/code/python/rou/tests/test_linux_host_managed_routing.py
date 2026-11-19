@@ -84,7 +84,7 @@ class LinuxHostManagedRoutingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "before managed dispatch"):
             HostManagedRoutingLinuxAllocation(
                 table=100,
-                bypass_priority=3000,
+                bypass_priority=5000,
                 dispatch_priority=2000,
                 owned_rule_priorities=NumericResourcePool(2000, 4000),
                 rule_protocol=203,
