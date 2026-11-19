@@ -18,7 +18,7 @@ from .local_publication_mutation import (
 )
 from .local_publication_policy import LocalPublicationDesiredState
 from .payload_forward_desired import PayloadForwardRuleSpec
-from .payload_nat_desired import PayloadMasqueradeSpec
+from .payload_nat_desired import PayloadNatRuleSpec
 from .probe_local_mutation import (
     ProbeLocalMutationStep,
     select_probe_local_step,
@@ -45,7 +45,7 @@ class CompositeNftMutationStep:
     handle: int | None = None
     chain_name: str | None = None
     profile_rule: PayloadForwardRuleSpec | None = None
-    nat_rule: PayloadMasqueradeSpec | None = None
+    nat_rule: PayloadNatRuleSpec | None = None
     device_chain: DeviceFirewallChainSpec | None = None
     local_publication_step: LocalPublicationMutationStep | None = None
     local_integration_step: IntegrationLocalMutationStep | None = None
