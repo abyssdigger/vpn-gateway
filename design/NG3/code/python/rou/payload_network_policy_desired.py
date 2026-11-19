@@ -139,7 +139,6 @@ def build_payload_network_policy_desired_state(
             layout,
             current_path_routes,
             host_boundary,
-            current_lane_routes,
         )
     except PayloadRoutingProjectionError as exc:
         raise PayloadNetworkPolicyProjectionError(
