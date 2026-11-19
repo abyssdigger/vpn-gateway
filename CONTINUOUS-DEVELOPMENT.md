@@ -639,7 +639,7 @@ Human agreement is required when the decision materially changes one of:
 
 Ordinary bug fixes, test-harness corrections, internal data-structure choices,
 Rust-alignment refactors and unambiguous fail-closed hardening do not require a human
-checkpoint.
+decision.
 
 ## Process-correction gate
 
@@ -680,7 +680,7 @@ Each autonomous design/development cycle has a **cycle interval**:
 Call the selected value `CYCLE_INTERVAL`. After it is chosen for the cycle, all cadence
 logic below refers only to `CYCLE_INTERVAL`.
 
-### Logical work versus CD window
+### Development blocks versus CD window
 
 Review units, development blocks, experiments and snapshots retain their natural
 boundaries independently of the CD window. Snapshot publication and the definition
