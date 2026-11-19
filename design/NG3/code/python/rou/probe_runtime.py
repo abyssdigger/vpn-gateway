@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Iterable
 
 from .availability_confirmation import AvailabilityOutcome
 from .interface_identity import InterfaceIdentity
@@ -233,8 +234,8 @@ class AvailabilityProbeRuntime:
 
     def configure(
         self,
-        intents,
-        path_routes,
+        intents: Iterable[AvailabilityProbeIntent],
+        path_routes: Iterable[RoutePriorityPathRoute],
     ) -> tuple[ProbeObservationContext, ...]:
         raw_intents = tuple(intents)
         raw_routes = tuple(path_routes)
