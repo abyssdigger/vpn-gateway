@@ -46,6 +46,7 @@ Current trace:
 | EXP-065-backed probe route/RPDB mutation Driver | `linux_probe_routing.py` | `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
 | EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
 | bounded current probe observation context / late-result rejection / technical-result mapping | `probe_runtime.py` | `NG3-2026-11-19-probe-observation-context-agent-review.md` |
+| EXP-067-backed one-shot Linux ICMP Driver | `icmp_probe_driver.py` | `NG3-2026-11-19-icmp-probe-driver-review.md`, `EXP-067-result-20261119.md` |
 | accepted NG3 Linux platform resource space | `linux_policy_platform.py` | `EXP-028-result-20261116.md` |
 | semantic Profile/allocation -> route-key priority realization | `route_priority_domain_builder.py` | `NG3-2026-11-16-route-priority-domain-builder-review.md` |
 | explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
@@ -2278,6 +2279,24 @@ For the first release, the concrete supported Driver mechanism is ICMP echo.
 The Driver executes one ICMP check through the concrete current VPN path toward the resolved
 target and reports technical reply/no-reply/local-error facts. The Agent maps those facts to
 `positive/negative/no_evidence` according to the criterion contract.
+
+The EXP-067-backed Linux Driver executes numeric one-packet ICMP under the dedicated probe
+UID. The reply deadline and outer process grace are finite lower runtime parameters, not
+Release-1 user-facing availability knobs or latency guarantees. The outer process deadline
+ensures an execution failure cannot leave one attempt indefinitely in flight.
+
+Current technical mapping is:
+
+```text
+ping exit 0 -> reply
+ping exit 1 -> no_reply
+other exit / spawn timeout or failure -> local_error + bounded diagnostic
+```
+
+This mapping was proven while the process was selected by the dedicated probe RPDB and
+admitted through the EXP-066 local nft owner, not through unrestricted ambient routing.
+
+The executable Driver is `icmp_probe_driver.py::LinuxIcmpProbeDriver`.
 
 TCP, UDP, HTTP and protocol-native liveness remain future possible Driver implementations,
 not current capabilities.

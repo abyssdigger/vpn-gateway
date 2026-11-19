@@ -377,6 +377,14 @@ from .probe_runtime import (
     ProbeTechnicalObservation,
     ProbeTechnicalOutcome,
 )
+from .icmp_probe_driver import (
+    IcmpProbeDriverError,
+    IcmpProbeExecutionPolicy,
+    LinuxIcmpProbeDriver,
+    ProbeCommandError,
+    ProbeCommandResult,
+    SubprocessProbeCommandRunner,
+)
 from .probe_routing_compare import (
     ProbeRoutingComparison,
     ProbeRoutingComparisonError,
@@ -689,6 +697,12 @@ __all__ = [
     "ProbeLocalMutationStep",
     "ProbeLocalPlanError",
     "LinuxProbeLocalBackend",
+    "IcmpProbeDriverError",
+    "IcmpProbeExecutionPolicy",
+    "LinuxIcmpProbeDriver",
+    "ProbeCommandError",
+    "ProbeCommandResult",
+    "SubprocessProbeCommandRunner",
     "ProbeRuleSpec",
     "ProbePolicyOwner",
     "ProbeRoutingDemand",

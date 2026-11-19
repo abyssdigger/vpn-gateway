@@ -59,3 +59,69 @@ yet a normative Requirement/Constraint, does not reopen the currently closed req
 tree, and does not yet define a command/API, serialization format, exact field set, freshness
 or atomicity guarantee, persistence behavior, or compatibility contract. Those semantics
 require separate requirement discussion before implementation.
+
+
+## External Profile network sources and reload semantics
+
+Preliminary user expectation: a Profile should eventually be able to obtain part or all of
+its network-prefix set from one or more external text files that are reread on configuration
+reload.
+
+Desired external behavior, subject to later requirement review:
+
+```text
+Profile configured prefixes
+    = inline prefixes from main config
+    + prefixes accepted from referenced external files
+
+reload
+    -> read/parse all configured sources
+    -> form one normalized runtime prefix bundle
+    -> validate/diagnose source contents
+    -> publish the new desired state only after reload processing completes
+```
+
+The main config should preferably allow inline prefixes and file-backed prefix sources to be
+mixed for one Profile; accepted entries from both sources are unioned into one runtime bundle
+before lower policy projection.
+
+Reload should be non-disruptive to the currently active runtime state. While the new
+configuration/source bundle is being read and normalized, the previously accepted desired
+state remains authoritative. Only after reload processing reaches a publishable result does
+the runtime desired state change.
+
+External network-list parsing is expected to be deliberately soft at line granularity:
+one malformed/unsupported line should produce an operator-visible warning/diagnostic and be
+excluded from the new source contribution rather than disabling the entire Profile merely
+because that one line is bad. This does **not** yet define how file-level failures, empty
+results, duplicate prefixes, overlapping prefixes, encoding errors, missing files, permission
+errors or all-lines-invalid cases affect publication of the new desired state.
+
+This is intentionally only a preliminary user expectation. It is not yet a normative
+Requirement/Constraint and does not define file syntax, source ordering, watch-vs-reload
+behavior, transactional scope across multiple files/Profiles, or diagnostics schema.
+
+## Future VPN configuration and lifecycle automation
+
+Preliminary future-product expectation: VPN-GATE may eventually support automation of
+supported VPN implementations using data already present in the gate configuration.
+
+Potential future scope includes:
+
+```text
+VPN config templates / rendered configuration
+start command
+reload command
+restart command
+stop command
+```
+
+The intent is to make automatic VPN setup and lifecycle control possible without treating
+those concrete commands/templates as part of the core Profile/Device policy model.
+
+This capability is explicitly **not required for the first releases**. Current releases may
+continue to consume externally managed VPN interfaces/processes. Before any implementation,
+a later requirement/design cycle must define supported integrations, template inputs and
+ownership, command execution/security boundaries, idempotency, failure handling, privilege
+model, and the exact relationship between VPN lifecycle state and VPN-GATE desired-state
+publication.
