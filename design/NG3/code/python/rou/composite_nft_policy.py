@@ -45,6 +45,12 @@ from .payload_nat_observation import (
     PayloadNatComparison,
     compare_payload_nat,
 )
+from .probe_local_observation import (
+    PROBE_LOCAL_RULE_COMMENT,
+    ProbeLocalComparison,
+    compare_probe_local,
+)
+from .probe_policy import ProbeLocalRuleSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +64,7 @@ class CompositeNftDesiredState:
     local_integration: IntegrationLocalDesiredState = field(
         default_factory=lambda: IntegrationLocalDesiredState(())
     )
+    probe_local: tuple[ProbeLocalRuleSpec, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.profile_forward, PayloadForwardDesiredState):
@@ -70,6 +77,11 @@ class CompositeNftDesiredState:
             raise ValueError("local_publication must be LocalPublicationDesiredState")
         if not isinstance(self.local_integration, IntegrationLocalDesiredState):
             raise ValueError("local_integration must be IntegrationLocalDesiredState")
+        if not isinstance(self.probe_local, tuple) or not all(
+            isinstance(rule, ProbeLocalRuleSpec)
+            for rule in self.probe_local
+        ):
+            raise ValueError("probe_local must be a tuple of ProbeLocalRuleSpec")
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +101,9 @@ class CompositeNftPolicyComparison:
     local_integration: IntegrationLocalComparison = field(
         default_factory=lambda: IntegrationLocalComparison((), (), (), ())
     )
+    probe_local: ProbeLocalComparison = field(
+        default_factory=lambda: ProbeLocalComparison((), (), (), ())
+    )
 
     @property
     def desired_confirmed(self) -> bool:
@@ -101,6 +116,7 @@ class CompositeNftPolicyComparison:
             and self.device_firewall.desired_confirmed
             and self.local_publication.desired_confirmed
             and self.local_integration.desired_confirmed
+            and self.probe_local.desired_confirmed
             and not self.conflicts
         )
 
@@ -132,6 +148,9 @@ def compare_composite_nft_policy(
     )
     local_integration = compare_integration_local(
         observation, current_interfaces, desired.local_integration
+    )
+    probe_local = compare_probe_local(
+        observation, current_interfaces, desired.probe_local
     )
 
     conflicts: list[CompositeNftPolicyConflict] = []
@@ -165,6 +184,14 @@ def compare_composite_nft_policy(
                 "rule",
             )
             for item in local_integration.conflicts
+        )
+    if probe_local.conflicts:
+        conflicts.extend(
+            CompositeNftPolicyConflict(
+                "probe local: " + item.reason,
+                "rule",
+            )
+            for item in probe_local.conflicts
         )
 
     # Structural ownership must be checked against the actual observation, not only
@@ -222,6 +249,7 @@ def compare_composite_nft_policy(
             and comment in {
                 LOCAL_PUBLICATION_RULE_COMMENT,
                 LOCAL_INTEGRATION_RULE_COMMENT,
+                PROBE_LOCAL_RULE_COMMENT,
             }
         ):
             continue
@@ -247,6 +275,7 @@ def compare_composite_nft_policy(
         device_firewall=device,
         local_publication=local_publication,
         local_integration=local_integration,
+        probe_local=probe_local,
         conflicts=tuple(conflicts),
     )
 

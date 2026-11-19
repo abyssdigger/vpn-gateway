@@ -11,8 +11,10 @@ from .linux_device_firewall import LinuxDeviceFirewallBackend
 from .linux_local_integration import LinuxIntegrationLocalBackend
 from .linux_nft_scaffold import NftScriptRunner
 from .linux_local_publication import LinuxLocalPublicationBackend
+from .linux_probe_local import LinuxProbeLocalBackend
 from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
+from .probe_local_mutation import ProbeLocalMutationStep
 from .linux_payload_nat import LinuxPayloadNatBackend
 from .nft_namespace_inventory import parse_nft_namespace_ruleset
 from .payload_forward_desired import PayloadForwardRuleSpec
@@ -121,6 +123,12 @@ class LinuxCompositeNftBackend:
     ) -> None:
         self._integration_local_backend().apply_integration_local_step(step)
 
+    def apply_probe_local_step(
+        self,
+        step: ProbeLocalMutationStep,
+    ) -> None:
+        self._probe_local_backend().apply_probe_local_step(step)
+
     def _device_backend(self) -> LinuxDeviceFirewallBackend:
         return LinuxDeviceFirewallBackend(
             runner=self.runner,
@@ -141,6 +149,12 @@ class LinuxCompositeNftBackend:
 
     def _integration_local_backend(self) -> LinuxIntegrationLocalBackend:
         return LinuxIntegrationLocalBackend(
+            runner=self.runner,
+            namespace=self.namespace,
+        )
+
+    def _probe_local_backend(self) -> LinuxProbeLocalBackend:
+        return LinuxProbeLocalBackend(
             runner=self.runner,
             namespace=self.namespace,
         )

@@ -45,6 +45,12 @@ from rou.payload_nat_observation import (
     ObservedPayloadMasquerade,
     PayloadNatComparison,
 )
+from rou.network_policy_layout import ProbePolicyOwner
+from rou.probe_local_observation import (
+    ObservedProbeLocalRule,
+    ProbeLocalComparison,
+)
+from rou.probe_policy import ProbeLocalHook, ProbeLocalRuleSpec
 
 
 HOST = InterfaceIdentity("host0", 10)
@@ -88,6 +94,8 @@ def comparison(
     device_stale_jumps=(),
     local_missing=(),
     local_stale=(),
+    probe_missing=(),
+    probe_stale=(),
 ):
     return CompositeNftPolicyComparison(
         scaffold=SCAFFOLD,
@@ -114,6 +122,12 @@ def comparison(
             confirmed=(),
             missing=local_missing,
             stale=local_stale,
+            conflicts=(),
+        ),
+        probe_local=ProbeLocalComparison(
+            confirmed=(),
+            missing=probe_missing,
+            stale=probe_stale,
             conflicts=(),
         ),
         conflicts=(),
@@ -152,6 +166,65 @@ class CompositeNftPlanTests(unittest.TestCase):
             step.local_publication_step.delete_rules[0].handle,
             9,
         )
+
+    def test_stale_probe_local_precedes_payload_cleanup(self):
+        owner = ProbePolicyOwner("corp", LogicalPathId("device", 0, 0))
+        stale_probe = ObservedProbeLocalRule(
+            handle=8,
+            hook=ProbeLocalHook.INPUT,
+            endpoint=VPN,
+            target=IPv4Address("198.51.100.7"),
+            conntrack_mark=0x20000001,
+        )
+        stale_profile = ObservedPayloadForwardRule(
+            10,
+            PayloadForwardRuleKind.NEW,
+            HOST,
+            VPN,
+            PayloadForwardRemoteField.DESTINATION,
+            PREFIX,
+        )
+        step = select_composite_nft_step(
+            comparison(
+                profile_stale=(stale_profile,),
+                probe_stale=(stale_probe,),
+            ),
+            probe_local_desired=(
+                ProbeLocalRuleSpec(
+                    owner=owner,
+                    hook=ProbeLocalHook.INPUT,
+                    endpoint=VPN,
+                    target=IPv4Address("203.0.113.9"),
+                    conntrack_mark=0x20000001,
+                ),
+            ),
+        )
+        self.assertEqual(step.kind, CompositeNftStepKind.APPLY_PROBE_LOCAL)
+        self.assertEqual(step.probe_local_step.delete_rules[0].handle, 8)
+
+    def test_missing_probe_local_is_added_after_payload_and_other_local_work(self):
+        owner = ProbePolicyOwner("corp", LogicalPathId("device", 0, 0))
+        probe = ProbeLocalRuleSpec(
+            owner=owner,
+            hook=ProbeLocalHook.INPUT,
+            endpoint=VPN,
+            target=IPv4Address("198.51.100.7"),
+            conntrack_mark=0x20000001,
+        )
+        step = select_composite_nft_step(
+            comparison(
+                profile_missing=(PROFILE_SPEC,),
+                probe_missing=(probe,),
+            ),
+            probe_local_desired=(probe,),
+        )
+        self.assertEqual(step.kind, CompositeNftStepKind.ADD_PROFILE_RULE)
+
+        step = select_composite_nft_step(
+            comparison(probe_missing=(probe,)),
+            probe_local_desired=(probe,),
+        )
+        self.assertEqual(step.kind, CompositeNftStepKind.APPLY_PROBE_LOCAL)
 
     def test_cleanup_precedence_starts_with_stale_profile_admission(self):
         stale_profile = ObservedPayloadForwardRule(
