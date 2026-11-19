@@ -9,6 +9,7 @@ import unittest
 from rou.binding import LogicalPathId, PathBinding
 from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
+from rou.network_policy_layout import ProbePolicyOwner
 from rou.payload_profile import PayloadProfileRequest
 from rou.release1_config import parse_release1_config
 from rou.runtime_status import (
@@ -92,6 +93,50 @@ availability_check = "default"
         )
         self.assertEqual(
             RuntimeStatusAgent(configured).snapshot().availability_state[0].state,
+            "unconfirmed",
+        )
+
+    def test_availability_status_reports_monitoring_problem_and_unconfirmed(self):
+        configured = build_configured_intent_status(parse_release1_config("""
+[device.ovpn]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[device.ovpn.availability_check]
+mechanism = "icmp"
+target = "198.51.100.10"
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["ovpn"]
+availability_check = "default"
+"""))
+        agent = RuntimeStatusAgent(configured)
+        agent.confirm_availability(())
+        self.assertEqual(
+            agent.snapshot().availability_state[0].state,
+            "monitoring",
+        )
+
+        owner = ProbePolicyOwner(
+            "alpha",
+            LogicalPathId("ovpn", 0, 0),
+        )
+        agent.confirm_availability((owner,))
+        self.assertEqual(
+            agent.snapshot().availability_state[0].state,
+            "problem",
+        )
+
+        agent.mark_unconfirmed(
+            readiness=RuntimeReadiness.DEGRADED,
+            problem="availability runtime is not exact",
+        )
+        self.assertEqual(
+            agent.snapshot().availability_state[0].state,
             "unconfirmed",
         )
 
