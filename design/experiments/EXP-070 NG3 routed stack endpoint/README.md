@@ -84,6 +84,18 @@ remote-prefix via <stack-ipvlan-IP> dev <host-ipvlan-alias>
 
 Это отдельный candidate, не утверждение, что netkit должен быть выбран.
 
+## Phase D — routed veth legacy-compatible L3 facade
+
+Проверяются четыре формы host-visible `vpng0` на обычной veth pair:
+
+1. unnumbered `route <remote> dev vpng0` без Proxy ARP;
+2. /32 peer addresses, но все еще `route <remote> dev vpng0`;
+3. /32 peer addresses + explicit `via <peer-IP> dev vpng0`;
+4. device-only routes с Proxy ARP на обоих концах veth, с и без /32 link-local peer addresses.
+
+Payload идет LAN -> HOST -> STACK -> REMOTE без NAT; remote observer должен видеть исходный LAN source.
+Это различает настоящий routed network path от NAT/proxy forwarding.
+
 ## Result interpretation
 
 `EXP070_RESULT=PASS` означает, что experiment harness получил различающее evidence.
