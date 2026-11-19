@@ -4,6 +4,7 @@ import unittest
 from rou.alpha_runtime import AlphaPreparedPolicy
 from rou.host_publication_policy import HostPublicationSelectorKind
 from rou.interface_identity import InterfaceIdentity
+from rou.payload_nat_desired import ProfileGatewayMasqueradeSpec
 from rou.payload_routing_desired import ManagedRouteType
 
 
@@ -120,7 +121,7 @@ remote_port = 11940
                 local_address=IPv4Address("198.19.255.2"),
             )
 
-    def test_alpha_accepts_availability_but_still_rejects_unmaterialized_snat(self):
+    def test_alpha_accepts_availability_and_materializes_profile_snat(self):
         availability = AlphaPreparedPolicy.from_text(
             CONFIG.replace(
                 'device_order = ["ovpn"]',
@@ -141,17 +142,39 @@ remote_port = 11940
         self.assertEqual(len(availability.last_probe_assembly.intents), 1)
         self.assertEqual(len(desired.nft.probe_local), 2)
 
-        with self.assertRaisesRegex(Exception, r"requests \+snat"):
-            AlphaPreparedPolicy.from_text(
-                CONFIG.replace(
-                    'direction = "outbound"',
-                    'direction = "inbound+snat"',
-                ).replace(
-                    'use_outbound_nat = false\n',
-                    "",
-                ),
-                local_address=IPv4Address("198.19.255.2"),
-            )
+        snat = AlphaPreparedPolicy.from_text(
+            CONFIG.replace(
+                'direction = "outbound"',
+                'direction = "inbound+snat"',
+            ).replace(
+                'use_outbound_nat = false\n',
+                "",
+            ),
+            local_address=IPv4Address("198.19.255.2"),
+            host_local_addresses=(
+                IPv4Address("127.0.0.1"),
+                IPv4Address("192.0.2.1"),
+            ),
+        )
+        snat_desired = snat.build_current(
+            host_boundary,
+            (InterfaceIdentity("lo", 1), host_boundary, vpn0),
+        )
+        gateway_rules = tuple(
+            rule
+            for rule in snat_desired.nft.payload_nat.masquerade_rules
+            if isinstance(rule, ProfileGatewayMasqueradeSpec)
+        )
+        self.assertEqual(len(gateway_rules), 1)
+        self.assertEqual(gateway_rules[0].ingress, vpn0)
+        self.assertEqual(gateway_rules[0].egress, host_boundary)
+        self.assertEqual(
+            gateway_rules[0].excluded_host_destinations,
+            (
+                IPv4Address("127.0.0.1"),
+                IPv4Address("192.0.2.1"),
+            ),
+        )
 
         route_return = AlphaPreparedPolicy.from_text(
             CONFIG.replace(
