@@ -29,6 +29,7 @@ class ConfiguredDeviceStatus:
     device_id: str
     enabled: bool
     expected_interfaces: tuple[str, ...]
+    availability_check: str | None
     use_outbound_nat: bool | None
     vpn_client_transports: tuple[str, ...]
     server_publications: tuple[str, ...]
@@ -189,6 +190,11 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
                     )
                     for selector in structural.expected_interfaces
                 ),
+                availability_check=(
+                    None
+                    if semantic.availability_check is None
+                    else _render_availability_check(semantic.availability_check)
+                ),
                 use_outbound_nat=semantic.use_outbound_nat,
                 vpn_client_transports=tuple(
                     _render_client_transport(item)
@@ -228,14 +234,13 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
                 ),
                 device_order=structural.device_order,
                 availability_check=(
-                    None
-                    if semantic.availability_check is None
+                    "default"
+                    if semantic.availability_uses_device_default
                     else (
-                        semantic.availability_check.mechanism
-                        if semantic.availability_check.target is None
-                        else (
-                            f"{semantic.availability_check.mechanism}/"
-                            f"{semantic.availability_check.target}"
+                        None
+                        if semantic.availability_check is None
+                        else _render_availability_check(
+                            semantic.availability_check
                         )
                     )
                 ),
@@ -243,6 +248,10 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
         )
 
     return ConfiguredIntentStatus(tuple(devices), tuple(profiles))
+
+
+def _render_availability_check(value) -> str:
+    return f"{value.mechanism}/{value.target}"
 
 
 def build_effective_profile_status(

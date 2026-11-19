@@ -51,6 +51,7 @@ EXP029_FWMARK_PROBE_RULE = {
     "fwmask": "0xffff",
     "priority": 8192,
     "src": "all",
+    "oif": "path1",
     "table": "3221225472",
 }
 EXP065_PROBE_RULE = {
@@ -58,6 +59,7 @@ EXP065_PROBE_RULE = {
     "ipproto": "ipproto-1",
     "priority": 8192,
     "src": "all",
+    "oif": "path1",
     "table": "3221225472",
     "uid_end": 4242,
     "uid_start": 4242,
@@ -112,6 +114,7 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
         self.assertEqual(probe_rule.uid_start, 4242)
         self.assertEqual(probe_rule.uid_end, 4242)
         self.assertEqual(probe_rule.ipproto, 1)
+        self.assertEqual(probe_rule.egress, PATH1)
         self.assertIsNone(probe_rule.fwmark)
         self.assertIsNone(probe_rule.fwmask)
 

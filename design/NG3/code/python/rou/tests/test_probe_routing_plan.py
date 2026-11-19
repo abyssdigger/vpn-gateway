@@ -46,6 +46,7 @@ RULE = ProbeRuleSpec(
     owner=ProbePolicyOwner("corp", PATH),
     priority=0x2000,
     process_uid=4242,
+    endpoint=EP,
     target=TARGET,
     table=TABLE,
 )
@@ -91,6 +92,7 @@ OBS_RULE = ObservedManagedRule(
     uid_start=4242,
     uid_end=4242,
     ipproto=1,
+    egress=EP,
 )
 
 
@@ -174,6 +176,7 @@ class ProbeRoutingPlanTests(unittest.TestCase):
             uid_start=4242,
             uid_end=4242,
             ipproto=1,
+            egress=EP,
         )
         value = comparison(
             missing_routes=(GUARD, PATH_ROUTE),

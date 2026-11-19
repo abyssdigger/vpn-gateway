@@ -44,6 +44,7 @@ class ObservedManagedRule:
     uid_start: int | None = None
     uid_end: int | None = None
     ipproto: int | None = None
+    egress: InterfaceIdentity | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,6 +358,7 @@ def _parse_reserved_rule(
         "uid_start",
         "uid_end",
         "ipproto",
+        "oif",
     }
     extras = sorted(set(row) - allowed)
     if extras:
@@ -387,6 +389,16 @@ def _parse_reserved_rule(
         raise StructuralRoutingInventoryError(
             "Release 1 probe rule ipproto must be ICMP"
         )
+    oif = row.get("oif")
+    if not isinstance(oif, str) or not oif:
+        raise StructuralRoutingInventoryError(
+            "probe rule has no valid oif"
+        )
+    egress = interfaces.get(oif)
+    if egress is None:
+        raise StructuralRoutingInventoryError(
+            f"probe rule oif {oif!r} is absent from current interface inventory"
+        )
     return ObservedManagedRule(
         priority=priority,
         table=table,
@@ -395,6 +407,7 @@ def _parse_reserved_rule(
         uid_start=uid_start,
         uid_end=uid_end,
         ipproto=ipproto,
+        egress=egress,
     )
 
 

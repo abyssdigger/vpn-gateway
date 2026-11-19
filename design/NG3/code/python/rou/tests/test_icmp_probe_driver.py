@@ -77,6 +77,7 @@ class IcmpProbeDriverTests(unittest.TestCase):
                         "--clear-groups",
                         "ping",
                         "-n",
+                        "-I", "vpn0",
                         "-c", "1",
                         "-W", "3",
                         "198.51.100.7",

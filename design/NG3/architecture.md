@@ -1073,7 +1073,7 @@ global generation counter or provenance history is introduced.
 
 Potential consumers remain separate semantic owners:
 
-- `AvailabilityTargetCalculator` may use confirmed transport provenance when an accepted
+- `AvailabilityDescriptionResolver` may use confirmed transport provenance when an accepted
   integration-specific target derivation formula requires it;
 - a future endpoint-scoped Device firewall policy may resolve a logical/named endpoint through
   confirmed provenance and then materialize the rule against the current concrete path;
@@ -1320,10 +1320,12 @@ Key normalization rules:
 - the same bound interface/path may therefore have independent availability state in
   different Profiles;
 - first-release availability mechanism is ICMP;
-- an explicit target is preserved exactly;
-- bare ICMP is resolved by `AvailabilityTargetCalculator` from Profile/path/Device/binding
-  topology before probe runtime;
-- probe runtime always receives one concrete IPv4 target.
+- Device may provide a reusable default availability description;
+- Profile independently selects no check, the Device default, or its own description of the
+  same normalized shape;
+- selecting Device default does not create Device-global health state: the resolved check and
+  its evidence remain scoped to each `(Profile, logical path)`;
+- probe runtime always receives one concrete normalized ICMP description with one IPv4 target.
 
 The complete canonical Release-1 external TOML grammar is normative in
 `design/NG3/config-model.md` and is normalized by the ConfigurationAdapter before any
@@ -1389,50 +1391,62 @@ Historical `nat`, `traffic_envelope`, `publications` and top-level `integration.
 spellings are not compatibility aliases. Endpoint-scoped firewall syntax remains separately
 deferred under `VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
 
-### AvailabilityTargetCalculator
+### AvailabilityDescriptionResolver
 
 **Component type:** Calculator
 
 **Implements:**
+- `VPNG0001-R1.R2.R4.R4.R1`
 - `VPNG0003-R3.R6.R1`
 - `VPNG0003-R3.R6.R3.R1`
+- `VPNG0003-R3.R6.R3.R1.C1.R1`
+- `VPNG0003-R3.R6.R3.R1.C1.R1.R1`
+- `VPNG0003-R3.R6.R3.R1.C1.R1.R2`
+- `VPNG0003-R3.R6.R3.R1.C1.R1.R3`
+- `VPNG0003-R3.R6.R3.R1.C1.R1.R4`
 - `VPNG0003-R3.R6.R3.R2`
 - `VPNG0007-R7.R1`
 - `VPNG0007-R7.R3.R1`
 - `VPNG0007-R7.R5`
 
-This pure semantic projection owns default-target derivation above probe runtime.
+**Constrained by:**
+- `VPNG0003-R3.R6.R3.R1.C1.R1.C1`
+
+This pure semantic projection resolves Profile availability selection above probe runtime.
 
 Conceptual contract:
 
 ```text
-derive_target(
-    availability_subject,
-    mechanism,
-    explicit_target?,
-    accepted policy/path/device/binding/peer topology facts
+resolve_description(
+    availability_subject = (Profile, logical path),
+    profile_selection = disabled | device_default | profile_description,
+    corresponding Device default description?
 )
-    -> concrete IPv4
-     | unresolved
-     | ambiguous
+    -> concrete AvailabilityProbeDescription
+     | disabled
+     | invalid
+```
+
+Release-1 `AvailabilityProbeDescription` is exactly:
+
+```text
+mechanism = ICMP
+target = exact IPv4
 ```
 
 Rules:
 
-- explicit target -> return exactly that IPv4;
-- omitted target -> derive the path-specific target mathematically from already available
-  semantics of the concrete availability subject;
-- never substitute a global public/default IP;
-- the same physical interface may produce different targets for different availability
-  subjects;
-- unresolved or ambiguous derivation rejects/diagnoses that probe intent before runtime
-  execution.
+- absent Profile selection -> no probe demand for that Profile;
+- Profile-owned description -> preserve that description exactly for each subject of the
+  Profile;
+- `default` -> copy the corresponding Device default description into the concrete
+  subject-specific probe intent;
+- if `default` is selected and the corresponding enabled Device has no valid default
+  description, reject the configuration before runtime materialization;
+- copying a Device description does not share availability evidence or state across Profiles;
+- the Calculator does not inspect runtime peer/interface topology to invent a target.
 
 The Calculator does not probe the network and does not own runtime observation state.
-
-Device/integration-specific derivation formulas may be implemented behind this contract. They
-must be deterministic projections of already accepted topology semantics and must not require
-the user to provide an additional target merely to make bare `icmp` work.
 
 Validation must reject at least:
 
@@ -2206,8 +2220,9 @@ The executable bounded reference is `probe_runtime.py::AvailabilityProbeAgent`.
 
 The product does not attempt to define one universal semantic "VPN path is good" predicate.
 
-The user selects the check mechanism for one availability subject and may provide an
-explicit IPv4 target in external configuration.
+The user selects availability at Profile scope. A Profile may disable active checking,
+select the reusable default description of each corresponding Device, or provide its own
+description in the same canonical shape.
 
 The probe runtime boundary receives only normalized requests:
 
@@ -2219,19 +2234,19 @@ AvailabilityProbeIntent:
     target = concrete IPv4
 ```
 
-Therefore `AvailabilityProbeAgent` and `ActiveProbeDriver` do not know whether the target
-was explicitly configured or derived by `AvailabilityTargetCalculator`.
+Therefore `AvailabilityProbeAgent` and `ActiveProbeDriver` receive only the resolved
+subject-specific description and do not know whether it came from Device default or Profile
+override.
 
 Current accepted semantics:
 
-1. explicit target -> normalization preserves exactly that IPv4 target;
-2. omitted target -> `AvailabilityTargetCalculator` derives one concrete IPv4 from the
-   already accepted topology/semantics of this availability subject;
-3. there is no universal default probe IP;
-4. if derivation is unresolved/ambiguous, runtime probe demand is not produced for that
-   subject and the problem is diagnostic.
+1. absent Profile availability selection -> no active probe;
+2. Profile description -> use that concrete description for each Profile/path subject;
+3. Profile `default` -> use the corresponding Device default description for that subject;
+4. missing Device default while `default` is selected is a configuration error;
+5. no runtime target inference from interface/peer/routing observations is performed.
 
-Target derivation remains above probe runtime and outside `VPNPathAdapter` policy.
+Description resolution remains above probe runtime and outside `VPNPathAdapter` policy.
 
 Once a concrete target exists, evidence semantics remain user-relative:
 
@@ -2641,8 +2656,8 @@ Executable contracts:
 - `linux_probe_routing.py` — link-bracketed observation plus EXP-065-backed exact mutation.
 
 This coordinator only establishes the route/RPDB precondition for one probe attempt. It does
-not schedule ICMP, derive omitted targets, own availability confirmation or change payload
-route preference.
+not schedule ICMP, resolve Profile/Device availability descriptions, own availability
+confirmation or change payload route preference.
 
 # 9. NetworkPolicyAdapter
 
@@ -6451,7 +6466,7 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R3.C2.R1` isolated-channel onboarding result | placement result architecture accepted; concrete provisioning commands remain implementation-specific |
 | `VPNG0002-R2` subtree — payload policy | Profile destinations/direction/device_order compile deterministically through PayloadPolicyCalculator |
 | `VPNG0003-R3.R1`–`VPNG0003-R3.R5`, `VPNG0003-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
-| `VPNG0003-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; explicit target or deterministic Profile/path-topology derivation normalized to concrete IPv4 before probe runtime |
+| `VPNG0003-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; Profile selects disabled, Device default, or same-shape Profile override, normalized to a concrete ICMP/IPv4 description before probe runtime |
 | `VPNG0004-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
 | `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
 | `VPNG0005-R5.R2`, `VPNG0005-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
@@ -6501,21 +6516,19 @@ Remaining interface freedom is narrower:
 These freedoms must not be expanded into a universal configuration framework without a new
 requirement.
 
-## 16.2. Availability target derivation
+## 16.2. Availability description resolution
 
 The product semantics and architecture boundary are now defined:
 
 - availability is subject-specific (Profile + logical VPN path);
-- explicit target is preserved exactly;
-- bare ICMP derives one concrete target deterministically from already accepted
-  subject/path/Device/interface/binding/peer topology semantics;
-- no universal global default target exists;
-- `AvailabilityTargetCalculator` performs this pure normalization before probe runtime;
-- unresolved/ambiguous derivation is diagnostic and produces no runtime probe demand.
-
-Concrete Device/integration-specific derivation formulas remain implementation work behind
-the accepted Calculator contract. They must satisfy the deterministic subject-specific
-contract and require their own implementation evidence.
+- Device may carry one reusable default probe description;
+- Profile independently selects no check, Device default, or its own same-shape description;
+- Device default and Profile override both normalize to the same concrete ICMP + exact IPv4
+  runtime description;
+- `AvailabilityDescriptionResolver` performs this pure selection before probe runtime;
+- selecting Device default does not merge evidence or health state across Profiles;
+- missing selected defaults are configuration errors, not runtime target-derivation problems;
+- runtime interface/peer/routing observations are not used to invent probe targets.
 
 Future TCP/UDP/HTTP mechanisms remain outside current scope.
 
@@ -6561,7 +6574,7 @@ The onboarding architecture is closed:
 - the administrator provisions/configures the external channel;
 - its data-plane endpoint must be present inside the managed domain;
 - configuration binds a stable logical path identity to one verified current endpoint;
-- availability-check target may be explicit or derived from current endpoint/network facts;
+- availability-check description may be Profile-owned or inherited from the corresponding Device default;
 - acceptance/rejection and unresolved target/binding conditions are observable.
 
 Remaining work is concrete documentation and integration implementation for each supported

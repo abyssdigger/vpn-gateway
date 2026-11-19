@@ -158,7 +158,10 @@ class AlphaPreparedPolicy:
                     f"profile {profile_id!r} requests +snat, which is not yet "
                     "materialized by the alpha runtime"
                 )
-            if profile.availability_check is not None:
+            if (
+                profile.availability_check is not None
+                or profile.availability_uses_device_default
+            ):
                 raise AlphaRuntimeError(
                     f"profile {profile_id!r} requests availability_check, which "
                     "is not yet assembled end-to-end by the alpha runtime"

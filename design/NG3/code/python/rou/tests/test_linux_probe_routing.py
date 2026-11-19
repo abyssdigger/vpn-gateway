@@ -115,6 +115,7 @@ class LinuxProbeRoutingBackendTests(unittest.TestCase):
                 owner=ProbePolicyOwner("corp", PATH),
                 priority=PRIORITY,
                 process_uid=4242,
+                endpoint=VPN,
                 target=TARGET,
                 table=TABLE,
             )
@@ -126,6 +127,7 @@ class LinuxProbeRoutingBackendTests(unittest.TestCase):
                 "priority", str(PRIORITY),
                 "uidrange", "4242-4242",
                 "ipproto", "icmp",
+                "oif", "vpn0",
                 "to", f"{TARGET}/32",
                 "lookup", str(TABLE),
             ),
@@ -142,6 +144,7 @@ class LinuxProbeRoutingBackendTests(unittest.TestCase):
                 uid_start=4242,
                 uid_end=4242,
                 ipproto=1,
+                egress=VPN,
             )
         )
         self.assertEqual(
@@ -151,6 +154,7 @@ class LinuxProbeRoutingBackendTests(unittest.TestCase):
                 "priority", str(PRIORITY),
                 "uidrange", "4242-4242",
                 "ipproto", "1",
+                "oif", "vpn0",
                 "to", f"{TARGET}/32",
                 "lookup", str(TABLE),
             ),
@@ -167,6 +171,7 @@ class LinuxProbeRoutingBackendTests(unittest.TestCase):
                     owner=ProbePolicyOwner("corp", PATH),
                     priority=0x2000,
                     process_uid=4242,
+                    endpoint=VPN,
                     target=TARGET,
                     table=0x80000000,
                 )

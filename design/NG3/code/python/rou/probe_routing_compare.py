@@ -213,6 +213,8 @@ def _desired_rule_key(rule: ProbeRuleSpec) -> tuple[object, ...]:
         rule.process_uid,
         rule.process_uid,
         1,
+        rule.endpoint.ifname,
+        rule.endpoint.ifindex,
         None,
         None,
     )
@@ -227,6 +229,8 @@ def _observed_rule_key(rule: ObservedManagedRule) -> tuple[object, ...]:
         rule.uid_start,
         rule.uid_end,
         rule.ipproto,
+        rule.egress.ifname if rule.egress else "",
+        rule.egress.ifindex if rule.egress else -1,
         rule.fwmark,
         rule.fwmask,
     )

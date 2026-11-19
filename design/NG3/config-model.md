@@ -724,40 +724,53 @@ wg0 is available for every Profile
 
 One interface can be usable for one Profile and unusable for another.
 
-The canonical Release-1 field is a simple Profile scalar:
+Release 1 uses one availability-check description shape wherever a concrete check is
+defined:
 
 ```toml
-availability_check = "icmp"
+[device.wg-main.availability_check]
+mechanism = "icmp"
+target = "198.51.100.20"
 ```
 
-or:
+The same description may be written directly for a Profile when its business criterion
+differs from the Device default:
 
 ```toml
-availability_check = "icmp/172.21.201.19"
+[profile.accounting.availability_check]
+mechanism = "icmp"
+target = "10.20.30.10"
 ```
 
-Absence of the field means no active availability check for that Profile.
+A Profile that wants the reusable Device description uses:
+
+```toml
+availability_check = "default"
+```
+
+Absence of `availability_check` on the Profile means no active availability check for that
+Profile.
 
 Semantics:
 
 ```text
-icmp/<explicit-ip>
-    -> use that IPv4 exactly
+Profile availability_check absent
+    -> no active check
 
-icmp
-    -> deterministically derive one path-specific target
-       for each availability subject from already accepted
-       Profile/path/Device/interface/binding/peer topology
+Profile availability_check = "default"
+    -> for each (Profile, logical path), use that path's Device availability_check
+
+Profile availability_check table
+    -> use that Profile description for every availability subject of the Profile
 ```
 
-There is no global Device `tunnel_endpoint` and no universal default target. This is
-important for selectors such as `expected_interfaces = ["wg*/3"]`: each admitted logical
-path may have a different current peer/topology and therefore a different derived target.
+The availability result remains scoped to `(Profile, logical VPN path)`; reusing a Device
+description does not create Device-global health state.
 
-Before probe runtime receives work, target normalization must have produced one concrete IPv4
-for the specific availability subject. If omitted-target derivation is unresolved or
-ambiguous, the requested check is not silently redirected to another address and the reason
-must be diagnosable.
+For Release 1 the only supported description is `mechanism = "icmp"` plus one exact IPv4
+`target`. If a Profile selects `default`, every enabled Device referenced by that Profile
+must provide a valid Device availability-check description, otherwise configuration is
+rejected before runtime materialization. Disabled Device placeholders remain shallow.
 
 Release 1 intentionally exposes no availability interval, timeout, failure-count or
 hysteresis knobs. Those remain implementation policy unless a later accepted requirement
@@ -785,6 +798,10 @@ enabled = true
 expected_interfaces = ["wg0"]
 use_outbound_nat = true
 allow_vpn_client = "udp:51820>198.51.100.10:51820"
+
+[device.wg-main.availability_check]
+mechanism = "icmp"
+target = "198.51.100.10"
 firewall = [
     "out allow tcp to 10.20.0.0/16:80,443,8000-8007 # web bundle",
     "out allow icmp to 10.20.0.0/16",
@@ -799,6 +816,10 @@ allow_vpn_client = [
     "tcp>198.51.100.20:443",
     "udp>198.51.100.20:443",
 ]
+
+[device.oc-backup.availability_check]
+mechanism = "icmp"
+target = "198.51.100.20"
 firewall = [
     "out allow tcp to 10.20.0.0/16:443",
     "out allow icmp to 10.20.0.0/16",
@@ -820,14 +841,17 @@ enabled = true
 direction = "outbound"
 destinations = ["10.20.0.0/16"]
 device_order = ["wg-main", "oc-backup"]
-availability_check = "icmp"
+availability_check = "default"
 
 [profile.remote-admin]
 enabled = true
 direction = "inbound+snat"
 destinations = ["10.30.0.0/16"]
 device_order = ["oc-server"]
-availability_check = "icmp/10.30.0.1"
+
+[profile.remote-admin.availability_check]
+mechanism = "icmp"
+target = "10.30.0.1"
 ```
 
 Notes:
@@ -841,8 +865,9 @@ Notes:
 - `publish_vpn_server` describes server-side host publication and is independent from
   Profile routing;
 - Device `firewall` can only narrow the permission already created by Profile policy;
-- `availability_check` belongs directly to Profile because no Release-1 subfields/timing
-  knobs justify a dedicated table.
+- Profile owns the decision to check availability; it may select `"default"` to reuse each
+  Device's default description or provide its own `[profile.<id>.availability_check]` block;
+  Device defaults and Profile overrides use the same `mechanism + target` description shape.
 
 # 8. Configuration normalization boundary
 

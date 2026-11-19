@@ -16,6 +16,23 @@ Read these documents **in this exact order**:
 
 Determine the current normative stage from the active project conventions and normative project artifacts. Locate the actual requirements and architecture paths for that stage; `design/<STAGE>/requirements.md` and `design/<STAGE>/architecture.md` are examples, not mandated names. **Do not hardcode NG1, NG2, NG3, or another stage in this instruction file.** Earlier stages are historical evidence, not automatically inherited design authority.
 
+## Repository write authorization gate
+
+Repository writes are allowed only in either of these two cases:
+
+1. the user has explicitly instructed the agent to make the specific change; or
+2. the user has explicitly started a continuous-development cycle (CD), in which case writes
+   that are within the declared scope of that cycle may proceed autonomously under the normal
+   CD rules.
+
+Discussion, design exploration, review, brainstorming, or agreement on semantics is **not**
+by itself authorization to modify repository state. Outside an active CD, keep repository
+work read-only until the user explicitly asks for the change to be applied.
+
+When a discussion appears ready to turn into implementation but no CD is active and no
+explicit write instruction has been given, report the proposed change and stop at the
+read-only boundary rather than silently beginning implementation.
+
 ## Requirement and component gates
 
 Before implementing a material change:

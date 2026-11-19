@@ -19,6 +19,10 @@ firewall = [
     "out allow icmp to 10.20.0.0/16",
 ]
 
+[device.wg-main.availability_check]
+mechanism = "icmp"
+target = "198.51.100.11"
+
 [device.oc-backup]
 enabled = true
 expected_interfaces = ["vpn*/2"]
@@ -27,6 +31,10 @@ allow_vpn_client = [
     "tcp>198.51.100.20:443",
     "udp>198.51.100.20:443",
 ]
+
+[device.oc-backup.availability_check]
+mechanism = "icmp"
+target = "198.51.100.12"
 
 [device.oc-server]
 enabled = true
@@ -44,14 +52,16 @@ enabled = true
 direction = "outbound"
 destinations = ["10.20.0.0/16"]
 device_order = ["wg-main", "oc-backup"]
-availability_check = "icmp"
+availability_check = "default"
 
 [profile.remote-admin]
 enabled = true
 direction = "inbound+snat"
 destinations = ["10.30.0.0/16"]
 device_order = ["oc-server"]
-availability_check = "icmp/10.30.0.1"
+[profile.remote-admin.availability_check]
+mechanism = "icmp"
+target = "10.30.0.1"
 """)
         self.assertEqual(
             cfg.structural.profiles["remote-admin"].direction,
@@ -63,8 +73,13 @@ availability_check = "icmp/10.30.0.1"
             str(cfg.profiles["remote-admin"].availability_check.target),
             "10.30.0.1",
         )
-        self.assertIsNone(
-            cfg.profiles["corporate"].availability_check.target
+        self.assertTrue(
+            cfg.profiles["corporate"].availability_uses_device_default
+        )
+        self.assertIsNone(cfg.profiles["corporate"].availability_check)
+        self.assertEqual(
+            str(cfg.devices["wg-main"].availability_check.target),
+            "198.51.100.11",
         )
 
         wg = cfg.devices["wg-main"]
@@ -447,7 +462,9 @@ enabled = true
 direction = "outbound"
 destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
-availability_check = "icmp/192.0.2.1"
+[profile.corp.availability_check]
+mechanism = "icmp"
+target = "192.0.2.1"
 """)
         self.assertEqual(
             cfg.profiles["corp"].availability_check.target,
@@ -476,8 +493,76 @@ enabled = true
 direction = "outbound"
 destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
-availability_check = "tcp/192.0.2.1:443"
+[profile.corp.availability_check]
+mechanism = "tcp"
+target = "192.0.2.1"
 """)
+
+    def test_profile_default_requires_device_default_description(self):
+        with self.assertRaisesRegex(
+            Release1ConfigError,
+            "device.oc.availability_check is required",
+        ):
+            parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+availability_check = "default"
+""")
+
+        cfg = parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[device.oc.availability_check]
+mechanism = "icmp"
+target = "192.0.2.9"
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+availability_check = "default"
+""")
+        self.assertTrue(cfg.profiles["corp"].availability_uses_device_default)
+        self.assertIsNone(cfg.profiles["corp"].availability_check)
+        self.assertEqual(
+            cfg.devices["oc"].availability_check.target,
+            ipaddress.IPv4Address("192.0.2.9"),
+        )
+
+        explicit = parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+
+[profile.corp.availability_check]
+mechanism = "icmp"
+target = "192.0.2.10"
+""")
+        self.assertFalse(explicit.profiles["corp"].availability_uses_device_default)
+        self.assertEqual(
+            explicit.profiles["corp"].availability_check.target,
+            ipaddress.IPv4Address("192.0.2.10"),
+        )
+        self.assertIsNone(explicit.devices["oc"].availability_check)
 
     def test_device_order_reserve_suffix_is_profile_local_and_normalized(self):
         cfg = parse_release1_config("""

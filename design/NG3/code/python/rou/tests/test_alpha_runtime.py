@@ -125,7 +125,10 @@ remote_port = 11940
             AlphaPreparedPolicy.from_text(
                 CONFIG.replace(
                     'device_order = ["ovpn"]',
-                    'device_order = ["ovpn"]\navailability_check = "icmp/10.253.0.1"',
+                    'device_order = ["ovpn"]\n'
+                    '[profile.alpha.availability_check]\n'
+                    'mechanism = "icmp"\n'
+                    'target = "10.253.0.1"',
                 ),
                 local_address=IPv4Address("198.19.255.2"),
             )
