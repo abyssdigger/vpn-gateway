@@ -45,6 +45,43 @@ availability_check = "default"
             {IPv4Address("198.51.100.10")},
         )
 
+    def test_profile_default_resolves_each_path_from_its_device(self):
+        cfg = parse_release1_config("""
+[device.wg]
+enabled = true
+expected_interfaces = ["wg0"]
+use_outbound_nat = false
+
+[device.wg.availability_check]
+mechanism = "icmp"
+target = "198.51.100.10"
+
+[device.oc]
+enabled = true
+expected_interfaces = ["oc0"]
+use_outbound_nat = false
+
+[device.oc.availability_check]
+mechanism = "icmp"
+target = "198.51.100.20"
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["wg", "oc"]
+availability_check = "default"
+""")
+        intents = resolve_availability_probe_intents(cfg, (OC0, WG0))
+        by_path = {item.owner.path_id: item.target for item in intents}
+        self.assertEqual(
+            by_path,
+            {
+                WG0: IPv4Address("198.51.100.10"),
+                OC0: IPv4Address("198.51.100.20"),
+            },
+        )
+
     def test_profile_override_wins_over_device_default(self):
         cfg = parse_release1_config("""
 [device.wg]
