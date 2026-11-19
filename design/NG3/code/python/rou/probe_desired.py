@@ -57,6 +57,17 @@ def build_probe_desired_assembly(
             "path_routes contains duplicate logical path realization"
         )
 
+    profile_paths = frozenset(
+        path
+        for profile in profiles
+        for path in profile.ordered_paths
+    )
+    route_paths = frozenset(path_ids)
+    if profile_paths != route_paths:
+        raise ProbeDesiredAssemblyError(
+            "payload Profile current path membership does not match path_routes"
+        )
+
     intents = resolve_availability_probe_intents(config, path_ids)
     demands = tuple(
         ProbeRoutingDemand(intent.owner)
