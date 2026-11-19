@@ -163,6 +163,7 @@ def _desired_route_key(route: ManagedRouteSpec) -> tuple[object, ...]:
         int(route.destination.network_address),
         route.destination.prefixlen,
         route.route_type.value,
+        route.role.value,
         route.protocol,
         route.metric,
         _expected_effective_scope(route),
