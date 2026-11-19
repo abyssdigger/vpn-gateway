@@ -20,6 +20,7 @@ on:
       - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
       - "design/experiments/EXP-071 NG3 boundary dataplane race/**"
       - "design/experiments/EXP-072 NG3 managed L3 host bootstrap/**"
+      - "design/experiments/EXP-073 NG3 routed managed L3 stateful return/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -526,6 +527,20 @@ jobs:
           "design/experiments/EXP-052 NG3 host publication DNAT/exp052_host_publication_dnat.py"
 
 
+  linux-routed-managed-l3-stateful-return:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-073 routed managed-L3 stateful return
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-073 NG3 routed managed L3 stateful return/exp073_routed_stateful_return.py"
   linux-host-return-steering:
     runs-on: ubuntu-latest
     steps:
