@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .composite_nft_policy import ProbeLocalComparison
+from .interface_identity import InterfaceIdentity
 from .network_policy_layout import NetworkPolicyPlatformSpace
-from .probe_local_observation import compare_probe_local
+from .probe_local_observation import (
+    ProbeLocalComparison,
+    compare_probe_local,
+)
 from .probe_policy import ProbeNetworkPolicyDesiredState
 from .probe_routing_compare import (
     ProbeRoutingComparison,
@@ -19,7 +22,7 @@ from .structural_policy_mutation import StructuralPolicyPhysicalSnapshot
 class ProbeExecutionPrecondition:
     routing: ProbeRoutingComparison
     local: ProbeLocalComparison
-    interfaces_stable_snapshot: tuple
+    interfaces_stable_snapshot: tuple[InterfaceIdentity, ...]
 
     @property
     def confirmed(self) -> bool:
