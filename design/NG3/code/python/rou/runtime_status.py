@@ -11,6 +11,7 @@ import tempfile
 from typing import Iterable
 
 from .binding import PathBinding
+from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
 from .release1_config import Release1Config
 
@@ -126,6 +127,50 @@ class RuntimeStatusAgent:
         self._problems = ()
         self._unknown = ()
 
+    def confirm_availability(
+        self,
+        problem_owners: Iterable[ProbePolicyOwner],
+    ) -> None:
+        owners = tuple(problem_owners)
+        if any(not isinstance(owner, ProbePolicyOwner) for owner in owners):
+            raise ValueError("problem_owners must contain ProbePolicyOwner")
+        problem_profiles = {owner.profile_id for owner in owners}
+        enabled_profiles = {
+            profile.profile_id: profile
+            for profile in self._configured.profiles
+            if profile.enabled
+        }
+        unknown = problem_profiles - set(enabled_profiles)
+        if unknown:
+            raise ValueError(
+                f"availability problem owner references unknown enabled Profile: {sorted(unknown)!r}"
+            )
+        invalid = {
+            profile_id
+            for profile_id in problem_profiles
+            if enabled_profiles[profile_id].availability_check is None
+        }
+        if invalid:
+            raise ValueError(
+                f"availability problem owner references disabled availability Profile: {sorted(invalid)!r}"
+            )
+        self._availability = tuple(
+            AvailabilityProfileStatus(
+                profile.profile_id,
+                (
+                    "disabled"
+                    if profile.availability_check is None
+                    else (
+                        "problem"
+                        if profile.profile_id in problem_profiles
+                        else "monitoring"
+                    )
+                ),
+            )
+            for profile in self._configured.profiles
+            if profile.enabled
+        )
+
     def mark_unconfirmed(
         self,
         *,
@@ -145,6 +190,18 @@ class RuntimeStatusAgent:
         if any(not isinstance(item, str) or not item for item in fields):
             raise ValueError("unknown fields must be non-empty text")
         self._effective = None
+        self._availability = tuple(
+            AvailabilityProfileStatus(
+                profile.profile_id,
+                (
+                    "disabled"
+                    if profile.availability_check is None
+                    else "unconfirmed"
+                ),
+            )
+            for profile in self._configured.profiles
+            if profile.enabled
+        )
         self._readiness = readiness
         self._problems = (problem,)
         self._unknown = fields
