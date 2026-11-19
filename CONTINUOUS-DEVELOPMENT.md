@@ -425,7 +425,9 @@ After the requirement/design gate passes:
    - applicable constraints and product envelope;
    - the component model;
    - whole-project invariants;
-4. resolve every accepted finding before starting the next review unit.
+4. give every accepted finding a canonical `Resolution` (`fixed` or `deferred`) before
+   starting the next review unit, and do not proceed when a deferred finding's named gate
+   blocks that next unit.
 
 During implementation, compare the emerging code against the approved design continuously.
 
