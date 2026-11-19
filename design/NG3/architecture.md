@@ -2422,6 +2422,14 @@ shared lower NetworkPolicyAdapter / Executor
 verified probe execution precondition
         ->
 physical probe attempt
+
+The executable read-only gate is
+`probe_precondition.py::verify_probe_execution_precondition`. It verifies the complete
+current probe route/RPDB desired state and probe-local nft desired state against one
+`StructuralPolicyPhysicalSnapshot`; an attempt is not execution-ready unless both comparisons
+are exact. The verifier performs no repair or probe I/O.
+
+
 ```
 
 This does not turn `AvailabilityProbeAgent` into the owner of the remote network condition.
