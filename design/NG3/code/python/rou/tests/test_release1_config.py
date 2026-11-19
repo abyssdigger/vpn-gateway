@@ -12,6 +12,7 @@ class Release1ConfigTests(unittest.TestCase):
 [device.wg-main]
 enabled = true
 expected_interfaces = ["wg0"]
+remote_endpoint = "198.51.100.11"
 use_outbound_nat = true
 allow_vpn_client = "udp:51820>198.51.100.10:51820"
 firewall = [
@@ -22,6 +23,7 @@ firewall = [
 [device.oc-backup]
 enabled = true
 expected_interfaces = ["vpn*/2"]
+remote_endpoint = "198.51.100.12"
 use_outbound_nat = false
 allow_vpn_client = [
     "tcp>198.51.100.20:443",
@@ -65,6 +67,10 @@ availability_check = "icmp/10.30.0.1"
         )
         self.assertIsNone(
             cfg.profiles["corporate"].availability_check.target
+        )
+        self.assertEqual(
+            str(cfg.devices["wg-main"].remote_endpoint),
+            "198.51.100.11",
         )
 
         wg = cfg.devices["wg-main"]
@@ -478,6 +484,59 @@ destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
 availability_check = "tcp/192.0.2.1:443"
 """)
+
+    def test_default_icmp_requires_enabled_device_remote_endpoint(self):
+        with self.assertRaisesRegex(
+            Release1ConfigError,
+            "remote_endpoint is required",
+        ):
+            parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+availability_check = "icmp"
+""")
+
+        cfg = parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+remote_endpoint = "192.0.2.9"
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+availability_check = "icmp"
+""")
+        self.assertEqual(
+            cfg.devices["oc"].remote_endpoint,
+            ipaddress.IPv4Address("192.0.2.9"),
+        )
+
+        explicit = parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+availability_check = "icmp/192.0.2.10"
+""")
+        self.assertIsNone(explicit.devices["oc"].remote_endpoint)
 
     def test_device_order_reserve_suffix_is_profile_local_and_normalized(self):
         cfg = parse_release1_config("""
