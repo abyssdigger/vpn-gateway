@@ -401,6 +401,7 @@ from .probe_attempt import (
     execute_probe_attempt_once,
 )
 from .probe_precondition import (
+    ProbeExecutionContextKey,
     ProbeExecutionPrecondition,
     verify_probe_execution_precondition,
 )
@@ -517,6 +518,7 @@ __all__ = [
     "ProbeDesiredAssemblyError",
     "ProbeAttemptError",
     "ProbeAttemptDriver",
+    "ProbeExecutionContextKey",
     "ProbeExecutionPrecondition",
     "AvailabilityRoutingProjection",
     "AvailabilityRoutingState",
