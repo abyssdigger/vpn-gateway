@@ -1,5 +1,9 @@
 """VPN-GATE NG3 Python reference slice."""
 
+from .availability_description import (
+    AvailabilityDescriptionResolutionError,
+    resolve_availability_probe_intents,
+)
 from .availability_priority import (
     AvailabilityPriorityError,
     calculate_effective_path_order,
@@ -358,6 +362,11 @@ from .network_policy_layout import (
     RouteMetricPlatformSpace,
     allocate_network_policy_layout,
 )
+from .probe_desired import (
+    ProbeDesiredAssembly,
+    ProbeDesiredAssemblyError,
+    build_probe_desired_assembly,
+)
 from .probe_policy import (
     AvailabilityProbeIntent,
     AvailabilityProbeMechanism,
@@ -486,12 +495,15 @@ from .route_priority_domain_builder import (
 )
 
 __all__ = [
+    "AvailabilityDescriptionResolutionError",
     "AvailabilityConfirmationState",
     "AvailabilityOutcome",
     "AvailabilityPriorityError",
     "AvailabilityProbeIntent",
     "AvailabilityProbeMechanism",
     "AvailabilityProbeAgent",
+    "ProbeDesiredAssembly",
+    "ProbeDesiredAssemblyError",
     "AvailabilityRoutingProjection",
     "AvailabilityRoutingState",
     "BindingProjectionError",
@@ -783,6 +795,8 @@ __all__ = [
     "activate_network_policy",
     "allocate_network_policy_layout",
     "apply_availability_evidence",
+    "resolve_availability_probe_intents",
+    "build_probe_desired_assembly",
     "project_availability_routing",
     "calculate_effective_path_order",
     "build_payload_network_policy_desired_state",
