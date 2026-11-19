@@ -57,10 +57,6 @@ class LinuxPayloadNatBackend:
                 f"meta oif {spec.egress.ifindex}",
                 f"ip saddr {spec.remote_source.with_prefixlen}",
             ]
-            parts.extend(
-                f"ip daddr != {address}"
-                for address in spec.excluded_host_destinations
-            )
             parts.extend((
                 "masquerade",
                 'comment "vpn-gate:ng3:profile-gateway-nat-v1"',
