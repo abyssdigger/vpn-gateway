@@ -94,6 +94,7 @@ class LinuxProbeRoutingBackend:
                 "priority", str(spec.priority),
                 "uidrange", f"{spec.process_uid}-{spec.process_uid}",
                 "ipproto", "icmp",
+                "oif", spec.endpoint.ifname,
                 "to", f"{spec.target}/32",
                 "lookup", str(spec.table),
             )
@@ -107,6 +108,7 @@ class LinuxProbeRoutingBackend:
             rule.ingress is not None
             or rule.destination is None
             or rule.destination.prefixlen != 32
+            or rule.egress is None
             or rule.fwmark is not None
             or rule.fwmask is not None
             or rule.uid_start is None
@@ -124,6 +126,7 @@ class LinuxProbeRoutingBackend:
                 "priority", str(rule.priority),
                 "uidrange", f"{rule.uid_start}-{rule.uid_end}",
                 "ipproto", "1",
+                "oif", rule.egress.ifname,
                 "to", rule.destination.with_prefixlen,
                 "lookup", str(rule.table),
             )
