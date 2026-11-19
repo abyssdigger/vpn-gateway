@@ -43,6 +43,7 @@ Current trace:
 | shared lower network-policy deterministic allocation | `network_policy_layout.py` | `NG3-2026-11-16-network-policy-layout-allocator-review.md` |
 | pure normalized availability-subject -> probe route/RPDB/local-policy projection | `probe_policy.py` | `NG3-2026-11-19-probe-policy-projection-review.md` |
 | pure probe route/RPDB actual-vs-desired comparison | `probe_routing_compare.py` | `NG3-2026-11-19-probe-routing-comparison-review.md` |
+| bounded fail-closed probe route/RPDB convergence | `probe_routing_plan.py`, `probe_routing_convergence.py`, `linux_probe_routing.py` | `NG3-2026-11-19-probe-routing-convergence-review.md` |
 | EXP-065-backed probe route/RPDB mutation Driver | `linux_probe_routing.py` | `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
 | EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
 | bounded current probe observation context / late-result rejection / technical-result mapping | `probe_runtime.py` | `NG3-2026-11-19-probe-observation-context-agent-review.md` |
@@ -2544,6 +2545,90 @@ The executable owner is split narrowly:
   postcondition checks.
 
 No packet-mark restoration or conntrack cleanup is introduced by this owner.
+
+## 8.5. Probe route/RPDB fail-closed convergence
+
+**Implements:**
+- `VPNG0003-R3.R6`
+- `VPNG0003-R3.R6.R1`
+- `VPNG0003-R3.R6.R2`
+- `VPNG0003-R3.R6.R3`
+- `VPNG0003-R3.R6.R3.R1`
+- `VPNG0003-R3.R6.R3.R1.C1.R1`
+- `VPNG0007-R7.R3.R2`
+
+Probe route/RPDB state is reconciled independently from payload forwarding. The owner uses
+its dedicated table and RPDB pools and never relies on the global payload ForwardingGate to
+make an incomplete probe table safe.
+
+The safety invariant is local to probe dispatch:
+
+```text
+an installed probe RPDB selector
+    -> may point only at an exact current probe table
+
+a probe table whose routes are being repaired
+    -> has no installed selector until repair is complete
+```
+
+Therefore a route-table drift may require temporary withdrawal of an otherwise semantically
+correct current probe rule. This is fail-closed: probe execution loses that route selector
+until the table is exact again.
+
+The one-step planner order is:
+
+```text
+selector pointing into a drifted table
+    -> withdraw
+
+other stale selector
+    -> withdraw
+
+missing terminal guard
+    -> add
+
+stale path route
+    -> delete
+
+stale terminal guard
+    -> delete
+
+missing exact target/path route
+    -> add
+
+missing desired selector
+    -> add only after route state is exact
+```
+
+A simple count of missing/stale objects is not a valid convergence metric because
+withdrawing a currently correct selector intentionally creates one missing desired rule while
+improving safety. Probe convergence therefore uses a lexicographic safety rank:
+
+```text
+(
+    installed selectors pointing at drifted tables,
+    route differences,
+    stale selectors,
+    missing desired selectors,
+)
+```
+
+Every successful one-step mutation must expose a strictly lower fresh rank. The bounded
+transaction has no retry-on-error loop; an inter-attempt rank increase is a regression and
+terminates the transaction.
+
+Observation is link-bracketed around the shared whole-reserved route/RPDB inventory so
+same-name/new-ifindex replacement cannot be silently adopted during convergence.
+
+Executable contracts:
+
+- `probe_routing_plan.py` — fail-closed step selection and safety rank;
+- `probe_routing_convergence.py` — fresh one-step postcondition and bounded transaction;
+- `linux_probe_routing.py` — link-bracketed observation plus EXP-065-backed exact mutation.
+
+This coordinator only establishes the route/RPDB precondition for one probe attempt. It does
+not schedule ICMP, derive omitted targets, own availability confirmation or change payload
+route preference.
 
 # 9. NetworkPolicyAdapter
 

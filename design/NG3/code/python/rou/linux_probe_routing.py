@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .iproute_priority_backend import CommandRunner
+from .interface_inventory import parse_ip_link_inventory
 from .linux_structural_routing import LinuxStructuralRoutingBackend
 from .network_policy_layout import NetworkPolicyPlatformSpace
 from .payload_routing_desired import ManagedRouteSpec, ManagedRouteType
@@ -12,9 +13,11 @@ from .probe_policy import (
     AvailabilityProbeMechanism,
     ProbeRuleSpec,
 )
+from .probe_routing_convergence import ProbeRoutingPhysicalSnapshot
 from .structural_routing_inventory import (
     ObservedManagedRoute,
     ObservedManagedRule,
+    parse_structural_routing_inventory,
 )
 
 
@@ -35,6 +38,39 @@ class LinuxProbeRoutingBackend:
             raise ValueError("namespace must be a non-empty string")
         if not isinstance(self.platform, NetworkPolicyPlatformSpace):
             raise ValueError("platform must be NetworkPolicyPlatformSpace")
+
+    def observe_probe_routing_snapshot(
+        self,
+    ) -> ProbeRoutingPhysicalSnapshot:
+        before = self._links()
+        routes = self.runner.run(
+            (
+                "ip", "-n", self.namespace,
+                "-j", "-N", "-4",
+                "route", "show", "table", "all",
+            )
+        )
+        rules = self.runner.run(
+            (
+                "ip", "-n", self.namespace,
+                "-j", "-N", "-4",
+                "rule", "show",
+            )
+        )
+        after = self._links()
+        if before != after:
+            raise RuntimeError(
+                "interface identity inventory drift during probe routing observation"
+            )
+        return ProbeRoutingPhysicalSnapshot(
+            interfaces=before,
+            routing=parse_structural_routing_inventory(
+                routes,
+                rules,
+                before,
+                self.platform,
+            ),
+        )
 
     def add_route(self, spec: ManagedRouteSpec) -> None:
         self._validate_desired_route(spec)
@@ -146,6 +182,13 @@ class LinuxProbeRoutingBackend:
             raise LinuxProbeRoutingError(
                 "probe rule table is outside reserved probe pool"
             )
+
+    def _links(self):
+        return parse_ip_link_inventory(
+            self.runner.run(
+                ("ip", "-n", self.namespace, "-j", "link", "show")
+            )
+        )
 
     def _shared(self) -> LinuxStructuralRoutingBackend:
         return LinuxStructuralRoutingBackend(self.runner, self.namespace)
