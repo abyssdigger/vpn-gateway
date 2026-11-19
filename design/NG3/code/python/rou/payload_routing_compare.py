@@ -180,6 +180,7 @@ def _observed_route_key(route: ObservedManagedRoute) -> tuple[object, ...]:
         int(route.destination.network_address),
         route.destination.prefixlen,
         route.route_type.value,
+        route.role.value,
         route.protocol,
         route.metric,
         0 if route.scope is None else route.scope,
