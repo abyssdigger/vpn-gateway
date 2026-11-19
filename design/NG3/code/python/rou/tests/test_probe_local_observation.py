@@ -208,24 +208,25 @@ class ProbeLocalObservationTests(unittest.TestCase):
 
 
     def test_symbolic_icmp_protocol_json_is_equivalent(self):
-        raw = exact_ruleset()
-        for item in raw["nftables"]:
-            rule = item.get("rule")
-            if not isinstance(rule, dict):
-                continue
-            for expr in rule.get("expr", ()):
-                match = expr.get("match") if isinstance(expr, dict) else None
-                if (
-                    isinstance(match, dict)
-                    and match.get("left")
-                    == {"payload": {"field": "protocol", "protocol": "ip"}}
-                    and match.get("right") == 1
-                ):
-                    match["right"] = "icmp"
+        symbolic_rules = []
+        for source, protocol_index in (
+            (output_rule(), 3),
+            (input_rule(), 2),
+        ):
+            row = json.loads(source.canonical_json)
+            row["rule"]["expr"][protocol_index]["match"]["right"] = "icmp"
+            symbolic_rules.append(
+                NftNamespaceObject(
+                    "rule",
+                    json.dumps(row, sort_keys=True, separators=(",", ":")),
+                    source.source_order,
+                )
+            )
+
         value = compare_probe_local(
-            parse_nft_namespace_ruleset(json.dumps(raw)),
-            (PATH,),
-            DESIRED,
+            observation(*symbolic_rules),
+            (EP,),
+            desired(),
         )
         self.assertTrue(value.desired_confirmed)
         self.assertEqual(value.conflicts, ())
