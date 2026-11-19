@@ -374,6 +374,20 @@ from .probe_routing_compare import (
     ProbeRoutingComparisonError,
     compare_probe_routing,
 )
+from .probe_local_observation import (
+    PROBE_LOCAL_RULE_COMMENT,
+    ObservedProbeLocalRule,
+    ProbeLocalComparison,
+    ProbeLocalConflict,
+    compare_probe_local,
+)
+from .probe_local_mutation import (
+    ProbeLocalDeleteRef,
+    ProbeLocalMutationStep,
+    ProbeLocalPlanError,
+    select_probe_local_step,
+)
+from .linux_probe_local import LinuxProbeLocalBackend
 from .linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from .linux_structural_routing import (
     LinuxStructuralRoutingBackend,
@@ -653,6 +667,14 @@ __all__ = [
     "ProbePolicyProjectionError",
     "ProbeRoutingComparison",
     "ProbeRoutingComparisonError",
+    "PROBE_LOCAL_RULE_COMMENT",
+    "ObservedProbeLocalRule",
+    "ProbeLocalComparison",
+    "ProbeLocalConflict",
+    "ProbeLocalDeleteRef",
+    "ProbeLocalMutationStep",
+    "ProbeLocalPlanError",
+    "LinuxProbeLocalBackend",
     "ProbeRuleSpec",
     "ProbePolicyOwner",
     "ProbeRoutingDemand",
@@ -715,6 +737,8 @@ __all__ = [
     "build_payload_routing_desired_state",
     "build_probe_network_policy_desired_state",
     "compare_probe_routing",
+    "compare_probe_local",
+    "select_probe_local_step",
     "build_route_priority_domain_realizations",
     "classify_inbound_profile",
     "build_inbound_profile_partition",
