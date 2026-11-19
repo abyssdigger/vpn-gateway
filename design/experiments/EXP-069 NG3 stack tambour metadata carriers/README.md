@@ -2,7 +2,7 @@
 
 ## Статус
 
-PREPARED — ожидает privileged GitHub Actions evidence.
+COMPLETE — **PASS**. См. `EXP-069-result-20261119.md`.
 
 ## Требования
 
