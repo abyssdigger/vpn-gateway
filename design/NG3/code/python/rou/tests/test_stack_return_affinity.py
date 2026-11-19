@@ -145,7 +145,30 @@ class StackReturnAffinityTests(unittest.TestCase):
 
     def test_initial_packet_table_selection_is_explicit_profile_capability(self):
         p = profile("broad", Direction.INBOUND, "10.0.0.0/16", PA)
-        l = layout()
+        l = NetworkPolicyLayout(
+            payload=(
+                PayloadPolicyAllocation(
+                    profile_id="broad",
+                    table=1001,
+                    metric_space=None,
+                    terminal_guard_metric=100,
+                    path_route_protocol=202,
+                    guard_route_protocol=203,
+                    host_boundary_lane_route_protocol=204,
+                ),
+            ),
+            probe=(),
+            dispatch_rules=(
+                PayloadDispatchRule(
+                    profile_id="broad",
+                    destination=IPv4Network("10.0.0.0/16"),
+                    priority=1001,
+                    table=1001,
+                ),
+            ),
+            nft_family="ip",
+            nft_table="vpn_gate",
+        )
         allocations = (
             StackReturnAffinityAllocation("broad", 0xA1, 1101),
         )
