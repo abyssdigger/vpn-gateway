@@ -2433,7 +2433,8 @@ does not require EXP-026 cleanup. A later Linux observer/mutator must verify the
 state and remove stale probe-owned rules/routes when the current owner/path/target set changes.
 
 The executable pure reference is `probe_policy.py`. It is an implementation of the accepted
-EXP-021/022/024 mechanism shape, not a new availability requirement.
+EXP-021/022/024 mechanism shape, with EXP-065 supplying current iproute2 selector/lookup
+evidence; it is not a new availability requirement.
 
 # 9. NetworkPolicyAdapter
 
@@ -5144,10 +5145,17 @@ resource space:
 - EXP-048 additionally proves that a payload RPDB host destination may be rendered as a bare
   IPv4 `dst` with omitted `dstlen`, which is normalized narrowly as `/32`;
 - `src = "all"` is explicit in the tested rules;
-- probe `fwmark` / `fwmask` are hexadecimal strings.
+- EXP-029 showed that `fwmark` / `fwmask` are hexadecimal strings for a marked RPDB
+  test rule, but that rule was an inventory-shape surrogate rather than the selected
+  Release-1 probe-routing discriminator;
+- EXP-065 confirms the selected probe rule shape as exact `uidrange + ipproto + target`:
+  current numeric JSON uses integer `uid_start` / `uid_end`, bare host `dst`, and
+  `"ipproto-1"` for ICMP.
 
 The structural observer must normalize these representation forms into typed semantic lower
-objects.
+objects. Current reserved probe rules are recognized only in the selected EXP-065 selector
+shape; a marked rule inside the probe RPDB pool is therefore an unsupported reserved shape,
+not a valid current probe rule.
 
 Rows outside VPN-GATE reserved table/priority pools may be ignored by this owner-specific
 inventory. Rows **inside** reserved pools must not be silently ignored merely because their
