@@ -5111,6 +5111,8 @@ Its normalized recovery semantics are:
 The convergence planner itself is not postcondition evidence. Confirmation still belongs to
 the physical Executor/Adapter boundary after Linux mutation and re-observation.
 
+The availability-specific composition above this generic Executor is intentionally thin: `availability_route_priority.py` maps the effective `PayloadProfileRequest` order produced by `AvailabilityManager` into the existing `RoutePriorityDomainRealization` / `RoutePriorityDomainRequest` contracts and invokes the existing Profile-level coordinator. It does not own a second metric namespace, planner or Linux mutation path.
+
 The current executable Linux backend now closes that boundary for the **pure-priority
 single-route-key** subset:
 

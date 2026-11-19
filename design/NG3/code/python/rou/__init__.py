@@ -11,6 +11,14 @@ from .availability_manager import (
     AvailabilityManagerProjection,
     AvailabilitySubjectState,
 )
+from .availability_route_priority import (
+    AvailabilityRoutePriorityError,
+    AvailabilityRoutePriorityPlan,
+    AvailabilityRoutePriorityProfileResult,
+    AvailabilityRoutePriorityResult,
+    build_availability_route_priority_plans,
+    converge_availability_route_priority_once,
+)
 from .availability_priority import (
     AvailabilityPriorityError,
     calculate_effective_path_order,
@@ -532,6 +540,10 @@ __all__ = [
     "ProbeAttemptDriver",
     "ProbeExecutionContextKey",
     "ProbeExecutionPrecondition",
+    "AvailabilityRoutePriorityError",
+    "AvailabilityRoutePriorityPlan",
+    "AvailabilityRoutePriorityProfileResult",
+    "AvailabilityRoutePriorityResult",
     "AvailabilityRoutingProjection",
     "AvailabilityRoutingState",
     "BindingProjectionError",
@@ -841,6 +853,8 @@ __all__ = [
     "converge_probe_routing_step_once",
     "compare_probe_local",
     "select_probe_local_step",
+    "build_availability_route_priority_plans",
+    "converge_availability_route_priority_once",
     "build_route_priority_domain_realizations",
     "classify_inbound_profile",
     "build_inbound_profile_partition",
