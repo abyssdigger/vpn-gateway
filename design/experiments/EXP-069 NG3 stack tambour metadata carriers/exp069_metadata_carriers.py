@@ -81,9 +81,8 @@ CANDIDATES = (
     ),
     Candidate(
         "ct_label", "conntrack-local",
-        "ct label set 0x69050000000000000000000000000001",
-        "ct label 0x69050000000000000000000000000001",
-        "ct label set 0", f"ct mark set {NAT_CLASS} ct label set 0",
+        "ct label set 69", "ct label 69",
+        None, None,
     ),
     Candidate(
         "ct_secmark", "conntrack-local",
