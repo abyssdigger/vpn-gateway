@@ -2449,8 +2449,9 @@ ambient state.
 - `VPNG0007-R7.R1`
 - `VPNG0007-R7.R3.R2`
 
-Once target normalization has produced a concrete current target, the lower probe policy is a
-pure projection. It does not derive the target and it does not execute the observation:
+Once availability-description resolution has produced a concrete current description, the
+lower probe policy is a pure projection. It does not choose the description and it does not
+execute the observation:
 
 ```text
 AvailabilityProbeIntent:
@@ -2475,10 +2476,10 @@ RPDB — required path-specific selector shape from EXP-022/023:
     probe process uid + ipproto icmp + exact target + exact current oif
         -> dedicated probe table
 
-CURRENT IMPLEMENTATION DEFECT:
-    the NG3 ProbeRuleSpec / observer / Linux renderer currently omit the oif discriminator;
-    this is BROKEN for multiple paths that share one target and must be repaired before the
-    probe plane is considered path-specific.
+The executable ProbeRuleSpec, observer/comparison contract and Linux renderer include the
+exact current oif discriminator. The ICMP Driver also binds execution with
+`ping -I <current-ifname>`, so multiple logical paths sharing one target remain physically
+distinguishable rather than collapsing onto uid+target alone.
 
 stack_output:
     probe process uid + exact current oif + exact target + ICMP
