@@ -15,7 +15,7 @@ from .probe_local_mutation import ProbeLocalMutationStep
 from .network_policy_layout import NetworkPolicyPlatformSpace
 from .nft_namespace_inventory import parse_nft_namespace_ruleset
 from .payload_forward_desired import PayloadForwardRuleSpec
-from .payload_nat_desired import PayloadMasqueradeSpec
+from .payload_nat_desired import PayloadNatRuleSpec
 from .payload_routing_desired import ManagedRouteSpec, ManagedRuleSpec
 from .structural_policy_mutation import StructuralPolicyPhysicalSnapshot
 from .structural_routing_inventory import (
@@ -106,7 +106,7 @@ class LinuxStructuralPolicyBackend:
     def delete_nat_rule(self, handle: int) -> None:
         self._nft().delete_nat_rule(handle)
 
-    def add_nat_rule(self, spec: PayloadMasqueradeSpec) -> None:
+    def add_nat_rule(self, spec: PayloadNatRuleSpec) -> None:
         self._nft().add_nat_rule(spec)
 
     def apply_local_publication_step(
