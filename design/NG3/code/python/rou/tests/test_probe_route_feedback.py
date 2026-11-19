@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 import unittest
 
 from rou.availability_confirmation import (
@@ -10,8 +10,11 @@ from rou.availability_routing_state import AvailabilityRoutingState
 from rou.binding import LogicalPathId
 from rou.domain import Direction
 from rou.network_policy_layout import ProbePolicyOwner
+from rou.interface_identity import InterfaceIdentity
 from rou.payload_profile import PayloadProfileRequest
 from rou.probe_attempt_runtime import ProbeSubjectRuntimeState
+from rou.probe_policy import AvailabilityProbeIntent
+from rou.probe_runtime import ProbeObservationContext
 from rou.probe_route_feedback import project_probe_route_feedback
 
 
@@ -29,13 +32,27 @@ def profile(paths=(A, B)):
     )
 
 
-def subject(path, *, problem=False):
+def subject(path, *, problem=False, known=True):
+    owner = ProbePolicyOwner("corp", path)
+    context = ProbeObservationContext(
+        AvailabilityProbeIntent(
+            owner,
+            IPv4Address("198.51.100.7"),
+        ),
+        InterfaceIdentity(
+            f"{path.device_id}0",
+            10 + path.slot_index + path.selector_index,
+        ),
+        1,
+    )
     return (
-        ProbePolicyOwner("corp", path),
+        owner,
         ProbeSubjectRuntimeState(
             AvailabilityConfirmationState(
                 availability_problem=problem
-            )
+            ),
+            context=context,
+            availability_known=known,
         ),
     )
 
@@ -71,6 +88,19 @@ class ProbeRouteFeedbackTests(unittest.TestCase):
         )
         self.assertEqual(value.problem_paths, ())
         self.assertEqual(value.routing.effective_order, (A, B))
+
+    def test_mismatched_context_owner_is_rejected(self):
+        owner, state = subject(A, problem=True)
+        wrong_owner = ProbePolicyOwner("corp", B)
+        with self.assertRaisesRegex(
+            ValueError,
+            "context owner",
+        ):
+            project_probe_route_feedback(
+                profile(),
+                {wrong_owner: state},
+                AvailabilityRoutingState(),
+            )
 
     def test_normal_active_path_remains_sticky_after_better_path_recovers(self):
         a_owner, a_state = subject(A, problem=False)
