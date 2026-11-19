@@ -13,6 +13,7 @@ on:
       - "design/experiments/EXP-028 NG3 lower policy platform space/**"
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
       - "design/experiments/EXP-065 NG3 probe RPDB selector shape/**"
+      - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -53,6 +54,7 @@ on:
       - "design/experiments/EXP-028 NG3 lower policy platform space/**"
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
       - "design/experiments/EXP-065 NG3 probe RPDB selector shape/**"
+      - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -155,6 +157,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-065 NG3 probe RPDB selector shape/exp065_probe_rpdb_selector.py"
+      - name: EXP-066 probe local nft owner shape
+        run: >-
+          sudo python3
+          "design/experiments/EXP-066 NG3 probe local nft owner shape/exp066_probe_local_nft_shape.py"
 
 
   linux-forwarding-barrier:
