@@ -107,9 +107,13 @@ Unit coverage added for:
 - mismatched payload/path realization -> fail closed;
 - duplicate physical logical-path realization -> rejection.
 
-The branch-level NG3 Python workflow is the execution authority for the full unit suite. The
-known unrelated privileged failures in EXP-057/060/063 remain baseline failures from main and
-are not used as positive evidence for this unit.
+NG3 Python workflow run `44490146781` on descendant code SHA
+`129916f149dac43d5c7facc34414c7fde6d44137` confirms the complete current unit suite,
+including this assembly: `unit=success`, `linux-probe-runtime=success`,
+`linux-structural-inventory-shape=success`.
+
+The known unrelated privileged failures in EXP-057/060/063 remain baseline failures from main
+and are not used as positive evidence for this unit.
 
 ## Simplification review
 
@@ -142,6 +146,6 @@ none
 
 ## Verdict
 
-**ACCEPT**, conditional only on the branch unit suite remaining green at this source state or
-a descendant containing no semantic change to this unit. No new requirement closure is
-needed because this is implementation of already closed contracts.
+**ACCEPT.** The reviewed assembly is covered by successful descendant workflow evidence.
+No new requirement closure is needed because this is implementation of already closed
+contracts.
