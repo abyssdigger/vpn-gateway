@@ -4,7 +4,7 @@ import unittest
 from rou.alpha_runtime import AlphaPreparedPolicy
 from rou.host_publication_policy import HostPublicationSelectorKind
 from rou.interface_identity import InterfaceIdentity
-from rou.payload_routing_desired import ManagedRouteType
+from rou.payload_routing_desired import ManagedRouteRole, ManagedRouteType
 
 
 CONFIG = """
@@ -120,7 +120,7 @@ remote_port = 11940
                 local_address=IPv4Address("198.19.255.2"),
             )
 
-    def test_alpha_accepts_availability_but_still_rejects_unmaterialized_snat(self):
+    def test_alpha_accepts_availability_and_materializes_snat_lane_route(self):
         availability = AlphaPreparedPolicy.from_text(
             CONFIG.replace(
                 'device_order = ["ovpn"]',
@@ -141,17 +141,42 @@ remote_port = 11940
         self.assertEqual(len(availability.last_probe_assembly.intents), 1)
         self.assertEqual(len(desired.nft.probe_local), 2)
 
-        with self.assertRaisesRegex(Exception, r"requests \+snat"):
-            AlphaPreparedPolicy.from_text(
-                CONFIG.replace(
-                    'direction = "outbound"',
-                    'direction = "inbound+snat"',
-                ).replace(
-                    'use_outbound_nat = false\n',
-                    "",
-                ),
-                local_address=IPv4Address("198.19.255.2"),
-            )
+        snat = AlphaPreparedPolicy.from_text(
+            CONFIG.replace(
+                'direction = "outbound"',
+                'direction = "inbound+snat"',
+            ).replace(
+                'use_outbound_nat = false\n',
+                "",
+            ),
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        lane1 = InterfaceIdentity("vnga-inner1", 21)
+        lane2 = InterfaceIdentity("vnga-inner2", 22)
+        lane3 = InterfaceIdentity("vnga-inner3", 23)
+        snat_desired = snat.build_current(
+            host_boundary,
+            (
+                InterfaceIdentity("lo", 1),
+                host_boundary,
+                lane1,
+                lane2,
+                lane3,
+                vpn0,
+            ),
+        )
+        lane_routes = tuple(
+            route
+            for route in snat_desired.routing.routes
+            if route.role is ManagedRouteRole.HOST_BOUNDARY_LANE
+        )
+        self.assertEqual(len(lane_routes), 1)
+        self.assertEqual(lane_routes[0].endpoint, lane1)
+        self.assertEqual(str(lane_routes[0].gateway), "198.19.255.5")
+        self.assertIsNotNone(snat_desired.stack_return_affinity)
+        self.assertTrue(
+            snat_desired.stack_return_affinity.classifiers[0].select_initial_packet
+        )
 
         route_return = AlphaPreparedPolicy.from_text(
             CONFIG.replace(
