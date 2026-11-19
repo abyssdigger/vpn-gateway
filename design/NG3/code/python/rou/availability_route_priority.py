@@ -25,6 +25,12 @@ class AvailabilityRoutePriorityError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class AvailabilityRoutePriorityPlan:
+    profile_id: str
+    requests: tuple[RoutePriorityDomainRequest, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AvailabilityRoutePriorityProfileResult:
     profile_id: str
     result: RoutePriorityProfileResult | None
@@ -43,14 +49,14 @@ class AvailabilityRoutePriorityResult:
         return all(profile.confirmed for profile in self.profiles)
 
 
-def converge_availability_route_priority_once(
+def build_availability_route_priority_plans(
     effective_profiles: Iterable[PayloadProfileRequest],
     layout: NetworkPolicyLayout,
     path_routes: Iterable[RoutePriorityPathRoute],
     *,
     runner: CommandRunner,
     namespace: str,
-) -> AvailabilityRoutePriorityResult:
+) -> tuple[AvailabilityRoutePriorityPlan, ...]:
     profiles = tuple(sorted(effective_profiles, key=lambda item: item.profile_id))
     routes = tuple(path_routes)
 
@@ -65,7 +71,7 @@ def converge_availability_route_priority_once(
         for route in routes
     }
 
-    outcomes: list[AvailabilityRoutePriorityProfileResult] = []
+    plans: list[AvailabilityRoutePriorityPlan] = []
     for profile in profiles:
         allocation = allocation_by_id[profile.profile_id]
         required_routes = tuple(
@@ -81,15 +87,6 @@ def converge_availability_route_priority_once(
         except RoutePriorityDomainBuildError as exc:
             raise AvailabilityRoutePriorityError(str(exc)) from exc
 
-        if not realizations:
-            outcomes.append(
-                AvailabilityRoutePriorityProfileResult(
-                    profile.profile_id,
-                    None,
-                )
-            )
-            continue
-
         requests = tuple(
             _request_for_realization(
                 realization,
@@ -98,10 +95,46 @@ def converge_availability_route_priority_once(
             )
             for realization in realizations
         )
+        plans.append(
+            AvailabilityRoutePriorityPlan(
+                profile.profile_id,
+                requests,
+            )
+        )
+
+    return tuple(plans)
+
+
+def converge_availability_route_priority_once(
+    effective_profiles: Iterable[PayloadProfileRequest],
+    layout: NetworkPolicyLayout,
+    path_routes: Iterable[RoutePriorityPathRoute],
+    *,
+    runner: CommandRunner,
+    namespace: str,
+) -> AvailabilityRoutePriorityResult:
+    plans = build_availability_route_priority_plans(
+        effective_profiles,
+        layout,
+        path_routes,
+        runner=runner,
+        namespace=namespace,
+    )
+
+    outcomes: list[AvailabilityRoutePriorityProfileResult] = []
+    for plan in plans:
+        if not plan.requests:
+            outcomes.append(
+                AvailabilityRoutePriorityProfileResult(
+                    plan.profile_id,
+                    None,
+                )
+            )
+            continue
         outcomes.append(
             AvailabilityRoutePriorityProfileResult(
-                profile.profile_id,
-                converge_route_priority_profile_once(requests),
+                plan.profile_id,
+                converge_route_priority_profile_once(plan.requests),
             )
         )
 
