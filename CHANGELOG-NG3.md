@@ -1,25 +1,65 @@
 # VPN-GATE NG3 — development milestones
 
-This log records **major steps** in the active NG3 lineage, not individual commits,
-reviews, experiments or transient implementation details. The governing requirements,
-architecture and evidence remain authoritative in their own artifacts.
+This log records **major verified steps** in the active NG3 lineage, not individual commits,
+reviews, experiments or transient implementation details. Requirements, architecture and
+evidence remain authoritative in their own artifacts.
 
-## 2026-11-17 — Clean active NG3 lineage
+## 2026-11-19 — Project governance model consolidated
 
-The active `main` was established as an NG3-only development line. Historical RC
-and NG1/NG2 material remains on `legacy-main-rc` and `legacy-main-ng1-2`;
-the former mixed NG3 history remains on `legacy-main-ng3`. The active-tree
-hygiene guard rejects reintroduction of legacy payload.
+Project-wide development rules were refactored so repository authorization, CD cadence,
+review outcomes, development blocks/snapshots, declarations/deferrals, experiment evidence,
+language policy and changelog ownership have explicit non-overlapping authorities. CD timing
+now starts from real wall-clock cycle start rather than first-commit time, and failed commit
+publication is a mandatory stop condition.
+
+## 2026-11-19 — Rust production-boundary parity established for availability state
+
+The Rust production boundary was introduced without changing current alpha behavior and then
+extended across adjacent pure availability contracts: confirmation, effective-order
+calculation and bounded active-path projection. Python remains the executable reference while
+the safe-Rust replacement surface grows behind parity evidence.
+
+## 2026-11-19 — Continuous availability path assembled in the alpha
+
+The Release-1 ICMP availability path was connected end to end from canonical configuration
+through probe policy, current physical observation, bounded confirmation, effective route
+ordering and runtime status. Subsequent descendant review evidence accepted the multi-subject
+runtime semantics.
+
+## 2026-11-18 — Selected host-boundary return handling integrated
+
+The executable alpha integrated the selected host bootstrap, default stateful return and
+explicit `+route-return` path under one lifecycle with runtime drift containment and owned
+cleanup.
+
+## 2026-11-18 — Live runtime status integrated
+
+The executable alpha gained a live current-state projection independent from the temporary
+JSON renderer. Runtime status composes authoritative controller state rather than creating a
+second state owner.
 
 ## 2026-11-17 — VPN server publication integrated into the NG3 runtime
 
-The reference NG3 runtime gained Device `publish_vpn_server` handling with
-host-owned publication boundaries and fail-closed mapping validation.
-The accepted experiment evidence includes external TCP publication, ordinary VPN
-lifecycle and cleanup of owned host resources.
+Canonical Device `publish_vpn_server` was materialized in the reference alpha/beta runtime
+with owner-scoped host publication, fail-closed overlap validation, external TCP evidence and
+owned cleanup.
+
+## 2026-11-17 — First functioning NG3 alpha
+
+The first installed systemd NG3 alpha transferred payload through an independently managed
+OpenVPN instance while the controller remained live, detected VPN endpoint replacement and
+reconciled current policy without requiring its own restart.
+
+## 2026-11-17 — Clean active NG3 lineage
+
+The active `main` was established as an NG3-only development line. Historical RC and NG1/NG2
+material remains on `legacy-main-rc` and `legacy-main-ng1-2`; the former mixed NG3 line
+remains on `legacy-main-ng3`. Active-line hygiene prevents legacy payload from silently
+reappearing.
 
 ---
 
-The previous active-line changelog was preserved verbatim as
-[CHANGELOG-OLD.md](CHANGELOG-OLD.md). Earlier RC/NG1/NG2 development history is
-retained on the corresponding legacy branches, not copied into the current tree.
+The previous active-line changelog is preserved verbatim as
+[CHANGELOG-OLD.md](CHANGELOG-OLD.md). The substantially longer earlier RC/NG1/NG2
+development log remains available on `legacy-main-ng1-2:CHANGELOG.md`; historical branches,
+rather than this milestone log, remain the source for detailed legacy chronology.
