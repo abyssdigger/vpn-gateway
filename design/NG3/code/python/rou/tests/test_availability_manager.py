@@ -27,7 +27,7 @@ TARGET = IPv4Address("198.51.100.10")
 
 
 def config(*, reserve=False):
-    reserve_line = 'reserve_devices = ["oc"]' if reserve else ""
+    device_order = '["wg", "oc:reserve"]' if reserve else '["wg", "oc"]'
     return parse_release1_config(f"""
 [device.wg]
 enabled = true
@@ -51,9 +51,8 @@ target = "198.51.100.20"
 enabled = true
 direction = "outbound"
 destinations = ["10.0.0.0/8"]
-device_order = ["wg", "oc"]
+device_order = {device_order}
 availability_check = "default"
-{reserve_line}
 """)
 
 
