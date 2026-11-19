@@ -82,6 +82,23 @@ class LinuxHostBootstrapBackendTests(unittest.TestCase):
         self.assertTrue(observed.exact)
         self.assertEqual(observed.conflicts,())
 
+    def test_split_dst_and_dstlen_are_observed_as_one_prefix(self):
+        d=desired()
+        rules=json.dumps([
+            {"priority":6400,"src":"all","iif":"vnga-host0","table":254,"protocol":203},
+            {"priority":8192,"src":"all","dst":"10.0.0.0","dstlen":8,"table":254,
+             "protocol":203,"suppress_prefixlen":8},
+            {"priority":8193,"src":"all","dst":"10.0.0.0","dstlen":8,
+             "table":allocation().table,"protocol":203},
+        ])
+        routes=json.dumps([{
+            "dst":"10.0.0.0/8","gateway":"198.19.255.2","dev":"vnga-host0",
+            "protocol":203,"table":allocation().table,
+        }])
+        observed=LinuxHostBootstrapBackend(Runner(routes,rules),allocation()).observe(d)
+        self.assertTrue(observed.exact)
+        self.assertEqual(observed.missing_rule_priorities,())
+        self.assertEqual(observed.stale_rule_priorities,())
     def test_device_only_route_is_observed_and_rendered_without_gateway(self):
         route=HostBootstrapRouteSpec(
             destination=IPv4Network("10.0.0.0/8"),
