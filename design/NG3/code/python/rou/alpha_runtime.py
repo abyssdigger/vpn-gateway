@@ -184,7 +184,7 @@ class AlphaPreparedPolicy:
         for profile_id, profile in config.profiles.items():
             if not config.structural.profiles[profile_id].enabled:
                 continue
-            if profile.ordinary_gateway_nat:
+            if profile.effective_snat_address is not None:
                 raise AlphaRuntimeError(
                     f"profile {profile_id!r} requests +snat, which is not yet "
                     "materialized by the alpha runtime"
