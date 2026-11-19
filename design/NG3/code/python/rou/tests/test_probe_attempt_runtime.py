@@ -89,7 +89,9 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
             ProbeAttemptStatus.PRECONDITION_FAILED,
         )
         self.assertEqual(driver.calls, [])
-        self.assertEqual(result.next_state, state)
+        self.assertNotEqual(result.next_state, state)
+        self.assertEqual(result.next_state.availability_label, "unknown")
+        self.assertEqual(result.next_state.context, agent.current_context)
 
     def test_negative_evidence_advances_degradation_hysteresis(self):
         agent = AvailabilityProbeAgent()
@@ -321,6 +323,47 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
             result.next_state.confirmation,
             AvailabilityConfirmationState(),
         )
+
+    def test_new_target_resets_old_problem_even_before_lower_policy_is_ready(self):
+        agent = AvailabilityProbeAgent()
+        current = agent.configure(INTENT, EP)
+        old = ProbeSubjectRuntimeState(
+            AvailabilityConfirmationState(
+                availability_problem=True,
+            ),
+            context=current,
+            availability_known=True,
+        )
+        replacement = AvailabilityProbeIntent(
+            ProbePolicyOwner("corp", PATH),
+            IPv4Address("203.0.113.9"),
+        )
+        driver = StaticDriver(
+            ProbeTechnicalObservation(ProbeTechnicalOutcome.REPLY)
+        )
+        result = run_probe_attempt_once(
+            agent,
+            driver,
+            replacement,
+            EP,
+            old,
+            ProbeAttemptPreconditions(
+                routing_confirmed=False,
+                local_policy_confirmed=False,
+            ),
+            degradation_threshold=2,
+            recovery_threshold=2,
+        )
+        self.assertEqual(
+            result.status,
+            ProbeAttemptStatus.PRECONDITION_FAILED,
+        )
+        self.assertEqual(driver.calls, [])
+        self.assertEqual(result.next_state.availability_label, "unknown")
+        self.assertFalse(
+            result.next_state.confirmation.availability_problem
+        )
+        self.assertNotEqual(result.next_state.context, current)
 
     def test_unchecked_preconditions_require_both_lower_owners(self):
         value = ProbeAttemptPreconditions(
