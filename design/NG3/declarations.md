@@ -22,84 +22,99 @@ Requirement or Constraint; quantitative limits and acceptance thresholds are def
 working implementation evidence provides a useful basis for them.
 
 
-## Runtime transparency / config-shaped current-state snapshot
+## Runtime transparency / human current-state view
 
-Preliminary user expectation: VPN-GATE should provide a way to render a current-state snapshot
-in a representation deliberately close to the human-facing configuration model, so an
-administrator can understand what the gate is actually using without reconstructing that
-state from Linux routes, nftables rules, metrics or logs.
+Preliminary user expectation: once the basic alpha functionality is operational and there is
+meaningful runtime state to observe, VPN-GATE should provide a compact human-readable current
+state view for testing and operational transparency.
 
-The snapshot is expected to be organized primarily by the same stable user-facing entities:
+This is a **presentation of current runtime state**, not an effective configuration dump and
+not a round-trippable config format.
 
-```text
-Device
-    -> currently observed runtime facts/bindings relevant to that Device
-
-Profile
-    -> currently used concrete interfaces/paths in effective route-preference order
-    -> availability annotation for each such path/interface
-```
-
-For Devices, the presentation should expose the runtime parameters/facts the product currently
-observes and uses when resolving the configured Device, while preserving the distinction
-between configured expectations and observed current state.
-
-For Profiles, the presentation should make the effective path order visible rather than merely
-echoing configured `device_order`: the user should be able to see which concrete interfaces
-or logical paths currently participate, in the order in which routing would actually prefer
-them, together with their current availability state.
-
-The output should remain conceptually close enough to the configuration language that a user
-can compare intended configuration with effective runtime state directly. Internal Linux
-implementation identifiers may be included when diagnostically useful, but must not become
-the primary organizing model.
-
-This is intentionally only a preliminary user expectation in the current cycle. It is **not**
-yet a normative Requirement/Constraint, does not reopen the currently closed requirement
-tree, and does not yet define a command/API, serialization format, exact field set, freshness
-or atomicity guarantee, persistence behavior, or compatibility contract. Those semantics
-require separate requirement discussion before implementation.
-
-
-## External Profile network sources and reload semantics
-
-Preliminary user expectation: a Profile should eventually be able to obtain part or all of
-its network-prefix set from one or more external text files that are reread on configuration
-reload.
-
-Desired external behavior, subject to later requirement review:
+The primary text view is expected to have exactly two user-facing sections.
 
 ```text
-Profile configured prefixes
-    = inline prefixes from main config
-    + prefixes accepted from referenced external files
-
-reload
-    -> read/parse all configured sources
-    -> form one normalized runtime prefix bundle
-    -> validate/diagnose source contents
-    -> publish the new desired state only after reload processing completes
+Devices
+    wg-main: wg0
+    oc-office: tun0, tun1
+    spare: not discovered
+    old-vpn: disabled
+Profiles
+    corp
+        01. wg0 available (icmp/10.20.0.1)
+        02. tun0 not available (icmp/10.20.0.1)
+        03. tun1 unchecked
+    internet
+        01. tun3 unknown (icmp/1.1.1.1)
+        02. wg2 unchecked
+    legacy: disabled
 ```
 
-The main config should preferably allow inline prefixes and file-backed prefix sources to be
-mixed for one Profile; accepted entries from both sources are unioned into one runtime bundle
-before lower policy projection.
+Formatting intent:
 
-Reload should be non-disruptive to the currently active runtime state. While the new
-configuration/source bundle is being read and normalized, the previously accepted desired
-state remains authoritative. Only after reload processing reaches a publishable result does
-the runtime desired state change.
+- every nesting level uses four spaces;
+- there is no blank line between a section heading and its first row;
+- one Device occupies one line;
+- a disabled Profile is one line: `<profile>: disabled`;
+- enabled Profile interfaces are listed on indented lines;
+- Profile interface rows are explicitly numbered `01.`, `02.`, ... to emphasize that
+  their order is the **current effective routing order**, not merely configured membership.
 
-External network-list parsing is expected to be deliberately soft at line granularity:
-one malformed/unsupported line should produce an operator-visible warning/diagnostic and be
-excluded from the new source contribution rather than disabling the entire Profile merely
-because that one line is bad. This does **not** yet define how file-level failures, empty
-results, duplicate prefixes, overlapping prefixes, encoding errors, missing files, permission
-errors or all-lines-invalid cases affect publication of the new desired state.
+For Devices, the first-release/current view should show the Device name and currently
+discovered interface name(s), or an explicit state such as `not discovered` / `disabled`.
+If another current Device fact later proves operationally important it may be added, but
+internal Linux implementation details are not the purpose of this compact view. Future
+managed Devices may extend the same row with their operational status.
 
-This is intentionally only a preliminary user expectation. It is not yet a normative
-Requirement/Constraint and does not define file syntax, source ordering, watch-vs-reload
-behavior, transactional scope across multiple files/Profiles, or diagnostics schema.
+For enabled Profile paths:
+
+- no configured availability check -> `unchecked`;
+- check configured but no current confirmed availability result -> `unknown`;
+- confirmed usable -> `available (<normalized-check>)`;
+- confirmed unusable -> `not available (<normalized-check>)`.
+
+The text inside parentheses is the normalized availability-check expression, effectively the
+normalized config form such as `icmp/10.20.0.1`. Low-level probe failure details belong in
+logs rather than this compact view.
+
+The implementation is deliberately blocked until the basic alpha runtime is operational:
+before routing/binding/probing produce meaningful current state, there is little useful state
+to render and little value in testing the renderer itself. Once the basic alpha path works,
+this view becomes an alpha testing/debugging aid.
+
+After the first release, the same semantic runtime snapshot may gain JSON and/or TOML
+renderers. Those are alternative serializations of one authoritative snapshot model, not
+separate diagnostic state models.
+
+This remains a preliminary user expectation, not a normative Requirement/Constraint, until
+the alpha runtime provides enough working evidence to promote it cleanly.
+
+## Post-first-release external Profile network sources
+
+Preliminary future expectation, explicitly deferred until **after the first release** and to
+be discussed together with managed Devices / VPN lifecycle automation.
+
+A future Profile may be able to combine:
+
+```text
+inline network prefixes
++ one or more external network-list files
+    -> one normalized runtime prefix bundle
+```
+
+Candidate future reload semantics remain:
+
+- external files are reread on explicit reload;
+- the currently published runtime state continues operating while the candidate reload is
+  parsed/normalized;
+- only after reload processing completes is a new desired state published;
+- malformed individual source lines should be warnings + skipped entries rather than
+  automatically disabling the whole Profile.
+
+This feature is intentionally not part of first-release planning. Without managed Device/VPN
+configuration ownership its near-term value does not justify the source/reload complexity.
+File-level failure semantics, syntax, provenance and atomicity scope are therefore postponed
+for the same post-first-release discussion rather than specified now.
 
 ## Future VPN configuration and lifecycle automation
 
