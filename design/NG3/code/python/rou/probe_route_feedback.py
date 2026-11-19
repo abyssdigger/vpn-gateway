@@ -10,6 +10,7 @@ from .availability_routing_state import (
     AvailabilityRoutingState,
     project_availability_routing,
 )
+from .binding import LogicalPathId
 from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
 from .probe_attempt_runtime import ProbeSubjectRuntimeState
@@ -21,7 +22,7 @@ class ProbeRouteFeedbackError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ProbeRouteFeedbackProjection:
-    problem_paths: tuple
+    problem_paths: tuple[LogicalPathId, ...]
     routing: AvailabilityRoutingProjection
 
 
@@ -62,8 +63,6 @@ def project_probe_route_feedback(
         ProbePolicyOwner(profile.profile_id, path_id)
         for path_id in profile.ordered_paths
     )
-    current_owner_set = set(current_owners)
-
     for owner, state in subject_states.items():
         if not isinstance(owner, ProbePolicyOwner):
             raise ProbeRouteFeedbackError(
@@ -78,8 +77,7 @@ def project_probe_route_feedback(
         owner.path_id
         for owner in current_owners
         if (
-            owner in current_owner_set
-            and owner in subject_states
+            owner in subject_states
             and subject_states[
                 owner
             ].confirmation.availability_problem
