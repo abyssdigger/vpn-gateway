@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Callable
 
 from .composite_nft_policy import CompositeNftDesiredState
 from .forwarding_gate import (
@@ -83,6 +84,7 @@ def activate_network_policy(
     platform: NetworkPolicyPlatformSpace,
     stack_return_affinity_backend: StackReturnAffinityBackend | None = None,
     stack_return_affinity_desired: StackReturnAffinityDesired | None = None,
+    activation_precondition: Callable[[], bool] | None = None,
 ) -> NetworkPolicyActivationResult:
     """Contain, prepare the invariant scaffold if safely bounded, then converge.
 
@@ -216,6 +218,7 @@ def activate_network_policy(
         routing_desired,
         nft_desired,
         platform,
+        activation_precondition=activation_precondition,
     )
     if not structural.confirmed:
         return _failed_after_containment(
