@@ -379,6 +379,10 @@ from .linux_structural_routing import (
     LinuxStructuralRoutingBackend,
     LinuxStructuralRoutingError,
 )
+from .linux_probe_routing import (
+    LinuxProbeRoutingBackend,
+    LinuxProbeRoutingError,
+)
 from .profile_classification import (
     ProfileClassificationError,
     classify_inbound_profile,
@@ -539,6 +543,8 @@ __all__ = [
     "IproutePriorityBackendError",
     "LinuxForwardingGateBackend",
     "LinuxForwardingGateError",
+    "LinuxProbeRoutingBackend",
+    "LinuxProbeRoutingError",
     "ManagedNetworkDomainEnsureResult",
     "ManagedNetworkDomainPreflightResult",
     "ManagedNetworkDomainError",
