@@ -117,6 +117,43 @@ def main() -> int:
         if len(handles) != 2:
             raise AssertionError(handles)
 
+        nsexec(ns, "ip", "link", "del", "path0")
+        nsexec(ns, "ip", "link", "add", "path0", "type", "dummy")
+        nsexec(ns, "ip", "link", "set", "path0", "up")
+        replacement = json.loads(
+            nsexec(ns, "ip", "-j", "link", "show", "dev", "path0").stdout
+        )[0]
+        replacement_ifindex = int(replacement["ifindex"])
+        if replacement_ifindex == ifindex:
+            raise AssertionError("replacement unexpectedly reused ifindex")
+
+        replaced_ruleset = json.loads(
+            nsexec(ns, "nft", "-j", "-nn", "list", "ruleset").stdout
+        )
+        replaced_probe_rules = [
+            row["rule"]
+            for row in replaced_ruleset.get("nftables", [])
+            if isinstance(row, dict)
+            and isinstance(row.get("rule"), dict)
+            and row["rule"].get("comment") == COMMENT
+        ]
+        print(
+            "EXP066_REPLACEMENT_JSON="
+            + json.dumps(
+                replaced_probe_rules,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        if len(replaced_probe_rules) != 2:
+            raise AssertionError(
+                "probe rules did not survive interface replacement"
+            )
+        print(
+            f"EXP066_IFINDEX_REPLACEMENT=PASS old={ifindex} "
+            f"new={replacement_ifindex}"
+        )
+
         delete_script = "\n".join(
             f"delete rule ip vpn_gate {chain} handle {handle}"
             for chain, handle in handles
