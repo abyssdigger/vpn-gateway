@@ -188,13 +188,21 @@ class ProbePolicyTests(unittest.TestCase):
 
     def test_duplicate_probe_owner_is_rejected(self):
         item = intent("corp", A, str(TARGET_A))
+        layout = allocate_network_policy_layout(
+            (),
+            (ProbeRoutingDemand(item.owner),),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
         with self.assertRaisesRegex(
             ProbePolicyProjectionError,
             "duplicate availability probe owner",
         ):
-            build(
+            build_probe_network_policy_desired_state(
                 (item, item),
+                layout,
                 (RoutePriorityPathRoute(A, EP_A),),
+                NG3_LINUX_POLICY_PLATFORM,
+                LOCAL,
             )
 
     def test_one_endpoint_cannot_realize_multiple_probe_paths(self):
