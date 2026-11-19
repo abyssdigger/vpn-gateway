@@ -88,16 +88,10 @@ pub fn calculate_effective_path_order(
         }
     };
 
-    Ok(usable_order
-        .into_iter()
-        .chain(problem_tail)
-        .collect())
+    Ok(usable_order.into_iter().chain(problem_tail).collect())
 }
 
-fn sticky_first(
-    active: &LogicalPathId,
-    usable: &[LogicalPathId],
-) -> Vec<LogicalPathId> {
+fn sticky_first(active: &LogicalPathId, usable: &[LogicalPathId]) -> Vec<LogicalPathId> {
     std::iter::once(active.clone())
         .chain(usable.iter().filter(|path| *path != active).cloned())
         .collect()
@@ -173,23 +167,12 @@ mod tests {
         let (a, b, c, _) = fixtures();
         let configured = vec![a.clone(), b.clone(), c.clone()];
         assert_eq!(
-            calculate_effective_path_order(
-                &configured,
-                std::slice::from_ref(&a),
-                Some(&b),
-                &[],
-            )
-            .unwrap(),
+            calculate_effective_path_order(&configured, std::slice::from_ref(&a), Some(&b), &[],)
+                .unwrap(),
             vec![b.clone(), c.clone(), a.clone()]
         );
         assert_eq!(
-            calculate_effective_path_order(
-                &configured,
-                &[],
-                Some(&b),
-                &[],
-            )
-            .unwrap(),
+            calculate_effective_path_order(&configured, &[], Some(&b), &[],).unwrap(),
             vec![b, a, c]
         );
     }
@@ -244,13 +227,8 @@ mod tests {
         let (a, b, c, _) = fixtures();
         let configured = vec![a.clone(), b.clone(), c.clone()];
         assert_eq!(
-            calculate_effective_path_order(
-                &configured,
-                &[c, a, b.clone()],
-                Some(&b),
-                &[],
-            )
-            .unwrap(),
+            calculate_effective_path_order(&configured, &[c, a, b.clone()], Some(&b), &[],)
+                .unwrap(),
             configured
         );
     }
@@ -267,39 +245,19 @@ mod tests {
     fn invalid_membership_inputs_are_rejected() {
         let (a, b, c, _) = fixtures();
         assert_eq!(
-            calculate_effective_path_order(
-                &[a.clone(), a.clone()],
-                &[],
-                None,
-                &[],
-            ),
+            calculate_effective_path_order(&[a.clone(), a.clone()], &[], None, &[],),
             Err(AvailabilityPriorityError::DuplicateConfiguredPath)
         );
         assert_eq!(
-            calculate_effective_path_order(
-                &[a.clone(), b.clone()],
-                &[a.clone(), a],
-                None,
-                &[],
-            ),
+            calculate_effective_path_order(&[a.clone(), b.clone()], &[a.clone(), a], None, &[],),
             Err(AvailabilityPriorityError::DuplicateProblemPath)
         );
         assert_eq!(
-            calculate_effective_path_order(
-                &[b.clone()],
-                std::slice::from_ref(&c),
-                None,
-                &[],
-            ),
+            calculate_effective_path_order(&[b.clone()], std::slice::from_ref(&c), None, &[],),
             Err(AvailabilityPriorityError::ProblemPathOutsideMembership)
         );
         assert_eq!(
-            calculate_effective_path_order(
-                &[b],
-                &[],
-                Some(&c),
-                &[],
-            ),
+            calculate_effective_path_order(&[b], &[], Some(&c), &[],),
             Err(AvailabilityPriorityError::ActivePathOutsideMembership)
         );
     }
@@ -308,12 +266,7 @@ mod tests {
     fn reserve_device_inputs_are_strict() {
         let (a, _, _, _) = fixtures();
         assert_eq!(
-            calculate_effective_path_order(
-                std::slice::from_ref(&a),
-                &[],
-                None,
-                &["".to_string()],
-            ),
+            calculate_effective_path_order(std::slice::from_ref(&a), &[], None, &["".to_string()],),
             Err(AvailabilityPriorityError::EmptyReserveDeviceId)
         );
         assert_eq!(
