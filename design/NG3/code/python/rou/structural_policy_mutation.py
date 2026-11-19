@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol
+from typing import Callable, Protocol
 
 from .composite_nft_mutation import apply_composite_nft_step
 from .composite_nft_policy import (
@@ -198,6 +198,7 @@ def converge_structural_policy_step_once(
     routing_desired: PayloadRoutingDesiredState,
     nft_desired: CompositeNftDesiredState,
     platform: NetworkPolicyPlatformSpace,
+    activation_precondition: Callable[[], bool] | None = None,
 ) -> StructuralPolicyMutationResult:
     """Perform at most one structural write, then activate only from exact state.
 
@@ -283,6 +284,7 @@ def converge_structural_policy_step_once(
             initial,
             initial,
             result,
+            activation_precondition=activation_precondition,
         )
 
     try:
@@ -440,6 +442,7 @@ def converge_structural_policy_step_once(
             attempted=True,
             step=step,
             inherited_diagnostic=progress_diagnostic,
+            activation_precondition=activation_precondition,
         )
 
     return result(
@@ -466,6 +469,7 @@ def _activate_exact(
     attempted: bool = False,
     step: StructuralPolicyMutationStep | None = None,
     inherited_diagnostic: str | None = None,
+    activation_precondition: Callable[[], bool] | None = None,
 ) -> StructuralPolicyMutationResult:
     if _gate_lost(gate_backend):
         return result_factory(
@@ -476,6 +480,31 @@ def _activate_exact(
             step=step,
             diagnostic="forwarding barrier lost before activation",
         )
+
+    if activation_precondition is not None:
+        try:
+            precondition_ok = activation_precondition()
+        except Exception as exc:
+            return result_factory(
+                StructuralPolicyMutationStatus.PRECONDITION_FAILED,
+                initial_comparison,
+                exact_comparison,
+                attempted=attempted,
+                step=step,
+                diagnostic=(
+                    "fresh activation precondition observation failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+            )
+        if precondition_ok is not True:
+            return result_factory(
+                StructuralPolicyMutationStatus.PRECONDITION_FAILED,
+                initial_comparison,
+                exact_comparison,
+                attempted=attempted,
+                step=step,
+                diagnostic="fresh activation precondition changed before forwarding open",
+            )
 
     activation = converge_forwarding_gate_once(
         gate_backend,
