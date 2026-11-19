@@ -11,6 +11,7 @@ from .linux_nft_scaffold import NftScriptRunner
 from .linux_structural_routing import LinuxStructuralRoutingBackend
 from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
+from .probe_local_mutation import ProbeLocalMutationStep
 from .network_policy_layout import NetworkPolicyPlatformSpace
 from .nft_namespace_inventory import parse_nft_namespace_ruleset
 from .payload_forward_desired import PayloadForwardRuleSpec
@@ -119,6 +120,12 @@ class LinuxStructuralPolicyBackend:
         step: IntegrationLocalMutationStep,
     ) -> None:
         self._nft().apply_integration_local_step(step)
+
+    def apply_probe_local_step(
+        self,
+        step: ProbeLocalMutationStep,
+    ) -> None:
+        self._nft().apply_probe_local_step(step)
 
     def _links(self):
         return parse_ip_link_inventory(
