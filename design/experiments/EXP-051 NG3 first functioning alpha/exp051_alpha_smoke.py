@@ -19,7 +19,7 @@ MANAGED = "vpn-gate-alpha"
 HOST_BOUNDARY = "vnga-host0"
 INNER_BOUNDARY = "vnga-inner0"
 INNER_ADDR = "198.19.255.2"
-HOST_ADDR = "198.19.255.1"
+HOST_ADDR = "198.19.255.1"  # test-only ordinary host-local /32, not boundary addressing
 STATUS_PATH = Path("/run/vpn-gate-alpha/status.json")
 
 SERVER_NS = "alpha-srv"
@@ -185,6 +185,7 @@ def cleanup():
     command(("nft", "delete", "table", "ip", "vpn_gate_publication"), check=False)
     command(("ip", "netns", "del", MANAGED), check=False)
     command(("ip", "link", "del", HOST_BOUNDARY), check=False)
+    command(("ip", "addr", "del", f"{HOST_ADDR}/32", "dev", "lo"), check=False)
     command(("ip", "netns", "del", SERVER_NS), check=False)
     command(("ip", "link", "del", SERVER_HOST), check=False)
 
@@ -372,6 +373,7 @@ def main():
 
     cleanup()
     try:
+        command(("ip", "addr", "add", f"{HOST_ADDR}/32", "dev", "lo"))
         generate_pki(root)
         setup_server_namespace()
         server_config = write_configs(root)
@@ -409,6 +411,39 @@ def main():
         assert status["availability_state"][0]["state"] == "disabled", status
         print("EXP051_RUNTIME_STATUS_ZERO_PATH=PASS")
         print("EXP051_ALPHA_CONTROLLER_READY=PASS")
+
+        host_boundary_addr = json.loads(
+            command(
+                ("ip", "-j", "-4", "addr", "show", "dev", HOST_BOUNDARY)
+            ).stdout
+        )
+        assert not host_boundary_addr[0].get("addr_info"), host_boundary_addr
+        inner_boundary_addr = json.loads(
+            ns_command(
+                MANAGED, "ip", "-j", "-4", "addr", "show", "dev", INNER_BOUNDARY
+            ).stdout
+        )
+        assert any(
+            item.get("local") == INNER_ADDR and item.get("prefixlen") == 32
+            for item in inner_boundary_addr[0].get("addr_info", ())
+        ), inner_boundary_addr
+        service_route = json.loads(
+            command(
+                ("ip", "-j", "-4", "route", "show", f"{INNER_ADDR}/32")
+            ).stdout
+        )
+        assert len(service_route) == 1, service_route
+        assert service_route[0].get("dev") == HOST_BOUNDARY, service_route
+        assert service_route[0].get("gateway") is None, service_route
+        stack_default = json.loads(
+            ns_command(
+                MANAGED, "ip", "-j", "-4", "route", "show", "default"
+            ).stdout
+        )
+        assert len(stack_default) == 1, stack_default
+        assert stack_default[0].get("dev") == INNER_BOUNDARY, stack_default
+        assert stack_default[0].get("gateway") is None, stack_default
+        print("EXP051_ROUTED_MANAGED_L3_BOUNDARY=PASS")
 
         # Server publication is a Device transport property and must be complete
         # even before a concrete VPN endpoint appears. Prove both the ordinary
@@ -490,8 +525,8 @@ def main():
             ).stdout
         )[0]
         assert selected_route.get("dev") == HOST_BOUNDARY, selected_route
-        assert selected_route.get("gateway") == INNER_ADDR, selected_route
-        print("EXP051_SELECTED_HOST_BOOTSTRAP=PASS")
+        assert selected_route.get("gateway") is None, selected_route
+        print("EXP051_SELECTED_HOST_BOOTSTRAP_DEVICE_ONLY=PASS")
 
         # +route-return must not install the stateful host-return nft owner.
         assert command(
