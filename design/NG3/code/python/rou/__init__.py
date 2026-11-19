@@ -4,6 +4,13 @@ from .availability_description import (
     AvailabilityDescriptionResolutionError,
     resolve_availability_probe_intents,
 )
+from .availability_manager import (
+    AvailabilityManager,
+    AvailabilityManagerError,
+    AvailabilityManagerPolicy,
+    AvailabilityManagerProjection,
+    AvailabilitySubjectState,
+)
 from .availability_priority import (
     AvailabilityPriorityError,
     calculate_effective_path_order,
@@ -507,6 +514,11 @@ from .route_priority_domain_builder import (
 
 __all__ = [
     "AvailabilityDescriptionResolutionError",
+    "AvailabilityManager",
+    "AvailabilityManagerError",
+    "AvailabilityManagerPolicy",
+    "AvailabilityManagerProjection",
+    "AvailabilitySubjectState",
     "AvailabilityConfirmationState",
     "AvailabilityOutcome",
     "AvailabilityPriorityError",

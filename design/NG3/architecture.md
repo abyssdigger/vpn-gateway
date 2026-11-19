@@ -31,7 +31,7 @@ Current trace:
 | shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
 | PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
 | PayloadPolicyCalculator NEW-flow Profile classification | `profile_classification.py` | `NG3-2026-11-16-profile-classification-code-review.md` |
-| PayloadTrafficManager bounded availability confirmation + Profile active-route state | `availability_confirmation.py`, `availability_routing_state.py` | `NG3-2026-11-16-availability-confirmation-code-review.md`, `NG3-2026-11-18-availability-routing-state-review.md` |
+| PayloadTrafficManager bounded availability confirmation + Profile active-route state | `availability_confirmation.py`, `availability_routing_state.py`, `availability_manager.py` | `NG3-2026-11-16-availability-confirmation-code-review.md`, `NG3-2026-11-18-availability-routing-state-review.md` |
 | AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md`, `NG3-2026-11-18-sticky-reserve-reference-code-review.md` |
 | NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
 | NetworkPolicyExecutor re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
@@ -44,10 +44,10 @@ Current trace:
 | pure normalized availability-subject -> probe route/RPDB/local-policy projection | `probe_policy.py` | `NG3-2026-11-19-probe-policy-projection-review.md` |
 | pure probe route/RPDB actual-vs-desired comparison | `probe_routing_compare.py` | `NG3-2026-11-19-probe-routing-comparison-review.md` |
 | bounded fail-closed probe route/RPDB convergence | `probe_routing_plan.py`, `probe_routing_convergence.py`, `linux_probe_routing.py` | `NG3-2026-11-19-probe-routing-convergence-review.md` |
-| probe route/RPDB mutation Driver — **BROKEN path discriminator pending oif recovery** | `linux_probe_routing.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
+| probe route/RPDB mutation Driver with exact `oif` path discriminator | `linux_probe_routing.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
 | EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
 | bounded current probe observation context / late-result rejection / technical-result mapping | `probe_runtime.py` | `NG3-2026-11-19-probe-observation-context-agent-review.md` |
-| EXP-067-backed one-shot ICMP exit semantics — **path binding correction pending** | `icmp_probe_driver.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-icmp-probe-driver-review.md`, `EXP-067-result-20261119.md` |
+| EXP-067-backed one-shot ICMP exit semantics with bound `-I <ifname>` path execution | `icmp_probe_driver.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-icmp-probe-driver-review.md`, `EXP-067-result-20261119.md` |
 | accepted NG3 Linux platform resource space | `linux_policy_platform.py` | `EXP-028-result-20261116.md` |
 | semantic Profile/allocation -> route-key priority realization | `route_priority_domain_builder.py` | `NG3-2026-11-16-route-priority-domain-builder-review.md` |
 | explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
@@ -1635,6 +1635,9 @@ No unbounded attempt history, evidence journal or replay log is justified.
 
 The Manager consumes semantic availability evidence, not raw probe execution results.
 
+The executable bounded composition is `availability_manager.py::AvailabilityManager`: it synchronizes current probe contexts, resets confirmation on context replacement, applies only matching fresh `ProbeEvidence`, and projects the resulting problem set into effective `PayloadProfileRequest` order using the existing sticky/reserve routing state.
+
+
 Normalized evidence:
 
 ```text
@@ -1689,8 +1692,7 @@ On either state transition, obsolete progress is reset.
 
 No observation history, time window, replay log or unbounded attempt count is retained.
 
-Adaptation consumes evidence from the user-selected availability criterion. For the first
-release, that criterion is ICMP with explicit or derived target semantics defined below.
+Adaptation consumes evidence from the user-selected availability criterion. For the first release, that criterion is a concrete ICMP + IPv4 description resolved from either the corresponding Device default or the Profile override defined below.
 
 ## 4.4. Availability affects priority only
 
@@ -5049,12 +5051,12 @@ No requirement promises an atomic simultaneous metric permutation across all des
 prefixes. The required observable invariants are preserved path membership/safety during
 the transition and the configured effective order after verified convergence.
 
-Metric convergence alone is **not** sufficient to satisfy established-flow stability for a
-multi-path Profile. The reordered metrics define selection for traffic without a preserved
-flow/path association. Before an availability-driven priority permutation is exposed for
-outbound multi-path traffic, the production path-affinity owner described in section 5.2
-must already be exact so packets belonging to an established flow continue to select their
-original logical path while it remains usable.
+For Release-1 outbound availability, pure-priority convergence does not require an additional
+per-flow path-affinity owner. The sticky active-path semantics in section 5 keep the currently
+healthy ordinary path first after failover/recovery and therefore avoid recovery-driven
+migration by construction. An explicit Profile-local reserve membership deliberately opts
+into failback to a recovered higher-baseline path. Managed-stack return affinity remains a
+separate concern for remote-initiated traffic.
 
 The unused/free metric is inferred operationally from freshly observed current state. It is
 not configuration, semantic state or a permanently materialized "hole".
