@@ -29,8 +29,10 @@ LAN_IP = "192.0.2.2"
 STACK_TRANSIT = "198.51.100.1"
 REMOTE_TRANSIT = "198.51.100.2"
 REMOTE_IP = "10.70.0.2"
+REMOTE_NO_NAT_IP = "10.70.0.3"
 STACK_IPVL_IP = "198.18.70.2"
 HOST_IPVL_IP = "198.18.70.1"
+STACK_NETKIT_IP = "198.18.71.2"
 MARK = "0x70010001"
 
 
@@ -90,6 +92,7 @@ def setup_base():
     addr(STACK, S_R, f"{STACK_TRANSIT}/30")
     addr(REMOTE, R_S, f"{REMOTE_TRANSIT}/30")
     ns(REMOTE, "ip", "addr", "add", f"{REMOTE_IP}/32", "dev", "lo")
+    ns(REMOTE, "ip", "addr", "add", f"{REMOTE_NO_NAT_IP}/32", "dev", "lo")
 
     ns(HOST, "sysctl", "-qw", "net.ipv4.ip_forward=1")
     ns(STACK, "sysctl", "-qw", "net.ipv4.ip_forward=1")
@@ -97,7 +100,7 @@ def setup_base():
         for iface in ifaces:
             ns(name, "sysctl", "-qw", f"net.ipv4.conf.{iface}.rp_filter=0")
 
-    ns(STACK, "ip", "route", "add", f"{REMOTE_IP}/32", "via", REMOTE_TRANSIT, "dev", S_R)
+    ns(STACK, "ip", "route", "add", "10.70.0.0/24", "via", REMOTE_TRANSIT, "dev", S_R)
     ns(REMOTE, "ip", "route", "add", "192.0.2.0/24", "via", STACK_TRANSIT, "dev", R_S)
     ns(REMOTE, "ip", "route", "add", f"{HOST_IPVL_IP}/32", "via", STACK_TRANSIT, "dev", R_S)
     ns(REMOTE, "ip", "route", "add", f"{HOST_LAN}/32", "via", STACK_TRANSIT, "dev", R_S)
