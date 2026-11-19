@@ -2,7 +2,7 @@
 
 ## Status
 
-PREPARED — evidence pending.
+PASS — selected backend confirmed in final privileged CI evidence; earlier red run was an authoritative-observer `dstlen` normalization defect.
 
 ## Purpose
 
@@ -23,3 +23,7 @@ PASS requires:
 - exact managed /32 equal to the configured VPN transport endpoint is supported without pins;
 - backend fresh observation confirms exact owner state;
 - cleanup removes all bootstrap owner routes/rules and leaves main unchanged.
+## Final evidence
+
+See `EXP-060-result-20261119.md`. Final workflow run `44598508737`, job
+`linux-selected-host-bootstrap-backend` (`135823381443`) completed with `EXP060_RESULT=PASS`.
