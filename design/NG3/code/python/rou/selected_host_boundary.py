@@ -117,7 +117,7 @@ def build_selected_host_boundary_desired(
     bootstrap_owner = build_linux_host_bootstrap_desired(
         plan,
         host_interface=domain_spec.host_interface,
-        inner_gateway=domain_spec.inner_address.ip,
+        inner_gateway=domain_spec.host_boundary_gateway,
         allocation=NG3_HOST_BOOTSTRAP_LINUX_ALLOCATION,
     )
     return SelectedHostBoundaryDesired(
