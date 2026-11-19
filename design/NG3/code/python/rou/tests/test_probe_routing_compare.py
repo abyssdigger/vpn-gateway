@@ -79,6 +79,7 @@ def exact_observation(desired):
             uid_start=rule.process_uid,
             uid_end=rule.process_uid,
             ipproto=1,
+            egress=rule.endpoint,
         )
         for rule in desired.rules
     )
@@ -109,6 +110,7 @@ class ProbeRoutingComparisonTests(unittest.TestCase):
             uid_start=rule.uid_start + 1,
             uid_end=rule.uid_end + 1,
             ipproto=rule.ipproto,
+            egress=rule.egress,
         )
         result = compare_probe_routing(
             desired,
@@ -135,6 +137,7 @@ class ProbeRoutingComparisonTests(unittest.TestCase):
             uid_start=rule.uid_start,
             uid_end=rule.uid_end,
             ipproto=rule.ipproto,
+            egress=rule.egress,
         )
         result = compare_probe_routing(
             desired,
