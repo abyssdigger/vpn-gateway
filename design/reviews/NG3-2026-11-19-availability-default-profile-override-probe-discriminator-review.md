@@ -72,7 +72,16 @@ canonical structural-inventory EXP-065 fixture without `oif`.
 
 **Disposition:** accepted and fixed. Unit tests are green after both fixture corrections.
 
-### F6 — three Linux integration jobs remain red but are baseline failures
+### F6 — architecture still carried the pre-fix "current defect" marker
+
+After the executable oif + `ping -I` correction was accepted, §8.3 still described the
+missing-oif condition as a current implementation defect. That made the architecture
+self-contradictory with the reviewed implementation.
+
+**Disposition:** accepted and fixed. §8.3 now records the implemented RPDB `oif`
+discriminator and bound ICMP execution instead of the obsolete defect marker.
+
+### F7 — three Linux integration jobs remain red but are baseline failures
 
 Current branch CI reproduces failures in:
 
