@@ -92,17 +92,23 @@ class LinuxHostBootstrapBackend:
 
     def add_route(self, route: HostBootstrapRouteSpec) -> None:
         destination="default" if route.destination.prefixlen==0 else route.destination.with_prefixlen
-        self.runner.run(self._cmd(
+        argv=[
             "ip","-4","route","add","table",str(route.table),destination,
-            "via",str(route.via),"dev",route.interface,"proto",str(route.protocol),
-        ))
+        ]
+        if route.via is not None:
+            argv.extend(("via",str(route.via)))
+        argv.extend(("dev",route.interface,"proto",str(route.protocol)))
+        self.runner.run(self._cmd(*argv))
 
     def delete_route(self, route: HostBootstrapRouteSpec) -> None:
         destination="default" if route.destination.prefixlen==0 else route.destination.with_prefixlen
-        self.runner.run(self._cmd(
+        argv=[
             "ip","-4","route","del","table",str(route.table),destination,
-            "via",str(route.via),"dev",route.interface,"proto",str(route.protocol),
-        ))
+        ]
+        if route.via is not None:
+            argv.extend(("via",str(route.via)))
+        argv.extend(("dev",route.interface,"proto",str(route.protocol)))
+        self.runner.run(self._cmd(*argv))
 
     def add_bypass_rule(self, rule: HostBootstrapBypassRuleSpec) -> None:
         self.runner.run(self._cmd(
@@ -253,14 +259,19 @@ def _observe_routes(rows,allocation,desired):
             continue
         destination=_route_network(row.get("dst","default"))
         gateway=row.get("gateway"); dev=row.get("dev")
-        if destination is None or not isinstance(gateway,str) or not isinstance(dev,str):
+        if destination is None or not isinstance(dev,str):
             conflicts.append("unrepresentable owner route in host bootstrap table")
             continue
-        try:
-            via=IPv4Address(gateway)
-        except ValueError:
-            conflicts.append("non-IPv4 gateway in host bootstrap table")
-            continue
+        via=None
+        if gateway is not None:
+            if not isinstance(gateway,str):
+                conflicts.append("unrepresentable gateway in host bootstrap table")
+                continue
+            try:
+                via=IPv4Address(gateway)
+            except ValueError:
+                conflicts.append("non-IPv4 gateway in host bootstrap table")
+                continue
         observed.append(HostBootstrapRouteSpec(
             destination=destination,via=via,interface=dev,
             table=allocation.table,protocol=allocation.route_protocol,
@@ -310,17 +321,34 @@ def _expected_rule_signatures(desired):
 
 
 def _rule_signature(row):
-    priority=_decimal(row.get("priority"))
     iif=row.get("iif")
     table=row.get("table")
     table_text=str(table) if table not in (254,"main") else "main"
-    destination=_route_network(row.get("dst","0.0.0.0/0"))
+    destination=_rule_destination(row)
     suppress=_decimal(row.get("suppress_prefixlen"))
     if isinstance(iif,str):
         return ("bypass",iif,table_text,None,None)
     if suppress is not None:
         return ("preserve",None,table_text,destination,suppress)
     return ("dispatch",None,table_text,destination,None)
+
+
+def _rule_destination(row):
+    raw=row.get("dst")
+    dstlen=_decimal(row.get("dstlen"))
+    if raw is None:
+        return IPv4Network("0.0.0.0/0") if dstlen in (None,0) else None
+    if not isinstance(raw,str):
+        return None
+    if "/" in raw:
+        network=_route_network(raw)
+        if network is None or (dstlen is not None and dstlen!=network.prefixlen):
+            return None
+        return network
+    prefixlen=32 if dstlen is None else dstlen
+    if not 0<=prefixlen<=32:
+        return None
+    return _route_network(f"{raw}/{prefixlen}")
 
 
 def _desired_rule_priorities(desired):
@@ -364,4 +392,5 @@ def _json_array(raw,label):
 
 
 def _route_key(route):
-    return (int(route.destination.network_address),route.destination.prefixlen,route.table,route.interface,int(route.via))
+    via=-1 if route.via is None else int(route.via)
+    return (int(route.destination.network_address),route.destination.prefixlen,route.table,route.interface,via)
