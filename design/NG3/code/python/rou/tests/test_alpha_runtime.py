@@ -141,17 +141,20 @@ remote_port = 11940
         self.assertEqual(len(availability.last_probe_assembly.intents), 1)
         self.assertEqual(len(desired.nft.probe_local), 2)
 
-        with self.assertRaisesRegex(Exception, r"requests \+snat"):
-            AlphaPreparedPolicy.from_text(
-                CONFIG.replace(
-                    'direction = "outbound"',
-                    'direction = "inbound+snat>198.19.255.10"',
-                ).replace(
-                    'use_outbound_nat = false\n',
-                    "",
-                ),
-                local_address=IPv4Address("198.19.255.2"),
-            )
+        snat = AlphaPreparedPolicy.from_text(
+            CONFIG.replace(
+                'direction = "outbound"',
+                'direction = "inbound+snat>198.19.255.10"',
+            ).replace(
+                'use_outbound_nat = false\n',
+                "",
+            ),
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        self.assertEqual(
+            str(snat.config.profiles["alpha"].effective_snat_address),
+            "198.19.255.10",
+        )
 
         with self.assertRaisesRegex(Exception, "historical"):
             AlphaPreparedPolicy.from_text(
