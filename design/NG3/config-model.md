@@ -724,45 +724,53 @@ wg0 is available for every Profile
 
 One interface can be usable for one Profile and unusable for another.
 
-The canonical Release-1 field is a simple Profile scalar:
+Release 1 uses one availability-check description shape wherever a concrete check is
+defined:
 
 ```toml
-availability_check = "icmp"
+[device.wg-main.availability_check]
+mechanism = "icmp"
+target = "198.51.100.20"
 ```
 
-or:
+The same description may be written directly for a Profile when its business criterion
+differs from the Device default:
 
 ```toml
-availability_check = "icmp/172.21.201.19"
+[profile.accounting.availability_check]
+mechanism = "icmp"
+target = "10.20.30.10"
 ```
 
-Absence of the field means no active availability check for that Profile.
-
-For a Device that participates in default ICMP, Release 1 also accepts one exact IPv4:
+A Profile that wants the reusable Device description uses:
 
 ```toml
-remote_endpoint = "198.51.100.20"
+availability_check = "default"
 ```
+
+Absence of `availability_check` on the Profile means no active availability check for that
+Profile.
 
 Semantics:
 
 ```text
-icmp/<explicit-ip>
-    -> use that IPv4 exactly
+Profile availability_check absent
+    -> no active check
 
-icmp
-    -> use the remote_endpoint declared by the corresponding enabled Device
+Profile availability_check = "default"
+    -> for each (Profile, logical path), use that path's Device availability_check
+
+Profile availability_check table
+    -> use that Profile description for every availability subject of the Profile
 ```
 
-Release 1 does not infer the remote channel endpoint from runtime interface, peer or routing
-observations. Automatic endpoint discovery remains a separate requirement blocked until a
-supported integration provides a reliable and unambiguous mechanism.
+The availability result remains scoped to `(Profile, logical VPN path)`; reusing a Device
+description does not create Device-global health state.
 
-Before probe runtime receives work, target normalization must have produced one concrete IPv4
-for the specific availability subject. If an enabled Device used by a Profile with bare
-`availability_check = "icmp"` has no `remote_endpoint`, configuration is invalid and must
-be rejected before runtime materialization. Disabled Device placeholders remain shallow and
-do not require the field.
+For Release 1 the only supported description is `mechanism = "icmp"` plus one exact IPv4
+`target`. If a Profile selects `default`, every enabled Device referenced by that Profile
+must provide a valid Device availability-check description, otherwise configuration is
+rejected before runtime materialization. Disabled Device placeholders remain shallow.
 
 Release 1 intentionally exposes no availability interval, timeout, failure-count or
 hysteresis knobs. Those remain implementation policy unless a later accepted requirement
