@@ -54,6 +54,7 @@ from .forwarding_gate import (
 )
 from .instance_lock import InstanceLockSpec
 from .interface_identity import InterfaceIdentity
+from .host_local_ipv4 import observe_host_local_ipv4_addresses
 from .host_publication_policy import (
     HostPublicationDesiredState,
     HostPublicationMappingIntent,
@@ -152,6 +153,7 @@ class AlphaPreparedPolicy:
     local_address: IPv4Address
     binding_state: DeviceBindingState
     config: Release1Config
+    host_local_addresses: tuple[IPv4Address, ...] = ()
     last_bindings: tuple[PathBinding, ...] = ()
     last_baseline_profiles: tuple[PayloadProfileRequest, ...] = ()
     last_profiles: tuple[PayloadProfileRequest, ...] = ()
@@ -175,25 +177,24 @@ class AlphaPreparedPolicy:
         text: str,
         *,
         local_address: IPv4Address,
+        host_local_addresses: tuple[IPv4Address, ...] = (),
     ) -> "AlphaPreparedPolicy":
         config = parse_release1_config(text)
-
-        # These canonical Release-1 capabilities have accepted syntax/semantics,
-        # but this first executable slice does not yet own their complete lower
-        # materialization. Reject them explicitly instead of accepting-and-ignoring.
-        for profile_id, profile in config.profiles.items():
-            if not config.structural.profiles[profile_id].enabled:
-                continue
-            if profile.ordinary_gateway_nat:
-                raise AlphaRuntimeError(
-                    f"profile {profile_id!r} requests +snat, which is not yet "
-                    "materialized by the alpha runtime"
-                )
+        if any(
+            not isinstance(item, IPv4Address)
+            for item in host_local_addresses
+        ):
+            raise AlphaRuntimeError(
+                "host_local_addresses must contain IPv4Address values"
+            )
 
         prepared = cls(
             local_address=local_address,
             binding_state=DeviceBindingState.empty(),
             config=config,
+            host_local_addresses=tuple(
+                sorted(set(host_local_addresses), key=int)
+            ),
         )
         try:
             prepared.build_host_publication_desired()
@@ -314,6 +315,15 @@ class AlphaPreparedPolicy:
             integration_intents,
             probe_local_rules=probe_assembly.probe.local_rules,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
+            gateway_nat_profile_ids=tuple(
+                sorted(
+                    profile_id
+                    for profile_id, semantic in self.config.profiles.items()
+                    if self.config.structural.profiles[profile_id].enabled
+                    and semantic.ordinary_gateway_nat
+                )
+            ),
+            host_local_addresses=self.host_local_addresses,
         )
         self.last_bindings = projection.bindings
         self.last_baseline_profiles = profiles
@@ -416,6 +426,9 @@ def reconcile_alpha_payload_once(
         ).observe_interfaces(
             required_host_boundary=verification.host_boundary,
         ).interfaces
+        prepared.host_local_addresses = (
+            observe_host_local_ipv4_addresses(runner)
+        )
         desired = prepared.build_current(
             verification.host_boundary,
             interfaces,
@@ -643,6 +656,9 @@ def run_alpha_runtime(
         prepared = AlphaPreparedPolicy.from_text(
             text,
             local_address=domain_spec.inner_address.ip,
+            host_local_addresses=observe_host_local_ipv4_addresses(
+                runner
+            ),
         )
         holder["policy"] = prepared
         return prepared
