@@ -11,11 +11,20 @@ from dataclasses import dataclass
 from typing import Mapping
 
 from .network_policy_layout import (
+    NetworkPolicyLayout,
+    NetworkPolicyPlatformSpace,
     ProbePolicyOwner,
     ProbeRoutingDemand,
+    allocate_network_policy_layout,
 )
 from .payload_profile import PayloadProfileRequest
-from .probe_policy import AvailabilityProbeIntent
+from .probe_policy import (
+    AvailabilityProbeIntent,
+    ProbeLocalPlatform,
+    ProbeNetworkPolicyDesiredState,
+    build_probe_network_policy_desired_state,
+)
+from .route_priority_inventory import RoutePriorityPathRoute
 from .release1_config import ProfileRelease1Config
 
 
@@ -106,4 +115,64 @@ def build_alpha_explicit_probe_projection(
     return AlphaProbeProjection(
         intents=tuple(intents),
         routing_demands=tuple(demands),
+    )
+
+
+
+@dataclass(frozen=True, slots=True)
+class AlphaProbeDesiredProjection:
+    semantic: AlphaProbeProjection
+    layout: NetworkPolicyLayout
+    desired: ProbeNetworkPolicyDesiredState
+
+
+def build_alpha_explicit_probe_desired(
+    profiles: tuple[PayloadProfileRequest, ...],
+    profile_config: Mapping[str, ProfileRelease1Config],
+    path_routes: tuple[RoutePriorityPathRoute, ...],
+    platform: NetworkPolicyPlatformSpace,
+    local_platform: ProbeLocalPlatform,
+) -> AlphaProbeDesiredProjection:
+    """Allocate payload+probe resources once and project explicit probe state.
+
+    The returned layout is the shared layout that the caller must also pass to
+    payload desired-state projection. This prevents alpha assembly from
+    constructing independent payload/probe resource allocations.
+    """
+    if not isinstance(path_routes, tuple) or not all(
+        isinstance(item, RoutePriorityPathRoute)
+        for item in path_routes
+    ):
+        raise AlphaProbeProjectionError(
+            "path_routes must be a tuple of RoutePriorityPathRoute"
+        )
+    if not isinstance(platform, NetworkPolicyPlatformSpace):
+        raise AlphaProbeProjectionError(
+            "platform must be NetworkPolicyPlatformSpace"
+        )
+    if not isinstance(local_platform, ProbeLocalPlatform):
+        raise AlphaProbeProjectionError(
+            "local_platform must be ProbeLocalPlatform"
+        )
+
+    semantic = build_alpha_explicit_probe_projection(
+        profiles,
+        profile_config,
+    )
+    layout = allocate_network_policy_layout(
+        profiles,
+        semantic.routing_demands,
+        platform,
+    )
+    desired = build_probe_network_policy_desired_state(
+        semantic.intents,
+        layout,
+        path_routes,
+        platform,
+        local_platform,
+    )
+    return AlphaProbeDesiredProjection(
+        semantic=semantic,
+        layout=layout,
+        desired=desired,
     )
