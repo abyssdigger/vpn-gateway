@@ -92,6 +92,7 @@ class ProbeRouteSpec:
     destination: IPv4Network
     route_type: ProbeRouteType
     protocol: int
+    metric: int
     path_id: LogicalPathId | None = None
     endpoint: InterfaceIdentity | None = None
     gateway: IPv4Address | None = None
@@ -111,6 +112,13 @@ class ProbeRouteSpec:
         if type(self.protocol) is not int or not 1 <= self.protocol <= 255:
             raise ProbePolicyProjectionError(
                 "probe route protocol must be in [1, 255]"
+            )
+        if (
+            type(self.metric) is not int
+            or not 0 <= self.metric <= 0xFFFFFFFF
+        ):
+            raise ProbePolicyProjectionError(
+                "probe route metric must be in [0, 2^32-1]"
             )
         if type(self.onlink) is not bool:
             raise ProbePolicyProjectionError("onlink must be bool")
@@ -394,6 +402,7 @@ def build_probe_network_policy_desired_state(
                 destination=IPv4Network(f"{intent.target}/32"),
                 route_type=ProbeRouteType.UNICAST,
                 protocol=network_platform.path_route_protocol,
+                metric=network_platform.route_metrics.first_preference_metric,
                 path_id=path_route.path_id,
                 endpoint=path_route.endpoint,
                 gateway=path_route.gateway,
@@ -406,6 +415,7 @@ def build_probe_network_policy_desired_state(
                 destination=IPv4Network("0.0.0.0/0"),
                 route_type=ProbeRouteType.BLACKHOLE,
                 protocol=network_platform.guard_route_protocol,
+                metric=network_platform.route_metrics.terminal_guard_metric,
             )
         )
         desired_rules.append(
@@ -469,5 +479,6 @@ def _route_key(route: ProbeRouteSpec) -> tuple[object, ...]:
         int(route.destination.network_address),
         route.destination.prefixlen,
         route.route_type.value,
+        route.metric,
         route.protocol,
     )
