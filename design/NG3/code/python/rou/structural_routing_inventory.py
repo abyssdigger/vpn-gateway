@@ -304,7 +304,7 @@ def _parse_reserved_route(
 def _parse_reserved_rule(
     row: dict,
     priority: int,
-    owner: str,
+    owner: ReservedOwnerKind,
     interfaces: dict[str, InterfaceIdentity],
     platform: NetworkPolicyPlatformSpace,
 ) -> ObservedManagedRule:
@@ -570,27 +570,6 @@ def _optional_ipv4(value: object, label: str) -> IPv4Address | None:
             f"{label} must be IPv4"
         )
     return address
-
-
-def _required_hex_or_int(value: object, label: str) -> int:
-    if type(value) is int:
-        result = value
-    elif isinstance(value, str):
-        try:
-            result = int(value, 0)
-        except ValueError:
-            raise StructuralRoutingInventoryError(
-                f"{label} is not numeric"
-            ) from None
-    else:
-        raise StructuralRoutingInventoryError(
-            f"{label} is missing/non-numeric"
-        )
-    if not 0 <= result <= 0xFFFFFFFF:
-        raise StructuralRoutingInventoryError(
-            f"{label} is outside u32"
-        )
-    return result
 
 
 def _duplicates(values):
