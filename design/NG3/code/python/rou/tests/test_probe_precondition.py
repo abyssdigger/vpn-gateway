@@ -232,7 +232,7 @@ class ProbeExecutionPreconditionTests(unittest.TestCase):
         )
         self.assertFalse(result.confirmed)
         self.assertTrue(result.routing.confirmed)
-        self.assertEqual(len(result.local.missing), 1)
+        self.assertEqual(len(result.local.missing), 2)
 
 
 if __name__ == "__main__":
