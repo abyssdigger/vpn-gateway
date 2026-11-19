@@ -3,6 +3,7 @@ from __future__ import annotations
 from .linux_host_boundary_policy import HostBoundaryLinuxAllocation
 from .linux_host_bootstrap import HostBootstrapLinuxAllocation
 from .linux_host_boundary_behavior import HostBoundaryBehaviorLinuxAllocation
+from .linux_host_managed_routing import HostManagedRoutingLinuxAllocation
 from .network_policy_layout import (
     NetworkPolicyPlatformSpace,
     NumericResourcePool,
@@ -70,6 +71,22 @@ NG3_HOST_BOOTSTRAP_LINUX_ALLOCATION = HostBootstrapLinuxAllocation(
     table=0x7FFF0002,
     bypass_priority=0x1F00,
     pair_priorities=NumericResourcePool(
+        first=0x2000,
+        stop=0x6000,
+    ),
+    rule_protocol=203,
+    route_protocol=203,
+)
+
+
+# Current ordinary-host managed-destination routing owner. The broad owned priority
+# pool intentionally includes the superseded EXP-059 paired-rule range so upgrade
+# reconciliation can remove stale VPN-GATE-owned rules without touching foreign state.
+NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION = HostManagedRoutingLinuxAllocation(
+    table=0x7FFF0002,
+    bypass_priority=0x1F00,
+    dispatch_priority=0x2000,
+    owned_rule_priorities=NumericResourcePool(
         first=0x2000,
         stop=0x6000,
     ),
