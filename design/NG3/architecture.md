@@ -6486,6 +6486,35 @@ Production Rust defaults to safe Rust. Any `unsafe` block or memory-unsafe FFI b
 A broad `unsafe` implementation is not considered compliance merely because the source
 language is Rust.
 
+### First Rust production-boundary slice
+
+The initial executable Rust production-boundary unit is deliberately a pure contract:
+`design/NG3/code/rust/vpng-runtime/src/availability_confirmation.rs`.
+
+It implements the same bounded availability confirmation state transition already represented
+by the Python reference `availability_confirmation.py`:
+
+```text
+current AvailabilityConfirmationState
++ current AvailabilityOutcome
++ finite local degradation/recovery thresholds
+    ->
+next AvailabilityConfirmationState
+```
+
+This first slice is selected because it has no Linux I/O, scheduling, parser grammar, FFI or
+lifecycle ownership. It therefore proves the production-language contract and test/evidence
+shape without simultaneously changing a lower mechanism.
+
+The Rust crate applies `#![forbid(unsafe_code)]` at crate scope. No FFI or `unsafe` boundary
+is introduced.
+
+During migration, Python remains executable reference/evidence for early releases under
+`VPNG0007-R7.R8.C1`. A Rust unit replaces production responsibility only when its complete
+upstream/downstream contract has been ported and acceptance evidence demonstrates semantic
+parity; the existence of a Rust implementation alone does not remove or bypass the Python
+reference path.
+
 ### Migration/evidence rule
 
 Porting Python reference behavior to Rust is an implementation replacement, not a redesign.
