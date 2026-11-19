@@ -69,6 +69,15 @@ unconfirmed reserved nft namespace.
 **Disposition:** test-harness defect fixed. The readiness fixture now includes the canonical
 `PAYLOAD_NFT_SCAFFOLD`; the verifier was not weakened to accept an incomplete namespace.
 
+### F5 — readiness must reject internally inconsistent desired owner sets
+
+After readiness began carrying owner identity, a desired state with a routing owner but no
+matching probe-local owner (or vice versa) could otherwise produce a misleading token.
+
+**Disposition:** accepted and fixed. The verifier requires the routing and probe-local desired
+owner sets to match before returning readiness. Focused tests distinguish this malformed
+desired-state case from ordinary observed drift.
+
 ## Evidence
 
 Focused tests cover:
