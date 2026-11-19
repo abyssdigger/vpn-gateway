@@ -417,7 +417,7 @@ def main():
                 ("ip", "-j", "-4", "addr", "show", "dev", HOST_BOUNDARY)
             ).stdout
         )
-        assert not host_boundary_addr[0].get("addr_info"), host_boundary_addr
+        assert not host_boundary_addr or not host_boundary_addr[0].get("addr_info"), host_boundary_addr
         inner_boundary_addr = json.loads(
             ns_command(
                 MANAGED, "ip", "-j", "-4", "addr", "show", "dev", INNER_BOUNDARY
