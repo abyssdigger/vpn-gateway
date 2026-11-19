@@ -65,6 +65,11 @@ CANDIDATES = (
         "meta priority set 0", f"ct mark set {NAT_CLASS} meta priority set 0",
     ),
     Candidate(
+        "meta_pkttype", "packet-local-derived",
+        "meta pkttype set broadcast", "meta pkttype broadcast",
+        "meta pkttype set host", f"ct mark set {NAT_CLASS} meta pkttype set host",
+    ),
+    Candidate(
         "meta_secmark", "packet-local",
         "meta secmark set 0x6903", "meta secmark 0x6903",
         "meta secmark set 0", f"ct mark set {NAT_CLASS} meta secmark set 0",

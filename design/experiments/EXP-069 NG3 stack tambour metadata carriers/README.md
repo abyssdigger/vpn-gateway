@@ -97,6 +97,7 @@ Harness выполняет последовательность из operational
 | --- | --- | --- | --- |
 | `meta mark` | packet-local | нет | известный отрицательный regression control из EXP-063 |
 | `meta priority` | packet-local | нет on-wire | может иметь локальную QoS/tc семантику |
+| `meta pkttype` | packet-local derived | нет on-wire | переопределяет skb packet type; семантически сомнительный, но проверяется как крайний кандидат |
 | `meta secmark` | packet-local | нет on-wire | может иметь локальную security/LSM семантику |
 | `meta nftrace` | packet-local | нет | diagnostic metadata |
 | `ct mark` | conntrack-local | нет | conntrack namespace-local state |
