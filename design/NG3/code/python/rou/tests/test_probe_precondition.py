@@ -15,6 +15,7 @@ from rou.nft_namespace_inventory import (
     NftNamespaceStatus,
 )
 from rou.nft_payload_scaffold import PAYLOAD_NFT_SCAFFOLD
+from rou.probe_local_observation import PROBE_LOCAL_RULE_COMMENT
 from rou.probe_policy import (
     ProbeLocalHook,
     ProbeLocalRuleSpec,
@@ -75,7 +76,7 @@ def _output_rule(handle=20):
             "table": "vpn_gate",
             "chain": "stack_output",
             "handle": handle,
-            "comment": "vpn-gate:probe-local",
+            "comment": PROBE_LOCAL_RULE_COMMENT,
             "expr": [
                 {"match": {"left": {"meta": {"key": "skuid"}}, "op": "==", "right": 4242}},
                 {"match": {"left": {"meta": {"key": "oif"}}, "op": "==", "right": "vpn0"}},
@@ -97,7 +98,7 @@ def _input_rule(handle=21):
             "table": "vpn_gate",
             "chain": "stack_input",
             "handle": handle,
-            "comment": "vpn-gate:probe-local",
+            "comment": PROBE_LOCAL_RULE_COMMENT,
             "expr": [
                 {"match": {"left": {"meta": {"key": "iif"}}, "op": "==", "right": "vpn0"}},
                 {"match": {"left": {"payload": {"field": "saddr", "protocol": "ip"}}, "op": "==", "right": str(TARGET)}},
