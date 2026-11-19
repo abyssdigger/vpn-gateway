@@ -86,4 +86,4 @@ are governed exclusively by `PROJECT-CONVENTIONS.md` §§6.1–6.2.
 - End each review unit with its branch, exact SHA, verified evidence, review verdict, remaining gates, and next intended unit.
 - A newly uncovered requirement/architecture ambiguity is not authorization to invent a solution in code.
 
-If this entry point and a normative project document appear inconsistent, follow the applicable normative document and explicitly surface the discrepancy before the affected work.
+If this entry point and another normative project document appear inconsistent, follow the document that owns the affected subject under `PROJECT-CONVENTIONS.md` §9 and explicitly surface the discrepancy before the affected work.
