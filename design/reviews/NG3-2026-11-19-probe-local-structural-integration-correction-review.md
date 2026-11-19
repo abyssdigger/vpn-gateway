@@ -2,7 +2,7 @@
 
 ## Status
 
-**FIX IMPLEMENTED — VERIFICATION PENDING.**
+**PASS — structural probe-local composition defect repaired and verified.**
 
 This correction was found during the next availability integration review after main snapshot
 106.
@@ -99,7 +99,19 @@ No normative R/C changed. Active:
 
 ## Verification
 
-Pending current `NG3 Python` run for head containing the correction tests.
+Current correction run:
 
-Do not publish this correction as a completed main snapshot until the current unit lane
-confirms the whole-structural probe-local path.
+```text
+GitHub Actions run: 44466431431
+head: 517e220eab1f961a1d41d7d9f6f1586b931070ba
+
+unit: PASS — 772 tests
+linux-probe-runtime: PASS
+linux-structural-inventory-shape: PASS
+```
+
+The new whole-structural regression tests therefore exercise the previously missing
+`apply_probe_local_step` path and strict-distance accounting directly.
+
+Known unrelated privileged EXP-057/060/063 failures remain unchanged and outside this
+correction.
