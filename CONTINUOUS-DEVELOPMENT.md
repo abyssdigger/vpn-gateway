@@ -765,8 +765,8 @@ At the start of a cycle:
 2. immediately read real current time and preserve it as `CYCLE_START_TIME`, before
    mandatory reading, preparation or the first commit;
 3. create or select the dedicated branch for that CD window;
-4. all requirement, design, implementation, test, evidence, review and fix commits produced
-   during the window are written to that branch;
+4. all requirement, design, implementation, test, evidence, review, process/documentation
+   and fix commits produced during the window are written to that branch;
 5. every commit must be present on GitHub immediately after creation.
 
 A failure to publish or verify publication of a commit is a mandatory early-stop
@@ -774,15 +774,20 @@ condition for the current CD. Follow the short preservation-and-handoff procedur
 in `PROJECT-CONVENTIONS.md` §7; do not continue development or perform prolonged
 recovery attempts in this CD.
 
+If fresh real current time cannot be obtained at cycle start or at a required cadence
+check, do not substitute commit timestamps as the elapsed-time source. Stop before
+further repository mutation and report that the CD safety clock cannot currently be
+enforced.
+
 At each existing cadence check, obtain fresh real current time and compare it to
 `CYCLE_START_TIME`. Check after every commit (including the first), at the existing
-logical-work and handoff boundaries, and whenever the existing cadence rules require it.
+development-block and handoff boundaries, and whenever the existing cadence rules require it.
 Keep the existing thresholds, safety margin and handoff behavior unchanged; the first
 commit is a check event, not the origin of elapsed time. A user intervention does not
 reset `CYCLE_START_TIME`.
 
-The branch is the durable record of work. The CD handoff is intentionally **not** a Git
-project artifact.
+The published branch is the durable record of successfully published work. The CD handoff
+is intentionally **not** a Git project artifact.
 
 ### Handoff trigger and behavior
 
@@ -798,10 +803,11 @@ chat turn:
   failed, explicitly identify unpublished work rather than assuming durability;
 - do not create a special commit unless the work itself naturally requires one;
 - do not create a snapshot solely because the CD window ended;
-- produce a compact **handoff file in the chat interface**, not in Git;
-- stop autonomous development until the next user turn.
+- produce a compact **handoff in the chat interface**, not in Git; use a file when practical,
+  but use direct chat text instead if file creation fails or would materially increase cutoff risk;
+- stop autonomous development until the user explicitly starts or resumes CD execution.
 
-The handoff file should contain only enough context to resume cheaply:
+The handoff should contain only enough context to resume cheaply:
 
 - `CYCLE_INTERVAL` and `CYCLE_START_TIME`;
 - active branch and current branch head;
