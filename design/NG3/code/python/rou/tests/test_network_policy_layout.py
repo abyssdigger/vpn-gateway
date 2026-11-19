@@ -39,6 +39,7 @@ def platform(
         ambient_main_rule_priority=ambient,
         path_route_protocol=202,
         guard_route_protocol=201,
+        host_boundary_lane_route_protocol=204,
         route_metrics=RouteMetricPlatformSpace(
             first_preference_metric=first_metric,
             terminal_guard_metric=guard_metric,
@@ -297,6 +298,7 @@ class NetworkPolicyLayoutTests(unittest.TestCase):
                 ambient_main_rule_priority=value.ambient_main_rule_priority,
                 path_route_protocol=202,
                 guard_route_protocol=202,
+                host_boundary_lane_route_protocol=204,
                 route_metrics=value.route_metrics,
                 nft_family="inet",
                 nft_table="vpn_gate",
