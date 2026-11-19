@@ -15,7 +15,6 @@ from .device_policy import (
     DeviceNatPolicyIntent,
 )
 from .interface_identity import InterfaceIdentity
-from .host_boundary_lane_routing import HostBoundaryLaneRouteSpec
 from .local_integration_policy import (
     IntegrationLocalTransportIntent,
     build_integration_local_desired,
@@ -88,7 +87,6 @@ def build_payload_network_policy_desired_state(
     integration_intents: Iterable[IntegrationLocalTransportIntent] = (),
     probe_local_rules: Iterable[ProbeLocalRuleSpec] = (),
     stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
-    host_boundary_lane_routes: Iterable[HostBoundaryLaneRouteSpec] = (),
 ) -> PayloadNetworkPolicyDesiredState:
     """Compose exact current payload lower desired state without I/O."""
     if not isinstance(layout, NetworkPolicyLayout):
@@ -107,14 +105,6 @@ def build_payload_network_policy_desired_state(
     current_publications = tuple(publication_intents)
     current_integrations = tuple(integration_intents)
     current_probe_local = tuple(probe_local_rules)
-    current_lane_routes = tuple(host_boundary_lane_routes)
-    if any(
-        not isinstance(route, HostBoundaryLaneRouteSpec)
-        for route in current_lane_routes
-    ):
-        raise PayloadNetworkPolicyProjectionError(
-            "host_boundary_lane_routes must contain HostBoundaryLaneRouteSpec"
-        )
     if any(
         not isinstance(rule, ProbeLocalRuleSpec)
         for rule in current_probe_local
@@ -222,9 +212,6 @@ def build_payload_network_policy_desired_state(
                 host_boundary,
                 layout,
                 allocations,
-                initial_packet_profile_ids=tuple(
-                    route.profile_id for route in current_lane_routes
-                ),
             )
         except ValueError as exc:
             raise PayloadNetworkPolicyProjectionError(
