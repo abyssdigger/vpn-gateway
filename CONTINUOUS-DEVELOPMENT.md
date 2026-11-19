@@ -698,6 +698,22 @@ logic below refers only to `CYCLE_INTERVAL`.
 Logical work units, reviews, experiments, implementation slices and snapshots have their own
 natural boundaries independent of the CD window.
 
+### User intervention pauses autonomous CD execution
+
+An active CD window is not blanket authorization to keep mutating the repository after the
+user sends a new message. Any user intervention during the cycle suspends autonomous CD
+writes before further mutation.
+
+The agent must first handle the user's new instruction/question. Autonomous CD execution
+resumes only after the user explicitly asks to continue/resume the CD (or equivalent).
+
+If the intervention itself contains an explicit instruction for one specific repository
+change, that instruction authorizes only that change. Completing it does not implicitly
+resume the rest of the CD; the cycle remains paused until an explicit resume instruction.
+
+This pause does not end or reset the CD clock, logical work unit, branch, snapshot policy or
+`CYCLE_INTERVAL`. It is only a write-authorization boundary caused by human intervention.
+
 - A completed substantial logical block **must** be committed/reviewed as applicable and
   published to `main` as one linear snapshot before the next logical block begins.
 - One CD cycle may therefore contain multiple mainline snapshots.
