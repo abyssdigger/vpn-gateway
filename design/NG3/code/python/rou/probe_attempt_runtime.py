@@ -85,6 +85,16 @@ class ProbeSubjectRuntimeState:
             raise ValueError(
                 "availability_known must be boolean"
             )
+        if (
+            self.context is None
+            and (
+                self.availability_known
+                or self.confirmation != AvailabilityConfirmationState()
+            )
+        ):
+            raise ValueError(
+                "non-empty confirmation state requires observation context"
+            )
         if self.confirmation.availability_problem and not self.availability_known:
             raise ValueError(
                 "confirmed availability problem requires known state"
