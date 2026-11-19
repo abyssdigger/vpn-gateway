@@ -798,6 +798,10 @@ enabled = true
 expected_interfaces = ["wg0"]
 use_outbound_nat = true
 allow_vpn_client = "udp:51820>198.51.100.10:51820"
+
+[device.wg-main.availability_check]
+mechanism = "icmp"
+target = "198.51.100.10"
 firewall = [
     "out allow tcp to 10.20.0.0/16:80,443,8000-8007 # web bundle",
     "out allow icmp to 10.20.0.0/16",
@@ -812,6 +816,10 @@ allow_vpn_client = [
     "tcp>198.51.100.20:443",
     "udp>198.51.100.20:443",
 ]
+
+[device.oc-backup.availability_check]
+mechanism = "icmp"
+target = "198.51.100.20"
 firewall = [
     "out allow tcp to 10.20.0.0/16:443",
     "out allow icmp to 10.20.0.0/16",
@@ -833,14 +841,17 @@ enabled = true
 direction = "outbound"
 destinations = ["10.20.0.0/16"]
 device_order = ["wg-main", "oc-backup"]
-availability_check = "icmp"
+availability_check = "default"
 
 [profile.remote-admin]
 enabled = true
 direction = "inbound+snat"
 destinations = ["10.30.0.0/16"]
 device_order = ["oc-server"]
-availability_check = "icmp/10.30.0.1"
+
+[profile.remote-admin.availability_check]
+mechanism = "icmp"
+target = "10.30.0.1"
 ```
 
 Notes:
@@ -854,8 +865,9 @@ Notes:
 - `publish_vpn_server` describes server-side host publication and is independent from
   Profile routing;
 - Device `firewall` can only narrow the permission already created by Profile policy;
-- `availability_check` belongs directly to Profile because no Release-1 subfields/timing
-  knobs justify a dedicated table.
+- Profile owns the decision to check availability; it may select `"default"` to reuse each
+  Device's default description or provide its own `[profile.<id>.availability_check]` block;
+  Device defaults and Profile overrides use the same `mechanism + target` description shape.
 
 # 8. Configuration normalization boundary
 
