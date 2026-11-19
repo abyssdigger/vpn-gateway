@@ -69,7 +69,10 @@ Focused tests cover:
 - context reconfiguration during Driver execution -> returned observation is rejected as
   stale.
 
-The branch NG3 unit workflow for the final code SHA is the execution authority.
+NG3 Python workflow run `44491324571` on code SHA
+`14d20aec42a9641654f02602c7892bfbdfa96878` passed `unit`,
+`linux-probe-runtime` and `linux-structural-inventory-shape`. The unit suite includes
+owner/context mismatch, changed-target-before-I/O and in-flight reconfiguration cases.
 
 ## Simplification review
 
@@ -102,5 +105,5 @@ none
 
 ## Verdict
 
-**ACCEPT**, conditional on the branch unit suite passing at the final code SHA or an exact
-descendant with no semantic change to this unit.
+**ACCEPT.** The exact-context one-shot attempt boundary is covered by successful current
+workflow evidence.
