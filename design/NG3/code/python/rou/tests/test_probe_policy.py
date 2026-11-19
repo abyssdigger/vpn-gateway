@@ -235,11 +235,13 @@ class ProbePolicyTests(unittest.TestCase):
             )
 
     def test_invalid_local_platform_is_rejected(self):
-        with self.assertRaisesRegex(
-            ProbePolicyProjectionError,
-            "process_uid",
-        ):
-            ProbeLocalPlatform(-1, 1)
+        for uid in (-1, 0):
+            with self.subTest(uid=uid):
+                with self.assertRaisesRegex(
+                    ProbePolicyProjectionError,
+                    "process_uid",
+                ):
+                    ProbeLocalPlatform(uid, 1)
         with self.assertRaisesRegex(
             ProbePolicyProjectionError,
             "conntrack_mark",
