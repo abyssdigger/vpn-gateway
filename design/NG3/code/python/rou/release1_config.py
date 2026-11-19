@@ -321,7 +321,7 @@ def _parse_direction(
 ) -> tuple[Direction, ipaddress.IPv4Address | None]:
     if value == "outbound":
         return Direction.OUTBOUND, None
-    if value in {"inbound", "bidirectional"}:
+    if isinstance(value, str) and value in {"inbound", "bidirectional"}:
         return (
             Direction.INBOUND if value == "inbound" else Direction.BIDIRECTIONAL,
             None,
