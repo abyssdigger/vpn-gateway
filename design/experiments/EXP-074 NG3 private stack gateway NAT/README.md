@@ -12,7 +12,6 @@ The experiment also checks that:
 
 - two +snat Profiles coexist with one neighboring no-SNAT Profile;
 - a more-specific no-SNAT Profile is not accidentally absorbed by a broader +snat Profile;
-- host-local destinations are explicitly excluded from stack gateway NAT;
 - reverse NAT completes through the same STACK conntrack state.
 
 ## Topology
@@ -41,5 +40,4 @@ Host-local traffic is tested separately and must preserve the original remote so
 - A/B replies complete through STACK reverse NAT;
 - C forwarded peer observes its original remote source;
 - C does not hit gateway-NAT counters;
-- host-local A flow observes the original remote source;
 - LAN has no remote-prefix or stack-service route beyond its ordinary default.
