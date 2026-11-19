@@ -104,7 +104,7 @@ def main() -> int:
                 ("ip", "-j", "-4", "addr", "show", "dev", host_interface)
             )
         )
-        assert not host_addr[0].get("addr_info"), host_addr
+        assert not host_addr or not host_addr[0].get("addr_info"), host_addr
         host_service_route = runner.run(
             (
                 "ip", "-4", "route", "show",
