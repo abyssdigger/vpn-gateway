@@ -8,9 +8,18 @@ evidence remain authoritative in their own artifacts.
 
 Project-wide development rules were refactored so repository authorization, CD cadence,
 review outcomes, development blocks/snapshots, declarations/deferrals, experiment evidence,
-language policy and changelog ownership have explicit non-overlapping authorities. CD timing
+language policy and changelog ownership have explicit subject ownership and cross-references.
+CD timing
 now starts from real wall-clock cycle start rather than first-commit time, and failed commit
 publication is a mandatory stop condition.
+
+## 2026-11-19 — Gateway-SNAT semantic blocker removed and behavior lanes materialized
+
+The ordinary-side gateway-SNAT requirement was restated in observable behavioral terms and
+accepted without requiring Profile identity to cross the host boundary. EXP-064 fixed
+host-behavior lanes were selected; managed-stack lane routing and an authoritative host nft
+behavior owner were materialized. Full alpha lifecycle wiring and removal of the `+snat`
+fail-fast remain later implementation/evidence work.
 
 ## 2026-11-19 — Rust production-boundary parity established for availability state
 
@@ -23,8 +32,9 @@ the safe-Rust replacement surface grows behind parity evidence.
 
 The Release-1 ICMP availability path was connected end to end from canonical configuration
 through probe policy, current physical observation, bounded confirmation, effective route
-ordering and runtime status. Subsequent descendant review evidence accepted the multi-subject
-runtime semantics.
+ordering and runtime status. EXP-068 then supplied accepted real two-path failover and sticky
+recovery evidence; descendant workflow evidence also accepted the multi-subject runtime
+semantics.
 
 ## 2026-11-18 — Selected host-boundary return handling integrated
 
