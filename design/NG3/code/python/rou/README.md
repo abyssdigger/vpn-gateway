@@ -81,9 +81,9 @@ Important non-goals of the current reference:
 - no Netlink event state/history/replay;
 - no generic local/system stack_input/stack_output exception framework; publication, supported-integration and probe-local traffic use separate bounded owner-specific contracts inside the shared composite nft owner;
 - no full daemon/lifecycle assembly;
-- no production probe scheduling/cadence assembly yet; one-shot normalized-target ICMP execution exists, but target derivation specializations and ongoing runtime orchestration remain separate;
+- no production probe scheduling/cadence assembly yet; exact one-shot ICMP execution exists and continuous orchestration remains separate;
 - no Profile ordinary-side `+snat` physical materialization yet;
-- no availability probe runtime assembly or user timing knobs.
+- no user-facing availability timing knobs; cadence/threshold values remain local implementation policy.
 
 Those omitted areas remain behind their current architecture/evidence gates and must not be
 guessed from historical NG1/NG2 code.
