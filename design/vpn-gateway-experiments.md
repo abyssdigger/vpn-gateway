@@ -34,6 +34,7 @@ Current experiment directories:
 | EXP-068 | continuous availability failover and sticky recovery |
 | EXP-069 | stack-to-tambour metadata carrier search |
 | EXP-070 | routed managed-stack endpoint candidates / Debian 12 routed-veth portability |
+| EXP-071 | managed-boundary dataplane race: netkit L3 vs routed veth |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -71,3 +72,4 @@ Canonical dispositions:
 | EXP-068 | PASS | selected | Confirms the already accepted continuous-availability failover and sticky-recovery chain on real Linux route state. |
 | EXP-069 | PASS | pending_decision | No tested direct nft-usable local-only carrier survived stack -> tambour; DSCP survived only as an on-wire field. Post-result architecture disposition remains open. |
 | EXP-070 | PASS | pending_decision | Routed endpoint candidates are distinguished: netkit L3 is a clean device-only peer on modern kernels; Debian-12-compatible routed veth works device-only with Proxy ARP. Architecture selection remains open. |
+| EXP-071 | PASS | pending_decision | Two independent CI runs found netkit L3 and routed veth + Proxy ARP indistinguishable at benchmark resolution; explicit-next-hop veth control likewise showed no steady-state Proxy-ARP tax. Backend architecture disposition remains open. |
