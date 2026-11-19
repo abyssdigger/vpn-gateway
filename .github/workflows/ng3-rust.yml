@@ -1,0 +1,30 @@
+name: NG3 Rust
+
+on:
+  push:
+    branches-ignore: [ legacy-main-rc, legacy-main-ng1-2, legacy-main-ng3 ]
+    paths:
+      - "design/NG3/code/rust/**"
+      - ".github/workflows/ng3-rust.yml"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "design/NG3/code/rust/**"
+      - ".github/workflows/ng3-rust.yml"
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: design/NG3/code/rust/vpng-runtime
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain
+        run: |
+          rustc --version
+          cargo --version
+      - name: Format check
+        run: cargo fmt --check
+      - name: Unit tests
+        run: cargo test --all-targets
