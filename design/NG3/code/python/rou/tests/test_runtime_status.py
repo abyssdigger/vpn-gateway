@@ -64,6 +64,37 @@ class RuntimeStatusTests(unittest.TestCase):
         self.assertEqual(profile.device_order, ("ovpn",))
         self.assertIsNone(profile.availability_check)
 
+    def test_status_exposes_device_default_and_profile_selection(self):
+        configured = build_configured_intent_status(parse_release1_config("""
+[device.ovpn]
+enabled = true
+expected_interfaces = ["vpn0"]
+use_outbound_nat = false
+
+[device.ovpn.availability_check]
+mechanism = "icmp"
+target = "198.51.100.10"
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["ovpn"]
+availability_check = "default"
+"""))
+        self.assertEqual(
+            configured.devices[0].availability_check,
+            "icmp/198.51.100.10",
+        )
+        self.assertEqual(
+            configured.profiles[0].availability_check,
+            "default",
+        )
+        self.assertEqual(
+            RuntimeStatusAgent(configured).snapshot().availability_state[0].state,
+            "unconfirmed",
+        )
+
     def test_confirmed_effective_state_reports_current_order_and_endpoint(self):
         agent = RuntimeStatusAgent(self.configured())
         path = LogicalPathId("ovpn", 0, 0)
