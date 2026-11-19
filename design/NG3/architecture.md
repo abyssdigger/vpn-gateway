@@ -446,9 +446,15 @@ does **not** install Profile routes or endpoint pins into host `main`.
 
 #### Dedicated bootstrap table and paired RPDB rules
 
-One VPN-GATE-owned host bootstrap table contains one route toward the managed inner peer for
-each distinct bootstrap destination. `0.0.0.0/0` is represented as an ordinary default route
-inside this dedicated table; no split-default or default replacement is needed in `main`.
+One VPN-GATE-owned host bootstrap table contains one route through the managed L3 endpoint for
+each distinct bootstrap destination. In the selected endpoint contract that route is
+`dev <managed-host-endpoint>` and does not require a peer gateway address; EXP-072 proves this
+representation on both routed-veth/Proxy-ARP and netkit-L3 backends. The current alpha
+addressed-veth lifecycle may continue to render its transitional gateway form until the primary
+boundary lifecycle migration is completed.
+
+`0.0.0.0/0` is represented as an ordinary default route inside this dedicated table; no
+split-default or default replacement is needed in `main`.
 
 Packets already emitted by the managed stack must bypass bootstrap before destination rules:
 
@@ -554,6 +560,8 @@ it closes the previous alpha materialization gap.
 - EXP-058: dedicated table with copied `throw` routes — PASS but not selected because it
   requires replication/reconciliation of ordinary route prefixes;
 - EXP-059: paired RPDB bootstrap with `suppress_prefixlength` — PASS and **selected**.
+- EXP-060: production selected paired-RPDB backend — PASS; prior red state resolved as `dst`/`dstlen` observer normalization defect.
+- EXP-072: gateway-less managed-L3 endpoint host bootstrap over routed veth + Proxy ARP and netkit L3 — PASS and **selected**.
 
 This architecture does not require VPN-GATE to protect its owned host-boundary rules/tables
 from a privileged administrator any more strongly than conventional VPN software protects its
