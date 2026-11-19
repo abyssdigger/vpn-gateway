@@ -6464,7 +6464,16 @@ accepted requirements + architecture contracts
 ```
 
 By `VPNG0007-R7.R8.C1`, alpha/beta releases may ship the Python reference runtime while the
-product semantics and integration applicability are still being proven. Such a release must
+product semantics and integration applicability are still being proven. By
+`VPNG0007-R7.R8.C2`, this is also the required development ordering for `rou`: while the
+target `rou` behavior is still being designed or lacks sufficient Python evidence, new Rust
+runtime ports, production cutover work and expansion of the Rust runtime surface are postponed.
+The Python executable reference remains the single current implementation in which changing
+`rou` semantics are assembled and proven. Rust migration begins only after the relevant
+production-boundary decision set exists as a coherent Python implementation with sufficient
+unit/integration/operational evidence.
+
+Such an early release must
 not be described as the final production/stable implementation boundary.
 
 Code outside the runtime boundary may continue to use the language most appropriate to its
@@ -6486,95 +6495,18 @@ Production Rust defaults to safe Rust. Any `unsafe` block or memory-unsafe FFI b
 A broad `unsafe` implementation is not considered compliance merely because the source
 language is Rust.
 
-### First Rust production-boundary slice
+### Premature Rust parity prototypes — frozen until the Python-completion gate
 
-The initial executable Rust production-boundary unit is deliberately a pure contract:
-`design/NG3/code/rust/vpng-runtime/src/availability_confirmation.rs`.
+Snapshots 123–125 introduced small safe-Rust parity prototypes for availability confirmation,
+effective ordering and bounded routing-state projection before the development-ordering gate
+in `VPNG0007-R7.R8.C2` was made explicit. They are retained as historical/prototype evidence,
+not as an active migration frontier and not as a claim that Rust transition has begun.
 
-It implements the same bounded availability confirmation state transition already represented
-by the Python reference `availability_confirmation.py`:
-
-```text
-current AvailabilityConfirmationState
-+ current AvailabilityOutcome
-+ finite local degradation/recovery thresholds
-    ->
-next AvailabilityConfirmationState
-```
-
-This first slice is selected because it has no Linux I/O, scheduling, parser grammar, FFI or
-lifecycle ownership. It therefore proves the production-language contract and test/evidence
-shape without simultaneously changing a lower mechanism.
-
-The Rust crate applies `#![forbid(unsafe_code)]` at crate scope. No FFI or `unsafe` boundary
-is introduced.
-
-During migration, Python remains executable reference/evidence for early releases under
-`VPNG0007-R7.R8.C1`. A Rust unit replaces production responsibility only when its complete
-upstream/downstream contract has been ported and acceptance evidence demonstrates semantic
-parity; the existence of a Rust implementation alone does not remove or bypass the Python
-reference path.
-
-The next dependency-adjacent Rust unit ports the pure
-`AvailabilityPriorityCalculator` contract together with a reusable `LogicalPathId` value
-type. Its boundary remains:
-
-```text
-configured allowed logical-path order
-+ established problem paths
-+ current Profile active path
-+ Profile-local reserve Device membership
-    ->
-same logical-path membership in effective preference order
-```
-
-The Rust calculator is not allowed to mutate routes, own active-path lifecycle, infer path
-health, or change structural membership. Those responsibilities remain in the existing
-Manager/lower convergence contracts.
-
-The next Rust parity slice ports the bounded `AvailabilityRoutingState` projection for one
-Profile. It owns only the previously accepted active-path identity and returns:
-
-```text
-previous active path
-+ current configured path membership
-+ established problem paths
-+ reserve Device membership
-    ->
-next active path
-+ current effective path order
-```
-
-A disappeared active path is treated as stale bounded state and replaced from current
-membership. All-problem or empty membership clears the active identity. The Rust projection
-delegates ordering semantics to the Rust `AvailabilityPriorityCalculator`; it performs no
-routing I/O and does not own confirmation state.
-
-The next Rust unit ports the bounded semantic core of `AvailabilityManager` together with
-the current probe-context value types required by that core. The port owns:
-
-```text
-current synchronized observation contexts
-+ fresh ProbeEvidence
-+ bounded confirmation state
-+ per-Profile active routing state
-+ already-normalized Profile/path membership
-    ->
-problem owners
-+ effective Profile/path order
-```
-
-Context replacement resets partial confirmation for that subject; stale evidence is rejected;
-`NO_EVIDENCE` is neutral; reserve/ordinary recovery semantics reuse the previously ported
-routing-state projection.
-
-This is intentionally **manager-core parity**, not yet the complete Rust ConfigurationAdapter
-or alpha assembly. The Python implementation currently also verifies that the supplied
-Profile set equals the enabled Release-1 config Profile set. Until Rust configuration
-normalization is ported, the Rust Manager core accepts an already-normalized current Profile
-set and validates only duplicate Profile identity and probe-context membership. A later Rust
-configuration/assembly unit must restore the complete upstream set-equality gate before this
-core can replace that production responsibility.
+No further `rou` Rust runtime surface should be added, and these prototypes should not drive
+architecture or require dual-maintenance while the Python `rou` reference is still evolving.
+When the Python-completion gate is eventually satisfied, the project must re-review whether
+these prototypes still match the accepted contracts before reusing, replacing or deleting
+them.
 
 ### Migration/evidence rule
 
