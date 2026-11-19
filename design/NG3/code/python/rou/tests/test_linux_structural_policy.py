@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import json
 import unittest
+from ipaddress import IPv4Address
 
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.linux_structural_policy import LinuxStructuralPolicyBackend
+from rou.probe_local_mutation import ProbeLocalMutationStep
+from rou.probe_policy import ProbeLocalHook, ProbeLocalRuleSpec
+from rou.network_policy_layout import ProbePolicyOwner
+from rou.binding import LogicalPathId
 from rou.nft_namespace_inventory import NftNamespaceStatus
 
 
@@ -123,6 +128,35 @@ class LinuxStructuralPolicyBackendTests(unittest.TestCase):
             "identity inventory drift",
         ):
             self.backend(runner).observe_structural_snapshot()
+
+    def test_probe_local_mutation_delegates_to_composite_nft_backend(self):
+        runner = FakeRunner()
+        backend = self.backend(runner)
+        owner = ProbePolicyOwner(
+            "corp",
+            LogicalPathId("device", 0, 0),
+        )
+        backend.apply_probe_local_step(
+            ProbeLocalMutationStep(
+                delete_rules=(),
+                add_rules=(
+                    ProbeLocalRuleSpec(
+                        owner=owner,
+                        hook=ProbeLocalHook.INPUT,
+                        endpoint=VPN,
+                        target=IPv4Address("198.51.100.7"),
+                        conntrack_mark=0x20000001,
+                    ),
+                ),
+            )
+        )
+        self.assertEqual(
+            runner.scripts[-1],
+            "add rule ip vpn_gate stack_input "
+            "meta iif 20 ip saddr 198.51.100.7 "
+            "ip protocol icmp ct mark 0x20000001 accept "
+            'comment "vpn-gate:ng3:probe-local-v1"\n',
+        )
 
     def test_route_and_rule_mutation_delegate_to_exp048_driver(self):
         from ipaddress import IPv4Network
