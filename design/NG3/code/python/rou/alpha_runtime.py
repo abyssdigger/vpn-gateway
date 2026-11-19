@@ -103,7 +103,6 @@ from .network_policy_activation import (
     NetworkPolicyActivationResult,
     activate_network_policy,
 )
-from .network_policy_layout import allocate_network_policy_layout
 from .payload_network_policy_desired import (
     PayloadNetworkPolicyDesiredState,
     build_payload_network_policy_desired_state,
@@ -618,6 +617,14 @@ def run_alpha_runtime(
         raise ValueError("audit_interval_seconds must be positive")
 
     runner = SubprocessNftRunner()
+    probe_driver = LinuxIcmpProbeDriver(
+        runner=SubprocessProbeCommandRunner(),
+        namespace=ALPHA_NAMESPACE,
+        process_uid=NG3_PROBE_LOCAL_PLATFORM.process_uid,
+        execution_policy=IcmpProbeExecutionPolicy(
+            ALPHA_PROBE_REPLY_TIMEOUT_SECONDS,
+        ),
+    )
     domain_spec = _domain_spec()
     stop_event = threading.Event()
     holder: dict[str, AlphaPreparedPolicy] = {}
@@ -687,6 +694,43 @@ def run_alpha_runtime(
             build_configured_intent_status(prepared.config)
         )
         write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+
+        availability_start = reconcile_alpha_availability_once(
+            prepared,
+            runner,
+            probe_driver,
+        )
+        if not availability_start.confirmed:
+            stopped = stop_controller_once(
+                startup.session,
+                domain_spec,
+                runner,
+            )
+            status_agent.mark_unconfirmed(
+                readiness=RuntimeReadiness.FAILED,
+                problem=(
+                    availability_start.diagnostic
+                    or (
+                        "availability startup cycle is not confirmed: "
+                        f"{availability_start.status.value}"
+                    )
+                ),
+            )
+            write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+            _log(
+                "VPNG_ALPHA_START_FAILED",
+                (
+                    "status=availability_unready "
+                    f"availability={availability_start.status.value} "
+                    f"diagnostic={availability_start.diagnostic!r} "
+                    f"managed_cleanup={stopped.status.value}"
+                ),
+            )
+            return (
+                1
+                if stopped.status is ControllerStopStatus.STOPPED
+                else 2
+            )
 
         host_publication_desired = prepared.build_host_publication_desired()
         host_publication_backend = LinuxHostPublicationBackend(runner)
@@ -775,7 +819,20 @@ def run_alpha_runtime(
                     ),
                 )
             )
-            if result.ready:
+            availability_result = (
+                reconcile_alpha_availability_once(
+                    prepared,
+                    runner,
+                    probe_driver,
+                )
+                if result.ready
+                else None
+            )
+            if (
+                result.ready
+                and availability_result is not None
+                and availability_result.confirmed
+            ):
                 status_agent.confirm_effective(
                     prepared.last_profiles,
                     prepared.last_bindings,
@@ -784,8 +841,18 @@ def run_alpha_runtime(
                 status_agent.mark_unconfirmed(
                     readiness=RuntimeReadiness.DEGRADED,
                     problem=(
-                        result.diagnostic
-                        or f"alpha reconcile failed: {result.status.value}"
+                        (
+                            availability_result.diagnostic
+                            if availability_result is not None
+                            else None
+                        )
+                        or result.diagnostic
+                        or (
+                            "availability reconcile is not confirmed: "
+                            f"{availability_result.status.value}"
+                            if availability_result is not None
+                            else f"alpha reconcile failed: {result.status.value}"
+                        )
                     ),
                 )
             write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
