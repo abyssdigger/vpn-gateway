@@ -6515,6 +6515,23 @@ upstream/downstream contract has been ported and acceptance evidence demonstrate
 parity; the existence of a Rust implementation alone does not remove or bypass the Python
 reference path.
 
+The next dependency-adjacent Rust unit ports the pure
+`AvailabilityPriorityCalculator` contract together with a reusable `LogicalPathId` value
+type. Its boundary remains:
+
+```text
+configured allowed logical-path order
++ established problem paths
++ current Profile active path
++ Profile-local reserve Device membership
+    ->
+same logical-path membership in effective preference order
+```
+
+The Rust calculator is not allowed to mutate routes, own active-path lifecycle, infer path
+health, or change structural membership. Those responsibilities remain in the existing
+Manager/lower convergence contracts.
+
 ### Migration/evidence rule
 
 Porting Python reference behavior to Rust is an implementation replacement, not a redesign.
