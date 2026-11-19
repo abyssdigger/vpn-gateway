@@ -57,26 +57,11 @@ Before implementing a material change:
 
 ## Process-correction gate
 
-If an error is discovered in methodology/process, Git/snapshot/branch policy, CD cadence, or
-another rule governing how project work is performed, **do not immediately repair it in
-GitHub**.
-
-Before any write:
-
-1. stop work affected by the faulty process;
-2. perform only the read-only inspection needed to characterize the problem;
-3. discuss with the user:
-   - what is wrong;
-   - why the current rule/process produces incorrect behavior;
-   - the proposed correction;
-   - which process/project artifacts would change;
-   - whether already-created consequences require repair;
-4. wait for explicit user agreement on the proposed correction.
-
-Only after that agreement may the process artifacts or the consequences of the process defect
-be changed. This gate applies to project/process rules and Git-history/snapshot policy; it does
-not turn ordinary implementation defects, test-harness fixes, or unambiguous fail-closed
-hardening into mandatory human checkpoints.
+Process and Git-policy defects require the read-only diagnosis and explicit human
+agreement described in `CONTINUOUS-DEVELOPMENT.md` (§ Process-correction gate)
+before corrective writes. The repository write-authorization gate above still applies.
+Do not apply this special gate to an ordinary implementation or test defect unless it
+changes the governing process itself.
 
 ## Normal continuous-development workflow
 
@@ -84,7 +69,7 @@ The following operations are **routine autonomous development work** and do not 
 
 - Create/select dedicated cycle branches, determine `CYCLE_INTERVAL`, and record real `CYCLE_START_TIME` before mandatory reading or the first commit, as defined in `CONTINUOUS-DEVELOPMENT.md`.
 - Develop coherent review units, write and run the cheapest sufficient tests/evidence, perform required expert review, record findings/dispositions/verdicts, and apply accepted fixes.
-- Follow the immediate commit-publication rule in `PROJECT-CONVENTIONS.md` §7.
+- Follow `PROJECT-CONVENTIONS.md` §7 for immediate publication of each commit and mandatory CD stop on publication failure.
 - After each commit, obtain fresh real current time and check elapsed time from `CYCLE_START_TIME` against `CYCLE_INTERVAL`. At the session-safety boundary, stop at the nearest safe technical point and produce the CD handoff; do not manufacture review-unit completion, a special checkpoint commit, or a mainline snapshot just because the window ended. Follow the exact handoff and safety-margin rules in `CONTINUOUS-DEVELOPMENT.md`.
 - Publish completed development blocks using the snapshot policy in `PROJECT-CONVENTIONS.md` §6.1; the CD boundary itself does not define a block boundary.
 - Follow `CONTINUOUS-DEVELOPMENT.md` for autonomous continuation across development blocks and the exact time/safety/decision conditions for stopping a CD.
