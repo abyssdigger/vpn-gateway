@@ -85,6 +85,17 @@ one probe owner/allocation per `(Profile, path)`, not deduplicate by target.
 **Disposition:** verified by tests. Two paths with the same target receive distinct probe
 tables/rule priorities and retain distinct concrete endpoints.
 
+### F5 — probe owners must belong to the current enabled payload Profile set
+
+The shared lower allocator intentionally does not require every `ProbePolicyOwner.profile_id`
+to have a payload allocation, because it is a generic resource allocator. Availability
+assembly has a stronger semantic invariant: a subject cannot exist for a Profile absent from
+the current enabled payload projection.
+
+**Disposition:** accepted and fixed. The assembly rejects a payload Profile set that does not
+exactly match the enabled Profile IDs in the accepted configuration before deriving probe
+demands.
+
 ## Evidence
 
 Unit coverage added for:
@@ -92,6 +103,7 @@ Unit coverage added for:
 - shared payload + probe allocation;
 - no availability -> no probe owner state;
 - same target on two paths -> two distinct probe allocations/endpoints;
+- mismatched enabled Profile projection -> fail closed;
 - mismatched payload/path realization -> fail closed;
 - duplicate physical logical-path realization -> rejection.
 
