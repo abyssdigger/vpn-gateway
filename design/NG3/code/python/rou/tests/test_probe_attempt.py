@@ -12,7 +12,10 @@ from rou.probe_attempt import (
     execute_probe_attempt_once,
 )
 from rou.probe_policy import AvailabilityProbeIntent
-from rou.probe_precondition import ProbeExecutionPrecondition
+from rou.probe_precondition import (
+    ProbeExecutionContextKey,
+    ProbeExecutionPrecondition,
+)
 from rou.probe_runtime import (
     AvailabilityProbeRuntime,
     ProbeTechnicalObservation,
@@ -55,12 +58,23 @@ def runtime():
     return value
 
 
-def readiness(*, confirmed=True, owners=frozenset({OWNER}), interfaces=(EP,)):
+def readiness(*, confirmed=True, contexts=None, interfaces=(EP,)):
+    if contexts is None:
+        contexts = frozenset(
+            {
+                ProbeExecutionContextKey(
+                    OWNER,
+                    intent().mechanism,
+                    TARGET,
+                    EP,
+                )
+            }
+        )
     return ProbeExecutionPrecondition(
         routing=SimpleNamespace(confirmed=confirmed),
         local=SimpleNamespace(desired_confirmed=True),
         interfaces_stable_snapshot=interfaces,
-        owners=owners,
+        contexts=contexts,
     )
 
 
@@ -108,7 +122,29 @@ class ProbeAttemptTests(unittest.TestCase):
             execute_probe_attempt_once(
                 value,
                 OWNER,
-                readiness(owners=frozenset()),
+                readiness(contexts=frozenset()),
+                driver,
+            )
+        self.assertEqual(driver.calls, [])
+
+    def test_changed_target_cannot_reuse_old_readiness(self):
+        value = runtime()
+        old_readiness = readiness()
+        value.configure(
+            (intent(TARGET2),),
+            (RoutePriorityPathRoute(PATH, EP),),
+        )
+        driver = FakeDriver(
+            ProbeTechnicalObservation(ProbeTechnicalOutcome.REPLY)
+        )
+        with self.assertRaisesRegex(
+            ProbeAttemptError,
+            "context differs",
+        ):
+            execute_probe_attempt_once(
+                value,
+                OWNER,
+                old_readiness,
                 driver,
             )
         self.assertEqual(driver.calls, [])
