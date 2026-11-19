@@ -93,6 +93,11 @@ from .managed_network_domain import (
     preflight_managed_network_domain,
     verify_managed_network_domain,
 )
+from .linux_availability_cycle import (
+    LinuxAvailabilityCycleResult,
+    LinuxAvailabilityCycleStatus,
+    run_linux_availability_cycle_once,
+)
 from .linux_forwarding_gate import (
     LinuxForwardingGateBackend,
     LinuxForwardingGateError,
@@ -461,7 +466,10 @@ from .probe_local_mutation import (
     select_probe_local_step,
 )
 from .linux_probe_local import LinuxProbeLocalBackend
-from .linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
+from .linux_policy_platform import (
+    NG3_LINUX_POLICY_PLATFORM,
+    NG3_PROBE_LOCAL_PLATFORM,
+)
 from .linux_structural_routing import (
     LinuxStructuralRoutingBackend,
     LinuxStructuralRoutingError,
@@ -648,6 +656,8 @@ __all__ = [
     "InterfaceInventoryError",
     "IproutePriorityBackend",
     "IproutePriorityBackendError",
+    "LinuxAvailabilityCycleResult",
+    "LinuxAvailabilityCycleStatus",
     "LinuxForwardingGateBackend",
     "LinuxForwardingGateError",
     "LinuxProbeRoutingBackend",
@@ -676,6 +686,7 @@ __all__ = [
     "ObservedManagedRoute",
     "ObservedManagedRule",
     "NG3_LINUX_POLICY_PLATFORM",
+    "NG3_PROBE_LOCAL_PLATFORM",
     "NftNamespaceInventoryError",
     "NftPayloadScaffoldComparison",
     "NftPayloadScaffoldConflict",
@@ -894,4 +905,5 @@ __all__ = [
     "prepare_payload_nft_scaffold_once",
     "project_device_bindings",
     "realize_direct_device_path_routes",
+    "run_linux_availability_cycle_once",
 ]
