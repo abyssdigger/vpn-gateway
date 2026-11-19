@@ -369,6 +369,14 @@ from .probe_policy import (
     ProbeRuleSpec,
     build_probe_network_policy_desired_state,
 )
+from .probe_runtime import (
+    AvailabilityProbeAgent,
+    ProbeEvidence,
+    ProbeObservationContext,
+    ProbeRuntimeError,
+    ProbeTechnicalObservation,
+    ProbeTechnicalOutcome,
+)
 from .probe_routing_compare import (
     ProbeRoutingComparison,
     ProbeRoutingComparisonError,
@@ -458,6 +466,7 @@ __all__ = [
     "AvailabilityPriorityError",
     "AvailabilityProbeIntent",
     "AvailabilityProbeMechanism",
+    "AvailabilityProbeAgent",
     "AvailabilityRoutingProjection",
     "AvailabilityRoutingState",
     "BindingProjectionError",
@@ -662,6 +671,11 @@ __all__ = [
     "ProbeLocalHook",
     "ProbeLocalPlatform",
     "ProbeLocalRuleSpec",
+    "ProbeEvidence",
+    "ProbeObservationContext",
+    "ProbeRuntimeError",
+    "ProbeTechnicalObservation",
+    "ProbeTechnicalOutcome",
     "ProbeNetworkPolicyDesiredState",
     "ProbePolicyAllocation",
     "ProbePolicyProjectionError",
