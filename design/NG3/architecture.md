@@ -6333,8 +6333,9 @@ Canonical Release-1 configuration теперь определяется `design/
 подтвердить `ForwardingGate=DISABLED` и публикует diagnostic в journal; он не усыновляет
 произвольные процессы или вручную поврежденные namespace artifacts.
 
-User-facing `RuntimeStatusAgent` в эту первую alpha-сборку еще не подключен. Journal markers
-являются implementation/evidence diagnostics и не объявляются финальным status interface.
+Python alpha публикует current-only `RuntimeStatusAgent` snapshot атомарно в
+`/run/vpn-gate-alpha/status.json`. Journal markers остаются implementation/evidence
+diagnostics и не объявляются финальным stable status interface.
 
 # 13. RuntimeStatusAgent
 
@@ -6380,6 +6381,20 @@ RuntimeStatusSnapshot:
     blocking_problems
     unknown_or_unconfirmed_fields
 ```
+
+Availability presentation in the current alpha uses only bounded current state:
+
+- `disabled` — Profile availability is not configured;
+- `unconfirmed` — availability-enabled Profile exists, but current runtime/reconcile truth is
+  not confirmed;
+- `monitoring` — the availability cycle is current and no confirmed problem owner exists for
+  that Profile;
+- `problem` — at least one current `(Profile, logical path)` owner has an established
+  availability problem.
+
+`monitoring` deliberately does not claim that every remote target is positively proven
+healthy; it states that current availability machinery is operating and has no established
+problem state.
 
 Truthfulness rules:
 
