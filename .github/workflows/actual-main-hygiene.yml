@@ -34,7 +34,7 @@ jobs:
                 ;;
               design/experiments/*)
                 case "$path" in
-                  design/experiments/*" NG3 "*/*) ;;
+                  design/experiments/README.md|design/experiments/*" NG3 "*/*) ;;
                   *) reject "$path" ;;
                 esac
                 ;;
