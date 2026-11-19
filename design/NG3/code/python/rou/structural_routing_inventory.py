@@ -374,11 +374,19 @@ def _parse_reserved_rule(
         )
     uid_start = _required_u32_number(row.get("uid_start"), "probe uid_start")
     uid_end = _required_u32_number(row.get("uid_end"), "probe uid_end")
-    if uid_start > uid_end:
+    if uid_start != uid_end:
         raise StructuralRoutingInventoryError(
-            "probe uid range start exceeds end"
+            "probe rule must use one exact dedicated uid"
+        )
+    if not 1 <= uid_start <= 0xFFFFFFFE:
+        raise StructuralRoutingInventoryError(
+            "probe rule uid must be a non-root Linux uid"
         )
     ipproto = _required_ipproto(row.get("ipproto"))
+    if ipproto != 1:
+        raise StructuralRoutingInventoryError(
+            "Release 1 probe rule ipproto must be ICMP"
+        )
     return ObservedManagedRule(
         priority=priority,
         table=table,
