@@ -23,7 +23,7 @@ _DEVICE_KEYS = frozenset(
     {
         "enabled",
         "expected_interfaces",
-        "remote_endpoint",
+        "availability_check",
         "use_outbound_nat",
         "allow_vpn_client",
         "publish_vpn_server",
@@ -98,7 +98,7 @@ class AvailabilityCheckConfig:
 
 @dataclass(frozen=True, slots=True)
 class DeviceRelease1Config:
-    remote_endpoint: ipaddress.IPv4Address | None
+    availability_check: AvailabilityCheckConfig | None
     use_outbound_nat: bool | None
     allow_vpn_client: tuple[VpnClientTransportConfig, ...]
     publish_vpn_server: tuple[VpnServerPublicationConfig, ...]
@@ -110,6 +110,7 @@ class ProfileRelease1Config:
     ordinary_gateway_nat: bool
     route_return: bool
     availability_check: AvailabilityCheckConfig | None
+    availability_uses_device_default: bool = False
     reserve_device_ids: frozenset[str] = frozenset()
 
 
@@ -193,19 +194,10 @@ def parse_release1_config(text: str) -> Release1Config:
             devices[device_id] = DeviceRelease1Config(None, None, (), (), None)
             continue
 
-        endpoint_value = body.get("remote_endpoint")
-        remote_endpoint = None
-        if "remote_endpoint" in body:
-            if not isinstance(endpoint_value, str):
-                raise Release1ConfigError(
-                    f"device.{device_id}.remote_endpoint must be an exact IPv4 address"
-                )
-            try:
-                remote_endpoint = ipaddress.IPv4Address(endpoint_value)
-            except ipaddress.AddressValueError:
-                raise Release1ConfigError(
-                    f"device.{device_id}.remote_endpoint must be an exact IPv4 address"
-                ) from None
+        default_availability_check = _parse_availability_description(
+            body.get("availability_check"),
+            f"device.{device_id}.availability_check",
+        )
 
         nat_value = body.get("use_outbound_nat")
         if device_id in ordinary_to_vpn_devices and "use_outbound_nat" not in body:
@@ -232,7 +224,7 @@ def parse_release1_config(text: str) -> Release1Config:
         )
 
         devices[device_id] = DeviceRelease1Config(
-            remote_endpoint=remote_endpoint,
+            availability_check=default_availability_check,
             use_outbound_nat=nat_value if type(nat_value) is bool else None,
             allow_vpn_client=tuple(
                 _parse_client_transport(
@@ -261,24 +253,27 @@ def parse_release1_config(text: str) -> Release1Config:
         profiles[profile_id] = ProfileRelease1Config(
             ordinary_gateway_nat=gateway_nat,
             route_return=route_return,
-            availability_check=_parse_availability(
+            availability_check=_parse_profile_availability(
                 body.get("availability_check"),
                 f"profile.{profile_id}.availability_check",
-            ),
+            )[0],
+            availability_uses_device_default=_parse_profile_availability(
+                body.get("availability_check"),
+                f"profile.{profile_id}.availability_check",
+            )[1],
             reserve_device_ids=profile_reserve_devices[profile_id],
         )
 
     for profile_id, profile in profiles.items():
-        check = profile.availability_check
-        if check is None or check.target is not None:
+        if not profile.availability_uses_device_default:
             continue
         for device_id in structural.profiles[profile_id].device_order:
             if not structural.devices[device_id].enabled:
                 continue
-            if devices[device_id].remote_endpoint is None:
+            if devices[device_id].availability_check is None:
                 raise Release1ConfigError(
-                    f"device.{device_id}.remote_endpoint is required by "
-                    f"profile.{profile_id}.availability_check = \"icmp\""
+                    f"device.{device_id}.availability_check is required by "
+                    f"profile.{profile_id}.availability_check = \"default\""
                 )
 
     return Release1Config(
@@ -609,26 +604,48 @@ def _parse_port_bundle(value: str, where: str) -> PortBundle:
         raise Release1ConfigError(f"{where}: {exc}") from None
 
 
-def _parse_availability(
+def _parse_availability_description(
     value: Any,
     where: str,
 ) -> AvailabilityCheckConfig | None:
     if value is None:
         return None
-    if value == "icmp":
-        return AvailabilityCheckConfig("icmp", None)
-    if isinstance(value, str) and value.startswith("icmp/"):
-        address_text = value[5:]
-        try:
-            target = ipaddress.IPv4Address(address_text)
-        except ipaddress.AddressValueError:
-            raise Release1ConfigError(
-                f"{where} explicit target must be an IPv4 address"
-            ) from None
-        return AvailabilityCheckConfig("icmp", target)
-    raise Release1ConfigError(
-        f'{where} must be "icmp" or "icmp/<IPv4>"'
-    )
+    if not isinstance(value, dict):
+        raise Release1ConfigError(
+            f"{where} must be a table with mechanism and target"
+        )
+    unknown = sorted(set(value) - {"mechanism", "target"})
+    if unknown:
+        raise Release1ConfigError(
+            f"{where} has unsupported field(s): " + ", ".join(unknown)
+        )
+    if value.get("mechanism") != "icmp":
+        raise Release1ConfigError(
+            f'{where}.mechanism must be "icmp"'
+        )
+    target_value = value.get("target")
+    if not isinstance(target_value, str):
+        raise Release1ConfigError(
+            f"{where}.target must be an exact IPv4 address"
+        )
+    try:
+        target = ipaddress.IPv4Address(target_value)
+    except ipaddress.AddressValueError:
+        raise Release1ConfigError(
+            f"{where}.target must be an exact IPv4 address"
+        ) from None
+    return AvailabilityCheckConfig("icmp", target)
+
+
+def _parse_profile_availability(
+    value: Any,
+    where: str,
+) -> tuple[AvailabilityCheckConfig | None, bool]:
+    if value is None:
+        return None, False
+    if value == "default":
+        return None, True
+    return _parse_availability_description(value, where), False
 
 
 def _port(value: Any, where: str) -> int:
