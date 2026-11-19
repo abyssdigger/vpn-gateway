@@ -404,24 +404,40 @@ def parse_host_boundary_behavior_nft_observation(
         ):
             conflicts.append(f"host behavior chain {name!r} shape mismatch")
 
-    expected_comments = (
-        _expected_rule_comments(desired)
+    expected_by_chain = (
+        _expected_rule_comments_by_chain(desired)
         if desired is not None
-        else ()
+        else {}
     )
-    comments: list[str] = []
+    actual_by_chain: dict[str, list[str]] = {}
+    all_comments: list[str] = []
     for row in rules:
         comment = row.get("comment")
+        chain = row.get("chain")
         if not isinstance(comment, str):
             conflicts.append("host behavior rule has no owner comment")
             continue
-        comments.append(comment)
+        if not isinstance(chain, str):
+            conflicts.append("host behavior rule has no chain identity")
+            continue
+        all_comments.append(comment)
+        actual_by_chain.setdefault(chain, []).append(comment)
         if not comment.startswith("vpn-gate:ng3:host-behavior-"):
             conflicts.append("foreign rule exists in owned host behavior table")
 
     comments_match = (
         desired is not None
-        and tuple(comments) == expected_comments
+        and set(all_comments)
+        == {
+            comment
+            for comments in expected_by_chain.values()
+            for comment in comments
+        }
+        and all(
+            actual_by_chain.get(chain, []) == list(expected)
+            for chain, expected in expected_by_chain.items()
+        )
+        and set(actual_by_chain) == set(expected_by_chain)
     )
     if comments_match and not conflicts:
         _validate_rule_shapes(rules, desired, conflicts)
@@ -438,12 +454,14 @@ def parse_host_boundary_behavior_nft_observation(
     )
 
 
-def _expected_rule_comments(
+def _expected_rule_comments_by_chain(
     desired: HostBoundaryBehaviorNftSpec,
-) -> tuple[str, ...]:
-    result: list[str] = []
+) -> dict[str, tuple[str, ...]]:
+    prerouting: list[str] = []
+    output: list[str] = []
+    postrouting: list[str] = []
     for item in desired.lanes:
-        result.extend(
+        prerouting.extend(
             (
                 _classify_comment(item.lane),
                 _lane_return_comment(item.lane),
@@ -451,16 +469,16 @@ def _expected_rule_comments(
         )
     for item in desired.lanes:
         if _stateful(item.lane):
-            result.extend(
-                (
-                    _prerouting_restore_comment(item.lane),
-                    _output_restore_comment(item.lane),
-                )
-            )
+            prerouting.append(_prerouting_restore_comment(item.lane))
+            output.append(_output_restore_comment(item.lane))
     for item in desired.lanes:
         if _nat(item.lane):
-            result.append(_nat_comment(item.lane))
-    return tuple(result)
+            postrouting.append(_nat_comment(item.lane))
+    return {
+        "prerouting": tuple(prerouting),
+        "output": tuple(output),
+        "postrouting": tuple(postrouting),
+    }
 
 
 def _validate_rule_shapes(
@@ -468,7 +486,11 @@ def _validate_rule_shapes(
     desired: HostBoundaryBehaviorNftSpec,
     conflicts: list[str],
 ) -> None:
-    if len(rules) != len(_expected_rule_comments(desired)):
+    expected_count = sum(
+        len(items)
+        for items in _expected_rule_comments_by_chain(desired).values()
+    )
+    if len(rules) != expected_count:
         conflicts.append("host behavior rule count mismatch")
         return
 
