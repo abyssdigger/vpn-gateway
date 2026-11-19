@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .interface_identity import InterfaceIdentity
-from .network_policy_layout import NetworkPolicyPlatformSpace
+from .network_policy_layout import (
+    NetworkPolicyPlatformSpace,
+    ProbePolicyOwner,
+)
 from .probe_local_observation import (
     ProbeLocalComparison,
     compare_probe_local,
@@ -23,6 +26,7 @@ class ProbeExecutionPrecondition:
     routing: ProbeRoutingComparison
     local: ProbeLocalComparison
     interfaces_stable_snapshot: tuple[InterfaceIdentity, ...]
+    owners: frozenset[ProbePolicyOwner]
 
     @property
     def confirmed(self) -> bool:
@@ -53,8 +57,15 @@ def verify_probe_execution_precondition(
         snapshot.interfaces,
         desired.local_rules,
     )
+    owners = frozenset(rule.owner for rule in desired.rules)
+    local_owners = frozenset(rule.owner for rule in desired.local_rules)
+    if local_owners != owners:
+        raise ValueError(
+            "probe routing and local desired owner sets do not match"
+        )
     return ProbeExecutionPrecondition(
         routing=routing,
         local=local,
         interfaces_stable_snapshot=snapshot.interfaces,
+        owners=owners,
     )
