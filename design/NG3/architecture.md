@@ -345,8 +345,8 @@ both endpoints:
 ```
 
 The stack-local `/32` is an addressable local service endpoint for integration/publication.
-It is **not** the boundary next-hop and is not used as a gateway by host bootstrap or
-stateful-return routing.
+It is **not** the boundary next-hop and is not used as a gateway by host
+managed-destination routing.
 
 The lifecycle owns only:
 
@@ -1324,8 +1324,8 @@ Key normalization rules:
 - `ProfileConfigIntent` retains remote destinations and ordered Device references; canonical
   `device_order` membership suffixes are normalized into plain Device IDs plus a separate
   Profile-local reserve Device subset, so lower consumers never parse `:reserve`;
-  canonical `direction` is normalized into base direction plus a separate Profile-scoped
-  ordinary-side gateway NAT intent when the accepted `+snat` suffix is present;
+  canonical `direction` is normalized into base direction plus an optional effective
+  Profile SNAT identity when `+snat` or `+snat>IPv4` is present;
 - `PayloadProfileRequest` contains the concrete ordered logical paths obtained after binding
   while preserving Profile identity/direction/destinations;
 - current concrete logical paths are derived from accepted Device bindings, not written
