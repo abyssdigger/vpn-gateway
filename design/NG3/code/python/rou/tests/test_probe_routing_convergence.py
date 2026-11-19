@@ -90,6 +90,7 @@ def observe_rule(spec):
         uid_start=spec.process_uid,
         uid_end=spec.process_uid,
         ipproto=1,
+        egress=spec.endpoint,
     )
 
 
