@@ -360,6 +360,7 @@ from .network_policy_layout import (
 )
 from .probe_policy import (
     AvailabilityProbeIntent,
+    AvailabilityProbeMechanism,
     ProbeLocalHook,
     ProbeLocalPlatform,
     ProbeLocalRuleSpec,
@@ -435,6 +436,7 @@ __all__ = [
     "AvailabilityOutcome",
     "AvailabilityPriorityError",
     "AvailabilityProbeIntent",
+    "AvailabilityProbeMechanism",
     "AvailabilityRoutingProjection",
     "AvailabilityRoutingState",
     "BindingProjectionError",
