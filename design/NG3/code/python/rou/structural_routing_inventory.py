@@ -8,7 +8,7 @@ from typing import Iterable
 
 from .interface_identity import InterfaceIdentity
 from .network_policy_layout import NetworkPolicyPlatformSpace
-from .payload_routing_desired import ManagedRouteType
+from .payload_routing_desired import ManagedRouteRole, ManagedRouteType
 
 
 class StructuralRoutingInventoryError(ValueError):
@@ -31,6 +31,21 @@ class ObservedManagedRoute:
     endpoint: InterfaceIdentity | None
     gateway: IPv4Address | None
     onlink: bool
+    role: ManagedRouteRole | None = None
+
+    def __post_init__(self) -> None:
+        role = self.role
+        if role is None:
+            role = (
+                ManagedRouteRole.GUARD
+                if self.route_type is ManagedRouteType.BLACKHOLE
+                else ManagedRouteRole.VPN_PATH
+            )
+            object.__setattr__(self, "role", role)
+        if not isinstance(role, ManagedRouteRole):
+            raise StructuralRoutingInventoryError(
+                "observed route role must be ManagedRouteRole"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,9 +287,18 @@ def _parse_reserved_route(
             endpoint=None,
             gateway=None,
             onlink=False,
+            role=ManagedRouteRole.GUARD,
         )
 
-    if protocol != platform.path_route_protocol:
+    if protocol == platform.path_route_protocol:
+        role = ManagedRouteRole.VPN_PATH
+    elif protocol == platform.host_boundary_lane_route_protocol:
+        role = ManagedRouteRole.HOST_BOUNDARY_LANE
+        if destination != IPv4Network("0.0.0.0/0"):
+            raise StructuralRoutingInventoryError(
+                "host-boundary lane route must use default destination"
+            )
+    else:
         raise StructuralRoutingInventoryError(
             "unicast reserved route uses unexpected protocol role"
         )
@@ -289,6 +313,10 @@ def _parse_reserved_route(
             f"reserved route dev {dev!r} is absent from current interface inventory"
         )
     gateway = _optional_ipv4(row.get("gateway"), "route gateway")
+    if role is ManagedRouteRole.HOST_BOUNDARY_LANE and gateway is None:
+        raise StructuralRoutingInventoryError(
+            "host-boundary lane route requires gateway"
+        )
     return ObservedManagedRoute(
         table=table,
         destination=destination,
@@ -299,6 +327,7 @@ def _parse_reserved_route(
         endpoint=endpoint,
         gateway=gateway,
         onlink=onlink,
+        role=role,
     )
 
 
@@ -610,6 +639,7 @@ def _route_key(route: ObservedManagedRoute) -> tuple[object, ...]:
         int(route.destination.network_address),
         route.destination.prefixlen,
         route.route_type.value,
+        route.role.value,
         route.protocol,
         route.metric,
         route.scope if route.scope is not None else -1,
