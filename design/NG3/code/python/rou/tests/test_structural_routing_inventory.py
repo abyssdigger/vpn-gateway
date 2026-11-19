@@ -46,26 +46,34 @@ EXP029_ROUTES = [
         "table": "2147483648",
     },
 ]
-EXP029_RULES = [
-    {
-        "fwmark": "0x1234",
-        "fwmask": "0xffff",
-        "priority": 8192,
-        "src": "all",
-        "table": "3221225472",
-    },
-    {
-        "dst": "10.77.0.0",
-        "dstlen": 16,
-        "iif": "host0",
-        "priority": 16384,
-        "src": "all",
-        "table": "2147483648",
-    },
-]
+EXP029_FWMARK_PROBE_RULE = {
+    "fwmark": "0x1234",
+    "fwmask": "0xffff",
+    "priority": 8192,
+    "src": "all",
+    "table": "3221225472",
+}
+EXP065_PROBE_RULE = {
+    "dst": "198.51.100.7",
+    "ipproto": "ipproto-1",
+    "priority": 8192,
+    "src": "all",
+    "table": "3221225472",
+    "uid_end": 4242,
+    "uid_start": 4242,
+}
+PAYLOAD_RULE = {
+    "dst": "10.77.0.0",
+    "dstlen": 16,
+    "iif": "host0",
+    "priority": 16384,
+    "src": "all",
+    "table": "2147483648",
+}
+CURRENT_RULES = [EXP065_PROBE_RULE, PAYLOAD_RULE]
 
 
-def parse(routes=EXP029_ROUTES, rules=EXP029_RULES, interfaces=(HOST, PATH0, PATH1)):
+def parse(routes=EXP029_ROUTES, rules=CURRENT_RULES, interfaces=(HOST, PATH0, PATH1)):
     return parse_structural_routing_inventory(
         json.dumps(routes),
         json.dumps(rules),
@@ -75,7 +83,7 @@ def parse(routes=EXP029_ROUTES, rules=EXP029_RULES, interfaces=(HOST, PATH0, PAT
 
 
 class StructuralRoutingInventoryTests(unittest.TestCase):
-    def test_exp029_shape_normalizes_to_typed_inventory(self):
+    def test_exp029_routes_and_exp065_probe_rule_normalize_to_typed_inventory(self):
         value = parse()
         self.assertEqual(value.conflicts, ())
         self.assertEqual(len(value.routes), 3)
@@ -100,12 +108,32 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
         self.assertEqual(host_route.scope, 253)
 
         probe_rule = next(rule for rule in value.rules if rule.priority == 0x2000)
-        self.assertEqual(probe_rule.fwmark, 0x1234)
-        self.assertEqual(probe_rule.fwmask, 0xFFFF)
+        self.assertEqual(str(probe_rule.destination), "198.51.100.7/32")
+        self.assertEqual(probe_rule.uid_start, 4242)
+        self.assertEqual(probe_rule.uid_end, 4242)
+        self.assertEqual(probe_rule.ipproto, 1)
+        self.assertIsNone(probe_rule.fwmark)
+        self.assertIsNone(probe_rule.fwmask)
 
         payload_rule = next(rule for rule in value.rules if rule.priority == 0x4000)
         self.assertEqual(payload_rule.ingress, HOST)
         self.assertEqual(str(payload_rule.destination), "10.77.0.0/16")
+
+    def test_exp029_fwmark_probe_surrogate_is_now_reserved_conflict(self):
+        value = parse([], [EXP029_FWMARK_PROBE_RULE])
+        self.assertEqual(value.rules, ())
+        self.assertEqual(len(value.conflicts), 1)
+        self.assertEqual(value.conflicts[0].owner, ReservedOwnerKind.PROBE)
+        self.assertIn("unsupported fields", value.conflicts[0].reason)
+
+    def test_probe_rule_requires_exact_host_target(self):
+        bad = dict(EXP065_PROBE_RULE)
+        bad["dst"] = "198.51.100.0"
+        bad["dstlen"] = 24
+        value = parse([], [bad])
+        self.assertEqual(value.rules, ())
+        self.assertEqual(len(value.conflicts), 1)
+        self.assertIn("exact IPv4 host", value.conflicts[0].reason)
 
     def test_bare_payload_rule_host_destination_without_dstlen_is_slash32(self):
         rules = [
@@ -150,7 +178,7 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
                 "metric": 0,
             }
         ]
-        rules = EXP029_RULES + [
+        rules = CURRENT_RULES + [
             {"priority": 32766, "src": "all", "table": "254"}
         ]
         value = parse(routes, rules)
@@ -168,14 +196,14 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
                 "metric": 5,
             }
         ]
-        value = parse(routes, EXP029_RULES)
+        value = parse(routes, CURRENT_RULES)
         self.assertEqual(len(value.routes), 3)
         self.assertEqual(len(value.conflicts), 1)
         self.assertIn("unexpected protocol role", value.conflicts[0].reason)
         self.assertEqual(value.conflicts[0].owner, ReservedOwnerKind.PAYLOAD)
 
     def test_reserved_rule_wrong_table_pool_is_conflict(self):
-        rules = EXP029_RULES + [
+        rules = CURRENT_RULES + [
             {
                 "priority": 0x4001,
                 "src": "all",

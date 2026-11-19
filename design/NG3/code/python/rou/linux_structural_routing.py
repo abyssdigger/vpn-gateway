@@ -67,6 +67,9 @@ class LinuxStructuralRoutingBackend:
             or rule.destination is None
             or rule.fwmark is not None
             or rule.fwmask is not None
+            or rule.uid_start is not None
+            or rule.uid_end is not None
+            or rule.ipproto is not None
         ):
             raise LinuxStructuralRoutingError(
                 "observed rule is not an exact payload dispatch rule"

@@ -358,6 +358,17 @@ from .network_policy_layout import (
     RouteMetricPlatformSpace,
     allocate_network_policy_layout,
 )
+from .probe_policy import (
+    AvailabilityProbeIntent,
+    AvailabilityProbeMechanism,
+    ProbeLocalHook,
+    ProbeLocalPlatform,
+    ProbeLocalRuleSpec,
+    ProbeNetworkPolicyDesiredState,
+    ProbePolicyProjectionError,
+    ProbeRuleSpec,
+    build_probe_network_policy_desired_state,
+)
 from .linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from .linux_structural_routing import (
     LinuxStructuralRoutingBackend,
@@ -422,6 +433,8 @@ __all__ = [
     "AvailabilityConfirmationState",
     "AvailabilityOutcome",
     "AvailabilityPriorityError",
+    "AvailabilityProbeIntent",
+    "AvailabilityProbeMechanism",
     "AvailabilityRoutingProjection",
     "AvailabilityRoutingState",
     "BindingProjectionError",
@@ -621,7 +634,13 @@ __all__ = [
     "PayloadRoutingComparisonError",
     "PayloadRoutingDesiredState",
     "PayloadRoutingProjectionError",
+    "ProbeLocalHook",
+    "ProbeLocalPlatform",
+    "ProbeLocalRuleSpec",
+    "ProbeNetworkPolicyDesiredState",
     "ProbePolicyAllocation",
+    "ProbePolicyProjectionError",
+    "ProbeRuleSpec",
     "ProbePolicyOwner",
     "ProbeRoutingDemand",
     "ProfileClassificationError",
@@ -681,6 +700,7 @@ __all__ = [
     "build_payload_nat_desired_state",
     "build_payload_profile_requests",
     "build_payload_routing_desired_state",
+    "build_probe_network_policy_desired_state",
     "build_route_priority_domain_realizations",
     "classify_inbound_profile",
     "build_inbound_profile_partition",

@@ -37,6 +37,7 @@ Implemented:
 - EXP-032/EXP-040-backed pure managed nft scaffold contract/comparison for exact fail-closed INPUT/FORWARD/OUTPUT plus empty postrouting NAT base-chain metadata;
 - guarded physical managed nft scaffold bootstrap/repair for all four invariant base chains (`stack_input`, `payload_forward`, `stack_output`, `payload_postrouting`) that closes/rechecks the managed-netns ForwardingGate and refuses mutation through conflicts or unclassified nft objects;
 - canonical `release1_config.py` Adapter for `use_outbound_nat`, exact-port `allow_vpn_client`, ordered one-line Device firewall with typed `PortBundle` selectors, `publish_vpn_server` with ordered 1:1 port-bundle mapping, Profile `+snat` and `availability_check`, with strict legacy-alias rejection; lower runtime consumers receive typed normalized values;
+- pure `probe_policy.py` projection from normalized concrete availability subject/target plus current path realization into dedicated probe route/RPDB and narrow EXP-024-style local ICMP admission desired state; lower process UID/conntrack mark remain platform inputs, not product config;
 - EXP-033-backed read-only authoritative NAT chain observation/comparison classifying exact current, missing, stale and conflicting masquerade rules against the normalized desired state; no NAT rule add/delete or mutation authority;
 - EXP-035/036/037/038-backed strict read-only `payload_forward` owner observer for no-counter NEW/RETURN rules across the full IPv4 CIDR prefix-length range, with explicit current-interface-identity vs stale-generation classification; recognized shape is not desired-policy confirmation or mutation authority;
 - exact immutable lower `payload_forward` desired rule data plus pure actual-vs-desired comparison yielding confirmed/missing/stale/conflicts; this layer deliberately does not compile Profile direction, most-specific selection or Device envelope semantics;
@@ -74,9 +75,9 @@ Important non-goals of the current reference:
 
 - no Device Engine;
 - no Netlink event state/history/replay;
-- no generic local/system stack_input/stack_output exception framework; only Device transport publication is materialized, while loopback/probe/integration-specific exceptions remain behind their own lower evidence gates;
+- no generic local/system stack_input/stack_output exception framework; publication and supported-integration exceptions use bounded owner-specific contracts, and the probe plane now has a pure EXP-021/022/024-backed desired-state projection but not yet a Linux observer/mutator;
 - no full daemon/lifecycle assembly;
-- no production probe execution;
+- no production probe execution/scheduling yet;
 - no Profile ordinary-side `+snat` physical materialization yet;
 - no availability probe runtime assembly or user timing knobs.
 

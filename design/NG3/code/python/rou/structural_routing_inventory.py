@@ -39,8 +39,11 @@ class ObservedManagedRule:
     table: int
     ingress: InterfaceIdentity | None
     destination: IPv4Network | None
-    fwmark: int | None
-    fwmask: int | None
+    fwmark: int | None = None
+    fwmask: int | None = None
+    uid_start: int | None = None
+    uid_end: int | None = None
+    ipproto: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,7 +304,7 @@ def _parse_reserved_route(
 def _parse_reserved_rule(
     row: dict,
     priority: int,
-    owner: str,
+    owner: ReservedOwnerKind,
     interfaces: dict[str, InterfaceIdentity],
     platform: NetworkPolicyPlatformSpace,
 ) -> ObservedManagedRule:
@@ -340,9 +343,21 @@ def _parse_reserved_rule(
             destination=destination,
             fwmark=None,
             fwmask=None,
+            uid_start=None,
+            uid_end=None,
+            ipproto=None,
         )
 
-    allowed = {"priority", "src", "table", "fwmark", "fwmask"}
+    allowed = {
+        "priority",
+        "src",
+        "table",
+        "dst",
+        "dstlen",
+        "uid_start",
+        "uid_end",
+        "ipproto",
+    }
     extras = sorted(set(row) - allowed)
     if extras:
         raise StructuralRoutingInventoryError(
@@ -352,15 +367,26 @@ def _parse_reserved_rule(
         raise StructuralRoutingInventoryError(
             "probe rule points outside probe table pool"
         )
-    fwmark = _required_hex_or_int(row.get("fwmark"), "fwmark")
-    fwmask = _required_hex_or_int(row.get("fwmask"), "fwmask")
+    destination = _rule_destination(row.get("dst"), row.get("dstlen"))
+    if destination.prefixlen != 32:
+        raise StructuralRoutingInventoryError(
+            "probe rule destination must be an exact IPv4 host"
+        )
+    uid_start = _required_u32_number(row.get("uid_start"), "probe uid_start")
+    uid_end = _required_u32_number(row.get("uid_end"), "probe uid_end")
+    if uid_start > uid_end:
+        raise StructuralRoutingInventoryError(
+            "probe uid range start exceeds end"
+        )
+    ipproto = _required_ipproto(row.get("ipproto"))
     return ObservedManagedRule(
         priority=priority,
         table=table,
         ingress=None,
-        destination=None,
-        fwmark=fwmark,
-        fwmask=fwmask,
+        destination=destination,
+        uid_start=uid_start,
+        uid_end=uid_end,
+        ipproto=ipproto,
     )
 
 
@@ -460,31 +486,70 @@ def _route_destination(value: object) -> IPv4Network:
 def _rule_destination(dst: object, dstlen: object) -> IPv4Network:
     if not isinstance(dst, str) or not dst:
         raise StructuralRoutingInventoryError(
-            "payload rule destination is missing"
+            "reserved rule destination is missing"
         )
     if dstlen is None:
         if "/" in dst:
             raise StructuralRoutingInventoryError(
-                "payload rule without dstlen must use bare IPv4 host destination"
+                "reserved rule without dstlen must use bare IPv4 host destination"
             )
         effective_dstlen = 32
     elif type(dstlen) is int and 0 <= dstlen <= 32:
         effective_dstlen = dstlen
     else:
         raise StructuralRoutingInventoryError(
-            "payload rule dstlen must be integer in [0, 32] or omitted for bare /32"
+            "reserved rule dstlen must be integer in [0, 32] or omitted for bare /32"
         )
     try:
         network = ip_network(f"{dst}/{effective_dstlen}", strict=True)
     except ValueError as exc:
         raise StructuralRoutingInventoryError(
-            f"invalid payload rule destination: {exc}"
+            f"invalid reserved rule destination: {exc}"
         ) from None
     if not isinstance(network, IPv4Network):
         raise StructuralRoutingInventoryError(
-            "payload rule destination must be IPv4"
+            "reserved rule destination must be IPv4"
         )
     return network
+
+
+def _required_u32_number(value: object, label: str) -> int:
+    if type(value) is int:
+        result = value
+    elif isinstance(value, str) and value.isdecimal():
+        result = int(value, 10)
+    else:
+        raise StructuralRoutingInventoryError(
+            f"{label} is missing/non-numeric"
+        )
+    if not 0 <= result <= 0xFFFFFFFF:
+        raise StructuralRoutingInventoryError(
+            f"{label} is outside u32"
+        )
+    return result
+
+
+def _required_ipproto(value: object) -> int:
+    if type(value) is int:
+        protocol = value
+    elif isinstance(value, str):
+        raw = value
+        if raw.startswith("ipproto-"):
+            raw = raw[len("ipproto-"):]
+        if not raw.isdecimal():
+            raise StructuralRoutingInventoryError(
+                "probe ipproto is not numeric"
+            )
+        protocol = int(raw, 10)
+    else:
+        raise StructuralRoutingInventoryError(
+            "probe ipproto is missing/non-numeric"
+        )
+    if not 0 <= protocol <= 255:
+        raise StructuralRoutingInventoryError(
+            "probe ipproto is outside u8"
+        )
+    return protocol
 
 
 def _optional_ipv4(value: object, label: str) -> IPv4Address | None:
@@ -505,27 +570,6 @@ def _optional_ipv4(value: object, label: str) -> IPv4Address | None:
             f"{label} must be IPv4"
         )
     return address
-
-
-def _required_hex_or_int(value: object, label: str) -> int:
-    if type(value) is int:
-        result = value
-    elif isinstance(value, str):
-        try:
-            result = int(value, 0)
-        except ValueError:
-            raise StructuralRoutingInventoryError(
-                f"{label} is not numeric"
-            ) from None
-    else:
-        raise StructuralRoutingInventoryError(
-            f"{label} is missing/non-numeric"
-        )
-    if not 0 <= result <= 0xFFFFFFFF:
-        raise StructuralRoutingInventoryError(
-            f"{label} is outside u32"
-        )
-    return result
 
 
 def _duplicates(values):
