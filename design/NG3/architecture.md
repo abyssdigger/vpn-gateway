@@ -41,6 +41,7 @@ Current trace:
 | Profile-level multi-domain priority coordinator | `route_priority_profile.py` | `NG3-2026-11-16-route-priority-profile-coordinator-review.md` |
 | lower Adapter route-priority realization contract | `route_priority_realization.py` | `NG3-2026-11-16-route-priority-realization-contract-review.md` |
 | shared lower network-policy deterministic allocation | `network_policy_layout.py` | `NG3-2026-11-16-network-policy-layout-allocator-review.md` |
+| pure normalized availability-subject -> probe route/RPDB/local-policy projection | `probe_policy.py` | `NG3-2026-11-19-probe-policy-projection-review.md` |
 | accepted NG3 Linux platform resource space | `linux_policy_platform.py` | `EXP-028-result-20261116.md` |
 | semantic Profile/allocation -> route-key priority realization | `route_priority_domain_builder.py` | `NG3-2026-11-16-route-priority-domain-builder-review.md` |
 | explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
@@ -2369,6 +2370,67 @@ distinct.
 When no enabled observation channel requires a probe-owner policy scope, that scope is
 removed through the same verified cleanup boundary rather than being left as implicit
 ambient state.
+
+## 8.3. Pure probe network-policy projection
+
+**Implements:**
+- `VPNG0003-R3.R6`
+- `VPNG0003-R3.R6.R1`
+- `VPNG0003-R3.R6.R2`
+- `VPNG0003-R3.R6.R3`
+- `VPNG0003-R3.R6.R3.R1`
+- `VPNG0003-R3.R6.R3.R1.C1.R1`
+- `VPNG0004-R4.R6.R1.R5`
+- `VPNG0004-R4.R6.R1.R5.R1`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R3.R2`
+
+Once target normalization has produced a concrete current target, the lower probe policy is a
+pure projection. It does not derive the target and it does not execute the observation:
+
+```text
+AvailabilityProbeIntent:
+    owner = (profile_id, logical_path_id)
+    target = concrete IPv4
+
++ current RoutePriorityPathRoute(logical_path_id)
++ ProbePolicyAllocation(owner)
++ lower probe process selector / conntrack mark
+        ->
+ProbeNetworkPolicyDesiredState
+```
+
+For the accepted Linux Release-1 ICMP mechanism the desired state contains:
+
+```text
+dedicated probe table:
+    target/32 -> exact current path realization
+    default   -> terminal blackhole
+
+RPDB:
+    probe process uid + ipproto icmp + exact target
+        -> dedicated probe table
+
+stack_output:
+    probe process uid + exact current oif + exact target + ICMP
+        -> set dedicated probe conntrack mark
+        -> accept
+
+stack_input:
+    exact current iif + exact remote source + ICMP + probe conntrack mark
+        -> accept
+```
+
+The UID and conntrack mark are lower Linux allocation values. They are not user-facing
+availability semantics and are not stored in `AvailabilityProbeIntent`.
+
+This projection intentionally keeps routing and local admission owner-scoped and separate from
+payload dispatch. It does not restore the probe conntrack mark into packet routing state and
+does not require EXP-026 cleanup. A later Linux observer/mutator must verify the exact desired
+state and remove stale probe-owned rules/routes when the current owner/path/target set changes.
+
+The executable pure reference is `probe_policy.py`. It is an implementation of the accepted
+EXP-021/022/024 mechanism shape, not a new availability requirement.
 
 # 9. NetworkPolicyAdapter
 
