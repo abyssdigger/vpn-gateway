@@ -6,6 +6,16 @@ architecture closure gates or implementation obligations by themselves. The proj
 revisit and, where justified by working-code evidence and product need, convert them into
 formal Requirements/Constraints later.
 
+A declaration is an exploratory, non-normative record, not an approved deferral:
+it does not authorize independent design, implementation, testing or release
+acceptance of the described capability. Work may investigate or discuss a
+declaration, but promotion to executable scope requires the applicable normative
+Requirements/Constraints, architecture and human-acceptance gates. By contrast,
+a deferral records already accepted or explicitly gated work with a defined
+re-entry condition; see `CONTINUOUS-DEVELOPMENT.md` (§ Blocking and deferral).
+Neither a declaration nor a deferral can silently supersede current normative
+requirements.
+
 ## Resource efficiency and weak-device suitability
 
 VPN-GATE should remain practically suitable not only for powerful hosts but also for
@@ -69,7 +79,7 @@ managed Devices may extend the same row with their operational status.
 For enabled Profile paths:
 
 - no configured availability check -> `unchecked`;
-- check configured but no current confirmed availability result -> `unknown`;
+- check configured but no current confirmed availability result -> `unknown (<normalized-check>)`;
 - confirmed usable -> `available (<normalized-check>)`;
 - confirmed unusable -> `not available (<normalized-check>)`.
 
