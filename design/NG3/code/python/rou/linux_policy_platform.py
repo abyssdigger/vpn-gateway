@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .linux_host_boundary_policy import HostBoundaryLinuxAllocation
 from .linux_host_bootstrap import HostBootstrapLinuxAllocation
+from .linux_host_boundary_behavior import HostBoundaryBehaviorLinuxAllocation
 from .network_policy_layout import (
     NetworkPolicyPlatformSpace,
     NumericResourcePool,
@@ -49,6 +50,17 @@ NG3_HOST_BOUNDARY_LINUX_ALLOCATION = HostBoundaryLinuxAllocation(
     return_table=0x7FFF0001,
     return_rule_priority=0x1800,
     route_protocol=203,
+)
+
+
+# EXP-064 selected fixed host behavior classes. These marks classify host
+# conntrack state only; they are distinct from stack affinity/probe marks.
+NG3_HOST_BOUNDARY_BEHAVIOR_LINUX_ALLOCATION = HostBoundaryBehaviorLinuxAllocation(
+    stateful_no_nat_mark=0x30000001,
+    stateful_nat_mark=0x30000002,
+    route_no_nat_mark=0x30000003,
+    route_nat_mark=0x30000004,
+    return_mark=NG3_HOST_BOUNDARY_LINUX_ALLOCATION.mark,
 )
 
 
