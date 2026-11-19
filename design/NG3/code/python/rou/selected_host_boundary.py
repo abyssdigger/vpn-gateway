@@ -23,6 +23,14 @@ from .host_boundary_route_convergence import (
     cleanup_host_boundary_route_dependencies_once,
     prepare_host_boundary_route_dependencies_once,
 )
+from .host_boundary_behavior import HostBoundaryBehaviorIntent
+from .linux_host_boundary_behavior import (
+    HostBoundaryBehaviorHostLane,
+    HostBoundaryBehaviorNftSpec,
+    LinuxHostBoundaryBehaviorNftBackend,
+    build_host_boundary_behavior_nft_desired,
+    converge_host_boundary_behavior_nft_once,
+)
 from .linux_host_bootstrap import (
     HostBootstrapLinuxDesired,
     build_linux_host_bootstrap_desired,
@@ -44,9 +52,13 @@ from .linux_host_return_nft import (
     converge_host_return_nft_once,
 )
 from .release1_config import Release1Config
-from .release1_host_boundary import build_release1_host_boundary_plan
+from .release1_host_boundary import (
+    build_release1_host_boundary_intent,
+    build_release1_host_boundary_plan,
+)
 from .linux_policy_platform import (
     NG3_HOST_BOOTSTRAP_LINUX_ALLOCATION,
+    NG3_HOST_BOUNDARY_BEHAVIOR_LINUX_ALLOCATION,
     NG3_HOST_BOUNDARY_LINUX_ALLOCATION,
 )
 from .managed_network_domain import ManagedNetworkDomainSpec
@@ -57,6 +69,7 @@ from .linux_nft_scaffold import NftScriptRunner
 class SelectedHostBoundaryDesired:
     return_owner: HostBoundaryLinuxDesired
     bootstrap_owner: HostBootstrapLinuxDesired
+    behavior_owner: HostBoundaryBehaviorNftSpec | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +104,7 @@ class SelectedHostBoundaryRuntimeResult:
 def build_selected_host_boundary_desired(
     config: Release1Config,
     domain_spec: ManagedNetworkDomainSpec,
+    behavior_host_lanes: tuple[HostBoundaryBehaviorHostLane, ...] = (),
 ) -> SelectedHostBoundaryDesired:
     if not isinstance(config, Release1Config):
         raise ValueError("config must be Release1Config")
@@ -108,10 +122,21 @@ def build_selected_host_boundary_desired(
         inner_gateway=domain_spec.inner_address.ip,
         allocation=NG3_HOST_BOUNDARY_LINUX_ALLOCATION,
     )
+    behavior_intents = build_release1_host_boundary_intent(config).behavior
+    behavior_owner = build_host_boundary_behavior_nft_desired(
+        behavior_intents,
+        behavior_host_lanes,
+        NG3_HOST_BOUNDARY_BEHAVIOR_LINUX_ALLOCATION,
+    )
     return_owner = replace(
         historical,
         underlay_pins=(),
         bootstrap_routes=(),
+        return_nft=(
+            None
+            if behavior_owner is not None
+            else historical.return_nft
+        ),
     )
 
     bootstrap_owner = build_linux_host_bootstrap_desired(
@@ -123,6 +148,7 @@ def build_selected_host_boundary_desired(
     return SelectedHostBoundaryDesired(
         return_owner=return_owner,
         bootstrap_owner=bootstrap_owner,
+        behavior_owner=behavior_owner,
     )
 
 
@@ -130,6 +156,7 @@ def build_selected_host_boundary_desired(
 class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
     route_backend: LinuxHostBoundaryRouteBackend
     return_nft_backend: LinuxHostReturnNftBackend
+    behavior_nft_backend: LinuxHostBoundaryBehaviorNftBackend
     bootstrap_backend: LinuxHostBootstrapBackend
     desired: SelectedHostBoundaryDesired
 
@@ -145,6 +172,13 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
             self.desired.return_owner.return_nft
         )
         conflicts.extend(f"return nft: {item}" for item in nft.conflicts)
+
+        behavior = self.behavior_nft_backend.observe(
+            self.desired.behavior_owner
+        )
+        conflicts.extend(
+            f"behavior nft: {item}" for item in behavior.conflicts
+        )
 
         route_exact, route_conflicts = _observe_reserved_return_routes(
             self.route_backend,
@@ -162,6 +196,7 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
                 not conflicts
                 and bootstrap.exact
                 and nft.exact
+                and behavior.exact
                 and route_exact
                 and rule_exact
             ),
@@ -190,6 +225,10 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
             self.return_nft_backend,
             self.desired.return_owner.return_nft,
         )
+        converge_host_boundary_behavior_nft_once(
+            self.behavior_nft_backend,
+            self.desired.behavior_owner,
+        )
         # Bootstrap capture is exposed last.
         converge_host_bootstrap_once(
             self.bootstrap_backend,
@@ -217,6 +256,14 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
             )
         except Exception as exc:
             errors.append(f"bootstrap cleanup: {exc}")
+
+        try:
+            converge_host_boundary_behavior_nft_once(
+                self.behavior_nft_backend,
+                None,
+            )
+        except Exception as exc:
+            errors.append(f"behavior nft cleanup: {exc}")
 
         try:
             converge_host_return_nft_once(self.return_nft_backend, None)
@@ -339,18 +386,25 @@ def build_selected_linux_host_boundary_contribution(
     config: Release1Config,
     domain_spec: ManagedNetworkDomainSpec,
     runner: NftScriptRunner,
+    behavior_host_lanes: tuple[HostBoundaryBehaviorHostLane, ...] = (),
 ) -> SelectedLinuxHostBoundaryContribution | None:
-    desired = build_selected_host_boundary_desired(config, domain_spec)
+    desired = build_selected_host_boundary_desired(
+        config,
+        domain_spec,
+        behavior_host_lanes,
+    )
     if (
         not desired.bootstrap_owner.routes
         and desired.return_owner.return_route is None
         and desired.return_owner.return_rule is None
         and desired.return_owner.return_nft is None
+        and desired.behavior_owner is None
     ):
         return None
 
     route_backend = LinuxHostBoundaryRouteBackend(runner)
     return_nft_backend = LinuxHostReturnNftBackend(runner)
+    behavior_nft_backend = LinuxHostBoundaryBehaviorNftBackend(runner)
     bootstrap_backend = LinuxHostBootstrapBackend(
         runner,
         NG3_HOST_BOOTSTRAP_LINUX_ALLOCATION,
@@ -358,6 +412,7 @@ def build_selected_linux_host_boundary_contribution(
     return SelectedLinuxHostBoundaryContribution(
         route_backend=route_backend,
         return_nft_backend=return_nft_backend,
+        behavior_nft_backend=behavior_nft_backend,
         bootstrap_backend=bootstrap_backend,
         desired=desired,
     )
