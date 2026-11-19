@@ -124,6 +124,7 @@ class StackReturnClassifierSpec:
     ingress: InterfaceIdentity
     remote_prefix: IPv4Network
     mark: int
+    select_initial_packet: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,6 +148,8 @@ def build_stack_return_affinity_desired(
     host_boundary: InterfaceIdentity,
     layout: NetworkPolicyLayout,
     allocations: Iterable[StackReturnAffinityAllocation],
+    *,
+    initial_packet_profile_ids: Iterable[str] = (),
 ) -> StackReturnAffinityDesired:
     if not isinstance(host_boundary, InterfaceIdentity):
         raise StackReturnAffinityError("host_boundary must be InterfaceIdentity")
@@ -230,6 +233,17 @@ def build_stack_return_affinity_desired(
         seen_marks.add(allocation.mark)
         seen_priorities.add(allocation.rule_priority)
 
+    initial_selection = tuple(initial_packet_profile_ids)
+    if any(not isinstance(item, str) or not item for item in initial_selection):
+        raise StackReturnAffinityError(
+            "initial_packet_profile_ids must contain non-empty Profile IDs"
+        )
+    if len(set(initial_selection)) != len(initial_selection):
+        raise StackReturnAffinityError(
+            "initial_packet_profile_ids contains duplicate Profile"
+        )
+    initial_selection_set = frozenset(initial_selection)
+
     inbound_profile_ids = {
         profile.profile_id
         for profile in current_profiles
@@ -239,6 +253,10 @@ def build_stack_return_affinity_desired(
     if set(allocation_by_profile) != inbound_profile_ids:
         raise StackReturnAffinityError(
             "affinity allocations must exactly cover current inbound-capable Profiles with paths"
+        )
+    if not initial_selection_set <= inbound_profile_ids:
+        raise StackReturnAffinityError(
+            "initial packet selection references Profile outside current inbound membership"
         )
 
     classifiers: list[StackReturnClassifierSpec] = []
@@ -265,6 +283,9 @@ def build_stack_return_affinity_desired(
                     ingress=endpoint,
                     remote_prefix=fragment.remote_prefix,
                     mark=allocation.mark,
+                    select_initial_packet=(
+                        fragment.profile_id in initial_selection_set
+                    ),
                 )
             )
             active_profiles.add(fragment.profile_id)
