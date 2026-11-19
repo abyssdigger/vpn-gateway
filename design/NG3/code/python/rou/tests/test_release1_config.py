@@ -13,28 +13,28 @@ class Release1ConfigTests(unittest.TestCase):
 enabled = true
 expected_interfaces = ["wg0"]
 use_outbound_nat = true
-
-[device.wg-main.availability_check]
-mechanism = "icmp"
-target = "198.51.100.11"
 allow_vpn_client = "udp:51820>198.51.100.10:51820"
 firewall = [
     "out allow tcp to 10.20.0.0/16:443 # HTTPS to corp",
     "out allow icmp to 10.20.0.0/16",
 ]
 
+[device.wg-main.availability_check]
+mechanism = "icmp"
+target = "198.51.100.11"
+
 [device.oc-backup]
 enabled = true
 expected_interfaces = ["vpn*/2"]
 use_outbound_nat = false
-
-[device.oc-backup.availability_check]
-mechanism = "icmp"
-target = "198.51.100.12"
 allow_vpn_client = [
     "tcp>198.51.100.20:443",
     "udp>198.51.100.20:443",
 ]
+
+[device.oc-backup.availability_check]
+mechanism = "icmp"
+target = "198.51.100.12"
 
 [device.oc-server]
 enabled = true
