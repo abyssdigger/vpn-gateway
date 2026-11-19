@@ -777,6 +777,10 @@ def run_alpha_runtime(
             prepared.last_profiles,
             prepared.last_bindings,
         )
+        if availability_start.observation is not None:
+            status_agent.confirm_availability(
+                availability_start.observation.projection.problem_owners
+            )
         write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
 
         _log(
@@ -838,6 +842,10 @@ def run_alpha_runtime(
                     prepared.last_profiles,
                     prepared.last_bindings,
                 )
+                if availability_result.observation is not None:
+                    status_agent.confirm_availability(
+                        availability_result.observation.projection.problem_owners
+                    )
             else:
                 status_agent.mark_unconfirmed(
                     readiness=RuntimeReadiness.DEGRADED,
