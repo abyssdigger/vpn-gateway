@@ -517,7 +517,7 @@ The expert-review role has:
 
 A full whole-project review is required when:
 
-- an L1 requirement or material product constraint changes;
+- a primary requirement or material product constraint changes;
 - an architectural or ownership boundary changes;
 - a substantial integration milestone is reached;
 - release/deployment acceptance is approached;
@@ -576,7 +576,9 @@ Every preserved experiment records at least:
 - required environment;
 - procedure/artifacts;
 - result or blocked status;
-- architectural consequence.
+- affected architecture/question or other technical implication established by the result.
+  This field must not decide whether the project adopts the mechanism; adoption belongs to
+  the separate `Disposition`.
 
 Experiment **Result** and post-result **Disposition** are separate facts:
 
@@ -589,8 +591,8 @@ Experiment **Result** and post-result **Disposition** are separate facts:
 - completing an experiment initially leaves its disposition `pending_decision` until the
   result has been discussed;
 - a technically successful experiment may therefore be `PASS` while its disposition is
-  `not_selected`; this means the mechanism is feasible but the project holder chose not to
-  adopt it;
+  `not_selected`; this means the mechanism is feasible but the applicable accepted project
+  decision did not adopt it;
 - changing a disposition must not rewrite or reinterpret the experiment Result.
 
 Use a small canonical disposition vocabulary unless a review explicitly extends it:
@@ -609,8 +611,8 @@ Use `design/deferrals/` only for **accepted, explicitly postponed** obligations 
 investigations expected to survive the current implementation scope, for example:
 
 - postponed product extensions;
-- future experiments not required for the first working production baseline;
-- deliberately deferred DeviceManager/availability behavior.
+- future experiments accepted for a later named milestone;
+- accepted implementation/evidence work explicitly moved outside the current scope.
 
 A deferred item must identify its original normative source or accepted decision, its
 scope and its re-entry condition: what future decision, evidence or milestone makes it
@@ -814,9 +816,11 @@ The handoff file should contain only enough context to resume cheaply:
 The handoff is operational continuity metadata. It should not be committed to the repository
 unless its content independently becomes a real project artifact.
 
-A new CD cycle starts after the next user turn. It may continue the same development
-block on a new cycle branch or a clearly reset continuation branch, using the previous handoff
-to avoid a full repository review.
+A new CD cycle starts only after the user explicitly starts or resumes CD execution.
+An arbitrary next user turn does not restore repository-write authorization. After explicit
+start/resume, the new cycle may continue the same development block on a new cycle branch or
+a clearly reset continuation branch, using the previous handoff to avoid a full repository
+review.
 
 This mechanism exists only to survive chat/session limits. It must not distort development-block
 boundaries, snapshot timing, review structure or repository history.
@@ -832,8 +836,10 @@ Design and development of the current product scope are complete when:
 - all accepted constraints have passed bottom-up lifting and product-envelope review;
 - all material component responsibilities and interactions are traceable to requirements;
 - all required evidence gates for that scope have passed;
-- all accepted review findings are fixed or explicitly postponed outside the current scope;
-- and a final full-project review has no unresolved finding of minor severity or higher.
+- every accepted review finding is either `fixed` or formally `deferred` with the
+  required named gate/re-entry condition;
+- no `unresolved` review finding remains if it can materially affect correctness, safety,
+  required product behavior, acceptance evidence or completion of the current scope.
 
 If that final review produces a finding, fix it and repeat the final review on the changed
 baseline. Multiple consecutive clean reviews without intervening code changes are not
