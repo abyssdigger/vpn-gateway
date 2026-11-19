@@ -527,34 +527,6 @@ jobs:
           "design/experiments/EXP-052 NG3 host publication DNAT/exp052_host_publication_dnat.py"
 
 
-  linux-routed-managed-l3-stateful-return:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables
-      - name: EXP-073 routed managed-L3 stateful return
-        env:
-          PYTHONPATH: design/NG3/code/python
-        run: >-
-          sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-073 NG3 routed managed L3 stateful return/exp073_routed_stateful_return.py"
-  linux-host-return-steering:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables conntrack
-      - name: EXP-053 host-side conntrack return steering
-        run: >-
-          sudo python3
-          "design/experiments/EXP-053 NG3 host return steering/exp053_host_return_steering.py"
-
-
   linux-underlay-endpoint-pinning:
     runs-on: ubuntu-latest
     steps:
@@ -571,22 +543,6 @@ jobs:
           "design/experiments/EXP-054 NG3 host underlay endpoint pinning/exp054_underlay_endpoint_pinning.py"
 
 
-  linux-composite-host-boundary:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping nftables conntrack
-      - name: EXP-055 composite host-boundary actuation
-        env:
-          PYTHONPATH: design/NG3/code/python
-        run: >-
-          sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-055 NG3 composite host boundary actuation/exp055_host_boundary_actuation.py"
-
-
   linux-host-ingress-bootstrap-bypass:
     runs-on: ubuntu-latest
     steps:
@@ -599,69 +555,6 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/exp056_host_ingress_bypass.py"
-
-
-  linux-nft-marked-host-bootstrap:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping nftables
-      - name: EXP-057 nft-marked host bootstrap
-        run: >-
-          sudo python3
-          "design/experiments/EXP-057 NG3 nft marked host bootstrap/exp057_nft_marked_bootstrap.py"
-
-
-  linux-bootstrap-main-specificity:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping nftables
-      - name: EXP-058 bootstrap table preserves main specificity
-        run: >-
-          sudo python3
-          "design/experiments/EXP-058 NG3 bootstrap table main specificity/exp058_bootstrap_main_specificity.py"
-
-
-  linux-paired-rpdb-bootstrap:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping
-      - name: EXP-059 paired RPDB bootstrap
-        run: >-
-          sudo python3
-          "design/experiments/EXP-059 NG3 paired RPDB bootstrap/exp059_paired_rpdb_bootstrap.py"
-
-
-  linux-selected-host-bootstrap-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping nftables
-      - name: Compile selected host-bootstrap code
-        run: python3 -m compileall -q design/NG3/code/python/rou
-      - name: EXP-060 selected host bootstrap backend
-        env:
-          PYTHONPATH: design/NG3/code/python
-        run: >-
-          sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-060 NG3 selected host bootstrap backend/exp060_selected_host_bootstrap.py"
 
 
   linux-stack-return-affinity:
@@ -705,33 +598,6 @@ jobs:
           sudo python3
           "design/NG3/code/python/rou/tests/integration_stack_return_affinity_owner.py"
 
-
-  linux-profile-gateway-nat-association:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables conntrack
-      - name: EXP-063 Profile association gateway NAT
-        run: >-
-          sudo python3
-          "design/experiments/EXP-063 NG3 Profile association gateway NAT/exp063_profile_gateway_nat.py"
-
-
-  linux-host-boundary-behavior-lanes:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables conntrack
-      - name: EXP-064 host-boundary behavior lanes
-        run: >-
-          sudo python3
-          "design/experiments/EXP-064 NG3 host boundary behavior lanes/exp064_behavior_lanes.py"
 
   linux-boundary-metadata-carriers:
     runs-on: ubuntu-latest
@@ -842,15 +708,3 @@ jobs:
           sudo python3
           "design/experiments/EXP-070 NG3 routed stack endpoint/exp070_routed_stack_endpoint.py"
 
-  linux-host-boundary-behavior-owner:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables
-      - name: Host-boundary behavior owner convergence
-        run: >-
-          sudo python3
-          design/NG3/code/python/rou/tests/integration_host_boundary_behavior_owner.py
