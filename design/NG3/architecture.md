@@ -2653,8 +2653,8 @@ Executable contracts:
 - `linux_probe_routing.py` — link-bracketed observation plus EXP-065-backed exact mutation.
 
 This coordinator only establishes the route/RPDB precondition for one probe attempt. It does
-not schedule ICMP, derive omitted targets, own availability confirmation or change payload
-route preference.
+not schedule ICMP, resolve Profile/Device availability descriptions, own availability
+confirmation or change payload route preference.
 
 # 9. NetworkPolicyAdapter
 
