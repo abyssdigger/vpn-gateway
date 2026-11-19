@@ -42,6 +42,7 @@ from .payload_forward_observation import (
 from .payload_nat_desired import PayloadNatDesiredState
 from .payload_nat_observation import (
     PAYLOAD_NAT_RULE_COMMENT,
+    PROFILE_SNAT_RULE_COMMENT,
     PayloadNatComparison,
     compare_payload_nat,
 )
@@ -242,7 +243,10 @@ def compare_composite_nft_policy(
             DEVICE_FIREWALL_JUMP_COMMENT,
         }:
             continue
-        if chain == "payload_postrouting" and comment == PAYLOAD_NAT_RULE_COMMENT:
+        if chain == "payload_postrouting" and comment in {
+            PAYLOAD_NAT_RULE_COMMENT,
+            PROFILE_SNAT_RULE_COMMENT,
+        }:
             continue
         if (
             chain in {"stack_input", "stack_output"}
