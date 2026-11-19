@@ -61,7 +61,7 @@ class LinuxStackReturnAffinityTests(unittest.TestCase):
         self.assertIn(f"table ip {STACK_RETURN_TABLE}", script)
         self.assertIn(
             "meta iif 20 ip saddr 10.0.0.0/16 ct state new "
-            "ct mark set 0x10000000",
+            "ct mark set 0x10000000 meta mark set ct mark",
             script,
         )
         self.assertIn(
