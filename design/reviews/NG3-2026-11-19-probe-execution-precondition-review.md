@@ -79,6 +79,15 @@ owner, exact INPUT+OUTPUT local rules for that owner, and matching mechanism/tar
 identity before returning readiness. Focused tests distinguish malformed desired state from
 ordinary observed drift.
 
+### F6 — local-drift test must reflect the exact INPUT+OUTPUT contract
+
+After the desired-state fixture was corrected to contain the required local rule pair, the
+test still expected one missing local rule. The comparison correctly reported two missing
+rules: one OUTPUT and one INPUT.
+
+**Disposition:** test expectation fixed to the accepted exact pair; production code was not
+changed.
+
 ## Evidence
 
 Focused tests cover:
