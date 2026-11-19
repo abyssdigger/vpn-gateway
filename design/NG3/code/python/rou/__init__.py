@@ -369,6 +369,11 @@ from .probe_policy import (
     ProbeRuleSpec,
     build_probe_network_policy_desired_state,
 )
+from .probe_routing_compare import (
+    ProbeRoutingComparison,
+    ProbeRoutingComparisonError,
+    compare_probe_routing,
+)
 from .linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from .linux_structural_routing import (
     LinuxStructuralRoutingBackend,
@@ -640,6 +645,8 @@ __all__ = [
     "ProbeNetworkPolicyDesiredState",
     "ProbePolicyAllocation",
     "ProbePolicyProjectionError",
+    "ProbeRoutingComparison",
+    "ProbeRoutingComparisonError",
     "ProbeRuleSpec",
     "ProbePolicyOwner",
     "ProbeRoutingDemand",
@@ -701,6 +708,7 @@ __all__ = [
     "build_payload_profile_requests",
     "build_payload_routing_desired_state",
     "build_probe_network_policy_desired_state",
+    "compare_probe_routing",
     "build_route_priority_domain_realizations",
     "classify_inbound_profile",
     "build_inbound_profile_partition",
