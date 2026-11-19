@@ -21,6 +21,7 @@ on:
       - "design/experiments/EXP-071 NG3 boundary dataplane race/**"
       - "design/experiments/EXP-072 NG3 managed L3 host bootstrap/**"
       - "design/experiments/EXP-073 NG3 routed managed L3 stateful return/**"
+      - "design/experiments/EXP-074 NG3 private stack gateway NAT/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -527,6 +528,18 @@ jobs:
           "design/experiments/EXP-052 NG3 host publication DNAT/exp052_host_publication_dnat.py"
 
 
+  linux-private-stack-gateway-nat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-074 private stack gateway NAT
+        run: >-
+          sudo python3
+          "design/experiments/EXP-074 NG3 private stack gateway NAT/exp074_private_stack_gateway_nat.py"
   linux-routed-managed-l3-stateful-return:
     runs-on: ubuntu-latest
     steps:
