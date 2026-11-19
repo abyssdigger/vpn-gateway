@@ -18,7 +18,7 @@ from .forwarding_gate import (
 from .interface_identity import InterfaceIdentity
 from .nft_namespace_inventory import NftNamespaceObject, NftNamespaceObservation
 from .nft_payload_scaffold import PAYLOAD_POSTROUTING_CHAIN, compare_payload_nft_scaffold
-from .payload_nat_desired import PayloadMasqueradeSpec, PayloadNatDesiredState
+from .payload_nat_desired import PayloadNatRuleSpec, PayloadNatDesiredState
 from .payload_nat_observation import (
     PayloadNatComparison, PayloadNatObservationError, compare_payload_nat,
 )
@@ -34,7 +34,7 @@ class PayloadNatMutationBackend(Protocol):
     def observe_nat_snapshot(self) -> PayloadNatPhysicalSnapshot:
         """Return nft observation bracketed by stable fresh link inventories."""
 
-    def add_nat_rule(self, spec: PayloadMasqueradeSpec) -> None:
+    def add_nat_rule(self, spec: PayloadNatRuleSpec) -> None:
         """Issue one exact-ifindex NAT add; successful return is not confirmation."""
 
     def delete_nat_rule(self, handle: int) -> None:
@@ -133,7 +133,7 @@ def _exact_step_postcondition(
     comparison: PayloadNatComparison,
     *,
     deleted_handle: int | None,
-    added: PayloadMasqueradeSpec | None,
+    added: PayloadNatRuleSpec | None,
 ) -> bool:
     if before.interfaces != after.interfaces:
         return False
@@ -213,7 +213,7 @@ def converge_payload_nat_step_once(
                       diagnostic="forwarding barrier lost before NAT write")
 
     deleted_handle: int | None = None
-    added: PayloadMasqueradeSpec | None = None
+    added: PayloadNatRuleSpec | None = None
     apply_error: Exception | None = None
     if initial.stale:
         deleted_handle = min(item.handle for item in initial.stale)
