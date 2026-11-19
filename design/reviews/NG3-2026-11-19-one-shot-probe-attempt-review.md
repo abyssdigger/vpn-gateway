@@ -30,14 +30,15 @@ There is no cadence, retry, threshold accumulation or route-priority mutation in
 
 ## Findings and dispositions
 
-### F1 — readiness must be bound to the exact probe owner set
+### F1 — readiness must be bound to the exact probe execution context
 
-A generic "probe plane is confirmed" boolean could be accidentally reused for an owner that
-was not represented by the desired state used for verification.
+A generic "probe plane is confirmed" boolean, or even owner-only membership, could be reused
+after the same `(Profile,path)` changed target/mechanism while keeping the same endpoint.
 
-**Disposition:** accepted and fixed. `ProbeExecutionPrecondition` carries the exact semantic
-owner set derived from desired probe routing/local policy, and verification rejects a mismatch
-between routing-owner and local-owner sets. Attempt execution requires membership.
+**Disposition:** accepted and fixed. `ProbeExecutionPrecondition` carries exact
+`(owner, mechanism, target, endpoint)` keys derived from mutually consistent desired
+routing/local policy. Attempt execution requires the current immutable Agent context to match
+one of those keys exactly.
 
 ### F2 — current context endpoint must still belong to the readiness snapshot
 
