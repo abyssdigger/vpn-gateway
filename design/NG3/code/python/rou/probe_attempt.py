@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Protocol
 
 from .network_policy_layout import ProbePolicyOwner
-from .probe_precondition import ProbeExecutionPrecondition
+from .probe_precondition import (
+    ProbeExecutionContextKey,
+    ProbeExecutionPrecondition,
+)
 from .probe_runtime import (
     AvailabilityProbeRuntime,
     ProbeEvidence,
@@ -51,6 +54,16 @@ def execute_probe_attempt_once(
         )
 
     context = runtime.begin_attempt(owner)
+    context_key = ProbeExecutionContextKey(
+        owner=context.intent.owner,
+        mechanism=context.intent.mechanism,
+        target=context.intent.target,
+        endpoint=context.endpoint,
+    )
+    if context_key not in precondition.contexts:
+        raise ProbeAttemptError(
+            "current probe context differs from confirmed execution precondition"
+        )
     if context.endpoint not in precondition.interfaces_stable_snapshot:
         raise ProbeAttemptError(
             "probe context endpoint is absent from readiness interface snapshot"
