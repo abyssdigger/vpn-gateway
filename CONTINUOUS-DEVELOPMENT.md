@@ -385,7 +385,8 @@ removal is preferred.
 Implementation may begin only when all of the following hold for the affected scope:
 
 - relevant requirements and constraints are identified by ID;
-- every requirement has meaningful `Purpose + Statement`;
+- every primary requirement has meaningful `Basis + Statement`, and every derived
+  requirement has meaningful `Purpose + Statement`;
 - every accepted constraint has meaningful `Reason + Statement`;
 - no unresolved product-semantic ambiguity is being hidden in implementation;
 - no active decomposition block exists on a requirement/constraint whose missing detail is
@@ -711,9 +712,11 @@ resume the rest of the CD; the cycle remains paused until an explicit resume ins
 This pause does not end or reset the CD clock, current development block, branch,
 snapshot policy or `CYCLE_INTERVAL`. It is only a write-authorization boundary.
 
+### Continuation across development blocks
+
 A completed development block receives its required snapshot before another
 development block begins, subject to `PROJECT-CONVENTIONS.md` §6.1 and any explicit
-user-approved coordinated-work exception. A CD window does not create or suppress
+user-approved snapshot-publication exception. A CD window does not create or suppress
 snapshots. Unfinished work may continue across CD windows via handoff.
 
 - Completing the current development block, subsystem or topic that originally triggered the CD
@@ -768,9 +771,11 @@ in `PROJECT-CONVENTIONS.md` §7; do not continue development or perform prolonge
 recovery attempts in this CD.
 
 At each existing cadence check, obtain fresh real current time and compare it to
-`CYCLE_START_TIME`. Keep the existing check events, thresholds, safety margin and handoff
-behavior unchanged; in particular, the first commit is a check event, not the origin
-of elapsed time. A user intervention does not reset `CYCLE_START_TIME`.
+`CYCLE_START_TIME`. Check after every commit (including the first), at the existing
+logical-work and handoff boundaries, and whenever the existing cadence rules require it.
+Keep the existing thresholds, safety margin and handoff behavior unchanged; the first
+commit is a check event, not the origin of elapsed time. A user intervention does not
+reset `CYCLE_START_TIME`.
 
 The branch is the durable record of work. The CD handoff is intentionally **not** a Git
 project artifact.
