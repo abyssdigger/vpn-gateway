@@ -1409,6 +1409,9 @@ deferred under `VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
 - `VPNG0007-R7.R3.R1`
 - `VPNG0007-R7.R5`
 
+**Constrained by:**
+- `VPNG0003-R3.R6.R3.R1.C1.R1.C1`
+
 This pure semantic projection resolves Profile availability selection above probe runtime.
 
 Conceptual contract:
