@@ -321,17 +321,34 @@ def _expected_rule_signatures(desired):
 
 
 def _rule_signature(row):
-    priority=_decimal(row.get("priority"))
     iif=row.get("iif")
     table=row.get("table")
     table_text=str(table) if table not in (254,"main") else "main"
-    destination=_route_network(row.get("dst","0.0.0.0/0"))
+    destination=_rule_destination(row)
     suppress=_decimal(row.get("suppress_prefixlen"))
     if isinstance(iif,str):
         return ("bypass",iif,table_text,None,None)
     if suppress is not None:
         return ("preserve",None,table_text,destination,suppress)
     return ("dispatch",None,table_text,destination,None)
+
+
+def _rule_destination(row):
+    raw=row.get("dst")
+    dstlen=_decimal(row.get("dstlen"))
+    if raw is None:
+        return IPv4Network("0.0.0.0/0") if dstlen in (None,0) else None
+    if not isinstance(raw,str):
+        return None
+    if "/" in raw:
+        network=_route_network(raw)
+        if network is None or (dstlen is not None and dstlen!=network.prefixlen):
+            return None
+        return network
+    prefixlen=32 if dstlen is None else dstlen
+    if not 0<=prefixlen<=32:
+        return None
+    return _route_network(f"{raw}/{prefixlen}")
 
 
 def _desired_rule_priorities(desired):
