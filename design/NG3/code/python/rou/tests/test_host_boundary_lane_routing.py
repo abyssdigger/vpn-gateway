@@ -58,6 +58,14 @@ class HostBoundaryLaneRoutingTests(unittest.TestCase):
         self.assertEqual(routes[0].table, layout.payload[0].table)
         self.assertEqual(routes[0].endpoint, endpoint)
         self.assertEqual(str(routes[0].gateway), "198.18.64.5")
+        self.assertEqual(
+            routes[0].protocol,
+            NG3_LINUX_POLICY_PLATFORM.host_boundary_lane_route_protocol,
+        )
+        self.assertEqual(
+            routes[0].metric,
+            layout.payload[0].terminal_guard_metric - 1,
+        )
 
     def test_zero_path_profile_keeps_lane_dormant(self):
         p = profile("p", current=False)

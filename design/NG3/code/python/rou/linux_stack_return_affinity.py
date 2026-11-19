@@ -38,7 +38,7 @@ class _RuleKey:
 class _NftInventory:
     present: bool
     owned: bool
-    classifiers: tuple[tuple[str, str, int], ...] = ()
+    classifiers: tuple[tuple[str, str, int, bool], ...] = ()
     restores: tuple[tuple[str, int], ...] = ()
     diagnostic: str | None = None
 
@@ -120,6 +120,7 @@ class LinuxStackReturnAffinityBackend:
                     item.ingress.ifname,
                     item.remote_prefix.with_prefixlen,
                     item.mark,
+                    item.select_initial_packet,
                 )
                 for item in desired.classifiers
             )
@@ -387,7 +388,7 @@ def _match(expr: list[dict], left_kind: str, key: str) -> Any:
     raise ValueError(f"reserved affinity rule misses {left_kind}.{key} exact match")
 
 
-def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int]:
+def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int, bool]:
     ingress = _match(expr, "meta", "iif")
     if not isinstance(ingress, str) or not ingress:
         raise ValueError("classifier iif must resolve to an interface name")
@@ -424,6 +425,7 @@ def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int]:
     if not state_new:
         raise ValueError("classifier does not match ct state new")
     mark = None
+    packet_restore = False
     for item in expr:
         if not isinstance(item, dict):
             continue
@@ -431,13 +433,24 @@ def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int]:
         if not isinstance(mangle, dict):
             continue
         key = mangle.get("key")
+        value = mangle.get("value")
         if isinstance(key, dict):
             ct = key.get("ct")
             if isinstance(ct, dict) and ct.get("key") == "mark":
-                mark = _parse_int(mangle.get("value"), "classifier ct mark")
+                mark = _parse_int(value, "classifier ct mark")
+                continue
+            meta = key.get("meta")
+            value_ct = value.get("ct") if isinstance(value, dict) else None
+            if (
+                isinstance(meta, dict)
+                and meta.get("key") == "mark"
+                and isinstance(value_ct, dict)
+                and value_ct.get("key") == "mark"
+            ):
+                packet_restore = True
     if mark is None:
         raise ValueError("classifier ct mark assignment is missing")
-    return ingress, source, mark
+    return ingress, source, mark, packet_restore
 
 
 def _parse_restore_expr(expr: list[dict]) -> tuple[str, int]:
@@ -483,12 +496,18 @@ def render_stack_return_affinity_nft(
     ]
 
     for item in desired.classifiers:
+        initial_select = (
+            " meta mark set ct mark"
+            if item.select_initial_packet
+            else ""
+        )
         lines.append(
             "    "
             f"meta iif {item.ingress.ifindex} "
             f"ip saddr {item.remote_prefix.with_prefixlen} "
             "ct state new "
-            f"ct mark set {hex(item.mark)} "
+            f"ct mark set {hex(item.mark)}"
+            f"{initial_select} "
             f'comment "{STACK_RETURN_CLASSIFIER_COMMENT}"'
         )
 

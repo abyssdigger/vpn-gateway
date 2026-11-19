@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 import unittest
 
 from rou.binding import LogicalPathId
 from rou.direct_device_route import realize_direct_device_path_routes
 from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
+from rou.host_boundary_behavior import (
+    HostBoundaryBehaviorIntent,
+    HostBoundaryBehaviorLane,
+)
+from rou.host_boundary_lane_routing import (
+    HostBoundaryLaneEndpoint,
+    build_host_boundary_lane_routes,
+)
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.network_policy_layout import (
     NetworkPolicyLayout,
@@ -16,6 +24,7 @@ from rou.network_policy_layout import (
 from rou.payload_profile import PayloadProfileRequest
 from rou.route_priority_inventory import RoutePriorityPathRoute
 from rou.payload_routing_desired import (
+    ManagedRouteRole,
     ManagedRouteType,
     PayloadRoutingProjectionError,
     build_payload_routing_desired_state,
@@ -143,6 +152,59 @@ class PayloadRoutingDesiredStateTests(unittest.TestCase):
             if route.route_type is ManagedRouteType.BLACKHOLE
         )
         self.assertLess(normal.metric, guard.metric)
+
+
+    def test_host_boundary_lane_default_is_explicit_non_path_route_role(self):
+        inbound = PayloadProfileRequest(
+            profile_id="corp",
+            direction=Direction.INBOUND,
+            destinations=(IPv4Network("10.0.0.0/8"),),
+            ordered_paths=(A,),
+        )
+        layout = allocate_network_policy_layout(
+            (inbound,),
+            (),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        path_routes = realize_direct_device_path_routes(
+            (PathBinding(A, EP_A),)
+        )
+        lane_endpoint = InterfaceIdentity("lane-nat", 30)
+        lane_routes = build_host_boundary_lane_routes(
+            (
+                HostBoundaryBehaviorIntent(
+                    "corp",
+                    HostBoundaryBehaviorLane.STATEFUL_NAT,
+                ),
+            ),
+            (
+                HostBoundaryLaneEndpoint(
+                    HostBoundaryBehaviorLane.STATEFUL_NAT,
+                    lane_endpoint,
+                    IPv4Address("198.18.64.5"),
+                ),
+            ),
+            layout,
+        )
+        desired = build_payload_routing_desired_state(
+            (inbound,),
+            layout,
+            path_routes,
+            HOST,
+            lane_routes,
+        )
+
+        lane = next(
+            route
+            for route in desired.routes
+            if route.role is ManagedRouteRole.HOST_BOUNDARY_LANE
+        )
+        self.assertEqual(lane.destination, IPv4Network("0.0.0.0/0"))
+        self.assertIsNone(lane.path_id)
+        self.assertEqual(lane.endpoint, lane_endpoint)
+        self.assertEqual(str(lane.gateway), "198.18.64.5")
+        self.assertEqual(lane.protocol, 204)
+        self.assertLess(lane.metric, 0xFFFFFFFF)
 
     def test_missing_path_realization_is_rejected(self):
         corp = profile("corp", ("10.0.0.0/8",), (A, B))

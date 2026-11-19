@@ -5,7 +5,7 @@ import unittest
 
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
-from rou.payload_routing_desired import ManagedRouteType
+from rou.payload_routing_desired import ManagedRouteRole, ManagedRouteType
 from rou.structural_routing_inventory import (
     ReservedOwnerKind,
     StructuralRoutingInventoryError,
@@ -16,6 +16,7 @@ from rou.structural_routing_inventory import (
 HOST = InterfaceIdentity("host0", 5)
 PATH0 = InterfaceIdentity("path0", 10)
 PATH1 = InterfaceIdentity("path1", 20)
+LANE = InterfaceIdentity("lane-nat", 30)
 
 
 EXP029_ROUTES = [
@@ -75,7 +76,7 @@ PAYLOAD_RULE = {
 CURRENT_RULES = [EXP065_PROBE_RULE, PAYLOAD_RULE]
 
 
-def parse(routes=EXP029_ROUTES, rules=CURRENT_RULES, interfaces=(HOST, PATH0, PATH1)):
+def parse(routes=EXP029_ROUTES, rules=CURRENT_RULES, interfaces=(HOST, PATH0, PATH1, LANE)):
     return parse_structural_routing_inventory(
         json.dumps(routes),
         json.dumps(rules),
@@ -121,6 +122,51 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
         payload_rule = next(rule for rule in value.rules if rule.priority == 0x4000)
         self.assertEqual(payload_rule.ingress, HOST)
         self.assertEqual(str(payload_rule.destination), "10.77.0.0/16")
+
+
+    def test_host_boundary_lane_protocol_normalizes_to_distinct_route_role(self):
+        value = parse(
+            [
+                {
+                    "dev": "lane-nat",
+                    "dst": "default",
+                    "gateway": "198.18.64.5",
+                    "flags": [],
+                    "metric": 4294967294,
+                    "protocol": "204",
+                    "scope": "0",
+                    "table": "2147483648",
+                }
+            ],
+            [],
+        )
+        self.assertEqual(value.conflicts, ())
+        self.assertEqual(len(value.routes), 1)
+        route = value.routes[0]
+        self.assertIs(route.role, ManagedRouteRole.HOST_BOUNDARY_LANE)
+        self.assertEqual(route.endpoint, LANE)
+        self.assertEqual(str(route.destination), "0.0.0.0/0")
+        self.assertEqual(str(route.gateway), "198.18.64.5")
+
+    def test_host_boundary_lane_protocol_rejects_nondefault_destination(self):
+        value = parse(
+            [
+                {
+                    "dev": "lane-nat",
+                    "dst": "192.0.2.0/24",
+                    "gateway": "198.18.64.5",
+                    "flags": [],
+                    "metric": 4294967294,
+                    "protocol": "204",
+                    "scope": "0",
+                    "table": "2147483648",
+                }
+            ],
+            [],
+        )
+        self.assertEqual(value.routes, ())
+        self.assertEqual(len(value.conflicts), 1)
+        self.assertIn("must use default destination", value.conflicts[0].reason)
 
     def test_exp029_fwmark_probe_surrogate_is_now_reserved_conflict(self):
         value = parse([], [EXP029_FWMARK_PROBE_RULE])

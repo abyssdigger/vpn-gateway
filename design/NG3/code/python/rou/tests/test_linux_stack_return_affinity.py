@@ -64,8 +64,35 @@ class LinuxStackReturnAffinityTests(unittest.TestCase):
             "ct mark set 0x10000000",
             script,
         )
+        self.assertNotIn(
+            "ct mark set 0x10000000 meta mark set ct mark",
+            script,
+        )
         self.assertIn(
             "meta iif 10 ct mark 0x10000000 meta mark set ct mark",
+            script,
+        )
+
+
+    def test_initial_packet_selection_is_rendered_only_when_requested(self):
+        state = desired()
+        classifier = state.classifiers[0]
+        selected = StackReturnAffinityDesired(
+            host_boundary=state.host_boundary,
+            classifiers=(
+                StackReturnClassifierSpec(
+                    profile_id=classifier.profile_id,
+                    ingress=classifier.ingress,
+                    remote_prefix=classifier.remote_prefix,
+                    mark=classifier.mark,
+                    select_initial_packet=True,
+                ),
+            ),
+            rules=state.rules,
+        )
+        script = render_stack_return_affinity_nft(selected)
+        self.assertIn(
+            "ct mark set 0x10000000 meta mark set ct mark",
             script,
         )
 

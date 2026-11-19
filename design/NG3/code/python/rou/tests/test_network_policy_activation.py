@@ -275,6 +275,7 @@ class NetworkPolicyActivationTests(unittest.TestCase):
         affinity.diagnostic = None
 
         def do_affinity(*args):
+            self.assertEqual(gate.state, ForwardingGateState.DISABLED)
             events.append("affinity")
             return affinity
 

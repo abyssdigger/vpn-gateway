@@ -123,6 +123,7 @@ class NetworkPolicyPlatformSpace:
     ambient_main_rule_priority: int
     path_route_protocol: int
     guard_route_protocol: int
+    host_boundary_lane_route_protocol: int
     route_metrics: RouteMetricPlatformSpace
     nft_family: str
     nft_table: str
@@ -174,14 +175,19 @@ class NetworkPolicyPlatformSpace:
         for name, value in (
             ("path_route_protocol", self.path_route_protocol),
             ("guard_route_protocol", self.guard_route_protocol),
+            ("host_boundary_lane_route_protocol", self.host_boundary_lane_route_protocol),
         ):
             if type(value) is not int or not 1 <= value <= 255:
                 raise NetworkPolicyLayoutError(
                     f"{name} must be an integer in [1, 255]"
                 )
-        if self.path_route_protocol == self.guard_route_protocol:
+        if len({
+            self.path_route_protocol,
+            self.guard_route_protocol,
+            self.host_boundary_lane_route_protocol,
+        }) != 3:
             raise NetworkPolicyLayoutError(
-                "path and guard route protocol markers must be distinct"
+                "path, guard and host-boundary-lane route protocol markers must be distinct"
             )
 
         if self.nft_family not in ("ip", "inet"):
@@ -234,6 +240,7 @@ class PayloadPolicyAllocation:
     terminal_guard_metric: int
     path_route_protocol: int
     guard_route_protocol: int
+    host_boundary_lane_route_protocol: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,6 +292,7 @@ def allocate_network_policy_layout(
             terminal_guard_metric=platform.route_metrics.terminal_guard_metric,
             path_route_protocol=platform.path_route_protocol,
             guard_route_protocol=platform.guard_route_protocol,
+            host_boundary_lane_route_protocol=platform.host_boundary_lane_route_protocol,
         )
         for index, profile in enumerate(profiles)
     )

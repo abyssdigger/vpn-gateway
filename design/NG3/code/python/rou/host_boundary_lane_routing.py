@@ -142,14 +142,18 @@ def build_host_boundary_lane_routes(
             # No current VPN path can produce remote-initiated traffic for this
             # Profile; keep its ordinary-side lane dormant.
             continue
-        metric = metric_space.preference_slots[0]
+        metric = allocation.terminal_guard_metric - 1
+        if metric in metric_space.preference_slots or metric in metric_space.scratch_metrics:
+            raise HostBoundaryLaneRoutingError(
+                "host-boundary lane metric collides with VPN path metric space"
+            )
         routes.append(
             HostBoundaryLaneRouteSpec(
                 profile_id=intent.profile_id,
                 table=allocation.table,
                 endpoint=lane.endpoint,
                 gateway=lane.gateway,
-                protocol=allocation.path_route_protocol,
+                protocol=allocation.host_boundary_lane_route_protocol,
                 metric=metric,
             )
         )

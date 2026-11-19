@@ -7,6 +7,7 @@ from typing import Iterable
 
 from .binding import LogicalPathId
 from .interface_identity import InterfaceIdentity
+from .host_boundary_lane_routing import HostBoundaryLaneRouteSpec
 from .network_policy_layout import (
     NetworkPolicyLayout,
     PayloadDispatchRule,
@@ -29,6 +30,12 @@ class ManagedRouteType(str, Enum):
     BLACKHOLE = "blackhole"
 
 
+class ManagedRouteRole(str, Enum):
+    GUARD = "guard"
+    VPN_PATH = "vpn_path"
+    HOST_BOUNDARY_LANE = "host_boundary_lane"
+
+
 @dataclass(frozen=True, slots=True)
 class ManagedRouteSpec:
     table: int
@@ -40,6 +47,7 @@ class ManagedRouteSpec:
     endpoint: InterfaceIdentity | None = None
     gateway: IPv4Address | None = None
     onlink: bool = False
+    role: ManagedRouteRole | None = None
 
     def __post_init__(self) -> None:
         if type(self.table) is not int or not 1 <= self.table <= 0xFFFFFFFF:
@@ -68,7 +76,24 @@ class ManagedRouteSpec:
         if type(self.onlink) is not bool:
             raise PayloadRoutingProjectionError("onlink must be bool")
 
-        if self.route_type is ManagedRouteType.BLACKHOLE:
+        role = self.role
+        if role is None:
+            role = (
+                ManagedRouteRole.GUARD
+                if self.route_type is ManagedRouteType.BLACKHOLE
+                else ManagedRouteRole.VPN_PATH
+            )
+            object.__setattr__(self, "role", role)
+        if not isinstance(role, ManagedRouteRole):
+            raise PayloadRoutingProjectionError(
+                "route role must be ManagedRouteRole"
+            )
+
+        if role is ManagedRouteRole.GUARD:
+            if self.route_type is not ManagedRouteType.BLACKHOLE:
+                raise PayloadRoutingProjectionError(
+                    "guard route must be blackhole"
+                )
             if any(
                 value is not None
                 for value in (
@@ -82,9 +107,9 @@ class ManagedRouteSpec:
                 )
             return
 
-        if not isinstance(self.path_id, LogicalPathId):
+        if self.route_type is not ManagedRouteType.UNICAST:
             raise PayloadRoutingProjectionError(
-                "unicast route requires LogicalPathId"
+                "non-guard managed route must be unicast"
             )
         if not isinstance(self.endpoint, InterfaceIdentity):
             raise PayloadRoutingProjectionError(
@@ -97,6 +122,30 @@ class ManagedRouteSpec:
             raise PayloadRoutingProjectionError(
                 "unicast gateway must be IPv4Address or None"
             )
+
+        if role is ManagedRouteRole.VPN_PATH:
+            if not isinstance(self.path_id, LogicalPathId):
+                raise PayloadRoutingProjectionError(
+                    "VPN path route requires LogicalPathId"
+                )
+            return
+
+        if role is ManagedRouteRole.HOST_BOUNDARY_LANE:
+            if self.path_id is not None:
+                raise PayloadRoutingProjectionError(
+                    "host-boundary lane route cannot carry LogicalPathId"
+                )
+            if self.destination != IPv4Network("0.0.0.0/0"):
+                raise PayloadRoutingProjectionError(
+                    "host-boundary lane route must use default destination"
+                )
+            if self.gateway is None:
+                raise PayloadRoutingProjectionError(
+                    "host-boundary lane route requires gateway"
+                )
+            return
+
+        raise PayloadRoutingProjectionError("unsupported managed route role")
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +189,7 @@ def build_payload_routing_desired_state(
     layout: NetworkPolicyLayout,
     path_routes: Iterable[RoutePriorityPathRoute],
     host_boundary: InterfaceIdentity,
+    host_boundary_lane_routes: Iterable[HostBoundaryLaneRouteSpec] = (),
 ) -> PayloadRoutingDesiredState:
     """Build complete route/RPDB desired data without mutating Linux."""
     if not isinstance(layout, NetworkPolicyLayout):
@@ -213,6 +263,32 @@ def build_payload_routing_desired_state(
             "physical path-route set does not exactly match current semantic payload paths"
         )
 
+    current_lane_routes = tuple(host_boundary_lane_routes)
+    lane_by_profile: dict[str, HostBoundaryLaneRouteSpec] = {}
+    for lane_route in current_lane_routes:
+        if not isinstance(lane_route, HostBoundaryLaneRouteSpec):
+            raise PayloadRoutingProjectionError(
+                "host_boundary_lane_routes must contain HostBoundaryLaneRouteSpec"
+            )
+        if lane_route.profile_id in lane_by_profile:
+            raise PayloadRoutingProjectionError(
+                f"duplicate host-boundary lane route for Profile {lane_route.profile_id!r}"
+            )
+        allocation = allocation_by_id.get(lane_route.profile_id)
+        if allocation is None:
+            raise PayloadRoutingProjectionError(
+                f"host-boundary lane route references unknown Profile {lane_route.profile_id!r}"
+            )
+        if lane_route.table != allocation.table:
+            raise PayloadRoutingProjectionError(
+                "host-boundary lane route table does not match Profile allocation"
+            )
+        if lane_route.protocol != allocation.host_boundary_lane_route_protocol:
+            raise PayloadRoutingProjectionError(
+                "host-boundary lane route protocol does not match Profile allocation"
+            )
+        lane_by_profile[lane_route.profile_id] = lane_route
+
     _validate_dispatch_rules(
         current_profiles,
         layout.dispatch_rules,
@@ -231,6 +307,7 @@ def build_payload_routing_desired_state(
                 route_type=ManagedRouteType.BLACKHOLE,
                 protocol=allocation.guard_route_protocol,
                 metric=allocation.terminal_guard_metric,
+                role=ManagedRouteRole.GUARD,
             )
         )
 
@@ -271,8 +348,24 @@ def build_payload_routing_desired_state(
                         endpoint=path_route.endpoint,
                         gateway=path_route.gateway,
                         onlink=path_route.onlink,
+                        role=ManagedRouteRole.VPN_PATH,
                     )
                 )
+
+        lane_route = lane_by_profile.get(profile.profile_id)
+        if lane_route is not None:
+            desired_routes.append(
+                ManagedRouteSpec(
+                    table=lane_route.table,
+                    destination=IPv4Network("0.0.0.0/0"),
+                    route_type=ManagedRouteType.UNICAST,
+                    protocol=lane_route.protocol,
+                    metric=lane_route.metric,
+                    endpoint=lane_route.endpoint,
+                    gateway=lane_route.gateway,
+                    role=ManagedRouteRole.HOST_BOUNDARY_LANE,
+                )
+            )
 
     desired_rules = tuple(
         ManagedRuleSpec(
@@ -367,6 +460,7 @@ def _route_sort_key(route: ManagedRouteSpec) -> tuple[object, ...]:
         int(route.destination.network_address),
         route.destination.prefixlen,
         route.route_type.value,
+        route.role.value,
         route.metric,
         route.path_id.device_id if route.path_id is not None else "",
         route.path_id.selector_index if route.path_id is not None else -1,

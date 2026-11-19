@@ -49,6 +49,7 @@ def layout():
                 terminal_guard_metric=100,
                 path_route_protocol=202,
                 guard_route_protocol=203,
+                host_boundary_lane_route_protocol=204,
             ),
             PayloadPolicyAllocation(
                 profile_id="specific",
@@ -57,6 +58,7 @@ def layout():
                 terminal_guard_metric=100,
                 path_route_protocol=202,
                 guard_route_protocol=203,
+                host_boundary_lane_route_protocol=204,
             ),
         ),
         probe=(),
@@ -140,6 +142,53 @@ class StackReturnAffinityTests(unittest.TestCase):
         self.assertEqual(rules["broad"].table, 1001)
         self.assertEqual(rules["specific"].table, 1002)
 
+
+    def test_initial_packet_table_selection_is_explicit_profile_capability(self):
+        p = profile("broad", Direction.INBOUND, "10.0.0.0/16", PA)
+        l = NetworkPolicyLayout(
+            payload=(
+                PayloadPolicyAllocation(
+                    profile_id="broad",
+                    table=1001,
+                    metric_space=None,
+                    terminal_guard_metric=100,
+                    path_route_protocol=202,
+                    guard_route_protocol=203,
+                    host_boundary_lane_route_protocol=204,
+                ),
+            ),
+            probe=(),
+            dispatch_rules=(
+                PayloadDispatchRule(
+                    profile_id="broad",
+                    destination=IPv4Network("10.0.0.0/16"),
+                    priority=1001,
+                    table=1001,
+                ),
+            ),
+            nft_family="ip",
+            nft_table="vpn_gate",
+        )
+        allocations = (
+            StackReturnAffinityAllocation("broad", 0xA1, 1101),
+        )
+        ordinary = build_stack_return_affinity_desired(
+            (p,), (RA,), HOST, l, allocations,
+        )
+        self.assertFalse(ordinary.classifiers[0].select_initial_packet)
+
+        lane_enabled = build_stack_return_affinity_desired(
+            (p,),
+            (RA,),
+            HOST,
+            l,
+            allocations,
+            initial_packet_profile_ids=("broad",),
+        )
+        self.assertTrue(
+            lane_enabled.classifiers[0].select_initial_packet
+        )
+
     def test_outbound_only_profile_needs_no_affinity_allocation(self):
         p = PayloadProfileRequest(
             profile_id="out",
@@ -156,6 +205,7 @@ class StackReturnAffinityTests(unittest.TestCase):
                     terminal_guard_metric=100,
                     path_route_protocol=202,
                     guard_route_protocol=203,
+                    host_boundary_lane_route_protocol=204,
                 ),
             ),
             probe=(),
