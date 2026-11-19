@@ -756,19 +756,24 @@ This pause does not end or reset the CD clock, logical work unit, branch, snapsh
 
 ### Cycle branch and clock
 
-Each CD cycle uses Git commit timestamps as an objective elapsed-time clock and a dedicated
-GitHub-visible working branch as the externally durable work trail.
+Each CD cycle uses real wall-clock time as its elapsed-time source and a dedicated
+GitHub-visible working branch as the externally durable work trail. Commit timestamps
+record publication events; they do not define when the CD window starts.
 
 At the start of a cycle:
 
 1. determine and record `CYCLE_INTERVAL`;
-2. create or select the dedicated branch for that CD window;
-3. all requirement, design, implementation, test, evidence, review and fix commits produced
+2. immediately read real current time and preserve it as `CYCLE_START_TIME`, before
+   mandatory reading, preparation or the first commit;
+3. create or select the dedicated branch for that CD window;
+4. all requirement, design, implementation, test, evidence, review and fix commits produced
    during the window are written to that branch;
-4. every commit must be present on GitHub immediately after creation;
-5. the first commit created in the window becomes `CYCLE_START_COMMIT`;
-6. record its committer timestamp `T0`;
-7. after later commits read their GitHub committer timestamps `Tn` and track `Tn - T0`.
+5. every commit must be present on GitHub immediately after creation.
+
+At each existing cadence check, obtain fresh real current time and compare it to
+`CYCLE_START_TIME`. Keep the existing check events, thresholds, safety margin and handoff
+behavior unchanged; in particular, the first commit is a check event, not the origin
+of elapsed time. A user intervention does not reset `CYCLE_START_TIME`.
 
 The branch is the durable record of work. The CD handoff is intentionally **not** a Git
 project artifact.
@@ -792,7 +797,7 @@ chat turn:
 
 The handoff file should contain only enough context to resume cheaply:
 
-- `CYCLE_INTERVAL`;
+- `CYCLE_INTERVAL` and `CYCLE_START_TIME`;
 - active branch and current branch head;
 - base/main snapshot from which the branch started when relevant;
 - what logical work was completed during the window;
