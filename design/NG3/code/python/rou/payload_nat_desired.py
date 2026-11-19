@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Network
 from typing import Iterable
 
 from .binding import LogicalPathId
@@ -43,7 +43,6 @@ class ProfileGatewayMasqueradeSpec:
     ingress: InterfaceIdentity
     egress: InterfaceIdentity
     remote_source: IPv4Network
-    excluded_host_destinations: tuple[IPv4Address, ...]
 
     def __post_init__(self) -> None:
         if not isinstance(self.profile_id, str) or not self.profile_id:
@@ -66,19 +65,6 @@ class ProfileGatewayMasqueradeSpec:
             raise PayloadNatProjectionError(
                 "gateway NAT remote_source must be IPv4Network"
             )
-        if any(
-            not isinstance(item, IPv4Address)
-            for item in self.excluded_host_destinations
-        ):
-            raise PayloadNatProjectionError(
-                "gateway NAT host-local exclusions must be IPv4Address values"
-            )
-        if tuple(sorted(set(self.excluded_host_destinations), key=int)) != (
-            self.excluded_host_destinations
-        ):
-            raise PayloadNatProjectionError(
-                "gateway NAT host-local exclusions must be unique and sorted"
-            )
 
 
 PayloadNatRuleSpec = PayloadMasqueradeSpec | ProfileGatewayMasqueradeSpec
@@ -96,7 +82,6 @@ def build_payload_nat_desired_state(
     host_boundary: InterfaceIdentity,
     *,
     gateway_nat_profile_ids: Iterable[str] = (),
-    host_local_addresses: Iterable[IPv4Address] = (),
 ) -> PayloadNatDesiredState:
     """Project both accepted source-NAT semantics inside the managed domain.
 
@@ -105,7 +90,6 @@ def build_payload_nat_desired_state(
 
     Profile gateway NAT:
         current VPN path -> ordinary boundary, disjoint remote-source fragment,
-        excluding exact ordinary-host local IPv4 destinations.
 
     Both run after managed payload filtering in postrouting.  No Profile
     identity or NAT class crosses into the ordinary host namespace.
@@ -161,12 +145,6 @@ def build_payload_nat_desired_state(
                 f"Profile {profile_id!r} requests gateway NAT without VPN-to-ordinary direction"
             )
 
-    local_addresses_raw = tuple(host_local_addresses)
-    if any(not isinstance(item, IPv4Address) for item in local_addresses_raw):
-        raise PayloadNatProjectionError(
-            "host_local_addresses must contain IPv4Address values"
-        )
-    local_addresses = tuple(sorted(set(local_addresses_raw), key=int))
 
     route_by_path: dict[LogicalPathId, RoutePriorityPathRoute] = {}
     endpoint_owner: dict[InterfaceIdentity, LogicalPathId] = {}
@@ -249,7 +227,6 @@ def build_payload_nat_desired_state(
                     ingress=ingress,
                     egress=host_boundary,
                     remote_source=fragment.remote_prefix,
-                    excluded_host_destinations=local_addresses,
                 )
             )
 
