@@ -1,6 +1,6 @@
 # EXP-072 — NG3 managed-L3 endpoint host bootstrap
 
-Status: **PREPARED**
+Status: **PASS** — production device-only host bootstrap semantics confirmed on routed veth + Proxy ARP and netkit L3
 
 ## Question
 
@@ -55,3 +55,8 @@ For each supported backend:
 
 Netkit unsupported on a runner is reported separately; it does not invalidate routed-veth
 evidence, but the dual-backend equivalence claim requires at least one successful netkit run.
+
+## Result
+
+See `EXP-072-result-20261119.md`. Workflow run `44598508737`, job
+`linux-managed-l3-host-bootstrap` (`135823381254`) completed with `EXP072_RESULT=PASS netkit=True`.
