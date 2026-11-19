@@ -116,7 +116,25 @@ device_order = ["wg"]
         )
 
         main_before=json.loads(ns(HOST,"ip","-j","-4","route","show","table","main").stdout)
-        result=converge_host_bootstrap_once(backend,desired)
+        try:
+            result=converge_host_bootstrap_once(backend,desired)
+        except Exception:
+            observed=backend.observe(desired)
+            print(f"EXP060_DIAG_DESIRED_ROUTES={desired.routes!r}",flush=True)
+            print(f"EXP060_DIAG_DESIRED_BYPASS={desired.bypass!r}",flush=True)
+            print(f"EXP060_DIAG_DESIRED_PAIRS={desired.pairs!r}",flush=True)
+            print(f"EXP060_DIAG_OBSERVED={observed!r}",flush=True)
+            print(
+                "EXP060_DIAG_RAW_ROUTES="
+                + ns(HOST,"ip","-j","-4","route","show","table","all").stdout,
+                flush=True,
+            )
+            print(
+                "EXP060_DIAG_RAW_RULES="
+                + ns(HOST,"ip","-j","-4","rule","show").stdout,
+                flush=True,
+            )
+            raise
         assert result.exact,result
         print("EXP060_BACKEND_CONVERGENCE=PASS")
 
