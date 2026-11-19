@@ -24,6 +24,7 @@ STACK_RETURN_CHAIN = "prerouting"
 STACK_RETURN_TABLE_COMMENT = "vpn-gate:ng3:stack-return-affinity-owner-v1"
 STACK_RETURN_CHAIN_COMMENT = "vpn-gate:ng3:stack-return-affinity-prerouting-v1"
 STACK_RETURN_CLASSIFIER_COMMENT = "vpn-gate:ng3:stack-return-affinity-classifier-v1"
+STACK_OUTBOUND_ASSOCIATION_COMMENT = "vpn-gate:ng3:stack-profile-outbound-association-v1"
 STACK_RETURN_RESTORE_COMMENT = "vpn-gate:ng3:stack-return-affinity-restore-v1"
 
 
@@ -38,8 +39,8 @@ class _RuleKey:
 class _NftInventory:
     present: bool
     owned: bool
-    classifiers: tuple[tuple[str, str, int, bool], ...] = ()
-    restores: tuple[tuple[str, int], ...] = ()
+    associations: tuple[tuple[str, str, str, int, bool], ...] = ()
+    restores: tuple[tuple[str, int, bool], ...] = ()
     diagnostic: str | None = None
 
 
@@ -56,7 +57,7 @@ class LinuxStackReturnAffinityBackend:
     def create_nft(self, desired: StackReturnAffinityDesired) -> None:
         if not isinstance(desired, StackReturnAffinityDesired):
             raise ValueError("desired must be StackReturnAffinityDesired")
-        if not desired.classifiers:
+        if not desired.classifiers and not desired.outbound_classifiers:
             return
         self.runner.run_script(
             self._cmd("nft", "-f", "-"),
@@ -114,22 +115,36 @@ class LinuxStackReturnAffinityBackend:
                 key=lambda item: (item.priority, item.mark, item.table),
             )
         )
-        expected_classifiers = tuple(
+        expected_associations = tuple(
             sorted(
                 (
+                    "inbound",
                     item.ingress.ifname,
                     item.remote_prefix.with_prefixlen,
                     item.mark,
-                    item.select_initial_packet,
+                    False,
                 )
                 for item in desired.classifiers
             )
+            + sorted(
+                (
+                    "outbound",
+                    item.ingress.ifname,
+                    item.remote_prefix.with_prefixlen,
+                    item.mark,
+                    False,
+                )
+                for item in desired.outbound_classifiers
+            )
         )
         expected_restores = tuple(
-            sorted((desired.host_boundary.ifname, item.mark) for item in desired.rules)
+            sorted(
+                (desired.host_boundary.ifname, item.mark, True)
+                for item in desired.rules
+            )
         )
 
-        wants_owner = bool(desired.classifiers)
+        wants_owner = bool(desired.classifiers or desired.outbound_classifiers)
         if not wants_owner:
             if nft.present or rules:
                 return StackReturnAffinityObservation(
@@ -150,7 +165,7 @@ class LinuxStackReturnAffinityBackend:
             )
 
         exact = (
-            nft.classifiers == expected_classifiers
+            nft.associations == expected_associations
             and nft.restores == expected_restores
             and rules == expected_rules
         )
@@ -176,7 +191,7 @@ class LinuxStackReturnAffinityBackend:
         if current.status is StackReturnAffinityOwnerStatus.EXACT:
             return
         self._clear_reserved_owned_state()
-        if desired.classifiers:
+        if desired.classifiers or desired.outbound_classifiers:
             self.create_nft(desired)
             for rule in desired.rules:
                 self.add_rule(rule)
@@ -349,8 +364,8 @@ def _parse_nft_inventory(text: str) -> _NftInventory:
     ):
         return _NftInventory(True, False, diagnostic="reserved affinity chain shape differs")
 
-    classifiers: list[tuple[int, str, int]] = []
-    restores: list[tuple[int, int]] = []
+    associations: list[tuple[str, str, str, int, bool]] = []
+    restores: list[tuple[str, int, bool]] = []
     for rule in rules:
         comment = rule.get("comment")
         expr = rule.get("expr")
@@ -358,7 +373,19 @@ def _parse_nft_inventory(text: str) -> _NftInventory:
             return _NftInventory(True, False, diagnostic="reserved affinity rule expression is malformed")
         try:
             if comment == STACK_RETURN_CLASSIFIER_COMMENT:
-                classifiers.append(_parse_classifier_expr(expr))
+                ingress, prefix, mark, packet_restore = _parse_classifier_expr(
+                    expr, remote_field="saddr"
+                )
+                associations.append(
+                    ("inbound", ingress, prefix, mark, packet_restore)
+                )
+            elif comment == STACK_OUTBOUND_ASSOCIATION_COMMENT:
+                ingress, prefix, mark, packet_restore = _parse_classifier_expr(
+                    expr, remote_field="daddr"
+                )
+                associations.append(
+                    ("outbound", ingress, prefix, mark, packet_restore)
+                )
             elif comment == STACK_RETURN_RESTORE_COMMENT:
                 restores.append(_parse_restore_expr(expr))
             else:
@@ -368,10 +395,9 @@ def _parse_nft_inventory(text: str) -> _NftInventory:
     return _NftInventory(
         True,
         True,
-        tuple(sorted(classifiers)),
+        tuple(sorted(associations)),
         tuple(sorted(restores)),
     )
-
 
 def _match(expr: list[dict], left_kind: str, key: str) -> Any:
     for item in expr:
@@ -388,41 +414,38 @@ def _match(expr: list[dict], left_kind: str, key: str) -> Any:
     raise ValueError(f"reserved affinity rule misses {left_kind}.{key} exact match")
 
 
-def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int, bool]:
+def _parse_classifier_expr(
+    expr: list[dict],
+    *,
+    remote_field: str,
+) -> tuple[str, str, int, bool]:
     ingress = _match(expr, "meta", "iif")
     if not isinstance(ingress, str) or not ingress:
         raise ValueError("classifier iif must resolve to an interface name")
-    source = None
+    remote = None
     for item in expr:
         if not isinstance(item, dict) or "match" not in item:
             continue
         match = item["match"]
         left = match.get("left") if isinstance(match, dict) else None
         payload = left.get("payload") if isinstance(left, dict) else None
-        if isinstance(payload, dict) and payload.get("protocol") == "ip" and payload.get("field") == "saddr":
+        if (
+            isinstance(payload, dict)
+            and payload.get("protocol") == "ip"
+            and payload.get("field") == remote_field
+        ):
             right = match.get("right")
             if isinstance(right, dict) and isinstance(right.get("prefix"), dict):
                 prefix = right["prefix"]
-                source = f"{prefix.get('addr')}/{prefix.get('len')}"
+                remote = f"{prefix.get('addr')}/{prefix.get('len')}"
             elif isinstance(right, str):
-                source = right
-    if source is None:
-        raise ValueError("classifier source prefix match is missing")
-    source = ipaddress.IPv4Network(source, strict=True).with_prefixlen
-    state_new = False
-    for item in expr:
-        if not isinstance(item, dict) or "match" not in item:
-            continue
-        match = item["match"]
-        if not isinstance(match, dict) or match.get("op") not in {"==", "in"}:
-            continue
-        left = match.get("left")
-        ct = left.get("ct") if isinstance(left, dict) else None
-        if isinstance(ct, dict) and ct.get("key") == "state":
-            right = match.get("right")
-            if right == "new" or right == ["new"]:
-                state_new = True
-    if not state_new:
+                remote = right
+    if remote is None:
+        raise ValueError(
+            f"classifier remote {remote_field} prefix match is missing"
+        )
+    remote = ipaddress.IPv4Network(remote, strict=True).with_prefixlen
+    if not _has_ct_state(expr, {"new"}):
         raise ValueError("classifier does not match ct state new")
     mark = None
     packet_restore = False
@@ -450,10 +473,28 @@ def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int, bool]:
                 packet_restore = True
     if mark is None:
         raise ValueError("classifier ct mark assignment is missing")
-    return ingress, source, mark, packet_restore
+    return ingress, remote, mark, packet_restore
 
 
-def _parse_restore_expr(expr: list[dict]) -> tuple[str, int]:
+def _has_ct_state(expr: list[dict], required: set[str]) -> bool:
+    for item in expr:
+        if not isinstance(item, dict) or "match" not in item:
+            continue
+        match = item["match"]
+        if not isinstance(match, dict) or match.get("op") not in {"==", "in"}:
+            continue
+        left = match.get("left")
+        ct = left.get("ct") if isinstance(left, dict) else None
+        if not (isinstance(ct, dict) and ct.get("key") == "state"):
+            continue
+        right = match.get("right")
+        values = {right} if isinstance(right, str) else set(right or ())
+        if required <= values:
+            return True
+    return False
+
+
+def _parse_restore_expr(expr: list[dict]) -> tuple[str, int, bool]:
     ingress = _match(expr, "meta", "iif")
     if not isinstance(ingress, str) or not ingress:
         raise ValueError("restore iif must resolve to an interface name")
@@ -476,7 +517,7 @@ def _parse_restore_expr(expr: list[dict]) -> tuple[str, int]:
             restored = True
     if not restored:
         raise ValueError("restore rule does not copy ct mark to packet mark")
-    return ingress, mark
+    return ingress, mark, _has_ct_state(expr, {"established", "related"})
 
 
 def render_stack_return_affinity_nft(
@@ -484,8 +525,8 @@ def render_stack_return_affinity_nft(
 ) -> str:
     if not isinstance(desired, StackReturnAffinityDesired):
         raise ValueError("desired must be StackReturnAffinityDesired")
-    if not desired.classifiers:
-        raise ValueError("cannot render empty stack return-affinity owner")
+    if not desired.classifiers and not desired.outbound_classifiers:
+        raise ValueError("cannot render empty stack Profile-association owner")
 
     lines = [
         f"table ip {STACK_RETURN_TABLE} {{",
@@ -496,25 +537,30 @@ def render_stack_return_affinity_nft(
     ]
 
     for item in desired.classifiers:
-        initial_select = (
-            " meta mark set ct mark"
-            if item.select_initial_packet
-            else ""
-        )
         lines.append(
             "    "
             f"meta iif {item.ingress.ifindex} "
             f"ip saddr {item.remote_prefix.with_prefixlen} "
             "ct state new "
-            f"ct mark set {hex(item.mark)}"
-            f"{initial_select} "
+            f"ct mark set {hex(item.mark)} "
             f'comment "{STACK_RETURN_CLASSIFIER_COMMENT}"'
+        )
+
+    for item in desired.outbound_classifiers:
+        lines.append(
+            "    "
+            f"meta iif {item.ingress.ifindex} "
+            f"ip daddr {item.remote_prefix.with_prefixlen} "
+            "ct state new "
+            f"ct mark set {hex(item.mark)} "
+            f'comment "{STACK_OUTBOUND_ASSOCIATION_COMMENT}"'
         )
 
     for rule in desired.rules:
         lines.append(
             "    "
             f"meta iif {desired.host_boundary.ifindex} "
+            "ct state established,related "
             f"ct mark {hex(rule.mark)} "
             "meta mark set ct mark "
             f'comment "{STACK_RETURN_RESTORE_COMMENT}"'
