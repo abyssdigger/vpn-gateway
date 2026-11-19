@@ -23,7 +23,7 @@ from .payload_forward_observation import (
     PAYLOAD_FORWARD_RETURN_COMMENT,
     PayloadForwardRuleKind,
 )
-from .payload_nat_desired import PayloadMasqueradeSpec
+from .payload_nat_desired import PayloadNatRuleSpec
 
 
 @dataclass(slots=True)
@@ -108,7 +108,7 @@ class LinuxCompositeNftBackend:
     def delete_nat_rule(self, handle: int) -> None:
         self._nat_backend().delete_nat_rule(handle)
 
-    def add_nat_rule(self, spec: PayloadMasqueradeSpec) -> None:
+    def add_nat_rule(self, spec: PayloadNatRuleSpec) -> None:
         self._nat_backend().add_nat_rule(spec)
 
     def apply_local_publication_step(
