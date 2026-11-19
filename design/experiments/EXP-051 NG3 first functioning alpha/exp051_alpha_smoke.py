@@ -252,7 +252,7 @@ publish_vpn_server = "tcp/{SERVER_HOST}:{PUBLICATION_HOST_PORT}>{PUBLICATION_INT
 
 [profile.alpha]
 enabled = true
-direction = "bidirectional+route-return"
+direction = "bidirectional"
 destinations = ["{VPN_SERVER_ADDR}/32"]
 device_order = ["ovpn"]
 """,
