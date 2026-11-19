@@ -143,12 +143,12 @@ class StackReturnAffinityTests(unittest.TestCase):
         self.assertEqual(rules["specific"].table, 1002)
 
 
-    def test_initial_packet_table_selection_is_explicit_profile_capability(self):
-        p = profile("broad", Direction.INBOUND, "10.0.0.0/16", PA)
+    def test_bidirectional_profile_associates_ordinary_originated_new_flow(self):
+        p = profile("both", Direction.BIDIRECTIONAL, "10.0.0.0/16", PA)
         l = NetworkPolicyLayout(
             payload=(
                 PayloadPolicyAllocation(
-                    profile_id="broad",
+                    profile_id="both",
                     table=1001,
                     metric_space=None,
                     terminal_guard_metric=100,
@@ -160,7 +160,7 @@ class StackReturnAffinityTests(unittest.TestCase):
             probe=(),
             dispatch_rules=(
                 PayloadDispatchRule(
-                    profile_id="broad",
+                    profile_id="both",
                     destination=IPv4Network("10.0.0.0/16"),
                     priority=1001,
                     table=1001,
@@ -169,25 +169,19 @@ class StackReturnAffinityTests(unittest.TestCase):
             nft_family="ip",
             nft_table="vpn_gate",
         )
-        allocations = (
-            StackReturnAffinityAllocation("broad", 0xA1, 1101),
-        )
-        ordinary = build_stack_return_affinity_desired(
-            (p,), (RA,), HOST, l, allocations,
-        )
-        self.assertFalse(ordinary.classifiers[0].select_initial_packet)
-
-        lane_enabled = build_stack_return_affinity_desired(
+        desired = build_stack_return_affinity_desired(
             (p,),
             (RA,),
             HOST,
             l,
-            allocations,
-            initial_packet_profile_ids=("broad",),
+            (StackReturnAffinityAllocation("both", 0xA1, 1101),),
         )
-        self.assertTrue(
-            lane_enabled.classifiers[0].select_initial_packet
-        )
+        self.assertEqual(len(desired.outbound_classifiers), 1)
+        association = desired.outbound_classifiers[0]
+        self.assertEqual(association.ingress, HOST)
+        self.assertEqual(association.remote_prefix, IPv4Network("10.0.0.0/16"))
+        self.assertEqual(association.mark, 0xA1)
+        self.assertEqual(desired.classifiers[0].mark, 0xA1)
 
     def test_outbound_only_profile_needs_no_affinity_allocation(self):
         p = PayloadProfileRequest(
