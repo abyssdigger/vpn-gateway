@@ -270,17 +270,22 @@ class AvailabilityProbeRuntime:
                 )
             route_by_path[route.path_id] = route
 
+        desired_contexts = []
         for owner, intent in intent_by_owner.items():
             route = route_by_path.get(owner.path_id)
             if route is None:
                 raise ProbeRuntimeError(
                     f"probe owner has no current path realization: {owner!r}"
                 )
+            desired_contexts.append((owner, intent, route.endpoint))
+
+        # Validation above is complete before any current Agent state changes.
+        for owner, intent, endpoint in desired_contexts:
             agent = self._agents.get(owner)
             if agent is None:
                 agent = AvailabilityProbeAgent()
                 self._agents[owner] = agent
-            agent.configure(intent, route.endpoint)
+            agent.configure(intent, endpoint)
 
         next_active = frozenset(intent_by_owner)
         for owner in self._active - next_active:
