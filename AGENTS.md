@@ -33,6 +33,18 @@ When a discussion appears ready to turn into implementation but no CD is active 
 explicit write instruction has been given, report the proposed change and stop at the
 read-only boundary rather than silently beginning implementation.
 
+Semantic/design approval is **not** repository-write authorization. Agreement phrases such as
+"yes", "ok", "looks good", "I agree", "that's fine", "let's do it", or equivalent approval of
+the proposed content mean only that the proposal is accepted for discussion/design purposes.
+They must not be interpreted as permission to mutate repository state.
+
+Outside an active CD, repository mutation requires an explicit imperative directed at the
+repository or a specific artifact, for example "apply this change", "edit AGENTS.md",
+"update the requirements", "commit this", or "write this to the repository". If the user
+approves a proposal but does not separately instruct the agent to apply it, remain read-only
+and state that the proposal is agreed but has not been written to Git.
+
+
 ## Requirement and component gates
 
 Before implementing a material change:
