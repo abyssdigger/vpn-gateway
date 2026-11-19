@@ -13,6 +13,7 @@ from enum import Enum
 from ipaddress import IPv4Address, IPv4Network
 from typing import Iterable
 
+from .binding import LogicalPathId
 from .interface_identity import InterfaceIdentity
 from .network_policy_layout import (
     NetworkPolicyLayout,
@@ -75,7 +76,7 @@ class ProbeRouteSpec:
     destination: IPv4Network
     route_type: ProbeRouteType
     protocol: int
-    path_id: object | None = None
+    path_id: LogicalPathId | None = None
     endpoint: InterfaceIdentity | None = None
     gateway: IPv4Address | None = None
     onlink: bool = False
@@ -111,8 +112,6 @@ class ProbeRouteSpec:
                     "probe blackhole route cannot carry path realization"
                 )
             return
-
-        from .binding import LogicalPathId
 
         if not isinstance(self.path_id, LogicalPathId):
             raise ProbePolicyProjectionError(
