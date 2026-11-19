@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import json
 import unittest
+from ipaddress import IPv4Address, IPv4Network
 
 from rou.interface_identity import InterfaceIdentity
 from rou.nft_namespace_inventory import parse_nft_namespace_ruleset
-from rou.payload_nat_desired import PayloadNatDesiredState, PayloadMasqueradeSpec
+from rou.payload_nat_desired import (
+    PayloadNatDesiredState,
+    PayloadMasqueradeSpec,
+    ProfileGatewayMasqueradeSpec,
+)
 from rou.payload_nat_observation import (
     PayloadNatObservationError,
     compare_payload_nat,
@@ -22,6 +27,41 @@ SPEC = PayloadMasqueradeSpec(LogicalPathId("device", 0, 0), HOST, OLD)
 
 def match(key, operand):
     return {"match": {"op": "==", "left": {"meta": {"key": key}}, "right": operand}}
+
+
+def ip_match(field, operand, op="=="):
+    return {
+        "match": {
+            "op": op,
+            "left": {"payload": {"protocol": "ip", "field": field}},
+            "right": operand,
+        }
+    }
+
+
+def gateway_rule(
+    iif="tun0",
+    oif="host0",
+    handle=40,
+    remote=None,
+    exclusions=("127.0.0.1", "192.0.2.1"),
+    **changes,
+):
+    if remote is None:
+        remote = {"prefix": {"addr": "10.74.0.0", "len": 16}}
+    value = {
+        "family": "ip", "table": "vpn_gate", "chain": "payload_postrouting",
+        "handle": handle, "comment": "vpn-gate:ng3:profile-gateway-nat-v1",
+        "expr": [
+            match("iif", iif),
+            match("oif", oif),
+            ip_match("saddr", remote),
+            *(ip_match("daddr", item, "!=") for item in exclusions),
+            {"masquerade": None},
+        ],
+    }
+    value.update(changes)
+    return {"rule": value}
 
 
 def rule(iif="host0", oif="tun0", handle=30, **changes):
@@ -95,6 +135,47 @@ class PayloadNatObservationTests(unittest.TestCase):
         result = self.compare(rule(oif="tun1"), interfaces=(HOST, OLD, OTHER))
         self.assertEqual(result.missing, (SPEC,))
         self.assertEqual(result.stale[0].egress, OTHER)
+
+    def test_profile_gateway_nat_exact_shape_confirms(self):
+        desired = ProfileGatewayMasqueradeSpec(
+            profile_id="remote",
+            path_id=SPEC.path_id,
+            ingress=OLD,
+            egress=HOST,
+            remote_source=IPv4Network("10.74.0.0/16"),
+            excluded_host_destinations=(
+                IPv4Address("127.0.0.1"),
+                IPv4Address("192.0.2.1"),
+            ),
+        )
+        result = self.compare(
+            gateway_rule(),
+            desired=(desired,),
+        )
+        self.assertEqual(result.confirmed, (desired,))
+        self.assertEqual(result.missing, ())
+        self.assertEqual(result.stale, ())
+        self.assertEqual(result.conflicts, ())
+
+    def test_profile_gateway_nat_host_local_exclusion_drift_is_stale(self):
+        desired = ProfileGatewayMasqueradeSpec(
+            profile_id="remote",
+            path_id=SPEC.path_id,
+            ingress=OLD,
+            egress=HOST,
+            remote_source=IPv4Network("10.74.0.0/16"),
+            excluded_host_destinations=(
+                IPv4Address("127.0.0.1"),
+                IPv4Address("192.0.2.1"),
+            ),
+        )
+        result = self.compare(
+            gateway_rule(exclusions=("127.0.0.1",)),
+            desired=(desired,),
+        )
+        self.assertEqual(result.missing, (desired,))
+        self.assertEqual(len(result.stale), 1)
+        self.assertTrue(result.conflict_free)
 
     def test_unknown_owner_inside_owned_chain_is_conflict(self):
         result = self.compare(rule(comment="unowned"))
