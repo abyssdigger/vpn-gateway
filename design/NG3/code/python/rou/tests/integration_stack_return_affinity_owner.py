@@ -43,6 +43,7 @@ DESIRED = StackReturnAffinityDesired(
             RULE.mark,
         ),
     ),
+    (),
     (RULE,),
 )
 
@@ -78,6 +79,7 @@ def main() -> int:
                     RULE.mark,
                 ),
             ),
+            (),
             (RULE,),
         )
 
