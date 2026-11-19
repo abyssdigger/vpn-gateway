@@ -257,7 +257,9 @@ def _icmp_match(expr):
     match = _match(expr)
     if match["left"] != {"payload": {"protocol": "ip", "field": "protocol"}}:
         raise ValueError("invalid probe-local protocol selector")
-    if match["right"] != 1:
+    # nft JSON renders the IPv4 protocol constant as either numeric 1
+    # or symbolic "icmp" depending on nftables/libnftables version.
+    if match["right"] not in (1, "icmp"):
         raise ValueError("Release 1 probe-local protocol must be ICMP")
 
 
