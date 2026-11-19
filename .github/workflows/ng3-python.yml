@@ -749,19 +749,19 @@ jobs:
           PROBE='design/experiments/EXP-070 NG3 routed stack endpoint/exp070_debian12_routed_veth.sh'
           B64="$(base64 -w0 "$PROBE")"
           cat > user-data <<EOF
-#cloud-config
-write_files:
-  - path: /root/exp070.sh
-    permissions: '0755'
-    encoding: b64
-    content: $B64
-runcmd:
-  - [ /bin/sh, -c, '/root/exp070.sh >/dev/ttyS0 2>&1; rc=$?; echo EXP070_D12_CLOUD_INIT_RC=$rc >/dev/ttyS0; poweroff -f' ]
-EOF
+          #cloud-config
+          write_files:
+            - path: /root/exp070.sh
+              permissions: '0755'
+              encoding: b64
+              content: $B64
+          runcmd:
+            - [ /bin/sh, -c, '/root/exp070.sh >/dev/ttyS0 2>&1; rc=$?; echo EXP070_D12_CLOUD_INIT_RC=$rc >/dev/ttyS0; poweroff -f' ]
+          EOF
           cat > meta-data <<'EOF'
-instance-id: exp070-debian12
-local-hostname: exp070-debian12
-EOF
+          instance-id: exp070-debian12
+          local-hostname: exp070-debian12
+          EOF
           cloud-localds seed.img user-data meta-data
 
           set +e
