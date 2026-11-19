@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Network
 import json
 from typing import Iterable
 
@@ -42,7 +42,6 @@ class ObservedPayloadMasquerade:
     ingress: InterfaceIdentity | int
     egress: InterfaceIdentity | int
     remote_source: IPv4Network | None = None
-    excluded_host_destinations: tuple[IPv4Address, ...] = ()
 
     @property
     def stale(self) -> bool:
@@ -224,7 +223,6 @@ def _desired_key(spec: PayloadNatRuleSpec) -> tuple[object, ...]:
             spec.ingress,
             spec.egress,
             spec.remote_source,
-            spec.excluded_host_destinations,
         )
     raise PayloadNatObservationError("unsupported desired NAT rule")
 
@@ -237,7 +235,6 @@ def _observed_key(
         rule.ingress,
         rule.egress,
         rule.remote_source,
-        rule.excluded_host_destinations,
     )
 
 
@@ -313,9 +310,9 @@ def _decode_rule(
         raise PayloadNatObservationError(
             "missing/wrong NAT owner comment"
         )
-    if len(expressions) < 4:
+    if len(expressions) != 4:
         raise PayloadNatObservationError(
-            "Profile gateway NAT rule is incomplete"
+            "Profile gateway NAT rule must contain exactly four expressions"
         )
     ingress = _match_operand(
         expressions[0], "iif", by_name, by_index
@@ -328,26 +325,13 @@ def _decode_rule(
         field="saddr",
         op="==",
     )
-    exclusions = tuple(
-        _exact_ipv4_match(
-            expression,
-            field="daddr",
-            op="!=",
-        )
-        for expression in expressions[3:-1]
-    )
-    if tuple(sorted(set(exclusions), key=int)) != exclusions:
-        raise PayloadNatObservationError(
-            "gateway NAT host-local exclusions are duplicated or unsorted"
-        )
-    _masquerade(expressions[-1])
+    _masquerade(expressions[3])
     return ObservedPayloadMasquerade(
         handle=payload["handle"],
         kind=PayloadNatRuleKind.PROFILE_GATEWAY,
         ingress=ingress,
         egress=egress,
         remote_source=remote_source,
-        excluded_host_destinations=exclusions,
     )
 
 
@@ -423,20 +407,6 @@ def _ipv4_match(
             f"invalid IPv4 {field} match"
         )
     return _ipv4_prefix(match["right"])
-
-
-def _exact_ipv4_match(
-    expr: object,
-    *,
-    field: str,
-    op: str,
-) -> IPv4Address:
-    network = _ipv4_match(expr, field=field, op=op)
-    if network.prefixlen != 32:
-        raise PayloadNatObservationError(
-            f"IPv4 {field} exclusion must be exact /32"
-        )
-    return network.network_address
 
 
 def _ipv4_prefix(value: object) -> IPv4Network:
