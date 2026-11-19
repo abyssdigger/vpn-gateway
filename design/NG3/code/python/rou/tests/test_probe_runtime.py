@@ -216,6 +216,30 @@ class AvailabilityProbeRuntimeTests(unittest.TestCase):
             )
         )
 
+    def test_failed_reconfiguration_does_not_partially_mutate_contexts(self):
+        runtime = AvailabilityProbeRuntime()
+        owner = ProbePolicyOwner("corp", A)
+        runtime.configure(
+            (intent(),),
+            (RoutePriorityPathRoute(A, EP_A1),),
+        )
+        before = runtime.begin_attempt(owner)
+
+        with self.assertRaisesRegex(
+            ProbeRuntimeError,
+            "no current path realization",
+        ):
+            runtime.configure(
+                (
+                    intent(target=TARGET_B),
+                    intent(profile="guest", path=B, target=TARGET_A),
+                ),
+                (RoutePriorityPathRoute(A, EP_A1),),
+            )
+
+        after = runtime.begin_attempt(owner)
+        self.assertEqual(after, before)
+
     def test_missing_current_path_realization_is_rejected(self):
         runtime = AvailabilityProbeRuntime()
         with self.assertRaisesRegex(
