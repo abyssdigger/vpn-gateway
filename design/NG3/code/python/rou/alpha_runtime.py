@@ -59,6 +59,15 @@ from .host_publication_policy import (
     HostPublicationSelectorKind,
     build_host_publication_desired,
 )
+from .icmp_probe_driver import (
+    IcmpProbeExecutionPolicy,
+    LinuxIcmpProbeDriver,
+    SubprocessProbeCommandRunner,
+)
+from .linux_availability_cycle import (
+    LinuxAvailabilityCycleResult,
+    run_linux_availability_cycle_once,
+)
 from .linux_forwarding_gate import LinuxForwardingGateBackend
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .linux_host_publication import (
@@ -129,6 +138,7 @@ ALPHA_STATUS_PATH = ALPHA_RUNTIME_DIRECTORY / "status.json"
 ALPHA_AUDIT_INTERVAL_SECONDS = 1.0
 ALPHA_AVAILABILITY_DEGRADATION_THRESHOLD = 2
 ALPHA_AVAILABILITY_RECOVERY_THRESHOLD = 2
+ALPHA_PROBE_REPLY_TIMEOUT_SECONDS = 1
 
 
 class AlphaRuntimeError(RuntimeError):
@@ -530,6 +540,38 @@ def reconcile_alpha_payload_once(
             or f"network-policy activation failed: {activation.status.value}"
         ),
     )
+
+
+def reconcile_alpha_availability_once(
+    prepared: AlphaPreparedPolicy,
+    runner: SubprocessNftRunner,
+    probe_driver: LinuxIcmpProbeDriver,
+) -> LinuxAvailabilityCycleResult:
+    if prepared.last_probe_assembly is None:
+        raise AlphaRuntimeError(
+            "availability cycle requires a current probe desired assembly"
+        )
+    result = run_linux_availability_cycle_once(
+        prepared.config,
+        prepared.last_baseline_profiles,
+        prepared.last_path_routes,
+        prepared.last_probe_assembly,
+        prepared.availability_runtime,
+        prepared.availability_manager,
+        probe_driver,
+        runner=runner,
+        namespace=ALPHA_NAMESPACE,
+        platform=NG3_LINUX_POLICY_PLATFORM,
+    )
+    if (
+        result.observation is not None
+        and result.priority is not None
+        and result.priority.confirmed
+    ):
+        prepared.last_profiles = (
+            result.observation.projection.effective_profiles
+        )
+    return result
 
 
 def _domain_spec() -> ManagedNetworkDomainSpec:
