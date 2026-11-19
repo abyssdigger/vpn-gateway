@@ -186,6 +186,7 @@ class LinuxIcmpProbeDriver:
             "--clear-groups",
             "ping",
             "-n",
+            "-I", context.endpoint.ifname,
             "-c", "1",
             "-W", str(
                 self.execution_policy.reply_timeout_seconds
