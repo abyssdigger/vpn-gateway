@@ -94,7 +94,7 @@ class LinuxHostBoundaryRouteBackend:
         return _exact_route_present(
             raw,
             destination=route.destination.with_prefixlen,
-            gateway=str(route.via),
+            gateway=None if route.via is None else str(route.via),
             interface=route.interface,
             protocol=route.protocol,
         )
@@ -118,48 +118,52 @@ class LinuxHostBoundaryRouteBackend:
     def add_bootstrap_route(self, route: HostBoundaryRouteSpec) -> None:
         if not isinstance(route, HostBoundaryRouteSpec):
             raise ValueError("route must be HostBoundaryRouteSpec")
-        self.runner.run(self._cmd(
+        argv = [
             "ip", "-4", "route", "add",
             route.destination.with_prefixlen,
-            "via", str(route.via),
-            "dev", route.interface,
-            "proto", str(route.protocol),
-        ))
+        ]
+        if route.via is not None:
+            argv.extend(("via", str(route.via)))
+        argv.extend(("dev", route.interface, "proto", str(route.protocol)))
+        self.runner.run(self._cmd(*argv))
 
     def delete_bootstrap_route(self, route: HostBoundaryRouteSpec) -> None:
         if not isinstance(route, HostBoundaryRouteSpec):
             raise ValueError("route must be HostBoundaryRouteSpec")
-        self.runner.run(self._cmd(
+        argv = [
             "ip", "-4", "route", "del",
             route.destination.with_prefixlen,
-            "via", str(route.via),
-            "dev", route.interface,
-            "proto", str(route.protocol),
-        ))
+        ]
+        if route.via is not None:
+            argv.extend(("via", str(route.via)))
+        argv.extend(("dev", route.interface, "proto", str(route.protocol)))
+        self.runner.run(self._cmd(*argv))
 
     def add_return_route(self, route: HostBoundaryReturnRouteSpec) -> None:
         if not isinstance(route, HostBoundaryReturnRouteSpec):
             raise ValueError("route must be HostBoundaryReturnRouteSpec")
-        self.runner.run(self._cmd(
-            "ip", "-4", "route", "add",
-            "default",
-            "via", str(route.via),
+        argv = ["ip", "-4", "route", "add", "default"]
+        if route.via is not None:
+            argv.extend(("via", str(route.via)))
+        argv.extend((
             "dev", route.interface,
             "table", str(route.table),
             "proto", str(route.protocol),
         ))
+        self.runner.run(self._cmd(*argv))
 
     def delete_return_route(self, route: HostBoundaryReturnRouteSpec) -> None:
         if not isinstance(route, HostBoundaryReturnRouteSpec):
             raise ValueError("route must be HostBoundaryReturnRouteSpec")
-        self.runner.run(self._cmd(
-            "ip", "-4", "route", "del",
-            "default",
-            "via", str(route.via),
+        argv = ["ip", "-4", "route", "del", "default"]
+        if route.via is not None:
+            argv.extend(("via", str(route.via)))
+        argv.extend((
             "dev", route.interface,
             "table", str(route.table),
             "proto", str(route.protocol),
         ))
+        self.runner.run(self._cmd(*argv))
 
     def add_return_rule(self, rule: HostBoundaryRuleSpec) -> None:
         if not isinstance(rule, HostBoundaryRuleSpec):
@@ -213,7 +217,7 @@ def _exact_route_present(
     raw_json: str,
     *,
     destination: str,
-    gateway: str,
+    gateway: str | None,
     interface: str,
     protocol: int,
 ) -> bool:
@@ -270,7 +274,8 @@ def _exact_return_route_present(
     row = matches[0]
     if row.get("type", "unicast") != "unicast":
         raise RuntimeError("host-boundary return route is not unicast")
-    if row.get("dev") != desired.interface or row.get("gateway") != str(desired.via):
+    expected_gateway = None if desired.via is None else str(desired.via)
+    if row.get("dev") != desired.interface or row.get("gateway") != expected_gateway:
         raise RuntimeError("host-boundary return route next hop is foreign/conflicting")
     if _decimal(row.get("protocol")) != desired.protocol:
         raise RuntimeError("host-boundary return route protocol owner mismatch")

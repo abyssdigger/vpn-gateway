@@ -169,6 +169,46 @@ class LinuxHostBoundaryRouteBackendTests(unittest.TestCase):
         )
         self.assertTrue(self.backend.return_route_present(route))
 
+    def test_device_only_bootstrap_and_return_routes_are_exact(self):
+        bootstrap = HostBoundaryRouteSpec(
+            destination=IPv4Network("10.0.0.0/8"),
+            via=None,
+            interface="vnga-host0",
+            protocol=203,
+        )
+        route = HostBoundaryReturnRouteSpec(
+            via=None,
+            interface="vnga-host0",
+            table=1053,
+            protocol=203,
+        )
+        responses = iter((
+            '[{"dst":"10.0.0.0/8","dev":"vnga-host0","protocol":"203"}]',
+            '[{"dst":"default","dev":"vnga-host0","protocol":"203","table":1053}]',
+        ))
+        self.runner.run = lambda argv: next(responses)
+        self.assertTrue(self.backend.bootstrap_route_present(bootstrap))
+        self.assertTrue(self.backend.return_route_present(route))
+
+        command_runner = Runner()
+        backend = LinuxHostBoundaryRouteBackend(command_runner)
+        backend.add_bootstrap_route(bootstrap)
+        backend.add_return_route(route)
+        self.assertIn(
+            (
+                "ip", "-4", "route", "add", "10.0.0.0/8",
+                "dev", "vnga-host0", "proto", "203",
+            ),
+            command_runner.calls,
+        )
+        self.assertIn(
+            (
+                "ip", "-4", "route", "add", "default",
+                "dev", "vnga-host0", "table", "1053", "proto", "203",
+            ),
+            command_runner.calls,
+        )
+
     def test_matching_bootstrap_route_and_return_rule_are_observed(self):
         bootstrap = HostBoundaryRouteSpec(
             destination=IPv4Network("10.0.0.0/8"),

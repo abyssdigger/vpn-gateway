@@ -33,19 +33,20 @@ Alpha controller:
 
 Это ограничения текущей сборки, а не новые product constraints:
 
-- имена managed namespace/veth и boundary IPv4 сейчас фиксированы:
-  - `vpn-gate-alpha`;
-  - `vnga-host0`;
-  - `vnga-inner0`;
-  - `198.19.255.1/30 <-> 198.19.255.2/30`;
+- primary managed-L3 endpoint сейчас фиксирован:
+  - namespace: `vpn-gate-alpha`;
+  - host endpoint: `vnga-host0`, unnumbered routed veth;
+  - stack endpoint: `vnga-inner0`, stack-local service address `198.19.255.2/32`;
+  - host имеет только owned route `198.19.255.2/32 dev vnga-host0`; peer gateway IP отсутствует;
+  - routed-veth backend использует Proxy ARP и `rp_filter=0` только на двух boundary endpoints;
 - canonical grammar уже принята; alpha materializes Device `use_outbound_nat`, ordinary
   Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
 - `availability_check` и Profile `+snat` распознаются как canonical syntax, но alpha fail-fast
   отклоняет их до завершения соответствующих lower runtime paths; canonical `+route-return`
   уже materialized через selected host-boundary bootstrap/return contribution;
 - host-side publication требует уже существующего внешнего host forwarding; alpha проверяет
-  `net.ipv4.ip_forward` и явные host IPv4/interface selectors, но не включает global host
-  forwarding, не назначает host addresses и не поднимает host interfaces;
+  `net.ipv4.ip_forward` и явные ordinary-host IPv4/interface selectors, но не включает global
+  host forwarding и не меняет адреса/UP-state внешних ordinary host interfaces;
 - при `use_outbound_nat = false` удаленная сторона должна иметь нормальный обратный маршрут;
 - config hot reload не поддерживается: изменение `config.toml` требует restart controller;
 - текущий RuntimeStatusAgent подключён через alpha JSON surface; путь/JSON presentation пока
@@ -231,6 +232,8 @@ EXP-051 запускает именно установленный controller un
 systemd environment и проверяет:
 
 - zero-path fail-closed startup;
+- реальный routed managed-L3 primary boundary: unnumbered host endpoint, stack service `/32`,
+  device-only host service route и device-only stack default;
 - точный client-transport admission до запуска VPN;
 - реальную server publication через host DNAT + managed local admission до появления VPN endpoint;
 - VPN MainPID внутри managed netns;
@@ -238,6 +241,11 @@ systemd environment и проверяет:
 - реальный controlled payload;
 - VPN-only restart без restart controller;
 - fresh ifindex generation + второе runtime reconciliation;
+- device-only selected paired-RPDB host bootstrap без peer gateway;
 - удаление host publication owner до managed-domain teardown и чистую остановку всего stack.
+
+Текущая migration evidence: EXP-051 `EXP051_ROUTED_MANAGED_L3_BOUNDARY=PASS` и
+`EXP051_SELECTED_HOST_BOOTSTRAP_DEVICE_ONLY=PASS`; gateway-less stateful-return отдельно
+подтвержден EXP-073.
 
 См. `design/experiments/EXP-051 NG3 first functioning alpha/`.

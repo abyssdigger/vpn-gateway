@@ -24,6 +24,7 @@ from rou.domain import Direction
 from rou.instance_lock import InstanceLockSpec
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
+from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
     destroy_managed_network_domain,
@@ -101,8 +102,9 @@ def main() -> int:
         namespace=namespace,
         host_interface=host_interface,
         inner_interface="host0",
-        host_address=IPv4Interface("198.19.255.1/30"),
-        inner_address=IPv4Interface("198.19.255.2/30"),
+        host_address=None,
+        inner_address=IPv4Interface("198.19.255.2/32"),
+        primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
     runner = SubprocessNftRunner()
 

@@ -33,12 +33,15 @@ host-global forwarding sysctl.
 
 ```text
 host
-  vnga-host0 198.19.255.1/30
-      |
-      | managed boundary
-      |
+  lo             198.19.255.1/32   (test-only ordinary host-local endpoint)
+  route          198.19.255.2/32 dev vnga-host0
+  vnga-host0     unnumbered routed veth
+      ||
+      || managed L3 boundary / Proxy ARP
+      ||
   /run/netns/vpn-gate-alpha
-      vnga-inner0 198.19.255.2/30
+      vnga-inner0 198.19.255.2/32
+      default dev vnga-inner0
       vpn0        10.253.0.2 <-> 10.253.0.1
       OpenVPN client under systemd
       |
@@ -62,23 +65,25 @@ The remote test namespace receives an explicit return route for host source
 1. Install the actual alpha package/service files.
 2. Start `vpn-gate-alpha.service`; systemd start completes only after `READY=1`.
 3. Confirm `/run/netns/vpn-gate-alpha` and the managed boundary exist.
-4. Confirm zero-path startup is fail-closed but contains the exact OpenVPN transport allow.
-5. Before VPN start, confirm host publication owner + managed local publication admission and
+4. Confirm the host boundary is unnumbered, the stack endpoint owns only
+   `198.19.255.2/32`, and both host service route and stack default are device-only.
+5. Confirm zero-path startup is fail-closed but contains the exact OpenVPN transport allow.
+6. Before VPN start, confirm host publication owner + managed local publication admission and
    pass real external TCP through 14443 -> 24443.
-6. Start the actual stack-specific OpenVPN systemd unit.
-6. Confirm its MainPID is inside the managed netns and `vpn0` appears.
-7. Without restarting VPN-GATE, wait for local reconciliation to observe/bind `vpn0`.
-8. Confirm host payload to `10.253.0.1` succeeds through the current path.
-9. Restart only the OpenVPN unit and confirm:
+7. Start the actual stack-specific OpenVPN systemd unit.
+8. Confirm its MainPID is inside the managed netns and `vpn0` appears.
+9. Without restarting VPN-GATE, wait for local reconciliation to observe/bind `vpn0`.
+10. Confirm host payload to `10.253.0.1` succeeds through the current path.
+11. Restart only the OpenVPN unit and confirm:
    - new PID;
    - fresh `vpn0` generation;
    - payload recovers through ordinary periodic reconciliation.
-11. Stop `vpn-gate-alpha.service` and confirm:
+12. Stop `vpn-gate-alpha.service` and confirm:
     - bound OpenVPN unit inactive;
     - old VPN PID absent;
     - managed netns absent;
     - host boundary absent.
-12. Repeat only as needed to distinguish harness defects from runtime defects; do not hide
+13. Repeat only as needed to distinguish harness defects from runtime defects; do not hide
     product failures with test-only repair.
 
 ## Evidence
@@ -95,6 +100,15 @@ Final runtime evidence:
 - two production reconciliation markers: first endpoint appearance and VPN-only restart.
 
 See `EXP-051-result-20261117-pass.md`.
+
+Managed-L3 lifecycle migration evidence on 2026-11-19:
+
+- workflow run `44604743687`, job `linux-alpha-smoke` (`135845485684`);
+- `EXP051_ROUTED_MANAGED_L3_BOUNDARY=PASS`;
+- `EXP051_SELECTED_HOST_BOOTSTRAP_DEVICE_ONLY=PASS`;
+- publication E2E, first payload, host-local `+route-return`, VPN-only restart/reconcile and
+  clean stop all remained PASS;
+- `EXP051_RESULT=PASS`.
 
 The harness is `exp051_alpha_smoke.py` and runs in the dedicated
 `linux-alpha-smoke` GitHub Actions job.

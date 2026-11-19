@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from ipaddress import IPv4Interface
+from ipaddress import IPv4Interface, IPv4Network, ip_network
 import json
 import re
 from typing import Protocol, Sequence
@@ -14,6 +14,7 @@ from .forwarding_gate import (
 )
 from .interface_identity import InterfaceIdentity
 from .linux_forwarding_gate import LinuxForwardingGateBackend
+from .managed_l3_boundary import ManagedL3BoundaryBackend
 
 
 _IFNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
@@ -81,8 +82,9 @@ class ManagedNetworkDomainSpec:
     namespace: str
     host_interface: str
     inner_interface: str
-    host_address: IPv4Interface
+    host_address: IPv4Interface | None
     inner_address: IPv4Interface
+    primary_backend: ManagedL3BoundaryBackend | None = None
     additional_boundaries: tuple[ManagedBoundaryLinkSpec, ...] = ()
 
     def __post_init__(self) -> None:
@@ -98,27 +100,37 @@ class ManagedNetworkDomainSpec:
                 raise ValueError(f"invalid {label} {value!r}")
         if self.host_interface == self.inner_interface:
             raise ValueError("host and inner interface names must differ")
-        if not isinstance(self.host_address, IPv4Interface):
-            raise ValueError("host_address must be IPv4Interface")
         if not isinstance(self.inner_address, IPv4Interface):
             raise ValueError("inner_address must be IPv4Interface")
-        if self.host_address.ip == self.inner_address.ip:
-            raise ValueError("host and inner addresses must differ")
-        if self.host_address.network != self.inner_address.network:
-            raise ValueError(
-                "host and inner addresses must belong to the same IPv4 network"
-            )
-        for label, address in (
-            ("host", self.host_address),
-            ("inner", self.inner_address),
-        ):
-            network = address.network
-            if network.prefixlen <= 30 and address.ip in {
-                network.network_address,
-                network.broadcast_address,
-            }:
+
+        if self.primary_backend is None:
+            if not isinstance(self.host_address, IPv4Interface):
                 raise ValueError(
-                    f"{label} address is not usable in its subnet"
+                    "transitional addressed primary boundary requires host_address"
+                )
+            _validate_boundary_link(
+                self.host_interface,
+                self.inner_interface,
+                self.host_address,
+                self.inner_address,
+            )
+        else:
+            if (
+                self.primary_backend
+                is not ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP
+            ):
+                raise ValueError(
+                    "managed network-domain lifecycle currently materializes only "
+                    "routed-veth-proxy-arp; alternate backends share the contract "
+                    "but require their own lifecycle Driver"
+                )
+            if self.host_address is not None:
+                raise ValueError(
+                    "routed managed L3 primary boundary must not have host_address"
+                )
+            if self.inner_address.network.prefixlen != 32:
+                raise ValueError(
+                    "routed managed L3 stack-local service address must be /32"
                 )
 
         if not isinstance(self.additional_boundaries, tuple) or any(
@@ -128,30 +140,42 @@ class ManagedNetworkDomainSpec:
             raise ValueError(
                 "additional_boundaries must contain ManagedBoundaryLinkSpec values"
             )
-        all_links = (
-            (self.host_interface, self.inner_interface, self.host_address, self.inner_address),
-            *(
-                (
-                    item.host_interface,
-                    item.inner_interface,
-                    item.host_address,
-                    item.inner_address,
-                )
-                for item in self.additional_boundaries
-            ),
-        )
         names = [
-            name
-            for host_if, inner_if, _host_addr, _inner_addr in all_links
-            for name in (host_if, inner_if)
+            self.host_interface,
+            self.inner_interface,
+            *(
+                name
+                for item in self.additional_boundaries
+                for name in (item.host_interface, item.inner_interface)
+            ),
         ]
         if len(set(names)) != len(names):
             raise ValueError("managed boundary interface names must be globally unique")
-        networks = [host_addr.network for _h, _i, host_addr, _ia in all_links]
+
+        primary_network = (
+            self.host_address.network
+            if self.host_address is not None
+            else self.inner_address.network
+        )
+        networks = [
+            primary_network,
+            *(item.host_address.network for item in self.additional_boundaries),
+        ]
         for index, left in enumerate(networks):
             for right in networks[index + 1:]:
                 if left.overlaps(right):
                     raise ValueError("managed boundary IPv4 networks must not overlap")
+
+    @property
+    def routed_primary(self) -> bool:
+        return (
+            self.primary_backend
+            is ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP
+        )
+
+    @property
+    def host_boundary_gateway(self):
+        return None if self.routed_primary else self.inner_address.ip
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,11 +276,22 @@ def verify_managed_network_domain(
             runner,
             spec.host_interface,
         )
-        if host_addresses != frozenset((spec.host_address,)):
-            errors.append(
-                "host boundary IPv4 address set does not exactly match "
-                f"{spec.host_address.with_prefixlen}"
-            )
+        expected_host_addresses = (
+            frozenset()
+            if spec.routed_primary
+            else frozenset((spec.host_address,))
+        )
+        if host_addresses != expected_host_addresses:
+            if spec.routed_primary:
+                errors.append(
+                    "routed host boundary must not carry an IPv4 address"
+                )
+            else:
+                assert spec.host_address is not None
+                errors.append(
+                    "host boundary IPv4 address set does not exactly match "
+                    f"{spec.host_address.with_prefixlen}"
+                )
 
     if inner is not None:
         inner_addresses = _ipv4_addresses(
@@ -269,6 +304,28 @@ def verify_managed_network_domain(
                 "inner boundary IPv4 address set does not exactly match "
                 f"{spec.inner_address.with_prefixlen}"
             )
+
+    if spec.routed_primary and host is not None and inner is not None:
+        for label, namespace, interface in (
+            ("host", None, spec.host_interface),
+            ("inner", spec.namespace, spec.inner_interface),
+        ):
+            if _sysctl_int(
+                runner,
+                f"net.ipv4.conf.{interface}.proxy_arp",
+                namespace=namespace,
+            ) != 1:
+                errors.append(
+                    f"{label} managed L3 endpoint Proxy ARP is not enabled"
+                )
+            if _sysctl_int(
+                runner,
+                f"net.ipv4.conf.{interface}.rp_filter",
+                namespace=namespace,
+            ) != 0:
+                errors.append(
+                    f"{label} managed L3 endpoint rp_filter is not disabled"
+                )
 
     boundary_interfaces: list[InterfaceIdentity] = []
     if inner is not None and type(inner.get("ifindex")) is int:
@@ -346,14 +403,45 @@ def verify_managed_network_domain(
         for row in routes
         if row.get("dst", "default") == "default"
     ]
-    if len(defaults) != 1 or not (
-        defaults[0].get("gateway") == str(spec.host_address.ip)
-        and defaults[0].get("dev") == spec.inner_interface
-    ):
-        errors.append(
-            "namespace default route does not exactly use configured host address "
-            "and inner boundary"
+    if spec.routed_primary:
+        if len(defaults) != 1 or not (
+            defaults[0].get("dev") == spec.inner_interface
+            and defaults[0].get("gateway") is None
+        ):
+            errors.append(
+                "namespace default route does not exactly use routed inner boundary"
+            )
+
+        host_routes = _json_array(
+            runner.run(
+                ("ip", "-j", "-4", "route", "show", "table", "main")
+            ),
+            "host main-route snapshot",
         )
+        service_routes = [
+            row
+            for row in host_routes
+            if _route_network(row.get("dst", "default"))
+            == spec.inner_address.network
+        ]
+        if len(service_routes) != 1 or not (
+            service_routes[0].get("dev") == spec.host_interface
+            and service_routes[0].get("gateway") is None
+            and service_routes[0].get("type", "unicast") == "unicast"
+        ):
+            errors.append(
+                "host stack-local service route does not exactly use routed host boundary"
+            )
+    else:
+        assert spec.host_address is not None
+        if len(defaults) != 1 or not (
+            defaults[0].get("gateway") == str(spec.host_address.ip)
+            and defaults[0].get("dev") == spec.inner_interface
+        ):
+            errors.append(
+                "namespace default route does not exactly use configured host address "
+                "and inner boundary"
+            )
 
     primary_boundary = (
         boundary_interfaces[0]
@@ -508,13 +596,15 @@ def _create_managed_network_domain(
                 "netns", spec.namespace,
             )
         )
-        runner.run(
-            (
-                "ip", "addr", "add",
-                spec.host_address.with_prefixlen,
-                "dev", spec.host_interface,
+        if not spec.routed_primary:
+            assert spec.host_address is not None
+            runner.run(
+                (
+                    "ip", "addr", "add",
+                    spec.host_address.with_prefixlen,
+                    "dev", spec.host_interface,
+                )
             )
-        )
         runner.run(("ip", "link", "set", spec.host_interface, "up"))
         runner.run(
             (
@@ -536,14 +626,58 @@ def _create_managed_network_domain(
                 "link", "set", spec.inner_interface, "up",
             )
         )
-        runner.run(
-            (
-                "ip", "-n", spec.namespace,
-                "-4", "route", "replace", "default",
-                "via", str(spec.host_address.ip),
-                "dev", spec.inner_interface,
+
+        if spec.routed_primary:
+            runner.run(
+                (
+                    "sysctl", "-w",
+                    f"net.ipv4.conf.{spec.host_interface}.proxy_arp=1",
+                )
             )
-        )
+            runner.run(
+                (
+                    "sysctl", "-w",
+                    f"net.ipv4.conf.{spec.host_interface}.rp_filter=0",
+                )
+            )
+            runner.run(
+                (
+                    "ip", "netns", "exec", spec.namespace,
+                    "sysctl", "-w",
+                    f"net.ipv4.conf.{spec.inner_interface}.proxy_arp=1",
+                )
+            )
+            runner.run(
+                (
+                    "ip", "netns", "exec", spec.namespace,
+                    "sysctl", "-w",
+                    f"net.ipv4.conf.{spec.inner_interface}.rp_filter=0",
+                )
+            )
+            runner.run(
+                (
+                    "ip", "-4", "route", "replace",
+                    spec.inner_address.network.with_prefixlen,
+                    "dev", spec.host_interface,
+                )
+            )
+            runner.run(
+                (
+                    "ip", "-n", spec.namespace,
+                    "-4", "route", "replace", "default",
+                    "dev", spec.inner_interface,
+                )
+            )
+        else:
+            assert spec.host_address is not None
+            runner.run(
+                (
+                    "ip", "-n", spec.namespace,
+                    "-4", "route", "replace", "default",
+                    "via", str(spec.host_address.ip),
+                    "dev", spec.inner_interface,
+                )
+            )
 
         for extra in spec.additional_boundaries:
             runner.run(
@@ -713,6 +847,36 @@ def _ipv4_addresses(
             continue
         result.add(IPv4Interface(f"{local}/{prefixlen}"))
     return frozenset(result)
+
+
+def _sysctl_int(
+    runner: ManagedNetworkDomainRunner,
+    key: str,
+    *,
+    namespace: str | None = None,
+) -> int | None:
+    argv = (
+        ("sysctl", "-n", key)
+        if namespace is None
+        else ("ip", "netns", "exec", namespace, "sysctl", "-n", key)
+    )
+    raw = runner.run(argv).strip()
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _route_network(value: object) -> IPv4Network | None:
+    if value == "default":
+        return IPv4Network("0.0.0.0/0")
+    if not isinstance(value, str):
+        return None
+    try:
+        network = ip_network(value, strict=False)
+    except ValueError:
+        return None
+    return network if isinstance(network, IPv4Network) else None
 
 
 def _json_array(text: str, what: str) -> list[dict]:

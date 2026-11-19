@@ -5,6 +5,7 @@ from ipaddress import IPv4Interface
 import unittest
 
 from rou.forwarding_gate import ForwardingGateState
+from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import ManagedNetworkDomainSpec
 from rou.release1_config import parse_release1_config
 from rou.selected_host_boundary import (
@@ -22,6 +23,15 @@ DOMAIN = ManagedNetworkDomainSpec(
     inner_interface="vnga-inner0",
     host_address=IPv4Interface("198.19.255.1/30"),
     inner_address=IPv4Interface("198.19.255.2/30"),
+)
+
+ROUTED_DOMAIN = ManagedNetworkDomainSpec(
+    namespace="vpn-gate-alpha",
+    host_interface="vnga-host0",
+    inner_interface="vnga-inner0",
+    host_address=None,
+    inner_address=IPv4Interface("198.19.255.2/32"),
+    primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
 )
 
 
@@ -134,6 +144,18 @@ class SelectedHostBoundaryTests(unittest.TestCase):
         self.assertEqual(desired.return_owner.bootstrap_routes, ())
         self.assertEqual(desired.return_owner.underlay_pins, ())
 
+    def test_routed_domain_uses_device_only_bootstrap_and_return_routes(self):
+        desired = build_selected_host_boundary_desired(
+            config("bidirectional"),
+            ROUTED_DOMAIN,
+        )
+        self.assertTrue(desired.bootstrap_owner.routes)
+        self.assertTrue(
+            all(route.via is None for route in desired.bootstrap_owner.routes)
+        )
+        self.assertIsNotNone(desired.return_owner.return_route)
+        self.assertIsNone(desired.return_owner.return_route.via)
+
     def test_inbound_default_has_stateful_return_and_no_bootstrap(self):
         desired = build_selected_host_boundary_desired(
             config("inbound"),
@@ -195,6 +217,38 @@ class SelectedHostBoundaryTests(unittest.TestCase):
                         "table": route.table,
                         "dst": "default",
                         "gateway": str(route.via),
+                        "dev": route.interface,
+                        "protocol": route.protocol,
+                    },
+                ),
+                rules=(
+                    {
+                        "priority": rule.priority,
+                        "src": "all",
+                        "fwmark": hex(rule.mark),
+                        "table": rule.table,
+                    },
+                ),
+            ),
+            return_nft_backend=NftBackend(Observation()),
+            bootstrap_backend=BootstrapBackend(Observation()),
+            desired=desired,
+        )
+        self.assertTrue(contribution.observe().exact)
+
+    def test_exact_device_only_stateful_return_owner_is_observed_exact(self):
+        desired = build_selected_host_boundary_desired(
+            config("inbound"),
+            ROUTED_DOMAIN,
+        )
+        route = desired.return_owner.return_route
+        rule = desired.return_owner.return_rule
+        contribution = SelectedLinuxHostBoundaryContribution(
+            route_backend=RouteBackend(
+                routes=(
+                    {
+                        "table": route.table,
+                        "dst": "default",
                         "dev": route.interface,
                         "protocol": route.protocol,
                     },

@@ -9,6 +9,7 @@ import sys
 from rou.forwarding_gate import ForwardingGateState
 from rou.linux_forwarding_gate import LinuxForwardingGateBackend
 from rou.linux_nft_scaffold import SubprocessNftRunner
+from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import (
     ManagedBoundaryLinkSpec,
     ManagedNetworkDomainError,
@@ -42,8 +43,9 @@ def main() -> int:
         namespace=namespace,
         host_interface=host_interface,
         inner_interface="host0",
-        host_address=IPv4Interface("198.18.255.1/30"),
-        inner_address=IPv4Interface("198.18.255.2/30"),
+        host_address=None,
+        inner_address=IPv4Interface("198.18.255.2/32"),
+        primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
         additional_boundaries=(
             ManagedBoundaryLinkSpec(
                 host_interface=extra_host_interface,
@@ -97,6 +99,37 @@ def main() -> int:
         ]
         assert tables == [], tables
         print("MANAGED_DOMAIN_FRESH_CREATE_NO_POLICY=PASS")
+        host_addr = json.loads(
+            runner.run(
+                ("ip", "-j", "-4", "addr", "show", "dev", host_interface)
+            )
+        )
+        assert not host_addr or not host_addr[0].get("addr_info"), host_addr
+        host_service_route = runner.run(
+            (
+                "ip", "-4", "route", "show",
+                spec.inner_address.network.with_prefixlen,
+            )
+        )
+        assert f"dev {host_interface}" in host_service_route
+        assert " via " not in host_service_route
+        stack_default = runner.run(
+            (
+                "ip", "-n", namespace,
+                "-4", "route", "show", "default",
+            )
+        )
+        assert f"dev {spec.inner_interface}" in stack_default
+        assert " via " not in stack_default
+        assert raw_run(
+            "sysctl", "-n", f"net.ipv4.conf.{host_interface}.proxy_arp"
+        ).stdout.strip() == "1"
+        assert raw_run(
+            "ip", "netns", "exec", namespace,
+            "sysctl", "-n", f"net.ipv4.conf.{spec.inner_interface}.proxy_arp"
+        ).stdout.strip() == "1"
+        print("MANAGED_DOMAIN_ROUTED_PRIMARY=PASS")
+
 
         raw_run(
             "ip", "netns", "exec", namespace,
