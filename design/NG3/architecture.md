@@ -4695,6 +4695,33 @@ The four-class vocabulary is fixed by accepted Release-1 semantics rather than b
 count. Concrete interface names/addresses and lifecycle allocation remain lower
 implementation details; they are not user-facing knobs.
 
+The executable host-side nft owner is `linux_host_boundary_behavior.py`. It owns one
+dedicated `inet vpn_gate_host_behavior` table and only these behavior-lane consequences:
+
+- NEW connection ingress on an active lane establishes that fixed lane's host conntrack class;
+- every packet arriving from a behavior lane exits the owner's prerouting processing before
+  stateful return-mark restore, so subsequent VPN→ordinary packets cannot be reflected back
+  toward the managed stack;
+- stateful classes restore the existing common host-return packet mark on non-lane ingress
+  and host-local OUTPUT replies;
+- NAT-enabled classes apply ordinary-side masquerade from their conntrack class;
+- route-return and no-NAT classes receive no corresponding stateful/NAT action.
+
+The class marks are fixed lower Linux allocations, not Profile IDs. Profiles sharing the same
+normalized host behavior share one class and one lane rule set.
+
+The existing selected-host-boundary return **route and RPDB rule** remain the common
+stateful-return mechanism and are reused. Its historical source-prefix nft classifier is an
+alternative pre-lane realization and must not coexist with the behavior-lane classifier.
+When behavior lanes are active, integration must retain the return route/RPDB dependency but
+omit the old host-return nft classifier; the behavior owner becomes the sole classifier that
+establishes/restores the host connection behavior.
+
+The behavior owner has exact authoritative observation, full-table ownership conflict
+detection, replace-from-observed convergence and cleanup. EXP-064 remains the traffic-semantic
+evidence; the dedicated privileged owner integration test proves that the selected production
+nft representation itself can be created, freshly observed as exact and removed.
+
 ###### Managed-stack dispatch to the selected behavior lane
 
 The selected EXP-064 carrier does not require a second Profile classifier. The stack already preserves
