@@ -8,16 +8,17 @@ materializes the lower capabilities already implemented by this reference slice:
 - Device outbound NAT;
 - ordinary Device firewall rules;
 - Device-owned VPN client transport/control local allow;
+- Release-1 ICMP availability probing, bounded confirmation and effective-order convergence;
 - one local PayloadTrafficManager-style periodic reconciliation loop.
 
-Capabilities whose full lower path is not yet implemented here are rejected at
-configuration load rather than silently ignored.
+Remaining canonical capabilities whose full lower path is not yet implemented here are
+rejected at configuration load rather than silently ignored.
 """
 
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Interface
 import os
@@ -28,6 +29,7 @@ import sys
 import threading
 from typing import Iterable
 
+from .availability_manager import AvailabilityManager, AvailabilityManagerPolicy
 from .binding import DeviceBindingState, PathBinding, project_device_bindings
 from .controller_startup import (
     ControllerStartupStatus,
@@ -58,6 +60,15 @@ from .host_publication_policy import (
     HostPublicationSelectorKind,
     build_host_publication_desired,
 )
+from .icmp_probe_driver import (
+    IcmpProbeExecutionPolicy,
+    LinuxIcmpProbeDriver,
+    SubprocessProbeCommandRunner,
+)
+from .linux_availability_cycle import (
+    LinuxAvailabilityCycleResult,
+    run_linux_availability_cycle_once,
+)
 from .linux_forwarding_gate import LinuxForwardingGateBackend
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .linux_host_publication import (
@@ -72,6 +83,7 @@ from .linux_nft_scaffold import (
 )
 from .linux_policy_platform import (
     NG3_LINUX_POLICY_PLATFORM,
+    NG3_PROBE_LOCAL_PLATFORM,
     NG3_STACK_RETURN_AFFINITY_PLATFORM,
 )
 from .linux_stack_return_affinity import LinuxStackReturnAffinityBackend
@@ -92,12 +104,14 @@ from .network_policy_activation import (
     NetworkPolicyActivationResult,
     activate_network_policy,
 )
-from .network_policy_layout import allocate_network_policy_layout
 from .payload_network_policy_desired import (
     PayloadNetworkPolicyDesiredState,
     build_payload_network_policy_desired_state,
 )
 from .payload_profile import PayloadProfileRequest, build_payload_profile_requests
+from .probe_desired import ProbeDesiredAssembly, build_probe_desired_assembly
+from .probe_runtime import AvailabilityProbeRuntime
+from .route_priority_inventory import RoutePriorityPathRoute
 from .release1_config import Release1Config, parse_release1_config
 from .structural_policy_mutation import compare_structural_policy
 from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
@@ -122,6 +136,9 @@ ALPHA_INNER_ADDRESS = IPv4Interface("198.19.255.2/30")
 ALPHA_RUNTIME_DIRECTORY = Path("/run/vpn-gate-alpha")
 ALPHA_STATUS_PATH = ALPHA_RUNTIME_DIRECTORY / "status.json"
 ALPHA_AUDIT_INTERVAL_SECONDS = 1.0
+ALPHA_AVAILABILITY_DEGRADATION_THRESHOLD = 2
+ALPHA_AVAILABILITY_RECOVERY_THRESHOLD = 2
+ALPHA_PROBE_REPLY_TIMEOUT_SECONDS = 1
 
 
 class AlphaRuntimeError(RuntimeError):
@@ -136,7 +153,21 @@ class AlphaPreparedPolicy:
     binding_state: DeviceBindingState
     config: Release1Config
     last_bindings: tuple[PathBinding, ...] = ()
+    last_baseline_profiles: tuple[PayloadProfileRequest, ...] = ()
     last_profiles: tuple[PayloadProfileRequest, ...] = ()
+    last_path_routes: tuple[RoutePriorityPathRoute, ...] = ()
+    last_probe_assembly: ProbeDesiredAssembly | None = None
+    availability_runtime: AvailabilityProbeRuntime = field(
+        default_factory=AvailabilityProbeRuntime
+    )
+    availability_manager: AvailabilityManager = field(
+        default_factory=lambda: AvailabilityManager(
+            AvailabilityManagerPolicy(
+                ALPHA_AVAILABILITY_DEGRADATION_THRESHOLD,
+                ALPHA_AVAILABILITY_RECOVERY_THRESHOLD,
+            )
+        )
+    )
 
     @classmethod
     def from_text(
@@ -157,14 +188,6 @@ class AlphaPreparedPolicy:
                 raise AlphaRuntimeError(
                     f"profile {profile_id!r} requests +snat, which is not yet "
                     "materialized by the alpha runtime"
-                )
-            if (
-                profile.availability_check is not None
-                or profile.availability_uses_device_default
-            ):
-                raise AlphaRuntimeError(
-                    f"profile {profile_id!r} requests availability_check, which "
-                    "is not yet assembled end-to-end by the alpha runtime"
                 )
 
         prepared = cls(
@@ -198,11 +221,24 @@ class AlphaPreparedPolicy:
             projection.bindings,
         )
         path_routes = realize_direct_device_path_routes(projection.bindings)
-        layout = allocate_network_policy_layout(
+        probe_assembly = build_probe_desired_assembly(
+            self.config,
             profiles,
-            (),
+            path_routes,
             NG3_LINUX_POLICY_PLATFORM,
+            NG3_PROBE_LOCAL_PLATFORM,
         )
+        layout = probe_assembly.layout
+        self.availability_runtime.configure(
+            probe_assembly.intents,
+            path_routes,
+        )
+        availability_projection = self.availability_manager.synchronize(
+            self.availability_runtime.current_contexts,
+            profiles,
+            self.config,
+        )
+        effective_profiles = availability_projection.effective_profiles
 
         nat_policies = tuple(
             DeviceNatPolicyIntent(
@@ -268,7 +304,7 @@ class AlphaPreparedPolicy:
         )
 
         desired = build_payload_network_policy_desired_state(
-            profiles,
+            effective_profiles,
             layout,
             path_routes,
             host_boundary,
@@ -276,10 +312,14 @@ class AlphaPreparedPolicy:
             firewall_policies,
             publication_intents,
             integration_intents,
+            probe_local_rules=probe_assembly.probe.local_rules,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
         )
         self.last_bindings = projection.bindings
-        self.last_profiles = profiles
+        self.last_baseline_profiles = profiles
+        self.last_profiles = effective_profiles
+        self.last_path_routes = path_routes
+        self.last_probe_assembly = probe_assembly
         return desired
 
     def build_host_publication_desired(self) -> HostPublicationDesiredState:
@@ -502,6 +542,38 @@ def reconcile_alpha_payload_once(
     )
 
 
+def reconcile_alpha_availability_once(
+    prepared: AlphaPreparedPolicy,
+    runner: SubprocessNftRunner,
+    probe_driver: LinuxIcmpProbeDriver,
+) -> LinuxAvailabilityCycleResult:
+    if prepared.last_probe_assembly is None:
+        raise AlphaRuntimeError(
+            "availability cycle requires a current probe desired assembly"
+        )
+    result = run_linux_availability_cycle_once(
+        prepared.config,
+        prepared.last_baseline_profiles,
+        prepared.last_path_routes,
+        prepared.last_probe_assembly,
+        prepared.availability_runtime,
+        prepared.availability_manager,
+        probe_driver,
+        runner=runner,
+        namespace=ALPHA_NAMESPACE,
+        platform=NG3_LINUX_POLICY_PLATFORM,
+    )
+    if (
+        result.observation is not None
+        and result.priority is not None
+        and result.priority.confirmed
+    ):
+        prepared.last_profiles = (
+            result.observation.projection.effective_profiles
+        )
+    return result
+
+
 def _domain_spec() -> ManagedNetworkDomainSpec:
     return ManagedNetworkDomainSpec(
         namespace=ALPHA_NAMESPACE,
@@ -546,6 +618,14 @@ def run_alpha_runtime(
         raise ValueError("audit_interval_seconds must be positive")
 
     runner = SubprocessNftRunner()
+    probe_driver = LinuxIcmpProbeDriver(
+        runner=SubprocessProbeCommandRunner(),
+        namespace=ALPHA_NAMESPACE,
+        process_uid=NG3_PROBE_LOCAL_PLATFORM.process_uid,
+        execution_policy=IcmpProbeExecutionPolicy(
+            ALPHA_PROBE_REPLY_TIMEOUT_SECONDS,
+        ),
+    )
     domain_spec = _domain_spec()
     stop_event = threading.Event()
     holder: dict[str, AlphaPreparedPolicy] = {}
@@ -616,6 +696,43 @@ def run_alpha_runtime(
         )
         write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
 
+        availability_start = reconcile_alpha_availability_once(
+            prepared,
+            runner,
+            probe_driver,
+        )
+        if not availability_start.confirmed:
+            stopped = stop_controller_once(
+                startup.session,
+                domain_spec,
+                runner,
+            )
+            status_agent.mark_unconfirmed(
+                readiness=RuntimeReadiness.FAILED,
+                problem=(
+                    availability_start.diagnostic
+                    or (
+                        "availability startup cycle is not confirmed: "
+                        f"{availability_start.status.value}"
+                    )
+                ),
+            )
+            write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+            _log(
+                "VPNG_ALPHA_START_FAILED",
+                (
+                    "status=availability_unready "
+                    f"availability={availability_start.status.value} "
+                    f"diagnostic={availability_start.diagnostic!r} "
+                    f"managed_cleanup={stopped.status.value}"
+                ),
+            )
+            return (
+                1
+                if stopped.status is ControllerStopStatus.STOPPED
+                else 2
+            )
+
         host_publication_desired = prepared.build_host_publication_desired()
         host_publication_backend = LinuxHostPublicationBackend(runner)
         host_start = converge_host_publication_once(
@@ -660,6 +777,10 @@ def run_alpha_runtime(
             prepared.last_profiles,
             prepared.last_bindings,
         )
+        if availability_start.observation is not None:
+            status_agent.confirm_availability(
+                availability_start.observation.projection.problem_owners
+            )
         write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
 
         _log(
@@ -703,17 +824,44 @@ def run_alpha_runtime(
                     ),
                 )
             )
-            if result.ready:
+            availability_result = (
+                reconcile_alpha_availability_once(
+                    prepared,
+                    runner,
+                    probe_driver,
+                )
+                if result.ready
+                else None
+            )
+            if (
+                result.ready
+                and availability_result is not None
+                and availability_result.confirmed
+            ):
                 status_agent.confirm_effective(
                     prepared.last_profiles,
                     prepared.last_bindings,
                 )
+                if availability_result.observation is not None:
+                    status_agent.confirm_availability(
+                        availability_result.observation.projection.problem_owners
+                    )
             else:
                 status_agent.mark_unconfirmed(
                     readiness=RuntimeReadiness.DEGRADED,
                     problem=(
-                        result.diagnostic
-                        or f"alpha reconcile failed: {result.status.value}"
+                        (
+                            availability_result.diagnostic
+                            if availability_result is not None
+                            else None
+                        )
+                        or result.diagnostic
+                        or (
+                            "availability reconcile is not confirmed: "
+                            f"{availability_result.status.value}"
+                            if availability_result is not None
+                            else f"alpha reconcile failed: {result.status.value}"
+                        )
                     ),
                 )
             write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())

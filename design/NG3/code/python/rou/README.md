@@ -81,7 +81,7 @@ Important non-goals of the current reference:
 - no Netlink event state/history/replay;
 - no generic local/system stack_input/stack_output exception framework; publication, supported-integration and probe-local traffic use separate bounded owner-specific contracts inside the shared composite nft owner;
 - no full daemon/lifecycle assembly;
-- no production probe scheduling/cadence assembly yet; exact one-shot ICMP execution exists and continuous orchestration remains separate;
+- no independent production probe scheduler framework; the Python alpha drives the bounded availability cycle from its existing periodic Manager audit cadence;
 - no Profile ordinary-side `+snat` physical materialization yet;
 - no user-facing availability timing knobs; cadence/threshold values remain local implementation policy.
 

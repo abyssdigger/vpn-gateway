@@ -48,6 +48,9 @@ Current trace:
 | EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
 | bounded current probe observation context / late-result rejection / technical-result mapping | `probe_runtime.py` | `NG3-2026-11-19-probe-observation-context-agent-review.md` |
 | EXP-067-backed one-shot ICMP exit semantics with bound `-I <ifname>` path execution | `icmp_probe_driver.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-icmp-probe-driver-review.md`, `EXP-067-result-20261119.md` |
+| bounded availability observation tick + confirmation/effective-order composition | `availability_observation_tick.py`, `availability_manager.py` | `NG3-2026-11-19-availability-observation-tick-review.md`, `NG3-2026-11-19-availability-manager-effective-order-review.md` |
+| availability effective-order -> existing make-before-break route-priority bridge | `availability_route_priority.py` | `NG3-2026-11-19-availability-route-priority-bridge-review.md` |
+| bounded Linux probe-routing/readiness/observation/priority cycle | `linux_availability_cycle.py` | current continuous-availability cycle review |
 | accepted NG3 Linux platform resource space | `linux_policy_platform.py` | `EXP-028-result-20261116.md` |
 | semantic Profile/allocation -> route-key priority realization | `route_priority_domain_builder.py` | `NG3-2026-11-16-route-priority-domain-builder-review.md` |
 | explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
@@ -82,7 +85,6 @@ The executable reference implementation still stops before separately-gated runt
 boundaries:
 
 - Profile ordinary-side `+snat` physical materialization;
-- availability probe execution/runtime assembly;
 - stable production packaging/version lifecycle and a stable external status API.
 
 Live current-state presentation is no longer one of these gaps: the executable alpha publishes
@@ -6331,8 +6333,9 @@ Canonical Release-1 configuration теперь определяется `design/
 подтвердить `ForwardingGate=DISABLED` и публикует diagnostic в journal; он не усыновляет
 произвольные процессы или вручную поврежденные namespace artifacts.
 
-User-facing `RuntimeStatusAgent` в эту первую alpha-сборку еще не подключен. Journal markers
-являются implementation/evidence diagnostics и не объявляются финальным status interface.
+Python alpha публикует current-only `RuntimeStatusAgent` snapshot атомарно в
+`/run/vpn-gate-alpha/status.json`. Journal markers остаются implementation/evidence
+diagnostics и не объявляются финальным stable status interface.
 
 # 13. RuntimeStatusAgent
 
@@ -6378,6 +6381,20 @@ RuntimeStatusSnapshot:
     blocking_problems
     unknown_or_unconfirmed_fields
 ```
+
+Availability presentation in the current alpha uses only bounded current state:
+
+- `disabled` — Profile availability is not configured;
+- `unconfirmed` — availability-enabled Profile exists, but current runtime/reconcile truth is
+  not confirmed;
+- `monitoring` — the availability cycle is current and no confirmed problem owner exists for
+  that Profile;
+- `problem` — at least one current `(Profile, logical path)` owner has an established
+  availability problem.
+
+`monitoring` deliberately does not claim that every remote target is positively proven
+healthy; it states that current availability machinery is operating and has no established
+problem state.
 
 Truthfulness rules:
 
