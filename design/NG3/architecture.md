@@ -5051,12 +5051,12 @@ No requirement promises an atomic simultaneous metric permutation across all des
 prefixes. The required observable invariants are preserved path membership/safety during
 the transition and the configured effective order after verified convergence.
 
-Metric convergence alone is **not** sufficient to satisfy established-flow stability for a
-multi-path Profile. The reordered metrics define selection for traffic without a preserved
-flow/path association. Before an availability-driven priority permutation is exposed for
-outbound multi-path traffic, the production path-affinity owner described in section 5.2
-must already be exact so packets belonging to an established flow continue to select their
-original logical path while it remains usable.
+For Release-1 outbound availability, pure-priority convergence does not require an additional
+per-flow path-affinity owner. The sticky active-path semantics in section 5 keep the currently
+healthy ordinary path first after failover/recovery and therefore avoid recovery-driven
+migration by construction. An explicit Profile-local reserve membership deliberately opts
+into failback to a recovered higher-baseline path. Managed-stack return affinity remains a
+separate concern for remote-initiated traffic.
 
 The unused/free metric is inferred operationally from freshly observed current state. It is
 not configuration, semantic state or a permanently materialized "hole".
