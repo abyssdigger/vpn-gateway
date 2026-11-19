@@ -40,10 +40,7 @@ pub struct InterfaceIdentity {
 }
 
 impl InterfaceIdentity {
-    pub fn new(
-        ifname: impl Into<String>,
-        ifindex: u32,
-    ) -> Result<Self, ProbeContextError> {
+    pub fn new(ifname: impl Into<String>, ifindex: u32) -> Result<Self, ProbeContextError> {
         let ifname = ifname.into();
         if ifname.is_empty() {
             return Err(ProbeContextError::EmptyInterfaceName);
