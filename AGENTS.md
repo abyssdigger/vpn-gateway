@@ -8,7 +8,7 @@ This file is an entry point, not a substitute for the normative project document
 
 Read these documents **in this exact order**:
 
-1. [CONTINUOUS-DEVELOPMENT.md](CONTINUOUS-DEVELOPMENT.md) — continuous-development rules, review units, gates, evidence, expert review, cycle timing, and checkpoints.
+1. [CONTINUOUS-DEVELOPMENT.md](CONTINUOUS-DEVELOPMENT.md) — continuous-development rules, review units, gates, evidence, expert review, cycle timing, and handoffs.
 2. [PROJECT-CONVENTIONS.md](PROJECT-CONVENTIONS.md) — project-wide conventions for documentation, reviews, repository structure, and commit publication.
 3. [design/requirements-model.md](design/requirements-model.md) — the independent normative requirements and constraints model.
 4. [design/component-model.md](design/component-model.md) — the independent normative model of components, roles, and interactions.
@@ -82,10 +82,10 @@ hardening into mandatory human checkpoints.
 
 The following operations are **routine autonomous development work** and do not need separate user approval:
 
-- Create/select dedicated cycle branches, determine `CYCLE_INTERVAL`, and designate the first cycle commit as `CYCLE_START_COMMIT` with its GitHub committer timestamp `T0`.
+- Create/select dedicated cycle branches, determine `CYCLE_INTERVAL`, and record real `CYCLE_START_TIME` before mandatory reading or the first commit, as defined in `CONTINUOUS-DEVELOPMENT.md`.
 - Develop coherent review units, write and run the cheapest sufficient tests/evidence, perform required expert review, record findings/dispositions/verdicts, and apply accepted fixes.
 - **Publish every commit to GitHub immediately**, including code, design, tests, reviews, fixes, and checkpoints. No unpublished local commit series.
-- After each commit, use its actual GitHub committer timestamp to check `Tn - T0` against `CYCLE_INTERVAL`; at the threshold, complete the current review unit, publish its checkpoint, report the precise restart state, and stop pending the next user turn.
+- After each commit, obtain fresh real current time and check elapsed time from `CYCLE_START_TIME` against `CYCLE_INTERVAL`. At the session-safety boundary, stop at the nearest safe technical point and produce the CD handoff; do not manufacture review-unit completion, a special checkpoint commit, or a mainline snapshot just because the window ended. Follow the exact handoff and safety-margin rules in `CONTINUOUS-DEVELOPMENT.md`.
 - After **each completed substantial logical work block**, publish that block's final committed tree to `main` as **one linear snapshot commit before starting the next logical block**. A CD cycle may therefore produce multiple mainline snapshots. A CD boundary by itself neither creates nor suppresses a snapshot. The working branch retains all intermediate commits and is not merged with its history into `main`.
 - An explicitly started CD authorizes and requires autonomous progress across successive logical blocks until the `CYCLE_INTERVAL`/safety boundary or a genuine blocking boundary is reached. Completing the subsystem or topic that triggered the cycle does **not** end the CD by itself. Unless the user explicitly says the cycle is limited to one topic, treat that topic as the starting point and continue with the next highest-priority sufficiently defined, unblocked project block. Do not stop early merely because one review unit, subsystem, or design seam is finished. Early exit is appropriate only for a required human decision, an external blocker, absence of further sufficiently defined unblocked work, or the existing time/safety-margin rules in `CONTINUOUS-DEVELOPMENT.md`.
 - Any new user message during an active CD **suspends autonomous CD write authorization** before further repository mutation. The agent must answer/handle that intervention first. Autonomous CD writes resume only after the user explicitly says to continue/resume the CD (or equivalent). If the intervening user message itself gives an explicit instruction for one specific repository change, that instruction authorizes only that specific change; after it is completed, the CD remains suspended until the user explicitly resumes it.
