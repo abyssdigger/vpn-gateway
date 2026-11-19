@@ -30,6 +30,7 @@ from .payload_forward_compiler import (
 )
 from .payload_nat_desired import (
     PayloadNatProjectionError,
+    ProfileSnatPolicyIntent,
     build_payload_nat_desired_state,
 )
 from .payload_profile import PayloadProfileRequest
@@ -87,6 +88,7 @@ def build_payload_network_policy_desired_state(
     integration_intents: Iterable[IntegrationLocalTransportIntent] = (),
     probe_local_rules: Iterable[ProbeLocalRuleSpec] = (),
     stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
+    profile_snat_policies: Iterable[ProfileSnatPolicyIntent] = (),
 ) -> PayloadNetworkPolicyDesiredState:
     """Compose exact current payload lower desired state without I/O."""
     if not isinstance(layout, NetworkPolicyLayout):
@@ -105,6 +107,15 @@ def build_payload_network_policy_desired_state(
     current_publications = tuple(publication_intents)
     current_integrations = tuple(integration_intents)
     current_probe_local = tuple(probe_local_rules)
+    current_profile_snat = tuple(profile_snat_policies)
+    if any(not isinstance(item, ProfileSnatPolicyIntent) for item in current_profile_snat):
+        raise PayloadNetworkPolicyProjectionError(
+            "profile_snat_policies must contain ProfileSnatPolicyIntent"
+        )
+    if current_profile_snat and stack_return_affinity_platform is None:
+        raise PayloadNetworkPolicyProjectionError(
+            "Profile SNAT requires stack Profile-association allocation"
+        )
     if any(
         not isinstance(rule, ProbeLocalRuleSpec)
         for rule in current_probe_local
@@ -156,12 +167,27 @@ def build_payload_network_policy_desired_state(
             f"Profile forward projection failed: {exc}"
         ) from exc
 
+    allocations = ()
+    if stack_return_affinity_platform is not None:
+        try:
+            allocations = allocate_stack_return_affinity(
+                current_profiles,
+                layout,
+                stack_return_affinity_platform,
+            )
+        except ValueError as exc:
+            raise PayloadNetworkPolicyProjectionError(
+                f"stack Profile-association allocation failed: {exc}"
+            ) from exc
+
     try:
         nat = build_payload_nat_desired_state(
             current_profiles,
             current_path_routes,
             current_nat_policies,
             host_boundary,
+            current_profile_snat,
+            allocations,
         )
     except PayloadNatProjectionError as exc:
         raise PayloadNetworkPolicyProjectionError(
@@ -200,11 +226,6 @@ def build_payload_network_policy_desired_state(
     stack_return_affinity = None
     if stack_return_affinity_platform is not None:
         try:
-            allocations = allocate_stack_return_affinity(
-                current_profiles,
-                layout,
-                stack_return_affinity_platform,
-            )
             stack_return_affinity = build_stack_return_affinity_desired(
                 current_profiles,
                 current_path_routes,
