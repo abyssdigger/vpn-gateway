@@ -5212,8 +5212,11 @@ separate `SAFETY_RECLOSE_FAILED` result.
 The root forwarding barrier protects managed payload forwarding only. Publication-local
 INPUT/OUTPUT state remains governed by its EXP-047 atomic full-diff contract and is included
 in the nft exactness check; the Executor does not pretend that `ip_forward=0` blocks local
-traffic. Probe-owned local/system materialization remains behind
-`design/deferrals/NG3-probe-local-system-materialization.md`.
+traffic. Probe-owned local/system state must therefore participate in the same explicit
+owned local-policy exactness boundary once materialized. The historical probe-materialization
+deferral is superseded for Release 1 as recorded in section 8.1 and
+`design/deferrals/NG3-probe-local-system-materialization.md`; EXP-026 cleanup is not a
+prerequisite for ordinary ICMP probe materialization.
 
 Privileged integration run `43949342868` proves on the current GitHub Linux environment:
 
