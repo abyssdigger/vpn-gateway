@@ -59,6 +59,16 @@ side before execution would duplicate ownership and make attempt provenance hard
 
 **Disposition:** fixed by construction. The gate only compares a fresh structural snapshot.
 
+### F4 — verifier correctly requires the invariant nft scaffold
+
+The first focused test fixture supplied an owned nft namespace without the invariant base
+chains. `compare_probe_local` rejected that snapshot before evaluating probe-local rules.
+This is the intended lower safety contract: local exactness cannot be claimed in an
+unconfirmed reserved nft namespace.
+
+**Disposition:** test-harness defect fixed. The readiness fixture now includes the canonical
+`PAYLOAD_NFT_SCAFFOLD`; the verifier was not weakened to accept an incomplete namespace.
+
 ## Evidence
 
 Focused tests cover:
