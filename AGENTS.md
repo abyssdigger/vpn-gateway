@@ -8,7 +8,7 @@ This file is an entry point, not a substitute for the normative project document
 
 Read these documents **in this exact order**:
 
-1. [CONTINUOUS-DEVELOPMENT.md](CONTINUOUS-DEVELOPMENT.md) — continuous-development rules, review units, gates, evidence, expert review, cycle timing, and checkpoints.
+1. [CONTINUOUS-DEVELOPMENT.md](CONTINUOUS-DEVELOPMENT.md) — continuous-development rules, review units, gates, evidence, expert review, cycle timing, and handoffs.
 2. [PROJECT-CONVENTIONS.md](PROJECT-CONVENTIONS.md) — project-wide conventions for documentation, reviews, repository structure, and commit publication.
 3. [design/requirements-model.md](design/requirements-model.md) — the independent normative requirements and constraints model.
 4. [design/component-model.md](design/component-model.md) — the independent normative model of components, roles, and interactions.
@@ -57,64 +57,33 @@ Before implementing a material change:
 
 ## Process-correction gate
 
-If an error is discovered in methodology/process, Git/snapshot/branch policy, CD cadence, or
-another rule governing how project work is performed, **do not immediately repair it in
-GitHub**.
-
-Before any write:
-
-1. stop work affected by the faulty process;
-2. perform only the read-only inspection needed to characterize the problem;
-3. discuss with the user:
-   - what is wrong;
-   - why the current rule/process produces incorrect behavior;
-   - the proposed correction;
-   - which process/project artifacts would change;
-   - whether already-created consequences require repair;
-4. wait for explicit user agreement on the proposed correction.
-
-Only after that agreement may the process artifacts or the consequences of the process defect
-be changed. This gate applies to project/process rules and Git-history/snapshot policy; it does
-not turn ordinary implementation defects, test-harness fixes, or unambiguous fail-closed
-hardening into mandatory human checkpoints.
+Process and Git-policy defects require the read-only diagnosis and explicit human
+agreement described in `CONTINUOUS-DEVELOPMENT.md` (§ Process-correction gate)
+before corrective writes. The repository write-authorization gate above still applies.
+Do not apply this special gate to an ordinary implementation or test defect unless it
+changes the governing process itself.
 
 ## Normal continuous-development workflow
 
 The following operations are **routine autonomous development work** and do not need separate user approval:
 
-- Create/select dedicated cycle branches, determine `CYCLE_INTERVAL`, and designate the first cycle commit as `CYCLE_START_COMMIT` with its GitHub committer timestamp `T0`.
+- Create/select dedicated cycle branches, determine `CYCLE_INTERVAL`, and record real `CYCLE_START_TIME` before mandatory reading or the first commit, as defined in `CONTINUOUS-DEVELOPMENT.md`.
 - Develop coherent review units, write and run the cheapest sufficient tests/evidence, perform required expert review, record findings/dispositions/verdicts, and apply accepted fixes.
-- **Publish every commit to GitHub immediately**, including code, design, tests, reviews, fixes, and checkpoints. No unpublished local commit series.
-- After each commit, use its actual GitHub committer timestamp to check `Tn - T0` against `CYCLE_INTERVAL`; at the threshold, complete the current review unit, publish its checkpoint, report the precise restart state, and stop pending the next user turn.
-- After **each completed substantial logical work block**, publish that block's final committed tree to `main` as **one linear snapshot commit before starting the next logical block**. A CD cycle may therefore produce multiple mainline snapshots. A CD boundary by itself neither creates nor suppresses a snapshot. The working branch retains all intermediate commits and is not merged with its history into `main`.
-- An explicitly started CD authorizes and requires autonomous progress across successive logical blocks until the `CYCLE_INTERVAL`/safety boundary or a genuine blocking boundary is reached. Completing the subsystem or topic that triggered the cycle does **not** end the CD by itself. Unless the user explicitly says the cycle is limited to one topic, treat that topic as the starting point and continue with the next highest-priority sufficiently defined, unblocked project block. Do not stop early merely because one review unit, subsystem, or design seam is finished. Early exit is appropriate only for a required human decision, an external blocker, absence of further sufficiently defined unblocked work, or the existing time/safety-margin rules in `CONTINUOUS-DEVELOPMENT.md`.
-- Any new user message during an active CD **suspends autonomous CD write authorization** before further repository mutation. The agent must answer/handle that intervention first. Autonomous CD writes resume only after the user explicitly says to continue/resume the CD (or equivalent). If the intervening user message itself gives an explicit instruction for one specific repository change, that instruction authorizes only that specific change; after it is completed, the CD remains suspended until the user explicitly resumes it.
+- Follow `PROJECT-CONVENTIONS.md` §7 for immediate publication of each commit and mandatory CD stop on publication failure.
+- After each commit, obtain fresh real current time and check elapsed time from `CYCLE_START_TIME` against `CYCLE_INTERVAL`. At the session-safety boundary, stop at the nearest safe technical point and produce the CD handoff; do not manufacture review-unit completion, an artificial completion commit, or a mainline snapshot just because the window ended. Follow the exact handoff and safety-margin rules in `CONTINUOUS-DEVELOPMENT.md`.
+- Publish completed development blocks using the snapshot policy in `PROJECT-CONVENTIONS.md` §6.1; the CD boundary itself does not define a block boundary.
+- Follow `CONTINUOUS-DEVELOPMENT.md` for autonomous continuation across development blocks and the exact time/safety/decision conditions for stopping a CD.
+- Any new user intervention pauses autonomous CD writes; follow the resume and one-change exceptions in `CONTINUOUS-DEVELOPMENT.md`.
 
-**Mainline snapshots are records of development checkpoints, not product-acceptance certificates.** A branch tip on the active development lineage is a legitimate snapshot point even if its name contains `pre-review` or `draft`. Do not impose a retroactive expert-review acceptance test on selection of historical checkpoint snapshots. Duplicate branch-tip SHAs produce one snapshot. Diverged/superseded branch tips whose work is already reflected in the continuing main development lineage are not separately snapshotted.
-
-Before a routine snapshot, confirm the source/target HEADs, lineage, existing mainline snapshots, and absence of conflicting updates. Never copy unfinished work as the accepted outcome of an earlier checkpoint. If a routine snapshot cannot be published unambiguously because of divergence, conflicting `main`, uncertain lineage, or required retrospective reordering, do not begin the next logical development block: stop at read-only analysis and use the applicable process/history gate first. Mark absorbed cycle branches with the agreed `-absorbed` suffix where the repository tooling supports an actual rename without losing the branch or its history; do not create misleading duplicate aliases in lieu of a rename.
-
-## Exceptional Git history or branch restructuring
-
-Routine branch creation and checkpoint snapshots do **not** require a new approval. The following **exceptional** actions do require a prior read-only review and explicit user approval:
-
-- Resetting or rewriting already published `main` history, including force-updating its ref.
-- Retrospective reconstruction or reordering of historical snapshot commits.
-- Removing or destructively relocating existing branches, or changing the agreed snapshot publication policy.
-- Incorporating a diverged, dead-end, or ambiguous branch as a separate mainline snapshot contrary to the active lineage.
-
-For such a change, first inspect branch tips, Git ancestry, existing checkpoints, and current refs. Present the exact before/after history, source SHA list and order, scope of preserved/excluded branches, and risks of duplication or lost changes. Request explicit user acceptance of that proposal before any exceptional ref changes.
-
-An approved restructuring must be performed with a staged reconstruction when practical, verified against exact target tree hashes, and a final ref update guarded by the expected old HEAD. If the remote HEAD changes, stop and re-review instead of overwriting it.
-
-Branch names are pointers to commit history; renaming them must not replace, discard, or rewrite their commits. Do not claim a branch has been renamed if only an additional alias was created.
+Snapshot publication, absorbed branch naming and exceptional Git history operations
+are governed exclusively by `PROJECT-CONVENTIONS.md` §§6.1–6.2.
 
 ## Evidence, review, and reporting
 
 - Distinguish written tests from executed tests and passed CI from pending or failed CI.
 - Use rootless tests for pure contracts and privileged disposable namespaces or target-specific experiments when necessary for Linux/kernel behavior.
 - Store reviews and their dispositions in `design/reviews/` according to project conventions; preserve external reviews unchanged.
-- End each work unit with its branch, exact SHA, verified evidence, review verdict, remaining gates, and next intended unit.
+- End each review unit with its branch, exact SHA, verified evidence, review verdict, remaining gates, and next intended unit.
 - A newly uncovered requirement/architecture ambiguity is not authorization to invent a solution in code.
 
-If this entry point and a normative project document appear inconsistent, follow the applicable normative document and explicitly surface the discrepancy before the affected work.
+If this entry point and another normative project document appear inconsistent, follow the document that owns the affected subject under `PROJECT-CONVENTIONS.md` §9 and explicitly surface the discrepancy before the affected work.

@@ -38,6 +38,10 @@ A review unit is the smallest coherent product change that can be independently:
 A review unit may start as requirement/design work and contain no code at all. Implementation
 starts only after the requirement and design gates for the affected behavior are satisfied.
 
+A `development block` is one or more review units that together produce one completed
+logical result. Its snapshot publication is governed by `PROJECT-CONVENTIONS.md` §6.1.
+Neither a review unit nor a CD window automatically defines a development-block boundary.
+
 The normal cycle is:
 
 ```text
@@ -381,7 +385,8 @@ removal is preferred.
 Implementation may begin only when all of the following hold for the affected scope:
 
 - relevant requirements and constraints are identified by ID;
-- every requirement has meaningful `Purpose + Statement`;
+- every primary requirement has meaningful `Basis + Statement`, and every derived
+  requirement has meaningful `Purpose + Statement`;
 - every accepted constraint has meaningful `Reason + Statement`;
 - no unresolved product-semantic ambiguity is being hidden in implementation;
 - no active decomposition block exists on a requirement/constraint whose missing detail is
@@ -420,7 +425,9 @@ After the requirement/design gate passes:
    - applicable constraints and product envelope;
    - the component model;
    - whole-project invariants;
-4. resolve every accepted finding before starting the next review unit.
+4. give every accepted finding a canonical `Resolution` (`fixed` or `deferred`) before
+   starting the next review unit, and do not proceed when a deferred finding's named gate
+   blocks that next unit.
 
 During implementation, compare the emerging code against the approved design continuously.
 
@@ -512,7 +519,7 @@ The expert-review role has:
 
 A full whole-project review is required when:
 
-- an L1 requirement or material product constraint changes;
+- a primary requirement or material product constraint changes;
 - an architectural or ownership boundary changes;
 - a substantial integration milestone is reached;
 - release/deployment acceptance is approached;
@@ -571,19 +578,23 @@ Every preserved experiment records at least:
 - required environment;
 - procedure/artifacts;
 - result or blocked status;
-- architectural consequence.
+- affected architecture/question or other technical implication established by the result.
+  This field must not decide whether the project adopts the mechanism; adoption belongs to
+  the separate `Disposition`.
 
 Experiment **Result** and post-result **Disposition** are separate facts:
 
 - `Result` records only the technical outcome established by the experiment itself
   (for example `PASS`, `FAIL`, `INCONCLUSIVE`, or a blocked/unrun state);
 - `Disposition` records what the project decided to do with that completed evidence and
-  belongs in the central experiment registry, not in the experiment result;
+  belongs in the central experiment registry
+  (`design/vpn-gateway-experiments.md` for the active project lineage), not in the
+  experiment result;
 - completing an experiment initially leaves its disposition `pending_decision` until the
   result has been discussed;
 - a technically successful experiment may therefore be `PASS` while its disposition is
-  `not_selected`; this means the mechanism is feasible but the project holder chose not to
-  adopt it;
+  `not_selected`; this means the mechanism is feasible but the applicable accepted project
+  decision did not adopt it;
 - changing a disposition must not rewrite or reinterpret the experiment Result.
 
 Use a small canonical disposition vocabulary unless a review explicitly extends it:
@@ -598,42 +609,32 @@ rerunning until green.
 A temporary ambiguity in the current development cycle is recorded in the relevant review,
 test or experiment artifact. It does not automatically create a project-wide deferral.
 
-Use `design/deferrals/` only for open items expected to survive the current implementation
-scope, for example:
+Use `design/deferrals/` only for **accepted, explicitly postponed** obligations or
+investigations expected to survive the current implementation scope, for example:
 
 - postponed product extensions;
-- future experiments not required for the first working production baseline;
-- deliberately deferred DeviceManager/availability behavior.
+- future experiments accepted for a later named milestone;
+- accepted implementation/evidence work explicitly moved outside the current scope.
 
-A deferred item must identify its re-entry condition: what future decision, evidence or
-milestone makes it active work again.
+A deferred item must identify its original normative source or accepted decision, its
+scope and its re-entry condition: what future decision, evidence or milestone makes it
+active work again. An unresolved technical ambiguity without an accepted disposition
+is a blocked/pending finding, not a deferral.
+
+Stage declarations are different: they record tentative, non-normative intent and
+cannot by themselves introduce approved scope, implementation work or acceptance gates.
+Promote them through the relevant Requirements/Constraints, architecture and human
+acceptance process before they become executable obligations.
 
 ## Review documentation
 
-External reviews are preserved verbatim under `design/reviews/` and receive a separate
-response/disposition document.
-
-Autonomous internal development reviews normally use **one document** containing:
-
-- scope;
-- findings;
-- disposition of every finding;
-- final verdict;
-- explicit accumulated requirement-state inventory listing every current `decomp` link
-  (mark each as `pending` or `resolved`), every active `unreal` link, every active `broken`
-  link and every `[rejected_closure]` node; write `none` for an empty category rather than
-  omitting it.
-
-Create a separate response document only when the review originated externally, must remain
-immutable/verbatim, or the disposition is produced materially later/by a different reviewer.
-
-Every finding is explicitly classified as one of:
-
-- accepted and fixed;
-- accepted and deferred behind a named gate/experiment;
-- rejected with technical justification.
-
-No finding is silently ignored.
+Review storage, immutable originals, response-file exceptions and canonical
+`Decision`/`Resolution` classification are governed by
+`PROJECT-CONVENTIONS.md` §2. An autonomous internal review normally uses one document
+containing scope, findings, the disposition of every finding, final verdict and the
+accumulated requirement-state inventory listing every current `decomp` link
+(`pending` or `resolved`), active `unreal`, active `broken`, and
+`[rejected_closure]`; write `none` when a category is empty.
 
 ## Human escalation
 
@@ -652,7 +653,7 @@ Human agreement is required when the decision materially changes one of:
 
 Ordinary bug fixes, test-harness corrections, internal data-structure choices,
 Rust-alignment refactors and unambiguous fail-closed hardening do not require a human
-checkpoint.
+decision.
 
 ## Process-correction gate
 
@@ -693,10 +694,11 @@ Each autonomous design/development cycle has a **cycle interval**:
 Call the selected value `CYCLE_INTERVAL`. After it is chosen for the cycle, all cadence
 logic below refers only to `CYCLE_INTERVAL`.
 
-### Logical work versus CD window
+### Development blocks versus CD window
 
-Logical work units, reviews, experiments, implementation slices and snapshots have their own
-natural boundaries independent of the CD window.
+Review units, development blocks, experiments and snapshots retain their natural
+boundaries independently of the CD window. Snapshot publication and the definition
+of a completed development block belong to `PROJECT-CONVENTIONS.md` §6.1.
 
 ### User intervention pauses autonomous CD execution
 
@@ -711,33 +713,29 @@ If the intervention itself contains an explicit instruction for one specific rep
 change, that instruction authorizes only that change. Completing it does not implicitly
 resume the rest of the CD; the cycle remains paused until an explicit resume instruction.
 
-This pause does not end or reset the CD clock, logical work unit, branch, snapshot policy or
-`CYCLE_INTERVAL`. It is only a write-authorization boundary caused by human intervention.
+This pause does not end or reset the CD clock, current development block, branch,
+snapshot policy or `CYCLE_INTERVAL`. It is only a write-authorization boundary.
 
-- A completed substantial logical block **must** be committed/reviewed as applicable and
-  published to `main` as one linear snapshot before the next logical block begins.
-- One CD cycle may therefore contain multiple mainline snapshots.
-- Reaching the end of a CD cycle does **not** by itself imply that a snapshot should be
-  created; an unfinished block remains unsnapshotted.
-- Snapshot publication must not be delayed merely to coincide with the CD boundary, and the
-  CD boundary must not be used to skip a snapshot of a block that already completed.
-- Conversely, unfinished logical work may remain on the active cycle branch across a CD
-  boundary; the handoff exists precisely so the next cycle can resume it without re-reviewing
-  the whole repository.
-- After a logical block completes, first publish its required linear snapshot to `main`.
-- Completing the current logical block, subsystem or topic that originally triggered the CD
+### Continuation across development blocks
+
+A completed development block receives its required snapshot before another
+development block begins, subject to `PROJECT-CONVENTIONS.md` §6.1 and any explicit
+user-approved snapshot-publication exception. A CD window does not create or suppress
+snapshots. Unfinished work may continue across CD windows via handoff.
+
+- Completing the current development block, subsystem or topic that originally triggered the CD
   does **not** by itself complete the CD window. Unless the user explicitly constrained the
   cycle to that one topic, the cycle scope is the current project development frontier.
 - If that completed block is snapshotted and less than three minutes remain before the nominal
   CD boundary, the CD cycle is complete.
 - Otherwise:
-  1. select the next highest-priority sufficiently defined and unblocked logical development
+  1. select the next highest-priority sufficiently defined and unblocked development
      block from the current project frontier; prefer a logically adjacent block when priority
      is otherwise equal;
   2. continue work until the earlier of:
      - the CD interval boundary;
-     - completion of that next logical block in a separate GitHub commit;
-  3. if that logical block completes, publish its required snapshot and apply this rule again
+     - completion of that next development block in a separate GitHub commit;
+  3. if that development block completes, publish its required snapshot and apply this rule again
      from the beginning.
 - A decision boundary ends the CD early only when continuing meaningful work actually requires
   human agreement. Finishing one subsystem, reaching a design boundary that can be resolved
@@ -746,7 +744,8 @@ This pause does not end or reset the CD clock, logical work unit, branch, snapsh
 - Early exit before the time/safety boundary is therefore limited to:
   - a required human product/process/architecture decision;
   - an external blocker that prevents further meaningful autonomous work;
-  - absence of any sufficiently defined unblocked logical development block;
+  - absence of any sufficiently defined unblocked development block;
+  - publication failure, handled as a mandatory stop under `PROJECT-CONVENTIONS.md` §7;
   - the existing less-than-three-minutes safety-margin rule above.
 - These rules do not relax the `CYCLE_INTERVAL` boundary. As elapsed time approaches the
   interval, session safety and a usable handoff take precedence over starting or finishing more
@@ -756,49 +755,67 @@ This pause does not end or reset the CD clock, logical work unit, branch, snapsh
 
 ### Cycle branch and clock
 
-Each CD cycle uses Git commit timestamps as an objective elapsed-time clock and a dedicated
-GitHub-visible working branch as the externally durable work trail.
+Each CD cycle uses real wall-clock time as its elapsed-time source and a dedicated
+GitHub-visible working branch as the externally durable work trail. Commit timestamps
+record publication events; they do not define when the CD window starts.
 
 At the start of a cycle:
 
 1. determine and record `CYCLE_INTERVAL`;
-2. create or select the dedicated branch for that CD window;
-3. all requirement, design, implementation, test, evidence, review and fix commits produced
-   during the window are written to that branch;
-4. every commit must be present on GitHub immediately after creation;
-5. the first commit created in the window becomes `CYCLE_START_COMMIT`;
-6. record its committer timestamp `T0`;
-7. after later commits read their GitHub committer timestamps `Tn` and track `Tn - T0`.
+2. immediately read real current time and preserve it as `CYCLE_START_TIME`, before
+   mandatory reading, preparation or the first commit;
+3. create or select the dedicated branch for that CD window;
+4. all requirement, design, implementation, test, evidence, review, process/documentation
+   and fix commits produced during the window are written to that branch;
+5. every commit must be present on GitHub immediately after creation.
 
-The branch is the durable record of work. The CD handoff is intentionally **not** a Git
-project artifact.
+A failure to publish or verify publication of a commit is a mandatory early-stop
+condition for the current CD. Follow the short preservation-and-handoff procedure
+in `PROJECT-CONVENTIONS.md` §7; do not continue development or perform prolonged
+recovery attempts in this CD.
+
+If fresh real current time cannot be obtained at cycle start or at a required cadence
+check, do not substitute commit timestamps as the elapsed-time source. Stop before
+further repository mutation and report that the CD safety clock cannot currently be
+enforced.
+
+At each existing cadence check, obtain fresh real current time and compare it to
+`CYCLE_START_TIME`. Check after every commit (including the first), at the existing
+development-block and handoff boundaries, and whenever the existing cadence rules require it.
+Keep the existing thresholds, safety margin and handoff behavior unchanged; the first
+commit is a check event, not the origin of elapsed time. A user intervention does not
+reset `CYCLE_START_TIME`.
+
+The published branch is the durable record of successfully published work. The CD handoff
+is intentionally **not** a Git project artifact.
 
 ### Handoff trigger and behavior
 
 As elapsed time approaches `CYCLE_INTERVAL`, prioritize leaving enough execution margin to
 produce a reliable handoff. Do not intentionally run far past the interval merely to finish a
-large logical unit.
+development block.
 
 When the session-safety boundary is reached or work is otherwise stopped for the current
 chat turn:
 
 - stop at the nearest safe technical point; do not manufacture a logical completion;
-- leave all already-created commits published on the active branch;
-- do not create a special Git checkpoint commit unless the work itself naturally requires a
-  commit;
+- leave all successfully published commits on the active branch; when a publication
+  failed, explicitly identify unpublished work rather than assuming durability;
+- do not create a special commit unless the work itself naturally requires one;
 - do not create a snapshot solely because the CD window ended;
-- produce a compact **handoff file in the chat interface**, not in Git;
-- stop autonomous development until the next user turn.
+- produce a compact **handoff in the chat interface**, not in Git; use a file when practical,
+  but use direct chat text instead if file creation fails or would materially increase cutoff risk;
+- stop autonomous development until the user explicitly starts or resumes CD execution.
 
-The handoff file should contain only enough context to resume cheaply:
+The handoff should contain only enough context to resume cheaply:
 
-- `CYCLE_INTERVAL`;
+- `CYCLE_INTERVAL` and `CYCLE_START_TIME`;
 - active branch and current branch head;
 - base/main snapshot from which the branch started when relevant;
-- what logical work was completed during the window;
+- which review units or development blocks completed during the window;
 - exact unfinished work and current technical state;
 - tests/experiments/reviews that are currently green/red or still pending;
-- the short plan for the **current logical development unit**, not a new plan invented merely
+- the short plan for the **current development block**, not a new plan invented merely
   for the next CD window;
 - decisions genuinely requiring human agreement, if any;
 - current accumulated requirement-state inventory: every `decomp` link with
@@ -807,11 +824,13 @@ The handoff file should contain only enough context to resume cheaply:
 The handoff is operational continuity metadata. It should not be committed to the repository
 unless its content independently becomes a real project artifact.
 
-A new CD cycle starts after the next user turn. It may continue the same logical development
-unit on a new cycle branch or a clearly reset continuation branch, using the previous handoff
-to avoid a full repository review.
+A new CD cycle starts only after the user explicitly starts or resumes CD execution.
+An arbitrary next user turn does not restore repository-write authorization. After explicit
+start/resume, the new cycle may continue the same development block on a new cycle branch or
+a clearly reset continuation branch, using the previous handoff to avoid a full repository
+review.
 
-This mechanism exists only to survive chat/session limits. It must not distort logical work
+This mechanism exists only to survive chat/session limits. It must not distort development-block
 boundaries, snapshot timing, review structure or repository history.
 
 ## Completion criteria
@@ -825,32 +844,28 @@ Design and development of the current product scope are complete when:
 - all accepted constraints have passed bottom-up lifting and product-envelope review;
 - all material component responsibilities and interactions are traceable to requirements;
 - all required evidence gates for that scope have passed;
-- all accepted review findings are fixed or explicitly postponed outside the current scope;
-- and a final full-project review has no unresolved finding of minor severity or higher.
+- every accepted review finding is either `fixed` or formally `deferred` with the
+  required named gate/re-entry condition;
+- no `unresolved` review finding remains if it can materially affect correctness, safety,
+  required product behavior, acceptance evidence or completion of the current scope.
 
 If that final review produces a finding, fix it and repeat the final review on the changed
 baseline. Multiple consecutive clean reviews without intervening code changes are not
 required.
 
-## Evidence hierarchy
+## Evidence sufficiency
 
-Safety-relevant kernel/userspace behavior must not be inferred from documentation or unit
-tests when a practical stronger experiment is feasible.
+Choose the cheapest environment that can establish the required technical fact,
+using the environment-selection procedure in
+[Ambiguity and experiment procedure](#ambiguity-and-experiment-procedure).
+Do not infer safety-relevant kernel/userspace behavior from documentation or
+unit tests when a practical stronger experiment is needed to establish that
+behavior. Experiment-stand execution rules are in
+`design/experiments/README.md`.
 
-Use, in order of increasing environment specificity:
+## Backend ownership
 
-1. rootless deterministic/unit/property tests;
-2. disposable privileged namespace / GitHub CI;
-3. real target topology.
-
-The environment is chosen by what the hypothesis requires, not by a fixed preference for
-the most expensive stand.
-
-## Backend direction
-
-Backend choices are owned by the current normative architecture and executable evidence, not
-by an older generation remaining in the repository tree.
-
-For the current NG3 line, packet filtering/NAT lower policy is nftables-based as defined by
-the NG3 architecture and accepted experiments. Historical backend code remains on legacy
-branches and does not define current production semantics.
+Backend selection follows the current normative stage's requirements, architecture
+and verified evidence; historical implementation or experiment evidence does not
+establish current product semantics by itself. This process document must not
+hardcode any particular stage, packet-filtering backend or technology choice.
