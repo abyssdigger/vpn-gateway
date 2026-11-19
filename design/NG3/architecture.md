@@ -4727,9 +4727,42 @@ the boundary; host behavior is derived only from the actual behavior-lane ingres
 
 The pure projection is represented separately by
 `host_boundary_lane_routing.py`; it deliberately does not masquerade a behavior lane as a
-VPN `LogicalPathId`. Production activation remains gated until these lane routes and the
-corresponding ingress table selection are composed into the existing structural desired-state
-transaction behind the closed ForwardingGate.
+VPN `LogicalPathId`.
+
+The structural routing model therefore has three explicit semantic route roles:
+
+```text
+GUARD
+VPN_PATH
+HOST_BOUNDARY_LANE
+```
+
+`HOST_BOUNDARY_LANE` is a unicast default route in the owning Profile table, carries no
+`LogicalPathId`, uses the current verified lane endpoint plus lane host-side gateway, and is
+identified in authoritative Linux observation by the dedicated owned route protocol 204.
+Its metric is immediately better than the terminal guard and outside the Profile's
+VPN-path preference/scratch metric space. Availability and ordinary route-priority
+permutation never treat this route as a VPN path member.
+
+Initial-packet Profile-table selection is coupled to that desired route rather than enabled
+globally. Stack return-affinity always records the selected Profile in conntrack state; the
+NEW VPN-originated packet copies that mark into its packet mark only for a Profile that has a
+current desired `HOST_BOUNDARY_LANE` route. Thus the current packet can select the Profile
+table only when the same structural desired state contains the ordinary-side lane fallback.
+Without a lane route, existing alpha behavior remains unchanged and the first packet is not
+redirected into a table whose only default is the terminal guard.
+
+The existing activation ordering provides the safety barrier:
+
+```text
+ForwardingGate = DISABLED
+    -> converge stack return-affinity / initial-selection state
+    -> converge exact structural routes including lane defaults
+    -> verify complete structural postcondition
+    -> only then ForwardingGate may become ENABLED
+```
+
+No separate staging component is introduced.
 
 A structural transition that changes Profile gateway NAT or its boundary association is not
 eligible for the pure route-priority fast path. The affected forwarding must remain
