@@ -68,6 +68,16 @@ class LinuxHostBootstrapTests(unittest.TestCase):
         self.assertEqual(desired.routes[-1].destination,IPv4Network("0.0.0.0/0"))
         self.assertEqual(desired.bypass.interface,"vnga-host0")
 
+    def test_device_only_routes_are_valid_lower_realization(self):
+        desired=build_linux_host_bootstrap_desired(
+            self.plan(self.profile("p",Direction.OUTBOUND,"10.0.0.0/8")),
+            host_interface="vpng0",
+            inner_gateway=None,
+            allocation=self.allocation(),
+        )
+        self.assertEqual(len(desired.routes),1)
+        self.assertIsNone(desired.routes[0].via)
+        self.assertEqual(desired.routes[0].interface,"vpng0")
     def test_route_return_inbound_gets_bootstrap_pair(self):
         desired=build_linux_host_bootstrap_desired(
             self.plan(
