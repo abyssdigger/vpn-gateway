@@ -2429,6 +2429,13 @@ current probe route/RPDB desired state and probe-local nft desired state against
 `StructuralPolicyPhysicalSnapshot`; an attempt is not execution-ready unless both comparisons
 are exact. The verifier performs no repair or probe I/O.
 
+One physical attempt is executed through
+`probe_attempt.py::execute_probe_attempt_once`. It requires a confirmed readiness value containing the exact execution-context key
+`(owner, mechanism, target, endpoint identity)` and whose interface snapshot still contains
+that endpoint before invoking the Driver. It performs no scheduling or retry. If the
+Agent context changes while Driver I/O is in flight, the existing generation equality gate
+rejects the returned observation as stale rather than emitting evidence for the new context.
+
 
 ```
 
