@@ -153,6 +153,31 @@ class ProbeExecutionPreconditionTests(unittest.TestCase):
         self.assertTrue(result.confirmed)
         self.assertEqual(result.interfaces_stable_snapshot, (EP,))
 
+    def test_routing_and_local_owner_sets_must_match(self):
+        desired = ProbeNetworkPolicyDesiredState(
+            (),
+            (
+                ProbeRuleSpec(
+                    owner=OWNER,
+                    priority=0x2000,
+                    process_uid=4242,
+                    endpoint=EP,
+                    target=TARGET,
+                    table=0xC0000000,
+                ),
+            ),
+            (),
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "owner sets do not match",
+        ):
+            verify_probe_execution_precondition(
+                snapshot(),
+                desired,
+                NG3_LINUX_POLICY_PLATFORM,
+            )
+
     def test_missing_routing_selector_blocks_execution_readiness(self):
         rule = ProbeRuleSpec(
             owner=OWNER,
