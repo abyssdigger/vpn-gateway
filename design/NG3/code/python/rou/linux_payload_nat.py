@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from .interface_inventory import parse_ip_link_inventory
 from .linux_nft_scaffold import NftScriptRunner
 from .nft_namespace_inventory import parse_nft_namespace_ruleset
-from .payload_nat_desired import PayloadMasqueradeSpec
+from .payload_nat_desired import (
+    PayloadMasqueradeSpec,
+    PayloadNatRuleSpec,
+    ProfileGatewayMasqueradeSpec,
+)
 from .payload_nat_mutation import PayloadNatPhysicalSnapshot
 
 
@@ -38,15 +42,36 @@ class LinuxPayloadNatBackend:
             raise RuntimeError("interface identity inventory drift during nft observation")
         return PayloadNatPhysicalSnapshot(nft, before)
 
-    def add_nat_rule(self, spec: PayloadMasqueradeSpec) -> None:
-        if not isinstance(spec, PayloadMasqueradeSpec):
-            raise ValueError("spec must be PayloadMasqueradeSpec")
-        script = (
-            "add rule ip vpn_gate payload_postrouting "
-            f"meta iif {spec.ingress.ifindex} meta oif {spec.egress.ifindex} "
-            'masquerade comment "vpn-gate:ng3:payload-nat-v1"\n'
+    def add_nat_rule(self, spec: PayloadNatRuleSpec) -> None:
+        if isinstance(spec, PayloadMasqueradeSpec):
+            script = (
+                "add rule ip vpn_gate payload_postrouting "
+                f"meta iif {spec.ingress.ifindex} "
+                f"meta oif {spec.egress.ifindex} "
+                'masquerade comment "vpn-gate:ng3:payload-nat-v1"\n'
+            )
+        elif isinstance(spec, ProfileGatewayMasqueradeSpec):
+            parts = [
+                "add rule ip vpn_gate payload_postrouting",
+                f"meta iif {spec.ingress.ifindex}",
+                f"meta oif {spec.egress.ifindex}",
+                f"ip saddr {spec.remote_source.with_prefixlen}",
+            ]
+            parts.extend(
+                f"ip daddr != {address}"
+                for address in spec.excluded_host_destinations
+            )
+            parts.extend((
+                "masquerade",
+                'comment "vpn-gate:ng3:profile-gateway-nat-v1"',
+            ))
+            script = " ".join(parts) + "\n"
+        else:
+            raise ValueError("unsupported payload NAT rule spec")
+        self.runner.run_script(
+            self._cmd("nft", "-f", "-"),
+            script,
         )
-        self.runner.run_script(self._cmd("nft", "-f", "-"), script)
 
     def delete_nat_rule(self, handle: int) -> None:
         if type(handle) is not int or handle < 0:
