@@ -1,6 +1,6 @@
 # EXP-073 — NG3 routed managed-L3 stateful return
 
-Status: **PREPARED**
+Status: **PASS** — gateway-less stateful return confirmed on routed managed-L3 boundary
 
 ## Question
 
@@ -34,3 +34,9 @@ The test uses the production `build_linux_host_boundary_desired`,
 - remote-initiated forwarded TCP receives its reply through STACK;
 - remote-initiated host-local TCP receives its reply through STACK;
 - host `main` contains no remote-prefix route.
+
+## Result
+
+See `EXP-073-result-20261119.md`. Workflow run `44604743687`, job
+`linux-routed-managed-l3-stateful-return` (`135845485540`) completed with
+`EXP073_RESULT=PASS`.
