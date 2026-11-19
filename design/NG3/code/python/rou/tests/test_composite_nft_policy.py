@@ -40,6 +40,9 @@ from rou.payload_nat_desired import (
     PayloadMasqueradeSpec,
     PayloadNatDesiredState,
 )
+from rou.network_policy_layout import ProbePolicyOwner
+from rou.probe_local_observation import PROBE_LOCAL_RULE_COMMENT
+from rou.probe_policy import ProbeLocalHook, ProbeLocalRuleSpec
 
 
 def obj(kind: str, payload: dict, order: int) -> NftNamespaceObject:
@@ -267,6 +270,81 @@ class CompositeNftPolicyTests(unittest.TestCase):
         )
         self.assertTrue(result.desired_confirmed)
         self.assertEqual(result.conflicts, ())
+
+    def test_exact_probe_local_pair_is_classified_in_composite_scope(self):
+        vpn = InterfaceIdentity("path0", 20)
+        path_id = LogicalPathId("device", 0, 0)
+        owner = ProbePolicyOwner("corp", path_id)
+        target = IPv4Address("198.51.100.7")
+        mark = 0x20000001
+        probe_rules = (
+            ProbeLocalRuleSpec(
+                owner=owner,
+                hook=ProbeLocalHook.OUTPUT,
+                endpoint=vpn,
+                target=target,
+                conntrack_mark=mark,
+                process_uid=4242,
+            ),
+            ProbeLocalRuleSpec(
+                owner=owner,
+                hook=ProbeLocalHook.INPUT,
+                endpoint=vpn,
+                target=target,
+                conntrack_mark=mark,
+            ),
+        )
+        desired = CompositeNftDesiredState(
+            profile_forward=PayloadForwardDesiredState(()),
+            payload_nat=PayloadNatDesiredState(()),
+            device_firewall=DeviceFirewallDesiredState(()),
+            probe_local=probe_rules,
+        )
+        output = obj(
+            "rule",
+            {
+                "family": "ip",
+                "table": "vpn_gate",
+                "chain": "stack_output",
+                "handle": 60,
+                "comment": PROBE_LOCAL_RULE_COMMENT,
+                "expr": [
+                    {"match": {"left": {"meta": {"key": "skuid"}}, "op": "==", "right": 4242}},
+                    {"match": {"left": {"meta": {"key": "oif"}}, "op": "==", "right": "path0"}},
+                    {"match": {"left": {"payload": {"protocol": "ip", "field": "daddr"}}, "op": "==", "right": str(target)}},
+                    {"match": {"left": {"payload": {"protocol": "ip", "field": "protocol"}}, "op": "==", "right": 1}},
+                    {"mangle": {"key": {"ct": {"key": "mark"}}, "value": mark}},
+                    {"accept": None},
+                ],
+            },
+            60,
+        )
+        input_rule = obj(
+            "rule",
+            {
+                "family": "ip",
+                "table": "vpn_gate",
+                "chain": "stack_input",
+                "handle": 61,
+                "comment": PROBE_LOCAL_RULE_COMMENT,
+                "expr": [
+                    {"match": {"left": {"meta": {"key": "iif"}}, "op": "==", "right": "path0"}},
+                    {"match": {"left": {"payload": {"protocol": "ip", "field": "saddr"}}, "op": "==", "right": str(target)}},
+                    {"match": {"left": {"payload": {"protocol": "ip", "field": "protocol"}}, "op": "==", "right": 1}},
+                    {"match": {"left": {"ct": {"key": "mark"}}, "op": "==", "right": mark}},
+                    {"accept": None},
+                ],
+            },
+            61,
+        )
+        result = compare_composite_nft_policy(
+            observation(output, input_rule),
+            (vpn,),
+            desired,
+        )
+        self.assertTrue(result.desired_confirmed)
+        self.assertEqual(result.conflicts, ())
+        self.assertEqual(len(result.probe_local.confirmed), 2)
 
     def test_unclassified_local_system_rule_is_conflict(self):
         local = obj(
