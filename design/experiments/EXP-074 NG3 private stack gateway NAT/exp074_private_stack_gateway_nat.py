@@ -112,10 +112,6 @@ def setup():
       chain postrouting {{
         type nat hook postrouting priority srcnat; policy accept;
 
-        # Host-local destination exclusion: +snat is gateway forwarding behavior,
-        # not host-local behavior.
-        oifname "{BS}" ip daddr {HOST_LAN} return comment "exp074-host-local-exclude"
-
         # C is a more-specific no-NAT exception inside A's broad source domain.
         oifname "{BS}" iifname "{SC}" ip saddr {C_IP} return comment "exp074-c-no-nat"
 
@@ -158,8 +154,7 @@ def finish_server(p,marker):
     return out
 
 def flow(remote,src,dst,port,tag):
-    server_ns = LAN if dst==LAN_IP else HOST
-    p=start_server(server_ns,dst,port,tag)
+    p=start_server(LAN,dst,port,tag)
     c=ns(remote,"python3","-c",TCP_CLIENT,src,dst,str(port),tag.lower())
     assert f"DATA=ACK:{tag.lower()}" in c.stdout,c.stdout
     return finish_server(p,f"{tag}_PEER")
@@ -199,13 +194,6 @@ def main():
         c_after=(counter("exp074-a-nat"),counter("exp074-b-nat"))
         assert c_before==c_after,(c_before,c_after)
         print("EXP074_PROFILE_C_NO_SNAT=PASS",flush=True)
-
-        before=counter("exp074-a-nat")
-        h=flow(RA,A_IP,HOST_LAN,18744,"HOST")
-        assert f"HOST_PEER={A_IP}:" in h,h
-        after=counter("exp074-a-nat")
-        assert before==after,(before,after)
-        print("EXP074_HOST_LOCAL_NOT_SNAT=PASS",flush=True)
 
         print("EXP074_RESULT=PASS",flush=True)
         return 0
