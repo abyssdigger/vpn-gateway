@@ -2491,6 +2491,13 @@ stack_input:
         -> accept
 ```
 
+The executable pure assembly boundary is
+`probe_desired.py::build_probe_desired_assembly`. It composes
+`AvailabilityDescriptionResolver`, `ProbeRoutingDemand`, the shared
+`allocate_network_policy_layout` call and `build_probe_network_policy_desired_state`.
+Payload and probe allocations are therefore selected in one layout operation rather than by
+independent allocators.
+
 The UID and conntrack mark are lower Linux allocation values. They are not user-facing
 availability semantics and are not stored in `AvailabilityProbeIntent`. The supplied probe
 UID must identify the dedicated probe worker rather than generic root/controller traffic;
