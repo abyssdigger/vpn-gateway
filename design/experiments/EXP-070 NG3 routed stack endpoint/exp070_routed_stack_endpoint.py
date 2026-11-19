@@ -476,8 +476,6 @@ def phase_routed_veth_proxy_arp(with_peer_ips: bool) -> bool:
     # that actually live behind it.
     ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{RV_HOST}.proxy_arp=1")
     ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{RV_STACK}.proxy_arp=1")
-    ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{RV_HOST}.proxy_delay=0")
-    ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{RV_STACK}.proxy_delay=0")
     ns(HOST, "ip", "route", "replace", f"{REMOTE_IP}/32", "dev", RV_HOST, "src", HOST_LAN)
     ns(STACK, "ip", "route", "replace", f"{LAN_IP}/32", "dev", RV_STACK)
 
