@@ -9,9 +9,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Iterable
 
 from .availability_confirmation import AvailabilityOutcome
 from .interface_identity import InterfaceIdentity
+from .network_policy_layout import ProbePolicyOwner
+from .route_priority_inventory import RoutePriorityPathRoute
 from .probe_policy import (
     AvailabilityProbeIntent,
     AvailabilityProbeMechanism,
@@ -196,3 +199,125 @@ class AvailabilityProbeAgent:
             AvailabilityOutcome.NO_EVIDENCE,
             observation.diagnostic,
         )
+
+
+@dataclass(slots=True)
+class AvailabilityProbeRuntime:
+    """Bounded multi-channel implementation of the AvailabilityProbeAgent role.
+
+    One child AvailabilityProbeAgent is retained per owner seen under the accepted
+    configuration so disable/re-enable cannot reuse an old generation token.
+    """
+
+    _agents: dict[ProbePolicyOwner, AvailabilityProbeAgent] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
+    _active: frozenset[ProbePolicyOwner] = field(
+        default_factory=frozenset,
+        init=False,
+        repr=False,
+    )
+
+    @property
+    def current_contexts(self) -> tuple[ProbeObservationContext, ...]:
+        contexts = [
+            self._agents[owner].current_context
+            for owner in sorted(self._active)
+        ]
+        if any(context is None for context in contexts):
+            raise ProbeRuntimeError(
+                "active probe owner has no current observation context"
+            )
+        return tuple(context for context in contexts if context is not None)
+
+    def configure(
+        self,
+        intents: Iterable[AvailabilityProbeIntent],
+        path_routes: Iterable[RoutePriorityPathRoute],
+    ) -> tuple[ProbeObservationContext, ...]:
+        raw_intents = tuple(intents)
+        raw_routes = tuple(path_routes)
+        if any(
+            not isinstance(intent, AvailabilityProbeIntent)
+            for intent in raw_intents
+        ):
+            raise ProbeRuntimeError(
+                "intents must contain AvailabilityProbeIntent"
+            )
+        if any(
+            not isinstance(route, RoutePriorityPathRoute)
+            for route in raw_routes
+        ):
+            raise ProbeRuntimeError(
+                "path_routes must contain RoutePriorityPathRoute"
+            )
+
+        intent_by_owner: dict[ProbePolicyOwner, AvailabilityProbeIntent] = {}
+        for intent in raw_intents:
+            if intent.owner in intent_by_owner:
+                raise ProbeRuntimeError(
+                    f"duplicate availability probe owner {intent.owner!r}"
+                )
+            intent_by_owner[intent.owner] = intent
+
+        route_by_path = {}
+        for route in raw_routes:
+            if route.path_id in route_by_path:
+                raise ProbeRuntimeError(
+                    f"duplicate current path realization {route.path_id!r}"
+                )
+            route_by_path[route.path_id] = route
+
+        desired_contexts = []
+        for owner, intent in intent_by_owner.items():
+            route = route_by_path.get(owner.path_id)
+            if route is None:
+                raise ProbeRuntimeError(
+                    f"probe owner has no current path realization: {owner!r}"
+                )
+            desired_contexts.append((owner, intent, route.endpoint))
+
+        # Validation above is complete before any current Agent state changes.
+        for owner, intent, endpoint in desired_contexts:
+            agent = self._agents.get(owner)
+            if agent is None:
+                agent = AvailabilityProbeAgent()
+                self._agents[owner] = agent
+            agent.configure(intent, endpoint)
+
+        next_active = frozenset(intent_by_owner)
+        for owner in self._active - next_active:
+            self._agents[owner].disable()
+        self._active = next_active
+        return self.current_contexts
+
+    def begin_attempt(
+        self,
+        owner: ProbePolicyOwner,
+    ) -> ProbeObservationContext:
+        if not isinstance(owner, ProbePolicyOwner):
+            raise ProbeRuntimeError(
+                "owner must be ProbePolicyOwner"
+            )
+        if owner not in self._active:
+            raise ProbeRuntimeError(
+                "probe owner is not currently active"
+            )
+        return self._agents[owner].begin_attempt()
+
+    def accept_result(
+        self,
+        owner: ProbePolicyOwner,
+        attempted_context: ProbeObservationContext,
+        observation: ProbeTechnicalObservation,
+    ) -> ProbeEvidence | None:
+        if not isinstance(owner, ProbePolicyOwner):
+            raise ProbeRuntimeError(
+                "owner must be ProbePolicyOwner"
+            )
+        agent = self._agents.get(owner)
+        if agent is None or owner not in self._active:
+            return None
+        return agent.accept_result(attempted_context, observation)
