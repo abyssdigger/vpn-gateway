@@ -72,6 +72,13 @@ def project_probe_route_feedback(
             raise ProbeRouteFeedbackError(
                 "subject_states values must be ProbeSubjectRuntimeState"
             )
+        if (
+            state.context is not None
+            and state.context.intent.owner != owner
+        ):
+            raise ProbeRouteFeedbackError(
+                "subject state context owner does not match mapping key"
+            )
 
     problem_paths = tuple(
         owner.path_id
