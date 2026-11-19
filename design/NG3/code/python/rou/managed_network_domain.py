@@ -596,13 +596,15 @@ def _create_managed_network_domain(
                 "netns", spec.namespace,
             )
         )
-        runner.run(
-            (
-                "ip", "addr", "add",
-                spec.host_address.with_prefixlen,
-                "dev", spec.host_interface,
+        if not spec.routed_primary:
+            assert spec.host_address is not None
+            runner.run(
+                (
+                    "ip", "addr", "add",
+                    spec.host_address.with_prefixlen,
+                    "dev", spec.host_interface,
+                )
             )
-        )
         runner.run(("ip", "link", "set", spec.host_interface, "up"))
         runner.run(
             (
@@ -624,14 +626,58 @@ def _create_managed_network_domain(
                 "link", "set", spec.inner_interface, "up",
             )
         )
-        runner.run(
-            (
-                "ip", "-n", spec.namespace,
-                "-4", "route", "replace", "default",
-                "via", str(spec.host_address.ip),
-                "dev", spec.inner_interface,
+
+        if spec.routed_primary:
+            runner.run(
+                (
+                    "sysctl", "-w",
+                    f"net.ipv4.conf.{spec.host_interface}.proxy_arp=1",
+                )
             )
-        )
+            runner.run(
+                (
+                    "sysctl", "-w",
+                    f"net.ipv4.conf.{spec.host_interface}.rp_filter=0",
+                )
+            )
+            runner.run(
+                (
+                    "ip", "netns", "exec", spec.namespace,
+                    "sysctl", "-w",
+                    f"net.ipv4.conf.{spec.inner_interface}.proxy_arp=1",
+                )
+            )
+            runner.run(
+                (
+                    "ip", "netns", "exec", spec.namespace,
+                    "sysctl", "-w",
+                    f"net.ipv4.conf.{spec.inner_interface}.rp_filter=0",
+                )
+            )
+            runner.run(
+                (
+                    "ip", "-4", "route", "replace",
+                    spec.inner_address.network.with_prefixlen,
+                    "dev", spec.host_interface,
+                )
+            )
+            runner.run(
+                (
+                    "ip", "-n", spec.namespace,
+                    "-4", "route", "replace", "default",
+                    "dev", spec.inner_interface,
+                )
+            )
+        else:
+            assert spec.host_address is not None
+            runner.run(
+                (
+                    "ip", "-n", spec.namespace,
+                    "-4", "route", "replace", "default",
+                    "via", str(spec.host_address.ip),
+                    "dev", spec.inner_interface,
+                )
+            )
 
         for extra in spec.additional_boundaries:
             runner.run(
