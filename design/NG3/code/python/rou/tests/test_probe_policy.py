@@ -17,9 +17,9 @@ from rou.probe_policy import (
     ProbeLocalHook,
     ProbeLocalPlatform,
     ProbePolicyProjectionError,
-    ProbeRouteType,
     build_probe_network_policy_desired_state,
 )
+from rou.payload_routing_desired import ManagedRouteType
 from rou.route_priority_inventory import RoutePriorityPathRoute
 
 
@@ -69,12 +69,12 @@ class ProbePolicyTests(unittest.TestCase):
         unicast = next(
             route
             for route in desired.routes
-            if route.route_type is ProbeRouteType.UNICAST
+            if route.route_type is ManagedRouteType.UNICAST
         )
         guard = next(
             route
             for route in desired.routes
-            if route.route_type is ProbeRouteType.BLACKHOLE
+            if route.route_type is ManagedRouteType.BLACKHOLE
         )
         self.assertEqual(
             unicast.destination,
@@ -149,7 +149,7 @@ class ProbePolicyTests(unittest.TestCase):
         unicast = next(
             item
             for item in desired.routes
-            if item.route_type is ProbeRouteType.UNICAST
+            if item.route_type is ManagedRouteType.UNICAST
         )
         self.assertEqual(unicast.gateway, IPv4Address("192.0.2.1"))
         self.assertTrue(unicast.onlink)
