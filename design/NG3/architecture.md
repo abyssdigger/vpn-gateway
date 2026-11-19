@@ -45,6 +45,7 @@ Current trace:
 | pure probe route/RPDB actual-vs-desired comparison | `probe_routing_compare.py` | `NG3-2026-11-19-probe-routing-comparison-review.md` |
 | EXP-065-backed probe route/RPDB mutation Driver | `linux_probe_routing.py` | `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
 | EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
+| bounded current probe observation context / late-result rejection / technical-result mapping | `probe_runtime.py` | `NG3-2026-11-19-probe-observation-context-agent-review.md` |
 | accepted NG3 Linux platform resource space | `linux_policy_platform.py` | `EXP-028-result-20261116.md` |
 | semantic Profile/allocation -> route-key priority realization | `route_priority_domain_builder.py` | `NG3-2026-11-16-route-priority-domain-builder-review.md` |
 | explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
@@ -2165,14 +2166,29 @@ Therefore it is an Agent under `design/component-model.md`, rather than a Manage
 To implement `VPNG0003-R3.R6.R2`, an in-flight result must carry enough identity to determine
 whether it still belongs to the current physical observation context.
 
-The minimal proposed mechanism is a monotonically replaced local observation-generation
-token.
+The implemented mechanism is a monotonically replaced local observation-generation token
+inside one bounded current observation context.
 
-The token has no routing-policy meaning.
+The current context is exactly:
 
-It exists only to reject stale physical results.
+```text
+normalized AvailabilityProbeIntent
+    -> availability subject = (Profile, logical path)
+    -> concrete target
+    -> mechanism
+current concrete endpoint identity = (ifname, ifindex)
+local generation token
+```
 
-No logical evidence epoch, attempt journal or replay ordering is introduced.
+Reconfiguring the exact same immutable context preserves the token. Subject, target,
+mechanism or concrete endpoint replacement creates a fresh generation. Disabling the
+observation removes the current context; re-enabling it creates a fresh generation even if
+the semantic tuple happens to be identical to the previously disabled one.
+
+The token has no routing-policy meaning. It exists only to reject stale physical results.
+No logical evidence epoch, attempt journal, result history or replay ordering is introduced.
+
+The executable bounded reference is `probe_runtime.py::AvailabilityProbeAgent`.
 
 **Implements:**
 - `VPNG0003-R3.R6.R2`
@@ -2223,8 +2239,14 @@ valid check with no reply                    -> negative evidence
 local execution failure                      -> no_evidence + diagnostic
 ```
 
-The availability subject and concrete target are both part of the observation context. A
-subject/target/path-binding change invalidates in-flight results from the preceding context.
+`ProbeTechnicalObservation` carries only those three technical facts. The Agent emits
+`AvailabilityOutcome` only when the completed attempt's immutable context still equals the
+current context. A late result from a superseded generation emits no evidence at all; it is
+not converted into `no_evidence`, because even that outcome belongs to the old context.
+
+The availability subject, concrete target and concrete endpoint generation are therefore all
+part of the observation context. Subject/target/path-binding change invalidates in-flight
+results from the preceding context.
 
 Future TCP/UDP/HTTP checks may add Driver implementations behind the same normalized
 criterion contract, but they are not first-release capabilities.
