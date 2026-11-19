@@ -13,6 +13,7 @@ from rou.network_policy_layout import (
 )
 from rou.probe_policy import (
     AvailabilityProbeIntent,
+    AvailabilityProbeMechanism,
     ProbeLocalHook,
     ProbeLocalPlatform,
     ProbePolicyProjectionError,
@@ -94,6 +95,7 @@ class ProbePolicyTests(unittest.TestCase):
         self.assertEqual(len(desired.rules), 1)
         rule = desired.rules[0]
         self.assertEqual(rule.owner, ProbePolicyOwner("corp", A))
+        self.assertIs(rule.mechanism, AvailabilityProbeMechanism.ICMP)
         self.assertEqual(rule.process_uid, 4242)
         self.assertEqual(rule.target, TARGET_A)
         self.assertTrue(
@@ -219,6 +221,17 @@ class ProbePolicyTests(unittest.TestCase):
                     RoutePriorityPathRoute(A, EP_A),
                     RoutePriorityPathRoute(B, EP_A),
                 ),
+            )
+
+    def test_non_typed_probe_mechanism_is_rejected(self):
+        with self.assertRaisesRegex(
+            ProbePolicyProjectionError,
+            "mechanism",
+        ):
+            AvailabilityProbeIntent(
+                ProbePolicyOwner("corp", A),
+                TARGET_A,
+                "icmp",
             )
 
     def test_invalid_local_platform_is_rejected(self):
