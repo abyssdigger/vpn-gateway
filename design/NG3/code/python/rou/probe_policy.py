@@ -21,6 +21,7 @@ from .network_policy_layout import (
     ProbePolicyAllocation,
     ProbePolicyOwner,
 )
+from .payload_routing_desired import ManagedRouteSpec, ManagedRouteType
 from .route_priority_inventory import RoutePriorityPathRoute
 
 
@@ -78,78 +79,6 @@ class ProbeLocalPlatform:
         ):
             raise ProbePolicyProjectionError(
                 "conntrack_mark must be an integer in [1, 2^32-1]"
-            )
-
-
-class ProbeRouteType(str, Enum):
-    UNICAST = "unicast"
-    BLACKHOLE = "blackhole"
-
-
-@dataclass(frozen=True, slots=True)
-class ProbeRouteSpec:
-    table: int
-    destination: IPv4Network
-    route_type: ProbeRouteType
-    protocol: int
-    metric: int
-    path_id: LogicalPathId | None = None
-    endpoint: InterfaceIdentity | None = None
-    gateway: IPv4Address | None = None
-    onlink: bool = False
-
-    def __post_init__(self) -> None:
-        if type(self.table) is not int or not 1 <= self.table <= 0xFFFFFFFF:
-            raise ProbePolicyProjectionError("invalid probe route table")
-        if not isinstance(self.destination, IPv4Network):
-            raise ProbePolicyProjectionError(
-                "probe route destination must be IPv4Network"
-            )
-        if not isinstance(self.route_type, ProbeRouteType):
-            raise ProbePolicyProjectionError(
-                "route_type must be ProbeRouteType"
-            )
-        if type(self.protocol) is not int or not 1 <= self.protocol <= 255:
-            raise ProbePolicyProjectionError(
-                "probe route protocol must be in [1, 255]"
-            )
-        if (
-            type(self.metric) is not int
-            or not 0 <= self.metric <= 0xFFFFFFFF
-        ):
-            raise ProbePolicyProjectionError(
-                "probe route metric must be in [0, 2^32-1]"
-            )
-        if type(self.onlink) is not bool:
-            raise ProbePolicyProjectionError("onlink must be bool")
-
-        if self.route_type is ProbeRouteType.BLACKHOLE:
-            if any(
-                value is not None
-                for value in (
-                    self.path_id,
-                    self.endpoint,
-                    self.gateway,
-                )
-            ) or self.onlink:
-                raise ProbePolicyProjectionError(
-                    "probe blackhole route cannot carry path realization"
-                )
-            return
-
-        if not isinstance(self.path_id, LogicalPathId):
-            raise ProbePolicyProjectionError(
-                "probe unicast route requires LogicalPathId"
-            )
-        if not isinstance(self.endpoint, InterfaceIdentity):
-            raise ProbePolicyProjectionError(
-                "probe unicast route requires InterfaceIdentity"
-            )
-        if self.gateway is not None and not isinstance(
-            self.gateway, IPv4Address
-        ):
-            raise ProbePolicyProjectionError(
-                "probe route gateway must be IPv4Address or None"
             )
 
 
@@ -252,17 +181,17 @@ class ProbeLocalRuleSpec:
 
 @dataclass(frozen=True, slots=True)
 class ProbeNetworkPolicyDesiredState:
-    routes: tuple[ProbeRouteSpec, ...]
+    routes: tuple[ManagedRouteSpec, ...]
     rules: tuple[ProbeRuleSpec, ...]
     local_rules: tuple[ProbeLocalRuleSpec, ...]
 
     def __post_init__(self) -> None:
         if not isinstance(self.routes, tuple) or not all(
-            isinstance(item, ProbeRouteSpec)
+            isinstance(item, ManagedRouteSpec)
             for item in self.routes
         ):
             raise ProbePolicyProjectionError(
-                "routes must be a tuple of ProbeRouteSpec"
+                "routes must be a tuple of ManagedRouteSpec"
             )
         if not isinstance(self.rules, tuple) or not all(
             isinstance(item, ProbeRuleSpec)
@@ -373,7 +302,7 @@ def build_probe_network_policy_desired_state(
         route_by_path[route.path_id] = route
         endpoint_owner[route.endpoint] = route.path_id
 
-    desired_routes: list[ProbeRouteSpec] = []
+    desired_routes: list[ManagedRouteSpec] = []
     desired_rules: list[ProbeRuleSpec] = []
     local_rules: list[ProbeLocalRuleSpec] = []
 
@@ -397,10 +326,10 @@ def build_probe_network_policy_desired_state(
             )
 
         desired_routes.append(
-            ProbeRouteSpec(
+            ManagedRouteSpec(
                 table=allocation.table,
                 destination=IPv4Network(f"{intent.target}/32"),
-                route_type=ProbeRouteType.UNICAST,
+                route_type=ManagedRouteType.UNICAST,
                 protocol=network_platform.path_route_protocol,
                 metric=network_platform.route_metrics.first_preference_metric,
                 path_id=path_route.path_id,
@@ -410,10 +339,10 @@ def build_probe_network_policy_desired_state(
             )
         )
         desired_routes.append(
-            ProbeRouteSpec(
+            ManagedRouteSpec(
                 table=allocation.table,
                 destination=IPv4Network("0.0.0.0/0"),
-                route_type=ProbeRouteType.BLACKHOLE,
+                route_type=ManagedRouteType.BLACKHOLE,
                 protocol=network_platform.guard_route_protocol,
                 metric=network_platform.route_metrics.terminal_guard_metric,
             )
@@ -473,7 +402,7 @@ def build_probe_network_policy_desired_state(
     )
 
 
-def _route_key(route: ProbeRouteSpec) -> tuple[object, ...]:
+def _route_key(route: ManagedRouteSpec) -> tuple[object, ...]:
     return (
         route.table,
         int(route.destination.network_address),
