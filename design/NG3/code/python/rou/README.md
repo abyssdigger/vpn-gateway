@@ -41,6 +41,7 @@ Implemented:
 - EXP-065-backed probe route/RPDB observer/comparison/mutation path using exact non-root UID + ICMP + target selectors in dedicated probe resources, with exact stale cleanup and no fwmark routing discriminator;
 - EXP-066-backed probe-local nft owner inside the shared `vpn_gate` composite scope: exact OUTPUT uid/oif/target/ICMP -> conntrack-mark assignment, reverse INPUT mark admission, same-name/new-ifindex stale detection, physical-rule set-union across semantic owners, and one atomic handle-delete + exact-add full-diff transaction;
 - bounded `AvailabilityProbeAgent` current-context semantics: normalized subject/target/mechanism + concrete `(ifname,ifindex)` + local generation token, exact late-result rejection, and technical reply/no-reply/local-error mapping to positive/negative/no_evidence without result history or routing state;
+- EXP-067-backed one-shot `LinuxIcmpProbeDriver`: dedicated numeric probe UID execution through `setpriv`, numeric one-packet ICMP, injected lower reply/process deadlines, exit 0/1/other -> reply/no-reply/local-error mapping, and bounded diagnostics;
 - EXP-033-backed read-only authoritative NAT chain observation/comparison classifying exact current, missing, stale and conflicting masquerade rules against the normalized desired state; no NAT rule add/delete or mutation authority;
 - EXP-035/036/037/038-backed strict read-only `payload_forward` owner observer for no-counter NEW/RETURN rules across the full IPv4 CIDR prefix-length range, with explicit current-interface-identity vs stale-generation classification; recognized shape is not desired-policy confirmation or mutation authority;
 - exact immutable lower `payload_forward` desired rule data plus pure actual-vs-desired comparison yielding confirmed/missing/stale/conflicts; this layer deliberately does not compile Profile direction, most-specific selection or Device envelope semantics;
@@ -80,7 +81,7 @@ Important non-goals of the current reference:
 - no Netlink event state/history/replay;
 - no generic local/system stack_input/stack_output exception framework; publication, supported-integration and probe-local traffic use separate bounded owner-specific contracts inside the shared composite nft owner;
 - no full daemon/lifecycle assembly;
-- no production probe execution/scheduling yet;
+- no production probe scheduling/cadence assembly yet; one-shot normalized-target ICMP execution exists, but target derivation specializations and ongoing runtime orchestration remain separate;
 - no Profile ordinary-side `+snat` physical materialization yet;
 - no availability probe runtime assembly or user timing knobs.
 
