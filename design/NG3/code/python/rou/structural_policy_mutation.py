@@ -22,6 +22,7 @@ from .forwarding_gate import (
 from .interface_identity import InterfaceIdentity
 from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
+from .probe_local_mutation import ProbeLocalMutationStep
 from .network_policy_layout import NetworkPolicyPlatformSpace
 from .nft_namespace_inventory import (
     NftNamespaceObservation,
@@ -92,6 +93,10 @@ class StructuralPolicyMutationBackend(Protocol):
     def apply_integration_local_step(
         self,
         step: IntegrationLocalMutationStep,
+    ) -> None: ...
+    def apply_probe_local_step(
+        self,
+        step: ProbeLocalMutationStep,
     ) -> None: ...
 
 
@@ -622,6 +627,8 @@ def structural_policy_distance(value: StructuralPolicyComparison) -> int:
         + len(value.nft.local_publication.stale)
         + len(value.nft.local_integration.missing)
         + len(value.nft.local_integration.stale)
+        + len(value.nft.probe_local.missing)
+        + len(value.nft.probe_local.stale)
         + len(value.nft.conflicts)
     )
 
