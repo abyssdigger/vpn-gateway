@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol
+from typing import Callable, Protocol
 
 from .controller_boundary_contribution import ControllerBoundaryContribution
 from .forwarding_gate import (
@@ -174,6 +174,7 @@ def start_controller_once(
     stop_requested: ControllerStopRequested | None = None,
     build_boundary_contribution: ControllerBoundaryContributionBuilder | None = None,
     stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
+    activation_precondition: Callable[[], bool] | None = None,
 ) -> ControllerStartupResult:
     """Run one bounded startup attempt with phase-boundary graceful-stop checkpoints."""
     requested = stop_requested or _never_stop_requested
@@ -509,6 +510,7 @@ def start_controller_once(
             else None
         ),
         desired.stack_return_affinity,
+        activation_precondition=activation_precondition,
     )
 
     if not activation.ready:
