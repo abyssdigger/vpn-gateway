@@ -122,7 +122,11 @@ def build_selected_host_boundary_desired(
         inner_gateway=domain_spec.inner_address.ip,
         allocation=NG3_HOST_BOUNDARY_LINUX_ALLOCATION,
     )
-    behavior_intents = build_release1_host_boundary_intent(config).behavior
+    behavior_intents = (
+        build_release1_host_boundary_intent(config).behavior
+        if behavior_host_lanes
+        else ()
+    )
     behavior_owner = build_host_boundary_behavior_nft_desired(
         behavior_intents,
         behavior_host_lanes,
@@ -156,9 +160,9 @@ def build_selected_host_boundary_desired(
 class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
     route_backend: LinuxHostBoundaryRouteBackend
     return_nft_backend: LinuxHostReturnNftBackend
-    behavior_nft_backend: LinuxHostBoundaryBehaviorNftBackend
     bootstrap_backend: LinuxHostBootstrapBackend
     desired: SelectedHostBoundaryDesired
+    behavior_nft_backend: LinuxHostBoundaryBehaviorNftBackend | None = None
 
     def observe(self) -> SelectedHostBoundaryObservation:
         conflicts: list[str] = []
@@ -173,12 +177,20 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
         )
         conflicts.extend(f"return nft: {item}" for item in nft.conflicts)
 
-        behavior = self.behavior_nft_backend.observe(
-            self.desired.behavior_owner
-        )
-        conflicts.extend(
-            f"behavior nft: {item}" for item in behavior.conflicts
-        )
+        if self.behavior_nft_backend is None:
+            behavior_exact = self.desired.behavior_owner is None
+            if not behavior_exact:
+                conflicts.append(
+                    "behavior nft: backend is missing for active behavior owner"
+                )
+        else:
+            behavior = self.behavior_nft_backend.observe(
+                self.desired.behavior_owner
+            )
+            behavior_exact = behavior.exact
+            conflicts.extend(
+                f"behavior nft: {item}" for item in behavior.conflicts
+            )
 
         route_exact, route_conflicts = _observe_reserved_return_routes(
             self.route_backend,
@@ -196,7 +208,7 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
                 not conflicts
                 and bootstrap.exact
                 and nft.exact
-                and behavior.exact
+                and behavior_exact
                 and route_exact
                 and rule_exact
             ),
@@ -225,10 +237,15 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
             self.return_nft_backend,
             self.desired.return_owner.return_nft,
         )
-        converge_host_boundary_behavior_nft_once(
-            self.behavior_nft_backend,
-            self.desired.behavior_owner,
-        )
+        if self.behavior_nft_backend is not None:
+            converge_host_boundary_behavior_nft_once(
+                self.behavior_nft_backend,
+                self.desired.behavior_owner,
+            )
+        elif self.desired.behavior_owner is not None:
+            raise RuntimeError(
+                "behavior nft backend is missing for active behavior owner"
+            )
         # Bootstrap capture is exposed last.
         converge_host_bootstrap_once(
             self.bootstrap_backend,
@@ -257,13 +274,14 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
         except Exception as exc:
             errors.append(f"bootstrap cleanup: {exc}")
 
-        try:
-            converge_host_boundary_behavior_nft_once(
-                self.behavior_nft_backend,
-                None,
-            )
-        except Exception as exc:
-            errors.append(f"behavior nft cleanup: {exc}")
+        if self.behavior_nft_backend is not None:
+            try:
+                converge_host_boundary_behavior_nft_once(
+                    self.behavior_nft_backend,
+                    None,
+                )
+            except Exception as exc:
+                errors.append(f"behavior nft cleanup: {exc}")
 
         try:
             converge_host_return_nft_once(self.return_nft_backend, None)
