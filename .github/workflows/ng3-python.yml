@@ -713,3 +713,16 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-064 NG3 host boundary behavior lanes/exp064_behavior_lanes.py"
+
+  linux-host-boundary-behavior-owner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: Host-boundary behavior owner convergence
+        run: >-
+          sudo python3
+          design/NG3/code/python/rou/tests/integration_host_boundary_behavior_owner.py
