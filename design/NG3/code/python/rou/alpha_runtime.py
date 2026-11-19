@@ -17,7 +17,7 @@ configuration load rather than silently ignored.
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Interface
 import os
@@ -28,6 +28,7 @@ import sys
 import threading
 from typing import Iterable
 
+from .availability_manager import AvailabilityManager, AvailabilityManagerPolicy
 from .binding import DeviceBindingState, PathBinding, project_device_bindings
 from .controller_startup import (
     ControllerStartupStatus,
@@ -72,6 +73,7 @@ from .linux_nft_scaffold import (
 )
 from .linux_policy_platform import (
     NG3_LINUX_POLICY_PLATFORM,
+    NG3_PROBE_LOCAL_PLATFORM,
     NG3_STACK_RETURN_AFFINITY_PLATFORM,
 )
 from .linux_stack_return_affinity import LinuxStackReturnAffinityBackend
@@ -98,6 +100,9 @@ from .payload_network_policy_desired import (
     build_payload_network_policy_desired_state,
 )
 from .payload_profile import PayloadProfileRequest, build_payload_profile_requests
+from .probe_desired import ProbeDesiredAssembly, build_probe_desired_assembly
+from .probe_runtime import AvailabilityProbeRuntime
+from .route_priority_inventory import RoutePriorityPathRoute
 from .release1_config import Release1Config, parse_release1_config
 from .structural_policy_mutation import compare_structural_policy
 from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
@@ -122,6 +127,8 @@ ALPHA_INNER_ADDRESS = IPv4Interface("198.19.255.2/30")
 ALPHA_RUNTIME_DIRECTORY = Path("/run/vpn-gate-alpha")
 ALPHA_STATUS_PATH = ALPHA_RUNTIME_DIRECTORY / "status.json"
 ALPHA_AUDIT_INTERVAL_SECONDS = 1.0
+ALPHA_AVAILABILITY_DEGRADATION_THRESHOLD = 2
+ALPHA_AVAILABILITY_RECOVERY_THRESHOLD = 2
 
 
 class AlphaRuntimeError(RuntimeError):
@@ -136,7 +143,21 @@ class AlphaPreparedPolicy:
     binding_state: DeviceBindingState
     config: Release1Config
     last_bindings: tuple[PathBinding, ...] = ()
+    last_baseline_profiles: tuple[PayloadProfileRequest, ...] = ()
     last_profiles: tuple[PayloadProfileRequest, ...] = ()
+    last_path_routes: tuple[RoutePriorityPathRoute, ...] = ()
+    last_probe_assembly: ProbeDesiredAssembly | None = None
+    availability_runtime: AvailabilityProbeRuntime = field(
+        default_factory=AvailabilityProbeRuntime
+    )
+    availability_manager: AvailabilityManager = field(
+        default_factory=lambda: AvailabilityManager(
+            AvailabilityManagerPolicy(
+                ALPHA_AVAILABILITY_DEGRADATION_THRESHOLD,
+                ALPHA_AVAILABILITY_RECOVERY_THRESHOLD,
+            )
+        )
+    )
 
     @classmethod
     def from_text(
@@ -157,14 +178,6 @@ class AlphaPreparedPolicy:
                 raise AlphaRuntimeError(
                     f"profile {profile_id!r} requests +snat, which is not yet "
                     "materialized by the alpha runtime"
-                )
-            if (
-                profile.availability_check is not None
-                or profile.availability_uses_device_default
-            ):
-                raise AlphaRuntimeError(
-                    f"profile {profile_id!r} requests availability_check, which "
-                    "is not yet assembled end-to-end by the alpha runtime"
                 )
 
         prepared = cls(
@@ -198,11 +211,24 @@ class AlphaPreparedPolicy:
             projection.bindings,
         )
         path_routes = realize_direct_device_path_routes(projection.bindings)
-        layout = allocate_network_policy_layout(
+        probe_assembly = build_probe_desired_assembly(
+            self.config,
             profiles,
-            (),
+            path_routes,
             NG3_LINUX_POLICY_PLATFORM,
+            NG3_PROBE_LOCAL_PLATFORM,
         )
+        layout = probe_assembly.layout
+        self.availability_runtime.configure(
+            probe_assembly.intents,
+            path_routes,
+        )
+        availability_projection = self.availability_manager.synchronize(
+            self.availability_runtime.current_contexts,
+            profiles,
+            self.config,
+        )
+        effective_profiles = availability_projection.effective_profiles
 
         nat_policies = tuple(
             DeviceNatPolicyIntent(
@@ -268,7 +294,7 @@ class AlphaPreparedPolicy:
         )
 
         desired = build_payload_network_policy_desired_state(
-            profiles,
+            effective_profiles,
             layout,
             path_routes,
             host_boundary,
@@ -276,10 +302,14 @@ class AlphaPreparedPolicy:
             firewall_policies,
             publication_intents,
             integration_intents,
+            probe_local_rules=probe_assembly.probe.local_rules,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
         )
         self.last_bindings = projection.bindings
-        self.last_profiles = profiles
+        self.last_baseline_profiles = profiles
+        self.last_profiles = effective_profiles
+        self.last_path_routes = path_routes
+        self.last_probe_assembly = probe_assembly
         return desired
 
     def build_host_publication_desired(self) -> HostPublicationDesiredState:
