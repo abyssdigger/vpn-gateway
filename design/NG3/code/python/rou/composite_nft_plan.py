@@ -19,6 +19,11 @@ from .local_publication_mutation import (
 from .local_publication_policy import LocalPublicationDesiredState
 from .payload_forward_desired import PayloadForwardRuleSpec
 from .payload_nat_desired import PayloadMasqueradeSpec
+from .probe_local_mutation import (
+    ProbeLocalMutationStep,
+    select_probe_local_step,
+)
+from .probe_policy import ProbeLocalRuleSpec
 
 
 class CompositeNftStepKind(str, Enum):
@@ -31,6 +36,7 @@ class CompositeNftStepKind(str, Enum):
     ADD_PROFILE_RULE = "add_profile_rule"
     APPLY_LOCAL_PUBLICATION = "apply_local_publication"
     APPLY_LOCAL_INTEGRATION = "apply_local_integration"
+    APPLY_PROBE_LOCAL = "apply_probe_local"
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +49,7 @@ class CompositeNftMutationStep:
     device_chain: DeviceFirewallChainSpec | None = None
     local_publication_step: LocalPublicationMutationStep | None = None
     local_integration_step: IntegrationLocalMutationStep | None = None
+    probe_local_step: ProbeLocalMutationStep | None = None
 
     def __post_init__(self) -> None:
         fields = (
@@ -53,6 +60,7 @@ class CompositeNftMutationStep:
             self.device_chain is not None,
             self.local_publication_step is not None,
             self.local_integration_step is not None,
+            self.probe_local_step is not None,
         )
         if sum(fields) != 1:
             raise ValueError("exactly one mutation step operand is required")
@@ -66,6 +74,7 @@ def select_composite_nft_step(
     comparison: CompositeNftPolicyComparison,
     local_publication_desired: LocalPublicationDesiredState | None = None,
     local_integration_desired: IntegrationLocalDesiredState | None = None,
+    probe_local_desired: tuple[ProbeLocalRuleSpec, ...] = (),
 ) -> CompositeNftMutationStep | None:
     """Select one fail-closed structural convergence step.
 
@@ -90,6 +99,7 @@ def select_composite_nft_step(
         or comparison.device_firewall.conflicts
         or comparison.local_publication.conflicts
         or comparison.local_integration.conflicts
+        or comparison.probe_local.conflicts
     ):
         raise CompositeNftPlanError(
             "sub-policy comparison has conflicts"
@@ -105,6 +115,13 @@ def select_composite_nft_step(
     if not isinstance(local_integration_desired, IntegrationLocalDesiredState):
         raise CompositeNftPlanError(
             "local_integration_desired must be IntegrationLocalDesiredState"
+        )
+    if not isinstance(probe_local_desired, tuple) or not all(
+        isinstance(rule, ProbeLocalRuleSpec)
+        for rule in probe_local_desired
+    ):
+        raise CompositeNftPlanError(
+            "probe_local_desired must be a tuple of ProbeLocalRuleSpec"
         )
 
     if comparison.local_integration.stale:
@@ -133,6 +150,17 @@ def select_composite_nft_step(
         return CompositeNftMutationStep(
             kind=CompositeNftStepKind.APPLY_LOCAL_PUBLICATION,
             local_publication_step=local_step,
+        )
+
+    if comparison.probe_local.stale:
+        local_step = select_probe_local_step(comparison.probe_local)
+        if local_step is None:
+            raise CompositeNftPlanError(
+                "stale probe-local state has no repair step"
+            )
+        return CompositeNftMutationStep(
+            kind=CompositeNftStepKind.APPLY_PROBE_LOCAL,
+            probe_local_step=local_step,
         )
 
     if comparison.profile_forward.stale:
@@ -229,6 +257,17 @@ def select_composite_nft_step(
         return CompositeNftMutationStep(
             kind=CompositeNftStepKind.APPLY_LOCAL_INTEGRATION,
             local_integration_step=local_step,
+        )
+
+    if comparison.probe_local.missing:
+        local_step = select_probe_local_step(comparison.probe_local)
+        if local_step is None:
+            raise CompositeNftPlanError(
+                "missing probe-local state has no repair step"
+            )
+        return CompositeNftMutationStep(
+            kind=CompositeNftStepKind.APPLY_PROBE_LOCAL,
+            probe_local_step=local_step,
         )
 
     return None
