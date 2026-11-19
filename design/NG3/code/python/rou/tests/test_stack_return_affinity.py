@@ -49,6 +49,7 @@ def layout():
                 terminal_guard_metric=100,
                 path_route_protocol=202,
                 guard_route_protocol=203,
+                host_boundary_lane_route_protocol=204,
             ),
             PayloadPolicyAllocation(
                 profile_id="specific",
@@ -57,6 +58,7 @@ def layout():
                 terminal_guard_metric=100,
                 path_route_protocol=202,
                 guard_route_protocol=203,
+                host_boundary_lane_route_protocol=204,
             ),
         ),
         probe=(),
