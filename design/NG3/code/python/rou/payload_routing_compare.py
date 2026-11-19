@@ -207,6 +207,9 @@ def _desired_rule_key(rule: ManagedRuleSpec) -> tuple[object, ...]:
         rule.destination.prefixlen,
         None,
         None,
+        None,
+        None,
+        None,
     )
 
 
@@ -220,4 +223,7 @@ def _observed_rule_key(rule: ObservedManagedRule) -> tuple[object, ...]:
         rule.destination.prefixlen if rule.destination else -1,
         rule.fwmark,
         rule.fwmask,
+        rule.uid_start,
+        rule.uid_end,
+        rule.ipproto,
     )
