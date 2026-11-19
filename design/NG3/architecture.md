@@ -44,10 +44,10 @@ Current trace:
 | pure normalized availability-subject -> probe route/RPDB/local-policy projection | `probe_policy.py` | `NG3-2026-11-19-probe-policy-projection-review.md` |
 | pure probe route/RPDB actual-vs-desired comparison | `probe_routing_compare.py` | `NG3-2026-11-19-probe-routing-comparison-review.md` |
 | bounded fail-closed probe route/RPDB convergence | `probe_routing_plan.py`, `probe_routing_convergence.py`, `linux_probe_routing.py` | `NG3-2026-11-19-probe-routing-convergence-review.md` |
-| probe route/RPDB mutation Driver — **BROKEN path discriminator pending oif recovery** | `linux_probe_routing.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
+| probe route/RPDB mutation Driver with exact `oif` path discriminator | `linux_probe_routing.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
 | EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
 | bounded current probe observation context / late-result rejection / technical-result mapping | `probe_runtime.py` | `NG3-2026-11-19-probe-observation-context-agent-review.md` |
-| EXP-067-backed one-shot ICMP exit semantics — **path binding correction pending** | `icmp_probe_driver.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-icmp-probe-driver-review.md`, `EXP-067-result-20261119.md` |
+| EXP-067-backed one-shot ICMP exit semantics with bound `-I <ifname>` path execution | `icmp_probe_driver.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-icmp-probe-driver-review.md`, `EXP-067-result-20261119.md` |
 | accepted NG3 Linux platform resource space | `linux_policy_platform.py` | `EXP-028-result-20261116.md` |
 | semantic Profile/allocation -> route-key priority realization | `route_priority_domain_builder.py` | `NG3-2026-11-16-route-priority-domain-builder-review.md` |
 | explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
