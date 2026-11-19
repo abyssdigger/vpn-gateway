@@ -115,6 +115,8 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
             ProbeAttemptStatus.EVIDENCE_APPLIED,
         )
         self.assertFalse(first.availability_problem)
+        self.assertFalse(first.next_state.availability_known)
+        self.assertEqual(first.next_state.availability_label, "unknown")
         self.assertEqual(
             first.next_state.confirmation.degradation_progress,
             1,
@@ -131,6 +133,11 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
             recovery_threshold=2,
         )
         self.assertTrue(second.availability_problem)
+        self.assertTrue(second.next_state.availability_known)
+        self.assertEqual(
+            second.next_state.availability_label,
+            "not available",
+        )
         self.assertEqual(
             second.next_state.confirmation.degradation_progress,
             0,
@@ -138,6 +145,7 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
 
     def test_positive_evidence_recovers_confirmed_problem(self):
         agent = AvailabilityProbeAgent()
+        current = agent.configure(INTENT, EP)
         driver = StaticDriver(
             ProbeTechnicalObservation(ProbeTechnicalOutcome.REPLY)
         )
@@ -145,7 +153,9 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
             AvailabilityConfirmationState(
                 availability_problem=True,
                 recovery_progress=1,
-            )
+            ),
+            context=current,
+            availability_known=True,
         )
         result = run_probe_attempt_once(
             agent,
@@ -158,9 +168,29 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
             recovery_threshold=2,
         )
         self.assertFalse(result.availability_problem)
+        self.assertTrue(result.next_state.availability_known)
+        self.assertEqual(result.next_state.availability_label, "available")
+
+    def test_initial_positive_establishes_known_available(self):
+        agent = AvailabilityProbeAgent()
+        result = run_probe_attempt_once(
+            agent,
+            StaticDriver(
+                ProbeTechnicalObservation(ProbeTechnicalOutcome.REPLY)
+            ),
+            INTENT,
+            EP,
+            ProbeSubjectRuntimeState(),
+            READY,
+            degradation_threshold=2,
+            recovery_threshold=2,
+        )
+        self.assertTrue(result.next_state.availability_known)
+        self.assertEqual(result.next_state.availability_label, "available")
 
     def test_local_error_is_no_evidence_and_does_not_advance_state(self):
         agent = AvailabilityProbeAgent()
+        current = agent.configure(INTENT, EP)
         driver = StaticDriver(
             ProbeTechnicalObservation(
                 ProbeTechnicalOutcome.LOCAL_ERROR,
@@ -170,7 +200,9 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
         state = ProbeSubjectRuntimeState(
             AvailabilityConfirmationState(
                 degradation_progress=1
-            )
+            ),
+            context=current,
+            availability_known=False,
         )
         result = run_probe_attempt_once(
             agent,
@@ -187,11 +219,14 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
 
     def test_context_change_during_driver_discards_late_reply(self):
         agent = AvailabilityProbeAgent()
+        current = agent.configure(INTENT, EP)
         driver = ContextChangingDriver(agent)
         state = ProbeSubjectRuntimeState(
             AvailabilityConfirmationState(
                 degradation_progress=1
-            )
+            ),
+            context=current,
+            availability_known=False,
         )
         result = run_probe_attempt_once(
             agent,
@@ -207,8 +242,85 @@ class ProbeAttemptRuntimeTests(unittest.TestCase):
             result.status,
             ProbeAttemptStatus.STALE_RESULT_DISCARDED,
         )
-        self.assertEqual(result.next_state, state)
+        self.assertNotEqual(result.next_state, state)
+        self.assertFalse(result.next_state.availability_known)
+        self.assertEqual(result.next_state.availability_label, "unknown")
+        self.assertEqual(
+            result.next_state.confirmation,
+            AvailabilityConfirmationState(),
+        )
+        self.assertEqual(
+            result.next_state.context,
+            agent.current_context,
+        )
         self.assertIsNone(result.evidence)
+
+    def test_target_change_resets_old_confirmed_problem_to_unknown(self):
+        agent = AvailabilityProbeAgent()
+        current = agent.configure(INTENT, EP)
+        old = ProbeSubjectRuntimeState(
+            AvailabilityConfirmationState(
+                availability_problem=True,
+            ),
+            context=current,
+            availability_known=True,
+        )
+        replacement = AvailabilityProbeIntent(
+            ProbePolicyOwner("corp", PATH),
+            IPv4Address("203.0.113.9"),
+        )
+        result = run_probe_attempt_once(
+            agent,
+            StaticDriver(
+                ProbeTechnicalObservation(
+                    ProbeTechnicalOutcome.LOCAL_ERROR,
+                    "new target not ready",
+                )
+            ),
+            replacement,
+            EP,
+            old,
+            READY,
+            degradation_threshold=2,
+            recovery_threshold=2,
+        )
+        self.assertFalse(result.next_state.availability_known)
+        self.assertEqual(result.next_state.availability_label, "unknown")
+        self.assertFalse(
+            result.next_state.confirmation.availability_problem
+        )
+        self.assertNotEqual(result.next_state.context, current)
+
+    def test_ifindex_change_resets_known_available_to_unknown(self):
+        agent = AvailabilityProbeAgent()
+        current = agent.configure(INTENT, EP)
+        old = ProbeSubjectRuntimeState(
+            AvailabilityConfirmationState(),
+            context=current,
+            availability_known=True,
+        )
+        replacement = InterfaceIdentity("vpn0", 11)
+        result = run_probe_attempt_once(
+            agent,
+            StaticDriver(
+                ProbeTechnicalObservation(
+                    ProbeTechnicalOutcome.LOCAL_ERROR,
+                    "replacement path not ready",
+                )
+            ),
+            INTENT,
+            replacement,
+            old,
+            READY,
+            degradation_threshold=2,
+            recovery_threshold=2,
+        )
+        self.assertFalse(result.next_state.availability_known)
+        self.assertEqual(result.next_state.availability_label, "unknown")
+        self.assertEqual(
+            result.next_state.confirmation,
+            AvailabilityConfirmationState(),
+        )
 
     def test_unchecked_preconditions_require_both_lower_owners(self):
         value = ProbeAttemptPreconditions(
