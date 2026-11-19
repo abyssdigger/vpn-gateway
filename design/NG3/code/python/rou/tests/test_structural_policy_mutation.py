@@ -421,6 +421,32 @@ class StructuralPolicyMutationTests(unittest.TestCase):
         self.assertIn("apply raised RuntimeError", result.diagnostic)
         self.assertEqual(gate.state, ForwardingGateState.ENABLED)
 
+    def test_activation_precondition_change_keeps_forwarding_closed(self):
+        exact_routes = (OBS_GUARD, OBS_PATH)
+        backend = FakeBackend(
+            snapshot(routes=exact_routes, rules=(OBS_RULE,)),
+        )
+        gate = FakeGate()
+        calls = []
+        result = converge_structural_policy_step_once(
+            gate,
+            backend,
+            ROUTING_DESIRED,
+            NFT_DESIRED,
+            NG3_LINUX_POLICY_PLATFORM,
+            activation_precondition=lambda: calls.append("checked") or False,
+        )
+        self.assertEqual(
+            result.status,
+            StructuralPolicyMutationStatus.PRECONDITION_FAILED,
+        )
+        self.assertEqual(calls, ["checked"])
+        self.assertEqual(
+            gate.writes,
+            [ForwardingGateState.DISABLED],
+        )
+        self.assertEqual(gate.state, ForwardingGateState.DISABLED)
+
     def test_post_activation_drift_recloses_forwarding(self):
         exact_routes = (OBS_GUARD, OBS_PATH)
         backend = FakeBackend(
