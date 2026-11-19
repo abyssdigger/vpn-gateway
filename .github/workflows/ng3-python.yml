@@ -797,6 +797,7 @@ jobs:
           sudo apt-get install -y iproute2 iputils-ping
       - name: EXP-072 managed L3 host bootstrap
         run: >-
+          env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-072 NG3 managed L3 host bootstrap/exp072_managed_l3_bootstrap.py"
   linux-boundary-dataplane-race:
