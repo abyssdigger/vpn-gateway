@@ -30,6 +30,7 @@ Current experiment directories:
 | EXP-064 | fixed host-boundary behavior lanes for remote-initiated traffic |
 | EXP-065 | Release-1 probe RPDB uidrange/ipproto/target selector shape |
 | EXP-066 | Release-1 probe local nft owner representation / ifindex-generation shape |
+| EXP-067 | Release-1 one-shot ICMP Driver execution / exit semantics |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -63,3 +64,4 @@ Canonical dispositions:
 | EXP-064 | PASS | pending_decision | Fixed behavior lanes are technically proven, but adoption is blocked on whether VPNG0004-R4.R6.R1.R6.R1 truly requires full Profile identity to cross the host boundary or only the Profile-derived host behavior needed by its Purpose. |
 | EXP-065 | PASS | selected | Confirms the current Linux representation and lookup behavior for the already selected Release-1 probe RPDB discriminator: exact uidrange + ICMP + target -> dedicated probe table. |
 | EXP-066 | PASS | selected | Confirms current nft JSON/handle shape for the accepted EXP-024 probe local OUTPUT/INPUT admission and proves same-name/new-ifindex replacement exposes the old raw ifindex instead of falsely confirming the replacement. |
+| EXP-067 | PASS | selected | Confirms one-shot ICMP execution under the selected non-root UID/RPDB/nft probe plane and the technical mapping exit 0=reply, exit 1=no-reply, other=local error; test timeout is not a product guarantee. |
