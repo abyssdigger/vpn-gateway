@@ -23,6 +23,7 @@ _DEVICE_KEYS = frozenset(
     {
         "enabled",
         "expected_interfaces",
+        "remote_endpoint",
         "use_outbound_nat",
         "allow_vpn_client",
         "publish_vpn_server",
@@ -97,6 +98,7 @@ class AvailabilityCheckConfig:
 
 @dataclass(frozen=True, slots=True)
 class DeviceRelease1Config:
+    remote_endpoint: ipaddress.IPv4Address | None
     use_outbound_nat: bool | None
     allow_vpn_client: tuple[VpnClientTransportConfig, ...]
     publish_vpn_server: tuple[VpnServerPublicationConfig, ...]
@@ -188,8 +190,22 @@ def parse_release1_config(text: str) -> Release1Config:
     for device_id, raw_body in raw_devices.items():
         body = _table(raw_body, f"device.{device_id}")
         if not structural.devices[device_id].enabled:
-            devices[device_id] = DeviceRelease1Config(None, (), (), None)
+            devices[device_id] = DeviceRelease1Config(None, None, (), (), None)
             continue
+
+        endpoint_value = body.get("remote_endpoint")
+        remote_endpoint = None
+        if "remote_endpoint" in body:
+            if not isinstance(endpoint_value, str):
+                raise Release1ConfigError(
+                    f"device.{device_id}.remote_endpoint must be an exact IPv4 address"
+                )
+            try:
+                remote_endpoint = ipaddress.IPv4Address(endpoint_value)
+            except ipaddress.AddressValueError:
+                raise Release1ConfigError(
+                    f"device.{device_id}.remote_endpoint must be an exact IPv4 address"
+                ) from None
 
         nat_value = body.get("use_outbound_nat")
         if device_id in ordinary_to_vpn_devices and "use_outbound_nat" not in body:
@@ -216,6 +232,7 @@ def parse_release1_config(text: str) -> Release1Config:
         )
 
         devices[device_id] = DeviceRelease1Config(
+            remote_endpoint=remote_endpoint,
             use_outbound_nat=nat_value if type(nat_value) is bool else None,
             allow_vpn_client=tuple(
                 _parse_client_transport(
@@ -250,6 +267,19 @@ def parse_release1_config(text: str) -> Release1Config:
             ),
             reserve_device_ids=profile_reserve_devices[profile_id],
         )
+
+    for profile_id, profile in profiles.items():
+        check = profile.availability_check
+        if check is None or check.target is not None:
+            continue
+        for device_id in structural.profiles[profile_id].device_order:
+            if not structural.devices[device_id].enabled:
+                continue
+            if devices[device_id].remote_endpoint is None:
+                raise Release1ConfigError(
+                    f"device.{device_id}.remote_endpoint is required by "
+                    f"profile.{profile_id}.availability_check = \"icmp\""
+                )
 
     return Release1Config(
         structural=structural,
