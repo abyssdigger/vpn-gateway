@@ -377,6 +377,14 @@ from .probe_runtime import (
     ProbeTechnicalObservation,
     ProbeTechnicalOutcome,
 )
+from .probe_attempt_runtime import (
+    ActiveProbeDriver,
+    ProbeAttemptPreconditions,
+    ProbeAttemptResult,
+    ProbeAttemptStatus,
+    ProbeSubjectRuntimeState,
+    run_probe_attempt_once,
+)
 from .icmp_probe_driver import (
     IcmpProbeDriverError,
     IcmpProbeExecutionPolicy,
@@ -696,6 +704,11 @@ __all__ = [
     "ProbeLocalHook",
     "ProbeLocalPlatform",
     "ProbeLocalRuleSpec",
+    "ActiveProbeDriver",
+    "ProbeAttemptPreconditions",
+    "ProbeAttemptResult",
+    "ProbeAttemptStatus",
+    "ProbeSubjectRuntimeState",
     "ProbeEvidence",
     "ProbeObservationContext",
     "ProbeRuntimeError",
@@ -790,6 +803,7 @@ __all__ = [
     "build_payload_profile_requests",
     "build_payload_routing_desired_state",
     "build_probe_network_policy_desired_state",
+    "run_probe_attempt_once",
     "compare_probe_routing",
     "probe_routing_rank",
     "select_probe_routing_step",
