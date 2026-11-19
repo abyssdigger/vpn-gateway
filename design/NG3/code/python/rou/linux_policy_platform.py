@@ -31,6 +31,7 @@ NG3_LINUX_POLICY_PLATFORM = NetworkPolicyPlatformSpace(
     ambient_main_rule_priority=32766,
     path_route_protocol=202,
     guard_route_protocol=201,
+    host_boundary_lane_route_protocol=204,
     route_metrics=RouteMetricPlatformSpace(
         first_preference_metric=1,
         terminal_guard_metric=0xFFFFFFFF,
