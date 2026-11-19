@@ -6532,6 +6532,24 @@ The Rust calculator is not allowed to mutate routes, own active-path lifecycle, 
 health, or change structural membership. Those responsibilities remain in the existing
 Manager/lower convergence contracts.
 
+The next Rust parity slice ports the bounded `AvailabilityRoutingState` projection for one
+Profile. It owns only the previously accepted active-path identity and returns:
+
+```text
+previous active path
++ current configured path membership
++ established problem paths
++ reserve Device membership
+    ->
+next active path
++ current effective path order
+```
+
+A disappeared active path is treated as stale bounded state and replaced from current
+membership. All-problem or empty membership clears the active identity. The Rust projection
+delegates ordering semantics to the Rust `AvailabilityPriorityCalculator`; it performs no
+routing I/O and does not own confirmation state.
+
 ### Migration/evidence rule
 
 Porting Python reference behavior to Rust is an implementation replacement, not a redesign.
