@@ -44,6 +44,8 @@ Current trace:
 | pure normalized availability-subject -> probe route/RPDB/local-policy projection | `probe_policy.py` | `NG3-2026-11-19-probe-policy-projection-review.md` |
 | pure probe route/RPDB actual-vs-desired comparison | `probe_routing_compare.py` | `NG3-2026-11-19-probe-routing-comparison-review.md` |
 | bounded fail-closed probe route/RPDB convergence | `probe_routing_plan.py`, `probe_routing_convergence.py`, `linux_probe_routing.py` | `NG3-2026-11-19-probe-routing-convergence-review.md` |
+| explicit-target Profile/path -> shared-layout probe projection | `alpha_probe_projection.py` | current explicit-target probe integration review |
+| bounded lower-precondition -> Agent -> Driver -> confirmation attempt | `probe_attempt_runtime.py` | current explicit-target probe integration review |
 | EXP-065-backed probe route/RPDB mutation Driver | `linux_probe_routing.py` | `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
 | EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
 | bounded current probe observation context / late-result rejection / technical-result mapping | `probe_runtime.py` | `NG3-2026-11-19-probe-observation-context-agent-review.md` |
@@ -2629,6 +2631,97 @@ Executable contracts:
 This coordinator only establishes the route/RPDB precondition for one probe attempt. It does
 not schedule ICMP, derive omitted targets, own availability confirmation or change payload
 route preference.
+
+## 8.6. Explicit-target Profile -> probe-subject alpha projection
+
+**Implements:**
+- `VPNG0003-R3.R6`
+- `VPNG0003-R3.R6.R1`
+- `VPNG0003-R3.R6.R2`
+- `VPNG0003-R3.R6.R3`
+
+For an enabled Profile whose accepted Release-1 configuration already contains an explicit
+`availability_check = "icmp/<IPv4>"`, the alpha Adapter may project one current probe
+subject per currently bound logical path:
+
+```text
+Profile availability check
++ current PayloadProfileRequest.ordered_paths
+    ->
+(Profile, path, concrete target)*
+```
+
+Each resulting owner becomes both:
+
+- an `AvailabilityProbeIntent`;
+- a `ProbeRoutingDemand` for the shared lower allocator.
+
+The payload and probe allocations must be produced by **one**
+`allocate_network_policy_layout()` call. Building a second independent layout for the probe
+plane is prohibited because table/RPDB ownership is one shared lower resource namespace.
+
+The executable `alpha_probe_projection.py` therefore returns:
+
+```text
+AlphaProbeDesiredProjection
+    semantic probe intents/demands
+    shared payload+probe NetworkPolicyLayout
+    ProbeNetworkPolicyDesiredState
+```
+
+The caller must reuse that same returned layout when projecting payload policy.
+
+A Profile with no current bound paths contributes no current probe subject. That does not
+mean its configured check is disabled; it means there is currently no concrete path on which
+an observation can be performed.
+
+Bare `availability_check = "icmp"` remains explicitly rejected by this Adapter. No global
+default target and no convenient VPN endpoint is inferred. Its concrete target still requires
+integration-specific evidence.
+
+The lower `ProbeLocalPlatform(process_uid, conntrack_mark)` values remain injected. The
+experiment values used by EXP-066/067 are not promoted into alpha production defaults merely
+because they proved the mechanism.
+
+## 8.7. One-attempt Agent/Driver/confirmation composition
+
+**Implements:**
+- `VPNG0003-R3.R6`
+- `VPNG0003-R3.R6.R1`
+- `VPNG0003-R3.R6.R2`
+- `VPNG0003-R3.R6.R3`
+- `VPNG0003-R3.R6.R3.R1`
+
+Once both lower owners are confirmed exact for the current probe subject:
+
+```text
+probe route/RPDB exact
+probe-local nft exact
+```
+
+one bounded attempt may cross the existing contracts without adding a new policy owner:
+
+```text
+AvailabilityProbeAgent.configure(current intent + endpoint)
+    -> begin_attempt() current immutable context
+    -> ActiveProbeDriver.check(context)
+    -> Agent accepts or discards result by exact current-context equality
+    -> accepted AvailabilityOutcome
+    -> availability_confirmation transition
+```
+
+If either lower owner is unconfirmed, the Driver is not invoked.
+
+If the observation context changes while the Driver is executing, the returned technical
+result is discarded and does not enter confirmation state. In particular a late reply is not
+converted to positive evidence and a late local error is not converted to `no_evidence`.
+
+A current local execution failure remains `NO_EVIDENCE` and does not advance either
+degradation or recovery progress.
+
+The executable `probe_attempt_runtime.py` owns no cadence, history, target derivation,
+Linux mutation or route-order state. It performs at most one technical attempt and one
+existing confirmation-state transition.
 
 # 9. NetworkPolicyAdapter
 
