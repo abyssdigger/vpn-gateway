@@ -29,6 +29,13 @@ SERVER_HOST_CIDR = "198.19.254.1/30"
 SERVER_ADDR_CIDR = "198.19.254.2/30"
 SERVER_UNDERLAY = "198.19.254.2"
 
+LAN_NS = "alpha-lan"
+LAN_HOST = "alpha-lan-host"
+LAN_INNER = "alpha-lan0"
+LAN_HOST_CIDR = "192.0.3.1/24"
+LAN_ADDR_CIDR = "192.0.3.2/24"
+LAN_ADDR = "192.0.3.2"
+
 VPN_IF = "vpn0"
 SERVER_TUN = "tun-srv"
 VPN_CLIENT_ADDR = "10.253.0.2"
@@ -156,6 +163,8 @@ def generate_pki(root):
 def setup_server_namespace():
     command(("ip", "netns", "del", SERVER_NS), check=False)
     command(("ip", "link", "del", SERVER_HOST), check=False)
+    command(("ip", "netns", "del", LAN_NS), check=False)
+    command(("ip", "link", "del", LAN_HOST), check=False)
     command(("ip", "netns", "add", SERVER_NS))
     command(
         (
@@ -175,6 +184,30 @@ def setup_server_namespace():
         (
             "ip", "-n", SERVER_NS, "route", "replace", "default",
             "via", "198.19.254.1", "dev", SERVER_INNER,
+        )
+    )
+
+    command(("ip", "netns", "del", LAN_NS), check=False)
+    command(("ip", "link", "del", LAN_HOST), check=False)
+    command(("ip", "netns", "add", LAN_NS))
+    command(
+        (
+            "ip", "link", "add", LAN_HOST,
+            "type", "veth", "peer", "name", LAN_INNER,
+        )
+    )
+    command(("ip", "link", "set", LAN_INNER, "netns", LAN_NS))
+    command(("ip", "addr", "add", LAN_HOST_CIDR, "dev", LAN_HOST))
+    command(("ip", "link", "set", LAN_HOST, "up"))
+    command(("ip", "-n", LAN_NS, "link", "set", "lo", "up"))
+    command(
+        ("ip", "-n", LAN_NS, "addr", "add", LAN_ADDR_CIDR, "dev", LAN_INNER)
+    )
+    command(("ip", "-n", LAN_NS, "link", "set", LAN_INNER, "up"))
+    command(
+        (
+            "ip", "-n", LAN_NS, "route", "replace", "default",
+            "via", LAN_HOST_CIDR.split("/")[0], "dev", LAN_INNER,
         )
     )
 
@@ -252,7 +285,7 @@ publish_vpn_server = "tcp/{SERVER_HOST}:{PUBLICATION_HOST_PORT}>{PUBLICATION_INT
 
 [profile.alpha]
 enabled = true
-direction = "bidirectional+route-return"
+direction = "bidirectional+snat+route-return"
 destinations = ["{VPN_SERVER_ADDR}/32"]
 device_order = ["ovpn"]
 """,
@@ -294,6 +327,70 @@ print('DATA=' + data.decode())
 assert data == b'PUBACK:publication-e2e'
 s.close()
 '''
+
+
+GATEWAY_NAT_SERVER = r'''
+import socket, sys
+addr = sys.argv[1]
+port = int(sys.argv[2])
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind((addr, port))
+s.listen(1)
+print('READY', flush=True)
+conn, peer = s.accept()
+conn.settimeout(5)
+data = conn.recv(4096)
+print(f'PEER={peer[0]}:{peer[1]}', flush=True)
+conn.sendall(b'NATACK:' + data)
+conn.close()
+s.close()
+'''
+
+GATEWAY_NAT_CLIENT = r'''
+import socket, sys
+src = sys.argv[1]
+dst = sys.argv[2]
+port = int(sys.argv[3])
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.settimeout(5)
+s.bind((src, 0))
+s.connect((dst, port))
+s.sendall(b'gateway-nat-e2e')
+data = s.recv(4096)
+print('DATA=' + data.decode())
+assert data == b'NATACK:gateway-nat-e2e'
+s.close()
+'''
+
+
+def spawn_gateway_nat_listener():
+    proc = subprocess.Popen(
+        (
+            'ip', 'netns', 'exec', LAN_NS,
+            'python3', '-u', '-c', GATEWAY_NAT_SERVER,
+            LAN_ADDR, '25443',
+        ),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert proc.stdout is not None
+    ready = proc.stdout.readline().strip()
+    if ready != 'READY':
+        out, err = proc.communicate(timeout=3)
+        raise RuntimeError(
+            f'gateway NAT listener did not become ready: {ready!r} {out!r} {err!r}'
+        )
+    return proc
+
+
+def gateway_nat_probe():
+    return ns_command(
+        SERVER_NS,
+        'python3', '-c', GATEWAY_NAT_CLIENT,
+        VPN_SERVER_ADDR, LAN_ADDR, '25443',
+    )
 
 
 def spawn_publication_listener():
@@ -557,6 +654,37 @@ def main():
         assert first_paths[0]["ifname"] == VPN_IF, first_status
         assert first_paths[0]["ifindex"] == first_ifindex, first_status
         print("EXP051_RUNTIME_STATUS_FIRST_PATH=PASS")
+
+        # Profile +snat is private STACK behavior. The ordinary LAN has only its
+        # normal default through this host; it has no route to the remote VPN
+        # source and no route to the stack service /32.
+        lan_routes = ns_command(LAN_NS, "ip", "-4", "route", "show").stdout
+        assert "default via " + LAN_HOST_CIDR.split("/")[0] in lan_routes, lan_routes
+        assert VPN_SERVER_ADDR not in lan_routes, lan_routes
+        assert INNER_ADDR not in lan_routes, lan_routes
+        command(
+            (
+                "ip", "-n", SERVER_NS, "route", "replace",
+                f"{LAN_ADDR}/32", "via", VPN_CLIENT_ADDR, "dev", SERVER_TUN,
+            )
+        )
+        nat_listener = spawn_gateway_nat_listener()
+        nat_probe = gateway_nat_probe()
+        assert "DATA=NATACK:gateway-nat-e2e" in nat_probe.stdout, nat_probe.stdout
+        nat_out, nat_err = nat_listener.communicate(timeout=6)
+        assert nat_listener.returncode == 0, nat_err
+        assert f"PEER={INNER_ADDR}:" in nat_out, nat_out
+        managed_nat = ns_command(
+            MANAGED,
+            "nft", "list", "chain", "ip", "vpn_gate", "payload_postrouting",
+        ).stdout
+        assert "profile-gateway-nat-v1" in managed_nat, managed_nat
+        assert "payload-nat-v1" not in managed_nat, managed_nat
+        host_ruleset = command(("nft", "list", "ruleset")).stdout
+        assert "profile-gateway-nat-v1" not in host_ruleset, host_ruleset
+        print("EXP051_PROFILE_GATEWAY_NAT_STACK_PRIVATE=PASS")
+        print("EXP051_PROFILE_GATEWAY_NAT_NO_LAN_ROUTE=PASS")
+
         # Remote-initiated host-local flow: the response must use the
         # selected route-based host bootstrap because +route-return opted out
         # of host conntrack return steering.
@@ -614,6 +742,12 @@ def main():
                 flush=True,
             )
         assert remote_host.returncode == 0, remote_host.stderr
+        host_conntrack = ns_command(
+            MANAGED,
+            "nft", "list", "chain", "ip", "vpn_gate", "payload_postrouting",
+        ).stdout
+        assert f"ip daddr != {HOST_ADDR}" in host_conntrack, host_conntrack
+        print("EXP051_PROFILE_GATEWAY_NAT_HOST_LOCAL_EXCLUDED=PASS")
         print("EXP051_ROUTE_RETURN_HOST_LOCAL_REPLY=PASS")
 
         systemctl("restart", VPN_UNIT)
