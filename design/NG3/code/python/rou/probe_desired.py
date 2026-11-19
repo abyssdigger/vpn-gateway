@@ -14,6 +14,7 @@ from .network_policy_layout import (
 )
 from .payload_profile import PayloadProfileRequest
 from .probe_policy import (
+    AvailabilityProbeIntent,
     ProbeLocalPlatform,
     ProbeNetworkPolicyDesiredState,
     build_probe_network_policy_desired_state,
@@ -30,6 +31,7 @@ class ProbeDesiredAssemblyError(ValueError):
 class ProbeDesiredAssembly:
     layout: NetworkPolicyLayout
     probe: ProbeNetworkPolicyDesiredState
+    intents: tuple[AvailabilityProbeIntent, ...]
 
 
 def build_probe_desired_assembly(
@@ -100,4 +102,4 @@ def build_probe_desired_assembly(
         network_platform,
         local_platform,
     )
-    return ProbeDesiredAssembly(layout, probe)
+    return ProbeDesiredAssembly(layout, probe, intents)

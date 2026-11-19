@@ -19,6 +19,11 @@ from .availability_route_priority import (
     build_availability_route_priority_plans,
     converge_availability_route_priority_once,
 )
+from .availability_observation_tick import (
+    AvailabilityObservationTickError,
+    AvailabilityObservationTickResult,
+    run_availability_observation_tick,
+)
 from .availability_priority import (
     AvailabilityPriorityError,
     calculate_effective_path_order,
@@ -529,6 +534,8 @@ __all__ = [
     "AvailabilitySubjectState",
     "AvailabilityConfirmationState",
     "AvailabilityOutcome",
+    "AvailabilityObservationTickError",
+    "AvailabilityObservationTickResult",
     "AvailabilityPriorityError",
     "AvailabilityProbeIntent",
     "AvailabilityProbeMechanism",
@@ -840,6 +847,7 @@ __all__ = [
     "verify_probe_execution_precondition",
     "execute_probe_attempt_once",
     "project_availability_routing",
+    "run_availability_observation_tick",
     "calculate_effective_path_order",
     "build_payload_network_policy_desired_state",
     "build_payload_nat_desired_state",
