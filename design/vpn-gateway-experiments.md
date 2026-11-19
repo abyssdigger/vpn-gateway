@@ -28,6 +28,7 @@ Current experiment directories:
 | EXP-062 | inbound multipath concrete-path affinity inside managed stack |
 | EXP-063 | Profile-association handoff for ordinary-side gateway NAT |
 | EXP-064 | fixed host-boundary behavior lanes for remote-initiated traffic |
+| EXP-065 | Release-1 probe RPDB uidrange/ipproto/target selector shape |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -59,3 +60,4 @@ Canonical dispositions:
 | EXP-062 | PASS | deferred | Concrete-path affinity is technically proven and retained as a possible future inbound/bidirectional multipath extension; the current baseline remains single-path until an explicit product decision re-enters this work. |
 | EXP-063 | FAIL | not_selected | Transient packet-mark handoff across the cross-netns veth boundary failed and is rejected as the Profile/behavior association carrier. |
 | EXP-064 | PASS | pending_decision | Fixed behavior lanes are technically proven, but adoption is blocked on whether VPNG0004-R4.R6.R1.R6.R1 truly requires full Profile identity to cross the host boundary or only the Profile-derived host behavior needed by its Purpose. |
+| EXP-065 | PASS | selected | Confirms the current Linux representation and lookup behavior for the already selected Release-1 probe RPDB discriminator: exact uidrange + ICMP + target -> dedicated probe table. |
