@@ -28,10 +28,15 @@ class ProbePolicyProjectionError(ValueError):
     pass
 
 
+class AvailabilityProbeMechanism(str, Enum):
+    ICMP = "icmp"
+
+
 @dataclass(frozen=True, slots=True)
 class AvailabilityProbeIntent:
     owner: ProbePolicyOwner
     target: IPv4Address
+    mechanism: AvailabilityProbeMechanism = AvailabilityProbeMechanism.ICMP
 
     def __post_init__(self) -> None:
         if not isinstance(self.owner, ProbePolicyOwner):
@@ -41,6 +46,14 @@ class AvailabilityProbeIntent:
         if not isinstance(self.target, IPv4Address):
             raise ProbePolicyProjectionError(
                 "target must be IPv4Address"
+            )
+        if not isinstance(self.mechanism, AvailabilityProbeMechanism):
+            raise ProbePolicyProjectionError(
+                "mechanism must be AvailabilityProbeMechanism"
+            )
+        if self.mechanism is not AvailabilityProbeMechanism.ICMP:
+            raise ProbePolicyProjectionError(
+                "Release 1 supports only ICMP availability probes"
             )
 
 
@@ -55,6 +68,10 @@ class ProbeLocalPlatform:
         if type(self.process_uid) is not int or self.process_uid < 0:
             raise ProbePolicyProjectionError(
                 "process_uid must be a non-negative integer"
+            )
+        if self.mechanism is not AvailabilityProbeMechanism.ICMP:
+            raise ProbePolicyProjectionError(
+                "probe local rule mechanism must be ICMP"
             )
         if (
             type(self.conntrack_mark) is not int
@@ -136,6 +153,7 @@ class ProbeRuleSpec:
     process_uid: int
     target: IPv4Address
     table: int
+    mechanism: AvailabilityProbeMechanism = AvailabilityProbeMechanism.ICMP
 
     def __post_init__(self) -> None:
         if not isinstance(self.owner, ProbePolicyOwner):
@@ -159,6 +177,10 @@ class ProbeRuleSpec:
             )
         if type(self.table) is not int or not 1 <= self.table <= 0xFFFFFFFF:
             raise ProbePolicyProjectionError("invalid probe rule table")
+        if self.mechanism is not AvailabilityProbeMechanism.ICMP:
+            raise ProbePolicyProjectionError(
+                "probe routing rule mechanism must be ICMP"
+            )
 
 
 class ProbeLocalHook(str, Enum):
@@ -174,6 +196,7 @@ class ProbeLocalRuleSpec:
     target: IPv4Address
     conntrack_mark: int
     process_uid: int | None = None
+    mechanism: AvailabilityProbeMechanism = AvailabilityProbeMechanism.ICMP
 
     def __post_init__(self) -> None:
         if not isinstance(self.owner, ProbePolicyOwner):
@@ -348,6 +371,7 @@ def build_probe_network_policy_desired_state(
                 process_uid=local_platform.process_uid,
                 target=intent.target,
                 table=allocation.table,
+                mechanism=intent.mechanism,
             )
         )
         local_rules.extend(
@@ -359,6 +383,7 @@ def build_probe_network_policy_desired_state(
                     target=intent.target,
                     conntrack_mark=local_platform.conntrack_mark,
                     process_uid=local_platform.process_uid,
+                    mechanism=intent.mechanism,
                 ),
                 ProbeLocalRuleSpec(
                     owner=intent.owner,
@@ -366,6 +391,7 @@ def build_probe_network_policy_desired_state(
                     endpoint=path_route.endpoint,
                     target=intent.target,
                     conntrack_mark=local_platform.conntrack_mark,
+                    mechanism=intent.mechanism,
                 ),
             )
         )
