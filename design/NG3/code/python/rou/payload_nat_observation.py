@@ -67,7 +67,10 @@ def compare_payload_nat(observation, interfaces: Iterable[InterfaceIdentity], de
         if item.kind!="rule": continue
         try: payload=_rule_payload(item)
         except PayloadNatObservationError as exc: conflicts.append(PayloadNatRuleConflict(None,str(exc))); continue
-        if payload.get("chain") != PAYLOAD_POSTROUTING_CHAIN: continue
+        chain=payload.get("chain")
+        if not isinstance(chain,str) or not chain:
+            conflicts.append(PayloadNatRuleConflict(None,"rule has missing/invalid chain")); continue
+        if chain != PAYLOAD_POSTROUTING_CHAIN: continue
         handle=payload.get("handle")
         if type(handle) is not int or handle < 0: conflicts.append(PayloadNatRuleConflict(None,"invalid NAT rule handle")); continue
         if handle in handles: conflicts.append(PayloadNatRuleConflict(handle,"duplicate NAT rule handle")); continue
