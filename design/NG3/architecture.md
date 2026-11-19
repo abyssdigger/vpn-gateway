@@ -44,10 +44,10 @@ Current trace:
 | pure normalized availability-subject -> probe route/RPDB/local-policy projection | `probe_policy.py` | `NG3-2026-11-19-probe-policy-projection-review.md` |
 | pure probe route/RPDB actual-vs-desired comparison | `probe_routing_compare.py` | `NG3-2026-11-19-probe-routing-comparison-review.md` |
 | bounded fail-closed probe route/RPDB convergence | `probe_routing_plan.py`, `probe_routing_convergence.py`, `linux_probe_routing.py` | `NG3-2026-11-19-probe-routing-convergence-review.md` |
-| EXP-065-backed probe route/RPDB mutation Driver | `linux_probe_routing.py` | `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
+| probe route/RPDB mutation Driver — **BROKEN path discriminator pending oif recovery** | `linux_probe_routing.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
 | EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
 | bounded current probe observation context / late-result rejection / technical-result mapping | `probe_runtime.py` | `NG3-2026-11-19-probe-observation-context-agent-review.md` |
-| EXP-067-backed one-shot Linux ICMP Driver | `icmp_probe_driver.py` | `NG3-2026-11-19-icmp-probe-driver-review.md`, `EXP-067-result-20261119.md` |
+| EXP-067-backed one-shot ICMP exit semantics — **path binding correction pending** | `icmp_probe_driver.py` | `NG3-2026-11-19-probe-path-discriminator-broken-review.md`, `NG3-2026-11-19-icmp-probe-driver-review.md`, `EXP-067-result-20261119.md` |
 | accepted NG3 Linux platform resource space | `linux_policy_platform.py` | `EXP-028-result-20261116.md` |
 | semantic Profile/allocation -> route-key priority realization | `route_priority_domain_builder.py` | `NG3-2026-11-16-route-priority-domain-builder-review.md` |
 | explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
@@ -2281,8 +2281,12 @@ The Driver executes one ICMP check through the concrete current VPN path toward 
 target and reports technical reply/no-reply/local-error facts. The Agent maps those facts to
 `positive/negative/no_evidence` according to the criterion contract.
 
-The EXP-067-backed Linux Driver executes numeric one-packet ICMP under the dedicated probe
-UID. The reply deadline and outer process grace are finite lower runtime parameters, not
+The EXP-067-backed Linux Driver proves numeric one-packet ICMP exit semantics under the
+dedicated probe UID. However, EXP-067 exercised only one path. Historical EXP-022/023 bound
+the actual path-specific attempt with `ping -I <current-ifname>`; the current NG3 Driver
+omits that binding and is therefore part of the active probe path-discriminator defect.
+
+The reply deadline and outer process grace are finite lower runtime parameters, not
 Release-1 user-facing availability knobs or latency guarantees. The outer process deadline
 ensures an execution failure cannot leave one attempt indefinitely in flight.
 
@@ -2452,9 +2456,14 @@ dedicated probe table:
     target/32 -> exact current path realization
     default   -> terminal blackhole
 
-RPDB:
-    probe process uid + ipproto icmp + exact target
+RPDB — required path-specific selector shape from EXP-022/023:
+    probe process uid + ipproto icmp + exact target + exact current oif
         -> dedicated probe table
+
+CURRENT IMPLEMENTATION DEFECT:
+    the NG3 ProbeRuleSpec / observer / Linux renderer currently omit the oif discriminator;
+    this is BROKEN for multiple paths that share one target and must be repaired before the
+    probe plane is considered path-specific.
 
 stack_output:
     probe process uid + exact current oif + exact target + ICMP
@@ -2478,10 +2487,15 @@ does not require EXP-026 cleanup. The current Linux lower layer verifies and rec
 the route/RPDB owner and the probe-local nft owner against exact desired state, removing stale
 owned state when the current owner/path/target set changes.
 
-The executable pure reference is `probe_policy.py`. It is an implementation of the accepted
-EXP-021/022/024 mechanism shape, with EXP-065 supplying current iproute2 selector/lookup
-evidence and EXP-066 supplying current nft local-owner representation evidence; it is not a
-new availability requirement.
+The executable pure reference is `probe_policy.py`, but the current RPDB rule projection is
+known incomplete: it recovered the EXP-065 single-path uid/ipproto/target subset and omitted
+the historical EXP-022/023 `oif` discriminator. EXP-065 remains current representation
+evidence for its tested fields; it is **not** evidence that the reduced selector is sufficient
+for path-specific multi-path probing. See
+`NG3-2026-11-19-probe-path-discriminator-broken-review.md`.
+
+EXP-066 continues to supply current nft local-owner representation evidence. No normative
+availability requirement is changed by this correction.
 
 EXP-066 additionally confirms the exact-current-interface observation boundary for local nft
 rules: when a rule was created against `path0` at one ifindex and that interface was deleted
@@ -5342,14 +5356,17 @@ resource space:
 - EXP-029 showed that `fwmark` / `fwmask` are hexadecimal strings for a marked RPDB
   test rule, but that rule was an inventory-shape surrogate rather than the selected
   Release-1 probe-routing discriminator;
-- EXP-065 confirms the selected probe rule shape as exact `uidrange + ipproto + target`:
-  current numeric JSON uses integer `uid_start` / `uid_end`, bare host `dst`, and
-  `"ipproto-1"` for ICMP.
+- EXP-065 confirms current representation for the tested
+  `uidrange + ipproto + target` subset: numeric JSON uses integer `uid_start` /
+  `uid_end`, bare host `dst`, and `"ipproto-1"` for ICMP;
+- EXP-022/023 show that the full proven path-specific selector also includes `oif`.
+  Current NG3 observation does not yet normalize that field and is therefore incomplete for
+  multi-path same-target probing.
 
 The structural observer must normalize these representation forms into typed semantic lower
-objects. Current reserved probe rules are recognized only in the selected EXP-065 selector
-shape; a marked rule inside the probe RPDB pool is therefore an unsupported reserved shape,
-not a valid current probe rule.
+objects. Until the `oif` correction is implemented, the current probe RPDB observer/renderer
+must not be treated as a complete path-specific Release-1 mechanism. A marked rule inside the
+probe RPDB pool remains an unsupported reserved shape.
 
 Rows outside VPN-GATE reserved table/priority pools may be ignored by this owner-specific
 inventory. Rows **inside** reserved pools must not be silently ignored merely because their
