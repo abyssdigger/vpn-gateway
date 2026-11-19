@@ -17,6 +17,7 @@ on:
       - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
       - "design/experiments/EXP-068 NG3 continuous availability failover/**"
       - "design/experiments/EXP-069 NG3 stack tambour metadata carriers/**"
+      - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -727,6 +728,74 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-069 NG3 stack tambour metadata carriers/exp069_metadata_carriers.py"
+
+  linux-debian12-routed-veth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU and cloud image tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils curl
+      - name: Boot Debian 12 kernel and run routed-veth probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            -o debian12.qcow2 \
+            https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
+
+          PROBE='design/experiments/EXP-070 NG3 routed stack endpoint/exp070_debian12_routed_veth.sh'
+          B64="$(base64 -w0 "$PROBE")"
+          cat > user-data <<EOF
+          #cloud-config
+          write_files:
+            - path: /root/exp070.sh
+              permissions: '0755'
+              encoding: b64
+              content: $B64
+          runcmd:
+            - [ /bin/sh, -c, '/root/exp070.sh >/dev/ttyS0 2>&1; rc=\$?; echo EXP070_D12_CLOUD_INIT_RC=\$rc >/dev/ttyS0; poweroff -f' ]
+          EOF
+          cat > meta-data <<'EOF'
+          instance-id: exp070-debian12
+          local-hostname: exp070-debian12
+          EOF
+          cloud-localds seed.img user-data meta-data
+
+          set +e
+          timeout 300 qemu-system-x86_64 \
+            -machine accel=tcg \
+            -m 1024 -smp 2 \
+            -nographic -no-reboot \
+            -drive file=debian12.qcow2,format=qcow2,if=virtio \
+            -drive file=seed.img,format=raw,if=virtio \
+            > vm.log 2>&1
+          qemu_rc=$?
+          set -e
+          cat vm.log
+          if [[ $qemu_rc -eq 124 ]]; then
+            echo 'Debian 12 guest timed out' >&2
+            exit 1
+          fi
+          grep -F 'EXP070_D12_KERNEL=6.1.' vm.log
+          grep -F 'EXP070_D12_NO_PROXY=EXPECTED_FAIL' vm.log
+          grep -F 'EXP070_D12_PROXY_ARP=PASS' vm.log
+          grep -F 'EXP070_D12_RESULT=PASS' vm.log
+
+  linux-routed-stack-endpoint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables
+      - name: EXP-070 routed stack endpoint
+        run: >-
+          sudo python3
+          "design/experiments/EXP-070 NG3 routed stack endpoint/exp070_routed_stack_endpoint.py"
 
   linux-host-boundary-behavior-owner:
     runs-on: ubuntu-latest

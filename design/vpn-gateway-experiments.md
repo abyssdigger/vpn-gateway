@@ -31,6 +31,9 @@ Current experiment directories:
 | EXP-065 | Release-1 probe RPDB uidrange/ipproto/target selector shape |
 | EXP-066 | Release-1 probe local nft owner representation / ifindex-generation shape |
 | EXP-067 | Release-1 one-shot ICMP Driver execution / exit semantics |
+| EXP-068 | continuous availability failover and sticky recovery |
+| EXP-069 | stack-to-tambour metadata carrier search |
+| EXP-070 | routed managed-stack endpoint candidates / Debian 12 routed-veth portability |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -65,3 +68,6 @@ Canonical dispositions:
 | EXP-065 | PASS | selected | Confirms current Linux representation/lookup behavior for the tested uidrange + ICMP + target selector subset. It does **not** prove that subset sufficient for multi-path path discrimination; recovered EXP-022/023 evidence requires an additional exact `oif` selector. |
 | EXP-066 | PASS | selected | Confirms current nft JSON/handle shape for the accepted EXP-024 probe local OUTPUT/INPUT admission and proves same-name/new-ifindex replacement exposes the old raw ifindex instead of falsely confirming the replacement. |
 | EXP-067 | PASS | selected | Confirms one-shot ICMP execution under the selected non-root UID/RPDB/nft probe plane and the technical mapping exit 0=reply, exit 1=no-reply, other=local error; test timeout is not a product guarantee. |
+| EXP-068 | PASS | selected | Confirms the already accepted continuous-availability failover and sticky-recovery chain on real Linux route state. |
+| EXP-069 | PASS | pending_decision | No tested direct nft-usable local-only carrier survived stack -> tambour; DSCP survived only as an on-wire field. Post-result architecture disposition remains open. |
+| EXP-070 | PASS | pending_decision | Routed endpoint candidates are distinguished: netkit L3 is a clean device-only peer on modern kernels; Debian-12-compatible routed veth works device-only with Proxy ARP. Architecture selection remains open. |
