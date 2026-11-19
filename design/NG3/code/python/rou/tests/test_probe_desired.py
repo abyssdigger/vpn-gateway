@@ -147,6 +147,34 @@ availability_check = "default"
             {IPv4Address("198.51.100.10")},
         )
 
+    def test_payload_and_route_current_path_sets_must_match(self):
+        cfg = parse_release1_config("""
+[device.wg]
+enabled = true
+expected_interfaces = ["wg0"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["wg"]
+""")
+        with self.assertRaisesRegex(
+            ProbeDesiredAssemblyError,
+            "current path membership",
+        ):
+            build_probe_desired_assembly(
+                cfg,
+                (profile("corp", (WG,)),),
+                (
+                    RoutePriorityPathRoute(WG, WG_EP),
+                    RoutePriorityPathRoute(OC, OC_EP),
+                ),
+                NG3_LINUX_POLICY_PLATFORM,
+                LOCAL,
+            )
+
     def test_duplicate_path_route_is_rejected_at_assembly_boundary(self):
         cfg = parse_release1_config("""
 [device.wg]
