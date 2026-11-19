@@ -336,7 +336,18 @@ def _rule_signature(row):
     table = row.get("table")
     if table is None:
         table = row.get("lookup")
-    table_value = str(table) if table is not None else None
+    numeric_table = _decimal(table)
+    table_value = (
+        "main"
+        if table == "main" or numeric_table == 254
+        else (str(table) if table is not None else None)
+    )
+    selectors = (
+        "dst", "dstlen", "suppress_prefixlen", "fwmark", "fwmask",
+        "uidrange", "sport", "dport", "ipproto", "oif",
+    )
+    if any(key in row for key in selectors):
+        return ("other", None, table_value)
     interface = row.get("iif")
     if interface is not None:
         return ("bypass", interface, table_value)
