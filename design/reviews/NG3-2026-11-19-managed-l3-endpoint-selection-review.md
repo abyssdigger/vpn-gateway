@@ -108,6 +108,30 @@ The remaining migration should be staged rather than conflated with this selecti
 4. only then switch alpha lifecycle end-to-end and retire the transitional `/30 + gateway`
    dependency.
 
+## Final validation
+
+NG3 Python run `44598912456`, final attempt 2:
+
+- `unit`: **PASS**;
+- `linux-selected-host-bootstrap-backend` (EXP-060): **PASS**;
+- `linux-managed-l3-host-bootstrap` (EXP-072): **PASS**;
+- `linux-routed-stack-endpoint` (EXP-070): **PASS**;
+- `linux-boundary-dataplane-race` (EXP-071): **PASS**;
+- `linux-debian12-routed-veth`: **PASS** on Debian 12 / `6.1.0-56-cloud-amd64`;
+- `linux-alpha-smoke`: **PASS**;
+- payload/return/behavior-lane integrations touched by the same workflow: **PASS**.
+
+The first Debian-12 job attempt exited from guest setup before evidence markers. An unchanged
+rerun completed with `EXP070_D12_RESULT=PASS` and `EXP070_D12_CLOUD_INIT_RC=0`; it is treated
+as QEMU/cloud-guest infrastructure flake rather than network evidence.
+
+The workflow conclusion remains red only because it intentionally still executes two historical
+negative mechanisms:
+
+- `linux-nft-marked-host-bootstrap` — rejected EXP-057;
+- `linux-profile-gateway-nat-association` — rejected EXP-063.
+
+Neither is selected Release-1 machinery and neither regressed in this cycle.
 ## Requirement impact
 
 No accepted product requirement changes.
