@@ -6550,6 +6550,32 @@ membership. All-problem or empty membership clears the active identity. The Rust
 delegates ordering semantics to the Rust `AvailabilityPriorityCalculator`; it performs no
 routing I/O and does not own confirmation state.
 
+The next Rust unit ports the bounded semantic core of `AvailabilityManager` together with
+the current probe-context value types required by that core. The port owns:
+
+```text
+current synchronized observation contexts
++ fresh ProbeEvidence
++ bounded confirmation state
++ per-Profile active routing state
++ already-normalized Profile/path membership
+    ->
+problem owners
++ effective Profile/path order
+```
+
+Context replacement resets partial confirmation for that subject; stale evidence is rejected;
+`NO_EVIDENCE` is neutral; reserve/ordinary recovery semantics reuse the previously ported
+routing-state projection.
+
+This is intentionally **manager-core parity**, not yet the complete Rust ConfigurationAdapter
+or alpha assembly. The Python implementation currently also verifies that the supplied
+Profile set equals the enabled Release-1 config Profile set. Until Rust configuration
+normalization is ported, the Rust Manager core accepts an already-normalized current Profile
+set and validates only duplicate Profile identity and probe-context membership. A later Rust
+configuration/assembly unit must restore the complete upstream set-equality gate before this
+core can replace that production responsibility.
+
 ### Migration/evidence rule
 
 Porting Python reference behavior to Rust is an implementation replacement, not a redesign.
