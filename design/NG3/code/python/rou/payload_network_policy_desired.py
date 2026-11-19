@@ -39,6 +39,7 @@ from .payload_routing_desired import (
     build_payload_routing_desired_state,
 )
 from .route_priority_inventory import RoutePriorityPathRoute
+from .probe_policy import ProbeLocalRuleSpec
 from .stack_return_affinity import (
     StackReturnAffinityDesired,
     StackReturnAffinityPlatformSpace,
@@ -84,6 +85,7 @@ def build_payload_network_policy_desired_state(
     firewall_policies: Iterable[DeviceFirewallPolicyIntent],
     publication_intents: Iterable[PublicationLocalEndpointIntent],
     integration_intents: Iterable[IntegrationLocalTransportIntent] = (),
+    probe_local_rules: Iterable[ProbeLocalRuleSpec] = (),
     stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
 ) -> PayloadNetworkPolicyDesiredState:
     """Compose exact current payload lower desired state without I/O."""
@@ -102,6 +104,14 @@ def build_payload_network_policy_desired_state(
     current_firewall_policies = tuple(firewall_policies)
     current_publications = tuple(publication_intents)
     current_integrations = tuple(integration_intents)
+    current_probe_local = tuple(probe_local_rules)
+    if any(
+        not isinstance(rule, ProbeLocalRuleSpec)
+        for rule in current_probe_local
+    ):
+        raise PayloadNetworkPolicyProjectionError(
+            "probe_local_rules must contain ProbeLocalRuleSpec"
+        )
 
     for intent in current_publications:
         if not isinstance(intent, PublicationLocalEndpointIntent):
@@ -215,6 +225,7 @@ def build_payload_network_policy_desired_state(
             device_firewall=firewall,
             local_publication=local_publication,
             local_integration=local_integration,
+            probe_local=current_probe_local,
         ),
         stack_return_affinity=stack_return_affinity,
     )
