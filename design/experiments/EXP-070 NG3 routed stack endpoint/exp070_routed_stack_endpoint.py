@@ -23,6 +23,8 @@ IPVL = "e70ipvl"
 IPVHOST = "e70ivh"
 NK_HOST = "e70nkh"
 NK_STACK = "e70nks"
+RV_HOST = "vpng0"
+RV_STACK = "e70rvs"
 
 HOST_LAN = "192.0.2.1"
 LAN_IP = "192.0.2.2"
@@ -33,6 +35,8 @@ REMOTE_NO_NAT_IP = "10.70.0.3"
 STACK_IPVL_IP = "198.18.70.2"
 HOST_IPVL_IP = "198.18.70.1"
 STACK_NETKIT_IP = "198.18.71.2"
+RV_HOST_IP = "169.254.70.1"
+RV_STACK_IP = "169.254.70.2"
 MARK = "0x70010001"
 
 
@@ -412,6 +416,83 @@ table ip e70nknat {{
     return nat_good, plain_good
 
 
+
+def setup_routed_veth(with_peer_ips: bool):
+    pair(HOST, RV_HOST, STACK, RV_STACK)
+    ns(HOST, "ip", "link", "set", RV_HOST, "up")
+    ns(STACK, "ip", "link", "set", RV_STACK, "up")
+    for name, iface in ((HOST, RV_HOST), (STACK, RV_STACK)):
+        ns(name, "sysctl", "-qw", f"net.ipv4.conf.{iface}.rp_filter=0")
+    if with_peer_ips:
+        ns(HOST, "ip", "addr", "add", f"{RV_HOST_IP}/32", "peer", f"{RV_STACK_IP}/32", "dev", RV_HOST)
+        ns(STACK, "ip", "addr", "add", f"{RV_STACK_IP}/32", "peer", f"{RV_HOST_IP}/32", "dev", RV_STACK)
+
+
+def cleanup_routed_veth():
+    ns(HOST, "ip", "link", "del", RV_HOST, check=False)
+
+
+def routed_veth_flow(port: int, label: str) -> tuple[bool, str | None]:
+    ns(LAN, "ip", "route", "replace", f"{REMOTE_IP}/32", "via", HOST_LAN, "dev", L_H)
+    server = start_server(REMOTE, REMOTE_IP, port)
+    ok = client(LAN, LAN_IP, REMOTE_IP, port, label)
+    peer = None
+    if ok:
+        peer = read_peer(server)
+    else:
+        if server.poll() is None:
+            server.kill(); server.communicate(timeout=1)
+    return ok, peer
+
+
+def phase_routed_veth_dev_only(with_peer_ips: bool) -> bool:
+    ns(HOST, "ip", "route", "replace", f"{REMOTE_IP}/32", "dev", RV_HOST, "src", HOST_LAN)
+    ns(STACK, "ip", "route", "replace", f"{LAN_IP}/32", "dev", RV_STACK)
+    ok, peer = routed_veth_flow(17021 if not with_peer_ips else 17022, "RV-DEV")
+    host_neigh = ns(HOST, "ip", "neigh", "show", "dev", RV_HOST, check=False).stdout.strip()
+    stack_neigh = ns(STACK, "ip", "neigh", "show", "dev", RV_STACK, check=False).stdout.strip()
+    good = ok and peer == LAN_IP
+    suffix = "PEER32" if with_peer_ips else "UNNUMBERED"
+    print(
+        f"EXP070_ROUTED_VETH_DEV_ONLY_{suffix}={'PASS' if good else 'FAIL'} "
+        f"peer={peer} host_neigh={host_neigh!r} stack_neigh={stack_neigh!r}",
+        flush=True,
+    )
+    return good
+
+
+def phase_routed_veth_via_peer() -> bool:
+    ns(HOST, "ip", "route", "replace", f"{REMOTE_IP}/32", "via", RV_STACK_IP, "dev", RV_HOST, "src", HOST_LAN)
+    ns(STACK, "ip", "route", "replace", f"{LAN_IP}/32", "via", RV_HOST_IP, "dev", RV_STACK)
+    ok, peer = routed_veth_flow(17023, "RV-VIA")
+    good = ok and peer == LAN_IP
+    print(f"EXP070_ROUTED_VETH_VIA_PEER={'PASS' if good else 'FAIL'} peer={peer}", flush=True)
+    return good
+
+
+def phase_routed_veth_proxy_arp(with_peer_ips: bool) -> bool:
+    # The host route contract remains device-only. Proxy ARP is enabled only on the
+    # opposite endpoint so each side can answer neighbour resolution for routed prefixes
+    # that actually live behind it.
+    ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{RV_HOST}.proxy_arp=1")
+    ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{RV_STACK}.proxy_arp=1")
+    ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{RV_HOST}.proxy_delay=0")
+    ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{RV_STACK}.proxy_delay=0")
+    ns(HOST, "ip", "route", "replace", f"{REMOTE_IP}/32", "dev", RV_HOST, "src", HOST_LAN)
+    ns(STACK, "ip", "route", "replace", f"{LAN_IP}/32", "dev", RV_STACK)
+
+    ok, peer = routed_veth_flow(17024 if not with_peer_ips else 17025, "RV-PROXY")
+    host_neigh = ns(HOST, "ip", "neigh", "show", "dev", RV_HOST, check=False).stdout.strip()
+    stack_neigh = ns(STACK, "ip", "neigh", "show", "dev", RV_STACK, check=False).stdout.strip()
+    good = ok and peer == LAN_IP
+    suffix = "PEER32" if with_peer_ips else "UNNUMBERED"
+    print(
+        f"EXP070_ROUTED_VETH_PROXY_ARP_{suffix}={'PASS' if good else 'FAIL'} "
+        f"peer={peer} host_neigh={host_neigh!r} stack_neigh={stack_neigh!r}",
+        flush=True,
+    )
+    return good
+
 def main():
     require_tools()
     print("EXP070_PREFLIGHT kernel=" + run("uname", "-r").stdout.strip(), flush=True)
@@ -452,12 +533,34 @@ def main():
             nk_nat, nk_plain = phase_netkit_stack_nat()
             cleanup_netkit()
 
+        rv_plain = rv_peer_dev = rv_via = rv_proxy_plain = rv_proxy_peer = False
+
+        setup_routed_veth(with_peer_ips=False)
+        rv_plain = phase_routed_veth_dev_only(with_peer_ips=False)
+        cleanup_routed_veth()
+
+        setup_routed_veth(with_peer_ips=True)
+        rv_peer_dev = phase_routed_veth_dev_only(with_peer_ips=True)
+        rv_via = phase_routed_veth_via_peer()
+        cleanup_routed_veth()
+
+        setup_routed_veth(with_peer_ips=False)
+        rv_proxy_plain = phase_routed_veth_proxy_arp(with_peer_ips=False)
+        cleanup_routed_veth()
+
+        setup_routed_veth(with_peer_ips=True)
+        rv_proxy_peer = phase_routed_veth_proxy_arp(with_peer_ips=True)
+        cleanup_routed_veth()
+
         print(
             "EXP070_SUMMARY "
             f"ipvlan_external={ipv_external} ipvlan_stack_nat={ipv_nat} "
             f"ipvlan_dev_only={dev_only} ipvlan_via={via} "
             f"netkit_dev_only={nk_dev} netkit_mark={nk_mark} "
-            f"netkit_stack_nat={nk_nat} netkit_no_snat={nk_plain}",
+            f"netkit_stack_nat={nk_nat} netkit_no_snat={nk_plain} "
+            f"routed_veth_plain={rv_plain} routed_veth_peer_dev={rv_peer_dev} "
+            f"routed_veth_via={rv_via} routed_veth_proxy_plain={rv_proxy_plain} "
+            f"routed_veth_proxy_peer={rv_proxy_peer}",
             flush=True,
         )
         print("EXP070_RESULT=PASS", flush=True)
