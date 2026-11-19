@@ -65,8 +65,8 @@ Current trace:
 | guarded cross-domain structural Executor + Linux snapshot backend | `structural_policy_mutation.py`, `linux_structural_policy.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
-| managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md` |
-| managed L3 boundary backend selection + device-only host-bootstrap seam | `managed_l3_boundary.py`, `linux_host_bootstrap.py`, `linux_host_bootstrap_backend.py` | EXP-070, EXP-071, EXP-072, current managed-L3-endpoint design-cycle review |
+| managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md`, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md`, EXP-051 migration evidence |
+| managed L3 boundary backend + device-only bootstrap/return seam | `managed_l3_boundary.py`, `linux_host_bootstrap.py`, `linux_host_bootstrap_backend.py`, `linux_host_boundary_policy.py`, `linux_host_boundary_routes.py` | EXP-070, EXP-071, EXP-072, EXP-073, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md` |
 | controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
 | bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
 | bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
