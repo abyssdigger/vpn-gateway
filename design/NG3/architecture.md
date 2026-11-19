@@ -4595,7 +4595,7 @@ The Device/Profile firewall runs before the packet leaves the managed network do
 Consequently source address/port filtering still sees the original remote payload sender.
 Ordinary-side gateway NAT must never be moved ahead of that managed policy boundary.
 
-###### Profile association across the host boundary
+###### Gateway-NAT applicability across the host boundary
 
 Per-Profile gateway NAT cannot safely reclassify packets on the host merely by remote source
 prefix.
@@ -4660,9 +4660,16 @@ EXP-064 proved the fixed behavior-lane carrier technically across all four combi
 overlapping remote prefixes, forwarded gateway NAT, route-return/stateful-return, stack-side
 established-flow affinity, host-local no-NAT and unrelated-host isolation.
 
-The lane identity is lower infrastructure, not user policy. However this candidate cannot be adopted while `VPNG0004-R4.R6.R1.R6.R1` is read literally as requiring full Profile identity to cross the boundary. Host-side behavior must not be
-inferred from source CIDR, current VPN ifname or Device identity. If the selected lane/owner
-state cannot be confirmed, the corresponding host-boundary behavior is unready.
+The lane identity is lower infrastructure, not user policy. This realizes
+`VPNG0004-R4.R6.R1.R6.R1` by preserving exactly the already-selected host-side behavior
+needed at the boundary: traffic whose accepted Profile policy requests `+snat` reaches a
+NAT-enabled class, while traffic whose accepted Profile policy does not request `+snat`
+reaches a no-NAT class. Profiles with the same resulting host behavior do not need distinct
+host-side identity.
+
+Host-side behavior must not be inferred from source CIDR, current VPN ifname or Device
+identity. If the selected lane/owner state cannot be confirmed, the corresponding
+host-boundary behavior is unready.
 
 ###### Ownership and component boundary
 
@@ -4691,7 +4698,7 @@ implementation details; they are not user-facing knobs.
 
 ###### Managed-stack dispatch to the selected behavior lane
 
-Conditional on resolving `VPNG0004-R4.R6.R1.R6.R1` in favor of Profile-derived host behavior rather than literal cross-boundary Profile identity, the EXP-064 carrier does not require a second Profile classifier. The stack already preserves
+The EXP-064 carrier does not require a second Profile classifier. The stack already preserves
 the accepted inbound Profile as its Release-1 return-affinity connection mark and has a
 higher-precedence mark-to-Profile-table RPDB rule. For a remote-initiated NEW flow, the same
 already-established Profile association may also select the initial packet's Profile table
@@ -4741,8 +4748,8 @@ This capability does not replace the existing requirement that traffic for manag
 prefixes be routed into the VPN-GATE boundary. It only avoids requiring each downstream
 ordinary host to know those remote routes.
 
-Failure or ambiguity in host-side NAT observation, owner classification or Profile
-association cannot be treated as "NAT probably active". The Profile gateway-NAT function is
+Failure or ambiguity in host-side NAT observation, owner classification or boundary behavior
+selection cannot be treated as "NAT probably active". The Profile gateway-NAT function is
 reported unconfirmed/unready and no new boundary NAT permission is activated from guessed
 state.
 
