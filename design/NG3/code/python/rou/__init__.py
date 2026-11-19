@@ -385,6 +385,11 @@ from .probe_attempt_runtime import (
     ProbeSubjectRuntimeState,
     run_probe_attempt_once,
 )
+from .probe_route_feedback import (
+    ProbeRouteFeedbackError,
+    ProbeRouteFeedbackProjection,
+    project_probe_route_feedback,
+)
 from .icmp_probe_driver import (
     IcmpProbeDriverError,
     IcmpProbeExecutionPolicy,
@@ -709,6 +714,8 @@ __all__ = [
     "ProbeAttemptResult",
     "ProbeAttemptStatus",
     "ProbeSubjectRuntimeState",
+    "ProbeRouteFeedbackError",
+    "ProbeRouteFeedbackProjection",
     "ProbeEvidence",
     "ProbeObservationContext",
     "ProbeRuntimeError",
@@ -804,6 +811,7 @@ __all__ = [
     "build_payload_routing_desired_state",
     "build_probe_network_policy_desired_state",
     "run_probe_attempt_once",
+    "project_probe_route_feedback",
     "compare_probe_routing",
     "probe_routing_rank",
     "select_probe_routing_step",
