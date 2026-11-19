@@ -240,10 +240,14 @@ class AlphaPreparedPolicy:
         host_boundary_intent = build_release1_host_boundary_intent(
             self.config
         )
-        lane_routes = build_host_boundary_lane_routes(
-            host_boundary_intent.behavior,
-            _alpha_behavior_lane_endpoints(interfaces),
-            layout,
+        lane_routes = (
+            build_host_boundary_lane_routes(
+                host_boundary_intent.behavior,
+                _alpha_behavior_lane_endpoints(interfaces),
+                layout,
+            )
+            if _alpha_uses_behavior_lanes(self.config)
+            else ()
         )
         self.availability_runtime.configure(
             probe_assembly.intents,
@@ -621,6 +625,14 @@ def _domain_spec() -> ManagedNetworkDomainSpec:
     )
 
 
+def _alpha_uses_behavior_lanes(config: Release1Config) -> bool:
+    return any(
+        config.structural.profiles[profile_id].enabled
+        and profile.ordinary_gateway_nat
+        for profile_id, profile in config.profiles.items()
+    )
+
+
 def _alpha_behavior_host_lanes() -> tuple[HostBoundaryBehaviorHostLane, ...]:
     return (
         HostBoundaryBehaviorHostLane(
@@ -756,7 +768,11 @@ def run_alpha_runtime(
             prepared.config,
             current_domain_spec,
             runner,
-            _alpha_behavior_host_lanes(),
+            (
+                _alpha_behavior_host_lanes()
+                if _alpha_uses_behavior_lanes(prepared.config)
+                else ()
+            ),
         )
 
     try:
