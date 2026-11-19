@@ -30,7 +30,7 @@ from .nft_namespace_inventory import (
 )
 from .nft_payload_scaffold import compare_payload_nft_scaffold
 from .payload_forward_desired import PayloadForwardRuleSpec
-from .payload_nat_desired import PayloadMasqueradeSpec
+from .payload_nat_desired import PayloadNatRuleSpec
 from .payload_routing_compare import (
     PayloadRoutingComparison,
     compare_payload_routing,
@@ -85,7 +85,7 @@ class StructuralPolicyMutationBackend(Protocol):
     def delete_device_child_chain(self, name: str) -> None: ...
     def create_device_chain(self, spec: DeviceFirewallChainSpec) -> None: ...
     def delete_nat_rule(self, handle: int) -> None: ...
-    def add_nat_rule(self, spec: PayloadMasqueradeSpec) -> None: ...
+    def add_nat_rule(self, spec: PayloadNatRuleSpec) -> None: ...
     def apply_local_publication_step(
         self,
         step: LocalPublicationMutationStep,
