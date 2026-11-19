@@ -30,6 +30,7 @@ class ProbeRoutingComparison:
     confirmed_rules: tuple[ProbeRuleSpec, ...]
     missing_rules: tuple[ProbeRuleSpec, ...]
     stale_rules: tuple[ObservedManagedRule, ...]
+    observed_rules: tuple[ObservedManagedRule, ...]
     conflicts: tuple[ReservedPolicyConflict, ...]
 
     @property
@@ -150,6 +151,10 @@ def compare_probe_routing(
         stale_rules=tuple(
             actual_rule_by_key[key]
             for key in sorted(actual_rule_keys - desired_rule_keys)
+        ),
+        observed_rules=tuple(
+            actual_rule_by_key[key]
+            for key in sorted(actual_rule_keys)
         ),
         conflicts=conflicts,
     )
