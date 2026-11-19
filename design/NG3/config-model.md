@@ -563,9 +563,10 @@ intentionally share the same effective address; this groups them into one admini
 source identity after the managed boundary.
 
 An effective SNAT address must not belong to source address space that can leave the managed
-boundary untranslated in the same enabled configuration. In Release 1 this means, at minimum,
-that it must not fall inside the remote destinations of an enabled `inbound` or
-`bidirectional` Profile that has no `+snat`. It must also not reuse an address that
+boundary untranslated in the same enabled configuration. In Release 1 this includes the
+remote destinations of every enabled Profile with no effective `+snat`: outbound-only
+Profiles can still emit untranslated remote sources on established replies, while inbound and
+bidirectional Profiles can emit them on VPN-originated traffic. It must also not reuse an address that
 VPN-GATE simultaneously owns for another service/transport role on the managed boundary.
 Configuration-known conflicts are rejected during normalization; environment-resolved
 boundary conflicts are fail-closed before activation.
