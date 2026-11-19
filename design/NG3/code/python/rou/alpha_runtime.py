@@ -8,10 +8,11 @@ materializes the lower capabilities already implemented by this reference slice:
 - Device outbound NAT;
 - ordinary Device firewall rules;
 - Device-owned VPN client transport/control local allow;
+- Release-1 ICMP availability probing, bounded confirmation and effective-order convergence;
 - one local PayloadTrafficManager-style periodic reconciliation loop.
 
-Capabilities whose full lower path is not yet implemented here are rejected at
-configuration load rather than silently ignored.
+Remaining canonical capabilities whose full lower path is not yet implemented here are
+rejected at configuration load rather than silently ignored.
 """
 
 from __future__ import annotations
