@@ -57,14 +57,10 @@ impl AvailabilityConfirmationState {
 
     fn validate_shape(self) -> Result<(), AvailabilityConfirmationError> {
         if self.availability_problem && self.degradation_progress != 0 {
-            return Err(
-                AvailabilityConfirmationError::DegradationProgressWhileProblemEstablished,
-            );
+            return Err(AvailabilityConfirmationError::DegradationProgressWhileProblemEstablished);
         }
         if !self.availability_problem && self.recovery_progress != 0 {
-            return Err(
-                AvailabilityConfirmationError::RecoveryProgressWhileNoProblemEstablished,
-            );
+            return Err(AvailabilityConfirmationError::RecoveryProgressWhileNoProblemEstablished);
         }
         Ok(())
     }
@@ -84,21 +80,17 @@ pub fn apply_availability_evidence(
     }
     state.validate_shape()?;
     if state.degradation_progress > degradation_threshold {
-        return Err(
-            AvailabilityConfirmationError::DegradationProgressExceedsThreshold,
-        );
+        return Err(AvailabilityConfirmationError::DegradationProgressExceedsThreshold);
     }
     if state.recovery_progress > recovery_threshold {
-        return Err(
-            AvailabilityConfirmationError::RecoveryProgressExceedsThreshold,
-        );
+        return Err(AvailabilityConfirmationError::RecoveryProgressExceedsThreshold);
     }
 
     match outcome {
         AvailabilityOutcome::NoEvidence => Ok(state),
-        AvailabilityOutcome::Positive if !state.availability_problem => Ok(
-            AvailabilityConfirmationState::default(),
-        ),
+        AvailabilityOutcome::Positive if !state.availability_problem => {
+            Ok(AvailabilityConfirmationState::default())
+        }
         AvailabilityOutcome::Negative if !state.availability_problem => {
             let progress = state.degradation_progress + 1;
             if progress >= degradation_threshold {
@@ -161,71 +153,44 @@ mod tests {
         assert_eq!(first.degradation_progress(), 1);
         assert!(!first.availability_problem());
 
-        let second = apply_availability_evidence(
-            first,
-            AvailabilityOutcome::Negative,
-            2,
-            2,
-        )
-        .unwrap();
+        let second =
+            apply_availability_evidence(first, AvailabilityOutcome::Negative, 2, 2).unwrap();
         assert_eq!(second, state(true, 0, 0));
     }
 
     #[test]
     fn positive_clears_degradation_progress() {
-        let next = apply_availability_evidence(
-            state(false, 1, 0),
-            AvailabilityOutcome::Positive,
-            3,
-            2,
-        )
-        .unwrap();
+        let next =
+            apply_availability_evidence(state(false, 1, 0), AvailabilityOutcome::Positive, 3, 2)
+                .unwrap();
         assert_eq!(next, AvailabilityConfirmationState::default());
     }
 
     #[test]
     fn positive_evidence_recovers_at_threshold() {
-        let first = apply_availability_evidence(
-            state(true, 0, 0),
-            AvailabilityOutcome::Positive,
-            2,
-            2,
-        )
-        .unwrap();
+        let first =
+            apply_availability_evidence(state(true, 0, 0), AvailabilityOutcome::Positive, 2, 2)
+                .unwrap();
         assert_eq!(first.recovery_progress(), 1);
 
-        let second = apply_availability_evidence(
-            first,
-            AvailabilityOutcome::Positive,
-            2,
-            2,
-        )
-        .unwrap();
+        let second =
+            apply_availability_evidence(first, AvailabilityOutcome::Positive, 2, 2).unwrap();
         assert_eq!(second, AvailabilityConfirmationState::default());
     }
 
     #[test]
     fn negative_clears_recovery_progress() {
-        let next = apply_availability_evidence(
-            state(true, 0, 1),
-            AvailabilityOutcome::Negative,
-            2,
-            3,
-        )
-        .unwrap();
+        let next =
+            apply_availability_evidence(state(true, 0, 1), AvailabilityOutcome::Negative, 2, 3)
+                .unwrap();
         assert_eq!(next, state(true, 0, 0));
     }
 
     #[test]
     fn no_evidence_is_neutral() {
         for current in [state(false, 1, 0), state(true, 0, 1)] {
-            let next = apply_availability_evidence(
-                current,
-                AvailabilityOutcome::NoEvidence,
-                3,
-                3,
-            )
-            .unwrap();
+            let next = apply_availability_evidence(current, AvailabilityOutcome::NoEvidence, 3, 3)
+                .unwrap();
             assert_eq!(next, current);
         }
     }
@@ -256,41 +221,23 @@ mod tests {
     fn invalid_state_shape_is_rejected() {
         assert_eq!(
             AvailabilityConfirmationState::new(true, 1, 0),
-            Err(
-                AvailabilityConfirmationError::DegradationProgressWhileProblemEstablished
-            )
+            Err(AvailabilityConfirmationError::DegradationProgressWhileProblemEstablished)
         );
         assert_eq!(
             AvailabilityConfirmationState::new(false, 0, 1),
-            Err(
-                AvailabilityConfirmationError::RecoveryProgressWhileNoProblemEstablished
-            )
+            Err(AvailabilityConfirmationError::RecoveryProgressWhileNoProblemEstablished)
         );
     }
 
     #[test]
     fn progress_outside_current_threshold_is_rejected() {
         assert_eq!(
-            apply_availability_evidence(
-                state(false, 3, 0),
-                AvailabilityOutcome::NoEvidence,
-                2,
-                2,
-            ),
-            Err(
-                AvailabilityConfirmationError::DegradationProgressExceedsThreshold
-            )
+            apply_availability_evidence(state(false, 3, 0), AvailabilityOutcome::NoEvidence, 2, 2,),
+            Err(AvailabilityConfirmationError::DegradationProgressExceedsThreshold)
         );
         assert_eq!(
-            apply_availability_evidence(
-                state(true, 0, 3),
-                AvailabilityOutcome::NoEvidence,
-                2,
-                2,
-            ),
-            Err(
-                AvailabilityConfirmationError::RecoveryProgressExceedsThreshold
-            )
+            apply_availability_evidence(state(true, 0, 3), AvailabilityOutcome::NoEvidence, 2, 2,),
+            Err(AvailabilityConfirmationError::RecoveryProgressExceedsThreshold)
         );
     }
 }
