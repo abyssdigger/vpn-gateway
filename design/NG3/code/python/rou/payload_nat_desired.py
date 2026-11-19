@@ -34,8 +34,7 @@ class ProfileGatewayMasqueradeSpec:
     """Profile-owned VPN->ordinary gateway NAT inside STACK.
 
     The remote-source fragment is already disjoint under most-specific Profile
-    classification. Exact host-local destinations are negative matches so this
-    behavior applies only to payload that the ordinary host will forward onward.
+    classification, so the physical rule needs no cross-boundary Profile tag.
     """
 
     profile_id: str
@@ -89,7 +88,7 @@ def build_payload_nat_desired_state(
         ordinary -> current VPN path, exact boundary/path pair.
 
     Profile gateway NAT:
-        current VPN path -> ordinary boundary, disjoint remote-source fragment,
+        current VPN path -> ordinary boundary, disjoint remote-source fragment.
 
     Both run after managed payload filtering in postrouting.  No Profile
     identity or NAT class crosses into the ordinary host namespace.
@@ -144,7 +143,6 @@ def build_payload_nat_desired_state(
             raise PayloadNatProjectionError(
                 f"Profile {profile_id!r} requests gateway NAT without VPN-to-ordinary direction"
             )
-
 
     route_by_path: dict[LogicalPathId, RoutePriorityPathRoute] = {}
     endpoint_owner: dict[InterfaceIdentity, LogicalPathId] = {}
