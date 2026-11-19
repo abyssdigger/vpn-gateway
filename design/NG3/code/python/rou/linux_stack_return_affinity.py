@@ -424,6 +424,7 @@ def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int]:
     if not state_new:
         raise ValueError("classifier does not match ct state new")
     mark = None
+    packet_restore = False
     for item in expr:
         if not isinstance(item, dict):
             continue
@@ -431,12 +432,27 @@ def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int]:
         if not isinstance(mangle, dict):
             continue
         key = mangle.get("key")
+        value = mangle.get("value")
         if isinstance(key, dict):
             ct = key.get("ct")
             if isinstance(ct, dict) and ct.get("key") == "mark":
-                mark = _parse_int(mangle.get("value"), "classifier ct mark")
+                mark = _parse_int(value, "classifier ct mark")
+                continue
+            meta = key.get("meta")
+            value_ct = value.get("ct") if isinstance(value, dict) else None
+            if (
+                isinstance(meta, dict)
+                and meta.get("key") == "mark"
+                and isinstance(value_ct, dict)
+                and value_ct.get("key") == "mark"
+            ):
+                packet_restore = True
     if mark is None:
         raise ValueError("classifier ct mark assignment is missing")
+    if not packet_restore:
+        raise ValueError(
+            "classifier does not copy current ct mark to packet mark"
+        )
     return ingress, source, mark
 
 
@@ -489,6 +505,7 @@ def render_stack_return_affinity_nft(
             f"ip saddr {item.remote_prefix.with_prefixlen} "
             "ct state new "
             f"ct mark set {hex(item.mark)} "
+            "meta mark set ct mark "
             f'comment "{STACK_RETURN_CLASSIFIER_COMMENT}"'
         )
 
