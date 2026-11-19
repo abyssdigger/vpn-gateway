@@ -366,8 +366,6 @@ from .probe_policy import (
     ProbeLocalRuleSpec,
     ProbeNetworkPolicyDesiredState,
     ProbePolicyProjectionError,
-    ProbeRouteSpec,
-    ProbeRouteType,
     ProbeRuleSpec,
     build_probe_network_policy_desired_state,
 )
@@ -642,8 +640,6 @@ __all__ = [
     "ProbeNetworkPolicyDesiredState",
     "ProbePolicyAllocation",
     "ProbePolicyProjectionError",
-    "ProbeRouteSpec",
-    "ProbeRouteType",
     "ProbeRuleSpec",
     "ProbePolicyOwner",
     "ProbeRoutingDemand",
