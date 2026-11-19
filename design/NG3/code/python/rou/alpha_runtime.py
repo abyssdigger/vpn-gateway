@@ -96,6 +96,7 @@ from .local_publication_policy import (
     PublicationLocalEndpointIntent,
     PublicationProtocol,
 )
+from .managed_l3_boundary import ManagedL3BoundaryBackend
 from .managed_network_domain import (
     ManagedNetworkDomainSpec,
     verify_managed_network_domain,
@@ -131,8 +132,7 @@ from .runtime_status import (
 ALPHA_NAMESPACE = "vpn-gate-alpha"
 ALPHA_HOST_INTERFACE = "vnga-host0"
 ALPHA_INNER_INTERFACE = "vnga-inner0"
-ALPHA_HOST_ADDRESS = IPv4Interface("198.19.255.1/30")
-ALPHA_INNER_ADDRESS = IPv4Interface("198.19.255.2/30")
+ALPHA_INNER_ADDRESS = IPv4Interface("198.19.255.2/32")
 ALPHA_RUNTIME_DIRECTORY = Path("/run/vpn-gate-alpha")
 ALPHA_STATUS_PATH = ALPHA_RUNTIME_DIRECTORY / "status.json"
 ALPHA_AUDIT_INTERVAL_SECONDS = 1.0
@@ -579,8 +579,9 @@ def _domain_spec() -> ManagedNetworkDomainSpec:
         namespace=ALPHA_NAMESPACE,
         host_interface=ALPHA_HOST_INTERFACE,
         inner_interface=ALPHA_INNER_INTERFACE,
-        host_address=ALPHA_HOST_ADDRESS,
+        host_address=None,
         inner_address=ALPHA_INNER_ADDRESS,
+        primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
 
 
