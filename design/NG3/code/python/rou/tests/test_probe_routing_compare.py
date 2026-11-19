@@ -152,6 +152,33 @@ class ProbeRoutingComparisonTests(unittest.TestCase):
         self.assertEqual(len(result.missing_rules), 1)
         self.assertEqual(result.stale_rules, (changed,))
 
+    def test_oif_drift_is_missing_plus_stale(self):
+        desired = desired_state()
+        actual = exact_observation(desired)
+        rule = actual.rules[0]
+        changed = ObservedManagedRule(
+            priority=rule.priority,
+            table=rule.table,
+            ingress=None,
+            destination=rule.destination,
+            uid_start=rule.uid_start,
+            uid_end=rule.uid_end,
+            ipproto=rule.ipproto,
+            egress=InterfaceIdentity("pathb", 12),
+        )
+        result = compare_probe_routing(
+            desired,
+            StructuralRoutingObservation(
+                actual.routes,
+                (changed,),
+                (),
+            ),
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        self.assertFalse(result.confirmed)
+        self.assertEqual(result.missing_rules, desired.rules)
+        self.assertEqual(result.stale_rules, (changed,))
+
     def test_same_name_new_ifindex_does_not_confirm_probe_path(self):
         desired = desired_state()
         actual = exact_observation(desired)
