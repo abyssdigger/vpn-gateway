@@ -86,10 +86,18 @@ class ProbePolicyTests(unittest.TestCase):
             unicast.protocol,
             NG3_LINUX_POLICY_PLATFORM.path_route_protocol,
         )
+        self.assertEqual(
+            unicast.metric,
+            NG3_LINUX_POLICY_PLATFORM.route_metrics.first_preference_metric,
+        )
         self.assertEqual(guard.destination, IPv4Network("0.0.0.0/0"))
         self.assertEqual(
             guard.protocol,
             NG3_LINUX_POLICY_PLATFORM.guard_route_protocol,
+        )
+        self.assertEqual(
+            guard.metric,
+            NG3_LINUX_POLICY_PLATFORM.route_metrics.terminal_guard_metric,
         )
 
         self.assertEqual(len(desired.rules), 1)
