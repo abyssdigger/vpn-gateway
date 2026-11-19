@@ -5,6 +5,7 @@ import json
 import unittest
 
 from rou.forwarding_gate import ForwardingGateState
+from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import (
     ManagedNetworkDomainError,
     ManagedNetworkDomainSpec,
@@ -296,6 +297,38 @@ class ManagedNetworkDomainTests(unittest.TestCase):
                 inner_interface="veth0",
                 host_address=IPv4Interface("192.0.2.1/30"),
                 inner_address=IPv4Interface("192.0.2.2/30"),
+            )
+
+    def test_routed_primary_requires_unnumbered_host_and_stack_local_slash32(self):
+        routed = ManagedNetworkDomainSpec(
+            namespace="vg-routed",
+            host_interface="vgrh0",
+            inner_interface="vgrs0",
+            host_address=None,
+            inner_address=IPv4Interface("198.19.255.2/32"),
+            primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
+        )
+        self.assertTrue(routed.routed_primary)
+        self.assertIsNone(routed.host_boundary_gateway)
+
+        with self.assertRaisesRegex(ValueError, "must be /32"):
+            ManagedNetworkDomainSpec(
+                namespace="vg-routed",
+                host_interface="vgrh0",
+                inner_interface="vgrs0",
+                host_address=None,
+                inner_address=IPv4Interface("198.19.255.2/30"),
+                primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
+            )
+
+        with self.assertRaisesRegex(ValueError, "must not have host_address"):
+            ManagedNetworkDomainSpec(
+                namespace="vg-routed",
+                host_interface="vgrh0",
+                inner_interface="vgrs0",
+                host_address=IPv4Interface("198.19.255.1/32"),
+                inner_address=IPv4Interface("198.19.255.2/32"),
+                primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
             )
 
     def test_absent_preflight_confirms_absence_without_creation(self):
