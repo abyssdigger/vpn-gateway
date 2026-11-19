@@ -66,7 +66,7 @@ Current trace:
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md` |
-| managed L3 boundary backend selection seam | `managed_l3_boundary.py` | EXP-070, EXP-071, current managed-L3-endpoint design-cycle review |
+| managed L3 boundary backend selection + device-only host-bootstrap seam | `managed_l3_boundary.py`, `linux_host_bootstrap.py`, `linux_host_bootstrap_backend.py` | EXP-070, EXP-071, EXP-072, current managed-L3-endpoint design-cycle review |
 | controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
 | bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
 | bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
@@ -219,7 +219,7 @@ namespace itself.
 
 ### 1.1.1. Managed L3 endpoint contract and Linux backend selection
 
-**Evidence:** EXP-070, EXP-071.
+**Evidence:** EXP-070, EXP-071, EXP-072.
 
 The primary HOST <-> STACK attachment has one semantic contract:
 
@@ -279,6 +279,12 @@ For **netkit L3**:
 
 Release 1 payload is IPv4-only, so IPv6 Proxy-NDP realization is outside this selected backend
 contract until IPv6 product support is re-entered.
+
+EXP-072 additionally proves that the selected paired-RPDB host bootstrap can consume this
+contract directly: its managed routes are `dev <host-endpoint>` with no peer gateway, while
+`0.0.0.0/0`, ordinary-main specificity, nested managed prefixes, dynamic main-route changes,
+stack-ingress bypass and exact cleanup remain unchanged on both routed-veth/Proxy-ARP and
+netkit-L3 realizations.
 
 This selection does **not** by itself relocate ordinary-side Profile gateway NAT into STACK.
 The EXP-070 stack-SNAT positive control installed an explicit ordinary-side route to the stack
