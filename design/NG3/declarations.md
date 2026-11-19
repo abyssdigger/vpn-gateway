@@ -10,9 +10,8 @@ A declaration is an exploratory, non-normative record, not an approved deferral:
 it does not authorize independent design, implementation, testing or release
 acceptance of the described capability. Work may investigate or discuss a
 declaration, but promotion to executable scope requires the applicable normative
-Requirements/Constraints, architecture and human-acceptance gates. By contrast,
-a deferral records already accepted or explicitly gated work with a defined
-re-entry condition; see `CONTINUOUS-DEVELOPMENT.md` (§ Blocking and deferral).
+Requirements/Constraints, architecture and human-acceptance gates. By contrast, a deferral records already accepted work that has been explicitly
+postponed with a defined re-entry condition; see `CONTINUOUS-DEVELOPMENT.md` (§ Blocking and deferral).
 Neither a declaration nor a deferral can silently supersede current normative
 requirements.
 
@@ -28,8 +27,8 @@ resource-expensive machinery should not be introduced merely for theoretical com
 when bounded Profile/path-level state provides the needed behavior.
 
 This declaration is supporting engineering guidance only. It is intentionally not a current
-Requirement or Constraint; quantitative limits and acceptance thresholds are deferred until
-working implementation evidence provides a useful basis for them.
+Requirement or Constraint; quantitative limits and acceptance thresholds are intentionally not promoted
+until working implementation evidence provides a useful basis for them.
 
 
 ## Runtime transparency / human current-state view
@@ -87,10 +86,11 @@ The text inside parentheses is the normalized availability-check expression, eff
 normalized config form such as `icmp/10.20.0.1`. Low-level probe failure details belong in
 logs rather than this compact view.
 
-The implementation is deliberately blocked until the basic alpha runtime is operational:
-before routing/binding/probing produce meaningful current state, there is little useful state
-to render and little value in testing the renderer itself. Once the basic alpha path works,
-this view becomes an alpha testing/debugging aid.
+This declaration is not eligible for promotion to implementation scope until the basic
+alpha runtime is operational: before routing/binding/probing produce meaningful current
+state, there is little useful state to render and little value in testing the renderer
+itself. Once the basic alpha path works, the proposal may be promoted through the normal
+requirements/design gates as an alpha testing/debugging aid.
 
 After the first release, the same semantic runtime snapshot may gain JSON and/or TOML
 renderers. Those are alternative serializations of one authoritative snapshot model, not
@@ -101,8 +101,8 @@ the alpha runtime provides enough working evidence to promote it cleanly.
 
 ## Post-first-release external Profile network sources
 
-Preliminary future expectation, explicitly deferred until **after the first release** and to
-be discussed together with managed Devices / VPN lifecycle automation.
+Preliminary future expectation outside the current release scope. Revisit it **after the
+first release**, together with managed Devices / VPN lifecycle automation.
 
 A future Profile may be able to combine:
 
@@ -123,8 +123,9 @@ Candidate future reload semantics remain:
 
 This feature is intentionally not part of first-release planning. Without managed Device/VPN
 configuration ownership its near-term value does not justify the source/reload complexity.
-File-level failure semantics, syntax, provenance and atomicity scope are therefore postponed
-for the same post-first-release discussion rather than specified now.
+File-level failure semantics, syntax, provenance and atomicity scope are therefore left
+unspecified until that post-first-release discussion rather than treated as an accepted
+deferral.
 
 ## Future VPN configuration and lifecycle automation
 
@@ -144,8 +145,8 @@ stop command
 The intent is to make automatic VPN setup and lifecycle control possible without treating
 those concrete commands/templates as part of the core Profile/Device policy model.
 
-This capability is explicitly **not required for the first releases**. Current releases may
-continue to consume externally managed VPN interfaces/processes. Before any implementation,
+This capability is **not proposed as part of the current release scope**. Current releases
+may continue to consume externally managed VPN interfaces/processes. Before any implementation,
 a later requirement/design cycle must define supported integrations, template inputs and
 ownership, command execution/security boundaries, idempotency, failure handling, privilege
 model, and the exact relationship between VPN lifecycle state and VPN-GATE desired-state
