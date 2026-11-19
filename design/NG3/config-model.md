@@ -738,6 +738,12 @@ availability_check = "icmp/172.21.201.19"
 
 Absence of the field means no active availability check for that Profile.
 
+For a Device that participates in default ICMP, Release 1 also accepts one exact IPv4:
+
+```toml
+remote_endpoint = "198.51.100.20"
+```
+
 Semantics:
 
 ```text
@@ -745,19 +751,18 @@ icmp/<explicit-ip>
     -> use that IPv4 exactly
 
 icmp
-    -> deterministically derive one path-specific target
-       for each availability subject from already accepted
-       Profile/path/Device/interface/binding/peer topology
+    -> use the remote_endpoint declared by the corresponding enabled Device
 ```
 
-There is no global Device `tunnel_endpoint` and no universal default target. This is
-important for selectors such as `expected_interfaces = ["wg*/3"]`: each admitted logical
-path may have a different current peer/topology and therefore a different derived target.
+Release 1 does not infer the remote channel endpoint from runtime interface, peer or routing
+observations. Automatic endpoint discovery remains a separate requirement blocked until a
+supported integration provides a reliable and unambiguous mechanism.
 
 Before probe runtime receives work, target normalization must have produced one concrete IPv4
-for the specific availability subject. If omitted-target derivation is unresolved or
-ambiguous, the requested check is not silently redirected to another address and the reason
-must be diagnosable.
+for the specific availability subject. If an enabled Device used by a Profile with bare
+`availability_check = "icmp"` has no `remote_endpoint`, configuration is invalid and must
+be rejected before runtime materialization. Disabled Device placeholders remain shallow and
+do not require the field.
 
 Release 1 intentionally exposes no availability interval, timeout, failure-count or
 hysteresis knobs. Those remain implementation policy unless a later accepted requirement
