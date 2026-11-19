@@ -293,12 +293,7 @@ return routes to VPN-side addressing. Until equivalent no-extra-ordinary-host-ro
 exists, the selected EXP-064 host-boundary behavior-lane realization remains authoritative for
 `+snat`/stateful-return consequences.
 
-### 1.1.2. Managed network-domain bootstrap — current executable transitional lower contract
-
-The executable `managed_network_domain.py` slice still realizes the older addressed-veth
-bootstrap described below. It remains valid historical/runtime evidence for namespace
-ownership and exact lifecycle behavior, but its `/30 + gateway` primary-boundary representation
-is now a migration target rather than the selected final managed-L3-endpoint shape.
+### 1.1.2. Managed network-domain bootstrap — executable managed-L3 lifecycle
 
 **Implements:**
 - `VPNG0004-R4.R6`;
@@ -311,42 +306,62 @@ is now a migration target rather than the selected final managed-L3-endpoint sha
 - `VPNG0007-R7.R1`;
 - `VPNG0007-R7.R3.R1`.
 
-The Linux bootstrap consumes an **already-normalized internal** infrastructure specification:
+The Linux managed-domain lifecycle now materializes the selected Release-1 primary boundary
+as the managed-L3 endpoint contract rather than as an addressed transit subnet.
+
+The already-normalized internal specification keeps the historical addressed form only as a
+compatibility path for retained experiments/tests:
 
 ```text
 ManagedNetworkDomainSpec:
     namespace
     host_interface
     inner_interface
-    host_address: IPv4Interface
+    host_address: IPv4Interface | None
     inner_address: IPv4Interface
+    primary_backend: ManagedL3BoundaryBackend | None
+    additional_boundaries[]
 ```
 
-These fields are not accepted external TOML syntax. Final instance/config grammar remains
-separate implementation work.
+For the selected alpha/runtime shape:
 
-The host/inner addresses must be distinct usable addresses in the same IPv4 subnet. Namespace
-and interface names must satisfy Linux-safe bounded identifier syntax. The two interface names
-must differ.
+```text
+primary_backend = routed-veth-proxy-arp
+host_address    = none
+inner_address   = stack-local service /32
+
+HOST:
+    <host_interface>      unnumbered
+    route <service-/32> dev <host_interface>
+
+STACK:
+    <inner_interface>     <service-/32>
+    default dev <inner_interface>
+
+both endpoints:
+    proxy_arp = 1
+    rp_filter = 0
+```
+
+The stack-local `/32` is an addressable local service endpoint for integration/publication.
+It is **not** the boundary next-hop and is not used as a gateway by host bootstrap or
+stateful-return routing.
 
 The lifecycle owns only:
 
-- the named network namespace;
-- the host-side boundary veth;
-- the namespace-side boundary veth;
-- the two explicit IPv4 addresses;
+- the named managed network namespace;
+- the primary routed veth pair and reciprocal peer identity;
+- the stack-local service `/32` on the managed endpoint;
+- the exact host service route through the unnumbered host endpoint;
+- per-endpoint Proxy ARP and `rp_filter=0` required by the routed-veth realization;
+- the managed namespace default route `dev <inner-interface>`;
 - namespace loopback UP state;
-- namespace main-table default route via the host-side address.
+- explicitly declared additional boundary links used by separately selected lower contracts.
 
-It does **not** own:
+It does **not** own payload routes/RPDB, payload nft policy, VPN path interfaces, publication
+sockets/relays, host-global forwarding or generic host firewall/NAT.
 
-- payload routes/RPDB;
-- nft policy;
-- VPN path interfaces;
-- publication sockets/relays;
-- host firewall/NAT.
-
-Only two initial presence shapes are accepted:
+Only two primary presence shapes are accepted:
 
 ```text
 namespace absent + host boundary absent
@@ -361,59 +376,40 @@ namespace present XOR host boundary present
     -> if namespace exists, forwarding remains protectively closed
 ```
 
-Existing divergent infrastructure is not repaired or adopted in place. Wrong link type,
-wrong/missing address, wrong default route, missing loopback/UP state or non-reciprocal veth
-peer identity is a conflict/failure. A later explicit teardown/recreate operation may replace
-it; `ensure` never guesses ownership.
-
-Fresh creation is:
+Fresh routed-primary creation is:
 
 ```text
-require namespace + host boundary absent
-    -> create namespace
-    -> immediately converge/reread ForwardingGate=DISABLED
+create namespace
+    -> immediately confirm ForwardingGate=DISABLED
     -> create veth pair
     -> move inner endpoint into namespace
-    -> assign exact IPv4 addresses
-    -> host veth UP
-    -> namespace lo + inner veth UP
-    -> install namespace default via host address / inner veth
+    -> host endpoint UP, no IPv4 address
+    -> namespace lo + inner endpoint UP
+    -> assign exact stack-local /32 to inner endpoint
+    -> set Proxy ARP + rp_filter endpoint state
+    -> install host service /32 route by dev only
+    -> install namespace default by dev only
     -> fresh exact verification
 ```
 
-Failure after namespace creation performs best-effort deletion of the just-created namespace
-and any surviving host-side boundary, then propagates failure. No nft table or payload route
-is created by this lifecycle.
-
 Exact verification requires current kernel evidence that:
 
-- namespace and host boundary exist;
-- both boundary endpoints are veth and UP;
-- both configured IPv4 addresses are present;
-- namespace loopback is UP;
-- namespace default route points through the configured host address and inner interface;
-- host and inner veth endpoints expose reciprocal `ifindex/link_index`, proving they are the
-  same current veth pair.
+- both primary endpoints are current reciprocal veth peers and UP;
+- host endpoint has no IPv4 address;
+- inner endpoint has exactly the configured service `/32`;
+- both endpoint Proxy-ARP/rp-filter values match the selected backend contract;
+- the host service route is exactly device-only through the host endpoint;
+- the namespace default is exactly device-only through the inner endpoint;
+- loopback and every explicitly owned additional boundary are exact.
 
-The verified inner endpoint is returned as the current host-boundary `InterfaceIdentity`
-for downstream binding/payload desired-state assembly. No stored ifindex registry is needed.
+Existing divergent infrastructure is not repaired or adopted in place. Destroy first
+re-confirms containment where possible, removes the owned namespace/link infrastructure and
+freshly verifies absence.
 
-Destroy is infrastructure cleanup, not semantic policy cleanup:
-
-```text
-if namespace exists:
-    best-effort ForwardingGate=DISABLED
-delete namespace best effort
-delete surviving host boundary best effort
-fresh verify namespace + host boundary absent
-```
-
-Normal product shutdown should release higher network-policy owners first when possible;
-crash/failure containment may still close forwarding and remove the owned infrastructure.
-
-This contract deliberately reuses the already live-proven NG2 namespace/veth lifecycle facts
-(peer verification, partial-state refusal and no policy ownership) while adapting them to the
-current NG3 ForwardingGate and leaving external configuration syntax unfixed.
+`netkit-l3` remains the compatible alternate managed-L3 backend selected by the lower backend
+contract. The current alpha lifecycle Driver intentionally materializes the Debian-12-compatible
+`routed-veth-proxy-arp` backend only; adding the netkit lifecycle Driver must not change any
+Device/Profile or host-bootstrap/stateful-return semantics.
 
 ### 1.1.1-A. Host-boundary bootstrap and return routing
 
@@ -449,9 +445,8 @@ does **not** install Profile routes or endpoint pins into host `main`.
 One VPN-GATE-owned host bootstrap table contains one route through the managed L3 endpoint for
 each distinct bootstrap destination. In the selected endpoint contract that route is
 `dev <managed-host-endpoint>` and does not require a peer gateway address; EXP-072 proves this
-representation on both routed-veth/Proxy-ARP and netkit-L3 backends. The current alpha
-addressed-veth lifecycle may continue to render its transitional gateway form until the primary
-boundary lifecycle migration is completed.
+representation on both routed-veth/Proxy-ARP and netkit-L3 backends. The alpha runtime now uses
+that same device-only representation on its routed-veth primary boundary.
 
 `0.0.0.0/0` is represented as an ordinary default route inside this dedicated table; no
 split-default or default replacement is needed in `main`.
@@ -508,7 +503,9 @@ undifferentiated mark/table cannot satisfy both semantics: bootstrap must preser
 strictly-more-specific ordinary route, while return traffic for an already-associated
 remote-initiated flow must be forced back to the managed stack.
 
-EXP-053 remains the selected stateful-return mechanism:
+EXP-053 remains the selected stateful-return mechanism, with EXP-073 confirming its
+gateway-less managed-L3 realization. The return table default is now
+`dev <managed-host-endpoint>` with no peer next-hop:
 
 ```text
 remote NEW enters host from managed boundary
