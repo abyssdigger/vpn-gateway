@@ -7,20 +7,11 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::availability_confirmation::{
-    AvailabilityConfirmationError,
-    AvailabilityConfirmationState,
-    apply_availability_evidence,
+    AvailabilityConfirmationError, AvailabilityConfirmationState, apply_availability_evidence,
 };
-use crate::availability_routing_state::{
-    AvailabilityRoutingState,
-    project_availability_routing,
-};
+use crate::availability_routing_state::{AvailabilityRoutingState, project_availability_routing};
 use crate::logical_path::LogicalPathId;
-use crate::probe_context::{
-    ProbeEvidence,
-    ProbeObservationContext,
-    ProbePolicyOwner,
-};
+use crate::probe_context::{ProbeEvidence, ProbeObservationContext, ProbePolicyOwner};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AvailabilityManagerPolicy {
@@ -193,11 +184,8 @@ impl AvailabilityManager {
                 .ordered_paths
                 .iter()
                 .filter(|path| {
-                    let owner = ProbePolicyOwner::new(
-                        profile.profile_id.clone(),
-                        (*path).clone(),
-                    )
-                    .expect("validated non-empty Profile ID");
+                    let owner = ProbePolicyOwner::new(profile.profile_id.clone(), (*path).clone())
+                        .expect("validated non-empty Profile ID");
                     problem_owners.contains(&owner)
                 })
                 .cloned()
@@ -217,10 +205,7 @@ impl AvailabilityManager {
             )
             .map_err(AvailabilityManagerError::Priority)?;
 
-            next_routing.insert(
-                profile.profile_id.clone(),
-                projected.next_state,
-            );
+            next_routing.insert(profile.profile_id.clone(), projected.next_state);
             effective_profiles.push(EffectiveAvailabilityProfile {
                 profile_id: profile.profile_id.clone(),
                 ordered_paths: projected.effective_order,
@@ -291,11 +276,7 @@ mod tests {
 
     use super::*;
     use crate::availability_confirmation::AvailabilityOutcome;
-    use crate::probe_context::{
-        AvailabilityProbeIntent,
-        InterfaceIdentity,
-        ProbeEvidence,
-    };
+    use crate::probe_context::{AvailabilityProbeIntent, InterfaceIdentity, ProbeEvidence};
 
     fn path(device: &str) -> LogicalPathId {
         LogicalPathId::new(device, 0, 0).unwrap()
@@ -322,31 +303,26 @@ mod tests {
     ) -> ProbeObservationContext {
         let owner = ProbePolicyOwner::new("corp", path_id).unwrap();
         ProbeObservationContext::new(
-            AvailabilityProbeIntent::icmp(
-                owner,
-                Ipv4Addr::new(198, 51, 100, 10),
-            ),
+            AvailabilityProbeIntent::icmp(owner, Ipv4Addr::new(198, 51, 100, 10)),
             InterfaceIdentity::new(ifname, ifindex).unwrap(),
             generation,
         )
         .unwrap()
     }
 
-    fn evidence(
-        context: ProbeObservationContext,
-        outcome: AvailabilityOutcome,
-    ) -> ProbeEvidence {
+    fn evidence(context: ProbeObservationContext, outcome: AvailabilityOutcome) -> ProbeEvidence {
         ProbeEvidence { context, outcome }
     }
 
     #[test]
     fn degradation_requires_threshold_then_reorders() {
-        let mut manager =
-            AvailabilityManager::new(AvailabilityManagerPolicy::new(2, 2).unwrap());
+        let mut manager = AvailabilityManager::new(AvailabilityManagerPolicy::new(2, 2).unwrap());
         let p = profile(false);
         let a = context(path("wg"), "wg0", 10, 1);
         let b = context(path("oc"), "oc0", 20, 1);
-        manager.synchronize(&[a.clone(), b], std::slice::from_ref(&p)).unwrap();
+        manager
+            .synchronize(&[a.clone(), b], std::slice::from_ref(&p))
+            .unwrap();
 
         let one = manager
             .apply_evidence(
@@ -354,7 +330,10 @@ mod tests {
                 std::slice::from_ref(&p),
             )
             .unwrap();
-        assert_eq!(one.effective_profiles[0].ordered_paths, vec![path("wg"), path("oc")]);
+        assert_eq!(
+            one.effective_profiles[0].ordered_paths,
+            vec![path("wg"), path("oc")]
+        );
 
         let two = manager
             .apply_evidence(
@@ -362,18 +341,22 @@ mod tests {
                 std::slice::from_ref(&p),
             )
             .unwrap();
-        assert_eq!(two.effective_profiles[0].ordered_paths, vec![path("oc"), path("wg")]);
+        assert_eq!(
+            two.effective_profiles[0].ordered_paths,
+            vec![path("oc"), path("wg")]
+        );
         assert_eq!(two.problem_owners.len(), 1);
     }
 
     #[test]
     fn recovery_is_sticky_for_ordinary_active_path() {
-        let mut manager =
-            AvailabilityManager::new(AvailabilityManagerPolicy::new(1, 2).unwrap());
+        let mut manager = AvailabilityManager::new(AvailabilityManagerPolicy::new(1, 2).unwrap());
         let p = profile(false);
         let a = context(path("wg"), "wg0", 10, 1);
         let b = context(path("oc"), "oc0", 20, 1);
-        manager.synchronize(&[a.clone(), b], std::slice::from_ref(&p)).unwrap();
+        manager
+            .synchronize(&[a.clone(), b], std::slice::from_ref(&p))
+            .unwrap();
 
         manager
             .apply_evidence(
@@ -403,12 +386,13 @@ mod tests {
 
     #[test]
     fn reserve_active_yields_on_recovery() {
-        let mut manager =
-            AvailabilityManager::new(AvailabilityManagerPolicy::new(1, 1).unwrap());
+        let mut manager = AvailabilityManager::new(AvailabilityManagerPolicy::new(1, 1).unwrap());
         let p = profile(true);
         let a = context(path("wg"), "wg0", 10, 1);
         let b = context(path("oc"), "oc0", 20, 1);
-        manager.synchronize(&[a.clone(), b], std::slice::from_ref(&p)).unwrap();
+        manager
+            .synchronize(&[a.clone(), b], std::slice::from_ref(&p))
+            .unwrap();
 
         manager
             .apply_evidence(
@@ -431,14 +415,15 @@ mod tests {
 
     #[test]
     fn context_change_resets_confirmation_and_stale_evidence_is_rejected() {
-        let mut manager =
-            AvailabilityManager::new(AvailabilityManagerPolicy::new(2, 2).unwrap());
+        let mut manager = AvailabilityManager::new(AvailabilityManagerPolicy::new(2, 2).unwrap());
         let p = profile(false);
         let a1 = context(path("wg"), "wg0", 10, 1);
         let a2 = context(path("wg"), "wg0", 10, 2);
         let b = context(path("oc"), "oc0", 20, 1);
 
-        manager.synchronize(&[a1.clone(), b.clone()], std::slice::from_ref(&p)).unwrap();
+        manager
+            .synchronize(&[a1.clone(), b.clone()], std::slice::from_ref(&p))
+            .unwrap();
         manager
             .apply_evidence(
                 &evidence(a1.clone(), AvailabilityOutcome::Negative),
@@ -446,7 +431,9 @@ mod tests {
             )
             .unwrap();
 
-        manager.synchronize(&[a2.clone(), b], std::slice::from_ref(&p)).unwrap();
+        manager
+            .synchronize(&[a2.clone(), b], std::slice::from_ref(&p))
+            .unwrap();
 
         assert_eq!(
             manager.apply_evidence(
@@ -467,12 +454,13 @@ mod tests {
 
     #[test]
     fn no_evidence_is_neutral() {
-        let mut manager =
-            AvailabilityManager::new(AvailabilityManagerPolicy::new(1, 1).unwrap());
+        let mut manager = AvailabilityManager::new(AvailabilityManagerPolicy::new(1, 1).unwrap());
         let p = profile(false);
         let a = context(path("wg"), "wg0", 10, 1);
         let b = context(path("oc"), "oc0", 20, 1);
-        manager.synchronize(&[a.clone(), b], std::slice::from_ref(&p)).unwrap();
+        manager
+            .synchronize(&[a.clone(), b], std::slice::from_ref(&p))
+            .unwrap();
 
         let projected = manager
             .apply_evidence(
