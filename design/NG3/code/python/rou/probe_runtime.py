@@ -7,7 +7,7 @@ ICMP, own confirmation hysteresis or mutate routing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from .availability_confirmation import AvailabilityOutcome
@@ -104,8 +104,16 @@ class ProbeEvidence:
 class AvailabilityProbeAgent:
     """Own exactly one current observation context and its generation token."""
 
-    _current: ProbeObservationContext | None = None
-    _last_generation: int = 0
+    _current: ProbeObservationContext | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
+    _last_generation: int = field(
+        default=0,
+        init=False,
+        repr=False,
+    )
 
     @property
     def current_context(self) -> ProbeObservationContext | None:
