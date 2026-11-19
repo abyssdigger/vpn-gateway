@@ -9,6 +9,8 @@ from rou.release1_config import Release1ConfigError, parse_release1_config
 class Release1ConfigTests(unittest.TestCase):
     def test_complete_canonical_surface_normalizes(self):
         cfg = parse_release1_config("""
+default_snat_address = "198.19.255.10"
+
 [device.wg-main]
 enabled = true
 expected_interfaces = ["wg0"]
@@ -67,8 +69,14 @@ target = "10.30.0.1"
             cfg.structural.profiles["remote-admin"].direction,
             Direction.INBOUND,
         )
-        self.assertTrue(cfg.profiles["remote-admin"].ordinary_gateway_nat)
-        self.assertFalse(cfg.profiles["remote-admin"].route_return)
+        self.assertEqual(
+            cfg.profiles["remote-admin"].effective_snat_address,
+            ipaddress.IPv4Address("198.19.255.10"),
+        )
+        self.assertEqual(
+            cfg.default_snat_address,
+            ipaddress.IPv4Address("198.19.255.10"),
+        )
         self.assertEqual(
             str(cfg.profiles["remote-admin"].availability_check.target),
             "10.30.0.1",
@@ -136,6 +144,8 @@ device_order = ["oc"]
 
     def test_direction_snat_suffix_is_bounded(self):
         cfg = parse_release1_config("""
+default_snat_address = "198.19.255.10"
+
 [device.oc]
 enabled = true
 expected_interfaces = ["vpn0"]
@@ -151,7 +161,10 @@ device_order = ["oc"]
             cfg.structural.profiles["support"].direction,
             Direction.BIDIRECTIONAL,
         )
-        self.assertTrue(cfg.profiles["support"].ordinary_gateway_nat)
+        self.assertEqual(
+            cfg.profiles["support"].effective_snat_address,
+            ipaddress.IPv4Address("198.19.255.10"),
+        )
 
         with self.assertRaisesRegex(Release1ConfigError, "VPN-to-ordinary"):
             parse_release1_config("""
@@ -167,27 +180,81 @@ destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
 """)
 
-    def test_direction_route_return_suffix_is_bounded_and_canonical(self):
+    def test_direction_snat_default_override_and_shared_identity(self):
         cfg = parse_release1_config("""
+default_snat_address = "198.19.255.10"
+
 [device.oc]
 enabled = true
 expected_interfaces = ["vpn0"]
 use_outbound_nat = false
 
-[profile.support]
+[profile.a]
 enabled = true
-direction = "bidirectional+snat+route-return"
-destinations = ["10.0.0.0/8"]
+direction = "bidirectional+snat"
+destinations = ["10.0.0.0/16"]
+device_order = ["oc"]
+
+[profile.b]
+enabled = true
+direction = "inbound+snat>198.19.255.10"
+destinations = ["10.1.0.0/16"]
+device_order = ["oc"]
+
+[profile.c]
+enabled = true
+direction = "inbound+snat>198.19.255.11"
+destinations = ["10.2.0.0/16"]
 device_order = ["oc"]
 """)
         self.assertEqual(
-            cfg.structural.profiles["support"].direction,
-            Direction.BIDIRECTIONAL,
+            cfg.profiles["a"].effective_snat_address,
+            ipaddress.IPv4Address("198.19.255.10"),
         )
-        self.assertTrue(cfg.profiles["support"].ordinary_gateway_nat)
-        self.assertTrue(cfg.profiles["support"].route_return)
+        self.assertEqual(
+            cfg.profiles["b"].effective_snat_address,
+            ipaddress.IPv4Address("198.19.255.10"),
+        )
+        self.assertEqual(
+            cfg.profiles["c"].effective_snat_address,
+            ipaddress.IPv4Address("198.19.255.11"),
+        )
 
-        cfg2 = parse_release1_config("""
+        explicit = parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+
+[profile.support]
+enabled = true
+direction = "inbound+snat>198.19.255.12"
+destinations = ["10.3.0.0/16"]
+device_order = ["oc"]
+""")
+        self.assertIsNone(explicit.default_snat_address)
+        self.assertEqual(
+            explicit.profiles["support"].effective_snat_address,
+            ipaddress.IPv4Address("198.19.255.12"),
+        )
+
+    def test_bare_snat_requires_default_and_historical_route_return_is_rejected(self):
+        with self.assertRaisesRegex(
+            Release1ConfigError, "requires top-level default_snat_address"
+        ):
+            parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn0"]
+
+[profile.support]
+enabled = true
+direction = "inbound+snat"
+destinations = ["10.0.0.0/8"]
+device_order = ["oc"]
+""")
+
+        with self.assertRaisesRegex(Release1ConfigError, "historical"):
+            parse_release1_config("""
 [device.oc]
 enabled = true
 expected_interfaces = ["vpn0"]
@@ -198,32 +265,46 @@ direction = "inbound+route-return"
 destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
 """)
-        self.assertFalse(cfg2.profiles["support"].ordinary_gateway_nat)
-        self.assertTrue(cfg2.profiles["support"].route_return)
 
-        with self.assertRaisesRegex(Release1ConfigError, "remote-initiated"):
+    def test_snat_identity_must_not_overlap_untranslated_remote_source_space(self):
+        with self.assertRaisesRegex(
+            Release1ConfigError, "overlaps untranslated remote source range"
+        ):
             parse_release1_config("""
+default_snat_address = "10.20.0.10"
+
 [device.oc]
 enabled = true
 expected_interfaces = ["vpn0"]
 use_outbound_nat = false
 
-[profile.bad]
+[profile.translated]
 enabled = true
-direction = "outbound+route-return"
-destinations = ["10.0.0.0/8"]
+direction = "bidirectional+snat"
+destinations = ["10.30.0.0/16"]
+device_order = ["oc"]
+
+[profile.direct]
+enabled = true
+direction = "outbound"
+destinations = ["10.20.0.0/16"]
 device_order = ["oc"]
 """)
 
-        with self.assertRaises(Release1ConfigError):
-            parse_release1_config("""
+    def test_snat_identity_rejects_non_boundary_unicast_addresses(self):
+        for address in ("0.0.0.0", "127.0.0.1", "169.254.1.1", "224.0.0.1", "255.255.255.255"):
+            with self.subTest(address=address):
+                with self.assertRaisesRegex(Release1ConfigError, "IPv4 unicast"):
+                    parse_release1_config(f"""
+default_snat_address = "{address}"
+
 [device.oc]
 enabled = true
 expected_interfaces = ["vpn0"]
 
-[profile.bad]
+[profile.support]
 enabled = true
-direction = "inbound+route-return+snat"
+direction = "inbound"
 destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
 """)
