@@ -66,6 +66,7 @@ Current trace:
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md` |
+| managed L3 boundary backend selection seam | `managed_l3_boundary.py` | EXP-070, EXP-071, current managed-L3-endpoint design-cycle review |
 | controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
 | bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
 | bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
@@ -167,11 +168,18 @@ data plane.
 For the Linux implementation direction, the minimal current realization is a dedicated
 network namespace containing the VPN-GATE-owned virtual network environment.
 
-The explicit host/domain boundary is realized by dedicated boundary links rather than by
-using arbitrary host routes/interfaces as implicit product plumbing. For the current Linux
-architecture, a dedicated veth-style link is the minimal default for each required
-host/domain attachment because it gives one endpoint inside the managed namespace and one
-explicit peer outside it without merging the two routing domains.
+The explicit host/domain boundary is realized by a dedicated **managed L3 endpoint** rather
+than by using arbitrary host routes/interfaces as implicit product plumbing. Product policy
+depends on the endpoint contract, not on one Linux link type. The host sees one explicit
+VPN-like device identity and the managed namespace sees its peer; routes may target that
+device directly without making a peer gateway address part of Device/Profile semantics.
+
+For Release 1, the selected default Linux realization is a routed veth pair with Proxy ARP
+used only as IPv4 neighbour-resolution machinery. EXP-070 confirms this shape on Debian 12 /
+Linux 6.1 and EXP-071 finds no material steady-state dataplane penalty relative to plain
+netkit L3. Netkit L3 remains a compatible alternate lower backend for kernels that provide it.
+Backend choice is lower platform realization state and is not part of ordinary Device/Profile
+configuration.
 
 Inside this domain belong the network objects whose semantics are owned by VPN-GATE,
 including:
@@ -209,7 +217,82 @@ The namespace is therefore an architecture choice. If another mechanism can late
 the same isolation/ownership requirements more simply, the requirement does not protect the
 namespace itself.
 
-### 1.1.1. Managed network-domain bootstrap — executable Linux lower contract
+### 1.1.1. Managed L3 endpoint contract and Linux backend selection
+
+**Evidence:** EXP-070, EXP-071.
+
+The primary HOST <-> STACK attachment has one semantic contract:
+
+```text
+HOST
+    managed host endpoint (stable device identity)
+        |
+        | managed L3 endpoint backend
+        |
+    managed stack endpoint
+STACK
+```
+
+The contract requires:
+
+- one current host-visible interface identity and one current managed-stack peer identity;
+- direct device-directed IPv4 routing across the boundary; a peer gateway IP is not a product
+  semantic dependency;
+- exact lower ownership/observation of the pair and its backend-specific neighbour behavior;
+- no Profile, Device, NAT-class or path identity encoded in the backend itself;
+- payload firewall/NAT/routing semantics remain owned by their existing policy layers;
+- backend replacement must not require Device/Profile configuration changes.
+
+Release-1 backend selection is intentionally conservative:
+
+```text
+default when available:
+    routed-veth-proxy-arp
+
+compatible alternate:
+    netkit-l3
+```
+
+The reference selection seam is `managed_l3_boundary.py`. With no lower override, Release 1
+prefers routed veth even when netkit exists: Debian-12/Linux-6.1 support is already proven and
+EXP-071 provides no performance reason to require the younger primitive. A lower
+administrator/platform override may select netkit where available; an unavailable requested
+backend fails closed. This override is implementation/platform configuration, not
+human-facing Device/Profile policy.
+
+For **routed veth + Proxy ARP**:
+
+- the primary pair is used as an L3 routed link, not as an addressed transit subnet;
+- host and stack managed routes may use `dev <boundary>` without a peer next-hop;
+- Proxy ARP exists only to satisfy Ethernet neighbour resolution for destinations routed
+  through the opposite endpoint;
+- steady-state payload forwarding remains ordinary kernel IP forwarding; there is no
+  userspace proxy and no NAT implied by the boundary backend.
+
+For **netkit L3**:
+
+- the host primary and stack peer satisfy the same device-directed routing contract without
+  Ethernet neighbour emulation;
+- no BPF program or cross-boundary metadata carrier is required by this architecture;
+- optional netkit metadata behavior must therefore not become a hidden dependency of
+  Device/Profile semantics.
+
+Release 1 payload is IPv4-only, so IPv6 Proxy-NDP realization is outside this selected backend
+contract until IPv6 product support is re-entered.
+
+This selection does **not** by itself relocate ordinary-side Profile gateway NAT into STACK.
+The EXP-070 stack-SNAT positive control installed an explicit ordinary-side route to the stack
+NAT source address, so it does not prove the accepted requirement that ordinary hosts need no
+return routes to VPN-side addressing. Until equivalent no-extra-ordinary-host-routing evidence
+exists, the selected EXP-064 host-boundary behavior-lane realization remains authoritative for
+`+snat`/stateful-return consequences.
+
+### 1.1.2. Managed network-domain bootstrap — current executable transitional lower contract
+
+The executable `managed_network_domain.py` slice still realizes the older addressed-veth
+bootstrap described below. It remains valid historical/runtime evidence for namespace
+ownership and exact lifecycle behavior, but its `/30 + gateway` primary-boundary representation
+is now a migration target rather than the selected final managed-L3-endpoint shape.
 
 **Implements:**
 - `VPNG0004-R4.R6`;
@@ -4659,6 +4742,12 @@ carrier: packets crossed, but the receiving namespace did not retain the exporte
 EXP-064 proved the fixed behavior-lane carrier technically across all four combinations, including
 overlapping remote prefixes, forwarded gateway NAT, route-return/stateful-return, stack-side
 established-flow affinity, host-local no-NAT and unrelated-host isolation.
+EXP-070/071 do not supersede this selected gateway-NAT carrier. The managed-L3-endpoint
+backend can replace the primary addressed HOST<->STACK transport independently, but moving
+ordinary-side gateway NAT into STACK would change reply-reachability assumptions. The current
+EXP-070 stack-SNAT control relied on an explicit ordinary-side route to the stack NAT source;
+therefore behavior lanes remain selected until a replacement proves the same no-extra-route
+ordinary-host semantics.
 
 The lane identity is lower infrastructure, not user policy. This contract satisfies
 `VPNG0004-R4.R6.R1.R6.R1` by preserving the already-selected host-side NAT applicability:
