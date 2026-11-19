@@ -2204,7 +2204,14 @@ the semantic tuple happens to be identical to the previously disabled one.
 The token has no routing-policy meaning. It exists only to reject stale physical results.
 No logical evidence epoch, attempt journal, result history or replay ordering is introduced.
 
-The executable bounded reference is `probe_runtime.py::AvailabilityProbeAgent`.
+The executable bounded reference uses
+`probe_runtime.py::AvailabilityProbeAgent` for one subject context and
+`probe_runtime.py::AvailabilityProbeRuntime` as the bounded multi-channel implementation of
+the same Agent role. The runtime retains one child context owner per subject seen under the
+accepted static configuration so path disappearance disables the context without resetting its
+generation counter; reappearance therefore cannot make an old in-flight result equal a fresh
+context. This retained set is bounded by the configured Profile/path identity space and is not
+an observation history.
 
 **Implements:**
 - `VPNG0003-R3.R6.R2`
