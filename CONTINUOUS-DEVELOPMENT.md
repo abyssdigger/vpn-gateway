@@ -729,6 +729,7 @@ snapshots. Unfinished work may continue across CD windows via handoff.
   - a required human product/process/architecture decision;
   - an external blocker that prevents further meaningful autonomous work;
   - absence of any sufficiently defined unblocked development block;
+  - publication failure, handled as a mandatory stop under `PROJECT-CONVENTIONS.md` §7;
   - the existing less-than-three-minutes safety-margin rule above.
 - These rules do not relax the `CYCLE_INTERVAL` boundary. As elapsed time approaches the
   interval, session safety and a usable handoff take precedence over starting or finishing more
@@ -752,6 +753,11 @@ At the start of a cycle:
    during the window are written to that branch;
 5. every commit must be present on GitHub immediately after creation.
 
+A failure to publish or verify publication of a commit is a mandatory early-stop
+condition for the current CD. Follow the short preservation-and-handoff procedure
+in `PROJECT-CONVENTIONS.md` §7; do not continue development or perform prolonged
+recovery attempts in this CD.
+
 At each existing cadence check, obtain fresh real current time and compare it to
 `CYCLE_START_TIME`. Keep the existing check events, thresholds, safety margin and handoff
 behavior unchanged; in particular, the first commit is a check event, not the origin
@@ -770,7 +776,8 @@ When the session-safety boundary is reached or work is otherwise stopped for the
 chat turn:
 
 - stop at the nearest safe technical point; do not manufacture a logical completion;
-- leave all already-created commits published on the active branch;
+- leave all successfully published commits on the active branch; when a publication
+  failed, explicitly identify unpublished work rather than assuming durability;
 - do not create a special commit unless the work itself naturally requires one;
 - do not create a snapshot solely because the CD window ended;
 - produce a compact **handoff file in the chat interface**, not in Git;
