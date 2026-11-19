@@ -59,6 +59,7 @@ EXP065_PROBE_RULE = {
     "ipproto": "ipproto-1",
     "priority": 8192,
     "src": "all",
+    "oif": "path1",
     "table": "3221225472",
     "uid_end": 4242,
     "uid_start": 4242,
