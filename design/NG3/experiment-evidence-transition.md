@@ -746,6 +746,7 @@ internal types.
 | ICMP/path-specific probe mechanism | EXP-021, EXP-022, EXP-023, EXP-024 |
 | Current interface-generation firewall enforcement | EXP-017, EXP-021, EXP-022 |
 | Selective shared-namespace probe process isolation | EXP-024 |
+| Current probe RPDB uidrange/ipproto/target representation | EXP-065 |
 | Probe conntrack stale-generation risk | EXP-025 — target-confirmed negative finding |
 | Probe-class conntrack cleanup candidate | EXP-026 — CI PASS, target confirmation open; Release-1 adoption not selected |
 | Pure route-priority transition | EXP-027 |
