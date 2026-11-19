@@ -2436,7 +2436,15 @@ state and remove stale probe-owned rules/routes when the current owner/path/targ
 
 The executable pure reference is `probe_policy.py`. It is an implementation of the accepted
 EXP-021/022/024 mechanism shape, with EXP-065 supplying current iproute2 selector/lookup
-evidence; it is not a new availability requirement.
+evidence and EXP-066 supplying current nft local-owner representation evidence; it is not a
+new availability requirement.
+
+EXP-066 additionally confirms the exact-current-interface observation boundary for local nft
+rules: when a rule was created against `path0` at one ifindex and that interface was deleted
+and recreated with the same name at another ifindex, nft JSON exposed the rule's old raw
+ifindex rather than resolving it to the new interface. The future probe-local observer can
+therefore classify same-name/new-ifindex rules as stale using the same current
+`InterfaceIdentity` discipline as the rest of NG3.
 
 # 9. NetworkPolicyAdapter
 

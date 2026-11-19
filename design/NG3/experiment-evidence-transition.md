@@ -747,6 +747,7 @@ internal types.
 | Current interface-generation firewall enforcement | EXP-017, EXP-021, EXP-022 |
 | Selective shared-namespace probe process isolation | EXP-024 |
 | Current probe RPDB uidrange/ipproto/target representation | EXP-065 |
+| Current probe local nft representation and ifindex-generation observation | EXP-066 |
 | Probe conntrack stale-generation risk | EXP-025 — target-confirmed negative finding |
 | Probe-class conntrack cleanup candidate | EXP-026 — CI PASS, target confirmation open; Release-1 adoption not selected |
 | Pure route-priority transition | EXP-027 |
