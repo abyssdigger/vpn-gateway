@@ -8,6 +8,7 @@ from .network_policy_layout import (
     RouteMetricPlatformSpace,
 )
 from .stack_return_affinity import StackReturnAffinityPlatformSpace
+from .probe_policy import ProbeLocalPlatform
 
 
 NG3_LINUX_POLICY_PLATFORM = NetworkPolicyPlatformSpace(
@@ -76,4 +77,13 @@ NG3_STACK_RETURN_AFFINITY_PLATFORM = StackReturnAffinityPlatformSpace(
         first=0x1800,
         stop=0x2000,
     ),
+)
+
+
+# Release-1 dedicated probe worker/local-policy identity. Numeric values are
+# lower Linux allocation, not user configuration. UID 4242 is the current
+# EXP-067-proven non-root alpha/reference worker identity.
+NG3_PROBE_LOCAL_PLATFORM = ProbeLocalPlatform(
+    process_uid=4242,
+    conntrack_mark=0x20000001,
 )
