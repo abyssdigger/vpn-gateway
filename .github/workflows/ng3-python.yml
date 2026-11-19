@@ -756,7 +756,7 @@ jobs:
               encoding: b64
               content: $B64
           runcmd:
-            - [ /bin/sh, -c, '/root/exp070.sh >/dev/ttyS0 2>&1; rc=$?; echo EXP070_D12_CLOUD_INIT_RC=$rc >/dev/ttyS0; poweroff -f' ]
+            - [ /bin/sh, -c, '/root/exp070.sh >/dev/ttyS0 2>&1; rc=\$?; echo EXP070_D12_CLOUD_INIT_RC=\$rc >/dev/ttyS0; poweroff -f' ]
           EOF
           cat > meta-data <<'EOF'
           instance-id: exp070-debian12
