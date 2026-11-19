@@ -582,7 +582,9 @@ Experiment **Result** and post-result **Disposition** are separate facts:
 - `Result` records only the technical outcome established by the experiment itself
   (for example `PASS`, `FAIL`, `INCONCLUSIVE`, or a blocked/unrun state);
 - `Disposition` records what the project decided to do with that completed evidence and
-  belongs in the central experiment registry, not in the experiment result;
+  belongs in the central experiment registry
+  (`design/vpn-gateway-experiments.md` for the active project lineage), not in the
+  experiment result;
 - completing an experiment initially leaves its disposition `pending_decision` until the
   result has been discussed;
 - a technically successful experiment may therefore be `PASS` while its disposition is
@@ -602,15 +604,22 @@ rerunning until green.
 A temporary ambiguity in the current development cycle is recorded in the relevant review,
 test or experiment artifact. It does not automatically create a project-wide deferral.
 
-Use `design/deferrals/` only for open items expected to survive the current implementation
-scope, for example:
+Use `design/deferrals/` only for **accepted, explicitly postponed** obligations or
+investigations expected to survive the current implementation scope, for example:
 
 - postponed product extensions;
 - future experiments not required for the first working production baseline;
 - deliberately deferred DeviceManager/availability behavior.
 
-A deferred item must identify its re-entry condition: what future decision, evidence or
-milestone makes it active work again.
+A deferred item must identify its original normative source or accepted decision, its
+scope and its re-entry condition: what future decision, evidence or milestone makes it
+active work again. An unresolved technical ambiguity without an accepted disposition
+is a blocked/pending finding, not a deferral.
+
+Stage declarations are different: they record tentative, non-normative intent and
+cannot by themselves introduce approved scope, implementation work or acceptance gates.
+Promote them through the relevant Requirements/Constraints, architecture and human
+acceptance process before they become executable obligations.
 
 ## Review documentation
 
@@ -839,11 +848,9 @@ Use, in order of increasing environment specificity:
 The environment is chosen by what the hypothesis requires, not by a fixed preference for
 the most expensive stand.
 
-## Backend direction
+## Backend ownership
 
-Backend choices are owned by the current normative architecture and executable evidence, not
-by an older generation remaining in the repository tree.
-
-For the current NG3 line, packet filtering/NAT lower policy is nftables-based as defined by
-the NG3 architecture and accepted experiments. Historical backend code remains on legacy
-branches and does not define current production semantics.
+Backend selection follows the current normative stage's requirements, architecture
+and verified evidence; historical implementation or experiment evidence does not
+establish current product semantics by itself. This process document must not
+hardcode any particular stage, packet-filtering backend or technology choice.
