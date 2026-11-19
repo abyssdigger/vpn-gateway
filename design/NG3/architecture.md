@@ -2310,9 +2310,10 @@ target and reports technical reply/no-reply/local-error facts. The Agent maps th
 `positive/negative/no_evidence` according to the criterion contract.
 
 The EXP-067-backed Linux Driver proves numeric one-packet ICMP exit semantics under the
-dedicated probe UID. However, EXP-067 exercised only one path. Historical EXP-022/023 bound
-the actual path-specific attempt with `ping -I <current-ifname>`; the current NG3 Driver
-omits that binding and is therefore part of the active probe path-discriminator defect.
+dedicated probe UID. Historical EXP-022/023 established that path-specific execution must bind
+the attempt with `ping -I <current-ifname>`; the current NG3 Driver preserves that binding.
+The recovered `oif` RPDB discriminator plus bound Driver execution are part of the accepted
+multi-path path-selection mechanism and are exercised by the continuous availability path.
 
 The reply deadline and outer process grace are finite lower runtime parameters, not
 Release-1 user-facing availability knobs or latency guarantees. The outer process deadline
@@ -2538,12 +2539,11 @@ does not require EXP-026 cleanup. The current Linux lower layer verifies and rec
 the route/RPDB owner and the probe-local nft owner against exact desired state, removing stale
 owned state when the current owner/path/target set changes.
 
-The executable pure reference is `probe_policy.py`, but the current RPDB rule projection is
-known incomplete: it recovered the EXP-065 single-path uid/ipproto/target subset and omitted
-the historical EXP-022/023 `oif` discriminator. EXP-065 remains current representation
-evidence for its tested fields; it is **not** evidence that the reduced selector is sufficient
-for path-specific multi-path probing. See
-`NG3-2026-11-19-probe-path-discriminator-broken-review.md`.
+The executable pure reference is `probe_policy.py`. The current RPDB rule projection
+includes the historical EXP-022/023 `oif` discriminator in addition to the EXP-065-proven
+uid/ipproto/target fields. The earlier reduced-selector defect is retained only as historical
+evidence in `NG3-2026-11-19-probe-path-discriminator-broken-review.md`; it is not an active
+implementation state.
 
 EXP-066 continues to supply current nft local-owner representation evidence. No normative
 availability requirement is changed by this correction.
