@@ -44,6 +44,7 @@ Current trace:
 | pure normalized availability-subject -> probe route/RPDB/local-policy projection | `probe_policy.py` | `NG3-2026-11-19-probe-policy-projection-review.md` |
 | pure probe route/RPDB actual-vs-desired comparison | `probe_routing_compare.py` | `NG3-2026-11-19-probe-routing-comparison-review.md` |
 | EXP-065-backed probe route/RPDB mutation Driver | `linux_probe_routing.py` | `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
+| EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
 | accepted NG3 Linux platform resource space | `linux_policy_platform.py` | `EXP-028-result-20261116.md` |
 | semantic Profile/allocation -> route-key priority realization | `route_priority_domain_builder.py` | `NG3-2026-11-16-route-priority-domain-builder-review.md` |
 | explicit direct-device VPN integration route realization | `direct_device_route.py` | `NG3-2026-11-16-direct-device-route-realizer-review.md` |
@@ -2431,8 +2432,9 @@ probe-process isolation boundary.
 
 This projection intentionally keeps routing and local admission owner-scoped and separate from
 payload dispatch. It does not restore the probe conntrack mark into packet routing state and
-does not require EXP-026 cleanup. A later Linux observer/mutator must verify the exact desired
-state and remove stale probe-owned rules/routes when the current owner/path/target set changes.
+does not require EXP-026 cleanup. The current Linux lower layer verifies and reconciles both
+the route/RPDB owner and the probe-local nft owner against exact desired state, removing stale
+owned state when the current owner/path/target set changes.
 
 The executable pure reference is `probe_policy.py`. It is an implementation of the accepted
 EXP-021/022/024 mechanism shape, with EXP-065 supplying current iproute2 selector/lookup
@@ -2442,9 +2444,65 @@ new availability requirement.
 EXP-066 additionally confirms the exact-current-interface observation boundary for local nft
 rules: when a rule was created against `path0` at one ifindex and that interface was deleted
 and recreated with the same name at another ifindex, nft JSON exposed the rule's old raw
-ifindex rather than resolving it to the new interface. The future probe-local observer can
-therefore classify same-name/new-ifindex rules as stale using the same current
-`InterfaceIdentity` discipline as the rest of NG3.
+ifindex rather than resolving it to the new interface. The probe-local observer therefore
+classifies same-name/new-ifindex rules as stale using the same current `InterfaceIdentity`
+discipline as the rest of NG3.
+
+## 8.4. Probe-local nft owner convergence
+
+**Implements:**
+- `VPNG0003-R3.R6`
+- `VPNG0003-R3.R6.R1`
+- `VPNG0003-R3.R6.R2`
+- `VPNG0003-R3.R6.R3`
+- `VPNG0003-R3.R6.R3.R1`
+- `VPNG0003-R3.R6.R3.R1.C1.R1`
+- `VPNG0007-R7.R3.R2`
+
+Probe-local admission is one classified owner inside the existing `ip vpn_gate`
+`stack_input` / `stack_output` chains. It does not get a private nft table, Manager or
+lifecycle.
+
+The authoritative comparison decodes only rules carrying the dedicated probe-local owner
+comment and requires the exact EXP-066 expression shape. Current-interface identity is
+resolved from the same link-bracketed inventory used by the composite nft observer. A raw
+numeric interface operand left behind after interface replacement is retained as stale
+physical identity rather than being rebound by name.
+
+The semantic `ProbeLocalRuleSpec` includes `(Profile,path)` owner identity for traceability,
+but that identity is deliberately not encoded into nft. If multiple semantic probe subjects
+project to an identical physical admission rule, the desired local owner is the set-union of
+that physical key rather than duplicate nft accepts. The physical key is:
+
+```text
+hook
+current endpoint identity
+target/source address
+dedicated probe conntrack mark
+dedicated process uid on OUTPUT only
+```
+
+Reconciliation uses one owner-specific full-diff nft batch:
+
+```text
+delete all stale probe-local handles
+add all missing unique physical probe-local rules
+```
+
+This follows the existing local publication/integration atomic pattern. Since
+`ip_forward=0` does not protect local traffic, stale probe-local accepts are removed before
+payload cleanup. Missing probe-local admission is installed only after payload structural
+additions and the other local-owner additions already ordered by the composite planner.
+
+The executable owner is split narrowly:
+
+- `probe_local_observation.py` — EXP-066-backed decode/comparison;
+- `probe_local_mutation.py` — pure full-diff step;
+- `linux_probe_local.py` — handle deletion and exact nft rendering;
+- existing `composite_nft_*` — whole-table ownership, ordering, forwarding barrier and fresh
+  postcondition checks.
+
+No packet-mark restoration or conntrack cleanup is introduced by this owner.
 
 # 9. NetworkPolicyAdapter
 
