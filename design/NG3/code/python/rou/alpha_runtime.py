@@ -518,6 +518,10 @@ def reconcile_alpha_payload_once(
             NG3_STACK_RETURN_AFFINITY_PLATFORM,
         ),
         desired.stack_return_affinity,
+        activation_precondition=lambda: (
+            observe_host_local_ipv4_addresses(runner)
+            == prepared.host_local_addresses
+        ),
     )
     if activation.ready:
         host_result = converge_host_publication_once(
@@ -687,6 +691,11 @@ def run_alpha_runtime(
             stop_requested=stop_event.is_set,
             build_boundary_contribution=build_boundary_contribution,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
+            activation_precondition=lambda: (
+                "policy" in holder
+                and observe_host_local_ipv4_addresses(runner)
+                == holder["policy"].host_local_addresses
+            ),
         )
         if startup.status is not ControllerStartupStatus.READY:
             _log(
