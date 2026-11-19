@@ -65,9 +65,12 @@ class ProbeLocalPlatform:
     conntrack_mark: int
 
     def __post_init__(self) -> None:
-        if type(self.process_uid) is not int or self.process_uid < 0:
+        if (
+            type(self.process_uid) is not int
+            or not 1 <= self.process_uid <= 0xFFFFFFFE
+        ):
             raise ProbePolicyProjectionError(
-                "process_uid must be a non-negative integer"
+                "process_uid must be a non-root Linux uid in [1, 2^32-2]"
             )
         if (
             type(self.conntrack_mark) is not int
@@ -163,9 +166,12 @@ class ProbeRuleSpec:
             raise ProbePolicyProjectionError(
                 "probe rule priority must be in [1, 2^32-1]"
             )
-        if type(self.process_uid) is not int or self.process_uid < 0:
+        if (
+            type(self.process_uid) is not int
+            or not 1 <= self.process_uid <= 0xFFFFFFFE
+        ):
             raise ProbePolicyProjectionError(
-                "probe rule process_uid must be non-negative"
+                "probe rule process_uid must be a non-root Linux uid"
             )
         if not isinstance(self.target, IPv4Address):
             raise ProbePolicyProjectionError(
@@ -223,9 +229,12 @@ class ProbeLocalRuleSpec:
                 "probe conntrack mark must be in [1, 2^32-1]"
             )
         if self.hook is ProbeLocalHook.OUTPUT:
-            if type(self.process_uid) is not int or self.process_uid < 0:
+            if (
+                type(self.process_uid) is not int
+                or not 1 <= self.process_uid <= 0xFFFFFFFE
+            ):
                 raise ProbePolicyProjectionError(
-                    "probe OUTPUT requires non-negative process_uid"
+                    "probe OUTPUT requires a non-root Linux process_uid"
                 )
         elif self.process_uid is not None:
             raise ProbePolicyProjectionError(
@@ -238,6 +247,41 @@ class ProbeNetworkPolicyDesiredState:
     routes: tuple[ProbeRouteSpec, ...]
     rules: tuple[ProbeRuleSpec, ...]
     local_rules: tuple[ProbeLocalRuleSpec, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.routes, tuple) or not all(
+            isinstance(item, ProbeRouteSpec)
+            for item in self.routes
+        ):
+            raise ProbePolicyProjectionError(
+                "routes must be a tuple of ProbeRouteSpec"
+            )
+        if not isinstance(self.rules, tuple) or not all(
+            isinstance(item, ProbeRuleSpec)
+            for item in self.rules
+        ):
+            raise ProbePolicyProjectionError(
+                "rules must be a tuple of ProbeRuleSpec"
+            )
+        if not isinstance(self.local_rules, tuple) or not all(
+            isinstance(item, ProbeLocalRuleSpec)
+            for item in self.local_rules
+        ):
+            raise ProbePolicyProjectionError(
+                "local_rules must be a tuple of ProbeLocalRuleSpec"
+            )
+        if len(set(self.routes)) != len(self.routes):
+            raise ProbePolicyProjectionError(
+                "duplicate desired probe route"
+            )
+        if len(set(self.rules)) != len(self.rules):
+            raise ProbePolicyProjectionError(
+                "duplicate desired probe routing rule"
+            )
+        if len(set(self.local_rules)) != len(self.local_rules):
+            raise ProbePolicyProjectionError(
+                "duplicate desired probe local rule"
+            )
 
 
 def build_probe_network_policy_desired_state(
