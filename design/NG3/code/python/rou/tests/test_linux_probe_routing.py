@@ -171,6 +171,7 @@ class LinuxProbeRoutingBackendTests(unittest.TestCase):
                     owner=ProbePolicyOwner("corp", PATH),
                     priority=0x2000,
                     process_uid=4242,
+                    endpoint=VPN,
                     target=TARGET,
                     table=0x80000000,
                 )
