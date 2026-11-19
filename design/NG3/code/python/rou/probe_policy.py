@@ -238,8 +238,16 @@ def build_probe_network_policy_desired_state(
             "local_platform must be ProbeLocalPlatform"
         )
 
+    raw_intents = tuple(intents)
+    if not all(
+        isinstance(intent, AvailabilityProbeIntent)
+        for intent in raw_intents
+    ):
+        raise ProbePolicyProjectionError(
+            "intents must contain AvailabilityProbeIntent"
+        )
     current_intents = tuple(sorted(
-        intents,
+        raw_intents,
         key=lambda value: (
             value.owner.profile_id,
             value.owner.path_id,
@@ -248,10 +256,6 @@ def build_probe_network_policy_desired_state(
     ))
     owner_to_intent: dict[ProbePolicyOwner, AvailabilityProbeIntent] = {}
     for intent in current_intents:
-        if not isinstance(intent, AvailabilityProbeIntent):
-            raise ProbePolicyProjectionError(
-                "intents must contain AvailabilityProbeIntent"
-            )
         if intent.owner in owner_to_intent:
             raise ProbePolicyProjectionError(
                 f"duplicate availability probe owner {intent.owner!r}"
