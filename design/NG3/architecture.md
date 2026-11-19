@@ -1466,8 +1466,8 @@ Validation must reject at least:
 - Device firewall declarations that would expand rather than restrict Profile permission;
 - unsupported/ambiguous Device-firewall or publication grammar;
 - malformed or unsupported availability-check mechanism/target;
-- a target-less probe when subject/topology semantics cannot produce one unambiguous concrete
-  normalized target;
+- Profile `default` availability selection whose corresponding enabled Device has no valid
+  default availability description;
 - contradictory declarations that cannot produce one deterministic semantic result.
 
 Known disabled Device references are valid and are skipped operationally.
@@ -3298,12 +3298,13 @@ payload NAT and publication-local rules in one reserved table. It also proves on
 replacement of an existing publication endpoint rule pair with a new desired pair, followed
 by exact whole-scope confirmation.
 
-This closes physical local-rule convergence **only for Device transport publication**.
-Loopback, probe and integration-specific exceptions remain unmaterialized until each function
-has its own exact lower selector/evidence unit.
+That historical publication review closed physical local-rule convergence only for Device
+transport publication at the time. Probe-local and supported-integration exceptions now have
+their own exact lower selector/observer/mutation contracts and participate in the shared
+composite nft owner. Loopback remains outside current materialized exception classes.
 
-Probe remains independently gated by the EXP-024/025/026 generation/conntrack evidence and
-is not widened by the publication result.
+The probe-local implementation preserves the separate EXP-024/025/026 evidence boundary
+described in section 8.1; ordinary Release-1 ICMP probing does not require EXP-026 cleanup.
 
 Concrete payload rules are added only by a fully normalized payload-policy projection. They
 must not be inferred from historical TOML examples.
