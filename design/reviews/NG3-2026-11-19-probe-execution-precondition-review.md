@@ -96,10 +96,10 @@ Focused tests cover:
 - missing routing selector blocks readiness while local side remains exact;
 - missing probe-local admission blocks readiness while routing side remains exact.
 
-NG3 Python workflow run `44490146781` on code SHA
-`129916f149dac43d5c7facc34414c7fde6d44137` passed `unit`,
-`linux-probe-runtime` and `linux-structural-inventory-shape`; the unit suite includes all
-focused readiness-gate tests above.
+Earlier run `44490146781` passed the initial readiness gate. Current run
+`44491324571` on `14d20aec42a9641654f02602c7892bfbdfa96878` passes the complete
+strengthened readiness suite plus `linux-probe-runtime` and
+`linux-structural-inventory-shape`.
 
 ## Simplification review
 
@@ -132,6 +132,7 @@ none
 
 ## Verdict
 
-**ACCEPT**, pending execution evidence for the owner-set strengthening added after workflow
-run `44490146781`. The earlier gate is green; the new consistency check must pass the
-current descendant unit suite before this verdict is final.
+**ACCEPT.** NG3 Python workflow run `44491324571` on code SHA
+`14d20aec42a9641654f02602c7892bfbdfa96878` passed `unit`,
+`linux-probe-runtime` and `linux-structural-inventory-shape`, including the exact-context
+and desired-context consistency strengthening.
