@@ -39,9 +39,13 @@ A Device may be reused by multiple Profiles.
 
 # 2. Current human-facing representation
 
-The recovered implemented surface uses TOML named tables:
+The human-facing surface uses TOML root policy plus named Device/Profile tables. The optional
+root `default_snat_address` supplies the common Profile SNAT identity when a Profile uses
+bare `+snat`:
 
 ```toml
+default_snat_address = "198.19.255.10"
+
 [device.oc-main]
 enabled = true
 expected_interfaces = [
@@ -510,12 +514,10 @@ Canonical Release-1 values:
 outbound
 inbound
 inbound+snat
-inbound+route-return
-inbound+snat+route-return
+inbound+snat>IPv4
 bidirectional
 bidirectional+snat
-bidirectional+route-return
-bidirectional+snat+route-return
+bidirectional+snat>IPv4
 ```
 
 Meaning:
@@ -524,22 +526,53 @@ Meaning:
 - `inbound`: remote side through a permitted Profile Device/path may initiate NEW flows
   toward ordinary/host side;
 - `bidirectional`: both sides may initiate;
-- `+snat` requests Profile-scoped ordinary-side gateway source NAT only for the
-  VPN-to-ordinary leg after the managed firewall boundary;
-- remote-initiated return traffic uses stateful host-boundary return steering by default;
-- `+route-return` opts out of that steering and requires ordinary host routing through the
-  managed boundary for the return leg;
-- admitted return traffic otherwise remains stateful.
+- bare `+snat` requests Profile-scoped source translation for the VPN-to-ordinary leg,
+  after managed firewall/policy and before the packet leaves the managed network domain;
+- `+snat>IPv4` requests the same translation but selects an explicit Profile SNAT identity.
 
-`outbound+snat` is invalid because the suffix controls a VPN-to-ordinary leg that an
-outbound-only Profile does not authorize. `outbound+route-return` is invalid because
-outbound-only Profile does not authorize remote-initiated flows. There is no separate
-Release-1 `gateway_nat` or return-routing field.
+Without `+snat`, VPN-to-ordinary payload leaves the managed domain with its original remote
+source address. Bare `+snat` uses the top-level `default_snat_address`; the explicit address
+after `>` overrides that default for the Profile. If any enabled Profile uses bare `+snat`,
+`default_snat_address` is required.
 
-Canonical combined ordering is `+snat+route-return`; reversed suffix order is rejected.
+`outbound+snat...` is invalid because outbound-only Profile does not authorize the
+VPN-to-ordinary leg. There is no separate Profile `gateway_nat`, `snat_address` or
+return-routing field. Return handling is internal product behavior, not a user-selectable
+direction modifier; historical `+route-return` forms are rejected.
+
 Direction is explicit and is not inferred from topology. Configuration normalization strips
-the suffixes into separate ordinary-side gateway NAT and route-return intents before
+the SNAT suffix into base direction plus an optional effective Profile SNAT identity before
 structural routing consumes the base direction.
+
+### 5.1.1 Profile SNAT identity
+
+The top-level default is an IPv4 string:
+
+```toml
+default_snat_address = "198.19.255.10"
+```
+
+An explicit Profile override is carried in the direction string:
+
+```toml
+direction = "inbound+snat>198.19.255.11"
+```
+
+Every effective SNAT identity must be a unicast IPv4 address. Multiple `+snat` Profiles may
+intentionally share the same effective address; this groups them into one administrative
+source identity after the managed boundary.
+
+An effective SNAT address must not belong to source address space that can leave the managed
+boundary untranslated in the same enabled configuration. In Release 1 this means, at minimum,
+that it must not fall inside the remote destinations of an enabled `inbound` or
+`bidirectional` Profile that has no `+snat`. It must also not reuse an address that
+VPN-GATE simultaneously owns for another service/transport role on the managed boundary.
+Configuration-known conflicts are rejected during normalization; environment-resolved
+boundary conflicts are fail-closed before activation.
+
+Profile SNAT defines only the source identity presented at the managed boundary. What the
+ordinary host subsequently does with that IPv4 source — route it, filter it, account it or
+apply another host-side NAT — is outside Profile SNAT semantics.
 
 First-release constraint:
 
@@ -556,6 +589,10 @@ expected-interface selector quotas. A runtime moment with only one currently pre
 interface does not make a capacity>1 Profile valid.
 
 **Requirements:**
+- `VPNG0001-R1.R2.R4.R4.R4`
+- `VPNG0001-R1.R2.R4.R4.R4.R1`
+- `VPNG0001-R1.R2.R4.R4.R4.C1`
+- `VPNG0001-R1.R2.R4.R4.R4.C2`
 - `VPNG0002-R2.R3.R3`
 - `VPNG0002-R2.R3.C1`
 - `VPNG0002-R2.R3.C1.R1`.
@@ -793,6 +830,8 @@ This example intentionally exercises every settled external configuration featur
 deployment does not need to use every optional field.
 
 ```toml
+default_snat_address = "198.19.255.10"
+
 [device.wg-main]
 enabled = true
 expected_interfaces = ["wg0"]
@@ -845,7 +884,7 @@ availability_check = "default"
 
 [profile.remote-admin]
 enabled = true
-direction = "inbound+snat"
+direction = "inbound+snat>198.19.255.11"
 destinations = ["10.30.0.0/16"]
 device_order = ["oc-server"]
 
@@ -859,7 +898,8 @@ Notes:
 - `expected_interfaces = ["vpn*/2"]` is valid; bare `"vpn*"` is not, because a prefix
   selector requires an explicit positive quota;
 - `use_outbound_nat` controls ordinary-to-VPN payload source masquerade and is unrelated to
-  `direction = "inbound+snat"`;
+  Profile `+snat`; bare Profile `+snat` uses `default_snat_address`, while
+  `+snat>IPv4` selects a Profile-specific identity;
 - `allow_vpn_client` allows the VPN implementation's own narrowly bounded client
   transport/control flow inside the otherwise DROP-by-default managed local plane;
 - `publish_vpn_server` describes server-side host publication and is independent from
