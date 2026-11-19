@@ -36,6 +36,7 @@ Current experiment directories:
 | EXP-070 | routed managed-stack endpoint candidates / Debian 12 routed-veth portability |
 | EXP-071 | managed-boundary dataplane race: netkit L3 vs routed veth |
 | EXP-072 | managed-L3 endpoint device-only host bootstrap equivalence |
+| EXP-073 | routed managed-L3 gateway-less stateful return |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -76,3 +77,4 @@ Canonical dispositions:
 | EXP-070 | PASS | selected | Selects the managed-L3-endpoint shape. Release 1 uses Debian-12-compatible routed veth + Proxy ARP as the default primary boundary backend; netkit L3 remains a compatible alternate realization. The stack-SNAT subtest does not supersede existing gateway-NAT semantics. |
 | EXP-071 | PASS | selected | Selected as performance evidence for the dual managed-L3-endpoint backend contract: no demonstrated dataplane reason requires netkit or excludes the Debian-12-compatible routed-veth backend. |
 | EXP-072 | PASS | selected | Confirms the production paired-RPDB bootstrap can use device-only `dev vpng0` routes with identical `/0`, main-specificity, nested-managed, dynamic-main, stack-bypass and cleanup semantics over routed veth + Proxy ARP and netkit L3. |
+| EXP-073 | PASS | selected | Confirms the selected EXP-053 stateful host-return owner uses the same gateway-less managed-L3 endpoint contract: return table `default dev vpng0`, no remote route in host `main`, forwarded and host-local replies both return through STACK. |
