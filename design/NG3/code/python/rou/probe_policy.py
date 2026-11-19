@@ -69,10 +69,6 @@ class ProbeLocalPlatform:
             raise ProbePolicyProjectionError(
                 "process_uid must be a non-negative integer"
             )
-        if self.mechanism is not AvailabilityProbeMechanism.ICMP:
-            raise ProbePolicyProjectionError(
-                "probe local rule mechanism must be ICMP"
-            )
         if (
             type(self.conntrack_mark) is not int
             or not 1 <= self.conntrack_mark <= 0xFFFFFFFF
@@ -214,6 +210,10 @@ class ProbeLocalRuleSpec:
         if not isinstance(self.target, IPv4Address):
             raise ProbePolicyProjectionError(
                 "probe local target must be IPv4Address"
+            )
+        if self.mechanism is not AvailabilityProbeMechanism.ICMP:
+            raise ProbePolicyProjectionError(
+                "probe local rule mechanism must be ICMP"
             )
         if (
             type(self.conntrack_mark) is not int
