@@ -142,6 +142,30 @@ class StackReturnAffinityTests(unittest.TestCase):
         self.assertEqual(rules["broad"].table, 1001)
         self.assertEqual(rules["specific"].table, 1002)
 
+
+    def test_initial_packet_table_selection_is_explicit_profile_capability(self):
+        p = profile("broad", Direction.INBOUND, "10.0.0.0/16", PA)
+        l = layout()
+        allocations = (
+            StackReturnAffinityAllocation("broad", 0xA1, 1101),
+        )
+        ordinary = build_stack_return_affinity_desired(
+            (p,), (RA,), HOST, l, allocations,
+        )
+        self.assertFalse(ordinary.classifiers[0].select_initial_packet)
+
+        lane_enabled = build_stack_return_affinity_desired(
+            (p,),
+            (RA,),
+            HOST,
+            l,
+            allocations,
+            initial_packet_profile_ids=("broad",),
+        )
+        self.assertTrue(
+            lane_enabled.classifiers[0].select_initial_packet
+        )
+
     def test_outbound_only_profile_needs_no_affinity_allocation(self):
         p = PayloadProfileRequest(
             profile_id="out",
