@@ -65,6 +65,7 @@ def exact_observation(desired):
                 endpoint=route.endpoint,
                 gateway=route.gateway,
                 onlink=route.onlink,
+                role=route.role,
             )
         )
     rules = tuple(
