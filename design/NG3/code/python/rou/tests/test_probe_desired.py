@@ -147,6 +147,31 @@ availability_check = "default"
             {IPv4Address("198.51.100.10")},
         )
 
+    def test_payload_profile_set_must_match_enabled_config_profiles(self):
+        cfg = parse_release1_config("""
+[device.wg]
+enabled = true
+expected_interfaces = ["wg0"]
+use_outbound_nat = false
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["wg"]
+""")
+        with self.assertRaisesRegex(
+            ProbeDesiredAssemblyError,
+            "enabled configuration Profiles",
+        ):
+            build_probe_desired_assembly(
+                cfg,
+                (),
+                (RoutePriorityPathRoute(WG, WG_EP),),
+                NG3_LINUX_POLICY_PLATFORM,
+                LOCAL,
+            )
+
     def test_payload_and_route_current_path_sets_must_match(self):
         cfg = parse_release1_config("""
 [device.wg]
