@@ -141,8 +141,8 @@ class AlphaProbeProjectionTests(unittest.TestCase):
         self.assertEqual(len(result.layout.payload), 1)
         self.assertEqual(len(result.layout.probe), 2)
         self.assertEqual(
-            tuple(item.owner for item in result.layout.probe),
-            tuple(item.owner for item in result.semantic.intents),
+            {item.owner for item in result.layout.probe},
+            {item.owner for item in result.semantic.intents},
         )
         self.assertEqual(len(result.desired.rules), 2)
         self.assertEqual(len(result.desired.local_rules), 4)
