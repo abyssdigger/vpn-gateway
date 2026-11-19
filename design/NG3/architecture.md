@@ -2422,7 +2422,10 @@ stack_input:
 ```
 
 The UID and conntrack mark are lower Linux allocation values. They are not user-facing
-availability semantics and are not stored in `AvailabilityProbeIntent`.
+availability semantics and are not stored in `AvailabilityProbeIntent`. The supplied probe
+UID must identify the dedicated probe worker rather than generic root/controller traffic;
+using UID 0 as the process discriminator would not satisfy the accepted selective
+probe-process isolation boundary.
 
 This projection intentionally keeps routing and local admission owner-scoped and separate from
 payload dispatch. It does not restore the probe conntrack mark into packet routing state and
