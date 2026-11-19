@@ -1,9 +1,15 @@
-"""Pure Release-1 stack-side established-flow return-affinity projection.
+"""Pure managed-stack Profile flow-association and return-affinity projection.
 
-This owner preserves the routing domain selected by a VPN-originated flow. It is
-separate from payload_forward permission: forwarding rules decide whether traffic
-is allowed; affinity state decides which already-selected VPN routing domain owns
-the return leg.
+The historical module name is retained for migration compatibility.  The owned
+conntrack mark now represents the selected Profile for the whole flow:
+
+- VPN-originated NEW is classified by ingress path + remote source;
+- ordinary-originated NEW for a bidirectional Profile is classified by the
+  canonical outbound destination partition;
+- established host-boundary replies restore the Profile mark to the packet so
+  RPDB selects the original Profile routing table.
+
+Forwarding permission remains a separate payload_forward responsibility.
 """
 
 from __future__ import annotations
@@ -20,6 +26,7 @@ from .payload_profile import PayloadProfileRequest
 from .profile_prefix_partition import (
     ProfilePrefixPartitionError,
     build_inbound_profile_partition,
+    build_outbound_profile_partition,
 )
 from .route_priority_inventory import RoutePriorityPathRoute
 
@@ -42,8 +49,6 @@ class StackReturnAffinityAllocation:
                 raise StackReturnAffinityError(
                     f"{label} must be an integer in [1, 2^32-1]"
                 )
-
-
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,11 +125,22 @@ def allocate_stack_return_affinity(
 
 @dataclass(frozen=True, slots=True)
 class StackReturnClassifierSpec:
+    """VPN-originated NEW classifier: ingress path + remote source."""
+
     profile_id: str
     ingress: InterfaceIdentity
     remote_prefix: IPv4Network
     mark: int
-    select_initial_packet: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class StackOutboundAssociationSpec:
+    """Ordinary-originated NEW classifier for a bidirectional Profile."""
+
+    profile_id: str
+    ingress: InterfaceIdentity
+    remote_prefix: IPv4Network
+    mark: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,6 +155,7 @@ class StackReturnRuleSpec:
 class StackReturnAffinityDesired:
     host_boundary: InterfaceIdentity
     classifiers: tuple[StackReturnClassifierSpec, ...]
+    outbound_classifiers: tuple[StackOutboundAssociationSpec, ...]
     rules: tuple[StackReturnRuleSpec, ...]
 
 
@@ -148,8 +165,6 @@ def build_stack_return_affinity_desired(
     host_boundary: InterfaceIdentity,
     layout: NetworkPolicyLayout,
     allocations: Iterable[StackReturnAffinityAllocation],
-    *,
-    initial_packet_profile_ids: Iterable[str] = (),
 ) -> StackReturnAffinityDesired:
     if not isinstance(host_boundary, InterfaceIdentity):
         raise StackReturnAffinityError("host_boundary must be InterfaceIdentity")
@@ -233,34 +248,18 @@ def build_stack_return_affinity_desired(
         seen_marks.add(allocation.mark)
         seen_priorities.add(allocation.rule_priority)
 
-    initial_selection = tuple(initial_packet_profile_ids)
-    if any(not isinstance(item, str) or not item for item in initial_selection):
-        raise StackReturnAffinityError(
-            "initial_packet_profile_ids must contain non-empty Profile IDs"
-        )
-    if len(set(initial_selection)) != len(initial_selection):
-        raise StackReturnAffinityError(
-            "initial_packet_profile_ids contains duplicate Profile"
-        )
-    initial_selection_set = frozenset(initial_selection)
-
-    inbound_profile_ids = {
+    association_profile_ids = {
         profile.profile_id
         for profile in current_profiles
         if profile.direction in {Direction.INBOUND, Direction.BIDIRECTIONAL}
         and profile.ordered_paths
     }
-    if set(allocation_by_profile) != inbound_profile_ids:
+    if set(allocation_by_profile) != association_profile_ids:
         raise StackReturnAffinityError(
             "affinity allocations must exactly cover current inbound-capable Profiles with paths"
         )
-    if not initial_selection_set <= inbound_profile_ids:
-        raise StackReturnAffinityError(
-            "initial packet selection references Profile outside current inbound membership"
-        )
 
-    classifiers: list[StackReturnClassifierSpec] = []
-    active_profiles: set[str] = set()
+    inbound_classifiers: list[StackReturnClassifierSpec] = []
     for path_id in sorted(required_paths):
         try:
             fragments = build_inbound_profile_partition(
@@ -277,18 +276,35 @@ def build_stack_return_affinity_desired(
                 raise StackReturnAffinityError(
                     f"inbound fragment for {fragment.profile_id!r} has no affinity allocation"
                 )
-            classifiers.append(
+            inbound_classifiers.append(
                 StackReturnClassifierSpec(
                     profile_id=fragment.profile_id,
                     ingress=endpoint,
                     remote_prefix=fragment.remote_prefix,
                     mark=allocation.mark,
-                    select_initial_packet=(
-                        fragment.profile_id in initial_selection_set
-                    ),
                 )
             )
-            active_profiles.add(fragment.profile_id)
+
+    try:
+        outbound_fragments = build_outbound_profile_partition(current_profiles)
+    except ProfilePrefixPartitionError as exc:
+        raise StackReturnAffinityError(str(exc)) from exc
+
+    outbound_classifiers: list[StackOutboundAssociationSpec] = []
+    for fragment in outbound_fragments:
+        allocation = allocation_by_profile.get(fragment.profile_id)
+        if allocation is None:
+            # The selected Profile is outbound-only and therefore cannot use
+            # Profile +snat or require inbound return affinity.
+            continue
+        outbound_classifiers.append(
+            StackOutboundAssociationSpec(
+                profile_id=fragment.profile_id,
+                ingress=host_boundary,
+                remote_prefix=fragment.remote_prefix,
+                mark=allocation.mark,
+            )
+        )
 
     rules = tuple(
         StackReturnRuleSpec(
@@ -297,15 +313,25 @@ def build_stack_return_affinity_desired(
             table=table_by_profile[profile_id],
             priority=allocation_by_profile[profile_id].rule_priority,
         )
-        for profile_id in sorted(active_profiles)
+        for profile_id in sorted(allocation_by_profile)
     )
     return StackReturnAffinityDesired(
         host_boundary=host_boundary,
         classifiers=tuple(
             sorted(
-                classifiers,
+                inbound_classifiers,
                 key=lambda item: (
                     item.ingress.ifindex,
+                    -item.remote_prefix.prefixlen,
+                    int(item.remote_prefix.network_address),
+                    item.profile_id,
+                ),
+            )
+        ),
+        outbound_classifiers=tuple(
+            sorted(
+                outbound_classifiers,
+                key=lambda item: (
                     -item.remote_prefix.prefixlen,
                     int(item.remote_prefix.network_address),
                     item.profile_id,
