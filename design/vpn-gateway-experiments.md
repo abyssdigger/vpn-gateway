@@ -35,6 +35,7 @@ Current experiment directories:
 | EXP-069 | stack-to-tambour metadata carrier search |
 | EXP-070 | routed managed-stack endpoint candidates / Debian 12 routed-veth portability |
 | EXP-071 | managed-boundary dataplane race: netkit L3 vs routed veth |
+| EXP-072 | managed-L3 endpoint device-only host bootstrap equivalence |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -62,6 +63,7 @@ Canonical dispositions:
 | EXP-014 | PREPARED / UNPROVEN | superseded | Historical predecessor for remote-initiated multi-path return pinning; EXP-062 is the current scoped experiment. |
 | EXP-025 | TARGET-CONFIRMED NEGATIVE FINDING | historical_only | Proves stale probe conntrack identity can survive interface replacement; retained as a real lower-level limitation, but not by itself a Release-1 correctness failure. |
 | EXP-026 | PRIVILEGED-CI PASS / target confirmation open | not_selected | Narrow probe-class conntrack cleanup works in CI, but Release 1 deliberately does not adopt it: the complexity is not justified without material payload/path or accumulated-availability harm; re-enter only if such harm is demonstrated. |
+| EXP-060 | PASS | selected | Selected paired-RPDB host-bootstrap backend is confirmed. The former red CI state was an authoritative observer bug: Linux split `dst` and `dstlen` for non-/32 RPDB prefixes; normalization was fixed without changing routing semantics. |
 | EXP-061 | PASS | selected | Selected Release-1 Profile-routing-domain return affinity evidence. |
 | EXP-062 | PASS | deferred | Concrete-path affinity is technically proven and retained as a possible future inbound/bidirectional multipath extension; the current baseline remains single-path until an explicit product decision re-enters this work. |
 | EXP-063 | FAIL | not_selected | Transient packet-mark handoff across the cross-netns veth boundary failed and is rejected as the Profile/behavior association carrier. |
@@ -73,3 +75,4 @@ Canonical dispositions:
 | EXP-069 | PASS | pending_decision | No tested direct nft-usable local-only carrier survived stack -> tambour; DSCP survived only as an on-wire field. Post-result architecture disposition remains open. |
 | EXP-070 | PASS | selected | Selects the managed-L3-endpoint shape. Release 1 uses Debian-12-compatible routed veth + Proxy ARP as the default primary boundary backend; netkit L3 remains a compatible alternate realization. The stack-SNAT subtest does not supersede existing gateway-NAT semantics. |
 | EXP-071 | PASS | selected | Selected as performance evidence for the dual managed-L3-endpoint backend contract: no demonstrated dataplane reason requires netkit or excludes the Debian-12-compatible routed-veth backend. |
+| EXP-072 | PASS | selected | Confirms the production paired-RPDB bootstrap can use device-only `dev vpng0` routes with identical `/0`, main-specificity, nested-managed, dynamic-main, stack-bypass and cleanup semantics over routed veth + Proxy ARP and netkit L3. |
