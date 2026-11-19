@@ -256,6 +256,16 @@ class HostBoundaryBehaviorNftObservation:
 @dataclass(slots=True)
 class LinuxHostBoundaryBehaviorNftBackend:
     runner: NftScriptRunner
+    network_namespace: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.network_namespace is not None and (
+            not isinstance(self.network_namespace, str)
+            or not self.network_namespace
+        ):
+            raise HostBoundaryBehaviorLinuxError(
+                "network_namespace must be non-empty text or None"
+            )
 
     def observe(
         self,
@@ -268,7 +278,9 @@ class LinuxHostBoundaryBehaviorNftBackend:
             raise HostBoundaryBehaviorLinuxError(
                 "desired must be HostBoundaryBehaviorNftSpec or None"
             )
-        raw = self.runner.run(("nft", "-j", "-y", "list", "ruleset"))
+        raw = self.runner.run(
+            self._cmd("nft", "-j", "-y", "list", "ruleset")
+        )
         return parse_host_boundary_behavior_nft_observation(raw, desired)
 
     def replace(self, desired: HostBoundaryBehaviorNftSpec | None) -> None:
@@ -286,9 +298,14 @@ class LinuxHostBoundaryBehaviorNftBackend:
         if not lines:
             return
         self.runner.run_script(
-            ("nft", "-f", "-"),
+            self._cmd("nft", "-f", "-"),
             "\n".join(lines).rstrip() + "\n",
         )
+
+    def _cmd(self, *args: str) -> tuple[str, ...]:
+        if self.network_namespace is None:
+            return tuple(args)
+        return ("ip", "netns", "exec", self.network_namespace, *args)
 
 
 def converge_host_boundary_behavior_nft_once(
