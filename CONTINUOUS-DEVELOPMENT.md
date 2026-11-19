@@ -709,18 +709,32 @@ natural boundaries independent of the CD window.
   boundary; the handoff exists precisely so the next cycle can resume it without re-reviewing
   the whole repository.
 - After a logical block completes, first publish its required linear snapshot to `main`.
+- Completing the current logical block, subsystem or topic that originally triggered the CD
+  does **not** by itself complete the CD window. Unless the user explicitly constrained the
+  cycle to that one topic, the cycle scope is the current project development frontier.
 - If that completed block is snapshotted and less than three minutes remain before the nominal
   CD boundary, the CD cycle is complete.
 - Otherwise:
-  1. briefly plan the next logically adjacent development block;
+  1. select the next highest-priority sufficiently defined and unblocked logical development
+     block from the current project frontier; prefer a logically adjacent block when priority
+     is otherwise equal;
   2. continue work until the earlier of:
      - the CD interval boundary;
      - completion of that next logical block in a separate GitHub commit;
   3. if that logical block completes, publish its required snapshot and apply this rule again
      from the beginning.
-- The next block must already be sufficiently defined for autonomous development. If starting
-  it requires a new product-semantic or architectural decision that needs human agreement,
-  that decision boundary is a valid reason to end the CD cycle early.
+- A decision boundary ends the CD early only when continuing meaningful work actually requires
+  human agreement. Finishing one subsystem, reaching a design boundary that can be resolved
+  autonomously, or discovering that the original topic is complete is **not** an early-exit
+  condition while another sufficiently defined, unblocked project block remains.
+- Early exit before the time/safety boundary is therefore limited to:
+  - a required human product/process/architecture decision;
+  - an external blocker that prevents further meaningful autonomous work;
+  - absence of any sufficiently defined unblocked logical development block;
+  - the existing less-than-three-minutes safety-margin rule above.
+- These rules do not relax the `CYCLE_INTERVAL` boundary. As elapsed time approaches the
+  interval, session safety and a usable handoff take precedence over starting or finishing more
+  work.
 - Large overruns beyond `CYCLE_INTERVAL` are undesirable because they increase the risk that
   the interface/session fails before a usable handoff is delivered.
 
