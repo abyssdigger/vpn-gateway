@@ -5,11 +5,16 @@ import unittest
 
 from rou.alpha_probe_projection import (
     AlphaProbeProjectionError,
+    build_alpha_explicit_probe_desired,
     build_alpha_explicit_probe_projection,
 )
 from rou.binding import LogicalPathId
 from rou.domain import Direction
+from rou.interface_identity import InterfaceIdentity
+from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.payload_profile import PayloadProfileRequest
+from rou.probe_policy import ProbeLocalPlatform
+from rou.route_priority_inventory import RoutePriorityPathRoute
 from rou.release1_config import (
     AvailabilityCheckConfig,
     ProfileRelease1Config,
@@ -106,6 +111,50 @@ class AlphaProbeProjectionTests(unittest.TestCase):
                     )
                 },
             )
+
+    def test_shared_layout_allocates_payload_and_probe_together(self):
+        profiles = (profile(),)
+        result = build_alpha_explicit_probe_desired(
+            profiles,
+            {
+                "corp": config(
+                    AvailabilityCheckConfig(
+                        "icmp",
+                        IPv4Address("198.51.100.7"),
+                    )
+                )
+            },
+            (
+                RoutePriorityPathRoute(
+                    A,
+                    InterfaceIdentity("wg0", 10),
+                ),
+                RoutePriorityPathRoute(
+                    B,
+                    InterfaceIdentity("tun0", 11),
+                ),
+            ),
+            NG3_LINUX_POLICY_PLATFORM,
+            ProbeLocalPlatform(4242, 0x20000001),
+        )
+
+        self.assertEqual(len(result.layout.payload), 1)
+        self.assertEqual(len(result.layout.probe), 2)
+        self.assertEqual(
+            tuple(item.owner for item in result.layout.probe),
+            tuple(item.owner for item in result.semantic.intents),
+        )
+        self.assertEqual(len(result.desired.rules), 2)
+        self.assertEqual(len(result.desired.local_rules), 4)
+        self.assertEqual(
+            {route.table for route in result.desired.routes},
+            {item.table for item in result.layout.probe},
+        )
+        self.assertTrue(
+            {item.table for item in result.layout.payload}.isdisjoint(
+                {item.table for item in result.layout.probe}
+            )
+        )
 
     def test_missing_release1_profile_config_is_rejected(self):
         with self.assertRaisesRegex(
