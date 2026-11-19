@@ -2206,6 +2206,8 @@ the semantic tuple happens to be identical to the previously disabled one.
 The token has no routing-policy meaning. It exists only to reject stale physical results.
 No logical evidence epoch, attempt journal, result history or replay ordering is introduced.
 
+`availability_observation_tick.py::run_availability_observation_tick` is the bounded external-wakeup composition for ongoing observation: it synchronizes current subjects, runs at most one exact-readiness-gated attempt per subject, applies only returned fresh evidence, and returns the resulting effective Profile order. It does not schedule itself or retry within the tick; cadence remains a local outer-runtime parameter.
+
 The executable bounded reference uses
 `probe_runtime.py::AvailabilityProbeAgent` for one subject context and
 `probe_runtime.py::AvailabilityProbeRuntime` as the bounded multi-channel implementation of
