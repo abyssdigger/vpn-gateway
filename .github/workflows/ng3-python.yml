@@ -15,6 +15,7 @@ on:
       - "design/experiments/EXP-065 NG3 probe RPDB selector shape/**"
       - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
       - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
+      - "design/experiments/EXP-068 NG3 continuous availability failover/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -57,6 +58,7 @@ on:
       - "design/experiments/EXP-065 NG3 probe RPDB selector shape/**"
       - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
       - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
+      - "design/experiments/EXP-068 NG3 continuous availability failover/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -177,6 +179,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/exp067_icmp_driver.py"
+      - name: EXP-068 continuous availability failover
+        run: >-
+          sudo python3
+          "design/experiments/EXP-068 NG3 continuous availability failover/exp068_continuous_availability.py"
 
 
   linux-forwarding-barrier:

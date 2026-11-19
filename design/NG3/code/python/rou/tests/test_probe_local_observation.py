@@ -206,5 +206,30 @@ class ProbeLocalObservationTests(unittest.TestCase):
         self.assertEqual(len(result.conflicts), 1)
 
 
+
+    def test_symbolic_icmp_protocol_json_is_equivalent(self):
+        symbolic_rules = []
+        for source, protocol_index in (
+            (output_rule(), 3),
+            (input_rule(), 2),
+        ):
+            row = json.loads(source.canonical_json)
+            row["rule"]["expr"][protocol_index]["match"]["right"] = "icmp"
+            symbolic_rules.append(
+                NftNamespaceObject(
+                    "rule",
+                    json.dumps(row, sort_keys=True, separators=(",", ":")),
+                    source.source_order,
+                )
+            )
+
+        value = compare_probe_local(
+            observation(*symbolic_rules),
+            (EP,),
+            desired(),
+        )
+        self.assertTrue(value.desired_confirmed)
+        self.assertEqual(value.conflicts, ())
+
 if __name__ == "__main__":
     unittest.main()
