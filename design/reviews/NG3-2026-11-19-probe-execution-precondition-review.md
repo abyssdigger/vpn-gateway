@@ -77,7 +77,10 @@ Focused tests cover:
 - missing routing selector blocks readiness while local side remains exact;
 - missing probe-local admission blocks readiness while routing side remains exact.
 
-The branch NG3 unit workflow for the final code SHA is the execution authority.
+NG3 Python workflow run `44490146781` on code SHA
+`129916f149dac43d5c7facc34414c7fde6d44137` passed `unit`,
+`linux-probe-runtime` and `linux-structural-inventory-shape`; the unit suite includes all
+focused readiness-gate tests above.
 
 ## Simplification review
 
@@ -110,5 +113,4 @@ none
 
 ## Verdict
 
-**ACCEPT**, conditional on the branch unit suite passing at the final code SHA or an exact
-descendant with no semantic change to this unit.
+**ACCEPT.** The readiness gate is covered by successful current workflow evidence.
