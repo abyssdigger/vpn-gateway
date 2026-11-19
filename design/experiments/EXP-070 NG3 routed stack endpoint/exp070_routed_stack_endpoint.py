@@ -325,14 +325,73 @@ table ip e70nkh {{
     ns(STACK, "nft", "-f", "-", input_text=stack_nft)
     ns(HOST, "nft", "-f", "-", input_text=host_nft)
 
-    # Generate stack -> host packet on the netkit pair.
+    # One-way reachability is enough for carrier survival: the host-side observer must see
+    # the exact mark on a packet emitted by STACK. Return routing is a separate question.
     ns(STACK, "ip", "route", "replace", f"{HOST_LAN}/32", "dev", NK_STACK)
-    ok = ping(STACK, NK_STACK, HOST_LAN)
+    ping_ok = ping(STACK, NK_STACK, HOST_LAN)
     src = nft_counter(STACK, "e70nks", "e70-set-mark")
     dst = nft_counter(HOST, "e70nkh", "e70-see-mark")
-    good = ok and src > 0 and dst > 0
-    print(f"EXP070_NETKIT_SCRUB_NONE_MARK={'PASS' if good else 'FAIL'} source_packets={src} host_packets={dst}", flush=True)
+    good = src > 0 and dst > 0
+    print(
+        f"EXP070_NETKIT_SCRUB_NONE_MARK={'PASS' if good else 'FAIL'} "
+        f"source_packets={src} host_packets={dst} roundtrip={ping_ok}",
+        flush=True,
+    )
     return good
+
+
+def phase_netkit_stack_nat() -> tuple[bool, bool]:
+    # Present STACK as an L3 endpoint to HOST: every host-side route points only at
+    # the host-visible netkit device, never at a gateway IP.
+    ns(STACK, "ip", "addr", "add", f"{STACK_NETKIT_IP}/32", "dev", NK_STACK)
+    ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{NK_STACK}.rp_filter=0")
+    ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{NK_HOST}.rp_filter=0")
+
+    ns(HOST, "ip", "route", "replace", f"{STACK_NETKIT_IP}/32", "dev", NK_HOST)
+    ns(HOST, "ip", "route", "replace", f"{REMOTE_IP}/32", "dev", NK_HOST)
+    ns(HOST, "ip", "route", "replace", f"{REMOTE_NO_NAT_IP}/32", "dev", NK_HOST)
+    ns(STACK, "ip", "route", "replace", "192.0.2.0/24", "dev", NK_STACK)
+    ns(LAN, "ip", "route", "replace", f"{STACK_NETKIT_IP}/32", "via", HOST_LAN, "dev", L_H)
+    ns(LAN, "ip", "route", "replace", f"{REMOTE_NO_NAT_IP}/32", "via", HOST_LAN, "dev", L_H)
+
+    nat = f"""
+table ip e70nknat {{
+  chain postrouting {{
+    type nat hook postrouting priority srcnat; policy accept;
+    ip saddr {REMOTE_IP} oifname "{NK_STACK}" counter masquerade comment "e70-netkit-snat"
+  }}
+}}
+"""
+    ns(STACK, "nft", "-f", "-", input_text=nat)
+
+    server_nat = start_server(LAN, LAN_IP, 17011)
+    ok_nat = client(REMOTE, REMOTE_IP, LAN_IP, 17011, "NETKIT-NAT")
+    peer_nat = None
+    if ok_nat:
+        peer_nat = read_peer(server_nat)
+    else:
+        if server_nat.poll() is None:
+            server_nat.kill(); server_nat.communicate(timeout=1)
+    nat_good = ok_nat and peer_nat == STACK_NETKIT_IP
+    print(
+        f"EXP070_NETKIT_STACK_SNAT={'PASS' if nat_good else 'FAIL'} peer={peer_nat}",
+        flush=True,
+    )
+
+    server_plain = start_server(LAN, LAN_IP, 17012)
+    ok_plain = client(REMOTE, REMOTE_NO_NAT_IP, LAN_IP, 17012, "NETKIT-PLAIN")
+    peer_plain = None
+    if ok_plain:
+        peer_plain = read_peer(server_plain)
+    else:
+        if server_plain.poll() is None:
+            server_plain.kill(); server_plain.communicate(timeout=1)
+    plain_good = ok_plain and peer_plain == REMOTE_NO_NAT_IP
+    print(
+        f"EXP070_NETKIT_NO_SNAT={'PASS' if plain_good else 'FAIL'} peer={peer_plain}",
+        flush=True,
+    )
+    return nat_good, plain_good
 
 
 def main():
@@ -355,7 +414,7 @@ def main():
 
         nk_ok, nk_detail = probe_netkit()
         print(f"EXP070_NETKIT_SUPPORT={'SUPPORTED' if nk_ok else 'UNAVAILABLE'} detail={nk_detail!r}", flush=True)
-        nk_dev = nk_mark = False
+        nk_dev = nk_mark = nk_nat = nk_plain = False
         if nk_ok:
             setup_netkit(scrub_none=False)
             nk_dev = phase_netkit_dev_route()
@@ -368,11 +427,19 @@ def main():
             nk_mark = phase_netkit_mark_survival()
             cleanup_netkit()
 
+            # Final production-shaped candidate: L3 device identity on HOST, Profile/NAT in STACK.
+            ns(HOST, "nft", "delete", "table", "ip", "e70nkh", check=False)
+            ns(STACK, "nft", "delete", "table", "ip", "e70nks", check=False)
+            setup_netkit(scrub_none=False)
+            nk_nat, nk_plain = phase_netkit_stack_nat()
+            cleanup_netkit()
+
         print(
             "EXP070_SUMMARY "
             f"ipvlan_external={ipv_external} ipvlan_stack_nat={ipv_nat} "
             f"ipvlan_dev_only={dev_only} ipvlan_via={via} "
-            f"netkit_dev_only={nk_dev} netkit_mark={nk_mark}",
+            f"netkit_dev_only={nk_dev} netkit_mark={nk_mark} "
+            f"netkit_stack_nat={nk_nat} netkit_no_snat={nk_plain}",
             flush=True,
         )
         print("EXP070_RESULT=PASS", flush=True)
