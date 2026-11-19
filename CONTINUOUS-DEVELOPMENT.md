@@ -839,19 +839,15 @@ If that final review produces a finding, fix it and repeat the final review on t
 baseline. Multiple consecutive clean reviews without intervening code changes are not
 required.
 
-## Evidence hierarchy
+## Evidence sufficiency
 
-Safety-relevant kernel/userspace behavior must not be inferred from documentation or unit
-tests when a practical stronger experiment is feasible.
-
-Use, in order of increasing environment specificity:
-
-1. rootless deterministic/unit/property tests;
-2. disposable privileged namespace / GitHub CI;
-3. real target topology.
-
-The environment is chosen by what the hypothesis requires, not by a fixed preference for
-the most expensive stand.
+Choose the cheapest environment that can establish the required technical fact,
+using the environment-selection procedure in
+[Ambiguity and experiment procedure](#ambiguity-and-experiment-procedure).
+Do not infer safety-relevant kernel/userspace behavior from documentation or
+unit tests when a practical stronger experiment is needed to establish that
+behavior. Experiment-stand execution rules are in
+`design/experiments/README.md`.
 
 ## Backend ownership
 
