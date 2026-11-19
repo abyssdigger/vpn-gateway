@@ -314,7 +314,7 @@ NG3 requirement merely because it existed before.
 
    **[VPNG0004-R4.R6.R1.R6]** *Чтобы optional gateway NAT за пределами managed network domain не превращал явную boundary-функцию в произвольное владение host networking.* | Когда Profile ordinary-side gateway NAT включён, VPN-GATE должен создавать, проверять и удалять только явно принадлежащие ему host-boundary NAT contributions, необходимые для этой функции; они должны быть ограничены traffic, вышедшим из managed boundary после принятой VPN policy, и не должны давать VPN-GATE право произвольно изменять несвязанный host firewall/routing state. [closed]
 
-    **[VPNG0004-R4.R6.R1.R6.R1]** *Чтобы ограничение ordinary-side gateway NAT только traffic, для которого эта функция запрошена, сохранялось при совместном использовании host boundary несколькими Profiles.* | Ordinary-side gateway NAT должен применяться только к VPN→ordinary traffic, для которого принятая Profile policy явно запрашивает `+snat`; traffic Profile без `+snat` не должен подвергаться этой трансляции независимо от пересечения remote prefixes, общего host boundary или различающихся ingress VPN paths.
+    **[VPNG0004-R4.R6.R1.R6.R1]** *Чтобы ограничение ordinary-side gateway NAT только traffic, для которого эта функция запрошена, сохранялось при совместном использовании host boundary несколькими Profiles.* | Ordinary-side gateway NAT должен применяться только к VPN→ordinary traffic, для которого принятая Profile policy явно запрашивает `+snat`; traffic Profile без `+snat` не должен подвергаться этой трансляции независимо от пересечения remote prefixes, общего host boundary или различающихся ingress VPN paths. [closed]
    ↳ [decomp: VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2]
 
 ## Lifecycle and recovery
