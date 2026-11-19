@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 import json
 import unittest
 
@@ -11,6 +11,8 @@ from rou.forwarding_gate import ForwardingGateState
 from rou.interface_identity import InterfaceIdentity
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.local_publication_policy import LocalPublicationDesiredState
+from rou.network_policy_layout import ProbePolicyOwner
+from rou.probe_policy import ProbeLocalHook, ProbeLocalRuleSpec
 from rou.nft_namespace_inventory import (
     NftNamespaceObservation,
     NftNamespaceStatus,
@@ -28,6 +30,7 @@ from rou.structural_policy_mutation import (
     StructuralPolicyMutationStatus,
     StructuralPolicyPhysicalSnapshot,
     converge_structural_policy_step_once,
+    structural_policy_distance,
 )
 from rou.structural_policy_plan import StructuralPolicyStepKind
 from rou.structural_routing_inventory import (
@@ -76,6 +79,22 @@ NFT_DESIRED = CompositeNftDesiredState(
     LocalPublicationDesiredState(()),
 )
 
+PROBE_OWNER = ProbePolicyOwner("corp", PATH)
+PROBE_LOCAL_SPEC = ProbeLocalRuleSpec(
+    owner=PROBE_OWNER,
+    hook=ProbeLocalHook.INPUT,
+    endpoint=VPN,
+    target=IPv4Address("198.51.100.7"),
+    conntrack_mark=0x20000001,
+)
+PROBE_NFT_DESIRED = CompositeNftDesiredState(
+    PayloadForwardDesiredState(()),
+    PayloadNatDesiredState(()),
+    DeviceFirewallDesiredState(()),
+    LocalPublicationDesiredState(()),
+    probe_local=(PROBE_LOCAL_SPEC,),
+)
+
 
 def scaffold_observation():
     return parse_nft_namespace_ruleset(json.dumps({"nftables": [
@@ -105,6 +124,71 @@ def scaffold_observation():
             "comment": "vpn-gate:ng3:payload-postrouting-v1",
         }},
     ]}))
+
+
+def probe_local_observation():
+    payload = json.loads(json.dumps({"nftables": [
+        {"table": {
+            "family": "ip", "name": "vpn_gate",
+            "comment": "vpn-gate:ng3:owner-v1",
+        }},
+        {"chain": {
+            "family": "ip", "table": "vpn_gate", "name": "stack_input",
+            "type": "filter", "hook": "input", "prio": 0,
+            "policy": "drop", "comment": "vpn-gate:ng3:stack-input-v1",
+        }},
+        {"chain": {
+            "family": "ip", "table": "vpn_gate", "name": "payload_forward",
+            "type": "filter", "hook": "forward", "prio": 0,
+            "policy": "drop", "comment": "vpn-gate:ng3:payload-forward-v1",
+        }},
+        {"chain": {
+            "family": "ip", "table": "vpn_gate", "name": "stack_output",
+            "type": "filter", "hook": "output", "prio": 0,
+            "policy": "drop", "comment": "vpn-gate:ng3:stack-output-v1",
+        }},
+        {"chain": {
+            "family": "ip", "table": "vpn_gate", "name": "payload_postrouting",
+            "type": "nat", "hook": "postrouting", "prio": 100,
+            "policy": "accept",
+            "comment": "vpn-gate:ng3:payload-postrouting-v1",
+        }},
+        {"rule": {
+            "family": "ip",
+            "table": "vpn_gate",
+            "chain": "stack_input",
+            "handle": 50,
+            "comment": "vpn-gate:ng3:probe-local-v1",
+            "expr": [
+                {"match": {
+                    "left": {"meta": {"key": "iif"}},
+                    "op": "==",
+                    "right": "vpn0",
+                }},
+                {"match": {
+                    "left": {
+                        "payload": {"protocol": "ip", "field": "saddr"}
+                    },
+                    "op": "==",
+                    "right": "198.51.100.7",
+                }},
+                {"match": {
+                    "left": {
+                        "payload": {"protocol": "ip", "field": "protocol"}
+                    },
+                    "op": "==",
+                    "right": 1,
+                }},
+                {"match": {
+                    "left": {"ct": {"key": "mark"}},
+                    "op": "==",
+                    "right": 0x20000001,
+                }},
+                {"accept": None},
+            ],
+        }},
+    ]}))
+    return parse_nft_namespace_ruleset(json.dumps(payload))
 
 
 OBS_GUARD = ObservedManagedRoute(
@@ -139,7 +223,7 @@ OBS_RULE = ObservedManagedRule(
 )
 
 
-def snapshot(*, routes=(), rules=(), interfaces=(HOST, VPN)):
+def snapshot(*, routes=(), rules=(), interfaces=(HOST, VPN), nft=None):
     return StructuralPolicyPhysicalSnapshot(
         interfaces=interfaces,
         routing=StructuralRoutingObservation(
@@ -147,7 +231,7 @@ def snapshot(*, routes=(), rules=(), interfaces=(HOST, VPN)):
             rules=rules,
             conflicts=(),
         ),
-        nft=scaffold_observation(),
+        nft=scaffold_observation() if nft is None else nft,
     )
 
 
@@ -193,6 +277,10 @@ class FakeBackend:
     def add_nat_rule(self, value): self._act("add_nat_rule", value)
     def apply_local_publication_step(self, value):
         self._act("apply_local_publication_step", value)
+    def apply_integration_local_step(self, value):
+        self._act("apply_integration_local_step", value)
+    def apply_probe_local_step(self, value):
+        self._act("apply_probe_local_step", value)
 
 
 class StructuralPolicyMutationTests(unittest.TestCase):
@@ -206,6 +294,58 @@ class StructuralPolicyMutationTests(unittest.TestCase):
             NG3_LINUX_POLICY_PLATFORM,
         )
         return gate, result
+
+    def test_probe_local_diff_counts_in_structural_distance(self):
+        from rou.structural_policy_mutation import compare_structural_policy
+
+        comparison = compare_structural_policy(
+            snapshot(),
+            ROUTING_DESIRED,
+            PROBE_NFT_DESIRED,
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        self.assertEqual(len(comparison.nft.probe_local.missing), 1)
+        self.assertEqual(
+            structural_policy_distance(comparison),
+            4,
+        )
+
+    def test_probe_local_repair_uses_structural_backend_delegate(self):
+        exact_routes = (OBS_GUARD, OBS_PATH)
+        backend = FakeBackend(
+            snapshot(
+                routes=exact_routes,
+                rules=(OBS_RULE,),
+            ),
+            snapshot(
+                routes=exact_routes,
+                rules=(OBS_RULE,),
+                nft=probe_local_observation(),
+            ),
+            snapshot(
+                routes=exact_routes,
+                rules=(OBS_RULE,),
+                nft=probe_local_observation(),
+            ),
+        )
+        gate = FakeGate()
+        result = converge_structural_policy_step_once(
+            gate,
+            backend,
+            ROUTING_DESIRED,
+            PROBE_NFT_DESIRED,
+            NG3_LINUX_POLICY_PLATFORM,
+        )
+        self.assertEqual(
+            result.status,
+            StructuralPolicyMutationStatus.CONFIRMED,
+        )
+        self.assertTrue(result.confirmed)
+        self.assertEqual(
+            backend.actions[0][0],
+            "apply_probe_local_step",
+        )
+        self.assertEqual(gate.state, ForwardingGateState.ENABLED)
 
     def test_absent_invariant_scaffold_is_precondition_not_conflict(self):
         backend = FakeBackend(
