@@ -250,17 +250,15 @@ def parse_release1_config(text: str) -> Release1Config:
             profiles[profile_id] = ProfileRelease1Config(False, False, None)
             continue
         _, gateway_nat, route_return = profile_modes[profile_id]
+        availability_check, uses_device_default = _parse_profile_availability(
+            body.get("availability_check"),
+            f"profile.{profile_id}.availability_check",
+        )
         profiles[profile_id] = ProfileRelease1Config(
             ordinary_gateway_nat=gateway_nat,
             route_return=route_return,
-            availability_check=_parse_profile_availability(
-                body.get("availability_check"),
-                f"profile.{profile_id}.availability_check",
-            )[0],
-            availability_uses_device_default=_parse_profile_availability(
-                body.get("availability_check"),
-                f"profile.{profile_id}.availability_check",
-            )[1],
+            availability_check=availability_check,
+            availability_uses_device_default=uses_device_default,
             reserve_device_ids=profile_reserve_devices[profile_id],
         )
 
