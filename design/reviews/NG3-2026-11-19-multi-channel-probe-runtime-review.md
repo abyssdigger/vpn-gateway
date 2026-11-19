@@ -79,8 +79,10 @@ Focused unit coverage includes:
 - duplicate owner is rejected;
 - failed multi-owner reconfiguration does not partially mutate earlier contexts.
 
-The branch NG3 unit workflow for the final code SHA is the execution authority; the workflow
-may be queued independently of this review commit.
+NG3 Python workflow run `44490146781` on descendant code SHA
+`129916f149dac43d5c7facc34414c7fde6d44137` passed `unit`,
+`linux-probe-runtime` and `linux-structural-inventory-shape`. The unit run includes the
+multi-channel runtime regression cases above.
 
 ## Simplification review
 
@@ -113,5 +115,4 @@ none
 
 ## Verdict
 
-**ACCEPT**, conditional on the branch unit suite passing at the final code SHA or an exact
-descendant with no semantic change to this unit.
+**ACCEPT.** Successful descendant workflow evidence covers the reviewed runtime semantics.
