@@ -120,18 +120,26 @@ remote_port = 11940
                 local_address=IPv4Address("198.19.255.2"),
             )
 
-    def test_alpha_rejects_canonical_features_not_yet_materialized(self):
-        with self.assertRaisesRegex(Exception, "availability_check"):
-            AlphaPreparedPolicy.from_text(
-                CONFIG.replace(
-                    'device_order = ["ovpn"]',
-                    'device_order = ["ovpn"]\n'
-                    '[profile.alpha.availability_check]\n'
-                    'mechanism = "icmp"\n'
-                    'target = "10.253.0.1"',
-                ),
-                local_address=IPv4Address("198.19.255.2"),
-            )
+    def test_alpha_accepts_availability_but_still_rejects_unmaterialized_snat(self):
+        availability = AlphaPreparedPolicy.from_text(
+            CONFIG.replace(
+                'device_order = ["ovpn"]',
+                'device_order = ["ovpn"]\n'
+                '[profile.alpha.availability_check]\n'
+                'mechanism = "icmp"\n'
+                'target = "10.253.0.1"',
+            ),
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        host_boundary = InterfaceIdentity("vnga-inner0", 7)
+        vpn0 = InterfaceIdentity("vpn0", 11)
+        desired = availability.build_current(
+            host_boundary,
+            (InterfaceIdentity("lo", 1), host_boundary, vpn0),
+        )
+        self.assertIsNotNone(availability.last_probe_assembly)
+        self.assertEqual(len(availability.last_probe_assembly.intents), 1)
+        self.assertEqual(len(desired.nft.probe_local), 2)
 
         with self.assertRaisesRegex(Exception, r"requests \+snat"):
             AlphaPreparedPolicy.from_text(
