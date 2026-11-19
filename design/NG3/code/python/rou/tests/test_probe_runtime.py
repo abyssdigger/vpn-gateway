@@ -8,8 +8,10 @@ from rou.binding import LogicalPathId
 from rou.interface_identity import InterfaceIdentity
 from rou.network_policy_layout import ProbePolicyOwner
 from rou.probe_policy import AvailabilityProbeIntent
+from rou.route_priority_inventory import RoutePriorityPathRoute
 from rou.probe_runtime import (
     AvailabilityProbeAgent,
+    AvailabilityProbeRuntime,
     ProbeRuntimeError,
     ProbeTechnicalObservation,
     ProbeTechnicalOutcome,
@@ -138,6 +140,100 @@ class ProbeRuntimeTests(unittest.TestCase):
                 "unexpected",
             )
 
+
+
+
+class AvailabilityProbeRuntimeTests(unittest.TestCase):
+    def test_multiple_subjects_are_active_concurrently(self):
+        runtime = AvailabilityProbeRuntime()
+        contexts = runtime.configure(
+            (
+                intent(profile="corp", path=A, target=TARGET_A),
+                intent(profile="guest", path=B, target=TARGET_B),
+            ),
+            (
+                RoutePriorityPathRoute(A, EP_A1),
+                RoutePriorityPathRoute(B, InterfaceIdentity("vpn1", 20)),
+            ),
+        )
+        self.assertEqual(len(contexts), 2)
+        self.assertEqual(
+            {context.intent.owner.profile_id for context in contexts},
+            {"corp", "guest"},
+        )
+
+    def test_disappear_reappear_gets_fresh_generation_and_rejects_old_result(self):
+        runtime = AvailabilityProbeRuntime()
+        owner = ProbePolicyOwner("corp", A)
+        runtime.configure(
+            (intent(),),
+            (RoutePriorityPathRoute(A, EP_A1),),
+        )
+        old = runtime.begin_attempt(owner)
+
+        runtime.configure((), ())
+        self.assertIsNone(
+            runtime.accept_result(
+                owner,
+                old,
+                ProbeTechnicalObservation(ProbeTechnicalOutcome.REPLY),
+            )
+        )
+
+        runtime.configure(
+            (intent(),),
+            (RoutePriorityPathRoute(A, EP_A1),),
+        )
+        new = runtime.begin_attempt(owner)
+        self.assertGreater(new.generation, old.generation)
+        self.assertIsNone(
+            runtime.accept_result(
+                owner,
+                old,
+                ProbeTechnicalObservation(ProbeTechnicalOutcome.REPLY),
+            )
+        )
+
+    def test_endpoint_replacement_invalidates_old_attempt(self):
+        runtime = AvailabilityProbeRuntime()
+        owner = ProbePolicyOwner("corp", A)
+        runtime.configure(
+            (intent(),),
+            (RoutePriorityPathRoute(A, EP_A1),),
+        )
+        old = runtime.begin_attempt(owner)
+        runtime.configure(
+            (intent(),),
+            (RoutePriorityPathRoute(A, EP_A2),),
+        )
+        new = runtime.begin_attempt(owner)
+        self.assertGreater(new.generation, old.generation)
+        self.assertIsNone(
+            runtime.accept_result(
+                owner,
+                old,
+                ProbeTechnicalObservation(ProbeTechnicalOutcome.NO_REPLY),
+            )
+        )
+
+    def test_missing_current_path_realization_is_rejected(self):
+        runtime = AvailabilityProbeRuntime()
+        with self.assertRaisesRegex(
+            ProbeRuntimeError,
+            "no current path realization",
+        ):
+            runtime.configure((intent(),), ())
+
+    def test_duplicate_owner_is_rejected(self):
+        runtime = AvailabilityProbeRuntime()
+        with self.assertRaisesRegex(
+            ProbeRuntimeError,
+            "duplicate availability probe owner",
+        ):
+            runtime.configure(
+                (intent(), intent()),
+                (RoutePriorityPathRoute(A, EP_A1),),
+            )
 
 if __name__ == "__main__":
     unittest.main()
