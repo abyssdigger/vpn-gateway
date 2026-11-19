@@ -211,9 +211,24 @@ table ip e70nat {{
     server = start_server(LAN, LAN_IP, 17002)
     ok = client(REMOTE, REMOTE_IP, LAN_IP, 17002, "NAT")
     if not ok:
+        nat_count = nft_counter(STACK, "e70nat", "e70-snat")
+        stack_route = ns(STACK, "ip", "-4", "route", "get", LAN_IP, "from", REMOTE_IP, check=False)
+        host_route = ns(HOST, "ip", "-4", "route", "get", LAN_IP, check=False)
+        stack_link = ns(STACK, "ip", "-s", "-j", "link", "show", "dev", IPVL, check=False)
+        host_link = ns(HOST, "ip", "-s", "-j", "link", "show", "dev", H_UP, check=False)
+        lan_link = ns(LAN, "ip", "-s", "-j", "link", "show", "dev", L_H, check=False)
         if server.poll() is None:
             server.kill(); server.communicate(timeout=1)
-        print("EXP070_IPVLAN_STACK_SNAT=FAIL client", flush=True)
+        print(
+            "EXP070_IPVLAN_STACK_SNAT=FAIL "
+            f"nat_packets={nat_count} "
+            f"stack_route={stack_route.stdout.strip()!r} "
+            f"host_route={host_route.stdout.strip()!r}",
+            flush=True,
+        )
+        print("EXP070_IPVLAN_DIAG_STACK_LINK=" + stack_link.stdout.strip(), flush=True)
+        print("EXP070_IPVLAN_DIAG_HOST_LINK=" + host_link.stdout.strip(), flush=True)
+        print("EXP070_IPVLAN_DIAG_LAN_LINK=" + lan_link.stdout.strip(), flush=True)
         return False
     peer = read_peer(server)
     good = peer == STACK_IPVL_IP
