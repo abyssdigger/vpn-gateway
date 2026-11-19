@@ -31,7 +31,7 @@ Current trace:
 | shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
 | PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
 | PayloadPolicyCalculator NEW-flow Profile classification | `profile_classification.py` | `NG3-2026-11-16-profile-classification-code-review.md` |
-| PayloadTrafficManager bounded availability confirmation + Profile active-route state | `availability_confirmation.py`, `availability_routing_state.py` | `NG3-2026-11-16-availability-confirmation-code-review.md`, `NG3-2026-11-18-availability-routing-state-review.md` |
+| PayloadTrafficManager bounded availability confirmation + Profile active-route state | `availability_confirmation.py`, `availability_routing_state.py`, `availability_manager.py` | `NG3-2026-11-16-availability-confirmation-code-review.md`, `NG3-2026-11-18-availability-routing-state-review.md` |
 | AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md`, `NG3-2026-11-18-sticky-reserve-reference-code-review.md` |
 | NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
 | NetworkPolicyExecutor re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
@@ -1635,6 +1635,9 @@ No unbounded attempt history, evidence journal or replay log is justified.
 
 The Manager consumes semantic availability evidence, not raw probe execution results.
 
+The executable bounded composition is `availability_manager.py::AvailabilityManager`: it synchronizes current probe contexts, resets confirmation on context replacement, applies only matching fresh `ProbeEvidence`, and projects the resulting problem set into effective `PayloadProfileRequest` order using the existing sticky/reserve routing state.
+
+
 Normalized evidence:
 
 ```text
@@ -1689,8 +1692,7 @@ On either state transition, obsolete progress is reset.
 
 No observation history, time window, replay log or unbounded attempt count is retained.
 
-Adaptation consumes evidence from the user-selected availability criterion. For the first
-release, that criterion is ICMP with explicit or derived target semantics defined below.
+Adaptation consumes evidence from the user-selected availability criterion. For the first release, that criterion is a concrete ICMP + IPv4 description resolved from either the corresponding Device default or the Profile override defined below.
 
 ## 4.4. Availability affects priority only
 
