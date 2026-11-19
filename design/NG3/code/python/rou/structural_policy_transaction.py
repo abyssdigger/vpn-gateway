@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Callable
 
 from .composite_nft_policy import CompositeNftDesiredState
 from .forwarding_gate import ForwardingGateBackend
@@ -48,6 +49,7 @@ def converge_structural_policy(
     routing_desired: PayloadRoutingDesiredState,
     nft_desired: CompositeNftDesiredState,
     platform: NetworkPolicyPlatformSpace,
+    activation_precondition: Callable[[], bool] | None = None,
 ) -> StructuralPolicyTransactionResult:
     """Drive fresh one-step convergence until confirmed or the transaction stops.
 
@@ -74,6 +76,7 @@ def converge_structural_policy(
             routing_desired,
             nft_desired,
             platform,
+            activation_precondition=activation_precondition,
         )
         attempts.append(attempt)
 
