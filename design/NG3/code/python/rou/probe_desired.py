@@ -47,6 +47,21 @@ def build_probe_desired_assembly(
         raise ProbeDesiredAssemblyError(
             "payload_profiles must contain PayloadProfileRequest"
         )
+    profile_ids = tuple(profile.profile_id for profile in profiles)
+    if len(set(profile_ids)) != len(profile_ids):
+        raise ProbeDesiredAssemblyError(
+            "payload_profiles contains duplicate Profile"
+        )
+    enabled_profile_ids = {
+        profile_id
+        for profile_id, profile in config.structural.profiles.items()
+        if profile.enabled
+    }
+    if set(profile_ids) != enabled_profile_ids:
+        raise ProbeDesiredAssemblyError(
+            "payload_profiles does not match enabled configuration Profiles"
+        )
+
     if any(not isinstance(item, RoutePriorityPathRoute) for item in routes):
         raise ProbeDesiredAssemblyError(
             "path_routes must contain RoutePriorityPathRoute"
