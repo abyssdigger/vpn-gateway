@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from ipaddress import IPv4Address, IPv4Network
 
 from rou.binding import LogicalPathId
 from rou.forwarding_gate import ForwardingGateState
@@ -12,7 +13,11 @@ from rou.iproute_priority_backend import SubprocessCommandRunner
 from rou.linux_forwarding_gate import LinuxForwardingGateBackend
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_payload_nat import LinuxPayloadNatBackend
-from rou.payload_nat_desired import PayloadMasqueradeSpec, PayloadNatDesiredState
+from rou.payload_nat_desired import (
+    PayloadMasqueradeSpec,
+    PayloadNatDesiredState,
+    ProfileGatewayMasqueradeSpec,
+)
 from rou.payload_nat_mutation import (
     PayloadNatMutationStatus, converge_payload_nat_step_once,
 )
@@ -107,6 +112,29 @@ def main():
         assert replacement.status is PayloadNatMutationStatus.CONFIRMED, replacement
         assert replacement.confirmed and not replacement.final.stale
         assert gate.observe_forwarding_gate() is ForwardingGateState.DISABLED
+
+        gateway = ProfileGatewayMasqueradeSpec(
+            profile_id="remote",
+            path_id=path_id,
+            ingress=new,
+            egress=host,
+            remote_source=IPv4Network("10.74.0.0/16"),
+            excluded_host_destinations=(
+                IPv4Address("127.0.0.1"),
+                IPv4Address("192.0.2.1"),
+            ),
+        )
+        gateway_desired = PayloadNatDesiredState((new_spec, gateway))
+        gateway_add = converge_payload_nat_step_once(
+            gate, backend, gateway_desired,
+        )
+        assert gateway_add.status is PayloadNatMutationStatus.CONFIRMED, gateway_add
+        assert gateway_add.confirmed
+        assert gateway in gateway_add.final.confirmed
+        ruleset = ns_run(namespace, "nft", "-j", "list", "chain",
+                         "ip", "vpn_gate", "payload_postrouting")
+        assert "profile-gateway-nat-v1" in ruleset, ruleset
+        print("NG3_STACK_PRIVATE_GATEWAY_NAT_DRIVER=PASS")
 
         before = backend.observe_nat_snapshot()
         ns_run(
