@@ -46,6 +46,7 @@ Current trace:
 | bounded fail-closed probe route/RPDB convergence | `probe_routing_plan.py`, `probe_routing_convergence.py`, `linux_probe_routing.py` | `NG3-2026-11-19-probe-routing-convergence-review.md` |
 | explicit-target Profile/path -> shared-layout probe projection | `alpha_probe_projection.py` | current explicit-target probe integration review |
 | bounded lower-precondition -> Agent -> Driver -> confirmation attempt | `probe_attempt_runtime.py` | current explicit-target probe integration review |
+| confirmed per-path probe state -> sticky/reserve effective route order | `probe_route_feedback.py` | current explicit-target probe integration review |
 | EXP-065-backed probe route/RPDB mutation Driver | `linux_probe_routing.py` | `NG3-2026-11-19-probe-route-rpdb-mutation-review.md`, `EXP-065-result-20261119.md` |
 | EXP-066-backed probe-local nft owner comparison/full-diff/Linux Driver | `probe_local_observation.py`, `probe_local_mutation.py`, `linux_probe_local.py`, composite nft owner | `NG3-2026-11-19-probe-local-nft-owner-review.md`, `EXP-066-result-20261119.md` |
 | bounded current probe observation context / late-result rejection / technical-result mapping | `probe_runtime.py` | `NG3-2026-11-19-probe-observation-context-agent-review.md` |
@@ -2722,6 +2723,55 @@ degradation or recovery progress.
 The executable `probe_attempt_runtime.py` owns no cadence, history, target derivation,
 Linux mutation or route-order state. It performs at most one technical attempt and one
 existing confirmation-state transition.
+
+## 8.8. Confirmed probe problem -> effective Profile route order
+
+**Implements:**
+- `VPNG0003-R3.R6`
+- `VPNG0003-R3.R6.R2`
+- `VPNG0003-R3.R6.R3`
+
+Only a **confirmed** per-path availability problem participates in route-order projection.
+
+For one current Profile:
+
+```text
+current ordered logical paths
++ current per-path ProbeSubjectRuntimeState
++ previous AvailabilityRoutingState
++ reserve membership
+    ->
+confirmed problem paths
+    ->
+existing sticky/reserve availability routing projection
+```
+
+A missing current subject state means that there is no confirmed problem yet. Operationally
+that path is `unknown`, not `not available`, and it remains eligible until degradation
+hysteresis establishes a problem.
+
+A stored subject state whose owner/path is no longer part of current Profile membership is
+ignored. It cannot keep a replacement path degraded after binding churn.
+
+The bridge deliberately reuses `project_availability_routing()`; it does not implement a
+second failover/failback policy.
+
+The pure executable bridge is `probe_route_feedback.py`.
+
+A current explicit-target pure integration test now demonstrates:
+
+```text
+Profile icmp/<IPv4>
+    -> per-path probe subjects
+    -> negative evidence + degradation threshold
+    -> confirmed problem path
+    -> effective fallback order
+    -> positive evidence + recovery threshold
+    -> reserve active path relinquishes to nominal better recovered path
+```
+
+This proves the semantic chain through effective order, but does not yet constitute the
+periodic alpha runtime loop or physical route-priority mutation.
 
 # 9. NetworkPolicyAdapter
 
