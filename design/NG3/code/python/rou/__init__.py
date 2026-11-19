@@ -395,6 +395,11 @@ from .icmp_probe_driver import (
     ProbeCommandResult,
     SubprocessProbeCommandRunner,
 )
+from .probe_attempt import (
+    ProbeAttemptError,
+    ProbeAttemptDriver,
+    execute_probe_attempt_once,
+)
 from .probe_precondition import (
     ProbeExecutionPrecondition,
     verify_probe_execution_precondition,
@@ -510,6 +515,8 @@ __all__ = [
     "AvailabilityProbeRuntime",
     "ProbeDesiredAssembly",
     "ProbeDesiredAssemblyError",
+    "ProbeAttemptError",
+    "ProbeAttemptDriver",
     "ProbeExecutionPrecondition",
     "AvailabilityRoutingProjection",
     "AvailabilityRoutingState",
@@ -805,6 +812,7 @@ __all__ = [
     "resolve_availability_probe_intents",
     "build_probe_desired_assembly",
     "verify_probe_execution_precondition",
+    "execute_probe_attempt_once",
     "project_availability_routing",
     "calculate_effective_path_order",
     "build_payload_network_policy_desired_state",
