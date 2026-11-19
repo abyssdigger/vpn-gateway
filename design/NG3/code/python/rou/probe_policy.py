@@ -87,6 +87,7 @@ class ProbeRuleSpec:
     owner: ProbePolicyOwner
     priority: int
     process_uid: int
+    endpoint: InterfaceIdentity
     target: IPv4Address
     table: int
     mechanism: AvailabilityProbeMechanism = AvailabilityProbeMechanism.ICMP
@@ -109,6 +110,10 @@ class ProbeRuleSpec:
         ):
             raise ProbePolicyProjectionError(
                 "probe rule process_uid must be a non-root Linux uid"
+            )
+        if not isinstance(self.endpoint, InterfaceIdentity):
+            raise ProbePolicyProjectionError(
+                "probe rule endpoint must be InterfaceIdentity"
             )
         if not isinstance(self.target, IPv4Address):
             raise ProbePolicyProjectionError(
@@ -352,6 +357,7 @@ def build_probe_network_policy_desired_state(
                 owner=intent.owner,
                 priority=allocation.rule_priority,
                 process_uid=local_platform.process_uid,
+                endpoint=path_route.endpoint,
                 target=intent.target,
                 table=allocation.table,
                 mechanism=intent.mechanism,
