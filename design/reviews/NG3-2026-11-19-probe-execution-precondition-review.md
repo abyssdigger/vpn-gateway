@@ -122,4 +122,6 @@ none
 
 ## Verdict
 
-**ACCEPT.** The readiness gate is covered by successful current workflow evidence.
+**ACCEPT**, pending execution evidence for the owner-set strengthening added after workflow
+run `44490146781`. The earlier gate is green; the new consistency check must pass the
+current descendant unit suite before this verdict is final.
