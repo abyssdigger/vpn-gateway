@@ -2,10 +2,7 @@
 
 use std::collections::HashSet;
 
-use crate::availability_priority::{
-    AvailabilityPriorityError,
-    calculate_effective_path_order,
-};
+use crate::availability_priority::{AvailabilityPriorityError, calculate_effective_path_order};
 use crate::logical_path::LogicalPathId;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
