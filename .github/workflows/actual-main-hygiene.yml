@@ -57,6 +57,7 @@ jobs:
           expected=(
             ".github/workflows/actual-main-hygiene.yml"
             ".github/workflows/ng3-python.yml"
+            ".github/workflows/ng3-rust.yml"
           )
           if [[ "${workflows[*]}" != "${expected[*]}" ]]; then
             echo "::error::unexpected workflow set on active lineage"
