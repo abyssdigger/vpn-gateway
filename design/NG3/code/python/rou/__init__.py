@@ -380,6 +380,7 @@ from .probe_policy import (
 )
 from .probe_runtime import (
     AvailabilityProbeAgent,
+    AvailabilityProbeRuntime,
     ProbeEvidence,
     ProbeObservationContext,
     ProbeRuntimeError,
@@ -502,6 +503,7 @@ __all__ = [
     "AvailabilityProbeIntent",
     "AvailabilityProbeMechanism",
     "AvailabilityProbeAgent",
+    "AvailabilityProbeRuntime",
     "ProbeDesiredAssembly",
     "ProbeDesiredAssemblyError",
     "AvailabilityRoutingProjection",
