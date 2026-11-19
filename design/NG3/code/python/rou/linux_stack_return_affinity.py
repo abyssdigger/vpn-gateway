@@ -38,7 +38,7 @@ class _RuleKey:
 class _NftInventory:
     present: bool
     owned: bool
-    classifiers: tuple[tuple[str, str, int], ...] = ()
+    classifiers: tuple[tuple[str, str, int, bool], ...] = ()
     restores: tuple[tuple[str, int], ...] = ()
     diagnostic: str | None = None
 
@@ -120,6 +120,7 @@ class LinuxStackReturnAffinityBackend:
                     item.ingress.ifname,
                     item.remote_prefix.with_prefixlen,
                     item.mark,
+                    item.select_initial_packet,
                 )
                 for item in desired.classifiers
             )
@@ -387,7 +388,7 @@ def _match(expr: list[dict], left_kind: str, key: str) -> Any:
     raise ValueError(f"reserved affinity rule misses {left_kind}.{key} exact match")
 
 
-def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int]:
+def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int, bool]:
     ingress = _match(expr, "meta", "iif")
     if not isinstance(ingress, str) or not ingress:
         raise ValueError("classifier iif must resolve to an interface name")
@@ -449,11 +450,7 @@ def _parse_classifier_expr(expr: list[dict]) -> tuple[str, str, int]:
                 packet_restore = True
     if mark is None:
         raise ValueError("classifier ct mark assignment is missing")
-    if not packet_restore:
-        raise ValueError(
-            "classifier does not copy current ct mark to packet mark"
-        )
-    return ingress, source, mark
+    return ingress, source, mark, packet_restore
 
 
 def _parse_restore_expr(expr: list[dict]) -> tuple[str, int]:
@@ -499,13 +496,18 @@ def render_stack_return_affinity_nft(
     ]
 
     for item in desired.classifiers:
+        initial_select = (
+            " meta mark set ct mark"
+            if item.select_initial_packet
+            else ""
+        )
         lines.append(
             "    "
             f"meta iif {item.ingress.ifindex} "
             f"ip saddr {item.remote_prefix.with_prefixlen} "
             "ct state new "
-            f"ct mark set {hex(item.mark)} "
-            "meta mark set ct mark "
+            f"ct mark set {hex(item.mark)}"
+            f"{initial_select} "
             f'comment "{STACK_RETURN_CLASSIFIER_COMMENT}"'
         )
 
