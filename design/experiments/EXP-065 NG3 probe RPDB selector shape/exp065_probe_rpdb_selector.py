@@ -106,6 +106,40 @@ def main() -> int:
                     "non-matching UID unexpectedly selected probe path"
                 )
 
+        unrelated_priority = PRIORITY + 1
+        unrelated_uid = UID + 99
+        unrelated_target = "203.0.113.9"
+        ipn(
+            ns, "-4", "rule", "add",
+            "priority", str(unrelated_priority),
+            "uidrange", f"{unrelated_uid}-{unrelated_uid}",
+            "ipproto", "icmp",
+            "to", f"{unrelated_target}/32",
+            "lookup", str(TABLE + 1),
+        )
+
+        ipn(
+            ns, "-4", "rule", "del",
+            "priority", str(PRIORITY),
+            "uidrange", f"{UID}-{UID}",
+            "ipproto", "1",
+            "to", f"{TARGET}/32",
+            "lookup", str(TABLE),
+        )
+
+        rows_after_delete = json.loads(
+            ipn(ns, "-j", "-N", "-4", "rule", "show").stdout
+        )
+        if any(item.get("priority") == PRIORITY for item in rows_after_delete):
+            raise AssertionError("exact probe rule delete left selected priority")
+        if not any(
+            item.get("priority") == unrelated_priority
+            for item in rows_after_delete
+        ):
+            raise AssertionError("exact probe rule delete removed unrelated rule")
+        print("EXP065_EXACT_DELETE=PASS")
+        print("EXP065_UNRELATED_PRESERVED=PASS")
+
         print("EXP065_RESULT=PASS")
         return 0
     finally:
