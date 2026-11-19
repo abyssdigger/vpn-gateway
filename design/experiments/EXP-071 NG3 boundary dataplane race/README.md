@@ -1,6 +1,6 @@
 # EXP-071 — managed-boundary dataplane race
 
-Status: **PREPARED**
+Status: **PASS** — two independent CI runs found no material netkit/veth dataplane difference
 
 ## Question
 
