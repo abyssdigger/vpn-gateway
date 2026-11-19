@@ -54,6 +54,12 @@ from .forwarding_gate import (
 )
 from .instance_lock import InstanceLockSpec
 from .interface_identity import InterfaceIdentity
+from .host_boundary_behavior import HostBoundaryBehaviorLane
+from .host_boundary_lane_routing import (
+    HostBoundaryLaneEndpoint,
+    build_host_boundary_lane_routes,
+)
+from .linux_host_boundary_behavior import HostBoundaryBehaviorHostLane
 from .host_publication_policy import (
     HostPublicationDesiredState,
     HostPublicationMappingIntent,
@@ -97,6 +103,7 @@ from .local_publication_policy import (
     PublicationProtocol,
 )
 from .managed_network_domain import (
+    ManagedBoundaryLinkSpec,
     ManagedNetworkDomainSpec,
     verify_managed_network_domain,
 )
@@ -113,6 +120,7 @@ from .probe_desired import ProbeDesiredAssembly, build_probe_desired_assembly
 from .probe_runtime import AvailabilityProbeRuntime
 from .route_priority_inventory import RoutePriorityPathRoute
 from .release1_config import Release1Config, parse_release1_config
+from .release1_host_boundary import build_release1_host_boundary_intent
 from .structural_policy_mutation import compare_structural_policy
 from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
 from .selected_host_boundary import (
@@ -133,6 +141,18 @@ ALPHA_HOST_INTERFACE = "vnga-host0"
 ALPHA_INNER_INTERFACE = "vnga-inner0"
 ALPHA_HOST_ADDRESS = IPv4Interface("198.19.255.1/30")
 ALPHA_INNER_ADDRESS = IPv4Interface("198.19.255.2/30")
+ALPHA_STATEFUL_NAT_HOST_INTERFACE = "vnga-host1"
+ALPHA_STATEFUL_NAT_INNER_INTERFACE = "vnga-inner1"
+ALPHA_STATEFUL_NAT_HOST_ADDRESS = IPv4Interface("198.19.255.5/30")
+ALPHA_STATEFUL_NAT_INNER_ADDRESS = IPv4Interface("198.19.255.6/30")
+ALPHA_ROUTE_NO_NAT_HOST_INTERFACE = "vnga-host2"
+ALPHA_ROUTE_NO_NAT_INNER_INTERFACE = "vnga-inner2"
+ALPHA_ROUTE_NO_NAT_HOST_ADDRESS = IPv4Interface("198.19.255.9/30")
+ALPHA_ROUTE_NO_NAT_INNER_ADDRESS = IPv4Interface("198.19.255.10/30")
+ALPHA_ROUTE_NAT_HOST_INTERFACE = "vnga-host3"
+ALPHA_ROUTE_NAT_INNER_INTERFACE = "vnga-inner3"
+ALPHA_ROUTE_NAT_HOST_ADDRESS = IPv4Interface("198.19.255.13/30")
+ALPHA_ROUTE_NAT_INNER_ADDRESS = IPv4Interface("198.19.255.14/30")
 ALPHA_RUNTIME_DIRECTORY = Path("/run/vpn-gate-alpha")
 ALPHA_STATUS_PATH = ALPHA_RUNTIME_DIRECTORY / "status.json"
 ALPHA_AUDIT_INTERVAL_SECONDS = 1.0
@@ -178,18 +198,6 @@ class AlphaPreparedPolicy:
     ) -> "AlphaPreparedPolicy":
         config = parse_release1_config(text)
 
-        # These canonical Release-1 capabilities have accepted syntax/semantics,
-        # but this first executable slice does not yet own their complete lower
-        # materialization. Reject them explicitly instead of accepting-and-ignoring.
-        for profile_id, profile in config.profiles.items():
-            if not config.structural.profiles[profile_id].enabled:
-                continue
-            if profile.ordinary_gateway_nat:
-                raise AlphaRuntimeError(
-                    f"profile {profile_id!r} requests +snat, which is not yet "
-                    "materialized by the alpha runtime"
-                )
-
         prepared = cls(
             local_address=local_address,
             binding_state=DeviceBindingState.empty(),
@@ -229,6 +237,14 @@ class AlphaPreparedPolicy:
             NG3_PROBE_LOCAL_PLATFORM,
         )
         layout = probe_assembly.layout
+        host_boundary_intent = build_release1_host_boundary_intent(
+            self.config
+        )
+        lane_routes = build_host_boundary_lane_routes(
+            host_boundary_intent.behavior,
+            _alpha_behavior_lane_endpoints(interfaces),
+            layout,
+        )
         self.availability_runtime.configure(
             probe_assembly.intents,
             path_routes,
@@ -314,6 +330,7 @@ class AlphaPreparedPolicy:
             integration_intents,
             probe_local_rules=probe_assembly.probe.local_rules,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
+            host_boundary_lane_routes=lane_routes,
         )
         self.last_bindings = projection.bindings
         self.last_baseline_profiles = profiles
@@ -581,7 +598,91 @@ def _domain_spec() -> ManagedNetworkDomainSpec:
         inner_interface=ALPHA_INNER_INTERFACE,
         host_address=ALPHA_HOST_ADDRESS,
         inner_address=ALPHA_INNER_ADDRESS,
+        additional_boundaries=(
+            ManagedBoundaryLinkSpec(
+                ALPHA_STATEFUL_NAT_HOST_INTERFACE,
+                ALPHA_STATEFUL_NAT_INNER_INTERFACE,
+                ALPHA_STATEFUL_NAT_HOST_ADDRESS,
+                ALPHA_STATEFUL_NAT_INNER_ADDRESS,
+            ),
+            ManagedBoundaryLinkSpec(
+                ALPHA_ROUTE_NO_NAT_HOST_INTERFACE,
+                ALPHA_ROUTE_NO_NAT_INNER_INTERFACE,
+                ALPHA_ROUTE_NO_NAT_HOST_ADDRESS,
+                ALPHA_ROUTE_NO_NAT_INNER_ADDRESS,
+            ),
+            ManagedBoundaryLinkSpec(
+                ALPHA_ROUTE_NAT_HOST_INTERFACE,
+                ALPHA_ROUTE_NAT_INNER_INTERFACE,
+                ALPHA_ROUTE_NAT_HOST_ADDRESS,
+                ALPHA_ROUTE_NAT_INNER_ADDRESS,
+            ),
+        ),
     )
+
+
+def _alpha_behavior_host_lanes() -> tuple[HostBoundaryBehaviorHostLane, ...]:
+    return (
+        HostBoundaryBehaviorHostLane(
+            HostBoundaryBehaviorLane.STATEFUL_NO_NAT,
+            ALPHA_HOST_INTERFACE,
+        ),
+        HostBoundaryBehaviorHostLane(
+            HostBoundaryBehaviorLane.STATEFUL_NAT,
+            ALPHA_STATEFUL_NAT_HOST_INTERFACE,
+        ),
+        HostBoundaryBehaviorHostLane(
+            HostBoundaryBehaviorLane.ROUTE_NO_NAT,
+            ALPHA_ROUTE_NO_NAT_HOST_INTERFACE,
+        ),
+        HostBoundaryBehaviorHostLane(
+            HostBoundaryBehaviorLane.ROUTE_NAT,
+            ALPHA_ROUTE_NAT_HOST_INTERFACE,
+        ),
+    )
+
+
+def _alpha_behavior_lane_endpoints(
+    interfaces: tuple[InterfaceIdentity, ...],
+) -> tuple[HostBoundaryLaneEndpoint, ...]:
+    by_name = {item.ifname: item for item in interfaces}
+    if len(by_name) != len(interfaces):
+        raise AlphaRuntimeError(
+            "managed interface inventory contains duplicate interface names"
+        )
+    definitions = (
+        (
+            HostBoundaryBehaviorLane.STATEFUL_NO_NAT,
+            ALPHA_INNER_INTERFACE,
+            ALPHA_HOST_ADDRESS.ip,
+        ),
+        (
+            HostBoundaryBehaviorLane.STATEFUL_NAT,
+            ALPHA_STATEFUL_NAT_INNER_INTERFACE,
+            ALPHA_STATEFUL_NAT_HOST_ADDRESS.ip,
+        ),
+        (
+            HostBoundaryBehaviorLane.ROUTE_NO_NAT,
+            ALPHA_ROUTE_NO_NAT_INNER_INTERFACE,
+            ALPHA_ROUTE_NO_NAT_HOST_ADDRESS.ip,
+        ),
+        (
+            HostBoundaryBehaviorLane.ROUTE_NAT,
+            ALPHA_ROUTE_NAT_INNER_INTERFACE,
+            ALPHA_ROUTE_NAT_HOST_ADDRESS.ip,
+        ),
+    )
+    endpoints = []
+    for lane, ifname, gateway in definitions:
+        endpoint = by_name.get(ifname)
+        if endpoint is None:
+            raise AlphaRuntimeError(
+                f"managed behavior lane endpoint {ifname!r} is missing"
+            )
+        endpoints.append(
+            HostBoundaryLaneEndpoint(lane, endpoint, gateway)
+        )
+    return tuple(endpoints)
 
 
 def _notify_systemd(message: str) -> bool:
@@ -655,6 +756,7 @@ def run_alpha_runtime(
             prepared.config,
             current_domain_spec,
             runner,
+            _alpha_behavior_host_lanes(),
         )
 
     try:
