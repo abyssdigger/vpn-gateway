@@ -124,7 +124,6 @@ class NetworkPolicyPlatformSpace:
     path_route_protocol: int
     guard_route_protocol: int
     host_boundary_lane_route_protocol: int
-    host_boundary_lane_route_protocol: int
     route_metrics: RouteMetricPlatformSpace
     nft_family: str
     nft_table: str
@@ -241,6 +240,7 @@ class PayloadPolicyAllocation:
     terminal_guard_metric: int
     path_route_protocol: int
     guard_route_protocol: int
+    host_boundary_lane_route_protocol: int
 
 
 @dataclass(frozen=True, slots=True)
