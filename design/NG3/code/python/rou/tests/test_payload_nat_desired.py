@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 import unittest
 
 from rou.binding import LogicalPathId
@@ -9,6 +9,7 @@ from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
 from rou.payload_nat_desired import (
     PayloadNatProjectionError,
+    ProfileGatewayMasqueradeSpec,
     build_payload_nat_desired_state,
 )
 from rou.payload_profile import PayloadProfileRequest
@@ -171,6 +172,75 @@ class PayloadNatDesiredTests(unittest.TestCase):
                 (DeviceNatPolicyIntent("a", NatIntent.MASQUERADE),),
                 HOST,
             )
+
+    def test_profile_gateway_nat_uses_inbound_partition_and_host_local_exclusions(self):
+        inbound = PayloadProfileRequest(
+            profile_id="remote",
+            direction=Direction.INBOUND,
+            destinations=(IPv4Network("10.20.0.0/16"),),
+            ordered_paths=(A0,),
+        )
+        value = build_payload_nat_desired_state(
+            (inbound,),
+            (route(A0, EP_A0),),
+            (DeviceNatPolicyIntent("a", NatIntent.NONE),),
+            HOST,
+            gateway_nat_profile_ids=("remote",),
+            host_local_addresses=(
+                IPv4Address("192.0.2.1"),
+                IPv4Address("127.0.0.1"),
+                IPv4Address("192.0.2.1"),
+            ),
+        )
+        self.assertEqual(len(value.masquerade_rules), 1)
+        rule = value.masquerade_rules[0]
+        self.assertIsInstance(rule, ProfileGatewayMasqueradeSpec)
+        self.assertEqual(rule.profile_id, "remote")
+        self.assertEqual(rule.ingress, EP_A0)
+        self.assertEqual(rule.egress, HOST)
+        self.assertEqual(rule.remote_source, IPv4Network("10.20.0.0/16"))
+        self.assertEqual(
+            rule.excluded_host_destinations,
+            (
+                IPv4Address("127.0.0.1"),
+                IPv4Address("192.0.2.1"),
+            ),
+        )
+
+    def test_nested_no_snat_profile_is_subtracted_from_broader_snat_profile(self):
+        broad = PayloadProfileRequest(
+            profile_id="broad",
+            direction=Direction.INBOUND,
+            destinations=(IPv4Network("10.0.0.0/8"),),
+            ordered_paths=(A0,),
+        )
+        nested = PayloadProfileRequest(
+            profile_id="nested",
+            direction=Direction.INBOUND,
+            destinations=(IPv4Network("10.1.0.0/16"),),
+            ordered_paths=(A0,),
+        )
+        value = build_payload_nat_desired_state(
+            (broad, nested),
+            (route(A0, EP_A0),),
+            (DeviceNatPolicyIntent("a", NatIntent.NONE),),
+            HOST,
+            gateway_nat_profile_ids=("broad",),
+        )
+        gateway = tuple(
+            rule
+            for rule in value.masquerade_rules
+            if isinstance(rule, ProfileGatewayMasqueradeSpec)
+        )
+        self.assertTrue(gateway)
+        self.assertTrue(
+            all(
+                not rule.remote_source.overlaps(
+                    IPv4Network("10.1.0.0/16")
+                )
+                for rule in gateway
+            )
+        )
 
     def test_zero_path_profiles_need_no_nat_policy(self):
         value = build_payload_nat_desired_state(
