@@ -2,7 +2,7 @@
 
 ## Статус
 
-PREPARED — privileged Linux acceptance evidence для revised `VPNG0001-R2.R2`.
+COMPLETE — PASS — SELECTED as privileged selector acceptance evidence for revised `VPNG0001-R2.R2`.
 
 ## Requirement trace
 
@@ -82,3 +82,17 @@ sudo env PYTHONPATH=design/NG3/code/python \
 
 Результат записывается отдельным result artifact после выполнения. До результата никакая
 supersession/disposition не объявляется.
+
+## Result
+
+See `EXP-078-result-20261120.md`.
+
+Workflow run `44758764201`, job `linux-host-managed-routing` (`136365426254`) completed
+with `EXP078_RESULT=PASS`.
+
+## Post-result lifecycle
+
+- Logical evidence state: **PROVEN FACT / SELECTED**.
+- Current disposition: selected for scoped Release-1 peaceful host-routing dispatch.
+- Coverage relation: extends EXP-077; does not supersede it.
+- EXP-074 remains selected only for the postponed aggressive authoritative child.

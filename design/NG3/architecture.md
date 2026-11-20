@@ -521,11 +521,12 @@ Lifecycle cleanup remains ownership-tagged and non-destructive. There is no peri
 audit or automatic repair for this helper, and later host-route changes do not control the
 internal ForwardingGate.
 
-The exact selector lowering and non-interference properties require privileged Linux
-acceptance evidence before revised `VPNG0001-R2.R2` returns to [`closed`]. EXP-077 remains
-valid evidence for the `:any`/global main-first subcase, administrator-route precedence and
-non-destructive cleanup; it is no longer sufficient by itself for the newly explicit scoped
-selector contract.
+EXP-078 is the privileged acceptance evidence for the selector-specific Linux lowering and
+non-interference properties: `iif lo`, `not iif lo`, exact ingress, selector union,
+selected-scope `0.0.0.0/0`, administrator non-default precedence and managed-boundary bypass
+all passed on real Linux RPDB state. EXP-077 remains selected complementary evidence for the
+`:any`/global main-first subcase and non-destructive lifecycle cleanup. Together they close
+the revised `VPNG0001-R2.R2`; neither supersedes EXP-074 for the postponed aggressive child.
 
 Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
 managed boundary, not by host routing. A helper may automate host reachability to that
@@ -6640,7 +6641,7 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
 | `VPNG0001-R2.R1` manual host integration | closed through `host-integration.md`: remote-prefix, Profile-SNAT identity, full-tunnel and host-forwarding prerequisites are explicit without requiring a helper |
-| `VPNG0001-R2.R2` peaceful host-routing assistance | revised closure candidate: default-disabled selector scope + `peaceful` policy; main-first scoped dispatch; privileged selector acceptance pending |
+| `VPNG0001-R2.R2` peaceful host-routing assistance | closed: default-disabled selector scope + `peaceful` policy; EXP-078-backed main-first scoped dispatch; EXP-077 retains lifecycle/non-destructive cleanup evidence |
 | `VPNG0001-R2.R3` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
