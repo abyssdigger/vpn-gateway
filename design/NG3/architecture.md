@@ -393,20 +393,37 @@ Existing divergent infrastructure is not repaired or adopted in place. Destroy f
 re-confirms containment where possible, removes the owned namespace/link infrastructure and
 freshly verifies absence.
 
-### 1.1.1-A. Optional host-routing assistance
+### 1.1.1-A. Core/host-network responsibility boundary and optional host-routing assistance
 
 **Implements:**
-- `VPNG0001-R1.R4`;
-- `VPNG0001-R1.R5`;
-- `VPNG0001-R1.R5.R1`;
-- `VPNG0001-R1.R5.R2`;
-- `VPNG0001-R1.R5.R3`;
+- `VPNG0001-R2`;
+- `VPNG0001-R2.R1`;
+- `VPNG0001-R2.R1.R1`;
+- `VPNG0001-R2.R2`;
+- `VPNG0001-R2.R3`;
+- `VPNG0001-R2.R3.R1`;
+- `VPNG0001-R2.R3.R2`;
+- `VPNG0001-R2.R3.R3`;
 - `VPNG0002-R2.R6`.
 
 **Constrained by:**
-- `VPNG0001-R1.R5.C1`;
+- `VPNG0001-R2.R3.C1`;
 - `VPNG0004-R4.R6.R1.R1`;
 - `VPNG0004-R4.R6.R1.R2`.
+
+Core VPN-GATE owns managed forwarding up to the explicit ordinary-side managed boundary.
+Ordinary-host routing beyond that boundary remains administrator-owned unless the
+administrator explicitly enables a host-side automation capability.
+
+Core correctness therefore cannot depend on a host-routing helper. A deployment in which the
+administrator supplies equivalent ordinary-host routes/reachability must use the same managed
+forwarding semantics as a deployment using product-provided host-routing automation. Core
+startup/readiness must not fail merely because host-routing automation is disabled, provided
+the externally required host integration is already present.
+
+The project must document the stable boundary facts and route/reachability prerequisites
+needed for manual host integration. Exact administrator-facing instructions remain
+`[pending_closure]` under `VPNG0001-R2.R1.R1`.
 
 Host routing is an integration concern outside the core managed forwarding domain. Core
 VPN-GATE policy begins once traffic is actually handed through the explicit managed boundary;
@@ -417,7 +434,7 @@ The product therefore separates two optional helper contracts.
 
 #### Simple lifecycle helper
 
-The Release-1-facing helper is lifecycle-scoped assistance, not a host-routing supervisor.
+The Release-1 peaceful helper is lifecycle-scoped assistance, not a host-routing supervisor. It is explicitly enabled/disabled by product configuration.
 
 Its desired contribution is derived from current accepted configuration and may include:
 
@@ -425,8 +442,7 @@ Its desired contribution is derived from current accepted configuration and may 
 - effective Profile SNAT identities when the administrator wants helper-provided reverse
   reachability to the managed boundary.
 
-The helper installs identifiable routing contributions at start / supported re-application
-of configuration. After successful application, ordinary host routing remains
+The helper installs identifiable routing contributions at start and updates them on the explicit Release-1 reload operation. After successful application, ordinary host routing remains
 administrator-owned rather than continuously owned by VPN-GATE. On stop the helper removes
 only still-identifiable contributions that remain its own and must not delete an
 administrator replacement merely because it occupies the same destination.
@@ -440,9 +456,7 @@ section. In particular, the former authoritative dedicated-table precedence cann
 Release-1 closure merely because the current Python reference already implements it: that
 precedence is stronger than the simple-helper contract.
 
-Consequently `VPNG0001-R1.R4` remains `[pending_closure]` until a lower realization is
-selected that preserves administrator ownership of ordinary host routing while still
-providing useful lifecycle assistance.
+Consequently `VPNG0001-R2.R2` remains `[pending_closure]` until a lower realization and exact configuration spelling are selected that preserve administrator ownership of ordinary host routing while still providing useful lifecycle assistance.
 
 Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
 managed boundary, not by host routing. A helper may automate host reachability to that
@@ -451,9 +465,9 @@ identity, but core Profile-SNAT semantics do not depend on the helper being enab
 #### Aggressive authoritative helper
 
 The aggressive helper is a separate opt-in capability and is outside Release 1 by
-`VPNG0001-R1.R5.C1`.
+`VPNG0001-R2.R3.C1`.
 
-For the narrow authoritative-routing child `VPNG0001-R1.R5.R1`, the selected Linux
+For the narrow authoritative-routing child `VPNG0001-R2.R3.R1`, the selected Linux
 realization is the already-proven dedicated managed table:
 
 ```text
@@ -478,7 +492,7 @@ a destination that the aggressive helper has accepted into its authoritative set
 `EXP-074` proves this exact observable property, including managed `0.0.0.0/0`, dynamic
 addition of a more-specific competing `main` route, preservation of local delivery,
 stack-origin bypass and cleanup that leaves unrelated `main` state unchanged. This evidence
-is sufficient closure for `VPNG0001-R1.R5.R1`; it is **not** evidence that the same
+is sufficient closure for `VPNG0001-R2.R3.R1`; it is **not** evidence that the same
 authoritative precedence is appropriate for the simple helper.
 
 The current Python `HostManagedRoutingPlan` / Linux owner embodies this authoritative child.
@@ -487,9 +501,9 @@ capability, not an unconditional core or Release-1 host-routing contract.
 
 The remaining aggressive children are not closed:
 
-- `VPNG0001-R1.R5.R2` requires a future continuous owner that detects and repairs
+- `VPNG0001-R2.R3.R2` requires a future continuous owner that detects and repairs
   helper-owned drift;
-- `VPNG0001-R1.R5.R3` requires composition of host-side fail-closed measures with the public
+- `VPNG0001-R2.R3.R3` requires composition of host-side fail-closed measures with the public
   administrative payload-containment control surface.
 
 Those responsibilities remain `[pending_closure]`; the existence of the current periodic
@@ -6145,7 +6159,17 @@ restart
     -> stop/cleanup as required
     -> start from the resulting authoritative state
     -> never report success while previous required cleanup remains unresolved
+
+reload
+    -> validate candidate configuration before network mutation
+    -> apply changed active-function desired state under existing safety barriers
+    -> invoke lifecycle-scoped peaceful host-routing update when enabled
+    -> report success only after required postconditions for the new configuration
 ```
+
+The reload operation implements `VPNG0005-R5.R6.R4`. Its exact executable orchestration is
+not yet materialized and the requirement therefore remains `[pending_closure]`; the current
+alpha still requires restart for config changes and must report that limitation truthfully.
 
 The control surface is not a long-lived domain Engine and owns no independent lifecycle
 policy. It invokes procedural assembly/orchestration whose postconditions are already
@@ -6271,9 +6295,9 @@ read-only exact structural audit
 ```
 
 Audit interval в alpha равен одной секунде и является локальным implementation parameter по
-§12.2, а не пользовательской latency guarantee. Config hot-reload не вводится: изменение
-конфигурации требует нового start/restart и тем самым не создает неоговоренную live-change
-semantics.
+§12.2, а не пользовательской latency guarantee. Current alpha config hot-reload пока не materialized: изменение конфигурации требует нового
+start/restart. После принятия `VPNG0005-R5.R6.R4` это является временным alpha implementation
+gap, а не Release-1 product semantics.
 
 Alpha deployment использует:
 
@@ -6513,8 +6537,10 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
 | `VPNG0001-R1.R2` declarative operation | canonical Release-1 Device/Profile grammar fixed in `config-model.md` and normalized by ConfigurationAdapter; only endpoint-scoped future firewall selector remains deferred |
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
-| `VPNG0001-R1.R4` host-routing assistance | simple lifecycle helper semantics accepted; Linux lowering remains pending and must preserve administrator-owned host routing |
-| `VPNG0001-R1.R5` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R1.R5.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
+| `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
+| `VPNG0001-R2.R1` manual host integration | core independence accepted; concrete administrator-facing route/reachability instructions remain pending under R2.R1.R1 |
+| `VPNG0001-R2.R2` peaceful host-routing assistance | required for Release 1 and config-disableable; start/reload/stop semantics accepted, Linux lowering/config spelling remain pending |
+| `VPNG0001-R2.R3` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
 | `VPNG0001-R1.R3.C2` isolated VPN data-plane endpoint | architecture constraint derived from managed-network isolation |
@@ -6524,7 +6550,7 @@ until a separate requirement requires it.
 | `VPNG0003-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; Profile selects disabled, Device default, or same-shape Profile override, normalized to a concrete ICMP/IPv4 description before probe runtime |
 | `VPNG0004-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
 | `VPNG0004-R4.R7` administrative payload containment | postponed beyond Release 1; semantic control surface accepted, lower composition/evidence remains pending |
-| `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
+| `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle | start/stop/restart postconditions represented; Release-1 reload semantics now required but executable orchestration remains pending under R5.R6.R4 |
 | `VPNG0005-R5.R2`, `VPNG0005-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
 | `VPNG0006-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
 | `VPNG0006-R6.R2`, `VPNG0006-R6.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
@@ -6564,7 +6590,7 @@ The core Device/Profile human-facing configuration contract is now recovered and
 Remaining interface freedom is narrower:
 
 - parser/serialization implementation details that do not change accepted TOML semantics;
-- any future live-change/reload capability, which is not currently promised;
+- implementation details of the now-required Release-1 reload operation that do not change its accepted validation/safety postconditions;
 - future endpoint-scoped Device firewall syntax under its explicit Release-1 constraint;
 - lower implementation details of accepted publication capabilities where architecture
   already defines semantic ownership but packaging/runtime integration may still evolve.
@@ -6612,7 +6638,7 @@ Affected requirements:
 
 Lifecycle control semantics and autonomous local reconciliation are now explicit for state
 that an active function retains under authoritative VPN-GATE ownership. The simple
-host-routing helper under `VPNG0001-R1.R4` is deliberately different: after each successful
+host-routing helper under `VPNG0001-R2.R2` is deliberately different: after each successful
 lifecycle application, ordinary host routing is handed back to administrator control and is
 not part of periodic runtime reconciliation until the next explicit helper lifecycle
 operation.

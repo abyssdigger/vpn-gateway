@@ -1,5 +1,11 @@
 # VPN-GATE NG3 — host-routing helper requirement review
 
+> **Supersession note (2026-11-20):** this review captured the first accepted helper split
+> while the new requirements were temporarily placed under `VPNG0001-R1`. A subsequent
+> immediate-parent review moved the host-network non-interference/helper subtree under
+> `VPNG0001-R2` and added the explicit Release-1 reload requirement. The old IDs below are
+> retained as historical review facts, not current requirement links.
+
 **Date:** 2026-11-20  
 **Branch:** `ng3-design-cycle-20261120-rudiment-cleanup-finish-35m`  
 **Reviewed range:** `be459411b2145aaa217f0df4be5c103b38968075..25723652abfc7645aad16a6c1997a3226ae43824`

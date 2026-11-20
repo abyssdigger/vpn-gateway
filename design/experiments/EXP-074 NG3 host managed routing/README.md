@@ -4,7 +4,7 @@
 
 This experiment is exact Linux acceptance evidence for:
 
-- `VPNG0001-R1.R5.R1` — authoritative managed-destination routing for the opt-in aggressive
+- `VPNG0001-R2.R3.R1` — authoritative managed-destination routing for the opt-in aggressive
   host-routing helper.
 
 The requirement IDs originally attached to this experiment under the removed
@@ -12,7 +12,7 @@ The requirement IDs originally attached to this experiment under the removed
 product semantics. `VPNG0002-R2.R6` remains a core STACK return-affinity requirement, but
 EXP-074 is no longer used to make host routing an unconditional part of that core contract.
 
-The aggressive helper itself is constrained out of Release 1 by `VPNG0001-R1.R5.C1`.
+The aggressive helper itself is constrained out of Release 1 by `VPNG0001-R2.R3.C1`.
 
 ## Question
 
