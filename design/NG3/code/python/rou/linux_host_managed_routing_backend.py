@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from ipaddress import IPv4Network, ip_network
+from ipaddress import IPv4Address, IPv4Network, ip_network
 
 from .iproute_priority_backend import CommandRunner
 from .linux_host_managed_routing import (
@@ -105,13 +105,17 @@ class LinuxHostManagedRoutingBackend:
             if route.destination.prefixlen == 0
             else route.destination.with_prefixlen
         )
-        self.runner.run(
-            self._cmd(
-                "ip", "-4", "route", "add", "table", str(route.table),
-                destination, "dev", route.interface,
-                "proto", str(route.protocol),
-            )
-        )
+        args = [
+            "ip", "-4", "route", "add", "table", str(route.table),
+            destination,
+        ]
+        if route.gateway is not None:
+            args.extend(("via", str(route.gateway)))
+        args.extend(("dev", route.interface))
+        if route.onlink:
+            args.append("onlink")
+        args.extend(("proto", str(route.protocol)))
+        self.runner.run(self._cmd(*args))
 
     def delete_route(self, route: HostManagedRouteSpec) -> None:
         destination = (
@@ -119,13 +123,14 @@ class LinuxHostManagedRoutingBackend:
             if route.destination.prefixlen == 0
             else route.destination.with_prefixlen
         )
-        self.runner.run(
-            self._cmd(
-                "ip", "-4", "route", "del", "table", str(route.table),
-                destination, "dev", route.interface,
-                "proto", str(route.protocol),
-            )
-        )
+        args = [
+            "ip", "-4", "route", "del", "table", str(route.table),
+            destination,
+        ]
+        if route.gateway is not None:
+            args.extend(("via", str(route.gateway)))
+        args.extend(("dev", route.interface, "proto", str(route.protocol)))
+        self.runner.run(self._cmd(*args))
 
     def add_bypass_rule(self, rule: HostManagedBypassRuleSpec) -> None:
         self.runner.run(
@@ -272,8 +277,27 @@ def _observe_routes(rows, allocation):
         if destination is None or not isinstance(interface, str):
             conflicts.append("unrepresentable owner route in managed-routing table")
             continue
-        if row.get("gateway") is not None:
-            conflicts.append("managed-routing route unexpectedly has a gateway")
+        gateway_raw = row.get("gateway")
+        if gateway_raw is None:
+            gateway = None
+        else:
+            try:
+                gateway = IPv4Address(gateway_raw)
+            except (TypeError, ValueError):
+                conflicts.append("managed-routing route has invalid IPv4 gateway")
+                continue
+        flags = row.get("flags", ())
+        if flags is None:
+            flags = ()
+        if not isinstance(flags, list):
+            conflicts.append("managed-routing route flags are not representable")
+            continue
+        unsupported_flags = set(flags) - {"onlink"}
+        if unsupported_flags:
+            conflicts.append(
+                "managed-routing route has unsupported flags: "
+                + ",".join(sorted(unsupported_flags))
+            )
             continue
         observed.append(
             HostManagedRouteSpec(
@@ -281,6 +305,8 @@ def _observe_routes(rows, allocation):
                 interface=interface,
                 table=allocation.table,
                 protocol=allocation.route_protocol,
+                gateway=gateway,
+                onlink="onlink" in flags,
             )
         )
     return observed, conflicts
