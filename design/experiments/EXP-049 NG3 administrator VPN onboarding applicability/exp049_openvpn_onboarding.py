@@ -32,7 +32,6 @@ from rou.integration_config import parse_integration_transport_config
 from rou.local_integration_policy import IntegrationLocalTransportIntent
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
-from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
     destroy_managed_network_domain,
@@ -701,7 +700,6 @@ def main() -> int:
         host_interface=HOST_BOUNDARY,
         inner_interface=INNER_BOUNDARY,
         inner_address=INNER_ADDR,
-        primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
     lock_spec = InstanceLockSpec(
         runtime_directory=root / "runtime",
