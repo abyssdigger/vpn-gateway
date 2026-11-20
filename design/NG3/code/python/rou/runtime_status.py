@@ -49,6 +49,7 @@ class ConfiguredProfileStatus:
 
 @dataclass(frozen=True, slots=True)
 class ConfiguredIntentStatus:
+    host_routing: str
     devices: tuple[ConfiguredDeviceStatus, ...]
     profiles: tuple[ConfiguredProfileStatus, ...]
 
@@ -304,7 +305,11 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
             )
         )
 
-    return ConfiguredIntentStatus(tuple(devices), tuple(profiles))
+    return ConfiguredIntentStatus(
+        config.host_routing.value,
+        tuple(devices),
+        tuple(profiles),
+    )
 
 
 def _render_availability_check(value) -> str:

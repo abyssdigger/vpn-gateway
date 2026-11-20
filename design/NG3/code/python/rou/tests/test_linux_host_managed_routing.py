@@ -9,6 +9,7 @@ from rou.host_managed_routing import (
 from rou.linux_host_managed_routing import (
     HostManagedRoutingLinuxAllocation,
     build_linux_host_managed_routing_desired,
+    build_linux_peaceful_host_routing_desired,
 )
 from rou.network_policy_layout import NumericResourcePool
 
@@ -36,6 +37,30 @@ class LinuxHostManagedRoutingTests(unittest.TestCase):
                 None if snat is None else IPv4Address(snat)
             ),
         )
+
+    def peaceful_allocation(self):
+        return HostManagedRoutingLinuxAllocation(
+            table=0x7FFF0004,
+            bypass_priority=0x6002,
+            preserve_priority=0x6003,
+            dispatch_priority=0x6004,
+            owned_rule_priorities=NumericResourcePool(0x6003, 0x6005),
+            rule_protocol=204,
+            route_protocol=204,
+        )
+
+    def test_peaceful_helper_checks_non_default_main_before_dispatch(self):
+        desired = build_linux_peaceful_host_routing_desired(
+            self.plan(self.profile("full", Direction.OUTBOUND, "0.0.0.0/0")),
+            host_interface="vpng0",
+            allocation=self.peaceful_allocation(),
+        )
+        self.assertEqual(desired.bypass.priority, 0x6002)
+        self.assertEqual(desired.preserve_main.priority, 0x6003)
+        self.assertEqual(desired.preserve_main.suppress_prefixlength, 0)
+        self.assertEqual(desired.dispatch.priority, 0x6004)
+        self.assertEqual(desired.routes[0].table, 0x7FFF0004)
+        self.assertEqual(desired.routes[0].protocol, 204)
 
     def test_one_dispatch_rule_serves_all_prefixes(self):
         desired = build_linux_host_managed_routing_desired(

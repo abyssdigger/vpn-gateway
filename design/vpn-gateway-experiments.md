@@ -40,6 +40,7 @@ Current experiment directories:
 | EXP-074 | aggressive-helper authoritative managed-destination routing |
 | EXP-075 | Profile SNAT identity reverse reachability |
 | EXP-076 | combined Profile SNAT dataplane |
+| EXP-077 | Release-1 peaceful host-routing helper |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.

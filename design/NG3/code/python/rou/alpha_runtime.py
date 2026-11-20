@@ -114,13 +114,12 @@ from .probe_desired import ProbeDesiredAssembly, build_probe_desired_assembly
 from .probe_runtime import AvailabilityProbeRuntime
 from .route_priority_inventory import RoutePriorityPathRoute
 from .release1_config import Release1Config, parse_release1_config
+from .release1_host_route_helper import (
+    LinuxPeacefulHostRoutingContribution,
+    build_linux_peaceful_host_routing_contribution,
+)
 from .structural_policy_mutation import compare_structural_policy
 from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
-from .selected_host_boundary import (
-    SelectedLinuxHostBoundaryContribution,
-    build_selected_linux_host_boundary_contribution,
-    reconcile_selected_host_boundary_runtime_once,
-)
 from .runtime_status import (
     RuntimeReadiness,
     RuntimeStatusAgent,
@@ -646,7 +645,7 @@ def run_alpha_runtime(
             raise AlphaRuntimeError(
                 "alpha host-boundary contribution requires AlphaPreparedPolicy"
             )
-        return build_selected_linux_host_boundary_contribution(
+        return build_linux_peaceful_host_routing_contribution(
             prepared.config,
             current_domain_spec,
             runner,
@@ -680,11 +679,11 @@ def run_alpha_runtime(
             boundary_contribution is not None
             and not isinstance(
                 boundary_contribution,
-                SelectedLinuxHostBoundaryContribution,
+                LinuxPeacefulHostRoutingContribution,
             )
         ):
             raise AlphaRuntimeError(
-                "alpha startup returned an unexpected host-boundary contribution"
+                "alpha startup returned an unexpected host-routing helper"
             )
         status_agent = RuntimeStatusAgent(
             build_configured_intent_status(prepared.config)
@@ -793,31 +792,13 @@ def run_alpha_runtime(
         last_status: AlphaReconcileStatus | None = None
         last_diagnostic: str | None = None
         while not stop_event.wait(audit_interval_seconds):
-            boundary_runtime = reconcile_selected_host_boundary_runtime_once(
-                LinuxForwardingGateBackend(
-                    runner,
-                    domain_spec.namespace,
-                ),
-                boundary_contribution,
-            )
-            result = (
-                reconcile_alpha_payload_once(
-                    prepared,
-                    domain_spec,
-                    runner,
-                )
-                if boundary_runtime.confirmed
-                else AlphaReconcileResult(
-                    AlphaReconcileStatus.FAILED,
-                    None,
-                    diagnostic=(
-                        boundary_runtime.diagnostic
-                        or (
-                            "host-boundary reconciliation failed: "
-                            f"{boundary_runtime.status.value}"
-                        )
-                    ),
-                )
+            # Peaceful host-routing assistance is lifecycle-scoped. Ordinary-host
+            # route changes after successful start are administrator-owned and do
+            # not gate core managed-domain reconciliation.
+            result = reconcile_alpha_payload_once(
+                prepared,
+                domain_spec,
+                runner,
             )
             availability_result = (
                 reconcile_alpha_availability_once(

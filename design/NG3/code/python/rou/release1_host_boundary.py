@@ -1,7 +1,7 @@
-"""Current alpha config -> authoritative host-routing prototype intent.
+"""Release-1 config -> postponed aggressive host-routing prototype intent.
 
-Despite the historical module name, this projection now belongs to the postponed aggressive
-helper evidence path and is not Release-1 simple-helper closure.
+The historical module name is retained only for the executable aggressive-helper evidence
+path. The alpha runtime does not import this module for Release-1 peaceful host routing.
 """
 
 from __future__ import annotations

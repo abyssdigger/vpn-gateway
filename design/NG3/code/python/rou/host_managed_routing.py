@@ -1,12 +1,11 @@
-"""Pure authoritative host managed-destination routing projection.
+"""Pure ordinary-host route-set projection shared by host-routing helpers.
 
-This module currently backs the alpha prototype of the postponed aggressive host-routing
-helper child VPNG0001-R2.R3.R1. It is not the selected lowering for the simple Release-1
-lifecycle helper VPNG0001-R2.R2.
+This layer only derives which remote prefixes and Profile-SNAT identities may require host
+reachability. It does not choose precedence/ownership semantics: the Release-1 peaceful
+helper and postponed aggressive helper lower the same route-set through different Linux
+ordering/lifecycle contracts.
 
-The ordinary host needs only one routing fact: which IPv4 destinations belong to the
-managed VPN-GATE domain.  Profile permission and established-flow affinity remain inside
-the managed domain.
+Profile permission and established-flow affinity remain inside the managed domain.
 """
 
 from __future__ import annotations

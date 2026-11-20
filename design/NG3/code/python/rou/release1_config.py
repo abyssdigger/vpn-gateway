@@ -7,6 +7,7 @@ materializers consume the typed result; they must not parse these strings again.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import ipaddress
 from types import MappingProxyType
 import re
@@ -18,7 +19,7 @@ from .domain import Direction, StructuralConfig
 from .port_bundle import PortBundle, PortSpan
 
 
-_TOP_LEVEL_KEYS = frozenset({"default_snat_address", "device", "profile"})
+_TOP_LEVEL_KEYS = frozenset({"default_snat_address", "host_routing", "device", "profile"})
 _DEVICE_KEYS = frozenset(
     {
         "enabled",
@@ -54,6 +55,11 @@ _PUBLICATION_RE = re.compile(
 
 class Release1ConfigError(ConfigError):
     pass
+
+
+class HostRoutingMode(str, Enum):
+    AUTO = "auto"
+    MANUAL = "manual"
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +125,7 @@ class Release1Config:
     devices: Mapping[str, DeviceRelease1Config]
     profiles: Mapping[str, ProfileRelease1Config]
     default_snat_address: ipaddress.IPv4Address | None = None
+    host_routing: HostRoutingMode = HostRoutingMode.AUTO
 
 
 def parse_release1_config(text: str) -> Release1Config:
@@ -144,6 +151,7 @@ def parse_release1_config(text: str) -> Release1Config:
         raw.get("default_snat_address"),
         "default_snat_address",
     )
+    host_routing = _parse_host_routing(raw.get("host_routing", "auto"))
     raw_devices = _table(raw.get("device", {}), "device")
     raw_profiles = _table(raw.get("profile", {}), "profile")
 
@@ -300,6 +308,17 @@ def parse_release1_config(text: str) -> Release1Config:
         devices=MappingProxyType(devices),
         profiles=MappingProxyType(profiles),
         default_snat_address=default_snat_address,
+        host_routing=host_routing,
+    )
+
+
+def _parse_host_routing(value: Any) -> HostRoutingMode:
+    if value == "auto":
+        return HostRoutingMode.AUTO
+    if value == "manual":
+        return HostRoutingMode.MANUAL
+    raise Release1ConfigError(
+        'host_routing must be exactly "auto" or "manual"'
     )
 
 

@@ -10,6 +10,7 @@ from .iproute_priority_backend import CommandRunner
 from .linux_host_managed_routing import (
     HostManagedBypassRuleSpec,
     HostManagedDispatchRuleSpec,
+    HostManagedPreserveMainRuleSpec,
     HostManagedRouteSpec,
     HostManagedRoutingLinuxAllocation,
     HostManagedRoutingLinuxDesired,
@@ -141,6 +142,18 @@ class LinuxHostManagedRoutingBackend:
             )
         )
 
+    def add_preserve_main_rule(
+        self,
+        rule: HostManagedPreserveMainRuleSpec,
+    ) -> None:
+        self.runner.run(
+            self._cmd(
+                "ip", "-4", "rule", "add", "priority", str(rule.priority),
+                "protocol", str(rule.protocol), "lookup", "main",
+                "suppress_prefixlength", str(rule.suppress_prefixlength),
+            )
+        )
+
     def add_dispatch_rule(self, rule: HostManagedDispatchRuleSpec) -> None:
         self.runner.run(
             self._cmd(
@@ -205,6 +218,15 @@ def converge_host_managed_routing_once(
     if observed.conflicts:
         raise HostManagedRoutingConflict("; ".join(observed.conflicts))
     if (
+        desired.preserve_main is not None
+        and desired.preserve_main.priority in observed.missing_rule_priorities
+    ):
+        backend.add_preserve_main_rule(desired.preserve_main)
+
+    observed = backend.observe(desired)
+    if observed.conflicts:
+        raise HostManagedRoutingConflict("; ".join(observed.conflicts))
+    if (
         desired.dispatch is not None
         and desired.dispatch.priority in observed.missing_rule_priorities
     ):
@@ -221,12 +243,14 @@ def converge_host_managed_routing_once(
 def cleanup_host_managed_routing_once(
     backend: LinuxHostManagedRoutingBackend,
     desired: HostManagedRoutingLinuxDesired,
+    *,
+    tolerate_foreign_replacements: bool = False,
 ) -> HostManagedRoutingObservation:
     if not isinstance(backend, LinuxHostManagedRoutingBackend):
         raise ValueError("backend must be LinuxHostManagedRoutingBackend")
 
     current = backend.observe(desired)
-    if current.conflicts:
+    if current.conflicts and not tolerate_foreign_replacements:
         raise HostManagedRoutingConflict("; ".join(current.conflicts))
 
     # Capture goes away before routes; bypass can disappear after dispatch.
@@ -235,6 +259,12 @@ def cleanup_host_managed_routing_once(
         and desired.dispatch.priority in current.rule_priorities
     ):
         backend.delete_rule_priority(desired.dispatch.priority)
+    current = backend.observe(desired)
+    if (
+        desired.preserve_main is not None
+        and desired.preserve_main.priority in current.rule_priorities
+    ):
+        backend.delete_rule_priority(desired.preserve_main.priority)
     current = backend.observe(desired)
     if (
         desired.bypass is not None
@@ -253,7 +283,7 @@ def cleanup_host_managed_routing_once(
 
     empty = HostManagedRoutingLinuxDesired((), None, None)
     final = backend.observe(empty)
-    if final.conflicts:
+    if final.conflicts and not tolerate_foreign_replacements:
         raise HostManagedRoutingConflict("; ".join(final.conflicts))
     if final.routes or final.rule_priorities:
         raise RuntimeError("host managed-routing cleanup postcondition failed")
@@ -315,6 +345,8 @@ def _observe_routes(rows, allocation):
 def _observe_rules(rows, allocation, desired):
     expected = _expected_rule_signatures(desired)
     reserved = {allocation.bypass_priority}
+    if allocation.preserve_priority is not None:
+        reserved.add(allocation.preserve_priority)
     reserved.update(
         range(
             allocation.owned_rule_priorities.first,
@@ -351,6 +383,13 @@ def _expected_rule_signatures(desired):
         result[desired.bypass.priority] = (
             "bypass", desired.bypass.interface, "main"
         )
+    if desired.preserve_main is not None:
+        result[desired.preserve_main.priority] = (
+            "preserve_main",
+            None,
+            "main",
+            desired.preserve_main.suppress_prefixlength,
+        )
     if desired.dispatch is not None:
         result[desired.dispatch.priority] = (
             "dispatch", None, str(desired.dispatch.table)
@@ -368,8 +407,13 @@ def _rule_signature(row):
         if table == "main" or numeric_table == 254
         else (str(table) if table is not None else None)
     )
+    suppress = row.get("suppress_prefixlen")
+    if suppress is None:
+        suppress = row.get("suppress_prefixlength")
+    if suppress is not None:
+        return ("preserve_main", None, table_value, _decimal(suppress))
     selectors = (
-        "dst", "dstlen", "suppress_prefixlen", "fwmark", "fwmask",
+        "dst", "dstlen", "fwmark", "fwmask",
         "uidrange", "sport", "dport", "ipproto", "oif",
     )
     if any(key in row for key in selectors):
@@ -384,6 +428,8 @@ def _desired_rule_priorities(desired):
     result = set()
     if desired.bypass is not None:
         result.add(desired.bypass.priority)
+    if desired.preserve_main is not None:
+        result.add(desired.preserve_main.priority)
     if desired.dispatch is not None:
         result.add(desired.dispatch.priority)
     return result
