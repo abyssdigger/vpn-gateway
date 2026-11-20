@@ -305,8 +305,7 @@ identities as managed /32 destinations. No additional host-side metadata carrier
 The Linux managed-domain lifecycle now materializes the selected Release-1 primary boundary
 as the managed-L3 endpoint contract rather than as an addressed transit subnet.
 
-The already-normalized internal specification keeps the historical addressed form only as a
-compatibility path for retained experiments/tests:
+The normalized internal specification contains only this selected primary-boundary shape:
 
 ```text
 ManagedNetworkDomainSpec:
