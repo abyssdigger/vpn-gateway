@@ -313,17 +313,14 @@ ManagedNetworkDomainSpec:
     namespace
     host_interface
     inner_interface
-    host_address: IPv4Interface | None
     inner_address: IPv4Interface
-    primary_backend: ManagedL3BoundaryBackend | None
-    additional_boundaries[]
+    primary_backend: ManagedL3BoundaryBackend
 ```
 
 For the selected alpha/runtime shape:
 
 ```text
 primary_backend = routed-veth-proxy-arp
-host_address    = none
 inner_address   = stack-local service /32
 
 HOST:
