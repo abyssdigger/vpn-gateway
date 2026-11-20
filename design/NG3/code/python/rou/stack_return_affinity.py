@@ -1,7 +1,6 @@
 """Pure managed-stack Profile flow-association and return-affinity projection.
 
-The historical module name is retained for migration compatibility.  The owned
-conntrack mark now represents the selected Profile for the whole flow:
+The owned conntrack mark represents the selected Profile for the whole flow:
 
 - VPN-originated NEW is classified by ingress path + remote source;
 - ordinary-originated NEW for a bidirectional Profile is classified by the
