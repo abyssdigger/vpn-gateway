@@ -32,7 +32,6 @@ class ManagedRouteType(str, Enum):
 class ManagedRouteRole(str, Enum):
     GUARD = "guard"
     VPN_PATH = "vpn_path"
-    LEGACY_HOST_BOUNDARY_LANE = "host_boundary_lane"
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,11 +127,6 @@ class ManagedRouteSpec:
                     "VPN path route requires LogicalPathId"
                 )
             return
-
-        if role is ManagedRouteRole.LEGACY_HOST_BOUNDARY_LANE:
-            raise PayloadRoutingProjectionError(
-                "legacy host-boundary lane route is observation-only and cannot be desired"
-            )
 
         raise PayloadRoutingProjectionError("unsupported managed route role")
 
