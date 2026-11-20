@@ -662,15 +662,16 @@ equivalence.
 ### 1.1.2.1. Release-1 systemd onboarding boundary
 
 **Constrained by:**
-- `VPNG0001-R1.R3.C1.C1`
-- `VPNG0001-R1.R3.C1.C1.R1`
-- `VPNG0001-R1.R3.C1.C1.R2`
-- `VPNG0001-R1.R3.C1.C1.R3`
+- `VPNG0001-R1.R3.C3`
+- `VPNG0001-R1.R3.C3.R1`
+- `VPNG0001-R1.R3.C1.R1.R2`
+- `VPNG0001-R1.R2.R4.R6.R4`
 - `VPNG0005-R5.C1`
 - `VPNG0005-R5.C1.R1`
 
-Release 1 uses systemd as the VPN process supervisor rather than introducing a VPN-GATE
-process manager.
+The requirement boundary does not prescribe a service manager. For the selected Release-1
+Linux realization, systemd remains the external VPN process supervisor rather than introducing
+a VPN-GATE process manager.
 
 For a supported service:
 
@@ -692,9 +693,10 @@ arbitrary administrator VPN units. The administrator prepares the stack-specific
 using `vpn-onboarding-release1.md`.
 
 Integration-specific VPN configuration must be policy-neutral with respect to VPN-GATE-owned
-managed-domain routes/RPDB/NAT/firewall. Examples include OpenVPN `route-noexec` and
-WireGuard/wg-quick `Table = off`; conflicting legacy hooks belong outside the supported
-managed-domain contract.
+managed-domain policy. This realizes `VPNG0001-R1.R3.C1.R1.R2`; examples include OpenVPN
+`route-noexec` and WireGuard/wg-quick `Table = off`. Conflicting legacy hooks belong
+outside the supported managed-domain contract unless a separate accepted requirement
+explicitly authorizes their effect.
 
 Direct root/admin modification of authoritative VPN-GATE-owned managed-domain state outside
 the supported lifecycle is external intervention for recovery purposes. Release 1 does not
@@ -718,7 +720,7 @@ blanket rule that every observable out-of-band change closes all forwarding.
 - `VPNG0005-R5.R6.R3`.
 
 **Constrained by:**
-- `VPNG0001-R1.R3.C1.C1`;
+- `VPNG0001-R1.R3.C3`;
 - `VPNG0005-R5.C1`.
 
 EXP-050 passed twice with the same OpenVPN 2.6.14 / systemd onboarding mechanism that passed
@@ -3207,7 +3209,9 @@ without manufacturing new product behavior.
 
 EXP-049 first proved that a real in-stack userspace VPN needs explicit local transport
 permission, then reran successfully after that permission was materialized through the normal
-production convergence boundary.
+production convergence boundary. The user-facing need for bounded client-side transport/control
+facts is owned by `VPNG0001-R1.R2.R4.R6.R4`; the default-deny local exception ownership is
+independently constrained by `VPNG0004-R4.R6.R1.R5.R1`.
 
 The normalized first-release contribution is:
 
@@ -6265,8 +6269,8 @@ command replay.
 
 **Implements:**
 - `VPNG0001-R1.R2`;
-- `VPNG0001-R1.R3.C1.C1.R1`;
-- `VPNG0001-R1.R3.C1.C1.R3`;
+- `VPNG0001-R1.R3.C3.R1`;
+- `VPNG0001-R1.R2.R4.R6.R4`;
 - `VPNG0004-R4.R4`;
 - `VPNG0004-R4.R5`;
 - `VPNG0005-R5.R1`;
@@ -6283,7 +6287,7 @@ command replay.
 
 **Constrained by:**
 - `VPNG0001-R1.R2.R4.R6.C1`;
-- `VPNG0001-R1.R3.C1.C1`;
+- `VPNG0001-R1.R3.C3`;
 - `VPNG0005-R5.C1`.
 
 Первый исполняемый alpha-runtime не вводит новую продуктовую семантику. Он соединяет уже

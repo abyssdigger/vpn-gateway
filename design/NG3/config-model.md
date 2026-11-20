@@ -443,7 +443,7 @@ The canonical Device policy/config grammar implements:
 - `VPNG0001-R1.R2.R4.R6.R2`;
 - `VPNG0001-R1.R2.R4.R6.R3`;
 - `VPNG0001-R1.R2.R4.R6.C1`;
-- `VPNG0001-R1.R3.C1.C1.R3`;
+- `VPNG0001-R1.R2.R4.R6.R4`;
 - `VPNG0001-R1.R2.R5` and its canonical-config children.
 
 Only the canonical fields and top-level tables defined by this model are accepted for
