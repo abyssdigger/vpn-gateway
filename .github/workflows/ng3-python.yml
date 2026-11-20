@@ -19,6 +19,7 @@ on:
       - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
       - "design/experiments/EXP-074 NG3 host managed routing/**"
       - "design/experiments/EXP-077 NG3 peaceful host routing/**"
+      - "design/experiments/EXP-078 NG3 peaceful host routing selectors/**"
       - "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/**"
       - "design/experiments/EXP-076 NG3 combined Profile SNAT/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
@@ -617,6 +618,10 @@ jobs:
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-077 NG3 peaceful host routing/exp077_peaceful_host_routing.py"
+      - name: EXP-078 scoped peaceful host routing selectors
+        run: >-
+          sudo python3
+          "design/experiments/EXP-078 NG3 peaceful host routing selectors/exp078_peaceful_host_routing_selectors.py"
   linux-profile-snat-reverse:
     runs-on: ubuntu-latest
     timeout-minutes: 10
