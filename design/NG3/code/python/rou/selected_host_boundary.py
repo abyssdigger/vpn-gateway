@@ -1,7 +1,7 @@
-"""Current alpha authoritative host-routing contribution.
+"""Postponed aggressive authoritative host-routing prototype contribution.
 
-The implementation remains executable reference evidence for the postponed aggressive
-host-routing child. It must not be treated as the selected Release-1 simple-helper contract.
+The implementation remains executable reference evidence for the aggressive host-routing
+child. It is intentionally detached from the alpha Release-1 peaceful-helper lifecycle.
 """
 
 from __future__ import annotations

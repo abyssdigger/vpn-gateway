@@ -11,9 +11,11 @@ an administrator may provide equivalent host integration manually, while Release
 configuration-disableable peaceful lifecycle helper for routine host-route setup/cleanup.
 Authoritative continuous host-routing ownership is a separate postponed aggressive capability;
 EXP-074 now closes only its narrow authoritative-routing child. Administrative payload
-containment remains an independent postponed safety capability. The current alpha's
-authoritative host-routing owner is retained only as executable aggressive-helper evidence and
-must be detached from the default core path before Release-1 host-integration closure.
+containment remains an independent postponed safety capability. The authoritative host-routing
+owner is retained only as executable aggressive-helper evidence and has been detached from the
+default alpha path. Release 1 now uses the EXP-077-backed peaceful helper, with
+`host_routing = "auto" | "manual"`, administrator non-default route precedence, no periodic
+host-route reconciliation and non-destructive lifecycle cleanup.
 
 The same cleanup removed the redundant zero-path safety child that had encoded host
 `ambient/main` fallback into the requirement tree: Profile persistence, valid concrete-path
