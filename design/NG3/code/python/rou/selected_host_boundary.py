@@ -72,8 +72,6 @@ def build_selected_host_boundary_desired(
         raise ValueError("domain_spec must be ManagedNetworkDomainSpec")
 
     boundary_owned_addresses = {domain_spec.inner_address.ip}
-    if domain_spec.host_address is not None:
-        boundary_owned_addresses.add(domain_spec.host_address.ip)
     for profile_id, semantic in config.profiles.items():
         if not config.structural.profiles[profile_id].enabled:
             continue
