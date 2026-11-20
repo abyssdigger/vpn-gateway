@@ -7,8 +7,11 @@
 - `VPNG0001-R1.R3.C1` — Release 1 leaves VPN-channel provisioning/configuration to the administrator.
 - `VPNG0001-R1.R3.C1.R1` — supported integrations must provide an administrator-facing onboarding contract.
 - `VPNG0001-R1.R3.C1.R1.R1` — that contract must have reproducible end-to-end applicability evidence.
+- `VPNG0001-R1.R3.C1.R1.R2` — the supported onboarding contract must keep VPN-specific configuration policy-neutral relative to VPN-GATE-owned state.
 - `VPNG0001-R1.R3.C2` — for this integration, the managed data-plane endpoint must exist inside the isolated managed network domain.
 - `VPNG0001-R1.R3.R2` — for this integration, a logical path must have one unambiguous current concrete endpoint before use.
+- `VPNG0001-R1.R2.R4.R6.R4` — Device policy supplies bounded client-side VPN transport/control facts.
+- `VPNG0004-R4.R6.R1.R5.R1` — those facts may materialize only as explicit owned local/system exceptions under default-deny managed-domain policy.
 
 The endpoint-placement, binding and forwarding checks below are therefore the **composed
 acceptance scenario for this concrete integration**, not lower mechanisms prescribed by

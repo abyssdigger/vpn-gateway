@@ -7,6 +7,8 @@
 - `VPNG0007-R7.R7` — substantial development/evidence work is requirement-driven.
 - `VPNG0007-R7.R7.R1` — dependent VPN lifecycle work is gated by basic in-stack applicability.
 - `VPNG0007-R7.R7.R1.R1` — after applicability PASS, lifecycle and aggressive-config behavior must be tested before accepting bounded-VPN lifecycle semantics.
+- `VPNG0001-R1.R3.C3` — Release 1 may leave external VPN runtime lifecycle ownership/supervision outside VPN-GATE.
+- `VPNG0001-R1.R3.C3.R1` — that external lifecycle must have a reproducible integration contract coordinated with VPN-GATE safety/lifecycle postconditions.
 - prerequisite product evidence: `VPNG0001-R1.R3.C1.R1.R1` / EXP-049.
 
 ## Dependency gate
