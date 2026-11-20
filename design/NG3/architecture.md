@@ -425,10 +425,15 @@ Its desired contribution is derived from current accepted configuration and may 
 - effective Profile SNAT identities when the administrator wants helper-provided reverse
   reachability to the managed boundary.
 
-The helper installs its owned routing contribution at start / supported re-application of
-configuration and removes that owned contribution on stop. Between those lifecycle
-operations, administrator changes to ordinary host routing are not treated as core
-managed-domain corruption and do not by themselves close the internal forwarding gate.
+The helper installs identifiable routing contributions at start / supported re-application
+of configuration. After successful application, ordinary host routing remains
+administrator-owned rather than continuously owned by VPN-GATE. On stop the helper removes
+only still-identifiable contributions that remain its own and must not delete an
+administrator replacement merely because it occupies the same destination.
+
+Between those lifecycle operations, administrator changes to ordinary host routing are not
+runtime drift under `VPNG0005-R5.R2`, are not out-of-band corruption under
+`VPNG0005-R5.C1`, and do not by themselves close the internal forwarding gate.
 
 The exact Linux route/RPDB lowering for this simple helper is **not yet selected** by this
 section. In particular, the former authoritative dedicated-table precedence cannot be used as
@@ -6605,8 +6610,14 @@ Affected requirements:
 - `VPNG0005-R5.R5`
 - `VPNG0005-R5.R6`
 
-Lifecycle control semantics and autonomous local reconciliation are now explicit. They
-still do not justify a separate global lifecycle component.
+Lifecycle control semantics and autonomous local reconciliation are now explicit for state
+that an active function retains under authoritative VPN-GATE ownership. The simple
+host-routing helper under `VPNG0001-R1.R4` is deliberately different: after each successful
+lifecycle application, ordinary host routing is handed back to administrator control and is
+not part of periodic runtime reconciliation until the next explicit helper lifecycle
+operation.
+
+These semantics still do not justify a separate global lifecycle component.
 
 For the first release, VPN provisioning and VPN-specific configuration remain outside
 VPN-GATE ownership by `VPNG0001-R1.R3.C1`. For a supported in-stack VPN process, however,
