@@ -63,25 +63,20 @@ def pair(a,b,na,nb):
 SERVER=r"""
 import socket,sys
 addr=sys.argv[1]; port=int(sys.argv[2])
-s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
-s.bind((addr,port)); s.listen(1); print("READY",flush=True)
-c,peer=s.accept(); c.settimeout(3)
+s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+s.bind((addr,port)); print("READY",flush=True)
+data,peer=s.recvfrom(4096)
 print("PEER="+peer[0],flush=True)
-data=c.recv(4096)
-try:
-    c.sendall(b"ACK:"+data)
-except OSError as exc:
-    print("SEND_ERROR="+repr(exc),flush=True)
-c.close(); s.close()
+s.sendto(b"ACK:"+data,peer)
+s.close()
 """
 
 CLIENT=r"""
 import socket,sys
-s=socket.socket(); s.settimeout(3)
-s.connect((sys.argv[1],int(sys.argv[2])))
-s.sendall(b"probe")
+s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(3)
+s.sendto(b"probe",(sys.argv[1],int(sys.argv[2])))
 try:
-    data=s.recv(4096)
+    data,peer=s.recvfrom(4096)
     print("DATA="+data.decode(),flush=True)
 except Exception as exc:
     print("RECV_ERROR="+type(exc).__name__+":"+str(exc),flush=True)
