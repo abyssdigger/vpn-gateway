@@ -340,7 +340,9 @@ def main():
             row
             for row in rules_after
             if row.get("priority") == preserve.priority
-            and str(row.get("protocol")) == "99"
+            and row.get("table") == "main"
+            and row.get("suppress_prefixlen") == 0
+            and str(row.get("protocol")) != str(preserve.protocol)
         ]
         assert len(foreign) == 1, rules_after
         print("EXP077_FOREIGN_REPLACEMENT_PRESERVED=PASS", flush=True)
