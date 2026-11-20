@@ -103,3 +103,13 @@ EXP-054 is PASS only if H1-H5 pass in one run.
 A PASS permits implementation of a bounded underlay-pin planner/observer and host bootstrap
 actuator. It does not decide how arbitrary vendor VPN endpoints are discovered; Release-1
 client-side exact endpoints already exist in normalized `allow_vpn_client` intent.
+## Post-result lifecycle
+
+- Logical evidence state: **PREPARED / UNPROVEN**.
+- Current disposition: **historical_only**.
+- Applicability: **утратил применимость до завершения эксперимента**.
+
+The prepared endpoint-pin mechanism was made unnecessary by the managed-boundary ingress
+bypass proven later by EXP-056 and by the current authoritative host-routing contract proven
+by EXP-074. No positive technical result is inferred from this prepared experiment.
+
