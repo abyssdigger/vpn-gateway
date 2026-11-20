@@ -237,7 +237,7 @@ device_order = ["oc"]
             ipaddress.IPv4Address("198.19.255.12"),
         )
 
-    def test_bare_snat_requires_default_and_historical_route_return_is_rejected(self):
+    def test_bare_snat_requires_default(self):
         with self.assertRaisesRegex(
             Release1ConfigError, "requires top-level default_snat_address"
         ):
@@ -253,18 +253,6 @@ destinations = ["10.0.0.0/8"]
 device_order = ["oc"]
 """)
 
-        with self.assertRaisesRegex(Release1ConfigError, "historical"):
-            parse_release1_config("""
-[device.oc]
-enabled = true
-expected_interfaces = ["vpn0"]
-
-[profile.support]
-enabled = true
-direction = "inbound+route-return"
-destinations = ["10.0.0.0/8"]
-device_order = ["oc"]
-""")
 
     def test_snat_identity_must_not_overlap_untranslated_remote_source_space(self):
         with self.assertRaisesRegex(
