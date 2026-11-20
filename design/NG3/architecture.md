@@ -1296,7 +1296,7 @@ ProfileConfigIntent:
     device_order[] = plain Device IDs in baseline order
     reserve_device_ids[] = Profile-local subset of device_order
     availability_check?
-    ordinary_gateway_nat_intent?
+    effective_snat_address?
 
 DeviceBindingIntent:
     device_id
