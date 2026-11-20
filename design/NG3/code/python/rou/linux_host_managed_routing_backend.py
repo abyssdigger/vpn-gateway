@@ -289,7 +289,7 @@ def _observe_routes(rows, allocation):
         flags = row.get("flags", ())
         if flags is None:
             flags = ()
-        if not isinstance(flags, list):
+        if not isinstance(flags, (list, tuple)):
             conflicts.append("managed-routing route flags are not representable")
             continue
         unsupported_flags = set(flags) - {"onlink"}
