@@ -1317,7 +1317,7 @@ Key normalization rules:
 - `publish_vpn_server` is normalized separately from Profile payload routing; host/internal
   port bundles preserve declared item order and explicit translation requires equal expanded
   cardinality for positional 1:1 mapping;
-- historical Device policy spellings are rejected rather than accepted as aliases;
+- enabled Device objects accept only the canonical policy fields defined by the Release-1 grammar;
 - availability subject identity is exactly `(profile_id, logical_path_id)`;
 - the same bound interface/path may therefore have independent availability state in
   different Profiles;
@@ -1389,9 +1389,9 @@ Client transport/control permission and server publication are both Device trans
 properties but remain different normalized owner classes. `allow_vpn_client` does not become
 payload forwarding permission; `publish_vpn_server` does not become Profile routing.
 
-Historical `nat`, `traffic_envelope`, `publications` and top-level `integration.*`
-spellings are not compatibility aliases. Endpoint-scoped firewall syntax remains separately
-deferred under `VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
+Unknown Device policy fields and top-level tables are rejected by the strict Release-1
+configuration boundary. Endpoint-scoped firewall syntax remains separately deferred under
+`VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
 
 ### AvailabilityDescriptionResolver
 
