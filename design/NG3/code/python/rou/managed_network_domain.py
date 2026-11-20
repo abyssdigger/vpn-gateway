@@ -70,7 +70,6 @@ class ManagedNetworkDomainVerification:
     confirmed: bool
     errors: tuple[str, ...]
     host_boundary: InterfaceIdentity | None = None
-    boundary_interfaces: tuple[InterfaceIdentity, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,11 +196,12 @@ def verify_managed_network_domain(
                     f"{label} managed L3 endpoint rp_filter is not disabled"
                 )
 
-    boundary_interfaces: list[InterfaceIdentity] = []
+    primary_boundary = None
     if inner is not None and type(inner.get("ifindex")) is int:
         try:
-            boundary_interfaces.append(
-                InterfaceIdentity(spec.inner_interface, inner["ifindex"])
+            primary_boundary = InterfaceIdentity(
+                spec.inner_interface,
+                inner["ifindex"],
             )
         except ValueError:
             errors.append("inner boundary interface identity is invalid")
@@ -242,17 +242,10 @@ def verify_managed_network_domain(
     ):
         errors.append("host stack-local service route does not exactly use managed L3 host boundary")
 
-    primary_boundary = (
-        boundary_interfaces[0]
-        if boundary_interfaces
-        and boundary_interfaces[0].ifname == spec.inner_interface
-        else None
-    )
     return ManagedNetworkDomainVerification(
         confirmed=not errors,
         errors=tuple(errors),
         host_boundary=primary_boundary if not errors else None,
-        boundary_interfaces=tuple(boundary_interfaces) if not errors else (),
     )
 
 
