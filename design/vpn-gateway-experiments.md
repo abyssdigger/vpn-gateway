@@ -43,6 +43,7 @@ Current experiment directories:
 | EXP-077 | Release-1 peaceful host-routing helper |
 | EXP-078 | scoped peaceful host-routing selectors |
 | EXP-079 | managed-boundary absolute helper bypass |
+| EXP-080 | scoped preserve-main non-interference |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -97,3 +98,4 @@ Canonical dispositions:
 | EXP-077 | PASS | selected | Selected complementary evidence for peaceful-helper main-first precedence and lifecycle-safe non-destructive cleanup. After scoped selectors were introduced, its former global behavior is the `:any` subcase; EXP-078 extends rather than supersedes it. |
 | EXP-078 | PASS | selected | Selected privileged acceptance evidence for revised `VPNG0001-R2.R2` selector scope: host-local, external, exact ingress, union and any dispatch preserve unselected ordinary-host routing, administrator non-default precedence and managed-boundary bypass. |
 | EXP-079 | PASS | selected | Selected reusable lower evidence for absolute managed-boundary no-recapture: `iif <boundary> goto <post-helper nop>` skips helper lookup even when ordinary routing has no result; applies to peaceful and postponed aggressive helpers. |
+| EXP-080 | PASS | selected | Selected correctness evidence for peaceful selector scope: global preserve-main can reorder unselected administrator RPDB policy; per-selector preserve+dispatch preserves unselected routing while retaining selected explicit-main precedence. |

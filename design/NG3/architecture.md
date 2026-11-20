@@ -471,8 +471,10 @@ Between lifecycle operations administrator changes are not drift under `VPNG0005
 are not out-of-band corruption under `VPNG0005-R5.C1`, and do not by themselves close the
 internal ForwardingGate.
 
-The revised Linux closure candidate keeps the already proven main-first behavior but scopes
-only the helper dispatch:
+The revised Linux closure candidate keeps the already proven main-first behavior **inside
+the selected helper scope only**. EXP-080 showed that a global preserve-main lookup can
+otherwise preempt unrelated administrator RPDB policy for traffic that the helper did not
+select. Each selector therefore owns one preserve+dispatch pair:
 
 ```text
 kernel local rule
@@ -481,26 +483,39 @@ kernel local rule
 iif <managed-host-boundary> goto <after-peaceful-helper>
     -> traffic already emitted by STACK skips the helper range unconditionally
 
-lookup main suppress_prefixlength 0
-    -> explicit non-default administrator main routes win first
+<selector-1> lookup main suppress_prefixlength 0
+<selector-1> lookup <peaceful-helper-table>
 
-<selector-scoped dispatch rule(s)> lookup <peaceful-helper-table>
-    -> only selected ordinary-host traffic may use helper destinations
+<selector-2> lookup main suppress_prefixlength 0
+<selector-2> lookup <peaceful-helper-table>
+
+...
 
 <after-peaceful-helper>: nop
     -> bypassed traffic resumes ordinary administrator/kernel RPDB processing
 
-ordinary main/default rules
-    -> unselected or unmatched traffic keeps ordinary host routing
+ordinary administrator/kernel RPDB + main/default
+    -> unselected traffic is not reordered by helper rules
 ```
 
-The dispatch lowering is:
+The pair lowering is:
 
 ```text
-:local       -> iif lo lookup <peaceful-helper-table>
-:external    -> not iif lo lookup <peaceful-helper-table>
-:any         -> lookup <peaceful-helper-table>
-<ifname>     -> iif <ifname> lookup <peaceful-helper-table>
+:local
+    -> iif lo lookup main suppress_prefixlength 0
+    -> iif lo lookup <peaceful-helper-table>
+
+:external
+    -> not iif lo lookup main suppress_prefixlength 0
+    -> not iif lo lookup <peaceful-helper-table>
+
+:any
+    -> lookup main suppress_prefixlength 0
+    -> lookup <peaceful-helper-table>
+
+<ifname>
+    -> iif <ifname> lookup main suppress_prefixlength 0
+    -> iif <ifname> lookup <peaceful-helper-table>
 ```
 
 The managed-boundary `goto` bypass precedes every helper lookup and targets the helper-owned
@@ -527,12 +542,14 @@ Lifecycle cleanup remains ownership-tagged and non-destructive. There is no peri
 audit or automatic repair for this helper, and later host-route changes do not control the
 internal ForwardingGate.
 
-EXP-078 is the privileged acceptance evidence for the selector-specific Linux lowering and
-non-interference properties: `iif lo`, `not iif lo`, exact ingress, selector union,
-selected-scope `0.0.0.0/0`, administrator non-default precedence and managed-boundary bypass
-all passed on real Linux RPDB state. EXP-077 remains selected complementary evidence for the
-`:any`/global main-first subcase and non-destructive lifecycle cleanup. Together they close
-the revised `VPNG0001-R2.R2`; neither supersedes EXP-074 for the postponed aggressive child.
+EXP-078 proves selector dispatch, selected-scope `0.0.0.0/0` and
+administrator non-default precedence for the selected traffic. EXP-079 proves absolute
+managed-boundary no-recapture. EXP-080 adds the missing non-interference fact: the
+preserve-main lookup must be selector-scoped as well, otherwise unselected administrator
+RPDB policy can be reordered. EXP-077 remains complementary lifecycle/non-destructive
+cleanup evidence. The requirement is re-opened until implementation uses the EXP-080-backed
+paired lowering and passes regression evidence; none of EXP-078/079/080 supersedes EXP-074
+for the postponed aggressive child.
 
 Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
 managed boundary, not by host routing. A helper may automate host reachability to that
@@ -6674,7 +6691,7 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
 | `VPNG0001-R2.R1` manual host integration | closed through `host-integration.md`: remote-prefix, Profile-SNAT identity, full-tunnel and host-forwarding prerequisites are explicit without requiring a helper |
-| `VPNG0001-R2.R2` peaceful host-routing assistance | closed: default-disabled selector scope + `peaceful` policy; EXP-078-backed main-first scoped dispatch; EXP-077 retains lifecycle/non-destructive cleanup evidence |
+| `VPNG0001-R2.R2` peaceful host-routing assistance | pending re-closure: EXP-080 found global preserve-main interference outside selector scope; architecture corrected to selector-paired preserve+dispatch, implementation/evidence refresh pending |
 | `VPNG0001-R2.R3` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
