@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from .host_managed_routing import HostManagedRoutingPlan
 from .network_policy_layout import NumericResourcePool
@@ -50,6 +50,8 @@ class HostManagedRouteSpec:
     interface: str
     table: int
     protocol: int
+    gateway: IPv4Address | None = None
+    onlink: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +80,7 @@ def build_linux_host_managed_routing_desired(
     *,
     host_interface: str,
     allocation: HostManagedRoutingLinuxAllocation,
+    stack_service_address: IPv4Address | None = None,
 ) -> HostManagedRoutingLinuxDesired:
     if not isinstance(plan, HostManagedRoutingPlan):
         raise ValueError("plan must be HostManagedRoutingPlan")
@@ -86,18 +89,29 @@ def build_linux_host_managed_routing_desired(
     if not isinstance(allocation, HostManagedRoutingLinuxAllocation):
         raise ValueError("allocation must be HostManagedRoutingLinuxAllocation")
 
-    destinations = tuple(item.destination for item in plan.routes)
-    if not destinations:
+    if stack_service_address is not None and not isinstance(
+        stack_service_address, IPv4Address
+    ):
+        raise ValueError("stack_service_address must be IPv4Address or None")
+    if not plan.routes:
         return HostManagedRoutingLinuxDesired((), None, None)
+    if any(item.via_stack_service for item in plan.routes) and stack_service_address is None:
+        raise ValueError(
+            "SNAT identity host route requires current stack_service_address"
+        )
 
     routes = tuple(
         HostManagedRouteSpec(
-            destination=destination,
+            destination=item.destination,
             interface=host_interface,
             table=allocation.table,
             protocol=allocation.route_protocol,
+            gateway=(
+                stack_service_address if item.via_stack_service else None
+            ),
+            onlink=item.via_stack_service,
         )
-        for destination in destinations
+        for item in plan.routes
     )
     return HostManagedRoutingLinuxDesired(
         routes=routes,
