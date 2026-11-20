@@ -6560,10 +6560,11 @@ VPN-path observation
 OS/network-state observation and actuation
 ```
 
-For the first release that claims conformance to this production boundary, those runtime
-responsibilities must execute from the Rust implementation. A Python module is not allowed to
-remain a hidden production-path dependency merely because it was the original executable
-reference.
+For the first release that claims conformance to this production boundary, the non-exempt
+runtime responsibilities must execute from the Rust implementation. A Python module is not
+allowed to remain a hidden dependency for those non-exempt responsibilities merely because
+it was the original executable reference. The host-routing helper is the explicit exception
+defined by `VPNG0007-R7.R8.C3`.
 
 The current `design/NG3/code/python/rou/` implementation has a different role:
 
@@ -6597,10 +6598,12 @@ not be described as the final production/stable implementation boundary.
 implementation may remain a supported production implementation after the first product
 release and after the rest of the target production runtime has crossed the Rust boundary.
 
-This exception is narrow: it does not permit core lifecycle, managed-domain forwarding,
-policy calculation/reconciliation, VPN-path observation, or other responsibilities covered
-by `VPNG0007-R7.R8` to retain hidden Python runtime dependencies. The helper remains a
-separable host-side contribution behind its existing internal contract.
+This exception is narrow: it does not relax the Rust boundary for core lifecycle,
+managed-domain forwarding, policy calculation/reconciliation, VPN-path observation, or other
+non-helper responsibilities covered by `VPNG0007-R7.R8`. The exact integration mechanism
+between a future Rust core runtime and a Python helper is intentionally not selected here;
+that is a later architecture decision and must not silently move non-helper responsibilities
+back into Python.
 
 Migrating the helper itself to Rust is therefore not ordinary completion work for
 `VPNG0007-R7.R8`. It may begin only after a separate explicit project-holder decision. If
@@ -6653,8 +6656,9 @@ Sufficient evidence for the final production-language transition includes:
   contracts;
 - end-to-end regression of the product scenarios used to accept the corresponding Python
   reference behavior;
-- packaging evidence that the claimed production runtime does not execute Python runtime
-  modules;
+- packaging evidence that non-exempt responsibilities in the claimed production runtime do
+  not execute Python runtime modules; the host-routing helper exception remains governed by
+  `VPNG0007-R7.R8.C3`;
 - an auditable inventory of production `unsafe`/memory-unsafe FFI boundaries and their
   local justifications.
 
