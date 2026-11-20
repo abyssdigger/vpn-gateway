@@ -3,23 +3,80 @@ import unittest
 
 from rou.domain import Direction
 from rou.port_bundle import PortBundle, PortSpan
-from rou.release1_config import HostRoutingMode, Release1ConfigError, parse_release1_config
+from rou.release1_config import (
+    HelperRoutingPolicy,
+    HelperRoutingSelectorKind,
+    Release1ConfigError,
+    parse_release1_config,
+    render_helper_routing_interfaces,
+)
 
 
 class Release1ConfigTests(unittest.TestCase):
-    def test_host_routing_mode_defaults_auto_and_accepts_manual_only(self):
-        self.assertIs(
-            parse_release1_config("").host_routing,
-            HostRoutingMode.AUTO,
+    def test_helper_routing_defaults_are_noninvasive_and_peaceful(self):
+        cfg = parse_release1_config("")
+        self.assertEqual(cfg.helper_routing_interfaces, ())
+        self.assertEqual(
+            render_helper_routing_interfaces(cfg.helper_routing_interfaces),
+            ":none",
         )
-        self.assertIs(
-            parse_release1_config('host_routing = "manual"').host_routing,
-            HostRoutingMode.MANUAL,
+        self.assertIs(cfg.helper_routing_policy, HelperRoutingPolicy.PEACEFUL)
+
+    def test_helper_routing_selector_scope_is_strict_and_canonical(self):
+        cfg = parse_release1_config(
+            'helper_routing_interfaces = ":local,eth1,eth0"'
         )
-        with self.assertRaisesRegex(Release1ConfigError, "host_routing"):
-            parse_release1_config('host_routing = "aggressive"')
-        with self.assertRaisesRegex(Release1ConfigError, "host_routing"):
-            parse_release1_config("host_routing = true")
+        self.assertEqual(
+            render_helper_routing_interfaces(cfg.helper_routing_interfaces),
+            ":local,eth0,eth1",
+        )
+        self.assertEqual(
+            [item.kind for item in cfg.helper_routing_interfaces],
+            [
+                HelperRoutingSelectorKind.LOCAL,
+                HelperRoutingSelectorKind.INTERFACE,
+                HelperRoutingSelectorKind.INTERFACE,
+            ],
+        )
+        lo = parse_release1_config('helper_routing_interfaces = "lo,eth0"')
+        self.assertEqual(
+            render_helper_routing_interfaces(lo.helper_routing_interfaces),
+            "eth0,lo",
+        )
+        for value in (":external", ":any"):
+            with self.subTest(value=value):
+                parsed = parse_release1_config(
+                    f'helper_routing_interfaces = "{value}"'
+                )
+                self.assertEqual(
+                    render_helper_routing_interfaces(
+                        parsed.helper_routing_interfaces
+                    ),
+                    value,
+                )
+        for invalid in (
+            ":none,eth0",
+            ":any,eth0",
+            ":external,eth0",
+            ":local,lo",
+            "eth0,eth0",
+            "eth0, eth1",
+            ":unknown",
+            "bad:if",
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(Release1ConfigError):
+                    parse_release1_config(
+                        f'helper_routing_interfaces = "{invalid}"'
+                    )
+
+    def test_old_host_routing_surface_and_future_aggressive_policy_are_rejected(self):
+        with self.assertRaisesRegex(Release1ConfigError, "unsupported"):
+            parse_release1_config('host_routing = "manual"')
+        with self.assertRaisesRegex(Release1ConfigError, "helper_routing_policy"):
+            parse_release1_config('helper_routing_policy = "aggressive"')
+        with self.assertRaisesRegex(Release1ConfigError, "helper_routing_policy"):
+            parse_release1_config("helper_routing_policy = true")
 
     def test_complete_canonical_surface_normalizes(self):
         cfg = parse_release1_config("""

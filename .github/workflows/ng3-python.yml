@@ -614,11 +614,6 @@ jobs:
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-074 NG3 host managed routing/exp074_host_managed_routing.py"
-      - name: EXP-077 peaceful Release-1 host routing
-        run: >-
-          env PYTHONPATH=design/NG3/code/python
-          sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-077 NG3 peaceful host routing/exp077_peaceful_host_routing.py"
       - name: EXP-078 scoped peaceful host routing selectors
         run: >-
           sudo python3

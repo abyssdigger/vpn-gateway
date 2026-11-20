@@ -14,6 +14,7 @@ from .linux_host_managed_routing import (
     HostManagedRouteSpec,
     HostManagedRoutingLinuxAllocation,
     HostManagedRoutingLinuxDesired,
+    HostManagedScopeExitRuleSpec,
 )
 
 
@@ -134,13 +135,15 @@ class LinuxHostManagedRoutingBackend:
         self.runner.run(self._cmd(*args))
 
     def add_bypass_rule(self, rule: HostManagedBypassRuleSpec) -> None:
-        self.runner.run(
-            self._cmd(
-                "ip", "-4", "rule", "add", "priority", str(rule.priority),
-                "protocol", str(rule.protocol), "iif", rule.interface,
-                "lookup", "main",
-            )
-        )
+        args = [
+            "ip", "-4", "rule", "add", "priority", str(rule.priority),
+            "protocol", str(rule.protocol), "iif", rule.interface,
+        ]
+        if rule.goto_priority is None:
+            args.extend(("lookup", "main"))
+        else:
+            args.extend(("goto", str(rule.goto_priority)))
+        self.runner.run(self._cmd(*args))
 
     def add_preserve_main_rule(
         self,
@@ -155,10 +158,22 @@ class LinuxHostManagedRoutingBackend:
         )
 
     def add_dispatch_rule(self, rule: HostManagedDispatchRuleSpec) -> None:
+        args = [
+            "ip", "-4", "rule", "add", "priority", str(rule.priority),
+            "protocol", str(rule.protocol),
+        ]
+        if rule.invert_incoming_interface:
+            args.append("not")
+        if rule.incoming_interface is not None:
+            args.extend(("iif", rule.incoming_interface))
+        args.extend(("lookup", str(rule.table)))
+        self.runner.run(self._cmd(*args))
+
+    def add_scope_exit_rule(self, rule: HostManagedScopeExitRuleSpec) -> None:
         self.runner.run(
             self._cmd(
                 "ip", "-4", "rule", "add", "priority", str(rule.priority),
-                "protocol", str(rule.protocol), "lookup", str(rule.table),
+                "protocol", str(rule.protocol), "type", "nop",
             )
         )
 
@@ -209,6 +224,15 @@ def converge_host_managed_routing_once(
     if observed.conflicts:
         raise HostManagedRoutingConflict("; ".join(observed.conflicts))
     if (
+        desired.scope_exit is not None
+        and desired.scope_exit.priority in observed.missing_rule_priorities
+    ):
+        backend.add_scope_exit_rule(desired.scope_exit)
+
+    observed = backend.observe(desired)
+    if observed.conflicts:
+        raise HostManagedRoutingConflict("; ".join(observed.conflicts))
+    if (
         desired.bypass is not None
         and desired.bypass.priority in observed.missing_rule_priorities
     ):
@@ -223,14 +247,12 @@ def converge_host_managed_routing_once(
     ):
         backend.add_preserve_main_rule(desired.preserve_main)
 
-    observed = backend.observe(desired)
-    if observed.conflicts:
-        raise HostManagedRoutingConflict("; ".join(observed.conflicts))
-    if (
-        desired.dispatch is not None
-        and desired.dispatch.priority in observed.missing_rule_priorities
-    ):
-        backend.add_dispatch_rule(desired.dispatch)
+    for dispatch in desired.dispatch_rules:
+        observed = backend.observe(desired)
+        if observed.conflicts:
+            raise HostManagedRoutingConflict("; ".join(observed.conflicts))
+        if dispatch.priority in observed.missing_rule_priorities:
+            backend.add_dispatch_rule(dispatch)
 
     final = backend.observe(desired)
     if final.conflicts:
@@ -253,13 +275,11 @@ def cleanup_host_managed_routing_once(
     if current.conflicts and not tolerate_foreign_replacements:
         raise HostManagedRoutingConflict("; ".join(current.conflicts))
 
-    # Capture goes away before routes; bypass can disappear after dispatch.
-    if (
-        desired.dispatch is not None
-        and desired.dispatch.priority in current.rule_priorities
-    ):
-        backend.delete_rule_priority(desired.dispatch.priority)
-    current = backend.observe(desired)
+    # Capture goes away before routes; remove selector dispatches before bypass/exit.
+    for dispatch in reversed(desired.dispatch_rules):
+        if dispatch.priority in current.rule_priorities:
+            backend.delete_rule_priority(dispatch.priority)
+            current = backend.observe(desired)
     if (
         desired.preserve_main is not None
         and desired.preserve_main.priority in current.rule_priorities
@@ -271,6 +291,12 @@ def cleanup_host_managed_routing_once(
         and desired.bypass.priority in current.rule_priorities
     ):
         backend.delete_rule_priority(desired.bypass.priority)
+    current = backend.observe(desired)
+    if (
+        desired.scope_exit is not None
+        and desired.scope_exit.priority in current.rule_priorities
+    ):
+        backend.delete_rule_priority(desired.scope_exit.priority)
 
     # Also remove any stale rules from the superseded paired-RPDB owner.
     current = backend.observe(desired)
@@ -381,7 +407,9 @@ def _expected_rule_signatures(desired):
     result = {}
     if desired.bypass is not None:
         result[desired.bypass.priority] = (
-            "bypass", desired.bypass.interface, "main"
+            ("bypass", desired.bypass.interface, "main")
+            if desired.bypass.goto_priority is None
+            else ("goto", desired.bypass.interface, desired.bypass.goto_priority)
         )
     if desired.preserve_main is not None:
         result[desired.preserve_main.priority] = (
@@ -390,14 +418,24 @@ def _expected_rule_signatures(desired):
             "main",
             desired.preserve_main.suppress_prefixlength,
         )
-    if desired.dispatch is not None:
-        result[desired.dispatch.priority] = (
-            "dispatch", None, str(desired.dispatch.table)
+    for dispatch in desired.dispatch_rules:
+        result[dispatch.priority] = (
+            "dispatch",
+            dispatch.incoming_interface,
+            dispatch.invert_incoming_interface,
+            str(dispatch.table),
         )
+    if desired.scope_exit is not None:
+        result[desired.scope_exit.priority] = ("nop",)
     return result
 
 
 def _rule_signature(row):
+    if "nop" in row:
+        return ("nop",)
+    if "goto" in row:
+        return ("goto", row.get("iif"), _decimal(row.get("goto")))
+
     table = row.get("table")
     if table is None:
         table = row.get("lookup")
@@ -419,9 +457,10 @@ def _rule_signature(row):
     if any(key in row for key in selectors):
         return ("other", None, table_value)
     interface = row.get("iif")
-    if interface is not None:
+    inverted = "not" in row
+    if interface is not None and table_value == "main" and not inverted:
         return ("bypass", interface, table_value)
-    return ("dispatch", None, table_value)
+    return ("dispatch", interface, inverted, table_value)
 
 
 def _desired_rule_priorities(desired):
@@ -430,10 +469,10 @@ def _desired_rule_priorities(desired):
         result.add(desired.bypass.priority)
     if desired.preserve_main is not None:
         result.add(desired.preserve_main.priority)
-    if desired.dispatch is not None:
-        result.add(desired.dispatch.priority)
+    result.update(item.priority for item in desired.dispatch_rules)
+    if desired.scope_exit is not None:
+        result.add(desired.scope_exit.priority)
     return result
-
 
 def _route_network(value):
     if value in (None, "default"):

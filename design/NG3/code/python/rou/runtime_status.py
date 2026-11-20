@@ -13,7 +13,7 @@ from typing import Iterable
 from .binding import PathBinding
 from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
-from .release1_config import Release1Config
+from .release1_config import Release1Config, render_helper_routing_interfaces
 
 
 class RuntimeReadiness(str, Enum):
@@ -49,7 +49,8 @@ class ConfiguredProfileStatus:
 
 @dataclass(frozen=True, slots=True)
 class ConfiguredIntentStatus:
-    host_routing: str
+    helper_routing_interfaces: str
+    helper_routing_policy: str
     devices: tuple[ConfiguredDeviceStatus, ...]
     profiles: tuple[ConfiguredProfileStatus, ...]
 
@@ -306,7 +307,8 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
         )
 
     return ConfiguredIntentStatus(
-        config.host_routing.value,
+        render_helper_routing_interfaces(config.helper_routing_interfaces),
+        config.helper_routing_policy.value,
         tuple(devices),
         tuple(profiles),
     )

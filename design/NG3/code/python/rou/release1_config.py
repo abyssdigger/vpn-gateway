@@ -19,7 +19,15 @@ from .domain import Direction, StructuralConfig
 from .port_bundle import PortBundle, PortSpan
 
 
-_TOP_LEVEL_KEYS = frozenset({"default_snat_address", "host_routing", "device", "profile"})
+_TOP_LEVEL_KEYS = frozenset(
+    {
+        "default_snat_address",
+        "helper_routing_interfaces",
+        "helper_routing_policy",
+        "device",
+        "profile",
+    }
+)
 _DEVICE_KEYS = frozenset(
     {
         "enabled",
@@ -57,9 +65,30 @@ class Release1ConfigError(ConfigError):
     pass
 
 
-class HostRoutingMode(str, Enum):
-    AUTO = "auto"
-    MANUAL = "manual"
+class HelperRoutingPolicy(str, Enum):
+    PEACEFUL = "peaceful"
+
+
+class HelperRoutingSelectorKind(str, Enum):
+    LOCAL = "local"
+    EXTERNAL = "external"
+    ANY = "any"
+    INTERFACE = "interface"
+
+
+@dataclass(frozen=True, slots=True)
+class HelperRoutingSelector:
+    kind: HelperRoutingSelectorKind
+    interface: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.kind, HelperRoutingSelectorKind):
+            raise ValueError("kind must be HelperRoutingSelectorKind")
+        if self.kind is HelperRoutingSelectorKind.INTERFACE:
+            if not isinstance(self.interface, str) or not self.interface:
+                raise ValueError("interface selector requires an interface name")
+        elif self.interface is not None:
+            raise ValueError("special helper selector cannot carry interface name")
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +154,8 @@ class Release1Config:
     devices: Mapping[str, DeviceRelease1Config]
     profiles: Mapping[str, ProfileRelease1Config]
     default_snat_address: ipaddress.IPv4Address | None = None
-    host_routing: HostRoutingMode = HostRoutingMode.AUTO
+    helper_routing_interfaces: tuple[HelperRoutingSelector, ...] = ()
+    helper_routing_policy: HelperRoutingPolicy = HelperRoutingPolicy.PEACEFUL
 
 
 def parse_release1_config(text: str) -> Release1Config:
@@ -151,7 +181,12 @@ def parse_release1_config(text: str) -> Release1Config:
         raw.get("default_snat_address"),
         "default_snat_address",
     )
-    host_routing = _parse_host_routing(raw.get("host_routing", "auto"))
+    helper_routing_interfaces = _parse_helper_routing_interfaces(
+        raw.get("helper_routing_interfaces", ":none")
+    )
+    helper_routing_policy = _parse_helper_routing_policy(
+        raw.get("helper_routing_policy", "peaceful")
+    )
     raw_devices = _table(raw.get("device", {}), "device")
     raw_profiles = _table(raw.get("profile", {}), "profile")
 
@@ -308,18 +343,108 @@ def parse_release1_config(text: str) -> Release1Config:
         devices=MappingProxyType(devices),
         profiles=MappingProxyType(profiles),
         default_snat_address=default_snat_address,
-        host_routing=host_routing,
+        helper_routing_interfaces=helper_routing_interfaces,
+        helper_routing_policy=helper_routing_policy,
     )
 
 
-def _parse_host_routing(value: Any) -> HostRoutingMode:
-    if value == "auto":
-        return HostRoutingMode.AUTO
-    if value == "manual":
-        return HostRoutingMode.MANUAL
+def _parse_helper_routing_policy(value: Any) -> HelperRoutingPolicy:
+    if value == "peaceful":
+        return HelperRoutingPolicy.PEACEFUL
     raise Release1ConfigError(
-        'host_routing must be exactly "auto" or "manual"'
+        'helper_routing_policy must be exactly "peaceful" in Release 1'
     )
+
+
+def _parse_helper_routing_interfaces(
+    value: Any,
+) -> tuple[HelperRoutingSelector, ...]:
+    if not isinstance(value, str) or not value:
+        raise Release1ConfigError(
+            "helper_routing_interfaces must be a non-empty canonical selector string"
+        )
+    parts = value.split(",")
+    if any(not item or item.strip() != item for item in parts):
+        raise Release1ConfigError(
+            "helper_routing_interfaces must not contain empty or whitespace-padded selectors"
+        )
+    if len(set(parts)) != len(parts):
+        raise Release1ConfigError(
+            "helper_routing_interfaces contains duplicate selectors"
+        )
+
+    complete = {":none", ":external", ":any"}
+    if complete.intersection(parts):
+        if len(parts) != 1:
+            raise Release1ConfigError(
+                "helper_routing_interfaces :none, :external and :any must appear alone"
+            )
+        token = parts[0]
+        if token == ":none":
+            return ()
+        return (
+            HelperRoutingSelector(
+                HelperRoutingSelectorKind.EXTERNAL
+                if token == ":external"
+                else HelperRoutingSelectorKind.ANY
+            ),
+        )
+
+    selectors: list[HelperRoutingSelector] = []
+    has_local = False
+    exact_interfaces: list[str] = []
+    for token in parts:
+        if token == ":local":
+            has_local = True
+            continue
+        if token.startswith(":"):
+            raise Release1ConfigError(
+                f"helper_routing_interfaces has unsupported selector {token!r}"
+            )
+        if not _IFNAME_RE.fullmatch(token) or len(token.encode("utf-8")) > 15:
+            raise Release1ConfigError(
+                f"helper_routing_interfaces has invalid Linux interface name {token!r}"
+            )
+        exact_interfaces.append(token)
+
+    if has_local and "lo" in exact_interfaces:
+        raise Release1ConfigError(
+            "helper_routing_interfaces must not redundantly combine :local and lo"
+        )
+    if has_local:
+        selectors.append(HelperRoutingSelector(HelperRoutingSelectorKind.LOCAL))
+    selectors.extend(
+        HelperRoutingSelector(HelperRoutingSelectorKind.INTERFACE, interface)
+        for interface in sorted(exact_interfaces)
+    )
+    if not selectors:
+        raise Release1ConfigError(
+            "helper_routing_interfaces must select :none or at least one routing interface scope"
+        )
+    return tuple(selectors)
+
+
+def render_helper_routing_interfaces(
+    selectors: tuple[HelperRoutingSelector, ...],
+) -> str:
+    if not isinstance(selectors, tuple) or any(
+        not isinstance(item, HelperRoutingSelector) for item in selectors
+    ):
+        raise ValueError("selectors must be a tuple of HelperRoutingSelector")
+    if not selectors:
+        return ":none"
+    rendered = []
+    for selector in selectors:
+        if selector.kind is HelperRoutingSelectorKind.LOCAL:
+            rendered.append(":local")
+        elif selector.kind is HelperRoutingSelectorKind.EXTERNAL:
+            rendered.append(":external")
+        elif selector.kind is HelperRoutingSelectorKind.ANY:
+            rendered.append(":any")
+        else:
+            assert selector.interface is not None
+            rendered.append(selector.interface)
+    return ",".join(rendered)
 
 
 def _table(value: Any, where: str) -> dict[str, Any]:
