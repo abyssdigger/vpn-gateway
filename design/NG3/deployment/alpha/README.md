@@ -22,7 +22,7 @@ Alpha controller:
 - при появлении, исчезновении или пересоздании VPN endpoint заново вычисляет binding и lower
   desired state;
 - при drift закрывает forwarding перед structural convergence;
-- materializes selected paired-RPDB host bootstrap и default stateful host-return owner; Profile `+route-return` оставляет route-based return через bootstrap без stateful host-return owner;
+- materializes authoritative host managed-destination routing: enabled Profile remote destinations направляются в managed domain через `vnga-host0`, stack-origin traffic bypass'ит этот capture в ordinary `main`, а Profile SNAT identities получают owned /32 через stack service next hop;
 - не требует restart controller после `systemctl restart` отдельного VPN service;
 - при stop выполняет bounded controller cleanup после того, как systemd dependency ordering
   остановил bound VPN service;
@@ -41,9 +41,9 @@ Alpha controller:
   - routed-veth backend использует Proxy ARP и `rp_filter=0` только на двух boundary endpoints;
 - canonical grammar уже принята; alpha materializes Device `use_outbound_nat`, ordinary
   Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
-- `availability_check` и Profile `+snat` распознаются как canonical syntax, но alpha fail-fast
-  отклоняет их до завершения соответствующих lower runtime paths; canonical `+route-return`
-  уже materialized через selected host-boundary bootstrap/return contribution;
+- `availability_check` и Profile `+snat` входят в canonical alpha path: `+snat` materializes
+  inside STACK after managed policy using the normalized Profile identity, а replies возвращаются
+  через owned host /32 via stack service address; historical `+route-return` syntax отвергается;
 - host-side publication требует уже существующего внешнего host forwarding; alpha проверяет
   `net.ipv4.ip_forward` и явные ordinary-host IPv4/interface selectors, но не включает global
   host forwarding и не меняет адреса/UP-state внешних ordinary host interfaces;
