@@ -15,6 +15,11 @@ containment remains an independent postponed safety capability. The current alph
 authoritative host-routing owner is retained only as executable aggressive-helper evidence and
 must be detached from the default core path before Release-1 host-integration closure.
 
+The same cleanup removed the redundant zero-path safety child that had encoded host
+`ambient/main` fallback into the requirement tree: Profile persistence, valid concrete-path
+membership and fail-closed managed forwarding are now traced to their existing independent
+requirements, while ordinary-host routing remains outside that core safety promise.
+
 ## 2026-11-19 — Project governance model consolidated
 
 Project-wide development rules were refactored so repository authorization, CD cadence,
