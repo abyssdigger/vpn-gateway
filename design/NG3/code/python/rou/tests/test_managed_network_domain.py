@@ -4,7 +4,6 @@ from ipaddress import IPv4Interface
 import json
 import unittest
 
-from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
     preflight_managed_network_domain,
@@ -16,7 +15,6 @@ SPEC = ManagedNetworkDomainSpec(
     host_interface="vghost0",
     inner_interface="host0",
     inner_address=IPv4Interface("198.19.255.2/32"),
-    primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
 )
 
 
@@ -44,17 +42,8 @@ class ManagedNetworkDomainTests(unittest.TestCase):
                 host_interface="vgh0",
                 inner_interface="vgi0",
                 inner_address=IPv4Interface("198.19.255.2/30"),
-                primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
-            )
+                        )
 
-        with self.assertRaisesRegex(ValueError, "currently materializes only"):
-            ManagedNetworkDomainSpec(
-                namespace="vg",
-                host_interface="vgh0",
-                inner_interface="vgi0",
-                inner_address=IPv4Interface("198.19.255.2/32"),
-                primary_backend=ManagedL3BoundaryBackend.NETKIT_L3,
-            )
 
         with self.assertRaisesRegex(ValueError, "must differ"):
             ManagedNetworkDomainSpec(
@@ -62,8 +51,7 @@ class ManagedNetworkDomainTests(unittest.TestCase):
                 host_interface="same0",
                 inner_interface="same0",
                 inner_address=IPv4Interface("198.19.255.2/32"),
-                primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
-            )
+                        )
 
     def test_absent_preflight_is_read_only(self):
         runner = AbsentRunner()
