@@ -192,15 +192,23 @@ removed, disabled or externalized according to the integration instructions.
 The supported lifecycle assumes the administrator manages the stack through the documented
 VPN-GATE/systemd boundary.
 
-Direct root/admin modification or deletion of VPN-GATE-owned namespace, veth, nft, route/RPDB
-or lifecycle dependency artifacts is external intervention.
+Direct root/admin modification or deletion of authoritative VPN-GATE-owned managed-domain
+state outside the documented lifecycle is external intervention for recovery purposes.
+Release 1 does not promise forensic recovery, adoption of arbitrary surviving processes, or
+discovery of unknown namespace file-descriptor holders after such manual damage.
 
-When such drift is observable, VPN-GATE is expected to fail closed and diagnose it. Release 1
-does not promise forensic recovery, adoption of arbitrary surviving processes, or discovery of
-unknown namespace file-descriptor holders after manual damage.
+Do not confuse that authoritative state with administrator-owned integration state. The
+stack-specific VPN systemd unit/drop-in and VPN-specific configuration remain administrator
+owned under this onboarding contract. Ordinary-host routing created by the peaceful helper is
+also administrator-controlled after the helper lifecycle operation completes.
 
-The administrator must repair/clean that externally modified environment before returning to
-the supported lifecycle.
+If external intervention removes a safety- or readiness-critical invariant, VPN-GATE follows
+the applicable safety/readiness requirement for that invariant; this recovery limitation does
+not impose a universal "any drift -> close all forwarding" rule.
+
+For unsupported damage to authoritative VPN-GATE-owned state, the administrator must
+repair/clean the externally modified environment as documented before returning to the
+supported lifecycle when automatic recovery cannot establish a trustworthy postcondition.
 
 ## Future automation
 

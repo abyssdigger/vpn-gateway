@@ -151,3 +151,20 @@ See `EXP-050-result-20261117-systemd-openvpn-pass.md`.
 
 This evidence supports the Release-1 bounded systemd lifecycle contract. It does not imply
 automatic adoption of arbitrary administrator VPN processes or arbitrary privileged VPN hooks.
+
+
+## Current requirement disposition (2026-11-20)
+
+EXP-050 remains selected evidence for the bounded systemd lifecycle and for the fact that the
+supported integration does not require generic process adoption or arbitrary privileged hook
+execution.
+
+For `VPNG0005-R5.C1`, the experiment supports only the bounded recovery/adoption conclusion:
+Release 1 need not forensic-adopt arbitrary surviving processes or reconstruct unknown
+namespace ownership after unsupported external intervention. EXP-050 did **not** test
+arbitrary root damage and therefore is not evidence for a blanket fail-closed reaction to
+every possible out-of-band mutation.
+
+The fail-closed forwarding containment observed in the tested lifecycle remains valid evidence
+for the specific managed-domain safety postconditions that required it; that behavior is
+owned by the applicable `VPNG0004` safety requirements rather than by `VPNG0005-R5.C1`.
