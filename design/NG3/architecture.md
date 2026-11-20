@@ -501,9 +501,10 @@ Release-1 configuration uses top-level `host_routing = "auto" | "manual"`; absen
 is not a Release-1 spelling.
 
 This closes `VPNG0001-R2.R2`. EXP-059/060/072 remain reusable lower evidence for
-`suppress_prefixlength`, stack-ingress bypass and managed-L3 device-only routing; a focused
-Release-1 integration test must prove the weaker main-first ordering and non-destructive
-replacement cleanup through the current implementation.
+`suppress_prefixlength`, stack-ingress bypass and managed-L3 device-only routing. EXP-077
+is the selected Release-1 acceptance evidence for the weaker main-first ordering,
+administrator-route precedence and non-destructive replacement cleanup through the current
+implementation.
 
 Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
 managed boundary, not by host routing. A helper may automate host reachability to that

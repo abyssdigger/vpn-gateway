@@ -2,7 +2,7 @@
 
 ## Status
 
-PREPARED — privileged acceptance evidence for `VPNG0001-R2.R2`.
+COMPLETE — PASS — SELECTED as privileged acceptance evidence for `VPNG0001-R2.R2`.
 
 ## Requirement trace
 
@@ -53,3 +53,41 @@ PASS requires all of the following on a real routed HOST↔STACK boundary:
 
 A PASS proves the selected Release-1 peaceful-helper lowering. It does not supersede EXP-074,
 which remains evidence for the separately postponed aggressive authoritative helper.
+
+
+## Result
+
+See `EXP-077-result-20261120.md`.
+
+Workflow run `44741376166`, job `linux-host-managed-routing`
+(`136305711716`) completed with `EXP077_RESULT=PASS`.
+
+## Post-result lifecycle
+
+- Logical evidence state: **PROVEN FACT / SELECTED**.
+- Current disposition: **selected for Release-1 peaceful host-routing helper**.
+- Applicability: exact acceptance evidence for `VPNG0001-R2.R2`.
+
+### Coverage transition
+
+Previous coverage:
+
+- `VPNG0001-R2.R2` had accepted lifecycle semantics but no selected lower realization;
+- EXP-059/060/072 provided reusable facts for main-route specificity preservation,
+  stack-ingress bypass and managed-L3 device-only routing;
+- EXP-074 proved the intentionally stronger authoritative behavior now assigned to the
+  postponed aggressive helper.
+
+Current coverage:
+
+- `VPNG0001-R2.R2` <- EXP-077 for the selected Release-1 Linux lowering;
+- EXP-074 remains selected for `VPNG0001-R2.R3.R1` and is not superseded by EXP-077.
+
+Transition:
+
+- the simple helper was separated from authoritative host-routing ownership, so its accepted
+  realization must allow later administrator non-default routes to win without reconciliation
+  and must preserve foreign replacements during lifecycle cleanup.
+
+EXP-077 does not supersede EXP-059/060/072 as technical facts; it reuses their proven lower
+properties in the current weaker lifecycle-helper contract.
