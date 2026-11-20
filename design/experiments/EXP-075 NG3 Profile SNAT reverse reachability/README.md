@@ -1,12 +1,16 @@
 # EXP-075 — Profile SNAT identity reverse reachability
 
-## Requirement trace
+## Current evidence scope
 
-This probe targets the reverse-reachability assumption in:
+The experiment retains a lower Linux integration fact used alongside:
 
-- `VPNG0001-R1.R2.R4.R4.R4`;
-- `VPNG0002-R2.R6`;
-- `VPNG0004-R4.R6.R1.R6`.
+- `VPNG0001-R1.R2.R4.R4.R4` — Profile source identity exists at the managed boundary;
+- `VPNG0004-R4.R6.R1.R6` — translation state remains inside the managed domain.
+
+It does **not** extend those requirements into a promise that core Profile SNAT owns ordinary
+host routing. The tested /32 route form may be installed by a host-routing helper or by the
+administrator. `VPNG0002-R2.R6` remains the STACK-side return-affinity requirement once the
+reply is delivered back into the managed domain.
 
 ## Question
 

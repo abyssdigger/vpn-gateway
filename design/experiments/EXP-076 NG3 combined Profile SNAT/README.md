@@ -2,7 +2,7 @@
 
 ## Requirement trace
 
-Acceptance evidence for:
+Core Profile-SNAT acceptance evidence for:
 
 - `VPNG0001-R1.R2.R4.R4.R4`;
 - `VPNG0001-R1.R2.R4.R4.R4.R1`;
@@ -26,12 +26,16 @@ A/B delivery proves firewall/policy precedes postrouting SNAT.
 
 The experiment also requires:
 
-- A and B both appear to the LAN server as the same SNAT identity and both replies return;
+- A and B both appear to the LAN server as the same SNAT identity and both replies return
+  under the tested host-integration route;
 - C appears as its original remote source and its reply returns;
 - authoritative NAT observation contains exactly the two Profile SNAT rules;
 - HOST contains no Profile SNAT nft owner;
-- the SNAT identity host route uses the stack service next hop, while ordinary remote
-  destinations remain device-only.
+- as ancillary lower integration evidence, the SNAT identity host route uses the stack
+  service next hop, while ordinary remote destinations remain device-only.
+
+The host route assertion is not a claim that core Profile SNAT owns host routing; equivalent
+routing may be supplied by a separate helper or by the administrator.
 
 ## Execution
 

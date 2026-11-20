@@ -78,7 +78,7 @@ Current trace:
 | guarded physical payload nft scaffold preparation | `nft_scaffold_executor.py`, `linux_nft_scaffold.py` | `NG3-2026-11-16-nft-scaffold-prepare-code-review.md` |
 | normalized Device NAT intent -> payload masquerade desired projection | `device_policy.py`, `payload_nat_desired.py` | `NG3-2026-11-16-payload-nat-desired-code-review.md`, `EXP-033-result-20261116.md` |
 | host-side Device server publication | `host_publication_policy.py`, `linux_host_publication.py`, alpha runtime composition | `NG3-2026-11-17-host-server-publication-dnat-review.md`, EXP-052, EXP-051 extension |
-| host managed-destination routing projection | `host_managed_routing.py`, `release1_host_boundary.py`, `linux_host_managed_routing.py`, `linux_host_managed_routing_backend.py`, `selected_host_boundary.py` | EXP-074, EXP-075, EXP-076 |
+| authoritative host-routing prototype (postponed aggressive child) | `host_managed_routing.py`, `release1_host_boundary.py`, `linux_host_managed_routing.py`, `linux_host_managed_routing_backend.py`, `selected_host_boundary.py` | EXP-074; EXP-075/076 retain lower SNAT-return route facts |
 | managed-stack established-flow return affinity | `stack_return_affinity.py`, `linux_stack_return_affinity.py` | EXP-061, current stack-return-affinity cycle review |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
@@ -278,10 +278,12 @@ that coverage transition is recorded in the experiment registry and EXP-074 resu
 
 The managed-L3 endpoint also provides the ordinary boundary for Profile source identities.
 EXP-070 already proves that source NAT itself can execute inside STACK. Its positive control
-used an explicit route to the translated source and therefore did not establish the current
-reverse-reachability contract. The current architecture supplies that reachability through
-the owned host managed-destination routing plane, which also carries effective Profile SNAT
-identities as managed /32 destinations. No additional host-side metadata carrier is required.
+used an explicit route to the translated source and therefore did not establish which host
+route form can return traffic addressed to that identity across the addressless boundary.
+EXP-075 supplies that lower route fact. A host-routing helper may automate the route, or the
+administrator may provide equivalent ordinary-host routing manually; the Profile-SNAT
+contract itself still ends at the managed boundary and does not promise host-side
+reachability. No additional host-side Profile metadata carrier is required.
 
 ### 1.1.2. Managed network-domain bootstrap — executable managed-L3 lifecycle
 
@@ -328,8 +330,9 @@ both endpoints:
 ```
 
 The stack-local `/32` is an addressable local service endpoint for integration/publication.
-It is **not** the boundary next-hop and is not used as a gateway by host
-managed-destination routing.
+It is **not** the generic boundary next-hop for remote managed prefixes. EXP-075 shows that
+it can nevertheless serve as the onlink next hop for an optional/helper-provided route to a
+Profile SNAT identity on the addressless boundary.
 
 The lifecycle owns only:
 
@@ -2016,9 +2019,9 @@ revises the requirements and selects the extension.
 **Constrained by:**
 - `VPNG0002-R2.R3.C1`.
 
-Host managed-destination routing returns a reply to STACK by destination, but it deliberately
-carries no Profile identity. It therefore does not by itself preserve which VPN routing domain
-accepted the original remote-initiated flow.
+When ordinary-host routing returns a reply to STACK by destination, that host routing carries
+no Profile identity. The host integration therefore does not by itself preserve which VPN
+routing domain accepted the original remote-initiated flow.
 
 This distinction is material when managed destinations overlap:
 
@@ -4647,13 +4650,14 @@ rather than a new host firewall owner or long-lived Manager. Desired state is de
 current accepted Profile intent plus the existing Profile association allocation; observation,
 convergence and cleanup remain bounded by the managed nft owner and the root ForwardingGate.
 
-The host managed-routing owner independently contributes an exact /32 route for every
-effective SNAT identity, using the current stack service address as its onlink next hop.
-Reverse traffic therefore follows:
+For deployments that want automated host-side reverse reachability, a host-routing helper may
+contribute an exact /32 route for an effective SNAT identity, using the current stack service
+address as its onlink next hop. The administrator may instead provide equivalent host routing
+manually. With that route present, reverse traffic follows:
 
 ```text
 ordinary reply to SNAT identity
-    -> host managed /32 via stack-service on vpng0
+    -> helper/admin /32 via stack-service on managed host boundary
     -> STACK receives packet with destination still = SNAT identity
     -> managed conntrack reverse-SNAT to original remote destination
     -> stack established-flow affinity
@@ -4667,8 +4671,9 @@ the same translated flow successfully without any additional stack-local identit
 An administrator may apply additional host-side firewall, routing, accounting or NAT policy
 based on the visible IPv4 identity. Such policy is ordinary host administration and is not
 owned or inferred by Profile SNAT. If host-side NAT is used, its reverse translation must
-produce the configured SNAT identity, after which the owned /32 route above returns the packet
-to STACK.
+produce the configured SNAT identity; any helper-provided or administrator-provided route
+needed to return that identity to STACK remains host-integration state outside the core
+Profile-SNAT promise.
 
 Validation is split at the authoritative boundary:
 
@@ -4680,15 +4685,16 @@ Validation is split at the authoritative boundary:
 - duplicate effective SNAT identities across `+snat` Profiles are valid by design.
 
 No cross-namespace Profile metadata carrier, host conntrack class or host-side NAT owner
-exists in the current design. EXP-076 is the combined acceptance evidence for
-Profile isolation, shared identities, no-SNAT preservation, managed /32 reverse routing and
-post-policy translation ordering; EXP-075 supplies the narrower SNAT-identity next-hop
-evidence. Superseded carrier experiments are retained only as historical evidence in the
+exists in the current core design. EXP-076 is the combined acceptance evidence for Profile
+isolation, shared identities, no-SNAT preservation and post-policy translation ordering; its
+successful return path also retains lower integration evidence for the tested host route.
+EXP-075 supplies the narrower SNAT-identity next-hop fact. Superseded carrier experiments are retained only as historical evidence in the
 experiment lifecycle artifacts.
 
-**Simplification:** the current model reuses Profile association already required for
-`VPNG0002-R2.R6`, the existing managed postrouting owner and the common host managed-routing
-table. It introduces no Profile-specific host resource and no new metadata channel.
+**Simplification:** the core Profile-SNAT model reuses Profile association already required
+for `VPNG0002-R2.R6` and the existing managed postrouting owner. It introduces no
+Profile-specific host metadata/resource owner. Optional host-route assistance is handled by
+the separate host-routing helper contract rather than being hidden inside Profile SNAT.
 
 The scaffold is deliberately independent from the root structural barrier:
 
