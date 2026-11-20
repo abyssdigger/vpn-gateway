@@ -293,10 +293,10 @@ def _parse_reserved_route(
     if protocol == platform.path_route_protocol:
         role = ManagedRouteRole.VPN_PATH
     elif protocol == platform.legacy_host_boundary_lane_route_protocol:
-        role = ManagedRouteRole.HOST_BOUNDARY_LANE
+        role = ManagedRouteRole.LEGACY_HOST_BOUNDARY_LANE
         if destination != IPv4Network("0.0.0.0/0"):
             raise StructuralRoutingInventoryError(
-                "host-boundary lane route must use default destination"
+                "legacy host-boundary lane route must use default destination"
             )
     else:
         raise StructuralRoutingInventoryError(
@@ -313,9 +313,9 @@ def _parse_reserved_route(
             f"reserved route dev {dev!r} is absent from current interface inventory"
         )
     gateway = _optional_ipv4(row.get("gateway"), "route gateway")
-    if role is ManagedRouteRole.HOST_BOUNDARY_LANE and gateway is None:
+    if role is ManagedRouteRole.LEGACY_HOST_BOUNDARY_LANE and gateway is None:
         raise StructuralRoutingInventoryError(
-            "host-boundary lane route requires gateway"
+            "legacy host-boundary lane route requires gateway"
         )
     return ObservedManagedRoute(
         table=table,
