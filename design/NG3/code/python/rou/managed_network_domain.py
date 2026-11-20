@@ -14,7 +14,6 @@ from .forwarding_gate import (
 )
 from .interface_identity import InterfaceIdentity
 from .linux_forwarding_gate import LinuxForwardingGateBackend
-from .managed_l3_boundary import ManagedL3BoundaryBackend
 
 
 _IFNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
@@ -36,7 +35,6 @@ class ManagedNetworkDomainSpec:
     host_interface: str
     inner_interface: str
     inner_address: IPv4Interface
-    primary_backend: ManagedL3BoundaryBackend
 
     def __post_init__(self) -> None:
         if not isinstance(self.namespace, str) or not _NAMESPACE_RE.fullmatch(
@@ -55,14 +53,6 @@ class ManagedNetworkDomainSpec:
             raise ValueError("inner_address must be IPv4Interface")
         if self.inner_address.network.prefixlen != 32:
             raise ValueError("managed L3 stack-local service address must be /32")
-        if (
-            self.primary_backend
-            is not ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP
-        ):
-            raise ValueError(
-                "managed network-domain lifecycle currently materializes only "
-                "routed-veth-proxy-arp"
-            )
 
 
 @dataclass(frozen=True, slots=True)
