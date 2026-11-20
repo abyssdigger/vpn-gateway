@@ -25,8 +25,8 @@ Constraint-Reason audit.
 Current actual VPNG tree:
 
 - primary project Requirements: **7**
-- derived Requirements: **146**
-- Constraints: **33**
+- derived Requirements: **159**
+- Constraints: **20**
 - total normative VPNG nodes: **186**
 
 The 2026-11-16 rationale review covered an earlier 128-node tree. The present tree has grown
@@ -36,9 +36,9 @@ that baseline, not a proof of the later nodes.
 
 ## Results
 
-**128 / 146 derived Requirements pass the immediate-parent test without a material finding.**
+**139 / 159 derived Requirements pass the immediate-parent test without a material finding.**
 
-**18 / 146 require action or explicit human review:**
+**20 / 159 require action or explicit human review:**
 
 ### Safe research corrections
 
@@ -66,6 +66,8 @@ that baseline, not a proof of the later nodes.
 16. `VPNG0004-R4.R7` — administrative payload-containment capability.
 17. `VPNG0005-R5.R6.R4` — reload capability.
 18. `VPNG0007-R7.R7.R1.R1` — lifecycle experiment as child of basic-applicability gate.
+19. `VPNG0003-R3.R6.R3.R1.C1.R1` — Device-default/Profile-override reuse incorrectly nested under the ICMP-only constraint.
+20. `VPNG0004-R4.R3.R1` — make-before-break continuity requirement nested under a safety parent that does not require continuity.
 
 These are not all equal. Some Statements are likely valid product needs with the wrong
 parent; some are likely architecture/configuration choices that should not be normative
@@ -120,5 +122,14 @@ accepted.
 **RESEARCH COMPLETE; NORMATIVE CHANGE BLOCKED ON HUMAN DECISIONS.**
 
 The tree is substantially consistent, but the later-grown capability/configuration branches
-contain 18 immediate-parent findings. Two can be corrected without a new product decision;
-the remaining 16 must not be normalized away by wording alone.
+contain 20 immediate-parent findings. Two can be corrected without a new product decision;
+the remaining 18 must not be normalized away by wording alone.
+
+
+## Secondary Constraint-placement observation
+
+The audit also found one adjacent non-counted placement issue:
+`VPNG0003-R3.R6.R3.R1.C1.R1.C1` (no first-release timing/hysteresis knobs) is nested under
+the Device-default/Profile-override reuse requirement even though its Reason constrains the
+broader availability configuration surface. This is not part of the 20 derived-Requirement
+findings but should be reparented/reviewed together with that subtree.

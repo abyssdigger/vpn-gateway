@@ -161,3 +161,35 @@ Child требует **после PASS** отдельный lifecycle experiment
 
 Нужно решить placement: sibling под `VPNG0007-R7.R7`, evidence child соответствующей
 VPN lifecycle requirement или ненормативное development-process правило.
+
+
+## 14. Device-default/Profile-override requirement under ICMP-only constraint
+
+**Affected:** `VPNG0003-R3.R6.R3.R1.C1.R1`.
+
+Parent `.C1` говорит только: Release 1 поддерживает ICMP, а не TCP/UDP/HTTP. Child требует
+совсем другую вещь — Device default + Profile override reuse model. Это не compensating
+requirement для ICMP-only ограничения.
+
+Наиболее естественный вариант при сохранении semantics — перенести этот requirement вместе
+с его `.R1..`.R4 descendants ближе к `VPNG0003-R3.R6.R3.R1` (user-selected criterion),
+а ICMP-only Constraint оставить только ограничением механизма.
+
+**Adjacent finding:** `VPNG0003-R3.R6.R3.R1.C1.R1.C1` про отсутствие
+timing/hysteresis knobs также семантически не зависит от Device-default/Profile-override
+reuse. Это Constraint-placement вопрос, не входящий в числитель derived-Requirement findings,
+но его нужно перепроверить при нормативном reparent.
+
+## 15. Priority-only make-before-break continuity under safety parent
+
+**Affected:** `VPNG0004-R4.R3.R1`.
+
+Parent `VPNG0004-R4.R3` требует только, чтобы policy transition не создавал forwarding,
+запрещенный старой или новой policy. Он допускает более restrictive промежуточное состояние.
+
+Child дополнительно требует **не терять ни один разрешенный path** при priority-only
+перестановке. Это availability/continuity promise, а не следствие safety parent.
+
+Нужно выбрать causal owner: path-preference/availability tree (`VPNG0003`), отдельный
+continuity requirement либо явное product decision, что non-disruptive priority transition
+является частью safety/lifecycle promise.
