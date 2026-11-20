@@ -674,7 +674,7 @@ jobs:
           grep -F 'EXP070_D12_PROXY_ARP=PASS' vm.log
           grep -F 'EXP070_D12_RESULT=PASS' vm.log
 
-  linux-managed-l3-host-bootstrap:
+  linux-host-managed-routing:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -683,11 +683,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y iproute2 iputils-ping
-      - name: EXP-072 managed L3 host bootstrap
+      - name: EXP-074 authoritative host managed routing
         run: >-
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-072 NG3 managed L3 host bootstrap/exp072_managed_l3_bootstrap.py"
+          "design/experiments/EXP-074 NG3 host managed routing/exp074_host_managed_routing.py"
   linux-boundary-dataplane-race:
     runs-on: ubuntu-latest
     timeout-minutes: 10
