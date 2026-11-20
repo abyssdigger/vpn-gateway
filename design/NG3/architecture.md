@@ -745,6 +745,7 @@ requirements that do not belong to one runtime component.
 **Implements:**
 - `VPNG0007-R7.R2`
 - `VPNG0007-R7.R3.R3`
+- `VPNG0007-R7.R3.R5`
 - `VPNG0007-R7.R4`
 - `VPNG0007-R7.R6.R1`
 - `VPNG0007-R7.R6.R2`
