@@ -27,3 +27,13 @@ PASS requires:
 
 See `EXP-060-result-20261119.md`. Final workflow run `44598508737`, job
 `linux-selected-host-bootstrap-backend` (`135823381443`) completed with `EXP060_RESULT=PASS`.
+## Post-result lifecycle
+
+- Logical evidence state: **PROVEN FACT / SUPERSEDED DESIGN**.
+- Current disposition: **superseded by EXP-074**.
+- Applicability: **утратил применимость к текущей реализации**.
+
+The production-shaped paired-RPDB backend was valid for the EXP-059 mechanism, but current
+host routing uses one authoritative managed-destination table and no longer contains that
+backend or its compatibility ownership.
+
