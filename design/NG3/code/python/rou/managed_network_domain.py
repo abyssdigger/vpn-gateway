@@ -359,7 +359,6 @@ def _create_managed_network_domain(
     runner: ManagedNetworkDomainRunner,
 ) -> None:
     created_namespace = False
-    created_veth = False
     try:
         runner.run(("ip", "netns", "add", spec.namespace))
         created_namespace = True
@@ -372,7 +371,6 @@ def _create_managed_network_domain(
                 "peer", "name", spec.inner_interface,
             )
         )
-        created_veth = True
         runner.run(
             (
                 "ip", "link", "set", spec.inner_interface,
