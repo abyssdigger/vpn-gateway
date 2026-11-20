@@ -159,26 +159,9 @@ def verify_managed_network_domain(
             )
 
     if host is not None:
-        host_addresses = _ipv4_addresses(
-            runner,
-            spec.host_interface,
-        )
-        expected_host_addresses = (
-            frozenset()
-            if spec.routed_primary
-            else frozenset((spec.host_address,))
-        )
-        if host_addresses != expected_host_addresses:
-            if spec.routed_primary:
-                errors.append(
-                    "routed host boundary must not carry an IPv4 address"
-                )
-            else:
-                assert spec.host_address is not None
-                errors.append(
-                    "host boundary IPv4 address set does not exactly match "
-                    f"{spec.host_address.with_prefixlen}"
-                )
+        host_addresses = _ipv4_addresses(runner, spec.host_interface)
+        if host_addresses:
+            errors.append("managed L3 host boundary must not carry an IPv4 address")
 
     if inner is not None:
         inner_addresses = _ipv4_addresses(
@@ -192,7 +175,7 @@ def verify_managed_network_domain(
                 f"{spec.inner_address.with_prefixlen}"
             )
 
-    if spec.routed_primary and host is not None and inner is not None:
+    if host is not None and inner is not None:
         for label, namespace, interface in (
             ("host", None, spec.host_interface),
             ("inner", spec.namespace, spec.inner_interface),
@@ -223,58 +206,6 @@ def verify_managed_network_domain(
         except ValueError:
             errors.append("inner boundary interface identity is invalid")
 
-    for extra in spec.additional_boundaries:
-        extra_host = _single_link(host_links, extra.host_interface)
-        extra_inner = _single_link(namespace_links, extra.inner_interface)
-        _verify_veth(extra_host, extra.host_interface, "additional host", errors)
-        _verify_veth(extra_inner, extra.inner_interface, "additional inner", errors)
-
-        if extra_host is not None and extra_inner is not None:
-            host_ifindex = extra_host.get("ifindex")
-            host_peer = extra_host.get("link_index")
-            inner_ifindex = extra_inner.get("ifindex")
-            inner_peer = extra_inner.get("link_index")
-            if not all(
-                type(value) is int
-                for value in (host_ifindex, host_peer, inner_ifindex, inner_peer)
-            ):
-                errors.append(
-                    f"additional boundary {extra.inner_interface!r} peer identity is not fully observable"
-                )
-            elif host_peer != inner_ifindex or inner_peer != host_ifindex:
-                errors.append(
-                    f"additional boundary {extra.inner_interface!r} is not a reciprocal veth pair"
-                )
-
-        if extra_host is not None:
-            observed = _ipv4_addresses(runner, extra.host_interface)
-            if observed != frozenset((extra.host_address,)):
-                errors.append(
-                    f"additional host boundary {extra.host_interface!r} IPv4 address set differs"
-                )
-        if extra_inner is not None:
-            observed = _ipv4_addresses(
-                runner,
-                extra.inner_interface,
-                namespace=spec.namespace,
-            )
-            if observed != frozenset((extra.inner_address,)):
-                errors.append(
-                    f"additional inner boundary {extra.inner_interface!r} IPv4 address set differs"
-                )
-            if type(extra_inner.get("ifindex")) is int:
-                try:
-                    boundary_interfaces.append(
-                        InterfaceIdentity(
-                            extra.inner_interface,
-                            extra_inner["ifindex"],
-                        )
-                    )
-                except ValueError:
-                    errors.append(
-                        f"additional inner boundary {extra.inner_interface!r} identity is invalid"
-                    )
-
     routes = _json_array(
         runner.run(
             (
@@ -290,45 +221,26 @@ def verify_managed_network_domain(
         for row in routes
         if row.get("dst", "default") == "default"
     ]
-    if spec.routed_primary:
-        if len(defaults) != 1 or not (
-            defaults[0].get("dev") == spec.inner_interface
-            and defaults[0].get("gateway") is None
-        ):
-            errors.append(
-                "namespace default route does not exactly use routed inner boundary"
-            )
+    if len(defaults) != 1 or not (
+        defaults[0].get("dev") == spec.inner_interface
+        and defaults[0].get("gateway") is None
+    ):
+        errors.append("namespace default route does not exactly use managed L3 inner boundary")
 
-        host_routes = _json_array(
-            runner.run(
-                ("ip", "-j", "-4", "route", "show", "table", "main")
-            ),
-            "host main-route snapshot",
-        )
-        service_routes = [
-            row
-            for row in host_routes
-            if _route_network(row.get("dst", "default"))
-            == spec.inner_address.network
-        ]
-        if len(service_routes) != 1 or not (
-            service_routes[0].get("dev") == spec.host_interface
-            and service_routes[0].get("gateway") is None
-            and service_routes[0].get("type", "unicast") == "unicast"
-        ):
-            errors.append(
-                "host stack-local service route does not exactly use routed host boundary"
-            )
-    else:
-        assert spec.host_address is not None
-        if len(defaults) != 1 or not (
-            defaults[0].get("gateway") == str(spec.host_address.ip)
-            and defaults[0].get("dev") == spec.inner_interface
-        ):
-            errors.append(
-                "namespace default route does not exactly use configured host address "
-                "and inner boundary"
-            )
+    host_routes = _json_array(
+        runner.run(("ip", "-j", "-4", "route", "show", "table", "main")),
+        "host main-route snapshot",
+    )
+    service_routes = [
+        row for row in host_routes
+        if _route_network(row.get("dst", "default")) == spec.inner_address.network
+    ]
+    if len(service_routes) != 1 or not (
+        service_routes[0].get("dev") == spec.host_interface
+        and service_routes[0].get("gateway") is None
+        and service_routes[0].get("type", "unicast") == "unicast"
+    ):
+        errors.append("host stack-local service route does not exactly use managed L3 host boundary")
 
     primary_boundary = (
         boundary_interfaces[0]
