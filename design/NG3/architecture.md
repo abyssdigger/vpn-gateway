@@ -393,9 +393,6 @@ freshly verifies absence.
 ### 1.1.1-A. Host managed-destination routing
 
 **Implements:**
-- `VPNG0002-R2.R3.R1.R1`;
-- `VPNG0002-R2.R3.R1.R1.R1`;
-- `VPNG0002-R2.R3.R1.R1.R2`;
 - `VPNG0002-R2.R6`;
 - `VPNG0004-R4.R6.R1.R1`;
 - `VPNG0004-R4.R6.R1.R2`.
@@ -432,13 +429,11 @@ ambient host main/default rules
     -> unmatched traffic remains ordinary
 ```
 
-A lookup that finds no route in the managed table naturally continues to later rules. A
-matching managed route is authoritative regardless of equal or more-specific non-local routes
-in host `main`; this is the direct architecture closure of
-`VPNG0002-R2.R3.R1.R1.R2`. With `0.0.0.0/0` in the managed table, all non-local
-ordinary/local traffic not already arriving from the managed boundary is captured into
-VPN-GATE. A deployment that wants a narrower managed envelope expresses narrower Profile
-destinations rather than relying on accidental host-main specificity as a hidden exclusion.
+A lookup that finds no route in the managed table naturally continues to later rules. The
+dedicated-table precedence shown above is an implementation detail of the current automatic
+host-routing helper. Profile direction policy does not grant VPN-GATE authority over
+administrator-owned ordinary-host routing; exact helper precedence and ownership semantics
+remain a separate architecture question and are not closed by this section.
 
 Packets already emitted by the managed stack bypass managed capture before the managed-table
 lookup. This is the ordinary underlay/server-reply escape and applies equally to VPN client
@@ -462,8 +457,10 @@ destination remains the SNAT identity and managed conntrack can reverse the tran
 the packet crosses the boundary. This adds no new stack address, proxy-neighbour owner or
 Profile metadata channel.
 
-EXP-074 proves the current authoritative managed-table semantics and stack-origin main bypass.
-EXP-075 proves the distinct gateway-backed route required for SNAT identities. Earlier host
+EXP-074 proves the observed dedicated-table and stack-origin main-bypass mechanics of the
+current helper implementation; it does not establish host-wide product authority over
+administrator routing. EXP-075 proves the distinct gateway-backed route required for SNAT
+identities. Earlier host
 bootstrap/return experiments are lifecycle-classified in the experiment registry and do not
 define current routing behavior.
 
@@ -1207,8 +1204,6 @@ the supported integration/onboarding contract beneath the Device/Profile policy 
 - `VPNG0002-R2.R2.R1`
 - `VPNG0002-R2.R2.R2`
 - `VPNG0002-R2.R3`
-- `VPNG0002-R2.R3.R1`
-- `VPNG0002-R2.R3.R2`
 - `VPNG0002-R2.R3.R3`
 - `VPNG0002-R2.R3.C1`
 - `VPNG0002-R2.R3.C1.R1`
@@ -1880,8 +1875,6 @@ responsibility that cannot be represented here.
 - `VPNG0002-R2.R2`
 - `VPNG0002-R2.R2.R1`
 - `VPNG0002-R2.R3`
-- `VPNG0002-R2.R3.R1`
-- `VPNG0002-R2.R3.R2`
 - `VPNG0002-R2.R3.R3`
 - `VPNG0002-R2.R4`
 - `VPNG0002-R2.R5`
