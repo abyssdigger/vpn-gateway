@@ -1,6 +1,6 @@
 import json
 import unittest
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from rou.linux_host_managed_routing import (
     HostManagedBypassRuleSpec,
@@ -63,7 +63,67 @@ def desired():
     )
 
 
+def desired_snat():
+    route = HostManagedRouteSpec(
+        destination=IPv4Network("198.19.255.10/32"),
+        interface="vpng0",
+        table=allocation().table,
+        protocol=203,
+        gateway=IPv4Address("198.19.255.2"),
+        onlink=True,
+    )
+    return HostManagedRoutingLinuxDesired(
+        routes=(route,),
+        bypass=HostManagedBypassRuleSpec(
+            priority=0x1F00,
+            interface="vpng0",
+            protocol=203,
+        ),
+        dispatch=HostManagedDispatchRuleSpec(
+            priority=0x2000,
+            table=allocation().table,
+            protocol=203,
+        ),
+    )
+
+
 class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
+    def test_gateway_backed_snat_route_is_observed_exactly(self):
+        routes = json.dumps(
+            [
+                {
+                    "dst": "198.19.255.10",
+                    "dev": "vpng0",
+                    "gateway": "198.19.255.2",
+                    "flags": ["onlink"],
+                    "protocol": 203,
+                    "table": allocation().table,
+                }
+            ]
+        )
+        rules = json.dumps(
+            [
+                {
+                    "priority": 0x1F00,
+                    "src": "all",
+                    "iif": "vpng0",
+                    "table": 254,
+                    "protocol": 203,
+                },
+                {
+                    "priority": 0x2000,
+                    "src": "all",
+                    "table": allocation().table,
+                    "protocol": 203,
+                },
+            ]
+        )
+        observed = LinuxHostManagedRoutingBackend(
+            Runner(routes, rules), allocation()
+        ).observe(desired_snat())
+        self.assertTrue(observed.exact)
+        self.assertEqual(observed.conflicts, ())
+
     def test_exact_kernel_json_is_observed(self):
         routes = json.dumps(
             [
@@ -160,6 +220,20 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
         ).observe(desired())
         self.assertEqual(observed.conflicts, ())
         self.assertNotIn(0x3000, observed.rule_priorities)
+
+    def test_driver_adds_gateway_backed_snat_route_onlink(self):
+        runner = Runner()
+        backend = LinuxHostManagedRoutingBackend(runner, allocation())
+        route = desired_snat().routes[0]
+        backend.add_route(route)
+        self.assertIn(
+            (
+                "ip", "-4", "route", "add", "table", str(allocation().table),
+                "198.19.255.10/32", "via", "198.19.255.2",
+                "dev", "vpng0", "onlink", "proto", "203",
+            ),
+            runner.calls,
+        )
 
     def test_driver_commands_are_device_only_and_generic(self):
         runner = Runner()
