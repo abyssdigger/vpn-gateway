@@ -354,3 +354,31 @@ lifecycle-операциями и невмешательство в невыбр
 Ранее принятое решение по aggressive helper из раздела 8/18 уточняется тем же общим
 родителем: aggressive режим является альтернативным более авторитетным вариантом той же
 host-routing automation capability и по-прежнему может быть отложен за пределы Release 1.
+
+## Реализация решений в текущем requirement draft
+
+Ниже зафиксирована **предварительная** ID-схема, уже применённая в
+`NG3-2026-11-20-purpose-parent-corrected-requirements-draft.md`. Эти ID нужны для
+согласованного исследования и remap остальных текущих документов; они не становятся
+нормативными до отдельного решения о замене `design/NG3/requirements.md`.
+
+| Решение | Текущий draft |
+| --- | --- |
+| Различимость входящего VPN-трафика | новая capability `VPNG0001-R3`; Release-1 Profile `+snat` остаётся способом её выражения в конфигурационной ветке `VPNG0001-R4.R4.R4.R4` |
+| Общая пользовательская конфигурация | `VPNG0001-R4` напрямую под `VPNG0001`; прежний subtree `VPNG0001-R1.R2.*` переносится под этот parent с сохранением относительной структуры там, где semantics остаётся конфигурационной |
+| NAT для ordinary→VPN | продуктовая capability `VPNG0001-R1.R4.R1`; конфигурационный контракт `use_outbound_nat` — `VPNG0001-R4.R4.R6.R1` |
+| Дополнительные ограничения по VPN-ресурсу | `VPNG0001-R1.R4.R2`; per-path capability — `VPNG0001-R1.R4.R2.R1`; Release-1 limitation — `.C1`; Device firewall config — `VPNG0001-R4.R4.R6.R2*` |
+| Transport/control условия VPN-канала | общий parent `VPNG0001-R1.R3.R6`; server publication — `.R1`; client transport/control admission — `.R2`; соответствующие Release-1 config contracts остаются под `VPNG0001-R4.R4.R6` |
+| Transport endpoint provenance | requirement subtree удалён; endpoint/peer остаётся только lower architecture fact. Пользовательские будущие selectors ссылаются на различимый logical VPN path |
+| Host-routing automation | новый положительный parent `VPNG0001-R5`; peaceful capability — `.R1`, её Release-1 detailed contract — `.R1.R1`; aggressive capability — `.R2`; прежний `VPNG0001-R2` остаётся отдельным non-interference requirement |
+| Availability criterion | `VPNG0003-R3.R6.R3.R1` сохраняет ID с исправленным Purpose/Statement; Device-default/Profile-override перемещён в `.R1.R1*`; ICMP-only остаётся `.C1`; timing/hysteresis limitation вынесен в sibling `.C2` |
+| Независимость policy от host network state | `VPNG0004-R4.R6` сохраняет ID, но становится mechanism-neutral; прежний `.R1*` managed-domain subtree удалён из requirements и остаётся architecture/evidence concern |
+| Защитный режим | новый первый derived level `VPNG0004-R5`; Release-1 limitation — `.C1` |
+
+Draft после этого remap содержит 7 primary Requirements, 153 derived Requirements и
+24 Constraints, всего 184 нормативно оформленных узла в исследовательской копии.
+
+Четыре исходных finding пока намеренно не remap-нуты, потому что решения по ним отсутствуют
+в этом документе: `VPNG0002-R2.R6`, `VPNG0004-R4.R3.R1`,
+`VPNG0005-R5.R6.R4`, `VPNG0007-R7.R7.R1.R1`.
+
