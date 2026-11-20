@@ -292,7 +292,7 @@ def _parse_reserved_route(
 
     if protocol == platform.path_route_protocol:
         role = ManagedRouteRole.VPN_PATH
-    elif protocol == platform.host_boundary_lane_route_protocol:
+    elif protocol == platform.legacy_host_boundary_lane_route_protocol:
         role = ManagedRouteRole.HOST_BOUNDARY_LANE
         if destination != IPv4Network("0.0.0.0/0"):
             raise StructuralRoutingInventoryError(
