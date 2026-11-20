@@ -20,6 +20,7 @@ on:
       - "design/experiments/EXP-074 NG3 host managed routing/**"
       - "design/experiments/EXP-077 NG3 peaceful host routing/**"
       - "design/experiments/EXP-078 NG3 peaceful host routing selectors/**"
+      - "design/experiments/EXP-079 NG3 managed boundary helper bypass/**"
       - "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/**"
       - "design/experiments/EXP-076 NG3 combined Profile SNAT/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
@@ -622,6 +623,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-078 NG3 peaceful host routing selectors/exp078_peaceful_host_routing_selectors.py"
+      - name: EXP-079 managed-boundary absolute helper bypass
+        run: >-
+          sudo python3
+          "design/experiments/EXP-079 NG3 managed boundary helper bypass/exp079_managed_boundary_helper_bypass.py"
   linux-profile-snat-reverse:
     runs-on: ubuntu-latest
     timeout-minutes: 10
