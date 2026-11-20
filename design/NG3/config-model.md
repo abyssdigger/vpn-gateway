@@ -538,7 +538,7 @@ after `>` overrides that default for the Profile. If any enabled Profile uses ba
 `outbound+snat...` is invalid because outbound-only Profile does not authorize the
 VPN-to-ordinary leg. There is no separate Profile `gateway_nat`, `snat_address` or
 return-routing field. Return handling is internal product behavior, not a user-selectable
-direction modifier; historical `+route-return` forms are rejected.
+direction modifier.
 
 Direction is explicit and is not inferred from topology. Configuration normalization strips
 the SNAT suffix into base direction plus an optional effective Profile SNAT identity before
