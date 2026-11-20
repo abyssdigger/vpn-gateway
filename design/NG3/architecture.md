@@ -588,29 +588,38 @@ implementation work.
 **Implements:**
 - `VPNG0001-R1.R3.C1.R1.R1`
 
-A supported external VPN onboarding integration is not accepted merely because an interface
-placement mechanism appears plausible on paper. Before an integration may be called supported,
-the project must retain reproducible target-Linux evidence for the complete administrator-facing
-boundary:
+A supported external VPN onboarding integration is not accepted merely because its
+administrator-facing procedure appears plausible on paper. Before a deployment/onboarding
+method may be called supported, the project must retain reproducible acceptance evidence that
+an administrator can follow the published onboarding contract, without modifying VPN-GATE
+internals, and reach a state in which VPN-GATE accepts the channel into service and uses it in
+accordance with all requirements applicable to that supported integration.
+
+This requirement deliberately does **not** prescribe the lower evidence steps. The concrete
+acceptance scenario is the composition of this evidence obligation with the other requirements
+applicable to the integration under test.
+
+For the currently selected Release-1 OpenVPN/systemd integration, those independently owned
+requirements compose into the EXP-049 scenario:
 
 ```text
 published administrator procedure
     ->
 administrator-only external VPN setup/onboarding actions
     ->
-VPN data-plane endpoint present inside the managed network domain
+VPN data-plane endpoint present inside the managed network domain   <- R4.R6.R1 / R1.R3.C2
     ->
-fresh VPNPathAdapter observation
+fresh endpoint observation + unambiguous logical-path binding      <- R1.R3.R2
     ->
-exactly one expected logical-path binding
-    ->
-path admitted to the existing forwarding contract
+path admitted to the accepted forwarding behavior                  <- R1.R3 / R1.R1
 ```
 
-The evidence must not depend on modifying VPN-GATE internals during the procedure. It must
-record the exact external VPN implementation/version and the commands/configuration used, and
-must include cleanup/repetition sufficient to show that the result is reproducible rather than
-a one-off pre-existing host state.
+The evidence must record the exact external VPN implementation/version and the
+commands/configuration used, and must include cleanup/repetition sufficient to show that the
+result is reproducible rather than a one-off pre-existing host state. A different supported
+integration may realize a different lower procedure while still closing the same
+administrator-facing evidence obligation, provided it satisfies its own applicable
+requirements.
 
 EXP-049 initially exposed a real closure defect: OpenVPN 2.6.14 could run inside the managed
 namespace and bind exactly, but the empty terminal `stack_input` / `stack_output` DROP

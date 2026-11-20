@@ -6,9 +6,13 @@
 
 - `VPNG0001-R1.R3.C1` — Release 1 leaves VPN-channel provisioning/configuration to the administrator.
 - `VPNG0001-R1.R3.C1.R1` — supported integrations must provide an administrator-facing onboarding contract.
-- `VPNG0001-R1.R3.C1.R1.R1` — that contract must have reproducible applicability evidence.
-- `VPNG0001-R1.R3.C2` — the managed data-plane endpoint must exist inside the isolated managed network domain.
-- `VPNG0001-R1.R3.R2` — a logical path must have one unambiguous current concrete endpoint before use.
+- `VPNG0001-R1.R3.C1.R1.R1` — that contract must have reproducible end-to-end applicability evidence.
+- `VPNG0001-R1.R3.C2` — for this integration, the managed data-plane endpoint must exist inside the isolated managed network domain.
+- `VPNG0001-R1.R3.R2` — for this integration, a logical path must have one unambiguous current concrete endpoint before use.
+
+The endpoint-placement, binding and forwarding checks below are therefore the **composed
+acceptance scenario for this concrete integration**, not lower mechanisms prescribed by
+`VPNG0001-R1.R3.C1.R1.R1` itself.
 
 ## Question
 
