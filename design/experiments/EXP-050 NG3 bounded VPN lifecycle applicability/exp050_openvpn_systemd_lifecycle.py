@@ -22,7 +22,6 @@ from rou.interface_inventory import parse_ip_link_inventory
 from rou.linux_forwarding_gate import LinuxForwardingGateBackend
 from rou.linux_nft_scaffold import LinuxNftScaffoldBackend, SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
-from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.linux_structural_policy import LinuxStructuralPolicyBackend
 from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
@@ -490,7 +489,6 @@ def main() -> int:
         host_interface=e49.HOST_BOUNDARY,
         inner_interface=e49.INNER_BOUNDARY,
         inner_address=e49.INNER_ADDR,
-        primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
     lock_spec = InstanceLockSpec(
         runtime_directory=root / "runtime",
