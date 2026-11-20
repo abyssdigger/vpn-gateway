@@ -4,7 +4,6 @@ from ipaddress import IPv4Interface
 import unittest
 
 from rou.forwarding_gate import ForwardingGateState
-from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import ManagedNetworkDomainSpec
 from rou.release1_config import parse_release1_config
 from rou.selected_host_boundary import (
@@ -21,7 +20,6 @@ DOMAIN = ManagedNetworkDomainSpec(
     host_interface="vpng0",
     inner_interface="vnga-inner0",
     inner_address=IPv4Interface("198.19.255.2/32"),
-    primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
 )
 ROUTED_DOMAIN = DOMAIN
 
