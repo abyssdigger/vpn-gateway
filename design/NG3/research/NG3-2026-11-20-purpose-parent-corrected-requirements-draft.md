@@ -9,7 +9,7 @@
 > findings not resolved by that decision document.
 
 **Status:** non-normative requirement-refactor draft
-**Cycle:** `ng3-design-cycle-20261116-config-intent-model-40m`  
+**Research branch:** `ng3-research-20261120-requirement-purpose-parent-consistency-30m`  
 **Normative model:** `design/requirements-model.md`  
 **Architecture status:** no NG2 architecture is inherited automatically
 
