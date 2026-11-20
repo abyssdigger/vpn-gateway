@@ -36,3 +36,13 @@ PASS requires:
 7. stack-origin traffic bypasses all bootstrap rules and uses main;
 8. exact managed /32 equal to an external transport endpoint is directionally disambiguated;
 9. cleanup removes only VPN-GATE table/rules and leaves main unchanged.
+## Post-result lifecycle
+
+- Logical evidence state: **PROVEN FACT / SUPERSEDED DESIGN**.
+- Current disposition: **superseded by EXP-074**.
+- Applicability: **утратил применимость к текущей реализации**.
+
+The paired `suppress_prefixlength` mechanism remains a valid Linux fact, but current
+authoritative managed-destination routing intentionally has different host-`main`
+specificity semantics and contains no paired-RPDB compatibility path.
+
