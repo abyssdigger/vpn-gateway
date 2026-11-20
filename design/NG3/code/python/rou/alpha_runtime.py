@@ -576,7 +576,6 @@ def _domain_spec() -> ManagedNetworkDomainSpec:
         namespace=ALPHA_NAMESPACE,
         host_interface=ALPHA_HOST_INTERFACE,
         inner_interface=ALPHA_INNER_INTERFACE,
-        host_address=None,
         inner_address=ALPHA_INNER_ADDRESS,
         primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
