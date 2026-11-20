@@ -18,21 +18,12 @@ from rou.selected_host_boundary import (
 
 DOMAIN = ManagedNetworkDomainSpec(
     namespace="vpn-gate-alpha",
-    host_interface="vnga-host0",
-    inner_interface="vnga-inner0",
-    host_address=IPv4Interface("198.19.255.1/30"),
-    inner_address=IPv4Interface("198.19.255.2/30"),
-)
-
-ROUTED_DOMAIN = ManagedNetworkDomainSpec(
-    namespace="vpn-gate-alpha",
     host_interface="vpng0",
     inner_interface="vnga-inner0",
-    host_address=None,
     inner_address=IPv4Interface("198.19.255.2/32"),
     primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
 )
-
+ROUTED_DOMAIN = DOMAIN
 
 def config(direction: str, *, default_snat_address: str | None = None):
     outbound_nat = (
