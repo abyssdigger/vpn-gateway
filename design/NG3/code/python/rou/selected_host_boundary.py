@@ -71,6 +71,19 @@ def build_selected_host_boundary_desired(
     if not isinstance(domain_spec, ManagedNetworkDomainSpec):
         raise ValueError("domain_spec must be ManagedNetworkDomainSpec")
 
+    boundary_owned_addresses = {domain_spec.inner_address.ip}
+    if domain_spec.host_address is not None:
+        boundary_owned_addresses.add(domain_spec.host_address.ip)
+    for profile_id, semantic in config.profiles.items():
+        if not config.structural.profiles[profile_id].enabled:
+            continue
+        address = semantic.effective_snat_address
+        if address is not None and address in boundary_owned_addresses:
+            raise ValueError(
+                f"profile {profile_id!r} effective SNAT address {address} "
+                "conflicts with managed-boundary service/address ownership"
+            )
+
     plan = build_release1_host_boundary_plan(config)
     return SelectedHostBoundaryDesired(
         routing=build_linux_host_managed_routing_desired(
