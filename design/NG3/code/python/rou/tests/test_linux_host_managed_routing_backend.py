@@ -5,6 +5,7 @@ from ipaddress import IPv4Address, IPv4Network
 from rou.linux_host_managed_routing import (
     HostManagedBypassRuleSpec,
     HostManagedDispatchRuleSpec,
+    HostManagedPreserveMainRuleSpec,
     HostManagedRouteSpec,
     HostManagedRoutingLinuxAllocation,
     HostManagedRoutingLinuxDesired,
@@ -88,6 +89,61 @@ def desired_snat():
 
 
 class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
+    def test_preserve_main_rule_signature_and_driver_command(self):
+        alloc = HostManagedRoutingLinuxAllocation(
+            table=0x7FFF0004,
+            bypass_priority=0x6002,
+            preserve_priority=0x6003,
+            dispatch_priority=0x6004,
+            owned_rule_priorities=NumericResourcePool(0x6003, 0x6005),
+            rule_protocol=204,
+            route_protocol=204,
+        )
+        route = HostManagedRouteSpec(
+            destination=IPv4Network("0.0.0.0/0"),
+            interface="vpng0",
+            table=alloc.table,
+            protocol=204,
+        )
+        desired_state = HostManagedRoutingLinuxDesired(
+            routes=(route,),
+            bypass=HostManagedBypassRuleSpec(0x6002, "vpng0", 204),
+            dispatch=HostManagedDispatchRuleSpec(0x6004, alloc.table, 204),
+            preserve_main=HostManagedPreserveMainRuleSpec(0x6003, 204, 0),
+        )
+        rules = json.dumps([
+            {
+                "priority": 0x6002, "src": "all", "iif": "vpng0",
+                "table": 254, "protocol": 204,
+            },
+            {
+                "priority": 0x6003, "src": "all", "table": 254,
+                "protocol": 204, "suppress_prefixlen": 0,
+            },
+            {
+                "priority": 0x6004, "src": "all", "table": alloc.table,
+                "protocol": 204,
+            },
+        ])
+        routes = json.dumps([
+            {
+                "dst": "default", "dev": "vpng0",
+                "table": alloc.table, "protocol": 204,
+            }
+        ])
+        runner = Runner(routes, rules)
+        backend = LinuxHostManagedRoutingBackend(runner, alloc)
+        self.assertTrue(backend.observe(desired_state).exact)
+        backend.add_preserve_main_rule(desired_state.preserve_main)
+        self.assertIn(
+            (
+                "ip", "-4", "rule", "add", "priority", str(0x6003),
+                "protocol", "204", "lookup", "main",
+                "suppress_prefixlength", "0",
+            ),
+            runner.calls,
+        )
+
     def test_gateway_backed_snat_route_is_observed_exactly(self):
         routes = json.dumps(
             [

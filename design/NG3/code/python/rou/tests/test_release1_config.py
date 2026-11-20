@@ -3,10 +3,24 @@ import unittest
 
 from rou.domain import Direction
 from rou.port_bundle import PortBundle, PortSpan
-from rou.release1_config import Release1ConfigError, parse_release1_config
+from rou.release1_config import HostRoutingMode, Release1ConfigError, parse_release1_config
 
 
 class Release1ConfigTests(unittest.TestCase):
+    def test_host_routing_mode_defaults_auto_and_accepts_manual_only(self):
+        self.assertIs(
+            parse_release1_config("").host_routing,
+            HostRoutingMode.AUTO,
+        )
+        self.assertIs(
+            parse_release1_config('host_routing = "manual"').host_routing,
+            HostRoutingMode.MANUAL,
+        )
+        with self.assertRaisesRegex(Release1ConfigError, "host_routing"):
+            parse_release1_config('host_routing = "aggressive"')
+        with self.assertRaisesRegex(Release1ConfigError, "host_routing"):
+            parse_release1_config("host_routing = true")
+
     def test_complete_canonical_surface_normalizes(self):
         cfg = parse_release1_config("""
 default_snat_address = "198.19.255.10"
