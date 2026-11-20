@@ -44,6 +44,26 @@ def _lower_dispatch_selectors(
     return tuple(result)
 
 
+def validate_release1_helper_routing_scope(
+    config: Release1Config,
+    domain_spec: ManagedNetworkDomainSpec,
+) -> tuple[HostManagedDispatchSelector, ...]:
+    """Validate/lower helper scope before any dependent network mutation."""
+    if not isinstance(config, Release1Config):
+        raise ValueError("config must be Release1Config")
+    if not isinstance(domain_spec, ManagedNetworkDomainSpec):
+        raise ValueError("domain_spec must be ManagedNetworkDomainSpec")
+    selectors = _lower_dispatch_selectors(config, domain_spec)
+    allocation = NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION
+    assert allocation.scope_exit_priority is not None
+    capacity = allocation.scope_exit_priority - allocation.dispatch_priority
+    if len(selectors) > capacity:
+        raise ValueError(
+            "helper routing selector count exceeds reserved RPDB priority space"
+        )
+    return selectors
+
+
 def helper_routing_uses_external_ingress(config: Release1Config) -> bool:
     if not isinstance(config, Release1Config):
         raise ValueError("config must be Release1Config")
@@ -70,6 +90,10 @@ def build_release1_peaceful_host_routing_desired(
         raise ValueError("domain_spec must be ManagedNetworkDomainSpec")
     if not config.helper_routing_interfaces:
         return None
+    dispatch_selectors = validate_release1_helper_routing_scope(
+        config,
+        domain_spec,
+    )
 
     profiles = tuple(
         HostManagedRoutingProfile(
@@ -86,7 +110,7 @@ def build_release1_peaceful_host_routing_desired(
         plan,
         host_interface=domain_spec.host_interface,
         allocation=NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION,
-        dispatch_selectors=_lower_dispatch_selectors(config, domain_spec),
+        dispatch_selectors=dispatch_selectors,
         stack_service_address=domain_spec.inner_address.ip,
     )
     return desired if desired.routes else None

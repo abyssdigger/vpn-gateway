@@ -7,6 +7,7 @@ from rou.release1_config import parse_release1_config
 from rou.release1_host_route_helper import (
     build_release1_peaceful_host_routing_desired,
     helper_routing_uses_external_ingress,
+    validate_release1_helper_routing_scope,
 )
 
 
@@ -98,10 +99,12 @@ class Release1HostRouteHelperTests(unittest.TestCase):
             (None, False),
         )
 
-    def test_managed_boundary_cannot_be_selected_as_exact_ingress(self):
+    def test_managed_boundary_is_rejected_by_pre_mutation_scope_validation(self):
         cfg = parse_release1_config(
             'helper_routing_interfaces = "vpng0"\n' + PROFILE
         )
+        with self.assertRaisesRegex(ValueError, "managed HOST<->STACK boundary"):
+            validate_release1_helper_routing_scope(cfg, DOMAIN)
         with self.assertRaisesRegex(ValueError, "managed HOST<->STACK boundary"):
             build_release1_peaceful_host_routing_desired(cfg, DOMAIN)
 

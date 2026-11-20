@@ -118,6 +118,7 @@ from .release1_host_route_helper import (
     LinuxPeacefulHostRoutingContribution,
     build_linux_peaceful_host_routing_contribution,
     helper_routing_uses_external_ingress,
+    validate_release1_helper_routing_scope,
 )
 from .structural_policy_mutation import compare_structural_policy
 from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
@@ -637,6 +638,10 @@ def run_alpha_runtime(
         prepared = AlphaPreparedPolicy.from_text(
             text,
             local_address=domain_spec.inner_address.ip,
+        )
+        validate_release1_helper_routing_scope(
+            prepared.config,
+            domain_spec,
         )
         if helper_routing_uses_external_ingress(prepared.config):
             try:
