@@ -421,9 +421,11 @@ forwarding semantics as a deployment using product-provided host-routing automat
 startup/readiness must not fail merely because host-routing automation is disabled, provided
 the externally required host integration is already present.
 
-The project must document the stable boundary facts and route/reachability prerequisites
-needed for manual host integration. Exact administrator-facing instructions remain
-`[pending_closure]` under `VPNG0001-R2.R1.R1`.
+The stable manual integration contract is published in
+`design/NG3/host-integration.md`. It defines the ordinary remote-prefix route requirement,
+the gateway-backed Profile-SNAT identity /32 shape, full-tunnel underlay caveats and the
+host-local versus host-forwarding boundary without requiring the peaceful helper. This closes
+`VPNG0001-R2.R1.R1`.
 
 Host routing is an integration concern outside the core managed forwarding domain. Core
 VPN-GATE policy begins once traffic is actually handed through the explicit managed boundary;

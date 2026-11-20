@@ -127,7 +127,9 @@ admission и owner-scoped host DNAT mapping; отсутствие requested sele
 старта обычная маршрутизация хоста снова считается администраторской: последующая замена
 маршрута не является drift core VPN-GATE. `host_routing = "manual"` полностью отключает
 эту route automation; тогда администратор должен сам обеспечить доставку нужного traffic к
-`vnga-host0` и обратную reachability для поддерживаемого сценария.
+`vnga-host0` и обратную reachability для поддерживаемого сценария. Точный контракт и
+примеры обычных remote-prefix, Profile-SNAT и full-tunnel маршрутов приведены в
+`design/NG3/host-integration.md`.
 
 ## OpenVPN example
 
