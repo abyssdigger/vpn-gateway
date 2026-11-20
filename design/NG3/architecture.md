@@ -478,8 +478,8 @@ only the helper dispatch:
 kernel local rule
     -> local delivery remains local
 
-iif <managed-host-boundary> lookup main
-    -> traffic already emitted by STACK bypasses helper capture
+iif <managed-host-boundary> goto <after-peaceful-helper>
+    -> traffic already emitted by STACK skips the helper range unconditionally
 
 lookup main suppress_prefixlength 0
     -> explicit non-default administrator main routes win first
@@ -487,7 +487,10 @@ lookup main suppress_prefixlength 0
 <selector-scoped dispatch rule(s)> lookup <peaceful-helper-table>
     -> only selected ordinary-host traffic may use helper destinations
 
-ordinary kernel main/default rules
+<after-peaceful-helper>: nop
+    -> bypassed traffic resumes ordinary administrator/kernel RPDB processing
+
+ordinary main/default rules
     -> unselected or unmatched traffic keeps ordinary host routing
 ```
 
@@ -500,7 +503,10 @@ The dispatch lowering is:
 <ifname>     -> iif <ifname> lookup <peaceful-helper-table>
 ```
 
-The managed-boundary bypass precedes every dispatch. Multiple exact selectors receive
+The managed-boundary `goto` bypass precedes every helper lookup and targets the helper-owned
+post-dispatch `nop`, so failure of an ordinary route lookup cannot fall back into helper
+capture. EXP-079 proves this exact no-recapture property and its Linux JSON observation
+shape. Multiple exact selectors receive
 deterministic helper-owned rule priorities from one reserved lower allocation; selector order
 has no product semantics. The helper table still contains only helper destinations.
 Ordinary remote prefixes use a device-only route to the managed host endpoint; a Profile
@@ -544,11 +550,14 @@ realization is the already-proven dedicated managed table:
 kernel local rule
     -> local delivery remains local
 
-iif <managed-host-boundary> lookup main
-    -> traffic already emitted by STACK uses ordinary host routing
+iif <managed-host-boundary> goto <after-aggressive-helper>
+    -> traffic already emitted by STACK skips aggressive helper capture
 
 lookup <VPNG-managed-destination-table>
     -> matching aggressive-helper managed destinations go to the managed boundary
+
+<after-aggressive-helper>: nop
+    -> bypassed traffic resumes ordinary administrator/kernel RPDB processing
 
 ambient host main/default rules
     -> unmatched traffic remains ordinary
@@ -559,9 +568,9 @@ managed-L3 endpoint. The lower owner does not edit unrelated host `main` routes.
 non-local route in ordinary host `main`, including a more-specific route, does not override
 a destination that the aggressive helper has accepted into its authoritative set.
 
-`EXP-074` proves this exact observable property, including managed `0.0.0.0/0`, dynamic
+`EXP-074` proves authoritative destination precedence, including managed `0.0.0.0/0`, dynamic
 addition of a more-specific competing `main` route, preservation of local delivery,
-stack-origin bypass and cleanup that leaves unrelated `main` state unchanged. This evidence
+stack-origin routing with an available ordinary route and cleanup that leaves unrelated `main` state unchanged. EXP-079 supplies the reusable absolute managed-boundary bypass fact for the no-recapture edge where ordinary routing has no result. Together this evidence
 is sufficient closure for `VPNG0001-R2.R3.R1`; it is **not** evidence that the same
 authoritative precedence is appropriate for the simple helper.
 

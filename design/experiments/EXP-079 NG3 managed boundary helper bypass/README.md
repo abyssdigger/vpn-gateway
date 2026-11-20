@@ -2,7 +2,7 @@
 
 ## Статус
 
-PREPARED — privileged Linux evidence для no-recapture части `VPNG0001-R2.R2`.
+COMPLETE — PASS — SELECTED as privileged no-recapture evidence for host-routing helpers.
 
 ## Вопрос
 
@@ -34,3 +34,15 @@ PASS требует:
 ```sh
 sudo python3 "design/experiments/EXP-079 NG3 managed boundary helper bypass/exp079_managed_boundary_helper_bypass.py"
 ```
+
+## Result
+
+See `EXP-079-result-20261120.md`.
+
+Workflow run `44759680923`, job `linux-host-managed-routing` (`136368681135`) completed
+with `EXP079_RESULT=PASS`.
+
+## Disposition
+
+Selected reusable lower evidence. It corrects the former `lookup main` bypass assumption
+without changing product semantics.
