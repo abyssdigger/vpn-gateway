@@ -16,6 +16,14 @@ Read these documents **in this exact order**:
 
 Determine the current normative stage from the active project conventions and normative project artifacts. Locate the actual requirements and architecture paths for that stage; `design/<STAGE>/requirements.md` and `design/<STAGE>/architecture.md` are examples, not mandated names. **Do not hardcode NG1, NG2, NG3, or another stage in this instruction file.** Earlier stages are historical evidence, not automatically inherited design authority.
 
+A chat/context transition, context compaction/reset, agent/model handoff, or any other
+situation in which the current repository instructions may no longer be present in active
+context counts as **starting repository work again** for this gate. Before any repository
+write after such a transition, re-read `AGENTS.md` and the mandatory documents above from
+the current working branch. Until that reading is complete, repository access is read-only.
+Do not rely on prior-chat summaries, remembered authorization, or an earlier reading to skip
+this re-read.
+
 ## Repository write authorization gate
 
 Repository writes are allowed only in either of these two cases:
@@ -43,6 +51,18 @@ repository or a specific artifact, for example "apply this change", "edit AGENTS
 "update the requirements", "commit this", or "write this to the repository". If the user
 approves a proposal but does not separately instruct the agent to apply it, remain read-only
 and state that the proposal is agreed but has not been written to Git.
+
+Write authorization does **not** survive a chat/context transition by inference. After such a
+transition, repository writes are authorized only when the active context itself contains
+either:
+
+- a specific explicit write instruction that still applies to the requested operation; or
+- an explicitly started CD whose scope is still active and unambiguously covers the write.
+
+A prior-chat summary, remembered approval, inferred continuation, or the fact that repository
+work was writable before the transition is not sufficient authorization. If neither
+authorization is present in active context, default to read-only and obtain a new explicit
+write instruction before mutating repository state.
 
 
 ## Requirement and component gates
