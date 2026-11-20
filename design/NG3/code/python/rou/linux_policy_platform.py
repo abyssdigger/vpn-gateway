@@ -43,9 +43,9 @@ NG3_LINUX_POLICY_PLATFORM = NetworkPolicyPlatformSpace(
 )
 
 
-# Ordinary-host namespace boundary owner. These are deliberately fixed Release-1
-# keys, not a host-global allocation service. If the administrator already owns a
-# conflicting key, host-boundary activation must fail rather than renumber silently.
+# Historical EXP-053/073 host-return allocation retained only so superseded
+# experiments/tests remain reproducible. Current runtime uses
+# NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION instead.
 NG3_HOST_BOUNDARY_LINUX_ALLOCATION = HostBoundaryLinuxAllocation(
     mark=0x56504E47,             # ASCII "VPNG"
     return_table=0x7FFF0001,
@@ -54,8 +54,8 @@ NG3_HOST_BOUNDARY_LINUX_ALLOCATION = HostBoundaryLinuxAllocation(
 )
 
 
-# EXP-064 selected fixed host behavior classes. These marks classify host
-# conntrack state only; they are distinct from stack affinity/probe marks.
+# Historical EXP-064 behavior-lane allocation retained only for historical
+# evidence reproduction; current runtime does not materialize these host classes.
 NG3_HOST_BOUNDARY_BEHAVIOR_LINUX_ALLOCATION = HostBoundaryBehaviorLinuxAllocation(
     stateful_no_nat_mark=0x30000001,
     stateful_nat_mark=0x30000002,
@@ -65,8 +65,8 @@ NG3_HOST_BOUNDARY_BEHAVIOR_LINUX_ALLOCATION = HostBoundaryBehaviorLinuxAllocatio
 )
 
 
-# Selected ordinary-host bootstrap owner (EXP-059). Return steering remains the
-# separate allocation above and must execute at higher precedence.
+# Historical EXP-059 paired-bootstrap allocation retained for migration/evidence
+# reproduction. Current runtime does not create paired bootstrap rules.
 NG3_HOST_BOOTSTRAP_LINUX_ALLOCATION = HostBootstrapLinuxAllocation(
     table=0x7FFF0002,
     bypass_priority=0x1F00,
@@ -95,8 +95,8 @@ NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION = HostManagedRoutingLinuxAllocation(
 )
 
 
-# Managed-stack established-flow return affinity (EXP-061). The RPDB rules
-# execute before probe/payload dispatch; marks live in a separate resource
+# Current managed-stack Profile flow association / return affinity. The RPDB
+# rules execute before probe/payload dispatch; marks live in a separate resource
 # namespace and are allocated deterministically per active inbound-capable Profile.
 NG3_STACK_RETURN_AFFINITY_PLATFORM = StackReturnAffinityPlatformSpace(
     marks=NumericResourcePool(
