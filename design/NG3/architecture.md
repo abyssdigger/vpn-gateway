@@ -390,98 +390,123 @@ Existing divergent infrastructure is not repaired or adopted in place. Destroy f
 re-confirms containment where possible, removes the owned namespace/link infrastructure and
 freshly verifies absence.
 
-### 1.1.1-A. Host managed-destination routing
+### 1.1.1-A. Optional host-routing assistance
 
 **Implements:**
-- `VPNG0002-R2.R6`;
+- `VPNG0001-R1.R4`;
+- `VPNG0001-R1.R5`;
+- `VPNG0001-R1.R5.R1`;
+- `VPNG0001-R1.R5.R2`;
+- `VPNG0001-R1.R5.R3`;
+- `VPNG0002-R2.R6`.
+
+**Constrained by:**
+- `VPNG0001-R1.R5.C1`;
 - `VPNG0004-R4.R6.R1.R1`;
 - `VPNG0004-R4.R6.R1.R2`.
 
-The isolated managed domain still requires an ordinary host route into that domain. The host
-does not need to know Profile identity or return-flow association; it needs only to recognize
-addresses whose next routing domain is VPN-GATE.
+Host routing is an integration concern outside the core managed forwarding domain. Core
+VPN-GATE policy begins once traffic is actually handed through the explicit managed boundary;
+Profile direction does not itself grant authority over administrator-owned ordinary-host
+routing.
 
-The selected host routing owner therefore maintains one dedicated managed table containing
-device-only routes through the managed L3 endpoint for:
+The product therefore separates two optional helper contracts.
 
-- the union of remote destinations of all enabled Profiles; and
-- every effective Profile SNAT identity as an exact /32.
+#### Simple lifecycle helper
 
-Route presence is transport into managed policy, not permission. An `inbound` Profile may
-therefore contribute its remote destination even though a new ordinary-originated flow to that
-destination is not authorized; after entering the managed domain, Profile direction/firewall
-policy still rejects unauthorized NEW traffic. The same route is required for a legitimate
-reply to a VPN-originated flow under `VPNG0002-R2.R6`.
+The Release-1-facing helper is lifecycle-scoped assistance, not a host-routing supervisor.
 
-The host RPDB shape is deliberately smaller than the superseded paired-suppression bootstrap:
+Its desired contribution is derived from current accepted configuration and may include:
+
+- remote Profile destinations that the administrator wants routed through VPN-GATE; and
+- effective Profile SNAT identities when the administrator wants helper-provided reverse
+  reachability to the managed boundary.
+
+The helper installs its owned routing contribution at start / supported re-application of
+configuration and removes that owned contribution on stop. Between those lifecycle
+operations, administrator changes to ordinary host routing are not treated as core
+managed-domain corruption and do not by themselves close the internal forwarding gate.
+
+The exact Linux route/RPDB lowering for this simple helper is **not yet selected** by this
+section. In particular, the former authoritative dedicated-table precedence cannot be used as
+Release-1 closure merely because the current Python reference already implements it: that
+precedence is stronger than the simple-helper contract.
+
+Consequently `VPNG0001-R1.R4` remains `[pending_closure]` until a lower realization is
+selected that preserves administrator ownership of ordinary host routing while still
+providing useful lifecycle assistance.
+
+Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
+managed boundary, not by host routing. A helper may automate host reachability to that
+identity, but core Profile-SNAT semantics do not depend on the helper being enabled.
+
+#### Aggressive authoritative helper
+
+The aggressive helper is a separate opt-in capability and is outside Release 1 by
+`VPNG0001-R1.R5.C1`.
+
+For the narrow authoritative-routing child `VPNG0001-R1.R5.R1`, the selected Linux
+realization is the already-proven dedicated managed table:
 
 ```text
 kernel local rule
     -> local delivery remains local
 
 iif <managed-host-boundary> lookup main
-    -> packets already emitted by STACK use ordinary host routing
+    -> traffic already emitted by STACK uses ordinary host routing
 
 lookup <VPNG-managed-destination-table>
-    -> matching managed destination or SNAT identity goes to vpng0
+    -> matching aggressive-helper managed destinations go to the managed boundary
 
 ambient host main/default rules
     -> unmatched traffic remains ordinary
 ```
 
-A lookup that finds no route in the managed table naturally continues to later rules. The
-dedicated-table precedence shown above is an implementation detail of the current automatic
-host-routing helper. Profile direction policy does not grant VPN-GATE authority over
-administrator-owned ordinary-host routing; exact helper precedence and ownership semantics
-remain a separate architecture question and are not closed by this section.
+The dedicated table contains only the helper-managed destinations and uses the explicit
+managed-L3 endpoint. The lower owner does not edit unrelated host `main` routes. A competing
+non-local route in ordinary host `main`, including a more-specific route, does not override
+a destination that the aggressive helper has accepted into its authoritative set.
 
-Packets already emitted by the managed stack bypass managed capture before the managed-table
-lookup. This is the ordinary underlay/server-reply escape and applies equally to VPN client
-transport packets, published-server replies and translated VPN-originated payload. Therefore
-a full-tunnel `0.0.0.0/0` does not recursively capture its own stack-origin transport.
+`EXP-074` proves this exact observable property, including managed `0.0.0.0/0`, dynamic
+addition of a more-specific competing `main` route, preservation of local delivery,
+stack-origin bypass and cleanup that leaves unrelated `main` state unchanged. This evidence
+is sufficient closure for `VPNG0001-R1.R5.R1`; it is **not** evidence that the same
+authoritative precedence is appropriate for the simple helper.
 
-The route representation is the selected managed-L3 contract:
+The current Python `HostManagedRoutingPlan` / Linux owner embodies this authoritative child.
+After the requirement correction it is evidence/prototype for the postponed aggressive
+capability, not an unconditional core or Release-1 host-routing contract.
+
+The remaining aggressive children are not closed:
+
+- `VPNG0001-R1.R5.R2` requires a future continuous owner that detects and repairs
+  helper-owned drift;
+- `VPNG0001-R1.R5.R3` requires composition of host-side fail-closed measures with the public
+  administrative payload-containment control surface.
+
+Those responsibilities remain `[pending_closure]`; the existence of the current periodic
+alpha audit must not be used to invent their final semantics.
+
+#### Managed-L3 route facts retained independently
+
+The managed-L3 boundary still supports device-only routes for remote prefixes. For Profile
+SNAT reverse reachability, `EXP-075` separately proved that an exact SNAT-identity route on
+the addressless routed boundary needs the already-owned stack service address as an onlink
+next hop:
 
 ```text
-<remote managed prefix> dev <managed-host-endpoint>
+<remote prefix> dev <managed-host-endpoint>
 <snat identity>/32 via <stack-service-address> dev <managed-host-endpoint> onlink
 ```
 
-Remote managed prefixes remain device-only routes. A translated SNAT identity is different:
-the packet's IP destination is the administrative identity itself, for which STACK has no
-ordinary destination route before conntrack reverse translation. EXP-075 demonstrated that a
-device-only host route therefore leaves neighbor resolution `INCOMPLETE` on the addressless
-routed boundary. The selected lower route uses the already-owned stack service /32 as the
-onlink next hop; STACK already answers neighbor discovery for that address, while the IP
-destination remains the SNAT identity and managed conntrack can reverse the translation after
-the packet crosses the boundary. This adds no new stack address, proxy-neighbour owner or
-Profile metadata channel.
+These are lower Linux facts reusable by a host-routing helper or by an administrator. They do
+not assign ordinary-host routing ownership to core VPN-GATE.
 
-EXP-074 proves the observed dedicated-table and stack-origin main-bypass mechanics of the
-current helper implementation; it does not establish host-wide product authority over
-administrator routing. EXP-075 proves the distinct gateway-backed route required for SNAT
-identities. Earlier host
-bootstrap/return experiments are lifecycle-classified in the experiment registry and do not
-define current routing behavior.
-
-There is no host conntrack association, return packet mark, dedicated return table or
-user-selectable host return mode. A remote-initiated reply is routed by its destination back through
-the managed endpoint; once inside STACK, the independently owned established-flow affinity
-under `VPNG0002-R2.R6` selects the original Profile/VPN routing domain.
-
-For Profile SNAT, a direct ordinary reply targets the selected SNAT identity. If the
-administrator applies an additional host-side NAT after `vpng0`, ordinary host conntrack
-first reverses that external translation back to the same identity. In both cases the managed
-/32 route returns the packet to STACK, where the managed-domain conntrack owner performs
-Profile SNAT reverse translation before established-flow affinity dispatch.
-
-The host routing owner mutates only its reserved table/rules and endpoint routes. A foreign
-object occupying an exact reserved key is a diagnosable conflict; VPN-GATE neither adopts it
-nor edits unrelated host `main` state.
-
-**Simplification:** no separate host-side return-steering or Profile-metadata owner exists in
-current architecture or current code. Superseded experimental evidence is retained only in
-the experiment register/result artifacts.
+There is no host conntrack association, return packet mark, dedicated host return table or
+user-selectable host return mode in the current core design. A remote-initiated reply that is
+delivered back to STACK by any valid host routing arrangement is associated with its original
+VPN routing domain inside STACK by the independently owned established-flow affinity under
+`VPNG0002-R2.R6`.
 
 ### Architectural consequence for external VPN channels
 
@@ -5214,6 +5239,37 @@ The executable lower backend may therefore use
 `ip netns exec <managed-ns> sysctl ... net.ipv4.ip_forward`, but success remains defined by
 the fresh reread value rather than process exit status alone.
 
+#### Administrative payload-containment control
+
+**Implements:**
+- `VPNG0004-R4.R7`.
+
+**Constrained by:**
+- `VPNG0004-R4.R7.C1`.
+
+This is a future administrative operational capability, not a second lifecycle state and not
+a configuration spelling for the structural ForwardingGate.
+
+Semantically the public control surface must be able to enter and leave a containment state
+while preserving the managed runtime for diagnosis. While contained:
+
+- no IP payload may cross the ordinary-side managed boundary in either direction; and
+- routed IP transit between VPN paths must be impossible.
+
+The caller may be an administrator or another product component/add-on, including the
+aggressive host-routing helper. Callers request the semantic operation; they do not directly
+write VPN-GATE internal sysctls/nft state.
+
+The exact lower composition remains open. The existing managed-domain
+`net.ipv4.ip_forward=0` ForwardingGate is a strong candidate for the cross-VPN transit part
+and `EXP-030` proves that primitive blocks routed transit while preserving the namespace.
+That fact alone does not prove the full administrative contract because a separate
+ordinary-side boundary block and the public enter/leave operation still require composed
+acceptance evidence.
+
+Accordingly `VPNG0004-R4.R7` remains `[pending_closure]`; Release 1 is explicitly exempt
+by `VPNG0004-R4.R7.C1`.
+
 #### Structural transaction ordering
 
 With the root barrier verified, the first-release physical structural transaction uses an
@@ -6446,6 +6502,8 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
 | `VPNG0001-R1.R2` declarative operation | canonical Release-1 Device/Profile grammar fixed in `config-model.md` and normalized by ConfigurationAdapter; only endpoint-scoped future firewall selector remains deferred |
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
+| `VPNG0001-R1.R4` host-routing assistance | simple lifecycle helper semantics accepted; Linux lowering remains pending and must preserve administrator-owned host routing |
+| `VPNG0001-R1.R5` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R1.R5.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
 | `VPNG0001-R1.R3.C2` isolated VPN data-plane endpoint | architecture constraint derived from managed-network isolation |
@@ -6454,6 +6512,7 @@ until a separate requirement requires it.
 | `VPNG0003-R3.R1`–`VPNG0003-R3.R5`, `VPNG0003-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
 | `VPNG0003-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; Profile selects disabled, Device default, or same-shape Profile override, normalized to a concrete ICMP/IPv4 description before probe runtime |
 | `VPNG0004-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
+| `VPNG0004-R4.R7` administrative payload containment | postponed beyond Release 1; semantic control surface accepted, lower composition/evidence remains pending |
 | `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
 | `VPNG0005-R5.R2`, `VPNG0005-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
 | `VPNG0006-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |

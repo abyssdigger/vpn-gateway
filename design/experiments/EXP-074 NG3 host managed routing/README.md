@@ -1,17 +1,22 @@
 # EXP-074 — current host managed-destination routing
 
-## Requirement trace
+## Current requirement trace
 
-This experiment provides Linux acceptance evidence for:
+This experiment is exact Linux acceptance evidence for:
 
-- `VPNG0002-R2.R3.R1.R1`;
-- `VPNG0002-R2.R3.R1.R1.R1`;
-- `VPNG0002-R2.R3.R1.R1.R2`;
-- the host-routing half of `VPNG0002-R2.R6`.
+- `VPNG0001-R1.R5.R1` — authoritative managed-destination routing for the opt-in aggressive
+  host-routing helper.
+
+The requirement IDs originally attached to this experiment under the removed
+`VPNG0002-R2.R3.R1...` direction decomposition are historical and no longer define current
+product semantics. `VPNG0002-R2.R6` remains a core STACK return-affinity requirement, but
+EXP-074 is no longer used to make host routing an unconditional part of that core contract.
+
+The aggressive helper itself is constrained out of Release 1 by `VPNG0001-R1.R5.C1`.
 
 ## Question
 
-Does the selected current host owner implement one authoritative managed-destination
+Does the tested authoritative host-routing realization implement one managed-destination
 table such that:
 
 - matching managed destinations are sent through `vpng0`;
@@ -22,8 +27,9 @@ table such that:
 - kernel local delivery remains local;
 - cleanup leaves unrelated host `main` routes unchanged?
 
-EXP-072 remains historical evidence for the superseded specificity-preserving paired
-RPDB bootstrap. It is not the acceptance gate for the current semantics.
+EXP-072 remains valid lower evidence for device-only managed-L3 routing and for the older
+specificity-preserving bootstrap mechanism. EXP-074 is the acceptance gate only for the
+aggressive authoritative-routing child, not for the simple lifecycle helper.
 
 ## Execution
 
