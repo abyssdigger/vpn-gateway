@@ -227,3 +227,14 @@ DSCP может пройти Phase B только как контроль тех
 
 Выбор или отказ от нового carrier является отдельным `Disposition` и не записывается
 автоматически из технического результата.
+
+## Post-result lifecycle
+
+- Logical evidence state: **PROVEN FACT / SUPERSEDED DESIGN**.
+- Current disposition: **historical_only**.
+- Applicability: **утратил применимость к текущей реализации**.
+
+The technical PASS remains evidence about the tested metadata carriers. The product no longer
+exports a Profile/behavior class across this boundary and no host behavior-lane carrier exists,
+so the carrier-selection question itself is no longer a current architecture decision.
+
