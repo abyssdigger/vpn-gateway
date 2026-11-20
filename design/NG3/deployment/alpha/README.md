@@ -66,7 +66,7 @@ Alpha controller:
 - текущая alpha не предоставляет reload: изменение `config.toml` требует restart controller; это прямо разрешено `VPNG0005-R5.R6.R4.C1` и не считается alpha-gap;
 - текущий RuntimeStatusAgent подключён через alpha JSON surface; путь/JSON presentation пока
   являются alpha interface machinery, а не стабильным Release-1 API;
-- availability/failover runtime этой сборкой еще не считается end-to-end завершенным;
+- availability/failover входит в текущий executable alpha path: canonical `availability_check` materializes probe-local/routing preconditions, выполняется continuous ICMP observation и меняет effective path order только после принятой confirmation semantics;
 - автоматического поиска/клонирования/редактирования vendor VPN units нет.
 
 ## Установка
@@ -229,9 +229,12 @@ controller завершает managed-domain cleanup. Successful stop требу
 сбрасывается в `null`, а причина появляется в `blocking_problems` и
 `unknown_or_unconfirmed_fields`.
 
-Текущая alpha отклоняет `availability_check`, поэтому для поддерживаемого alpha-slice
-availability честно отображается как `disabled`. JSON schema/path пока не объявлены
-стабильным Release-1 внешним API.
+Текущая alpha принимает canonical `availability_check`. Для Profile без настроенной проверки
+status показывает `disabled`; для включенной проверки — `unconfirmed`, пока текущий
+availability/reconcile truth не подтвержден, затем `monitoring` при работающем observation
+cycle без установленной проблемы либо `problem` при подтвержденной проблеме хотя бы одного
+`(Profile, logical path)`. Эти значения описывают только current bounded state и не обещают
+историю наблюдений. JSON schema/path пока не объявлены стабильным Release-1 внешним API.
 
 ## Диагностика
 
@@ -279,9 +282,12 @@ systemd environment и проверяет:
 - routed managed-L3 boundary без addressed transit subnet;
 - удаление host publication owner до managed-domain teardown и чистую остановку всего stack.
 
-Текущая boundary/evidence база: EXP-070/071 для managed-L3 backend; EXP-074 — точное evidence
-отложенного aggressive authoritative child; EXP-075 — lower SNAT-identity route fact;
-EXP-076 — core Profile-SNAT dataplane acceptance с ancillary host-route observation;
+Текущая boundary/evidence база: EXP-068 — continuous availability failover/recovery на реальном
+Linux dataplane; EXP-070/071 — managed-L3 backend; EXP-074 — точное evidence отложенного
+aggressive authoritative child; EXP-075 — lower SNAT-identity route fact; EXP-076 — core
+Profile-SNAT dataplane acceptance с ancillary host-route observation; current alpha unit
+evidence дополнительно проходит через `AlphaPreparedPolicy.build_current()` и подтверждает
+materialization Profile SNAT в assembled runtime desired state;
 EXP-077 — complementary evidence для main-first precedence и non-destructive lifecycle
 cleanup; EXP-078 — scoped selectors (`:local`/`:external`/`:any`/exact ingress);
 EXP-079 — absolute managed-boundary no-recapture через RPDB `goto`/post-helper `nop`; EXP-080 — selector-scoped preserve-main, не меняющий administrator RPDB policy вне выбранного helper scope.
