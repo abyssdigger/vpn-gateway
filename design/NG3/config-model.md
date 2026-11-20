@@ -248,8 +248,7 @@ interface naming into hidden policy.
 ## 4.1. Canonical Release-1 Device policy grammar
 
 The configuration-format review is complete for the ordinary Release-1 Device policy
-surface. Historical NG1/NG3 prototype spellings remain evidence only and are **not**
-compatibility aliases.
+surface. Only the canonical fields defined below are accepted for enabled Device objects.
 
 ### Outbound Device NAT
 
@@ -279,8 +278,6 @@ is independent from Profile ordinary-side `+snat`.
 
 For a Device that participates only in inbound Profiles, the field is not required because
 there is no ordinary-to-VPN payload leg on which this NAT could operate.
-
-Historical `nat = "none|masquerade"` is rejected by the canonical Release-1 parser.
 
 ### Client-side VPN transport/control allow
 
@@ -814,9 +811,6 @@ rejected before runtime materialization. Disabled Device placeholders remain sha
 Release 1 intentionally exposes no availability interval, timeout, failure-count or
 hysteresis knobs. Those remain implementation policy unless a later accepted requirement
 makes them user policy.
-
-Historical `interface_balancing` spelling is not an alias and is rejected by the canonical
-parser.
 
 **Requirements:**
 - `VPNG0001-R1.R2.R4.R4.R1`
