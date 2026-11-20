@@ -56,9 +56,10 @@ Alpha controller:
 - canonical grammar уже принята; alpha materializes Device `use_outbound_nat`, ordinary
   Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
 - `availability_check` и Profile `+snat` входят в canonical alpha path: `+snat` materializes
-  inside STACK after managed policy using the normalized Profile identity, а текущий alpha
-  возвращает replies через prototype host /32 via stack service address; сам core `+snat`
-  host-side reachability не обещает;
+  inside STACK after managed policy using the normalized Profile identity; host-side return
+  reachability к этой identity обеспечивает либо явно включённый peaceful helper через
+  `/32 via <stack-service-address> ... onlink`, либо эквивалентный administrator route;
+  сам core `+snat` host-side reachability не обещает;
 - host-side publication требует уже существующего внешнего host forwarding; alpha проверяет
   `net.ipv4.ip_forward` и явные ordinary-host IPv4/interface selectors, но не включает global
   host forwarding и не меняет адреса/UP-state внешних ordinary host interfaces;
