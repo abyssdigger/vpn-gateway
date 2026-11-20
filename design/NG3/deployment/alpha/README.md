@@ -37,7 +37,7 @@ Alpha controller:
   - namespace: `vpn-gate-alpha`;
   - host endpoint: `vnga-host0`, unnumbered routed veth;
   - stack endpoint: `vnga-inner0`, stack-local service address `198.19.255.2/32`;
-  - host имеет только owned route `198.19.255.2/32 dev vnga-host0`; peer gateway IP отсутствует;
+  - boundary lifecycle в host `main` владеет только service route `198.19.255.2/32 dev vnga-host0`; managed Profile destinations и SNAT identities живут отдельно в owned policy-routing table, причём SNAT /32 использует `198.19.255.2` как onlink next hop; peer transit-subnet gateway IP отсутствует;
   - routed-veth backend использует Proxy ARP и `rp_filter=0` только на двух boundary endpoints;
 - canonical grammar уже принята; alpha materializes Device `use_outbound_nat`, ordinary
   Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
