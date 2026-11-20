@@ -43,7 +43,7 @@ Alpha controller:
   Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
 - `availability_check` и Profile `+snat` входят в canonical alpha path: `+snat` materializes
   inside STACK after managed policy using the normalized Profile identity, а replies возвращаются
-  через owned host /32 via stack service address; historical `+route-return` syntax отвергается;
+  через owned host /32 via stack service address;
 - host-side publication требует уже существующего внешнего host forwarding; alpha проверяет
   `net.ipv4.ip_forward` и явные ordinary-host IPv4/interface selectors, но не включает global
   host forwarding и не меняет адреса/UP-state внешних ordinary host interfaces;
@@ -241,11 +241,11 @@ systemd environment и проверяет:
 - реальный controlled payload;
 - VPN-only restart без restart controller;
 - fresh ifindex generation + второе runtime reconciliation;
-- device-only selected paired-RPDB host bootstrap без peer gateway;
+- routed managed-L3 boundary без addressed transit subnet;
 - удаление host publication owner до managed-domain teardown и чистую остановку всего stack.
 
-Текущая migration evidence: EXP-051 `EXP051_ROUTED_MANAGED_L3_BOUNDARY=PASS` и
-`EXP051_SELECTED_HOST_BOOTSTRAP_DEVICE_ONLY=PASS`; gateway-less stateful-return отдельно
-подтвержден EXP-073.
+Текущая boundary/routing acceptance evidence: EXP-070/071 для managed-L3 backend,
+EXP-074 для host managed routing и EXP-075/076 для Profile-SNAT reverse/dataplane behavior.
+EXP-051 сохраняется как evidence первого functioning alpha lifecycle.
 
 См. `design/experiments/EXP-051 NG3 first functioning alpha/`.
