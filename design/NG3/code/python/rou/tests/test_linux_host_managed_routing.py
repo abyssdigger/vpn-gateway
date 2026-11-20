@@ -51,17 +51,21 @@ class LinuxHostManagedRoutingTests(unittest.TestCase):
             ),
             host_interface="vpng0",
             allocation=self.allocation(),
+            stack_service_address=IPv4Address("198.19.255.2"),
         )
         self.assertEqual(
             [item.destination.with_prefixlen for item in desired.routes],
             ["198.19.255.10/32", "10.20.0.0/16", "10.0.0.0/8", "0.0.0.0/0"],
         )
+        snat_route = desired.routes[0]
+        self.assertEqual(snat_route.gateway, IPv4Address("198.19.255.2"))
+        self.assertTrue(snat_route.onlink)
         self.assertEqual(desired.bypass.priority, 0x1F00)
         self.assertEqual(desired.bypass.interface, "vpng0")
         self.assertEqual(desired.dispatch.priority, 0x2000)
         self.assertEqual(desired.dispatch.table, 0x7FFF0002)
 
-    def test_routes_are_device_only(self):
+    def test_remote_routes_remain_device_only(self):
         desired = build_linux_host_managed_routing_desired(
             self.plan(self.profile("p", Direction.INBOUND, "10.0.0.0/8")),
             host_interface="vpng0",
@@ -69,6 +73,23 @@ class LinuxHostManagedRoutingTests(unittest.TestCase):
         )
         self.assertEqual(desired.routes[0].interface, "vpng0")
         self.assertEqual(desired.routes[0].table, 0x7FFF0002)
+        self.assertIsNone(desired.routes[0].gateway)
+        self.assertFalse(desired.routes[0].onlink)
+
+    def test_snat_identity_requires_stack_service_address(self):
+        with self.assertRaisesRegex(ValueError, "stack_service_address"):
+            build_linux_host_managed_routing_desired(
+                self.plan(
+                    self.profile(
+                        "snat",
+                        Direction.INBOUND,
+                        "10.20.0.0/16",
+                        snat="198.19.255.10",
+                    )
+                ),
+                host_interface="vpng0",
+                allocation=self.allocation(),
+            )
 
     def test_empty_plan_has_no_active_rules(self):
         desired = build_linux_host_managed_routing_desired(
