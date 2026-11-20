@@ -26,7 +26,6 @@ on:
       - "design/experiments/EXP-051 NG3 first functioning alpha/**"
       - "design/experiments/EXP-052 NG3 host publication DNAT/**"
       - "design/experiments/EXP-061 NG3 stack established-flow return affinity/**"
-      - "design/experiments/EXP-062 NG3 inbound multipath concrete-path affinity/**"
       - "design/NG3/deployment/alpha/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
@@ -527,20 +526,6 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-061 NG3 stack established-flow return affinity/exp061_stack_return_affinity.py"
-
-
-  linux-inbound-multipath-affinity:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables conntrack
-      - name: EXP-062 inbound multipath concrete-path affinity
-        run: >-
-          sudo python3
-          "design/experiments/EXP-062 NG3 inbound multipath concrete-path affinity/exp062_inbound_multipath_affinity.py"
 
 
   linux-stack-return-affinity-owner:
