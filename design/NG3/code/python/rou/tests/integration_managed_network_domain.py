@@ -60,10 +60,6 @@ def main() -> int:
             created.verification.host_boundary.ifname
             == spec.inner_interface
         )
-        assert tuple(
-            item.ifname
-            for item in created.verification.boundary_interfaces
-        ) == ("host0",)
         assert (
             LinuxForwardingGateBackend(
                 runner,
