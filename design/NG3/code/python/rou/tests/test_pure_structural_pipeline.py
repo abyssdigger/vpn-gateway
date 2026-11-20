@@ -16,8 +16,8 @@ from rou import (
     build_payload_network_policy_desired_state,
     build_payload_profile_requests,
     calculate_effective_path_order,
-    classify_inbound_profile,
-    classify_outbound_profile,
+    build_inbound_profile_partition,
+    build_outbound_profile_partition,
     compile_payload_forward_policy,
     NG3_LINUX_POLICY_PLATFORM,
     parse_ip_link_inventory,
@@ -64,11 +64,15 @@ device_order = ["oc"]
                 LogicalPathId("oc", 1, 1),
             ),
         )
-        classified = classify_outbound_profile(
-            (request,),
-            ipaddress.IPv4Address("10.20.30.40"),
+        outbound_partition = build_outbound_profile_partition((request,))
+        self.assertEqual(
+            [
+                item.profile_id
+                for item in outbound_partition
+                if ipaddress.IPv4Address("10.20.30.40") in item.remote_prefix
+            ],
+            ["corp"],
         )
-        self.assertEqual(classified, request)
 
         effective = calculate_effective_path_order(
             request.ordered_paths,
@@ -173,11 +177,12 @@ device_order = ["future"]
 
         self.assertEqual(request.ordered_paths, ())
         self.assertEqual(
-            classify_outbound_profile(
-                (request,),
-                ipaddress.IPv4Address("10.1.2.3"),
-            ),
-            request,
+            [
+                item.profile_id
+                for item in build_outbound_profile_partition((request,))
+                if ipaddress.IPv4Address("10.1.2.3") in item.remote_prefix
+            ],
+            ["corp"],
         )
         self.assertEqual(
             calculate_effective_path_order(request.ordered_paths, ()),
@@ -290,19 +295,19 @@ device_order = ["wg"]
 
         self.assertEqual(request.ordered_paths, (ingress,))
         self.assertEqual(
-            classify_inbound_profile(
-                (request,),
-                ingress,
-                ipaddress.IPv4Address("10.9.8.7"),
-            ),
-            request,
+            [
+                item.profile_id
+                for item in build_inbound_profile_partition((request,), ingress)
+                if ipaddress.IPv4Address("10.9.8.7") in item.remote_prefix
+            ],
+            ["support"],
         )
-        self.assertIsNone(
-            classify_inbound_profile(
+        self.assertEqual(
+            build_inbound_profile_partition(
                 (request,),
                 LogicalPathId("other", 0, 0),
-                ipaddress.IPv4Address("10.9.8.7"),
-            )
+            ),
+            (),
         )
 
         host_boundary = InterfaceIdentity("host0", 100)
