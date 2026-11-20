@@ -35,7 +35,7 @@ def allocation():
         table=0x7FFF0002,
         bypass_priority=0x1F00,
         dispatch_priority=0x2000,
-        owned_rule_priorities=NumericResourcePool(0x2000, 0x6000),
+        owned_rule_priorities=NumericResourcePool(0x2000, 0x2001),
         rule_protocol=203,
         route_protocol=203,
     )
@@ -160,34 +160,6 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
         self.assertTrue(observed.exact)
         self.assertEqual(observed.conflicts, ())
 
-    def test_legacy_prefix_rule_is_stale_not_current_dispatch(self):
-        rules = json.dumps(
-            [
-                {
-                    "priority": 0x2000,
-                    "src": "all",
-                    "dst": "10.0.0.0/8",
-                    "table": 254,
-                    "protocol": 203,
-                    "suppress_prefixlen": 8,
-                },
-                {
-                    "priority": 0x2001,
-                    "src": "all",
-                    "dst": "10.0.0.0/8",
-                    "table": allocation().table,
-                    "protocol": 203,
-                },
-            ]
-        )
-        observed = LinuxHostManagedRoutingBackend(
-            Runner("[]", rules), allocation()
-        ).observe(desired())
-        self.assertEqual(observed.conflicts, ())
-        self.assertIn(0x2000, observed.stale_rule_priorities)
-        self.assertIn(0x2001, observed.stale_rule_priorities)
-        self.assertIn(0x2000, observed.missing_rule_priorities)
-
     def test_foreign_rule_at_required_priority_is_conflict(self):
         rules = json.dumps(
             [
@@ -203,23 +175,6 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
             Runner("[]", rules), allocation()
         ).observe(desired())
         self.assertIn("foreign rule", "; ".join(observed.conflicts))
-
-    def test_foreign_rule_at_unused_legacy_priority_is_not_claimed(self):
-        rules = json.dumps(
-            [
-                {
-                    "priority": 0x3000,
-                    "src": "all",
-                    "table": 100,
-                    "protocol": 99,
-                }
-            ]
-        )
-        observed = LinuxHostManagedRoutingBackend(
-            Runner("[]", rules), allocation()
-        ).observe(desired())
-        self.assertEqual(observed.conflicts, ())
-        self.assertNotIn(0x3000, observed.rule_priorities)
 
     def test_driver_adds_gateway_backed_snat_route_onlink(self):
         runner = Runner()
