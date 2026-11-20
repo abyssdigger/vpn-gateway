@@ -2,19 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from .host_managed_routing import (
     HostManagedRoutingPlan,
     HostManagedRoutingProfile,
     build_host_managed_routing_plan,
 )
 from .release1_config import Release1Config
-
-
-@dataclass(frozen=True, slots=True)
-class Release1HostBoundaryIntent:
-    plan: HostManagedRoutingPlan
 
 
 def build_release1_host_boundary_plan(
@@ -37,13 +30,3 @@ def build_release1_host_boundary_plan(
         if structural.enabled
     )
     return build_host_managed_routing_plan(profiles)
-
-
-def build_release1_host_boundary_intent(
-    config: Release1Config,
-) -> Release1HostBoundaryIntent:
-    if not isinstance(config, Release1Config):
-        raise ValueError("config must be Release1Config")
-    return Release1HostBoundaryIntent(
-        plan=build_release1_host_boundary_plan(config),
-    )
