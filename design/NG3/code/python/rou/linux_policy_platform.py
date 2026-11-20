@@ -43,12 +43,12 @@ NG3_LINUX_POLICY_PLATFORM = NetworkPolicyPlatformSpace(
 # dispatch priority is reserved; superseded paired-RPDB state is not recognized or
 # cleaned up because compatibility with pre-current alpha kernel state is unsupported.
 NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION = HostManagedRoutingLinuxAllocation(
-    table=0x7FFF0002,
-    bypass_priority=0x1F00,
-    dispatch_priority=0x2000,
+    table=0x7FFF0003,
+    bypass_priority=0x6000,
+    dispatch_priority=0x6001,
     owned_rule_priorities=NumericResourcePool(
-        first=0x2000,
-        stop=0x2001,
+        first=0x6001,
+        stop=0x6002,
     ),
     rule_protocol=203,
     route_protocol=203,
