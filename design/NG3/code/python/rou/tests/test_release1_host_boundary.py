@@ -2,7 +2,7 @@ import unittest
 from ipaddress import IPv4Network
 
 from rou.release1_config import parse_release1_config
-from rou.release1_host_boundary import build_release1_host_boundary_intent
+from rou.release1_host_boundary import build_release1_host_boundary_plan
 
 
 class Release1HostBoundaryTests(unittest.TestCase):
@@ -31,9 +31,9 @@ direction = "bidirectional"
 destinations = ["10.3.0.0/16"]
 device_order = ["vpn"]
 """)
-        intent = build_release1_host_boundary_intent(cfg)
+        plan = build_release1_host_boundary_plan(cfg)
         self.assertEqual(
-            tuple(item.destination.with_prefixlen for item in intent.plan.routes),
+            tuple(item.destination.with_prefixlen for item in plan.routes),
             ("10.1.0.0/16", "10.2.0.0/16", "10.3.0.0/16"),
         )
 
@@ -50,10 +50,10 @@ direction = "outbound"
 destinations = ["0.0.0.0/0"]
 device_order = ["vpn"]
 """)
-        intent = build_release1_host_boundary_intent(cfg)
-        self.assertTrue(intent.plan.full_tunnel)
+        plan = build_release1_host_boundary_plan(cfg)
+        self.assertTrue(plan.full_tunnel)
         self.assertEqual(
-            intent.plan.routes[0].destination,
+            plan.routes[0].destination,
             IPv4Network("0.0.0.0/0"),
         )
 
@@ -77,10 +77,10 @@ direction = "inbound+snat>198.19.255.10"
 destinations = ["10.20.0.0/16"]
 device_order = ["server"]
 """)
-        intent = build_release1_host_boundary_intent(cfg)
+        plan = build_release1_host_boundary_plan(cfg)
         by_destination = {
             item.destination: item.profile_ids
-            for item in intent.plan.routes
+            for item in plan.routes
         }
         self.assertEqual(
             by_destination[IPv4Network("198.19.255.10/32")],
@@ -101,9 +101,9 @@ direction = "outbound"
 destinations = ["198.51.100.10/32"]
 device_order = ["wg"]
 """)
-        intent = build_release1_host_boundary_intent(cfg)
+        plan = build_release1_host_boundary_plan(cfg)
         self.assertEqual(
-            intent.plan.routes[0].destination,
+            plan.routes[0].destination,
             IPv4Network("198.51.100.10/32"),
         )
 
@@ -119,9 +119,9 @@ direction = "future"
 destinations = ["0.0.0.0/0"]
 device_order = ["vpn"]
 """)
-        intent = build_release1_host_boundary_intent(cfg)
-        self.assertEqual(intent.plan.routes, ())
-        self.assertFalse(intent.plan.full_tunnel)
+        plan = build_release1_host_boundary_plan(cfg)
+        self.assertEqual(plan.routes, ())
+        self.assertFalse(plan.full_tunnel)
 
 
 if __name__ == "__main__":
