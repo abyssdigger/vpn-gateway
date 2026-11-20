@@ -243,12 +243,14 @@ def converge_host_managed_routing_once(
 def cleanup_host_managed_routing_once(
     backend: LinuxHostManagedRoutingBackend,
     desired: HostManagedRoutingLinuxDesired,
+    *,
+    tolerate_foreign_replacements: bool = False,
 ) -> HostManagedRoutingObservation:
     if not isinstance(backend, LinuxHostManagedRoutingBackend):
         raise ValueError("backend must be LinuxHostManagedRoutingBackend")
 
     current = backend.observe(desired)
-    if current.conflicts:
+    if current.conflicts and not tolerate_foreign_replacements:
         raise HostManagedRoutingConflict("; ".join(current.conflicts))
 
     # Capture goes away before routes; bypass can disappear after dispatch.
@@ -281,7 +283,7 @@ def cleanup_host_managed_routing_once(
 
     empty = HostManagedRoutingLinuxDesired((), None, None)
     final = backend.observe(empty)
-    if final.conflicts:
+    if final.conflicts and not tolerate_foreign_replacements:
         raise HostManagedRoutingConflict("; ".join(final.conflicts))
     if final.routes or final.rule_priorities:
         raise RuntimeError("host managed-routing cleanup postcondition failed")

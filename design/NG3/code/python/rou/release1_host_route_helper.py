@@ -65,7 +65,11 @@ class LinuxPeacefulHostRoutingContribution(ControllerBoundaryContribution):
         converge_host_managed_routing_once(self.backend, self.desired)
 
     def cleanup(self) -> None:
-        cleanup_host_managed_routing_once(self.backend, self.desired)
+        cleanup_host_managed_routing_once(
+            self.backend,
+            self.desired,
+            tolerate_foreign_replacements=True,
+        )
 
 
 def build_linux_peaceful_host_routing_contribution(

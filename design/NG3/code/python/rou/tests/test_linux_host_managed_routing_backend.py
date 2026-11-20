@@ -12,6 +12,7 @@ from rou.linux_host_managed_routing import (
 )
 from rou.linux_host_managed_routing_backend import (
     LinuxHostManagedRoutingBackend,
+    cleanup_host_managed_routing_once,
 )
 from rou.network_policy_layout import NumericResourcePool
 
@@ -89,6 +90,51 @@ def desired_snat():
 
 
 class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
+    def test_tolerant_cleanup_leaves_foreign_replacement(self):
+        alloc = HostManagedRoutingLinuxAllocation(
+            table=0x7FFF0004,
+            bypass_priority=0x6002,
+            preserve_priority=0x6003,
+            dispatch_priority=0x6004,
+            owned_rule_priorities=NumericResourcePool(0x6003, 0x6005),
+            rule_protocol=204,
+            route_protocol=204,
+        )
+        desired_state = HostManagedRoutingLinuxDesired(
+            routes=(),
+            bypass=None,
+            dispatch=None,
+            preserve_main=None,
+        )
+        runner = Runner(
+            routes=json.dumps([
+                {
+                    "dst": "10.0.0.0/8",
+                    "dev": "eth9",
+                    "table": alloc.table,
+                    "protocol": 99,
+                }
+            ]),
+            rules=json.dumps([
+                {
+                    "priority": 0x6003,
+                    "src": "all",
+                    "table": 123,
+                    "protocol": 99,
+                }
+            ]),
+        )
+        backend = LinuxHostManagedRoutingBackend(runner, alloc)
+        result = cleanup_host_managed_routing_once(
+            backend,
+            desired_state,
+            tolerate_foreign_replacements=True,
+        )
+        self.assertEqual(result.routes, ())
+        self.assertEqual(result.rule_priorities, ())
+        self.assertTrue(result.conflicts)
+        self.assertFalse(any("del" in call for call in runner.calls))
+
     def test_preserve_main_rule_signature_and_driver_command(self):
         alloc = HostManagedRoutingLinuxAllocation(
             table=0x7FFF0004,
