@@ -16,10 +16,10 @@ from rou.network_policy_layout import NumericResourcePool
 class LinuxHostManagedRoutingTests(unittest.TestCase):
     def allocation(self):
         return HostManagedRoutingLinuxAllocation(
-            table=0x7FFF0002,
-            bypass_priority=0x1F00,
-            dispatch_priority=0x2000,
-            owned_rule_priorities=NumericResourcePool(0x2000, 0x6000),
+            table=0x7FFF0003,
+            bypass_priority=0x6000,
+            dispatch_priority=0x6001,
+            owned_rule_priorities=NumericResourcePool(0x6001, 0x6002),
             rule_protocol=203,
             route_protocol=203,
         )
@@ -60,10 +60,10 @@ class LinuxHostManagedRoutingTests(unittest.TestCase):
         snat_route = desired.routes[0]
         self.assertEqual(snat_route.gateway, IPv4Address("198.19.255.2"))
         self.assertTrue(snat_route.onlink)
-        self.assertEqual(desired.bypass.priority, 0x1F00)
+        self.assertEqual(desired.bypass.priority, 0x6000)
         self.assertEqual(desired.bypass.interface, "vpng0")
-        self.assertEqual(desired.dispatch.priority, 0x2000)
-        self.assertEqual(desired.dispatch.table, 0x7FFF0002)
+        self.assertEqual(desired.dispatch.priority, 0x6001)
+        self.assertEqual(desired.dispatch.table, 0x7FFF0003)
 
     def test_remote_routes_remain_device_only(self):
         desired = build_linux_host_managed_routing_desired(
@@ -72,7 +72,7 @@ class LinuxHostManagedRoutingTests(unittest.TestCase):
             allocation=self.allocation(),
         )
         self.assertEqual(desired.routes[0].interface, "vpng0")
-        self.assertEqual(desired.routes[0].table, 0x7FFF0002)
+        self.assertEqual(desired.routes[0].table, 0x7FFF0003)
         self.assertIsNone(desired.routes[0].gateway)
         self.assertFalse(desired.routes[0].onlink)
 
