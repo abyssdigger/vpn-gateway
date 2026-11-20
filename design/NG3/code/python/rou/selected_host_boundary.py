@@ -77,6 +77,7 @@ def build_selected_host_boundary_desired(
             plan,
             host_interface=domain_spec.host_interface,
             allocation=NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION,
+            stack_service_address=domain_spec.inner_address.ip,
         )
     )
 
