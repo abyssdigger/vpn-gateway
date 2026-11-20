@@ -484,11 +484,11 @@ destinations = ["10.0.0.0/8"]
 device_order = ["client"]
 """)
 
-    def test_unknown_enabled_fields_and_top_level_integration_are_rejected(self):
+    def test_unknown_enabled_fields_and_top_level_tables_are_rejected(self):
         for extra in (
-            'nat = "masquerade"',
-            'publications = ["44443/udp"]',
-            'traffic_envelope = { default = "allow" }',
+            'unsupported_string = "value"',
+            'unsupported_list = ["value"]',
+            'unsupported_table = { key = "value" }',
         ):
             with self.subTest(extra=extra):
                 with self.assertRaisesRegex(
@@ -512,11 +512,8 @@ device_order = ["oc"]
             Release1ConfigError, "top level has unsupported"
         ):
             parse_release1_config("""
-[integration.old]
-device = "oc"
-protocol = "udp"
-remote_ipv4 = "198.51.100.20"
-remote_port = 443
+[unsupported.example]
+value = true
 """)
 
     def test_availability_field_and_prefix_quota_are_strict(self):
