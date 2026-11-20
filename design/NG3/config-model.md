@@ -37,23 +37,27 @@ A Device may be reused by multiple Profiles.
 - `VPNG0001-R1.R2.R4.R3`
 - `VPNG0001-R1.R2.R4.R4`
 
-## 1.1. Release-1 host-routing control gap
+## 1.1. Release-1 host-routing control
 
-The Device/Profile grammar below remains canonical for its settled fields, but the complete
-Release-1 top-level configuration surface is no longer closed after acceptance of
-`VPNG0001-R2.R2`.
+The Release-1 peaceful host-routing helper is controlled by the optional top-level field:
 
-Release 1 must expose an explicit configuration choice that disables or enables the peaceful
-host-routing helper. Exact field name/spelling has not yet been selected and must not be
-invented by parser/runtime code before the corresponding configuration closure.
+```toml
+host_routing = "auto"   # default
+```
 
-Therefore:
+Accepted values are:
 
-- the examples below remain canonical for all fields they show;
-- absence of a host-routing helper field in the current examples is an identified
-  `[pending_closure]` gap, not a promise that the helper is always enabled;
-- the current alpha's unconditional authoritative host-routing prototype is not the
-  Release-1 configuration contract.
+- `"auto"` — apply the peaceful lifecycle helper at start and supported reload, and remove
+  only still-identifiable helper-owned contributions at stop;
+- `"manual"` — do not mutate ordinary-host routing; the administrator supplies the required
+  host integration.
+
+When the field is absent, `"auto"` is the canonical Release-1 default so the common
+installation receives route assistance without extra configuration. The field is a product
+integration choice, not a Linux routing-table or policy-rule knob.
+
+No other value is accepted in Release 1. In particular, the postponed aggressive helper is
+not exposed by this field until its own requirement/design closure is complete.
 
 # 2. Current human-facing representation
 
@@ -63,6 +67,7 @@ bare `+snat`:
 
 ```toml
 default_snat_address = "198.19.255.10"
+host_routing = "auto"
 
 [device.oc-main]
 enabled = true

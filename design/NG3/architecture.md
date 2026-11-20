@@ -451,12 +451,59 @@ Between those lifecycle operations, administrator changes to ordinary host routi
 runtime drift under `VPNG0005-R5.R2`, are not out-of-band corruption under
 `VPNG0005-R5.C1`, and do not by themselves close the internal forwarding gate.
 
-The exact Linux route/RPDB lowering for this simple helper is **not yet selected** by this
-section. In particular, the former authoritative dedicated-table precedence cannot be used as
-Release-1 closure merely because the current Python reference already implements it: that
-precedence is stronger than the simple-helper contract.
+The selected Release-1 Linux lowering is deliberately weaker than the postponed authoritative
+helper and reuses the proven `suppress_prefixlength` RPDB property without giving the helper
+precedence over explicit administrator routes.
 
-Consequently `VPNG0001-R2.R2` remains `[pending_closure]` until a lower realization and exact configuration spelling are selected that preserve administrator ownership of ordinary host routing while still providing useful lifecycle assistance.
+The helper owns one dedicated route table plus three exact RPDB rules, all tagged with one
+reserved helper protocol:
+
+```text
+kernel local rule
+    -> local delivery remains local
+
+iif <managed-host-boundary> lookup main
+    -> traffic already emitted by STACK bypasses helper capture
+
+lookup main suppress_prefixlength 0
+    -> any explicit non-default administrator main route wins first
+
+lookup <peaceful-helper-table>
+    -> helper destinations use the managed boundary
+
+ordinary kernel main/default rules
+    -> unmatched traffic remains ordinary
+```
+
+The helper table contains only the current helper destinations. Ordinary remote prefixes use a
+device-only route to the managed host endpoint. A Profile SNAT identity uses the already-proven
+onlink next-hop form through the stack service address.
+
+This ordering has intentionally limited authority:
+
+- connected/static/more-specific/equal non-default routes already present in `main`, or added
+  later by the administrator, win without helper reconciliation;
+- helper `0.0.0.0/0` may replace ordinary default-route behavior for otherwise-unmatched
+  traffic while the helper remains installed, which is the explicit effect requested by
+  enabling automatic full-tunnel host routing;
+- packets arriving from the managed boundary use ordinary `main` and are not recaptured;
+- the helper never rewrites ordinary `main` routes.
+
+Lifecycle mutation is ownership-tagged and non-destructive. Start/reload may remove stale
+entries carrying the helper's reserved protocol and then materialize the current desired set,
+but must not delete foreign entries occupying the same destination or rule slot. Stop removes
+only entries whose current protocol/signature still identifies them as the helper's own; an
+administrator replacement is left untouched. There is no periodic runtime audit or automatic
+repair for this helper, and later host-route changes do not control the internal ForwardingGate.
+
+Release-1 configuration uses top-level `host_routing = "auto" | "manual"`; absence means
+`"auto"`. `"manual"` builds no host-routing contribution. The postponed aggressive helper
+is not a Release-1 spelling.
+
+This closes `VPNG0001-R2.R2`. EXP-059/060/072 remain reusable lower evidence for
+`suppress_prefixlength`, stack-ingress bypass and managed-L3 device-only routing; a focused
+Release-1 integration test must prove the weaker main-first ordering and non-destructive
+replacement cleanup through the current implementation.
 
 Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
 managed boundary, not by host routing. A helper may automate host reachability to that
@@ -6571,7 +6618,7 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
 | `VPNG0001-R2.R1` manual host integration | core independence accepted; concrete administrator-facing route/reachability instructions remain pending under R2.R1.R1 |
-| `VPNG0001-R2.R2` peaceful host-routing assistance | required for Release 1 and config-disableable; start/stop and supported-reload semantics accepted, Linux lowering/config spelling remain pending |
+| `VPNG0001-R2.R2` peaceful host-routing assistance | closed: top-level `host_routing = "auto" | "manual"`; main-first suppress-default RPDB lowering selected; no periodic ownership/recovery |
 | `VPNG0001-R2.R3` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
