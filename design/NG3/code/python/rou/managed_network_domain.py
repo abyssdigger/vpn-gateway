@@ -30,62 +30,13 @@ class ManagedNetworkDomainRunner(Protocol):
         """Run one argv-only command or raise; return stdout text."""
 
 
-def _validate_boundary_link(
-    host_interface: str,
-    inner_interface: str,
-    host_address: IPv4Interface,
-    inner_address: IPv4Interface,
-) -> None:
-    for label, value in (
-        ("host_interface", host_interface),
-        ("inner_interface", inner_interface),
-    ):
-        if not isinstance(value, str) or not _IFNAME_RE.fullmatch(value):
-            raise ValueError(f"invalid {label} {value!r}")
-    if host_interface == inner_interface:
-        raise ValueError("host and inner interface names must differ")
-    if not isinstance(host_address, IPv4Interface):
-        raise ValueError("host_address must be IPv4Interface")
-    if not isinstance(inner_address, IPv4Interface):
-        raise ValueError("inner_address must be IPv4Interface")
-    if host_address.ip == inner_address.ip:
-        raise ValueError("host and inner addresses must differ")
-    if host_address.network != inner_address.network:
-        raise ValueError("host and inner addresses must belong to the same IPv4 network")
-    for label, address in (("host", host_address), ("inner", inner_address)):
-        network = address.network
-        if network.prefixlen <= 30 and address.ip in {
-            network.network_address,
-            network.broadcast_address,
-        }:
-            raise ValueError(f"{label} address is not usable in its subnet")
-
-
-@dataclass(frozen=True, slots=True)
-class ManagedBoundaryLinkSpec:
-    host_interface: str
-    inner_interface: str
-    host_address: IPv4Interface
-    inner_address: IPv4Interface
-
-    def __post_init__(self) -> None:
-        _validate_boundary_link(
-            self.host_interface,
-            self.inner_interface,
-            self.host_address,
-            self.inner_address,
-        )
-
-
 @dataclass(frozen=True, slots=True)
 class ManagedNetworkDomainSpec:
     namespace: str
     host_interface: str
     inner_interface: str
-    host_address: IPv4Interface | None
     inner_address: IPv4Interface
-    primary_backend: ManagedL3BoundaryBackend | None = None
-    additional_boundaries: tuple[ManagedBoundaryLinkSpec, ...] = ()
+    primary_backend: ManagedL3BoundaryBackend
 
     def __post_init__(self) -> None:
         if not isinstance(self.namespace, str) or not _NAMESPACE_RE.fullmatch(
@@ -102,80 +53,16 @@ class ManagedNetworkDomainSpec:
             raise ValueError("host and inner interface names must differ")
         if not isinstance(self.inner_address, IPv4Interface):
             raise ValueError("inner_address must be IPv4Interface")
-
-        if self.primary_backend is None:
-            if not isinstance(self.host_address, IPv4Interface):
-                raise ValueError(
-                    "transitional addressed primary boundary requires host_address"
-                )
-            _validate_boundary_link(
-                self.host_interface,
-                self.inner_interface,
-                self.host_address,
-                self.inner_address,
-            )
-        else:
-            if (
-                self.primary_backend
-                is not ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP
-            ):
-                raise ValueError(
-                    "managed network-domain lifecycle currently materializes only "
-                    "routed-veth-proxy-arp; alternate backends share the contract "
-                    "but require their own lifecycle Driver"
-                )
-            if self.host_address is not None:
-                raise ValueError(
-                    "routed managed L3 primary boundary must not have host_address"
-                )
-            if self.inner_address.network.prefixlen != 32:
-                raise ValueError(
-                    "routed managed L3 stack-local service address must be /32"
-                )
-
-        if not isinstance(self.additional_boundaries, tuple) or any(
-            not isinstance(item, ManagedBoundaryLinkSpec)
-            for item in self.additional_boundaries
+        if self.inner_address.network.prefixlen != 32:
+            raise ValueError("managed L3 stack-local service address must be /32")
+        if (
+            self.primary_backend
+            is not ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP
         ):
             raise ValueError(
-                "additional_boundaries must contain ManagedBoundaryLinkSpec values"
+                "managed network-domain lifecycle currently materializes only "
+                "routed-veth-proxy-arp"
             )
-        names = [
-            self.host_interface,
-            self.inner_interface,
-            *(
-                name
-                for item in self.additional_boundaries
-                for name in (item.host_interface, item.inner_interface)
-            ),
-        ]
-        if len(set(names)) != len(names):
-            raise ValueError("managed boundary interface names must be globally unique")
-
-        primary_network = (
-            self.host_address.network
-            if self.host_address is not None
-            else self.inner_address.network
-        )
-        networks = [
-            primary_network,
-            *(item.host_address.network for item in self.additional_boundaries),
-        ]
-        for index, left in enumerate(networks):
-            for right in networks[index + 1:]:
-                if left.overlaps(right):
-                    raise ValueError("managed boundary IPv4 networks must not overlap")
-
-    @property
-    def routed_primary(self) -> bool:
-        return (
-            self.primary_backend
-            is ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP
-        )
-
-    @property
-    def host_boundary_gateway(self):
-        return None if self.routed_primary else self.inner_address.ip
 
 
 @dataclass(frozen=True, slots=True)
