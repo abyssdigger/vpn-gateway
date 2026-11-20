@@ -283,9 +283,9 @@ NG3 requirement merely because it existed before.
 
                         - **[VPNG0003-R3.R6.R3.R1.R1.R4]** *Чтобы ссылка на default не превращалась в неявную или частично определённую проверку.* | Если enabled Profile выбирает Device default, каждый enabled Device, разрешённый этому Profile, должен иметь валидное default availability-check description; иначе конфигурация должна быть отклонена до runtime materialization. [`closed`]
 
-                        - **[VPNG0003-R3.R6.R3.R1.R1.C1]** *Поскольку timing/hysteresis не подтверждены как пользовательская policy первого release.* | Release 1 не обязан предоставлять availability interval, timeout, failure-count или hysteresis knobs в user-facing config. [`closed`]
-
                     - **[VPNG0003-R3.R6.R3.R1.C1]** *Для первого release принят минимальный достаточный active-check scope: необходимость универсального probe framework не подтверждена требованиями до реализации и проверки базового ICMP path.* | В первом release поддерживаемым пользовательским механизмом availability-проверки является ICMP echo; конфигурация и architecture contracts не должны считать TCP, UDP, HTTP или иной механизм уже поддерживаемым. [`closed`]
+
+                    - **[VPNG0003-R3.R6.R3.R1.C2]** *Поскольку timing/hysteresis не подтверждены как пользовательская policy первого release и не являются следствием выбора Device default или Profile override.* | Release 1 не обязан предоставлять availability interval, timeout, failure-count или hysteresis knobs в user-facing config. [`closed`]
 
                 - **[VPNG0003-R3.R6.R3.R2]** *Чтобы probe runtime никогда не получал неоднозначную цель проверки.* | До формирования runtime probe demand VPN-GATE должен разрешить Profile availability selection для каждого availability subject в одно конкретное поддерживаемое probe description с одним IPv4 target; невозможность разрешить selection должна завершаться диагностируемым отказом до запуска probe. [`closed`]
 
