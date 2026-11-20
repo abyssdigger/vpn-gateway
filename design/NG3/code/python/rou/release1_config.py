@@ -326,10 +326,6 @@ def _parse_direction(
             Direction.INBOUND if value == "inbound" else Direction.BIDIRECTIONAL,
             None,
         )
-    if isinstance(value, str) and "route-return" in value:
-        raise Release1ConfigError(
-            f"{where}: +route-return is historical and no longer supported"
-        )
     if isinstance(value, str) and value.startswith("outbound+snat"):
         raise Release1ConfigError(
             f"{where}: +snat is meaningful only for VPN-to-ordinary traffic"
