@@ -6,9 +6,9 @@
 
 Эта сборка предназначена для первого реального запуска NG3 reference runtime. Она не
 является финальным Release-1 packaging contract и не вводит новую конфигурационную семантику.
-После requirement review 2026-11-20 ее authoritative host-routing owner считается
-исполняемым prototype/evidence для отложенного aggressive helper, а не выбранной реализацией
-простого Release-1 host-routing helper.
+После requirement/design review 2026-11-20 alpha использует выбранный Release-1 peaceful
+host-routing helper. Отдельный authoritative host-routing owner сохранён только как
+prototype/evidence для отложенного aggressive helper и в alpha lifecycle не подключён.
 
 ## Что уже реально работает
 
@@ -25,7 +25,13 @@ Alpha controller:
 - при появлении, исчезновении или пересоздании VPN endpoint заново вычисляет binding и lower
   desired state;
 - при drift закрывает forwarding перед structural convergence;
-- текущая alpha всё ещё materializes authoritative host managed-destination prototype: enabled Profile remote destinations направляются в managed domain через `vnga-host0`, stack-origin traffic bypass'ит capture в ordinary `main`, а Profile SNAT identities получают /32 через stack service next hop; это фактическое alpha-поведение, но после requirement review оно относится к postponed aggressive-helper evidence и не является Release-1 simple-helper contract;
+- по умолчанию materializes peaceful host-routing helper: otherwise-default ordinary traffic
+  к Profile destinations направляется через `vnga-host0`, явные non-default host routes
+  администратора остаются сильнее helper'а, stack-origin traffic использует ordinary `main`,
+  а Profile SNAT identities получают /32 через stack service next hop;
+- peaceful helper применяется только на lifecycle boundary: alpha не наблюдает и не
+  восстанавливает его host routes в секундном audit loop и не закрывает внутренний forwarding
+  из-за последующей замены маршрута администратором;
 - не требует restart controller после `systemctl restart` отдельного VPN service;
 - при stop выполняет bounded controller cleanup после того, как systemd dependency ordering
   остановил bound VPN service;
@@ -40,7 +46,11 @@ Alpha controller:
   - namespace: `vpn-gate-alpha`;
   - host endpoint: `vnga-host0`, unnumbered routed veth;
   - stack endpoint: `vnga-inner0`, stack-local service address `198.19.255.2/32`;
-  - boundary lifecycle в host `main` владеет только service route `198.19.255.2/32 dev vnga-host0`; текущий alpha prototype отдельно держит authoritative policy-routing table для managed Profile destinations и SNAT identities, причём SNAT /32 использует `198.19.255.2` как onlink next hop; этот prototype не является выбранным simple-helper lowering; peer transit-subnet gateway IP отсутствует;
+  - boundary lifecycle в host `main` владеет только service route
+    `198.19.255.2/32 dev vnga-host0`; peaceful helper держит отдельную lifecycle-scoped
+    routing table/rules с собственным protocol marker, причём explicit non-default `main`
+    routes проверяются до helper table, а SNAT /32 использует `198.19.255.2` как onlink
+    next hop; peer transit-subnet gateway IP отсутствует;
   - routed-veth backend использует Proxy ARP и `rp_filter=0` только на двух boundary endpoints;
 - canonical grammar уже принята; alpha materializes Device `use_outbound_nat`, ordinary
   Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
@@ -87,6 +97,10 @@ Installer:
 Минимальный accepted slice:
 
 ```toml
+# "auto" is the Release-1 default; use "manual" to make no ordinary-host
+# routing changes and provide host integration yourself.
+host_routing = "auto"
+
 [device.ovpn]
 enabled = true
 expected_interfaces = ["vpn0"]
@@ -108,6 +122,12 @@ admission и owner-scoped host DNAT mapping; отсутствие requested sele
 делает startup/reconciliation unready, а не дает runtime право менять global host setup.
 Оба поля не заменяют VPN-specific OpenVPN/WireGuard/OpenConnect configuration и сами по себе
 не разрешают Profile payload forwarding.
+
+`host_routing = "auto"` включает только lifecycle-scoped route assistance. После успешного
+старта обычная маршрутизация хоста снова считается администраторской: последующая замена
+маршрута не является drift core VPN-GATE. `host_routing = "manual"` полностью отключает
+эту route automation; тогда администратор должен сам обеспечить доставку нужного traffic к
+`vnga-host0` и обратную reachability для поддерживаемого сценария.
 
 ## OpenVPN example
 
@@ -250,7 +270,9 @@ systemd environment и проверяет:
 
 Текущая boundary/evidence база: EXP-070/071 для managed-L3 backend; EXP-074 — точное evidence
 отложенного aggressive authoritative child; EXP-075 — lower SNAT-identity route fact;
-EXP-076 — core Profile-SNAT dataplane acceptance с ancillary host-route observation.
+EXP-076 — core Profile-SNAT dataplane acceptance с ancillary host-route observation;
+EXP-077 — Release-1 peaceful host-routing helper: main-first precedence, отсутствие runtime
+route ownership и non-destructive cleanup.
 EXP-051 сохраняется как evidence первого functioning alpha lifecycle.
 
 См. `design/experiments/EXP-051 NG3 first functioning alpha/`.

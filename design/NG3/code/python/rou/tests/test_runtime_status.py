@@ -43,6 +43,7 @@ class RuntimeStatusTests(unittest.TestCase):
 
     def test_configured_projection_contains_accepted_policy_intent(self):
         configured = self.configured()
+        self.assertEqual(configured.host_routing, "auto")
         self.assertEqual(len(configured.devices), 1)
         device = configured.devices[0]
         self.assertEqual(device.device_id, "ovpn")
@@ -64,6 +65,16 @@ class RuntimeStatusTests(unittest.TestCase):
         self.assertEqual(profile.destinations, ("10.253.0.0/24",))
         self.assertEqual(profile.device_order, ("ovpn",))
         self.assertIsNone(profile.availability_check)
+
+    def test_status_exposes_manual_host_routing_intent(self):
+        configured = build_configured_intent_status(
+            parse_release1_config('host_routing = "manual"')
+        )
+        self.assertEqual(configured.host_routing, "manual")
+        self.assertEqual(
+            RuntimeStatusAgent(configured).snapshot().configured_intent.host_routing,
+            "manual",
+        )
 
     def test_status_exposes_device_default_and_profile_selection(self):
         configured = build_configured_intent_status(parse_release1_config("""

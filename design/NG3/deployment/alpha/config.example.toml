@@ -5,6 +5,10 @@
 # It still rejects availability_check and Profile +snat until those complete
 # lower runtime paths are assembled. Publication requires pre-existing host
 # forwarding and any explicit host IPv4/interface selector.
+#
+# "auto" is the default peaceful lifecycle helper. Set "manual" when ordinary
+# host routing is managed externally.
+host_routing = "auto"
 
 [device.ovpn]
 enabled = true
