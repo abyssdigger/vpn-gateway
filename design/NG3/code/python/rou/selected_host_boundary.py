@@ -1,4 +1,8 @@
-"""Selected ordinary-host managed-routing contribution for Release-1 runtime."""
+"""Current alpha authoritative host-routing contribution.
+
+The implementation remains executable reference evidence for the postponed aggressive
+host-routing child. It must not be treated as the selected Release-1 simple-helper contract.
+"""
 
 from __future__ import annotations
 
@@ -124,7 +128,7 @@ def reconcile_selected_host_boundary_runtime_once(
     gate_backend: ForwardingGateBackend,
     contribution: SelectedLinuxHostBoundaryContribution | None,
 ) -> SelectedHostBoundaryRuntimeResult:
-    """Audit/repair managed host routing only while payload forwarding is contained."""
+    """Audit/repair the authoritative alpha host-routing prototype under containment."""
     if contribution is None:
         return SelectedHostBoundaryRuntimeResult(
             SelectedHostBoundaryRuntimeStatus.EXACT,

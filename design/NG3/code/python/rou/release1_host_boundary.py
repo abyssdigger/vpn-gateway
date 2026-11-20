@@ -1,4 +1,8 @@
-"""Canonical Release-1 config -> pure host managed-routing intent."""
+"""Current alpha config -> authoritative host-routing prototype intent.
+
+Despite the historical module name, this projection now belongs to the postponed aggressive
+helper evidence path and is not Release-1 simple-helper closure.
+"""
 
 from __future__ import annotations
 
@@ -13,7 +17,7 @@ from .release1_config import Release1Config
 def build_release1_host_boundary_plan(
     config: Release1Config,
 ) -> HostManagedRoutingPlan:
-    """Project enabled Profiles into ordinary-host managed destinations."""
+    """Project enabled Profiles into the authoritative alpha prototype route set."""
     if not isinstance(config, Release1Config):
         raise ValueError("config must be Release1Config")
 

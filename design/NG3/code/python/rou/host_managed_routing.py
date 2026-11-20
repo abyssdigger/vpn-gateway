@@ -1,4 +1,8 @@
-"""Pure host managed-destination routing projection.
+"""Pure authoritative host managed-destination routing projection.
+
+This module currently backs the alpha prototype of the postponed aggressive host-routing
+helper child VPNG0001-R1.R5.R1. It is not the selected lowering for the simple Release-1
+lifecycle helper VPNG0001-R1.R4.
 
 The ordinary host needs only one routing fact: which IPv4 destinations belong to the
 managed VPN-GATE domain.  Profile permission and established-flow affinity remain inside
