@@ -543,13 +543,13 @@ audit or automatic repair for this helper, and later host-route changes do not c
 internal ForwardingGate.
 
 EXP-078 proves selector dispatch, selected-scope `0.0.0.0/0` and
-administrator non-default precedence for the selected traffic. EXP-079 proves absolute
-managed-boundary no-recapture. EXP-080 adds the missing non-interference fact: the
-preserve-main lookup must be selector-scoped as well, otherwise unselected administrator
-RPDB policy can be reordered. EXP-077 remains complementary lifecycle/non-destructive
-cleanup evidence. The requirement is re-opened until implementation uses the EXP-080-backed
-paired lowering and passes regression evidence; none of EXP-078/079/080 supersedes EXP-074
-for the postponed aggressive child.
+administrator non-default precedence for selected traffic. EXP-079 proves absolute
+managed-boundary no-recapture. EXP-080 proved both the old global-preserve interference and
+the selector-paired correction. The implementation now materializes one preserve+dispatch
+pair per effective selector, and the resulting code passed unit/compile plus privileged
+EXP-074/078/079/080 and installed alpha smoke. EXP-077 remains complementary
+lifecycle/non-destructive cleanup evidence. Together these close the revised
+`VPNG0001-R2.R2`; none supersedes EXP-074 for the postponed aggressive child.
 
 Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
 managed boundary, not by host routing. A helper may automate host reachability to that
@@ -6623,7 +6623,7 @@ that is a later architecture decision and must not silently move non-helper resp
 back into Python.
 
 Migrating the helper itself to Rust is therefore not ordinary completion work for
-`VPNG0007-R7.R8`. It may begin only after a separate explicit project-holder decision. If
+`VPNG0007-R7.R8`. It may begin only after a separate explicit project holder decision. If
 that decision is made, the migration remains an implementation replacement and must preserve
 the accepted peaceful/aggressive helper contracts and evidence rather than redesigning them
 for language-specific convenience.
@@ -6691,7 +6691,7 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
 | `VPNG0001-R2.R1` manual host integration | closed through `host-integration.md`: remote-prefix, Profile-SNAT identity, full-tunnel and host-forwarding prerequisites are explicit without requiring a helper |
-| `VPNG0001-R2.R2` peaceful host-routing assistance | pending re-closure: EXP-080 found global preserve-main interference outside selector scope; architecture corrected to selector-paired preserve+dispatch, implementation/evidence refresh pending |
+| `VPNG0001-R2.R2` peaceful host-routing assistance | closed: default-disabled selector scope + `peaceful` policy; EXP-078 selector semantics, EXP-079 absolute STACK bypass, EXP-080 selector-paired preserve+dispatch non-interference, lifecycle cleanup retained from EXP-077 |
 | `VPNG0001-R2.R3` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |

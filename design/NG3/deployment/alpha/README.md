@@ -284,7 +284,7 @@ systemd environment и проверяет:
 EXP-076 — core Profile-SNAT dataplane acceptance с ancillary host-route observation;
 EXP-077 — complementary evidence для main-first precedence и non-destructive lifecycle
 cleanup; EXP-078 — scoped selectors (`:local`/`:external`/`:any`/exact ingress);
-EXP-079 — absolute managed-boundary no-recapture через RPDB `goto`/post-helper `nop`.
+EXP-079 — absolute managed-boundary no-recapture через RPDB `goto`/post-helper `nop`; EXP-080 — selector-scoped preserve-main, не меняющий administrator RPDB policy вне выбранного helper scope.
 EXP-051 сохраняется как evidence первого functioning alpha lifecycle.
 
 См. `design/experiments/EXP-051 NG3 first functioning alpha/`.
