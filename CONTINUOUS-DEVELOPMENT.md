@@ -624,6 +624,14 @@ known. Use disposition `superseded` only when the newer evidence replaces the ol
 as a whole for the same project decision. For partial replacement, keep the disposition that
 matches the remaining evidence value and describe the replaced/retained scopes in the Note.
 
+A Note that mentions another mutable project object's status/disposition/role must state that
+relationship as a fact of the decision being recorded, not as an automatically current claim
+about the referenced object. Prefer wording such as "this disposition selected EXP-X as the
+scoped successor evidence"; the referenced object's own canonical entry remains authoritative
+for its later/current status. Do not copy phrases such as "EXP-X is current/selected/deferred"
+into another object's historical Note unless the wording explicitly makes the as-of context
+clear.
+
 Do **not** reconstruct speculative supersession chains retrospectively. Apply this rule to
 historical experiments only when the repository's experiment/result/review/architecture
 artifacts make the predecessor, successor and reason explicit. If that causal chain cannot be
