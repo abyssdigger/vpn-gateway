@@ -128,6 +128,16 @@ class SelectedHostBoundaryTests(unittest.TestCase):
             {item.destination.with_prefixlen for item in desired.routing.routes},
             {"10.0.0.0/24", "198.19.255.10/32"},
         )
+        by_destination = {
+            item.destination.with_prefixlen: item
+            for item in desired.routing.routes
+        }
+        remote = by_destination["10.0.0.0/24"]
+        identity = by_destination["198.19.255.10/32"]
+        self.assertIsNone(remote.gateway)
+        self.assertFalse(remote.onlink)
+        self.assertEqual(str(identity.gateway), "198.19.255.2")
+        self.assertTrue(identity.onlink)
 
     def test_exact_runtime_needs_no_containment(self):
         contribution = RuntimeContribution(
