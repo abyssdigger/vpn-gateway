@@ -283,12 +283,11 @@ specificity semantics are superseded and do not constrain current host routing; 
 transition is recorded in the experiment registry and EXP-074 result.
 
 The managed-L3 endpoint also provides the ordinary boundary for Profile source identities.
-EXP-070 already proves that source NAT itself can execute inside STACK. Its historical positive
-control used an explicit route to the translated source and therefore did not establish the
-old gateway-NAT promise; that promise has since been removed from the requirements. The
-current architecture supplies reverse reachability through the same owned host
-managed-destination routing plane, which also carries effective Profile SNAT identities as
-managed /32 destinations. No host behavior-lane carrier is required.
+EXP-070 already proves that source NAT itself can execute inside STACK. Its positive control
+used an explicit route to the translated source and therefore did not establish the current
+reverse-reachability contract. The current architecture supplies that reachability through
+the owned host managed-destination routing plane, which also carries effective Profile SNAT
+identities as managed /32 destinations. No additional host-side metadata carrier is required.
 
 ### 1.1.2. Managed network-domain bootstrap — executable managed-L3 lifecycle
 
@@ -500,9 +499,9 @@ The host routing owner mutates only its reserved table/rules and endpoint routes
 object occupying an exact reserved key is a diagnosable conflict; VPN-GATE neither adopts it
 nor edits unrelated host `main` state.
 
-**Simplification:** host return steering and behavior-lane owners are absent from current
-architecture and current code. Superseded experimental evidence is retained only in the
-experiment register/result artifacts.
+**Simplification:** no separate host-side return-steering or Profile-metadata owner exists in
+current architecture or current code. Superseded experimental evidence is retained only in
+the experiment register/result artifacts.
 
 ### Architectural consequence for external VPN channels
 
@@ -4678,8 +4677,8 @@ Validation is split at the authoritative boundary:
   service/transport address on that boundary;
 - duplicate effective SNAT identities across `+snat` Profiles are valid by design.
 
-No cross-namespace Profile metadata carrier, behavior lane, host conntrack class or host-side
-NAT owner exists in the current design. EXP-076 is the combined acceptance evidence for
+No cross-namespace Profile metadata carrier, host conntrack class or host-side NAT owner
+exists in the current design. EXP-076 is the combined acceptance evidence for
 Profile isolation, shared identities, no-SNAT preservation, managed /32 reverse routing and
 post-policy translation ordering; EXP-075 supplies the narrower SNAT-identity next-hop
 evidence. Superseded carrier experiments are retained only as historical evidence in the
