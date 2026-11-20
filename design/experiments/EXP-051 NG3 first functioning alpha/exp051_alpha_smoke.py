@@ -243,7 +243,10 @@ verb 3
     )
 
     (etc / "config.toml").write_text(
-        f"""[device.ovpn]
+        f"""helper_routing_interfaces = ":local"
+helper_routing_policy = "peaceful"
+
+[device.ovpn]
 enabled = true
 expected_interfaces = ["{VPN_IF}"]
 use_outbound_nat = false

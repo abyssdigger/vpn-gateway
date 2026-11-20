@@ -25,10 +25,11 @@ Alpha controller:
 - при появлении, исчезновении или пересоздании VPN endpoint заново вычисляет binding и lower
   desired state;
 - при drift закрывает forwarding перед structural convergence;
-- по умолчанию materializes peaceful host-routing helper: otherwise-default ordinary traffic
-  к Profile destinations направляется через `vnga-host0`, явные non-default host routes
-  администратора остаются сильнее helper'а, stack-origin traffic использует ordinary `main`,
-  а Profile SNAT identities получают /32 через stack service next hop;
+- по умолчанию не меняет ordinary-host routing: `helper_routing_interfaces = ":none"`;
+  при явном выборе `:local`, `:external`, `:any` или точных ingress-интерфейсов
+  peaceful helper направляет только выбранный traffic к Profile destinations через
+  `vnga-host0`, сохраняя приоритет explicit non-default administrator routes и абсолютный
+  bypass для traffic, уже вышедшего из STACK;
 - peaceful helper применяется только на lifecycle boundary: alpha не наблюдает и не
   восстанавливает его host routes в секундном audit loop и не закрывает внутренний forwarding
   из-за последующей замены маршрута администратором;
@@ -97,9 +98,9 @@ Installer:
 Минимальный accepted slice:
 
 ```toml
-# "auto" is the Release-1 default; use "manual" to make no ordinary-host
-# routing changes and provide host integration yourself.
-host_routing = "auto"
+# Safe defaults: no ordinary-host routing changes.
+helper_routing_interfaces = ":none"
+helper_routing_policy = "peaceful"
 
 [device.ovpn]
 enabled = true
@@ -123,12 +124,19 @@ admission и owner-scoped host DNAT mapping; отсутствие requested sele
 Оба поля не заменяют VPN-specific OpenVPN/WireGuard/OpenConnect configuration и сами по себе
 не разрешают Profile payload forwarding.
 
-`host_routing = "auto"` включает только lifecycle-scoped route assistance. После успешного
-старта обычная маршрутизация хоста снова считается администраторской: последующая замена
-маршрута не является drift core VPN-GATE. `host_routing = "manual"` полностью отключает
-эту route automation; тогда администратор должен сам обеспечить доставку нужного traffic к
-`vnga-host0` и обратную reachability для поддерживаемого сценария. Точный контракт и
-примеры обычных remote-prefix, Profile-SNAT и full-tunnel маршрутов приведены в
+`helper_routing_interfaces` задаёт только область traffic, которой помогает host-routing
+helper: `:local` — host-originated traffic, `:external` — non-local ingress, `:any` —
+оба класса, а точные имена вроде `eth0,br0` — только traffic с указанных ingress.
+`:local` можно объединять с точными именами. Значение по умолчанию `:none` полностью
+отключает route automation. `helper_routing_policy = "peaceful"` — единственная политика
+Release 1 и default: helper действует на lifecycle boundary, но не возвращает позже
+заменённое администратором состояние. Даже при helper `0.0.0.0/0` затрагивается только
+выбранная selector-область.
+
+Peaceful helper не включает `net.ipv4.ip_forward`. Если выбран внешний ingress при
+выключенном IPv4 forwarding, alpha пишет `VPNG_ALPHA_HOST_ROUTING_WARNING`, но оставляет
+sysctl администратору. Точный manual/out-of-scope host-integration contract и примеры
+remote-prefix, Profile-SNAT и full-tunnel маршрутов приведены в
 `design/NG3/host-integration.md`.
 
 ## OpenVPN example
@@ -241,6 +249,7 @@ VPNG_ALPHA_RECONCILE status=reconciled
 VPNG_ALPHA_RECONCILE status=failed
 VPNG_ALPHA_STOP
 VPNG_ALPHA_FATAL
+VPNG_ALPHA_HOST_ROUTING_WARNING
 ```
 
 Это не финальный user-facing status API.
@@ -273,8 +282,9 @@ systemd environment и проверяет:
 Текущая boundary/evidence база: EXP-070/071 для managed-L3 backend; EXP-074 — точное evidence
 отложенного aggressive authoritative child; EXP-075 — lower SNAT-identity route fact;
 EXP-076 — core Profile-SNAT dataplane acceptance с ancillary host-route observation;
-EXP-077 — Release-1 peaceful host-routing helper: main-first precedence, отсутствие runtime
-route ownership и non-destructive cleanup.
+EXP-077 — complementary evidence для main-first precedence и non-destructive lifecycle
+cleanup; EXP-078 — scoped selectors (`:local`/`:external`/`:any`/exact ingress);
+EXP-079 — absolute managed-boundary no-recapture через RPDB `goto`/post-helper `nop`.
 EXP-051 сохраняется как evidence первого functioning alpha lifecycle.
 
 См. `design/experiments/EXP-051 NG3 first functioning alpha/`.

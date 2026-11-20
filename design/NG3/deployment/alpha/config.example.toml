@@ -6,9 +6,10 @@
 # lower runtime paths are assembled. Publication requires pre-existing host
 # forwarding and any explicit host IPv4/interface selector.
 #
-# "auto" is the default peaceful lifecycle helper. Set "manual" when ordinary
-# host routing is managed externally.
-host_routing = "auto"
+# Host-routing assistance is disabled by default. Select traffic explicitly:
+# ":local", ":external", ":any", or exact ingress names such as "eth0,br0".
+helper_routing_interfaces = ":none"
+helper_routing_policy = "peaceful"
 
 [device.ovpn]
 enabled = true
