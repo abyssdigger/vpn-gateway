@@ -139,6 +139,19 @@ class SelectedHostBoundaryTests(unittest.TestCase):
         self.assertEqual(str(identity.gateway), "198.19.255.2")
         self.assertTrue(identity.onlink)
 
+    def test_snat_identity_cannot_reuse_managed_boundary_service_address(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "conflicts with managed-boundary",
+        ):
+            build_selected_host_boundary_desired(
+                config(
+                    "inbound+snat",
+                    default_snat_address="198.19.255.2",
+                ),
+                ROUTED_DOMAIN,
+            )
+
     def test_exact_runtime_needs_no_containment(self):
         contribution = RuntimeContribution(
             [SelectedHostBoundaryObservation(True, ())]
