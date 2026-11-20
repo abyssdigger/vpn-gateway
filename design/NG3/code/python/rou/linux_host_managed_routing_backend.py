@@ -149,13 +149,21 @@ class LinuxHostManagedRoutingBackend:
         self,
         rule: HostManagedPreserveMainRuleSpec,
     ) -> None:
-        self.runner.run(
-            self._cmd(
-                "ip", "-4", "rule", "add", "priority", str(rule.priority),
-                "protocol", str(rule.protocol), "lookup", "main",
+        args = [
+            "ip", "-4", "rule", "add", "priority", str(rule.priority),
+            "protocol", str(rule.protocol),
+        ]
+        if rule.invert_incoming_interface:
+            args.append("not")
+        if rule.incoming_interface is not None:
+            args.extend(("iif", rule.incoming_interface))
+        args.extend(
+            (
+                "lookup", "main",
                 "suppress_prefixlength", str(rule.suppress_prefixlength),
             )
         )
+        self.runner.run(self._cmd(*args))
 
     def add_dispatch_rule(self, rule: HostManagedDispatchRuleSpec) -> None:
         args = [
@@ -238,14 +246,12 @@ def converge_host_managed_routing_once(
     ):
         backend.add_bypass_rule(desired.bypass)
 
-    observed = backend.observe(desired)
-    if observed.conflicts:
-        raise HostManagedRoutingConflict("; ".join(observed.conflicts))
-    if (
-        desired.preserve_main is not None
-        and desired.preserve_main.priority in observed.missing_rule_priorities
-    ):
-        backend.add_preserve_main_rule(desired.preserve_main)
+    for preserve in desired.preserve_main_rules:
+        observed = backend.observe(desired)
+        if observed.conflicts:
+            raise HostManagedRoutingConflict("; ".join(observed.conflicts))
+        if preserve.priority in observed.missing_rule_priorities:
+            backend.add_preserve_main_rule(preserve)
 
     for dispatch in desired.dispatch_rules:
         observed = backend.observe(desired)
@@ -280,11 +286,10 @@ def cleanup_host_managed_routing_once(
         if dispatch.priority in current.rule_priorities:
             backend.delete_rule_priority(dispatch.priority)
             current = backend.observe(desired)
-    if (
-        desired.preserve_main is not None
-        and desired.preserve_main.priority in current.rule_priorities
-    ):
-        backend.delete_rule_priority(desired.preserve_main.priority)
+    for preserve in reversed(desired.preserve_main_rules):
+        if preserve.priority in current.rule_priorities:
+            backend.delete_rule_priority(preserve.priority)
+            current = backend.observe(desired)
     current = backend.observe(desired)
     if (
         desired.bypass is not None
@@ -411,12 +416,13 @@ def _expected_rule_signatures(desired):
             if desired.bypass.goto_priority is None
             else ("goto", desired.bypass.interface, desired.bypass.goto_priority)
         )
-    if desired.preserve_main is not None:
-        result[desired.preserve_main.priority] = (
+    for preserve in desired.preserve_main_rules:
+        result[preserve.priority] = (
             "preserve_main",
-            None,
+            preserve.incoming_interface,
+            preserve.invert_incoming_interface,
             "main",
-            desired.preserve_main.suppress_prefixlength,
+            preserve.suppress_prefixlength,
         )
     for dispatch in desired.dispatch_rules:
         result[dispatch.priority] = (
@@ -449,7 +455,13 @@ def _rule_signature(row):
     if suppress is None:
         suppress = row.get("suppress_prefixlength")
     if suppress is not None:
-        return ("preserve_main", None, table_value, _decimal(suppress))
+        return (
+            "preserve_main",
+            row.get("iif"),
+            "not" in row,
+            table_value,
+            _decimal(suppress),
+        )
     selectors = (
         "dst", "dstlen", "fwmark", "fwmask",
         "uidrange", "sport", "dport", "ipproto", "oif",
@@ -467,8 +479,7 @@ def _desired_rule_priorities(desired):
     result = set()
     if desired.bypass is not None:
         result.add(desired.bypass.priority)
-    if desired.preserve_main is not None:
-        result.add(desired.preserve_main.priority)
+    result.update(item.priority for item in desired.preserve_main_rules)
     result.update(item.priority for item in desired.dispatch_rules)
     if desired.scope_exit is not None:
         result.add(desired.scope_exit.priority)

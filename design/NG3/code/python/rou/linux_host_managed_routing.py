@@ -106,6 +106,8 @@ class HostManagedPreserveMainRuleSpec:
     priority: int
     protocol: int
     suppress_prefixlength: int = 0
+    incoming_interface: str | None = None
+    invert_incoming_interface: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,7 +123,14 @@ class HostManagedRoutingLinuxDesired:
     dispatch: HostManagedDispatchRuleSpec | None
     preserve_main: HostManagedPreserveMainRuleSpec | None = None
     additional_dispatches: tuple[HostManagedDispatchRuleSpec, ...] = ()
+    additional_preserve_main: tuple[HostManagedPreserveMainRuleSpec, ...] = ()
     scope_exit: HostManagedScopeExitRuleSpec | None = None
+
+    @property
+    def preserve_main_rules(self) -> tuple[HostManagedPreserveMainRuleSpec, ...]:
+        if self.preserve_main is None:
+            return self.additional_preserve_main
+        return (self.preserve_main, *self.additional_preserve_main)
 
     @property
     def dispatch_rules(self) -> tuple[HostManagedDispatchRuleSpec, ...]:
@@ -205,14 +214,29 @@ def build_linux_peaceful_host_routing_desired(
     if not base.routes:
         return HostManagedRoutingLinuxDesired((), None, None, None)
 
+    preserves = []
     dispatches = []
     for offset, selector in enumerate(dispatch_selectors):
-        priority = allocation.dispatch_priority + offset
-        if priority >= allocation.scope_exit_priority or not allocation.owned_rule_priorities.contains(priority):
+        preserve_priority = allocation.preserve_priority + (offset * 2)
+        dispatch_priority = allocation.dispatch_priority + (offset * 2)
+        if (
+            dispatch_priority >= allocation.scope_exit_priority
+            or not allocation.owned_rule_priorities.contains(preserve_priority)
+            or not allocation.owned_rule_priorities.contains(dispatch_priority)
+        ):
             raise ValueError("peaceful helper selector count exceeds reserved RPDB priority space")
+        preserves.append(
+            HostManagedPreserveMainRuleSpec(
+                priority=preserve_priority,
+                protocol=allocation.rule_protocol,
+                suppress_prefixlength=0,
+                incoming_interface=selector.incoming_interface,
+                invert_incoming_interface=selector.invert_incoming_interface,
+            )
+        )
         dispatches.append(
             HostManagedDispatchRuleSpec(
-                priority=priority,
+                priority=dispatch_priority,
                 table=allocation.table,
                 protocol=allocation.rule_protocol,
                 incoming_interface=selector.incoming_interface,
@@ -229,12 +253,9 @@ def build_linux_peaceful_host_routing_desired(
             goto_priority=allocation.scope_exit_priority,
         ),
         dispatch=dispatches[0],
-        preserve_main=HostManagedPreserveMainRuleSpec(
-            priority=allocation.preserve_priority,
-            protocol=allocation.rule_protocol,
-            suppress_prefixlength=0,
-        ),
+        preserve_main=preserves[0],
         additional_dispatches=tuple(dispatches[1:]),
+        additional_preserve_main=tuple(preserves[1:]),
         scope_exit=HostManagedScopeExitRuleSpec(
             priority=allocation.scope_exit_priority,
             protocol=allocation.rule_protocol,

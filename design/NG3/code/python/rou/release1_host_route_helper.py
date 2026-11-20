@@ -56,7 +56,8 @@ def validate_release1_helper_routing_scope(
     selectors = _lower_dispatch_selectors(config, domain_spec)
     allocation = NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION
     assert allocation.scope_exit_priority is not None
-    capacity = allocation.scope_exit_priority - allocation.dispatch_priority
+    assert allocation.preserve_priority is not None
+    capacity = (allocation.scope_exit_priority - allocation.preserve_priority) // 2
     if len(selectors) > capacity:
         raise ValueError(
             "helper routing selector count exceeds reserved RPDB priority space"

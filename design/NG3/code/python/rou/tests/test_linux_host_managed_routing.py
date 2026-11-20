@@ -63,11 +63,17 @@ class LinuxHostManagedRoutingTests(unittest.TestCase):
         )
         self.assertEqual(desired.bypass.priority, 0x6002)
         self.assertEqual(desired.bypass.goto_priority, 0x7000)
-        self.assertEqual(desired.preserve_main.priority, 0x6003)
-        self.assertEqual(desired.preserve_main.suppress_prefixlength, 0)
+        self.assertEqual(
+            [item.priority for item in desired.preserve_main_rules],
+            [0x6003, 0x6005],
+        )
+        self.assertEqual(
+            [item.incoming_interface for item in desired.preserve_main_rules],
+            ["lo", "eth0"],
+        )
         self.assertEqual(
             [item.priority for item in desired.dispatch_rules],
-            [0x6004, 0x6005],
+            [0x6004, 0x6006],
         )
         self.assertEqual(
             [item.incoming_interface for item in desired.dispatch_rules],

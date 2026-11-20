@@ -156,7 +156,9 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
             routes=(route,),
             bypass=HostManagedBypassRuleSpec(0x6002, "vpng0", 204),
             dispatch=HostManagedDispatchRuleSpec(0x6004, alloc.table, 204),
-            preserve_main=HostManagedPreserveMainRuleSpec(0x6003, 204, 0),
+            preserve_main=HostManagedPreserveMainRuleSpec(
+                0x6003, 204, 0, "eth0", False
+            ),
         )
         rules = json.dumps([
             {
@@ -164,8 +166,8 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
                 "table": 254, "protocol": 204,
             },
             {
-                "priority": 0x6003, "src": "all", "table": 254,
-                "protocol": 204, "suppress_prefixlen": 0,
+                "priority": 0x6003, "src": "all", "iif": "eth0",
+                "table": 254, "protocol": 204, "suppress_prefixlen": 0,
             },
             {
                 "priority": 0x6004, "src": "all", "table": alloc.table,
@@ -185,8 +187,8 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
         self.assertIn(
             (
                 "ip", "-4", "rule", "add", "priority", str(0x6003),
-                "protocol", "204", "lookup", "main",
-                "suppress_prefixlength", "0",
+                "protocol", "204", "iif", "eth0",
+                "lookup", "main", "suppress_prefixlength", "0",
             ),
             runner.calls,
         )
@@ -208,10 +210,17 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
             dispatch=HostManagedDispatchRuleSpec(
                 0x6004, alloc.table, 204, "lo", True
             ),
-            preserve_main=HostManagedPreserveMainRuleSpec(0x6003, 204, 0),
+            preserve_main=HostManagedPreserveMainRuleSpec(
+                0x6003, 204, 0, "lo", True
+            ),
             additional_dispatches=(
                 HostManagedDispatchRuleSpec(
-                    0x6005, alloc.table, 204, "eth0", False
+                    0x6006, alloc.table, 204, "eth0", False
+                ),
+            ),
+            additional_preserve_main=(
+                HostManagedPreserveMainRuleSpec(
+                    0x6005, 204, 0, "eth0", False
                 ),
             ),
             scope_exit=HostManagedScopeExitRuleSpec(0x7000, 204),
@@ -222,8 +231,9 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
                 "goto": 0x7000, "protocol": 204,
             },
             {
-                "priority": 0x6003, "src": "all", "table": 254,
-                "protocol": 204, "suppress_prefixlen": 0,
+                "priority": 0x6003, "src": "all", "not": None,
+                "iif": "lo", "table": 254, "protocol": 204,
+                "suppress_prefixlen": 0,
             },
             {
                 "priority": 0x6004, "src": "all", "not": None,
@@ -231,6 +241,11 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
             },
             {
                 "priority": 0x6005, "src": "all",
+                "iif": "eth0", "table": 254, "protocol": 204,
+                "suppress_prefixlen": 0,
+            },
+            {
+                "priority": 0x6006, "src": "all",
                 "iif": "eth0", "table": alloc.table, "protocol": 204,
             },
             {

@@ -58,10 +58,26 @@ class Release1HostRouteHelperTests(unittest.TestCase):
             [("lo", False), ("eth0", False)],
         )
         self.assertEqual(
+            [
+                (rule.priority, rule.incoming_interface)
+                for rule in desired.preserve_main_rules
+            ],
+            [
+                (
+                    NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION.preserve_priority,
+                    "lo",
+                ),
+                (
+                    NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION.preserve_priority + 2,
+                    "eth0",
+                ),
+            ],
+        )
+        self.assertEqual(
             [rule.priority for rule in desired.dispatch_rules],
             [
                 NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION.dispatch_priority,
-                NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION.dispatch_priority + 1,
+                NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION.dispatch_priority + 2,
             ],
         )
         self.assertIsNotNone(desired.preserve_main)
