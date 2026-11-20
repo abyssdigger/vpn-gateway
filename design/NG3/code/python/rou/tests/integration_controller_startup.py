@@ -102,7 +102,6 @@ def main() -> int:
         namespace=namespace,
         host_interface=host_interface,
         inner_interface="host0",
-        host_address=None,
         inner_address=IPv4Interface("198.19.255.2/32"),
         primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
