@@ -15,7 +15,6 @@ import tempfile
 import time
 
 from rou.binding import DeviceBindingState, LogicalPathId, project_device_bindings
-from rou.config import parse_structural_config
 from rou.composite_nft_policy import compare_composite_nft_policy
 from rou.nft_namespace_inventory import parse_nft_namespace_ruleset
 from rou.controller_startup import ControllerStartupStatus, start_controller_once
@@ -28,8 +27,10 @@ from rou.device_policy import (
 from rou.direct_device_route import realize_direct_device_path_routes
 from rou.instance_lock import InstanceLockSpec
 from rou.interface_inventory import parse_ip_link_inventory
-from rou.integration_config import parse_integration_transport_config
-from rou.local_integration_policy import IntegrationLocalTransportIntent
+from rou.local_integration_policy import (
+    IntegrationLocalTransportIntent,
+    IntegrationTransportProtocol,
+)
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.managed_network_domain import (
@@ -43,6 +44,7 @@ from rou.payload_network_policy_desired import (
     build_payload_network_policy_desired_state,
 )
 from rou.payload_profile import build_payload_profile_requests
+from rou.release1_config import parse_release1_config
 
 
 MANAGED = "e49-managed"
@@ -54,8 +56,7 @@ SERVER_INNER = "srv0"
 VPN_IF = "vpn0"
 SERVER_TUN = "tun-srv"
 
-HOST_ADDR = IPv4Interface("198.19.255.1/30")
-INNER_ADDR = IPv4Interface("198.19.255.2/30")
+INNER_ADDR = IPv4Interface("198.19.255.2/32")
 SERVER_HOST_CIDR = "198.19.254.1/30"
 SERVER_ADDR_CIDR = "198.19.254.2/30"
 SERVER_UNDERLAY = "198.19.254.2"
@@ -70,19 +71,14 @@ STRUCTURAL_CONFIG = f"""
 [device.ovpn]
 enabled = true
 expected_interfaces = ["{VPN_IF}"]
+use_outbound_nat = true
+allow_vpn_client = "udp:{OPENVPN_LOCAL_PORT}>{SERVER_UNDERLAY}:{OPENVPN_PORT}"
 
 [profile.exp049]
 enabled = true
 direction = "outbound"
 destinations = ["{VPN_SERVER_ADDR}/32"]
 device_order = ["ovpn"]
-
-[integration.openvpn-exp049]
-device = "ovpn"
-protocol = "udp"
-remote_ipv4 = "{SERVER_UNDERLAY}"
-remote_port = {OPENVPN_PORT}
-local_port = {OPENVPN_LOCAL_PORT}
 """
 
 
@@ -384,9 +380,9 @@ class PreparedPolicy:
     desired: PayloadNetworkPolicyDesiredState | None = None
 
     def build_current(self, host_boundary, interfaces):
-        cfg = parse_structural_config(self.config_text)
+        cfg = parse_release1_config(self.config_text)
         binding = project_device_bindings(
-            cfg.device_binding_intents,
+            cfg.structural.device_binding_intents,
             DeviceBindingState.empty(),
             interfaces,
         )
@@ -399,7 +395,7 @@ class PreparedPolicy:
             raise AssertionError(binding.bindings[0])
 
         profiles = build_payload_profile_requests(
-            cfg.profiles.values(),
+            cfg.structural.profiles.values(),
             binding.bindings,
         )
         path_routes = realize_direct_device_path_routes(binding.bindings)
@@ -408,26 +404,29 @@ class PreparedPolicy:
             (),
             NG3_LINUX_POLICY_PLATFORM,
         )
-        integration_cfg = parse_integration_transport_config(self.config_text)
-        known_devices = set(cfg.devices)
-        for item in integration_cfg:
-            if item.device_id not in known_devices:
-                raise AssertionError(
-                    f"integration {item.integration_id!r} references unknown Device "
-                    f"{item.device_id!r}"
-                )
         integration_intents = tuple(
             IntegrationLocalTransportIntent(
-                integration_id=item.integration_id,
-                protocol=item.protocol,
+                integration_id=f"{device_id}-vpn-client-{index}",
+                protocol=IntegrationTransportProtocol(item.protocol),
                 host_boundary=host_boundary,
                 local_address=INNER_ADDR.ip,
                 remote_address=item.remote_address,
                 remote_port=item.remote_port,
                 local_port=item.local_port,
             )
-            for item in integration_cfg
-            if item.device_id in cfg.active_device_ids
+            for device_id in sorted(cfg.structural.active_device_ids)
+            for index, item in enumerate(cfg.devices[device_id].allow_vpn_client)
+        )
+        nat_policies = tuple(
+            DeviceNatPolicyIntent(
+                device_id,
+                (
+                    NatIntent.MASQUERADE
+                    if cfg.devices[device_id].use_outbound_nat is True
+                    else NatIntent.NONE
+                ),
+            )
+            for device_id in sorted(cfg.structural.active_device_ids)
         )
 
         desired = build_payload_network_policy_desired_state(
@@ -435,8 +434,11 @@ class PreparedPolicy:
             layout,
             path_routes,
             host_boundary,
-            (DeviceNatPolicyIntent("ovpn", NatIntent.MASQUERADE),),
-            (DeviceFirewallPolicyIntent("ovpn", rules=None),),
+            nat_policies,
+            tuple(
+                DeviceFirewallPolicyIntent(device_id, rules=None)
+                for device_id in sorted(cfg.structural.active_device_ids)
+            ),
             (),
             integration_intents,
         )
@@ -543,9 +545,9 @@ def run_cycle(
 
         inventory_json = runner.run(("ip", "-n", MANAGED, "-j", "link", "show"))
         inventory = parse_ip_link_inventory(inventory_json)
-        cfg = parse_structural_config(STRUCTURAL_CONFIG)
+        cfg = parse_release1_config(STRUCTURAL_CONFIG)
         binding = project_device_bindings(
-            cfg.device_binding_intents,
+            cfg.structural.device_binding_intents,
             DeviceBindingState.empty(),
             inventory,
         )
@@ -700,7 +702,6 @@ def main() -> int:
         namespace=MANAGED,
         host_interface=HOST_BOUNDARY,
         inner_interface=INNER_BOUNDARY,
-        host_address=HOST_ADDR,
         inner_address=INNER_ADDR,
     )
     lock_spec = InstanceLockSpec(

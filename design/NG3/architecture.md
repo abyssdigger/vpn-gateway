@@ -30,7 +30,7 @@ Current trace:
 | Linux VPNPathAdapter fresh managed-netns runtime collection | `linux_vpn_path_adapter.py` | `NG3-2026-11-18-linux-vpn-path-adapter-runtime-review.md` |
 | shared current Device binding projection / stable logical slots | `binding.py` | `NG3-2026-11-16-device-binding-projection-code-review.md` |
 | PayloadProfileRequest structural projection | `payload_profile.py` | `NG3-2026-11-16-payload-profile-request-code-review.md` |
-| PayloadPolicyCalculator NEW-flow Profile classification | `profile_classification.py` | `NG3-2026-11-16-profile-classification-code-review.md` |
+| PayloadPolicyCalculator most-specific Profile partition/classification | `profile_prefix_partition.py`, `payload_forward_compiler.py` | `NG3-2026-11-16-profile-prefix-partition-code-review.md`, `NG3-2026-11-17-profile-forward-compiler-review.md` |
 | PayloadTrafficManager bounded availability confirmation + Profile active-route state | `availability_confirmation.py`, `availability_routing_state.py`, `availability_manager.py` | `NG3-2026-11-16-availability-confirmation-code-review.md`, `NG3-2026-11-18-availability-routing-state-review.md` |
 | AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md`, `NG3-2026-11-18-sticky-reserve-reference-code-review.md` |
 | NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
@@ -66,7 +66,7 @@ Current trace:
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md`, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md`, EXP-051 migration evidence |
-| managed L3 boundary backend + device-only bootstrap/return seam | `managed_l3_boundary.py`, `linux_host_bootstrap.py`, `linux_host_bootstrap_backend.py`, `linux_host_boundary_policy.py`, `linux_host_boundary_routes.py` | EXP-070, EXP-071, EXP-072, EXP-073, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md` |
+| managed L3 boundary lifecycle | `managed_network_domain.py` | EXP-070 routed-veth/Debian-12 evidence, EXP-071 comparative selection evidence, retained routed-veth fact from EXP-072, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md` |
 | controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
 | bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
 | bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
@@ -78,15 +78,12 @@ Current trace:
 | guarded physical payload nft scaffold preparation | `nft_scaffold_executor.py`, `linux_nft_scaffold.py` | `NG3-2026-11-16-nft-scaffold-prepare-code-review.md` |
 | normalized Device NAT intent -> payload masquerade desired projection | `device_policy.py`, `payload_nat_desired.py` | `NG3-2026-11-16-payload-nat-desired-code-review.md`, `EXP-033-result-20261116.md` |
 | host-side Device server publication | `host_publication_policy.py`, `linux_host_publication.py`, alpha runtime composition | `NG3-2026-11-17-host-server-publication-dnat-review.md`, EXP-052, EXP-051 extension |
-| host-boundary bootstrap/return policy projection | `host_boundary_policy.py`, `linux_host_boundary_policy.py` | EXP-053, current host-return-steering cycle review |
+| authoritative host-routing prototype (postponed aggressive child) | `host_managed_routing.py`, `release1_host_boundary.py`, `linux_host_managed_routing.py`, `linux_host_managed_routing_backend.py`, `selected_host_boundary.py` | EXP-074; EXP-075/076 retain lower SNAT-return route facts |
 | managed-stack established-flow return affinity | `stack_return_affinity.py`, `linux_stack_return_affinity.py` | EXP-061, current stack-return-affinity cycle review |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
-The executable reference implementation still stops before separately-gated runtime
-boundaries:
-
-- Profile ordinary-side `+snat` physical materialization;
-- stable production packaging/version lifecycle and a stable external status API.
+The executable reference implementation still stops before stable production
+packaging/version lifecycle and a stable external status API.
 
 Live current-state presentation is no longer one of these gaps: the executable alpha publishes
 the accepted `RuntimeStatusAgent` projection through its documented current-only JSON surface.
@@ -161,6 +158,7 @@ These omissions are deliberate implementation freedom, not unresolved requiremen
 - `VPNG0005-R5.R4`
 - `VPNG0007-R7.R3`
 - `VPNG0007-R7.R3.R2`
+- `VPNG0007-R7.R3.R5`
 
 NG3 selects an isolated managed network domain as the architectural boundary for the router
 data plane.
@@ -174,12 +172,19 @@ depends on the endpoint contract, not on one Linux link type. The host sees one 
 VPN-like device identity and the managed namespace sees its peer; routes may target that
 device directly without making a peer gateway address part of Device/Profile semantics.
 
-For Release 1, the selected default Linux realization is a routed veth pair with Proxy ARP
-used only as IPv4 neighbour-resolution machinery. EXP-070 confirms this shape on Debian 12 /
-Linux 6.1 and EXP-071 finds no material steady-state dataplane penalty relative to plain
-netkit L3. Netkit L3 remains a compatible alternate lower backend for kernels that provide it.
-Backend choice is lower platform realization state and is not part of ordinary Device/Profile
-configuration.
+For Release 1, the supported Linux realization is a routed veth pair with Proxy ARP used only
+as IPv4 neighbour-resolution machinery. EXP-070 confirms this shape on Debian 12 / Linux 6.1;
+EXP-071 found no material steady-state dataplane advantage that would justify carrying a second
+current backend solely for netkit. No runtime-selectable alternate boundary backend is part of
+the Release-1 implementation or product contract.
+
+The managed-L3 endpoint contract itself is intentionally not veth-specific. EXP-070/071 also
+establish netkit L3 as an experimentally viable alternative realization of the same L3 role.
+Outside Release 1, a later implementation may add netkit as another lower backend selected by
+platform/implementation settings in the same VPN-GATE product build, without creating separate
+product variants and without changing Device/Profile policy. This is preserved architectural
+freedom, not a current support promise: adding that backend still requires its own accepted
+implementation/evidence unit.
 
 Inside this domain belong the network objects whose semantics are owned by VPN-GATE,
 including:
@@ -217,9 +222,9 @@ The namespace is therefore an architecture choice. If another mechanism can late
 the same isolation/ownership requirements more simply, the requirement does not protect the
 namespace itself.
 
-### 1.1.1. Managed L3 endpoint contract and Linux backend selection
+### 1.1.1. Managed L3 endpoint contract and Linux realization
 
-**Evidence:** EXP-070, EXP-071, EXP-072.
+**Evidence:** EXP-070; EXP-071 as comparative selection evidence; retained routed-veth endpoint fact from EXP-072; EXP-075 for the SNAT-identity next-hop distinction.
 
 The primary HOST <-> STACK attachment has one semantic contract:
 
@@ -238,27 +243,19 @@ The contract requires:
 - one current host-visible interface identity and one current managed-stack peer identity;
 - direct device-directed IPv4 routing across the boundary; a peer gateway IP is not a product
   semantic dependency;
-- exact lower ownership/observation of the pair and its backend-specific neighbour behavior;
-- no Profile, Device, NAT-class or path identity encoded in the backend itself;
-- payload firewall/NAT/routing semantics remain owned by their existing policy layers;
-- backend replacement must not require Device/Profile configuration changes.
+- exact lower ownership/observation of the selected lower endpoint realization and the
+  backend-specific state required to verify that realization;
+- no Profile, Device, NAT-class or path identity encoded in the boundary itself;
+- payload firewall/NAT/routing semantics remain owned by their existing policy layers.
 
-Release-1 backend selection is intentionally conservative:
-
-```text
-default when available:
-    routed-veth-proxy-arp
-
-compatible alternate:
-    netkit-l3
-```
-
-The reference selection seam is `managed_l3_boundary.py`. With no lower override, Release 1
-prefers routed veth even when netkit exists: Debian-12/Linux-6.1 support is already proven and
-EXP-071 provides no performance reason to require the younger primitive. A lower
-administrator/platform override may select netkit where available; an unavailable requested
-backend fails closed. This override is implementation/platform configuration, not
-human-facing Device/Profile policy.
+The Release-1 lower realization is intentionally singular: `routed-veth-proxy-arp`.
+This is the Debian-12/Linux-6.1-compatible shape already materialized by the managed-domain
+lifecycle. EXP-071 remains comparative evidence: netkit can realize the same practical L3
+boundary role, but the experiment found no material steady-state dataplane advantage that
+justifies Release-1 dual-backend machinery. A future netkit backend therefore belongs behind
+this same lower contract and may be selected through platform/implementation settings; it
+must not require a separate VPN-GATE product variant or leak backend choice into Device/Profile
+policy.
 
 For **routed veth + Proxy ARP**:
 
@@ -269,29 +266,24 @@ For **routed veth + Proxy ARP**:
 - steady-state payload forwarding remains ordinary kernel IP forwarding; there is no
   userspace proxy and no NAT implied by the boundary backend.
 
-For **netkit L3**:
-
-- the host primary and stack peer satisfy the same device-directed routing contract without
-  Ethernet neighbour emulation;
-- no BPF program or cross-boundary metadata carrier is required by this architecture;
-- optional netkit metadata behavior must therefore not become a hidden dependency of
-  Device/Profile semantics.
-
 Release 1 payload is IPv4-only, so IPv6 Proxy-NDP realization is outside this selected backend
 contract until IPv6 product support is re-entered.
 
-EXP-072 additionally proves that the selected paired-RPDB host bootstrap can consume this
-contract directly: its managed routes are `dev <host-endpoint>` with no peer gateway, while
-`0.0.0.0/0`, ordinary-main specificity, nested managed prefixes, dynamic main-route changes,
-stack-ingress bypass and exact cleanup remain unchanged on both routed-veth/Proxy-ARP and
-netkit-L3 realizations.
+EXP-072 remains reusable for the lower endpoint fact needed by the current realization:
+device-directed managed routes work on routed-veth/Proxy-ARP. Its netkit result remains
+technical evidence supporting the future alternative-backend option above, but does not define
+a supported Release-1 backend. Its former bootstrap specificity semantics are superseded and do
+not constrain current host routing;
+that coverage transition is recorded in the experiment registry and EXP-074 result.
 
-This selection does **not** by itself relocate ordinary-side Profile gateway NAT into STACK.
-The EXP-070 stack-SNAT positive control installed an explicit ordinary-side route to the stack
-NAT source address, so it does not prove the accepted requirement that ordinary hosts need no
-return routes to VPN-side addressing. Until equivalent no-extra-ordinary-host-routing evidence
-exists, the selected EXP-064 host-boundary behavior-lane realization remains authoritative for
-`+snat`/stateful-return consequences.
+The managed-L3 endpoint also provides the ordinary boundary for Profile source identities.
+EXP-070 already proves that source NAT itself can execute inside STACK. Its positive control
+used an explicit route to the translated source and therefore did not establish which host
+route form can return traffic addressed to that identity across the addressless boundary.
+EXP-075 supplies that lower route fact. A host-routing helper may automate the route, or the
+administrator may provide equivalent ordinary-host routing manually; the Profile-SNAT
+contract itself still ends at the managed boundary and does not promise host-side
+reachability. No additional host-side Profile metadata carrier is required.
 
 ### 1.1.2. Managed network-domain bootstrap — executable managed-L3 lifecycle
 
@@ -309,26 +301,20 @@ exists, the selected EXP-064 host-boundary behavior-lane realization remains aut
 The Linux managed-domain lifecycle now materializes the selected Release-1 primary boundary
 as the managed-L3 endpoint contract rather than as an addressed transit subnet.
 
-The already-normalized internal specification keeps the historical addressed form only as a
-compatibility path for retained experiments/tests:
+The normalized internal specification contains only this selected primary-boundary shape:
 
 ```text
 ManagedNetworkDomainSpec:
     namespace
     host_interface
     inner_interface
-    host_address: IPv4Interface | None
     inner_address: IPv4Interface
-    primary_backend: ManagedL3BoundaryBackend | None
-    additional_boundaries[]
 ```
 
 For the selected alpha/runtime shape:
 
 ```text
-primary_backend = routed-veth-proxy-arp
-host_address    = none
-inner_address   = stack-local service /32
+inner_address = stack-local service /32
 
 HOST:
     <host_interface>      unnumbered
@@ -344,8 +330,9 @@ both endpoints:
 ```
 
 The stack-local `/32` is an addressable local service endpoint for integration/publication.
-It is **not** the boundary next-hop and is not used as a gateway by host bootstrap or
-stateful-return routing.
+It is **not** the generic boundary next-hop for remote managed prefixes. EXP-075 shows that
+it can nevertheless serve as the onlink next hop for an optional/helper-provided route to a
+Profile SNAT identity on the addressless boundary.
 
 The lifecycle owns only:
 
@@ -397,173 +384,151 @@ Exact verification requires current kernel evidence that:
 - both primary endpoints are current reciprocal veth peers and UP;
 - host endpoint has no IPv4 address;
 - inner endpoint has exactly the configured service `/32`;
-- both endpoint Proxy-ARP/rp-filter values match the selected backend contract;
+- both endpoint Proxy-ARP/rp-filter values match the routed-veth contract;
 - the host service route is exactly device-only through the host endpoint;
 - the namespace default is exactly device-only through the inner endpoint;
-- loopback and every explicitly owned additional boundary are exact.
+- loopback is UP.
 
 Existing divergent infrastructure is not repaired or adopted in place. Destroy first
 re-confirms containment where possible, removes the owned namespace/link infrastructure and
 freshly verifies absence.
 
-`netkit-l3` remains the compatible alternate managed-L3 backend selected by the lower backend
-contract. The current alpha lifecycle Driver intentionally materializes the Debian-12-compatible
-`routed-veth-proxy-arp` backend only; adding the netkit lifecycle Driver must not change any
-Device/Profile or host-bootstrap/stateful-return semantics.
-
-### 1.1.1-A. Host-boundary bootstrap and return routing
+### 1.1.1-A. Core/host-network responsibility boundary and optional host-routing assistance
 
 **Implements:**
-- `VPNG0002-R2.R3.R1.R1`;
-- `VPNG0002-R2.R3.R1.R1.R1`;
-- `VPNG0002-R2.R3.R1.R1.R2`;
-- `VPNG0002-R2.R3.R3.R1`;
-- `VPNG0002-R2.R3.R3.R1.R1`;
+- `VPNG0001-R2`;
+- `VPNG0001-R2.R1`;
+- `VPNG0001-R2.R1.R1`;
+- `VPNG0001-R2.R2`;
+- `VPNG0001-R2.R3`;
+- `VPNG0001-R2.R3.R1`;
+- `VPNG0001-R2.R3.R2`;
+- `VPNG0001-R2.R3.R3`;
+- `VPNG0002-R2.R6`.
+
+**Constrained by:**
+- `VPNG0001-R2.R3.C1`;
 - `VPNG0004-R4.R6.R1.R1`;
 - `VPNG0004-R4.R6.R1.R2`.
 
-The isolated managed domain does not remove the ordinary VPN bootstrap problem: a packet
-initiated on the ordinary/host side must first be delivered into the explicit VPN-GATE
-boundary before Profile routing can act on it. NG3 therefore defines a separate
-**host-boundary policy owner**. It owns only explicit VPN-GATE tables/rules/nft state and does
-not own the ordinary host `main` table.
+Core VPN-GATE owns managed forwarding up to the explicit ordinary-side managed boundary.
+Ordinary-host routing beyond that boundary remains administrator-owned unless the
+administrator explicitly enables a host-side automation capability.
 
-Bootstrap is required for:
+Core correctness therefore cannot depend on a host-routing helper. A deployment in which the
+administrator supplies equivalent ordinary-host routes/reachability must use the same managed
+forwarding semantics as a deployment using product-provided host-routing automation. Core
+startup/readiness must not fail merely because host-routing automation is disabled, provided
+the externally required host integration is already present.
 
-```text
-outbound
-bidirectional
-inbound+route-return
-bidirectional+route-return
-```
+The project must document the stable boundary facts and route/reachability prerequisites
+needed for manual host integration. Exact administrator-facing instructions remain
+`[pending_closure]` under `VPNG0001-R2.R1.R1`.
 
-The selected Release-1 Linux realization is backed by EXP-056 and EXP-059 and deliberately
-does **not** install Profile routes or endpoint pins into host `main`.
+Host routing is an integration concern outside the core managed forwarding domain. Core
+VPN-GATE policy begins once traffic is actually handed through the explicit managed boundary;
+Profile direction does not itself grant authority over administrator-owned ordinary-host
+routing.
 
-#### Dedicated bootstrap table and paired RPDB rules
+The product therefore separates two explicitly enabled helper contracts: the peaceful helper capability is required in Release 1 but may be disabled by configuration, while the aggressive helper is a later optional capability.
 
-One VPN-GATE-owned host bootstrap table contains one route through the managed L3 endpoint for
-each distinct bootstrap destination. In the selected endpoint contract that route is
-`dev <managed-host-endpoint>` and does not require a peer gateway address; EXP-072 proves this
-representation on both routed-veth/Proxy-ARP and netkit-L3 backends. The alpha runtime now uses
-that same device-only representation on its routed-veth primary boundary.
+#### Simple lifecycle helper
 
-`0.0.0.0/0` is represented as an ordinary default route inside this dedicated table; no
-split-default or default replacement is needed in `main`.
+The Release-1 peaceful helper is lifecycle-scoped assistance, not a host-routing supervisor. It is explicitly enabled/disabled by product configuration.
 
-Packets already emitted by the managed stack must bypass bootstrap before destination rules:
+Its desired contribution is derived from current accepted configuration and may include:
 
-```text
-iif <managed-host-boundary>
-    -> lookup main
-```
+- remote Profile destinations that the administrator wants routed through VPN-GATE; and
+- effective Profile SNAT identities when the administrator wants helper-provided reverse
+  reachability to the managed boundary.
 
-This rule is the ordinary underlay/server-reply escape. It applies equally to:
+The helper installs identifiable routing contributions at start and updates them on a supported lifecycle reload operation. After successful application, ordinary host routing remains
+administrator-owned rather than continuously owned by VPN-GATE. On stop the helper removes
+only still-identifiable contributions that remain its own and must not delete an
+administrator replacement merely because it occupies the same destination.
 
-- client VPN transport packets leaving the managed namespace;
-- replies from a published VPN server to dynamic external clients;
-- any other packet that has already crossed from the managed domain into the host.
+Between those lifecycle operations, administrator changes to ordinary host routing are not
+runtime drift under `VPNG0005-R5.R2`, are not out-of-band corruption under
+`VPNG0005-R5.C1`, and do not by themselves close the internal forwarding gate.
 
-Therefore no exact underlay endpoint pin is required, and a managed exact `/32` destination
-may equal a VPN transport endpoint: ordinary/local initiation and stack-origin transport are
-distinguished by ingress direction.
+The exact Linux route/RPDB lowering for this simple helper is **not yet selected** by this
+section. In particular, the former authoritative dedicated-table precedence cannot be used as
+Release-1 closure merely because the current Python reference already implements it: that
+precedence is stronger than the simple-helper contract.
 
-For each bootstrap destination prefix `P`, rule pairs are ordered by descending prefix
-length and then deterministic network/owner order:
+Consequently `VPNG0001-R2.R2` remains `[pending_closure]` until a lower realization and exact configuration spelling are selected that preserve administrator ownership of ordinary host routing while still providing useful lifecycle assistance.
 
-```text
-to P lookup main suppress_prefixlength prefixlen(P)
-to P lookup <VPNG-bootstrap-table>
-```
+Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
+managed boundary, not by host routing. A helper may automate host reachability to that
+identity, but core Profile-SNAT semantics do not depend on the helper being enabled.
 
-The first rule asks the current ordinary `main` table for a route but suppresses any decision
-whose prefix is equal to or broader than `P`. Consequently:
+#### Aggressive authoritative helper
 
-- an ordinary route **strictly more specific** than the matching managed destination wins;
-- an equal or less-specific ordinary route does not override explicit Profile policy;
-- connected LAN/uplink routes naturally survive a full-tunnel Profile;
-- an administrator route added after VPN-GATE activation is honored immediately when it is
-  strictly more specific; VPN-GATE does not copy or reconcile that route;
-- a nested more-specific managed destination is processed by its own earlier rule pair and can
-  still override a broader ordinary route.
+The aggressive helper is a separate opt-in capability and is outside Release 1 by
+`VPNG0001-R2.R3.C1`.
 
-The dispatch rule then looks up the VPN-GATE bootstrap table. This is equivalent to the useful
-longest-prefix behavior of conventional VPN route injection without mutating host `main`.
-
-Reserved VPN-GATE RPDB priorities execute after the kernel local rule but before ambient main
-lookup. A foreign rule/object occupying an exact VPN-GATE-owned priority/table key is a
-diagnosable conflict; VPN-GATE does not renumber around arbitrary administrator policy or
-adopt foreign state. Administrator rules at higher precedence remain administrator
-responsibility, consistent with the conventional VPN operating boundary.
-
-#### Stateful remote-initiated return is a separate owner
-
-Bootstrap routing and stateful return intentionally remain separate. EXP-057 proved that one
-undifferentiated mark/table cannot satisfy both semantics: bootstrap must preserve a
-strictly-more-specific ordinary route, while return traffic for an already-associated
-remote-initiated flow must be forced back to the managed stack.
-
-EXP-053 remains the selected stateful-return mechanism, with EXP-073 confirming its
-gateway-less managed-L3 realization. The return table default is now
-`dev <managed-host-endpoint>` with no peer next-hop:
+For the narrow authoritative-routing child `VPNG0001-R2.R3.R1`, the selected Linux
+realization is the already-proven dedicated managed table:
 
 ```text
-remote NEW enters host from managed boundary
-    -> save connection association in ct mark
+kernel local rule
+    -> local delivery remains local
 
-forwarded reply
-    -> restore packet mark in PREROUTING
+iif <managed-host-boundary> lookup main
+    -> traffic already emitted by STACK uses ordinary host routing
 
-host-local reply
-    -> restore packet mark in nft type-route OUTPUT
+lookup <VPNG-managed-destination-table>
+    -> matching aggressive-helper managed destinations go to the managed boundary
 
-return fwmark
-    -> dedicated return RPDB rule/table
-    -> managed boundary
+ambient host main/default rules
+    -> unmatched traffic remains ordinary
 ```
 
-The return fwmark rule executes before bootstrap bypass/prefix pairs. Thus an associated reply
-cannot accidentally fall through to a more-specific ordinary route.
+The dedicated table contains only the helper-managed destinations and uses the explicit
+managed-L3 endpoint. The lower owner does not edit unrelated host `main` routes. A competing
+non-local route in ordinary host `main`, including a more-specific route, does not override
+a destination that the aggressive helper has accepted into its authoritative set.
 
-The canonical `+route-return` Profile modifier disables this stateful return steering for
-that Profile. Its unmarked reply is then handled by the ordinary bootstrap pair for the
-Profile destination and therefore follows route-based VPN semantics, including preservation
-of strictly-more-specific `main` routes.
+`EXP-074` proves this exact observable property, including managed `0.0.0.0/0`, dynamic
+addition of a more-specific competing `main` route, preservation of local delivery,
+stack-origin bypass and cleanup that leaves unrelated `main` state unchanged. This evidence
+is sufficient closure for `VPNG0001-R2.R3.R1`; it is **not** evidence that the same
+authoritative precedence is appropriate for the simple helper.
 
-The modifier does **not** mean Linux `NOTRACK`, does not disable conntrack globally and does
-not alter Profile firewall state semantics.
+The current Python `HostManagedRoutingPlan` / Linux owner embodies this authoritative child.
+After the requirement correction it is evidence/prototype for the postponed aggressive
+capability, not an unconditional core or Release-1 host-routing contract.
 
-The production-shaped controller/alpha composition now treats bootstrap and stateful return
-as one bounded **selected host-boundary contribution** while retaining their separate lower
-owners. Runtime audit first observes the complete contribution. Exact state is a no-op; any
-repair closes the managed ForwardingGate before host-boundary mutation, and conflicting
-reserved host state is fail-closed rather than adopted. The stateful return route/RPDB owner
-predates protocol-tagged host bootstrap ownership, so its reserved table/priority accepts only
-ABSENT or exact desired state; a different occupant is a conflict, not automatically deletable
-stale state. Cleanup disables selected bootstrap capture first, then removes return nft and
-return routing dependencies.
+The remaining aggressive children are not closed:
 
-The executable alpha now accepts canonical `+route-return` and exercises this composition
-through its ordinary startup/reconcile/stop lifecycle. This changes no grammar or semantics;
-it closes the previous alpha materialization gap.
+- `VPNG0001-R2.R3.R2` requires a future continuous owner that detects and repairs
+  helper-owned drift;
+- `VPNG0001-R2.R3.R3` requires composition of host-side fail-closed measures with the public
+  administrative payload-containment control surface.
 
-#### Evidence and rejected alternatives
+Those responsibilities remain `[pending_closure]`; the existence of the current periodic
+alpha audit must not be used to invent their final semantics.
 
-- EXP-053: stateful host return steering — PASS;
-- EXP-054/055: exact endpoint pin + host-route fallback/composite — PASS, retained as
-  comparative fallback evidence;
-- EXP-056: managed-ingress ordinary-main bypass — PASS;
-- EXP-057: one shared bootstrap/return mark-table — FAIL and rejected;
-- EXP-058: dedicated table with copied `throw` routes — PASS but not selected because it
-  requires replication/reconciliation of ordinary route prefixes;
-- EXP-059: paired RPDB bootstrap with `suppress_prefixlength` — PASS and **selected**.
-- EXP-060: production selected paired-RPDB backend — PASS; prior red state resolved as `dst`/`dstlen` observer normalization defect.
-- EXP-072: gateway-less managed-L3 endpoint host bootstrap over routed veth + Proxy ARP and netkit L3 — PASS and **selected**.
+#### Managed-L3 route facts retained independently
 
-This architecture does not require VPN-GATE to protect its owned host-boundary rules/tables
-from a privileged administrator any more strongly than conventional VPN software protects its
-own installed routes. It does require exact owner observation and fail-fast conflict handling
-for the reserved VPN-GATE keys.
+The managed-L3 boundary still supports device-only routes for remote prefixes. For Profile
+SNAT reverse reachability, `EXP-075` separately proved that an exact SNAT-identity route on
+the addressless routed boundary needs the already-owned stack service address as an onlink
+next hop:
+
+```text
+<remote prefix> dev <managed-host-endpoint>
+<snat identity>/32 via <stack-service-address> dev <managed-host-endpoint> onlink
+```
+
+These are lower Linux facts reusable by a host-routing helper or by an administrator. They do
+not assign ordinary-host routing ownership to core VPN-GATE.
+
+There is no host conntrack association, return packet mark, dedicated host return table or
+user-selectable host return mode in the current core design. A remote-initiated reply that is
+delivered back to STACK by any valid host routing arrangement is associated with its original
+VPN routing domain inside STACK by the independently owned established-flow affinity under
+`VPNG0002-R2.R6`.
 
 ### Architectural consequence for external VPN channels
 
@@ -824,6 +789,7 @@ requirements that do not belong to one runtime component.
 **Implements:**
 - `VPNG0007-R7.R2`
 - `VPNG0007-R7.R3.R3`
+- `VPNG0007-R7.R3.R5`
 - `VPNG0007-R7.R4`
 - `VPNG0007-R7.R6.R1`
 - `VPNG0007-R7.R6.R2`
@@ -1285,8 +1251,6 @@ the supported integration/onboarding contract beneath the Device/Profile policy 
 - `VPNG0002-R2.R2.R1`
 - `VPNG0002-R2.R2.R2`
 - `VPNG0002-R2.R3`
-- `VPNG0002-R2.R3.R1`
-- `VPNG0002-R2.R3.R2`
 - `VPNG0002-R2.R3.R3`
 - `VPNG0002-R2.R3.C1`
 - `VPNG0002-R2.R3.C1.R1`
@@ -1350,7 +1314,7 @@ ProfileConfigIntent:
     device_order[] = plain Device IDs in baseline order
     reserve_device_ids[] = Profile-local subset of device_order
     availability_check?
-    ordinary_gateway_nat_intent?
+    effective_snat_address?
 
 DeviceBindingIntent:
     device_id
@@ -1389,8 +1353,8 @@ Key normalization rules:
 - `ProfileConfigIntent` retains remote destinations and ordered Device references; canonical
   `device_order` membership suffixes are normalized into plain Device IDs plus a separate
   Profile-local reserve Device subset, so lower consumers never parse `:reserve`;
-  canonical `direction` is normalized into base direction plus a separate Profile-scoped
-  ordinary-side gateway NAT intent when the accepted `+snat` suffix is present;
+  canonical `direction` is normalized into base direction plus an optional effective
+  Profile SNAT identity when `+snat` or `+snat>IPv4` is present;
 - `PayloadProfileRequest` contains the concrete ordered logical paths obtained after binding
   while preserving Profile identity/direction/destinations;
 - current concrete logical paths are derived from accepted Device bindings, not written
@@ -1411,7 +1375,7 @@ Key normalization rules:
 - `publish_vpn_server` is normalized separately from Profile payload routing; host/internal
   port bundles preserve declared item order and explicit translation requires equal expanded
   cardinality for positional 1:1 mapping;
-- historical Device policy spellings are rejected rather than accepted as aliases;
+- enabled Device objects accept only the canonical policy fields defined by the Release-1 grammar;
 - availability subject identity is exactly `(profile_id, logical_path_id)`;
 - the same bound interface/path may therefore have independent availability state in
   different Profiles;
@@ -1483,9 +1447,9 @@ Client transport/control permission and server publication are both Device trans
 properties but remain different normalized owner classes. `allow_vpn_client` does not become
 payload forwarding permission; `publish_vpn_server` does not become Profile routing.
 
-Historical `nat`, `traffic_envelope`, `publications` and top-level `integration.*`
-spellings are not compatibility aliases. Endpoint-scoped firewall syntax remains separately
-deferred under `VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
+Unknown Device policy fields and top-level tables are rejected by the strict Release-1
+configuration boundary. Endpoint-scoped firewall syntax remains separately deferred under
+`VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
 
 ### AvailabilityDescriptionResolver
 
@@ -1958,8 +1922,6 @@ responsibility that cannot be represented here.
 - `VPNG0002-R2.R2`
 - `VPNG0002-R2.R2.R1`
 - `VPNG0002-R2.R3`
-- `VPNG0002-R2.R3.R1`
-- `VPNG0002-R2.R3.R2`
 - `VPNG0002-R2.R3.R3`
 - `VPNG0002-R2.R4`
 - `VPNG0002-R2.R5`
@@ -2076,9 +2038,9 @@ revises the requirements and selects the extension.
 **Constrained by:**
 - `VPNG0002-R2.R3.C1`.
 
-The host-side return mechanism from EXP-053 solves only the host/managed-domain boundary.
-It returns a reply to the stack but does not by itself preserve which VPN routing domain
-accepted the original remote-initiated flow.
+When ordinary-host routing returns a reply to STACK by destination, that host routing carries
+no Profile identity. The host integration therefore does not by itself preserve which VPN
+routing domain accepted the original remote-initiated flow.
 
 This distinction is material when managed destinations overlap:
 
@@ -4641,7 +4603,7 @@ Only after independent expert review may this partial lower slice be
 considered executable reference evidence. It must never reopen the root
 forwarding barrier.
 
-##### Ordinary-side Profile gateway NAT boundary
+##### Profile source identity translation inside the managed domain
 
 **Implements:**
 - `VPNG0001-R1.R2.R4.R4.R4`;
@@ -4650,276 +4612,108 @@ forwarding barrier.
 - `VPNG0004-R4.R6.R1.R6.R1`.
 
 **Constrained by:**
-- `VPNG0001-R1.R2.R4.R4.R4.C1`.
+- `VPNG0001-R1.R2.R4.R4.R4.C1`;
+- `VPNG0001-R1.R2.R4.R4.R4.C2`.
 
-This is a second source-NAT purpose and must not be conflated with Device
-`NatIntent.MASQUERADE`.
+Profile `+snat` is a second source-translation purpose and is not Device
+`use_outbound_nat`.
 
 ```text
 Device VPN-side NAT
     ordinary -> managed firewall -> Device/path postrouting masquerade -> VPN
 
-Profile ordinary-side gateway NAT
-    VPN -> managed Device/Profile firewall -> explicit host boundary
-        -> host forwarding toward ordinary network
-        -> optional Profile-scoped gateway source NAT
+Profile source identity translation
+    VPN -> managed Profile/Device firewall -> managed postrouting SNAT -> vpng0 -> HOST
 ```
 
-The first exists to make ordinary-originated traffic usable through a VPN path. The second
-exists only when an ordinary-network next hop needs replies to return through the VPN-GATE
-host without being taught routes to remote VPN prefixes.
+The Profile translation occurs entirely inside the managed network domain, after policy has
+seen the original remote source and before the packet crosses `vpng0`. The host receives
+either the real remote source or the already-selected Profile SNAT identity. VPN-GATE does not
+install a host-side NAT rule merely because Profile `+snat` is enabled.
 
-A packet whose destination is the VPN-GATE host itself is locally delivered on the host side
-and does not require the gateway-forwarding NAT contribution. The semantic intent therefore
-does not mean "SNAT every inbound VPN packet"; it means "SNAT the already-permitted
-VPN-originated packet when the host forwards it onward through the owned ordinary-side
-gateway boundary".
-
-The normalized upper intent is conceptually:
+Configuration normalization resolves the external grammar to one effective lower value:
 
 ```text
-ProfileGatewayNatIntent:
+ProfileSnatIntent:
     profile_id
-    mode = NONE | MASQUERADE
+    effective_source = NONE | IPv4
 ```
 
-This type name is architectural shorthand, not accepted external configuration syntax.
+Bare `+snat` resolves through top-level `default_snat_address`; `+snat>IPv4` resolves
+directly. Lower policy consumers do not parse suffix strings or distinguish default from
+override after normalization.
 
-The Device/Profile firewall runs before the packet leaves the managed network domain.
-Consequently source address/port filtering still sees the original remote payload sender.
-Ordinary-side gateway NAT must never be moved ahead of that managed policy boundary.
-
-###### Gateway-NAT applicability across the host boundary
-
-Per-Profile gateway NAT cannot safely reclassify packets on the host merely by remote source
-prefix.
-
-Inbound Profile classification is path-relative:
-
-```text
-actual ingress logical path
-    +
-remote source prefix
-    ->
-selected Profile
-```
-
-Two Profiles may therefore overlap in remote prefix space while being unambiguous because
-they admit different ingress paths. Once several managed paths converge on one ordinary host
-boundary, source CIDR alone no longer carries that provenance.
-
-The lower boundary must preserve the **host-side consequence** of the already-selected Profile,
-but EXP-063/064 show that arbitrary Profile identity does not need to cross the namespace
-boundary.
-
-The normalized Release-1 host-side behavior of a remote-initiated Profile is exactly two bits:
-
-```text
-stateful return steering = enabled | route-return
-ordinary-side gateway NAT = disabled | enabled
-```
-
-so the complete behavior space is four fixed classes:
-
-```text
-STATEFUL_NO_NAT
-STATEFUL_NAT
-ROUTE_NO_NAT
-ROUTE_NAT
-```
-
-The EXP-064 candidate boundary contract is therefore:
-
-```text
-actual VPN ingress + remote source
-        ->
-selected Profile inside managed policy
-        ->
-stack connection keeps Profile routing-domain association
-        +
-Profile normalized host behavior selects one fixed boundary lane
-        ->
-host ingress lane establishes host connection behavior class
-        ->
-host return/NAT behavior
-```
-
-The host never reconstructs the Profile from source CIDR and does not need a per-Profile host
-resource. Multiple Profiles with the same normalized host behavior share the same lane while
-remaining distinct inside the managed stack.
-
-EXP-063 disproved transient packet-mark handoff across the cross-netns veth boundary as a
-carrier: packets crossed, but the receiving namespace did not retain the exported packet mark.
-EXP-064 proved the fixed behavior-lane carrier technically across all four combinations, including
-overlapping remote prefixes, forwarded gateway NAT, route-return/stateful-return, stack-side
-established-flow affinity, host-local no-NAT and unrelated-host isolation.
-EXP-070/071 do not supersede this selected gateway-NAT carrier. The managed-L3-endpoint
-backend can replace the primary addressed HOST<->STACK transport independently, but moving
-ordinary-side gateway NAT into STACK would change reply-reachability assumptions. The current
-EXP-070 stack-SNAT control relied on an explicit ordinary-side route to the stack NAT source;
-therefore behavior lanes remain selected until a replacement proves the same no-extra-route
-ordinary-host semantics.
-
-The lane identity is lower infrastructure, not user policy. This contract satisfies
-`VPNG0004-R4.R6.R1.R6.R1` by preserving the already-selected host-side NAT applicability:
-traffic whose accepted Profile policy requests `+snat` reaches a NAT-enabled behavior class,
-while traffic whose accepted Profile policy does not request `+snat` reaches a no-NAT class.
-Profiles with the same required host-side behavior do not need distinct host-side identity.
-
-Host-side behavior must not be inferred from source CIDR, current VPN ifname or Device
-identity. If the selected lane/owner state cannot be confirmed, the corresponding
-host-boundary behavior is unready.
-
-###### Ownership and component boundary
-
-The semantic owner remains the existing payload/Profile policy owner. No new long-lived
-Manager is introduced.
-
-The existing `NetworkPolicyAdapter` gains a **separate host-boundary behavior realization
-sub-contract** because the host-side mutable state is outside the managed network namespace:
-
-```text
-Profile normalized intent
-    -> fixed HostBoundaryBehaviorLane
-
-observe HostBoundaryBehaviorOwner
-apply desired active lanes + return/NAT behavior + verify
-cleanup owned behavior state + verify absence
-```
-
-This owner scope is disjoint from the managed-domain `table ip vpn_gate` owner scope. The
-host-side owner may mutate only explicit VPN-GATE lane/return/NAT resources and must treat
-unrelated host firewall/routing state as foreign.
-
-The four-class vocabulary is fixed by accepted Release-1 semantics rather than by Profile
-count. Concrete interface names/addresses and lifecycle allocation remain lower
-implementation details; they are not user-facing knobs.
-
-The executable host-side nft owner is `linux_host_boundary_behavior.py`. It owns one
-dedicated `inet vpn_gate_host_behavior` table and only these behavior-lane consequences:
-
-- NEW connection ingress on an active lane establishes that fixed lane's host conntrack class;
-- every packet arriving from a behavior lane exits the owner's prerouting processing before
-  stateful return-mark restore, so subsequent VPN→ordinary packets cannot be reflected back
-  toward the managed stack;
-- stateful classes restore the existing common host-return packet mark on non-lane ingress
-  and host-local OUTPUT replies;
-- NAT-enabled classes apply ordinary-side masquerade from their conntrack class;
-- route-return and no-NAT classes receive no corresponding stateful/NAT action.
-
-The class marks are fixed lower Linux allocations, not Profile IDs. Profiles sharing the same
-normalized host behavior share one class and one lane rule set.
-
-The existing selected-host-boundary return **route and RPDB rule** remain the common
-stateful-return mechanism and are reused. Its historical source-prefix nft classifier is an
-alternative pre-lane realization and must not coexist with the behavior-lane classifier.
-When behavior lanes are active, integration must retain the return route/RPDB dependency but
-omit the old host-return nft classifier; the behavior owner becomes the sole classifier that
-establishes/restores the host connection behavior.
-
-The behavior owner has exact authoritative observation, full-table ownership conflict
-detection, replace-from-observed convergence and cleanup. EXP-064 remains the traffic-semantic
-evidence; the dedicated privileged owner integration test proves that the selected production
-nft representation itself can be created, freshly observed as exact and removed.
-
-###### Managed-stack dispatch to the selected behavior lane
-
-The selected EXP-064 carrier does not require a second Profile classifier. The stack already preserves
-the accepted inbound Profile as its Release-1 return-affinity connection mark and has a
-higher-precedence mark-to-Profile-table RPDB rule. For a remote-initiated NEW flow, the same
-already-established Profile association may also select the initial packet's Profile table
-inside the managed namespace.
-
-That Profile table gains a preferred ordinary-side default route through the current endpoint
-for the Profile's normalized `HostBoundaryBehaviorLane`, while the existing terminal guard
-remains as the fail-closed fallback. Zero-current-path Profiles do not materialize a lane
-route.
+The existing inbound Profile classifier already establishes the authoritative Profile
+routing-domain association before the packet reaches postrouting. The managed nft projection
+uses that association to select the Profile's effective SNAT address. It must not reclassify
+the packet from remote source prefix after paths have converged.
 
 Conceptually:
 
 ```text
 VPN ingress
-    -> path-relative Profile classifier
-    -> save Profile connection association
-    -> select the same Profile routing table for this inbound packet
-    -> Profile table:
-         remote destinations -> VPN path routes
-         ordinary-side default -> selected behavior lane
-         terminal guard -> fail closed
+    -> path-relative Profile classification
+    -> managed firewall/policy on original remote source
+    -> save/retain Profile association
+    -> if effective_source != NONE:
+           SNAT source to effective_source
+    -> vpng0
 ```
 
-The packet mark used for this table selection is stack-local implementation state. It is not
-the cross-namespace carrier rejected by EXP-063 and is cleared/lost without consequence at
-the boundary; host behavior is derived only from the actual behavior-lane ingress.
+Profiles without `+snat` contribute no translation rule. Several Profiles may intentionally
+resolve to the same IPv4 identity; they remain distinct inside STACK while becoming one
+administrative source class after `vpng0`.
 
-The pure projection is represented separately by
-`host_boundary_lane_routing.py`; it deliberately does not masquerade a behavior lane as a
-VPN `LogicalPathId`.
+The translation is materialized through the existing managed payload postrouting ownership
+rather than a new host firewall owner or long-lived Manager. Desired state is derived from
+current accepted Profile intent plus the existing Profile association allocation; observation,
+convergence and cleanup remain bounded by the managed nft owner and the root ForwardingGate.
 
-The structural routing model therefore has three explicit semantic route roles:
+For deployments that want automated host-side reverse reachability, a host-routing helper may
+contribute an exact /32 route for an effective SNAT identity, using the current stack service
+address as its onlink next hop. The administrator may instead provide equivalent host routing
+manually. With that route present, reverse traffic follows:
 
 ```text
-GUARD
-VPN_PATH
-HOST_BOUNDARY_LANE
+ordinary reply to SNAT identity
+    -> helper/admin /32 via stack-service on managed host boundary
+    -> STACK receives packet with destination still = SNAT identity
+    -> managed conntrack reverse-SNAT to original remote destination
+    -> stack established-flow affinity
+    -> original Profile/VPN routing domain
 ```
 
-`HOST_BOUNDARY_LANE` is a unicast default route in the owning Profile table, carries no
-`LogicalPathId`, uses the current verified lane endpoint plus lane host-side gateway, and is
-identified in authoritative Linux observation by the dedicated owned route protocol 204.
-Its metric is immediately better than the terminal guard and outside the Profile's
-VPN-path preference/scratch metric space. Availability and ordinary route-priority
-permutation never treat this route as a VPN path member.
+EXP-075 is the lower acceptance evidence for this route distinction: the former device-only
+SNAT /32 failed with unresolved neighbor state, while the stack-service next-hop form returned
+the same translated flow successfully without any additional stack-local identity state.
 
-Initial-packet Profile-table selection is coupled to that desired route rather than enabled
-globally. Stack return-affinity always records the selected Profile in conntrack state; the
-NEW VPN-originated packet copies that mark into its packet mark only for a Profile that has a
-current desired `HOST_BOUNDARY_LANE` route. Thus the current packet can select the Profile
-table only when the same structural desired state contains the ordinary-side lane fallback.
-Without a lane route, existing alpha behavior remains unchanged and the first packet is not
-redirected into a table whose only default is the terminal guard.
+An administrator may apply additional host-side firewall, routing, accounting or NAT policy
+based on the visible IPv4 identity. Such policy is ordinary host administration and is not
+owned or inferred by Profile SNAT. If host-side NAT is used, its reverse translation must
+produce the configured SNAT identity; any helper-provided or administrator-provided route
+needed to return that identity to STACK remains host-integration state outside the core
+Profile-SNAT promise.
 
-The existing activation ordering provides the safety barrier:
+Validation is split at the authoritative boundary:
 
-```text
-ForwardingGate = DISABLED
-    -> converge stack return-affinity / initial-selection state
-    -> converge exact structural routes including lane defaults
-    -> verify complete structural postcondition
-    -> only then ForwardingGate may become ENABLED
-```
+- configuration normalization requires every default/override to be IPv4 unicast and rejects
+  an effective identity that overlaps source space of an enabled non-SNAT inbound-capable
+  Profile;
+- managed-boundary assembly rejects an identity that conflicts with another VPN-GATE-owned
+  service/transport address on that boundary;
+- duplicate effective SNAT identities across `+snat` Profiles are valid by design.
 
-No separate staging component is introduced.
+No cross-namespace Profile metadata carrier, host conntrack class or host-side NAT owner
+exists in the current core design. EXP-076 is the combined acceptance evidence for Profile
+isolation, shared identities, no-SNAT preservation and post-policy translation ordering; its
+successful return path also retains lower integration evidence for the tested host route.
+EXP-075 supplies the narrower SNAT-identity next-hop fact. Superseded carrier experiments are retained only as historical evidence in the
+experiment lifecycle artifacts.
 
-A structural transition that changes Profile gateway NAT or its boundary association is not
-eligible for the pure route-priority fast path. The affected forwarding must remain
-restrictive until managed policy, association and host-boundary NAT postconditions are all
-freshly verified.
-
-###### Return path and failure semantics
-
-For a forwarded VPN-originated packet, successful ordinary-side source NAT makes the
-ordinary-network destination reply to the VPN-GATE host gateway address. Normal conntrack
-reverse NAT then restores the remote destination on the reply before routing it back toward
-the explicit managed boundary.
-
-This capability does not replace the existing requirement that traffic for managed remote
-prefixes be routed into the VPN-GATE boundary. It only avoids requiring each downstream
-ordinary host to know those remote routes.
-
-Failure or ambiguity in host-side NAT observation, owner classification or Profile
-association cannot be treated as "NAT probably active". The Profile gateway-NAT function is
-reported unconfirmed/unready and no new boundary NAT permission is activated from guessed
-state.
-
-**Simplification:** no universal host-firewall Manager, per-packet userspace proxy, endpoint
-provisioning service, durable association journal or guessed host-route editor is introduced.
-
-**Evidence:** EXP-063 rejects transient cross-netns packet-mark handoff. EXP-064 proves the
-fixed behavior-lane mechanism technically, including overlapping remote prefixes on distinct
-ingress paths, all four return/NAT combinations, reverse NAT, host-local no-NAT and unrelated
-host isolation. Production ownership/convergence and managed-domain lane lifecycle remain
-separate implementation gates.
+**Simplification:** the core Profile-SNAT model reuses Profile association already required
+for `VPNG0002-R2.R6` and the existing managed postrouting owner. It introduces no
+Profile-specific host metadata/resource owner. Optional host-route assistance is handled by
+the separate host-routing helper contract rather than being hidden inside Profile SNAT.
 
 The scaffold is deliberately independent from the root structural barrier:
 
@@ -5469,6 +5263,37 @@ target with real forwarded packets:
 The executable lower backend may therefore use
 `ip netns exec <managed-ns> sysctl ... net.ipv4.ip_forward`, but success remains defined by
 the fresh reread value rather than process exit status alone.
+
+#### Administrative payload-containment control
+
+**Implements:**
+- `VPNG0004-R4.R7`.
+
+**Constrained by:**
+- `VPNG0004-R4.R7.C1`.
+
+This is a future administrative operational capability, not a second lifecycle state and not
+a configuration spelling for the structural ForwardingGate.
+
+Semantically the public control surface must be able to enter and leave a containment state
+while preserving the managed runtime for diagnosis. While contained:
+
+- no IP payload may cross the ordinary-side managed boundary in either direction; and
+- routed IP transit between VPN paths must be impossible.
+
+The caller may be an administrator or another product component/add-on, including the
+aggressive host-routing helper. Callers request the semantic operation; they do not directly
+write VPN-GATE internal sysctls/nft state.
+
+The exact lower composition remains open. The existing managed-domain
+`net.ipv4.ip_forward=0` ForwardingGate is a strong candidate for the cross-VPN transit part
+and `EXP-030` proves that primitive blocks routed transit while preserving the namespace.
+That fact alone does not prove the full administrative contract because a separate
+ordinary-side boundary block and the public enter/leave operation still require composed
+acceptance evidence.
+
+Accordingly `VPNG0004-R4.R7` remains `[pending_closure]`; Release 1 is explicitly exempt
+by `VPNG0004-R4.R7.C1`.
 
 #### Structural transaction ordering
 
@@ -6334,7 +6159,22 @@ restart
     -> stop/cleanup as required
     -> start from the resulting authoritative state
     -> never report success while previous required cleanup remains unresolved
+
+reload
+    -> validate candidate configuration before network mutation
+    -> apply changed active-function desired state under existing safety barriers
+    -> invoke lifecycle-scoped peaceful host-routing update when enabled
+    -> report success only after required postconditions for the new configuration
 ```
+
+The reload operation implements `VPNG0005-R5.R6.R4` when the selected deployment/lifecycle
+interface exposes reload. Its exact executable orchestration remains `[pending_closure]`.
+
+**Constrained by:**
+- `VPNG0005-R5.R6.R4.C1`.
+
+Alpha releases may omit reload and require restart for configuration changes. This is an
+accepted alpha-scope constraint, not a current implementation defect.
 
 The control surface is not a long-lived domain Engine and owns no independent lifecycle
 policy. It invokes procedural assembly/orchestration whose postconditions are already
@@ -6460,9 +6300,9 @@ read-only exact structural audit
 ```
 
 Audit interval в alpha равен одной секунде и является локальным implementation parameter по
-§12.2, а не пользовательской latency guarantee. Config hot-reload не вводится: изменение
-конфигурации требует нового start/restart и тем самым не создает неоговоренную live-change
-semantics.
+§12.2, а не пользовательской latency guarantee. Current alpha не предоставляет config reload:
+изменение конфигурации требует нового start/restart. Это разрешено
+`VPNG0005-R5.R6.R4.C1` и не считается alpha implementation gap.
 
 Alpha deployment использует:
 
@@ -6702,6 +6542,10 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
 | `VPNG0001-R1.R2` declarative operation | canonical Release-1 Device/Profile grammar fixed in `config-model.md` and normalized by ConfigurationAdapter; only endpoint-scoped future firewall selector remains deferred |
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
+| `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
+| `VPNG0001-R2.R1` manual host integration | core independence accepted; concrete administrator-facing route/reachability instructions remain pending under R2.R1.R1 |
+| `VPNG0001-R2.R2` peaceful host-routing assistance | required for Release 1 and config-disableable; start/stop and supported-reload semantics accepted, Linux lowering/config spelling remain pending |
+| `VPNG0001-R2.R3` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
 | `VPNG0001-R1.R3.C2` isolated VPN data-plane endpoint | architecture constraint derived from managed-network isolation |
@@ -6710,7 +6554,8 @@ until a separate requirement requires it.
 | `VPNG0003-R3.R1`–`VPNG0003-R3.R5`, `VPNG0003-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
 | `VPNG0003-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; Profile selects disabled, Device default, or same-shape Profile override, normalized to a concrete ICMP/IPv4 description before probe runtime |
 | `VPNG0004-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
-| `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle | postconditions and thin control surface represented; long-lived LifecycleManager intentionally absent |
+| `VPNG0004-R4.R7` administrative payload containment | postponed beyond Release 1; semantic control surface accepted, lower composition/evidence remains pending |
+| `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle | start/stop/restart postconditions represented; reload semantics are defined when supported, while alpha may omit reload under R5.R6.R4.C1 |
 | `VPNG0005-R5.R2`, `VPNG0005-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
 | `VPNG0006-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
 | `VPNG0006-R6.R2`, `VPNG0006-R6.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
@@ -6750,10 +6595,10 @@ The core Device/Profile human-facing configuration contract is now recovered and
 Remaining interface freedom is narrower:
 
 - parser/serialization implementation details that do not change accepted TOML semantics;
-- any future live-change/reload capability, which is not currently promised;
+- implementation details of a supported reload operation that do not change its accepted validation/safety postconditions; alpha may omit reload under `VPNG0005-R5.R6.R4.C1`;
 - future endpoint-scoped Device firewall syntax under its explicit Release-1 constraint;
-- lower implementation of accepted publication/gateway-NAT capabilities where architecture
-  already defines the semantic ownership but complete physical materialization remains work.
+- lower implementation details of accepted publication capabilities where architecture
+  already defines semantic ownership but packaging/runtime integration may still evolve.
 
 These freedoms must not be expanded into a universal configuration framework without a new
 requirement.
@@ -6796,8 +6641,14 @@ Affected requirements:
 - `VPNG0005-R5.R5`
 - `VPNG0005-R5.R6`
 
-Lifecycle control semantics and autonomous local reconciliation are now explicit. They
-still do not justify a separate global lifecycle component.
+Lifecycle control semantics and autonomous local reconciliation are now explicit for state
+that an active function retains under authoritative VPN-GATE ownership. The simple
+host-routing helper under `VPNG0001-R2.R2` is deliberately different: after each successful
+lifecycle application, ordinary host routing is handed back to administrator control and is
+not part of periodic runtime reconciliation until the next explicit helper lifecycle
+operation.
+
+These semantics still do not justify a separate global lifecycle component.
 
 For the first release, VPN provisioning and VPN-specific configuration remain outside
 VPN-GATE ownership by `VPNG0001-R1.R3.C1`. For a supported in-stack VPN process, however,

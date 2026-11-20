@@ -15,7 +15,6 @@ from .device_policy import (
     DeviceNatPolicyIntent,
 )
 from .interface_identity import InterfaceIdentity
-from .host_boundary_lane_routing import HostBoundaryLaneRouteSpec
 from .local_integration_policy import (
     IntegrationLocalTransportIntent,
     build_integration_local_desired,
@@ -31,6 +30,7 @@ from .payload_forward_compiler import (
 )
 from .payload_nat_desired import (
     PayloadNatProjectionError,
+    ProfileSnatPolicyIntent,
     build_payload_nat_desired_state,
 )
 from .payload_profile import PayloadProfileRequest
@@ -88,7 +88,7 @@ def build_payload_network_policy_desired_state(
     integration_intents: Iterable[IntegrationLocalTransportIntent] = (),
     probe_local_rules: Iterable[ProbeLocalRuleSpec] = (),
     stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
-    host_boundary_lane_routes: Iterable[HostBoundaryLaneRouteSpec] = (),
+    profile_snat_policies: Iterable[ProfileSnatPolicyIntent] = (),
 ) -> PayloadNetworkPolicyDesiredState:
     """Compose exact current payload lower desired state without I/O."""
     if not isinstance(layout, NetworkPolicyLayout):
@@ -107,13 +107,14 @@ def build_payload_network_policy_desired_state(
     current_publications = tuple(publication_intents)
     current_integrations = tuple(integration_intents)
     current_probe_local = tuple(probe_local_rules)
-    current_lane_routes = tuple(host_boundary_lane_routes)
-    if any(
-        not isinstance(route, HostBoundaryLaneRouteSpec)
-        for route in current_lane_routes
-    ):
+    current_profile_snat = tuple(profile_snat_policies)
+    if any(not isinstance(item, ProfileSnatPolicyIntent) for item in current_profile_snat):
         raise PayloadNetworkPolicyProjectionError(
-            "host_boundary_lane_routes must contain HostBoundaryLaneRouteSpec"
+            "profile_snat_policies must contain ProfileSnatPolicyIntent"
+        )
+    if current_profile_snat and stack_return_affinity_platform is None:
+        raise PayloadNetworkPolicyProjectionError(
+            "Profile SNAT requires stack Profile-association allocation"
         )
     if any(
         not isinstance(rule, ProbeLocalRuleSpec)
@@ -149,7 +150,6 @@ def build_payload_network_policy_desired_state(
             layout,
             current_path_routes,
             host_boundary,
-            current_lane_routes,
         )
     except PayloadRoutingProjectionError as exc:
         raise PayloadNetworkPolicyProjectionError(
@@ -167,12 +167,27 @@ def build_payload_network_policy_desired_state(
             f"Profile forward projection failed: {exc}"
         ) from exc
 
+    allocations = ()
+    if stack_return_affinity_platform is not None:
+        try:
+            allocations = allocate_stack_return_affinity(
+                current_profiles,
+                layout,
+                stack_return_affinity_platform,
+            )
+        except ValueError as exc:
+            raise PayloadNetworkPolicyProjectionError(
+                f"stack Profile-association allocation failed: {exc}"
+            ) from exc
+
     try:
         nat = build_payload_nat_desired_state(
             current_profiles,
             current_path_routes,
             current_nat_policies,
             host_boundary,
+            current_profile_snat,
+            allocations,
         )
     except PayloadNatProjectionError as exc:
         raise PayloadNetworkPolicyProjectionError(
@@ -211,20 +226,12 @@ def build_payload_network_policy_desired_state(
     stack_return_affinity = None
     if stack_return_affinity_platform is not None:
         try:
-            allocations = allocate_stack_return_affinity(
-                current_profiles,
-                layout,
-                stack_return_affinity_platform,
-            )
             stack_return_affinity = build_stack_return_affinity_desired(
                 current_profiles,
                 current_path_routes,
                 host_boundary,
                 layout,
                 allocations,
-                initial_packet_profile_ids=tuple(
-                    route.profile_id for route in current_lane_routes
-                ),
             )
         except ValueError as exc:
             raise PayloadNetworkPolicyProjectionError(

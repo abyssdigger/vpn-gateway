@@ -488,7 +488,6 @@ def main() -> int:
         namespace=e49.MANAGED,
         host_interface=e49.HOST_BOUNDARY,
         inner_interface=e49.INNER_BOUNDARY,
-        host_address=e49.HOST_ADDR,
         inner_address=e49.INNER_ADDR,
     )
     lock_spec = InstanceLockSpec(

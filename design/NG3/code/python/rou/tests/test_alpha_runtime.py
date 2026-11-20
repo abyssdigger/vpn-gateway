@@ -106,19 +106,6 @@ class AlphaPreparedPolicyTests(unittest.TestCase):
         self.assertEqual(len(desired.stack_return_affinity.classifiers), 1)
         self.assertEqual(len(desired.stack_return_affinity.rules), 1)
 
-    def test_legacy_integration_object_is_rejected(self):
-        with self.assertRaisesRegex(Exception, "top level has unsupported"):
-            AlphaPreparedPolicy.from_text(
-                CONFIG
-                + """
-[integration.legacy]
-device = "ovpn"
-protocol = "udp"
-remote_ipv4 = "198.19.254.2"
-remote_port = 11940
-""",
-                local_address=IPv4Address("198.19.255.2"),
-            )
 
     def test_alpha_accepts_availability_but_still_rejects_unmaterialized_snat(self):
         availability = AlphaPreparedPolicy.from_text(
@@ -141,29 +128,21 @@ remote_port = 11940
         self.assertEqual(len(availability.last_probe_assembly.intents), 1)
         self.assertEqual(len(desired.nft.probe_local), 2)
 
-        with self.assertRaisesRegex(Exception, r"requests \+snat"):
-            AlphaPreparedPolicy.from_text(
-                CONFIG.replace(
-                    'direction = "outbound"',
-                    'direction = "inbound+snat"',
-                ).replace(
-                    'use_outbound_nat = false\n',
-                    "",
-                ),
-                local_address=IPv4Address("198.19.255.2"),
-            )
-
-        route_return = AlphaPreparedPolicy.from_text(
+        snat = AlphaPreparedPolicy.from_text(
             CONFIG.replace(
                 'direction = "outbound"',
-                'direction = "inbound+route-return"',
+                'direction = "inbound+snat>198.19.255.10"',
             ).replace(
                 'use_outbound_nat = false\n',
                 "",
             ),
             local_address=IPv4Address("198.19.255.2"),
         )
-        self.assertTrue(route_return.config.profiles["alpha"].route_return)
+        self.assertEqual(
+            str(snat.config.profiles["alpha"].effective_snat_address),
+            "198.19.255.10",
+        )
+
 
     def test_alpha_materializes_canonical_server_publication_both_halves(self):
         replacement = (

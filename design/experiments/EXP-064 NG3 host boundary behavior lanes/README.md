@@ -89,3 +89,13 @@ EXP064_RESULT=PASS
 
 A PASS proves technical feasibility of the fixed behavior-lane carrier. Architecture selection,
 ownership/convergence and production integration remain separate review work.
+## Post-result lifecycle
+
+- Logical evidence state: **PROVEN FACT / SUPERSEDED DESIGN**.
+- Current disposition: **superseded by EXP-074 + EXP-076**.
+- Applicability: **утратил применимость к текущей реализации**.
+
+The four behavior lanes depended on host-side return-mode and gateway-NAT behavior that no
+longer exists. EXP-074 covers current host routing, while EXP-076 covers current Profile-SNAT
+applicability/return without any host metadata carrier.
+

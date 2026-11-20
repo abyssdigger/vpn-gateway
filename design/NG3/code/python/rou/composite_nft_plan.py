@@ -18,7 +18,11 @@ from .local_publication_mutation import (
 )
 from .local_publication_policy import LocalPublicationDesiredState
 from .payload_forward_desired import PayloadForwardRuleSpec
-from .payload_nat_desired import PayloadMasqueradeSpec
+from .payload_nat_desired import (
+    PayloadMasqueradeSpec,
+    PayloadNatRuleSpec,
+    PayloadProfileSnatSpec,
+)
 from .probe_local_mutation import (
     ProbeLocalMutationStep,
     select_probe_local_step,
@@ -45,7 +49,7 @@ class CompositeNftMutationStep:
     handle: int | None = None
     chain_name: str | None = None
     profile_rule: PayloadForwardRuleSpec | None = None
-    nat_rule: PayloadMasqueradeSpec | None = None
+    nat_rule: PayloadNatRuleSpec | None = None
     device_chain: DeviceFirewallChainSpec | None = None
     local_publication_step: LocalPublicationMutationStep | None = None
     local_integration_step: IntegrationLocalMutationStep | None = None
@@ -206,11 +210,7 @@ def select_composite_nft_step(
     if comparison.payload_nat.missing:
         target = min(
             comparison.payload_nat.missing,
-            key=lambda spec: (
-                spec.ingress.ifindex,
-                spec.egress.ifindex,
-                repr(spec.path_id),
-            ),
+            key=_nat_spec_sort_key,
         )
         return CompositeNftMutationStep(
             kind=CompositeNftStepKind.ADD_NAT_RULE,
@@ -271,3 +271,11 @@ def select_composite_nft_step(
         )
 
     return None
+
+
+def _nat_spec_sort_key(spec: PayloadNatRuleSpec) -> tuple:
+    if isinstance(spec, PayloadMasqueradeSpec):
+        return (0, spec.ingress.ifindex, spec.egress.ifindex, repr(spec.path_id))
+    if isinstance(spec, PayloadProfileSnatSpec):
+        return (1, spec.mark, spec.egress.ifindex, int(spec.source_address), spec.profile_id)
+    raise CompositeNftPlanError("unsupported payload NAT spec")

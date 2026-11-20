@@ -30,3 +30,12 @@ Run:
 PYTHONPATH=design/NG3/code/python sudo --preserve-env=PYTHONPATH python3 \
   "design/experiments/EXP-055 NG3 composite host boundary actuation/exp055_host_boundary_actuation.py"
 ```
+## Post-result lifecycle
+
+- Logical evidence state: **PREPARED / UNPROVEN**.
+- Current disposition: **historical_only**.
+- Applicability: **утратил применимость до завершения эксперимента**.
+
+The composite host-boundary actuation pipeline depended on the removed host-return/bootstrap
+architecture. It was never completed, and current code contains no compatibility owner for it.
+

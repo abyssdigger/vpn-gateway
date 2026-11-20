@@ -601,6 +601,42 @@ Use a small canonical disposition vocabulary unless a review explicitly extends 
 `pending_decision`, `selected`, `not_selected`, `deferred`, `superseded`,
 `historical_only`.
 
+### Post-result supersession and coverage trace
+
+When a completed experiment is accepted as replacing earlier evidence or the architecture
+that consumed it, record that relationship **post-result**, after the new result has been
+discussed and accepted. Do not predeclare supersession in a prepared experiment.
+
+The accepted new experiment/result or its consuming review must record, where applicable:
+
+- `Supersedes`: the earlier experiment(s) whose acceptance role is replaced, with the
+  replaced claim/scope stated explicitly;
+- `Partially supersedes`: the exact old claim that is replaced when other facts from the
+  old experiment remain reusable;
+- `Retains`: old claims that remain valid/current when partial supersession could otherwise
+  be misread as replacing the whole experiment;
+- a concise **coverage transition**: which requirement/architecture need the earlier
+  evidence covered, what the new evidence covers now, and why the coverage changed.
+
+The central experiment registry must be updated in the opposite direction as well:
+the older entry names the replacing experiment/result in its Note when that relationship is
+known. Use disposition `superseded` only when the newer evidence replaces the old experiment
+as a whole for the same project decision. For partial replacement, keep the disposition that
+matches the remaining evidence value and describe the replaced/retained scopes in the Note.
+
+A Note that mentions another mutable project object's status/disposition/role must state that
+relationship as a fact of the decision being recorded, not as an automatically current claim
+about the referenced object. Prefer wording such as "this disposition selected EXP-X as the
+scoped successor evidence"; the referenced object's own canonical entry remains authoritative
+for its later/current status. Do not copy phrases such as "EXP-X is current/selected/deferred"
+into another object's historical Note unless the wording explicitly makes the as-of context
+clear.
+
+Do **not** reconstruct speculative supersession chains retrospectively. Apply this rule to
+historical experiments only when the repository's experiment/result/review/architecture
+artifacts make the predecessor, successor and reason explicit. If that causal chain cannot be
+stated confidently, preserve the historical entry without inventing one.
+
 Failed or unavailable experiments remain visible evidence and are not hidden by simply
 rerunning until green.
 

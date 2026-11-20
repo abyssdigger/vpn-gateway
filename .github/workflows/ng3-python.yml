@@ -16,28 +16,16 @@ on:
       - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
       - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
       - "design/experiments/EXP-068 NG3 continuous availability failover/**"
-      - "design/experiments/EXP-069 NG3 stack tambour metadata carriers/**"
       - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
-      - "design/experiments/EXP-071 NG3 boundary dataplane race/**"
-      - "design/experiments/EXP-072 NG3 managed L3 host bootstrap/**"
-      - "design/experiments/EXP-073 NG3 routed managed L3 stateful return/**"
+      - "design/experiments/EXP-074 NG3 host managed routing/**"
+      - "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/**"
+      - "design/experiments/EXP-076 NG3 combined Profile SNAT/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
       - "design/experiments/EXP-051 NG3 first functioning alpha/**"
       - "design/experiments/EXP-052 NG3 host publication DNAT/**"
-      - "design/experiments/EXP-053 NG3 host return steering/**"
-      - "design/experiments/EXP-054 NG3 host underlay endpoint pinning/**"
       - "design/experiments/EXP-061 NG3 stack established-flow return affinity/**"
-      - "design/experiments/EXP-062 NG3 inbound multipath concrete-path affinity/**"
-      - "design/experiments/EXP-063 NG3 Profile association gateway NAT/**"
-      - "design/experiments/EXP-064 NG3 host boundary behavior lanes/**"
-      - "design/experiments/EXP-055 NG3 composite host boundary actuation/**"
-      - "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/**"
-      - "design/experiments/EXP-057 NG3 nft marked host bootstrap/**"
-      - "design/experiments/EXP-058 NG3 bootstrap table main specificity/**"
-      - "design/experiments/EXP-059 NG3 paired RPDB bootstrap/**"
-      - "design/experiments/EXP-060 NG3 selected host bootstrap backend/**"
       - "design/NG3/deployment/alpha/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
@@ -69,15 +57,7 @@ on:
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
       - "design/experiments/EXP-051 NG3 first functioning alpha/**"
       - "design/experiments/EXP-052 NG3 host publication DNAT/**"
-      - "design/experiments/EXP-053 NG3 host return steering/**"
-      - "design/experiments/EXP-054 NG3 host underlay endpoint pinning/**"
       - "design/experiments/EXP-061 NG3 stack established-flow return affinity/**"
-      - "design/experiments/EXP-055 NG3 composite host boundary actuation/**"
-      - "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/**"
-      - "design/experiments/EXP-057 NG3 nft marked host bootstrap/**"
-      - "design/experiments/EXP-058 NG3 bootstrap table main specificity/**"
-      - "design/experiments/EXP-059 NG3 paired RPDB bootstrap/**"
-      - "design/experiments/EXP-060 NG3 selected host bootstrap backend/**"
       - "design/NG3/deployment/alpha/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
@@ -283,6 +263,13 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_payload_nat_observation.py
+      - name: NG3 live Profile SNAT materialization
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_profile_snat.py
       - name: EXP-034 exact-handle stale NAT deletion
         env:
           PYTHONPATH: design/NG3/code/python
@@ -527,143 +514,6 @@ jobs:
           "design/experiments/EXP-052 NG3 host publication DNAT/exp052_host_publication_dnat.py"
 
 
-  linux-routed-managed-l3-stateful-return:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables
-      - name: EXP-073 routed managed-L3 stateful return
-        env:
-          PYTHONPATH: design/NG3/code/python
-        run: >-
-          sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-073 NG3 routed managed L3 stateful return/exp073_routed_stateful_return.py"
-  linux-host-return-steering:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables conntrack
-      - name: EXP-053 host-side conntrack return steering
-        run: >-
-          sudo python3
-          "design/experiments/EXP-053 NG3 host return steering/exp053_host_return_steering.py"
-
-
-  linux-underlay-endpoint-pinning:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping
-      - name: EXP-054 host underlay endpoint pinning
-        env:
-          PYTHONPATH: design/NG3/code/python
-        run: >-
-          sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-054 NG3 host underlay endpoint pinning/exp054_underlay_endpoint_pinning.py"
-
-
-  linux-composite-host-boundary:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping nftables conntrack
-      - name: EXP-055 composite host-boundary actuation
-        env:
-          PYTHONPATH: design/NG3/code/python
-        run: >-
-          sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-055 NG3 composite host boundary actuation/exp055_host_boundary_actuation.py"
-
-
-  linux-host-ingress-bootstrap-bypass:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping
-      - name: EXP-056 host-ingress bootstrap bypass
-        run: >-
-          sudo python3
-          "design/experiments/EXP-056 NG3 host ingress bootstrap bypass/exp056_host_ingress_bypass.py"
-
-
-  linux-nft-marked-host-bootstrap:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping nftables
-      - name: EXP-057 nft-marked host bootstrap
-        run: >-
-          sudo python3
-          "design/experiments/EXP-057 NG3 nft marked host bootstrap/exp057_nft_marked_bootstrap.py"
-
-
-  linux-bootstrap-main-specificity:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping nftables
-      - name: EXP-058 bootstrap table preserves main specificity
-        run: >-
-          sudo python3
-          "design/experiments/EXP-058 NG3 bootstrap table main specificity/exp058_bootstrap_main_specificity.py"
-
-
-  linux-paired-rpdb-bootstrap:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping
-      - name: EXP-059 paired RPDB bootstrap
-        run: >-
-          sudo python3
-          "design/experiments/EXP-059 NG3 paired RPDB bootstrap/exp059_paired_rpdb_bootstrap.py"
-
-
-  linux-selected-host-bootstrap-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 iputils-ping nftables
-      - name: Compile selected host-bootstrap code
-        run: python3 -m compileall -q design/NG3/code/python/rou
-      - name: EXP-060 selected host bootstrap backend
-        env:
-          PYTHONPATH: design/NG3/code/python
-        run: >-
-          sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-060 NG3 selected host bootstrap backend/exp060_selected_host_bootstrap.py"
-
-
   linux-stack-return-affinity:
     runs-on: ubuntu-latest
     steps:
@@ -676,20 +526,6 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-061 NG3 stack established-flow return affinity/exp061_stack_return_affinity.py"
-
-
-  linux-inbound-multipath-affinity:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables conntrack
-      - name: EXP-062 inbound multipath concrete-path affinity
-        run: >-
-          sudo python3
-          "design/experiments/EXP-062 NG3 inbound multipath concrete-path affinity/exp062_inbound_multipath_affinity.py"
 
 
   linux-stack-return-affinity-owner:
@@ -705,46 +541,6 @@ jobs:
           sudo python3
           "design/NG3/code/python/rou/tests/integration_stack_return_affinity_owner.py"
 
-
-  linux-profile-gateway-nat-association:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables conntrack
-      - name: EXP-063 Profile association gateway NAT
-        run: >-
-          sudo python3
-          "design/experiments/EXP-063 NG3 Profile association gateway NAT/exp063_profile_gateway_nat.py"
-
-
-  linux-host-boundary-behavior-lanes:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables conntrack
-      - name: EXP-064 host-boundary behavior lanes
-        run: >-
-          sudo python3
-          "design/experiments/EXP-064 NG3 host boundary behavior lanes/exp064_behavior_lanes.py"
-
-  linux-boundary-metadata-carriers:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables
-      - name: EXP-069 stack-to-tambour metadata carriers
-        run: >-
-          sudo python3
-          "design/experiments/EXP-069 NG3 stack tambour metadata carriers/exp069_metadata_carriers.py"
 
   linux-debian12-routed-veth:
     runs-on: ubuntu-latest
@@ -801,7 +597,7 @@ jobs:
           grep -F 'EXP070_D12_PROXY_ARP=PASS' vm.log
           grep -F 'EXP070_D12_RESULT=PASS' vm.log
 
-  linux-managed-l3-host-bootstrap:
+  linux-host-managed-routing:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -810,24 +606,40 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y iproute2 iputils-ping
-      - name: EXP-072 managed L3 host bootstrap
+      - name: EXP-074 authoritative host managed routing
         run: >-
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-072 NG3 managed L3 host bootstrap/exp072_managed_l3_bootstrap.py"
-  linux-boundary-dataplane-race:
+          "design/experiments/EXP-074 NG3 host managed routing/exp074_host_managed_routing.py"
+  linux-profile-snat-reverse:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Install benchmark networking tools
+      - name: Install Linux networking tools
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y iproute2 iputils-ping iperf3
-      - name: EXP-071 managed-boundary dataplane race
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-075 Profile SNAT identity reverse reachability
         run: >-
-          sudo python3
-          "design/experiments/EXP-071 NG3 boundary dataplane race/exp071_boundary_race.py"
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/exp075_profile_snat_reverse.py"
+
+  linux-profile-snat-combined:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-076 combined Profile SNAT dataplane
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-076 NG3 combined Profile SNAT/exp076_combined_profile_snat.py"
 
   linux-routed-stack-endpoint:
     runs-on: ubuntu-latest
@@ -842,15 +654,3 @@ jobs:
           sudo python3
           "design/experiments/EXP-070 NG3 routed stack endpoint/exp070_routed_stack_endpoint.py"
 
-  linux-host-boundary-behavior-owner:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux networking tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iproute2 nftables
-      - name: Host-boundary behavior owner convergence
-        run: >-
-          sudo python3
-          design/NG3/code/python/rou/tests/integration_host_boundary_behavior_owner.py

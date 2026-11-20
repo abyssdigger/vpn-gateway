@@ -10,7 +10,6 @@ from rou.linux_structural_routing import (
     LinuxStructuralRoutingError,
 )
 from rou.payload_routing_desired import (
-    ManagedRouteRole,
     ManagedRouteSpec,
     ManagedRouteType,
     ManagedRuleSpec,
@@ -89,34 +88,6 @@ class LinuxStructuralRoutingBackendTests(unittest.TestCase):
             ),
         )
 
-
-    def test_add_host_boundary_lane_default_uses_distinct_owned_route_shape(self):
-        runner = FakeRunner()
-        backend = LinuxStructuralRoutingBackend(runner, "managed")
-        backend.add_route(
-            ManagedRouteSpec(
-                table=0x80000000,
-                destination=IPv4Network("0.0.0.0/0"),
-                route_type=ManagedRouteType.UNICAST,
-                protocol=204,
-                metric=0xFFFFFFFE,
-                endpoint=InterfaceIdentity("lane-nat", 30),
-                gateway=IPv4Address("198.18.64.5"),
-                role=ManagedRouteRole.HOST_BOUNDARY_LANE,
-            )
-        )
-        self.assertEqual(
-            runner.commands[-1],
-            (
-                "ip", "-n", "managed", "-4", "route", "add",
-                "unicast", "default",
-                "table", str(0x80000000),
-                "proto", "204",
-                "metric", str(0xFFFFFFFE),
-                "via", "198.18.64.5",
-                "dev", "lane-nat",
-            ),
-        )
 
     def test_delete_stale_route_uses_observed_physical_shape(self):
         runner = FakeRunner()

@@ -282,8 +282,8 @@ def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentSt
                     if structural.direction is None
                     else _render_direction(
                         structural.direction.value,
-                        semantic.ordinary_gateway_nat,
-                        semantic.route_return,
+                        semantic.effective_snat_address,
+                        config.default_snat_address,
                     )
                 ),
                 destinations=tuple(
@@ -383,13 +383,15 @@ def write_runtime_status_json(path: Path, snapshot: RuntimeStatusSnapshot) -> No
             pass
 
 
-def _render_direction(base: str, gateway_nat: bool, route_return: bool) -> str:
-    suffixes = []
-    if gateway_nat:
-        suffixes.append("snat")
-    if route_return:
-        suffixes.append("route-return")
-    return base + "".join(f"+{item}" for item in suffixes)
+def _render_direction(base: str, effective_snat_address, default_snat_address) -> str:
+    if effective_snat_address is None:
+        return base
+    if (
+        default_snat_address is not None
+        and effective_snat_address == default_snat_address
+    ):
+        return base + "+snat"
+    return base + f"+snat>{effective_snat_address}"
 
 
 def _render_client_transport(item) -> str:

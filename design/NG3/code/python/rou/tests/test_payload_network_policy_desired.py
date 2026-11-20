@@ -14,14 +14,6 @@ from rou.device_policy import (
 )
 from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
-from rou.host_boundary_behavior import (
-    HostBoundaryBehaviorIntent,
-    HostBoundaryBehaviorLane,
-)
-from rou.host_boundary_lane_routing import (
-    HostBoundaryLaneEndpoint,
-    build_host_boundary_lane_routes,
-)
 from rou.linux_policy_platform import (
     NG3_LINUX_POLICY_PLATFORM,
     NG3_STACK_RETURN_AFFINITY_PLATFORM,
@@ -36,7 +28,7 @@ from rou.payload_network_policy_desired import (
     build_payload_network_policy_desired_state,
 )
 from rou.payload_profile import PayloadProfileRequest
-from rou.payload_routing_desired import ManagedRouteRole, ManagedRouteType
+from rou.payload_routing_desired import ManagedRouteType
 from rou.route_priority_inventory import RoutePriorityPathRoute
 
 
@@ -44,7 +36,6 @@ HOST = InterfaceIdentity("host0", 10)
 OTHER_HOST = InterfaceIdentity("host0", 11)
 VPN_A = InterfaceIdentity("vpn-a", 20)
 VPN_B = InterfaceIdentity("vpn-b", 30)
-LANE = InterfaceIdentity("lane-nat", 40)
 PATH_A = LogicalPathId("a", 0, 0)
 PATH_B = LogicalPathId("b", 0, 0)
 
@@ -152,65 +143,28 @@ class PayloadNetworkPolicyDesiredTests(unittest.TestCase):
         self.assertEqual(len(desired.nft.local_publication.rules), 2)
 
 
-    def test_lane_route_and_initial_ingress_selection_are_coupled(self):
+    def test_inbound_affinity_no_longer_depends_on_host_behavior_lane(self):
         p = PayloadProfileRequest(
             profile_id="corp",
             direction=Direction.INBOUND,
             destinations=(IPv4Network("10.0.0.0/8"),),
             ordered_paths=(PATH_A,),
         )
-        layout = layout_for(p)
-        lane_routes = build_host_boundary_lane_routes(
-            (
-                HostBoundaryBehaviorIntent(
-                    "corp",
-                    HostBoundaryBehaviorLane.STATEFUL_NAT,
-                ),
-            ),
-            (
-                HostBoundaryLaneEndpoint(
-                    HostBoundaryBehaviorLane.STATEFUL_NAT,
-                    LANE,
-                    IPv4Address("198.18.64.5"),
-                ),
-            ),
-            layout,
-        )
         desired = build_payload_network_policy_desired_state(
             (p,),
-            layout,
+            layout_for(p),
             (RoutePriorityPathRoute(PATH_A, VPN_A),),
             HOST,
             (DeviceNatPolicyIntent("a", NatIntent.NONE),),
             (firewall("a"),),
             (),
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
-            host_boundary_lane_routes=lane_routes,
         )
-
-        lane = next(
-            route
-            for route in desired.routing.routes
-            if route.role is ManagedRouteRole.HOST_BOUNDARY_LANE
-        )
-        self.assertEqual(lane.endpoint, LANE)
         self.assertIsNotNone(desired.stack_return_affinity)
-        self.assertTrue(
-            desired.stack_return_affinity.classifiers[0].select_initial_packet
-        )
-
-        without_lane = build_payload_network_policy_desired_state(
-            (p,),
-            layout,
-            (RoutePriorityPathRoute(PATH_A, VPN_A),),
-            HOST,
-            (DeviceNatPolicyIntent("a", NatIntent.NONE),),
-            (firewall("a"),),
-            (),
-            stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
-        )
+        self.assertEqual(len(desired.stack_return_affinity.classifiers), 1)
+        self.assertEqual(desired.stack_return_affinity.outbound_classifiers, ())
         self.assertFalse(
-            without_lane.stack_return_affinity.classifiers[0].select_initial_packet
+            any(route.role.value == "host_boundary_lane" for route in desired.routing.routes)
         )
 
     def test_missing_nat_semantics_for_current_device_is_rejected(self):

@@ -4,8 +4,11 @@
 **Целевая среда:** Linux + systemd, root deployment  
 **Managed netns:** `/run/netns/vpn-gate-alpha`
 
-Эта сборка предназначена для первого реального запуска уже принятой NG3 архитектуры. Она не
+Эта сборка предназначена для первого реального запуска NG3 reference runtime. Она не
 является финальным Release-1 packaging contract и не вводит новую конфигурационную семантику.
+После requirement review 2026-11-20 ее authoritative host-routing owner считается
+исполняемым prototype/evidence для отложенного aggressive helper, а не выбранной реализацией
+простого Release-1 host-routing helper.
 
 ## Что уже реально работает
 
@@ -22,7 +25,7 @@ Alpha controller:
 - при появлении, исчезновении или пересоздании VPN endpoint заново вычисляет binding и lower
   desired state;
 - при drift закрывает forwarding перед structural convergence;
-- materializes selected paired-RPDB host bootstrap и default stateful host-return owner; Profile `+route-return` оставляет route-based return через bootstrap без stateful host-return owner;
+- текущая alpha всё ещё materializes authoritative host managed-destination prototype: enabled Profile remote destinations направляются в managed domain через `vnga-host0`, stack-origin traffic bypass'ит capture в ordinary `main`, а Profile SNAT identities получают /32 через stack service next hop; это фактическое alpha-поведение, но после requirement review оно относится к postponed aggressive-helper evidence и не является Release-1 simple-helper contract;
 - не требует restart controller после `systemctl restart` отдельного VPN service;
 - при stop выполняет bounded controller cleanup после того, как systemd dependency ordering
   остановил bound VPN service;
@@ -37,18 +40,19 @@ Alpha controller:
   - namespace: `vpn-gate-alpha`;
   - host endpoint: `vnga-host0`, unnumbered routed veth;
   - stack endpoint: `vnga-inner0`, stack-local service address `198.19.255.2/32`;
-  - host имеет только owned route `198.19.255.2/32 dev vnga-host0`; peer gateway IP отсутствует;
+  - boundary lifecycle в host `main` владеет только service route `198.19.255.2/32 dev vnga-host0`; текущий alpha prototype отдельно держит authoritative policy-routing table для managed Profile destinations и SNAT identities, причём SNAT /32 использует `198.19.255.2` как onlink next hop; этот prototype не является выбранным simple-helper lowering; peer transit-subnet gateway IP отсутствует;
   - routed-veth backend использует Proxy ARP и `rp_filter=0` только на двух boundary endpoints;
 - canonical grammar уже принята; alpha materializes Device `use_outbound_nat`, ordinary
   Device `firewall`, `allow_vpn_client` и `publish_vpn_server`;
-- `availability_check` и Profile `+snat` распознаются как canonical syntax, но alpha fail-fast
-  отклоняет их до завершения соответствующих lower runtime paths; canonical `+route-return`
-  уже materialized через selected host-boundary bootstrap/return contribution;
+- `availability_check` и Profile `+snat` входят в canonical alpha path: `+snat` materializes
+  inside STACK after managed policy using the normalized Profile identity, а текущий alpha
+  возвращает replies через prototype host /32 via stack service address; сам core `+snat`
+  host-side reachability не обещает;
 - host-side publication требует уже существующего внешнего host forwarding; alpha проверяет
   `net.ipv4.ip_forward` и явные ordinary-host IPv4/interface selectors, но не включает global
   host forwarding и не меняет адреса/UP-state внешних ordinary host interfaces;
 - при `use_outbound_nat = false` удаленная сторона должна иметь нормальный обратный маршрут;
-- config hot reload не поддерживается: изменение `config.toml` требует restart controller;
+- текущая alpha не предоставляет reload: изменение `config.toml` требует restart controller; это прямо разрешено `VPNG0005-R5.R6.R4.C1` и не считается alpha-gap;
 - текущий RuntimeStatusAgent подключён через alpha JSON surface; путь/JSON presentation пока
   являются alpha interface machinery, а не стабильным Release-1 API;
 - availability/failover runtime этой сборкой еще не считается end-to-end завершенным;
@@ -241,11 +245,12 @@ systemd environment и проверяет:
 - реальный controlled payload;
 - VPN-only restart без restart controller;
 - fresh ifindex generation + второе runtime reconciliation;
-- device-only selected paired-RPDB host bootstrap без peer gateway;
+- routed managed-L3 boundary без addressed transit subnet;
 - удаление host publication owner до managed-domain teardown и чистую остановку всего stack.
 
-Текущая migration evidence: EXP-051 `EXP051_ROUTED_MANAGED_L3_BOUNDARY=PASS` и
-`EXP051_SELECTED_HOST_BOOTSTRAP_DEVICE_ONLY=PASS`; gateway-less stateful-return отдельно
-подтвержден EXP-073.
+Текущая boundary/evidence база: EXP-070/071 для managed-L3 backend; EXP-074 — точное evidence
+отложенного aggressive authoritative child; EXP-075 — lower SNAT-identity route fact;
+EXP-076 — core Profile-SNAT dataplane acceptance с ancillary host-route observation.
+EXP-051 сохраняется как evidence первого functioning alpha lifecycle.
 
 См. `design/experiments/EXP-051 NG3 first functioning alpha/`.

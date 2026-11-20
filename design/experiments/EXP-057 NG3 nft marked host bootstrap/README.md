@@ -48,3 +48,13 @@ PASS requires:
 4. exact destination equal to the external endpoint is directionally disambiguated;
 5. host `main` remains unchanged and contains no VPN-GATE route;
 6. removing the nft/table/rule owner restores ordinary host routing.
+## Post-result lifecycle
+
+- Result remains: **FAIL**.
+- Current disposition: **historical_only**.
+- Applicability: **утратил применимость к текущей реализации**.
+
+The failed nft-marked bootstrap candidate remains negative evidence about that mechanism.
+Current managed-destination routing does not use packet marking for host capture, so the
+candidate no longer participates in implementation or acceptance.
+

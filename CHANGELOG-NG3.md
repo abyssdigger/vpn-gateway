@@ -4,6 +4,17 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-20 — Core host-network ownership boundary separated from routing helpers
+
+Core VPN-GATE forwarding is now explicitly independent from ordinary-host routing ownership:
+an administrator may provide equivalent host integration manually, while Release 1 provides a
+configuration-disableable peaceful lifecycle helper for routine host-route setup/cleanup.
+Authoritative continuous host-routing ownership is a separate postponed aggressive capability;
+EXP-074 now closes only its narrow authoritative-routing child. Administrative payload
+containment remains an independent postponed safety capability. The current alpha's
+authoritative host-routing owner is retained only as executable aggressive-helper evidence and
+must be detached from the default core path before Release-1 host-integration closure.
+
 ## 2026-11-19 — Project governance model consolidated
 
 Project-wide development rules were refactored so repository authorization, CD cadence,

@@ -1,5 +1,11 @@
 # NG3 2026-11-18 — stack established-flow return affinity — 50m cycle review
 
+> **Historical requirement trace note (2026-11-20):** this review records the requirement
+> tree that was current when the review was performed. `VPNG0002-R2.R3.R1.R1`
+> was later removed from the current requirement tree when the old direction-derived host-routing
+> ownership decomposition was rejected. References below to that ID are historical facts about
+> what this review evaluated, not current requirement links; the review conclusions are not rewritten retroactively.
+
 ## Verdict
 
 **PASS for the bounded cycle scope.**

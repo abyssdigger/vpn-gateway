@@ -44,8 +44,7 @@ DOMAIN_SPEC = ManagedNetworkDomainSpec(
     namespace="managed",
     host_interface="vgh0",
     inner_interface="host0",
-    host_address=IPv4Interface("192.0.2.1/30"),
-    inner_address=IPv4Interface("192.0.2.2/30"),
+    inner_address=IPv4Interface("198.19.255.2/32"),
 )
 
 DESIRED = PayloadNetworkPolicyDesiredState(

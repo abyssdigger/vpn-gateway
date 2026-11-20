@@ -6,10 +6,6 @@ import unittest
 from rou.binding import LogicalPathId
 from rou.domain import Direction
 from rou.payload_profile import PayloadProfileRequest
-from rou.profile_classification import (
-    classify_inbound_profile,
-    classify_outbound_profile,
-)
 from rou.profile_prefix_partition import (
     ProfilePrefixPartitionError,
     build_inbound_profile_partition,
@@ -46,6 +42,46 @@ def owner_of_partition(partition, address: IPv4Address) -> str | None:
     return owners[0] if owners else None
 
 
+def reference_profile_owner(
+    requests,
+    address: IPv4Address,
+    *,
+    ingress_path: LogicalPathId | None = None,
+) -> str | None:
+    """Test-local scalar oracle for most-specific Profile ownership."""
+    candidates = []
+    for profile in requests:
+        if ingress_path is None:
+            if profile.direction not in {Direction.OUTBOUND, Direction.BIDIRECTIONAL}:
+                continue
+        else:
+            if profile.direction not in {Direction.INBOUND, Direction.BIDIRECTIONAL}:
+                continue
+            if ingress_path not in profile.ordered_paths:
+                continue
+
+        matching = tuple(
+            network for network in profile.destinations
+            if address in network
+        )
+        if matching:
+            candidates.append(
+                (max(network.prefixlen for network in matching), profile.profile_id)
+            )
+
+    if not candidates:
+        return None
+    best = max(prefixlen for prefixlen, _ in candidates)
+    owners = sorted(
+        profile_id
+        for prefixlen, profile_id in candidates
+        if prefixlen == best
+    )
+    if len(owners) != 1:
+        raise AssertionError((address, ingress_path, owners))
+    return owners[0]
+
+
 class ProfilePrefixPartitionTests(unittest.TestCase):
     def assert_disjoint(self, partition):
         for index, left in enumerate(partition):
@@ -63,10 +99,9 @@ class ProfilePrefixPartitionTests(unittest.TestCase):
             int(network.broadcast_address) + 1,
         ):
             address = IPv4Address(integer)
-            selected = classify_outbound_profile(requests, address)
             self.assertEqual(
                 owner_of_partition(partition, address),
-                selected.profile_id if selected is not None else None,
+                reference_profile_owner(requests, address),
                 address,
             )
         self.assert_disjoint(partition)
@@ -79,14 +114,13 @@ class ProfilePrefixPartitionTests(unittest.TestCase):
             int(network.broadcast_address) + 1,
         ):
             address = IPv4Address(integer)
-            selected = classify_inbound_profile(
-                requests,
-                ingress_path,
-                address,
-            )
             self.assertEqual(
                 owner_of_partition(partition, address),
-                selected.profile_id if selected is not None else None,
+                reference_profile_owner(
+                    requests,
+                    address,
+                    ingress_path=ingress_path,
+                ),
                 address,
             )
         self.assert_disjoint(partition)

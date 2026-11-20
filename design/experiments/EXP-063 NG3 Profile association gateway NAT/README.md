@@ -80,3 +80,13 @@ EXP063_RESULT=PASS
 
 A PASS proves technical feasibility of the boundary Profile-association carrier. Selection
 and production lifecycle integration remain separate architecture/review steps.
+## Post-result lifecycle
+
+- Result remains: **FAIL**.
+- Current disposition: **historical_only**.
+- Applicability: **утратил применимость к текущей реализации**.
+
+The failed transient cross-boundary Profile-tag carrier remains negative technical evidence.
+Current Profile SNAT stays inside STACK and exports no Profile/behavior metadata to HOST;
+EXP-076 removes the need for this carrier rather than reinterpreting the FAIL.
+

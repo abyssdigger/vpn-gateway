@@ -478,11 +478,6 @@ from .linux_probe_routing import (
     LinuxProbeRoutingBackend,
     LinuxProbeRoutingError,
 )
-from .profile_classification import (
-    ProfileClassificationError,
-    classify_inbound_profile,
-    classify_outbound_profile,
-)
 from .profile_prefix_partition import (
     ProfilePrefixFragment,
     ProfilePrefixPartitionError,
@@ -802,7 +797,6 @@ __all__ = [
     "ProbeRuleSpec",
     "ProbePolicyOwner",
     "ProbeRoutingDemand",
-    "ProfileClassificationError",
     "ProfilePrefixFragment",
     "ProfilePrefixPartitionError",
     "PortBundle",
@@ -875,7 +869,6 @@ __all__ = [
     "build_availability_route_priority_plans",
     "converge_availability_route_priority_once",
     "build_route_priority_domain_realizations",
-    "classify_inbound_profile",
     "build_inbound_profile_partition",
     "build_outbound_profile_partition",
     "compare_payload_nft_scaffold",
@@ -891,7 +884,6 @@ __all__ = [
     "compare_payload_routing",
     "converge_device_firewall_step_once",
     "converge_forwarding_gate_once",
-    "classify_outbound_profile",
     "converge_route_priority_once",
     "converge_route_priority_profile_once",
     "parse_ip_link_inventory",

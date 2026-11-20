@@ -2,16 +2,26 @@
 
 ## Status
 
-PREPARED — evidence pending.
+PREPARED / UNPROVEN — historical_only.
 
-## Requirement trace
+The experiment lost current applicability before execution. No technical result is claimed.
 
-Verifies the Linux lower mechanism required by:
+## Historical requirement context
 
-- `VPNG0002-R2.R3.R1.R1` — narrow host bootstrap routing into the managed domain;
-- `VPNG0002-R2.R3.R1.R1.R1` — preserve ordinary reachability to external VPN transport
-  endpoints before a bootstrap route can capture them;
-- `VPNG0004-R4.R6.R1.R1` — host mutable state remains an explicit boundary contribution.
+When this experiment was prepared, the then-current requirement tree contained:
+
+- `VPNG0002-R2.R3.R1.R1`: VPN-GATE was required to create/remove host-boundary routing
+  contributions for Profiles permitting ordinary-side initiation, and the administrator was
+  required not to replace them with conflicting host routing while the service was running;
+- `VPNG0002-R2.R3.R1.R1.R1`: host managed-destination capture was required not to recapture
+  traffic already arriving from the explicit managed-domain boundary;
+- `VPNG0004-R4.R6.R1.R1`: host mutable state used by VPN-GATE had to remain an explicit
+  owned/boundary contribution.
+
+The first two requirement IDs were removed from the current tree on 2026-11-20 when the old
+direction-derived host-routing ownership model was rejected. They remain here only to record
+the historical question that produced EXP-054; they are not current requirement links.
+Current host-routing acceptance is reviewed separately, and EXP-054 has no current acceptance role.
 
 ## Question
 
@@ -103,3 +113,13 @@ EXP-054 is PASS only if H1-H5 pass in one run.
 A PASS permits implementation of a bounded underlay-pin planner/observer and host bootstrap
 actuator. It does not decide how arbitrary vendor VPN endpoints are discovered; Release-1
 client-side exact endpoints already exist in normalized `allow_vpn_client` intent.
+## Post-result lifecycle
+
+- Logical evidence state: **PREPARED / UNPROVEN**.
+- Current disposition: **historical_only**.
+- Applicability: **утратил применимость до завершения эксперимента**.
+
+The prepared endpoint-pin mechanism was made unnecessary by the managed-boundary ingress
+bypass proven later by EXP-056 and by the current authoritative host-routing contract proven
+by EXP-074. No positive technical result is inferred from this prepared experiment.
+

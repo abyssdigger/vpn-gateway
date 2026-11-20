@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 import unittest
 
 from rou.binding import LogicalPathId
@@ -9,10 +9,12 @@ from rou.domain import Direction
 from rou.interface_identity import InterfaceIdentity
 from rou.payload_nat_desired import (
     PayloadNatProjectionError,
+    ProfileSnatPolicyIntent,
     build_payload_nat_desired_state,
 )
 from rou.payload_profile import PayloadProfileRequest
 from rou.route_priority_inventory import RoutePriorityPathRoute
+from rou.stack_return_affinity import StackReturnAffinityAllocation
 
 
 A0 = LogicalPathId("a", 0, 0)
@@ -90,6 +92,28 @@ class PayloadNatDesiredTests(unittest.TestCase):
             [(item.path_id, item.egress) for item in value.masquerade_rules],
             [(A0, EP_A0), (A1, EP_A1)],
         )
+
+    def test_profile_snat_uses_flow_association_mark_and_host_boundary(self):
+        inbound = PayloadProfileRequest(
+            profile_id="snat",
+            direction=Direction.INBOUND,
+            destinations=(IPv4Network("10.0.0.0/8"),),
+            ordered_paths=(A0,),
+        )
+        value = build_payload_nat_desired_state(
+            (inbound,),
+            (route(A0, EP_A0),),
+            (DeviceNatPolicyIntent("a", NatIntent.NONE),),
+            HOST,
+            (ProfileSnatPolicyIntent("snat", IPv4Address("198.19.255.10")),),
+            (StackReturnAffinityAllocation("snat", 0x10000001, 0x1800),),
+        )
+        self.assertEqual(value.masquerade_rules, ())
+        self.assertEqual(len(value.profile_snat_rules), 1)
+        rule = value.profile_snat_rules[0]
+        self.assertEqual(rule.mark, 0x10000001)
+        self.assertEqual(rule.egress, HOST)
+        self.assertEqual(rule.source_address, IPv4Address("198.19.255.10"))
 
     def test_missing_nat_intent_is_not_an_implicit_default(self):
         with self.assertRaisesRegex(

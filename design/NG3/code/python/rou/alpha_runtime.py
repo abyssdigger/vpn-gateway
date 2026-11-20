@@ -96,7 +96,6 @@ from .local_publication_policy import (
     PublicationLocalEndpointIntent,
     PublicationProtocol,
 )
-from .managed_l3_boundary import ManagedL3BoundaryBackend
 from .managed_network_domain import (
     ManagedNetworkDomainSpec,
     verify_managed_network_domain,
@@ -110,6 +109,7 @@ from .payload_network_policy_desired import (
     build_payload_network_policy_desired_state,
 )
 from .payload_profile import PayloadProfileRequest, build_payload_profile_requests
+from .payload_nat_desired import ProfileSnatPolicyIntent
 from .probe_desired import ProbeDesiredAssembly, build_probe_desired_assembly
 from .probe_runtime import AvailabilityProbeRuntime
 from .route_priority_inventory import RoutePriorityPathRoute
@@ -177,18 +177,6 @@ class AlphaPreparedPolicy:
         local_address: IPv4Address,
     ) -> "AlphaPreparedPolicy":
         config = parse_release1_config(text)
-
-        # These canonical Release-1 capabilities have accepted syntax/semantics,
-        # but this first executable slice does not yet own their complete lower
-        # materialization. Reject them explicitly instead of accepting-and-ignoring.
-        for profile_id, profile in config.profiles.items():
-            if not config.structural.profiles[profile_id].enabled:
-                continue
-            if profile.ordinary_gateway_nat:
-                raise AlphaRuntimeError(
-                    f"profile {profile_id!r} requests +snat, which is not yet "
-                    "materialized by the alpha runtime"
-                )
 
         prepared = cls(
             local_address=local_address,
@@ -303,6 +291,13 @@ class AlphaPreparedPolicy:
             for internal_port in item.internal_ports.expanded()
         )
 
+        profile_snat_policies = tuple(
+            ProfileSnatPolicyIntent(profile_id, semantic.effective_snat_address)
+            for profile_id, semantic in self.config.profiles.items()
+            if self.config.structural.profiles[profile_id].enabled
+            and semantic.effective_snat_address is not None
+        )
+
         desired = build_payload_network_policy_desired_state(
             effective_profiles,
             layout,
@@ -314,6 +309,7 @@ class AlphaPreparedPolicy:
             integration_intents,
             probe_local_rules=probe_assembly.probe.local_rules,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
+            profile_snat_policies=profile_snat_policies,
         )
         self.last_bindings = projection.bindings
         self.last_baseline_profiles = profiles
@@ -579,9 +575,7 @@ def _domain_spec() -> ManagedNetworkDomainSpec:
         namespace=ALPHA_NAMESPACE,
         host_interface=ALPHA_HOST_INTERFACE,
         inner_interface=ALPHA_INNER_INTERFACE,
-        host_address=None,
         inner_address=ALPHA_INNER_ADDRESS,
-        primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
 
 

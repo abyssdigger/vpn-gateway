@@ -143,3 +143,13 @@ EXP-053 is PASS only if H1-H4 pass in one run.
 A PASS proves only the Linux mechanism at the host/managed-stack boundary. It does not prove
 multi-path return pinning inside the managed namespace and does not by itself define final
 product requirements, lifecycle reconciliation, mark allocation, or host-route ownership.
+## Post-result lifecycle
+
+- Logical evidence state: **PROVEN FACT / SUPERSEDED DESIGN**.
+- Current disposition: **historical_only**.
+- Applicability: **утратил применимость к текущей реализации**.
+
+The tested host conntrack/RPDB return-steering fact remains valid for that mechanism, but the
+current architecture routes replies back to STACK by managed destination and keeps Profile
+flow affinity inside STACK. No current runtime owner implements EXP-053.
+

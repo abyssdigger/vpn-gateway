@@ -2,7 +2,8 @@
 
 ## Status
 
-PREPARED — awaiting privileged CI evidence.
+PASS — selected for the routed-veth/Proxy-ARP managed-L3 endpoint and Debian-12/Linux-6.1
+portability evidence.
 
 ## Purpose
 
@@ -20,12 +21,24 @@ host-integration contract.
 
 ## Requirements/evidence scope
 
-Техническое evidence относится к уже принятым обязанностям:
+Current selected evidence from this experiment maps to live requirements for the explicit
+managed-L3 boundary and mechanism isolation:
 
-- `VPNG0002-R2.R3.R1.R1` — host-boundary routing contributions для ordinary initiation;
-- `VPNG0002-R2.R3.R1.R1.R1` — не заворачивать stack-origin traffic обратно bootstrap-ом;
-- `VPNG0001-R1.R2.R4.R4.R4` / `.R1` — Profile ordinary-side gateway NAT;
-- `VPNG0004-R4.R6.R1.R6` / `.R1` — bounded host-boundary ownership.
+- `VPNG0004-R4.R6.R1` — managed network-domain interaction with host/external networking
+  occurs through explicit boundary points;
+- `VPNG0004-R4.R6.R1.R1` — mutable state required at that boundary remains explicitly owned
+  rather than becoming hidden ambient host state;
+- `VPNG0004-R4.R6.R1.R2` — traffic crosses the managed domain only through explicit boundary
+  endpoints with known roles;
+- `VPNG0007-R7.R3.R5` — the common managed-L3 contract must not be coupled to one accidental
+  lower Linux mechanism when multiple mechanisms can realize the same semantics;
+- `VPNG0001-R1.R2.R4.R4.R4` / `.R1` — the experiment also retains lower evidence that
+  Profile source translation can execute inside the managed domain.
+
+The former references to `VPNG0002-R2.R3.R1.R1` and
+`VPNG0002-R2.R3.R1.R1.R1` described the then-current host-bootstrap model. Those requirement
+IDs were removed from the current tree on 2026-11-20 and are no longer part of EXP-070's
+selected evidence role.
 
 Эксперимент не меняет requirements и не выбирает новую архитектуру автоматически.
 
