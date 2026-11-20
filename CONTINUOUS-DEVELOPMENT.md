@@ -174,16 +174,16 @@ When a requirement or constraint is insufficient:
    - verify the resulting effective product envelope;
 9. define acceptance evidence at the cheapest sufficient level;
 10. if further decomposition depends on insufficient semantics in another `R/C` branch:
-    - add `[decomp: <blocker-ID> -> pending]` to the blocked node;
+    - add [`decomp`: <blocker-ID> -> pending] to the blocked node;
     - stop only that decomposition path;
     - continue independent requirement/design work;
 11. when the blocker or one of its descendants later provides enough specificity:
     - replace `pending` in the same link with the concrete deblocker ID:
-      `[decomp: <blocker-ID> -> <deblocker-ID>]`;
+      [`decomp`: <blocker-ID> -> <deblocker-ID>];
     - keep the blocker part unchanged for causal traceability;
     - resume review of the blocked decomposition;
 12. if sufficiently concrete accepted R/C nodes make another Requirement impossible to satisfy:
-    - add `[unreal: <R/C-ID>, <R/C-ID>, ...]` beside the unreachable Requirement;
+    - add [`unreal`: <R/C-ID>, <R/C-ID>, ...] beside the unreachable Requirement;
     - use the minimal sufficient set of normative causes;
     - stop architecture/implementation for that Requirement;
     - escalate for human requirement decision; do not search for an architecture workaround
@@ -192,7 +192,7 @@ When a requirement or constraint is insufficient:
       demonstrably reachable again;
 13. if accepted R/C nodes make another Requirement or Constraint itself no longer a correct
     normative decision, even if it remains technically implementable:
-    - add `[broken: <R/C-ID>, <R/C-ID>, ...]` beside the broken R/C;
+    - add [`broken`: <R/C-ID>, <R/C-ID>, ...] beside the broken R/C;
     - use the minimal sufficient normative causal set;
     - do not implement or preserve the broken rule merely because it was previously accepted;
     - re-open the affected requirement semantics and its descendants/architecture/evidence;
@@ -223,20 +223,20 @@ When requirement/constraint text or decomposition links change:
 
 - keep the existing stable ID unless the entity itself was incorrectly identified;
 - update the node in place rather than creating a shadow copy;
-- preserve causal decomposition links as `[decomp: blocker -> pending|deblocker]`;
-- preserve active normative-causality links as `[unreal: ...]` or `[broken: ...]` until the
+- preserve causal decomposition links as [`decomp`: blocker -> pending|deblocker];
+- preserve active normative-causality links as [`unreal`: ...] or [`broken`: ...] until the
   underlying requirement-tree conflict has actually been resolved;
 - use one architecture-closure label per requirement/constraint:
-  `[pending_closure]`, `[closed]` or `[rejected_closure]`;
-- `[pending_closure]` means an architecture candidate exists but acceptance is pending;
-- `[closed]` means the closure candidate passed sufficient acceptance;
-- `[rejected_closure]` means the closure candidate failed acceptance and the affected
+  [`pending_closure`], [`closed`] or [`rejected_closure`];
+- [`pending_closure`] means an architecture candidate exists but acceptance is pending;
+- [`closed`] means the closure candidate passed sufficient acceptance;
+- [`rejected_closure`] means the closure candidate failed acceptance and the affected
   implementation remains blocked;
 - do not copy architecture-decision IDs or architecture link lists into requirements;
 - to determine how a closed requirement is realized, search architecture artifacts for the
   exact requirement/constraint ID;
 - revalidate affected descendants, constraints, architecture references and evidence;
-- remove/revalidate `[closed]` after a semantic change before implementation continues;
+- remove/revalidate [`closed`] after a semantic change before implementation continues;
 - use Git history as the current editorial change record.
 
 The normal closure lifecycle is:
@@ -246,19 +246,19 @@ open -> pending_closure -> closed | rejected_closure
 rejected_closure -> pending_closure
 ```
 
-A node with `[decomp: ... -> pending]` cannot be `[pending_closure]` or `[closed]`.
+A node with [`decomp`: ... -> pending] cannot be [`pending_closure`] or [`closed`].
 
-A Requirement with active `[unreal: ...]` cannot be
-`[pending_closure]` or `[closed]`. This link records a requirement-tree inconsistency,
+A Requirement with active [`unreal`: ...] cannot be
+[`pending_closure`] or [`closed`]. This link records a requirement-tree inconsistency,
 not an architecture closure status.
 
-Any R/C with active `[broken: ...]` likewise cannot be `[pending_closure]` or `[closed]`.
+Any R/C with active [`broken`: ...] likewise cannot be [`pending_closure`] or [`closed`].
 The node itself requires semantic repair/replacement/removal before dependent implementation
 continues.
 
-After architecture produces a closure candidate, mark `[pending_closure]` only after
-verifying an exact architecture reference. Replace it with `[closed]` only after sufficient
-acceptance/review evidence. Replace it with `[rejected_closure]` when acceptance shows the
+After architecture produces a closure candidate, mark [`pending_closure`] only after
+verifying an exact architecture reference. Replace it with [`closed`] only after sufficient
+acceptance/review evidence. Replace it with [`rejected_closure`] when acceptance shows the
 candidate is insufficient or unacceptable.
 
 The closure check is deliberately asymmetric:
@@ -392,15 +392,15 @@ Implementation may begin only when all of the following hold for the affected sc
 - no active decomposition block exists on a requirement/constraint whose missing detail is
   necessary for the implementation scope;
 - no Requirement required by the implementation scope has an active
-  `[unreal: ...]` link;
-- no R/C required by the implementation scope has an active `[broken: ...]` link;
+  [`unreal`: ...] link;
+- no R/C required by the implementation scope has an active [`broken`: ...] link;
 - all material component responsibilities and interactions are traceable to requirements;
 - every requirement/constraint whose architecture is required by the implementation unit is
-  marked `[closed]`; `[pending_closure]` and `[rejected_closure]` block implementation
+  marked [`closed`]; [`pending_closure`] and [`rejected_closure`] block implementation
   of the dependent behavior;
-- every `[pending_closure]` and `[closed]` node has an exact reference in the architecture;
-- every `[rejected_closure]` node has explicit rejection evidence/review;
-- the mechanical closure check reports every `[pending_closure]` or `[closed]` node
+- every [`pending_closure`] and [`closed`] node has an exact reference in the architecture;
+- every [`rejected_closure`] node has explicit rejection evidence/review;
+- the mechanical closure check reports every [`pending_closure`] or [`closed`] node
   without an architecture reference as an error, while allowing architecture references to
   unlabeled nodes;
 - discovered constraints have been lifted far enough to expose their product effect;
@@ -670,7 +670,7 @@ Review storage, immutable originals, response-file exceptions and canonical
 containing scope, findings, the disposition of every finding, final verdict and the
 accumulated requirement-state inventory listing every current `decomp` link
 (`pending` or `resolved`), active `unreal`, active `broken`, and
-`[rejected_closure]`; write `none` when a category is empty.
+[`rejected_closure`]; write `none` when a category is empty.
 
 ## Human escalation
 
@@ -855,7 +855,7 @@ The handoff should contain only enough context to resume cheaply:
   for the next CD window;
 - decisions genuinely requiring human agreement, if any;
 - current accumulated requirement-state inventory: every `decomp` link with
-  `pending|resolved`, active `unreal`, active `broken`, and `[rejected_closure]`.
+  `pending|resolved`, active `unreal`, active `broken`, and [`rejected_closure`].
 
 The handoff is operational continuity metadata. It should not be committed to the repository
 unless its content independently becomes a real project artifact.
