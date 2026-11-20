@@ -32,6 +32,7 @@ from rou.integration_config import parse_integration_transport_config
 from rou.local_integration_policy import IntegrationLocalTransportIntent
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
+from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
     destroy_managed_network_domain,
@@ -54,8 +55,7 @@ SERVER_INNER = "srv0"
 VPN_IF = "vpn0"
 SERVER_TUN = "tun-srv"
 
-HOST_ADDR = IPv4Interface("198.19.255.1/30")
-INNER_ADDR = IPv4Interface("198.19.255.2/30")
+INNER_ADDR = IPv4Interface("198.19.255.2/32")
 SERVER_HOST_CIDR = "198.19.254.1/30"
 SERVER_ADDR_CIDR = "198.19.254.2/30"
 SERVER_UNDERLAY = "198.19.254.2"
@@ -700,8 +700,8 @@ def main() -> int:
         namespace=MANAGED,
         host_interface=HOST_BOUNDARY,
         inner_interface=INNER_BOUNDARY,
-        host_address=HOST_ADDR,
         inner_address=INNER_ADDR,
+        primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
     lock_spec = InstanceLockSpec(
         runtime_directory=root / "runtime",
