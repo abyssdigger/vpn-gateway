@@ -23,6 +23,7 @@ from rou.forwarding_gate import (
 from rou.instance_lock import ControllerInstanceBusyError
 from rou.interface_identity import InterfaceIdentity
 from rou.local_publication_policy import LocalPublicationDesiredState
+from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import (
     ManagedNetworkDomainEnsureResult,
     ManagedNetworkDomainPreflightResult,
@@ -44,8 +45,8 @@ DOMAIN_SPEC = ManagedNetworkDomainSpec(
     namespace="managed",
     host_interface="vgh0",
     inner_interface="host0",
-    host_address=IPv4Interface("192.0.2.1/30"),
-    inner_address=IPv4Interface("192.0.2.2/30"),
+    inner_address=IPv4Interface("198.19.255.2/32"),
+    primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
 )
 
 DESIRED = PayloadNetworkPolicyDesiredState(
