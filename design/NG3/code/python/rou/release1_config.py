@@ -124,7 +124,7 @@ class Release1Config:
 def parse_release1_config(text: str) -> Release1Config:
     """Parse the canonical Release-1 TOML surface.
 
-    Historical aliases are intentionally rejected. Disabled placeholders retain
+    Unknown fields in enabled objects are rejected. Disabled placeholders retain
     the structural model's shallow-validation semantics.
     """
     try:
