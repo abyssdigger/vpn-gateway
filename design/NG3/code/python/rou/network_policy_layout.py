@@ -240,7 +240,6 @@ class PayloadPolicyAllocation:
     terminal_guard_metric: int
     path_route_protocol: int
     guard_route_protocol: int
-    host_boundary_lane_route_protocol: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,7 +291,6 @@ def allocate_network_policy_layout(
             terminal_guard_metric=platform.route_metrics.terminal_guard_metric,
             path_route_protocol=platform.path_route_protocol,
             guard_route_protocol=platform.guard_route_protocol,
-            host_boundary_lane_route_protocol=platform.host_boundary_lane_route_protocol,
         )
         for index, profile in enumerate(profiles)
     )
