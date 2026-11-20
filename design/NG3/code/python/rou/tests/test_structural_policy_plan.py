@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from rou.binding import LogicalPathId
 from rou.composite_nft_policy import (
@@ -27,6 +27,7 @@ from rou.payload_nat_desired import (
 from rou.payload_nat_observation import PayloadNatComparison
 from rou.payload_routing_compare import PayloadRoutingComparison
 from rou.payload_routing_desired import (
+    ManagedRouteRole,
     ManagedRouteSpec,
     ManagedRouteType,
     ManagedRuleSpec,
@@ -43,6 +44,7 @@ from rou.structural_routing_inventory import (
 
 HOST = InterfaceIdentity("host0", 10)
 VPN = InterfaceIdentity("vpn0", 20)
+LEGACY_LANE = InterfaceIdentity("lane-nat", 30)
 PATH = LogicalPathId("device", 0, 0)
 PREFIX = IPv4Network("10.0.0.0/8")
 
@@ -99,6 +101,20 @@ STALE_GUARD = ObservedManagedRoute(
     gateway=None,
     onlink=False,
 )
+
+STALE_LEGACY_LANE = ObservedManagedRoute(
+    table=0x80000000,
+    destination=IPv4Network("0.0.0.0/0"),
+    route_type=ManagedRouteType.UNICAST,
+    protocol=204,
+    metric=0xFFFFFFFE,
+    scope=0,
+    endpoint=LEGACY_LANE,
+    gateway=IPv4Address("198.18.64.5"),
+    onlink=False,
+    role=ManagedRouteRole.LEGACY_HOST_BOUNDARY_LANE,
+)
+
 
 SCAFFOLD = NftPayloadScaffoldComparison(
     namespace_status=NftNamespaceStatus.OWNED,
@@ -206,6 +222,18 @@ class StructuralPolicyPlanTests(unittest.TestCase):
             StructuralPolicyStepKind.DELETE_ROUTING_ROUTE,
         )
         self.assertEqual(step.observed_route, STALE_PATH)
+
+    def test_stale_legacy_lane_is_selected_for_route_cleanup(self):
+        step = select_structural_policy_step(
+            routing(stale_routes=(STALE_LEGACY_LANE,)),
+            nft(),
+            EMPTY_NFT_DESIRED,
+        )
+        self.assertEqual(
+            step.kind,
+            StructuralPolicyStepKind.DELETE_ROUTING_ROUTE,
+        )
+        self.assertEqual(step.observed_route, STALE_LEGACY_LANE)
 
     def test_missing_path_route_precedes_nft_convergence(self):
         nat_spec = PayloadMasqueradeSpec(PATH, HOST, VPN)
