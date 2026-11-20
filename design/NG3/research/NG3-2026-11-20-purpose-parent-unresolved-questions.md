@@ -2,194 +2,105 @@
 
 **Status:** non-normative research artifact  
 **Branch:** `ng3-research-20261120-requirement-purpose-parent-consistency-30m`  
-**Baseline:** main snapshot 145 `623a688e4080de56e5ac14675ffca028c3865d18`
+**Baseline:** main snapshot 145 `623a688e4080de56e5ac14675ffca028c3865d18`  
+**Current research draft:** requirement remap through branch HEAD
 
-Этот список содержит только решения, которые нельзя честно вывести из immediate-parent
-Statements без нового human decision. Вопрос не означает, что capability плохая или что
-текущая реализация неверна; он означает, что текущая requirement ancestry не доказывает,
-почему capability обязательна именно как child данного parent.
+Этот список содержит только решения, которые **остались нерешёнными после**
+product-holder dispositions, записанных в
+`NG3-2026-11-20-requirement-refactor-decisions.md`, и после их применения к
+`NG3-2026-11-20-purpose-parent-corrected-requirements-draft.md`.
 
-## 1. Profile source identity / NAT
+Исходный audit содержал 20 findings: 2 safe corrections и 18 вопросов, требовавших human
+decision. В текущем draft 16 findings уже имеют disposition; остаются четыре.
 
-**Affected:** `VPNG0001-R1.R2.R4.R4.R4` и его descendants.
-
-Нужно решить, откуда берется продуктовая обязанность предоставлять Profile `+snat`.
-Текущий parent описывает обязательные поля Profile и запрет на leakage Linux details, но не
-обещает управление source identity.
-
-Варианты:
-
-1. подтвердить отдельное внешнее/product-holder основание и дать capability собственную
-   причинную ветку;
-2. привязать ее к уже существующему более высокому forwarding/policy requirement, если
-   project holder считает source identity частью управляемого forwarding contract;
-3. удалить capability из normative tree, если это была только архитектурная возможность.
-
-## 2. Device transport capabilities
-
-**Affected:** `VPNG0001-R1.R2.R4.R6.R1`, `.R2`, `.R3`, `.R4`.
-
-`VPNG0001-R1.R2.R4.R6` честно отвечает на вопрос **где** хранить Device-scoped policy,
-если такая policy существует. Но он не доказывает, почему продукт обязан предоставить:
-
-- outbound masquerade;
-- Device firewall;
-- VPN-server publication;
-- client-side transport/control admission.
-
-Нужно отдельно подтвердить продуктовую необходимость каждой capability либо явно записать,
-что они являются независимыми externally requested children другого requirement.
-
-Особенно `.R4` причинно тяготеет к onboarding/integration branch, а не к общей
-Device-policy placement branch.
-
-## 3. Transport endpoint provenance
-
-**Affected:** `VPNG0001-R1.R3.R5`.
-
-Нужно решить, является ли endpoint provenance самостоятельной поддерживаемой capability или
-только optional lower fact для будущих функций. Current Purpose перечисляет availability и
-endpoint-scoped firewall convenience — то есть объясняет consumers, а не immediate parent
-«принять/идентифицировать/использовать VPN channel».
-
-## 4. Peaceful host-routing helper
-
-**Affected:** `VPNG0001-R2.R2`.
-
-Project history явно содержит решение «Release 1 must provide peaceful helper», но current
-parent `VPNG0001-R2` только **ограничивает влияние** явно включенных host-side функций и не
-требует существования helper.
-
-Нужно зафиксировать, от какого product need происходит обязанность предоставить helper:
-например, от требования пользоваться VPN-GATE без ручной сборки host routes — если именно
-это является accepted product promise.
-
-## 5. Aggressive host-routing helper
-
-**Affected:** `VPNG0001-R2.R3` и postponed descendants.
-
-Нужно подтвердить, существует ли отдельная продуктовая обязанность когда-либо предоставить
-authoritative/aggressive helper. Текущий parent не требует такой функции, а только
-ограничивает её влияние, если она существует.
-
-Если это future option, честнее держать ее вне mandatory requirement tree до явного
-project-holder decision либо дать ей отдельное основание.
-
-## 6. Return affinity for remote-initiated flow
+## 1. Return affinity for remote-initiated flow
 
 **Affected:** `VPNG0002-R2.R6`.
 
-Same-ingress reply behavior выглядит полезным и текущая реализация имеет сильное evidence,
-но immediate parent `VPNG0002-R2` — про **явно заданную пользователем policy**
-traffic/path/direction. Пользователь не задаёт same-ingress affinity как отдельную policy.
+Текущий Statement требует, чтобы ответный трафик remote-initiated flow возвращался через тот
+же VPN-канал, через который был принят исходный трафик.
 
-Нужно выбрать настоящий causal parent: forwarding correctness, flow stability, explicit
-policy preservation или отдельный requirement.
+Поведение выглядит необходимым для корректности и устойчивости established flow, но
+immediate parent `VPNG0002-R2` описывает **явно заданную пользователем**
+traffic/path/direction policy. Пользователь не задаёт same-ingress affinity как отдельную
+policy, поэтому ancestry остаётся причинно нечестной.
 
-## 7. User-selected availability criterion
+Нужно выбрать causal owner:
 
-**Affected:** `VPNG0003-R3.R6.R3.R1` и descendants.
+- forwarding correctness / сохранение семантики уже принятого flow;
+- flow stability;
+- либо отдельный requirement, если это самостоятельная продуктовая гарантия.
 
-Parent требует evidence, которое действительно наблюдает существенную пригодность path.
-Из этого не следует единственный способ — дать пользователю механизм+target.
+Существующая реализация/evidence не является основанием для выбора parent: она подтверждает
+реализуемость и текущее поведение, но не продуктовую причинность.
 
-Нужно подтвердить, что user-selectable criterion является именно product promise, а не
-выбранной конфигурационной архитектурой. Если promise подтвержден, ему нужен parent,
-который уже содержит различие пользовательских критериев/сценариев.
-
-## 8. Host-network isolation versus safety tree
-
-**Affected:** `VPNG0004-R4.R6`.
-
-Purpose этого узла почти буквально отвечает `VPNG0001-R2` (не менять несвязанный host
-network state), но находится под `VPNG0004-R4` (не допускать unsafe forwarding при
-ошибке/неопределенности).
-
-Нужно решить, является ли non-interference частью safety promise или отдельной веткой
-primary routing requirement. После решения потребуется reparent/remap всего subtree.
-
-## 9. Managed network domain as Requirement or Architecture
-
-**Affected:** `VPNG0004-R4.R6.R1`.
-
-Даже если isolation/non-interference requirement сохраняется, отдельный managed network
-domain — один конкретный способ его реализации. Current architecture сама пишет, что
-namespace является architecture choice и может быть заменен другим механизмом.
-
-Нужно решить, защищает ли requirement **абстрактную isolated owned network domain boundary**
-как обязательный product/development invariant, или требование должно остаться
-mechanism-neutral, а domain/netns — только architecture.
-
-## 10. Literal default DROP hooks
-
-**Affected:** `VPNG0004-R4.R6.R1.R5`.
-
-Нужно решить, что нормативно требуется:
-
-- поведенческий default-deny для managed local/forwarding surfaces; или
-- буквально Linux `INPUT=DROP`, `OUTPUT=DROP`, `FORWARD=DROP`.
-
-Первый вариант является requirement-level поведением; второй выглядит выбранной nft/Linux
-реализацией и должен остаться в architecture/evidence.
-
-## 11. Administrative payload containment
-
-**Affected:** `VPNG0004-R4.R7`.
-
-Fail-closed core safety не требует публичной enter/leave containment operation. Нужна
-отдельная human decision: это самостоятельная operator capability или только возможная
-future composition для aggressive helper/recovery.
-
-## 12. Reload
-
-**Affected:** `VPNG0005-R5.R6.R4`.
-
-Current lifecycle requirement гарантирует start/stop/restart, а reload появляется только
-условно «если deployment interface объявляет reload». Нужно решить, является ли это
-продуктовой обязанностью VPN-GATE или контрактом конкретной deployment integration.
-
-Если reload не является product capability, requirement лучше заменить architecture/interface
-rule: нельзя рекламировать reload, пока она не имеет безопасной semantics.
-
-## 13. Second VPN lifecycle evidence gate
-
-**Affected:** `VPNG0007-R7.R7.R1.R1`.
-
-Parent требует не начинать зависимую integration development до PASS basic applicability.
-Child требует **после PASS** отдельный lifecycle experiment. Это следующий gate, а не
-уточнение предыдущего Statement.
-
-Нужно решить placement: sibling под `VPNG0007-R7.R7`, evidence child соответствующей
-VPN lifecycle requirement или ненормативное development-process правило.
-
-
-## 14. Device-default/Profile-override requirement under ICMP-only constraint
-
-**Affected:** `VPNG0003-R3.R6.R3.R1.C1.R1`.
-
-Parent `.C1` говорит только: Release 1 поддерживает ICMP, а не TCP/UDP/HTTP. Child требует
-совсем другую вещь — Device default + Profile override reuse model. Это не compensating
-requirement для ICMP-only ограничения.
-
-Наиболее естественный вариант при сохранении semantics — перенести этот requirement вместе
-с его `.R1..`.R4 descendants ближе к `VPNG0003-R3.R6.R3.R1` (user-selected criterion),
-а ICMP-only Constraint оставить только ограничением механизма.
-
-**Adjacent finding:** `VPNG0003-R3.R6.R3.R1.C1.R1.C1` про отсутствие
-timing/hysteresis knobs также семантически не зависит от Device-default/Profile-override
-reuse. Это Constraint-placement вопрос, не входящий в числитель derived-Requirement findings,
-но его нужно перепроверить при нормативном reparent.
-
-## 15. Priority-only make-before-break continuity under safety parent
+## 2. Priority-only make-before-break continuity
 
 **Affected:** `VPNG0004-R4.R3.R1`.
 
-Parent `VPNG0004-R4.R3` требует только, чтобы policy transition не создавал forwarding,
-запрещенный старой или новой policy. Он допускает более restrictive промежуточное состояние.
+Parent `VPNG0004-R4.R3` требует безопасного policy transition: промежуточное состояние не
+должно разрешать forwarding, запрещённый старой или новой policy. Это допускает временно
+более restrictive состояние.
 
-Child дополнительно требует **не терять ни один разрешенный path** при priority-only
-перестановке. Это availability/continuity promise, а не следствие safety parent.
+Child дополнительно обещает не терять разрешённые paths при priority-only перестановке.
+Это уже availability/continuity guarantee, а не следствие safety parent.
 
-Нужно выбрать causal owner: path-preference/availability tree (`VPNG0003`), отдельный
-continuity requirement либо явное product decision, что non-disruptive priority transition
-является частью safety/lifecycle promise.
+Нужно решить, принадлежит ли гарантия:
+
+- path-preference/availability tree `VPNG0003`;
+- отдельной continuity capability;
+- либо safety/lifecycle tree после явного product decision, что non-disruptive priority
+  transition является обязательной частью этой гарантии.
+
+## 3. Reload
+
+**Affected:** `VPNG0005-R5.R6.R4`.
+
+Lifecycle ancestry гарантирует start/stop/restart. Текущий reload-node появляется только
+условно: deployment interface должен иметь безопасную reload semantics **если** он такую
+операцию предоставляет.
+
+Нужно решить, является ли reload:
+
+- самостоятельной обязательной product capability;
+- либо контрактом deployment integration: интерфейс не должен рекламировать reload, пока
+  безопасная semantics не определена.
+
+Первый release уже допускает отсутствие reload; текущая alpha её не реализует, поэтому
+решение в основном влияет на requirement/interface placement, а не на готовый runtime.
+
+## 4. Second VPN lifecycle evidence gate
+
+**Affected:** `VPNG0007-R7.R7.R1.R1`.
+
+Parent `VPNG0007-R7.R7.R1` запрещает начинать зависимую integration development до PASS
+базового applicability evidence. Child требует **после этого PASS** отдельный lifecycle /
+aggressive-configuration experiment до принятия bounded-VPN lifecycle semantics.
+
+Это следующий evidence gate, а не уточнение Statement текущего parent.
+
+Нужно выбрать placement:
+
+- sibling gate под `VPNG0007-R7.R7`;
+- evidence child конкретного VPN lifecycle requirement;
+- либо ненормативное development-process правило, если оно не является продуктовым или
+  requirement-level обязательством.
+
+## Уже закрытые adjacent findings
+
+Следующие вопросы больше не являются unresolved и не должны снова появляться в decision
+queue:
+
+- Profile source identity / `+snat` поднят в самостоятельную capability;
+- Device NAT/firewall и VPN transport/control capabilities отделены от config placement;
+- transport endpoint provenance удалён из requirement tree;
+- peaceful/aggressive host-routing helpers получили положительный общий parent;
+- user-selected availability criterion подтверждён;
+- Device-default/Profile-override перенесён из-под ICMP-only constraint;
+- timing/hysteresis limitation вынесен в sibling constraint `VPNG0003-R3.R6.R3.R1.C2`;
+- host-state safety сделан mechanism-neutral, managed network domain и literal DROP остаются
+  architecture/evidence;
+- protective mode поднят непосредственно под `VPNG0004`.
+
+До решения четырёх вопросов выше нормативный remap `design/NG3/requirements.md` остаётся
+неполным.
