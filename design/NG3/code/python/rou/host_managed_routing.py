@@ -42,6 +42,7 @@ class HostManagedRoutingProfile:
 class HostManagedRouteIntent:
     destination: IPv4Network
     profile_ids: tuple[str, ...]
+    via_stack_service: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,17 +68,20 @@ def build_host_managed_routing_plan(
         raise ValueError("profile_ids must be unique")
 
     owners: dict[IPv4Network, set[str]] = {}
+    snat_identities: set[IPv4Network] = set()
     for profile in items:
         for destination in profile.destinations:
             owners.setdefault(destination, set()).add(profile.profile_id)
         if profile.effective_snat_address is not None:
             identity = IPv4Network(f"{profile.effective_snat_address}/32")
             owners.setdefault(identity, set()).add(profile.profile_id)
+            snat_identities.add(identity)
 
     routes = tuple(
         HostManagedRouteIntent(
             destination=destination,
             profile_ids=tuple(sorted(profile_ids)),
+            via_stack_service=destination in snat_identities,
         )
         for destination, profile_ids in sorted(
             owners.items(),
