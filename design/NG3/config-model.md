@@ -1024,7 +1024,7 @@ This recovered config model does not require NG3 to restore:
 - old process topology.
 
 NG3 instead uses the independently accepted canonical grammar for the settled Release-1 fields in this document.
-The Release-1 peaceful host-routing helper control is the canonical top-level `host_routing = "auto" | "manual"` field defined in section 1.1; no additional host-routing spelling is inherited from NG1.
+The Release-1 peaceful host-routing helper controls are the canonical top-level `helper_routing_interfaces` and `helper_routing_policy` fields defined in section 1.1; the former `host_routing = "auto" | "manual"` spelling and other historical host-routing controls are not inherited.
 
 Other additions require independent NG3 requirements if needed.
 
