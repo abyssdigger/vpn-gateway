@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from dataclasses import replace
 from ipaddress import IPv4Address, IPv4Network
 
 from rou.domain import Direction
@@ -137,17 +138,28 @@ def setup():
             effective_snat_address=IPv4Address(SNAT_IP),
         ),
     ))
-    desired=build_linux_host_managed_routing_desired(
+    candidate=build_linux_host_managed_routing_desired(
         plan,
         host_interface=BH,
         allocation=NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION,
+        stack_service_address=IPv4Address(STACK_SERVICE),
+    )
+    identity=IPv4Network(f"{SNAT_IP}/32")
+    baseline=replace(
+        candidate,
+        routes=tuple(
+            replace(route, gateway=None, onlink=False)
+            if route.destination == identity
+            else route
+            for route in candidate.routes
+        ),
     )
     backend=LinuxHostManagedRoutingBackend(
         SubprocessCommandRunner(),
         NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION,
         network_namespace=HOST,
     )
-    assert converge_host_managed_routing_once(backend,desired).exact
+    assert converge_host_managed_routing_once(backend,baseline).exact
 
     # Minimal managed policy: classify original VPN source, allow forwarding, then
     # materialize the real Profile SNAT rule through the production Linux Driver.
@@ -182,6 +194,7 @@ def setup():
             source_address=IPv4Address(SNAT_IP),
         )
     )
+    return backend, candidate
 
 
 def main():
@@ -190,7 +203,7 @@ def main():
         print("EXP075_RESULT=SKIP root required")
         return 77
     try:
-        setup()
+        backend,candidate=setup()
         route=ns(HOST,"ip","-j","-4","route","get",SNAT_IP).stdout
         assert BH in route and '"gateway"' not in route,route
         print("EXP075_HOST_SNAT_32_DEVICE_ROUTE=PASS",flush=True)
@@ -219,16 +232,12 @@ def main():
         # Candidate: keep remote prefixes device-only, but send only the SNAT
         # identity through the already-owned stack service /32 as an onlink
         # next hop. No extra stack-local identity address/proxy-neighbour exists.
-        table=str(NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION.table)
-        ns(
-            HOST,"ip","route","replace","table",table,f"{SNAT_IP}/32",
-            "via",STACK_SERVICE,"dev",BH,"onlink",
-            "proto",str(NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION.route_protocol),
-        )
+        migrated=converge_host_managed_routing_once(backend,candidate)
+        assert migrated.exact,migrated
         ns(HOST,"ip","neigh","flush","dev",BH,check=False)
-        candidate=ns(HOST,"ip","-j","-4","route","get",SNAT_IP).stdout
-        assert STACK_SERVICE in candidate and BH in candidate,candidate
-        print("EXP075_GATEWAY_ROUTE_SELECTED=PASS",flush=True)
+        candidate_route=ns(HOST,"ip","-j","-4","route","get",SNAT_IP).stdout
+        assert STACK_SERVICE in candidate_route and BH in candidate_route,candidate_route
+        print("EXP075_PRODUCTION_GATEWAY_ROUTE_SELECTED=PASS",flush=True)
 
         second_port=PORT+1
         server=start_server(second_port)
@@ -242,7 +251,7 @@ def main():
         assert client.returncode==0 and "DATA=ACK:probe" in client.stdout,(
             client.stdout,client.stderr
         )
-        print("EXP075_GATEWAY_REVERSE_SNAT_REPLY=PASS",flush=True)
+        print("EXP075_PRODUCTION_GATEWAY_REVERSE_SNAT_REPLY=PASS",flush=True)
         print("EXP075_RESULT=PASS baseline=device-only-failed candidate=stack-service-gateway",flush=True)
         return 0
     finally:
