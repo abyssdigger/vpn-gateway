@@ -1,5 +1,13 @@
 # VPN-GATE NG3 — external VPN onboarding applicability gate review
 
+> **Current interpretation (2026-11-20):** this review records the original closure
+> wording of `VPNG0001-R1.R3.C1.R1.R1`. The current Requirement is mechanism-neutral: it
+> requires reproducible end-to-end evidence that the published onboarding contract produces a
+> channel VPN-GATE can accept and use under all requirements applicable to that integration.
+> The managed-domain placement, exact binding and forwarding steps described below remain the
+> concrete EXP-049 scenario because separate requirements require them; they are not themselves
+> prescribed by `C1.R1.R1`.
+
 **Date:** 2026-11-17  
 **Cycle branch:** `ng3-design-cycle-20261117-stop-cleanup-35m`
 

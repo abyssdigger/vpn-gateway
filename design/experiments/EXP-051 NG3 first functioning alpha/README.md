@@ -9,8 +9,8 @@ This experiment does not add product semantics. It verifies the first deployment
 already accepted requirements and constraints:
 
 - `VPNG0001-R1.R1` / `VPNG0001-R1.R2` — controlled payload from accepted config;
-- `VPNG0001-R1.R3.C1.C1.R1` — stack-specific systemd VPN onboarding into managed netns;
-- `VPNG0001-R1.R3.C1.C1.R3` — bounded integration-local transport admission;
+- `VPNG0001-R1.R3.C3.R1` — externally supervised VPN runtime lifecycle integrated with VPN-GATE;
+- `VPNG0001-R1.R2.R4.R6.R4` — bounded Device client-side VPN transport/control facts;
 - `VPNG0004-R4.R4` / `VPNG0004-R4.R5` — fail-closed verified network policy;
 - `VPNG0005-R5.R1` / `VPNG0005-R5.R2` / `VPNG0005-R5.R3` — startup and local
   reconciliation from fresh authoritative state;

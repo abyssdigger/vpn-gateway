@@ -25,6 +25,20 @@ forensic/adoption behavior after unsupported root/admin intervention without act
 second blanket safety root. Fail-closed/readiness reactions now trace to the concrete
 invariant and its existing safety/lifecycle requirements.
 
+Onboarding acceptance evidence was likewise separated from its first concrete Linux
+realization: `VPNG0001-R1.R3.C1.R1.R1` now requires reproducible proof of the published
+administrator onboarding contract without embedding managed-domain placement, logical-path
+binding or forwarding mechanisms in the Requirement itself. Those checks remain independently
+required where their own R/C apply to the selected integration.
+
+External VPN runtime lifecycle ownership was separated from administrator provisioning:
+the former nested systemd-specific constraint is now a sibling first-release constraint with
+a mechanism-neutral lifecycle-integration compensation requirement. Policy-neutral VPN
+configuration documentation moved under the administrator onboarding contract, while
+client-side VPN transport/control intent moved to the Device transport-policy branch.
+Systemd service/dependency details remain the selected Release-1 Linux architecture rather
+than requirement semantics.
+
 ## 2026-11-19 — Project governance model consolidated
 
 Project-wide development rules were refactored so repository authorization, CD cadence,

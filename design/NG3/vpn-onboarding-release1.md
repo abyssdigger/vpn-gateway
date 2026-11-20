@@ -3,6 +3,26 @@
 **Scope:** first-release administrator-managed VPN integration  
 **Status:** implementation/documentation contract; automatic vendor-unit capture is out of scope
 
+## Requirement/architecture mapping
+
+This document is the selected Release-1 **systemd realization**, not the source of generic
+requirement semantics.
+
+It realizes:
+
+- `VPNG0001-R1.R3.C3` — external VPN runtime lifecycle may remain outside VPN-GATE
+  ownership/supervision;
+- `VPNG0001-R1.R3.C3.R1` — the project provides a reproducible lifecycle integration
+  contract for that externally supervised runtime;
+- `VPNG0001-R1.R3.C1.R1.R2` — VPN-specific configuration remains policy-neutral with
+  respect to VPN-GATE-owned network policy;
+- `VPNG0001-R1.R2.R4.R6.R4` — Device configuration provides bounded client-side VPN
+  transport/control intents.
+
+Concrete `NetworkNamespacePath=`, `After=`, `BindsTo=`, stack-specific unit identity and
+`systemctl` behavior below are the selected Linux/systemd architecture for this release.
+They are not embedded in those generic Requirement/Constraint statements.
+
 ## Goal
 
 A supported VPN service runs as an ordinary administrator-visible systemd service, but its

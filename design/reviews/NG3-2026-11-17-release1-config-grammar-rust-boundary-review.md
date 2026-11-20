@@ -1,5 +1,21 @@
 # NG3 review — canonical Release-1 config grammar + target Rust runtime boundary
 
+> **Current requirement mapping (2026-11-20):** the systemd-specific requirement subtree
+> used by this historical review was later normalized without changing the accepted systemd
+> architecture/evidence:
+>
+> - historical `VPNG0001-R1.R3.C1.C1` -> current `VPNG0001-R1.R3.C3`
+>   (external VPN runtime lifecycle ownership/supervision constraint);
+> - historical `VPNG0001-R1.R3.C1.C1.R1` -> current `VPNG0001-R1.R3.C3.R1`
+>   (external lifecycle integration contract);
+> - historical `VPNG0001-R1.R3.C1.C1.R2` -> current `VPNG0001-R1.R3.C1.R1.R2`
+>   (policy-neutral administrator onboarding configuration);
+> - historical `VPNG0001-R1.R3.C1.C1.R3` -> current `VPNG0001-R1.R2.R4.R6.R4`
+>   (Device client-side VPN transport/control intent).
+>
+> The concrete systemd/`NetworkNamespacePath`/`BindsTo`/`After` mechanism remains selected
+> architecture and evidence, not current generic requirement wording.
+
 **Date:** 2026-11-17  
 **Cycle:** `ng3-beta-cycle-20261117-config-grammar-35m`  
 **Baseline:** main snapshot 72, `48587d41f8c7313081909a673ddcf2c7902e1ab8`  

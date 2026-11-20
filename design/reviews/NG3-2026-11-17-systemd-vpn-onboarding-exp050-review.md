@@ -1,5 +1,21 @@
 # VPN-GATE NG3 — Release-1 systemd VPN onboarding and EXP-050 lifecycle review
 
+> **Current requirement mapping (2026-11-20):** the systemd-specific requirement subtree
+> used by this historical review was later normalized without changing the accepted systemd
+> architecture/evidence:
+>
+> - historical `VPNG0001-R1.R3.C1.C1` -> current `VPNG0001-R1.R3.C3`
+>   (external VPN runtime lifecycle ownership/supervision constraint);
+> - historical `VPNG0001-R1.R3.C1.C1.R1` -> current `VPNG0001-R1.R3.C3.R1`
+>   (external lifecycle integration contract);
+> - historical `VPNG0001-R1.R3.C1.C1.R2` -> current `VPNG0001-R1.R3.C1.R1.R2`
+>   (policy-neutral administrator onboarding configuration);
+> - historical `VPNG0001-R1.R3.C1.C1.R3` -> current `VPNG0001-R1.R2.R4.R6.R4`
+>   (Device client-side VPN transport/control intent).
+>
+> The concrete systemd/`NetworkNamespacePath`/`BindsTo`/`After` mechanism remains selected
+> architecture and evidence, not current generic requirement wording.
+
 > **Current requirement interpretation (2026-11-20):** `VPNG0005-R5.C1` now serves only as
 > the boundary of required automatic recovery/adoption after unsupported external
 > intervention. Historical statements below that directly attribute a blanket
