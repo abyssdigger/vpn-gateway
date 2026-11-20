@@ -688,6 +688,21 @@ jobs:
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-074 NG3 host managed routing/exp074_host_managed_routing.py"
+  linux-profile-snat-reverse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-075 Profile SNAT identity reverse reachability
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/exp075_profile_snat_reverse.py"
+
   linux-boundary-dataplane-race:
     runs-on: ubuntu-latest
     timeout-minutes: 10
