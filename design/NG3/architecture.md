@@ -661,13 +661,16 @@ equivalence.
 
 ### 1.1.2.1. Release-1 systemd onboarding boundary
 
+**Implements:**
+- `VPNG0001-R1.R3.C1.R1.R2`;
+- `VPNG0001-R1.R2.R4.R6.R4`.
+
 **Constrained by:**
-- `VPNG0001-R1.R3.C3`
-- `VPNG0001-R1.R3.C3.R1`
-- `VPNG0001-R1.R3.C1.R1.R2`
-- `VPNG0001-R1.R2.R4.R6.R4`
-- `VPNG0005-R5.C1`
-- `VPNG0005-R5.C1.R1`
+- `VPNG0001-R1.R3.C3`;
+- `VPNG0005-R5.C1`.
+
+**Compensates/documented by:**
+- `VPNG0005-R5.C1.R1`.
 
 The requirement boundary does not prescribe a service manager. For the selected Release-1
 Linux realization, systemd remains the external VPN process supervisor rather than introducing
@@ -712,6 +715,7 @@ blanket rule that every observable out-of-band change closes all forwarding.
 ### 1.1.3. Release-1 bounded VPN lifecycle through systemd
 
 **Implements:**
+- `VPNG0001-R1.R3.C3.R1`;
 - `VPNG0007-R7.R7.R1`;
 - `VPNG0007-R7.R7.R1.R1`;
 - `VPNG0005-R5.R4`;
