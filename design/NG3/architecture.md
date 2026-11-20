@@ -158,6 +158,7 @@ These omissions are deliberate implementation freedom, not unresolved requiremen
 - `VPNG0005-R5.R4`
 - `VPNG0007-R7.R3`
 - `VPNG0007-R7.R3.R2`
+- `VPNG0007-R7.R3.R5`
 
 NG3 selects an isolated managed network domain as the architectural boundary for the router
 data plane.
@@ -173,9 +174,17 @@ device directly without making a peer gateway address part of Device/Profile sem
 
 For Release 1, the supported Linux realization is a routed veth pair with Proxy ARP used only
 as IPv4 neighbour-resolution machinery. EXP-070 confirms this shape on Debian 12 / Linux 6.1;
-EXP-071 found no material steady-state dataplane reason to require the younger netkit primitive.
-No runtime-selectable alternate boundary backend is part of the current implementation or
-product contract.
+EXP-071 found no material steady-state dataplane advantage that would justify carrying a second
+current backend solely for netkit. No runtime-selectable alternate boundary backend is part of
+the Release-1 implementation or product contract.
+
+The managed-L3 endpoint contract itself is intentionally not veth-specific. EXP-070/071 also
+establish netkit L3 as an experimentally viable alternative realization of the same L3 role.
+Outside Release 1, a later implementation may add netkit as another lower backend selected by
+platform/implementation settings in the same VPN-GATE product build, without creating separate
+product variants and without changing Device/Profile policy. This is preserved architectural
+freedom, not a current support promise: adding that backend still requires its own accepted
+implementation/evidence unit.
 
 Inside this domain belong the network objects whose semantics are owned by VPN-GATE,
 including:
@@ -234,14 +243,19 @@ The contract requires:
 - one current host-visible interface identity and one current managed-stack peer identity;
 - direct device-directed IPv4 routing across the boundary; a peer gateway IP is not a product
   semantic dependency;
-- exact lower ownership/observation of the routed-veth pair and its Proxy-ARP/rp-filter state;
+- exact lower ownership/observation of the selected lower endpoint realization and the
+  backend-specific state required to verify that realization;
 - no Profile, Device, NAT-class or path identity encoded in the boundary itself;
 - payload firewall/NAT/routing semantics remain owned by their existing policy layers.
 
 The Release-1 lower realization is intentionally singular: `routed-veth-proxy-arp`.
 This is the Debian-12/Linux-6.1-compatible shape already materialized by the managed-domain
-lifecycle. EXP-071 remains comparative evidence that no measured steady-state dataplane reason
-forces a netkit-only design; it does not create a second supported backend.
+lifecycle. EXP-071 remains comparative evidence: netkit can realize the same practical L3
+boundary role, but the experiment found no material steady-state dataplane advantage that
+justifies Release-1 dual-backend machinery. A future netkit backend therefore belongs behind
+this same lower contract and may be selected through platform/implementation settings; it
+must not require a separate VPN-GATE product variant or leak backend choice into Device/Profile
+policy.
 
 For **routed veth + Proxy ARP**:
 
@@ -255,10 +269,11 @@ For **routed veth + Proxy ARP**:
 Release 1 payload is IPv4-only, so IPv6 Proxy-NDP realization is outside this selected backend
 contract until IPv6 product support is re-entered.
 
-EXP-072 remains reusable only for the lower fact needed by the current realization:
-device-directed managed routes work on routed-veth/Proxy-ARP. Its netkit result remains a
-technical experiment fact but does not define a supported Release-1 backend. Its former
-bootstrap specificity semantics are superseded and do not constrain current host routing;
+EXP-072 remains reusable for the lower endpoint fact needed by the current realization:
+device-directed managed routes work on routed-veth/Proxy-ARP. Its netkit result remains
+technical evidence supporting the future alternative-backend option above, but does not define
+a supported Release-1 backend. Its former bootstrap specificity semantics are superseded and do
+not constrain current host routing;
 that coverage transition is recorded in the experiment registry and EXP-074 result.
 
 The managed-L3 endpoint also provides the ordinary boundary for Profile source identities.
