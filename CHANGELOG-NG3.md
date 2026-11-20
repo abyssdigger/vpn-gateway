@@ -20,6 +20,10 @@ default alpha path. Release 1 now separates helper scope from ownership policy:
 main-first and non-destructive lifecycle evidence, EXP-078 proves scoped dispatch, and EXP-079
 hardens STACK-origin no-recapture with an absolute RPDB bypass. Explicit non-default
 administrator routes remain stronger and there is no periodic peaceful host-route ownership.
+The host-routing helper is also explicitly outside the automatic Rust production cutover:
+its Python implementation may remain after the first release, and moving that helper to Rust
+requires a separate project-holder decision rather than following automatically from the
+core runtime migration.
 
 The same cleanup removed the redundant zero-path safety child that had encoded host
 `ambient/main` fallback into the requirement tree: Profile persistence, valid concrete-path

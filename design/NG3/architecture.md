@@ -6541,7 +6541,9 @@ internal Manager state.
 - `VPNG0007-R7.R8.R3`.
 
 **Constrained by:**
-- `VPNG0007-R7.R8.C1`.
+- `VPNG0007-R7.R8.C1`;
+- `VPNG0007-R7.R8.C2`;
+- `VPNG0007-R7.R8.C3`.
 
 Rust is a target **implementation boundary**, not a new component role and not a source of
 product semantics. The component contracts, requirement trace and observable network
@@ -6587,6 +6589,24 @@ unit/integration/operational evidence.
 
 Such an early release must
 not be described as the final production/stable implementation boundary.
+
+### Host-routing helper language exception
+
+`VPNG0007-R7.R8.C3` deliberately excludes the host-routing helper responsibilities under
+`VPNG0001-R2.R2` and `VPNG0001-R2.R3` from automatic Rust cutover. Their current Python
+implementation may remain a supported production implementation after the first product
+release and after the rest of the target production runtime has crossed the Rust boundary.
+
+This exception is narrow: it does not permit core lifecycle, managed-domain forwarding,
+policy calculation/reconciliation, VPN-path observation, or other responsibilities covered
+by `VPNG0007-R7.R8` to retain hidden Python runtime dependencies. The helper remains a
+separable host-side contribution behind its existing internal contract.
+
+Migrating the helper itself to Rust is therefore not ordinary completion work for
+`VPNG0007-R7.R8`. It may begin only after a separate explicit project-holder decision. If
+that decision is made, the migration remains an implementation replacement and must preserve
+the accepted peaceful/aggressive helper contracts and evidence rather than redesigning them
+for language-specific convenience.
 
 Code outside the runtime boundary may continue to use the language most appropriate to its
 job. In particular, disposable experiments, CI/evidence harnesses, test fixtures,
@@ -6666,7 +6686,7 @@ until a separate requirement requires it.
 | `VPNG0006-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
 | `VPNG0006-R6.R2`, `VPNG0006-R6.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
 | `VPNG0006-R6.R3` system failure visibility | RuntimeStatusAgent aggregates current blocking diagnostics without becoming policy owner |
-| `VPNG0007-R7` subtree — implementation quality | applied as cross-cutting architecture rules; target production runtime language boundary is Rust, with Python allowed for early/reference releases under R7.R8.C1 |
+| `VPNG0007-R7` subtree — implementation quality | applied as cross-cutting architecture rules; target production runtime language boundary is Rust, with early/reference Python allowed under R7.R8.C1 and host-routing helper specifically exempted from automatic Rust cutover under R7.R8.C3 |
 
 # 15. Deliberately omitted machinery
 
