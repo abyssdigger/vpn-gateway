@@ -71,7 +71,7 @@ class HostRoutingContributionBuilder(Protocol):
         prepared: PreparedPayloadPolicy,
         domain_spec: ManagedNetworkDomainSpec,
     ) -> HostRoutingContribution | None:
-        """Build one bounded optional host-host-routing contribution."""
+        """Build one bounded optional host-routing contribution."""
 
 
 class ControllerStopRequested(Protocol):
