@@ -17,7 +17,6 @@ on:
       - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
       - "design/experiments/EXP-068 NG3 continuous availability failover/**"
       - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
-      - "design/experiments/EXP-071 NG3 boundary dataplane race/**"
       - "design/experiments/EXP-074 NG3 host managed routing/**"
       - "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/**"
       - "design/experiments/EXP-076 NG3 combined Profile SNAT/**"
@@ -656,20 +655,6 @@ jobs:
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-076 NG3 combined Profile SNAT/exp076_combined_profile_snat.py"
-
-  linux-boundary-dataplane-race:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install benchmark networking tools
-        run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y iproute2 iputils-ping iperf3
-      - name: EXP-071 managed-boundary dataplane race
-        run: >-
-          sudo python3
-          "design/experiments/EXP-071 NG3 boundary dataplane race/exp071_boundary_race.py"
 
   linux-routed-stack-endpoint:
     runs-on: ubuntu-latest
