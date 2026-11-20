@@ -735,8 +735,10 @@ Profile disappeared
 ```
 
 With zero paths the Profile remains the owner of its destinations and materializes
-fail-closed terminal behavior. Traffic must not fall through to ambient/main routing merely
-because no VPN path is currently usable/bound.
+fail-closed terminal behavior inside the managed policy domain. Once traffic has been
+accepted into that Profile policy domain, absence of a usable/bound VPN path does not create
+a different permitted forwarding result. This statement does not constrain ordinary-host
+routing before traffic is handed to VPN-GATE.
 
 The structural request is independent from availability. Availability may only change the
 effective ordering of existing paths.
@@ -754,7 +756,7 @@ It must not change:
 - `VPNG0001-R1.R2.R4.R4.R3`
 - `VPNG0002-R2.R2.R2`
 - `VPNG0003-R3.R2.R1`
-- `VPNG0004-R4.R1.R1`
+- `VPNG0004-R4`
 
 # 7. Profile-scoped availability
 

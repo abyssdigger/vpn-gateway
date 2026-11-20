@@ -1559,7 +1559,7 @@ introduced. Those require separate accepted requirements if they become necessar
 - `VPNG0001-R1.R2.R4.R4.R3`
 - `VPNG0002-R2.R2.R2`
 - `VPNG0003-R3.R2.R1`
-- `VPNG0004-R4.R1.R1`
+- `VPNG0004-R4`
 
 A Profile is preserved as a semantic domain even when its current concrete path set is empty.
 
@@ -1579,8 +1579,10 @@ PayloadProfileRequest:
 `ordered_paths` may be empty.
 
 An empty path set does **not** remove the Profile from structural policy. Its destinations
-remain classified to that Profile and materialize a fail-closed terminal result rather than
-falling through to ambient/main routing.
+remain classified to that Profile and materialize a fail-closed terminal result inside the
+managed policy domain. Once traffic is classified to that Profile, the absence of a usable
+VPN path does not authorize a different forwarding result. Ordinary-host routing before the
+managed boundary remains outside this rule.
 
 Availability is applied after this structural request exists. It may reorder
 `ordered_paths` through negative priority modification, but it cannot rewrite:
@@ -1612,8 +1614,8 @@ container. Those remain separate lower or adjacent contracts.
 - `VPNG0003-R3.R4`
 - `VPNG0003-R3.R5`
 - `VPNG0003-R3.R7`
+- `VPNG0004-R4`
 - `VPNG0004-R4.R1`
-- `VPNG0004-R4.R1.R1`
 - `VPNG0004-R4.R2`
 - `VPNG0005-R5.R2`
 - `VPNG0005-R5.R3`
@@ -2887,8 +2889,8 @@ authority that chooses global Linux resource namespaces.
 **Implements:**
 - `VPNG0001-R1.R1`
 - `VPNG0003-R3.R6`
+- `VPNG0004-R4`
 - `VPNG0004-R4.R1`
-- `VPNG0004-R4.R1.R1`
 - `VPNG0004-R4.R2`
 - `VPNG0004-R4.R5`
 - `VPNG0004-R4.R6.R1.R1`
@@ -2918,9 +2920,10 @@ The owner key is semantic identity. Kernel resource numbers are internal realiza
 #### Routing-table ownership
 
 Each enabled payload Profile owns one internal routing table even when its current concrete
-path set is empty. Keeping the table/domain present preserves the accepted rule that a
-zero-path Profile remains a fail-closed policy domain instead of disappearing into ambient
-routing.
+path set is empty. Keeping the table/domain present is the selected lower realization of the
+combined requirements that the Profile remains a logical policy domain when `paths = 0`
+and that managed traffic is not forwarded by a result outside current policy. The table is
+an internal mechanism; this rule does not claim authority over ordinary-host routing.
 
 A Profile table contains the structural routes for all of that Profile's remote
 destinations plus a terminal fail-closed route. Pure-priority convergence mutates only the
