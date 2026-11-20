@@ -3,6 +3,15 @@
 **Date:** 2026-11-16  
 **Cycle:** `ng3-design-cycle-20261116-lower-policy-layout-40m`
 
+> **Historical requirement note (2026-11-20):** this review was performed while
+> `VPNG0004-R4.R1.R1` existed in the then-current tree with the meaning that a zero-path
+> Profile remained fail-closed instead of falling through ambient routing. That node was later
+> removed as redundant and mis-scoped: Profile persistence is covered by
+> `VPNG0001-R1.R2.R4.R4.R2`, concrete-path membership by `VPNG0002-R2.R2.R2`, and the
+> prohibition on forwarding managed traffic outside accepted policy by `VPNG0004-R4`.
+> The reference below to `VPNG0004-R4.R1.R1` is a historical review fact, not a current
+> requirement link.
+
 ## Trigger
 
 After closing the pure-priority chain, the next apparent step was to implement physical
