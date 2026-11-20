@@ -1,4 +1,4 @@
-"""Selected ordinary-host managed-routing contribution for Release-1 runtime."""
+"""Ordinary-host managed-routing contribution for Release-1 runtime."""
 
 from __future__ import annotations
 
@@ -29,17 +29,17 @@ from .release1_host_boundary import build_release1_host_boundary_plan
 
 
 @dataclass(frozen=True, slots=True)
-class SelectedHostBoundaryDesired:
+class HostManagedRoutingRuntimeDesired:
     routing: HostManagedRoutingLinuxDesired
 
 
 @dataclass(frozen=True, slots=True)
-class SelectedHostBoundaryObservation:
+class HostManagedRoutingRuntimeObservation:
     exact: bool
     conflicts: tuple[str, ...]
 
 
-class SelectedHostBoundaryRuntimeStatus(str, Enum):
+class HostManagedRoutingRuntimeStatus(str, Enum):
     EXACT = "exact"
     RECONCILED = "reconciled"
     CONFLICT = "conflict"
@@ -49,23 +49,23 @@ class SelectedHostBoundaryRuntimeStatus(str, Enum):
 
 
 @dataclass(frozen=True, slots=True)
-class SelectedHostBoundaryRuntimeResult:
-    status: SelectedHostBoundaryRuntimeStatus
-    observation: SelectedHostBoundaryObservation | None
+class HostManagedRoutingRuntimeResult:
+    status: HostManagedRoutingRuntimeStatus
+    observation: HostManagedRoutingRuntimeObservation | None
     diagnostic: str | None = None
 
     @property
     def confirmed(self) -> bool:
         return self.status in {
-            SelectedHostBoundaryRuntimeStatus.EXACT,
-            SelectedHostBoundaryRuntimeStatus.RECONCILED,
+            HostManagedRoutingRuntimeStatus.EXACT,
+            HostManagedRoutingRuntimeStatus.RECONCILED,
         }
 
 
-def build_selected_host_boundary_desired(
+def build_host_managed_routing_runtime_desired(
     config: Release1Config,
     domain_spec: ManagedNetworkDomainSpec,
-) -> SelectedHostBoundaryDesired:
+) -> HostManagedRoutingRuntimeDesired:
     if not isinstance(config, Release1Config):
         raise ValueError("config must be Release1Config")
     if not isinstance(domain_spec, ManagedNetworkDomainSpec):
@@ -83,7 +83,7 @@ def build_selected_host_boundary_desired(
             )
 
     plan = build_release1_host_boundary_plan(config)
-    return SelectedHostBoundaryDesired(
+    return HostManagedRoutingRuntimeDesired(
         routing=build_linux_host_managed_routing_desired(
             plan,
             host_interface=domain_spec.host_interface,
@@ -94,20 +94,20 @@ def build_selected_host_boundary_desired(
 
 
 @dataclass(slots=True)
-class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
+class LinuxHostManagedRoutingContribution(ControllerBoundaryContribution):
     routing_backend: LinuxHostManagedRoutingBackend
-    desired: SelectedHostBoundaryDesired
+    desired: HostManagedRoutingRuntimeDesired
 
-    def observe(self) -> SelectedHostBoundaryObservation:
+    def observe(self) -> HostManagedRoutingRuntimeObservation:
         observed = self.routing_backend.observe(self.desired.routing)
-        return SelectedHostBoundaryObservation(
+        return HostManagedRoutingRuntimeObservation(
             exact=observed.exact,
             conflicts=observed.conflicts,
         )
 
     def converge(self) -> None:
-        if not isinstance(self.desired, SelectedHostBoundaryDesired):
-            raise ValueError("desired must be SelectedHostBoundaryDesired")
+        if not isinstance(self.desired, HostManagedRoutingRuntimeDesired):
+            raise ValueError("desired must be HostManagedRoutingRuntimeDesired")
         converge_host_managed_routing_once(
             self.routing_backend,
             self.desired.routing,
@@ -120,19 +120,19 @@ class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
         )
 
 
-def reconcile_selected_host_boundary_runtime_once(
+def reconcile_host_managed_routing_runtime_once(
     gate_backend: ForwardingGateBackend,
-    contribution: SelectedLinuxHostBoundaryContribution | None,
-) -> SelectedHostBoundaryRuntimeResult:
+    contribution: LinuxHostManagedRoutingContribution | None,
+) -> HostManagedRoutingRuntimeResult:
     """Audit/repair managed host routing only while payload forwarding is contained."""
     if contribution is None:
-        return SelectedHostBoundaryRuntimeResult(
-            SelectedHostBoundaryRuntimeStatus.EXACT,
-            SelectedHostBoundaryObservation(True, ()),
+        return HostManagedRoutingRuntimeResult(
+            HostManagedRoutingRuntimeStatus.EXACT,
+            HostManagedRoutingRuntimeObservation(True, ()),
         )
-    if not isinstance(contribution, SelectedLinuxHostBoundaryContribution):
+    if not isinstance(contribution, LinuxHostManagedRoutingContribution):
         raise ValueError(
-            "contribution must be SelectedLinuxHostBoundaryContribution or None"
+            "contribution must be LinuxHostManagedRoutingContribution or None"
         )
 
     try:
@@ -143,8 +143,8 @@ def reconcile_selected_host_boundary_runtime_once(
             ForwardingGateState.DISABLED,
         )
         if not containment.confirmed:
-            return SelectedHostBoundaryRuntimeResult(
-                SelectedHostBoundaryRuntimeStatus.CONTAINMENT_FAILED,
+            return HostManagedRoutingRuntimeResult(
+                HostManagedRoutingRuntimeStatus.CONTAINMENT_FAILED,
                 None,
                 (
                     f"host managed-routing observation failed: "
@@ -155,8 +155,8 @@ def reconcile_selected_host_boundary_runtime_once(
                     )
                 ),
             )
-        return SelectedHostBoundaryRuntimeResult(
-            SelectedHostBoundaryRuntimeStatus.CONVERGENCE_FAILED,
+        return HostManagedRoutingRuntimeResult(
+            HostManagedRoutingRuntimeStatus.CONVERGENCE_FAILED,
             None,
             (
                 f"host managed-routing observation failed: "
@@ -165,8 +165,8 @@ def reconcile_selected_host_boundary_runtime_once(
         )
 
     if observed.exact:
-        return SelectedHostBoundaryRuntimeResult(
-            SelectedHostBoundaryRuntimeStatus.EXACT,
+        return HostManagedRoutingRuntimeResult(
+            HostManagedRoutingRuntimeStatus.EXACT,
             observed,
         )
 
@@ -175,15 +175,15 @@ def reconcile_selected_host_boundary_runtime_once(
         ForwardingGateState.DISABLED,
     )
     if not containment.confirmed:
-        return SelectedHostBoundaryRuntimeResult(
-            SelectedHostBoundaryRuntimeStatus.CONTAINMENT_FAILED,
+        return HostManagedRoutingRuntimeResult(
+            HostManagedRoutingRuntimeStatus.CONTAINMENT_FAILED,
             observed,
             containment.diagnostic or "forwarding containment is not confirmed",
         )
 
     if observed.conflicts:
-        return SelectedHostBoundaryRuntimeResult(
-            SelectedHostBoundaryRuntimeStatus.CONFLICT,
+        return HostManagedRoutingRuntimeResult(
+            HostManagedRoutingRuntimeStatus.CONFLICT,
             observed,
             "host managed-routing owner conflict: " + "; ".join(observed.conflicts),
         )
@@ -191,8 +191,8 @@ def reconcile_selected_host_boundary_runtime_once(
     try:
         contribution.converge()
     except Exception as exc:
-        return SelectedHostBoundaryRuntimeResult(
-            SelectedHostBoundaryRuntimeStatus.CONVERGENCE_FAILED,
+        return HostManagedRoutingRuntimeResult(
+            HostManagedRoutingRuntimeStatus.CONVERGENCE_FAILED,
             observed,
             (
                 f"host managed-routing convergence failed: "
@@ -203,8 +203,8 @@ def reconcile_selected_host_boundary_runtime_once(
     try:
         final = contribution.observe()
     except Exception as exc:
-        return SelectedHostBoundaryRuntimeResult(
-            SelectedHostBoundaryRuntimeStatus.POSTCONDITION_FAILED,
+        return HostManagedRoutingRuntimeResult(
+            HostManagedRoutingRuntimeStatus.POSTCONDITION_FAILED,
             None,
             (
                 f"host managed-routing final observation failed: "
@@ -212,8 +212,8 @@ def reconcile_selected_host_boundary_runtime_once(
             ),
         )
     if final.conflicts or not final.exact:
-        return SelectedHostBoundaryRuntimeResult(
-            SelectedHostBoundaryRuntimeStatus.POSTCONDITION_FAILED,
+        return HostManagedRoutingRuntimeResult(
+            HostManagedRoutingRuntimeStatus.POSTCONDITION_FAILED,
             final,
             (
                 "host managed-routing final state is conflicting"
@@ -222,19 +222,19 @@ def reconcile_selected_host_boundary_runtime_once(
             ),
         )
 
-    return SelectedHostBoundaryRuntimeResult(
-        SelectedHostBoundaryRuntimeStatus.RECONCILED,
+    return HostManagedRoutingRuntimeResult(
+        HostManagedRoutingRuntimeStatus.RECONCILED,
         final,
     )
 
 
-def build_selected_linux_host_boundary_contribution(
+def build_linux_host_managed_routing_contribution(
     config: Release1Config,
     domain_spec: ManagedNetworkDomainSpec,
     runner: NftScriptRunner,
-) -> SelectedLinuxHostBoundaryContribution:
-    desired = build_selected_host_boundary_desired(config, domain_spec)
-    return SelectedLinuxHostBoundaryContribution(
+) -> LinuxHostManagedRoutingContribution:
+    desired = build_host_managed_routing_runtime_desired(config, domain_spec)
+    return LinuxHostManagedRoutingContribution(
         routing_backend=LinuxHostManagedRoutingBackend(
             runner,
             NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION,

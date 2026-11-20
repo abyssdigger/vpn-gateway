@@ -6,12 +6,12 @@ import unittest
 from rou.forwarding_gate import ForwardingGateState
 from rou.managed_network_domain import ManagedNetworkDomainSpec
 from rou.release1_config import parse_release1_config
-from rou.selected_host_boundary import (
-    SelectedHostBoundaryObservation,
-    SelectedHostBoundaryRuntimeStatus,
-    SelectedLinuxHostBoundaryContribution,
-    build_selected_host_boundary_desired,
-    reconcile_selected_host_boundary_runtime_once,
+from rou.host_managed_routing_runtime import (
+    HostManagedRoutingRuntimeObservation,
+    HostManagedRoutingRuntimeStatus,
+    LinuxHostManagedRoutingContribution,
+    build_host_managed_routing_runtime_desired,
+    reconcile_host_managed_routing_runtime_once,
 )
 
 
@@ -21,8 +21,6 @@ DOMAIN = ManagedNetworkDomainSpec(
     inner_interface="vnga-inner0",
     inner_address=IPv4Interface("198.19.255.2/32"),
 )
-ROUTED_DOMAIN = DOMAIN
-
 def config(direction: str, *, default_snat_address: str | None = None):
     outbound_nat = (
         "use_outbound_nat = false\n"
@@ -66,7 +64,7 @@ class Gate:
         self.state = desired
 
 
-class RuntimeContribution(SelectedLinuxHostBoundaryContribution):
+class RuntimeContribution(LinuxHostManagedRoutingContribution):
     def __init__(self, observations, *, fail_converge=False):
         self.observations = list(observations)
         self.fail_converge = fail_converge
@@ -81,9 +79,9 @@ class RuntimeContribution(SelectedLinuxHostBoundaryContribution):
             raise RuntimeError("synthetic routing convergence failure")
 
 
-class SelectedHostBoundaryTests(unittest.TestCase):
+class HostManagedRoutingRuntimeTests(unittest.TestCase):
     def test_inbound_destination_is_managed_without_return_owner(self):
-        desired = build_selected_host_boundary_desired(
+        desired = build_host_managed_routing_runtime_desired(
             config("inbound"),
             DOMAIN,
         )
@@ -95,9 +93,9 @@ class SelectedHostBoundaryTests(unittest.TestCase):
         self.assertIsNotNone(desired.routing.dispatch)
 
     def test_routed_boundary_uses_device_only_managed_routes(self):
-        desired = build_selected_host_boundary_desired(
+        desired = build_host_managed_routing_runtime_desired(
             config("bidirectional"),
-            ROUTED_DOMAIN,
+            DOMAIN,
         )
         self.assertEqual(desired.routing.routes[0].interface, "vpng0")
         self.assertEqual(
@@ -106,12 +104,12 @@ class SelectedHostBoundaryTests(unittest.TestCase):
         )
 
     def test_snat_identity_adds_exact_managed_route(self):
-        desired = build_selected_host_boundary_desired(
+        desired = build_host_managed_routing_runtime_desired(
             config(
                 "inbound+snat",
                 default_snat_address="198.19.255.10",
             ),
-            ROUTED_DOMAIN,
+            DOMAIN,
         )
         self.assertEqual(
             {item.destination.with_prefixlen for item in desired.routing.routes},
@@ -133,58 +131,58 @@ class SelectedHostBoundaryTests(unittest.TestCase):
             ValueError,
             "conflicts with managed-boundary",
         ):
-            build_selected_host_boundary_desired(
+            build_host_managed_routing_runtime_desired(
                 config(
                     "inbound+snat",
                     default_snat_address="198.19.255.2",
                 ),
-                ROUTED_DOMAIN,
+                DOMAIN,
             )
 
     def test_exact_runtime_needs_no_containment(self):
         contribution = RuntimeContribution(
-            [SelectedHostBoundaryObservation(True, ())]
+            [HostManagedRoutingRuntimeObservation(True, ())]
         )
         gate = Gate()
-        result = reconcile_selected_host_boundary_runtime_once(
+        result = reconcile_host_managed_routing_runtime_once(
             gate,
             contribution,
         )
-        self.assertEqual(result.status, SelectedHostBoundaryRuntimeStatus.EXACT)
+        self.assertEqual(result.status, HostManagedRoutingRuntimeStatus.EXACT)
         self.assertEqual(gate.set_calls, 0)
         self.assertEqual(contribution.converge_calls, 0)
 
     def test_drift_is_contained_then_reconciled(self):
         contribution = RuntimeContribution(
             [
-                SelectedHostBoundaryObservation(False, ()),
-                SelectedHostBoundaryObservation(True, ()),
+                HostManagedRoutingRuntimeObservation(False, ()),
+                HostManagedRoutingRuntimeObservation(True, ()),
             ]
         )
         gate = Gate()
-        result = reconcile_selected_host_boundary_runtime_once(
+        result = reconcile_host_managed_routing_runtime_once(
             gate,
             contribution,
         )
         self.assertEqual(
             result.status,
-            SelectedHostBoundaryRuntimeStatus.RECONCILED,
+            HostManagedRoutingRuntimeStatus.RECONCILED,
         )
         self.assertEqual(gate.state, ForwardingGateState.DISABLED)
         self.assertEqual(contribution.converge_calls, 1)
 
     def test_conflict_is_reported_after_containment(self):
         contribution = RuntimeContribution(
-            [SelectedHostBoundaryObservation(False, ("foreign rule",))]
+            [HostManagedRoutingRuntimeObservation(False, ("foreign rule",))]
         )
         gate = Gate()
-        result = reconcile_selected_host_boundary_runtime_once(
+        result = reconcile_host_managed_routing_runtime_once(
             gate,
             contribution,
         )
         self.assertEqual(
             result.status,
-            SelectedHostBoundaryRuntimeStatus.CONFLICT,
+            HostManagedRoutingRuntimeStatus.CONFLICT,
         )
         self.assertEqual(gate.state, ForwardingGateState.DISABLED)
         self.assertEqual(contribution.converge_calls, 0)

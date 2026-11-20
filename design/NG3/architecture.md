@@ -78,7 +78,7 @@ Current trace:
 | guarded physical payload nft scaffold preparation | `nft_scaffold_executor.py`, `linux_nft_scaffold.py` | `NG3-2026-11-16-nft-scaffold-prepare-code-review.md` |
 | normalized Device NAT intent -> payload masquerade desired projection | `device_policy.py`, `payload_nat_desired.py` | `NG3-2026-11-16-payload-nat-desired-code-review.md`, `EXP-033-result-20261116.md` |
 | host-side Device server publication | `host_publication_policy.py`, `linux_host_publication.py`, alpha runtime composition | `NG3-2026-11-17-host-server-publication-dnat-review.md`, EXP-052, EXP-051 extension |
-| host managed-destination routing projection | `host_managed_routing.py`, `release1_host_boundary.py`, `linux_host_managed_routing.py`, `linux_host_managed_routing_backend.py`, `selected_host_boundary.py` | EXP-074, EXP-075, EXP-076 |
+| host managed-destination routing projection | `host_managed_routing.py`, `release1_host_boundary.py`, `linux_host_managed_routing.py`, `linux_host_managed_routing_backend.py`, `host_managed_routing_runtime.py` | EXP-074, EXP-075, EXP-076 |
 | managed-stack established-flow return affinity | `stack_return_affinity.py`, `linux_stack_return_affinity.py` | EXP-061, current stack-return-affinity cycle review |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
