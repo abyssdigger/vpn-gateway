@@ -38,3 +38,13 @@ PASS requires one run to prove:
 
 A PASS permits replacement of the conservative EXP-054 pin/main-route implementation by this
 non-invasive dedicated-table model.
+## Post-result lifecycle
+
+- Logical evidence state: **PROVEN FACT / SUPERSEDED DESIGN**.
+- Current disposition: **superseded**.
+- Applicability: **утратил применимость к текущей реализации**.
+
+Its specificity-preserving dedicated-table design was superseded first by EXP-059 and the
+current host-routing acceptance role is now covered by EXP-074, whose semantics intentionally
+do not preserve a more-specific non-local host-`main` escape.
+
