@@ -484,7 +484,7 @@ destinations = ["10.0.0.0/8"]
 device_order = ["client"]
 """)
 
-    def test_historical_aliases_and_top_level_integration_are_rejected(self):
+    def test_unknown_enabled_fields_and_top_level_integration_are_rejected(self):
         for extra in (
             'nat = "masquerade"',
             'publications = ["44443/udp"]',
@@ -714,7 +714,7 @@ device_order = ["oc", "oc:reserve"]
         cfg = parse_release1_config("""
 [device.future]
 enabled = false
-nat = "historical-but-ignored-because-disabled"
+nat = "ignored-because-disabled"
 anything = { future = true }
 
 [profile.future]
