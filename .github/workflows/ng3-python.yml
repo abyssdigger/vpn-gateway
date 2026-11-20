@@ -23,6 +23,7 @@ on:
       - "design/experiments/EXP-073 NG3 routed managed L3 stateful return/**"
       - "design/experiments/EXP-074 NG3 host managed routing/**"
       - "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/**"
+      - "design/experiments/EXP-076 NG3 combined Profile SNAT/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -704,6 +705,21 @@ jobs:
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/exp075_profile_snat_reverse.py"
+
+  linux-profile-snat-combined:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-076 combined Profile SNAT dataplane
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-076 NG3 combined Profile SNAT/exp076_combined_profile_snat.py"
 
   linux-boundary-dataplane-race:
     runs-on: ubuntu-latest
