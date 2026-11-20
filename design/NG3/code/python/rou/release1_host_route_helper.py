@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .controller_boundary_contribution import ControllerBoundaryContribution
+from .host_routing_contribution import HostRoutingContribution
 from .host_managed_routing import HostManagedRoutingProfile, build_host_managed_routing_plan
 from .linux_host_managed_routing import (
     HostManagedDispatchSelector,
@@ -118,7 +118,7 @@ def build_release1_peaceful_host_routing_desired(
 
 
 @dataclass(slots=True)
-class LinuxPeacefulHostRoutingContribution(ControllerBoundaryContribution):
+class LinuxPeacefulHostRoutingContribution(HostRoutingContribution):
     backend: LinuxHostManagedRoutingBackend
     desired: HostManagedRoutingLinuxDesired
 

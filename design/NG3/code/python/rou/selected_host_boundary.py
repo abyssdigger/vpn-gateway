@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from .controller_boundary_contribution import ControllerBoundaryContribution
+from .host_routing_contribution import HostRoutingContribution
 from .forwarding_gate import (
     ForwardingGateBackend,
     ForwardingGateState,
@@ -98,7 +98,7 @@ def build_selected_host_boundary_desired(
 
 
 @dataclass(slots=True)
-class SelectedLinuxHostBoundaryContribution(ControllerBoundaryContribution):
+class SelectedLinuxHostBoundaryContribution(HostRoutingContribution):
     routing_backend: LinuxHostManagedRoutingBackend
     desired: SelectedHostBoundaryDesired
 
