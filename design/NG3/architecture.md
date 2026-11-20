@@ -470,16 +470,27 @@ a full-tunnel `0.0.0.0/0` does not recursively capture its own stack-origin tran
 The route representation is the selected managed-L3 contract:
 
 ```text
-<managed prefix> dev <managed-host-endpoint>
-<snat identity>/32 dev <managed-host-endpoint>
+<remote managed prefix> dev <managed-host-endpoint>
+<snat identity>/32 via <stack-service-address> dev <managed-host-endpoint> onlink
 ```
 
-No peer gateway address is required. EXP-072 proves device-only routes on both selected
-managed-L3 backends; EXP-056 proves the managed-ingress ordinary-main bypass shape. The
-historical EXP-059/060 paired `suppress_prefixlength` realization remains evidence for the
-older specificity-preserving bootstrap but is no longer selected because that specificity
-rule conflicts with ordinary destination routing for inbound replies once host per-flow
-return steering is removed.
+Remote managed prefixes remain device-only routes. A translated SNAT identity is different:
+the packet's IP destination is the administrative identity itself, for which STACK has no
+ordinary destination route before conntrack reverse translation. EXP-075 demonstrated that a
+device-only host route therefore leaves neighbor resolution `INCOMPLETE` on the addressless
+routed boundary. The selected lower route uses the already-owned stack service /32 as the
+onlink next hop; STACK already answers neighbor discovery for that address, while the IP
+destination remains the SNAT identity and managed conntrack can reverse the translation after
+the packet crosses the boundary. This adds no new stack address, proxy-neighbour owner or
+Profile metadata channel.
+
+EXP-074 proves the current authoritative managed-table semantics and stack-origin main bypass.
+EXP-072 remains historical evidence for device-only managed-L3 forwarding under the superseded
+specificity-preserving bootstrap. EXP-056 proves the managed-ingress ordinary-main bypass
+shape. The historical EXP-059/060 paired `suppress_prefixlength` realization remains evidence
+for the older specificity-preserving bootstrap but is no longer selected because that
+specificity rule conflicts with ordinary destination routing for inbound replies once host
+per-flow return steering is removed.
 
 There is no host conntrack association, return packet mark, dedicated return table or
 `+route-return` behavior. A remote-initiated reply is routed by its destination back through
@@ -4643,16 +4654,21 @@ current accepted Profile intent plus the existing Profile association allocation
 convergence and cleanup remain bounded by the managed nft owner and the root ForwardingGate.
 
 The host managed-routing owner independently contributes an exact /32 route for every
-effective SNAT identity. Reverse traffic therefore follows:
+effective SNAT identity, using the current stack service address as its onlink next hop.
+Reverse traffic therefore follows:
 
 ```text
 ordinary reply to SNAT identity
-    -> host managed /32 route
-    -> vpng0
+    -> host managed /32 via stack-service on vpng0
+    -> STACK receives packet with destination still = SNAT identity
     -> managed conntrack reverse-SNAT to original remote destination
     -> stack established-flow affinity
     -> original Profile/VPN routing domain
 ```
+
+EXP-075 is the lower acceptance evidence for this route distinction: the former device-only
+SNAT /32 failed with unresolved neighbor state, while the stack-service next-hop form returned
+the same translated flow successfully without any additional stack-local identity state.
 
 An administrator may apply additional host-side firewall, routing, accounting or NAT policy
 based on the visible IPv4 identity. Such policy is ordinary host administration and is not
