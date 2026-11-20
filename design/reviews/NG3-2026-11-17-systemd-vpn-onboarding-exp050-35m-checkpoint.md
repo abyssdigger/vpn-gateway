@@ -1,5 +1,12 @@
 # VPN-GATE NG3 — systemd VPN onboarding + EXP-050 35m checkpoint
 
+> **Current requirement interpretation (2026-11-20):** `VPNG0005-R5.C1` now serves only as
+> the boundary of required automatic recovery/adoption after unsupported external
+> intervention. Historical statements below that directly attribute a blanket
+> fail-closed reaction to `C1` preserve the review's original reasoning, but current
+> containment/readiness behavior is justified by the specific safety/readiness invariant
+> that was lost.
+
 **Date:** 2026-11-17  
 **Cycle:** `ng3-design-cycle-20261117-systemd-vpn-onboarding-exp050-35m`  
 **CYCLE_INTERVAL:** 35m  

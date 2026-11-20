@@ -1,5 +1,12 @@
 # VPN-GATE NG3 — review первой функционирующей alpha-сборки
 
+> **Current requirement interpretation (2026-11-20):** `VPNG0005-R5.C1` now serves only as
+> the boundary of required automatic recovery/adoption after unsupported external
+> intervention. Historical statements below that directly attribute a blanket
+> fail-closed reaction to `C1` preserve the review's original reasoning, but current
+> containment/readiness behavior is justified by the specific safety/readiness invariant
+> that was lost.
+
 **Date:** 2026-11-17  
 **Cycle:** `ng3-alpha-cycle-20261117-runtime-assembly-35m`  
 **Runtime evidence commit:** `5a1a9f53c8d861e9a616cf18bfa7107764f4a38d`  

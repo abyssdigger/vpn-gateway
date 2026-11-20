@@ -20,6 +20,11 @@ The same cleanup removed the redundant zero-path safety child that had encoded h
 membership and fail-closed managed forwarding are now traced to their existing independent
 requirements, while ordinary-host routing remains outside that core safety promise.
 
+Recovery scope was also narrowed so `VPNG0005-R5.C1` limits mandatory automatic
+forensic/adoption behavior after unsupported root/admin intervention without acting as a
+second blanket safety root. Fail-closed/readiness reactions now trace to the concrete
+invariant and its existing safety/lifecycle requirements.
+
 ## 2026-11-19 — Project governance model consolidated
 
 Project-wide development rules were refactored so repository authorization, CD cadence,

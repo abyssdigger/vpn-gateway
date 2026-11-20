@@ -194,3 +194,17 @@ and other integrations retain their own documented policy-neutral onboarding res
 ```text
 EXP050_RESULT=PASS
 ```
+
+
+## Current requirement mapping (2026-11-20)
+
+The result above is unchanged. The experiment explicitly did not test arbitrary root damage.
+
+Its current `VPNG0005-R5.C1` value is the negative recovery fact: the first release need not
+forensic-adopt arbitrary surviving processes or reconstruct untrustworthy namespace ownership
+after unsupported external intervention.
+
+The historical sentence that observable invariant loss "must remain fail-closed/diagnosable"
+must not be read as a blanket rule sourced from `VPNG0005-R5.C1`. Where the tested runtime
+closed forwarding, that containment is justified by the concrete safety/readiness invariant
+that was lost and by the corresponding `VPNG0004` / lifecycle requirements.

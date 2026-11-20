@@ -687,10 +687,16 @@ managed-domain routes/RPDB/NAT/firewall. Examples include OpenVPN `route-noexec`
 WireGuard/wg-quick `Table = off`; conflicting legacy hooks belong outside the supported
 managed-domain contract.
 
-Direct root/admin modification of VPN-GATE-owned namespace/lifecycle artifacts is external
-intervention. Observable invariant loss is fail-closed and diagnosable; Release 1 does not
+Direct root/admin modification of authoritative VPN-GATE-owned managed-domain state outside
+the supported lifecycle is external intervention for recovery purposes. Release 1 does not
 promise forensic adoption or cleanup of arbitrary processes/namespace references left by
-manual damage.
+manual damage. Administrator-owned integration state is not silently promoted to
+VPN-GATE-owned state by this constraint.
+
+If such intervention causes loss of a safety- or readiness-critical invariant, the required
+containment/readiness reaction comes from the applicable `VPNG0004` / lifecycle requirement
+for that invariant. `VPNG0005-R5.C1` itself limits automatic recovery scope; it is not a
+blanket rule that every observable out-of-band change closes all forwarding.
 
 ### 1.1.3. Release-1 bounded VPN lifecycle through systemd
 
@@ -6340,8 +6346,11 @@ Canonical Release-1 configuration теперь определяется `design/
 явно отклонять запрошенную ещё не materialized capability вместо silent ignore.
 
 Если periodic audit обнаруживает exact managed-domain mismatch, alpha пытается прежде всего
-подтвердить `ForwardingGate=DISABLED` и публикует diagnostic в journal; он не усыновляет
-произвольные процессы или вручную поврежденные namespace artifacts.
+подтвердить `ForwardingGate=DISABLED` и публикует diagnostic в journal. Такое containment
+закрывает конкретную потерю safety-critical managed-domain postcondition по
+`VPNG0004-R4.R2` / `VPNG0004-R4.R5`; `VPNG0005-R5.C1` отдельно объясняет, почему alpha
+не обязана усыновлять произвольные процессы или реконструировать вручную поврежденные
+authoritative namespace artifacts.
 
 Python alpha публикует current-only `RuntimeStatusAgent` snapshot атомарно в
 `/run/vpn-gate-alpha/status.json`. Journal markers остаются implementation/evidence
