@@ -21,6 +21,8 @@ on:
       - "design/experiments/EXP-071 NG3 boundary dataplane race/**"
       - "design/experiments/EXP-072 NG3 managed L3 host bootstrap/**"
       - "design/experiments/EXP-073 NG3 routed managed L3 stateful return/**"
+      - "design/experiments/EXP-074 NG3 host managed routing/**"
+      - "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
