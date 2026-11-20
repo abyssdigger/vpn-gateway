@@ -431,8 +431,9 @@ The canonical Device policy/config grammar implements:
 - `VPNG0001-R1.R3.C1.C1.R3`;
 - `VPNG0001-R1.R2.R5` and its canonical-config children.
 
-Historical `nat`, `traffic_envelope`, `publications` and top-level
-`[integration.*]` spellings are not accepted aliases.
+Only the canonical fields and top-level tables defined by this model are accepted for
+enabled configuration objects; unknown fields/tables are rejected rather than interpreted as
+aliases.
 
 ### Ordering
 
