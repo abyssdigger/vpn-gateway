@@ -6620,7 +6620,7 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R2` declarative operation | canonical Release-1 Device/Profile grammar fixed in `config-model.md` and normalized by ConfigurationAdapter; only endpoint-scoped future firewall selector remains deferred |
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
-| `VPNG0001-R2.R1` manual host integration | core independence accepted; concrete administrator-facing route/reachability instructions remain pending under R2.R1.R1 |
+| `VPNG0001-R2.R1` manual host integration | closed through `host-integration.md`: remote-prefix, Profile-SNAT identity, full-tunnel and host-forwarding prerequisites are explicit without requiring a helper |
 | `VPNG0001-R2.R2` peaceful host-routing assistance | closed: top-level `host_routing = "auto" | "manual"`; main-first suppress-default RPDB lowering selected; no periodic ownership/recovery |
 | `VPNG0001-R2.R3` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
