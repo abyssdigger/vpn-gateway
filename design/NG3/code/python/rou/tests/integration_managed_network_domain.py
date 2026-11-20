@@ -9,7 +9,6 @@ import sys
 from rou.forwarding_gate import ForwardingGateState
 from rou.linux_forwarding_gate import LinuxForwardingGateBackend
 from rou.linux_nft_scaffold import SubprocessNftRunner
-from rou.managed_l3_boundary import ManagedL3BoundaryBackend
 from rou.managed_network_domain import (
     ManagedNetworkDomainError,
     ManagedNetworkDomainSpec,
@@ -42,7 +41,6 @@ def main() -> int:
         host_interface=host_interface,
         inner_interface="host0",
         inner_address=IPv4Interface("198.18.255.2/32"),
-        primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
     runner = SubprocessNftRunner()
 
