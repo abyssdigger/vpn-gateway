@@ -87,9 +87,9 @@ finally:
 """
 
 
-def start_server():
+def start_server(port):
     p=subprocess.Popen(
-        ["ip","netns","exec",LAN,"python3","-u","-c",SERVER,LAN_IP,str(PORT)],
+        ["ip","netns","exec",LAN,"python3","-u","-c",SERVER,LAN_IP,str(port)],
         text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
     )
     assert p.stdout is not None
@@ -195,7 +195,7 @@ def main():
         assert BH in route and '"gateway"' not in route,route
         print("EXP075_HOST_SNAT_32_DEVICE_ROUTE=PASS",flush=True)
 
-        server=start_server()
+        server=start_server(PORT)
         client=ns(
             REMOTE,"python3","-c",CLIENT,LAN_IP,str(PORT),check=False
         )
@@ -230,11 +230,10 @@ def main():
         assert STACK_SERVICE in candidate and BH in candidate,candidate
         print("EXP075_GATEWAY_ROUTE_SELECTED=PASS",flush=True)
 
-        global PORT
-        PORT += 1
-        server=start_server()
+        second_port=PORT+1
+        server=start_server(second_port)
         client=ns(
-            REMOTE,"python3","-c",CLIENT,LAN_IP,str(PORT),check=False
+            REMOTE,"python3","-c",CLIENT,LAN_IP,str(second_port),check=False
         )
         out,err=server.communicate(timeout=6)
         server=None
