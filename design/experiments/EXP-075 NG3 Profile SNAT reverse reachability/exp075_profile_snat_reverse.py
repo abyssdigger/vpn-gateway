@@ -30,6 +30,7 @@ BH="vpng0"; BS="stack0"; HL="e75hl"; LH="e75lh"; SV="e75sv"; VR="e75vr"
 HOST_LAN="10.75.0.1"; LAN_IP="10.75.0.2"
 STACK_VPN="203.0.113.1"; REMOTE_IP="203.0.113.2"
 SNAT_IP="198.19.255.10"
+STACK_SERVICE="198.19.255.2"
 MARK=0x10000000
 PORT=18750
 
@@ -106,6 +107,7 @@ def setup():
     ns(HOST,"ip","addr","add",f"{HOST_LAN}/24","dev",HL)
     ns(LAN,"ip","addr","add",f"{LAN_IP}/24","dev",LH)
     ns(STACK,"ip","addr","add",f"{STACK_VPN}/30","dev",SV)
+    ns(STACK,"ip","addr","add",f"{STACK_SERVICE}/32","dev",BS)
     ns(REMOTE,"ip","addr","add",f"{REMOTE_IP}/30","dev",VR)
     for name,ifs in (
         (HOST,(BH,HL)),(STACK,(BS,SV)),(LAN,(LH,)),(REMOTE,(VR,))
@@ -123,6 +125,7 @@ def setup():
 
     # Current routed-L3 contract: addressless HOST endpoint, STACK default through it.
     ns(STACK,"ip","route","add","default","dev",BS)
+    ns(HOST,"ip","route","add",f"{STACK_SERVICE}/32","dev",BH)
     ns(LAN,"ip","route","add","default","via",HOST_LAN)
     ns(REMOTE,"ip","route","add",f"{LAN_IP}/32","via",STACK_VPN,"dev",VR)
 
@@ -202,18 +205,46 @@ def main():
         assert f"PEER={SNAT_IP}" in combined,(combined,client.stdout,client.stderr)
         print("EXP075_FORWARD_SNAT_IDENTITY=PASS",flush=True)
 
-        if client.returncode!=0 or "DATA=ACK:probe" not in client.stdout:
-            neigh=ns(HOST,"ip","neigh","show","dev",BH,check=False).stdout
-            stack_routes=ns(STACK,"ip","-4","route","show","table","main").stdout
-            print("EXP075_REPLY_FAILED=YES",flush=True)
-            print("EXP075_HOST_NEIGH="+repr(neigh),flush=True)
-            print("EXP075_STACK_MAIN="+repr(stack_routes),flush=True)
-            raise AssertionError(
-                "reply to SNAT identity did not return across current routed boundary"
-            )
+        # Current architecture is expected to fail here: HOST ARPs for the
+        # translated identity itself, while STACK owns no route/address for it.
+        assert client.returncode!=0 and "DATA=ACK:probe" not in client.stdout,(
+            "baseline unexpectedly returned",
+            client.stdout,
+            client.stderr,
+        )
+        neigh=ns(HOST,"ip","neigh","show","dev",BH,check=False).stdout
+        print("EXP075_BASELINE_REPLY_FAILED=PASS",flush=True)
+        print("EXP075_BASELINE_HOST_NEIGH="+repr(neigh),flush=True)
 
-        print("EXP075_REVERSE_SNAT_REPLY=PASS",flush=True)
-        print("EXP075_RESULT=PASS",flush=True)
+        # Candidate: keep remote prefixes device-only, but send only the SNAT
+        # identity through the already-owned stack service /32 as an onlink
+        # next hop. No extra stack-local identity address/proxy-neighbour exists.
+        table=str(NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION.table)
+        ns(
+            HOST,"ip","route","replace","table",table,f"{SNAT_IP}/32",
+            "via",STACK_SERVICE,"dev",BH,"onlink",
+            "proto",str(NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION.route_protocol),
+        )
+        ns(HOST,"ip","neigh","flush","dev",BH,check=False)
+        candidate=ns(HOST,"ip","-j","-4","route","get",SNAT_IP).stdout
+        assert STACK_SERVICE in candidate and BH in candidate,candidate
+        print("EXP075_GATEWAY_ROUTE_SELECTED=PASS",flush=True)
+
+        global PORT
+        PORT += 1
+        server=start_server()
+        client=ns(
+            REMOTE,"python3","-c",CLIENT,LAN_IP,str(PORT),check=False
+        )
+        out,err=server.communicate(timeout=6)
+        server=None
+        combined=out+err
+        assert f"PEER={SNAT_IP}" in combined,(combined,client.stdout,client.stderr)
+        assert client.returncode==0 and "DATA=ACK:probe" in client.stdout,(
+            client.stdout,client.stderr
+        )
+        print("EXP075_GATEWAY_REVERSE_SNAT_REPLY=PASS",flush=True)
+        print("EXP075_RESULT=PASS baseline=device-only-failed candidate=stack-service-gateway",flush=True)
         return 0
     finally:
         if server is not None and server.poll() is None:
