@@ -25,7 +25,7 @@ from .linux_nft_scaffold import NftScriptRunner
 from .linux_policy_platform import NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION
 from .managed_network_domain import ManagedNetworkDomainSpec
 from .release1_config import Release1Config
-from .release1_host_boundary import build_release1_host_boundary_plan
+from .release1_host_managed_routing import build_release1_host_managed_routing_plan
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +82,7 @@ def build_host_managed_routing_runtime_desired(
                 "conflicts with managed-boundary service/address ownership"
             )
 
-    plan = build_release1_host_boundary_plan(config)
+    plan = build_release1_host_managed_routing_plan(config)
     return HostManagedRoutingRuntimeDesired(
         routing=build_linux_host_managed_routing_desired(
             plan,

@@ -1,4 +1,4 @@
-"""Canonical Release-1 config -> pure host managed-routing intent."""
+"""Canonical Release-1 config -> pure host managed-routing plan."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from .host_managed_routing import (
 from .release1_config import Release1Config
 
 
-def build_release1_host_boundary_plan(
+def build_release1_host_managed_routing_plan(
     config: Release1Config,
 ) -> HostManagedRoutingPlan:
     """Project enabled Profiles into ordinary-host managed destinations."""

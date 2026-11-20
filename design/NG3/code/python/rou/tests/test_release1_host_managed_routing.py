@@ -2,10 +2,10 @@ import unittest
 from ipaddress import IPv4Network
 
 from rou.release1_config import parse_release1_config
-from rou.release1_host_boundary import build_release1_host_boundary_plan
+from rou.release1_host_managed_routing import build_release1_host_managed_routing_plan
 
 
-class Release1HostBoundaryTests(unittest.TestCase):
+class Release1HostManagedRoutingTests(unittest.TestCase):
     def test_all_enabled_profile_destinations_are_managed_routes(self):
         cfg = parse_release1_config("""
 [device.vpn]
@@ -31,7 +31,7 @@ direction = "bidirectional"
 destinations = ["10.3.0.0/16"]
 device_order = ["vpn"]
 """)
-        plan = build_release1_host_boundary_plan(cfg)
+        plan = build_release1_host_managed_routing_plan(cfg)
         self.assertEqual(
             tuple(item.destination.with_prefixlen for item in plan.routes),
             ("10.1.0.0/16", "10.2.0.0/16", "10.3.0.0/16"),
@@ -50,7 +50,7 @@ direction = "outbound"
 destinations = ["0.0.0.0/0"]
 device_order = ["vpn"]
 """)
-        plan = build_release1_host_boundary_plan(cfg)
+        plan = build_release1_host_managed_routing_plan(cfg)
         self.assertTrue(plan.full_tunnel)
         self.assertEqual(
             plan.routes[0].destination,
@@ -77,7 +77,7 @@ direction = "inbound+snat>198.19.255.10"
 destinations = ["10.20.0.0/16"]
 device_order = ["server"]
 """)
-        plan = build_release1_host_boundary_plan(cfg)
+        plan = build_release1_host_managed_routing_plan(cfg)
         by_destination = {
             item.destination: item.profile_ids
             for item in plan.routes
@@ -101,7 +101,7 @@ direction = "outbound"
 destinations = ["198.51.100.10/32"]
 device_order = ["wg"]
 """)
-        plan = build_release1_host_boundary_plan(cfg)
+        plan = build_release1_host_managed_routing_plan(cfg)
         self.assertEqual(
             plan.routes[0].destination,
             IPv4Network("198.51.100.10/32"),
@@ -119,7 +119,7 @@ direction = "future"
 destinations = ["0.0.0.0/0"]
 device_order = ["vpn"]
 """)
-        plan = build_release1_host_boundary_plan(cfg)
+        plan = build_release1_host_managed_routing_plan(cfg)
         self.assertEqual(plan.routes, ())
         self.assertFalse(plan.full_tunnel)
 
