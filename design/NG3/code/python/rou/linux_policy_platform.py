@@ -39,9 +39,8 @@ NG3_LINUX_POLICY_PLATFORM = NetworkPolicyPlatformSpace(
 )
 
 
-# Current ordinary-host managed-destination routing owner. Only the one current
-# dispatch priority is reserved; superseded paired-RPDB state is not recognized or
-# cleaned up because compatibility with pre-current alpha kernel state is unsupported.
+# Current ordinary-host managed-destination routing owner. Only the current
+# bypass/dispatch/table keys are reserved.
 NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION = HostManagedRoutingLinuxAllocation(
     table=0x7FFF0003,
     bypass_priority=0x6000,
