@@ -15,6 +15,7 @@ from rou.host_managed_routing import (
 )
 from rou.interface_inventory import parse_ip_link_inventory
 from rou.iproute_priority_backend import SubprocessCommandRunner
+from rou.linux_composite_nft import LinuxCompositeNftBackend
 from rou.linux_host_managed_routing import build_linux_host_managed_routing_desired
 from rou.linux_host_managed_routing_backend import (
     LinuxHostManagedRoutingBackend,
@@ -26,6 +27,11 @@ from rou.linux_policy_platform import (
     NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION,
 )
 from rou.linux_stack_return_affinity import LinuxStackReturnAffinityBackend
+from rou.payload_forward_desired import PayloadForwardRuleSpec
+from rou.payload_forward_observation import (
+    PayloadForwardRemoteField,
+    PayloadForwardRuleKind,
+)
 from rou.payload_nat_desired import PayloadNatDesiredState, PayloadProfileSnatSpec
 from rou.payload_nat_observation import compare_payload_nat
 from rou.stack_return_affinity import (
@@ -236,22 +242,25 @@ def setup():
             '}\n'
         )
     )
+    composite=LinuxCompositeNftBackend(runner,STACK)
     for vpn,remote_ip in ((vpn_a,REMOTE_A),(vpn_b,REMOTE_B),(vpn_c,REMOTE_C)):
-        ns(
-            STACK,"nft","add","rule","ip","vpn_gate","payload_forward",
-            "ct","state","new",
-            "meta","iif",str(vpn.ifindex),
-            "meta","oif",str(host_identity.ifindex),
-            "ip","saddr",f"{remote_ip}/32",
-            "accept","comment","vpn-gate:ng3:payload-forward-new-v1",
+        composite.add_profile_rule(
+            PayloadForwardRuleSpec(
+                PayloadForwardRuleKind.NEW,
+                vpn,
+                host_identity,
+                PayloadForwardRemoteField.SOURCE,
+                IPv4Network(f"{remote_ip}/32"),
+            )
         )
-        ns(
-            STACK,"nft","add","rule","ip","vpn_gate","payload_forward",
-            "ct","state","established,related",
-            "meta","iif",str(host_identity.ifindex),
-            "meta","oif",str(vpn.ifindex),
-            "ip","daddr",f"{remote_ip}/32",
-            "accept","comment","vpn-gate:ng3:payload-forward-return-v1",
+        composite.add_profile_rule(
+            PayloadForwardRuleSpec(
+                PayloadForwardRuleKind.RETURN,
+                host_identity,
+                vpn,
+                PayloadForwardRemoteField.DESTINATION,
+                IPv4Network(f"{remote_ip}/32"),
+            )
         )
 
     nat_backend=LinuxPayloadNatBackend(runner,STACK)
