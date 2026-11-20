@@ -41,6 +41,15 @@ When a discussion appears ready to turn into implementation but no CD is active 
 explicit write instruction has been given, report the proposed change and stop at the
 read-only boundary rather than silently beginning implementation.
 
+A question asking whether work can proceed is not an instruction to proceed. In particular,
+confirmation-seeking or declarative questions such as "can we start a new CD?", "we can
+continue now, right?", "this is ready for a new cycle, yes?", or equivalent phrasing ending
+in a question are only requests to confirm readiness. They do not start or resume a CD and
+do not authorize repository mutation. In that situation, answer the readiness question and
+remain read-only. A CD starts or resumes only when the user's active message contains an
+unambiguous directive to begin or resume execution, such as "start a new CD", "begin the
+cycle", "resume the CD", or an equivalent explicit instruction.
+
 Semantic/design approval is **not** repository-write authorization. Agreement phrases such as
 "yes", "ok", "looks good", "I agree", "that's fine", "let's do it", or equivalent approval of
 the proposed content mean only that the proposal is accepted for discussion/design purposes.
