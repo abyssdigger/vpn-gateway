@@ -107,7 +107,7 @@ class AlphaPreparedPolicyTests(unittest.TestCase):
         self.assertEqual(len(desired.stack_return_affinity.rules), 1)
 
 
-    def test_alpha_accepts_availability_but_still_rejects_unmaterialized_snat(self):
+    def test_alpha_materializes_availability_and_profile_snat(self):
         availability = AlphaPreparedPolicy.from_text(
             CONFIG.replace(
                 'device_order = ["ovpn"]',
@@ -142,6 +142,15 @@ class AlphaPreparedPolicyTests(unittest.TestCase):
             str(snat.config.profiles["alpha"].effective_snat_address),
             "198.19.255.10",
         )
+        snat_desired = snat.build_current(
+            host_boundary,
+            (InterfaceIdentity("lo", 1), host_boundary, vpn0),
+        )
+        self.assertIsNotNone(snat_desired.stack_return_affinity)
+        self.assertEqual(len(snat_desired.nft.payload_nat.profile_snat_rules), 1)
+        snat_rule = snat_desired.nft.payload_nat.profile_snat_rules[0]
+        self.assertEqual(str(snat_rule.source_address), "198.19.255.10")
+        self.assertEqual(snat_rule.egress, host_boundary)
 
 
     def test_alpha_materializes_canonical_server_publication_both_halves(self):
