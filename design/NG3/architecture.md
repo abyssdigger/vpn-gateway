@@ -430,7 +430,7 @@ VPN-GATE policy begins once traffic is actually handed through the explicit mana
 Profile direction does not itself grant authority over administrator-owned ordinary-host
 routing.
 
-The product therefore separates two optional helper contracts.
+The product therefore separates two explicitly enabled helper contracts: the peaceful helper capability is required in Release 1 but may be disabled by configuration, while the aggressive helper is a later optional capability.
 
 #### Simple lifecycle helper
 

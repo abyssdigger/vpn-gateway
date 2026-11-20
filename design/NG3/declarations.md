@@ -112,7 +112,7 @@ inline network prefixes
     -> one normalized runtime prefix bundle
 ```
 
-Candidate future reload semantics remain:
+Candidate reload semantics for this **post-first-release external-source feature** remain:
 
 - external files are reread on explicit reload;
 - the currently published runtime state continues operating while the candidate reload is
@@ -121,8 +121,8 @@ Candidate future reload semantics remain:
 - malformed individual source lines should be warnings + skipped entries rather than
   automatically disabling the whole Profile.
 
-This feature is intentionally not part of first-release planning. Without managed Device/VPN
-configuration ownership its near-term value does not justify the source/reload complexity.
+This external-source feature is intentionally not part of first-release planning. This does not defer the general VPN-GATE configuration reload operation now required by `VPNG0005-R5.R6.R4`; only rereading/merging external Profile network-list sources remains post-first-release. Without managed Device/VPN
+configuration ownership its near-term value does not justify the external-source complexity.
 File-level failure semantics, syntax, provenance and atomicity scope are therefore left
 unspecified until that post-first-release discussion rather than treated as an accepted
 deferral.

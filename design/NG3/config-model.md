@@ -37,6 +37,24 @@ A Device may be reused by multiple Profiles.
 - `VPNG0001-R1.R2.R4.R3`
 - `VPNG0001-R1.R2.R4.R4`
 
+## 1.1. Release-1 host-routing control gap
+
+The Device/Profile grammar below remains canonical for its settled fields, but the complete
+Release-1 top-level configuration surface is no longer closed after acceptance of
+`VPNG0001-R2.R2`.
+
+Release 1 must expose an explicit configuration choice that disables or enables the peaceful
+host-routing helper. Exact field name/spelling has not yet been selected and must not be
+invented by parser/runtime code before the corresponding configuration closure.
+
+Therefore:
+
+- the examples below remain canonical for all fields they show;
+- absence of a host-routing helper field in the current examples is an identified
+  `[pending_closure]` gap, not a promise that the helper is always enabled;
+- the current alpha's unconditional authoritative host-routing prototype is not the
+  Release-1 configuration contract.
+
 # 2. Current human-facing representation
 
 The human-facing surface uses TOML root policy plus named Device/Profile tables. The optional
@@ -820,10 +838,11 @@ makes them user policy.
 - `VPNG0003-R3.R6.R3.R1.C1.R1`
 - `VPNG0003-R3.R6.R3.R2`
 
-## 7.1. Complete canonical Release-1 example
+## 7.1. Canonical example for currently settled Release-1 fields
 
-This example intentionally exercises every settled external configuration feature. A concrete
-deployment does not need to use every optional field.
+This example intentionally exercises every currently settled external configuration feature. A concrete
+deployment does not need to use every optional field. The pending peaceful host-routing enable/disable
+control from `VPNG0001-R2.R2` is intentionally not given a provisional spelling here.
 
 ```toml
 default_snat_address = "198.19.255.10"
@@ -973,9 +992,10 @@ This recovered config model does not require NG3 to restore:
 - historical Device publication shorthand or range grammar;
 - old process topology.
 
-NG3 instead uses the independently accepted canonical Release-1 grammar in this document.
+NG3 instead uses the independently accepted canonical grammar for the settled Release-1 fields in this document.
+The one known remaining top-level configuration gap is the explicit peaceful host-routing helper control required by `VPNG0001-R2.R2`; its spelling remains pending closure.
 
-Those require independent NG3 requirements if needed.
+Other additions require independent NG3 requirements if needed.
 
 # 11. Implementation consequences
 
