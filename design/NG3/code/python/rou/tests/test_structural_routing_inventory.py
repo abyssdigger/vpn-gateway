@@ -124,7 +124,7 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
         self.assertEqual(str(payload_rule.destination), "10.77.0.0/16")
 
 
-    def test_host_boundary_lane_protocol_normalizes_to_distinct_route_role(self):
+    def test_legacy_host_boundary_lane_protocol_normalizes_to_distinct_route_role(self):
         value = parse(
             [
                 {
@@ -143,12 +143,12 @@ class StructuralRoutingInventoryTests(unittest.TestCase):
         self.assertEqual(value.conflicts, ())
         self.assertEqual(len(value.routes), 1)
         route = value.routes[0]
-        self.assertIs(route.role, ManagedRouteRole.HOST_BOUNDARY_LANE)
+        self.assertIs(route.role, ManagedRouteRole.LEGACY_HOST_BOUNDARY_LANE)
         self.assertEqual(route.endpoint, LANE)
         self.assertEqual(str(route.destination), "0.0.0.0/0")
         self.assertEqual(str(route.gateway), "198.18.64.5")
 
-    def test_host_boundary_lane_protocol_rejects_nondefault_destination(self):
+    def test_legacy_host_boundary_lane_protocol_rejects_nondefault_destination(self):
         value = parse(
             [
                 {
