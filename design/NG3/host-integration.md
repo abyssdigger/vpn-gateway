@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — ordinary-host integration contract
 
-**Applies to:** Release 1 manual host routing (`host_routing = "manual"`) and equivalent
-administrator-managed integration.
+**Applies to:** Release 1 with `helper_routing_interfaces = ":none"` and to traffic outside
+any explicitly selected peaceful-helper scope.
 
 **Normative requirements:**
 - `VPNG0001-R2`
@@ -20,7 +20,7 @@ neighbor resolution through the selected Proxy-ARP boundary mechanism.
 
 The administrator may choose any ordinary-host routing policy that produces the required
 delivery. VPN-GATE does not require a particular host routing table, RPDB priority scheme or
-route manager when `host_routing = "manual"`.
+route manager when helper routing is disabled or does not select that traffic.
 
 For the current alpha deployment the concrete facts are:
 
@@ -81,8 +81,9 @@ EXP-075 provides the lower evidence for this gateway-backed /32 form.
 ## 4. Full-tunnel host routing
 
 A Profile destination `0.0.0.0/0` means that traffic actually handed to VPN-GATE may be
-classified as full-tunnel traffic. In manual mode the administrator still decides which
-ordinary-host traffic is handed to the boundary.
+classified as full-tunnel traffic. With helper routing disabled, or for traffic outside the
+selected helper scope, the administrator still decides which ordinary-host traffic is handed
+to the boundary.
 
 A literal host default route through the managed endpoint is possible:
 
@@ -112,17 +113,18 @@ provide the ordinary host prerequisites for that role, including as applicable:
 - routes on adjacent ordinary networks back through this host.
 
 VPN-GATE does not enable global host forwarding and does not own unrelated ordinary-host
-firewall/NAT policy merely because `host_routing = "manual"` is used.
+firewall/NAT policy merely because peaceful helper routing is configured.
 
 ## 6. Ownership and failure boundary
 
-With `host_routing = "manual"` VPN-GATE creates no peaceful-helper route/rule contribution.
-Missing, conflicting or later-changed administrator routing is therefore a host integration
-condition, not corruption of core managed forwarding state.
+With `helper_routing_interfaces = ":none"` VPN-GATE creates no peaceful-helper route/rule
+contribution. With a narrower enabled selector, traffic outside that selector remains fully
+administrator-routed. Missing, conflicting or later-changed administrator routing in either
+case is a host integration condition, not corruption of core managed forwarding state.
 
 The managed-domain safety boundary remains independent: once traffic reaches the explicit
 ordinary-side managed boundary, VPN-GATE applies its own Profile/path/firewall/NAT policy and
 its own fail-closed semantics.
 
 The administrator must diagnose ordinary-host routing separately from managed-domain policy.
-Current status exposes the configured `host_routing` mode so the two cases are distinguishable.
+Current status must expose the configured helper-routing selector scope and policy so the cases remain distinguishable.

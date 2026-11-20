@@ -9,6 +9,7 @@ from rou.linux_host_managed_routing import (
     HostManagedRouteSpec,
     HostManagedRoutingLinuxAllocation,
     HostManagedRoutingLinuxDesired,
+    HostManagedScopeExitRuleSpec,
 )
 from rou.linux_host_managed_routing_backend import (
     LinuxHostManagedRoutingBackend,
@@ -155,7 +156,9 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
             routes=(route,),
             bypass=HostManagedBypassRuleSpec(0x6002, "vpng0", 204),
             dispatch=HostManagedDispatchRuleSpec(0x6004, alloc.table, 204),
-            preserve_main=HostManagedPreserveMainRuleSpec(0x6003, 204, 0),
+            preserve_main=HostManagedPreserveMainRuleSpec(
+                0x6003, 204, 0, "eth0", False
+            ),
         )
         rules = json.dumps([
             {
@@ -163,8 +166,8 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
                 "table": 254, "protocol": 204,
             },
             {
-                "priority": 0x6003, "src": "all", "table": 254,
-                "protocol": 204, "suppress_prefixlen": 0,
+                "priority": 0x6003, "src": "all", "iif": "eth0",
+                "table": 254, "protocol": 204, "suppress_prefixlen": 0,
             },
             {
                 "priority": 0x6004, "src": "all", "table": alloc.table,
@@ -184,8 +187,98 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
         self.assertIn(
             (
                 "ip", "-4", "rule", "add", "priority", str(0x6003),
-                "protocol", "204", "lookup", "main",
-                "suppress_prefixlength", "0",
+                "protocol", "204", "iif", "eth0",
+                "lookup", "main", "suppress_prefixlength", "0",
+            ),
+            runner.calls,
+        )
+
+    def test_scoped_dispatch_goto_and_nop_are_observed_and_emitted(self):
+        alloc = HostManagedRoutingLinuxAllocation(
+            table=0x7FFF0004,
+            bypass_priority=0x6002,
+            preserve_priority=0x6003,
+            dispatch_priority=0x6004,
+            scope_exit_priority=0x7000,
+            owned_rule_priorities=NumericResourcePool(0x6003, 0x7001),
+            rule_protocol=204,
+            route_protocol=204,
+        )
+        desired_state = HostManagedRoutingLinuxDesired(
+            routes=(),
+            bypass=HostManagedBypassRuleSpec(0x6002, "vpng0", 204, 0x7000),
+            dispatch=HostManagedDispatchRuleSpec(
+                0x6004, alloc.table, 204, "lo", True
+            ),
+            preserve_main=HostManagedPreserveMainRuleSpec(
+                0x6003, 204, 0, "lo", True
+            ),
+            additional_dispatches=(
+                HostManagedDispatchRuleSpec(
+                    0x6006, alloc.table, 204, "eth0", False
+                ),
+            ),
+            additional_preserve_main=(
+                HostManagedPreserveMainRuleSpec(
+                    0x6005, 204, 0, "eth0", False
+                ),
+            ),
+            scope_exit=HostManagedScopeExitRuleSpec(0x7000, 204),
+        )
+        rules = json.dumps([
+            {
+                "priority": 0x6002, "src": "all", "iif": "vpng0",
+                "goto": 0x7000, "protocol": 204,
+            },
+            {
+                "priority": 0x6003, "src": "all", "not": None,
+                "iif": "lo", "table": 254, "protocol": 204,
+                "suppress_prefixlen": 0,
+            },
+            {
+                "priority": 0x6004, "src": "all", "not": None,
+                "iif": "lo", "table": alloc.table, "protocol": 204,
+            },
+            {
+                "priority": 0x6005, "src": "all",
+                "iif": "eth0", "table": 254, "protocol": 204,
+                "suppress_prefixlen": 0,
+            },
+            {
+                "priority": 0x6006, "src": "all",
+                "iif": "eth0", "table": alloc.table, "protocol": 204,
+            },
+            {
+                "priority": 0x7000, "src": "all", "nop": None,
+                "protocol": 204,
+            },
+        ])
+        runner = Runner("[]", rules)
+        backend = LinuxHostManagedRoutingBackend(runner, alloc)
+        self.assertTrue(backend.observe(desired_state).exact)
+
+        backend.add_bypass_rule(desired_state.bypass)
+        backend.add_dispatch_rule(desired_state.dispatch)
+        backend.add_scope_exit_rule(desired_state.scope_exit)
+        self.assertIn(
+            (
+                "ip", "-4", "rule", "add", "priority", str(0x6002),
+                "protocol", "204", "iif", "vpng0", "goto", str(0x7000),
+            ),
+            runner.calls,
+        )
+        self.assertIn(
+            (
+                "ip", "-4", "rule", "add", "priority", str(0x6004),
+                "protocol", "204", "not", "iif", "lo",
+                "lookup", str(alloc.table),
+            ),
+            runner.calls,
+        )
+        self.assertIn(
+            (
+                "ip", "-4", "rule", "add", "priority", str(0x7000),
+                "protocol", "204", "type", "nop",
             ),
             runner.calls,
         )

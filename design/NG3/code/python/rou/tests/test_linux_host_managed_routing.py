@@ -7,6 +7,7 @@ from rou.host_managed_routing import (
     build_host_managed_routing_plan,
 )
 from rou.linux_host_managed_routing import (
+    HostManagedDispatchSelector,
     HostManagedRoutingLinuxAllocation,
     build_linux_host_managed_routing_desired,
     build_linux_peaceful_host_routing_desired,
@@ -44,7 +45,8 @@ class LinuxHostManagedRoutingTests(unittest.TestCase):
             bypass_priority=0x6002,
             preserve_priority=0x6003,
             dispatch_priority=0x6004,
-            owned_rule_priorities=NumericResourcePool(0x6003, 0x6005),
+            scope_exit_priority=0x7000,
+            owned_rule_priorities=NumericResourcePool(0x6003, 0x7001),
             rule_protocol=204,
             route_protocol=204,
         )
@@ -54,11 +56,30 @@ class LinuxHostManagedRoutingTests(unittest.TestCase):
             self.plan(self.profile("full", Direction.OUTBOUND, "0.0.0.0/0")),
             host_interface="vpng0",
             allocation=self.peaceful_allocation(),
+            dispatch_selectors=(
+                HostManagedDispatchSelector("lo"),
+                HostManagedDispatchSelector("eth0"),
+            ),
         )
         self.assertEqual(desired.bypass.priority, 0x6002)
-        self.assertEqual(desired.preserve_main.priority, 0x6003)
-        self.assertEqual(desired.preserve_main.suppress_prefixlength, 0)
-        self.assertEqual(desired.dispatch.priority, 0x6004)
+        self.assertEqual(desired.bypass.goto_priority, 0x7000)
+        self.assertEqual(
+            [item.priority for item in desired.preserve_main_rules],
+            [0x6003, 0x6005],
+        )
+        self.assertEqual(
+            [item.incoming_interface for item in desired.preserve_main_rules],
+            ["lo", "eth0"],
+        )
+        self.assertEqual(
+            [item.priority for item in desired.dispatch_rules],
+            [0x6004, 0x6006],
+        )
+        self.assertEqual(
+            [item.incoming_interface for item in desired.dispatch_rules],
+            ["lo", "eth0"],
+        )
+        self.assertEqual(desired.scope_exit.priority, 0x7000)
         self.assertEqual(desired.routes[0].table, 0x7FFF0004)
         self.assertEqual(desired.routes[0].protocol, 204)
 

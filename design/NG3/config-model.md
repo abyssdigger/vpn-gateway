@@ -39,25 +39,49 @@ A Device may be reused by multiple Profiles.
 
 ## 1.1. Release-1 host-routing control
 
-The Release-1 peaceful host-routing helper is controlled by the optional top-level field:
+Release 1 separates **which ordinary-host traffic may be assisted** from **how strongly the
+helper owns that routing area**:
 
 ```toml
-host_routing = "auto"   # default
+helper_routing_interfaces = ":none"   # default
+helper_routing_policy = "peaceful"    # default
 ```
 
-Accepted values are:
+`helper_routing_interfaces` is one canonical comma-separated selector string:
 
-- `"auto"` — apply the peaceful lifecycle helper at start and supported reload, and remove
-  only still-identifiable helper-owned contributions at stop;
-- `"manual"` — do not mutate ordinary-host routing; the administrator supplies the required
-  host integration.
+- `":none"` — helper disabled; this value must appear alone;
+- `":local"` — host-originated traffic;
+- `":external"` — all non-local ordinary-host ingress traffic; this value must appear alone;
+- `":any"` — host-originated plus all non-local ordinary-host ingress traffic; this value
+  must appear alone;
+- an exact host interface name — traffic received through that interface;
+- `":local,<ifname>,<ifname>..."` or a list of exact interface names — the union of those
+  selectors.
 
-When the field is absent, `"auto"` is the canonical Release-1 default so the common
-installation receives route assistance without extra configuration. The field is a product
-integration choice, not a Linux routing-table or policy-rule knob.
+Exact interface names use the same canonical Release-1 Linux-interface spelling accepted by
+the existing configuration boundary. `lo` is therefore an ordinary exact interface name and
+may be combined with other names, for example `"lo,eth0"`. Tokens beginning with `:` are
+reserved product selectors rather than interface names; the colon is intentionally not a
+valid Linux interface-name character in the supported grammar.
 
-No other value is accepted in Release 1. In particular, the postponed aggressive helper is
-not exposed by this field until its own requirement/design closure is complete.
+The managed HOST↔STACK boundary is never an ordinary helper ingress selector. Packets already
+emitted by STACK must not be captured back into STACK even when `":any"` or
+`":external"` is selected.
+
+`helper_routing_policy` defaults to `"peaceful"`. Release 1 accepts only
+`"peaceful"`: lifecycle operations may install/update/remove identifiable helper
+contributions, but the helper does not continuously reclaim administrator changes between
+those operations. The future canonical value `"aggressive"` is reserved for the separately
+postponed authoritative helper under `VPNG0001-R2.R3` and must be rejected until that
+capability completes its own requirement/design closure.
+
+The peaceful helper never enables or disables global host IPv4 forwarding. If the effective
+selector includes non-local ingress while IPv4 forwarding is disabled, the implementation
+may report that prerequisite as an operator-visible warning/problem, but ownership of the
+sysctl remains with the administrator.
+
+The defaults deliberately make installation non-invasive: omitting both fields leaves
+ordinary-host routing untouched.
 
 # 2. Current human-facing representation
 
@@ -67,7 +91,7 @@ bare `+snat`:
 
 ```toml
 default_snat_address = "198.19.255.10"
-host_routing = "auto"
+helper_routing_interfaces = ":none"\nhelper_routing_policy = "peaceful"
 
 [device.oc-main]
 enabled = true
@@ -1000,7 +1024,7 @@ This recovered config model does not require NG3 to restore:
 - old process topology.
 
 NG3 instead uses the independently accepted canonical grammar for the settled Release-1 fields in this document.
-The Release-1 peaceful host-routing helper control is the canonical top-level `host_routing = "auto" | "manual"` field defined in section 1.1; no additional host-routing spelling is inherited from NG1.
+The Release-1 peaceful host-routing helper controls are the canonical top-level `helper_routing_interfaces` and `helper_routing_policy` fields defined in section 1.1; the former `host_routing = "auto" | "manual"` spelling and other historical host-routing controls are not inherited.
 
 Other additions require independent NG3 requirements if needed.
 

@@ -117,6 +117,8 @@ from .release1_config import Release1Config, parse_release1_config
 from .release1_host_route_helper import (
     LinuxPeacefulHostRoutingContribution,
     build_linux_peaceful_host_routing_contribution,
+    helper_routing_uses_external_ingress,
+    validate_release1_helper_routing_scope,
 )
 from .structural_policy_mutation import compare_structural_policy
 from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
@@ -637,6 +639,26 @@ def run_alpha_runtime(
             text,
             local_address=domain_spec.inner_address.ip,
         )
+        validate_release1_helper_routing_scope(
+            prepared.config,
+            domain_spec,
+        )
+        if helper_routing_uses_external_ingress(prepared.config):
+            try:
+                host_forwarding = Path(
+                    "/proc/sys/net/ipv4/ip_forward"
+                ).read_text(encoding="ascii").strip()
+            except OSError as exc:
+                _log(
+                    "VPNG_ALPHA_HOST_ROUTING_WARNING",
+                    f"unable_to_read_ipv4_forwarding={exc!r}",
+                )
+            else:
+                if host_forwarding == "0":
+                    _log(
+                        "VPNG_ALPHA_HOST_ROUTING_WARNING",
+                        "external_ingress_selected ipv4_forwarding=disabled",
+                    )
         holder["policy"] = prepared
         return prepared
 

@@ -18,6 +18,7 @@ class HostManagedRoutingLinuxAllocation:
     rule_protocol: int
     route_protocol: int
     preserve_priority: int | None = None
+    scope_exit_priority: int | None = None
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -38,23 +39,19 @@ class HostManagedRoutingLinuxAllocation:
         if self.bypass_priority > self.dispatch_priority:
             raise ValueError("bypass rule must execute before managed dispatch")
         if self.preserve_priority is not None:
-            if (
-                type(self.preserve_priority) is not int
-                or not 1 <= self.preserve_priority <= 0xFFFFFFFF
-            ):
+            if type(self.preserve_priority) is not int or not 1 <= self.preserve_priority <= 0xFFFFFFFF:
                 raise ValueError("preserve_priority must be in [1, 2^32-1] or None")
             if not self.owned_rule_priorities.contains(self.preserve_priority):
-                raise ValueError(
-                    "preserve priority must be inside owned rule priority pool"
-                )
-            if not (
-                self.bypass_priority
-                < self.preserve_priority
-                < self.dispatch_priority
-            ):
-                raise ValueError(
-                    "preserve rule must execute between bypass and managed dispatch"
-                )
+                raise ValueError("preserve priority must be inside owned rule priority pool")
+            if not self.bypass_priority < self.preserve_priority < self.dispatch_priority:
+                raise ValueError("preserve rule must execute between bypass and managed dispatch")
+        if self.scope_exit_priority is not None:
+            if type(self.scope_exit_priority) is not int or not 1 <= self.scope_exit_priority <= 0xFFFFFFFF:
+                raise ValueError("scope_exit_priority must be in [1, 2^32-1] or None")
+            if not self.owned_rule_priorities.contains(self.scope_exit_priority):
+                raise ValueError("scope exit priority must be inside owned rule priority pool")
+            if self.scope_exit_priority <= self.dispatch_priority:
+                raise ValueError("scope exit must execute after managed dispatch")
         for label, value in (
             ("rule_protocol", self.rule_protocol),
             ("route_protocol", self.route_protocol),
@@ -74,10 +71,25 @@ class HostManagedRouteSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class HostManagedDispatchSelector:
+    incoming_interface: str | None = None
+    invert_incoming_interface: bool = False
+
+    def __post_init__(self) -> None:
+        if self.incoming_interface is not None and (
+            not isinstance(self.incoming_interface, str) or not self.incoming_interface
+        ):
+            raise ValueError("incoming_interface must be non-empty text or None")
+        if self.invert_incoming_interface and self.incoming_interface is None:
+            raise ValueError("inverted dispatch requires incoming_interface")
+
+
+@dataclass(frozen=True, slots=True)
 class HostManagedBypassRuleSpec:
     priority: int
     interface: str
     protocol: int
+    goto_priority: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +97,8 @@ class HostManagedDispatchRuleSpec:
     priority: int
     table: int
     protocol: int
+    incoming_interface: str | None = None
+    invert_incoming_interface: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,6 +106,14 @@ class HostManagedPreserveMainRuleSpec:
     priority: int
     protocol: int
     suppress_prefixlength: int = 0
+    incoming_interface: str | None = None
+    invert_incoming_interface: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class HostManagedScopeExitRuleSpec:
+    priority: int
+    protocol: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +122,21 @@ class HostManagedRoutingLinuxDesired:
     bypass: HostManagedBypassRuleSpec | None
     dispatch: HostManagedDispatchRuleSpec | None
     preserve_main: HostManagedPreserveMainRuleSpec | None = None
+    additional_dispatches: tuple[HostManagedDispatchRuleSpec, ...] = ()
+    additional_preserve_main: tuple[HostManagedPreserveMainRuleSpec, ...] = ()
+    scope_exit: HostManagedScopeExitRuleSpec | None = None
+
+    @property
+    def preserve_main_rules(self) -> tuple[HostManagedPreserveMainRuleSpec, ...]:
+        if self.preserve_main is None:
+            return self.additional_preserve_main
+        return (self.preserve_main, *self.additional_preserve_main)
+
+    @property
+    def dispatch_rules(self) -> tuple[HostManagedDispatchRuleSpec, ...]:
+        if self.dispatch is None:
+            return self.additional_dispatches
+        return (self.dispatch, *self.additional_dispatches)
 
 
 def build_linux_host_managed_routing_desired(
@@ -115,17 +152,12 @@ def build_linux_host_managed_routing_desired(
         raise ValueError("host_interface must be non-empty text")
     if not isinstance(allocation, HostManagedRoutingLinuxAllocation):
         raise ValueError("allocation must be HostManagedRoutingLinuxAllocation")
-
-    if stack_service_address is not None and not isinstance(
-        stack_service_address, IPv4Address
-    ):
+    if stack_service_address is not None and not isinstance(stack_service_address, IPv4Address):
         raise ValueError("stack_service_address must be IPv4Address or None")
     if not plan.routes:
         return HostManagedRoutingLinuxDesired((), None, None)
     if any(item.via_stack_service for item in plan.routes) and stack_service_address is None:
-        raise ValueError(
-            "SNAT identity host route requires current stack_service_address"
-        )
+        raise ValueError("SNAT identity host route requires current stack_service_address")
 
     routes = tuple(
         HostManagedRouteSpec(
@@ -133,9 +165,7 @@ def build_linux_host_managed_routing_desired(
             interface=host_interface,
             table=allocation.table,
             protocol=allocation.route_protocol,
-            gateway=(
-                stack_service_address if item.via_stack_service else None
-            ),
+            gateway=stack_service_address if item.via_stack_service else None,
             onlink=item.via_stack_service,
         )
         for item in plan.routes
@@ -160,11 +190,21 @@ def build_linux_peaceful_host_routing_desired(
     *,
     host_interface: str,
     allocation: HostManagedRoutingLinuxAllocation,
+    dispatch_selectors: tuple[HostManagedDispatchSelector, ...],
     stack_service_address: IPv4Address | None = None,
 ) -> HostManagedRoutingLinuxDesired:
-    """Lower the Release-1 lifecycle helper without authoritative host precedence."""
+    """Lower scoped Release-1 lifecycle assistance without authoritative precedence."""
     if allocation.preserve_priority is None:
         raise ValueError("peaceful helper allocation requires preserve_priority")
+    if allocation.scope_exit_priority is None:
+        raise ValueError("peaceful helper allocation requires scope_exit_priority")
+    if not isinstance(dispatch_selectors, tuple) or any(
+        not isinstance(item, HostManagedDispatchSelector) for item in dispatch_selectors
+    ):
+        raise ValueError("dispatch_selectors must be a tuple of HostManagedDispatchSelector")
+    if not dispatch_selectors:
+        return HostManagedRoutingLinuxDesired((), None, None, None)
+
     base = build_linux_host_managed_routing_desired(
         plan,
         host_interface=host_interface,
@@ -173,13 +213,51 @@ def build_linux_peaceful_host_routing_desired(
     )
     if not base.routes:
         return HostManagedRoutingLinuxDesired((), None, None, None)
+
+    preserves = []
+    dispatches = []
+    for offset, selector in enumerate(dispatch_selectors):
+        preserve_priority = allocation.preserve_priority + (offset * 2)
+        dispatch_priority = allocation.dispatch_priority + (offset * 2)
+        if (
+            dispatch_priority >= allocation.scope_exit_priority
+            or not allocation.owned_rule_priorities.contains(preserve_priority)
+            or not allocation.owned_rule_priorities.contains(dispatch_priority)
+        ):
+            raise ValueError("peaceful helper selector count exceeds reserved RPDB priority space")
+        preserves.append(
+            HostManagedPreserveMainRuleSpec(
+                priority=preserve_priority,
+                protocol=allocation.rule_protocol,
+                suppress_prefixlength=0,
+                incoming_interface=selector.incoming_interface,
+                invert_incoming_interface=selector.invert_incoming_interface,
+            )
+        )
+        dispatches.append(
+            HostManagedDispatchRuleSpec(
+                priority=dispatch_priority,
+                table=allocation.table,
+                protocol=allocation.rule_protocol,
+                incoming_interface=selector.incoming_interface,
+                invert_incoming_interface=selector.invert_incoming_interface,
+            )
+        )
+
     return HostManagedRoutingLinuxDesired(
         routes=base.routes,
-        bypass=base.bypass,
-        dispatch=base.dispatch,
-        preserve_main=HostManagedPreserveMainRuleSpec(
-            priority=allocation.preserve_priority,
+        bypass=HostManagedBypassRuleSpec(
+            priority=allocation.bypass_priority,
+            interface=host_interface,
             protocol=allocation.rule_protocol,
-            suppress_prefixlength=0,
+            goto_priority=allocation.scope_exit_priority,
+        ),
+        dispatch=dispatches[0],
+        preserve_main=preserves[0],
+        additional_dispatches=tuple(dispatches[1:]),
+        additional_preserve_main=tuple(preserves[1:]),
+        scope_exit=HostManagedScopeExitRuleSpec(
+            priority=allocation.scope_exit_priority,
+            protocol=allocation.rule_protocol,
         ),
     )

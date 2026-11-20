@@ -13,9 +13,19 @@ Authoritative continuous host-routing ownership is a separate postponed aggressi
 EXP-074 now closes only its narrow authoritative-routing child. Administrative payload
 containment remains an independent postponed safety capability. The authoritative host-routing
 owner is retained only as executable aggressive-helper evidence and has been detached from the
-default alpha path. Release 1 now uses the EXP-077-backed peaceful helper, with
-`host_routing = "auto" | "manual"`, administrator non-default route precedence, no periodic
-host-route reconciliation and non-destructive lifecycle cleanup.
+default alpha path. Release 1 now separates helper scope from ownership policy:
+`helper_routing_interfaces = ":none"` is the non-invasive default, with explicit
+`:local`, `:external`, `:any` and exact-ingress selection, while
+`helper_routing_policy = "peaceful"` is the Release-1 default/only policy. EXP-077 retains
+main-first and non-destructive lifecycle evidence, EXP-078 proves scoped dispatch, and EXP-079
+hardens STACK-origin no-recapture with an absolute RPDB bypass. Explicit non-default
+administrator routes remain stronger inside the selected helper scope, while EXP-080-backed
+selector-paired preserve+dispatch rules leave administrator RPDB ordering outside that scope
+unchanged. There is no periodic peaceful host-route ownership.
+The host-routing helper is also explicitly outside the automatic Rust production cutover:
+its Python implementation may remain after the first release, and moving that helper to Rust
+requires a separate project-holder decision rather than following automatically from the
+core runtime migration.
 
 The same cleanup removed the redundant zero-path safety child that had encoded host
 `ambient/main` fallback into the requirement tree: Profile persistence, valid concrete-path

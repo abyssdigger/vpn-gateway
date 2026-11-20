@@ -86,9 +86,10 @@ NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION = HostManagedRoutingLinuxAllocation(
     bypass_priority=0x6002,
     preserve_priority=0x6003,
     dispatch_priority=0x6004,
+    scope_exit_priority=0x7000,
     owned_rule_priorities=NumericResourcePool(
         first=0x6003,
-        stop=0x6005,
+        stop=0x7001,
     ),
     rule_protocol=204,
     route_protocol=204,

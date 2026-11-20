@@ -1,173 +1,173 @@
-# NG3 Release-1 peaceful host-routing implementation review — 2026-11-20
+# NG3 review — Release-1 scoped peaceful host-routing implementation
+
+**Date:** 2026-11-20  
+**Branch:** `ng3-design-cycle-20261120-helper-routing-finalize-30m`  
+**Implementation baseline reviewed:** `4b8e14cce729786225460a8eed4346ae43b01a28`  
+**Base main snapshot:** `f67322385e6f5ac25bd817067d3dc68d45d443bb` (snapshot 142)  
+**Verdict:** **ACCEPTED — DEVELOPMENT BLOCK COMPLETE**
 
 ## Scope
 
-This review closes the development block that followed the host-network ownership requirement
-correction and replaces the alpha's previously wired authoritative host-routing owner with the
-selected Release-1 peaceful lifecycle helper.
+Final review of the Release-1 peaceful ordinary-host routing helper after the source-scope
+correction, absolute managed-boundary bypass hardening and the review-discovered
+preserve-main non-interference defect.
 
-Branch:
+Also revalidates the development-language boundary after the project-holder decision that
+host-routing helper implementations may remain Python beyond the first release.
 
-`ng3-design-cycle-20261120-host-routing-helper-35m`
+## Requirements
 
-Base main snapshot:
+**Implements / closes:**
 
-`f551da17b8364d7adc4c1c11da5b159e58887736` — Main snapshot 140.
+- `VPNG0001-R2`;
+- `VPNG0001-R2.R2`.
 
-## Product boundary implemented
+**Constrained / revalidated by:**
 
-Core managed forwarding no longer depends on authoritative ordinary-host routing ownership.
+- `VPNG0007-R7.R8`;
+- `VPNG0007-R7.R8.C1`;
+- `VPNG0007-R7.R8.C2`;
+- `VPNG0007-R7.R8.C3`;
+- `VPNG0007-R7.R8.R3`.
 
-Release 1 now exposes:
+## Accepted configuration contract
 
 ```toml
-host_routing = "auto"   # default
-# or
-host_routing = "manual"
+helper_routing_interfaces = ":none"   # default
+helper_routing_policy = "peaceful"    # default / only Release-1 value
 ```
 
-- `auto` enables peaceful lifecycle-scoped route assistance;
-- `manual` creates no peaceful host-routing contribution and leaves ordinary-host integration
-  to the administrator;
-- later administrator route changes are not periodically reconciled and do not gate the
-  internal managed-domain ForwardingGate.
+Canonical selector scopes:
 
-This closes `VPNG0001-R2.R2`.
+- `:none` — no helper contribution;
+- `:local` — host-originated traffic;
+- `:external` — all non-local ingress;
+- `:any` — local + external;
+- exact interface names — exact ingress;
+- `:local` may be unioned with exact interface names.
 
-The manual host-integration contract is published in `design/NG3/host-integration.md` and
-covers remote-prefix reachability, Profile-SNAT identity return routing, full-tunnel underlay
-requirements and the host-local versus host-forwarding distinction. This closes
-`VPNG0001-R2.R1.R1`.
+The old `host_routing = "auto" | "manual"` surface is no longer current.
 
-## Selected Linux lowering
+The default is deliberately non-invasive. Peaceful helper does not own
+`net.ipv4.ip_forward`; external ingress with forwarding disabled is diagnostic-only.
 
-The peaceful helper uses a dedicated helper table and protocol marker, with lookup order:
+## Final Linux lowering
+
+For every effective selector:
 
 ```text
-kernel local
-iif managed-boundary -> main
-main suppress_prefixlength 0
-peaceful-helper table
-ordinary main/default
+<selector> lookup main suppress_prefixlength 0
+<selector> lookup <peaceful-helper-table>
 ```
 
-Consequences:
+The managed HOST↔STACK ingress has a higher-priority absolute jump:
 
-- explicit non-default administrator `main` routes win before helper dispatch;
-- helper `0.0.0.0/0` replaces only otherwise-default routing for ordinary-origin traffic;
-- packets already arriving from STACK use ordinary `main` and are not recaptured;
-- the helper does not rewrite ordinary `main`;
-- Profile-SNAT identity /32 routes use the proven
-  `via <stack-service-address> dev <boundary> onlink` form.
+```text
+iif <managed-boundary> goto <after-helper>
+...
+<after-helper>: nop
+```
 
-The selected Release-1 allocation is independent from the retained aggressive prototype:
+This gives explicit non-default administrator `main` routes precedence **inside selected
+scope** without reordering unrelated administrator RPDB policy outside that scope.
 
-- table `0x7FFF0004`;
-- bypass priority `0x6002`;
-- preserve-main priority `0x6003`;
-- dispatch priority `0x6004`;
-- route/rule protocol `204`.
+Multiple selectors receive deterministic preserve/dispatch pairs. Selector order is not
+product policy. Helper routes remain in a dedicated table and ordinary `main` routes are not
+rewritten.
 
-The EXP-074 aggressive allocation/behavior remains unchanged and detached from alpha runtime
-composition.
+## Review findings and dispositions
 
-## Lifecycle behavior
+### F1 — global preserve-main changed unselected host routing
 
-Startup still treats failure to establish an explicitly enabled `auto` helper as failure of
-that requested lifecycle operation.
+**Finding:** confirmed during this final review.
 
-After successful startup, however, ordinary-host routing returns to administrator control:
+The earlier implementation scoped helper dispatch but left
+`lookup main suppress_prefixlength 0` global. An unselected packet could therefore resolve
+an explicit `main` route before a later administrator RPDB rule that normally precedes
+ordinary kernel `main`.
 
-- alpha periodic reconciliation no longer observes or repairs peaceful host-routing state;
-- later administrator changes do not close core managed forwarding;
-- stop removes only still-identifiable helper-owned state;
-- a foreign/admin replacement at an owned slot is preserved rather than deleted or treated as
-  a core cleanup failure.
+**Evidence:** EXP-080 reproduced the interference and proved the selector-scoped correction.
 
-`manual` mode returns no host-routing contribution at all.
+**Disposition:** **fixed** in `4b8e14cce729786225460a8eed4346ae43b01a28`.
 
-## Observability and deployment surface
+### F2 — managed-boundary lookup-main was not an absolute bypass
 
-Configured-intent status now exposes the normalized `host_routing` mode.
+**Finding:** discovered in the preceding CD.
 
-The alpha deployment README and example configuration describe the selected peaceful helper
-rather than the former authoritative prototype.
+**Evidence:** EXP-079 proved that `goto <post-helper nop>` skips helper capture even when
+ordinary routing has no result.
 
-Current implementation descriptions in the Python reference README/module docstrings and
-NG3 changelog were aligned with the actual runtime composition.
+**Disposition:** **fixed** before this review baseline.
 
-## Acceptance evidence
+### F3 — helper scope had to fail before dependent network mutation
 
-### EXP-077
+Exact selection of the managed boundary itself is rejected by pure candidate-policy scope
+validation before managed-domain creation/convergence.
 
-EXP-077 provides the differentiating privileged evidence for the Release-1 peaceful helper:
+**Disposition:** **fixed** in the preceding CD.
 
-- otherwise-default traffic is assisted through the managed boundary;
-- pre-existing administrator non-default route wins;
-- an administrator /32 added after activation wins immediately without reconciliation;
-- STACK-origin traffic bypasses helper capture;
-- ordinary `main` is not mutated by helper activation;
-- a foreign replacement at the helper preserve-main priority survives peaceful cleanup;
-- final ordinary `main` returns to its pre-helper state.
+### F4 — Rust boundary conflicted with the new helper exception
 
-The experiment emitted `EXP077_RESULT=PASS`.
+The former absolute language text would have required every host-side network-state actor to
+move to Rust and `R7.R8.R3` unconditionally described Python as reference-only.
 
-EXP-074 executed in the same host-routing job and remained PASS, proving that retaining the
-aggressive evidence path did not silently change its authoritative semantics.
+**Disposition:** **fixed**. `VPNG0007-R7.R8.C3` now narrowly permits the host-routing helper
+responsibilities under `VPNG0001-R2.R2` / `R2.R3` to remain Python after the first release
+and after non-exempt runtime cutover. Moving the helper itself to Rust requires a separate
+explicit project holder decision. The integration mechanism between a future Rust core and a
+Python helper is intentionally not invented now.
 
-### Full branch workflow
+No compensating user/admin requirement is needed: this constraint transfers no deployment
+work to an external product participant.
 
-GitHub Actions `NG3 Python` run `44742418333` completed **SUCCESS** on the final code tree.
+## Evidence
 
-All jobs passed, including:
+Selected lower evidence:
 
-- unit tests;
-- alpha smoke;
-- EXP-074 / EXP-077 host-routing job;
-- Debian-12 routed-veth;
-- EXP-049 external OpenVPN integration;
-- payload forwarding/NAT/nft;
-- probing;
-- stack return affinity;
-- Profile SNAT reverse and combined dataplane;
-- host publication.
+- EXP-077 — peaceful lifecycle/main-first/non-destructive cleanup evidence;
+- EXP-078 — `:local`, `:external`, `:any`, exact ingress and selector union;
+- EXP-079 — absolute managed-boundary no-recapture;
+- EXP-080 — old global-preserve counterexample + scoped preserve-main correction.
 
-Actual-main lineage guards also remained green throughout the block.
+Current implementation evidence on workflow run `44772969324`:
 
-## Evidence lifecycle
+- compile/unit — PASS;
+- `linux-host-managed-routing` — PASS, including EXP-074/078/079/080;
+- `linux-alpha-smoke` — PASS on installed Debian 13/systemd alpha with explicit
+  `:local` opt-in.
 
-EXP-077 is selected acceptance evidence for `VPNG0001-R2.R2`.
+The preceding full baseline run `44762191809` was also SUCCESS before F1 was found; it is
+retained only as historical regression evidence, not as proof of the corrected F1 lowering.
 
-It does not supersede EXP-074, which remains selected for the postponed aggressive
-authoritative child `VPNG0001-R2.R3.R1`.
+## Simplification review
 
-EXP-059/060/072 remain valid lower Linux facts/history; EXP-077 reuses the relevant
-specificity-preservation, stack-ingress-bypass and managed-L3 route facts without restoring
-their former complete bootstrap architecture.
+No mark/nft classifier, route-copying into `main`, per-flow state, routing daemon, or
+periodic peaceful ownership is needed.
 
-## Remaining requirement state
+The minimum lower state is:
 
-No unresolved Release-1 obligation remains in this host-routing block.
+- one dedicated helper route table;
+- one absolute managed-boundary bypass + post-helper exit;
+- one preserve+dispatch pair per selected scope;
+- helper-owned routes only;
+- lifecycle-only convergence/cleanup.
 
-The remaining `pending_closure` nodes are explicitly outside the Release-1 obligation:
+The future aggressive helper remains a separate postponed capability and is not silently
+implemented by the peaceful path.
 
-- `VPNG0001-R2.R3` aggressive host-routing helper;
-- `VPNG0001-R2.R3.R2` continuous aggressive ownership/recovery;
-- `VPNG0001-R2.R3.R3` unrecoverable-alarm containment composition;
-- `VPNG0004-R4.R7` administrative payload-containment mode;
-- `VPNG0005-R5.R6.R4` reload semantics when a deployment interface chooses to support reload.
+## Requirement-state disposition
 
-Current causal-link inventory contains four `decomp` links and no active `-> pending`
-target; all four resolve to concrete live requirement nodes. There are no active `unreal`,
-`broken` or `rejected_closure` links.
+- `VPNG0001-R2.R2` -> [`closed`].
+- `VPNG0007-R7.R8.C3` -> [`closed`].
+- `VPNG0007-R7.R8.R3` -> [`closed`] after revalidation against C3.
+- Existing aggressive/containment/reload pending nodes remain unchanged.
 
-## Verdict
+No active `unreal`, `broken` or `rejected_closure` relationship is introduced by this
+block.
+
+## Final verdict
 
 **ACCEPTED — DEVELOPMENT BLOCK COMPLETE.**
 
-The previous alpha mismatch is removed: the default runtime now implements the peaceful
-Release-1 helper semantics rather than the postponed aggressive semantics.
-
-The next development block must start only after normal snapshot publication of this completed
-tree. It should be selected from the remaining Release-1 implementation/readiness work rather
-than by reopening the now-closed host-routing ownership question.
+The current tree is suitable for ordinary snapshot publication once the current workflow
+state is checked and main lineage remains unchanged.

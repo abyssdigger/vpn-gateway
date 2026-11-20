@@ -19,6 +19,9 @@ on:
       - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
       - "design/experiments/EXP-074 NG3 host managed routing/**"
       - "design/experiments/EXP-077 NG3 peaceful host routing/**"
+      - "design/experiments/EXP-078 NG3 peaceful host routing selectors/**"
+      - "design/experiments/EXP-079 NG3 managed boundary helper bypass/**"
+      - "design/experiments/EXP-080 NG3 scoped preserve-main non-interference/**"
       - "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/**"
       - "design/experiments/EXP-076 NG3 combined Profile SNAT/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
@@ -612,11 +615,18 @@ jobs:
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-074 NG3 host managed routing/exp074_host_managed_routing.py"
-      - name: EXP-077 peaceful Release-1 host routing
+      - name: EXP-078 scoped peaceful host routing selectors
         run: >-
-          env PYTHONPATH=design/NG3/code/python
-          sudo --preserve-env=PYTHONPATH python3
-          "design/experiments/EXP-077 NG3 peaceful host routing/exp077_peaceful_host_routing.py"
+          sudo python3
+          "design/experiments/EXP-078 NG3 peaceful host routing selectors/exp078_peaceful_host_routing_selectors.py"
+      - name: EXP-079 managed-boundary absolute helper bypass
+        run: >-
+          sudo python3
+          "design/experiments/EXP-079 NG3 managed boundary helper bypass/exp079_managed_boundary_helper_bypass.py"
+      - name: EXP-080 scoped preserve-main non-interference
+        run: >-
+          sudo python3
+          "design/experiments/EXP-080 NG3 scoped preserve-main non-interference/exp080_scoped_preserve_main.py"
   linux-profile-snat-reverse:
     runs-on: ubuntu-latest
     timeout-minutes: 10

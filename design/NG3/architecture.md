@@ -436,77 +436,120 @@ The product therefore separates two explicitly enabled helper contracts: the pea
 
 #### Simple lifecycle helper
 
-The Release-1 peaceful helper is lifecycle-scoped assistance, not a host-routing supervisor. It is explicitly enabled/disabled by product configuration.
+The Release-1 peaceful helper is lifecycle-scoped assistance, not a host-routing supervisor.
+Its configuration separates the selected traffic scope from the ownership policy:
 
-Its desired contribution is derived from current accepted configuration and may include:
+```toml
+helper_routing_interfaces = ":none"   # default
+helper_routing_policy = "peaceful"    # default
+```
 
-- remote Profile destinations that the administrator wants routed through VPN-GATE; and
-- effective Profile SNAT identities when the administrator wants helper-provided reverse
-  reachability to the managed boundary.
+Release 1 accepts only `peaceful`; `aggressive` remains reserved for the postponed
+capability below. `:none` creates no helper contribution. The remaining selector semantics
+are:
 
-The helper installs identifiable routing contributions at start and updates them on a supported lifecycle reload operation. After successful application, ordinary host routing remains
-administrator-owned rather than continuously owned by VPN-GATE. On stop the helper removes
-only still-identifiable contributions that remain its own and must not delete an
-administrator replacement merely because it occupies the same destination.
+```text
+:local       host-originated traffic
+:external    non-local ordinary-host ingress traffic
+:any         local + external ordinary-host traffic
+<ifname>     traffic received through that exact host interface
+```
 
-Between those lifecycle operations, administrator changes to ordinary host routing are not
-runtime drift under `VPNG0005-R5.R2`, are not out-of-band corruption under
-`VPNG0005-R5.C1`, and do not by themselves close the internal forwarding gate.
+`:local` may be unioned with exact interface names; exact names may be listed together.
+`:none`, `:external` and `:any` are complete scopes and therefore stand alone.
+The managed HOST↔STACK boundary is excluded from the ordinary selector domain even under
+`:any`.
 
-The selected Release-1 Linux lowering is deliberately weaker than the postponed authoritative
-helper and reuses the proven `suppress_prefixlength` RPDB property without giving the helper
-precedence over explicit administrator routes.
+The helper desired route set remains derived from current accepted configuration and may
+include remote Profile destinations plus effective Profile SNAT identities. Scope controls
+**which host routing decisions may dispatch into that table**; it does not change Profile
+destination meaning.
 
-The helper owns one dedicated route table plus three exact RPDB rules, all tagged with one
-reserved helper protocol:
+Lifecycle ownership is unchanged: start installs identifiable contributions, supported
+reload updates them, and stop removes only contributions that still identify as helper-owned.
+Between lifecycle operations administrator changes are not drift under `VPNG0005-R5.R2`,
+are not out-of-band corruption under `VPNG0005-R5.C1`, and do not by themselves close the
+internal ForwardingGate.
+
+The revised Linux closure candidate keeps the already proven main-first behavior **inside
+the selected helper scope only**. EXP-080 showed that a global preserve-main lookup can
+otherwise preempt unrelated administrator RPDB policy for traffic that the helper did not
+select. Each selector therefore owns one preserve+dispatch pair:
 
 ```text
 kernel local rule
     -> local delivery remains local
 
-iif <managed-host-boundary> lookup main
-    -> traffic already emitted by STACK bypasses helper capture
+iif <managed-host-boundary> goto <after-peaceful-helper>
+    -> traffic already emitted by STACK skips the helper range unconditionally
 
-lookup main suppress_prefixlength 0
-    -> any explicit non-default administrator main route wins first
+<selector-1> lookup main suppress_prefixlength 0
+<selector-1> lookup <peaceful-helper-table>
 
-lookup <peaceful-helper-table>
-    -> helper destinations use the managed boundary
+<selector-2> lookup main suppress_prefixlength 0
+<selector-2> lookup <peaceful-helper-table>
 
-ordinary kernel main/default rules
-    -> unmatched traffic remains ordinary
+...
+
+<after-peaceful-helper>: nop
+    -> bypassed traffic resumes ordinary administrator/kernel RPDB processing
+
+ordinary administrator/kernel RPDB + main/default
+    -> unselected traffic is not reordered by helper rules
 ```
 
-The helper table contains only the current helper destinations. Ordinary remote prefixes use a
-device-only route to the managed host endpoint. A Profile SNAT identity uses the already-proven
-onlink next-hop form through the stack service address.
+The pair lowering is:
 
-This ordering has intentionally limited authority:
+```text
+:local
+    -> iif lo lookup main suppress_prefixlength 0
+    -> iif lo lookup <peaceful-helper-table>
 
-- connected/static/more-specific/equal non-default routes already present in `main`, or added
-  later by the administrator, win without helper reconciliation;
-- helper `0.0.0.0/0` may replace ordinary default-route behavior for otherwise-unmatched
-  traffic while the helper remains installed, which is the explicit effect requested by
-  enabling automatic full-tunnel host routing;
-- packets arriving from the managed boundary use ordinary `main` and are not recaptured;
-- the helper never rewrites ordinary `main` routes.
+:external
+    -> not iif lo lookup main suppress_prefixlength 0
+    -> not iif lo lookup <peaceful-helper-table>
 
-Lifecycle mutation is ownership-tagged and non-destructive. Start/reload may remove stale
-entries carrying the helper's reserved protocol and then materialize the current desired set,
-but must not delete foreign entries occupying the same destination or rule slot. Stop removes
-only entries whose current protocol/signature still identifies them as the helper's own; an
-administrator replacement is left untouched. There is no periodic runtime audit or automatic
-repair for this helper, and later host-route changes do not control the internal ForwardingGate.
+:any
+    -> lookup main suppress_prefixlength 0
+    -> lookup <peaceful-helper-table>
 
-Release-1 configuration uses top-level `host_routing = "auto" | "manual"`; absence means
-`"auto"`. `"manual"` builds no host-routing contribution. The postponed aggressive helper
-is not a Release-1 spelling.
+<ifname>
+    -> iif <ifname> lookup main suppress_prefixlength 0
+    -> iif <ifname> lookup <peaceful-helper-table>
+```
 
-This closes `VPNG0001-R2.R2`. EXP-059/060/072 remain reusable lower evidence for
-`suppress_prefixlength`, stack-ingress bypass and managed-L3 device-only routing. EXP-077
-is the selected Release-1 acceptance evidence for the weaker main-first ordering,
-administrator-route precedence and non-destructive replacement cleanup through the current
-implementation.
+The managed-boundary `goto` bypass precedes every helper lookup and targets the helper-owned
+post-dispatch `nop`, so failure of an ordinary route lookup cannot fall back into helper
+capture. EXP-079 proves this exact no-recapture property and its Linux JSON observation
+shape. Multiple exact selectors receive
+deterministic helper-owned rule priorities from one reserved lower allocation; selector order
+has no product semantics. The helper table still contains only helper destinations.
+Ordinary remote prefixes use a device-only route to the managed host endpoint; a Profile
+SNAT identity uses the proven onlink stack-service next hop.
+
+This fixes the full-tunnel boundary: helper `0.0.0.0/0` replaces ordinary default behavior
+only for traffic matching the selected dispatch scope. For example, `:external` may route
+LAN transit through VPN-GATE while host-originated traffic continues through the host's
+ordinary default route; `:local` does the converse; `:any` deliberately requests the
+previous global behavior.
+
+Peaceful routing does not own or mutate `net.ipv4.ip_forward`. A selected external ingress
+therefore still requires administrator-provided host forwarding. The alpha/runtime may emit
+an operator-visible warning when external ingress is selected while IPv4 forwarding is
+disabled, but it must not silently enable the sysctl.
+
+Lifecycle cleanup remains ownership-tagged and non-destructive. There is no periodic runtime
+audit or automatic repair for this helper, and later host-route changes do not control the
+internal ForwardingGate.
+
+EXP-078 proves selector dispatch, selected-scope `0.0.0.0/0` and
+administrator non-default precedence for selected traffic. EXP-079 proves absolute
+managed-boundary no-recapture. EXP-080 proved both the old global-preserve interference and
+the selector-paired correction. The implementation now materializes one preserve+dispatch
+pair per effective selector, and the resulting code passed unit/compile plus privileged
+EXP-074/078/079/080 and installed alpha smoke. EXP-077 remains complementary
+lifecycle/non-destructive cleanup evidence. Together these close the revised
+`VPNG0001-R2.R2`; none supersedes EXP-074 for the postponed aggressive child.
 
 Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
 managed boundary, not by host routing. A helper may automate host reachability to that
@@ -524,11 +567,14 @@ realization is the already-proven dedicated managed table:
 kernel local rule
     -> local delivery remains local
 
-iif <managed-host-boundary> lookup main
-    -> traffic already emitted by STACK uses ordinary host routing
+iif <managed-host-boundary> goto <after-aggressive-helper>
+    -> traffic already emitted by STACK skips aggressive helper capture
 
 lookup <VPNG-managed-destination-table>
     -> matching aggressive-helper managed destinations go to the managed boundary
+
+<after-aggressive-helper>: nop
+    -> bypassed traffic resumes ordinary administrator/kernel RPDB processing
 
 ambient host main/default rules
     -> unmatched traffic remains ordinary
@@ -539,9 +585,9 @@ managed-L3 endpoint. The lower owner does not edit unrelated host `main` routes.
 non-local route in ordinary host `main`, including a more-specific route, does not override
 a destination that the aggressive helper has accepted into its authoritative set.
 
-`EXP-074` proves this exact observable property, including managed `0.0.0.0/0`, dynamic
+`EXP-074` proves authoritative destination precedence, including managed `0.0.0.0/0`, dynamic
 addition of a more-specific competing `main` route, preservation of local delivery,
-stack-origin bypass and cleanup that leaves unrelated `main` state unchanged. This evidence
+stack-origin routing with an available ordinary route and cleanup that leaves unrelated `main` state unchanged. EXP-079 supplies the reusable absolute managed-boundary bypass fact for the no-recapture edge where ordinary routing has no result. Together this evidence
 is sufficient closure for `VPNG0001-R2.R3.R1`; it is **not** evidence that the same
 authoritative precedence is appropriate for the simple helper.
 
@@ -6512,7 +6558,9 @@ internal Manager state.
 - `VPNG0007-R7.R8.R3`.
 
 **Constrained by:**
-- `VPNG0007-R7.R8.C1`.
+- `VPNG0007-R7.R8.C1`;
+- `VPNG0007-R7.R8.C2`;
+- `VPNG0007-R7.R8.C3`.
 
 Rust is a target **implementation boundary**, not a new component role and not a source of
 product semantics. The component contracts, requirement trace and observable network
@@ -6529,10 +6577,11 @@ VPN-path observation
 OS/network-state observation and actuation
 ```
 
-For the first release that claims conformance to this production boundary, those runtime
-responsibilities must execute from the Rust implementation. A Python module is not allowed to
-remain a hidden production-path dependency merely because it was the original executable
-reference.
+For the first release that claims conformance to this production boundary, the non-exempt
+runtime responsibilities must execute from the Rust implementation. A Python module is not
+allowed to remain a hidden dependency for those non-exempt responsibilities merely because
+it was the original executable reference. The host-routing helper is the explicit exception
+defined by `VPNG0007-R7.R8.C3`.
 
 The current `design/NG3/code/python/rou/` implementation has a different role:
 
@@ -6558,6 +6607,26 @@ unit/integration/operational evidence.
 
 Such an early release must
 not be described as the final production/stable implementation boundary.
+
+### Host-routing helper language exception
+
+`VPNG0007-R7.R8.C3` deliberately excludes the host-routing helper responsibilities under
+`VPNG0001-R2.R2` and `VPNG0001-R2.R3` from automatic Rust cutover. Their current Python
+implementation may remain a supported production implementation after the first product
+release and after the rest of the target production runtime has crossed the Rust boundary.
+
+This exception is narrow: it does not relax the Rust boundary for core lifecycle,
+managed-domain forwarding, policy calculation/reconciliation, VPN-path observation, or other
+non-helper responsibilities covered by `VPNG0007-R7.R8`. The exact integration mechanism
+between a future Rust core runtime and a Python helper is intentionally not selected here;
+that is a later architecture decision and must not silently move non-helper responsibilities
+back into Python.
+
+Migrating the helper itself to Rust is therefore not ordinary completion work for
+`VPNG0007-R7.R8`. It may begin only after a separate explicit project holder decision. If
+that decision is made, the migration remains an implementation replacement and must preserve
+the accepted peaceful/aggressive helper contracts and evidence rather than redesigning them
+for language-specific convenience.
 
 Code outside the runtime boundary may continue to use the language most appropriate to its
 job. In particular, disposable experiments, CI/evidence harnesses, test fixtures,
@@ -6604,8 +6673,9 @@ Sufficient evidence for the final production-language transition includes:
   contracts;
 - end-to-end regression of the product scenarios used to accept the corresponding Python
   reference behavior;
-- packaging evidence that the claimed production runtime does not execute Python runtime
-  modules;
+- packaging evidence that non-exempt responsibilities in the claimed production runtime do
+  not execute Python runtime modules; the host-routing helper exception remains governed by
+  `VPNG0007-R7.R8.C3`;
 - an auditable inventory of production `unsafe`/memory-unsafe FFI boundaries and their
   local justifications.
 
@@ -6621,7 +6691,7 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
 | `VPNG0001-R2.R1` manual host integration | closed through `host-integration.md`: remote-prefix, Profile-SNAT identity, full-tunnel and host-forwarding prerequisites are explicit without requiring a helper |
-| `VPNG0001-R2.R2` peaceful host-routing assistance | closed: top-level `host_routing = "auto" | "manual"`; main-first suppress-default RPDB lowering selected; no periodic ownership/recovery |
+| `VPNG0001-R2.R2` peaceful host-routing assistance | closed: default-disabled selector scope + `peaceful` policy; EXP-078 selector semantics, EXP-079 absolute STACK bypass, EXP-080 selector-paired preserve+dispatch non-interference, lifecycle cleanup retained from EXP-077 |
 | `VPNG0001-R2.R3` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
@@ -6637,7 +6707,7 @@ until a separate requirement requires it.
 | `VPNG0006-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
 | `VPNG0006-R6.R2`, `VPNG0006-R6.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
 | `VPNG0006-R6.R3` system failure visibility | RuntimeStatusAgent aggregates current blocking diagnostics without becoming policy owner |
-| `VPNG0007-R7` subtree — implementation quality | applied as cross-cutting architecture rules; target production runtime language boundary is Rust, with Python allowed for early/reference releases under R7.R8.C1 |
+| `VPNG0007-R7` subtree — implementation quality | applied as cross-cutting architecture rules; target production runtime language boundary is Rust, with early/reference Python allowed under R7.R8.C1 and host-routing helper specifically exempted from automatic Rust cutover under R7.R8.C3 |
 
 # 15. Deliberately omitted machinery
 
