@@ -40,3 +40,13 @@ The test uses the production `build_linux_host_boundary_desired`,
 See `EXP-073-result-20261119.md`. Workflow run `44604743687`, job
 `linux-routed-managed-l3-stateful-return` (`135845485540`) completed with
 `EXP073_RESULT=PASS`.
+## Post-result lifecycle
+
+- Logical evidence state: **PROVEN FACT / SUPERSEDED DESIGN**.
+- Current disposition: **historical_only**.
+- Applicability: **утратил применимость к текущей реализации**.
+
+The experiment validly proved the removed stateful host-return owner on the routed boundary.
+Current replies return by managed destination and STACK flow affinity instead; no exact
+one-for-one successor is claimed, and no current runtime module implements this mechanism.
+
