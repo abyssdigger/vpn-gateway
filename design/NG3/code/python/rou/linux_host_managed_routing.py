@@ -17,6 +17,7 @@ class HostManagedRoutingLinuxAllocation:
     owned_rule_priorities: NumericResourcePool
     rule_protocol: int
     route_protocol: int
+    preserve_priority: int | None = None
 
     def __post_init__(self) -> None:
         for label, value in (
@@ -36,6 +37,24 @@ class HostManagedRoutingLinuxAllocation:
             raise ValueError("bypass priority must be outside owned rule priority pool")
         if self.bypass_priority > self.dispatch_priority:
             raise ValueError("bypass rule must execute before managed dispatch")
+        if self.preserve_priority is not None:
+            if (
+                type(self.preserve_priority) is not int
+                or not 1 <= self.preserve_priority <= 0xFFFFFFFF
+            ):
+                raise ValueError("preserve_priority must be in [1, 2^32-1] or None")
+            if not self.owned_rule_priorities.contains(self.preserve_priority):
+                raise ValueError(
+                    "preserve priority must be inside owned rule priority pool"
+                )
+            if not (
+                self.bypass_priority
+                < self.preserve_priority
+                < self.dispatch_priority
+            ):
+                raise ValueError(
+                    "preserve rule must execute between bypass and managed dispatch"
+                )
         for label, value in (
             ("rule_protocol", self.rule_protocol),
             ("route_protocol", self.route_protocol),
@@ -69,10 +88,18 @@ class HostManagedDispatchRuleSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class HostManagedPreserveMainRuleSpec:
+    priority: int
+    protocol: int
+    suppress_prefixlength: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class HostManagedRoutingLinuxDesired:
     routes: tuple[HostManagedRouteSpec, ...]
     bypass: HostManagedBypassRuleSpec | None
     dispatch: HostManagedDispatchRuleSpec | None
+    preserve_main: HostManagedPreserveMainRuleSpec | None = None
 
 
 def build_linux_host_managed_routing_desired(
@@ -124,5 +151,35 @@ def build_linux_host_managed_routing_desired(
             priority=allocation.dispatch_priority,
             table=allocation.table,
             protocol=allocation.rule_protocol,
+        ),
+    )
+
+
+def build_linux_peaceful_host_routing_desired(
+    plan: HostManagedRoutingPlan,
+    *,
+    host_interface: str,
+    allocation: HostManagedRoutingLinuxAllocation,
+    stack_service_address: IPv4Address | None = None,
+) -> HostManagedRoutingLinuxDesired:
+    """Lower the Release-1 lifecycle helper without authoritative host precedence."""
+    if allocation.preserve_priority is None:
+        raise ValueError("peaceful helper allocation requires preserve_priority")
+    base = build_linux_host_managed_routing_desired(
+        plan,
+        host_interface=host_interface,
+        allocation=allocation,
+        stack_service_address=stack_service_address,
+    )
+    if not base.routes:
+        return HostManagedRoutingLinuxDesired((), None, None, None)
+    return HostManagedRoutingLinuxDesired(
+        routes=base.routes,
+        bypass=base.bypass,
+        dispatch=base.dispatch,
+        preserve_main=HostManagedPreserveMainRuleSpec(
+            priority=allocation.preserve_priority,
+            protocol=allocation.rule_protocol,
+            suppress_prefixlength=0,
         ),
     )

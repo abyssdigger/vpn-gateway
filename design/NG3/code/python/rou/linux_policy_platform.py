@@ -76,3 +76,20 @@ NG3_PROBE_LOCAL_PLATFORM = ProbeLocalPlatform(
     process_uid=4242,
     conntrack_mark=0x20000001,
 )
+
+
+# Release-1 peaceful host-routing helper. It is intentionally distinct from the
+# postponed authoritative owner above: explicit non-default main routes are
+# consulted before this table, and no runtime reconciliation is attached.
+NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION = HostManagedRoutingLinuxAllocation(
+    table=0x7FFF0004,
+    bypass_priority=0x6002,
+    preserve_priority=0x6003,
+    dispatch_priority=0x6004,
+    owned_rule_priorities=NumericResourcePool(
+        first=0x6003,
+        stop=0x6005,
+    ),
+    rule_protocol=204,
+    route_protocol=204,
+)
