@@ -66,7 +66,7 @@ Current trace:
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md`, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md`, EXP-051 migration evidence |
-| managed L3 boundary backend + device-only bootstrap/return seam | `managed_l3_boundary.py`, `linux_host_bootstrap.py`, `linux_host_bootstrap_backend.py`, `linux_host_boundary_policy.py`, `linux_host_boundary_routes.py` | EXP-070, EXP-071, EXP-072, EXP-073, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md` |
+| managed L3 boundary backend | `managed_l3_boundary.py`, `managed_network_domain.py` | EXP-070, EXP-071, retained endpoint fact from EXP-072, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md` |
 | controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
 | bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
 | bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
@@ -78,15 +78,12 @@ Current trace:
 | guarded physical payload nft scaffold preparation | `nft_scaffold_executor.py`, `linux_nft_scaffold.py` | `NG3-2026-11-16-nft-scaffold-prepare-code-review.md` |
 | normalized Device NAT intent -> payload masquerade desired projection | `device_policy.py`, `payload_nat_desired.py` | `NG3-2026-11-16-payload-nat-desired-code-review.md`, `EXP-033-result-20261116.md` |
 | host-side Device server publication | `host_publication_policy.py`, `linux_host_publication.py`, alpha runtime composition | `NG3-2026-11-17-host-server-publication-dnat-review.md`, EXP-052, EXP-051 extension |
-| host managed-destination routing projection | `host_boundary_policy.py`, `linux_host_boundary_policy.py` | EXP-056, EXP-072, current managed-host-routing review |
+| host managed-destination routing projection | `host_managed_routing.py`, `release1_host_boundary.py`, `linux_host_managed_routing.py`, `linux_host_managed_routing_backend.py`, `selected_host_boundary.py` | EXP-074, EXP-075, EXP-076 |
 | managed-stack established-flow return affinity | `stack_return_affinity.py`, `linux_stack_return_affinity.py` | EXP-061, current stack-return-affinity cycle review |
 | cross-contract pure structural integration | `tests/test_pure_structural_pipeline.py` | `NG3-2026-11-16-pure-structural-pipeline-integration-review.md` |
 
-The executable reference implementation still stops before separately-gated runtime
-boundaries:
-
-- Profile ordinary-side `+snat` physical materialization;
-- stable production packaging/version lifecycle and a stable external status API.
+The executable reference implementation still stops before stable production
+packaging/version lifecycle and a stable external status API.
 
 Live current-state presentation is no longer one of these gaps: the executable alpha publishes
 the accepted `RuntimeStatusAgent` projection through its documented current-only JSON surface.
@@ -219,7 +216,7 @@ namespace itself.
 
 ### 1.1.1. Managed L3 endpoint contract and Linux backend selection
 
-**Evidence:** EXP-070, EXP-071, EXP-072.
+**Evidence:** EXP-070, EXP-071; retained managed-L3 endpoint fact from EXP-072; EXP-075 for the SNAT-identity next-hop distinction.
 
 The primary HOST <-> STACK attachment has one semantic contract:
 
@@ -280,11 +277,10 @@ For **netkit L3**:
 Release 1 payload is IPv4-only, so IPv6 Proxy-NDP realization is outside this selected backend
 contract until IPv6 product support is re-entered.
 
-EXP-072 additionally proves that the selected paired-RPDB host bootstrap can consume this
-contract directly: its managed routes are `dev <host-endpoint>` with no peer gateway, while
-`0.0.0.0/0`, ordinary-main specificity, nested managed prefixes, dynamic main-route changes,
-stack-ingress bypass and exact cleanup remain unchanged on both routed-veth/Proxy-ARP and
-netkit-L3 realizations.
+EXP-072 remains reusable only for its lower managed-L3 endpoint fact: device-directed managed
+routes work on both routed-veth/Proxy-ARP and netkit-L3 realizations. Its former bootstrap
+specificity semantics are superseded and do not constrain current host routing; that coverage
+transition is recorded in the experiment registry and EXP-074 result.
 
 The managed-L3 endpoint also provides the ordinary boundary for Profile source identities.
 EXP-070 already proves that source NAT itself can execute inside STACK. Its historical positive
@@ -485,15 +481,12 @@ the packet crosses the boundary. This adds no new stack address, proxy-neighbour
 Profile metadata channel.
 
 EXP-074 proves the current authoritative managed-table semantics and stack-origin main bypass.
-EXP-072 remains historical evidence for device-only managed-L3 forwarding under the superseded
-specificity-preserving bootstrap. EXP-056 proves the managed-ingress ordinary-main bypass
-shape. The historical EXP-059/060 paired `suppress_prefixlength` realization remains evidence
-for the older specificity-preserving bootstrap but is no longer selected because that
-specificity rule conflicts with ordinary destination routing for inbound replies once host
-per-flow return steering is removed.
+EXP-075 proves the distinct gateway-backed route required for SNAT identities. Earlier host
+bootstrap/return experiments are lifecycle-classified in the experiment registry and do not
+define current routing behavior.
 
 There is no host conntrack association, return packet mark, dedicated return table or
-`+route-return` behavior. A remote-initiated reply is routed by its destination back through
+user-selectable host return mode. A remote-initiated reply is routed by its destination back through
 the managed endpoint; once inside STACK, the independently owned established-flow affinity
 under `VPNG0002-R2.R6` selects the original Profile/VPN routing domain.
 
@@ -507,9 +500,9 @@ The host routing owner mutates only its reserved table/rules and endpoint routes
 object occupying an exact reserved key is a diagnosable conflict; VPN-GATE neither adopts it
 nor edits unrelated host `main` state.
 
-**Simplification:** removal of stateful host return steering also removes the need for
-EXP-053/073 return marks/tables and for EXP-064 host behavior lanes. Those experiments remain
-historical technical evidence for the superseded boundary model, not current architecture.
+**Simplification:** host return steering and behavior-lane owners are absent from current
+architecture and current code. Superseded experimental evidence is retained only in the
+experiment register/result artifacts.
 
 ### Architectural consequence for external VPN channels
 
@@ -4686,12 +4679,11 @@ Validation is split at the authoritative boundary:
 - duplicate effective SNAT identities across `+snat` Profiles are valid by design.
 
 No cross-namespace Profile metadata carrier, behavior lane, host conntrack class or host-side
-gateway-NAT owner remains. EXP-063 and EXP-064 are retained as historical evidence explaining
-why the former host-carrier model was complex; they no longer define current behavior.
-EXP-070 provides positive Linux evidence that stack-side SNAT/reverse-NAT is feasible on the
-managed-L3 boundary shape. The new combined acceptance evidence must additionally verify
+NAT owner exists in the current design. EXP-076 is the combined acceptance evidence for
 Profile isolation, shared identities, no-SNAT preservation, managed /32 reverse routing and
-post-policy translation ordering.
+post-policy translation ordering; EXP-075 supplies the narrower SNAT-identity next-hop
+evidence. Superseded carrier experiments are retained only as historical evidence in the
+experiment lifecycle artifacts.
 
 **Simplification:** the current model reuses Profile association already required for
 `VPNG0002-R2.R6`, the existing managed postrouting owner and the common host managed-routing
@@ -6528,8 +6520,8 @@ Remaining interface freedom is narrower:
 - parser/serialization implementation details that do not change accepted TOML semantics;
 - any future live-change/reload capability, which is not currently promised;
 - future endpoint-scoped Device firewall syntax under its explicit Release-1 constraint;
-- lower implementation of accepted publication/gateway-NAT capabilities where architecture
-  already defines the semantic ownership but complete physical materialization remains work.
+- lower implementation details of accepted publication capabilities where architecture
+  already defines semantic ownership but packaging/runtime integration may still evolve.
 
 These freedoms must not be expanded into a universal configuration framework without a new
 requirement.
