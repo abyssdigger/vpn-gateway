@@ -66,7 +66,7 @@ Current trace:
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md`, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md`, EXP-051 migration evidence |
-| managed L3 boundary backend | `managed_l3_boundary.py`, `managed_network_domain.py` | EXP-070, EXP-071, retained endpoint fact from EXP-072, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md` |
+| managed L3 boundary lifecycle | `managed_network_domain.py` | EXP-070 routed-veth/Debian-12 evidence, EXP-071 comparative selection evidence, retained routed-veth fact from EXP-072, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md` |
 | controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
 | bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
 | bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
@@ -171,12 +171,11 @@ depends on the endpoint contract, not on one Linux link type. The host sees one 
 VPN-like device identity and the managed namespace sees its peer; routes may target that
 device directly without making a peer gateway address part of Device/Profile semantics.
 
-For Release 1, the selected default Linux realization is a routed veth pair with Proxy ARP
-used only as IPv4 neighbour-resolution machinery. EXP-070 confirms this shape on Debian 12 /
-Linux 6.1 and EXP-071 finds no material steady-state dataplane penalty relative to plain
-netkit L3. Netkit L3 remains a compatible alternate lower backend for kernels that provide it.
-Backend choice is lower platform realization state and is not part of ordinary Device/Profile
-configuration.
+For Release 1, the supported Linux realization is a routed veth pair with Proxy ARP used only
+as IPv4 neighbour-resolution machinery. EXP-070 confirms this shape on Debian 12 / Linux 6.1;
+EXP-071 found no material steady-state dataplane reason to require the younger netkit primitive.
+No runtime-selectable alternate boundary backend is part of the current implementation or
+product contract.
 
 Inside this domain belong the network objects whose semantics are owned by VPN-GATE,
 including:
@@ -214,9 +213,9 @@ The namespace is therefore an architecture choice. If another mechanism can late
 the same isolation/ownership requirements more simply, the requirement does not protect the
 namespace itself.
 
-### 1.1.1. Managed L3 endpoint contract and Linux backend selection
+### 1.1.1. Managed L3 endpoint contract and Linux realization
 
-**Evidence:** EXP-070, EXP-071; retained managed-L3 endpoint fact from EXP-072; EXP-075 for the SNAT-identity next-hop distinction.
+**Evidence:** EXP-070; EXP-071 as comparative selection evidence; retained routed-veth endpoint fact from EXP-072; EXP-075 for the SNAT-identity next-hop distinction.
 
 The primary HOST <-> STACK attachment has one semantic contract:
 
@@ -235,27 +234,14 @@ The contract requires:
 - one current host-visible interface identity and one current managed-stack peer identity;
 - direct device-directed IPv4 routing across the boundary; a peer gateway IP is not a product
   semantic dependency;
-- exact lower ownership/observation of the pair and its backend-specific neighbour behavior;
-- no Profile, Device, NAT-class or path identity encoded in the backend itself;
-- payload firewall/NAT/routing semantics remain owned by their existing policy layers;
-- backend replacement must not require Device/Profile configuration changes.
+- exact lower ownership/observation of the routed-veth pair and its Proxy-ARP/rp-filter state;
+- no Profile, Device, NAT-class or path identity encoded in the boundary itself;
+- payload firewall/NAT/routing semantics remain owned by their existing policy layers.
 
-Release-1 backend selection is intentionally conservative:
-
-```text
-default when available:
-    routed-veth-proxy-arp
-
-compatible alternate:
-    netkit-l3
-```
-
-The reference selection seam is `managed_l3_boundary.py`. With no lower override, Release 1
-prefers routed veth even when netkit exists: Debian-12/Linux-6.1 support is already proven and
-EXP-071 provides no performance reason to require the younger primitive. A lower
-administrator/platform override may select netkit where available; an unavailable requested
-backend fails closed. This override is implementation/platform configuration, not
-human-facing Device/Profile policy.
+The Release-1 lower realization is intentionally singular: `routed-veth-proxy-arp`.
+This is the Debian-12/Linux-6.1-compatible shape already materialized by the managed-domain
+lifecycle. EXP-071 remains comparative evidence that no measured steady-state dataplane reason
+forces a netkit-only design; it does not create a second supported backend.
 
 For **routed veth + Proxy ARP**:
 
@@ -266,21 +252,14 @@ For **routed veth + Proxy ARP**:
 - steady-state payload forwarding remains ordinary kernel IP forwarding; there is no
   userspace proxy and no NAT implied by the boundary backend.
 
-For **netkit L3**:
-
-- the host primary and stack peer satisfy the same device-directed routing contract without
-  Ethernet neighbour emulation;
-- no BPF program or cross-boundary metadata carrier is required by this architecture;
-- optional netkit metadata behavior must therefore not become a hidden dependency of
-  Device/Profile semantics.
-
 Release 1 payload is IPv4-only, so IPv6 Proxy-NDP realization is outside this selected backend
 contract until IPv6 product support is re-entered.
 
-EXP-072 remains reusable only for its lower managed-L3 endpoint fact: device-directed managed
-routes work on both routed-veth/Proxy-ARP and netkit-L3 realizations. Its former bootstrap
-specificity semantics are superseded and do not constrain current host routing; that coverage
-transition is recorded in the experiment registry and EXP-074 result.
+EXP-072 remains reusable only for the lower fact needed by the current realization:
+device-directed managed routes work on routed-veth/Proxy-ARP. Its netkit result remains a
+technical experiment fact but does not define a supported Release-1 backend. Its former
+bootstrap specificity semantics are superseded and do not constrain current host routing;
+that coverage transition is recorded in the experiment registry and EXP-074 result.
 
 The managed-L3 endpoint also provides the ordinary boundary for Profile source identities.
 EXP-070 already proves that source NAT itself can execute inside STACK. Its positive control
@@ -313,14 +292,12 @@ ManagedNetworkDomainSpec:
     host_interface
     inner_interface
     inner_address: IPv4Interface
-    primary_backend: ManagedL3BoundaryBackend
 ```
 
 For the selected alpha/runtime shape:
 
 ```text
-primary_backend = routed-veth-proxy-arp
-inner_address   = stack-local service /32
+inner_address = stack-local service /32
 
 HOST:
     <host_interface>      unnumbered
@@ -389,19 +366,14 @@ Exact verification requires current kernel evidence that:
 - both primary endpoints are current reciprocal veth peers and UP;
 - host endpoint has no IPv4 address;
 - inner endpoint has exactly the configured service `/32`;
-- both endpoint Proxy-ARP/rp-filter values match the selected backend contract;
+- both endpoint Proxy-ARP/rp-filter values match the routed-veth contract;
 - the host service route is exactly device-only through the host endpoint;
 - the namespace default is exactly device-only through the inner endpoint;
-- loopback and every explicitly owned additional boundary are exact.
+- loopback is UP.
 
 Existing divergent infrastructure is not repaired or adopted in place. Destroy first
 re-confirms containment where possible, removes the owned namespace/link infrastructure and
 freshly verifies absence.
-
-`netkit-l3` remains the compatible alternate managed-L3 backend selected by the lower backend
-contract. The current alpha lifecycle Driver intentionally materializes the Debian-12-compatible
-`routed-veth-proxy-arp` backend only; adding the netkit lifecycle Driver must not change any
-Device/Profile or host managed-routing semantics.
 
 ### 1.1.1-A. Host managed-destination routing
 
