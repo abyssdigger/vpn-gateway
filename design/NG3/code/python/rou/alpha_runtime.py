@@ -96,7 +96,6 @@ from .local_publication_policy import (
     PublicationLocalEndpointIntent,
     PublicationProtocol,
 )
-from .managed_l3_boundary import ManagedL3BoundaryBackend
 from .managed_network_domain import (
     ManagedNetworkDomainSpec,
     verify_managed_network_domain,
@@ -577,7 +576,6 @@ def _domain_spec() -> ManagedNetworkDomainSpec:
         host_interface=ALPHA_HOST_INTERFACE,
         inner_interface=ALPHA_INNER_INTERFACE,
         inner_address=ALPHA_INNER_ADDRESS,
-        primary_backend=ManagedL3BoundaryBackend.ROUTED_VETH_PROXY_ARP,
     )
 
 
