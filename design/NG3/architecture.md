@@ -663,14 +663,12 @@ equivalence.
 
 **Implements:**
 - `VPNG0001-R1.R3.C1.R1.R2`;
-- `VPNG0001-R1.R2.R4.R6.R4`.
+- `VPNG0001-R1.R2.R4.R6.R4`;
+- `VPNG0005-R5.C1.R1`.
 
 **Constrained by:**
 - `VPNG0001-R1.R3.C3`;
 - `VPNG0005-R5.C1`.
-
-**Compensates/documented by:**
-- `VPNG0005-R5.C1.R1`.
 
 The requirement boundary does not prescribe a service manager. For the selected Release-1
 Linux realization, systemd remains the external VPN process supervisor rather than introducing
