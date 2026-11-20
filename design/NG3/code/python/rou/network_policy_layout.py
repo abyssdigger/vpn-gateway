@@ -123,7 +123,7 @@ class NetworkPolicyPlatformSpace:
     ambient_main_rule_priority: int
     path_route_protocol: int
     guard_route_protocol: int
-    host_boundary_lane_route_protocol: int
+    legacy_host_boundary_lane_route_protocol: int
     route_metrics: RouteMetricPlatformSpace
     nft_family: str
     nft_table: str
@@ -175,7 +175,7 @@ class NetworkPolicyPlatformSpace:
         for name, value in (
             ("path_route_protocol", self.path_route_protocol),
             ("guard_route_protocol", self.guard_route_protocol),
-            ("host_boundary_lane_route_protocol", self.host_boundary_lane_route_protocol),
+            ("legacy_host_boundary_lane_route_protocol", self.legacy_host_boundary_lane_route_protocol),
         ):
             if type(value) is not int or not 1 <= value <= 255:
                 raise NetworkPolicyLayoutError(
@@ -184,10 +184,10 @@ class NetworkPolicyPlatformSpace:
         if len({
             self.path_route_protocol,
             self.guard_route_protocol,
-            self.host_boundary_lane_route_protocol,
+            self.legacy_host_boundary_lane_route_protocol,
         }) != 3:
             raise NetworkPolicyLayoutError(
-                "path, guard and host-boundary-lane route protocol markers must be distinct"
+                "path, guard and legacy host-boundary-lane route protocol markers must be distinct"
             )
 
         if self.nft_family not in ("ip", "inet"):
