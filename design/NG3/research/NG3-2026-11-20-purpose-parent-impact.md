@@ -1,101 +1,165 @@
-# VPN-GATE NG3 — Purpose/parent correction impact assessment
+# VPN-GATE NG3 — Purpose/parent refactor impact assessment
 
 **Status:** non-normative research artifact  
 **Branch:** `ng3-research-20261120-requirement-purpose-parent-consistency-30m`  
-**Baseline:** main snapshot 145 `623a688e4080de56e5ac14675ffca028c3865d18`
+**Baseline:** main snapshot 145 `623a688e4080de56e5ac14675ffca028c3865d18`  
+**Current research draft:** provisional 184-node tree in
+`NG3-2026-11-20-purpose-parent-corrected-requirements-draft.md`
 
 ## Главный вывод
 
-Большинство обнаруженных дефектов — **traceability/ancestry defects, а не доказанные
-behavior defects**.
+После product-holder review большая часть исходных findings уже не является вопросом
+«сохранять ли capability». Принятые решения в основном **исправляют продуктовую причинность,
+разделяют capability и configuration contract и выносят implementation mechanisms из
+requirement tree**.
 
-Если project holder подтверждает существующую capability и мы только переносим requirement
-под честный parent / меняем Basis/Purpose, текущая архитектура и Python code в большинстве
-случаев могут остаться функционально неизменными. Большая работа будет в remap точных
-requirement IDs по architecture, config-model, experiments и reviews.
+Поэтому ожидаемый эффект текущего draft:
 
-Код нужно переделывать только там, где human decision изменит или удалит сам Statement.
+- **высокий documentation/traceability churn**;
+- **низкий functional-code churn** для уже реализованных Release-1 функций;
+- selected managed-domain/nft architecture может остаться фактически той же, но больше не
+  является нормативной продуктовой семантикой сама по себе;
+- historical reviews и experiment README/results не переписываются задним числом;
+- current architecture/configuration/registry documents должны получить новый requirement
+  trace только после принятия draft как нормативного дерева.
 
-## Impact matrix
+Четыре вопроса остаются открыты: return affinity, priority-only continuity, reload и второй
+VPN lifecycle evidence gate. Их impact ниже выделен отдельно.
 
-| Scope | Если сохранить capability и исправить ancestry | Если capability отклонить/сузить |
+## Принятый draft remap и ожидаемый эффект
+
+| Область | Draft owner | Ожидаемый эффект |
 | --- | --- | --- |
-| `VPNG0001-R1.R2` Purpose wording | **Very low.** Только requirement text; architecture/code semantics не меняются. | n/a |
-| duplicate `VPNG0001-R1.R2.R4.R4.R1` | **Low.** Удалить duplicate ID и remap config/architecture/review references на `VPNG0003` subtree. Code не меняется. | n/a: семантика уже существует в `VPNG0003`. |
-| Profile `+snat` | **Medium docs / low code.** Reparent IDs in architecture/config/evidence; dataplane остается. | **High.** Затронуты `payload_nat_desired.py`, `payload_network_policy_desired.py`, `alpha_runtime.py`, stack-affinity composition, EXP-075/076 и tests. |
-| Device outbound NAT | **Medium docs / low code.** | **Medium-high.** NAT normalization/projection/observation/mutation and composite nft evidence become removable/reworkable. |
-| Device firewall | **High trace remap / low code.** Большой review/evidence surface, но behavior можно сохранить. | **High.** `device_policy.py`, `device_firewall_compiler.py`, `device_firewall_policy_compiler.py`, composite nft planner/mutation and integrations. |
-| VPN-server publication | **Medium trace remap / low code.** | **High.** `host_publication_policy.py`, `linux_host_publication.py`, local publication owner, alpha composition and EXP-052/051 coverage. |
-| client transport/control admission | **Medium trace remap / low code.** Вероятный reparent к onboarding не требует behavior change. | **High for supported in-stack VPN onboarding.** `local_integration_policy.py`, local integration nft owner, alpha/OpenVPN integration. |
-| transport endpoint provenance | **Low-medium.** В основном architecture/evidence; current Release-1 core не зависит от provenance. | **Low current code impact.** Future endpoint-dependent features lose prerequisite. |
-| peaceful helper | **Medium-high trace remap / low code if retained.** `config-model`, helper docs/EXP-077..080 and architecture IDs. | **High Release-1 behavior impact.** `release1_host_route_helper.py`, Linux host-routing backend, config/runtime/status/tests and host-integration expectations. |
-| aggressive helper | **Medium docs.** Capability already postponed; reparenting mostly trace cleanup. | **Low current Release-1 code impact**, but detached prototype/evidence (`host_managed_routing.py`, `selected_host_boundary.py`, EXP-074) becomes removable archival evidence. |
-| established-flow return affinity | **Medium-high trace remap / low code.** | **High safety/forwarding impact.** `stack_return_affinity.py`, `linux_stack_return_affinity.py`, convergence/activation/alpha integration and EXP-061/076. |
-| user-selected availability criterion | **Medium-high trace remap / low code.** | **High config/behavior impact.** availability description/resolver, probe desired/runtime, alpha config/status and EXP-068-related path. |
-| Device-default/Profile-override reuse placement | **Low-medium docs / zero code** if moved out from under ICMP-only constraint while semantics stay. | **Medium-high config/probe impact** only if reuse semantics itself is rejected. |
-| priority-only make-before-break continuity | **Medium trace remap / zero code** if moved under path-preference/availability semantics. | **High route-priority behavior impact** if continuity guarantee is removed; make-before-break planner/executor assumptions and evidence must be reconsidered. |
-| `VPNG0004-R4.R6` host isolation | **Very high docs trace, low code if only reparented.** Exact ID has broad architecture/review/evidence usage. | **Very high architecture/code impact** only if non-interference/isolation promise itself is rejected. |
-| managed network domain requirement status | **High documentation, near-zero runtime if reclassified as architecture.** Keep selected architecture but stop pretending the mechanism is product semantics. | **Very high** if architecture itself must be replaced: `managed_network_domain.py`, controller lifecycle, path observation, nft/routing ownership and most privileged evidence. |
-| literal default DROP requirement | **Medium docs / zero code** if rewritten to mechanism-neutral default-deny behavior while existing nft architecture remains selected. | **High safety code impact** if default-deny behavior itself is rejected; affects scaffold/local owners/composite nft/probe/publication integration. |
-| administrative containment | **Low current code.** Pending architecture can be reparented without implementation change. | **Low current code**, future aggressive-helper composition changes. |
-| reload | **Low current code.** Alpha implements no reload; mainly requirements/architecture/docs cleanup. | **Low.** Remove future obligation; start/stop/restart unchanged. |
-| lifecycle applicability experiment child | **Docs/evidence only.** Reparent/remap EXP-050 trace. | **No production-code impact** unless evidence policy itself is relaxed. |
+| Различимость входящего VPN-трафика | `VPNG0001-R3`; Release-1 config `VPNG0001-R4.R4.R4.R4` | **Medium docs / low code.** Текущая Profile SNAT dataplane может сохраниться; меняется product explanation и trace |
+| Общая пользовательская конфигурация | `VPNG0001-R4` | **High docs / zero behavior.** Бывший `VPNG0001-R1.R2.*` config subtree получает новый ancestry; lifecycle operations остаются в `VPNG0005` |
+| Ordinary→VPN NAT | capability `VPNG0001-R1.R4.R1`; config `VPNG0001-R4.R4.R6.R1` | **Medium trace / low code.** `use_outbound_nat` больше не служит основанием существования NAT capability |
+| Дополнительные ограничения по VPN-ресурсу | `VPNG0001-R1.R4.R2`; per-path `.R1`; config `VPNG0001-R4.R4.R6.R2*` | **High trace / low current code.** Device firewall behavior сохраняется; future per-path selector относится к logical VPN path, не endpoint provenance |
+| VPN server/client transport conditions | `VPNG0001-R1.R3.R6.R1/.R2`; config under `VPNG0001-R4.R4.R6` | **Medium trace / low code.** Publication/local integration implementations остаются, ancestry становится onboarding/channel-service oriented |
+| Transport endpoint provenance | requirement subtree удалён | **Medium architecture cleanup / low current code.** Endpoint/peer остаётся adapter/lower fact; Release-1 core и явные probe targets от него не зависят |
+| Host-routing automation | `VPNG0001-R5`; peaceful `.R1`, detailed Release-1 `.R1.R1`; aggressive `.R2` | **Medium-high trace / low code.** Peaceful helper остаётся Release-1 behavior; aggressive остаётся postponed |
+| Availability criterion | `VPNG0003-R3.R6.R3.R1`; reuse `.R1.R1*`; ICMP-only `.C1`; timing `.C2` | **Medium trace / zero behavior.** Probe/config implementation не требует изменения |
+| Host-state safety | mechanism-neutral `VPNG0004-R4.R6` | **Very high trace / near-zero runtime.** Managed domain/netns/nft остаются выбранной архитектурой, но должны ссылаться на product invariants/functions, а не на удалённый mechanism requirement |
+| Protective mode | `VPNG0004-R5`; Release-1 limitation `.C1` | **Low current code / medium docs.** Capability остаётся postponed; future aggressive-helper composition получает честный safety owner |
 
-## Architecture-wide estimate
+## Архитектура: что меняется по смыслу
 
-### If all disputed capabilities are retained
+### Managed network domain
 
-Expected effect:
+Самое большое изменение — не runtime, а ownership смысла.
 
-1. **No dataplane redesign is implied by this audit.**
-2. Architecture must remap exact requirement IDs and, for a few blocks, stop presenting a
-   selected mechanism as requirement semantics.
-3. The largest traceability churn is around:
-   - managed-domain/isolation (`VPNG0004-R4.R6*`);
-   - Device firewall/NAT/publication;
-   - host-routing helpers;
-   - availability criterion;
-   - Profile SNAT/return affinity.
-4. Historical reviews/experiment results must **not** be rewritten. Current registry/current
-   architecture may record superseding ID mappings; historical documents retain original IDs
-   with branch/time context.
+Draft больше не требует отдельный managed network domain, namespace, boundary endpoints или
+literal `INPUT/OUTPUT/FORWARD=DROP` как product requirements. Эти механизмы могут остаться
+в `design/NG3/architecture.md`, потому что они являются выбранным способом выполнить:
 
-Qualitative estimate: **high documentation churn, low functional-code churn**.
+- `VPNG0004-R4.R6` — внешнее host network state не должно обходить policy VPN-GATE;
+- forwarding/policy requirements `VPNG0001-R1*` и `VPNG0002-R2*`;
+- VPN-path acceptance/binding `VPNG0001-R1.R3*`;
+- fail-closed/readiness requirements `VPNG0004-R4*`.
 
-### If some disputed capabilities are rejected
+Следствие: при нормативном remap архитектурные секции не нужно «депроектировать» из netns.
+Нужно удалить ложную трассировку вида «namespace существует, потому что requirement требует
+namespace» и заменить её на «namespace выбран, чтобы реализовать перечисленные observable
+invariants».
 
-Potential code impact ranges from low (reload, containment, endpoint provenance) to very high
-(managed-domain architecture, Device firewall, Profile SNAT, return affinity, peaceful helper).
+### Endpoint provenance
 
-Therefore this audit does **not** recommend deleting implementation merely because ancestry is
-currently wrong. First fix product provenance/placement; only then use the resulting
-Requirement/Constraint decision to decide whether code is retained, re-traced or removed.
+EXP-039 и исторические reviews остаются evidence того, что такой lower fact технически можно
+получать для конкретной integration. Но current architecture не должна представлять
+transport endpoint provenance как самостоятельную product capability.
 
-## Current code areas already materially coupled to disputed nodes
+Future per-path policy должна использовать logical VPN-path identity. Если lower adapter для
+её materialization использует peer/endpoint, это внутренний architecture contract.
 
-- Profile SNAT: `payload_nat_desired.py`, `payload_network_policy_desired.py`,
-  `alpha_runtime.py`, stack return-affinity allocation.
-- Device firewall: `device_policy.py`, `device_firewall_compiler.py`,
-  `device_firewall_policy_compiler.py`, composite nft code.
-- Publication: `host_publication_policy.py`, `linux_host_publication.py`,
-  local publication owner and alpha runtime.
-- VPN client transport admission: `local_integration_policy.py` and its Linux/local nft owner.
-- Return affinity: `stack_return_affinity.py`, `linux_stack_return_affinity.py`,
-  `stack_return_affinity_convergence.py`, activation/startup integration.
-- Managed domain: `managed_network_domain.py`, controller startup/stop/restart,
-  VPN-path observation and all managed-netns lower policy.
-- Default-deny local/forwarding surface: `nft_payload_scaffold.py`,
-  `composite_nft_policy.py`, probe/local integration/publication owners.
-- Reload: no current Python `rou` implementation was found.
+### Config versus capability
 
-## Recommendation before any normative rewrite
+`config-model.md` должен после нормативного remap различать:
 
-Resolve the unresolved questions in semantic groups, not ID-by-ID:
+1. **что продукт умеет** — functional requirement;
+2. **как пользователь выражает это в Release-1 config** — descendants `VPNG0001-R4*`.
 
-1. **Which capabilities are real product promises?**
-2. **Which are only configuration placement decisions?**
-3. **Which are selected architecture mechanisms?**
-4. Then rebuild ancestry and IDs.
-5. Only after the new tree is accepted, remap current architecture/evidence.
-6. Touch production/reference code only for Statements whose product semantics actually
-   changed.
+Это особенно важно для `+snat`, `use_outbound_nat`, `firewall`,
+`publish_vpn_server`, `allow_vpn_client`.
+
+## Current documents requiring remap after normative promotion
+
+Пока `design/NG3/requirements.md` остаётся нормативным snapshot-145 деревом, менять ссылки
+в current architecture на provisional draft IDs было бы некорректно: architecture начала бы
+ссылаться на несуществующие нормативные requirements. Поэтому в исследовательской ветке
+сейчас фиксируется **remap plan**, а не частично ломающий traceability rewrite.
+
+После явного принятия draft и замены нормативного requirements tree в одном согласованном
+remap unit нужно проверить как минимум:
+
+| Current document | Основной remap |
+| --- | --- |
+| `design/NG3/architecture.md` | config subtree; NAT/firewall/publication/client split; helper IDs; availability reuse; removal of provenance requirement; managed-domain `R4.R6.R1*` trace; protective mode |
+| `design/NG3/config-model.md` | весь бывший `VPNG0001-R1.R2*` → `VPNG0001-R4*`; functional/config split; helper IDs; availability placement |
+| `design/NG3/vpn-onboarding-release1.md` | client transport/control → `VPNG0001-R1.R3.R6.R2` + config contract; remove requirement-level managed-domain provenance assumptions |
+| `design/deferrals/NG3-user-facing-policy-grammar.md` | config IDs and per-path firewall wording; historical decisions remain attributable to original baseline |
+| `design/NG3/code/python/rou/README.md` | peaceful/aggressive helper trace IDs only; code semantics need not change |
+| `design/vpn-gateway-experiments.md` | current selected-coverage descriptions may point to new IDs; historical experiment files retain their original requirement references |
+
+Также необходимо искать все **current** non-historical documents, которые ссылаются на
+удалённые `VPNG0001-R1.R3.R5*`, `VPNG0004-R4.R6.R1*`,
+`VPNG0004-R4.R7*` или старые helper/config IDs.
+
+## Historical evidence policy
+
+Не следует массово переписывать:
+
+- `design/reviews/NG3-2026-...`;
+- `design/experiments/EXP-.../README.md`;
+- сохранённые experiment result files.
+
+Они описывают requirement IDs и reasoning, существовавшие в момент проведения работы.
+Переписывание задним числом уничтожило бы provenance.
+
+Вместо этого current architecture/registries должны фиксировать, какой новый requirement
+использует сохранённое evidence и что именно из старого evidence остаётся применимым после
+semantic remap.
+
+## Functional code impact accepted so far
+
+Текущий draft сам по себе не требует переписывать working behavior следующих областей:
+
+- Profile source translation:
+  `payload_nat_desired.py`, `payload_network_policy_desired.py`,
+  `alpha_runtime.py`;
+- Device firewall:
+  `device_policy.py`, `device_firewall_compiler.py`,
+  `device_firewall_policy_compiler.py`, composite nft code;
+- publication:
+  `host_publication_policy.py`, `linux_host_publication.py`;
+- VPN client transport/control:
+  `local_integration_policy.py` и local nft owner;
+- peaceful helper:
+  `release1_host_route_helper.py` и Linux host-routing backend;
+- availability:
+  availability description/resolver/probe runtime;
+- managed-domain implementation:
+  `managed_network_domain.py`, controller lifecycle, managed-netns routing/nft owners.
+
+Код меняется только если один из оставшихся четырёх human decisions меняет observable
+Statement либо если trace review обнаружит, что текущая реализация была необходима только
+удалённому implementation-specific requirement и не нужна новым product invariants.
+
+## Impact оставшихся четырёх решений
+
+| Finding | Если только исправить placement | Если изменить semantics |
+| --- | --- | --- |
+| `VPNG0002-R2.R6` return affinity | **Medium-high trace / low code** | **High forwarding impact**: stack-return-affinity allocation/convergence и EXP-061/076 assumptions |
+| `VPNG0004-R4.R3.R1` priority continuity | **Medium trace / zero code** | **High route-priority behavior impact** if non-disruptive continuity guarantee is removed |
+| `VPNG0005-R5.R6.R4` reload | **Low docs** | **Low current code**: alpha reload отсутствует |
+| `VPNG0007-R7.R7.R1.R1` lifecycle gate | **Docs/evidence only** | **No direct production-code impact** unless evidence policy is relaxed |
+
+## Итоговая оценка
+
+Для уже принятых refactor decisions:
+
+**high documentation/traceability churn, low functional-code churn.**
+
+Самая трудоёмкая будущая операция — аккуратный remap `architecture.md` и связанных current
+contracts после нормативного принятия нового requirements tree. Самый опасный вид ошибки —
+механически заменить старые IDs без проверки, **какую именно часть старого Statement**
+реализовывал архитектурный блок: многие старые nodes теперь split между product capability,
+configuration contract и architecture mechanism.
