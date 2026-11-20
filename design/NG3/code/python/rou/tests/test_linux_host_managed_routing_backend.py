@@ -32,10 +32,10 @@ class Runner:
 
 def allocation():
     return HostManagedRoutingLinuxAllocation(
-        table=0x7FFF0002,
-        bypass_priority=0x1F00,
-        dispatch_priority=0x2000,
-        owned_rule_priorities=NumericResourcePool(0x2000, 0x2001),
+        table=0x7FFF0003,
+        bypass_priority=0x6000,
+        dispatch_priority=0x6001,
+        owned_rule_priorities=NumericResourcePool(0x6001, 0x6002),
         rule_protocol=203,
         route_protocol=203,
     )
@@ -51,12 +51,12 @@ def desired():
     return HostManagedRoutingLinuxDesired(
         routes=(route,),
         bypass=HostManagedBypassRuleSpec(
-            priority=0x1F00,
+            priority=0x6000,
             interface="vpng0",
             protocol=203,
         ),
         dispatch=HostManagedDispatchRuleSpec(
-            priority=0x2000,
+            priority=0x6001,
             table=allocation().table,
             protocol=203,
         ),
@@ -75,12 +75,12 @@ def desired_snat():
     return HostManagedRoutingLinuxDesired(
         routes=(route,),
         bypass=HostManagedBypassRuleSpec(
-            priority=0x1F00,
+            priority=0x6000,
             interface="vpng0",
             protocol=203,
         ),
         dispatch=HostManagedDispatchRuleSpec(
-            priority=0x2000,
+            priority=0x6001,
             table=allocation().table,
             protocol=203,
         ),
@@ -104,14 +104,14 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
         rules = json.dumps(
             [
                 {
-                    "priority": 0x1F00,
+                    "priority": 0x6000,
                     "src": "all",
                     "iif": "vpng0",
                     "table": 254,
                     "protocol": 203,
                 },
                 {
-                    "priority": 0x2000,
+                    "priority": 0x6001,
                     "src": "all",
                     "table": allocation().table,
                     "protocol": 203,
@@ -139,14 +139,14 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
             [
                 {"priority": 0, "src": "all", "table": 255},
                 {
-                    "priority": 0x1F00,
+                    "priority": 0x6000,
                     "src": "all",
                     "iif": "vpng0",
                     "table": 254,
                     "protocol": 203,
                 },
                 {
-                    "priority": 0x2000,
+                    "priority": 0x6001,
                     "src": "all",
                     "table": allocation().table,
                     "protocol": 203,
@@ -164,7 +164,7 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
         rules = json.dumps(
             [
                 {
-                    "priority": 0x2000,
+                    "priority": 0x6001,
                     "src": "all",
                     "table": 100,
                     "protocol": 99,
@@ -206,7 +206,7 @@ class LinuxHostManagedRoutingBackendTests(unittest.TestCase):
         )
         self.assertIn(
             (
-                "ip", "-4", "rule", "add", "priority", str(0x2000),
+                "ip", "-4", "rule", "add", "priority", str(0x6001),
                 "protocol", "203", "lookup", str(allocation().table),
             ),
             runner.calls,
