@@ -267,28 +267,20 @@ def preflight_managed_network_domain(
         current_host_links,
         spec.host_interface,
     ) is not None
-    additional_host_exists = any(
-        _single_link(current_host_links, item.host_interface) is not None
-        for item in spec.additional_boundaries
-    )
-
     if namespace_exists:
         _require_containment(spec, runner)
 
-    if not namespace_exists and not host_exists and not additional_host_exists:
+    if not namespace_exists and not host_exists:
         return ManagedNetworkDomainPreflightResult(
             existing=False,
             verification=None,
         )
 
-    if namespace_exists != host_exists or (
-        not namespace_exists and additional_host_exists
-    ):
+    if namespace_exists != host_exists:
         raise ManagedNetworkDomainError(
             "managed network-domain infrastructure is partially present; "
             f"namespace_exists={namespace_exists} "
-            f"host_boundary_exists={host_exists} "
-            f"additional_host_boundary_exists={additional_host_exists}"
+            f"host_boundary_exists={host_exists}"
         )
 
     verification = verify_managed_network_domain(spec, runner)
@@ -346,26 +338,18 @@ def destroy_managed_network_domain(
         except Exception:
             pass
 
-    for host_interface in (
-        spec.host_interface,
-        *(item.host_interface for item in spec.additional_boundaries),
-    ):
-        if _single_link(_link_rows(runner), host_interface) is not None:
-            try:
-                runner.run(("ip", "link", "del", host_interface))
-            except Exception:
-                pass
+    if _single_link(_link_rows(runner), spec.host_interface) is not None:
+        try:
+            runner.run(("ip", "link", "del", spec.host_interface))
+        except Exception:
+            pass
 
     errors = []
     if spec.namespace in _namespace_names(runner):
         errors.append(f"namespace {spec.namespace!r} still exists")
     current_host_links = _link_rows(runner)
-    for host_interface in (
-        spec.host_interface,
-        *(item.host_interface for item in spec.additional_boundaries),
-    ):
-        if _single_link(current_host_links, host_interface) is not None:
-            errors.append(f"host interface {host_interface!r} still exists")
+    if _single_link(current_host_links, spec.host_interface) is not None:
+        errors.append(f"host interface {spec.host_interface!r} still exists")
     if errors:
         raise ManagedNetworkDomainError("; ".join(errors))
 
