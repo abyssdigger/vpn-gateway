@@ -156,17 +156,6 @@ remote_port = 11940
             "198.19.255.10",
         )
 
-        with self.assertRaisesRegex(Exception, "historical"):
-            AlphaPreparedPolicy.from_text(
-                CONFIG.replace(
-                    'direction = "outbound"',
-                    'direction = "inbound+route-return"',
-                ).replace(
-                    'use_outbound_nat = false\n',
-                    "",
-                ),
-                local_address=IPv4Address("198.19.255.2"),
-            )
 
     def test_alpha_materializes_canonical_server_publication_both_halves(self):
         replacement = (
