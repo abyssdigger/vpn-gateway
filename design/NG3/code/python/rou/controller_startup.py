@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
-from .controller_boundary_contribution import ControllerBoundaryContribution
+from .host_routing_contribution import HostRoutingContribution
 from .forwarding_gate import (
     ForwardingGateExecutionResult,
     ForwardingGateState,
@@ -65,13 +65,13 @@ class ValidatedPolicyLoader(Protocol):
         """Load/validate candidate config and return a pure current-state builder."""
 
 
-class ControllerBoundaryContributionBuilder(Protocol):
+class HostRoutingContributionBuilder(Protocol):
     def __call__(
         self,
         prepared: PreparedPayloadPolicy,
         domain_spec: ManagedNetworkDomainSpec,
-    ) -> ControllerBoundaryContribution | None:
-        """Build one bounded optional host-boundary contribution."""
+    ) -> HostRoutingContribution | None:
+        """Build one bounded optional host-routing contribution."""
 
 
 class ControllerStopRequested(Protocol):
@@ -90,8 +90,8 @@ class ControllerStartupStatus(str, Enum):
     DOMAIN_ENSURE_FAILED = "domain_ensure_failed"
     INTERFACE_OBSERVATION_FAILED = "interface_observation_failed"
     DESIRED_BUILD_FAILED = "desired_build_failed"
-    BOUNDARY_BUILD_FAILED = "boundary_build_failed"
-    BOUNDARY_CONVERGENCE_FAILED = "boundary_convergence_failed"
+    HOST_ROUTING_BUILD_FAILED = "boundary_build_failed"
+    HOST_ROUTING_CONVERGENCE_FAILED = "boundary_convergence_failed"
     ACTIVATION_FAILED = "activation_failed"
     FAILURE_CONTAINMENT_FAILED = "failure_containment_failed"
 
@@ -104,7 +104,7 @@ class ControllerStartupSession:
     interfaces: tuple[InterfaceIdentity, ...]
     desired: PayloadNetworkPolicyDesiredState
     activation: NetworkPolicyActivationResult
-    boundary_contribution: ControllerBoundaryContribution | None = None
+    host_routing_contribution: HostRoutingContribution | None = None
 
     def __post_init__(self) -> None:
         if not self.lock.acquired:
@@ -135,7 +135,7 @@ class ControllerStartupResult:
     session: ControllerStartupSession | None
     preflight: ManagedNetworkDomainPreflightResult | None = None
     domain: ManagedNetworkDomainEnsureResult | None = None
-    boundary_contribution: ControllerBoundaryContribution | None = None
+    host_routing_contribution: HostRoutingContribution | None = None
     activation: NetworkPolicyActivationResult | None = None
     failure_containment: ForwardingGateExecutionResult | None = None
     failure_status: ControllerStartupStatus | None = None
@@ -172,7 +172,7 @@ def start_controller_once(
     platform: NetworkPolicyPlatformSpace,
     load_validated_policy: ValidatedPolicyLoader,
     stop_requested: ControllerStopRequested | None = None,
-    build_boundary_contribution: ControllerBoundaryContributionBuilder | None = None,
+    build_host_routing_contribution: HostRoutingContributionBuilder | None = None,
     stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
 ) -> ControllerStartupResult:
     """Run one bounded startup attempt with phase-boundary graceful-stop checkpoints."""
@@ -202,7 +202,7 @@ def start_controller_once(
 
     preflight: ManagedNetworkDomainPreflightResult | None = None
     domain: ManagedNetworkDomainEnsureResult | None = None
-    boundary_contribution: ControllerBoundaryContribution | None = None
+    host_routing_contribution: HostRoutingContribution | None = None
 
     if requested():
         lock.release()
@@ -220,7 +220,7 @@ def start_controller_once(
             lock,
             domain_spec,
             runner,
-            boundary_contribution,
+            host_routing_contribution,
         )
         if stopped.stopped:
             return ControllerStartupResult(
@@ -273,7 +273,7 @@ def start_controller_once(
             session=None,
             preflight=preflight,
             domain=domain,
-            boundary_contribution=boundary_contribution,
+            host_routing_contribution=host_routing_contribution,
             activation=activation,
             failure_containment=containment,
             failure_status=failure_status,
@@ -409,28 +409,28 @@ def start_controller_once(
     if interrupted is not None:
         return interrupted
 
-    if build_boundary_contribution is not None:
+    if build_host_routing_contribution is not None:
         try:
-            boundary_contribution = build_boundary_contribution(
+            host_routing_contribution = build_host_routing_contribution(
                 prepared,
                 domain_spec,
             )
             if (
-                boundary_contribution is not None
-                and not hasattr(boundary_contribution, "converge")
+                host_routing_contribution is not None
+                and not hasattr(host_routing_contribution, "converge")
             ):
                 raise TypeError(
-                    "boundary contribution must implement converge()/cleanup()"
+                    "host-routing contribution must implement converge()/cleanup()"
                 )
         except Exception as exc:
             containment = _contain(domain_spec, runner)
             return fail(
                 (
-                    ControllerStartupStatus.BOUNDARY_BUILD_FAILED
+                    ControllerStartupStatus.HOST_ROUTING_BUILD_FAILED
                     if containment.confirmed
                     else ControllerStartupStatus.FAILURE_CONTAINMENT_FAILED
                 ),
-                "boundary contribution build failed: "
+                "host-routing contribution build failed: "
                 f"{type(exc).__name__}: {exc}"
                 + (
                     ""
@@ -438,16 +438,16 @@ def start_controller_once(
                     else "; failure containment is not confirmed"
                 ),
                 containment=containment,
-                failure_status=ControllerStartupStatus.BOUNDARY_BUILD_FAILED,
+                failure_status=ControllerStartupStatus.HOST_ROUTING_BUILD_FAILED,
             )
 
-        if boundary_contribution is not None:
+        if host_routing_contribution is not None:
             try:
-                boundary_contribution.converge()
+                host_routing_contribution.converge()
             except Exception as exc:
                 cleanup_error = None
                 try:
-                    boundary_contribution.cleanup()
+                    host_routing_contribution.cleanup()
                 except Exception as cleanup_exc:
                     cleanup_error = (
                         f"{type(cleanup_exc).__name__}: {cleanup_exc}"
@@ -456,11 +456,11 @@ def start_controller_once(
                 failed_safe = containment.confirmed and cleanup_error is None
                 return fail(
                     (
-                        ControllerStartupStatus.BOUNDARY_CONVERGENCE_FAILED
+                        ControllerStartupStatus.HOST_ROUTING_CONVERGENCE_FAILED
                         if failed_safe
                         else ControllerStartupStatus.FAILURE_CONTAINMENT_FAILED
                     ),
-                    "boundary contribution convergence failed: "
+                    "host-routing contribution convergence failed: "
                     f"{type(exc).__name__}: {exc}"
                     + (
                         ""
@@ -473,11 +473,11 @@ def start_controller_once(
                         else "; failure containment is not confirmed"
                     ),
                     containment=containment,
-                    failure_status=ControllerStartupStatus.BOUNDARY_CONVERGENCE_FAILED,
+                    failure_status=ControllerStartupStatus.HOST_ROUTING_CONVERGENCE_FAILED,
                     retain_lock=cleanup_error is not None,
                 )
 
-        interrupted = interrupted_stop("boundary contribution convergence")
+        interrupted = interrupted_stop("host-routing contribution convergence")
         if interrupted is not None:
             return interrupted
 
@@ -513,9 +513,9 @@ def start_controller_once(
 
     if not activation.ready:
         boundary_cleanup_error = None
-        if boundary_contribution is not None:
+        if host_routing_contribution is not None:
             try:
-                boundary_contribution.cleanup()
+                host_routing_contribution.cleanup()
             except Exception as exc:
                 boundary_cleanup_error = f"{type(exc).__name__}: {exc}"
         if boundary_cleanup_error is not None:
@@ -578,7 +578,7 @@ def start_controller_once(
         interfaces=interfaces,
         desired=desired,
         activation=activation,
-        boundary_contribution=boundary_contribution,
+        host_routing_contribution=host_routing_contribution,
     )
     return ControllerStartupResult(
         status=ControllerStartupStatus.READY,

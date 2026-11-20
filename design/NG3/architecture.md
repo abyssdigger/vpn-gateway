@@ -68,8 +68,8 @@ Current trace:
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md`, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md`, EXP-051 migration evidence |
 | managed L3 boundary lifecycle | `managed_network_domain.py` | EXP-070 routed-veth/Debian-12 evidence, EXP-071 comparative selection evidence, retained routed-veth fact from EXP-072, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md` |
 | controller lifetime instance exclusion | `instance_lock.py` | `NG3-2026-11-17-controller-instance-lock-review.md` |
-| bounded controller startup assembly | `controller_startup.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md` |
-| bounded controller stop / owned-domain cleanup | `controller_stop.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md` |
+| bounded controller startup assembly | `controller_startup.py`, `host_routing_contribution.py`, `release1_host_route_helper.py`, `managed_network_domain.py` preflight | `NG3-2026-11-17-controller-startup-review.md`, current host-routing lifecycle cleanup review |
+| bounded controller stop / owned-domain cleanup | `controller_stop.py`, `host_routing_contribution.py`, `managed_network_domain.py` teardown | `NG3-2026-11-17-controller-stop-cleanup-review.md`, current host-routing lifecycle cleanup review |
 | bounded controller restart composition | `controller_restart.py` | `NG3-2026-11-17-controller-restart-review.md` |
 | phase-bounded STARTING termination checkpoints | `controller_startup.py`, shared owned-domain cleanup in `controller_stop.py` | `NG3-2026-11-17-starting-termination-review.md` |
 | managed-netns structural forwarding gate | `forwarding_gate.py`, `linux_forwarding_gate.py` | `NG3-2026-11-16-forwarding-gate-code-review.md`, `EXP-030-result-20261116.md` |
@@ -6011,9 +6011,12 @@ The startup sequence is:
        existing -> repeat contained exact verify
 5. fresh managed-domain link inventory
 6. pure build_current(host_boundary, interfaces) -> complete payload desired state
-7. activate_network_policy(...)
-8. READY only when activation is READY
-9. return startup session while retaining lifetime lock
+7. optionally build + converge the configured HostRoutingContribution
+       peaceful Release-1 helper when helper_routing_interfaces != ":none"
+       no contribution when helper routing is disabled
+8. activate_network_policy(...)
+9. READY only when activation is READY
+10. return startup session while retaining lifetime lock and the active host-routing contribution
 ```
 
 A busy lock exits before domain/config/policy work.
@@ -6024,8 +6027,14 @@ already existed, it remains protectively closed by preflight.
 After successful domain ensure, failure to observe current links or build desired state causes
 one explicit `ForwardingGate=DISABLED` containment verification before the lock is released.
 
-Activation failures reuse the activation subassembly's own failure-containment result and are
-not retried by startup.
+Host-routing contribution build/convergence happens before managed payload activation so the
+ordinary-host delivery prerequisite is established before the managed forwarding policy can
+become READY. If contribution convergence fails, startup attempts contribution cleanup and
+confirms `ForwardingGate=DISABLED`; an unconfirmed cleanup keeps the lifetime lock retained.
+
+Activation failures reuse the activation subassembly's own failure-containment result. If an
+active host-routing contribution exists, startup attempts its cleanup before reporting the
+activation failure. Neither contribution convergence nor activation is retried by startup.
 
 Startup failure does not automatically destroy a successfully verified managed domain. A
 contained exact domain is safe reusable infrastructure for a later start; destructive
@@ -6066,19 +6075,22 @@ require retained controller lifetime lock
     ->
 attempt fresh ForwardingGate=DISABLED convergence
     ->
-regardless of that result, attempt owned managed-domain teardown
+if a HostRoutingContribution is active, attempt its cleanup
+    ->
+regardless of containment/helper-cleanup result, attempt owned managed-domain teardown
     ->
 fresh teardown postcondition:
     named managed namespace absent
     host boundary veth absent
     ->
-only after confirmed teardown release controller lifetime lock
+release controller lifetime lock only when all required cleanup areas succeeded
 ```
 
-The teardown attempt is independent from the preceding containment result. Failure to confirm
-the gate must not suppress the stronger cleanup attempt of removing the owned network domain.
-Conversely, a teardown failure does not justify releasing the lifetime lock while this
-controller process remains alive.
+The host-routing cleanup and managed-domain teardown attempts are independent from the
+preceding containment result. Failure to confirm the gate must not suppress either cleanup
+area, and host-routing cleanup failure must not suppress managed-domain teardown. Conversely,
+failure of either required cleanup area does not justify releasing the lifetime lock while
+this controller process remains alive.
 
 Results distinguish:
 
@@ -6205,6 +6217,9 @@ fresh interface observation
 pure desired-state build
     -> checkpoint
 
+host-routing contribution convergence (when configured)
+    -> checkpoint
+
 network-policy activation
     -> FINAL STARTING checkpoint BEFORE READY
 ```
@@ -6215,9 +6230,11 @@ owned-domain cleanup primitive used by product stop:
 ```text
 attempt ForwardingGate=DISABLED
     ->
+attempt active HostRoutingContribution cleanup when present
+    ->
 independently attempt managed-domain teardown
     ->
-confirmed namespace + host-boundary absence
+confirmed required cleanup postconditions
     ->
 release lifetime lock
 ```

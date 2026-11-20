@@ -662,10 +662,10 @@ def run_alpha_runtime(
         holder["policy"] = prepared
         return prepared
 
-    def build_boundary_contribution(prepared, current_domain_spec):
+    def build_host_routing_contribution(prepared, current_domain_spec):
         if not isinstance(prepared, AlphaPreparedPolicy):
             raise AlphaRuntimeError(
-                "alpha host-boundary contribution requires AlphaPreparedPolicy"
+                "alpha host-routing contribution requires AlphaPreparedPolicy"
             )
         return build_linux_peaceful_host_routing_contribution(
             prepared.config,
@@ -684,7 +684,7 @@ def run_alpha_runtime(
             NG3_LINUX_POLICY_PLATFORM,
             load_policy,
             stop_requested=stop_event.is_set,
-            build_boundary_contribution=build_boundary_contribution,
+            build_host_routing_contribution=build_host_routing_contribution,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
         )
         if startup.status is not ControllerStartupStatus.READY:
@@ -696,11 +696,11 @@ def run_alpha_runtime(
 
         assert startup.session is not None
         prepared = holder["policy"]
-        boundary_contribution = startup.session.boundary_contribution
+        host_routing_contribution = startup.session.host_routing_contribution
         if (
-            boundary_contribution is not None
+            host_routing_contribution is not None
             and not isinstance(
-                boundary_contribution,
+                host_routing_contribution,
                 LinuxPeacefulHostRoutingContribution,
             )
         ):

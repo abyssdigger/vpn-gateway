@@ -174,12 +174,12 @@ class FakeBoundaryContribution:
     def converge(self):
         self.events.append("boundary_converge")
         if self.fail_converge:
-            raise RuntimeError("synthetic boundary convergence failure")
+            raise RuntimeError("synthetic host-routing convergence failure")
 
     def cleanup(self):
-        self.events.append("boundary_cleanup")
+        self.events.append("host_routing_cleanup")
         if self.fail_cleanup:
-            raise RuntimeError("synthetic boundary cleanup failure")
+            raise RuntimeError("synthetic host-routing cleanup failure")
 
 
 class FakeActivation:
@@ -219,8 +219,8 @@ class ControllerStartupTests(unittest.TestCase):
         containment=CONTAINED,
         stop_requested=None,
         stop_cleanup=STOPPED_CLEANUP,
-        boundary_contribution=None,
-        boundary_build_error=None,
+        host_routing_contribution=None,
+        host_routing_build_error=None,
     ):
         events = []
         lock = FakeLock()
@@ -253,15 +253,15 @@ class ControllerStartupTests(unittest.TestCase):
             events.append("activate")
             return activation
 
-        def build_boundary(prepared_arg, domain_spec_arg):
-            events.append("boundary_build")
-            if boundary_build_error:
-                raise boundary_build_error
+        def build_host_routing(prepared_arg, domain_spec_arg):
+            events.append("host_routing_build")
+            if host_routing_build_error:
+                raise host_routing_build_error
             if prepared_arg is not prepared:
                 raise AssertionError(prepared_arg)
             if domain_spec_arg != DOMAIN_SPEC:
                 raise AssertionError(domain_spec_arg)
-            return boundary_contribution
+            return host_routing_contribution
 
         def cleanup_owned(*args):
             events.append("cleanup_owned")
@@ -302,9 +302,9 @@ class ControllerStartupTests(unittest.TestCase):
                 NG3_LINUX_POLICY_PLATFORM,
                 loader,
                 stop_requested=stop_requested,
-                build_boundary_contribution=(
-                    build_boundary
-                    if boundary_contribution is not None or boundary_build_error is not None
+                build_host_routing_contribution=(
+                    build_host_routing
+                    if host_routing_contribution is not None or host_routing_build_error is not None
                     else None
                 ),
             )
@@ -688,18 +688,18 @@ class ControllerStartupTests(unittest.TestCase):
         events = []
         boundary = FakeBoundaryContribution(events)
         result, startup_events, lock, *_ = self.run_startup(
-            boundary_contribution=boundary,
+            host_routing_contribution=boundary,
         )
         combined = startup_events + events
         self.assertEqual(result.status, ControllerStartupStatus.READY)
-        self.assertIs(result.session.boundary_contribution, boundary)
+        self.assertIs(result.session.host_routing_contribution, boundary)
         self.assertLess(
             startup_events.index("build_desired"),
-            startup_events.index("boundary_build"),
+            startup_events.index("host_routing_build"),
         )
         self.assertEqual(events, ["boundary_converge"])
         self.assertLess(
-            startup_events.index("boundary_build"),
+            startup_events.index("host_routing_build"),
             startup_events.index("activate"),
         )
         result.session.lock.release()
@@ -708,14 +708,14 @@ class ControllerStartupTests(unittest.TestCase):
         events = []
         boundary = FakeBoundaryContribution(events, fail_converge=True)
         result, startup_events, lock, *rest = self.run_startup(
-            boundary_contribution=boundary,
+            host_routing_contribution=boundary,
         )
         activation_mock = rest[2]
         self.assertEqual(
             result.status,
-            ControllerStartupStatus.BOUNDARY_CONVERGENCE_FAILED,
+            ControllerStartupStatus.HOST_ROUTING_CONVERGENCE_FAILED,
         )
-        self.assertEqual(events, ["boundary_converge", "boundary_cleanup"])
+        self.assertEqual(events, ["boundary_converge", "host_routing_cleanup"])
         activation_mock.assert_not_called()
         self.assertFalse(lock.acquired)
 
@@ -727,7 +727,7 @@ class ControllerStartupTests(unittest.TestCase):
             fail_cleanup=True,
         )
         result, startup_events, lock, *rest = self.run_startup(
-            boundary_contribution=boundary,
+            host_routing_contribution=boundary,
         )
         activation_mock = rest[2]
         self.assertEqual(
@@ -736,9 +736,9 @@ class ControllerStartupTests(unittest.TestCase):
         )
         self.assertEqual(
             result.failure_status,
-            ControllerStartupStatus.BOUNDARY_CONVERGENCE_FAILED,
+            ControllerStartupStatus.HOST_ROUTING_CONVERGENCE_FAILED,
         )
-        self.assertEqual(events, ["boundary_converge", "boundary_cleanup"])
+        self.assertEqual(events, ["boundary_converge", "host_routing_cleanup"])
         self.assertTrue(lock.acquired)
         activation_mock.assert_not_called()
         lock.release()
@@ -747,18 +747,18 @@ class ControllerStartupTests(unittest.TestCase):
         events = []
         boundary = FakeBoundaryContribution(events)
         result, startup_events, lock, *_ = self.run_startup(
-            boundary_contribution=boundary,
+            host_routing_contribution=boundary,
             activation=FAILED_ACTIVATION,
         )
         self.assertEqual(result.status, ControllerStartupStatus.ACTIVATION_FAILED)
-        self.assertEqual(events, ["boundary_converge", "boundary_cleanup"])
+        self.assertEqual(events, ["boundary_converge", "host_routing_cleanup"])
         self.assertFalse(lock.acquired)
 
-    def test_boundary_cleanup_failure_after_activation_failure_is_containment_failure(self):
+    def test_host_routing_cleanup_failure_after_activation_failure_is_containment_failure(self):
         events = []
         boundary = FakeBoundaryContribution(events, fail_cleanup=True)
         result, startup_events, lock, *_ = self.run_startup(
-            boundary_contribution=boundary,
+            host_routing_contribution=boundary,
             activation=FAILED_ACTIVATION,
         )
         self.assertEqual(
@@ -770,7 +770,7 @@ class ControllerStartupTests(unittest.TestCase):
             ControllerStartupStatus.ACTIVATION_FAILED,
         )
         self.assertTrue(lock.acquired)
-        self.assertEqual(events, ["boundary_converge", "boundary_cleanup"])
+        self.assertEqual(events, ["boundary_converge", "host_routing_cleanup"])
         lock.release()
 
     def test_activation_failure_is_not_retried(self):

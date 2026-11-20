@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from .controller_boundary_contribution import ControllerBoundaryContribution
+from .host_routing_contribution import HostRoutingContribution
 from .instance_lock import ControllerInstanceLock
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ def cleanup_controller_owned_domain_once(
     lock: ControllerInstanceLock,
     domain_spec: ManagedNetworkDomainSpec,
     runner: ManagedNetworkDomainRunner,
-    boundary_contribution: ControllerBoundaryContribution | None = None,
+    host_routing_contribution: HostRoutingContribution | None = None,
 ) -> ControllerStopResult:
     """Run one bounded owned-domain cleanup attempt under a retained lifetime lock."""
     if not lock.acquired:
@@ -62,12 +62,12 @@ def cleanup_controller_owned_domain_once(
 
     cleanup_errors: list[str] = []
 
-    if boundary_contribution is not None:
+    if host_routing_contribution is not None:
         try:
-            boundary_contribution.cleanup()
+            host_routing_contribution.cleanup()
         except Exception as exc:
             cleanup_errors.append(
-                "boundary contribution cleanup failed: "
+                "host-routing contribution cleanup failed: "
                 f"{type(exc).__name__}: {exc}"
             )
 
@@ -122,5 +122,5 @@ def stop_controller_once(
         session.lock,
         domain_spec,
         runner,
-        session.boundary_contribution,
+        session.host_routing_contribution,
     )
