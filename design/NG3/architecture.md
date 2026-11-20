@@ -442,7 +442,7 @@ Its desired contribution is derived from current accepted configuration and may 
 - effective Profile SNAT identities when the administrator wants helper-provided reverse
   reachability to the managed boundary.
 
-The helper installs identifiable routing contributions at start and updates them on the explicit Release-1 reload operation. After successful application, ordinary host routing remains
+The helper installs identifiable routing contributions at start and updates them on a supported lifecycle reload operation. After successful application, ordinary host routing remains
 administrator-owned rather than continuously owned by VPN-GATE. On stop the helper removes
 only still-identifiable contributions that remain its own and must not delete an
 administrator replacement merely because it occupies the same destination.
@@ -6167,9 +6167,14 @@ reload
     -> report success only after required postconditions for the new configuration
 ```
 
-The reload operation implements `VPNG0005-R5.R6.R4`. Its exact executable orchestration is
-not yet materialized and the requirement therefore remains `[pending_closure]`; the current
-alpha still requires restart for config changes and must report that limitation truthfully.
+The reload operation implements `VPNG0005-R5.R6.R4` when the selected deployment/lifecycle
+interface exposes reload. Its exact executable orchestration remains `[pending_closure]`.
+
+**Constrained by:**
+- `VPNG0005-R5.R6.R4.C1`.
+
+Alpha releases may omit reload and require restart for configuration changes. This is an
+accepted alpha-scope constraint, not a current implementation defect.
 
 The control surface is not a long-lived domain Engine and owns no independent lifecycle
 policy. It invokes procedural assembly/orchestration whose postconditions are already
@@ -6295,9 +6300,9 @@ read-only exact structural audit
 ```
 
 Audit interval в alpha равен одной секунде и является локальным implementation parameter по
-§12.2, а не пользовательской latency guarantee. Current alpha config hot-reload пока не materialized: изменение конфигурации требует нового
-start/restart. После принятия `VPNG0005-R5.R6.R4` это является временным alpha implementation
-gap, а не Release-1 product semantics.
+§12.2, а не пользовательской latency guarantee. Current alpha не предоставляет config reload:
+изменение конфигурации требует нового start/restart. Это разрешено
+`VPNG0005-R5.R6.R4.C1` и не считается alpha implementation gap.
 
 Alpha deployment использует:
 
@@ -6539,7 +6544,7 @@ until a separate requirement requires it.
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
 | `VPNG0001-R2.R1` manual host integration | core independence accepted; concrete administrator-facing route/reachability instructions remain pending under R2.R1.R1 |
-| `VPNG0001-R2.R2` peaceful host-routing assistance | required for Release 1 and config-disableable; start/reload/stop semantics accepted, Linux lowering/config spelling remain pending |
+| `VPNG0001-R2.R2` peaceful host-routing assistance | required for Release 1 and config-disableable; start/stop and supported-reload semantics accepted, Linux lowering/config spelling remain pending |
 | `VPNG0001-R2.R3` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
@@ -6550,7 +6555,7 @@ until a separate requirement requires it.
 | `VPNG0003-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; Profile selects disabled, Device default, or same-shape Profile override, normalized to a concrete ICMP/IPv4 description before probe runtime |
 | `VPNG0004-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
 | `VPNG0004-R4.R7` administrative payload containment | postponed beyond Release 1; semantic control surface accepted, lower composition/evidence remains pending |
-| `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle | start/stop/restart postconditions represented; Release-1 reload semantics now required but executable orchestration remains pending under R5.R6.R4 |
+| `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle | start/stop/restart postconditions represented; reload semantics are defined when supported, while alpha may omit reload under R5.R6.R4.C1 |
 | `VPNG0005-R5.R2`, `VPNG0005-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
 | `VPNG0006-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
 | `VPNG0006-R6.R2`, `VPNG0006-R6.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
@@ -6590,7 +6595,7 @@ The core Device/Profile human-facing configuration contract is now recovered and
 Remaining interface freedom is narrower:
 
 - parser/serialization implementation details that do not change accepted TOML semantics;
-- implementation details of the now-required Release-1 reload operation that do not change its accepted validation/safety postconditions;
+- implementation details of a supported reload operation that do not change its accepted validation/safety postconditions; alpha may omit reload under `VPNG0005-R5.R6.R4.C1`;
 - future endpoint-scoped Device firewall syntax under its explicit Release-1 constraint;
 - lower implementation details of accepted publication capabilities where architecture
   already defines semantic ownership but packaging/runtime integration may still evolve.

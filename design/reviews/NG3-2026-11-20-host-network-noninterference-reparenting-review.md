@@ -1,5 +1,12 @@
 # VPN-GATE NG3 — host-network non-interference / helper reparenting review
 
+> **Reload correction note (2026-11-20):** the review below originally over-interpreted
+> peaceful-helper reload handling as making reload mandatory in alpha. The current tree
+> instead treats reload as a standard-but-optional lifecycle operation: semantics are defined
+> by `VPNG0005-R5.R6.R4` when supported, while
+> `VPNG0005-R5.R6.R4.C1` explicitly permits alpha releases to omit reload and require
+> restart for configuration changes. Historical wording below is retained as review history.
+
 **Date:** 2026-11-20  
 **Branch:** `ng3-design-cycle-20261120-rudiment-cleanup-finish-35m`  
 **Reviewed range:** `cfe3c91dbea3930aa26fb377b3a119643a51aee0..6bf78352cfa1a5dec73a17b8eb12e0a47c286edd`

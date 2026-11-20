@@ -52,7 +52,7 @@ Alpha controller:
   `net.ipv4.ip_forward` и явные ordinary-host IPv4/interface selectors, но не включает global
   host forwarding и не меняет адреса/UP-state внешних ordinary host interfaces;
 - при `use_outbound_nat = false` удаленная сторона должна иметь нормальный обратный маршрут;
-- текущая alpha ещё не materializes обязательную для Release 1 reload-операцию (`VPNG0005-R5.R6.R4`): изменение `config.toml` пока требует restart controller;
+- текущая alpha не предоставляет reload: изменение `config.toml` требует restart controller; это прямо разрешено `VPNG0005-R5.R6.R4.C1` и не считается alpha-gap;
 - текущий RuntimeStatusAgent подключён через alpha JSON surface; путь/JSON presentation пока
   являются alpha interface machinery, а не стабильным Release-1 API;
 - availability/failover runtime этой сборкой еще не считается end-to-end завершенным;
