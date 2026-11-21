@@ -45,9 +45,9 @@ host-routing and production-language branches.
 
 Two were safe research corrections:
 
-1. `VPNG0001-R1.R2` — Purpose wording leaned on the primary root rather than the immediate
+1. `VPNG-U001-R1.R2` — Purpose wording leaned on the primary root rather than the immediate
    managed-routing parent;
-2. `VPNG0001-R1.R2.R4.R4.R1` — duplicate/misplaced availability-config node.
+2. `VPNG-U001-R1.R2.R4.R4.R1` — duplicate/misplaced availability-config node.
 
 The remaining 18 findings required product-holder disposition.
 
@@ -73,11 +73,11 @@ and managed-domain mechanism nodes were moved out of requirement semantics.
 
 The draft now has accepted dispositions for **all 20 original findings**:
 
-1. former `VPNG0001-R1.R2` configuration ancestry — common configuration moved directly
-   under `VPNG0001` as provisional `VPNG0001-R4`;
+1. former `VPNG-U001-R1.R2` configuration ancestry — common configuration moved directly
+   under `VPNG-U001` as provisional `VPNG-U001-R4`;
 2. duplicate Profile availability config node — removed;
 3. Profile source identity / `+snat` — product capability lifted to provisional
-   `VPNG0001-R3`, Release-1 spelling remains a config contract;
+   `VPNG-U001-R3`, Release-1 spelling remains a config contract;
 4. Device outbound NAT — product capability separated from `use_outbound_nat`;
 5. Device firewall — product additional-restriction capability separated from firewall
    grammar/config placement;
@@ -91,31 +91,31 @@ The draft now has accepted dispositions for **all 20 original findings**:
     remains postponed for Release 1;
 11. user-selected availability criterion — confirmed and reworded;
 12. host-network safety/non-interference — kept as mechanism-neutral
-    `VPNG0004-R4.R6`;
+    `VPNG-U004-R4.R6`;
 13. managed network domain — removed as product Requirement and retained as selected
     architecture mechanism;
 14. literal INPUT/OUTPUT/FORWARD=DROP requirement — removed with the managed-domain
     implementation subtree; default-deny realization remains architecture/evidence;
-15. protective/containment mode — promoted to first derived level under `VPNG0004` as
-    provisional `VPNG0004-R5`;
+15. protective/containment mode — promoted to first derived level under `VPNG-U004` as
+    provisional `VPNG-U004-R5`;
 16. Device-default/Profile-override availability reuse — moved out from under the ICMP-only
     Constraint;
-17. remote-initiated-flow return affinity — moved from `VPNG0002-R2.R6` to direct child
-    `VPNG0003-R4`; the same-path Statement is retained, while flow/network-property stability
-    is stated in Purpose. It remains separate from `VPNG0003-R3` baseline/availability preference;
-18. second VPN lifecycle evidence gate `VPNG0007-R7.R7.R1.R1` — removed from the requirement
+17. remote-initiated-flow return affinity — moved from `VPNG-U002-R2.R6` to direct child
+    `VPNG-U003-R4`; the same-path Statement is retained, while flow/network-property stability
+    is stated in Purpose. It remains separate from `VPNG-U003-R3` baseline/availability preference;
+18. second VPN lifecycle evidence gate `VPNG-U007-R7.R7.R1.R1` — removed from the requirement
     tree as a process/evidence sequencing rule rather than a product obligation; EXP-050 remains
     historical evidence and current trace is redirected to the applicable integration, safety
     and lifecycle requirements;
-19. priority-only continuity — moved from `VPNG0004-R4.R3.R1` to `VPNG0003-R3.R9`; the
+19. priority-only continuity — moved from `VPNG-U004-R4.R3.R1` to `VPNG-U003-R3.R9`; the
     non-disruptive reorder guarantee is retained while route-copy/staging implementation detail
     is removed from requirement semantics;
-20. reload/configuration update — configuration update is now part of `VPNG0005`,
-    `VPNG0005-R5` and `VPNG0005-R5.R6`; `VPNG0005-R5.R6.R4` and its `.C1` are removed,
+20. reload/configuration update — configuration update is now part of `VPNG-U005`,
+    `VPNG-U005-R5` and `VPNG-U005-R5.R6`; `VPNG-U005-R5.R6.R4` and its `.C1` are removed,
     because `reload` is an optional interface mechanism rather than a mandatory product capability.
 
 The adjacent timing/hysteresis constraint was also moved to sibling
-`VPNG0003-R3.R6.R3.R1.C2`, so it no longer depends on Device-default/Profile-override reuse.
+`VPNG-U003-R3.R6.R3.R1.C2`, so it no longer depends on Device-default/Profile-override reuse.
 
 ### Remaining unresolved findings
 
@@ -144,7 +144,7 @@ association may remain an internal adapter fact.
 
 ### Non-interference and automation are different obligations
 
-`VPNG0001-R2` remains a limiting non-interference requirement. Peaceful and aggressive
+`VPNG-U001-R2` remains a limiting non-interference requirement. Peaceful and aggressive
 host-routing helpers now derive from a separate positive automation requirement instead of
 being justified by a parent that only says what an optional helper must not disturb.
 
@@ -154,7 +154,7 @@ The accepted refactor implies **high traceability churn but low functional-code 
 
 Most existing Release-1 behavior can remain unchanged. The largest future document remap is
 the managed-domain architecture: sections currently tracing directly to
-`VPNG0004-R4.R6.R1*` must instead explain the domain/netns/nft mechanisms as an
+`VPNG-U004-R4.R6.R1*` must instead explain the domain/netns/nft mechanisms as an
 architecture choice satisfying mechanism-neutral safety plus the relevant forwarding,
 binding and policy requirements.
 
@@ -191,19 +191,19 @@ Structural checks:
 - no duplicate requirement IDs;
 - no missing immediate parents in the actual VPNG tree;
 - no active `RESEARCH UNRESOLVED` marker;
-- removed `VPNG0004-R4.R3.R1` and `VPNG0005-R5.R6.R4*` do not remain in the corrected
+- removed `VPNG-U004-R4.R3.R1` and `VPNG-U005-R5.R6.R4*` do not remain in the corrected
   tree.
 
 Semantic checks for the final changes:
 
-- `VPNG0003-R3.R9` is causally owned by `VPNG0003-R3`: it preserves practical path
+- `VPNG-U003-R3.R9` is causally owned by `VPNG-U003-R3`: it preserves practical path
   continuity while applying a change in effective preference and no longer carries a
   route-copy/staging implementation prescription;
-- the expanded `VPNG0005` has an explicit additional external Basis from the 2026-11-21
+- the expanded `VPNG-U005` has an explicit additional external Basis from the 2026-11-21
   project-holder decision that configuration update belongs in the lifecycle obligation;
-- `VPNG0005-R5` now explicitly owns both lifecycle state and application of changed
+- `VPNG-U005-R5` now explicitly owns both lifecycle state and application of changed
   configuration;
-- `VPNG0005-R5.R6` requires a supported way to apply changed configuration and safe final
+- `VPNG-U005-R5.R6` requires a supported way to apply changed configuration and safe final
   state, without requiring a distinct `reload` command;
 - removal of the former reload Requirement and alpha Constraint does not remove Release-1
   capability: restart remains a valid way to apply changed configuration.
@@ -230,8 +230,8 @@ normative basis. Historical review and result records remain unchanged.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005` -> `VPNG9101-R1`
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005` -> `VPNG-M001-R1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

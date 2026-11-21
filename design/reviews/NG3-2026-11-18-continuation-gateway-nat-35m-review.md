@@ -1,7 +1,7 @@
 # NG3 2026-11-18 — continuation-rule / gateway-NAT boundary carrier — CD review
 
 > **Historical requirement trace note (2026-11-20):** this review records the requirement
-> tree that was current when the review was performed. `VPNG0002-R2.R3.R1.R1`
+> tree that was current when the review was performed. `VPNG-U002-R2.R3.R1.R1`
 > was later removed from the current requirement tree when the old direction-derived host-routing
 > ownership decomposition was rejected. References below to that ID are historical facts about
 > what this review evaluated, not current requirement links; the review conclusions are not rewritten retroactively.
@@ -105,7 +105,7 @@ A structural integration review identifies the next implementation requirement: 
 
 The cycle found a material mismatch between EXP-064's technically sufficient mechanism and the literal current Statement of:
 
-`VPNG0004-R4.R6.R1.R6.R1`
+`VPNG-U004-R4.R6.R1.R6.R1`
 
 Its Purpose is to prevent gateway NAT of one Profile from being applied to traffic of another Profile when remote prefixes overlap or ingress paths differ.
 
@@ -126,7 +126,7 @@ No requirement wording was silently changed.
 
 ## Proposed requirement-resolution question
 
-The next discussion must decide whether `VPNG0004-R4.R6.R1.R6.R1` really intends:
+The next discussion must decide whether `VPNG-U004-R4.R6.R1.R6.R1` really intends:
 
 1. **literal Profile identity continuity across the host boundary**, even when two Profiles require exactly the same host behavior; or
 2. **behavior-equivalent continuity**, sufficient to prove that the host applies exactly the return/NAT behavior derived from the selected Profile and never confuses Profiles whose required host behavior differs.
@@ -138,21 +138,21 @@ If (1) is retained, EXP-064 remains technically useful but insufficient, and ano
 ## Suspicious requirements
 
 Previous open semantic suspects remain:
-- `VPNG0002-R2.R1.R2`;
-- `VPNG0002-R2.R2.R2`.
+- `VPNG-U002-R2.R1.R2`;
+- `VPNG-U002-R2.R2.R2`.
 
 Previous placement/Purpose suspects remain:
-- `VPNG0002-R2.R1.R1`;
-- `VPNG0002-R2.R1.R2`;
-- `VPNG0002-R2.R2.R1`;
-- `VPNG0002-R2.R2.R2`;
-- `VPNG0002-R2.R3.R3`;
-- `VPNG0002-R2.R3.R3.R1`;
-- `VPNG0002-R2.R3.R1.R1`;
-- `VPNG0002-R2.R5.R1`.
+- `VPNG-U002-R2.R1.R1`;
+- `VPNG-U002-R2.R1.R2`;
+- `VPNG-U002-R2.R2.R1`;
+- `VPNG-U002-R2.R2.R2`;
+- `VPNG-U002-R2.R3.R3`;
+- `VPNG-U002-R2.R3.R3.R1`;
+- `VPNG-U002-R2.R3.R1.R1`;
+- `VPNG-U002-R2.R5.R1`.
 
 New semantic/abstraction suspect raised by this cycle:
-- `VPNG0004-R4.R6.R1.R6.R1` — its Purpose requires non-confusion of host-side gateway-NAT behavior, while its Statement may overconstrain the lower mechanism to literal cross-boundary Profile identity.
+- `VPNG-U004-R4.R6.R1.R6.R1` — its Purpose requires non-confusion of host-side gateway-NAT behavior, while its Statement may overconstrain the lower mechanism to literal cross-boundary Profile identity.
 
 This is a discussion item, not an automatic rewrite.
 

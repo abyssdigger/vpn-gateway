@@ -8,18 +8,18 @@ guarded physical NAT reconciliation; **не** внедрение продукт�
 ## Requirements / Constraints
 
 **Implements:**
-- `VPNG0001-R1.R2.R4.R6.R1` — принятое Device NAT intent `none / masquerade`;
-- `VPNG0001-R1.R3.R2` — сопоставление с конкретным current endpoint;
-- `VPNG0001-R1.R3.R3` — no inheritance при одноимённой замене endpoint;
-- `VPNG0004-R4.R3.R2` — guarded structural policy transition;
-- `VPNG0004-R4.R4` — подтверждённый закрытый forwarding barrier;
-- `VPNG0004-R4.R5` — authoritative re-observation after partial/failed operation.
+- `VPNG-U001-R1.R2.R4.R6.R1` — принятое Device NAT intent `none / masquerade`;
+- `VPNG-U001-R1.R3.R2` — сопоставление с конкретным current endpoint;
+- `VPNG-U001-R1.R3.R3` — no inheritance при одноимённой замене endpoint;
+- `VPNG-U004-R4.R3.R2` — guarded structural policy transition;
+- `VPNG-U004-R4.R4` — подтверждённый закрытый forwarding barrier;
+- `VPNG-U004-R4.R5` — authoritative re-observation after partial/failed operation.
 
 **Constrained by:**
-- `VPNG0001-R1.R2.R4.R6.C1` — не выводить user-facing grammar из kernel test.
+- `VPNG-U001-R1.R2.R4.R6.C1` — не выводить user-facing grammar из kernel test.
 
-В `design/NG3/requirements.md` проверены первичные `VPNG0001` и
-`VPNG0004` с Basis/Statement, их полные цепочки Purpose/Statement и
+В `design/NG3/requirements.md` проверены первичные `VPNG-U001` и
+`VPNG-U004` с Basis/Statement, их полные цепочки Purpose/Statement и
 ограничение Reason/Statement. Узлы закрыты, актор — VPN-GATE; новое
 продуктовое решение не требуется. Эксперимент не изменяет требования.
 

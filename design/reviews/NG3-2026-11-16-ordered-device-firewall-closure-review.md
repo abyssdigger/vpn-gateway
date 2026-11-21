@@ -19,7 +19,7 @@ Exact human-facing compact syntax and physical nft mutation are outside this uni
 
 ## Requirement validation
 
-### VPNG0001-R1.R2.R4.R6.R2
+### VPNG-U001-R1.R2.R4.R6.R2
 
 **Purpose / Зачем:** allow transport-level restrictions to protect tunnel traffic without
 turning Device policy into a bypass around Profile policy.
@@ -50,7 +50,7 @@ The first applicable terminal Device verdict wins. A broad early rule is not rep
 reordered around a later specific rule.
 
 Exact external encoding and exact accepted protocol/port combinations remain under
-`VPNG0001-R1.R2.R4.R6.C1`. The lower normalized contract must receive a coherent predicate;
+`VPNG-U001-R1.R2.R4.R6.C1`. The lower normalized contract must receive a coherent predicate;
 the parser/compiler must not invent semantics for an external combination that has not been
 accepted by the configuration-format review.
 
@@ -100,7 +100,7 @@ transport endpoint without long-lived dependence on `tun17`-style runtime names.
 Its implementation is intentionally outside Release 1 until:
 
 1. the corresponding integration supplies confirmed transport-endpoint provenance under
-   `VPNG0001-R1.R3.R5`;
+   `VPNG-U001-R1.R3.R5`;
 2. the named-endpoint configuration format is accepted.
 
 Ordinary Device firewall rules do not depend on this future selector.

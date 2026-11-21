@@ -85,9 +85,9 @@ PASS.
 
 The unit preserves the accepted ownership rules under:
 
-- `VPNG0004-R4.R2`;
-- `VPNG0004-R4.R5`;
-- `VPNG0004-R4.R6.R1.R1`.
+- `VPNG-U004-R4.R2`;
+- `VPNG-U004-R4.R5`;
+- `VPNG-U004-R4.R6.R1.R1`.
 
 It does not infer user payload permission or NAT policy.
 

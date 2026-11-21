@@ -1,7 +1,7 @@
 # NG3 2026-11-18 — stack return-affinity production integration — cycle review
 
 > **Historical requirement trace note (2026-11-20):** this review records the requirement
-> tree that was current when the review was performed. `VPNG0002-R2.R3.R1.R1`
+> tree that was current when the review was performed. `VPNG-U002-R2.R3.R1.R1`
 > was later removed from the current requirement tree when the old direction-derived host-routing
 > ownership decomposition was rejected. References below to that ID are historical facts about
 > what this review evaluated, not current requirement links; the review conclusions are not rewritten retroactively.
@@ -21,11 +21,11 @@ No multi-path functionality was activated by this cycle.
 
 The cycle started from these already accepted facts:
 
-- `VPNG0002-R2.R6` requires related replies to return through the VPN channel that accepted
+- `VPNG-U002-R2.R6` requires related replies to return through the VPN channel that accepted
   the original managed inbound traffic;
-- `VPNG0007-R7.R3.R4` requires semantic continuity across material implementation boundaries;
+- `VPNG-U007-R7.R3.R4` requires semantic continuity across material implementation boundaries;
 - EXP-061 proved Release-1 Profile-routing-domain return affinity;
-- `VPNG0002-R2.R3.C1` keeps inbound/bidirectional Profiles at no more than one eligible
+- `VPNG-U002-R2.R3.C1` keeps inbound/bidirectional Profiles at no more than one eligible
   logical path in the current product;
 - EXP-062 subsequently proved concrete-path multi-path affinity technically feasible, but its
   registry disposition is **deferred**: it is a possible future functional extension, not part
@@ -223,10 +223,10 @@ No new product Requirement or Constraint was introduced in this cycle.
 The implementation closes the previously identified architecture/activation gap under already
 accepted:
 
-- `VPNG0002-R2.R6`;
-- `VPNG0007-R7.R3.R4`;
-- `VPNG0007-R7.R3.R4.R1`;
-- constrained by `VPNG0002-R2.R3.C1`.
+- `VPNG-U002-R2.R6`;
+- `VPNG-U007-R7.R3.R4`;
+- `VPNG-U007-R7.R3.R4.R1`;
+- constrained by `VPNG-U002-R2.R3.C1`.
 
 No new suspicious reverse-engineered requirement was introduced by this implementation cycle.
 
@@ -237,34 +237,34 @@ cycle did not silently rewrite any of them.
 
 ### Semantic suspects
 
-1. **`VPNG0002-R2.R1.R2`** — exact symmetric NEW-flow classification:
+1. **`VPNG-U002-R2.R1.R2`** — exact symmetric NEW-flow classification:
    ordinary side by remote destination; VPN side by remote source restricted by actual ingress
    Device/path. The mechanism is useful, but the exact Profile/source-prefix formulation may
    have been reconstructed from implementation.
-2. **`VPNG0002-R2.R2.R2`** — Profile intent at Device level with concrete paths arising only
+2. **`VPNG-U002-R2.R2.R2`** — Profile intent at Device level with concrete paths arising only
    from bindings. The "do not guess a path" safety property is strong, while the particular
    Profile/Device/binding formulation may belong at a lower architectural level.
 
 ### Placement / Purpose suspects
 
-1. `VPNG0002-R2.R1.R1` — Purpose first introduces Profile.
-2. `VPNG0002-R2.R1.R2` — Purpose depends on Profile destination semantics introduced by a
+1. `VPNG-U002-R2.R1.R1` — Purpose first introduces Profile.
+2. `VPNG-U002-R2.R1.R2` — Purpose depends on Profile destination semantics introduced by a
    sibling rather than an ancestor.
-3. `VPNG0002-R2.R2.R1` — Purpose first introduces Profile/user-described VPN resources.
-4. `VPNG0002-R2.R2.R2` — Purpose introduces Profile/Device/binding vocabulary.
-5. `VPNG0002-R2.R3.R3` — Purpose introduces Profile below a generic direction branch.
-6. `VPNG0002-R2.R3.R3.R1` — Purpose introduces host routing/Linux/managed-boundary vocabulary
+3. `VPNG-U002-R2.R2.R1` — Purpose first introduces Profile/user-described VPN resources.
+4. `VPNG-U002-R2.R2.R2` — Purpose introduces Profile/Device/binding vocabulary.
+5. `VPNG-U002-R2.R3.R3` — Purpose introduces Profile below a generic direction branch.
+6. `VPNG-U002-R2.R3.R3.R1` — Purpose introduces host routing/Linux/managed-boundary vocabulary
    below a user-direction branch.
-7. `VPNG0002-R2.R3.R1.R1` — Purpose introduces isolated routing-domain/host-boundary
+7. `VPNG-U002-R2.R3.R1.R1` — Purpose introduces isolated routing-domain/host-boundary
    mechanism below the ordinary-to-VPN direction requirement.
-8. `VPNG0002-R2.R5.R1` — Purpose first introduces Profiles below the generic
+8. `VPNG-U002-R2.R5.R1` — Purpose first introduces Profiles below the generic
    deterministic-overlap requirement.
 
 This list concerns requirement ancestry/abstraction quality. It does not revoke the separately
 discussed and accepted semantics of host bootstrap, host stateful return, `+route-return`,
 most-specific routing, or the current Release-1 single-path constraint.
 
-`VPNG0002-R2.R6` is not suspect; its user-level wording was explicitly corrected and
+`VPNG-U002-R2.R6` is not suspect; its user-level wording was explicitly corrected and
 accepted before EXP-061.
 
 ## Requirement-state inventory
@@ -274,10 +274,10 @@ No requirement-state transitions were made in this implementation cycle.
 The normative tree therefore retains the previous inventory:
 
 - six `decomp` link occurrences, all resolved:
-  - `VPNG0005-R5 -> VPNG0005-R5.R6`;
-  - `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` twice;
-  - `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` twice;
-  - `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`;
+  - `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+  - `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1` twice;
+  - `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2` twice;
+  - `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`;
 - pending `decomp`: **none**;
 - active `unreal`: **none**;
 - active `[rejected_closure]`: **none**.
@@ -318,9 +318,9 @@ Draft PR #26 remains unmerged and is stacked on
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R3.R4` -> `VPNG9001-R1.R1.R3.R4`
-- `VPNG0007-R7.R3.R4.R1` -> `VPNG9001-R1.R1.R3.R4.R1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R3.R4` -> `VPNG-D001-R1.R1.R3.R4`
+- `VPNG-U007-R7.R3.R4.R1` -> `VPNG-D001-R1.R1.R3.R4.R1`
 
 The original IDs in the historical body are intentionally preserved.

@@ -8,7 +8,7 @@
 
 **PASS.**
 
-`VPNG0001-R1.R3.C1.R1.R1` remains a valid child of the administrator-onboarding
+`VPNG-U001-R1.R3.C1.R1.R1` remains a valid child of the administrator-onboarding
 compensation requirement, but no longer embeds the first concrete Linux realization into the
 Requirement itself.
 
@@ -54,14 +54,14 @@ concrete supported integration
 For the current OpenVPN/systemd Release-1 integration, EXP-049 still checks managed-domain
 placement, fresh endpoint observation, exact logical-path binding and forwarding. These checks
 remain valid because EXP-049 directly traces the independent requirements that own those
-semantics, including `VPNG0001-R1.R3.C2` and `VPNG0001-R1.R3.R2`.
+semantics, including `VPNG-U001-R1.R3.C2` and `VPNG-U001-R1.R3.R2`.
 
 EXP-049 therefore remains valid evidence; only the ownership of its individual checks is made
 explicit.
 
 ## Downstream interference review
 
-`VPNG0007-R7.R7.R1` and EXP-050 depend on a PASS of the basic applicability evidence gate,
+`VPNG-U007-R7.R7.R1` and EXP-050 depend on a PASS of the basic applicability evidence gate,
 not on the lower mechanisms being textually embedded in `C1.R1.R1`. Their dependency remains
 valid.
 
@@ -78,6 +78,6 @@ No runtime code or behavior changed.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R7.R1` -> `VPNG9001-R1.R1.R7.R1`
+- `VPNG-U007-R7.R7.R1` -> `VPNG-D001-R1.R1.R7.R1`
 
 The original IDs in the historical body are intentionally preserved.

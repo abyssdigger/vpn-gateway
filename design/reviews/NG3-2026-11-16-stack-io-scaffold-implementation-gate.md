@@ -27,10 +27,10 @@ No local/system allow rules are part of this unit.
 
 **Implements:**
 
-- `VPNG0004-R4.R6.R1.R5`;
-- `VPNG0004-R4.R6.R1.R5.R1`;
-- `VPNG0004-R4.R4`;
-- `VPNG0004-R4.R2`;
+- `VPNG-U004-R4.R6.R1.R5`;
+- `VPNG-U004-R4.R6.R1.R5.R1`;
+- `VPNG-U004-R4.R4`;
+- `VPNG-U004-R4.R2`;
 - existing nft ownership/safe-transition requirements already implemented by the scaffold
   prepare path.
 

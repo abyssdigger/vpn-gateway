@@ -1,7 +1,7 @@
 # NG3 2026-11-18 — continuation gap-truth / VPNPathAdapter 35m review
 
 > **Historical requirement trace note (2026-11-20):** this review records the requirement
-> tree that was current when the review was performed. `VPNG0002-R2.R3.R1.R1`
+> tree that was current when the review was performed. `VPNG-U002-R2.R3.R1.R1`
 > was later removed from the current requirement tree when the old direction-derived host-routing
 > ownership decomposition was rejected. References below to that ID are historical facts about
 > what this review evaluated, not current requirement links; the review conclusions are not rewritten retroactively.
@@ -137,7 +137,7 @@ The remaining current executable gaps are not autonomous next blocks.
 ### Profile ordinary-side `+snat`
 
 Blocked by the explicit human requirement decision around
-`VPNG0004-R4.R6.R1.R6.R1`.
+`VPNG-U004-R4.R6.R1.R6.R1`.
 
 EXP-064 technically proves the four fixed host-boundary behavior lanes, but adoption remains
 `pending_decision` while the requirement literally says full Profile identity must cross the
@@ -161,12 +161,12 @@ would create new user-facing semantics.
 
 Six links exist and all are resolved:
 
-1. `VPNG0005-R5 -> VPNG0005-R5.R6`
-2. `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`
-3. `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`
-4. `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`
-5. `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`
-6. `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`
+1. `VPNG-U005-R5 -> VPNG-U005-R5.R6`
+2. `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`
+3. `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`
+4. `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`
+5. `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`
+6. `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`
 
 Pending `decomp`: **none**.
 
@@ -189,20 +189,20 @@ review list remains:
 
 Semantic suspicion:
 
-- `VPNG0002-R2.R1.R2` — exact symmetric classifier wording may be code-derived;
-- `VPNG0002-R2.R2.R2` — Profile intent expressed through Device/concrete binding vocabulary
+- `VPNG-U002-R2.R1.R2` — exact symmetric classifier wording may be code-derived;
+- `VPNG-U002-R2.R2.R2` — Profile intent expressed through Device/concrete binding vocabulary
   may be below the appropriate abstraction level.
 
 Placement/Purpose suspicion:
 
-- `VPNG0002-R2.R1.R1`;
-- `VPNG0002-R2.R1.R2`;
-- `VPNG0002-R2.R2.R1`;
-- `VPNG0002-R2.R2.R2`;
-- `VPNG0002-R2.R3.R3`;
-- `VPNG0002-R2.R3.R3.R1`;
-- `VPNG0002-R2.R3.R1.R1`;
-- `VPNG0002-R2.R5.R1`.
+- `VPNG-U002-R2.R1.R1`;
+- `VPNG-U002-R2.R1.R2`;
+- `VPNG-U002-R2.R2.R1`;
+- `VPNG-U002-R2.R2.R2`;
+- `VPNG-U002-R2.R3.R3`;
+- `VPNG-U002-R2.R3.R3.R1`;
+- `VPNG-U002-R2.R3.R1.R1`;
+- `VPNG-U002-R2.R5.R1`.
 
 This inventory is review debt only; it does not revoke the separately accepted semantics of
 host bootstrap, stateful return, `+route-return`, most-specific routing or the current
@@ -210,7 +210,7 @@ Release-1 single-path inbound constraint.
 
 ## Human decisions / explicit re-entry gates
 
-1. Decide whether `VPNG0004-R4.R6.R1.R6.R1` truly requires full Profile identity across the
+1. Decide whether `VPNG-U004-R4.R6.R1.R6.R1` truly requires full Profile identity across the
    host boundary or whether preserving the already-selected Profile-derived host behavior is
    sufficient. This decides whether EXP-064 can be selected and `+snat` materialization can
    continue.
@@ -233,7 +233,7 @@ decision/evidence boundary.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

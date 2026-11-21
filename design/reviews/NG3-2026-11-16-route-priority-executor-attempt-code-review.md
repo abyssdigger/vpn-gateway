@@ -16,11 +16,11 @@ that a physical backend must obey.
 
 Relevant accepted nodes:
 
-- `VPNG0003-R3.R2`, `VPNG0003-R3.R3`, `VPNG0003-R3.R4`;
-- `VPNG0004-R4.R2`, `VPNG0004-R4.R3`, `VPNG0004-R4.R3.R1`,
-  `VPNG0004-R4.R5`;
-- `VPNG0005-R5.R2`, `VPNG0005-R5.R3`;
-- `VPNG0007-R7.R3`, `VPNG0007-R7.R5`.
+- `VPNG-U003-R3.R2`, `VPNG-U003-R3.R3`, `VPNG-U003-R3.R4`;
+- `VPNG-U004-R4.R2`, `VPNG-U004-R4.R3`, `VPNG-U004-R4.R3.R1`,
+  `VPNG-U004-R4.R5`;
+- `VPNG-U005-R5.R2`, `VPNG-U005-R5.R3`;
+- `VPNG-U007-R7.R3`, `VPNG-U007-R7.R5`.
 
 The architecture already requires fresh observation before non-authoritative planning,
 re-observation after partial failure, final postcondition verification and no stale-plan
@@ -128,9 +128,9 @@ semantics.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
-- `VPNG0005-R5.R3` -> `VPNG9101-R1.R1.R3`
-- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
-- `VPNG0007-R7.R5` -> `VPNG9001-R1.R1.R5`
+- `VPNG-U005-R5.R2` -> `VPNG-M001-R1.R1.R2`
+- `VPNG-U005-R5.R3` -> `VPNG-M001-R1.R1.R3`
+- `VPNG-U007-R7.R3` -> `VPNG-D001-R1.R1.R3`
+- `VPNG-U007-R7.R5` -> `VPNG-D001-R1.R1.R5`
 
 The original IDs in the historical body are intentionally preserved.

@@ -13,10 +13,10 @@ evidence-backed one-path `compile_device_firewall_policy(...)`.
 
 ## Implements
 
-- `VPNG0001-R1.R2.R4.R6.R2` and its ordinary Release-1 Device-firewall children;
-- current path identity/binding safety from `VPNG0001-R1.R3.R2` / `R1.R3.R3`;
+- `VPNG-U001-R1.R2.R4.R6.R2` and its ordinary Release-1 Device-firewall children;
+- current path identity/binding safety from `VPNG-U001-R1.R3.R2` / `R1.R3.R3`;
 - minimal lower identity and explicit contract requirements from
-  `VPNG0007-R7.R1` / `R7.R3.R1`.
+  `VPNG-U007-R7.R1` / `R7.R3.R1`.
 
 External firewall grammar remains deferred and is not selected here.
 
@@ -265,6 +265,6 @@ user-ID leakage.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
+- `VPNG-U007-R7.R1` -> `VPNG-D001-R1.R1.R1`
 
 The original IDs in the historical body are intentionally preserved.

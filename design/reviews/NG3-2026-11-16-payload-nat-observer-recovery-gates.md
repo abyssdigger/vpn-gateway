@@ -16,26 +16,26 @@ on the new branch. It does not retroactively declare the earlier workflow compli
 ## Requirement gate
 
 **Implements:**
-- `VPNG0001-R1.R2.R4.R6.R1` — explicit `none / masquerade` Device NAT need;
-- `VPNG0001-R1.R3.R2` — current binding identifies the actual endpoint;
-- `VPNG0001-R1.R3.R3` — same-name replacement never inherits stale identity;
-- `VPNG0004-R4.R3.R2` — NAT change is a guarded structural transition;
-- `VPNG0004-R4.R4` — forwarding not ready before safe initial boundary;
-- `VPNG0004-R4.R5` — authoritative observation after failure/uncertainty.
+- `VPNG-U001-R1.R2.R4.R6.R1` — explicit `none / masquerade` Device NAT need;
+- `VPNG-U001-R1.R3.R2` — current binding identifies the actual endpoint;
+- `VPNG-U001-R1.R3.R3` — same-name replacement never inherits stale identity;
+- `VPNG-U004-R4.R3.R2` — NAT change is a guarded structural transition;
+- `VPNG-U004-R4.R4` — forwarding not ready before safe initial boundary;
+- `VPNG-U004-R4.R5` — authoritative observation after failure/uncertainty.
 
 **Constrained by:**
-- `VPNG0001-R1.R2.R4.R6.C1` — unaccepted human-facing Device grammar must not be inferred.
+- `VPNG-U001-R1.R2.R4.R6.C1` — unaccepted human-facing Device grammar must not be inferred.
 
 The complete ancestry was checked in `design/NG3/requirements.md`.
-The primary roots `VPNG0001` and `VPNG0004` have an externally sourced
+The primary roots `VPNG-U001` and `VPNG-U004` have an externally sourced
 2026-11-15 customer-interview **Basis** and normative **Statement**, both `[closed]`.
 For the Device NAT chain the derived ancestry is
-`VPNG0001 -> R1 -> R1.R2 -> R1.R2.R4 -> R1.R2.R4.R6 ->
+`VPNG-U001 -> R1 -> R1.R2 -> R1.R2.R4 -> R1.R2.R4.R6 ->
 R1.R2.R4.R6.R1`. The binding chain is
-`VPNG0001 -> R1 -> R1.R3 -> R1.R3.R2/R3`.
+`VPNG-U001 -> R1 -> R1.R3 -> R1.R3.R2/R3`.
 For safety the ancestry is
-`VPNG0004 -> R4 -> R4.R3 -> R4.R3.R2`, plus
-`VPNG0004 -> R4 -> R4.R4/R5`.
+`VPNG-U004 -> R4 -> R4.R3 -> R4.R3.R2`, plus
+`VPNG-U004 -> R4 -> R4.R4/R5`.
 Every relevant derived node has distinct **Purpose** and **Statement**;
 the applicable `...R6.C1` has **Reason** and **Statement**. All selected
 nodes are `[closed]`, and the normative actor is explicitly VPN-GATE or
@@ -62,9 +62,9 @@ interface inventory and pure `PayloadNatDesiredState` are explicit inputs.
 The Calculator performs strict normalization/classification and returns
 immutable `confirmed/missing/stale/conflicts` values; no kernel I/O or mutation.
 
-**Responsibilities / interactions / traceability:** `VPNG0001-R1.R3.R2/R3`
-requires exact current identity; `VPNG0001-R1.R2.R4.R6.R1` requires mapping
-explicit desired NAT to current paths; `VPNG0004-R4.R3.R2/R4/R5` requires no
+**Responsibilities / interactions / traceability:** `VPNG-U001-R1.R3.R2/R3`
+requires exact current identity; `VPNG-U001-R1.R2.R4.R6.R1` requires mapping
+explicit desired NAT to current paths; `VPNG-U004-R4.R3.R2/R4/R5` requires no
 mutation or forwarding authorization on uncertainty. All processing is direct:
 adapter observation -> confirmed scaffold -> pure classification -> result for
 later structural Executor. Handles identify actual rule objects only.

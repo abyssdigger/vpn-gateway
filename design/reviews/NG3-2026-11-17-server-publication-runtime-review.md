@@ -22,15 +22,15 @@ Base clean main:
 
 Primary implementation trace:
 
-- `VPNG0001-R1.R2.R4.R6.R3` — Device-owned server publication and canonical
+- `VPNG-U001-R1.R2.R4.R6.R3` — Device-owned server publication and canonical
   `publish_vpn_server` grammar;
-- `VPNG0001-R1.R2` — VPN-GATE materializes its required internal network actions;
-- `VPNG0004-R4.R6.R1.R1` — mutable lower state must live in an explicit owned boundary;
-- `VPNG0004-R4.R6.R1.R5.R1` — publication-specific managed INPUT/OUTPUT exceptions are
+- `VPNG-U001-R1.R2` — VPN-GATE materializes its required internal network actions;
+- `VPNG-U004-R4.R6.R1.R1` — mutable lower state must live in an explicit owned boundary;
+- `VPNG-U004-R4.R6.R1.R5.R1` — publication-specific managed INPUT/OUTPUT exceptions are
   VPN-GATE-owned without becoming arbitrary payload/host firewall ownership;
-- `VPNG0006-R6.R4` — required/current/unknown state must not be conflated when it matters
+- `VPNG-U006-R6.R4` — required/current/unknown state must not be conflated when it matters
   for user understanding or safety;
-- `VPNG0007-R7.1/R7.3/R7.5/R7.7` — bounded implementation, authoritative observation,
+- `VPNG-U007-R7.1/R7.3/R7.5/R7.7` — bounded implementation, authoritative observation,
   review/evidence and requirements-driven development.
 
 No requirement text was changed in this cycle.
@@ -289,10 +289,10 @@ Driver/Executor.
 No new `decomp` links were created by this unit. The accumulated unique links are all
 resolved because their decomposition targets are closed:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6` — resolved;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` — resolved;
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` — resolved;
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2` — resolved.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6` — resolved;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1` — resolved;
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2` — resolved;
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2` — resolved.
 
 Repeated occurrences of the same link in the requirements tree do not create additional
 open decomposition state.
@@ -331,8 +331,8 @@ No human product decision remains for this unit.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0006-R6.R4` -> `VPNG9101-R2.R1.R4`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U006-R6.R4` -> `VPNG-M001-R2.R1.R4`
 
 The original IDs in the historical body are intentionally preserved.

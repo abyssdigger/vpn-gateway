@@ -5,18 +5,18 @@
 
 ## Scope
 
-Review the explicit product restart operation required by `VPNG0005-R5.R6.R3` as the
+Review the explicit product restart operation required by `VPNG-U005-R5.R6.R3` as the
 smallest composition of the already accepted bounded stop and startup operations.
 
 ## Requirements
 
 **Implements:**
-- `VPNG0005-R5.R6.R3`;
-- `VPNG0006-R6.R3`.
+- `VPNG-U005-R5.R6.R3`;
+- `VPNG-U006-R6.R3`.
 
 **Constrained by:**
-- `VPNG0005-R5.R6.R2`;
-- `VPNG0007-R7.R1`.
+- `VPNG-U005-R5.R6.R2`;
+- `VPNG-U007-R7.R1`.
 
 ## Verdict
 
@@ -205,9 +205,9 @@ second startup path or restart-specific lifecycle machinery.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R6.R2` -> `VPNG9101-R1.R1.R6.R2`
-- `VPNG0005-R5.R6.R3` -> `VPNG9101-R1.R1.R6.R3`
-- `VPNG0006-R6.R3` -> `VPNG9101-R2.R1.R3`
-- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
+- `VPNG-U005-R5.R6.R2` -> `VPNG-M001-R1.R1.R6.R2`
+- `VPNG-U005-R5.R6.R3` -> `VPNG-M001-R1.R1.R6.R3`
+- `VPNG-U006-R6.R3` -> `VPNG-M001-R2.R1.R3`
+- `VPNG-U007-R7.R1` -> `VPNG-D001-R1.R1.R1`
 
 The original IDs in the historical body are intentionally preserved.

@@ -9,11 +9,11 @@
 
 ## Requirement traceability
 
-- `VPNG9101-R2.R2`
-- `VPNG9101-R2.R2.R1`
-- `VPNG9101-R2.R2.R2`
-- `VPNG9101-R2.R2.R3`
-- `VPNG9101-R2.R2.R4`
+- `VPNG-M001-R2.R2`
+- `VPNG-M001-R2.R2.R1`
+- `VPNG-M001-R2.R2.R2`
+- `VPNG-M001-R2.R2.R3`
+- `VPNG-M001-R2.R2.R4`
 
 ## Result
 

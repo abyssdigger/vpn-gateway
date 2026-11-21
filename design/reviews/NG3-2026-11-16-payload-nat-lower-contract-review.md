@@ -10,7 +10,7 @@ without selecting the final human-facing TOML grammar.
 
 ## Requirement basis
 
-`VPNG0001-R1.R2.R4.R6.R1` requires an explicit distinction between:
+`VPNG-U001-R1.R2.R4.R6.R1` requires an explicit distinction between:
 
 ```text
 no payload source NAT

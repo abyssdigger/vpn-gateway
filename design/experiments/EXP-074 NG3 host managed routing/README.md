@@ -8,9 +8,9 @@ Technical result and disposition are unchanged by this traceability annotation.
 
 When this experiment was prepared, the then-current requirement tree contained:
 
-- **[VPNG0001-R2.R3.R1]** *Чтобы ordinary host routing не могла незаметно обойти явно выбранную администратором authoritative host-routing guarantee.* | Для destination, принятого aggressive host-routing helper под управление, конкурирующая ordinary host routing policy не должна переопределять выбранную helper'ом доставку этого destination к VPN-GATE; host-local delivery и трафик, уже вышедший из managed network domain в сторону host, не должны из-за этого захватываться обратно, а несвязанное ordinary host routing state не должно становиться объектом произвольной мутации helper'а. [`closed`]
-- **[VPNG0002-R2.R6]** *Чтобы ответ на входящий трафик из VPN-канала мог быть корректно обработан его отправителем.* | Для управляемого трафика, принятого со стороны VPN через разрешенный канал, VPN-GATE должен обеспечивать передачу относящегося к нему ответного трафика обратно через тот VPN-канал, через который был принят исходный трафик; наличие других разрешенных каналов для адреса отправителя не должно само по себе менять канал такого ответа. [`closed`]
-- **[VPNG0001-R2.R3.C1]** *Поскольку непрерывная защита ordinary-host routing от внешнего вмешательства и безопасная аварийная композиция с административным containment существенно расширяют host-integration и recovery scope, тогда как первый рабочий релиз может использовать peaceful lifecycle helper или полностью административную host routing.* | Первый release не обязан предоставлять aggressive host-routing helper и связанные с ним continuous-recovery / unrecoverable-alarm guarantees; отсутствие этой capability не должно запрещать peaceful host-routing helper или полностью ручное управление host routing администратором. [`closed`]
+- **[VPNG-U001-R2.R3.R1]** *Чтобы ordinary host routing не могла незаметно обойти явно выбранную администратором authoritative host-routing guarantee.* | Для destination, принятого aggressive host-routing helper под управление, конкурирующая ordinary host routing policy не должна переопределять выбранную helper'ом доставку этого destination к VPN-GATE; host-local delivery и трафик, уже вышедший из managed network domain в сторону host, не должны из-за этого захватываться обратно, а несвязанное ordinary host routing state не должно становиться объектом произвольной мутации helper'а. [`closed`]
+- **[VPNG-U002-R2.R6]** *Чтобы ответ на входящий трафик из VPN-канала мог быть корректно обработан его отправителем.* | Для управляемого трафика, принятого со стороны VPN через разрешенный канал, VPN-GATE должен обеспечивать передачу относящегося к нему ответного трафика обратно через тот VPN-канал, через который был принят исходный трафик; наличие других разрешенных каналов для адреса отправителя не должно само по себе менять канал такого ответа. [`closed`]
+- **[VPNG-U001-R2.R3.C1]** *Поскольку непрерывная защита ordinary-host routing от внешнего вмешательства и безопасная аварийная композиция с административным containment существенно расширяют host-integration и recovery scope, тогда как первый рабочий релиз может использовать peaceful lifecycle helper или полностью административную host routing.* | Первый release не обязан предоставлять aggressive host-routing helper и связанные с ним continuous-recovery / unrecoverable-alarm guarantees; отсутствие этой capability не должно запрещать peaceful host-routing helper или полностью ручное управление host routing администратором. [`closed`]
 
 These R/C IDs were later removed or reparented by the NG3 Purpose/parent refactor. They are
 preserved here verbatim as the historical normative context that caused this experiment to be
@@ -21,14 +21,14 @@ through live R/C links elsewhere in this dossier or in the central experiment re
 
 This experiment is exact Linux acceptance evidence for:
 
-- `VPNG0001-R5.R2.R1` — authoritative managed-destination routing for the opt-in aggressive
+- `VPNG-U001-R5.R2.R1` — authoritative managed-destination routing for the opt-in aggressive
   host-routing helper.
 
 Older direction-derived host-routing decompositions are historical and no longer define current
-product semantics. `VPNG0003-R4` remains a core STACK return-affinity requirement, but
+product semantics. `VPNG-U003-R4` remains a core STACK return-affinity requirement, but
 EXP-074 is no longer used to make host routing an unconditional part of that core contract.
 
-The aggressive helper itself is constrained out of Release 1 by `VPNG0001-R5.R2.C1`.
+The aggressive helper itself is constrained out of Release 1 by `VPNG-U001-R5.R2.C1`.
 
 ## Question
 

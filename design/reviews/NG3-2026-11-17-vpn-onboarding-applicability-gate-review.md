@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — external VPN onboarding applicability gate review
 
 > **Current interpretation (2026-11-20):** this review records the original closure
-> wording of `VPNG0001-R1.R3.C1.R1.R1`. The current Requirement is mechanism-neutral: it
+> wording of `VPNG-U001-R1.R3.C1.R1.R1`. The current Requirement is mechanism-neutral: it
 > requires reproducible end-to-end evidence that the published onboarding contract produces a
 > channel VPN-GATE can accept and use under all requirements applicable to that integration.
 > The managed-domain placement, exact binding and forwarding steps described below remain the
@@ -19,13 +19,13 @@ boundary.
 Existing requirements already establish that:
 
 - VPN-GATE Release 1 does not provision/configure VPN channels itself
-  (`VPNG0001-R1.R3.C1`);
+  (`VPNG-U001-R1.R3.C1`);
 - the project must provide an administrator-facing supported-integration instruction/contract
-  (`VPNG0001-R1.R3.C1.R1`);
+  (`VPNG-U001-R1.R3.C1.R1`);
 - the usable data-plane endpoint must exist inside the managed network domain
-  (`VPNG0001-R1.R3.C2`);
+  (`VPNG-U001-R1.R3.C2`);
 - a current logical path may be used only after exact current endpoint binding
-  (`VPNG0001-R1.R3.R2`).
+  (`VPNG-U001-R1.R3.R2`).
 
 The gap was that none of those nodes required evidence that the administrator-facing contract
 is actually reproducible on a target Linux system.
@@ -45,7 +45,7 @@ and binding primitives.
 
 **Disposition:** accepted.
 
-Added `VPNG0001-R1.R3.C1.R1.R1`: every external VPN onboarding mechanism claimed as
+Added `VPNG-U001-R1.R3.C1.R1.R1`: every external VPN onboarding mechanism claimed as
 supported by Release 1 requires reproducible acceptance evidence that an administrator can
 follow the published procedure, place/create the real data-plane endpoint inside the managed
 domain, and let VPN-GATE freshly observe, exactly bind and use it through the existing
@@ -56,7 +56,7 @@ forwarding contract.
 The new node does not require VPN-GATE to create or configure VPN sessions.
 
 The administrator still performs external VPN provisioning under
-`VPNG0001-R1.R3.C1`. The product/project obligation is to prove that the published handoff
+`VPNG-U001-R1.R3.C1`. The product/project obligation is to prove that the published handoff
 boundary is executable and repeatable.
 
 Therefore the new requirement refines the already accepted administrator-support obligation
@@ -89,7 +89,7 @@ It also requires:
 - per-integration evidence unless equivalence is explicitly reviewed.
 
 This is sufficient architecture closure for
-`VPNG0001-R1.R3.C1.R1.R1`.
+`VPNG-U001-R1.R3.C1.R1.R1`.
 
 ## Evidence plan
 

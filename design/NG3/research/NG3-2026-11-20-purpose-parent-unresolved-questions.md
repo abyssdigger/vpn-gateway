@@ -15,11 +15,11 @@ decision. Все 18 вопросов получили product-holder disposition
 
 Последними закрыты:
 
-- priority-only continuity: прежний `VPNG0004-R4.R3.R1` перенесён в
-  `VPNG0003-R3.R9` как гарантия отсутствия искусственного разрыва при изменении только
+- priority-only continuity: прежний `VPNG-U004-R4.R3.R1` перенесён в
+  `VPNG-U003-R3.R9` как гарантия отсутствия искусственного разрыва при изменении только
   эффективного порядка неизменного набора разрешённых VPN-путей;
 - `reload`: обязательная product capability удалена; возможность обновлять конфигурацию
-  поднята в `VPNG0005` / `VPNG0005-R5` / `VPNG0005-R5.R6`, а `reload` остаётся
+  поднята в `VPNG-U005` / `VPNG-U005-R5` / `VPNG-U005-R5.R6`, а `reload` остаётся
   необязательным механизмом интерфейса управления.
 
 ## Уже закрытые adjacent findings
@@ -32,11 +32,11 @@ decision. Все 18 вопросов получили product-holder disposition
 - peaceful/aggressive host-routing helpers получили положительный общий parent;
 - user-selected availability criterion подтверждён;
 - Device-default/Profile-override перенесён из-под ICMP-only constraint;
-- timing/hysteresis limitation вынесен в sibling constraint `VPNG0003-R3.R6.R3.R1.C2`;
+- timing/hysteresis limitation вынесен в sibling constraint `VPNG-U003-R3.R6.R3.R1.C2`;
 - host-state safety сделан mechanism-neutral, managed network domain и literal DROP остаются
   architecture/evidence;
-- protective mode поднят непосредственно под `VPNG0004`;
-- return-flow affinity перенесён из `VPNG0002-R2.R6` в прямой child `VPNG0003-R4`;
+- protective mode поднят непосредственно под `VPNG-U004`;
+- return-flow affinity перенесён из `VPNG-U002-R2.R6` в прямой child `VPNG-U003-R4`;
 - второй VPN lifecycle evidence gate удалён из requirement tree; EXP-050 остаётся
   историческим evidence для соответствующих product/lifecycle/safety obligations.
 
@@ -50,8 +50,8 @@ tree и атомарный remap актуальной traceability.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005` -> `VPNG9101-R1`
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005` -> `VPNG-M001-R1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

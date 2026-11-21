@@ -9,17 +9,17 @@
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
-- `VPNG0005-R5.R4` -> `VPNG9101-R1.R1.R4`
-- `VPNG0005-R5.R5` -> `VPNG9101-R1.R1.R5`
-- `VPNG0005-R5.R6.R2` -> `VPNG9101-R1.R1.R6.R2`
-- `VPNG0005-R5.R6.R3` -> `VPNG9101-R1.R1.R6.R3`
+- `VPNG-U005-R5.C1` -> `VPNG-M001-R1.R1.C1`
+- `VPNG-U005-R5.R4` -> `VPNG-M001-R1.R1.R4`
+- `VPNG-U005-R5.R5` -> `VPNG-M001-R1.R1.R5`
+- `VPNG-U005-R5.R6.R2` -> `VPNG-M001-R1.R1.R6.R2`
+- `VPNG-U005-R5.R6.R3` -> `VPNG-M001-R1.R1.R6.R3`
 
 The original IDs in the historical body are intentionally preserved.
 
 When this experiment was prepared and executed, the then-current requirement tree contained:
 
-- **[VPNG0007-R7.R7.R1.R1]** *Чтобы после подтверждения базовой запускабельности VPN проект не принял lifecycle/ownership контракт, работающий только на одном чистом запуске или на безобидной VPN-specific конфигурации.* | После PASS базового applicability gate проект должен на той же подтвержденной integration провести отдельный lifecycle experiment до принятия зависимой bounded-VPN lifecycle семантики: проверить start, stop, restart с неизмененной VPN-specific конфигурацией, restart с измененной VPN-specific конфигурацией, отсутствие зависимости нового запуска от runtime-состояния предыдущего экземпляра и поведение при aggressive VPN-specific configuration, включая hooks или другие механизмы, пытающиеся изменять routes, RPDB, NAT, firewall, sysctl или иное сетевое состояние внутри managed network domain. [`closed`]
+- **[VPNG-U007-R7.R7.R1.R1]** *Чтобы после подтверждения базовой запускабельности VPN проект не принял lifecycle/ownership контракт, работающий только на одном чистом запуске или на безобидной VPN-specific конфигурации.* | После PASS базового applicability gate проект должен на той же подтвержденной integration провести отдельный lifecycle experiment до принятия зависимой bounded-VPN lifecycle семантики: проверить start, stop, restart с неизмененной VPN-specific конфигурацией, restart с измененной VPN-specific конфигурацией, отсутствие зависимости нового запуска от runtime-состояния предыдущего экземпляра и поведение при aggressive VPN-specific configuration, включая hooks или другие механизмы, пытающиеся изменять routes, RPDB, NAT, firewall, sysctl или иное сетевое состояние внутри managed network domain. [`closed`]
 
 This requirement was later removed from the current tree because it prescribed a particular
 evidence sequence rather than an independent product obligation. It remains here only as the
@@ -30,13 +30,13 @@ current requirement link.
 Current applicability of the EXP-050 evidence maps to the product obligations it actually
 tests:
 
-- `VPNG0001-R1.R3.C1.R1.R2` — supported external VPN configuration must not silently obtain authority to mutate VPN-GATE-owned network policy/state.
-- `VPNG0001-R1.R3.C3` — Release 1 may leave external VPN runtime lifecycle ownership/supervision outside VPN-GATE.
-- `VPNG0001-R1.R3.C3.R1` — that external lifecycle must have a reproducible integration contract coordinated with VPN-GATE lifecycle and safety requirements.
-- `VPNG0004-R4.R6` — external network state must not allow VPN-GATE traffic-processing rules to be bypassed or change their required outcome.
-- `VPNG9101-R1.R1.R4` and `VPNG9101-R1.R1.R5` — shutdown/cleanup must remove product-owned effects and continue attempting independent cleanup despite partial failures.
-- `VPNG9101-R1.R1.R6.R2` and `VPNG9101-R1.R1.R6.R3` — successful stop/restart must reach the required cleanup/new-start state rather than merely issue internal commands.
-- prerequisite product evidence: `VPNG0001-R1.R3.C1.R1.R1` / EXP-049.
+- `VPNG-U001-R1.R3.C1.R1.R2` — supported external VPN configuration must not silently obtain authority to mutate VPN-GATE-owned network policy/state.
+- `VPNG-U001-R1.R3.C3` — Release 1 may leave external VPN runtime lifecycle ownership/supervision outside VPN-GATE.
+- `VPNG-U001-R1.R3.C3.R1` — that external lifecycle must have a reproducible integration contract coordinated with VPN-GATE lifecycle and safety requirements.
+- `VPNG-U004-R4.R6` — external network state must not allow VPN-GATE traffic-processing rules to be bypassed or change their required outcome.
+- `VPNG-M001-R1.R1.R4` and `VPNG-M001-R1.R1.R5` — shutdown/cleanup must remove product-owned effects and continue attempting independent cleanup despite partial failures.
+- `VPNG-M001-R1.R1.R6.R2` and `VPNG-M001-R1.R1.R6.R3` — successful stop/restart must reach the required cleanup/new-start state rather than merely issue internal commands.
+- prerequisite product evidence: `VPNG-U001-R1.R3.C1.R1.R1` / EXP-049.
 
 ## Dependency gate
 
@@ -188,7 +188,7 @@ EXP-050 remains selected evidence for the bounded systemd lifecycle and for the 
 supported integration does not require generic process adoption or arbitrary privileged hook
 execution.
 
-For `VPNG0005-R5.C1`, the experiment supports only the bounded recovery/adoption conclusion:
+For `VPNG-U005-R5.C1`, the experiment supports only the bounded recovery/adoption conclusion:
 Release 1 need not forensic-adopt arbitrary surviving processes or reconstruct unknown
 namespace ownership after unsupported external intervention. EXP-050 did **not** test
 arbitrary root damage and therefore is not evidence for a blanket fail-closed reaction to
@@ -196,4 +196,4 @@ every possible out-of-band mutation.
 
 The fail-closed forwarding containment observed in the tested lifecycle remains valid evidence
 for the specific managed-domain safety postconditions that required it; that behavior is
-owned by the applicable `VPNG0004` safety requirements rather than by `VPNG0005-R5.C1`.
+owned by the applicable `VPNG-U004` safety requirements rather than by `VPNG-U005-R5.C1`.

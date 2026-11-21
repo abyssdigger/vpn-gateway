@@ -12,9 +12,9 @@
 
 Added and closed:
 
-- `VPNG0001-R1.R3.R5`;
-- `VPNG0001-R1.R3.R5.C1`;
-- `VPNG0001-R1.R3.R5.C1.R1`.
+- `VPNG-U001-R1.R3.R5`;
+- `VPNG-U001-R1.R3.R5.C1`;
+- `VPNG-U001-R1.R3.R5.C1.R1`.
 
 Accepted semantics:
 
@@ -43,7 +43,7 @@ Integration-specific provenance is required.
 
 ### 2. Ordered Device firewall — closed semantics, lower physical completion gated
 
-Refined `VPNG0001-R1.R2.R4.R6.R2` and added/closed R1-R5 descendants plus
+Refined `VPNG-U001-R1.R2.R4.R6.R2` and added/closed R1-R5 descendants plus
 endpoint-scoped first-release constraint.
 
 Accepted semantics:
@@ -81,8 +81,8 @@ desired state and physical mutation remain separate evidence/implementation work
 
 Added and closed:
 
-- `VPNG0004-R4.R6.R1.R5`;
-- `VPNG0004-R4.R6.R1.R5.R1`.
+- `VPNG-U004-R4.R6.R1.R5`;
+- `VPNG-U004-R4.R6.R1.R5.R1`.
 
 Managed-domain defaults are:
 
@@ -102,11 +102,11 @@ shapes and exceptions require a later bounded lower unit.
 
 Added and closed:
 
-- `VPNG0001-R1.R2.R4.R4.R4`;
-- `VPNG0001-R1.R2.R4.R4.R4.R1`;
-- `VPNG0001-R1.R2.R4.R4.R4.C1`;
-- `VPNG0004-R4.R6.R1.R6`;
-- `VPNG0004-R4.R6.R1.R6.R1`.
+- `VPNG-U001-R1.R2.R4.R4.R4`;
+- `VPNG-U001-R1.R2.R4.R4.R4.R1`;
+- `VPNG-U001-R1.R2.R4.R4.R4.C1`;
+- `VPNG-U004-R4.R6.R1.R6`;
+- `VPNG-U004-R4.R6.R1.R6.R1`.
 
 The two NAT purposes are separate:
 

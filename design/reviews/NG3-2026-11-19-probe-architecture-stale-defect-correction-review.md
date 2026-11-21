@@ -69,10 +69,10 @@ The following are not current Release-1 ICMP probing blockers:
 
 All accumulated occurrences remain resolved:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`;
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`;
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 ### unreal
 
@@ -99,7 +99,7 @@ Release-1 ICMP probing blocker remains.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

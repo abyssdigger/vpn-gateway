@@ -28,9 +28,9 @@ PASS.
 
 The helper implements lower integration detail under:
 
-- `VPNG0001-R1.R3.R2` current concrete endpoint binding;
-- `VPNG0001-R1.R3.C1.R1` supported-integration onboarding contract;
-- `VPNG0007-R7.R3.R2` containment of lower technical details.
+- `VPNG-U001-R1.R3.R2` current concrete endpoint binding;
+- `VPNG-U001-R1.R3.C1.R1` supported-integration onboarding contract;
+- `VPNG-U007-R7.R3.R2` containment of lower technical details.
 
 It does not claim that every supported VPN channel is direct-device.
 
@@ -105,6 +105,6 @@ nft payload/probe policy remains a separate subsequent unit.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R3.R2` -> `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U007-R7.R3.R2` -> `VPNG-D001-R1.R1.R3.R2`
 
 The original IDs in the historical body are intentionally preserved.

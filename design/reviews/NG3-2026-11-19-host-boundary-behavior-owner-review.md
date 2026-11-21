@@ -15,10 +15,10 @@ behavior lanes into the alpha lifecycle or remove the alpha `+snat` fail-fast.
 
 Implements or supports:
 
-- `VPNG0001-R1.R2.R4.R4.R4`;
-- `VPNG0001-R1.R2.R4.R4.R4.R1`;
-- `VPNG0004-R4.R6.R1.R6`;
-- `VPNG0004-R4.R6.R1.R6.R1`;
+- `VPNG-U001-R1.R2.R4.R4.R4`;
+- `VPNG-U001-R1.R2.R4.R4.R4.R1`;
+- `VPNG-U004-R4.R6.R1.R6`;
+- `VPNG-U004-R4.R6.R1.R6.R1`;
 - selected EXP-064 fixed behavior-lane carrier.
 
 The host does not recover Profile identity. It consumes only one of the four already-selected
@@ -176,10 +176,10 @@ carrier.
 
 Resolved historical links remain:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`;
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`;
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 ### unreal
 
@@ -210,7 +210,7 @@ lane routes + initial packet selection + host behavior owner, and only then remo
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

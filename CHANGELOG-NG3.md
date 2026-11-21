@@ -7,14 +7,14 @@ evidence remain authoritative in their own artifacts.
 ## 2026-11-22 — Development and operational cost requirements separated
 
 Engineering requirements are now classified by the lifecycle cost they optimize rather than
-by who implements them. Development-cost requirements moved from the former `VPNG0007` tree
-under the owner-imposed `VPNG9001` root; lifecycle/observability requirements moved from the
-former `VPNG0005`/`VPNG0006` roots under the owner-imposed operational-cost `VPNG9101`
-root. Functional/user-facing VPN behavior remains in the `VPNG0001`–`VPNG0004` range.
+by who implements them. Development-cost requirements moved from the former `VPNG-U007` tree
+under the owner-imposed `VPNG-D001` root; lifecycle/observability requirements moved from the
+former `VPNG-U005`/`VPNG-U006` roots under the owner-imposed operational-cost `VPNG-M001`
+root. Functional/user-facing VPN behavior remains in the `VPNG-U001`–`VPNG-U004` range.
 
 The previously preliminary weak-device/resource-efficiency expectation is now normative under
-`VPNG9101-R3`. The long-requested compact human current-state report is now normative under
-`VPNG9101-R2.R2`, with Devices/Profiles sections, four-space hierarchy, numbered current
+`VPNG-M001-R3`. The long-requested compact human current-state report is now normative under
+`VPNG-M001-R2.R2`, with Devices/Profiles sections, four-space hierarchy, numbered current
 effective path order and normalized availability wording. Its architecture is separated into
 the existing truthful `RuntimeStatusAgent` snapshot and a pure
 `RuntimeStatusTextRenderer`; the concrete delivery path remains replaceable. The installed
@@ -55,13 +55,13 @@ The same cleanup removed the redundant zero-path safety child that had encoded h
 membership and fail-closed managed forwarding are now traced to their existing independent
 requirements, while ordinary-host routing remains outside that core safety promise.
 
-Recovery scope was also narrowed so `VPNG0005-R5.C1` (moved to `VPNG9101-R1.R1.C1`) limits mandatory automatic
+Recovery scope was also narrowed so `VPNG-U005-R5.C1` (moved to `VPNG-M001-R1.R1.C1`) limits mandatory automatic
 forensic/adoption behavior after unsupported root/admin intervention without acting as a
 second blanket safety root. Fail-closed/readiness reactions now trace to the concrete
 invariant and its existing safety/lifecycle requirements.
 
 Onboarding acceptance evidence was likewise separated from its first concrete Linux
-realization: `VPNG0001-R1.R3.C1.R1.R1` now requires reproducible proof of the published
+realization: `VPNG-U001-R1.R3.C1.R1.R1` now requires reproducible proof of the published
 administrator onboarding contract without embedding managed-domain placement, logical-path
 binding or forwarding mechanisms in the Requirement itself. Those checks remain independently
 required where their own R/C apply to the selected integration.

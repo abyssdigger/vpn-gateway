@@ -27,8 +27,8 @@ canonical capabilities whose complete lower alpha path is not yet assembled:
 `availability_check`, Profile `+snat`, and `publish_vpn_server`.
 
 The target production runtime implementation boundary is now Rust under
-`VPNG0007-R7.R8`. Alpha/beta Python reference releases remain explicitly permitted by
-`VPNG0007-R7.R8.C1`.
+`VPNG-U007-R7.R8`. Alpha/beta Python reference releases remain explicitly permitted by
+`VPNG-U007-R7.R8.C1`.
 
 ## Evidence
 
@@ -81,10 +81,10 @@ Mechanical final check:
 
 Accumulated resolved decomp annotations: **6 occurrences**, all with concrete deblockers:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` — two recorded occurrences;
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` — two recorded occurrences;
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1` — two recorded occurrences;
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2` — two recorded occurrences;
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 Accumulated active/rejected exceptional state:
 
@@ -115,9 +115,9 @@ No CHANGELOG update was made during active NG3 development.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R8` -> `VPNG9001-R1.R1.R8`
-- `VPNG0007-R7.R8.C1` -> `VPNG9001-R1.R1.R8.C1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R8` -> `VPNG-D001-R1.R1.R8`
+- `VPNG-U007-R7.R8.C1` -> `VPNG-D001-R1.R1.R8.C1`
 
 The original IDs in the historical body are intentionally preserved.

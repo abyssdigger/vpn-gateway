@@ -6,13 +6,13 @@ network-policy allocation and probe desired state.
 
 ## Reviewed contracts
 
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R2`
-- `VPNG0003-R3.R6.R3`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.C1.R1`
-- `VPNG0003-R3.R6.R3.R2`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R2`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.C1.R1`
+- `VPNG-U003-R3.R6.R3.R2`
 - shared lower ownership/allocation architecture in §8.2, §8.3 and §9.2.
 
 No product requirement changed in this review unit.
@@ -127,10 +127,10 @@ lower projections.
 
 All existing occurrences remain resolved:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`
 
 ### unreal
 
@@ -156,7 +156,7 @@ contracts.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

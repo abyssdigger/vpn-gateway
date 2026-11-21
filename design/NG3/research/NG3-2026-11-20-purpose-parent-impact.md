@@ -29,19 +29,19 @@ requirement tree**.
 
 | Область | Draft owner | Ожидаемый эффект |
 | --- | --- | --- |
-| Различимость входящего VPN-трафика | `VPNG0001-R3`; Release-1 config `VPNG0001-R4.R4.R4.R4` | **Medium docs / low code.** Текущая Profile SNAT dataplane может сохраниться; меняется product explanation и trace |
-| Общая пользовательская конфигурация | `VPNG0001-R4` | **High docs / zero behavior.** Бывший `VPNG0001-R1.R2.*` config subtree получает новый ancestry; lifecycle operations остаются в `VPNG0005` |
-| Ordinary→VPN NAT | capability `VPNG0001-R1.R4.R1`; config `VPNG0001-R4.R4.R6.R1` | **Medium trace / low code.** `use_outbound_nat` больше не служит основанием существования NAT capability |
-| Дополнительные ограничения по VPN-ресурсу | `VPNG0001-R1.R4.R2`; per-path `.R1`; config `VPNG0001-R4.R4.R6.R2*` | **High trace / low current code.** Device firewall behavior сохраняется; future per-path selector относится к logical VPN path, не endpoint provenance |
-| VPN server/client transport conditions | `VPNG0001-R1.R3.R6.R1/.R2`; config under `VPNG0001-R4.R4.R6` | **Medium trace / low code.** Publication/local integration implementations остаются, ancestry становится onboarding/channel-service oriented |
+| Различимость входящего VPN-трафика | `VPNG-U001-R3`; Release-1 config `VPNG-U001-R4.R4.R4.R4` | **Medium docs / low code.** Текущая Profile SNAT dataplane может сохраниться; меняется product explanation и trace |
+| Общая пользовательская конфигурация | `VPNG-U001-R4` | **High docs / zero behavior.** Бывший `VPNG-U001-R1.R2.*` config subtree получает новый ancestry; lifecycle operations остаются в `VPNG-U005` |
+| Ordinary→VPN NAT | capability `VPNG-U001-R1.R4.R1`; config `VPNG-U001-R4.R4.R6.R1` | **Medium trace / low code.** `use_outbound_nat` больше не служит основанием существования NAT capability |
+| Дополнительные ограничения по VPN-ресурсу | `VPNG-U001-R1.R4.R2`; per-path `.R1`; config `VPNG-U001-R4.R4.R6.R2*` | **High trace / low current code.** Device firewall behavior сохраняется; future per-path selector относится к logical VPN path, не endpoint provenance |
+| VPN server/client transport conditions | `VPNG-U001-R1.R3.R6.R1/.R2`; config under `VPNG-U001-R4.R4.R6` | **Medium trace / low code.** Publication/local integration implementations остаются, ancestry становится onboarding/channel-service oriented |
 | Transport endpoint provenance | requirement subtree удалён | **Medium architecture cleanup / low current code.** Endpoint/peer остаётся adapter/lower fact; Release-1 core и явные probe targets от него не зависят |
-| Host-routing automation | `VPNG0001-R5`; peaceful `.R1`, detailed Release-1 `.R1.R1`; aggressive `.R2` | **Medium-high trace / low code.** Peaceful helper остаётся Release-1 behavior; aggressive остаётся postponed |
-| Availability criterion | `VPNG0003-R3.R6.R3.R1`; reuse `.R1.R1*`; ICMP-only `.C1`; timing `.C2` | **Medium trace / zero behavior.** Probe/config implementation не требует изменения |
-| Host-state safety | mechanism-neutral `VPNG0004-R4.R6` | **Very high trace / near-zero runtime.** Managed domain/netns/nft остаются выбранной архитектурой, но должны ссылаться на product invariants/functions, а не на удалённый mechanism requirement |
-| Protective mode | `VPNG0004-R5`; Release-1 limitation `.C1` | **Low current code / medium docs.** Capability остаётся postponed; future aggressive-helper composition получает честный safety owner |
-| Return-flow stability | `VPNG0003-R4` | **Medium trace / low code.** Existing same-path forwarding behavior сохраняется; causal owner становится multi-path predictability, параллельно baseline/availability preference |
-| Priority-only continuity | `VPNG0003-R3.R9` | **Medium trace / zero intended behavior change.** Non-disruptive reorder guarantee сохраняется; route-copy/staging implementation detail удалён из requirement semantics |
-| Configuration update | `VPNG0005`, `VPNG0005-R5`, `VPNG0005-R5.R6`; отдельный reload requirement удалён | **Low-medium docs / low current code.** Alpha по-прежнему может применять новую конфигурацию через restart; обязательной операции `reload` нет |
+| Host-routing automation | `VPNG-U001-R5`; peaceful `.R1`, detailed Release-1 `.R1.R1`; aggressive `.R2` | **Medium-high trace / low code.** Peaceful helper остаётся Release-1 behavior; aggressive остаётся postponed |
+| Availability criterion | `VPNG-U003-R3.R6.R3.R1`; reuse `.R1.R1*`; ICMP-only `.C1`; timing `.C2` | **Medium trace / zero behavior.** Probe/config implementation не требует изменения |
+| Host-state safety | mechanism-neutral `VPNG-U004-R4.R6` | **Very high trace / near-zero runtime.** Managed domain/netns/nft остаются выбранной архитектурой, но должны ссылаться на product invariants/functions, а не на удалённый mechanism requirement |
+| Protective mode | `VPNG-U004-R5`; Release-1 limitation `.C1` | **Low current code / medium docs.** Capability остаётся postponed; future aggressive-helper composition получает честный safety owner |
+| Return-flow stability | `VPNG-U003-R4` | **Medium trace / low code.** Existing same-path forwarding behavior сохраняется; causal owner становится multi-path predictability, параллельно baseline/availability preference |
+| Priority-only continuity | `VPNG-U003-R3.R9` | **Medium trace / zero intended behavior change.** Non-disruptive reorder guarantee сохраняется; route-copy/staging implementation detail удалён из requirement semantics |
+| Configuration update | `VPNG-U005`, `VPNG-U005-R5`, `VPNG-U005-R5.R6`; отдельный reload requirement удалён | **Low-medium docs / low current code.** Alpha по-прежнему может применять новую конфигурацию через restart; обязательной операции `reload` нет |
 
 ## Архитектура: что меняется по смыслу
 
@@ -53,10 +53,10 @@ Draft больше не требует отдельный managed network domain
 literal `INPUT/OUTPUT/FORWARD=DROP` как product requirements. Эти механизмы могут остаться
 в `design/NG3/architecture.md`, потому что они являются выбранным способом выполнить:
 
-- `VPNG0004-R4.R6` — внешнее host network state не должно обходить policy VPN-GATE;
-- forwarding/policy requirements `VPNG0001-R1*` и `VPNG0002-R2*`;
-- VPN-path acceptance/binding `VPNG0001-R1.R3*`;
-- fail-closed/readiness requirements `VPNG0004-R4*`.
+- `VPNG-U004-R4.R6` — внешнее host network state не должно обходить policy VPN-GATE;
+- forwarding/policy requirements `VPNG-U001-R1*` и `VPNG-U002-R2*`;
+- VPN-path acceptance/binding `VPNG-U001-R1.R3*`;
+- fail-closed/readiness requirements `VPNG-U004-R4*`.
 
 Следствие: при нормативном remap архитектурные секции не нужно «депроектировать» из netns.
 Нужно удалить ложную трассировку вида «namespace существует, потому что requirement требует
@@ -77,7 +77,7 @@ Future per-path policy должна использовать logical VPN-path id
 `config-model.md` должен после нормативного remap различать:
 
 1. **что продукт умеет** — functional requirement;
-2. **как пользователь выражает это в Release-1 config** — descendants `VPNG0001-R4*`.
+2. **как пользователь выражает это в Release-1 config** — descendants `VPNG-U001-R4*`.
 
 Это особенно важно для `+snat`, `use_outbound_nat`, `firewall`,
 `publish_vpn_server`, `allow_vpn_client`.
@@ -95,24 +95,24 @@ remap unit нужно проверить как минимум:
 | Current document | Основной remap |
 | --- | --- |
 | `design/NG3/architecture.md` | config subtree; NAT/firewall/publication/client split; helper IDs; availability reuse; removal of provenance requirement; managed-domain `R4.R6.R1*` trace; protective mode |
-| `design/NG3/config-model.md` | весь бывший `VPNG0001-R1.R2*` → `VPNG0001-R4*`; functional/config split; helper IDs; availability placement |
-| `design/NG3/vpn-onboarding-release1.md` | client transport/control → `VPNG0001-R1.R3.R6.R2` + config contract; remove requirement-level managed-domain provenance assumptions |
+| `design/NG3/config-model.md` | весь бывший `VPNG-U001-R1.R2*` → `VPNG-U001-R4*`; functional/config split; helper IDs; availability placement |
+| `design/NG3/vpn-onboarding-release1.md` | client transport/control → `VPNG-U001-R1.R3.R6.R2` + config contract; remove requirement-level managed-domain provenance assumptions |
 | `design/deferrals/NG3-user-facing-policy-grammar.md` | config IDs and per-path firewall wording; historical decisions remain attributable to original baseline |
 | `design/NG3/code/python/rou/README.md` | peaceful/aggressive helper trace IDs only; code semantics need not change |
 | `design/vpn-gateway-experiments.md` | current selected-coverage descriptions may point to new IDs; historical experiment files retain their original requirement references |
 
 Также необходимо искать все **current** non-historical documents, которые ссылаются на
-удалённые `VPNG0001-R1.R3.R5*`, `VPNG0004-R4.R6.R1*`,
-`VPNG0004-R4.R7*` или старые helper/config IDs.
+удалённые `VPNG-U001-R1.R3.R5*`, `VPNG-U004-R4.R6.R1*`,
+`VPNG-U004-R4.R7*` или старые helper/config IDs.
 
 ## EXP-050 после удаления process-only requirement
 
-`VPNG0007-R7.R7.R1.R1` больше не является актуальным requirement owner для EXP-050.
+`VPNG-U007-R7.R7.R1.R1` больше не является актуальным requirement owner для EXP-050.
 Технический результат эксперимента сохраняется без ретроактивного редактирования, а current
-trace должен использовать `VPNG0001-R1.R3.C1.R1.R2`,
-`VPNG0001-R1.R3.C3.R1`, `VPNG0004-R4.R6`,
-`VPNG0005-R5.R4`, `VPNG0005-R5.R5`,
-`VPNG0005-R5.R6.R2` и `VPNG0005-R5.R6.R3` в зависимости от проверяемого аспекта.
+trace должен использовать `VPNG-U001-R1.R3.C1.R1.R2`,
+`VPNG-U001-R1.R3.C3.R1`, `VPNG-U004-R4.R6`,
+`VPNG-U005-R5.R4`, `VPNG-U005-R5.R5`,
+`VPNG-U005-R5.R6.R2` и `VPNG-U005-R5.R6.R3` в зависимости от проверяемого аспекта.
 
 ## Historical evidence policy
 
@@ -174,12 +174,12 @@ experiment dossiers подтверждает отсутствие удалённ
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005` -> `VPNG9101-R1`
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R4` -> `VPNG9101-R1.R1.R4`
-- `VPNG0005-R5.R5` -> `VPNG9101-R1.R1.R5`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0005-R5.R6.R2` -> `VPNG9101-R1.R1.R6.R2`
-- `VPNG0005-R5.R6.R3` -> `VPNG9101-R1.R1.R6.R3`
+- `VPNG-U005` -> `VPNG-M001-R1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R4` -> `VPNG-M001-R1.R1.R4`
+- `VPNG-U005-R5.R5` -> `VPNG-M001-R1.R1.R5`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U005-R5.R6.R2` -> `VPNG-M001-R1.R1.R6.R2`
+- `VPNG-U005-R5.R6.R3` -> `VPNG-M001-R1.R1.R6.R3`
 
 The original IDs in the historical body are intentionally preserved.

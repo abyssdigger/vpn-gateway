@@ -83,7 +83,7 @@ review/checkpoint inventories must list active `broken` links explicitly.
 
 ## Finding F4 — current VPN provisioning constraint is not broken
 
-`VPNG0001-R1.R3.C1` says that Release-1 VPN **provisioning and VPN-specific configuration**
+`VPNG-U001-R1.R3.C1` says that Release-1 VPN **provisioning and VPN-specific configuration**
 remain administrator responsibilities.
 
 That remains consistent with the current discussion and is therefore not marked `broken`.
@@ -99,7 +99,7 @@ the managed domain is now explicitly evidence-gated rather than inferred from C1
 
 Added:
 
-### `VPNG0007-R7.R7`
+### `VPNG-U007-R7.R7`
 
 Purpose correlates with `R7`: safe, maintainable development requires implementation and
 experiments not to become independent sources of semantics.
@@ -107,15 +107,15 @@ experiments not to become independent sources of semantics.
 Statement requires every substantial development/evidence unit to have an exact R/C trace and
 an expected evidence/review result.
 
-### `VPNG0007-R7.R7.R1`
+### `VPNG-U007-R7.R7.R1`
 
 Purpose correlates with `R7.R7`: requirement-driven integration work must not build lifecycle,
 ownership or safety mechanisms on an unproven basic applicability assumption.
 
 Statement gates dependent in-stack VPN integration work on PASS evidence required by
-`VPNG0001-R1.R3.C1.R1.R1` / EXP-049.
+`VPNG-U001-R1.R3.C1.R1.R1` / EXP-049.
 
-### `VPNG0007-R7.R7.R1.R1`
+### `VPNG-U007-R7.R7.R1.R1`
 
 Purpose correlates with `R7.R7.R1`: after basic applicability is proven, one clean launch is
 still insufficient evidence for a lifecycle/ownership decision.
@@ -180,9 +180,9 @@ That question is now explicitly downstream of EXP-049 -> EXP-050.
 
 Exact architecture references now exist:
 
-- `VPNG0007-R7.R7` — architecture-wide requirement-driven development rule;
-- `VPNG0007-R7.R7.R1` — dependent bounded-VPN lifecycle evidence gate;
-- `VPNG0007-R7.R7.R1.R1` — EXP-050 lifecycle/aggressive-config evidence gate.
+- `VPNG-U007-R7.R7` — architecture-wide requirement-driven development rule;
+- `VPNG-U007-R7.R7.R1` — dependent bounded-VPN lifecycle evidence gate;
+- `VPNG-U007-R7.R7.R1.R1` — EXP-050 lifecycle/aggressive-config evidence gate.
 
 The three new requirements may therefore move from `[pending_closure]` to `[closed]` after
 this PASS review. Their closure means the development/evidence plan is accepted; it does not
@@ -194,10 +194,10 @@ mean EXP-049 or EXP-050 has executed.
 
 Six accumulated links, all resolved:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` (two referencing nodes);
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` (two referencing nodes);
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1` (two referencing nodes);
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2` (two referencing nodes);
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 Pending `decomp`: **none**.
 
@@ -256,9 +256,9 @@ implementation
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R7` -> `VPNG9001-R1.R1.R7`
-- `VPNG0007-R7.R7.R1` -> `VPNG9001-R1.R1.R7.R1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R7` -> `VPNG-D001-R1.R1.R7`
+- `VPNG-U007-R7.R7.R1` -> `VPNG-D001-R1.R1.R7.R1`
 
 The original IDs in the historical body are intentionally preserved.

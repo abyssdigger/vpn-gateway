@@ -8,16 +8,16 @@
 
 ## Requirements / Constraints
 
-**Implements:** `VPNG0002-R2.R1.R2`, `VPNG0002-R2.R3.R3`,
-`VPNG0002-R2.R5.R1`, `VPNG0001-R1.R3.R2`,
-`VPNG0001-R1.R3.R3`, `VPNG0004-R4.R1`,
-`VPNG0004-R4.R2`, `VPNG0004-R4.R3.R2`.
+**Implements:** `VPNG-U002-R2.R1.R2`, `VPNG-U002-R2.R3.R3`,
+`VPNG-U002-R2.R5.R1`, `VPNG-U001-R1.R3.R2`,
+`VPNG-U001-R1.R3.R3`, `VPNG-U004-R4.R1`,
+`VPNG-U004-R4.R2`, `VPNG-U004-R4.R3.R2`.
 
-**Constrained by:** `VPNG0002-R2.R3.C1`,
-`VPNG0001-R1.R2.R4.R6.C1`.
+**Constrained by:** `VPNG-U002-R2.R3.C1`,
+`VPNG-U001-R1.R2.R4.R6.C1`.
 
 Полные ancestry проверены по текущему `design/NG3/requirements.md`.
-Первичные `VPNG0001`, `VPNG0002`, `VPNG0004`: внешнее
+Первичные `VPNG-U001`, `VPNG-U002`, `VPNG-U004`: внешнее
 `Basis` — интервью заказчика 2026-11-15, normative `Statement`,
 статус `[closed]`. Производные узлы `Purpose + Statement`
 соответствуют родительскому обязательству. Ограничения

@@ -28,10 +28,10 @@ The coordinator therefore provides:
 
 Relevant accepted nodes:
 
-- `VPNG0003-R3.R1` through `R3.R4` for configured/effective path order;
-- `VPNG0004-R4.R2`, `R4.R3.R1`, `R4.R5` for authoritative state and safe partial transitions;
-- `VPNG0005-R5.R2`, `R5.R3` for recovery from current state;
-- `VPNG0007-R7.R3`, `R7.R3.R1`, `R7.R5` for explicit bounded contracts.
+- `VPNG-U003-R3.R1` through `R3.R4` for configured/effective path order;
+- `VPNG-U004-R4.R2`, `R4.R3.R1`, `R4.R5` for authoritative state and safe partial transitions;
+- `VPNG-U005-R5.R2`, `R5.R3` for recovery from current state;
+- `VPNG-U007-R7.R3`, `R7.R3.R1`, `R7.R5` for explicit bounded contracts.
 
 The prior physical-domain review already established that aggregation across destinations
 cannot replace per-route-key observation.
@@ -146,7 +146,7 @@ verification.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
-- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
+- `VPNG-U005-R5.R2` -> `VPNG-M001-R1.R1.R2`
+- `VPNG-U007-R7.R3` -> `VPNG-D001-R1.R1.R3`
 
 The original IDs in the historical body are intentionally preserved.

@@ -12,11 +12,11 @@
 Нормативный gate:
 `design/reviews/NG3-2026-11-16-guarded-nat-mutation-gates.md`.
 
-**Implements:** `VPNG0001-R1.R2.R4.R6.R1`,
-`VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3`,
-`VPNG0004-R4.R3.R2`, `VPNG0004-R4.R4`, `VPNG0004-R4.R5`.
+**Implements:** `VPNG-U001-R1.R2.R4.R6.R1`,
+`VPNG-U001-R1.R3.R2`, `VPNG-U001-R1.R3.R3`,
+`VPNG-U004-R4.R3.R2`, `VPNG-U004-R4.R4`, `VPNG-U004-R4.R5`.
 
-**Constrained by:** `VPNG0001-R1.R2.R4.R6.C1`.
+**Constrained by:** `VPNG-U001-R1.R2.R4.R6.C1`.
 
 Проверена цепочка Basis/Statement первичных корней,
 Purpose/Statement производных, Reason/Statement ограничения

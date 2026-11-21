@@ -1,7 +1,7 @@
 # NG3 2026-11-22 — operational lifecycle closure review
 
-**Scope:** `VPNG9101-R1`, `VPNG9101-R1.R1` and
-`VPNG9101-R1.R1.R6`.
+**Scope:** `VPNG-M001-R1`, `VPNG-M001-R1.R1` and
+`VPNG-M001-R1.R1.R6`.
 
 ## Verdict
 
@@ -16,7 +16,7 @@ evidence.
 `A.001 ProductLifecycleControl` provides bounded start, stop and restart semantics and now
 explicitly covers the migrated operational lifecycle parent requirements. Its replaceable
 control-surface decision permits alpha to apply changed configuration through a supported
-restart path; a distinct reload operation is not required by `VPNG9101-R1.R1.R6`.
+restart path; a distinct reload operation is not required by `VPNG-M001-R1.R1.R6`.
 
 ## Evidence
 
@@ -36,10 +36,10 @@ product semantic is required.
 
 ## Disposition
 
-- `VPNG9101-R1.R1.R6`: close.
-- `VPNG9101-R1.R1`: close after R6 closure; all current lifecycle responsibilities have
+- `VPNG-M001-R1.R1.R6`: close.
+- `VPNG-M001-R1.R1`: close after R6 closure; all current lifecycle responsibilities have
   accepted architecture.
-- `VPNG9101-R1`: close as the complete operational lifecycle parent.
+- `VPNG-M001-R1`: close as the complete operational lifecycle parent.
 
 Their existing `decomposition` states are unchanged. In particular, decomposition-incomplete
 descendants remain honestly marked incomplete; architecture closure is orthogonal to normative

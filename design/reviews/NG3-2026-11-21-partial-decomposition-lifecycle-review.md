@@ -28,11 +28,11 @@ recovery semantics for already-owned lower state, and architecture-to-code trace
 
 The decomposition is driven by the existing requirement tree, chiefly:
 
-- `VPNG0004-R4.R6` — host-state/non-interference safety boundary;
-- `VPNG0005-R5.R1`, `R5.R2`, `R5.R4`, `R5.R5` — bounded lifecycle, observation,
+- `VPNG-U004-R4.R6` — host-state/non-interference safety boundary;
+- `VPNG-U005-R5.R1`, `R5.R2`, `R5.R4`, `R5.R5` — bounded lifecycle, observation,
   cleanup and independent cleanup-domain behavior;
-- `VPNG0001-R1.R3.R6.R1` and `VPNG0001-R4.R4.R6.R3` — Device server publication;
-- `VPNG0007-R7.R3`, `R7.R3.R3`, `R7.R7` — localized architecture, traceability and
+- `VPNG-U001-R1.R3.R6.R1` and `VPNG-U001-R4.R4.R6.R3` — Device server publication;
+- `VPNG-U007-R7.R3`, `R7.R3.R3`, `R7.R7` — localized architecture, traceability and
   implementation/evidence discipline.
 
 Historical managed-domain mechanism-specific requirement IDs are not revived. The current
@@ -313,7 +313,7 @@ design questions, not hidden blockers to this block.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R1` -> `VPNG9101-R1.R1.R1`
-- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
+- `VPNG-U005-R5.R1` -> `VPNG-M001-R1.R1.R1`
+- `VPNG-U007-R7.R3` -> `VPNG-D001-R1.R1.R3`
 
 The original IDs in the historical body are intentionally preserved.

@@ -37,9 +37,9 @@ The observer implements the accepted distinction between:
 - exact versioned owner marker;
 - the still-unclassified contents of that table.
 
-This directly supports `VPNG0004-R4.R2`, `VPNG0004-R4.R5`,
-`VPNG0004-R4.R6.R1.R1` and the lower-detail containment rule
-`VPNG0007-R7.R3.R2`.
+This directly supports `VPNG-U004-R4.R2`, `VPNG-U004-R4.R5`,
+`VPNG-U004-R4.R6.R1.R1` and the lower-detail containment rule
+`VPNG-U007-R7.R3.R2`.
 
 ## Table-level states
 
@@ -150,6 +150,6 @@ DevicePolicyIntent semantics and the unresolved final human-facing grammar.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R3.R2` -> `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U007-R7.R3.R2` -> `VPNG-D001-R1.R1.R3.R2`
 
 The original IDs in the historical body are intentionally preserved.

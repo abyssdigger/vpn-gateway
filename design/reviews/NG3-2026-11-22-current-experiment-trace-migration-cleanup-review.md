@@ -1,6 +1,6 @@
 # NG3 2026-11-22 — current experiment trace migration cleanup review
 
-**Scope:** remove migrated `VPNG0005/0006/0007` IDs from current experiment requirement-trace
+**Scope:** remove migrated `VPNG-U005/0006/0007` IDs from current experiment requirement-trace
 sections while preserving them in historical baseline text and migration notes.
 
 ## Verdict
@@ -26,7 +26,7 @@ Current trace sections were migrated in:
 Historical body text and `Requirement ID migration` notes were not rewritten.
 
 A mechanical pass over the affected experiment set found **5 current requirement-trace
-sections and 0 remaining references to `VPNG0005`, `VPNG0006` or `VPNG0007` in those
+sections and 0 remaining references to `VPNG-U005`, `VPNG-U006` or `VPNG-U007` in those
 sections**.
 
 No requirement, architecture, implementation or evidence semantics changed. No tests are

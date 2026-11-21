@@ -90,18 +90,18 @@ explicit interface deferral.
 
 All current links are resolved:
 
-1. owner `VPNG0001-R1.R2`:  
-   `VPNG0005-R5 -> VPNG0005-R5.R6` — **resolved**.
-2. owner `VPNG0001-R1.R3.C1.R1`:  
-   `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` — **resolved**.
-3. owner `VPNG0001-R1.R3.C1.R1`:  
-   `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` — **resolved**.
-4. owner `VPNG0001-R1.R3.C1.R1`:  
-   `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2` — **resolved**.
-5. owner `VPNG0001-R1.R3.C2.R1`:  
-   `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` — **resolved**.
-6. owner `VPNG0004-R4.R6.R1.R6.R1`:  
-   `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` — **resolved**.
+1. owner `VPNG-U001-R1.R2`:  
+   `VPNG-U005-R5 -> VPNG-U005-R5.R6` — **resolved**.
+2. owner `VPNG-U001-R1.R3.C1.R1`:  
+   `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1` — **resolved**.
+3. owner `VPNG-U001-R1.R3.C1.R1`:  
+   `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2` — **resolved**.
+4. owner `VPNG-U001-R1.R3.C1.R1`:  
+   `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2` — **resolved**.
+5. owner `VPNG-U001-R1.R3.C2.R1`:  
+   `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1` — **resolved**.
+6. owner `VPNG-U004-R4.R6.R1.R6.R1`:  
+   `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2` — **resolved**.
 
 Pending `decomp`: **none**.
 
@@ -119,7 +119,7 @@ Pending `decomp`: **none**.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

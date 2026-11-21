@@ -46,7 +46,7 @@ experimentally viable future realization of the same managed-L3 endpoint role, w
 performance comparison found no material steady-state dataplane advantage that justifies
 Release-1 dual-backend complexity.
 
-The general development rule is now explicit in `VPNG0007-R7.R3.R5`: where practical lower
+The general development rule is now explicit in `VPNG-U007-R7.R3.R5`: where practical lower
 mechanisms provide the same accepted semantics, common logic depends on the semantic contract
 and mechanism-specific observation/actuation remains behind the lower boundary. A future
 netkit backend may therefore be selected through platform/implementation settings in the same
@@ -96,8 +96,8 @@ for ordinary-host managed routing:
 - retain the controller lifetime lock when cleanup cannot be confirmed.
 
 Removing this behavior without an equivalent replacement would violate the current startup,
-shutdown and independent-cleanup semantics represented by `VPNG0005-R5.R1`,
-`VPNG0005-R5.R4`, `VPNG0005-R5.R5` and `VPNG0005-R5.R6`.
+shutdown and independent-cleanup semantics represented by `VPNG-U005-R5.R1`,
+`VPNG-U005-R5.R4`, `VPNG-U005-R5.R5` and `VPNG-U005-R5.R6`.
 
 **Disposition:** retain the behavior.
 
@@ -162,10 +162,10 @@ the completed carry-over work.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R1` -> `VPNG9101-R1.R1.R1`
-- `VPNG0005-R5.R4` -> `VPNG9101-R1.R1.R4`
-- `VPNG0005-R5.R5` -> `VPNG9101-R1.R1.R5`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R3.R5` -> `VPNG9001-R1.R1.R3.R5`
+- `VPNG-U005-R5.R1` -> `VPNG-M001-R1.R1.R1`
+- `VPNG-U005-R5.R4` -> `VPNG-M001-R1.R1.R4`
+- `VPNG-U005-R5.R5` -> `VPNG-M001-R1.R1.R5`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R3.R5` -> `VPNG-D001-R1.R1.R3.R5`
 
 The original IDs in the historical body are intentionally preserved.

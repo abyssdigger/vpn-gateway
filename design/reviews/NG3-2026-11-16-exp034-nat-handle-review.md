@@ -7,11 +7,11 @@ NAT-mutation и изменение user-facing семантики вне scope.
 
 ## Normative review
 
-**Implements:** `VPNG0001-R1.R2.R4.R6.R1`,
-`VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3`,
-`VPNG0004-R4.R3.R2`, `VPNG0004-R4.R4`, `VPNG0004-R4.R5`.
+**Implements:** `VPNG-U001-R1.R2.R4.R6.R1`,
+`VPNG-U001-R1.R3.R2`, `VPNG-U001-R1.R3.R3`,
+`VPNG-U004-R4.R3.R2`, `VPNG-U004-R4.R4`, `VPNG-U004-R4.R5`.
 
-**Constrained by:** `VPNG0001-R1.R2.R4.R6.C1`.
+**Constrained by:** `VPNG-U001-R1.R2.R4.R6.C1`.
 
 Требование подтвердить текущее и заменённое interface identity уже
 принято в NG3. Новое неизвестное — факт nft exact-handle deletion,

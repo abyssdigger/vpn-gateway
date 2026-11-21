@@ -9,7 +9,7 @@ the RuntimeStatusAgent alpha integration already published in main snapshot 86.
 
 ## Scope
 
-Implements the traceability/truthfulness intent of `VPNG0007-R7.R6.R1`.
+Implements the traceability/truthfulness intent of `VPNG-U007-R7.R6.R1`.
 
 No product requirement, constraint, architecture mechanism, runtime behavior or external
 configuration grammar changed.
@@ -80,6 +80,6 @@ Release-1 operator API.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R6.R1` -> `VPNG9001-R1.R1.R6.R1`
+- `VPNG-U007-R7.R6.R1` -> `VPNG-D001-R1.R1.R6.R1`
 
 The original IDs in the historical body are intentionally preserved.

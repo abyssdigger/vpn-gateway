@@ -27,11 +27,11 @@ Rows inside it must be representable and must match exactly one current logical 
 
 Relevant accepted nodes:
 
-- `VPNG0004-R4.R2` — actual state must be confirmed, not assumed;
-- `VPNG0004-R4.R3.R1` — every eligible path remains represented in pure-priority change;
-- `VPNG0004-R4.R5` — partial failure requires authoritative re-observation;
-- `VPNG0005-R5.R2` / `R5.R3` — recover from actual owned state;
-- `VPNG0007-R7.R3` / `R7.R3.R1` — explicit adapter/executor contracts.
+- `VPNG-U004-R4.R2` — actual state must be confirmed, not assumed;
+- `VPNG-U004-R4.R3.R1` — every eligible path remains represented in pure-priority change;
+- `VPNG-U004-R4.R5` — partial failure requires authoritative re-observation;
+- `VPNG-U005-R5.R2` / `R5.R3` — recover from actual owned state;
+- `VPNG-U007-R7.R3` / `R7.R3.R1` — explicit adapter/executor contracts.
 
 The preceding physical-domain design review resolved multi-destination aggregation by
 scoping one snapshot to one independently observable route key.
@@ -148,7 +148,7 @@ replacement, filtered-protocol omission or unsupported kernel route structure.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
-- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
+- `VPNG-U005-R5.R2` -> `VPNG-M001-R1.R1.R2`
+- `VPNG-U007-R7.R3` -> `VPNG-D001-R1.R1.R3`
 
 The original IDs in the historical body are intentionally preserved.

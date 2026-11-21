@@ -7,13 +7,13 @@
 
 ## Requirement gate
 
-**Implements:** `VPNG0001-R1.R2.R4.R6.R1`,
-`VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3`,
-`VPNG0004-R4.R3.R2`, `VPNG0004-R4.R4`, `VPNG0004-R4.R5`.
+**Implements:** `VPNG-U001-R1.R2.R4.R6.R1`,
+`VPNG-U001-R1.R3.R2`, `VPNG-U001-R1.R3.R3`,
+`VPNG-U004-R4.R3.R2`, `VPNG-U004-R4.R4`, `VPNG-U004-R4.R5`.
 
-**Constrained by:** `VPNG0001-R1.R2.R4.R6.C1`.
+**Constrained by:** `VPNG-U001-R1.R2.R4.R6.C1`.
 
-Проверено полное ancestry: первичные `VPNG0001`, `VPNG0004`
+Проверено полное ancestry: первичные `VPNG-U001`, `VPNG-U004`
 имеют Basis + Statement и [closed], производные уровни —
 неподменённые Purpose + Statement, ограничение — Reason + Statement.
 Актор — VPN-GATE / lower Driver; user policy не выбирается этой

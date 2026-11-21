@@ -14,10 +14,10 @@ firewall policy and does not select new user-facing configuration syntax.
 
 **Implements:**
 
-- `VPNG0004-R4.R6.R1.R5`;
-- `VPNG0004-R4.R6.R1.R5.R1`;
-- `VPNG0001-R1.R2.R4.R6.R3` where publication requires local transport traffic;
-- `VPNG0001-R1.R3.C1.R1` for explicit supported-integration local control needs.
+- `VPNG-U004-R4.R6.R1.R5`;
+- `VPNG-U004-R4.R6.R1.R5.R1`;
+- `VPNG-U001-R1.R2.R4.R6.R3` where publication requires local transport traffic;
+- `VPNG-U001-R1.R3.C1.R1` for explicit supported-integration local control needs.
 
 The full relevant requirement statements already require terminal DROP defaults, explicit
 owned exceptions, VPN-GATE ownership of control/probe/publication/integration exceptions,
@@ -114,12 +114,12 @@ shape.
 
 All six current links are resolved:
 
-1. `VPNG0001-R1.R2`: `VPNG0005-R5 -> VPNG0005-R5.R6`.
-2. `VPNG0001-R1.R3.C1.R1`: `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`.
-3. `VPNG0001-R1.R3.C1.R1`: `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`.
-4. `VPNG0001-R1.R3.C1.R1`: `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
-5. `VPNG0001-R1.R3.C2.R1`: `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`.
-6. `VPNG0004-R4.R6.R1.R6.R1`: `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`.
+1. `VPNG-U001-R1.R2`: `VPNG-U005-R5 -> VPNG-U005-R5.R6`.
+2. `VPNG-U001-R1.R3.C1.R1`: `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`.
+3. `VPNG-U001-R1.R3.C1.R1`: `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`.
+4. `VPNG-U001-R1.R3.C1.R1`: `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
+5. `VPNG-U001-R1.R3.C2.R1`: `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`.
+6. `VPNG-U004-R4.R6.R1.R6.R1`: `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`.
 
 Pending `decomp`: **none**.
 
@@ -144,7 +144,7 @@ gate rather than being guessed here.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

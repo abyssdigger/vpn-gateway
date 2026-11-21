@@ -20,13 +20,13 @@ It does not universally provide Linux `gateway/onlink` semantics.
 
 Relevant accepted nodes:
 
-- `VPNG0001-R1.R3` — supported external VPN channels are usable as managed paths;
-- `VPNG0001-R1.R3.R2` — the logical path has one verified current concrete endpoint;
-- `VPNG0001-R1.R3.C1` / `C1.R1` — external provisioning and onboarding remain
+- `VPNG-U001-R1.R3` — supported external VPN channels are usable as managed paths;
+- `VPNG-U001-R1.R3.R2` — the logical path has one verified current concrete endpoint;
+- `VPNG-U001-R1.R3.C1` / `C1.R1` — external provisioning and onboarding remain
   administrator/integration responsibilities in Release 1;
-- `VPNG0001-R1.R3.C2` / `C2.R1` — the data-plane endpoint must exist inside the managed
+- `VPNG-U001-R1.R3.C2` / `C2.R1` — the data-plane endpoint must exist inside the managed
   network domain;
-- `VPNG0007-R7.R3.R2` — lower integration details must not leak upward without need.
+- `VPNG-U007-R7.R3.R2` — lower integration details must not leak upward without need.
 
 No requirement says every supported endpoint uses the same Linux next-hop form.
 
@@ -102,6 +102,6 @@ capability.**
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R3.R2` -> `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U007-R7.R3.R2` -> `VPNG-D001-R1.R1.R3.R2`
 
 The original IDs in the historical body are intentionally preserved.

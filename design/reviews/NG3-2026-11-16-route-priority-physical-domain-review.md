@@ -35,10 +35,10 @@ No product requirement is missing.
 
 Relevant accepted requirements already constrain the answer:
 
-- `VPNG0004-R4.R2` — do not treat unconfirmed desired state as actual;
-- `VPNG0004-R4.R3.R1` — priority-only transition must retain every eligible path;
-- `VPNG0004-R4.R5` — after partial mutation, re-establish authoritative actual state;
-- `VPNG0005-R5.R2` / `R5.R3` — recover from current owned state, not stale command history.
+- `VPNG-U004-R4.R2` — do not treat unconfirmed desired state as actual;
+- `VPNG-U004-R4.R3.R1` — priority-only transition must retain every eligible path;
+- `VPNG-U004-R4.R5` — after partial mutation, re-establish authoritative actual state;
+- `VPNG-U005-R5.R2` / `R5.R3` — recover from current owned state, not stale command history.
 
 ## Resolution
 
@@ -90,6 +90,6 @@ losing partial-failure state.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+- `VPNG-U005-R5.R2` -> `VPNG-M001-R1.R1.R2`
 
 The original IDs in the historical body are intentionally preserved.

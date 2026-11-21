@@ -106,7 +106,7 @@ No ad-hoc nft exception was added.
 
 ## Requirement disposition
 
-`VPNG0001-R1.R3.C1.R1.R1`:
+`VPNG-U001-R1.R3.C1.R1.R1`:
 
 ```text
 [closed] -> [rejected_closure]
@@ -132,7 +132,7 @@ Pending: none.
 
 ### `[rejected_closure]`
 
-- `VPNG0001-R1.R3.C1.R1.R1` — EXP-049 current OpenVPN candidate cannot carry payload after
+- `VPNG-U001-R1.R3.C1.R1.R1` — EXP-049 current OpenVPN candidate cannot carry payload after
   production activation because concrete integration local/system permission is absent.
 
 ## Architecture disposition

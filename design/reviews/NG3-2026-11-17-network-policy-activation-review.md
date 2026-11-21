@@ -21,21 +21,21 @@ This unit is intentionally smaller than product startup/lifecycle.
 
 ## Implements
 
-- `VPNG0004-R4.R4` — payload forwarding is not ready before safe initial policy state is
+- `VPNG-U004-R4.R4` — payload forwarding is not ready before safe initial policy state is
   confirmed;
-- `VPNG0004-R4.R5` — uncertainty/failure is followed by authoritative containment rather
+- `VPNG-U004-R4.R5` — uncertainty/failure is followed by authoritative containment rather
   than unknown allowing state;
-- `VPNG0005-R5.R1` — startup assembly needs a verified runtime-policy postcondition before
+- `VPNG-U005-R5.R1` — startup assembly needs a verified runtime-policy postcondition before
   readiness;
-- `VPNG0005-R5.R6.R1` — successful start/readiness semantics depend on confirmed
+- `VPNG-U005-R5.R6.R1` — successful start/readiness semantics depend on confirmed
   postconditions, not command issuance;
-- `VPNG0006-R6.R3` — blocking lifecycle/policy failures remain explicit;
-- `VPNG0006-R6.R4` — READY is distinct from desired/unconfirmed state.
+- `VPNG-U006-R6.R3` — blocking lifecycle/policy failures remain explicit;
+- `VPNG-U006-R6.R4` — READY is distinct from desired/unconfirmed state.
 
 **Constrained by:**
 
-- `VPNG0007-R7.R1` — no generic lifecycle framework or hidden retry policy;
-- `VPNG0007-R7.R3.R1` — lower boundaries are composed through explicit contracts.
+- `VPNG-U007-R7.R1` — no generic lifecycle framework or hidden retry policy;
+- `VPNG-U007-R7.R3.R1` — lower boundaries are composed through explicit contracts.
 
 All governing R/C nodes were already `[closed]`; no requirement refinement was required.
 
@@ -369,11 +369,11 @@ semantics.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R1` -> `VPNG9101-R1.R1.R1`
-- `VPNG0005-R5.R6.R1` -> `VPNG9101-R1.R1.R6.R1`
-- `VPNG0006-R6.R3` -> `VPNG9101-R2.R1.R3`
-- `VPNG0006-R6.R4` -> `VPNG9101-R2.R1.R4`
-- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
-- `VPNG0007-R7.R3.R1` -> `VPNG9001-R1.R1.R3.R1`
+- `VPNG-U005-R5.R1` -> `VPNG-M001-R1.R1.R1`
+- `VPNG-U005-R5.R6.R1` -> `VPNG-M001-R1.R1.R6.R1`
+- `VPNG-U006-R6.R3` -> `VPNG-M001-R2.R1.R3`
+- `VPNG-U006-R6.R4` -> `VPNG-M001-R2.R1.R4`
+- `VPNG-U007-R7.R1` -> `VPNG-D001-R1.R1.R1`
+- `VPNG-U007-R7.R3.R1` -> `VPNG-D001-R1.R1.R3.R1`
 
 The original IDs in the historical body are intentionally preserved.

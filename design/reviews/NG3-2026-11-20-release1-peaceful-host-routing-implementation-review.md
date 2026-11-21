@@ -19,16 +19,16 @@ host-routing helper implementations may remain Python beyond the first release.
 
 **Implements / closes:**
 
-- `VPNG0001-R2`;
-- `VPNG0001-R2.R2`.
+- `VPNG-U001-R2`;
+- `VPNG-U001-R2.R2`.
 
 **Constrained / revalidated by:**
 
-- `VPNG0007-R7.R8`;
-- `VPNG0007-R7.R8.C1`;
-- `VPNG0007-R7.R8.C2`;
-- `VPNG0007-R7.R8.C3`;
-- `VPNG0007-R7.R8.R3`.
+- `VPNG-U007-R7.R8`;
+- `VPNG-U007-R7.R8.C1`;
+- `VPNG-U007-R7.R8.C2`;
+- `VPNG-U007-R7.R8.C3`;
+- `VPNG-U007-R7.R8.R3`.
 
 ## Accepted configuration contract
 
@@ -111,8 +111,8 @@ validation before managed-domain creation/convergence.
 The former absolute language text would have required every host-side network-state actor to
 move to Rust and `R7.R8.R3` unconditionally described Python as reference-only.
 
-**Disposition:** **fixed**. `VPNG0007-R7.R8.C3` now narrowly permits the host-routing helper
-responsibilities under `VPNG0001-R2.R2` / `R2.R3` to remain Python after the first release
+**Disposition:** **fixed**. `VPNG-U007-R7.R8.C3` now narrowly permits the host-routing helper
+responsibilities under `VPNG-U001-R2.R2` / `R2.R3` to remain Python after the first release
 and after non-exempt runtime cutover. Moving the helper itself to Rust requires a separate
 explicit project holder decision. The integration mechanism between a future Rust core and a
 Python helper is intentionally not invented now.
@@ -157,9 +157,9 @@ implemented by the peaceful path.
 
 ## Requirement-state disposition
 
-- `VPNG0001-R2.R2` -> [`closed`].
-- `VPNG0007-R7.R8.C3` -> [`closed`].
-- `VPNG0007-R7.R8.R3` -> [`closed`] after revalidation against C3.
+- `VPNG-U001-R2.R2` -> [`closed`].
+- `VPNG-U007-R7.R8.C3` -> [`closed`].
+- `VPNG-U007-R7.R8.R3` -> [`closed`] after revalidation against C3.
 - Existing aggressive/containment/reload pending nodes remain unchanged.
 
 No active `unreal`, `broken` or `rejected_closure` relationship is introduced by this
@@ -178,10 +178,10 @@ state is checked and main lineage remains unchanged.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R8` -> `VPNG9001-R1.R1.R8`
-- `VPNG0007-R7.R8.C1` -> `VPNG9001-R1.R1.R8.C1`
-- `VPNG0007-R7.R8.C2` -> `VPNG9001-R1.R1.R8.C2`
-- `VPNG0007-R7.R8.C3` -> `VPNG9001-R1.R1.R8.C3`
-- `VPNG0007-R7.R8.R3` -> `VPNG9001-R1.R1.R8.R3`
+- `VPNG-U007-R7.R8` -> `VPNG-D001-R1.R1.R8`
+- `VPNG-U007-R7.R8.C1` -> `VPNG-D001-R1.R1.R8.C1`
+- `VPNG-U007-R7.R8.C2` -> `VPNG-D001-R1.R1.R8.C2`
+- `VPNG-U007-R7.R8.C3` -> `VPNG-D001-R1.R1.R8.C3`
+- `VPNG-U007-R7.R8.R3` -> `VPNG-D001-R1.R1.R8.R3`
 
 The original IDs in the historical body are intentionally preserved.

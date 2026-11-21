@@ -3,7 +3,7 @@
 **Date:** 2026-11-20  
 **Review unit:** revised Release-1 peaceful helper traffic scope  
 **Branch:** `ng3-design-cycle-20261120-helper-routing-selectors-35m`  
-**Requirement:** `VPNG0001-R2.R2`  
+**Requirement:** `VPNG-U001-R2.R2`  
 **Verdict:** **ACCEPTED — architecture closure restored**
 
 ## Trigger
@@ -13,7 +13,7 @@ The previous Release-1 lowering used one unconditional peaceful-helper dispatch 
 otherwise-default host-local traffic even when the administrator intended VPN-GATE only as a
 gateway for selected LAN transit.
 
-That behavior was too broad for `VPNG0001-R2`: helper destination scope and the ordinary-host
+That behavior was too broad for `VPNG-U001-R2`: helper destination scope and the ordinary-host
 traffic handed to that helper must be separate administrative decisions.
 
 ## Accepted product contract
@@ -66,7 +66,7 @@ non-destructive lifecycle cleanup. EXP-074 remains separate aggressive-helper ev
 
 ## Requirements review
 
-The revised `VPNG0001-R2.R2` Purpose remains directly causal to `VPNG0001-R2`: the helper
+The revised `VPNG-U001-R2.R2` Purpose remains directly causal to `VPNG-U001-R2`: the helper
 reduces administrative routing work without taking unrelated ordinary-host routing into its
 scope. The Statement does not require Linux RPDB vocabulary and explicitly separates selected
 host traffic from helper ownership semantics.
@@ -83,7 +83,7 @@ set of selector-specific dispatch rules are sufficient.
 
 ## Disposition
 
-- `VPNG0001-R2.R2`: [`closed`].
+- `VPNG-U001-R2.R2`: [`closed`].
 - EXP-078: selected.
 - EXP-077: remains selected complementary evidence.
 - Implementation must now replace the obsolete `host_routing = auto|manual` surface and

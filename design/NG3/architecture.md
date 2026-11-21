@@ -92,30 +92,30 @@ Release-1 operator API.
 
 The ordinary Release-1 Device/Profile grammar itself is no longer unresolved.
 
-This mapping implements the traceability intent of `VPNG9001-R1.R1.R6.R1` without promoting
+This mapping implements the traceability intent of `VPNG-D001-R1.R1.R6.R1` without promoting
 reference code into new product semantics.
 
 # 1. Architecture scope of this pass
 
 **Implements:**
-- `VPNG0001`
-- `VPNG0002`
-- `VPNG0003`
-- `VPNG0004`
-- `VPNG9101-R1`
-- `VPNG9101-R2`
-- `VPNG9001-R1`
-- `VPNG0001-R1`
-- `VPNG0002-R2`
-- `VPNG0003-R3`
-- `VPNG0004-R4`
-- `VPNG9101-R1.R1`
-- `VPNG9101-R2.R1`
-- `VPNG9001-R1.R1`
+- `VPNG-U001`
+- `VPNG-U002`
+- `VPNG-U003`
+- `VPNG-U004`
+- `VPNG-M001-R1`
+- `VPNG-M001-R2`
+- `VPNG-D001-R1`
+- `VPNG-U001-R1`
+- `VPNG-U002-R2`
+- `VPNG-U003-R3`
+- `VPNG-U004-R4`
+- `VPNG-M001-R1.R1`
+- `VPNG-M001-R2.R1`
+- `VPNG-D001-R1.R1`
 
-The functional primary roots `VPNG0001`–`VPNG0004` remain closed through their accepted
+The functional primary roots `VPNG-U001`–`VPNG-U004` remain closed through their accepted
 derived trees and the architecture traced below. The new overarching cost roots
-`VPNG9001` and `VPNG9101` are intentionally [`decomposition`: `incomplete`] and are
+`VPNG-D001` and `VPNG-M001` are intentionally [`decomposition`: `incomplete`] and are
 not claimed closed here; this architecture covers the migrated development/operational
 descendants listed above plus any explicitly identified new descendants.
 
@@ -133,10 +133,10 @@ defined to justify concrete responsibilities:
 This architecture intentionally does **not** yet define implementation details that no
 accepted requirement makes architectural semantics:
 
-- automatic VPN-session provisioning/configuration, because `VPNG0001-R1.R3.C1` leaves that
+- automatic VPN-session provisioning/configuration, because `VPNG-U001-R1.R3.C1` leaves that
   responsibility to the administrator in the first release;
 - concrete per-integration administrator command sequences/documents;
-- stable delivery/access mechanism for operator status (CLI/file/API path) and optional machine serializations; the required compact human text format is defined separately by `VPNG9101-R2.R2`;
+- stable delivery/access mechanism for operator status (CLI/file/API path) and optional machine serializations; the required compact human text format is defined separately by `VPNG-M001-R2.R2`;
 - concrete event-delivery transport;
 - final process/package assembly topology where existing contracts do not require one;
 - complete Linux route/table/nft/sysctl representation beyond the accepted safety and
@@ -150,16 +150,16 @@ These omissions are deliberate implementation freedom, not unresolved requiremen
 ## 1.1. Managed network isolation boundary ("стакан")
 
 **Implements:**
-- `VPNG0001-R1.R1`
-- `VPNG0001-R1.R3.R2`
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R4`
-- `VPNG0004-R4.R6`
-- `VPNG9101-R1.R1.R1`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R3.R2`
-- `VPNG9001-R1.R1.R3.R5`
+- `VPNG-U001-R1.R1`
+- `VPNG-U001-R1.R3.R2`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R4`
+- `VPNG-U004-R4.R6`
+- `VPNG-M001-R1.R1.R1`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-D001-R1.R1.R3.R5`
 
 NG3 selects an isolated managed network domain as the architectural boundary for the router
 data plane.
@@ -216,7 +216,7 @@ The host network namespace is outside this managed domain. Interaction with the 
 occur only through explicit boundary links/contracts.
 
 The purpose of this boundary is not "use netns because NG1 used netns". It is to realize
-`VPNG0004-R4.R6`: unrelated host network state must not become implicit product state or be
+`VPNG-U004-R4.R6`: unrelated host network state must not become implicit product state or be
 mutated as a side effect of internal routing changes.
 
 The namespace is therefore an architecture choice. If another mechanism can later satisfy
@@ -289,12 +289,12 @@ reachability. No additional host-side Profile metadata carrier is required.
 ### 1.1.2. Managed network-domain bootstrap — retained combined implementation evidence
 
 **Implements:**
-- `VPNG0001-R1.R3.R2`;
-- `VPNG0004-R4.R6`;
-- `VPNG9101-R1.R1.R1`;
-- `VPNG9101-R1.R1.R4`;
-- `VPNG9001-R1.R1.R1`;
-- `VPNG9001-R1.R1.R3.R1`.
+- `VPNG-U001-R1.R3.R2`;
+- `VPNG-U004-R4.R6`;
+- `VPNG-M001-R1.R1.R1`;
+- `VPNG-M001-R1.R1.R4`;
+- `VPNG-D001-R1.R1.R1`;
+- `VPNG-D001-R1.R1.R3.R1`.
 
 This section preserves the selected Release-1 Linux facts and evidence from the former
 combined managed-domain lifecycle. Its lower routed-veth facts remain current, but its
@@ -479,31 +479,31 @@ areas. A later stronger postcondition may prove that an earlier artifact cannot 
 because its endpoint/container was removed; the earlier diagnostic remains observable.
 
 **Implements / supports:**
-- `VPNG0004-R4.R6`;
-- `VPNG9101-R1.R1.R1`;
-- `VPNG9101-R1.R1.R2`;
-- `VPNG9101-R1.R1.R4`;
-- `VPNG9101-R1.R1.R5`;
-- `VPNG9001-R1.R1.R3`;
-- `VPNG9001-R1.R1.R3.R3`;
-- `VPNG9001-R1.R1.R7`.
+- `VPNG-U004-R4.R6`;
+- `VPNG-M001-R1.R1.R1`;
+- `VPNG-M001-R1.R1.R2`;
+- `VPNG-M001-R1.R1.R4`;
+- `VPNG-M001-R1.R1.R5`;
+- `VPNG-D001-R1.R1.R3`;
+- `VPNG-D001-R1.R1.R3.R3`;
+- `VPNG-D001-R1.R1.R7`.
 
 ### 1.1.1-A. Core/host-network responsibility boundary and optional host-routing assistance
 
 **Implements:**
-- `VPNG0001-R2`;
-- `VPNG0001-R2.R1`;
-- `VPNG0001-R2.R1.R1`;
-- `VPNG0001-R5.R1`;
-- `VPNG0001-R5.R2`;
-- `VPNG0001-R5.R2.R1`;
-- `VPNG0001-R5.R2.R2`;
-- `VPNG0001-R5.R2.R3`;
-- `VPNG0003-R4`.
+- `VPNG-U001-R2`;
+- `VPNG-U001-R2.R1`;
+- `VPNG-U001-R2.R1.R1`;
+- `VPNG-U001-R5.R1`;
+- `VPNG-U001-R5.R2`;
+- `VPNG-U001-R5.R2.R1`;
+- `VPNG-U001-R5.R2.R2`;
+- `VPNG-U001-R5.R2.R3`;
+- `VPNG-U003-R4`.
 
 **Constrained by:**
-- `VPNG0001-R5.R2.C1`;
-- `VPNG0004-R4.R6`.
+- `VPNG-U001-R5.R2.C1`;
+- `VPNG-U004-R4.R6`.
 
 Core VPN-GATE owns managed forwarding up to the explicit ordinary-side managed boundary.
 Ordinary-host routing beyond that boundary remains administrator-owned unless the
@@ -519,7 +519,7 @@ The stable manual integration contract is published in
 `design/NG3/host-integration.md`. It defines the ordinary remote-prefix route requirement,
 the gateway-backed Profile-SNAT identity /32 shape, full-tunnel underlay caveats and the
 host-local versus host-forwarding boundary without requiring the peaceful helper. This closes
-`VPNG0001-R2.R1.R1`.
+`VPNG-U001-R2.R1.R1`.
 
 Host routing is an integration concern outside the core managed forwarding domain. Core
 VPN-GATE policy begins once traffic is actually handed through the explicit managed boundary;
@@ -561,8 +561,8 @@ destination meaning.
 
 Lifecycle ownership is unchanged: start installs identifiable contributions, supported
 reload updates them, and stop removes only contributions that still identify as helper-owned.
-Between lifecycle operations administrator changes are not drift under `VPNG9101-R1.R1.R2`,
-are not out-of-band corruption under `VPNG9101-R1.R1.C1`, and do not by themselves close the
+Between lifecycle operations administrator changes are not drift under `VPNG-M001-R1.R1.R2`,
+are not out-of-band corruption under `VPNG-M001-R1.R1.C1`, and do not by themselves close the
 internal ForwardingGate.
 
 The revised Linux closure candidate keeps the already proven main-first behavior **inside
@@ -643,7 +643,7 @@ the selector-paired correction. The implementation now materializes one preserve
 pair per effective selector, and the resulting code passed unit/compile plus privileged
 EXP-074/078/079/080 and installed alpha smoke. EXP-077 remains complementary
 lifecycle/non-destructive cleanup evidence. Together these close the revised
-`VPNG0001-R5.R1`; none supersedes EXP-074 for the postponed aggressive child.
+`VPNG-U001-R5.R1`; none supersedes EXP-074 for the postponed aggressive child.
 
 Profile SNAT remains bounded by its own requirement: the source identity is guaranteed at the
 managed boundary, not by host routing. A helper may automate host reachability to that
@@ -652,9 +652,9 @@ identity, but core Profile-SNAT semantics do not depend on the helper being enab
 #### Aggressive authoritative helper
 
 The aggressive helper is a separate opt-in capability and is outside Release 1 by
-`VPNG0001-R5.R2.C1`.
+`VPNG-U001-R5.R2.C1`.
 
-For the narrow authoritative-routing child `VPNG0001-R5.R2.R1`, the selected Linux
+For the narrow authoritative-routing child `VPNG-U001-R5.R2.R1`, the selected Linux
 realization is the already-proven dedicated managed table:
 
 ```text
@@ -682,7 +682,7 @@ a destination that the aggressive helper has accepted into its authoritative set
 `EXP-074` proves authoritative destination precedence, including managed `0.0.0.0/0`, dynamic
 addition of a more-specific competing `main` route, preservation of local delivery,
 stack-origin routing with an available ordinary route and cleanup that leaves unrelated `main` state unchanged. EXP-079 supplies the reusable absolute managed-boundary bypass fact for the no-recapture edge where ordinary routing has no result. Together this evidence
-is sufficient closure for `VPNG0001-R5.R2.R1`; it is **not** evidence that the same
+is sufficient closure for `VPNG-U001-R5.R2.R1`; it is **not** evidence that the same
 authoritative precedence is appropriate for the simple helper.
 
 The current Python `HostManagedRoutingPlan` / Linux owner embodies this authoritative child.
@@ -691,9 +691,9 @@ capability, not an unconditional core or Release-1 host-routing contract.
 
 The remaining aggressive children are not closed:
 
-- `VPNG0001-R5.R2.R2` requires a future continuous owner that detects and repairs
+- `VPNG-U001-R5.R2.R2` requires a future continuous owner that detects and repairs
   helper-owned drift;
-- `VPNG0001-R5.R2.R3` requires composition of host-side fail-closed measures with the public
+- `VPNG-U001-R5.R2.R3` requires composition of host-side fail-closed measures with the public
   administrative payload-containment control surface.
 
 Those responsibilities remain `[pending_closure]`; the existence of the current periodic
@@ -718,17 +718,17 @@ There is no host conntrack association, return packet mark, dedicated host retur
 user-selectable host return mode in the current core design. A remote-initiated reply that is
 delivered back to STACK by any valid host routing arrangement is associated with its original
 VPN routing domain inside STACK by the independently owned established-flow affinity under
-`VPNG0003-R4`.
+`VPNG-U003-R4`.
 
 ### Architectural consequence for external VPN channels
 
 **Constrained by:**
-- `VPNG0001-R1.R3.C1`
-- `VPNG0004-R4.R6`
+- `VPNG-U001-R1.R3.C1`
+- `VPNG-U004-R4.R6`
 
 **Implements:**
-- `VPNG0001-R1.R3.C1.R1`
-- `VPNG0001-R1.R3.R2`
+- `VPNG-U001-R1.R3.C1.R1`
+- `VPNG-U001-R1.R3.R2`
 
 An administrator-provisioned VPN channel is useful to NG3 only when its data-plane endpoint
 is available inside the isolated managed network domain.
@@ -776,7 +776,7 @@ implementation work.
 ### 1.1.2. Supported VPN onboarding applicability evidence gate
 
 **Implements:**
-- `VPNG0001-R1.R3.C1.R1.R1`
+- `VPNG-U001-R1.R3.C1.R1.R1`
 
 A supported external VPN onboarding integration is not accepted merely because its
 administrator-facing procedure appears plausible on paper. Before a deployment/onboarding
@@ -852,13 +852,13 @@ equivalence.
 ### 1.1.2.1. Release-1 systemd onboarding boundary
 
 **Implements:**
-- `VPNG0001-R1.R3.C1.R1.R2`;
-- `VPNG0001-R4.R4.R6.R4`;
-- `VPNG9101-R1.R1.C1.R1`.
+- `VPNG-U001-R1.R3.C1.R1.R2`;
+- `VPNG-U001-R4.R4.R6.R4`;
+- `VPNG-M001-R1.R1.C1.R1`.
 
 **Constrained by:**
-- `VPNG0001-R1.R3.C3`;
-- `VPNG9101-R1.R1.C1`.
+- `VPNG-U001-R1.R3.C3`;
+- `VPNG-M001-R1.R1.C1`.
 
 The requirement boundary does not prescribe a service manager. For the selected Release-1
 Linux realization, systemd remains the external VPN process supervisor rather than introducing
@@ -884,7 +884,7 @@ arbitrary administrator VPN units. The administrator prepares the stack-specific
 using `vpn-onboarding-release1.md`.
 
 Integration-specific VPN configuration must be policy-neutral with respect to VPN-GATE-owned
-managed-domain policy. This realizes `VPNG0001-R1.R3.C1.R1.R2`; examples include OpenVPN
+managed-domain policy. This realizes `VPNG-U001-R1.R3.C1.R1.R2`; examples include OpenVPN
 `route-noexec` and WireGuard/wg-quick `Table = off`. Conflicting legacy hooks belong
 outside the supported managed-domain contract unless a separate accepted requirement
 explicitly authorizes their effect.
@@ -896,25 +896,25 @@ manual damage. Administrator-owned integration state is not silently promoted to
 VPN-GATE-owned state by this constraint.
 
 If such intervention causes loss of a safety- or readiness-critical invariant, the required
-containment/readiness reaction comes from the applicable `VPNG0004` / lifecycle requirement
-for that invariant. `VPNG9101-R1.R1.C1` itself limits automatic recovery scope; it is not a
+containment/readiness reaction comes from the applicable `VPNG-U004` / lifecycle requirement
+for that invariant. `VPNG-M001-R1.R1.C1` itself limits automatic recovery scope; it is not a
 blanket rule that every observable out-of-band change closes all forwarding.
 
 ### 1.1.3. Release-1 bounded VPN lifecycle through systemd
 
 **Implements:**
-- `VPNG0001-R1.R3.C1.R1.R2`;
-- `VPNG0001-R1.R3.C3.R1`;
-- `VPNG0004-R4.R6`;
-- `VPNG9001-R1.R1.R7.R1`;
-- `VPNG9101-R1.R1.R4`;
-- `VPNG9101-R1.R1.R5`;
-- `VPNG9101-R1.R1.R6.R2`;
-- `VPNG9101-R1.R1.R6.R3`.
+- `VPNG-U001-R1.R3.C1.R1.R2`;
+- `VPNG-U001-R1.R3.C3.R1`;
+- `VPNG-U004-R4.R6`;
+- `VPNG-D001-R1.R1.R7.R1`;
+- `VPNG-M001-R1.R1.R4`;
+- `VPNG-M001-R1.R1.R5`;
+- `VPNG-M001-R1.R1.R6.R2`;
+- `VPNG-M001-R1.R1.R6.R3`.
 
 **Constrained by:**
-- `VPNG0001-R1.R3.C3`;
-- `VPNG9101-R1.R1.C1`.
+- `VPNG-U001-R1.R3.C3`;
+- `VPNG-M001-R1.R1.C1`.
 
 EXP-050 passed twice with the same OpenVPN 2.6.14 / systemd onboarding mechanism that passed
 EXP-049. The accepted first-release lifecycle boundary is therefore:
@@ -997,13 +997,13 @@ The structure and maintenance rules of this report itself implement cross-cuttin
 requirements that do not belong to one runtime component.
 
 **Implements:**
-- `VPNG9001-R1.R1.R2`
-- `VPNG9001-R1.R1.R3.R3`
-- `VPNG9001-R1.R1.R3.R5`
-- `VPNG9001-R1.R1.R4`
-- `VPNG9001-R1.R1.R6.R1`
-- `VPNG9001-R1.R1.R6.R2`
-- `VPNG9001-R1.R1.R7`
+- `VPNG-D001-R1.R1.R2`
+- `VPNG-D001-R1.R1.R3.R3`
+- `VPNG-D001-R1.R1.R3.R5`
+- `VPNG-D001-R1.R1.R4`
+- `VPNG-D001-R1.R1.R6.R1`
+- `VPNG-D001-R1.R1.R6.R2`
+- `VPNG-D001-R1.R1.R7`
 
 Consequences for this architecture:
 
@@ -1028,12 +1028,12 @@ A configured traffic class is allowed to use a configured set of VPN paths. Unre
 traffic must not acquire VPN forwarding merely because those paths exist.
 
 Relevant requirements:
-- `VPNG0001-R1.R1`
-- `VPNG0002-R2.R1`
-- `VPNG0002-R2.R2`
-- `VPNG0002-R2.R3`
-- `VPNG0002-R2.R4`
-- `VPNG0004-R4.R1`
+- `VPNG-U001-R1.R1`
+- `VPNG-U002-R2.R1`
+- `VPNG-U002-R2.R2`
+- `VPNG-U002-R2.R3`
+- `VPNG-U002-R2.R4`
+- `VPNG-U004-R4.R1`
 
 ## S2 — Preferred path degrades
 
@@ -1042,13 +1042,13 @@ least one allowed alternative remains usable. New traffic should prefer the usab
 alternative, without changing path membership.
 
 Relevant requirements:
-- `VPNG0003-R3.R1`
-- `VPNG0003-R3.R2`
-- `VPNG0003-R3.R2.R1`
-- `VPNG0003-R3.R3`
-- `VPNG0003-R3.R4`
-- `VPNG0003-R3.R5`
-- `VPNG0003-R3.R7`
+- `VPNG-U003-R3.R1`
+- `VPNG-U003-R3.R2`
+- `VPNG-U003-R3.R2.R1`
+- `VPNG-U003-R3.R3`
+- `VPNG-U003-R3.R4`
+- `VPNG-U003-R3.R5`
+- `VPNG-U003-R3.R7`
 
 ## S3 — Local presence is not sufficient evidence
 
@@ -1057,12 +1057,12 @@ to the product scenario is no longer usable. Payload may also be idle, so waitin
 payload failure is not always useful.
 
 The architecture therefore selects active observation as the first NG3 mechanism for
-obtaining evidence required by `VPNG0003-R3.R6`. Active probing is an architectural choice,
+obtaining evidence required by `VPNG-U003-R3.R6`. Active probing is an architectural choice,
 not a product promise.
 
 Relevant requirements:
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R3`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R3`
 
 ## S4 — Old observation finishes late
 
@@ -1070,8 +1070,8 @@ The observed concrete path context changes while an earlier asynchronous check i
 in-flight. Its later result must not modify current preference.
 
 Relevant requirements:
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R2`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R2`
 
 ## S5 — Network mutation partially fails
 
@@ -1080,12 +1080,12 @@ decision must be based on freshly observed authoritative state and must not sile
 unallowed forwarding.
 
 Relevant requirements:
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R3`
-- `VPNG0004-R4.R4`
-- `VPNG0004-R4.R5`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R3`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R3`
+- `VPNG-U004-R4.R4`
+- `VPNG-U004-R4.R5`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R3`
 
 ## S6 — One cleanup area fails
 
@@ -1093,9 +1093,9 @@ Shutdown owns several independent resources. Failure to clean one must not preve
 to clean the others, and the failures must remain visible.
 
 Relevant requirements:
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9101-R2.R1.R3`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-M001-R2.R1.R3`
 
 # 3. Architecture summary
 
@@ -1210,11 +1210,11 @@ fact consumed through the Adapter, not an effect produced by it.
 ## 3.1. External VPN-channel boundary
 
 **Implements:**
-- `VPNG0001-R1.R3`
-- `VPNG0001-R1.R3.C1.R1`
+- `VPNG-U001-R1.R3`
+- `VPNG-U001-R1.R3.C1.R1`
 
 **Constrained by:**
-- `VPNG0001-R1.R3.C1`
+- `VPNG-U001-R1.R3.C1`
 
 For the first release, VPN-GATE consumes VPN channels that have already been deployed and
 basically configured by the administrator.
@@ -1238,11 +1238,11 @@ selected by a supported integration without changing the accepted product semant
 ## 3.2. Logical VPN path binding
 
 **Implements:**
-- `VPNG0001-R1.R3.R1`
-- `VPNG0001-R1.R3.R2`
-- `VPNG0001-R1.R3.R3`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U001-R1.R3.R1`
+- `VPNG-U001-R1.R3.R2`
+- `VPNG-U001-R1.R3.R3`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R3.R2`
 
 The architecture separates:
 
@@ -1276,17 +1276,17 @@ the new binding has been observed and verified.
 **Component type:** Adapter
 
 **Implements:**
-- `VPNG0001-R1.R3.R1`
-- `VPNG0001-R1.R3.R2`
-- `VPNG0001-R1.R3.R3`
-- `VPNG0001-R1.R3.R4`
-- `VPNG0001-R1.R3.R4.R1`
-- `VPNG0001-R1.R3.R4.R2`
-- `VPNG0001-R1.R3.R4.R3`
-- `VPNG0001-R1.R3.R4.R3.R1`
-- `VPNG0001-R1.R3.R4.R4`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U001-R1.R3.R1`
+- `VPNG-U001-R1.R3.R2`
+- `VPNG-U001-R1.R3.R3`
+- `VPNG-U001-R1.R3.R4`
+- `VPNG-U001-R1.R3.R4.R1`
+- `VPNG-U001-R1.R3.R4.R2`
+- `VPNG-U001-R1.R3.R4.R3`
+- `VPNG-U001-R1.R3.R4.R3.R1`
+- `VPNG-U001-R1.R3.R4.R4`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R5`
 
 The Adapter is the boundary between logical VPN-path semantics and the externally
 provisioned concrete VPN endpoint.
@@ -1346,9 +1346,9 @@ bounded lower integration fact when a supported adapter can prove it, but upper 
 not depend on its presence unless a later accepted requirement explicitly needs it.
 
 **Related requirements:**
-- `VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R3.R3`;
-- `VPNG9001-R1.R1.R3.R2`.
+- `VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R3.R3`;
+- `VPNG-D001-R1.R1.R3.R2`.
 
 When present, provenance is attached to the **current verified path binding**, not to stable
 `LogicalPathId` identity:
@@ -1465,48 +1465,48 @@ the supported integration/onboarding contract beneath the Device/Profile policy 
 ## 3.3. Declarative configuration boundary
 
 **Implements:**
-- `VPNG0001-R4.R1`
-- `VPNG0001-R4.R2`
-- `VPNG0001-R4.R3`
-- `VPNG0001-R4.R4`
-- `VPNG0001-R4.R4.R1`
-- `VPNG0001-R4.R4.R1.C1`
-- `VPNG0001-R4.R4.R2`
-- `VPNG0001-R4.R4.R2.R1`
-- `VPNG0001-R4.R4.R3`
-- `VPNG0001-R4.R4.R4`
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG0001-R4.R4.R4.R2`
-- `VPNG0001-R4.R4.R4.R3`
-- `VPNG0001-R4.R4.R5`
-- `VPNG0001-R4.R4.R6`
-- `VPNG0001-R4.R4.R6.R1`
-- `VPNG0001-R4.R4.R6.R2`
-- `VPNG0001-R4.R4.R6.R3`
-- `VPNG0001-R4.R4.R6.C1`
-- `VPNG0001-R4.R5`
-- `VPNG0001-R4.R5.R1`
-- `VPNG0001-R4.R5.R2`
-- `VPNG0001-R4.R5.R3`
-- `VPNG0001-R4.R5.R4`
-- `VPNG0001-R1.R3.C1.R1`
-- `VPNG0002-R2.R1`
-- `VPNG0002-R2.R1.R1`
-- `VPNG0002-R2.R1.R2`
-- `VPNG0002-R2.R2`
-- `VPNG0002-R2.R2.R1`
-- `VPNG0002-R2.R2.R2`
-- `VPNG0002-R2.R3`
-- `VPNG0002-R2.R3.R3`
-- `VPNG0002-R2.R3.C1`
-- `VPNG0002-R2.R3.C1.R1`
-- `VPNG0002-R2.R4`
-- `VPNG0002-R2.R5`
-- `VPNG0002-R2.R5.R1`
-- `VPNG0004-R4.R1`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R3.R2`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U001-R4.R1`
+- `VPNG-U001-R4.R2`
+- `VPNG-U001-R4.R3`
+- `VPNG-U001-R4.R4`
+- `VPNG-U001-R4.R4.R1`
+- `VPNG-U001-R4.R4.R1.C1`
+- `VPNG-U001-R4.R4.R2`
+- `VPNG-U001-R4.R4.R2.R1`
+- `VPNG-U001-R4.R4.R3`
+- `VPNG-U001-R4.R4.R4`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-U001-R4.R4.R4.R2`
+- `VPNG-U001-R4.R4.R4.R3`
+- `VPNG-U001-R4.R4.R5`
+- `VPNG-U001-R4.R4.R6`
+- `VPNG-U001-R4.R4.R6.R1`
+- `VPNG-U001-R4.R4.R6.R2`
+- `VPNG-U001-R4.R4.R6.R3`
+- `VPNG-U001-R4.R4.R6.C1`
+- `VPNG-U001-R4.R5`
+- `VPNG-U001-R4.R5.R1`
+- `VPNG-U001-R4.R5.R2`
+- `VPNG-U001-R4.R5.R3`
+- `VPNG-U001-R4.R5.R4`
+- `VPNG-U001-R1.R3.C1.R1`
+- `VPNG-U002-R2.R1`
+- `VPNG-U002-R2.R1.R1`
+- `VPNG-U002-R2.R1.R2`
+- `VPNG-U002-R2.R2`
+- `VPNG-U002-R2.R2.R1`
+- `VPNG-U002-R2.R2.R2`
+- `VPNG-U002-R2.R3`
+- `VPNG-U002-R2.R3.R3`
+- `VPNG-U002-R2.R3.C1`
+- `VPNG-U002-R2.R3.C1.R1`
+- `VPNG-U002-R2.R4`
+- `VPNG-U002-R2.R5`
+- `VPNG-U002-R2.R5.R1`
+- `VPNG-U004-R4.R1`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-D001-R1.R1.R5`
 
 NG3 uses the recovered human-facing Device/Profile configuration model recorded in
 `design/NG3/config-model.md`.
@@ -1643,15 +1643,15 @@ though they originate from one human configuration.
 ### Device policy normalization
 
 **Implements:**
-- `VPNG0001-R4.R4.R6`
-- `VPNG0001-R4.R4.R6.R1`
-- `VPNG0001-R4.R4.R6.R2`
-- `VPNG0001-R4.R4.R6.R3`
-- `VPNG0001-R4.R4.R6.C1`
-- `VPNG0002-R2.R1`
-- `VPNG0002-R2.R2`
-- `VPNG0002-R2.R3`
-- `VPNG0004-R4.R1`
+- `VPNG-U001-R4.R4.R6`
+- `VPNG-U001-R4.R4.R6.R1`
+- `VPNG-U001-R4.R4.R6.R2`
+- `VPNG-U001-R4.R4.R6.R3`
+- `VPNG-U001-R4.R4.R6.C1`
+- `VPNG-U002-R2.R1`
+- `VPNG-U002-R2.R2`
+- `VPNG-U002-R2.R3`
+- `VPNG-U004-R4.R1`
 
 The configuration boundary keeps Device transport policy separate from Profile need.
 
@@ -1695,28 +1695,28 @@ payload forwarding permission; `publish_vpn_server` does not become Profile rout
 
 Unknown Device policy fields and top-level tables are rejected by the strict Release-1
 configuration boundary. Endpoint-scoped firewall syntax remains separately deferred under
-`VPNG0001-R4.R4.R6.R2.R5.C1`.
+`VPNG-U001-R4.R4.R6.R2.R5.C1`.
 
 ### AvailabilityDescriptionResolver
 
 **Component type:** Calculator
 
 **Implements:**
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG0003-R3.R6.R3.R1.R1.R1`
-- `VPNG0003-R3.R6.R3.R1.R1.R2`
-- `VPNG0003-R3.R6.R3.R1.R1.R3`
-- `VPNG0003-R3.R6.R3.R1.R1.R4`
-- `VPNG0003-R3.R6.R3.R2`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1.R2`
+- `VPNG-U003-R3.R6.R3.R1.R1.R3`
+- `VPNG-U003-R3.R6.R3.R1.R1.R4`
+- `VPNG-U003-R3.R6.R3.R2`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R5`
 
 **Constrained by:**
-- `VPNG0003-R3.R6.R3.R1.C2`
+- `VPNG-U003-R3.R6.R3.R1.C2`
 
 This pure semantic projection resolves Profile availability selection above probe runtime.
 
@@ -1791,7 +1791,7 @@ documentation must explain:
    configuration boundary;
 4. how to determine that VPN-GATE accepted or rejected the binding.
 
-This closes the architecture of `VPNG0001-R1.R3.C1.R1` without choosing a specific VPN
+This closes the architecture of `VPNG-U001-R1.R3.C1.R1` without choosing a specific VPN
 protocol. The Release-1 configuration spelling itself is now fixed by
 `design/NG3/config-model.md`.
 
@@ -1801,11 +1801,11 @@ introduced. Those require separate accepted requirements if they become necessar
 ## 3.4. Profile as independent payload-policy domain
 
 **Implements:**
-- `VPNG0001-R4.R4.R4.R2`
-- `VPNG0001-R4.R4.R4.R3`
-- `VPNG0002-R2.R2.R2`
-- `VPNG0003-R3.R2.R1`
-- `VPNG0004-R4`
+- `VPNG-U001-R4.R4.R4.R2`
+- `VPNG-U001-R4.R4.R4.R3`
+- `VPNG-U002-R2.R2.R2`
+- `VPNG-U003-R3.R2.R1`
+- `VPNG-U004-R4`
 
 A Profile is preserved as a semantic domain even when its current concrete path set is empty.
 
@@ -1848,29 +1848,29 @@ container. Those remain separate lower or adjacent contracts.
 **Component type:** Manager
 
 **Implements:**
-- `VPNG0001-R1.R1`
-- `VPNG0002-R2.R1`
-- `VPNG0002-R2.R2`
-- `VPNG0002-R2.R3`
-- `VPNG0002-R2.R4`
-- `VPNG0002-R2.R5`
-- `VPNG0003-R3.R1`
-- `VPNG0003-R3.R2`
-- `VPNG0003-R3.R3`
-- `VPNG0003-R3.R4`
-- `VPNG0003-R3.R5`
-- `VPNG0003-R3.R7`
-- `VPNG0004-R4`
-- `VPNG0004-R4.R1`
-- `VPNG0004-R4.R2`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R3`
-- `VPNG9101-R2.R1.R2`
-- `VPNG9101-R2.R1.R4`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R5`
-- `VPNG9001-R1.R1.R6`
+- `VPNG-U001-R1.R1`
+- `VPNG-U002-R2.R1`
+- `VPNG-U002-R2.R2`
+- `VPNG-U002-R2.R3`
+- `VPNG-U002-R2.R4`
+- `VPNG-U002-R2.R5`
+- `VPNG-U003-R3.R1`
+- `VPNG-U003-R3.R2`
+- `VPNG-U003-R3.R3`
+- `VPNG-U003-R3.R4`
+- `VPNG-U003-R3.R5`
+- `VPNG-U003-R3.R7`
+- `VPNG-U004-R4`
+- `VPNG-U004-R4.R1`
+- `VPNG-U004-R4.R2`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R3`
+- `VPNG-M001-R2.R1.R2`
+- `VPNG-M001-R2.R1.R4`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R5`
+- `VPNG-D001-R1.R1.R6`
 
 ## 4.1. Responsibility
 
@@ -1919,13 +1919,13 @@ same effective routing domain and would require an additional transactional coor
 protocol not demanded by any accepted requirement.
 
 Keeping them together therefore follows both the product semantics and
-`VPNG9001-R1.R1.R1`.
+`VPNG-D001-R1.R1.R1`.
 
 ## 4.3. Availability state inside the Manager
 
 For each availability subject (one Profile + logical VPN path), the Manager
-may keep only the bounded semantic state necessary to implement `VPNG0003-R3.R3`,
-`VPNG0003-R3.R4`, `VPNG0003-R3.R5.R1` and `VPNG0003-R3.R5.R2`:
+may keep only the bounded semantic state necessary to implement `VPNG-U003-R3.R3`,
+`VPNG-U003-R3.R4`, `VPNG-U003-R3.R5.R1` and `VPNG-U003-R3.R5.R2`:
 
 - whether an availability problem is currently established;
 - bounded progress toward establishing a problem;
@@ -1934,12 +1934,12 @@ may keep only the bounded semantic state necessary to implement `VPNG0003-R3.R3`
 No unbounded attempt history, evidence journal or replay log is justified.
 
 **Implements:**
-- `VPNG0003-R3.R3`
-- `VPNG0003-R3.R4`
-- `VPNG0003-R3.R5`
-- `VPNG0003-R3.R5.R1`
-- `VPNG0003-R3.R5.R2`
-- `VPNG9001-R1.R1.R1.R1`
+- `VPNG-U003-R3.R3`
+- `VPNG-U003-R3.R4`
+- `VPNG-U003-R3.R5`
+- `VPNG-U003-R3.R5.R1`
+- `VPNG-U003-R3.R5.R2`
+- `VPNG-D001-R1.R1.R1.R1`
 
 The Manager consumes semantic availability evidence, not raw probe execution results.
 
@@ -2028,15 +2028,15 @@ Availability is not allowed to:
 - change direction policy.
 
 **Implements:**
-- `VPNG0002-R2.R4`
-- `VPNG0003-R3.R2`
-- `VPNG0003-R3.R4`
-- `VPNG0003-R3.R4.R1`
-- `VPNG0003-R3.R4.R1.R1`
-- `VPNG0003-R3.R7`
-- `VPNG0003-R3.R8`
-- `VPNG0003-R3.R8.R1`
-- `VPNG0003-R3.R8.C1`
+- `VPNG-U002-R2.R4`
+- `VPNG-U003-R3.R2`
+- `VPNG-U003-R3.R4`
+- `VPNG-U003-R3.R4.R1`
+- `VPNG-U003-R3.R4.R1.R1`
+- `VPNG-U003-R3.R7`
+- `VPNG-U003-R3.R8`
+- `VPNG-U003-R3.R8.R1`
+- `VPNG-U003-R3.R8.C1`
 
 The Release-1 selection rule is route-level and deliberately bounded:
 
@@ -2089,13 +2089,13 @@ prerequisite.
 ## 4.5. Device binding projection
 
 **Implements:**
-- `VPNG0001-R1.R3.R4`
-- `VPNG0001-R1.R3.R4.R1`
-- `VPNG0001-R1.R3.R4.R2`
-- `VPNG0001-R1.R3.R4.R3`
-- `VPNG0001-R1.R3.R4.R3.R1`
-- `VPNG0001-R1.R3.R4.R4`
-- `VPNG0003-R3.R1.R1`
+- `VPNG-U001-R1.R3.R4`
+- `VPNG-U001-R1.R3.R4.R1`
+- `VPNG-U001-R1.R3.R4.R2`
+- `VPNG-U001-R1.R3.R4.R3`
+- `VPNG-U001-R1.R3.R4.R3.R1`
+- `VPNG-U001-R1.R3.R4.R4`
+- `VPNG-U003-R3.R1.R1`
 
 `PayloadTrafficManager` owns the current shared Device-binding projection used by all
 Profiles.
@@ -2164,18 +2164,18 @@ responsibility that cannot be represented here.
 **Component type:** Calculator
 
 **Implements:**
-- `VPNG0002-R2.R1`
-- `VPNG0002-R2.R1.R1`
-- `VPNG0002-R2.R1.R2`
-- `VPNG0002-R2.R2`
-- `VPNG0002-R2.R2.R1`
-- `VPNG0002-R2.R3`
-- `VPNG0002-R2.R3.R3`
-- `VPNG0002-R2.R4`
-- `VPNG0002-R2.R5`
-- `VPNG0002-R2.R5.R1`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U002-R2.R1`
+- `VPNG-U002-R2.R1.R1`
+- `VPNG-U002-R2.R1.R2`
+- `VPNG-U002-R2.R2`
+- `VPNG-U002-R2.R2.R1`
+- `VPNG-U002-R2.R3`
+- `VPNG-U002-R2.R3.R3`
+- `VPNG-U002-R2.R4`
+- `VPNG-U002-R2.R5`
+- `VPNG-U002-R2.R5.R1`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R5`
 
 The Calculator maps normalized structural intent and already-resolved external facts into a
 deterministic semantic payload-policy projection.
@@ -2223,11 +2223,11 @@ The Calculator must preserve these invariants:
 ## 5.1. First-release inbound/bidirectional path-capacity constraint
 
 **Implements:**
-- `VPNG0002-R2`
-- `VPNG0002-R2.R3`
-- `VPNG0002-R2.R3.R3`
-- `VPNG0002-R2.R3.C1`
-- `VPNG0002-R2.R3.C1.R1`
+- `VPNG-U002-R2`
+- `VPNG-U002-R2.R3`
+- `VPNG-U002-R2.R3.R3`
+- `VPNG-U002-R2.R3.C1`
+- `VPNG-U002-R2.R3.C1.R1`
 
 First release deliberately does not promise remote-initiated multi-path return-path behavior.
 
@@ -2276,15 +2276,15 @@ revises the requirements and selects the extension.
 ## 5.2. Established-flow path affinity inside the managed stack
 
 **Implements:**
-- `VPNG0003-R4`;
-- `VPNG0003-R3.R8`;
-- `VPNG0003-R3.R8.R1`;
-- `VPNG0003-R3.R8.C1`;
-- `VPNG9001-R1.R1.R3.R4`;
-- `VPNG9001-R1.R1.R3.R4.R1`.
+- `VPNG-U003-R4`;
+- `VPNG-U003-R3.R8`;
+- `VPNG-U003-R3.R8.R1`;
+- `VPNG-U003-R3.R8.C1`;
+- `VPNG-D001-R1.R1.R3.R4`;
+- `VPNG-D001-R1.R1.R3.R4.R1`.
 
 **Constrained by:**
-- `VPNG0002-R2.R3.C1`.
+- `VPNG-U002-R2.R3.C1`.
 
 When ordinary-host routing returns a reply to STACK by destination, that host routing carries
 no Profile identity. The host integration therefore does not by itself preserve which VPN
@@ -2333,7 +2333,7 @@ higher-precedence affinity RPDB rule
 ```
 
 The mark identifies the original **Profile routing domain**, not an arbitrary concrete path.
-That is sufficient only because `VPNG0002-R2.R3.C1` limits Release-1 inbound/bidirectional
+That is sufficient only because `VPNG-U002-R2.R3.C1` limits Release-1 inbound/bidirectional
 Profiles to at most one eligible logical path. EXP-062 separately proves that concrete-path
 pinning is technically feasible for a future multi-path extension, but that evidence is
 deferred and does not change the Release-1 product envelope.
@@ -2401,25 +2401,25 @@ Device identity, structural membership or baseline ordering.
 
 Consequently the outbound Release-1 availability path no longer has a per-flow-affinity
 readiness gate. Managed-stack return affinity for remote-initiated traffic remains a separate
-requirement under `VPNG0003-R4` and is unchanged by this simplification.
+requirement under `VPNG-U003-R4` and is unchanged by this simplification.
 
 # 6. AvailabilityPriorityCalculator
 
 **Component type:** Calculator
 
 **Implements:**
-- `VPNG0003-R3.R1`
-- `VPNG0003-R3.R2`
-- `VPNG0003-R3.R3`
-- `VPNG0003-R3.R4`
-- `VPNG0003-R3.R4.R1`
-- `VPNG0003-R3.R4.R1.R1`
-- `VPNG0003-R3.R7`
-- `VPNG0003-R3.R8`
-- `VPNG0003-R3.R8.R1`
-- `VPNG0003-R3.R8.C1`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U003-R3.R1`
+- `VPNG-U003-R3.R2`
+- `VPNG-U003-R3.R3`
+- `VPNG-U003-R3.R4`
+- `VPNG-U003-R3.R4.R1`
+- `VPNG-U003-R3.R4.R1.R1`
+- `VPNG-U003-R3.R7`
+- `VPNG-U003-R3.R8`
+- `VPNG-U003-R3.R8.R1`
+- `VPNG-U003-R3.R8.C1`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R5`
 
 Inputs:
 
@@ -2447,15 +2447,15 @@ delete policy permission.
 **Component type:** Agent
 
 **Implements:**
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R2`
-- `VPNG0003-R3.R6.R3`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG9101-R2.R1.R3`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R2`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-M001-R2.R1.R3`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R5`
 
 ## 7.1. Responsibility
 
@@ -2487,7 +2487,7 @@ Therefore it is an Agent under `design/component-model.md`, rather than a Manage
 
 ## 7.3. Generation token
 
-To implement `VPNG0003-R3.R6.R2`, an in-flight result must carry enough identity to determine
+To implement `VPNG-U003-R3.R6.R2`, an in-flight result must carry enough identity to determine
 whether it still belongs to the current physical observation context.
 
 The implemented mechanism is a monotonically replaced local observation-generation token
@@ -2524,16 +2524,16 @@ context. This retained set is bounded by the configured Profile/path identity sp
 an observation history.
 
 **Implements:**
-- `VPNG0003-R3.R6.R2`
-- `VPNG9001-R1.R1.R1`
+- `VPNG-U003-R3.R6.R2`
+- `VPNG-D001-R1.R1.R1`
 
 ## 7.4. User-defined check criterion and normalized target
 
 **Implements:**
-- `VPNG0003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1`
 
 **Constrained by:**
-- `VPNG0003-R3.R6.R3.R1.C1`
+- `VPNG-U003-R3.R6.R3.R1.C1`
 
 The product does not attempt to define one universal semantic "VPN path is good" predicate.
 
@@ -2590,13 +2590,13 @@ criterion contract, but they are not first-release capabilities.
 **Component type:** Driver
 
 **Implements:**
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R3`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG9001-R1.R1.R3.R2`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-D001-R1.R1.R5`
 
 The Driver provides a narrow technical operation:
 
@@ -2706,15 +2706,15 @@ Release-1 ICMP probe materialization.
 ## 8.2. Probe network preconditions and shared lower policy boundary
 
 **Implements:**
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R2`
-- `VPNG0004-R4.R1`
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R5`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R2`
+- `VPNG-U004-R4.R1`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R5`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R3.R2`
 
 A path-specific availability observation is valid only when its local network preconditions
 ensure that the probe is actually constrained to the intended path and cannot silently escape
@@ -2771,17 +2771,17 @@ ambient state.
 ## 8.3. Pure probe network-policy projection
 
 **Implements:**
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R2`
-- `VPNG0003-R3.R6.R3`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG0004-R4.R1`
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R6`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R2`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-U004-R4.R1`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R6`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R3.R2`
 
 Once availability-description resolution has produced a concrete current description, the
 lower probe policy is a pure projection. It does not choose the description and it does not
@@ -2863,13 +2863,13 @@ discipline as the rest of NG3.
 ## 8.4. Probe-local nft owner convergence
 
 **Implements:**
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R2`
-- `VPNG0003-R3.R6.R3`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R2`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-D001-R1.R1.R3.R2`
 
 Probe-local admission is one classified owner inside the existing `ip vpn_gate`
 `stack_input` / `stack_output` chains. It does not get a private nft table, Manager or
@@ -2919,13 +2919,13 @@ No packet-mark restoration or conntrack cleanup is introduced by this owner.
 ## 8.5. Probe route/RPDB fail-closed convergence
 
 **Implements:**
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R2`
-- `VPNG0003-R3.R6.R3`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R2`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-D001-R1.R1.R3.R2`
 
 Probe route/RPDB state is reconciled independently from payload forwarding. The owner uses
 its dedicated table and RPDB pools and never relies on the global payload ForwardingGate to
@@ -3005,16 +3005,16 @@ confirmation or change payload route preference.
 **Component type:** Adapter
 
 **Implements:**
-- `VPNG0001-R1.R1`
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R3`
-- `VPNG0004-R4.R5`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R3`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R3.R2`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U001-R1.R1`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R3`
+- `VPNG-U004-R4.R5`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R3`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-D001-R1.R1.R5`
 
 The Adapter is the shared boundary from owner-scoped semantic network policy into the lower
 network-policy domain.
@@ -3134,20 +3134,20 @@ authority that chooses global Linux resource namespaces.
 ### 9.2. Shared lower network-policy ownership/allocation layout
 
 **Implements:**
-- `VPNG0001-R1.R1`
-- `VPNG0003-R3.R6`
-- `VPNG0004-R4`
-- `VPNG0004-R4.R1`
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R5`
-- `VPNG0004-R4.R6`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U001-R1.R1`
+- `VPNG-U003-R3.R6`
+- `VPNG-U004-R4`
+- `VPNG-U004-R4.R1`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R5`
+- `VPNG-U004-R4.R6`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R3.R2`
 
 The lower Linux policy namespace is allocated from **semantic owner scopes**, not from
 user-visible identifiers copied directly into kernel object names.
@@ -3342,10 +3342,10 @@ chain stack_output
 ```
 
 **Implements:**
-- `VPNG0004-R4.R1`;
-- `VPNG0004-R4.R2`;
-- `VPNG0004-R4.R6`;
-- `VPNG0004-R4.R6`.
+- `VPNG-U004-R4.R1`;
+- `VPNG-U004-R4.R2`;
+- `VPNG-U004-R4.R6`;
+- `VPNG-U004-R4.R6`.
 
 These chains are appliance/control-plane policy, not the user's Device firewall. Required
 loopback, probe, publication or integration-specific local exceptions are explicit
@@ -3366,12 +3366,12 @@ scaffold itself.
 ##### Managed local/system allow policy
 
 **Implements:**
-- `VPNG0004-R4.R1`;
-- `VPNG0004-R4.R2`;
-- `VPNG0004-R4.R6`;
-- `VPNG0004-R4.R6`;
-- `VPNG0001-R4.R4.R6.R3` where a supported Device publication requires local transport traffic;
-- `VPNG0001-R1.R3.C1.R1` for integration-specific local control traffic explicitly required by a supported onboarding contract.
+- `VPNG-U004-R4.R1`;
+- `VPNG-U004-R4.R2`;
+- `VPNG-U004-R4.R6`;
+- `VPNG-U004-R4.R6`;
+- `VPNG-U001-R4.R4.R6.R3` where a supported Device publication requires local transport traffic;
+- `VPNG-U001-R1.R3.C1.R1` for integration-specific local control traffic explicitly required by a supported onboarding contract.
 
 The managed `stack_input` / `stack_output` exception layer is compiled only from explicit
 VPN-GATE-owned **local/system allow intents**. It is not a second user firewall and it must
@@ -3444,9 +3444,9 @@ without manufacturing new product behavior.
 EXP-049 first proved that a real in-stack userspace VPN needs explicit local transport
 permission, then reran successfully after that permission was materialized through the normal
 production convergence boundary. The product need for bounded client-side transport/control is owned by
-`VPNG0001-R1.R3.R6.R2` and expressed in configuration by `VPNG0001-R4.R4.R6.R4`; the
-local exception is a selected safety mechanism under `VPNG0004-R4.R1`, `VPNG0004-R4.R2`
-and `VPNG0004-R4.R6`.
+`VPNG-U001-R1.R3.R6.R2` and expressed in configuration by `VPNG-U001-R4.R4.R6.R4`; the
+local exception is a selected safety mechanism under `VPNG-U004-R4.R1`, `VPNG-U004-R4.R2`
+and `VPNG-U004-R4.R6`.
 
 The normalized first-release contribution is:
 
@@ -3625,10 +3625,10 @@ must not be inferred from historical TOML examples.
 ###### Host-side Device server publication mapping — EXP-052
 
 **Implements:**
-- `VPNG0001-R1.R3.R6.R1`;
-- `VPNG0001-R4.R4.R6.R3`;
-- `VPNG0004-R4.R6`;
-- `VPNG9001-R1.R1.R1`, `VPNG9001-R1.R1.R3`, `VPNG9001-R1.R1.R5`.
+- `VPNG-U001-R1.R3.R6.R1`;
+- `VPNG-U001-R4.R4.R6.R3`;
+- `VPNG-U004-R4.R6`;
+- `VPNG-D001-R1.R1.R1`, `VPNG-D001-R1.R1.R3`, `VPNG-D001-R1.R1.R5`.
 
 One canonical Device publication has two lower postconditions:
 
@@ -3727,15 +3727,15 @@ Changing ownership of host forwarding requires a separate requirement/design dec
 ###### EXP-035 — проверка низкоуровневого nft-контракта NEW forwarding
 
 **Implements:**
-- `VPNG0002-R2.R1.R2` — remote destination/source определяется направлением NEW flow;
-- `VPNG0002-R2.R3.R3` — разрешение инициирования flow зависит от direction;
-- `VPNG0002-R2.R5.R1` — most-specific Profile selection нельзя подменять произвольным порядком allow rules;
-- `VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3` — физические ingress/egress идентичности должны быть текущими;
-- `VPNG0004-R4.R1`, `VPNG0004-R4.R2`, `VPNG0004-R4.R3.R2` — неподтверждённый или ошибочный lower rule не может расширять forwarding.
+- `VPNG-U002-R2.R1.R2` — remote destination/source определяется направлением NEW flow;
+- `VPNG-U002-R2.R3.R3` — разрешение инициирования flow зависит от direction;
+- `VPNG-U002-R2.R5.R1` — most-specific Profile selection нельзя подменять произвольным порядком allow rules;
+- `VPNG-U001-R1.R3.R2`, `VPNG-U001-R1.R3.R3` — физические ingress/egress идентичности должны быть текущими;
+- `VPNG-U004-R4.R1`, `VPNG-U004-R4.R2`, `VPNG-U004-R4.R3.R2` — неподтверждённый или ошибочный lower rule не может расширять forwarding.
 
 **Constrained by:**
-- `VPNG0002-R2.R3.C1` — первая версия не принимает многопутевой inbound/bidirectional Profile;
-- `VPNG0001-R4.R4.R6.C1` — не выводить незакрытую пользовательскую grammar из lower nft синтаксиса.
+- `VPNG-U002-R2.R3.C1` — первая версия не принимает многопутевой inbound/bidirectional Profile;
+- `VPNG-U001-R4.R4.R6.C1` — не выводить незакрытую пользовательскую grammar из lower nft синтаксиса.
 
 **Scope:** только технический эксперимент с одной разрешающей rule shape для
 host-boundary -> конкретный VPN endpoint: `meta iif` и `meta oif`
@@ -3787,14 +3787,14 @@ full payload filter semantics remain gated as stated above.
 ###### EXP-036 — проверка prefix-scoped stateful return primitive
 
 **Implements:**
-- `VPNG0002-R2.R1.R2` — remote prefix сохраняет одинаковый смысл в обоих направлениях;
-- `VPNG0002-R2.R3.R3` — return traffic уже разрешённого flow может обслуживаться statefully;
-- `VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3` — обратный packet path привязан к текущей concrete interface generation;
-- `VPNG0004-R4.R1`, `VPNG0004-R4.R2`, `VPNG0004-R4.R3.R2` — stale/неподтверждённый return state не должен расширять forwarding.
+- `VPNG-U002-R2.R1.R2` — remote prefix сохраняет одинаковый смысл в обоих направлениях;
+- `VPNG-U002-R2.R3.R3` — return traffic уже разрешённого flow может обслуживаться statefully;
+- `VPNG-U001-R1.R3.R2`, `VPNG-U001-R1.R3.R3` — обратный packet path привязан к текущей concrete interface generation;
+- `VPNG-U004-R4.R1`, `VPNG-U004-R4.R2`, `VPNG-U004-R4.R3.R2` — stale/неподтверждённый return state не должен расширять forwarding.
 
 **Constrained by:**
-- `VPNG0002-R2.R3.C1` — Release 1 inbound/bidirectional max-path constraint остаётся;
-- `VPNG0001-R4.R4.R6.C1` — lower nft expression не выбирает user grammar.
+- `VPNG-U002-R2.R3.C1` — Release 1 inbound/bidirectional max-path constraint остаётся;
+- `VPNG-U001-R4.R4.R6.C1` — lower nft expression не выбирает user grammar.
 
 Для outbound NEW primitive из EXP-035 кандидат stateful reverse primitive
 должен быть **prefix-scoped**, а не только `ct state established,related`:
@@ -3828,18 +3828,18 @@ same symbolic/decimal-index rule established by EXP-033/035.
 unambiguous interface inventory.
 
 **Implements:**
-- `VPNG0002-R2.R1.R2`;
-- `VPNG0002-R2.R3.R3`;
-- `VPNG0002-R2.R5.R1`;
-- `VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R3.R3`;
-- `VPNG0004-R4.R1`;
-- `VPNG0004-R4.R2`;
-- `VPNG0004-R4.R5`.
+- `VPNG-U002-R2.R1.R2`;
+- `VPNG-U002-R2.R3.R3`;
+- `VPNG-U002-R2.R5.R1`;
+- `VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R3.R3`;
+- `VPNG-U004-R4.R1`;
+- `VPNG-U004-R4.R2`;
+- `VPNG-U004-R4.R5`.
 
 **Constrained by:**
-- `VPNG0002-R2.R3.C1`;
-- `VPNG0001-R4.R4.R6.C1`.
+- `VPNG-U002-R2.R3.C1`;
+- `VPNG-U001-R4.R4.R6.C1`.
 
 The observer does **not** compile Profile policy. It only classifies exact
 lower rule shapes already proven by EXP-035/036 and preserves the semantic
@@ -3903,7 +3903,7 @@ expressions. `/32` remote matches render as a plain IPv4 address string;
 non-host prefixes such as the tested `/24` render as a prefix object.
 The observer accepts only these evidence-backed canonical forms.
 
-**Gate amendment after EXP-037:** `VPNG0002-R2.R1.R1` permits arbitrary
+**Gate amendment after EXP-037:** `VPNG-U002-R2.R1.R1` permits arbitrary
 strict IPv4 CIDR destinations, including `0.0.0.0/0`. EXP-037 closed only
 `/32`; EXP-035/036 closed `/24`. Before implementation the observer gate
 must additionally resolve nft canonicalization for `/0` and boundary
@@ -3919,19 +3919,19 @@ rather than pretending the missing expression is equivalent by assumption.
 **not** the Profile/Device policy compiler.
 
 **Implements:**
-- `VPNG0002-R2.R1.R1`;
-- `VPNG0002-R2.R1.R2`;
-- `VPNG0002-R2.R3.R3`;
-- `VPNG0002-R2.R5.R1`;
-- `VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R3.R3`;
-- `VPNG0004-R4.R1`;
-- `VPNG0004-R4.R2`;
-- `VPNG0004-R4.R5`.
+- `VPNG-U002-R2.R1.R1`;
+- `VPNG-U002-R2.R1.R2`;
+- `VPNG-U002-R2.R3.R3`;
+- `VPNG-U002-R2.R5.R1`;
+- `VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R3.R3`;
+- `VPNG-U004-R4.R1`;
+- `VPNG-U004-R4.R2`;
+- `VPNG-U004-R4.R5`.
 
 **Constrained by:**
-- `VPNG0002-R2.R3.C1`;
-- `VPNG0001-R4.R4.R6.C1`.
+- `VPNG-U002-R2.R3.C1`;
+- `VPNG-U001-R4.R4.R6.C1`.
 
 The higher semantic Calculator eventually composes Profile direction/destinations, path
 bindings, most-specific Profile selection and the later accepted ordered Device firewall.
@@ -3989,9 +3989,9 @@ and physical filter mutation remain separate gated units.
 
 ###### Forward semantic compiler — implemented pure Calculator
 
-**Implements:** `VPNG0002-R2.R1.R2`, `VPNG0002-R2.R3.R3`,
-`VPNG0002-R2.R5.R1`, `VPNG0001-R4.R4.R6.R2`,
-`VPNG0004-R4.R1`, `VPNG0004-R4.R3.R2`.
+**Implements:** `VPNG-U002-R2.R1.R2`, `VPNG-U002-R2.R3.R3`,
+`VPNG-U002-R2.R5.R1`, `VPNG-U001-R4.R4.R6.R2`,
+`VPNG-U004-R4.R1`, `VPNG-U004-R4.R3.R2`.
 
 A naive union of Profile CIDR allow rules is not equivalent to accepted
 most-specific classification. Example: a broad outbound Profile may allow
@@ -4108,16 +4108,16 @@ authoritative for each lower shape.
 **Ordered Device firewall composition — accepted semantic architecture**
 
 **Implements:**
-- `VPNG0001-R4.R4.R6.R2`;
-- `VPNG0001-R4.R4.R6.R2.R1`;
-- `VPNG0001-R4.R4.R6.R2.R2`;
-- `VPNG0001-R4.R4.R6.R2.R3`;
-- `VPNG0001-R4.R4.R6.R2.R4`;
-- `VPNG0001-R4.R4.R6.R2.R5`.
+- `VPNG-U001-R4.R4.R6.R2`;
+- `VPNG-U001-R4.R4.R6.R2.R1`;
+- `VPNG-U001-R4.R4.R6.R2.R2`;
+- `VPNG-U001-R4.R4.R6.R2.R3`;
+- `VPNG-U001-R4.R4.R6.R2.R4`;
+- `VPNG-U001-R4.R4.R6.R2.R5`.
 
 **Constrained by:**
-- `VPNG0001-R4.R4.R6.C1`;
-- `VPNG0001-R4.R4.R6.R2.R5.C1`.
+- `VPNG-U001-R4.R4.R6.C1`;
+- `VPNG-U001-R4.R4.R6.R2.R5.C1`.
 
 The positive-only Profile partition remains the **hard Profile permission gate**, but it is
 no longer the whole Device firewall. The accepted composition is:
@@ -4192,7 +4192,7 @@ authorized.
 Endpoint-scoped Device rules are a future extension. They must resolve a configured logical
 endpoint through confirmed transport provenance to the exact current binding; runtime
 ifnames are not user-facing selectors. Under
-`VPNG0001-R4.R4.R6.R2.R5.C1`, this does not block ordinary Release-1 Device firewall
+`VPNG-U001-R4.R4.R6.R2.R5.C1`, this does not block ordinary Release-1 Device firewall
 rules.
 
 ###### Device firewall lower structural ownership
@@ -4290,13 +4290,13 @@ layer still grants no mutation authority.
 ###### Multi-path Device firewall composition and child-chain identity
 
 **Implements:**
-- `VPNG0001-R4.R4.R6.R2`;
-- `VPNG0001-R4.R4.R6.R2.R1`;
-- `VPNG0001-R4.R4.R6.R2.R2`;
-- `VPNG0001-R4.R4.R6.R2.R3`;
-- `VPNG0001-R4.R4.R6.R2.R4`;
-- `VPNG9001-R1.R1.R1`;
-- `VPNG9001-R1.R1.R3.R1`.
+- `VPNG-U001-R4.R4.R6.R2`;
+- `VPNG-U001-R4.R4.R6.R2.R1`;
+- `VPNG-U001-R4.R4.R6.R2.R2`;
+- `VPNG-U001-R4.R4.R6.R2.R3`;
+- `VPNG-U001-R4.R4.R6.R2.R4`;
+- `VPNG-D001-R1.R1.R1`;
+- `VPNG-D001-R1.R1.R3.R1`.
 
 The caller supplies normalized Device firewall intent for every Device that currently backs
 a payload path, including explicit `rules=None` when the firewall is omitted. Missing
@@ -4515,10 +4515,10 @@ accepted product semantic.
 in bulk form, **not** final effective permission and not nft compilation.
 
 **Implements:**
-- `VPNG0002-R2.R1.R2`;
-- `VPNG0002-R2.R3.R3`;
-- `VPNG0002-R2.R5.R1`;
-- `VPNG0004-R4.R1`.
+- `VPNG-U002-R2.R1.R2`;
+- `VPNG-U002-R2.R3.R3`;
+- `VPNG-U002-R2.R5.R1`;
+- `VPNG-U004-R4.R1`.
 
 Input is the existing set of `PayloadProfileRequest` objects and, for inbound
 partitioning, one concrete `LogicalPathId`. Output is a canonical set of
@@ -4664,15 +4664,15 @@ incidental.
 **Component:** read-only direct Calculator for normalized nft observation/comparison.
 
 **Implements:**
-- `VPNG0001-R4.R4.R6.R1` — explicit Device NAT intent projected onto an exact current path;
-- `VPNG0001-R1.R3.R2` — unambiguous current physical endpoint binding;
-- `VPNG0001-R1.R3.R3` — replaced endpoint must not inherit old interface identity;
-- `VPNG0004-R4.R3.R2` — structural NAT changes may not bypass a restrictive transition;
-- `VPNG0004-R4.R4` — unconfirmed network state cannot authorize forwarding;
-- `VPNG0004-R4.R5` — authoritative actual state is required after uncertainty.
+- `VPNG-U001-R4.R4.R6.R1` — explicit Device NAT intent projected onto an exact current path;
+- `VPNG-U001-R1.R3.R2` — unambiguous current physical endpoint binding;
+- `VPNG-U001-R1.R3.R3` — replaced endpoint must not inherit old interface identity;
+- `VPNG-U004-R4.R3.R2` — structural NAT changes may not bypass a restrictive transition;
+- `VPNG-U004-R4.R4` — unconfirmed network state cannot authorize forwarding;
+- `VPNG-U004-R4.R5` — authoritative actual state is required after uncertainty.
 
 **Constrained by:**
-- `VPNG0001-R4.R4.R6.C1` — lower NAT observation does not assume an unaccepted human-facing configuration grammar.
+- `VPNG-U001-R4.R4.R6.C1` — lower NAT observation does not assume an unaccepted human-facing configuration grammar.
 
 **Scenario and responsibility:** After an external Device endpoint disappears or is recreated
 with the same name, the product must distinguish the old physical NAT rule from the new
@@ -4795,15 +4795,15 @@ Linux nft Driver and the existing read-only Calculator. This is deliberately a
 partial reference slice, **not** completion of full Release 1 structural policy.
 
 **Implements:**
-- `VPNG0001-R4.R4.R6.R1`;
-- `VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R3.R3`;
-- `VPNG0004-R4.R3.R2`;
-- `VPNG0004-R4.R4`;
-- `VPNG0004-R4.R5`.
+- `VPNG-U001-R4.R4.R6.R1`;
+- `VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R3.R3`;
+- `VPNG-U004-R4.R3.R2`;
+- `VPNG-U004-R4.R4`;
+- `VPNG-U004-R4.R5`.
 
 **Constrained by:**
-- `VPNG0001-R4.R4.R6.C1` — no guessed external NAT grammar.
+- `VPNG-U001-R4.R4.R6.C1` — no guessed external NAT grammar.
 
 **Scenario:** One recognized old exact-ifindex NAT rule remains in the marked
 payload postrouting chain after a Device endpoint was replaced. The required
@@ -4868,13 +4868,13 @@ forwarding barrier.
 ##### Profile source identity translation inside the managed domain
 
 **Implements:**
-- `VPNG0001-R3`;
-- `VPNG0001-R4.R4.R4.R4`;
-- `VPNG0002-R2.R1.R3`;
-- `VPNG0004-R4.R6`.
+- `VPNG-U001-R3`;
+- `VPNG-U001-R4.R4.R4.R4`;
+- `VPNG-U002-R2.R1.R3`;
+- `VPNG-U004-R4.R6`.
 
 **Constrained by:**
-- `VPNG0001-R4.R4.R4.R4.C1`.
+- `VPNG-U001-R4.R4.R4.R4.C1`.
 
 Profile `+snat` is a second source-translation purpose and is not Device
 `use_outbound_nat`.
@@ -4972,7 +4972,7 @@ EXP-075 supplies the narrower SNAT-identity next-hop fact. Superseded carrier ex
 experiment lifecycle artifacts.
 
 **Simplification:** the core Profile-SNAT model reuses Profile association already required
-for `VPNG0003-R4` and the existing managed postrouting owner. It introduces no
+for `VPNG-U003-R4` and the existing managed postrouting owner. It introduces no
 Profile-specific host metadata/resource owner. Optional host-route assistance is handled by
 the separate host-routing helper contract rather than being hidden inside Profile SNAT.
 
@@ -5171,15 +5171,15 @@ The executable pure allocator implements this contract over an injected
 **Component type:** Enforcer
 
 **Implements:**
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R3`
-- `VPNG0003-R3.R9`
-- `VPNG0004-R4.R3.R2`
-- `VPNG0004-R4.R5`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R3`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R3`
+- `VPNG-U003-R3.R9`
+- `VPNG-U004-R4.R3.R2`
+- `VPNG-U004-R4.R5`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R5`
 
 The Enforcer converges the lower network domain from freshly observed current state to the
 caller-selected desired semantic state.
@@ -5258,12 +5258,12 @@ The Enforcer distinguishes two transition classes.
 ## 10.1. Pure priority permutation — make-before-break route-slot transaction
 
 **Implements:**
-- `VPNG0003-R3.R9`
-- `VPNG0003-R3.R2`
-- `VPNG0003-R3.R3`
-- `VPNG0003-R3.R4`
-- `VPNG0003-R3.R8`
-- `VPNG0003-R3.R8.R1`
+- `VPNG-U003-R3.R9`
+- `VPNG-U003-R3.R2`
+- `VPNG-U003-R3.R3`
+- `VPNG-U003-R3.R4`
+- `VPNG-U003-R3.R8`
+- `VPNG-U003-R3.R8.R1`
 
 When the desired change alters only priority/order of the same eligible unicast path set,
 the Linux implementation uses owned ordinary metric space and must be able to identify one
@@ -5419,10 +5419,10 @@ NG2 product semantics are not inherited by that fact.
 ## 10.2. Structural policy transition — guarded fail-closed convergence
 
 **Implements:**
-- `VPNG0004-R4.R3.R2`
-- `VPNG0004-R4.R1`
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R5`
+- `VPNG-U004-R4.R3.R2`
+- `VPNG-U004-R4.R1`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R5`
 
 If membership, direction, filtering/NAT or another structural policy dimension changes, the
 priority-only route-slot proof no longer applies.
@@ -5567,10 +5567,10 @@ the fresh reread value rather than process exit status alone.
 #### Administrative payload-containment control
 
 **Implements:**
-- `VPNG0004-R5`.
+- `VPNG-U004-R5`.
 
 **Constrained by:**
-- `VPNG0004-R5.C1`.
+- `VPNG-U004-R5.C1`.
 
 This is a future administrative operational capability, not a second lifecycle state and not
 a configuration spelling for the structural ForwardingGate.
@@ -5592,8 +5592,8 @@ That fact alone does not prove the full administrative contract because a separa
 ordinary-side boundary block and the public enter/leave operation still require composed
 acceptance evidence.
 
-Accordingly `VPNG0004-R5` remains `[pending_closure]`; Release 1 is explicitly exempt
-by `VPNG0004-R5.C1`.
+Accordingly `VPNG-U004-R5` remains `[pending_closure]`; Release 1 is explicitly exempt
+by `VPNG-U004-R5.C1`.
 
 #### Structural transaction ordering
 
@@ -5874,11 +5874,11 @@ The architecture currently needs only semantic event edges required by Engine ro
 `AvailabilityProbeAgent -> PayloadTrafficManager`
 
 **Implements:**
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R2`
-- `VPNG0003-R3.R6.R3`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R2`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-D001-R1.R1.R5`
 
 The event must identify the availability subject and logical path and carry only the bounded
 observation information needed by the Manager.
@@ -5889,7 +5889,7 @@ Local inability to execute the observation mechanism produces `no_evidence` plus
 state unless the observation contract proves that the failure itself demonstrates path
 unusability.
 
-By `VPNG0003-R3.R6.R3`, only evidence that observes a relevant path property may become
+By `VPNG-U003-R3.R6.R3`, only evidence that observes a relevant path property may become
 `positive` or `negative`.
 
 No requirement currently justifies:
@@ -5904,8 +5904,8 @@ No requirement currently justifies:
 `PayloadTrafficManager -> observers`
 
 **Implements:**
-- `VPNG9101-R2.R1.R2`
-- `VPNG9101-R2.R1.R4`
+- `VPNG-M001-R2.R1.R2`
+- `VPNG-M001-R2.R1.R4`
 
 The Manager publishes a current projection that distinguishes desired/effective/unknown
 state where that distinction affects behavior or safety.
@@ -5926,7 +5926,7 @@ publishing the resulting current projection fails transiently:
 - unexpected internal programming/runtime faults remain errors and are not converted into a
   fake successful publication state.
 
-This follows `VPNG9101-R1.R1.R3`, `VPNG9101-R2.R1.R3`, `VPNG9101-R2.R1.R4` and keeps mutation retry separate
+This follows `VPNG-M001-R1.R1.R3`, `VPNG-M001-R2.R1.R3`, `VPNG-M001-R2.R1.R4` and keeps mutation retry separate
 from information-delivery retry.
 
 # 12. Startup, shutdown and recovery
@@ -5939,17 +5939,17 @@ long-lived semantic component.
 Instead, the architecture records only required postconditions:
 
 **Implements:**
-- `VPNG0001-R4`
-- `VPNG0004-R4.R4`
-- `VPNG9101-R1.R1`
-- `VPNG9101-R1.R1.R1`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9101-R1.R1.R6`
-- `VPNG9101-R1.R1.R6.R1`
-- `VPNG9101-R1.R1.R6.R2`
-- `VPNG9101-R1.R1.R6.R3`
-- `VPNG9001-R1.R1.R1`
+- `VPNG-U001-R4`
+- `VPNG-U004-R4.R4`
+- `VPNG-M001-R1.R1`
+- `VPNG-M001-R1.R1.R1`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-M001-R1.R1.R6`
+- `VPNG-M001-R1.R1.R6.R1`
+- `VPNG-M001-R1.R1.R6.R2`
+- `VPNG-M001-R1.R1.R6.R3`
+- `VPNG-D001-R1.R1.R1`
 
 Required orchestration semantics:
 
@@ -5991,16 +5991,16 @@ mechanism and exact phase implementation are replaceable.
 ## 12.0.1. Network-policy activation subassembly
 
 **Implements:**
-- `VPNG0004-R4.R4`;
-- `VPNG0004-R4.R5`;
-- `VPNG9101-R1.R1.R1`;
-- `VPNG9101-R1.R1.R6.R1`;
-- `VPNG9101-R2.R1.R3`;
-- `VPNG9101-R2.R1.R4`.
+- `VPNG-U004-R4.R4`;
+- `VPNG-U004-R4.R5`;
+- `VPNG-M001-R1.R1.R1`;
+- `VPNG-M001-R1.R1.R6.R1`;
+- `VPNG-M001-R2.R1.R3`;
+- `VPNG-M001-R2.R1.R4`.
 
 **Constrained by:**
-- `VPNG9001-R1.R1.R1`;
-- `VPNG9001-R1.R1.R3.R1`.
+- `VPNG-D001-R1.R1.R1`;
+- `VPNG-D001-R1.R1.R3.R1`.
 
 This is a bounded procedural subassembly inside startup/reconciliation. It is **not** the
 product `start` operation and does not own instance locking, managed-domain creation,
@@ -6058,7 +6058,7 @@ failure and readiness remains false.
 
 No failed scaffold operation or failed structural transaction is retried inside this
 subassembly. A later Manager reconciliation may invoke a new activation attempt from fresh
-state as required by `VPNG9101-R1.R1.R3`.
+state as required by `VPNG-M001-R1.R1.R3`.
 
 The result is a current bounded readiness projection:
 
@@ -6257,15 +6257,15 @@ This assembly still does not define:
 ## 12.0.4. Bounded controller stop / owned-domain cleanup
 
 **Implements:**
-- `VPNG9101-R1.R1.R4`;
-- `VPNG9101-R1.R1.R5`;
-- `VPNG9101-R1.R1.R6.R2`;
-- `VPNG9101-R2.R1.R3`.
+- `VPNG-M001-R1.R1.R4`;
+- `VPNG-M001-R1.R1.R5`;
+- `VPNG-M001-R1.R1.R6.R2`;
+- `VPNG-M001-R2.R1.R3`.
 
 **Constrained by:**
-- `VPNG0001-R1.R3.C1`;
-- `VPNG0004-R4.R6`;
-- `VPNG9001-R1.R1.R1`.
+- `VPNG-U001-R1.R3.C1`;
+- `VPNG-U004-R4.R6`;
+- `VPNG-D001-R1.R1.R1`.
 
 For the currently executable controller lifetime, a READY startup session owns no runtime
 Manager/Agent loops yet. Its stop boundary therefore remains procedural rather than inventing
@@ -6307,7 +6307,7 @@ A successful domain teardown is a stronger terminal postcondition than a failed 
 observation: once the named namespace and host boundary are freshly confirmed absent, no
 VPN-GATE-owned managed forwarding domain remains connected to host traffic.
 
-`VPNG0001-R1.R3.C1` establishes administrator ownership of VPN provisioning and
+`VPNG-U001-R1.R3.C1` establishes administrator ownership of VPN provisioning and
 VPN-specific configuration; it does **not** establish that the runtime lifecycle of a VPN
 process executing inside the managed domain must remain administrator-owned.
 
@@ -6325,18 +6325,18 @@ silently killed.
 
 The current bounded stop has no generic callback list, retry queue or cleanup registry. When
 future runtime Managers/Agents become executable, their independently required quiesce/release
-operations must be added as concrete cleanup domains under `VPNG9101-R1.R1.R5`, preserving the
+operations must be added as concrete cleanup domains under `VPNG-M001-R1.R1.R5`, preserving the
 same rule: one cleanup-area failure does not suppress attempts in other independent areas.
 
 ## 12.0.5. Bounded controller restart composition
 
 **Implements:**
-- `VPNG9101-R1.R1.R6.R3`;
-- `VPNG9101-R2.R1.R3`.
+- `VPNG-M001-R1.R1.R6.R3`;
+- `VPNG-M001-R2.R1.R3`.
 
 **Constrained by:**
-- `VPNG9101-R1.R1.R6.R2`;
-- `VPNG9001-R1.R1.R1`.
+- `VPNG-M001-R1.R1.R6.R2`;
+- `VPNG-D001-R1.R1.R1`.
 
 Restart adds no new lifecycle mechanism. It composes the already accepted stop and startup
 operations:
@@ -6374,15 +6374,15 @@ operation reports it; a later operator action may start again from authoritative
 ## 12.0.6. Phase-bounded STARTING termination checkpoints
 
 **Implements:**
-- `VPNG9101-R1.R1.R1`;
-- `VPNG9101-R1.R1.R4`;
-- `VPNG9101-R1.R1.R5`;
-- `VPNG9101-R1.R1.R6.R1`;
-- `VPNG9101-R1.R1.R6.R2`;
-- `VPNG9101-R2.R1.R3`.
+- `VPNG-M001-R1.R1.R1`;
+- `VPNG-M001-R1.R1.R4`;
+- `VPNG-M001-R1.R1.R5`;
+- `VPNG-M001-R1.R1.R6.R1`;
+- `VPNG-M001-R1.R1.R6.R2`;
+- `VPNG-M001-R2.R1.R3`.
 
 **Constrained by:**
-- `VPNG9001-R1.R1.R1`.
+- `VPNG-D001-R1.R1.R1`.
 
 The core startup assembly does not own POSIX signal installation or service-manager mechanics.
 It accepts one replaceable read-only process-control input:
@@ -6478,7 +6478,7 @@ real lifecycle boundary; their daemon/event-loop implementation is not inherited
 
 ## 12.1. Product lifecycle control surface
 
-The lifecycle operations required by `VPNG9101-R1.R1.R6` are exposed through a thin product
+The lifecycle operations required by `VPNG-M001-R1.R1.R6` are exposed through a thin product
 control surface.
 
 The architecture does not require that surface to be a specific CLI, service manager,
@@ -6507,7 +6507,7 @@ reload
     -> report success only after required postconditions for the new configuration
 ```
 
-`VPNG9101-R1.R1.R6` requires a supported way to apply changed configuration, but it does not
+`VPNG-M001-R1.R1.R6` requires a supported way to apply changed configuration, but it does not
 require a distinct `reload` operation. The selected management/deployment interface may expose
 `reload` only when its behavior and result are explicitly defined; it must not silently mean
 a full instance restart.
@@ -6529,12 +6529,12 @@ responsibility that cannot be represented by these direct operations.
 ## 12.2. Local Manager reconciliation
 
 **Implements:**
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R2.R1`
-- `VPNG9101-R1.R1.R3`
-- `VPNG9101-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R1.R1`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R2.R1`
+- `VPNG-M001-R1.R1.R3`
+- `VPNG-M001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R1.R1`
 
 Any Manager that owns mutable external state keeps the current accepted desired semantic
 state and periodically re-observes its own managed domain while the corresponding function
@@ -6585,27 +6585,27 @@ command replay.
 ## 12.3. Первая исполняемая alpha-сборка runtime
 
 **Implements:**
-- `VPNG0001-R4`;
-- `VPNG0001-R1.R3.C3.R1`;
-- `VPNG0001-R4.R4.R6.R4`;
-- `VPNG0004-R4.R4`;
-- `VPNG0004-R4.R5`;
-- `VPNG9101-R1.R1.R1`;
-- `VPNG9101-R1.R1.R2`;
-- `VPNG9101-R1.R1.R3`;
-- `VPNG9101-R1.R1.R6.R2`;
-- `VPNG9101-R1.R1.R6.R3`;
-- `VPNG9001-R1.R1.R1`;
-- `VPNG9001-R1.R1.R7`.
+- `VPNG-U001-R4`;
+- `VPNG-U001-R1.R3.C3.R1`;
+- `VPNG-U001-R4.R4.R6.R4`;
+- `VPNG-U004-R4.R4`;
+- `VPNG-U004-R4.R5`;
+- `VPNG-M001-R1.R1.R1`;
+- `VPNG-M001-R1.R1.R2`;
+- `VPNG-M001-R1.R1.R3`;
+- `VPNG-M001-R1.R1.R6.R2`;
+- `VPNG-M001-R1.R1.R6.R3`;
+- `VPNG-D001-R1.R1.R1`;
+- `VPNG-D001-R1.R1.R7`.
 
 **Allowed early implementation by:**
-- `VPNG9001-R1.R1.R8.C1`;
-- `VPNG9001-R1.R1.R8.R3`.
+- `VPNG-D001-R1.R1.R8.C1`;
+- `VPNG-D001-R1.R1.R8.R3`.
 
 **Constrained by:**
-- `VPNG0001-R4.R4.R6.C1`;
-- `VPNG0001-R1.R3.C3`;
-- `VPNG9101-R1.R1.C1`.
+- `VPNG-U001-R4.R4.R6.C1`;
+- `VPNG-U001-R1.R3.C3`;
+- `VPNG-M001-R1.R1.C1`.
 
 Первый исполняемый alpha-runtime не вводит новую продуктовую семантику. Он соединяет уже
 принятые нижние контракты в один процесс `rou.alpha_runtime` и один systemd deployment
@@ -6641,7 +6641,7 @@ read-only exact structural audit
 Audit interval в alpha равен одной секунде и является локальным implementation parameter по
 §12.2, а не пользовательской latency guarantee. Current alpha не предоставляет config `reload`: изменение конфигурации требует нового
 start/restart. Это является поддерживаемым способом применения изменённой конфигурации по
-`VPNG9101-R1.R1.R6` и не считается alpha implementation gap.
+`VPNG-M001-R1.R1.R6` и не считается alpha implementation gap.
 
 Alpha deployment использует:
 
@@ -6678,7 +6678,7 @@ Canonical Release-1 configuration теперь определяется `design/
 Если periodic audit обнаруживает exact managed-domain mismatch, alpha пытается прежде всего
 подтвердить `ForwardingGate=DISABLED` и публикует diagnostic в journal. Такое containment
 закрывает конкретную потерю safety-critical managed-domain postcondition по
-`VPNG0004-R4.R2` / `VPNG0004-R4.R5`; `VPNG9101-R1.R1.C1` отдельно объясняет, почему alpha
+`VPNG-U004-R4.R2` / `VPNG-U004-R4.R5`; `VPNG-M001-R1.R1.C1` отдельно объясняет, почему alpha
 не обязана усыновлять произвольные процессы или реконструировать вручную поврежденные
 authoritative namespace artifacts.
 
@@ -6691,15 +6691,15 @@ diagnostics и не объявляются финальным stable status inte
 **Component type:** Agent
 
 **Implements:**
-- `VPNG9101-R2.R1`
-- `VPNG9101-R2.R1.R1`
-- `VPNG9101-R2.R1.R2`
-- `VPNG9101-R2.R1.R3`
-- `VPNG9101-R2.R1.R4`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R1.R1`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-M001-R2.R1`
+- `VPNG-M001-R2.R1.R1`
+- `VPNG-M001-R2.R1.R2`
+- `VPNG-M001-R2.R1.R3`
+- `VPNG-M001-R2.R1.R4`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R1.R1`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R5`
 
 The Agent observes current projections published by the Engines that own product domains and
 composes a user-facing current status snapshot.
@@ -6771,15 +6771,15 @@ internal Manager state.
 ## 13.1. Target production runtime implementation boundary
 
 **Implements:**
-- `VPNG9001-R1.R1.R8`;
-- `VPNG9001-R1.R1.R8.R1`;
-- `VPNG9001-R1.R1.R8.R2`;
-- `VPNG9001-R1.R1.R8.R3`.
+- `VPNG-D001-R1.R1.R8`;
+- `VPNG-D001-R1.R1.R8.R1`;
+- `VPNG-D001-R1.R1.R8.R2`;
+- `VPNG-D001-R1.R1.R8.R3`.
 
 **Constrained by:**
-- `VPNG9001-R1.R1.R8.C1`;
-- `VPNG9001-R1.R1.R8.C2`;
-- `VPNG9001-R1.R1.R8.C3`.
+- `VPNG-D001-R1.R1.R8.C1`;
+- `VPNG-D001-R1.R1.R8.C2`;
+- `VPNG-D001-R1.R1.R8.C3`.
 
 Rust is a target **implementation boundary**, not a new component role and not a source of
 product semantics. The component contracts, requirement trace and observable network
@@ -6800,7 +6800,7 @@ For the first release that claims conformance to this production boundary, the n
 runtime responsibilities must execute from the Rust implementation. A Python module is not
 allowed to remain a hidden dependency for those non-exempt responsibilities merely because
 it was the original executable reference. The host-routing helper is the explicit exception
-defined by `VPNG9001-R1.R1.R8.C3`.
+defined by `VPNG-D001-R1.R1.R8.C3`.
 
 The current `design/NG3/code/python/rou/` implementation has a different role:
 
@@ -6814,9 +6814,9 @@ accepted requirements + architecture contracts
                 +--> must preserve the same product semantics
 ```
 
-By `VPNG9001-R1.R1.R8.C1`, alpha/beta releases may ship the Python reference runtime while the
+By `VPNG-D001-R1.R1.R8.C1`, alpha/beta releases may ship the Python reference runtime while the
 product semantics and integration applicability are still being proven. By
-`VPNG9001-R1.R1.R8.C2`, this is also the required development ordering for `rou`: while the
+`VPNG-D001-R1.R1.R8.C2`, this is also the required development ordering for `rou`: while the
 target `rou` behavior is still being designed or lacks sufficient Python evidence, new Rust
 runtime ports, production cutover work and expansion of the Rust runtime surface are postponed.
 The Python executable reference remains the single current implementation in which changing
@@ -6829,20 +6829,20 @@ not be described as the final production/stable implementation boundary.
 
 ### Host-routing helper language exception
 
-`VPNG9001-R1.R1.R8.C3` deliberately excludes the host-routing helper responsibilities under
-`VPNG0001-R5.R1` and `VPNG0001-R5.R2` from automatic Rust cutover. Their current Python
+`VPNG-D001-R1.R1.R8.C3` deliberately excludes the host-routing helper responsibilities under
+`VPNG-U001-R5.R1` and `VPNG-U001-R5.R2` from automatic Rust cutover. Their current Python
 implementation may remain a supported production implementation after the first product
 release and after the rest of the target production runtime has crossed the Rust boundary.
 
 This exception is narrow: it does not relax the Rust boundary for core lifecycle,
 managed-domain forwarding, policy calculation/reconciliation, VPN-path observation, or other
-non-helper responsibilities covered by `VPNG9001-R1.R1.R8`. The exact integration mechanism
+non-helper responsibilities covered by `VPNG-D001-R1.R1.R8`. The exact integration mechanism
 between a future Rust core runtime and a Python helper is intentionally not selected here;
 that is a later architecture decision and must not silently move non-helper responsibilities
 back into Python.
 
 Migrating the helper itself to Rust is therefore not ordinary completion work for
-`VPNG9001-R1.R1.R8`. It may begin only after a separate explicit project holder decision. If
+`VPNG-D001-R1.R1.R8`. It may begin only after a separate explicit project holder decision. If
 that decision is made, the migration remains an implementation replacement and must preserve
 the accepted peaceful/aggressive helper contracts and evidence rather than redesigning them
 for language-specific convenience.
@@ -6870,7 +6870,7 @@ language is Rust.
 
 Snapshots 123–125 introduced small safe-Rust parity prototypes for availability confirmation,
 effective ordering and bounded routing-state projection before the development-ordering gate
-in `VPNG9001-R1.R1.R8.C2` was made explicit. They are retained as historical/prototype evidence,
+in `VPNG-D001-R1.R1.R8.C2` was made explicit. They are retained as historical/prototype evidence,
 not as an active migration frontier and not as a claim that Rust transition has begun.
 
 No further `rou` Rust runtime surface should be added, and these prototypes should not drive
@@ -6894,7 +6894,7 @@ Sufficient evidence for the final production-language transition includes:
   reference behavior;
 - packaging evidence that non-exempt responsibilities in the claimed production runtime do
   not execute Python runtime modules; the host-routing helper exception remains governed by
-  `VPNG9001-R1.R1.R8.C3`;
+  `VPNG-D001-R1.R1.R8.C3`;
 - an auditable inventory of production `unsafe`/memory-unsafe FFI boundaries and their
   local justifications.
 
@@ -6905,27 +6905,27 @@ until a separate requirement requires it.
 
 | Requirement area | Architecture status |
 | --- | --- |
-| `VPNG0001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG0001-R4` declarative operation | canonical Release-1 Device/Profile grammar fixed in `config-model.md` and normalized by ConfigurationAdapter; only per-path future firewall selector remains deferred |
-| `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
-| `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
-| `VPNG0001-R2.R1` manual host integration | closed through `host-integration.md`: remote-prefix, Profile-SNAT identity, full-tunnel and host-forwarding prerequisites are explicit without requiring a helper |
-| `VPNG0001-R5.R1` peaceful host-routing assistance | closed: default-disabled selector scope + `peaceful` policy; EXP-078 selector semantics, EXP-079 absolute STACK bypass, EXP-080 selector-paired preserve+dispatch non-interference, lifecycle cleanup retained from EXP-077 |
-| `VPNG0001-R5.R2` aggressive host-routing assistance | postponed beyond Release 1; authoritative child `VPNG0001-R5.R2.R1` closed by EXP-074, continuous recovery/alarm containment remain pending |
-| `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
-| `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
-| managed-domain VPN endpoint placement | selected architecture under `VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.C1.R1` and `VPNG0004-R4.R6`; it is not an independent product requirement |
-| `VPNG0002-R2` subtree — payload policy | Profile destinations/direction/device_order compile deterministically through PayloadPolicyCalculator |
-| `VPNG0003-R3.R1`–`VPNG0003-R3.R5`, `VPNG0003-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
-| `VPNG0003-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; Profile selects disabled, Device default, or same-shape Profile override, normalized to a concrete ICMP/IPv4 description before probe runtime |
-| `VPNG0004-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
-| `VPNG0004-R5` administrative payload containment | postponed beyond Release 1; semantic control surface accepted, lower composition/evidence remains pending |
-| `VPNG9101-R1.R1.R1`, `VPNG9101-R1.R1.R4`, `VPNG9101-R1.R1.R5`, `VPNG9101-R1.R1.R6` lifecycle/config update | start/stop/restart and safe application of changed configuration are represented; alpha may require restart, while any exposed `reload` is an interface mechanism with explicitly defined behavior |
-| `VPNG9101-R1.R1.R2`, `VPNG9101-R1.R1.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
-| `VPNG9101-R2.R1.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
-| `VPNG9101-R2.R1.R2`, `VPNG9101-R2.R1.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
-| `VPNG9101-R2.R1.R3` system failure visibility | RuntimeStatusAgent aggregates current blocking diagnostics without becoming policy owner |
-| `VPNG9001-R1.R1` subtree — implementation quality | applied as cross-cutting architecture rules; target production runtime language boundary is Rust, with early/reference Python allowed under R7.R8.C1 and host-routing helper specifically exempted from automatic Rust cutover under R7.R8.C3 |
+| `VPNG-U001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
+| `VPNG-U001-R4` declarative operation | canonical Release-1 Device/Profile grammar fixed in `config-model.md` and normalized by ConfigurationAdapter; only per-path future firewall selector remains deferred |
+| `VPNG-U001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
+| `VPNG-U001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
+| `VPNG-U001-R2.R1` manual host integration | closed through `host-integration.md`: remote-prefix, Profile-SNAT identity, full-tunnel and host-forwarding prerequisites are explicit without requiring a helper |
+| `VPNG-U001-R5.R1` peaceful host-routing assistance | closed: default-disabled selector scope + `peaceful` policy; EXP-078 selector semantics, EXP-079 absolute STACK bypass, EXP-080 selector-paired preserve+dispatch non-interference, lifecycle cleanup retained from EXP-077 |
+| `VPNG-U001-R5.R2` aggressive host-routing assistance | postponed beyond Release 1; authoritative child `VPNG-U001-R5.R2.R1` closed by EXP-074, continuous recovery/alarm containment remain pending |
+| `VPNG-U001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
+| `VPNG-U001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
+| managed-domain VPN endpoint placement | selected architecture under `VPNG-U001-R1.R3.R2`, `VPNG-U001-R1.R3.C1.R1` and `VPNG-U004-R4.R6`; it is not an independent product requirement |
+| `VPNG-U002-R2` subtree — payload policy | Profile destinations/direction/device_order compile deterministically through PayloadPolicyCalculator |
+| `VPNG-U003-R3.R1`–`VPNG-U003-R3.R5`, `VPNG-U003-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
+| `VPNG-U003-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; Profile selects disabled, Device default, or same-shape Profile override, normalized to a concrete ICMP/IPv4 description before probe runtime |
+| `VPNG-U004-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
+| `VPNG-U004-R5` administrative payload containment | postponed beyond Release 1; semantic control surface accepted, lower composition/evidence remains pending |
+| `VPNG-M001-R1.R1.R1`, `VPNG-M001-R1.R1.R4`, `VPNG-M001-R1.R1.R5`, `VPNG-M001-R1.R1.R6` lifecycle/config update | start/stop/restart and safe application of changed configuration are represented; alpha may require restart, while any exposed `reload` is an interface mechanism with explicitly defined behavior |
+| `VPNG-M001-R1.R1.R2`, `VPNG-M001-R1.R1.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
+| `VPNG-M001-R2.R1.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
+| `VPNG-M001-R2.R1.R2`, `VPNG-M001-R2.R1.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
+| `VPNG-M001-R2.R1.R3` system failure visibility | RuntimeStatusAgent aggregates current blocking diagnostics without becoming policy owner |
+| `VPNG-D001-R1.R1` subtree — implementation quality | applied as cross-cutting architecture rules; target production runtime language boundary is Rust, with early/reference Python allowed under R7.R8.C1 and host-routing helper specifically exempted from automatic Rust cutover under R7.R8.C3 |
 
 # 15. Deliberately omitted machinery
 
@@ -6944,7 +6944,7 @@ requirement currently makes them necessary:
 - universal probe mechanism abstraction beyond the narrow Driver contract;
 - kernel-specific routing allocation objects in upper Managers.
 
-This omission is an implementation of `VPNG9001-R1.R1.R1`, not a claim that such machinery can
+This omission is an implementation of `VPNG-D001-R1.R1.R1`, not a claim that such machinery can
 never become necessary.
 
 # 16. Implementation freedoms and future extensions
@@ -6960,8 +6960,8 @@ The core Device/Profile human-facing configuration contract is now recovered and
 Remaining interface freedom is narrower:
 
 - parser/serialization implementation details that do not change accepted TOML semantics;
-- implementation details of an optional supported `reload` operation, provided its interface behavior and result remain explicit and it does not silently mean full restart; alpha may omit `reload` and apply changed configuration through restart under `VPNG9101-R1.R1.R6`;
-- future per-path Device firewall syntax under `VPNG0001-R1.R4.R2.R1.C1` and `VPNG0001-R4.R4.R6.R2.R5.C1`;
+- implementation details of an optional supported `reload` operation, provided its interface behavior and result remain explicit and it does not silently mean full restart; alpha may omit `reload` and apply changed configuration through restart under `VPNG-M001-R1.R1.R6`;
+- future per-path Device firewall syntax under `VPNG-U001-R1.R4.R2.R1.C1` and `VPNG-U001-R4.R4.R6.R2.R5.C1`;
 - lower implementation details of accepted publication capabilities where architecture
   already defines semantic ownership but packaging/runtime integration may still evolve.
 
@@ -6987,16 +6987,16 @@ Future TCP/UDP/HTTP mechanisms remain outside current scope.
 ## 16.3. User-visible status presentation
 
 Affected requirements:
-- `VPNG9101-R2.R1`;
-- `VPNG9101-R2.R1.R1`;
-- `VPNG9101-R2.R1.R2`;
-- `VPNG9101-R2.R1.R3`;
-- `VPNG9101-R2.R1.R4`;
-- `VPNG9101-R2.R2`;
-- `VPNG9101-R2.R2.R1`;
-- `VPNG9101-R2.R2.R2`;
-- `VPNG9101-R2.R2.R3`;
-- `VPNG9101-R2.R2.R4`.
+- `VPNG-M001-R2.R1`;
+- `VPNG-M001-R2.R1.R1`;
+- `VPNG-M001-R2.R1.R2`;
+- `VPNG-M001-R2.R1.R3`;
+- `VPNG-M001-R2.R1.R4`;
+- `VPNG-M001-R2.R2`;
+- `VPNG-M001-R2.R2.R1`;
+- `VPNG-M001-R2.R2.R2`;
+- `VPNG-M001-R2.R2.R3`;
+- `VPNG-M001-R2.R2.R4`.
 
 Status aggregation semantics and ownership remain defined by `RuntimeStatusAgent`.
 It composes one current authoritative `RuntimeStatusSnapshot` and does not become a second
@@ -7013,7 +7013,7 @@ RuntimeStatusSnapshot
 `RuntimeStatusTextRenderer` is a Direct Calculator. It performs no kernel observation,
 policy inference or lifecycle action. It renders stable Device/Profile identities, current
 confirmed path bindings/effective order and current availability state according to
-`VPNG9101-R2.R2.*`. The report is current-state presentation, not a configuration dump and
+`VPNG-M001-R2.R2.*`. The report is current-state presentation, not a configuration dump and
 not a round-trippable configuration format.
 
 The **delivery mechanism** remains replaceable interface machinery: a release may expose the
@@ -7025,16 +7025,16 @@ serializations remain separate presentations of the same authoritative snapshot.
 ## 16.4. Lifecycle ownership
 
 Affected requirements:
-- `VPNG9101-R1.R1.R1`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R3`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9101-R1.R1.R6`
+- `VPNG-M001-R1.R1.R1`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R3`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-M001-R1.R1.R6`
 
 Lifecycle control semantics and autonomous local reconciliation are now explicit for state
 that an active function retains under authoritative VPN-GATE ownership. The simple
-host-routing helper under `VPNG0001-R5.R1` is deliberately different: after each successful
+host-routing helper under `VPNG-U001-R5.R1` is deliberately different: after each successful
 lifecycle application, ordinary host routing is handed back to administrator control and is
 not part of periodic runtime reconciliation until the next explicit helper lifecycle
 operation.
@@ -7042,7 +7042,7 @@ operation.
 These semantics still do not justify a separate global lifecycle component.
 
 For the first release, VPN provisioning and VPN-specific configuration remain outside
-VPN-GATE ownership by `VPNG0001-R1.R3.C1`. For a supported in-stack VPN process, however,
+VPN-GATE ownership by `VPNG-U001-R1.R3.C1`. For a supported in-stack VPN process, however,
 EXP-049/050 establish the systemd-bounded lifecycle boundary: the administrator supplies the
 stack-specific unit/configuration, systemd supervises its process/cgroup, and deployment stop
 ordering removes the explicitly bound VPN runtime before VPN-GATE destroys the managed

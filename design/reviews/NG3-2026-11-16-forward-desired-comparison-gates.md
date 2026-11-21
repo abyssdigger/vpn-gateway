@@ -5,13 +5,13 @@
 
 ## Requirements
 
-**Implements:** `VPNG0002-R2.R1.R1`, `VPNG0002-R2.R1.R2`,
-`VPNG0002-R2.R3.R3`, `VPNG0002-R2.R5.R1`,
-`VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3`,
-`VPNG0004-R4.R1`, `VPNG0004-R4.R2`, `VPNG0004-R4.R5`.
+**Implements:** `VPNG-U002-R2.R1.R1`, `VPNG-U002-R2.R1.R2`,
+`VPNG-U002-R2.R3.R3`, `VPNG-U002-R2.R5.R1`,
+`VPNG-U001-R1.R3.R2`, `VPNG-U001-R1.R3.R3`,
+`VPNG-U004-R4.R1`, `VPNG-U004-R4.R2`, `VPNG-U004-R4.R5`.
 
-**Constrained by:** `VPNG0002-R2.R3.C1`,
-`VPNG0001-R1.R2.R4.R6.C1`.
+**Constrained by:** `VPNG-U002-R2.R3.C1`,
+`VPNG-U001-R1.R2.R4.R6.C1`.
 
 All referenced ancestry remains closed with required Basis/Purpose/Reason and
 Statements. This unit does not choose user-visible policy.

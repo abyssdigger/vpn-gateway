@@ -11,12 +11,12 @@ or change product behavior.
 
 Applicable requirements:
 
-- `VPNG0007-R7.R1`, `VPNG0007-R7.R1.R1`, `VPNG0007-R7.R2`;
-- `VPNG0007-R7.R3`, `VPNG0007-R7.R3.R1`, `VPNG0007-R7.R3.R2`,
-  `VPNG0007-R7.R3.R3`, `VPNG0007-R7.R3.R5`;
-- `VPNG0007-R7.R4`, `VPNG0007-R7.R5`;
-- `VPNG0007-R7.R6`, `VPNG0007-R7.R6.R1`;
-- `VPNG0007-R7.R7`.
+- `VPNG-U007-R7.R1`, `VPNG-U007-R7.R1.R1`, `VPNG-U007-R7.R2`;
+- `VPNG-U007-R7.R3`, `VPNG-U007-R7.R3.R1`, `VPNG-U007-R7.R3.R2`,
+  `VPNG-U007-R7.R3.R3`, `VPNG-U007-R7.R3.R5`;
+- `VPNG-U007-R7.R4`, `VPNG-U007-R7.R5`;
+- `VPNG-U007-R7.R6`, `VPNG-U007-R7.R6.R1`;
+- `VPNG-U007-R7.R7`.
 
 No requirement Statement, Purpose, Reason or closure label changed in this development block.
 
@@ -154,18 +154,18 @@ Executor components. No unresolved finding blocks publication of this developmen
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
-- `VPNG0007-R7.R1.R1` -> `VPNG9001-R1.R1.R1.R1`
-- `VPNG0007-R7.R2` -> `VPNG9001-R1.R1.R2`
-- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
-- `VPNG0007-R7.R3.R1` -> `VPNG9001-R1.R1.R3.R1`
-- `VPNG0007-R7.R3.R2` -> `VPNG9001-R1.R1.R3.R2`
-- `VPNG0007-R7.R3.R3` -> `VPNG9001-R1.R1.R3.R3`
-- `VPNG0007-R7.R3.R5` -> `VPNG9001-R1.R1.R3.R5`
-- `VPNG0007-R7.R4` -> `VPNG9001-R1.R1.R4`
-- `VPNG0007-R7.R5` -> `VPNG9001-R1.R1.R5`
-- `VPNG0007-R7.R6` -> `VPNG9001-R1.R1.R6`
-- `VPNG0007-R7.R6.R1` -> `VPNG9001-R1.R1.R6.R1`
-- `VPNG0007-R7.R7` -> `VPNG9001-R1.R1.R7`
+- `VPNG-U007-R7.R1` -> `VPNG-D001-R1.R1.R1`
+- `VPNG-U007-R7.R1.R1` -> `VPNG-D001-R1.R1.R1.R1`
+- `VPNG-U007-R7.R2` -> `VPNG-D001-R1.R1.R2`
+- `VPNG-U007-R7.R3` -> `VPNG-D001-R1.R1.R3`
+- `VPNG-U007-R7.R3.R1` -> `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-U007-R7.R3.R2` -> `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-U007-R7.R3.R3` -> `VPNG-D001-R1.R1.R3.R3`
+- `VPNG-U007-R7.R3.R5` -> `VPNG-D001-R1.R1.R3.R5`
+- `VPNG-U007-R7.R4` -> `VPNG-D001-R1.R1.R4`
+- `VPNG-U007-R7.R5` -> `VPNG-D001-R1.R1.R5`
+- `VPNG-U007-R7.R6` -> `VPNG-D001-R1.R1.R6`
+- `VPNG-U007-R7.R6.R1` -> `VPNG-D001-R1.R1.R6.R1`
+- `VPNG-U007-R7.R7` -> `VPNG-D001-R1.R1.R7`
 
 The original IDs in the historical body are intentionally preserved.

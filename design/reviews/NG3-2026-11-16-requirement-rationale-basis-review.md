@@ -74,7 +74,7 @@ Six Constraints were reviewed.
 
 ### F1 — Device/Profile ID grammar used Purpose instead of Reason
 
-**Node:** `VPNG0001-R1.R2.R4.R1.C1`  
+**Node:** `VPNG-U001-R1.R2.R4.R1.C1`  
 **Severity:** semantic-form defect  
 **Disposition:** accepted and fixed
 
@@ -92,7 +92,7 @@ to one simple canonical textual form.
 
 ### F2 — first-release VPN provisioning Reason was too close to its Statement
 
-**Node:** `VPNG0001-R1.R3.C1`  
+**Node:** `VPNG-U001-R1.R3.C1`  
 **Severity:** rationale clarity  
 **Disposition:** accepted and fixed
 
@@ -102,7 +102,7 @@ repeating who performs the work.
 
 ### F3 — ICMP-only first-release Reason mixed cause and intended implementation sequence
 
-**Node:** `VPNG0003-R3.R6.R3.R1.C1`  
+**Node:** `VPNG-U003-R3.R6.R3.R1.C1`  
 **Severity:** rationale clarity  
 **Disposition:** accepted and fixed
 
@@ -114,11 +114,11 @@ path is implemented and validated.
 
 The remaining three Reasons are adequate:
 
-- `VPNG0001-R1.R2.R4.R6.C1` — historical grammar is genuinely unclosed; old spellings
+- `VPNG-U001-R1.R2.R4.R6.C1` — historical grammar is genuinely unclosed; old spellings
   therefore cannot become normative by inheritance;
-- `VPNG0001-R1.R3.C2` — the support limitation is a direct consequence of the already
+- `VPNG-U001-R1.R3.C2` — the support limitation is a direct consequence of the already
   accepted isolated managed-network-domain boundary;
-- `VPNG0002-R2.R3.C1` — the Release 1 inbound/bidirectional capacity restriction is tied
+- `VPNG-U002-R2.R3.C1` — the Release 1 inbound/bidirectional capacity restriction is tied
   to an explicit unproven return-path semantic and named future evidence gate.
 
 No Constraint is being used as an unexplained root-level product requirement.

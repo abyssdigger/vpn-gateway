@@ -154,7 +154,7 @@ of EXP-049 PASS and EXP-050.
 
 ## Requirement disposition
 
-### `VPNG0001-R1.R3.C1.R1.R1`
+### `VPNG-U001-R1.R3.C1.R1.R1`
 
 The Requirement remains desired and appears reachable.
 
@@ -173,7 +173,7 @@ This is not `broken`: the Requirement itself remains correct.
 
 **BLOCKED.**
 
-`VPNG0007-R7.R7.R1` explicitly requires EXP-049 PASS before dependent bounded-VPN
+`VPNG-U007-R7.R7.R1` explicitly requires EXP-049 PASS before dependent bounded-VPN
 lifecycle experimentation.
 
 Endpoint placement/binding partial success does not satisfy that prerequisite.
@@ -196,7 +196,7 @@ Pending: **none**.
 
 ### `[rejected_closure]`
 
-- `VPNG0001-R1.R3.C1.R1.R1` — EXP-049 failed because a real in-stack OpenVPN transport is
+- `VPNG-U001-R1.R3.C1.R1.R1` — EXP-049 failed because a real in-stack OpenVPN transport is
   blocked by the current terminal local policy after activation.
 
 ## Next logical unit
@@ -236,6 +236,6 @@ the VPN transport needed to keep that real path usable.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R7.R1` -> `VPNG9001-R1.R1.R7.R1`
+- `VPNG-U007-R7.R7.R1` -> `VPNG-D001-R1.R1.R7.R1`
 
 The original IDs in the historical body are intentionally preserved.

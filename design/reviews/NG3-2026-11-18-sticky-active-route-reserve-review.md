@@ -89,7 +89,7 @@ If the active path itself fails, a route change is already an availability failo
 Release 1 does not promise preservation of source IP/port/NAT identity, transport session
 continuity, buffering/replay or seamless flow migration across that boundary.
 
-Managed-stack return affinity for remote-initiated traffic under `VPNG0002-R2.R6` is a
+Managed-stack return affinity for remote-initiated traffic under `VPNG-U002-R2.R6` is a
 different responsibility and remains unchanged.
 
 ## Simplification review
@@ -127,20 +127,20 @@ code provides a useful basis.
 
 Changed/reopened and now architecturally covered:
 
-- `VPNG0003-R3`;
-- `VPNG0003-R3.R4`;
-- `VPNG0003-R3.R5.R2`;
-- `VPNG0003-R3.R7`;
-- `VPNG0003-R3.R8`;
-- `VPNG0003-R3.R8.R1`;
-- `VPNG0003-R3.R8.C1`.
+- `VPNG-U003-R3`;
+- `VPNG-U003-R3.R4`;
+- `VPNG-U003-R3.R5.R2`;
+- `VPNG-U003-R3.R7`;
+- `VPNG-U003-R3.R8`;
+- `VPNG-U003-R3.R8.R1`;
+- `VPNG-U003-R3.R8.C1`.
 
 Added and architecturally covered:
 
-- `VPNG0003-R3.R4.R1` — explicit Profile-local reserve behavior;
-- `VPNG0003-R3.R4.R1.R1` — canonical `:reserve` membership grammar and scope.
+- `VPNG-U003-R3.R4.R1` — explicit Profile-local reserve behavior;
+- `VPNG-U003-R3.R4.R1.R1` — canonical `:reserve` membership grammar and scope.
 
-The Purpose/Reason of each changed node is supported by the existing `VPNG0003` path
+The Purpose/Reason of each changed node is supported by the existing `VPNG-U003` path
 preference/availability ancestry and by the explicit user decision in this design cycle.
 No new primary requirement is introduced.
 

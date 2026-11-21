@@ -8,7 +8,7 @@
 ## Scope
 
 This review records the current human-agreed findings reached while cleaning the obsolete
-`VPNG0002-R2.R3.R1` / `VPNG0002-R2.R3.R2` direction decomposition and revalidating the
+`VPNG-U002-R2.R3.R1` / `VPNG-U002-R2.R3.R2` direction decomposition and revalidating the
 host-routing architecture/evidence that used to depend on it.
 
 The review deliberately does **not** create requirement IDs, choose final configuration
@@ -211,7 +211,7 @@ This keeps both current traceability and historical truth intact.
 The current `Host managed-destination routing` architecture section is in a transitional
 state after removal of the obsolete direction decomposition.
 
-Its remaining references (`VPNG0002-R2.R6` and managed-domain isolation requirements)
+Its remaining references (`VPNG-U002-R2.R6` and managed-domain isolation requirements)
 justify individual return/ownership properties but do not honestly justify the entire
 automatic host-routing owner.
 

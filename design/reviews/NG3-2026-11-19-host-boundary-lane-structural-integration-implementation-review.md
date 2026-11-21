@@ -23,10 +23,10 @@ fail-fast.
 
 Implements or supports:
 
-- `VPNG0001-R1.R2.R4.R4.R4`;
-- `VPNG0001-R1.R2.R4.R4.R4.R1`;
-- `VPNG0004-R4.R6.R1.R6`;
-- `VPNG0004-R4.R6.R1.R6.R1`;
+- `VPNG-U001-R1.R2.R4.R4.R4`;
+- `VPNG-U001-R1.R2.R4.R4.R4.R1`;
+- `VPNG-U004-R4.R6.R1.R6`;
+- `VPNG-U004-R4.R6.R1.R6.R1`;
 - the selected EXP-064 host-boundary behavior-lane architecture.
 
 The lane remains lower infrastructure and does not become a user-visible path or
@@ -162,10 +162,10 @@ defaults from VPN path routes without consulting desired state.
 
 Resolved historical links remain:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`;
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`;
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 ### unreal
 
@@ -193,7 +193,7 @@ The next logical block is the authoritative host-side behavior-lane owner.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

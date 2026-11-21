@@ -123,11 +123,11 @@ without an accepted need and is not implied by the payload/publication PortBundl
 The correction refines already closed requirements rather than introducing a new independent
 feature root:
 
-- `VPNG0001-R1.R2.R4.R6.R2.R1` — Device firewall one-line grammar now uses
+- `VPNG-U001-R1.R2.R4.R6.R2.R1` — Device firewall one-line grammar now uses
   `port-bundle` on source/destination selectors;
-- `VPNG0001-R1.R2.R4.R6.R3` — server publication now uses host/internal port bundles and
+- `VPNG-U001-R1.R2.R4.R6.R3` — server publication now uses host/internal port bundles and
   defines identity/positional mapping;
-- `VPNG0001-R1.R2.R5.R2` — strict validation continues to reject duplicate, overlapping,
+- `VPNG-U001-R1.R2.R5.R2` — strict validation continues to reject duplicate, overlapping,
   reversed and otherwise ambiguous ranges.
 
 The correction does not change Profile permissions, Device direction semantics, NAT

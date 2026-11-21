@@ -33,7 +33,7 @@ human-facing checkpoint message.
   - primary Requirement = `Basis / Основание + Statement`;
   - derived Requirement = `Purpose + Statement`;
   - Constraint = `Reason + Statement`;
-- introduced stable primary roots such as `VPNG0003` with typed derived paths;
+- introduced stable primary roots such as `VPNG-U003` with typed derived paths;
 - added an explicit actor-completeness review gate;
 - synchronized `CONTINUOUS-DEVELOPMENT.md` with Basis/Purpose/Reason and actor semantics;
 - made immediate GitHub publication of every commit an explicit

@@ -11,10 +11,10 @@ review.
 
 ## Requirements
 
-**Implements / constrains future design:** `VPNG0002-R2.R1.R2`,
-`VPNG0002-R2.R3.R3`, `VPNG0002-R2.R5.R1`,
-`VPNG0001-R1.R2.R4.R6.R2`, `VPNG0004-R4.R1`,
-`VPNG0004-R4.R3.R2`.
+**Implements / constrains future design:** `VPNG-U002-R2.R1.R2`,
+`VPNG-U002-R2.R3.R3`, `VPNG-U002-R2.R5.R1`,
+`VPNG-U001-R1.R2.R4.R6.R2`, `VPNG-U004-R4.R1`,
+`VPNG-U004-R4.R3.R2`.
 
 ## Findings
 
