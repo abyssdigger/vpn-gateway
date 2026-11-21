@@ -2056,7 +2056,7 @@ Implementation
 
     design/NG3/code/python/rou/host_publication_adapter.py — semantic Adapter wrapper.
     design/NG3/code/python/rou/host_publication_policy.py — pure desired projection.
-    design/NG3/code/python/rou/linux_host_publication.py — Linux backend.
+    design/NG3/code/python/rou/linux_host_publication.py — concrete Linux Driver for host nft/link/address/sysctl interaction.
     design/NG3/code/python/rou/alpha_runtime.py — current Release-1 runtime composition of host publication after managed local admission.
 
 

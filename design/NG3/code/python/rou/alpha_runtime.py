@@ -79,7 +79,7 @@ from .host_publication_adapter import HostPublicationAdapter
 from .linux_host_publication import (
     HostPublicationConvergenceResult,
     HostPublicationConvergenceStatus,
-    LinuxHostPublicationBackend,
+    LinuxHostPublicationDriver,
 )
 from .linux_nft_scaffold import (
     LinuxNftScaffoldBackend,
@@ -463,7 +463,7 @@ def reconcile_alpha_payload_once(
             and gate is ForwardingGateState.ENABLED
         ):
             host_result = HostPublicationAdapter(
-                LinuxHostPublicationBackend(runner)
+                LinuxHostPublicationDriver(runner)
             ).apply(host_publication_desired)
             if host_result.confirmed:
                 return AlphaReconcileResult(
@@ -508,7 +508,7 @@ def reconcile_alpha_payload_once(
     )
     if activation.ready:
         host_result = HostPublicationAdapter(
-            LinuxHostPublicationBackend(runner)
+            LinuxHostPublicationDriver(runner)
         ).apply(host_publication_desired)
         if host_result.confirmed:
             return AlphaReconcileResult(
@@ -753,7 +753,7 @@ def run_alpha_runtime(
 
         host_publication_desired = prepared.build_host_publication_desired()
         host_publication_adapter = HostPublicationAdapter(
-            LinuxHostPublicationBackend(runner)
+            LinuxHostPublicationDriver(runner)
         )
         host_start = host_publication_adapter.apply(host_publication_desired)
         if not host_start.confirmed:
@@ -882,7 +882,7 @@ def run_alpha_runtime(
         write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
         _notify_systemd("STOPPING=1\nSTATUS=VPN-GATE alpha stopping")
         host_cleanup = HostPublicationAdapter(
-            LinuxHostPublicationBackend(runner)
+            LinuxHostPublicationDriver(runner)
         ).cleanup()
         stopped = stop_controller_once(
             startup.session,

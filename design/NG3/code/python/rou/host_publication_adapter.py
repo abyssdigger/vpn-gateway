@@ -13,7 +13,7 @@ from .host_publication_policy import HostPublicationDesiredState
 from .linux_host_publication import (
     HostPublicationConvergenceResult,
     HostPublicationPhysicalObservation,
-    LinuxHostPublicationBackend,
+    LinuxHostPublicationDriver,
     converge_host_publication_once,
 )
 
@@ -22,10 +22,10 @@ from .linux_host_publication import (
 class HostPublicationAdapter:
     """Own the semantic observe/apply/cleanup boundary for host publication."""
 
-    backend: LinuxHostPublicationBackend
+    driver: LinuxHostPublicationDriver
 
     def observe(self) -> HostPublicationPhysicalObservation:
-        return self.backend.observe()
+        return self.driver.observe()
 
     def apply(
         self,
@@ -33,10 +33,10 @@ class HostPublicationAdapter:
     ) -> HostPublicationConvergenceResult:
         if not isinstance(desired, HostPublicationDesiredState):
             raise ValueError("desired must be HostPublicationDesiredState")
-        return converge_host_publication_once(self.backend, desired)
+        return converge_host_publication_once(self.driver, desired)
 
     def cleanup(self) -> HostPublicationConvergenceResult:
         return converge_host_publication_once(
-            self.backend,
+            self.driver,
             HostPublicationDesiredState(()),
         )

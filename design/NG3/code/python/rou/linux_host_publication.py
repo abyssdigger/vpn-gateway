@@ -1,6 +1,6 @@
 """Strict host-namespace nft Driver/Executor for server publication.
 
-Architecture: structured Annex E E.001 HostPublicationAdapter Linux backend.
+Architecture: structured Annex E E.001 HostPublicationAdapter lower Linux Driver.
 The component spec owns normative requirement traceability.
 """
 
@@ -70,7 +70,7 @@ class HostPublicationConvergenceResult:
 
 
 @dataclass(slots=True)
-class LinuxHostPublicationBackend:
+class LinuxHostPublicationDriver:
     runner: NftScriptRunner
     network_namespace: str | None = None
 
@@ -172,16 +172,16 @@ class LinuxHostPublicationBackend:
 
 
 def converge_host_publication_once(
-    backend: LinuxHostPublicationBackend,
+    driver: LinuxHostPublicationDriver,
     desired: HostPublicationDesiredState,
 ) -> HostPublicationConvergenceResult:
-    if not isinstance(backend, LinuxHostPublicationBackend):
-        raise ValueError("backend must be LinuxHostPublicationBackend")
+    if not isinstance(driver, LinuxHostPublicationDriver):
+        raise ValueError("driver must be LinuxHostPublicationDriver")
     if not isinstance(desired, HostPublicationDesiredState):
         raise ValueError("desired must be HostPublicationDesiredState")
 
     try:
-        initial = backend.observe()
+        initial = driver.observe()
     except Exception as exc:
         return HostPublicationConvergenceResult(
             status=HostPublicationConvergenceStatus.FAILED,
@@ -201,7 +201,7 @@ def converge_host_publication_once(
         )
 
     try:
-        prerequisites = backend.prerequisite_diagnostics(desired)
+        prerequisites = driver.prerequisite_diagnostics(desired)
     except Exception as exc:
         return HostPublicationConvergenceResult(
             status=HostPublicationConvergenceStatus.FAILED,
@@ -240,8 +240,8 @@ def converge_host_publication_once(
         )
 
     try:
-        backend.replace(desired)
-        final = backend.observe()
+        driver.replace(desired)
+        final = driver.observe()
     except Exception as exc:
         return HostPublicationConvergenceResult(
             status=HostPublicationConvergenceStatus.FAILED,
@@ -268,7 +268,7 @@ def converge_host_publication_once(
             diagnostic="host publication fresh postcondition does not match desired state",
         )
     try:
-        final_prerequisites = backend.prerequisite_diagnostics(desired)
+        final_prerequisites = driver.prerequisite_diagnostics(desired)
     except Exception as exc:
         return HostPublicationConvergenceResult(
             status=HostPublicationConvergenceStatus.FAILED,

@@ -16,7 +16,7 @@ from rou.linux_host_publication import (
     HOST_PUBLICATION_TABLE,
     HOST_PUBLICATION_TABLE_COMMENT,
     HostPublicationConvergenceStatus,
-    LinuxHostPublicationBackend,
+    LinuxHostPublicationDriver,
     converge_host_publication_once,
 )
 from rou.local_publication_policy import PublicationProtocol
@@ -151,21 +151,21 @@ class FakeRunner:
 
 class LinuxHostPublicationTests(unittest.TestCase):
     def test_exact_observation_is_confirmed(self):
-        backend = LinuxHostPublicationBackend(FakeRunner(nft=ruleset()))
+        backend = LinuxHostPublicationDriver(FakeRunner(nft=ruleset()))
         result = converge_host_publication_once(backend, DESIRED)
         self.assertEqual(result.status, HostPublicationConvergenceStatus.CONFIRMED)
         self.assertFalse(result.mutation_attempted)
 
     def test_disabled_forwarding_is_unready_and_never_mutates_positive_state(self):
         runner = FakeRunner(forwarding="0")
-        backend = LinuxHostPublicationBackend(runner)
+        backend = LinuxHostPublicationDriver(runner)
         result = converge_host_publication_once(backend, DESIRED)
         self.assertEqual(result.status, HostPublicationConvergenceStatus.UNREADY)
         self.assertEqual(runner.scripts, [])
 
     def test_absent_owner_is_created_and_freshly_verified(self):
         runner = FakeRunner()
-        backend = LinuxHostPublicationBackend(runner)
+        backend = LinuxHostPublicationDriver(runner)
         result = converge_host_publication_once(backend, DESIRED)
         self.assertEqual(result.status, HostPublicationConvergenceStatus.APPLIED)
         self.assertTrue(result.confirmed)
@@ -175,7 +175,7 @@ class LinuxHostPublicationTests(unittest.TestCase):
 
     def test_cleanup_does_not_require_forwarding(self):
         runner = FakeRunner(forwarding="0", nft=ruleset())
-        backend = LinuxHostPublicationBackend(runner)
+        backend = LinuxHostPublicationDriver(runner)
         result = converge_host_publication_once(
             backend,
             HostPublicationDesiredState(()),
@@ -188,7 +188,7 @@ class LinuxHostPublicationTests(unittest.TestCase):
     def test_missing_interface_selector_is_unready(self):
         runner = FakeRunner(links=[{"ifname": "eth1", "flags": ["UP"]}])
         result = converge_host_publication_once(
-            LinuxHostPublicationBackend(runner),
+            LinuxHostPublicationDriver(runner),
             DESIRED,
         )
         self.assertEqual(result.status, HostPublicationConvergenceStatus.UNREADY)
@@ -198,7 +198,7 @@ class LinuxHostPublicationTests(unittest.TestCase):
     def test_down_interface_selector_is_unready(self):
         runner = FakeRunner(links=[{"ifname": "eth0", "flags": ["BROADCAST"]}])
         result = converge_host_publication_once(
-            LinuxHostPublicationBackend(runner),
+            LinuxHostPublicationDriver(runner),
             DESIRED,
         )
         self.assertEqual(result.status, HostPublicationConvergenceStatus.UNREADY)
@@ -214,7 +214,7 @@ class LinuxHostPublicationTests(unittest.TestCase):
             internal_port=8443,
         )
         result = converge_host_publication_once(
-            LinuxHostPublicationBackend(FakeRunner()),
+            LinuxHostPublicationDriver(FakeRunner()),
             HostPublicationDesiredState((ipv4_rule,)),
         )
         self.assertEqual(result.status, HostPublicationConvergenceStatus.UNREADY)
@@ -236,7 +236,7 @@ class LinuxHostPublicationTests(unittest.TestCase):
         )
         runner = FakeRunner(nft=json.dumps(root))
         result = converge_host_publication_once(
-            LinuxHostPublicationBackend(runner),
+            LinuxHostPublicationDriver(runner),
             DESIRED,
         )
         self.assertEqual(result.status, HostPublicationConvergenceStatus.CONFLICT)

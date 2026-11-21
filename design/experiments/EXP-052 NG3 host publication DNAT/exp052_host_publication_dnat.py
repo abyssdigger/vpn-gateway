@@ -14,7 +14,7 @@ from rou.host_publication_policy import (
     build_host_publication_desired,
 )
 from rou.linux_host_publication import (
-    LinuxHostPublicationBackend,
+    LinuxHostPublicationDriver,
     converge_host_publication_once,
 )
 from rou.linux_nft_scaffold import SubprocessNftRunner
@@ -271,15 +271,15 @@ def publication_desired() -> HostPublicationDesiredState:
     )
 
 
-def publication_backend() -> LinuxHostPublicationBackend:
-    return LinuxHostPublicationBackend(
+def publication_backend() -> LinuxHostPublicationDriver:
+    return LinuxHostPublicationDriver(
         SubprocessNftRunner(),
         network_namespace=HOST,
     )
 
 
 def assert_inventory(
-    backend: LinuxHostPublicationBackend,
+    backend: LinuxHostPublicationDriver,
     desired: HostPublicationDesiredState,
 ) -> None:
     observed = backend.observe()
