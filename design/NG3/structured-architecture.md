@@ -31,7 +31,7 @@ Transition Space остается полноценным Space: он может 
 Имена в первом проходе рабочие; границы важнее конкретного названия.
 
 1. `STACK` *Внутренняя среда VPN-GATE, в которой живут верхнеуровневая policy, orchestration и другие core-компоненты продукта.*
-2. `STACK-HOST transition` *Переходный Space между STACK и host-side сетевой средой; отдельный заменяемый «тамбур» со своим состоянием и контрактами.*
+2. `Ordinary-side transition` *Прозрачный L3-переход между `Private network` и ordinary host-side сетевой средой; отдельный заменяемый «тамбур», основная собственная семантика которого состоит в lifecycle/materialization границы.*
 3. `Private network` *Отдельная управляемая и наблюдаемая из STACK сетевая реальность, содержащая принадлежащее VPN-GATE сетевое состояние и machinery доступа к нему.*
 4. `VPN external ends` *Совокупная внешняя VPN-среда; для архитектуры VPN-GATE существенна прежде всего обращенная к нему сторона ее VPN-интерфейсов/endpoints.*
 5. `Helper-managed host` *Часть host state, которой VPN-GATE явно управляет через свои host-side helpers.*
@@ -455,6 +455,106 @@ resident/artifact/interaction или component spec; активный structured
 
 Ниже пока сохранен существующий inline `Component addenda` для `Private network` как
 миграционное состояние до отдельного structural pass.
+
+
+
+# Ordinary-side transition
+
+Прозрачный L3-переход между `Private network` и ordinary host-side сетевой средой.
+Transition владеет «дверью», но не traffic-selection policy соседних Spaces. После успешного
+establishment он не должен добавлять самостоятельную data-plane semantics: для
+`Private network` открытый переход наблюдается как прямая host boundary, а для host-side
+среды — как explicit managed L3 endpoint.
+
+Текущая Release-1 realization — routed veth + Proxy ARP. Конкретный link type является
+backend detail: архитектурный контракт перехода допускает другую lower realization без
+изменения Device/Profile semantics или соседних Spaces.
+
+API
+
+    @ManagedNetworkDomainLifecycle.observe_transition(...) — получить fresh exact/absent/conflict projection текущей boundary realization.
+    @ManagedNetworkDomainLifecycle.establish_transition(...) — материализовать отсутствующий transition и подтвердить exact usable postcondition.
+    @ManagedNetworkDomainLifecycle.remove_transition(...) — удалить owned transition realization и подтвердить отсутствие.
+
+Отдельного `open/closed` API сейчас нет. `established` означает, что требуемый L3 handoff
+уже пригоден для передачи IP. Возможный будущий gate для aggressive helper не проектируется
+до появления отдельного принятого контракта.
+
+Residents
+
+1. `@ManagedNetworkDomainLifecycle <partial>` *Текущая lifecycle machinery, transition-проекция которой наблюдает, устанавливает и удаляет managed L3 boundary realization. Та же technical identity сейчас также обслуживает materialization `Private network`, поэтому marker является decomposition finding.*
+
+Artifacts
+
+1. `managed L3 boundary realization` *(observed, managed)* — целостная установленная ordinary-side L3 «дверь». Current exact postcondition включает обе стороны selected boundary backend, их operational/backend invariants и host-side reachability contribution, необходимую самой границе. Конкретные veth peer identities, Proxy ARP, `rp_filter` и другие backend-specific детали не поднимаются в самостоятельные Artifacts, пока ими не требуется независимо управлять.
+
+Состояния Artifact на этом уровне:
+
+```text
+absent
+established
+conflict
+```
+
+`established` включает exact backend invariants и usable bidirectional IP handoff.
+`conflict` означает, что наблюдаемая reality не может быть безопасно принята как owned
+exact realization. Текущий lifecycle не обязан ремонтировать произвольную partial realization
+in place.
+
+Не принадлежат этому Space:
+
+- stack-local IPv4 identity — собственная identity `Private network`;
+- private-side default routing decision toward ordinary side — routing state `Private network`;
+- remote Profile destination/SNAT routing selection на host — `Helper-managed host` либо
+  administrator-owned host state;
+- host-global forwarding/firewall/NAT — ordinary host ownership, если отдельный helper
+  contract явно не принимает конкретную часть этого state.
+
+Interactions
+
+| From | Interaction | To |
+| --- | --- | --- |
+| `STACK` | lifecycle `observe / establish / remove` | `@ManagedNetworkDomainLifecycle <partial>` |
+| `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove exact boundary state | `managed L3 boundary realization` |
+| `Private network.ordinary-side IP portal` | bidirectional IP handoff | `managed L3 boundary realization` |
+| `managed L3 boundary realization` | bidirectional IP handoff | `Ambient host and external world` |
+| `Helper-managed host` | routes selected host traffic toward the explicit managed host endpoint | `managed L3 boundary realization` |
+
+Finding: current `ManagedNetworkDomain` lifecycle transaction crosses the
+`Private network` / `Ordinary-side transition` boundary. Its existing preflight therefore
+treats `namespace present XOR host boundary present` as one structural failure although
+the decomposed architecture admits an independently present Private network materialization
+with absent transition. This is a concrete candidate for later architecture/code
+decomposition, not a reason to merge the Spaces.
+
+Component diagram
+
+```text
++---------------------+
+|        STACK        |
++----------+----------+
+           |
+           | lifecycle
+           v
++----------+--------------------------------------------------+
+| Ordinary-side transition                                   |
+|                                                             |
+| @ManagedNetworkDomainLifecycle <partial>                    |
+|           |                                                 |
+|           | observe / establish / remove                    |
+|           v                                                 |
+| [ managed L3 boundary realization ]                         |
+|          ^                         ^                        |
++----------|-------------------------|------------------------+
+           | bidirectional IP        | selected host traffic /
+           | handoff                 | host-side IP handoff
+           |                         |
++----------+----------+    +---------+------------------------+
+|   Private network   |    | Helper-managed / ambient host    |
+| ordinary-side       |    |                                 |
+| IP portal           |    |                                 |
++---------------------+    +----------------------------------+
+```
 
 
 # Private network
