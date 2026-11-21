@@ -3,7 +3,7 @@
 **Status:** non-normative research artifact  
 **Branch:** `ng3-research-20261120-requirement-purpose-parent-consistency-30m`  
 **Baseline:** main snapshot 145 `623a688e4080de56e5ac14675ffca028c3865d18`  
-**Current research draft:** provisional 184-node tree in
+**Current research draft:** provisional 181-node tree in
 `NG3-2026-11-20-purpose-parent-corrected-requirements-draft.md`
 
 ## Главный вывод
@@ -23,8 +23,6 @@ requirement tree**.
 - current architecture/configuration/registry documents должны получить новый requirement
   trace только после принятия draft как нормативного дерева.
 
-Два вопроса остаются открыты: priority-only continuity и reload. Их impact ниже выделен отдельно.
-
 ## Принятый draft remap и ожидаемый эффект
 
 | Область | Draft owner | Ожидаемый эффект |
@@ -40,6 +38,8 @@ requirement tree**.
 | Host-state safety | mechanism-neutral `VPNG0004-R4.R6` | **Very high trace / near-zero runtime.** Managed domain/netns/nft остаются выбранной архитектурой, но должны ссылаться на product invariants/functions, а не на удалённый mechanism requirement |
 | Protective mode | `VPNG0004-R5`; Release-1 limitation `.C1` | **Low current code / medium docs.** Capability остаётся postponed; future aggressive-helper composition получает честный safety owner |
 | Return-flow stability | `VPNG0003-R4` | **Medium trace / low code.** Existing same-path forwarding behavior сохраняется; causal owner становится multi-path predictability, параллельно baseline/availability preference |
+| Priority-only continuity | `VPNG0003-R3.R9` | **Medium trace / zero intended behavior change.** Non-disruptive reorder guarantee сохраняется; route-copy/staging implementation detail удалён из requirement semantics |
+| Configuration update | `VPNG0005`, `VPNG0005-R5`, `VPNG0005-R5.R6`; отдельный reload requirement удалён | **Low-medium docs / low current code.** Alpha по-прежнему может применять новую конфигурацию через restart; обязательной операции `reload` нет |
 
 ## Архитектура: что меняется по смыслу
 
@@ -114,18 +114,18 @@ trace должен использовать `VPNG0001-R1.R3.C1.R1.R2`,
 
 ## Historical evidence policy
 
-Не следует массово переписывать:
+Не следует массово переписывать исторические review и сохранённые experiment result files:
+они описывают requirement IDs и reasoning, существовавшие в момент проведения работы.
+Переписывание их фактического содержания задним числом уничтожило бы provenance.
 
-- `design/reviews/NG3-2026-...`;
-- `design/experiments/EXP-.../README.md`;
-- сохранённые experiment result files.
+Для experiment dossier действует отдельное правило `PROJECT-CONVENTIONS.md` §5.1: если
+ссылающийся R/C удалён, `README.md` получает `## Historical requirement context` с его
+дословной исходной compact-form формулировкой, а текущая `## Requirement traceability`
+указывает действующие продуктовые обязательства. Такая поясняющая запись не переписывает
+технический Result.
 
-Они описывают requirement IDs и reasoning, существовавшие в момент проведения работы.
-Переписывание задним числом уничтожило бы provenance.
-
-Вместо этого current architecture/registries должны фиксировать, какой новый requirement
-использует сохранённое evidence и что именно из старого evidence остаётся применимым после
-semantic remap.
+Current architecture/registries должны фиксировать, какой новый requirement использует
+сохранённое evidence и что именно из старого evidence остаётся применимым после semantic remap.
 
 ## Functional code impact accepted so far
 
@@ -148,16 +148,11 @@ semantic remap.
 - managed-domain implementation:
   `managed_network_domain.py`, controller lifecycle, managed-netns routing/nft owners.
 
-Код меняется только если один из оставшихся двух human decisions меняет observable
-Statement либо если trace review обнаружит, что текущая реализация была необходима только
-удалённому implementation-specific requirement и не нужна новым product invariants.
-
-## Impact оставшихся двух решений
-
-| Finding | Если только исправить placement | Если изменить semantics |
-| --- | --- | --- |
-| `VPNG0004-R4.R3.R1` priority continuity | **Medium trace / zero code** | **High route-priority behavior impact** if non-disruptive continuity guarantee is removed |
-| `VPNG0005-R5.R6.R4` reload | **Low docs** | **Low current code**: alpha reload отсутствует |
+Код меняется только если итоговый trace review обнаружит, что текущая реализация была
+необходима только удалённому implementation-specific requirement и не нужна новым product
+invariants. Последние два product-holder решения сами по себе не требуют изменения уже
+работающего поведения: continuity-гарантия сохранена, а обновление конфигурации в alpha может
+по-прежнему выполняться через restart.
 
 ## Итоговая оценка
 
