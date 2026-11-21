@@ -381,14 +381,54 @@ Architectural decisions
 
 ### VPNPathAdapter
 
-Adapter наблюдает уже существующие в Private network concrete VPN endpoints и проверяет их
-соответствие logical VPN-path intent. Он не создает, не перемещает и не конфигурирует VPN
-session/endpoint.
+Adapter является boundary между logical VPN-path semantics и уже provisioned concrete VPN
+endpoint внутри Private network. Он наблюдает/проверяет lower-domain facts, но не создает и
+не управляет VPN session как таковой.
+
+**Implements:**
+- `VPNG0001-R1.R3.R1`
+- `VPNG0001-R1.R3.R2`
+- `VPNG0001-R1.R3.R3`
+- `VPNG0001-R1.R3.R4`
+- `VPNG0001-R1.R3.R4.R1`
+- `VPNG0001-R1.R3.R4.R2`
+- `VPNG0001-R1.R3.R4.R3`
+- `VPNG0001-R1.R3.R4.R3.R1`
+- `VPNG0001-R1.R3.R4.R4`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R5`
 
 API
 
-    @observe_device_endpoints(...) — получить свежие candidate endpoints из managed domain.
-    @verify_path_binding(...) — подтвердить current endpoint для logical path либо вернуть absent/ambiguous/unusable result.
+    @observe_device_endpoints(...) — получить свежие candidate endpoints из Private network.
+    @verify_path_binding(...) — подтвердить current endpoint для logical path либо вернуть absent/ambiguous/wrong-domain/unusable result.
+
+Architectural decisions
+
+1. `Observation, not provisioning`
+   *Adapter только наблюдает и проверяет уже существующий endpoint. Создание VPN session, credentials, protocol configuration и помещение endpoint в Private network принадлежат внешней VPN integration/admin side.*
+
+2. `Fresh authoritative observation`
+   *Каждое observation получает новый полный snapshot relevant endpoint inventory. Periodic timer является только wakeup mechanism; cache/generation registry не становится source of truth.*
+
+3. `Failure is not absence`
+   *Command/parse/observation failure возвращается как observation failure и не превращается в пустой endpoint set. Неизвестное состояние нельзя интерпретировать как доказанное отсутствие.*
+
+4. `Concrete endpoint identity`
+   *Current endpoint различается по concrete interface generation, включая exact `(ifname, ifindex)`. Same-name replacement не наследует current binding автоматически.*
+
+5. `Binding postcondition`
+   *Успешный binding должен доказать, что endpoint находится в Private network, соответствует normalized logical-path intent, выбран однозначно и не является superseded generation. Новый endpoint становится current только после нового observation+verification.*
+
+6. `No upper policy ownership`
+   *Adapter не выбирает Profile policy, Device preference, payload eligibility или availability health и не определяет human configuration grammar.*
+
+7. `Optional transport provenance`
+   *Если supported integration может доказать transport endpoint provenance, факт привязывается к exact current `PathBinding`, а не к стабильному `LogicalPathId`. Provenance нельзя угадывать из interface prefix/name, inner peer, ambient routes или другого unrelated lower fact; при отсутствии достаточного evidence он остается absent/unresolved.*
+
+Маршрутная gateway/onlink realization из current binding намеренно пока не включена в этот
+spec: flat architecture требует такой lower integration fact, но точная component ownership
+этого контракта еще не установлена в structured tree.
 
 ### ForwardingGate
 
