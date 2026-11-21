@@ -6,6 +6,16 @@ COMPLETE — **FAIL**. See `EXP-063-result-20261118.md`.
 
 ## Historical requirement context
 
+### Requirement ID migration
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R3.R4` -> `VPNG9001-R1.R1.R3.R4`
+- `VPNG0007-R7.R3.R4.R1` -> `VPNG9001-R1.R1.R3.R4.R1`
+
+The original IDs in the historical body are intentionally preserved.
+
 When this experiment was prepared, the then-current requirement tree contained:
 
 - **[VPNG0001-R1.R2.R4.R4.R4]** *Чтобы Profile мог явно задавать требуемое представление source address для уже разрешённого VPN→ordinary traffic, не заставляя пользователя воспроизводить внутреннюю NAT-механику VPN-GATE вручную.* | VPN-GATE должен позволять пользователю для Profile явно запросить source NAT уже разрешённого VPN→ordinary payload перед его выходом из managed network domain: без такого запроса payload должен выходить из managed domain с исходным remote source address, а при запросе — с выбранной для Profile IPv4 SNAT identity. Эта функция определяет source identity на managed boundary и сама по себе не обещает последующую host-side маршрутизируемость, firewall policy или внешний NAT. [`closed`]

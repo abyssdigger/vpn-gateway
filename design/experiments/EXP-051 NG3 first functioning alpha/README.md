@@ -6,6 +6,20 @@ Technical result and disposition are unchanged by this traceability annotation.
 
 ## Historical requirement context
 
+### Requirement ID migration
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.R1` -> `VPNG9101-R1.R1.R1`
+- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+- `VPNG0005-R5.R3` -> `VPNG9101-R1.R1.R3`
+- `VPNG0005-R5.R6.R2` -> `VPNG9101-R1.R1.R6.R2`
+- `VPNG0005-R5.R6.R3` -> `VPNG9101-R1.R1.R6.R3`
+- `VPNG0007-R7.R7` -> `VPNG9001-R1.R1.R7`
+
+The original IDs in the historical body are intentionally preserved.
+
 When this experiment was prepared, the then-current requirement tree contained:
 
 - **[VPNG0001-R1.R2]** *Чтобы эксплуатация продукта не зависела от ручного воспроизведения его внутренней сетевой механики оператором.* | Пользователь должен задавать требуемое поведение через продуктовую конфигурацию и управляющие операции VPN-GATE; внутренние сетевые действия должны выполняться продуктом. [`closed`]

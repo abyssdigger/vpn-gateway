@@ -7,6 +7,15 @@ portability evidence.
 
 ## Historical requirement context
 
+### Requirement ID migration
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R3.R5` -> `VPNG9001-R1.R1.R3.R5`
+
+The original IDs in the historical body are intentionally preserved.
+
 When this experiment was prepared, the then-current requirement tree contained:
 
 - **[VPNG0004-R4.R6.R1]** *Чтобы изоляция была не декларацией, а проверяемой границей владения сетевым состоянием.* | VPN-GATE должен иметь отдельный управляемый сетевой домен, в котором локализованы принадлежащие продукту routing/policy/data-plane состояния; взаимодействие этого домена с внешней сетью и хостом должно происходить только через явно определенные граничные точки, а используемые VPN data-plane endpoints должны быть представлены внутри этого домена. [`closed`]
