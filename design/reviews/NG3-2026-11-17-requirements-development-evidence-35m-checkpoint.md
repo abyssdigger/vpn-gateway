@@ -45,9 +45,9 @@ accepted R/C broke its premise. It is distinct from `unreal` and
 
 Added and closed on accepted documentary architecture/evidence planning:
 
-- `VPNG0007-R7.R7`;
-- `VPNG0007-R7.R7.R1`;
-- `VPNG0007-R7.R7.R1.R1`.
+- `VPNG-U007-R7.R7`;
+- `VPNG-U007-R7.R7.R1`;
+- `VPNG-U007-R7.R7.R1.R1`.
 
 The branch requires:
 
@@ -86,7 +86,7 @@ EXP-050 requires the exact integration that passed EXP-049 and covers:
 ### Architecture correction
 
 Removed the unsupported extrapolation that
-`VPNG0001-R1.R3.C1` makes external VPN process lifecycle administrator-owned.
+`VPNG-U001-R1.R3.C1` makes external VPN process lifecycle administrator-owned.
 
 C1 only establishes administrator ownership of VPN provisioning and VPN-specific
 configuration.
@@ -165,7 +165,7 @@ Do not implement bounded-VPN lifecycle ownership or EXP-050 mechanics before EXP
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R7` -> `VPNG9001-R1.R1.R7`
-- `VPNG0007-R7.R7.R1` -> `VPNG9001-R1.R1.R7.R1`
+- `VPNG-U007-R7.R7` -> `VPNG-D001-R1.R1.R7`
+- `VPNG-U007-R7.R7.R1` -> `VPNG-D001-R1.R1.R7.R1`
 
 The original IDs in the historical body are intentionally preserved.

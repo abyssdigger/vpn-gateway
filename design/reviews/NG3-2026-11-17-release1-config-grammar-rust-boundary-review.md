@@ -4,13 +4,13 @@
 > used by this historical review was later normalized without changing the accepted systemd
 > architecture/evidence:
 >
-> - historical `VPNG0001-R1.R3.C1.C1` -> current `VPNG0001-R1.R3.C3`
+> - historical `VPNG-U001-R1.R3.C1.C1` -> current `VPNG-U001-R1.R3.C3`
 >   (external VPN runtime lifecycle ownership/supervision constraint);
-> - historical `VPNG0001-R1.R3.C1.C1.R1` -> current `VPNG0001-R1.R3.C3.R1`
+> - historical `VPNG-U001-R1.R3.C1.C1.R1` -> current `VPNG-U001-R1.R3.C3.R1`
 >   (external lifecycle integration contract);
-> - historical `VPNG0001-R1.R3.C1.C1.R2` -> current `VPNG0001-R1.R3.C1.R1.R2`
+> - historical `VPNG-U001-R1.R3.C1.C1.R2` -> current `VPNG-U001-R1.R3.C1.R1.R2`
 >   (policy-neutral administrator onboarding configuration);
-> - historical `VPNG0001-R1.R3.C1.C1.R3` -> current `VPNG0001-R1.R2.R4.R6.R4`
+> - historical `VPNG-U001-R1.R3.C1.C1.R3` -> current `VPNG-U001-R1.R2.R4.R6.R4`
 >   (Device client-side VPN transport/control intent).
 >
 > The concrete systemd/`NetworkNamespacePath`/`BindsTo`/`After` mechanism remains selected
@@ -31,7 +31,7 @@ This unit resolves two accepted decisions:
    long-running runtime.
 
 The second decision does **not** change the beta release gate: early alpha/beta releases may
-continue to use the Python reference runtime under `VPNG0007-R7.R8.C1`.
+continue to use the Python reference runtime under `VPNG-U007-R7.R8.C1`.
 
 ## Requirement gate
 
@@ -39,30 +39,30 @@ continue to use the Python reference runtime under `VPNG0007-R7.R8.C1`.
 
 Revalidated affected closed requirements:
 
-- `VPNG0001-R1.R2.R4.R4.R4` / `.R1` / `.C1` — Profile ordinary-side NAT remains a
+- `VPNG-U001-R1.R2.R4.R4.R4` / `.R1` / `.C1` — Profile ordinary-side NAT remains a
   distinct capability and is encoded as direction `+snat`;
-- `VPNG0001-R1.R2.R4.R6.R1` — Device ordinary->VPN NAT is explicit
+- `VPNG-U001-R1.R2.R4.R6.R1` — Device ordinary->VPN NAT is explicit
   `use_outbound_nat = true|false`;
-- `VPNG0001-R1.R2.R4.R6.R2.R1` — ordered one-line Device firewall grammar;
-- `VPNG0001-R1.R2.R4.R6.R3` — Device server publication grammar;
-- `VPNG0001-R1.R2.R4.R6.C1` — one canonical Release-1 grammar, legacy aliases rejected;
-- `VPNG0001-R1.R3.C1.C1.R3` — Device-owned `allow_vpn_client`, no public
+- `VPNG-U001-R1.R2.R4.R6.R2.R1` — ordered one-line Device firewall grammar;
+- `VPNG-U001-R1.R2.R4.R6.R3` — Device server publication grammar;
+- `VPNG-U001-R1.R2.R4.R6.C1` — one canonical Release-1 grammar, legacy aliases rejected;
+- `VPNG-U001-R1.R3.C1.C1.R3` — Device-owned `allow_vpn_client`, no public
   top-level `integration.*`;
-- `VPNG0003-R3.R6.R3.R1.C1.R1` — Profile `availability_check = "icmp[/IPv4]"`.
+- `VPNG-U003-R3.R6.R3.R1.C1.R1` — Profile `availability_check = "icmp[/IPv4]"`.
 
 Human acceptance in this cycle resolves the previous configuration-format decision. The
 remaining endpoint-scoped Device firewall grammar is still independently constrained by
-`VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
+`VPNG-U001-R1.R2.R4.R6.R2.R5.C1`.
 
 ### Target Rust production runtime
 
 New subtree:
 
-- `VPNG0007-R7.R8`;
-- `VPNG0007-R7.R8.C1`;
-- `VPNG0007-R7.R8.R1`;
-- `VPNG0007-R7.R8.R2`;
-- `VPNG0007-R7.R8.R3`.
+- `VPNG-U007-R7.R8`;
+- `VPNG-U007-R7.R8.C1`;
+- `VPNG-U007-R7.R8.R1`;
+- `VPNG-U007-R7.R8.R2`;
+- `VPNG-U007-R7.R8.R3`.
 
 The initial R7.R8 Purpose was reviewed critically. Runtime fail-closed correctness belongs to
 the existing R4 tree and is **not** claimed to follow automatically from choosing Rust.
@@ -250,10 +250,10 @@ Mechanical count on the current tree before applying this review verdict:
 
 Accumulated resolved `decomp` annotations: **6 occurrences**, all with concrete deblockers:
 
-1. `VPNG0005-R5 -> VPNG0005-R5.R6`;
-2. `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` (recorded in two affected paths);
-3. `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` (recorded in two affected paths);
-4. `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+1. `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+2. `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1` (recorded in two affected paths);
+3. `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2` (recorded in two affected paths);
+4. `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 No pending decomp remains.
 
@@ -288,12 +288,12 @@ The Rust production rewrite is deliberately **not** on that beta list.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R8` -> `VPNG9001-R1.R1.R8`
-- `VPNG0007-R7.R8.C1` -> `VPNG9001-R1.R1.R8.C1`
-- `VPNG0007-R7.R8.R1` -> `VPNG9001-R1.R1.R8.R1`
-- `VPNG0007-R7.R8.R2` -> `VPNG9001-R1.R1.R8.R2`
-- `VPNG0007-R7.R8.R3` -> `VPNG9001-R1.R1.R8.R3`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R8` -> `VPNG-D001-R1.R1.R8`
+- `VPNG-U007-R7.R8.C1` -> `VPNG-D001-R1.R1.R8.C1`
+- `VPNG-U007-R7.R8.R1` -> `VPNG-D001-R1.R1.R8.R1`
+- `VPNG-U007-R7.R8.R2` -> `VPNG-D001-R1.R1.R8.R2`
+- `VPNG-U007-R7.R8.R3` -> `VPNG-D001-R1.R1.R8.R3`
 
 The original IDs in the historical body are intentionally preserved.

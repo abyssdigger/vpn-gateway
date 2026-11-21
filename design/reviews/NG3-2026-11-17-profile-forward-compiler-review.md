@@ -23,17 +23,17 @@ availability semantics.
 
 ## Implements
 
-- `VPNG0002-R2.R1.R2` — remote destination/source classification semantics;
-- `VPNG0002-R2.R2` / `R2.R2.2` — only current eligible bound paths may receive
+- `VPNG-U002-R2.R1.R2` — remote destination/source classification semantics;
+- `VPNG-U002-R2.R2` / `R2.R2.2` — only current eligible bound paths may receive
   permission;
-- `VPNG0002-R2.R3` / `R2.R3.3` — explicit OUT/IN/bidirectional direction;
-- `VPNG0002-R2.R5.R1` — deterministic most-specific classification;
-- `VPNG0004-R4.R1` / `R4.R1.R1` — zero-path remains fail-closed policy domain;
-- `VPNG0004-R4.R3.R2` — structural policy must not transiently widen permission.
+- `VPNG-U002-R2.R3` / `R2.R3.3` — explicit OUT/IN/bidirectional direction;
+- `VPNG-U002-R2.R5.R1` — deterministic most-specific classification;
+- `VPNG-U004-R4.R1` / `R4.R1.R1` — zero-path remains fail-closed policy domain;
+- `VPNG-U004-R4.R3.R2` — structural policy must not transiently widen permission.
 
 **Constrained by:**
 
-- `VPNG0002-R2.R3.C1` — first-release inbound/bidirectional path-capacity constraint is
+- `VPNG-U002-R2.R3.C1` — first-release inbound/bidirectional path-capacity constraint is
   already enforced at config normalization;
 - accepted exact lower NEW/RETURN nft shape from EXP-035/036/037/038.
 
