@@ -60,9 +60,9 @@ The resulting proposed tree is rendered in
 The current research draft has:
 
 - primary project Requirements: **7**
-- derived Requirements: **152**
-- Constraints: **24**
-- total proposed nodes: **183**
+- derived Requirements: **151**
+- Constraints: **23**
+- total proposed nodes: **181**
 
 The count change is not itself a scope change: several old implementation/configuration nodes
 were removed or split into a product capability plus configuration Constraint/Requirement,
@@ -70,7 +70,7 @@ and managed-domain mechanism nodes were moved out of requirement semantics.
 
 ### Resolved findings
 
-The draft now has accepted dispositions for **18 of the original 20 findings**:
+The draft now has accepted dispositions for **all 20 original findings**:
 
 1. former `VPNG0001-R1.R2` configuration ancestry — common configuration moved directly
    under `VPNG0001` as provisional `VPNG0001-R4`;
@@ -105,21 +105,21 @@ The draft now has accepted dispositions for **18 of the original 20 findings**:
 18. second VPN lifecycle evidence gate `VPNG0007-R7.R7.R1.R1` — removed from the requirement
     tree as a process/evidence sequencing rule rather than a product obligation; EXP-050 remains
     historical evidence and current trace is redirected to the applicable integration, safety
-    and lifecycle requirements.
+    and lifecycle requirements;
+19. priority-only continuity — moved from `VPNG0004-R4.R3.R1` to `VPNG0003-R3.R9`; the
+    non-disruptive reorder guarantee is retained while route-copy/staging implementation detail
+    is removed from requirement semantics;
+20. reload/configuration update — configuration update is now part of `VPNG0005`,
+    `VPNG0005-R5` and `VPNG0005-R5.R6`; `VPNG0005-R5.R6.R4` and its `.C1` are removed,
+    because `reload` is an optional interface mechanism rather than a mandatory product capability.
 
 The adjacent timing/hysteresis constraint was also moved to sibling
 `VPNG0003-R3.R6.R3.R1.C2`, so it no longer depends on Device-default/Profile-override reuse.
 
 ### Remaining unresolved findings
 
-Two baseline findings still lack a product-holder disposition and remain explicitly marked
-`RESEARCH UNRESOLVED` in the draft:
-
-1. `VPNG0004-R4.R3.R1` — priority-only make-before-break continuity;
-2. `VPNG0005-R5.R6.R4` — reload capability/contract placement.
-
-Their detailed questions are maintained in
-`design/NG3/research/NG3-2026-11-20-purpose-parent-unresolved-questions.md`.
+None. All original findings have an accepted disposition and are applied to the corrected-tree
+draft.
 
 ## Important semantic distinctions established by the refactor
 
@@ -180,12 +180,13 @@ No production/reference code was changed by this research refactor.
 
 ## Verdict
 
-**RESEARCH DRAFT SUBSTANTIALLY SYNCHRONIZED; TWO PRODUCT/PLACEMENT DECISIONS REMAIN.**
+**ALL ORIGINAL PURPOSE/PARENT FINDINGS HAVE ACCEPTED DISPOSITIONS.**
 
-The original 20 findings have been reduced to two unresolved questions. The corrected-tree
-draft, decision record, unresolved list and impact assessment are now aligned with each other.
+All original 20 findings are resolved in the research draft. The corrected-tree draft,
+decision record, unresolved list and impact assessment are aligned with each other.
 
-Normative promotion remains blocked until the remaining two findings are decided and the
-resulting tree is reviewed as one coherent requirement structure. After that, current
-architecture/configuration/registry documents require an atomic trace remap; historical
-reviews/experiments remain unchanged.
+Normative promotion is no longer blocked by a missing product-holder decision. It still
+requires a final coherent-tree integrity review and, if that review passes, an atomic trace
+remap across current architecture/configuration/registry documents. Historical evidence
+remains preserved according to `PROJECT-CONVENTIONS.md`, including the required historical
+requirement context when an experiment referenced a subsequently removed R/C.
