@@ -60,9 +60,9 @@ The resulting proposed tree is rendered in
 The current research draft has:
 
 - primary project Requirements: **7**
-- derived Requirements: **151**
+- derived Requirements: **148**
 - Constraints: **23**
-- total proposed nodes: **181**
+- total proposed nodes: **178**
 
 The count change is not itself a scope change: several old implementation/configuration nodes
 were removed or split into a product capability plus configuration Constraint/Requirement,
@@ -185,7 +185,7 @@ structure rather than as isolated findings.
 
 Structural checks:
 
-- **181** normative VPNG nodes: 7 primary Requirements, 151 derived Requirements and
+- **178** normative VPNG nodes: 7 primary Requirements, 148 derived Requirements and
   23 Constraints;
 - no duplicate requirement IDs;
 - no missing immediate parents in the actual VPNG tree;
