@@ -40,7 +40,7 @@ evidence gate. Их impact ниже выделен отдельно.
 | Availability criterion | `VPNG0003-R3.R6.R3.R1`; reuse `.R1.R1*`; ICMP-only `.C1`; timing `.C2` | **Medium trace / zero behavior.** Probe/config implementation не требует изменения |
 | Host-state safety | mechanism-neutral `VPNG0004-R4.R6` | **Very high trace / near-zero runtime.** Managed domain/netns/nft остаются выбранной архитектурой, но должны ссылаться на product invariants/functions, а не на удалённый mechanism requirement |
 | Protective mode | `VPNG0004-R5`; Release-1 limitation `.C1` | **Low current code / medium docs.** Capability остаётся postponed; future aggressive-helper composition получает честный safety owner |
-| Return-flow stability | `VPNG0001-R1.R1.R1` | **Medium trace / low code.** Existing same-path forwarding behavior сохраняется; меняется causal owner с explicit-policy tree на forwarding correctness |
+| Return-flow stability | `VPNG0003-R4` | **Medium trace / low code.** Existing same-path forwarding behavior сохраняется; causal owner становится multi-path predictability, параллельно baseline/availability preference |
 
 ## Архитектура: что меняется по смыслу
 
