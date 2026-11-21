@@ -220,3 +220,20 @@ Architectural decisions
 
 Перенос решения в структурированный документ не является основанием менять его requirement
 traceability, semantics или evidence.
+
+# Private network
+
+Отдельная сетевая среда VPN-GATE, управляемая и наблюдаемая из STACK.
+Содержит сетевое состояние, которым владеет VPN-GATE, и компоненты,
+через которые это состояние наблюдается и изменяется.
+
+API
+
+    @NetworkPolicyAdapter.observe(...)
+    @NetworkPolicyAdapter.apply(...)
+    @NetworkPolicyAdapter.cleanup(...)
+
+Residents
+
+1. `@NetworkPolicyAdapter` *Граница между semantic network policy STACK и состоянием Private network.*
+
