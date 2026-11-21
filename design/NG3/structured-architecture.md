@@ -98,23 +98,30 @@ component specs относятся к resident'ам, являющимся арх
 
 ### 2.2. API Space
 
-API Space — объединение той части API его resident'ов, которая востребована клиентами из
-других Spaces.
+API Space — объединение внешне востребованных interaction points, предоставляемых:
 
-Самостоятельного «магического» API поверх resident'ов у Space нет.
+1. API его resident'ов; и
+2. явно объявленными boundary-capability Artifacts для пассивного/data-plane handoff, где
+   отдельного обслуживающего component resident по смыслу нет.
 
-Для конкретного взаимодействия действуют два механических правила:
+Самостоятельного «магического» API поверх resident'ов/Artifacts у Space нет. Пассивный
+Artifact interaction point не превращает Artifact в component: он лишь фиксирует реальную
+capability Space, на которой заканчивается boundary interaction.
 
-1. API принадлежит тому Space, внутри которого находится обслуживающая сторона
-   взаимодействия — server.
-2. Интерфейс является API Space только тогда, когда его client находится вне этого Space.
+Для active/service interaction API принадлежит тому Space, внутри которого находится
+обслуживающая сторона — server. Интерфейс является API Space только тогда, когда его client
+находится вне этого Space.
 
-Если и server, и все clients находятся внутри одного Space, это внутренний контракт, а не
+Для bidirectional/passive data-plane boundary, где понятие server неприменимо или ничего не
+добавляет, interaction point принадлежит Space явного boundary Artifact, реализующего эту
+capability. Physical placement concrete endpoint само по себе ownership не меняет.
+
+Если все стороны взаимодействия находятся внутри одного Space, это внутренний контракт, а не
 API Space.
 
-Асинхронность правило не меняет. В конкретной точке взаимодействия существует server-side
-broker/queue/API и его client; размещение обслуживающей стороны определяет принадлежность
-этого API.
+Асинхронность active/service правило не меняет. В конкретной точке взаимодействия существует
+server-side broker/queue/API и его client; размещение обслуживающей стороны определяет
+принадлежность этого API.
 
 ### 2.3. Маркер `@`
 
@@ -139,6 +146,9 @@ broker/queue/API и его client; размещение обслуживающе
 @NetworkPolicyAdapter.apply(...)
 @vpn_iff[].<outbound port>
 ```
+
+Если точка предоставляется boundary-capability Artifact, `@` в API-списке отмечает именно
+его interaction point и не делает Artifact resident'ом/компонентом.
 
 Если внешний вызов приходит в метод parent-компонента, а тот внутри использует метод
 subcomponent, API Space содержит метод parent. Внутренний метод subcomponent от этого не
@@ -445,7 +455,7 @@ Component diagram
 Целевая структура component specs задана в §2.9: specs всех Spaces собираются после
 описаний Spaces в Annexes и остаются плоскими относительно `Residents`.
 
-Каждый resident получает отдельный Space-local spec с описанием ответственности, API,
+Каждый resident, являющийся компонентом VPN-GATE, получает отдельный Space-local spec с описанием ответственности, API,
 requirement traceability, архитектурных решений и при необходимости unresolved
 `Findings`. `@` получают только те точки component API, которые непосредственно входят
 в API соответствующего Space.
@@ -510,15 +520,15 @@ Interactions
 
 | From | Interaction | To |
 | --- | --- | --- |
-| `Operator` / deployment control | `start / stop / restart / optional reload` | `@ProductLifecycleControl` |
+| `Operator.OperatorClient` / deployment control | `start / stop / restart / optional reload` | `@ProductLifecycleControl` |
 | `@ProductLifecycleControl` | acquire/release single-controller ownership and maintain bounded session | `controller ownership/readiness session` |
-| external configuration source | candidate configuration representation | `@ConfigurationAdapter` |
+| `Ambient host and external world.@ExternalConfigurationSource` | candidate configuration representation | `@ConfigurationAdapter` |
 | `@ConfigurationAdapter` | resolve normalized availability descriptions | `AvailabilityDescriptionResolver` |
 | `@ConfigurationAdapter` | accepted normalized domain intents | `accepted normalized intent` |
 | `@ProductLifecycleControl` | validate/load candidate intent before dependent mutation | `@ConfigurationAdapter` |
 | `@ProductLifecycleControl` | preflight/ensure/destroy managed data-plane environment | `Private network.@ManagedNetworkDomainLifecycle <partial>` |
 | `@ProductLifecycleControl` | establish/remove ordinary-side managed boundary through the same current lifecycle transaction | `Ordinary-side transition.@ManagedNetworkDomainLifecycle <partial>` |
-| `@ProductLifecycleControl` | converge/cleanup enabled host-side contribution | `VPN-GATE-managed host state` |
+| `@ProductLifecycleControl` | converge/cleanup enabled host-side contribution | `VPN-GATE-managed host state.@HostRoutingContribution` |
 | `@ProductLifecycleControl` | activate/cleanup desired lower network policy | `Private network.@NetworkPolicyAdapter` |
 | `accepted normalized intent` | current structural inputs | `PayloadTrafficManager` |
 | `PayloadTrafficManager` | calculate structural semantic projection | `PayloadPolicyCalculator` |
@@ -534,7 +544,7 @@ Interactions
 | `AvailabilityProbeAgent` | current observation/diagnostic InfoEvent | `@RuntimeStatusAgent` |
 | `@ProductLifecycleControl` | lifecycle/readiness/cleanup projection | `@RuntimeStatusAgent` |
 | `@RuntimeStatusAgent` | compose/update | `runtime status snapshot` |
-| `@RuntimeStatusAgent` | current snapshot publication | `Operator` / presentation environment |
+| `@RuntimeStatusAgent` | current snapshot publication | `Operator.OperatorClient` / presentation environment |
 
 Findings
 
@@ -602,6 +612,8 @@ API
     @ManagedNetworkDomainLifecycle <partial>.preflight_managed_network_domain(...) — read-only проверить существующую combined domain/boundary realization; transition-проекция результата подтверждает exact/absent либо conflict.
     @ManagedNetworkDomainLifecycle <partial>.ensure_managed_network_domain(...) — создать отсутствующую combined realization либо подтвердить существующую; transition-проекция success означает established usable boundary.
     @ManagedNetworkDomainLifecycle <partial>.destroy_managed_network_domain(...) — удалить owned combined realization; transition-проекция success подтверждает отсутствие boundary.
+    @managed L3 boundary realization.<private-side IP handoff> — passive bidirectional handoff к Private network.
+    @managed L3 boundary realization.<host-side IP handoff> — passive bidirectional handoff к ordinary host network.
 
 Отдельного `open/closed` API сейчас нет. `established` означает, что требуемый L3 handoff
 уже пригоден для передачи IP. Возможный будущий gate для aggressive helper не проектируется
@@ -641,10 +653,10 @@ Interactions
 
 | From | Interaction | To |
 | --- | --- | --- |
-| `STACK` | lifecycle `observe / establish / remove` | `@ManagedNetworkDomainLifecycle <partial>` |
+| `STACK.@ProductLifecycleControl` | lifecycle `observe / establish / remove` | `@ManagedNetworkDomainLifecycle <partial>` |
 | `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove exact boundary state | `managed L3 boundary realization` |
-| `Private network.ordinary-side IP portal` | bidirectional IP handoff | `managed L3 boundary realization` |
-| `managed L3 boundary realization` | bidirectional IP handoff | `Ambient host and external world` |
+| `Private network.@ordinary-side IP portal.<IP handoff>` | bidirectional IP handoff | `@managed L3 boundary realization.<private-side IP handoff>` |
+| `@managed L3 boundary realization.<host-side IP handoff>` | bidirectional IP handoff | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` |
 | `VPN-GATE-managed host state` | routes selected host traffic toward the explicit managed host endpoint | `managed L3 boundary realization` |
 
 Finding: current `ManagedNetworkDomain` lifecycle transaction crosses the
@@ -704,6 +716,8 @@ API
     @ActiveProbeDriver.execute(...) — выполнить один bounded probe через заранее подтвержденный current VPN-side execution context.
     @ForwardingGate.observe(∅) — вернуть свежий authoritative state корневого IPv4 forwarding gate.
     @ForwardingGate.converge(...) — установить требуемое состояние gate и подтвердить его свежим наблюдением.
+    @ordinary-side IP portal.<IP handoff> — passive bidirectional ordinary-side data-plane handoff.
+    @VPN-side IP portal.<IP handoff> — passive bidirectional VPN-side data-plane handoff.
 
 Artifacts
 
@@ -753,13 +767,13 @@ Interactions
 
 | From | Interaction | To |
 | --- | --- | --- |
-| `STACK` | lifecycle preflight / ensure / destroy | `@ManagedNetworkDomainLifecycle <partial>` |
+| `STACK.@ProductLifecycleControl` | lifecycle preflight / ensure / destroy | `@ManagedNetworkDomainLifecycle <partial>` |
 | `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove namespace + loopback | `managed network environment realization` |
 | `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove local service address | `stack-local IPv4 identity` |
 | `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove ordinary-side default | `ordinary-side default routing state` |
 | `@ManagedNetworkDomainLifecycle <partial>` | same current transaction also manages the door realization | `Ordinary-side transition.managed L3 boundary realization` |
-| `Ordinary-side transition` | bidirectional IP handoff | `ordinary-side IP portal` |
-| `STACK` | semantic observe/apply/cleanup | `@NetworkPolicyAdapter` |
+| `Ordinary-side transition.@managed L3 boundary realization.<private-side IP handoff>` | bidirectional IP handoff | `@ordinary-side IP portal.<IP handoff>` |
+| `STACK.PayloadTrafficManager` / `STACK.@ProductLifecycleControl` | semantic observe/apply/cleanup | `@NetworkPolicyAdapter` |
 | `@NetworkPolicyAdapter` | allocate internal lower resources | `NetworkPolicyLayoutCalculator` |
 | `@NetworkPolicyAdapter` | converge desired lower policy | `NetworkPolicyEnforcer` |
 | `NetworkPolicyEnforcer` | converge/verify payload dispatch and path routes | `payload routing state` |
@@ -768,14 +782,14 @@ Interactions
 | `NetworkPolicyEnforcer` | converge/verify semantic nft owners | `Profile forwarding policy`, `Device firewall policy`, `payload NAT policy`, `local publication policy`, `VPN integration local policy`, `probe local admission policy` |
 | `@NetworkPolicyAdapter` | converge/verify independently owned established-flow return-affinity postcondition under the shared safety barrier | `return-affinity state` |
 | `NetworkPolicyEnforcer` | structural safety barrier | `@ForwardingGate` |
-| `STACK` | fresh endpoint observation / binding verification | `@VPNPathAdapter` |
+| `STACK.PayloadTrafficManager` | fresh endpoint observation / binding verification | `@VPNPathAdapter` |
 | `@VPNPathAdapter` | observe current concrete endpoint generations | `VPN endpoint inventory` |
-| `VPN external ends` | provision/remove supported VPN data-plane endpoint generation | `VPN endpoint inventory` |
+| `VPN external ends.@VPNChannel[].<vpn-interface endpoint>` | presence/replacement/removal changes the freshly observed endpoint set | `VPN endpoint inventory` |
 | `STACK.AvailabilityProbeAgent` | execute one confirmed physical probe attempt | `@ActiveProbeDriver` |
 | `STACK.AvailabilityProbeAgent` | require confirmed probe execution precondition before invoking the Driver | `probe routing state`, `probe local admission policy`, `VPN endpoint inventory` |
-| `@ActiveProbeDriver` | send/receive probe IP | `VPN-side IP portal` |
-| `VPN-side IP portal` | bidirectional IP handoff | `VPN external ends` |
-| `STACK` / `NetworkPolicyEnforcer` | observe/converge barrier | `@ForwardingGate` |
+| `@ActiveProbeDriver` | send/receive probe IP | `@VPN-side IP portal.<IP handoff>` |
+| `@VPN-side IP portal.<IP handoff>` | bidirectional IP handoff | `VPN external ends.@VPNChannel[].<vpn-interface endpoint>` |
+| `STACK.@ProductLifecycleControl` | lifecycle/preflight/stop containment | `@ForwardingGate` |
 | `@ForwardingGate` | technical read/mutation | `ForwardingGateDriver` |
 | `ForwardingGateDriver` | read/write | `IPv4 forwarding state` |
 
@@ -865,17 +879,17 @@ Interactions
 
 | From | Interaction | To |
 | --- | --- | --- |
-| `Operator` | provision VPN-specific configuration / stack-specific service integration | `@VPNChannel[]` |
-| `Ambient host and external world.systemd` | start/stop/restart explicitly bound supported VPN service/cgroup | `@VPNChannel[]` |
+| `Operator.OperatorClient` | provision VPN-specific configuration / stack-specific service integration | `@VPNChannel[]` |
+| `Ambient host and external world.@systemd` | start/stop/restart explicitly bound supported VPN service/cgroup | `@VPNChannel[]` |
 | `@VPNChannel[]` | maintain protocol-specific runtime/session | `VPN channel runtime/session state` |
 | `@VPNChannel[]` | realize current concrete endpoint generation | `VPN endpoint generation` |
 | `Private network.@VPNPathAdapter` | fresh observe / verify current endpoint identity | `@VPNChannel[].<vpn-interface endpoint>` |
 | `Private network.@VPNPathAdapter` | optionally consume proven integration transport fact | `@VPNChannel[].<transport provenance>` |
-| `@VPNChannel[].<vpn-interface endpoint>` | bidirectional tunneled IP handoff | `Private network.VPN-side IP portal` |
+| `@VPNChannel[].<vpn-interface endpoint>` | bidirectional tunneled IP handoff | `Private network.@VPN-side IP portal.<IP handoff>` |
 | `@VPNChannel[]` | VPN underlay/control traffic admitted by bounded local owner | `Private network.VPN integration local policy` |
-| `@VPNChannel[]` | VPN underlay IP exits/enters ordinary side | `Private network.ordinary-side IP portal` |
+| `@VPNChannel[]` | VPN underlay IP exits/enters ordinary side | `Private network.@ordinary-side IP portal.<IP handoff>` |
 | `STACK.AvailabilityProbeAgent` via `Private network.@ActiveProbeDriver` | configured active observation | `remote path availability property` |
-| `Ambient host and external world.systemd` | supported deployment stop removes bound process/cgroup and endpoint before managed-domain teardown | `VPN channel runtime/session state` / `VPN endpoint generation` |
+| `Ambient host and external world.@systemd` | supported deployment stop removes bound process/cgroup and endpoint before managed-domain teardown | `VPN channel runtime/session state` / `VPN endpoint generation` |
 
 Findings
 
@@ -963,15 +977,14 @@ Interactions
 | --- | --- | --- |
 | `STACK.PayloadTrafficManager` / policy assembly | desired Device publication | `@NetworkPolicyAdapter <partial>` |
 | `@NetworkPolicyAdapter <partial>` | observe/converge/cleanup distinct owner scope | `host publication mapping state` |
-| `@NetworkPolicyAdapter <partial>` | observe host forwarding/interface/address prerequisites without ownership | `Ambient host and external world` |
-| `Ambient host and external world` | inbound traffic to selected local publication surface | `host publication mapping state` |
-| `host publication mapping state` | DNAT toward current stack-local service/publication identity | `Ordinary-side transition` |
-| `Ordinary-side transition` | deliver publication traffic | `Private network.local publication policy` |
+| `@NetworkPolicyAdapter <partial>` | observe host forwarding/interface/address prerequisites without ownership | `Ambient host and external world.@OrdinaryHostNetwork.<host network observation>` |
+| `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | inbound traffic to selected local publication surface | `host publication mapping state` |
+| `host publication mapping state` | DNAT toward current stack-local service/publication identity through managed boundary | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` |
 | `STACK.@ProductLifecycleControl` | build/converge enabled helper contribution | `@HostRoutingContribution` |
 | `@HostRoutingContribution` | converge/cleanup | `peaceful host routing contribution` |
-| `Ambient host and external world` | selected host traffic enters helper-owned RPDB scope | `peaceful host routing contribution` |
-| `peaceful host routing contribution` | route selected traffic to explicit managed host endpoint | `Ordinary-side transition.managed L3 boundary realization` |
-| `Ordinary-side transition` | traffic emitted from Private network bypasses helper recapture and resumes ordinary host routing | `Ambient host and external world` |
+| `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | selected host traffic enters helper-owned RPDB scope | `peaceful host routing contribution` |
+| `peaceful host routing contribution` | route selected traffic to explicit managed host endpoint | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` |
+| `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` | traffic emitted from Private network bypasses helper recapture and resumes ordinary host routing | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` |
 
 Findings
 
@@ -1058,12 +1071,11 @@ Interactions
 | `Ordinary-side transition.managed L3 boundary realization` | bidirectional ordinary-side IP handoff | `@OrdinaryHostNetwork` |
 | `@OrdinaryHostNetwork` | ordinary traffic / underlay connectivity | `ordinary external IP connectivity` |
 | `VPN-GATE-managed host state.@NetworkPolicyAdapter <partial>` | observe forwarding/interface/address prerequisites only | `@OrdinaryHostNetwork` |
-| `VPN-GATE-managed host state` | preserve foreign host network state outside explicit owner scopes | `administrator routing/RPDB state` / `foreign host firewall/NAT state` |
-| `Operator` | create/change external configuration representation | `@ExternalConfigurationSource` |
+| `Operator.OperatorClient` | create/change external configuration representation | `@ExternalConfigurationSource` |
 | `@ExternalConfigurationSource` | candidate representation | `STACK.@ConfigurationAdapter` |
-| `Operator` | start/stop/restart controller deployment | `@systemd` |
+| `Operator.OperatorClient` | start/stop/restart controller deployment | `@systemd` |
 | `@systemd` | invoke/contain controller service lifecycle and wait for readiness semantics | `STACK.@ProductLifecycleControl` |
-| `Operator` | start/stop/restart supported stack-specific VPN service | `@systemd` |
+| `Operator.OperatorClient` | start/stop/restart supported stack-specific VPN service | `@systemd` |
 | `@systemd` | supervise explicitly bound VPN process/cgroup | `VPN external ends.@VPNChannel[]` |
 | `@systemd` | reverse dependency/order stop bound VPN service before final managed-domain teardown | `VPN external ends` / `STACK.@ProductLifecycleControl` |
 
