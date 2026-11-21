@@ -301,3 +301,36 @@ architecture is stable.
 Variant D and decision-organization Option 3 are internally coherent with the current
 component model and preserve the accepted flat-architecture semantics while making two
 previously hidden boundary problems visible.
+
+
+## Fix verification
+
+Reviewed fixed baseline: `b4add2c66a9f46a51c490e14a23ffd5abd3473c4`.
+
+Verified:
+
+- F1: the structured Enforcer now explicitly states that the root gate protects routed IPv4
+  forwarding, not local INPUT/OUTPUT owner classes;
+- F2: the Enforcer failure rule is now per-invocation and leaves later retry/reconciliation to
+  caller/Manager from fresh state;
+- F3: `NetworkPolicyLayoutCalculator` is now an internal Adapter subcomponent and is not
+  exported as Space API;
+- no nested subcomponent in the selected tree carries `@`;
+- `ForwardingGate` remains a direct resident because its API has independent lifecycle/safety
+  callers;
+- `VPNPathAdapter` remains a direct resident because its endpoint-observation/binding API is
+  independent of policy convergence.
+
+Deliberately not placed in this pass:
+
+- `ActiveProbeDriver` and other probe-execution machinery whose final Space ownership is not
+  established by the reviewed boundary;
+- individual desired-state compilers beyond the already clear lower resource-layout
+  Calculator;
+- the EXP-052 host-side publication owner, pending the first structured host/transition-space
+  pass.
+
+These omissions keep the current structured document honest rather than filling its tree from
+file/module proximity.
+
+**Final verdict on fixed baseline: PASS.**
