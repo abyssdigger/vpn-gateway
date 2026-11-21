@@ -167,3 +167,19 @@ invariants. Последние два product-holder решения сами п�
 nodes, split между product capability, configuration contract и architecture mechanism,
 получили раздельную трассировку. Финальный stale-reference audit current NG3 documents и
 experiment dossiers подтверждает отсутствие удалённых IDs в активной traceability.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005` -> `VPNG9101-R1`
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R4` -> `VPNG9101-R1.R1.R4`
+- `VPNG0005-R5.R5` -> `VPNG9101-R1.R1.R5`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG0005-R5.R6.R2` -> `VPNG9101-R1.R1.R6.R2`
+- `VPNG0005-R5.R6.R3` -> `VPNG9101-R1.R1.R6.R3`
+
+The original IDs in the historical body are intentionally preserved.

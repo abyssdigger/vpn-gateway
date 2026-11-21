@@ -6,6 +6,15 @@ Technical result and disposition are unchanged by this traceability annotation.
 
 ## Historical requirement context
 
+### Requirement ID migration
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R3.R2` -> `VPNG9001-R1.R1.R3.R2`
+
+The original IDs in the historical body are intentionally preserved.
+
 When this experiment was prepared, the then-current requirement tree contained:
 
 - **[VPNG0001-R1.R3.R5]** *Чтобы упростить описание пользователем типовых проверок доступности, правил фильтрации по конечной точке VPN и других функций, которым полезна логическая привязка к конечной точке VPN вместо явного указания её IP-адреса.* | VPN-GATE должен при обнаружении или обновлении current logical VPN path уметь однозначно определить transport endpoint/peer, соответствующий текущему concrete data-plane endpoint, когда принятый discovery contract поддерживаемой integration предоставляет для этого достаточные наблюдаемые данные, и связать определённый endpoint/peer с текущей generation этого path binding. [`closed`]
