@@ -11,30 +11,9 @@ product-holder dispositions, записанных в
 `NG3-2026-11-20-purpose-parent-corrected-requirements-draft.md`.
 
 Исходный audit содержал 20 findings: 2 safe corrections и 18 вопросов, требовавших human
-decision. В текущем draft 16 findings уже имеют disposition; остаются четыре.
+decision. В текущем draft 17 findings уже имеют disposition; остаются три.
 
-## 1. Return affinity for remote-initiated flow
-
-**Affected:** `VPNG0002-R2.R6`.
-
-Текущий Statement требует, чтобы ответный трафик remote-initiated flow возвращался через тот
-же VPN-канал, через который был принят исходный трафик.
-
-Поведение выглядит необходимым для корректности и устойчивости established flow, но
-immediate parent `VPNG0002-R2` описывает **явно заданную пользователем**
-traffic/path/direction policy. Пользователь не задаёт same-ingress affinity как отдельную
-policy, поэтому ancestry остаётся причинно нечестной.
-
-Нужно выбрать causal owner:
-
-- forwarding correctness / сохранение семантики уже принятого flow;
-- flow stability;
-- либо отдельный requirement, если это самостоятельная продуктовая гарантия.
-
-Существующая реализация/evidence не является основанием для выбора parent: она подтверждает
-реализуемость и текущее поведение, но не продуктовую причинность.
-
-## 2. Priority-only make-before-break continuity
+## 1. Priority-only make-before-break continuity
 
 **Affected:** `VPNG0004-R4.R3.R1`.
 
@@ -52,7 +31,7 @@ Child дополнительно обещает не терять разрешё
 - либо safety/lifecycle tree после явного product decision, что non-disruptive priority
   transition является обязательной частью этой гарантии.
 
-## 3. Reload
+## 2. Reload
 
 **Affected:** `VPNG0005-R5.R6.R4`.
 
@@ -69,7 +48,7 @@ Lifecycle ancestry гарантирует start/stop/restart. Текущий rel
 Первый release уже допускает отсутствие reload; текущая alpha её не реализует, поэтому
 решение в основном влияет на requirement/interface placement, а не на готовый runtime.
 
-## 4. Second VPN lifecycle evidence gate
+## 3. Second VPN lifecycle evidence gate
 
 **Affected:** `VPNG0007-R7.R7.R1.R1`.
 
@@ -101,6 +80,7 @@ queue:
 - host-state safety сделан mechanism-neutral, managed network domain и literal DROP остаются
   architecture/evidence;
 - protective mode поднят непосредственно под `VPNG0004`.
+- return-flow affinity перенесён под forwarding behavior `VPNG0001-R1.R1` как `VPNG0001-R1.R1.R1`, сохранив позитивную same-path гарантию.
 
-До решения четырёх вопросов выше нормативный remap `design/NG3/requirements.md` остаётся
+До решения трёх вопросов выше нормативный remap `design/NG3/requirements.md` остаётся
 неполным.
