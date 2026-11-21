@@ -3,7 +3,7 @@
 **Status:** non-normative research artifact  
 **Branch:** `ng3-research-20261120-requirement-purpose-parent-consistency-30m`  
 **Baseline:** main snapshot 145 `623a688e4080de56e5ac14675ffca028c3865d18`  
-**Current research draft:** provisional 181-node tree in
+**Current research draft:** provisional 178-node tree in
 `NG3-2026-11-20-purpose-parent-corrected-requirements-draft.md`
 
 ## Главный вывод
