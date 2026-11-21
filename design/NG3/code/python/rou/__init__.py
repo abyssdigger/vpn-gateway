@@ -125,7 +125,7 @@ from .nft_payload_scaffold import (
     NftPayloadScaffoldError,
     compare_payload_nft_scaffold,
 )
-from .nft_scaffold_executor import (
+from .nft_scaffold_enforcer import (
     PayloadNftScaffoldPrepareResult,
     PayloadNftScaffoldPrepareStatus,
     prepare_payload_nft_scaffold_once,

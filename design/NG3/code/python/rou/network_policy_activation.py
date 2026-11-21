@@ -23,7 +23,7 @@ from .nft_payload_scaffold import (
     NftPayloadScaffoldComparison,
     compare_payload_nft_scaffold,
 )
-from .nft_scaffold_executor import (
+from .nft_scaffold_enforcer import (
     PayloadNftScaffoldBackend,
     PayloadNftScaffoldPrepareResult,
     prepare_payload_nft_scaffold_once,
