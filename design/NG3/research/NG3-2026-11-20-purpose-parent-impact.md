@@ -23,8 +23,7 @@ requirement tree**.
 - current architecture/configuration/registry documents должны получить новый requirement
   trace только после принятия draft как нормативного дерева.
 
-Три вопроса остаются открыты: priority-only continuity, reload и второй VPN lifecycle
-evidence gate. Их impact ниже выделен отдельно.
+Два вопроса остаются открыты: priority-only continuity и reload. Их impact ниже выделен отдельно.
 
 ## Принятый draft remap и ожидаемый эффект
 
@@ -104,6 +103,15 @@ remap unit нужно проверить как минимум:
 удалённые `VPNG0001-R1.R3.R5*`, `VPNG0004-R4.R6.R1*`,
 `VPNG0004-R4.R7*` или старые helper/config IDs.
 
+## EXP-050 после удаления process-only requirement
+
+`VPNG0007-R7.R7.R1.R1` больше не является актуальным requirement owner для EXP-050.
+Технический результат эксперимента сохраняется без ретроактивного редактирования, а current
+trace должен использовать `VPNG0001-R1.R3.C1.R1.R2`,
+`VPNG0001-R1.R3.C3.R1`, `VPNG0004-R4.R6`,
+`VPNG0005-R5.R4`, `VPNG0005-R5.R5`,
+`VPNG0005-R5.R6.R2` и `VPNG0005-R5.R6.R3` в зависимости от проверяемого аспекта.
+
 ## Historical evidence policy
 
 Не следует массово переписывать:
@@ -140,17 +148,16 @@ semantic remap.
 - managed-domain implementation:
   `managed_network_domain.py`, controller lifecycle, managed-netns routing/nft owners.
 
-Код меняется только если один из оставшихся трёх human decisions меняет observable
+Код меняется только если один из оставшихся двух human decisions меняет observable
 Statement либо если trace review обнаружит, что текущая реализация была необходима только
 удалённому implementation-specific requirement и не нужна новым product invariants.
 
-## Impact оставшихся трёх решений
+## Impact оставшихся двух решений
 
 | Finding | Если только исправить placement | Если изменить semantics |
 | --- | --- | --- |
 | `VPNG0004-R4.R3.R1` priority continuity | **Medium trace / zero code** | **High route-priority behavior impact** if non-disruptive continuity guarantee is removed |
 | `VPNG0005-R5.R6.R4` reload | **Low docs** | **Low current code**: alpha reload отсутствует |
-| `VPNG0007-R7.R7.R1.R1` lifecycle gate | **Docs/evidence only** | **No direct production-code impact** unless evidence policy is relaxed |
 
 ## Итоговая оценка
 
