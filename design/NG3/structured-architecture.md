@@ -275,7 +275,8 @@ API
 
 Subcomponents
 
-1. `NetworkPolicyEnforcer` *Достигает и подтверждает переданный Adapter'ом desired lower network-policy state; сам desired state не выбирает.*
+1. `NetworkPolicyLayoutCalculator` *Детерминированно распределяет внутренние routing/RPDB/metric/nft resources между semantic owner scopes; numeric layout наружу Adapter не экспортирует.*
+2. `NetworkPolicyEnforcer` *Достигает и подтверждает переданный Adapter'ом desired lower network-policy state; сам desired state не выбирает.*
 
 Architectural decisions
 
@@ -283,6 +284,19 @@ Architectural decisions
 2. `Owner separation` *Общая physical realization не сливает payload, probe и другие semantic owner scopes; ownership должен оставаться различимым при observation, mutation и cleanup.*
 3. `Lower realization` *Adapter обязан получить достаточные verified lower facts и owned-resource allocation; неизвестную gateway/onlink или другую physical realization запрещено угадывать.*
 4. `Cross-Space finding` *Существующий flat architecture также приписывает этому Adapter host-side Device publication mapping. В structured architecture этот sub-contract пока не заселяется сюда: его server находится вне Private network, а сохранение его под этим Adapter потребовало бы `<partial>` и отдельного review границы.*
+
+### NetworkPolicyLayoutCalculator
+
+Pure Calculator внутреннего resource layout. Он получает semantic owner demand и injected
+platform resource space и возвращает детерминированное распределение внутренних
+routing-table, RPDB, route-marker, metric и nft namespace ресурсов.
+
+API
+
+    allocate(...) — построить lower owner/resource layout без observation или mutation внешней среды.
+
+Его API не входит в API Space: numeric/internal allocation требуется только
+`NetworkPolicyAdapter` и не является самостоятельным контрактом для STACK.
 
 ### NetworkPolicyEnforcer
 
@@ -322,13 +336,13 @@ Architectural decisions
       *Изменение membership, direction, filtering/NAT или другой structural semantics допускает временное ограничение forwarding. Enforcer принимает complete desired lower state как input и не является владельцем его semantic compilation.*
 
 3. `Structural barrier dependency`
-   *Перед allowing structural mutation Enforcer требует независимо подтвержденный `ForwardingGate=DISABLED`. Сам `ForwardingGate` не является subcomponent Enforcer: его API независимо востребован lifecycle/safety клиентами.*
+   *Перед allowing structural mutation Enforcer требует независимо подтвержденный `ForwardingGate=DISABLED`. Сам `ForwardingGate` не является subcomponent Enforcer: его API независимо востребован lifecycle/safety клиентами. Gate блокирует routed IPv4 forwarding, но не делает автоматически безопасным local `stack_input/stack_output` traffic; такие owner classes сохраняют собственные atomic/exact safety contracts.*
 
 4. `Exact-before-release`
    *Structural state изменяется под закрытым gate: сначала restrictive guards и удаление stale activation/routing state, затем required routes и nft state, затем activation dispatch. Gate может быть открыт только после exact routing+nft postcondition; после открытия выполняется fresh final verification.*
 
-5. `Failure and recovery`
-   *После partial/failed mutation authoritative state устанавливается заново. Неподтвержденное состояние остается restrictive. Если final verification после открытия gate не проходит, Enforcer пытается вернуть gate в verified DISABLED и сообщает failure, а не success.*
+5. `Failure postcondition`
+   *После partial/failed mutation Enforcer заново наблюдает authoritative state и не продолжает stale plan. Неподтвержденное состояние остается restrictive. Если final verification после открытия gate не проходит, Enforcer пытается вернуть gate в verified DISABLED и сообщает failure, а не success. Любая более поздняя retry/reconciliation attempt принадлежит caller/Manager и начинается из нового fresh state.*
 
 6. `Lower technical boundary`
    *Drivers/Readers/Executors и Backend-композиции предоставляют observation/actuation primitives, но не выбирают desired state и не владеют convergence. Linux JSON/argv shapes, numeric pools и platform constants принадлежат lower technical realization, а не API Enforcer.*
