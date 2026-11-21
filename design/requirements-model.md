@@ -530,7 +530,7 @@ child scope ⊆ parent scope
 ```text
 PRODUCT0001
 PRODUCT0002
-VPNG0003
+VPNG-U003
 ```
 
 Номер первичного требования не кодирует тип: корень по определению всегда Requirement.
