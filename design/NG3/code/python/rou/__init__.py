@@ -494,9 +494,9 @@ from .route_priority_convergence import (
     RoutePriorityDeleteDuplicate,
     plan_route_priority_convergence,
 )
-from .route_priority_executor import (
-    RoutePriorityExecutionResult,
-    RoutePriorityExecutionStatus,
+from .route_priority_enforcer import (
+    RoutePriorityEnforcementResult,
+    RoutePriorityEnforcementStatus,
     RoutePrioritySnapshot,
     converge_route_priority_once,
 )
@@ -812,8 +812,8 @@ __all__ = [
     "RoutePriorityDomainOutcome",
     "RoutePriorityDomainRequest",
     "RoutePriorityDomainRealization",
-    "RoutePriorityExecutionResult",
-    "RoutePriorityExecutionStatus",
+    "RoutePriorityEnforcementResult",
+    "RoutePriorityEnforcementStatus",
     "RoutePriorityInventoryError",
     "RoutePriorityMetricSpace",
     "RoutePriorityPathRoute",
