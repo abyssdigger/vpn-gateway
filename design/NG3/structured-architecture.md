@@ -67,6 +67,11 @@ Space без resident'ов для этой модели ненаблюдаем �
 Если компонент представлен в Space как `<partial>` или иным review-marker, причина
 маркера поясняется в его кратком component spec.
 
+Если одна technical component identity представлена как `<partial>` в нескольких Spaces,
+каждый Space содержит собственный addendum spec только для своей проекции этого компонента.
+Общая technical identity не создает скрытого глобального spec поверх Spaces и не заменяет
+Space-local описание ответственности/API этой partial occurrence.
+
 ### 2.1.1. Критерий вложенности
 
 Компонент следует показывать child'ом другого компонента в дереве `Residents`, когда
