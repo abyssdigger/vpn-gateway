@@ -95,3 +95,13 @@ EXP-031 must prove on the current nftables target:
 ## Verdict
 
 **PASS — versioned table marker selected; live representation remains evidence-gated.**
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R3.R2` -> `VPNG9001-R1.R1.R3.R2`
+
+The original IDs in the historical body are intentionally preserved.

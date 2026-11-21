@@ -141,3 +141,14 @@ unit.
 The owned route-key snapshot is now sufficiently strict to serve as authoritative input to
 the pure priority convergence/recovery algorithm without hiding same-name interface
 replacement, filtered-protocol omission or unsupported kernel route structure.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
+
+The original IDs in the historical body are intentionally preserved.

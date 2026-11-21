@@ -121,3 +121,16 @@ Those remain explicit next review units.
 The unit preserves the accepted safety/recovery semantics and closes the Executor
 single-attempt orchestration contract without inventing retry policy or Linux representation
 semantics.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+- `VPNG0005-R5.R3` -> `VPNG9101-R1.R1.R3`
+- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
+- `VPNG0007-R7.R5` -> `VPNG9001-R1.R1.R5`
+
+The original IDs in the historical body are intentionally preserved.
