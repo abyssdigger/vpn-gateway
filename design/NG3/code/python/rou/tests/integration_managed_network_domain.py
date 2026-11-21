@@ -193,9 +193,10 @@ def main() -> int:
         drift_environment, drift_boundary, _ = ensure_lifecycle(spec, runner)
         assert drift_environment.confirmed
         assert drift_boundary.confirmed
-        assert not json.loads(
+        host_address_rows = json.loads(
             runner.run(("ip", "-j", "-4", "addr", "show", "dev", host_interface))
-        )[0].get("addr_info")
+        )
+        assert not host_address_rows or not host_address_rows[0].get("addr_info")
         print("MANAGED_OWNED_LIFECYCLE_DRIFT_REPAIRED=PASS")
 
         destroy_lifecycle(spec, runner)
