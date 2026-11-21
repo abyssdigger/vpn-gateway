@@ -458,6 +458,125 @@ resident/artifact/interaction или component spec; активный structured
 
 
 
+# STACK
+
+Внутренняя control-plane среда VPN-GATE. Здесь живут semantic Engines и Machinery,
+которые принимают/нормализуют intent, поддерживают текущую payload-policy проекцию,
+планируют наблюдение availability, оркестрируют bounded lifecycle и собирают truthful
+runtime status. STACK не является data-plane network namespace: воздействие на сетевую
+реальность выполняется через API соседних Spaces.
+
+API
+
+    @ProductLifecycleControl.start(...) — выполнить bounded startup и сообщить success только после требуемых readiness/safety postconditions.
+    @ProductLifecycleControl.stop(...) — выполнить bounded containment/cleanup и сообщить success только после требуемых cleanup postconditions.
+    @ProductLifecycleControl.restart(...) — скомпозировать stop + новый start из authoritative state.
+    @ProductLifecycleControl.reload(...) — optional supported operation; отсутствует в текущей alpha и не подменяется скрытым restart.
+    @ConfigurationAdapter.normalize(...) — принять внешнее configuration representation и вернуть validated normalized domain intents.
+    @RuntimeStatusAgent.<current snapshot publication> — предоставить текущую user-facing status projection; concrete presentation/API surface пока заменяем.
+
+Residents
+
+1. `@ProductLifecycleControl` *Direct procedural Machinery product lifecycle; не является Engine и не вводит самостоятельную lifecycle policy/state machine.*
+2. `@ConfigurationAdapter` *Direct boundary от external configuration representation к validated normalized domain intents.*
+    1. `AvailabilityDescriptionResolver` *Pure Calculator, разрешающий Profile/Device availability description без runtime topology inference.*
+3. `PayloadTrafficManager` *Manager текущей semantic payload-policy среды: structural intent, binding projection, availability confirmation и effective path order.*
+    1. `PayloadPolicyCalculator` *Pure Calculator structural payload policy из normalized intent и уже подтвержденных внешних фактов.*
+    2. `AvailabilityPriorityCalculator` *Pure Calculator effective path order из current membership, availability problem state, active path и reserve semantics.*
+4. `AvailabilityProbeAgent` *Agent ongoing availability observation; планирует bounded checks и публикует normalized evidence, но не управляет наблюдаемой внешней доступностью.*
+5. `@RuntimeStatusAgent` *Agent current-only status composition из authoritative owner snapshots; не актуирует наблюдаемые domains.*
+
+Artifacts
+
+1. `accepted normalized intent` *(observed, managed)* — текущие validated Device/Profile/availability/helper intents, от которых разрешено строить dependent desired state. Это не глобальный mutable config object и не копия external file syntax.
+2. `payload semantic state` *(observed, managed)* — текущая owner projection `PayloadTrafficManager`.
+    1. `structural payload intent` *(observed, managed)*
+    2. `Device binding projection` *(observed, managed)* — bounded current logical binding state, а не endpoint inventory.
+    3. `availability confirmation state` *(observed, managed)*
+    4. `effective path-order state` *(observed, managed)* — current active path/effective order; не per-flow affinity.
+3. `availability observation context` *(observed, managed)* — current requested subjects, cadence, bounded in-flight identities/generation tokens и diagnostics `AvailabilityProbeAgent`.
+4. `controller ownership/readiness session` *(observed, managed)* — bounded procedural lifecycle state, включая retained single-controller ownership и текущий READY/cleanup result. Его наличие не превращает lifecycle в Engine.
+5. `runtime status snapshot` *(observed, managed)* — current-only composition authoritative snapshots; не event history и не system-of-record.
+
+Interactions
+
+| From | Interaction | To |
+| --- | --- | --- |
+| `Operator` / deployment control | `start / stop / restart / optional reload` | `@ProductLifecycleControl` |
+| `@ProductLifecycleControl` | acquire/release single-controller ownership and maintain bounded session | `controller ownership/readiness session` |
+| external configuration source | candidate configuration representation | `@ConfigurationAdapter` |
+| `@ConfigurationAdapter` | resolve normalized availability descriptions | `AvailabilityDescriptionResolver` |
+| `@ConfigurationAdapter` | accepted normalized domain intents | `accepted normalized intent` |
+| `@ProductLifecycleControl` | validate/load candidate intent before dependent mutation | `@ConfigurationAdapter` |
+| `@ProductLifecycleControl` | preflight/ensure/destroy managed data-plane environment | `Private network.@ManagedNetworkDomainLifecycle <partial>` |
+| `@ProductLifecycleControl` | establish/remove ordinary-side managed boundary through the same current lifecycle transaction | `Ordinary-side transition.@ManagedNetworkDomainLifecycle <partial>` |
+| `@ProductLifecycleControl` | converge/cleanup enabled host-side contribution | `Helper-managed host` |
+| `@ProductLifecycleControl` | activate/cleanup desired lower network policy | `Private network.@NetworkPolicyAdapter` |
+| `accepted normalized intent` | current structural inputs | `PayloadTrafficManager` |
+| `PayloadTrafficManager` | calculate structural semantic projection | `PayloadPolicyCalculator` |
+| `PayloadTrafficManager` | calculate effective availability-dependent ordering | `AvailabilityPriorityCalculator` |
+| `PayloadTrafficManager` | observe/verify current endpoint bindings | `Private network.@VPNPathAdapter` |
+| `PayloadTrafficManager` | apply/reconcile current desired lower policy | `Private network.@NetworkPolicyAdapter` |
+| `PayloadTrafficManager` | own/update current semantic state | `payload semantic state` |
+| `accepted normalized intent` / current bindings | synchronize requested observation subjects | `AvailabilityProbeAgent` |
+| `AvailabilityProbeAgent` | own current check schedule/context | `availability observation context` |
+| `AvailabilityProbeAgent` | execute one physical check | `Private network.@ActiveProbeDriver` |
+| `AvailabilityProbeAgent` | `AvailabilityEvidence` InfoEvent | `PayloadTrafficManager` |
+| `PayloadTrafficManager` | current payload projection InfoEvent | `@RuntimeStatusAgent` |
+| `AvailabilityProbeAgent` | current observation/diagnostic InfoEvent | `@RuntimeStatusAgent` |
+| `@ProductLifecycleControl` | lifecycle/readiness/cleanup projection | `@RuntimeStatusAgent` |
+| `@RuntimeStatusAgent` | compose/update | `runtime status snapshot` |
+| `@RuntimeStatusAgent` | current snapshot publication | `Operator` / presentation environment |
+
+Findings
+
+1. `Status presentation boundary` — architecture intentionally leaves CLI/API/text/file
+   presentation replaceable. Current alpha writes `status.json`, but that file path/format is
+   not yet a stable product API; structured model therefore terminates on semantic current
+   snapshot publication rather than blessing the alpha mechanism.
+2. `Lifecycle decomposition` — current procedural startup directly composes lower lifecycle,
+   host contribution and policy activation. No accepted need justifies a `LifecycleManager`;
+   decomposition should happen only where lower Space boundaries now expose independent
+   Machinery contracts.
+
+Component diagram
+
+```text
++-------------------------- Operator / deployment --------------------------+
+             | lifecycle control                         ^ status
+             v                                           |
++------------+-------------------------------------------------------------+
+|                                  STACK                                   |
+|                                                                          |
+| @ProductLifecycleControl ----------------------------+                   |
+|       |                |               |             |                   |
+|       |                |               |             v                   |
+|       |                |               |      @RuntimeStatusAgent        |
+|       |                |               |             ^                   |
+|       v                |               |             | InfoEvents        |
+| @ConfigurationAdapter  |               |      +------+---------+         |
+|       |                |               |      |                |         |
+|       v                |               | PayloadTrafficManager |         |
+| AvailabilityDescriptionResolver       |      ^                |         |
+|       |                                |      | evidence       |         |
+| [accepted normalized intent] ----------+----> |                |         |
+|                                              |                |         |
+|                                     AvailabilityProbeAgent ----+         |
+|                                              |                           |
+|                 +----------------------------+------------------+        |
+|                 |                                               |        |
++-----------------|-----------------------------------------------|--------+
+                  |                                               |
+       lower policy/lifecycle                              physical probe
+                  |                                               |
+        +---------v-------------------+             +-------------v---------+
+        | Private network / transition|             | Private network       |
+        +-----------------------------+             +-----------------------+
+                  |
+                  +--------------------------> Helper-managed host
+```
+
+
 # Ordinary-side transition
 
 Прозрачный L3-переход между `Private network` и ordinary host-side сетевой средой.
