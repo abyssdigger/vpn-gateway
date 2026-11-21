@@ -178,15 +178,46 @@ revalidated against the new Statement/ancestry.
 
 No production/reference code was changed by this research refactor.
 
+## Final coherent-tree integrity pass
+
+After the final two dispositions were applied, the corrected tree was rechecked as one
+structure rather than as isolated findings.
+
+Structural checks:
+
+- **181** normative VPNG nodes: 7 primary Requirements, 151 derived Requirements and
+  23 Constraints;
+- no duplicate requirement IDs;
+- no missing immediate parents in the actual VPNG tree;
+- no active `RESEARCH UNRESOLVED` marker;
+- removed `VPNG0004-R4.R3.R1` and `VPNG0005-R5.R6.R4*` do not remain in the corrected
+  tree.
+
+Semantic checks for the final changes:
+
+- `VPNG0003-R3.R9` is causally owned by `VPNG0003-R3`: it preserves practical path
+  continuity while applying a change in effective preference and no longer carries a
+  route-copy/staging implementation prescription;
+- the expanded `VPNG0005` has an explicit additional external Basis from the 2026-11-21
+  project-holder decision that configuration update belongs in the lifecycle obligation;
+- `VPNG0005-R5` now explicitly owns both lifecycle state and application of changed
+  configuration;
+- `VPNG0005-R5.R6` requires a supported way to apply changed configuration and safe final
+  state, without requiring a distinct `reload` command;
+- removal of the former reload Requirement and alpha Constraint does not remove Release-1
+  capability: restart remains a valid way to apply changed configuration.
+
+No new product decision was required by this coherent-tree pass.
+
 ## Verdict
 
-**ALL ORIGINAL PURPOSE/PARENT FINDINGS HAVE ACCEPTED DISPOSITIONS.**
+**PASS — ALL ORIGINAL PURPOSE/PARENT FINDINGS ARE RESOLVED AND THE CORRECTED TREE IS INTERNALLY COHERENT.**
 
 All original 20 findings are resolved in the research draft. The corrected-tree draft,
 decision record, unresolved list and impact assessment are aligned with each other.
 
-Normative promotion is no longer blocked by a missing product-holder decision. It still
-requires a final coherent-tree integrity review and, if that review passes, an atomic trace
-remap across current architecture/configuration/registry documents. Historical evidence
+Normative promotion is no longer blocked by a missing product-holder decision or by the
+coherent-tree integrity review. The next step is an atomic trace remap across current
+architecture/configuration/registry documents together with normative promotion. Historical evidence
 remains preserved according to `PROJECT-CONVENTIONS.md`, including the required historical
 requirement context when an experiment referenced a subsequently removed R/C.
