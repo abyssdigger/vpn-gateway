@@ -40,7 +40,7 @@ Transition Space остается полноценным Space: он может 
 
 ## 2. Нотация
 
-### 2.1. Residents tree и component addenda
+### 2.1. Residents tree и component specs
 
 Каждый Space обязан содержать раздел `Residents`.
 
@@ -60,22 +60,22 @@ Space без resident'ов для этой модели ненаблюдаем �
 3. `Имя <partial>` *краткое описание*
 ```
 
-Все компоненты, встречающиеся в дереве `Residents`, описываются ниже в плоском
-`Component addenda` этого Space. Все component specs внутри addendum имеют одинаковый
+Все resident'ы, являющиеся компонентами VPN-GATE, описываются после карты Spaces в
+Space-local Component Annex (§2.9). Все component specs внутри Annex имеют одинаковый
 уровень заголовка. Иерархия из их расположения не выводится.
 
 Если компонент представлен в Space как `<partial>` или иным review-marker, причина
 маркера поясняется в его кратком component spec.
 
 Если одна technical component identity представлена как `<partial>` в нескольких Spaces,
-каждый Space содержит собственный addendum spec только для своей проекции этого компонента.
+Annex каждого Space содержит собственный spec только для своей проекции этого компонента.
 Общая technical identity не создает скрытого глобального spec поверх Spaces и не заменяет
 Space-local описание ответственности/API этой partial occurrence.
 
 Для **внешнего** Space `Resident` может быть external actor/system/capability provider,
 который не является компонентом VPN-GATE и поэтому не классифицируется как
 Engine/Machinery по `design/component-model.md`. На него по-прежнему распространяются
-Space/API/Interaction rules, но отдельный VPN-GATE component addendum не требуется, если
+Space/API/Interaction rules, но отдельный VPN-GATE component spec не требуется, если
 его внешний контракт уже достаточно описан в самом Space. Component roles и обязательные
 component specs относятся к resident'ам, являющимся архитектурными компонентами VPN-GATE.
 
@@ -405,9 +405,8 @@ Annex содержит плоский набор specs. Component hierarchy за
 Для крупного проекта Annex может быть вынесен в отдельный документ без изменения этой
 адресации и семантики.
 
-Пока structured migration не завершена, уже перенесенные inline-блоки
-`Component addenda` допускаются как временная форма. Их наличие не отменяет целевое
-правило и не делает inline placement частью архитектурной семантики.
+Inline component specs между Space sections не используются: карта Spaces остается
+непрерывной, а подробные specs находятся только в соответствующих Annexes.
 
 ## 3. Форма описания Space
 
