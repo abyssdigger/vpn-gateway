@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .composite_nft_policy import CompositeNftDesiredState
-from .forwarding_gate import ForwardingGateBackend
+from .forwarding_gate import ForwardingGateDriver
 from .network_policy_layout import NetworkPolicyPlatformSpace
 from .payload_routing_desired import PayloadRoutingDesiredState
 from .structural_policy_mutation import (
@@ -43,7 +43,7 @@ class StructuralPolicyTransactionResult:
 
 
 def converge_structural_policy(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     backend: StructuralPolicyMutationBackend,
     routing_desired: PayloadRoutingDesiredState,
     nft_desired: CompositeNftDesiredState,

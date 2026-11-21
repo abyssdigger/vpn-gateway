@@ -26,8 +26,8 @@ from .device_firewall_structure import (
     DEVICE_FIREWALL_RULE_COMMENT,
 )
 from .forwarding_gate import (
-    ForwardingGateBackend,
-    ForwardingGateExecutionResult,
+    ForwardingGateDriver,
+    ForwardingGateEnforcementResult,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
@@ -79,7 +79,7 @@ class DeviceFirewallMutationStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class DeviceFirewallMutationResult:
     status: DeviceFirewallMutationStatus
-    barrier: ForwardingGateExecutionResult
+    barrier: ForwardingGateEnforcementResult
     initial: DeviceFirewallComparison | None
     final: DeviceFirewallComparison | None
     mutation_attempted: bool
@@ -187,7 +187,7 @@ def _classify(
 
 
 def converge_device_firewall_step_once(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     firewall_backend: DeviceFirewallMutationBackend,
     desired: DeviceFirewallDesiredState,
 ) -> DeviceFirewallMutationResult:
@@ -388,7 +388,7 @@ def _strict_progress(
     )
 
 
-def _gate_lost(gate_backend: ForwardingGateBackend) -> bool:
+def _gate_lost(gate_backend: ForwardingGateDriver) -> bool:
     try:
         return (
             gate_backend.observe_forwarding_gate()

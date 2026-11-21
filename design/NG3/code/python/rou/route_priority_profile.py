@@ -6,9 +6,9 @@ from ipaddress import IPv4Network
 from typing import Iterable, Mapping
 
 from .binding import LogicalPathId
-from .route_priority_executor import (
+from .route_priority_enforcer import (
     RoutePriorityBackend,
-    RoutePriorityExecutionResult,
+    RoutePriorityEnforcementResult,
     RoutePrioritySnapshot,
     converge_route_priority_once,
 )
@@ -43,7 +43,7 @@ class RoutePriorityDomainRequest:
 @dataclass(frozen=True, slots=True)
 class RoutePriorityDomainOutcome:
     domain_id: RoutePriorityDomainId
-    attempt: RoutePriorityExecutionResult | None
+    attempt: RoutePriorityEnforcementResult | None
     attempt_error: str | None
     final: RoutePrioritySnapshot | None
     final_error: str | None
@@ -89,7 +89,7 @@ def converge_route_priority_profile_once(
     )
     _validate_requests(ordered)
 
-    attempts: dict[RoutePriorityDomainId, RoutePriorityExecutionResult | None] = {}
+    attempts: dict[RoutePriorityDomainId, RoutePriorityEnforcementResult | None] = {}
     attempt_errors: dict[RoutePriorityDomainId, str | None] = {}
 
     for request in ordered:

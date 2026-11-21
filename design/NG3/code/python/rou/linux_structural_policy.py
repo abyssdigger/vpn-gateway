@@ -8,7 +8,7 @@ from .device_firewall_desired import DeviceFirewallChainSpec
 from .interface_inventory import parse_ip_link_inventory
 from .linux_composite_nft import LinuxCompositeNftBackend
 from .linux_nft_scaffold import NftScriptRunner
-from .linux_structural_routing import LinuxStructuralRoutingBackend
+from .linux_structural_routing import LinuxStructuralRoutingDriver
 from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
 from .probe_local_mutation import ProbeLocalMutationStep
@@ -134,8 +134,8 @@ class LinuxStructuralPolicyBackend:
             )
         )
 
-    def _routing(self) -> LinuxStructuralRoutingBackend:
-        return LinuxStructuralRoutingBackend(
+    def _routing(self) -> LinuxStructuralRoutingDriver:
+        return LinuxStructuralRoutingDriver(
             runner=self.runner,
             namespace=self.namespace,
         )

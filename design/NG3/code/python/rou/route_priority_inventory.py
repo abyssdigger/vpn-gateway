@@ -7,7 +7,7 @@ from typing import Iterable
 
 from .binding import LogicalPathId
 from .interface_identity import InterfaceIdentity
-from .route_priority_executor import RoutePrioritySnapshot
+from .route_priority_enforcer import RoutePrioritySnapshot
 
 
 class RoutePriorityInventoryError(ValueError):

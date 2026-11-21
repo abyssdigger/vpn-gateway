@@ -8,7 +8,7 @@ from typing import Protocol
 
 from .host_routing_contribution import HostRoutingContribution
 from .forwarding_gate import (
-    ForwardingGateExecutionResult,
+    ForwardingGateEnforcementResult,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
@@ -20,7 +20,7 @@ from .instance_lock import (
     acquire_controller_instance_lock,
 )
 from .interface_identity import InterfaceIdentity
-from .linux_forwarding_gate import LinuxForwardingGateBackend
+from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .linux_nft_scaffold import (
     LinuxNftScaffoldBackend,
@@ -137,7 +137,7 @@ class ControllerStartupResult:
     domain: ManagedNetworkDomainEnsureResult | None = None
     host_routing_contribution: HostRoutingContribution | None = None
     activation: NetworkPolicyActivationResult | None = None
-    failure_containment: ForwardingGateExecutionResult | None = None
+    failure_containment: ForwardingGateEnforcementResult | None = None
     failure_status: ControllerStartupStatus | None = None
     stop: ControllerStopResult | None = None
     stopping: ControllerStartupStoppingContext | None = None
@@ -262,7 +262,7 @@ def start_controller_once(
         diagnostic: str,
         *,
         activation: NetworkPolicyActivationResult | None = None,
-        containment: ForwardingGateExecutionResult | None = None,
+        containment: ForwardingGateEnforcementResult | None = None,
         failure_status: ControllerStartupStatus | None = None,
         retain_lock: bool = False,
     ) -> ControllerStartupResult:
@@ -481,7 +481,7 @@ def start_controller_once(
         if interrupted is not None:
             return interrupted
 
-    gate = LinuxForwardingGateBackend(
+    gate = LinuxForwardingGateDriver(
         runner,
         domain_spec.namespace,
     )
@@ -593,9 +593,9 @@ def start_controller_once(
 def _contain(
     domain_spec: ManagedNetworkDomainSpec,
     runner: NftScriptRunner,
-) -> ForwardingGateExecutionResult:
+) -> ForwardingGateEnforcementResult:
     return converge_forwarding_gate_once(
-        LinuxForwardingGateBackend(
+        LinuxForwardingGateDriver(
             runner,
             domain_spec.namespace,
         ),

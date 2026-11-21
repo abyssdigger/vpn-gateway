@@ -7,7 +7,7 @@ from typing import Protocol, Sequence
 from .interface_inventory import parse_ip_link_inventory
 from .route_priority import RoutePriorityMove
 from .route_priority_convergence import RoutePriorityDeleteDuplicate
-from .route_priority_executor import RoutePrioritySnapshot
+from .route_priority_enforcer import RoutePrioritySnapshot
 from .route_priority_inventory import (
     RoutePriorityPathRoute,
     parse_ip_route_priority_snapshot,

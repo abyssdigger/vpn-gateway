@@ -13,7 +13,7 @@ from .forwarding_gate import (
     converge_forwarding_gate_once,
 )
 from .interface_identity import InterfaceIdentity
-from .linux_forwarding_gate import LinuxForwardingGateBackend
+from .linux_forwarding_gate import LinuxForwardingGateDriver
 
 
 _IFNAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,14}$")
@@ -446,7 +446,7 @@ def _require_containment(
     runner: ManagedNetworkDomainRunner,
 ) -> None:
     result = converge_forwarding_gate_once(
-        LinuxForwardingGateBackend(runner, spec.namespace),
+        LinuxForwardingGateDriver(runner, spec.namespace),
         ForwardingGateState.DISABLED,
     )
     if not result.confirmed:

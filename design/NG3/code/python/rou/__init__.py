@@ -77,8 +77,8 @@ from .interface_inventory import (
     parse_ip_link_inventory,
 )
 from .forwarding_gate import (
-    ForwardingGateExecutionResult,
-    ForwardingGateExecutionStatus,
+    ForwardingGateEnforcementResult,
+    ForwardingGateEnforcementStatus,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
@@ -99,7 +99,7 @@ from .linux_availability_cycle import (
     run_linux_availability_cycle_once,
 )
 from .linux_forwarding_gate import (
-    LinuxForwardingGateBackend,
+    LinuxForwardingGateDriver,
     LinuxForwardingGateError,
 )
 from .nft_namespace_inventory import (
@@ -125,7 +125,7 @@ from .nft_payload_scaffold import (
     NftPayloadScaffoldError,
     compare_payload_nft_scaffold,
 )
-from .nft_scaffold_executor import (
+from .nft_scaffold_enforcer import (
     PayloadNftScaffoldPrepareResult,
     PayloadNftScaffoldPrepareStatus,
     prepare_payload_nft_scaffold_once,
@@ -471,7 +471,7 @@ from .linux_policy_platform import (
     NG3_PROBE_LOCAL_PLATFORM,
 )
 from .linux_structural_routing import (
-    LinuxStructuralRoutingBackend,
+    LinuxStructuralRoutingDriver,
     LinuxStructuralRoutingError,
 )
 from .linux_probe_routing import (
@@ -494,9 +494,9 @@ from .route_priority_convergence import (
     RoutePriorityDeleteDuplicate,
     plan_route_priority_convergence,
 )
-from .route_priority_executor import (
-    RoutePriorityExecutionResult,
-    RoutePriorityExecutionStatus,
+from .route_priority_enforcer import (
+    RoutePriorityEnforcementResult,
+    RoutePriorityEnforcementStatus,
     RoutePrioritySnapshot,
     converge_route_priority_once,
 )
@@ -644,8 +644,8 @@ __all__ = [
     "DirectDeviceRouteRealizationError",
     "Direction",
     "ExpectedInterfaceSelector",
-    "ForwardingGateExecutionResult",
-    "ForwardingGateExecutionStatus",
+    "ForwardingGateEnforcementResult",
+    "ForwardingGateEnforcementStatus",
     "ForwardingGateState",
     "InterfaceIdentity",
     "InterfaceInventoryError",
@@ -653,7 +653,7 @@ __all__ = [
     "IproutePriorityBackendError",
     "LinuxAvailabilityCycleResult",
     "LinuxAvailabilityCycleStatus",
-    "LinuxForwardingGateBackend",
+    "LinuxForwardingGateDriver",
     "LinuxForwardingGateError",
     "LinuxProbeRoutingBackend",
     "LinuxProbeRoutingError",
@@ -714,7 +714,7 @@ __all__ = [
     "PayloadNatPhysicalSnapshot",
     "LinuxPayloadNatBackend",
     "LinuxStructuralRoutingError",
-    "LinuxStructuralRoutingBackend",
+    "LinuxStructuralRoutingDriver",
     "compare_payload_nat",
     "observe_payload_forward",
     "select_composite_nft_step",
@@ -812,8 +812,8 @@ __all__ = [
     "RoutePriorityDomainOutcome",
     "RoutePriorityDomainRequest",
     "RoutePriorityDomainRealization",
-    "RoutePriorityExecutionResult",
-    "RoutePriorityExecutionStatus",
+    "RoutePriorityEnforcementResult",
+    "RoutePriorityEnforcementStatus",
     "RoutePriorityInventoryError",
     "RoutePriorityMetricSpace",
     "RoutePriorityPathRoute",

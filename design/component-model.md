@@ -19,18 +19,29 @@ Components
 │   └── Agent
 │
 └── Machinery
-    ├── semantic roles
+    ├── semantic component roles
     │   ├── Calculator
     │   ├── Adapter
-    │   ├── Executor
+    │   ├── Enforcer
     │   └── Driver
     │
-    └── execution primitives
-        └── Runner
+    └── technical operation roles
+        ├── Reader
+        └── Executor
 ```
 
 Разделение задается способом участия компонента в архитектуре, а не сложностью его
 внутренней реализации.
+
+`Reader` и `Executor` описывают технические ответственности операции и не требуют
+автоматического выделения самостоятельного компонента. Они становятся отдельной Machinery
+только там, где это создает полезную архитектурную границу; в простом случае их
+функциональность может оставаться методом `Driver`.
+
+`Backend` не является дополнительным типом компонента. Это логическая композиционная
+единица реализации: сформированный проектом внутренний API к внешней технической среде или
+ее части, который может собирать несколько Drivers, Readers, Executors и локальных
+технических преобразований. Нормативная семантика Backend определена в §11.4.
 
 ### 1.1. Engines
 
@@ -233,7 +244,9 @@ result
 
 Caller вправе использовать returned value как результат данного обращения.
 
-Немаркированные Calculator, Adapter, Executor и Driver предполагают Direct semantics. Runner обычно является Direct execution primitive.
+Немаркированные Calculator, Adapter, Enforcer и Driver предполагают Direct semantics.
+Выделенные в самостоятельную Machinery Reader и Executor также предполагают Direct
+semantics, если явно не указано иное.
 
 ### 6.2. Indirect Machinery
 
@@ -364,7 +377,9 @@ Adapter является **границей архитектурной види�
 - собственная Event Delivery Environment;
 - Calculators;
 - другие Adapters;
-- Drivers;
+- Enforcers;
+- Drivers и их Reader/Executor operations;
+- Backend-композиции;
 - transactions;
 - persistent state;
 - отдельный процесс или распределенная система.
@@ -402,16 +417,16 @@ caller -> Adapter -> lower domain
 Это особенно важно для Adapter, за которым находится самостоятельная система: ответ
 Adapter обычно означает «передал», а не «вот итог всей скрытой системы».
 
-## 9. Executor
+## 9. Enforcer
 
-**Executor** — Machinery, принимающая заданное состояние или проверяемое постусловие и
-отвечающая за его достижение.
+**Enforcer** — Machinery, принимающая заданное состояние или проверяемое постусловие и
+отвечающая за его достижение в рамках одного вызова.
 
 Ключевая граница ответственности:
 
-> Executor не выбирает, **какое** desired state нужно предметной области, но отвечает за
-> то, чтобы переданное ему desired state / postcondition было достигнуто либо операция
-> завершилась доказанным failure.
+> Enforcer не выбирает, **какое** desired state нужно предметной области, но отвечает за
+> то, чтобы переданное ему desired state / postcondition было достигнуто и подтверждено либо
+> операция завершилась доказанным failure.
 
 Типичный Direct-контракт:
 
@@ -419,9 +434,11 @@ Adapter обычно означает «передал», а не «вот ит�
 desired state / postcondition
     |
     v
-Executor
+Enforcer
     |
-    +--> external actions
+    +--> fresh observation
+    +--> plan required changes
+    +--> Reader / Executor operations
     +--> fresh observation
     +--> verification
     |
@@ -429,31 +446,34 @@ Executor
 SUCCESS | FAILURE
 ```
 
-Executor может:
-
-- использовать один или несколько Drivers;
-- использовать Runner напрямую;
-- самостоятельно выполнять driver-level external interactions, если выделение отдельного
-  Driver не создает полезной переиспользуемой semantic boundary.
+Enforcer может использовать один или несколько Backend/Driver boundaries и их Reader /
+Executor operations. Он может самостоятельно содержать локальные технические операции, если
+их выделение не создает полезной переиспользуемой границы.
 
 Наличие прямого внешнего I/O поэтому **не делает компонент Driver автоматически**.
-Определяющий признак Executor — ответственность за convergence / verified postcondition.
+Определяющий признак Enforcer — ответственность за разовое достижение и подтверждение
+caller-supplied desired state / postcondition.
 
-Executor не должен выбирать предметную policy, ради которой desired state был выбран.
+Enforcer не должен выбирать предметную policy, ради которой desired state был выбран.
 Эта ответственность остается у Manager или иного вышележащего caller.
 
-Executor не обязан быть классом. Stateless cohesive convergence operation может быть
+Enforcer не является долговременным Controller/Manager только потому, что внутри одного
+вызова использует цикл `observe -> plan -> actuate -> re-observe`. После завершения
+вызова он не владеет обязанностью непрерывно поддерживать состояние среды; если такая
+обязанность существует, ее lifecycle принадлежит Engine.
+
+Enforcer не обязан быть классом. Stateless cohesive convergence operation может быть
 функцией или набором процедур, если отдельный object boundary не дает архитектурной
 ценности.
 
-### 9.1. Direct Executor
+### 9.1. Direct Enforcer
 
-Обычный случай: return завершает попытку convergence и сообщает, достигнуто ли требуемое
-постусловие.
+Обычный случай: return завершает попытку materialization/convergence и сообщает, достигнуто
+ли требуемое постусловие.
 
-### 9.2. Indirect Executor
+### 9.2. Indirect Enforcer
 
-Indirect Executor допустим только с явно описанной completion semantics. Его synchronous
+Indirect Enforcer допустим только с явно описанной completion semantics. Его synchronous
 return не доказывает достижение desired state; фактическое завершение должно наблюдаться
 отдельно.
 
@@ -463,8 +483,9 @@ Manager/Agent boundary.
 
 ## 10. Driver
 
-**Driver** — Machinery, непосредственно взаимодействующая с конкретным внешним техническим
-механизмом.
+**Driver** — Machinery, являющаяся технической границей доступа к конкретному внешнему
+механизму или технической среде и делающая эту среду доступной внутренней системе для
+наблюдения и/или управления через определенный контракт.
 
 Примеры внешних механизмов:
 
@@ -477,19 +498,31 @@ Manager/Agent boundary.
 - socket API;
 - filesystem.
 
-Driver знает технический контракт механизма, но не должен знать предметную policy
-вышележащего Engine.
+Driver знает технический контракт механизма и отвечает за корректную границу взаимодействия
+с ним. В его ответственность могут входить:
+
+- установление и проверка технического доступа к среде;
+- namespace/socket/session/API/process boundary;
+- преобразование contract inputs в конкретную техническую форму;
+- нормализация ошибок доступа, transport/protocol failures и иных технических отказов;
+- предоставление Reader- и/или Executor-операций непосредственно своими методами.
+
+Driver не должен знать предметную policy вышележащего Engine и не владеет convergence к
+caller-selected desired state.
 
 Driver также может быть Direct или Indirect.
 
 ### 10.1. Direct Driver
 
-Пример:
+Примеры:
 
 ```text
 read current routes -> route snapshot
-write sysctl        -> immediate technical result
+add route(spec)      -> technical execution result
 ```
+
+Обе операции могут быть методами одного Driver, если выделение отдельных Reader/Executor
+компонентов не дает архитектурной пользы.
 
 ### 10.2. Indirect Driver
 
@@ -500,98 +533,173 @@ submit long database job -> accepted/job_id
 ```
 
 Внешняя операция продолжается после return. Ее результат при необходимости наблюдается
-отдельным Engine, обычно Agent, использующим соответствующий read Driver или иной
-механизм наблюдения.
+отдельным Engine, обычно Agent, использующим соответствующий read contract.
 
 Наличие synchronous return у Driver никогда само по себе не доказывает, что внешняя
 реальность достигла желаемого конечного состояния.
 
+## 11. Reader, Executor и Backend
 
-## 11. Runner
+### 11.1. Reader
 
-**Runner** — низкоуровневый execution / transport primitive внутри Machinery.
+**Reader** — read-only техническая ответственность Machinery: выполнить предусмотренную
+контрактом операцию наблюдения внешней технической среды и вернуть осмысленное текущее
+представление наблюдаемого состояния.
 
-Runner механически передает конкретный внешний вызов и возвращает его сырой
-transport/execution result. Он не имеет semantic model управляемого объекта.
-
-Типичная форма:
-
-```text
-argv / request bytes / stdin / execution options
-    |
-    v
-Runner
-    |
-    v
-return code / response bytes / stdout / stderr
-```
-
-Runner не знает, означает ли вызов «добавить маршрут», «изменить sysctl», «послать probe»
-или «удалить conntrack entry».
-
-### 11.1. Runner vs Driver
-
-Граница между Runner и Driver семантическая, а не технологическая.
-
-**Runner**:
-
-- транспортирует сырой invocation;
-- возвращает сырой execution/transport result;
-- не предоставляет осмысленной операции над управляемым объектом.
-
-**Driver**:
-
-- знает конкретный внешний технический механизм;
-- предоставляет осмысленную техническую операцию над ним;
-- может использовать Runner как реализацию transport/execution boundary;
-- не владеет convergence к caller-selected desired state.
-
-Например:
+Примеры:
 
 ```text
-run(argv) -> rc/stdout/stderr
+read_routes()        -> RouteSnapshot
+read_forwarding()    -> ForwardingState
+read_nft_owner()     -> NftOwnerSnapshot
 ```
 
-— Runner.
+Reader может выполнять parsing/normalization технического ответа, если это необходимо для
+его contract result. Он не изменяет наблюдаемую им целевую среду и не является Engine:
+самостоятельный polling, timers, publication и ownership наблюдаемого domain относятся к
+Agent/Manager, а не к Reader.
+
+### 11.2. Executor
+
+**Executor** — техническая ответственность Machinery: выполнить одну конкретную
+предусмотренную контрактом операцию изменения/воздействия на внешнюю техническую среду и
+вернуть ее технический execution result.
+
+Примеры:
 
 ```text
-probe(request) -> REPLY | NO_REPLY | ERROR
+add_route(spec)          -> SUCCESS | technical failure
+delete_rule(spec)        -> SUCCESS | technical failure
+set_forwarding(DISABLED) -> SUCCESS | technical failure
 ```
 
-— Driver, даже если внутри он запускает process через Runner.
+Executor не решает:
 
-### 11.2. Кто использует Runner
+- нужно ли выполнять эту операцию для достижения предметной цели;
+- в каком порядке она должна выполняться относительно других операций;
+- достигнут ли более широкий desired state после ее выполнения;
+- нужно ли повторять, компенсировать или откатывать последовательность действий.
 
-Нормальный dependency shape:
+Эти обязанности, когда они нужны, принадлежат Enforcer либо вышележащему Engine.
+
+Executor — не generic CLI/API passthrough. Его контракт задает конкретную техническую
+операцию. Детали raw invocation могут быть скрыты внутри Driver/Executor implementation.
+
+Сырой helper вида `run(argv) -> stdout/rc`, используемый только как process/transport
+injection primitive внутри Driver/Backend, сам по себе не является Reader или Executor
+компонентной модели. Такой helper находится ниже классификации Machinery roles; его локальное
+implementation-имя не создает архитектурную роль.
+
+### 11.3. Когда Reader/Executor являются отдельными компонентами
+
+Reader и Executor описывают ответственность, а не обязательную гранулярность декомпозиции.
+
+Их следует выделять в самостоятельные Machinery-компоненты только когда это дает
+практическую архитектурную ценность, например:
+
+- переиспользуемый контракт;
+- независимое тестирование или замена реализации;
+- четкую границу ответственности;
+- заметное упрощение композиции нескольких callers.
+
+Если операция проста и естественно принадлежит конкретному Driver, Reader-/Executor-
+функциональность может быть реализована непосредственно методом этого Driver.
+
+Например оба варианта допустимы:
 
 ```text
-Manager
-    |
-    v
-Executor
-    |
-    +--> Driver --> Runner --> external mechanism
-    |
-    +------------> Runner --> external mechanism
+RoutingDriver
+    read_routes()
+    add_route()
+    delete_route()
 ```
 
-Это не требование создавать каждый слой для каждой операции.
+и:
 
-- Driver обычно использует Runner для конкретного внешнего взаимодействия.
-- Executor может использовать Drivers и/или Runner напрямую.
-- Manager обычно должен работать через semantic Machinery boundaries, а не через Runner.
-  Прямая зависимость Manager -> Runner не запрещена формально, но требует отдельного
-  обоснования, потому что смешивает domain lifecycle/policy с raw transport mechanics.
-- Adapter может скрывать Runner внутри своей нижней реализации, но Runner не должен
-  становиться частью semantic upper-domain contract только ради передачи сырого вызова.
+```text
+RoutingDriver
+    +--> RoutingReader
+    +--> RouteExecutor
+```
 
-Runner не является peer semantic-role рядом с Calculator / Adapter / Executor / Driver.
-Это implementation primitive под ними.
+Не следует создавать отдельный компонент для каждой однострочной технической операции
+только ради соответствия словарю ролей.
+
+### 11.4. Backend
+
+**Backend** — логическая композиционная единица реализации, предоставляющая сформированный
+проектом внутренний API к конкретной внешней технической среде или ее части.
+
+Backend может объединять:
+
+- один или несколько Drivers;
+- Reader/Executor responsibilities;
+- technical parsers/normalizers;
+- environment-specific constants/handles/configuration;
+- небольшие локальные преобразования, необходимые для единого lower API.
+
+Backend **не является отдельной component role** и не должен использоваться как название
+для любого произвольного нижнего класса.
+
+Backend не владеет:
+
+- предметной policy;
+- собственным desired state;
+- convergence/reconciliation к caller-selected desired state;
+- lifecycle внешней среды;
+- скрытой историей предыдущих применений, от которой зависит корректность caller;
+- orchestration последовательности действий ради достижения более широкого postcondition.
+
+Backend может свежим образом наблюдать внешнее состояние и может хранить технические
+handles/configuration, необходимые для доступа. Это не делает его state owner.
+
+Практический смысл Backend:
+
+> сгруппировать удобный для проекта lower API к одной технической среде, не превращая эту
+> композицию в новый архитектурный тип или самостоятельный оркестратор.
+
+### 11.5. Переход со старой терминологии
+
+До этого изменения модель использовала термины `Executor` и `Runner` в других смыслах.
+Для текущей архитектуры и реализации действует следующий transition mapping:
+
+```text
+old Executor
+    owned desired-state convergence / postcondition verification
+        -> Enforcer
+
+old Runner
+    when it represented one concrete contract-defined external technical action
+        -> Executor
+
+raw invocation helper such as run(argv)
+    implementation primitive below the component model;
+    may retain a local Runner-like implementation name and is not an Executor by that fact alone
+
+old read-only Driver/Backend slice
+    isolated only when useful
+        -> Reader
+        or remains a read method of Driver
+
+old narrow *Backend
+    one concrete mechanism boundary rather than a composition bundle
+        -> review as Driver / Reader / Executor
+
+Backend
+    retained only as a logical composition/facade term,
+    not as a peer component role
+```
+
+Исторические review/experiment/result artifacts сохраняют использованную в них терминологию
+как часть исходной доказательной записи. Текущая нормативная архитектура и текущий код должны
+использовать новую терминологию при очередном затрагивании соответствующих имен.
 
 ## 12. Externally stateless Machinery
 
-Для рассматриваемой предметной области Calculator, Adapter, Executor, Driver и Runner считаются externally
-stateless независимо от их внутренней реализации.
+Для рассматриваемой предметной области Calculator, Adapter, Enforcer, Driver, а также
+выделенные Reader и Executor считаются externally stateless независимо от их внутренней
+реализации. Backend как композиция обязан сохранять тот же externally-stateless contract
+для caller.
 
 Это означает прежде всего отсутствие зависимости от **неявной** истории вызовов:
 
@@ -752,33 +860,49 @@ Event Delivery Environment
 - является ли Direct return действительно результатом обращения;
 - не принимается ли acknowledgement Indirect Machinery за конечный результат;
 - нет ли скрытого synchronous back-edge через Adapter;
-- не выбирает ли Executor предметный desired state вместо получения его от caller;
-- не взял ли Driver на себя convergence к caller-selected desired state;
-- не протек ли raw Runner contract туда, где caller уже должен видеть semantic operation;
-- не протекла ли предметная policy в Driver.
+- не выбирает ли Enforcer предметный desired state вместо получения его от caller;
+- не взял ли Driver/Backend на себя convergence к caller-selected desired state;
+- не превратился ли Executor в скрытый Enforcer, самостоятельно решающий порядок и
+  postcondition нескольких операций;
+- не превратился ли Reader в Agent, самостоятельно владеющий polling/lifecycle/event
+  publication;
+- не назван ли узкий Driver/Reader/Executor словом Backend без реальной композиции;
+- не протекла ли предметная policy в Driver/Backend.
 
-### 16.4. Adapter vs Executor vs Driver vs Runner
+### 16.4. Adapter vs Enforcer vs Driver vs Reader/Executor vs Backend
 
 Adapter соединяет **предметные области**.
 
-Executor отвечает за достижение **заданного postcondition / desired state**.
+Enforcer отвечает за разовое достижение и подтверждение **заданного postcondition /
+desired state**.
 
-Driver соединяет внутреннюю систему с **конкретным внешним техническим механизмом** через
-осмысленные технические операции, но не владеет convergence к caller-selected desired
-state.
+Driver является **технической границей доступа** к конкретному внешнему механизму/среде и
+нормализует interaction/access failures.
 
-Runner передает **сырой invocation** и возвращает сырой execution/transport result.
+Reader выполняет конкретную **операцию наблюдения**.
+
+Executor выполняет конкретную **операцию изменения/воздействия**.
+
+Backend группирует внутренний lower API к внешней технической среде, но сам не является
+дополнительной component role.
 
 Если компонент скрывает целую нижнюю предметную систему и представляет ее через контракт
 верхней, это Adapter.
 
-Если компонент принимает desired state и сам materialize/observe/verify его, это Executor,
-даже если он напрямую вызывает Linux/netlink/nft/systemd/DB operations.
+Если компонент принимает desired state и сам materialize/observe/verify его, это Enforcer,
+даже если он напрямую использует Linux/netlink/nft/systemd/DB operations.
 
-Если компонент предоставляет одну осмысленную техническую операцию над механизмом, это
-Driver.
+Если компонент отвечает прежде всего за техническую доступность и контракт конкретного
+механизма, это Driver. Его read/write operations могут оставаться методами Driver.
 
-Если компонент знает только форму raw command/request и raw response, это Runner.
+Если отдельная read-only operation имеет полезную самостоятельную границу, это Reader.
+
+Если отдельная mutation/action operation имеет полезную самостоятельную границу, это
+Executor.
+
+Если несколько таких lower responsibilities объединены в удобный проекту stateless facade
+без собственной orchestration/convergence ответственности, эта композиция может называться
+Backend.
 
 ## 17. Краткая таблица
 
@@ -810,15 +934,24 @@ Adapter
     Machinery bridging two semantic/domain models;
     architectural visibility boundary
 
-Executor
+Enforcer
     Machinery responsible for reaching/verifying a supplied desired state or postcondition
 
 Driver
-    Machinery exposing meaningful operations over an external technical mechanism
-    without owning caller-selected convergence
+    technical boundary that makes one external mechanism/environment observable/manageable
+    through an internal contract and normalizes interaction/access failures
 
-Runner
-    low-level execution/transport primitive for raw invocations and raw results
+Reader
+    read-only technical operation returning an observed current representation;
+    separate component only when useful
+
+Executor
+    one contract-defined technical actuation operation returning its execution result;
+    separate component only when useful
+
+Backend
+    logical stateless composition/facade for the project's lower API to an external
+    technical environment; not a separate component role
 
 Event Delivery Environment
     asynchronous delivery only

@@ -10,7 +10,7 @@ class ForwardingGateState(str, Enum):
     ENABLED = "enabled"
 
 
-class ForwardingGateBackend(Protocol):
+class ForwardingGateDriver(Protocol):
     def observe_forwarding_gate(self) -> ForwardingGateState:
         """Return one fresh authoritative managed-netns forwarding state."""
 
@@ -18,7 +18,7 @@ class ForwardingGateBackend(Protocol):
         """Issue one lower mutation attempt. Confirmation is not implied."""
 
 
-class ForwardingGateExecutionStatus(str, Enum):
+class ForwardingGateEnforcementStatus(str, Enum):
     SUCCESS = "success"
     OBSERVATION_FAILED = "observation_failed"
     APPLY_FAILED = "apply_failed"
@@ -26,8 +26,8 @@ class ForwardingGateExecutionStatus(str, Enum):
 
 
 @dataclass(frozen=True, slots=True)
-class ForwardingGateExecutionResult:
-    status: ForwardingGateExecutionStatus
+class ForwardingGateEnforcementResult:
+    status: ForwardingGateEnforcementStatus
     desired: ForwardingGateState
     initial: ForwardingGateState | None
     final: ForwardingGateState | None
@@ -37,15 +37,15 @@ class ForwardingGateExecutionResult:
     @property
     def confirmed(self) -> bool:
         return (
-            self.status is ForwardingGateExecutionStatus.SUCCESS
+            self.status is ForwardingGateEnforcementStatus.SUCCESS
             and self.final is self.desired
         )
 
 
 def converge_forwarding_gate_once(
-    backend: ForwardingGateBackend,
+    backend: ForwardingGateDriver,
     desired: ForwardingGateState,
-) -> ForwardingGateExecutionResult:
+) -> ForwardingGateEnforcementResult:
     """One observe -> optional write -> fresh observe attempt.
 
     The lower write command is never treated as confirmation. A failed write
@@ -61,8 +61,8 @@ def converge_forwarding_gate_once(
     try:
         initial = backend.observe_forwarding_gate()
     except Exception as exc:
-        return ForwardingGateExecutionResult(
-            status=ForwardingGateExecutionStatus.OBSERVATION_FAILED,
+        return ForwardingGateEnforcementResult(
+            status=ForwardingGateEnforcementStatus.OBSERVATION_FAILED,
             desired=desired,
             initial=None,
             final=None,
@@ -87,11 +87,11 @@ def converge_forwarding_gate_once(
             prefix = (
                 f"apply failed: {type(apply_error).__name__}: {apply_error}; "
             )
-        return ForwardingGateExecutionResult(
+        return ForwardingGateEnforcementResult(
             status=(
-                ForwardingGateExecutionStatus.APPLY_FAILED
+                ForwardingGateEnforcementStatus.APPLY_FAILED
                 if apply_error is not None
-                else ForwardingGateExecutionStatus.OBSERVATION_FAILED
+                else ForwardingGateEnforcementStatus.OBSERVATION_FAILED
             ),
             desired=desired,
             initial=initial,
@@ -110,8 +110,8 @@ def converge_forwarding_gate_once(
                 f"apply raised {type(apply_error).__name__}: {apply_error}; "
                 "desired postcondition independently confirmed"
             )
-        return ForwardingGateExecutionResult(
-            status=ForwardingGateExecutionStatus.SUCCESS,
+        return ForwardingGateEnforcementResult(
+            status=ForwardingGateEnforcementStatus.SUCCESS,
             desired=desired,
             initial=initial,
             final=final,
@@ -120,8 +120,8 @@ def converge_forwarding_gate_once(
         )
 
     if apply_error is not None:
-        return ForwardingGateExecutionResult(
-            status=ForwardingGateExecutionStatus.APPLY_FAILED,
+        return ForwardingGateEnforcementResult(
+            status=ForwardingGateEnforcementStatus.APPLY_FAILED,
             desired=desired,
             initial=initial,
             final=final,
@@ -132,11 +132,17 @@ def converge_forwarding_gate_once(
             ),
         )
 
-    return ForwardingGateExecutionResult(
-        status=ForwardingGateExecutionStatus.POSTCONDITION_FAILED,
+    return ForwardingGateEnforcementResult(
+        status=ForwardingGateEnforcementStatus.POSTCONDITION_FAILED,
         desired=desired,
         initial=initial,
         final=final,
         mutation_attempted=mutation_attempted,
         diagnostic="fresh final forwarding-gate state does not match desired",
     )
+
+
+# Transitional aliases for code/evidence written before the component-model rename.
+ForwardingGateBackend = ForwardingGateDriver
+ForwardingGateExecutionStatus = ForwardingGateEnforcementStatus
+ForwardingGateExecutionResult = ForwardingGateEnforcementResult

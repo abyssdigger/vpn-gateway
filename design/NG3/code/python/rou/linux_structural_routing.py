@@ -21,11 +21,11 @@ class LinuxStructuralRoutingError(ValueError):
 
 
 @dataclass(slots=True)
-class LinuxStructuralRoutingBackend:
+class LinuxStructuralRoutingDriver:
     """Narrow argv-only mutation Driver.
 
     Authoritative observation and postcondition verification belong to the
-    outer structural Executor. This Driver renders only EXP-048-backed
+    outer structural Enforcer. This Driver renders only EXP-048-backed
     payload route/RPDB operations.
     """
 
@@ -150,3 +150,7 @@ def _render_destination(destination) -> str:
     if destination.prefixlen == 0:
         return "default"
     return destination.with_prefixlen
+
+
+# Transitional alias; current code uses the Driver role name.
+LinuxStructuralRoutingBackend = LinuxStructuralRoutingDriver

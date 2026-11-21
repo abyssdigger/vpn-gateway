@@ -12,7 +12,7 @@ import json
 from typing import Protocol
 
 from .forwarding_gate import (
-    ForwardingGateBackend, ForwardingGateExecutionResult,
+    ForwardingGateDriver, ForwardingGateEnforcementResult,
     ForwardingGateState, converge_forwarding_gate_once,
 )
 from .interface_identity import InterfaceIdentity
@@ -55,7 +55,7 @@ class PayloadNatMutationStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class PayloadNatMutationResult:
     status: PayloadNatMutationStatus
-    barrier: ForwardingGateExecutionResult
+    barrier: ForwardingGateEnforcementResult
     initial: PayloadNatComparison | None
     final: PayloadNatComparison | None
     mutation_attempted: bool
@@ -154,7 +154,7 @@ def _exact_step_postcondition(
 
 
 def converge_payload_nat_step_once(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     nat_backend: PayloadNatMutationBackend,
     desired: PayloadNatDesiredState,
 ) -> PayloadNatMutationResult:
