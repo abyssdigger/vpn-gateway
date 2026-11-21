@@ -282,7 +282,7 @@ administrator may provide equivalent ordinary-host routing manually; the Profile
 contract itself still ends at the managed boundary and does not promise host-side
 reachability. No additional host-side Profile metadata carrier is required.
 
-### 1.1.2. Managed network-domain bootstrap — executable managed-L3 lifecycle
+### 1.1.2. Managed network-domain bootstrap — retained combined implementation evidence
 
 **Implements:**
 - `VPNG0001-R1.R3.R2`;
@@ -292,8 +292,12 @@ reachability. No additional host-side Profile metadata carrier is required.
 - `VPNG0007-R7.R1`;
 - `VPNG0007-R7.R3.R1`.
 
-The Linux managed-domain lifecycle now materializes the selected Release-1 primary boundary
-as the managed-L3 endpoint contract rather than as an addressed transit subnet.
+This section preserves the selected Release-1 Linux facts and evidence from the former
+combined managed-domain lifecycle. Its lower routed-veth facts remain current, but its
+component/ownership boundary is superseded by §1.1.2-A.
+
+The historical combined implementation materializes the selected primary boundary as a
+managed-L3 endpoint rather than as an addressed transit subnet.
 
 The normalized internal specification contains only this selected primary-boundary shape:
 

@@ -409,6 +409,29 @@ Annex содержит плоский набор specs. Component hierarchy за
 Inline component specs между Space sections не используются: карта Spaces остается
 непрерывной, а подробные specs находятся только в соответствующих Annexes.
 
+Для materialized component spec поддерживается двунаправленная implementation trace:
+
+1. spec содержит блок `Implementation` с текущими production/reference implementation
+   units, непосредственно реализующими этот component occurrence;
+2. implementation unit содержит локальный стабильный `Architecture:` marker на Annex/spec,
+   к которому относится код;
+3. нормативная requirement trace остается в component spec. Requirement IDs в code comment
+   допустимы как convenience, но не являются вторым источником истины.
+
+Таким образом минимальная цепочка reverse trace имеет вид:
+
+```text
+code
+    -> Architecture: Annex X.YYY
+    -> component spec
+    -> Implements / Constrained by
+    -> requirement
+```
+
+Если один implementation unit обслуживает несколько component occurrences, marker перечисляет
+каждый из них явно. File placement, import graph или имя Linux primitive сами по себе не
+считаются архитектурной traceability.
+
 ## 3. Форма описания Space
 
 Каждый Space оформляется отдельным разделом.
@@ -615,8 +638,9 @@ API
     @managed L3 boundary realization.<private-side IP handoff> — passive bidirectional handoff к Private network.
     @managed L3 boundary realization.<host-side IP handoff> — passive bidirectional handoff к ordinary host network.
 
-Отдельного `open/closed` API сейчас нет. `established` означает, что требуемый L3 handoff
-уже пригоден для передачи IP. Возможный будущий gate для aggressive helper не проектируется
+Отдельного `open/closed` API сейчас нет. `established` означает transport-ready L3 door с
+подтвержденными handoff endpoints; готовность Private network использовать ordinary side
+требует также exact portal state. Возможный будущий gate для aggressive helper не проектируется
 до появления отдельного принятого контракта.
 
 Residents
@@ -671,7 +695,7 @@ Component diagram
 +----------+--------------------------------------------------+
 | Ordinary-side transition                                   |
 |                                                             |
-| @ManagedL3BoundaryLifecycle                    |
+| @ManagedL3BoundaryLifecycle                                  |
 |           |                                                 |
 |           | observe / establish / remove                    |
 |           v                                                 |
@@ -682,7 +706,7 @@ Component diagram
            | handoff                 | host-side IP handoff
            |                         |
 +----------+----------+    +---------+------------------------+
-|   Private network   |    | Helper-managed / ambient host    |
+|   Private network   |    | Managed-host / ambient host     |
 | ordinary-side       |    |                                 |
 | IP portal           |    |                                 |
 +---------------------+    +----------------------------------+
@@ -806,8 +830,10 @@ Component diagram
 +---------+--------------------------------------------------------+
 |                         Private network                          |
 |                                                                  |
-| @ManagedNetworkEnvironmentLifecycle                         |
-|      +--> [environment] [stack-local identity] [ordinary default]|
+| @ManagedNetworkEnvironmentLifecycle                             |
+|      +--> [environment: namespace + loopback]                    |
+| @OrdinarySidePortalLifecycle                                     |
+|      +--> [stack-local identity] [ordinary default]              |
 |                                                                  |
 | @NetworkPolicyAdapter --> NetworkPolicyEnforcer                  |
 |      |                    +--> [payload routing + nft policies]   |
@@ -930,7 +956,7 @@ API
 
 Residents
 
-1. `@HostPublicationAdapter` *Host-side projection того же semantic Adapter, который для Device publication координирует отдельный host mapping postcondition; host owner не сливается с managed-domain nft owner.*
+1. `@HostPublicationAdapter` *Самостоятельный semantic Adapter host-side Device publication mapping; он потребляет тот же normalized publication intent, но не является occurrence `Private network.NetworkPolicyAdapter`.*
 2. `@HostRoutingContribution` *Direct lifecycle Machinery optional peaceful helper. Current Release-1 realization — `LinuxPeacefulHostRoutingContribution`; continuous host-routing supervision отсутствует.*
 
 Artifacts
@@ -955,7 +981,7 @@ Interactions
 
 | From | Interaction | To |
 | --- | --- | --- |
-| `STACK.PayloadTrafficManager` / policy assembly | desired Device publication | `@HostPublicationAdapter` |
+| `STACK.@ProductLifecycleControl` / runtime policy assembly | after exact managed local admission, apply desired Device publication mapping | `@HostPublicationAdapter` |
 | `@HostPublicationAdapter` | observe/converge/cleanup distinct owner scope | `host publication mapping state` |
 | `@HostPublicationAdapter` | observe host forwarding/interface/address prerequisites without ownership | `Ambient host and external world.@OrdinaryHostNetwork.<host network observation>` |
 | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | inbound traffic to selected local publication surface | `@host publication mapping state.<selected publication traffic>` |
@@ -976,9 +1002,9 @@ Component diagram
 
 ```text
 +---------------------------- STACK --------------------------------+
-| PayloadTrafficManager                 @ProductLifecycleControl     |
+| runtime policy assembly              @ProductLifecycleControl     |
 +-----------+-----------------------------------+--------------------+
-            | publication desired               | helper lifecycle
+            | publication mapping               | helper lifecycle
             v                                   v
 +-----------+--------------------------------------------------------+
 |                  VPN-GATE-managed host state                       |
@@ -1177,6 +1203,13 @@ a long-lived lifecycle Engine or independent lifecycle policy.
 
 **Constrained by:**
 - `VPNG0005-R5.C1`
+
+Implementation
+
+    design/NG3/code/python/rou/controller_startup.py — bounded startup composition and phase checkpoints.
+    design/NG3/code/python/rou/controller_stop.py — bounded independent cleanup composition.
+    design/NG3/code/python/rou/controller_restart.py — stop-then-start restart composition.
+    design/NG3/code/python/rou/alpha_runtime.py — Release-1 executable product/deployment assembly around these lifecycle contracts.
 
 API
 
@@ -2015,7 +2048,7 @@ Implementation
     design/NG3/code/python/rou/host_publication_adapter.py — semantic Adapter wrapper.
     design/NG3/code/python/rou/host_publication_policy.py — pure desired projection.
     design/NG3/code/python/rou/linux_host_publication.py — Linux backend.
-    design/NG3/code/python/rou/alpha_runtime.py — current ProductLifecycleControl composition.
+    design/NG3/code/python/rou/alpha_runtime.py — current Release-1 runtime composition of host publication after managed local admission.
 
 
 ## E.002 HostRoutingContribution
