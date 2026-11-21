@@ -44,12 +44,13 @@ already accepted requirements and constraints:
 - `VPNG0001-R1.R3.C3.R1` — externally supervised VPN runtime lifecycle integrated with VPN-GATE;
 - `VPNG0001-R1.R3.R6.R2` — bounded Device client-side VPN transport/control facts;
 - `VPNG0004-R4.R4` / `VPNG0004-R4.R5` — fail-closed verified network policy;
-- `VPNG0005-R5.R1` / `VPNG0005-R5.R2` / `VPNG0005-R5.R3` — startup and local
+- `VPNG9101-R1.R1.R1` / `VPNG9101-R1.R1.R2` / `VPNG9101-R1.R1.R3` — startup and local
   reconciliation from fresh authoritative state;
-- `VPNG0005-R5.R6.R2` / `VPNG0005-R5.R6.R3` — bounded stop/restart postconditions;
+- `VPNG9101-R1.R1.R6.R2` / `VPNG9101-R1.R1.R6.R3` — bounded stop/restart postconditions;
 - `VPNG0001-R1.R3.R6.R1` — Device-owned server publication;
 - `VPNG0004-R4.R6` — bounded managed local publication admission;
-- `VPNG0007-R7.R7` — implementation/evidence is requirements-driven.
+- `VPNG9001-R1.R1.R7` — implementation/evidence is requirements-driven.
+- `VPNG9101-R2.R2` — installed alpha publishes the required compact human current-state report from the same authoritative runtime snapshot.
 
 ## Current alpha boundary under test
 

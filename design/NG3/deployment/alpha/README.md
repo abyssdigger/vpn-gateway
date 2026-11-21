@@ -36,7 +36,7 @@ Alpha controller:
 - не требует restart controller после `systemctl restart` отдельного VPN service;
 - при stop выполняет bounded controller cleanup после того, как systemd dependency ordering
   остановил bound VPN service;
-- публикует текущую status-проекцию в `/run/vpn-gate-alpha/status.json`: accepted intent,
+- публикует ту же текущую status-проекцию в `/run/vpn-gate-alpha/status.json` и человекочитаемый compact report в `/run/vpn-gate-alpha/status.txt`: accepted intent,
   подтверждённые current paths, readiness, availability-state и current blocking problems.
 
 ## Ограничения этой alpha

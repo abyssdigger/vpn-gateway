@@ -17,7 +17,10 @@ The previously preliminary weak-device/resource-efficiency expectation is now no
 `VPNG9101-R2.R2`, with Devices/Profiles sections, four-space hierarchy, numbered current
 effective path order and normalized availability wording. Its architecture is separated into
 the existing truthful `RuntimeStatusAgent` snapshot and a pure
-`RuntimeStatusTextRenderer`; the concrete delivery path remains replaceable.
+`RuntimeStatusTextRenderer`; the concrete delivery path remains replaceable. The installed
+alpha now publishes this view atomically as `/run/vpn-gate-alpha/status.txt` beside the JSON
+snapshot; EXP-051 proves zero-path, first-path and VPN-endpoint-recreation updates, while unit
+evidence proves truthful unknown state and independent per-path availability rendering.
 
 Because NG3 is still alpha, the requirement model now permits project-holder-authorized ID
 migration with complete current trace remapping. Historical review/research/experiment

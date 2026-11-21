@@ -16,7 +16,9 @@ from rou.runtime_status import (
     RuntimeReadiness,
     RuntimeStatusAgent,
     build_configured_intent_status,
+    render_runtime_status_text,
     write_runtime_status_json,
+    write_runtime_status_text,
 )
 
 
@@ -213,6 +215,82 @@ availability_check = "default"
             snapshot.unknown_or_unconfirmed_fields,
             ("confirmed_effective_state",),
         )
+
+
+    def test_human_status_renders_effective_order_and_per_path_availability(self):
+        configured = build_configured_intent_status(parse_release1_config("""
+[device.ovpn]
+enabled = true
+expected_interfaces = ["vpn*/2"]
+use_outbound_nat = false
+
+[device.ovpn.availability_check]
+mechanism = "icmp"
+target = "198.51.100.10"
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["ovpn"]
+availability_check = "default"
+"""))
+        agent = RuntimeStatusAgent(configured)
+        first = LogicalPathId("ovpn", 0, 0)
+        second = LogicalPathId("ovpn", 0, 1)
+        agent.confirm_effective(
+            (
+                PayloadProfileRequest(
+                    "alpha",
+                    Direction.OUTBOUND,
+                    (IPv4Network("10.0.0.0/8"),),
+                    (first, second),
+                ),
+            ),
+            (
+                PathBinding(first, InterfaceIdentity("vpn0", 11)),
+                PathBinding(second, InterfaceIdentity("vpn1", 12)),
+            ),
+        )
+        agent.confirm_availability((ProbePolicyOwner("alpha", second),))
+
+        self.assertEqual(
+            render_runtime_status_text(agent.snapshot()),
+            """Devices
+    ovpn: vpn0, vpn1
+Profiles
+    alpha
+        01. vpn0 available (icmp/198.51.100.10)
+        02. vpn1 not available (icmp/198.51.100.10)""",
+        )
+
+    def test_human_status_reports_unconfirmed_state_as_unknown(self):
+        agent = RuntimeStatusAgent(self.configured())
+        self.assertEqual(
+            render_runtime_status_text(agent.snapshot()),
+            """Devices
+    ovpn: unknown
+Profiles
+    alpha: unknown""",
+        )
+
+    def test_text_publisher_replaces_one_current_snapshot(self):
+        agent = RuntimeStatusAgent(self.configured())
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "status.txt"
+            write_runtime_status_text(path, agent.snapshot())
+            self.assertEqual(
+                path.read_text(encoding="utf-8"),
+                """Devices
+    ovpn: unknown
+Profiles
+    alpha: unknown
+""",
+            )
+            self.assertEqual(
+                tuple(item.name for item in Path(root).iterdir()),
+                ("status.txt",),
+            )
 
     def test_json_publisher_replaces_one_current_snapshot(self):
         agent = RuntimeStatusAgent(self.configured())

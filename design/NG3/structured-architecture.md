@@ -1761,13 +1761,17 @@ Architectural decisions
    *Renderer использует только RuntimeStatusSnapshot и не реконструирует состояние из kernel/logs.*
 
 2. `Stable human shape, replaceable delivery`
-   *Нормативны две секции Devices/Profiles, four-space nesting, Device rows, numbered effective-order path rows и availability wording. CLI/file/API path не входит в этот semantic contract.*
+   *Нормативны две секции Devices/Profiles, four-space nesting, Device rows, truthful `unknown` при неподтверждённом current state, numbered effective-order path rows и availability wording. CLI/file/API path не входит в этот semantic contract.*
 
 3. `Not configuration`
    *Report не обязан round-trip в configuration parser и не представляет effective configuration dump.*
 
 4. `No diagnostic overloading`
    *Compact rows показывают operator-level current state. Детальные lower diagnostics остаются в blocking diagnostics/logging surfaces и не расширяют row grammar автоматически.*
+
+Implementation
+
+    design/NG3/code/python/rou/runtime_status.py — pure text rendering from RuntimeStatusSnapshot plus atomic text publication.
 
 # Annex B. Ordinary-side transition components
 
