@@ -387,6 +387,99 @@ Existing divergent infrastructure is not repaired or adopted in place. Destroy f
 re-confirms containment where possible, removes the owned namespace/link infrastructure and
 freshly verifies absence.
 
+### 1.1.2-A. Managed-domain lifecycle decomposition across Space boundaries
+
+The previous executable `ManagedNetworkDomain` lifecycle combined three independently owned
+architectural postconditions in one transaction:
+
+```text
+Private network environment realization
+Ordinary-side managed L3 boundary realization
+Private-network ordinary-side portal state
+```
+
+That implementation shape is superseded as an architectural boundary. The accepted
+decomposition is:
+
+```text
+Private network
+    ManagedNetworkEnvironmentLifecycle
+        namespace + loopback
+
+Ordinary-side transition
+    ManagedL3BoundaryLifecycle
+        reciprocal L3 boundary endpoints
+        boundary backend invariants
+        host-side service reachability contribution
+
+Private network
+    OrdinarySidePortalLifecycle
+        stack-local IPv4 identity on the current private-facing boundary endpoint
+        ordinary-side default routing state
+```
+
+The contracts are ordered by dependency but remain independently observable and cleanable.
+Physical co-location on one veth/netns does not merge their ownership.
+
+Startup establishes them in this order:
+
+```text
+preflight/contain Private network environment
+    ->
+load and validate candidate configuration
+    ->
+ensure Private network environment
+    ->
+ensure ordinary-side managed L3 boundary
+    ->
+ensure Private-network ordinary-side portal state
+    ->
+build/apply remaining network policy
+```
+
+An exact Private network environment with an absent transition is a valid recoverable
+intermediate state. It is no longer a structural error merely because the host boundary is
+absent. Conversely, a host-side boundary endpoint that exists while the named Private network
+environment is absent is not safely adoptable from name alone and remains a conflict unless
+stronger ownership evidence exists.
+
+The routed-veth backend owns reciprocal veth identity, endpoint UP state, Proxy ARP /
+reverse-path-filter invariants and the host-side route needed to reach the Private-network
+service identity. Private network separately owns the service address itself and its
+device-only default route through the current private-facing endpoint.
+
+`OrdinarySidePortalLifecycle` may repair its own exact address/default-route state because
+those facts are authoritatively owned by VPN-GATE on the dedicated private-facing endpoint.
+It must not mutate unrelated host routing or infer a replacement transition endpoint.
+
+Normal shutdown reverses the dependency order:
+
+```text
+contain managed forwarding
+    ->
+remove independent host-side exposure/contributions
+    ->
+remove Private-network ordinary-side portal state
+    ->
+remove ordinary-side transition realization
+    ->
+remove Private network environment realization
+```
+
+A cleanup failure in one independently managed area does not suppress attempts in later
+areas. A later stronger postcondition may prove that an earlier artifact cannot remain active
+because its endpoint/container was removed; the earlier diagnostic remains observable.
+
+**Implements / supports:**
+- `VPNG0004-R4.R6`;
+- `VPNG0005-R5.R1`;
+- `VPNG0005-R5.R2`;
+- `VPNG0005-R5.R4`;
+- `VPNG0005-R5.R5`;
+- `VPNG0007-R7.R3`;
+- `VPNG0007-R7.R3.R3`;
+- `VPNG0007-R7.R7`.
+
 ### 1.1.1-A. Core/host-network responsibility boundary and optional host-routing assistance
 
 **Implements:**
@@ -3542,14 +3635,20 @@ normalized publish_vpn_server
 ```
 
 The host-boundary mapping is not Profile routing and is not merged into the managed nft
-owner. The existing `NetworkPolicyAdapter` boundary gains a separate host-publication
-realization sub-contract; no additional Manager/Agent is introduced:
+owner. It is exposed through a separate `HostPublicationAdapter` in the
+`VPN-GATE-managed host state` Space; `NetworkPolicyAdapter` remains confined to
+`Private network`. No additional Manager/Agent is introduced:
 
 ```text
-observe HostPublicationOwner
-apply desired HostPublicationMapping + fresh verify
-cleanup owned HostPublicationOwner + fresh verify absence
+HostPublicationAdapter.observe(...)
+HostPublicationAdapter.apply(desired HostPublicationMapping) + fresh verify
+HostPublicationAdapter.cleanup() + fresh verify absence
 ```
+
+One normalized Device publication intent still produces two independently verified
+postconditions: managed-domain local admission through `NetworkPolicyAdapter`, then
+host-side mapping through `HostPublicationAdapter`. The lifecycle/policy caller composes
+them in that order; sharing semantic source intent does not imply shared Adapter identity.
 
 The pure lower projection consumes only normalized configuration facts. For each publication
 it expands the already validated ordered host/internal `PortBundle` values positionally
@@ -6091,6 +6190,29 @@ The startup sequence is:
 9. READY only when activation is READY
 10. return startup session while retaining lifetime lock and the active host-routing contribution
 ```
+
+The lifecycle-decomposition decision in `1.1.2-A supersedes the combined
+`ensure_managed_network_domain` phase above for new implementation work. The decomposed
+controller sequence is:
+
+```text
+1. acquire controller lifetime lock
+2. preflight/contain ManagedNetworkEnvironmentLifecycle
+3. load/validate candidate normalized policy
+4. ensure ManagedNetworkEnvironmentLifecycle
+5. ensure ManagedL3BoundaryLifecycle
+6. ensure OrdinarySidePortalLifecycle
+7. fresh managed-domain endpoint inventory
+8. build current managed-domain desired state
+9. converge optional HostRoutingContribution
+10. activate managed-domain network policy
+11. apply HostPublicationAdapter only after required local publication admission is exact
+12. READY
+```
+
+The startup session retains the lifecycle results/contributions required for symmetric
+cleanup. A host-publication failure removes any owned host mapping, attempts the remaining
+independent cleanup domains and never publishes READY.
 
 A busy lock exits before domain/config/policy work.
 
