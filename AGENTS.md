@@ -1,118 +1,157 @@
 # AGENTS.md — VPN-GATE agent operating instructions
 
-**Scope:** All repository work, including requirements, architecture, implementation, tests, experiments, reviews, release documentation, and Git operations.
+**Scope:** all repository work.
 
-This file is an entry point, not a substitute for the normative project documents. An agent must read the current files in its actual working branch. Do not rely on summaries, prior chats, remembered conventions, or the repository's default branch as a proxy for the current development stage.
+This is the repository entry point. It owns reading discipline and all repository
+write/publication rules. Other documents own their subject matter and must not duplicate these
+rules.
 
-## Mandatory reading order — before starting work
+## 1. Reading gate
 
-Read these documents **in this exact order**:
+After a new chat/context, compaction/reset, handoff, or any situation where active repository
+instructions may have been lost:
 
-1. [CONTINUOUS-DEVELOPMENT.md](CONTINUOUS-DEVELOPMENT.md) — continuous-development rules, review units, gates, evidence, expert review, cycle timing, and handoffs.
-2. [PROJECT-CONVENTIONS.md](PROJECT-CONVENTIONS.md) — project-wide conventions for documentation, reviews, repository structure, and commit publication.
-3. [design/requirements-model.md](design/requirements-model.md) — the independent normative requirements and constraints model.
-4. [design/component-model.md](design/component-model.md) — the independent normative model of components, roles, and interactions.
-5. **Requirements of the current normative development stage**, followed by **the architecture of that same stage**.
+1. read the current `AGENTS.md` from the actual branch/ref;
+2. identify which project/normative documents are relevant to the task;
+3. read only those relevant documents before relying on them.
 
-Determine the current normative stage from the active project conventions and normative project artifacts. Locate the actual requirements and architecture paths for that stage; `design/<STAGE>/requirements.md` and `design/<STAGE>/architecture.md` are examples, not mandated names. **Do not hardcode NG1, NG2, NG3, or another stage in this instruction file.** Earlier stages are historical evidence, not automatically inherited design authority.
+Normal subject owners:
 
-A chat/context transition, context compaction/reset, agent/model handoff, or any other
-situation in which the current repository instructions may no longer be present in active
-context counts as **starting repository work again** for this gate. Before any repository
-write after such a transition, re-read `AGENTS.md` and the mandatory documents above from
-the current working branch. Until that reading is complete, repository access is read-only.
-Do not rely on prior-chat summaries, remembered authorization, or an earlier reading to skip
-this re-read.
+- `PROJECT-CONVENTIONS.md` — documentation/review conventions, repository layout, lineage,
+  CHANGELOG;
+- `design/requirements-model.md` — Requirement/Constraint model;
+- `design/component-model.md` — component/interaction model;
+- current-stage requirements — product semantics/scope/constraints;
+- current-stage architecture — accepted architectural realization;
+- experiment/review artifacts — only when their evidence/history is relevant.
 
-## Repository write authorization gate
+`CONTINUOUS-DEVELOPMENT.md` is **not** a general prerequisite. Read it when the user
+explicitly starts/resumes CD, or when the task itself edits/reviews CD process.
 
-Repository writes are allowed only in either of these two cases:
+For product/implementation changes, read the relevant requirement ancestry and relevant
+architecture/component-model sections. Do not force unrelated requirements/architecture into
+documentation, process or repository-maintenance tasks.
 
-1. the user has explicitly instructed the agent to make the specific change; or
-2. the user has explicitly started a continuous-development cycle (CD), in which case writes
-   that are within the declared scope of that cycle may proceed autonomously under the normal
-   CD rules.
+### No duplicate read in one response
 
-Discussion, design exploration, review, brainstorming, or agreement on semantics is **not**
-by itself authorization to modify repository state. Outside an active CD, keep repository
-work read-only until the user explicitly asks for the change to be applied.
+If a document was already read during the current assistant response from the same branch/ref
+and its blob SHA has not changed, do not read it again. If it changes, re-read it before
+dependent work.
 
-When a discussion appears ready to turn into implementation but no CD is active and no
-explicit write instruction has been given, report the proposed change and stop at the
-read-only boundary rather than silently beginning implementation.
+This exception does not cross a new chat/context: previous read content may have been lost.
 
-A question asking whether work can proceed is not an instruction to proceed. In particular,
-confirmation-seeking or declarative questions such as "can we start a new CD?", "we can
-continue now, right?", "this is ready for a new cycle, yes?", or equivalent phrasing ending
-in a question are only requests to confirm readiness. They do not start or resume a CD and
-do not authorize repository mutation. In that situation, answer the readiness question and
-remain read-only. A CD starts or resumes only when the user's active message contains an
-unambiguous directive to begin or resume execution, such as "start a new CD", "begin the
-cycle", "resume the CD", or an equivalent explicit instruction.
+## 2. Git-state recovery
 
-Semantic/design approval is **not** repository-write authorization. Agreement phrases such as
-"yes", "ok", "looks good", "I agree", "that's fine", "let's do it", or equivalent approval of
-the proposed content mean only that the proposal is accepted for discussion/design purposes.
-They must not be interpreted as permission to mutate repository state.
+For repository/GitHub recovery or history diagnosis, start from the affected refs and newest
+relevant commits by commit time; inspect their ancestry, trees and diffs first.
 
-Outside an active CD, repository mutation requires an explicit imperative directed at the
-repository or a specific artifact, for example "apply this change", "edit AGENTS.md",
-"update the requirements", "commit this", or "write this to the repository". If the user
-approves a proposal but does not separately instruct the agent to apply it, remain read-only
-and state that the proposal is agreed but has not been written to Git.
+Do not semantically re-review an already clean `main` from scratch when recent ref/commit
+history is sufficient. Broaden the search only when recent history does not explain the
+state.
 
-Write authorization does **not** survive a chat/context transition by inference. After such a
-transition, repository writes are authorized only when the active context itself contains
-either:
+## 3. Repository write authorization
 
-- a specific explicit write instruction that still applies to the requested operation; or
-- an explicitly started CD whose scope is still active and unambiguously covers the write.
+Repository state is read-only unless:
 
-A prior-chat summary, remembered approval, inferred continuation, or the fact that repository
-work was writable before the transition is not sufficient authorization. If neither
-authorization is present in active context, default to read-only and obtain a new explicit
-write instruction before mutating repository state.
+1. the user's active instruction explicitly orders the specific repository/artifact change;
+   or
+2. the user explicitly starts/resumes CD, authorizing writes within its active scope.
 
+Discussion, review, brainstorming, semantic approval, “yes/ok/looks good”, or a question about
+whether work can proceed is not write authorization.
 
-## Requirement and component gates
+Outside CD, an explicit edit/implementation instruction authorizes that change on a working
+branch. It does **not** authorize `main`.
 
-Before implementing a material change:
+Write authorization must be present in active context; do not infer it across a context
+transition.
 
-- Identify exact applicable requirement and constraint IDs in the current stage and read their complete ancestry. Verify `Basis + Statement` for primary requirements, `Purpose + Statement` for derived requirements, and `Reason + Statement` for constraints. Check actor completeness, scope, closure status, and bottom-up constraint lifting.
-- Confirm that requirements are sufficient to distinguish acceptable from unacceptable behavior. Do not invent product promises, constraints, or user-visible semantics in implementation.
-- Check the current architecture and component model. A non-trivial review unit must have direct `Implements:` and, where applicable, `Constrained by:` traceability, a real scenario, component responsibilities and interaction boundaries, necessary external facts, a simplification review, and an evidence plan.
-- Implementation begins only after the relevant requirement/design gates pass. A missing product decision returns to requirements work; a missing component contract returns to design; an uncertain kernel/platform fact requires an appropriately scoped experiment.
-- Do not silently promote implementation convenience to product scope or allow lower-domain concepts to leak across an Adapter boundary.
+## 4. Working branches and commit publication
 
-## Process-correction gate
+Authorized work uses a dedicated working branch unless the user explicitly requests another
+safe target.
 
-Process and Git-policy defects require the read-only diagnosis and explicit human
-agreement described in `CONTINUOUS-DEVELOPMENT.md` (§ Process-correction gate)
-before corrective writes. The repository write-authorization gate above still applies.
-Do not apply this special gate to an ordinary implementation or test defect unless it
-changes the governing process itself.
+Every created commit must be published to GitHub immediately and verified on the expected
+remote branch before another commit is created.
 
-## Normal continuous-development workflow
+On publication/verification failure, stop repository mutation; do not create another commit,
+perform prolonged recovery, force-update or rewrite history. Report the last verified remote
+state and any unverified work accurately.
 
-The following operations are **routine autonomous development work** and do not need separate user approval:
+## 5. `main` protection and snapshots
 
-- Create/select dedicated cycle branches, determine `CYCLE_INTERVAL`, and record real `CYCLE_START_TIME` before mandatory reading or the first commit, as defined in `CONTINUOUS-DEVELOPMENT.md`.
-- Develop coherent review units, write and run the cheapest sufficient tests/evidence, perform required expert review, record findings/dispositions/verdicts, and apply accepted fixes.
-- Follow `PROJECT-CONVENTIONS.md` §7 for immediate publication of each commit and mandatory CD stop on publication failure.
-- After each commit, obtain fresh real current time and check elapsed time from `CYCLE_START_TIME` against `CYCLE_INTERVAL`. At the session-safety boundary, stop at the nearest safe technical point and produce the CD handoff; do not manufacture review-unit completion, an artificial completion commit, or a mainline snapshot just because the window ended. Follow the exact handoff and safety-margin rules in `CONTINUOUS-DEVELOPMENT.md`.
-- Publish completed development blocks using the snapshot policy in `PROJECT-CONVENTIONS.md` §6.1; the CD boundary itself does not define a block boundary.
-- Follow `CONTINUOUS-DEVELOPMENT.md` for autonomous continuation across development blocks and the exact time/safety/decision conditions for stopping a CD.
-- Any new user intervention pauses autonomous CD writes; follow the resume and one-change exceptions in `CONTINUOUS-DEVELOPMENT.md`.
+`main` is not a development branch.
 
-Snapshot publication, absorbed branch naming and exceptional Git history operations
-are governed exclusively by `PROJECT-CONVENTIONS.md` §§6.1–6.2.
+Outside active CD, a `main` update requires an explicit user instruction to
+publish/snapshot the accepted result to `main`.
 
-## Evidence, review, and reporting
+During active CD, normal completed-development-block snapshots are included in CD
+authorization unless the user explicitly changes/disables snapshot publication.
 
-- Distinguish written tests from executed tests and passed CI from pending or failed CI.
-- Use rootless tests for pure contracts and privileged disposable namespaces or target-specific experiments when necessary for Linux/kernel behavior.
-- Store reviews and their dispositions in `design/reviews/` according to project conventions; preserve external reviews unchanged.
-- End each review unit with its branch, exact SHA, verified evidence, review verdict, remaining gates, and next intended unit.
-- A newly uncovered requirement/architecture ambiguity is not authorization to invent a solution in code.
+A normal snapshot:
 
-If this entry point and another normative project document appear inconsistent, follow the document that owns the affected subject under `PROJECT-CONVENTIONS.md` §9 and explicitly surface the discrepancy before the affected work.
+- is one linear commit on `main`;
+- records the exact final tree of the completed published working-branch tip;
+- does not replay/merge intermediate working-branch commits;
+- is created only for a completed development block, not because a CD window ended;
+- is not duplicated for an already represented branch-tip/tree;
+- never presents unfinished work as completed.
+
+Before snapshotting, verify source/target heads, expected ancestry/tree and absence of an
+incompatible `main` update. The user may explicitly choose another snapshot boundary.
+
+### Exceptional history operations
+
+Reset/rewrite/force-update of published `main`, retrospective snapshot reconstruction,
+destructive branch movement/deletion, or publication of ambiguous diverged/dead-end history
+always requires:
+
+1. read-only diagnosis;
+2. presentation of relevant before/after refs/SHAs, ancestry and loss/duplication risk;
+3. explicit user approval of that specific operation.
+
+If the remote head changes after approval, stop and re-review.
+
+## 6. Process-correction gate
+
+A governing process/Git/snapshot/CD rule is changed only after read-only diagnosis, an
+explicit explanation of the proposed replacement and affected process artifacts, and explicit
+user agreement. Then change only the agreed scope under the normal write gate.
+
+Ordinary implementation/test defects do not use this gate unless they change governing
+process.
+
+## 7. Responsibility split between operating documents
+
+The three top-level operating documents have deliberately non-overlapping responsibilities:
+
+1. `AGENTS.md` contains **general rules for the agent's work with the repository**:
+   reading discipline, write authorization, working-branch publication, `main` protection,
+   snapshots, exceptional Git-history operations, process-correction gate and ownership of
+   the other governing documents.
+2. `CONTINUOUS-DEVELOPMENT.md` contains **only the machinery required to keep an explicitly
+   requested CD session continuous and safe in time**: cycle start, real-time clock,
+   continuation across work, pause/resume, session boundary and handoff. It must not duplicate
+   general repository policy, requirement/component methodology or artifact-format rules.
+3. `PROJECT-CONVENTIONS.md` contains **only project-artifact maintenance conventions**:
+   language, formatting, review/experiment artifact handling, repository layout/lineage facts,
+   naming and CHANGELOG conventions. It must not define agent authorization, `main` write
+   policy, CD timing or requirement/component semantics.
+
+When a rule appears to belong to more than one document, keep the normative rule only in the
+owner above and use a short reference from the other document if needed.
+
+## 8. Subject ownership
+
+Do not restate detailed subject rules here.
+
+- requirement changes follow `design/requirements-model.md` and current-stage requirements;
+- component/interaction changes follow `design/component-model.md` and current architecture;
+- CD execution follows `CONTINUOUS-DEVELOPMENT.md`;
+- documentation/review/layout/lineage conventions follow `PROJECT-CONVENTIONS.md`.
+
+Implementation must not invent missing product semantics or silently convert implementation
+limitations into product scope.
+
+If documents conflict, follow the document owning the affected subject and surface the
+conflict rather than choosing convenient wording.
