@@ -253,3 +253,21 @@ Device firewall/publication grammar следует закрывать отдел
 ## Checkpoint verdict
 
 **PASS — первая функционирующая NG3 alpha реально взлетела.**
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R1` -> `VPNG9101-R1.R1.R1`
+- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+- `VPNG0005-R5.R3` -> `VPNG9101-R1.R1.R3`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG0005-R5.R6.R2` -> `VPNG9101-R1.R1.R6.R2`
+- `VPNG0005-R5.R6.R3` -> `VPNG9101-R1.R1.R6.R3`
+- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
+- `VPNG0007-R7.R7` -> `VPNG9001-R1.R1.R7`
+
+The original IDs in the historical body are intentionally preserved.
