@@ -5,6 +5,7 @@ from ipaddress import IPv4Network
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from rou.binding import LogicalPathId, PathBinding
 from rou.domain import Direction
@@ -15,6 +16,7 @@ from rou.release1_config import parse_release1_config
 from rou.runtime_status import (
     RuntimeReadiness,
     RuntimeStatusAgent,
+    RuntimeStatusFilePublisher,
     build_configured_intent_status,
     render_runtime_status_text,
     write_runtime_status_json,
@@ -273,6 +275,38 @@ Profiles
 Profiles
     alpha: unknown""",
         )
+
+    def test_file_publisher_skips_equivalent_snapshot_and_publishes_change(self):
+        agent = RuntimeStatusAgent(self.configured())
+        publisher = RuntimeStatusFilePublisher(
+            Path("/run/test-status.json"),
+            Path("/run/test-status.txt"),
+        )
+        with (
+            patch("rou.runtime_status.write_runtime_status_json") as write_json,
+            patch("rou.runtime_status.write_runtime_status_text") as write_text,
+        ):
+            first = agent.snapshot()
+            self.assertTrue(publisher.publish(first))
+            self.assertFalse(publisher.publish(agent.snapshot()))
+            self.assertEqual(write_json.call_count, 1)
+            self.assertEqual(write_text.call_count, 1)
+
+            path = LogicalPathId("ovpn", 0, 0)
+            agent.confirm_effective(
+                (
+                    PayloadProfileRequest(
+                        "alpha",
+                        Direction.OUTBOUND,
+                        (IPv4Network("10.253.0.0/24"),),
+                        (path,),
+                    ),
+                ),
+                (PathBinding(path, InterfaceIdentity("vpn0", 11)),),
+            )
+            self.assertTrue(publisher.publish(agent.snapshot()))
+            self.assertEqual(write_json.call_count, 2)
+            self.assertEqual(write_text.call_count, 2)
 
     def test_text_publisher_replaces_one_current_snapshot(self):
         agent = RuntimeStatusAgent(self.configured())

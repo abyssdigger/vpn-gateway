@@ -132,9 +132,8 @@ from .stack_return_affinity_convergence import StackReturnAffinityOwnerStatus
 from .runtime_status import (
     RuntimeReadiness,
     RuntimeStatusAgent,
+    RuntimeStatusFilePublisher,
     build_configured_intent_status,
-    write_runtime_status_json,
-    write_runtime_status_text,
 )
 
 
@@ -630,11 +629,6 @@ def _log(marker: str, detail: str = "") -> None:
     )
 
 
-def _write_runtime_status(snapshot) -> None:
-    write_runtime_status_json(ALPHA_STATUS_PATH, snapshot)
-    write_runtime_status_text(ALPHA_STATUS_TEXT_PATH, snapshot)
-
-
 def run_alpha_runtime(
     config_path: Path,
     *,
@@ -742,7 +736,11 @@ def run_alpha_runtime(
         status_agent = RuntimeStatusAgent(
             build_configured_intent_status(prepared.config)
         )
-        _write_runtime_status(status_agent.snapshot())
+        status_publisher = RuntimeStatusFilePublisher(
+            ALPHA_STATUS_PATH,
+            ALPHA_STATUS_TEXT_PATH,
+        )
+        status_publisher.publish(status_agent.snapshot())
 
         availability_start = reconcile_alpha_availability_once(
             prepared,
@@ -765,7 +763,7 @@ def run_alpha_runtime(
                     )
                 ),
             )
-            _write_runtime_status(status_agent.snapshot())
+            status_publisher.publish(status_agent.snapshot())
             _log(
                 "VPNG_ALPHA_START_FAILED",
                 (
@@ -800,7 +798,7 @@ def run_alpha_runtime(
                     or "host publication convergence is not confirmed"
                 ),
             )
-            _write_runtime_status(status_agent.snapshot())
+            status_publisher.publish(status_agent.snapshot())
             _log(
                 "VPNG_ALPHA_START_FAILED",
                 (
@@ -825,7 +823,7 @@ def run_alpha_runtime(
             status_agent.confirm_availability(
                 availability_start.observation.projection.problem_owners
             )
-        _write_runtime_status(status_agent.snapshot())
+        status_publisher.publish(status_agent.snapshot())
 
         _log(
             "VPNG_ALPHA_READY",
@@ -890,7 +888,7 @@ def run_alpha_runtime(
                         )
                     ),
                 )
-            _write_runtime_status(status_agent.snapshot())
+            status_publisher.publish(status_agent.snapshot())
             if (
                 result.status is not last_status
                 or result.diagnostic != last_diagnostic
@@ -909,7 +907,7 @@ def run_alpha_runtime(
                 last_diagnostic = result.diagnostic
 
         status_agent.mark_stopping()
-        _write_runtime_status(status_agent.snapshot())
+        status_publisher.publish(status_agent.snapshot())
         _notify_systemd("STOPPING=1\nSTATUS=VPN-GATE alpha stopping")
         host_cleanup = HostPublicationAdapter(
             LinuxHostPublicationDriver(runner)
@@ -933,7 +931,7 @@ def run_alpha_runtime(
                     f"managed={stopped.status.value}"
                 ),
             )
-        _write_runtime_status(status_agent.snapshot())
+        status_publisher.publish(status_agent.snapshot())
         _log(
             "VPNG_ALPHA_STOP",
             (

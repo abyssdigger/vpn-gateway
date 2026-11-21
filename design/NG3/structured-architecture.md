@@ -1388,6 +1388,7 @@ introduce a long-lived lifecycle Engine or independent lifecycle policy.
 - `VPNG-M001-R1.R1.R6.R3`
 - `VPNG-M001-R2.R1.R3`
 - `VPNG-M001-R2.R1.R4`
+- `VPNG-M001-R2.R1.R5`
 - `VPNG-D001-R1.R1.R1`
 
 **Constrained by:**
@@ -1738,7 +1739,10 @@ Architectural decisions
 4. `Snapshot/presentation split`
    *Agent contract заканчивается на truthful RuntimeStatusSnapshot. Обязательный compact text является отдельным pure Calculator contract, а конкретный CLI/file/API transport остаётся presentation machinery.*
 
-5. `No hidden Profile verdict model`
+5. `Change-driven publication`
+   *Periodic observation/reconciliation может повторно получить семантически тот же RuntimeStatusSnapshot, но presentation publication boundary не создает новый publication event и не переписывает current surfaces, пока snapshot равен последнему успешно опубликованному. После semantic change новый snapshot публикуется; failed publication не считается принятым baseline для дедупликации.*
+
+6. `No hidden Profile verdict model`
    *Более сильный aggregated ProfileState не вводится без отдельного requirement; current status достаточно truthful composition существующих owner projections.*
 
 ## A.009 RuntimeStatusTextRenderer
