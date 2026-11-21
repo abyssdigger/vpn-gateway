@@ -5,7 +5,8 @@
 **Baseline:** main snapshot 145 `623a688e4080de56e5ac14675ffca028c3865d18`  
 **Scope:** all baseline NG3 derived Requirements plus product-holder dispositions applied to
 the non-normative corrected-tree draft.  
-**Normative files modified:** none.
+**Initial review phase:** normative files were not modified before the corrected-tree PASS.  
+**Post-review execution:** corrected tree promoted and current traceability remapped on this research branch.
 
 ## Method
 
@@ -216,8 +217,9 @@ No new product decision was required by this coherent-tree pass.
 All original 20 findings are resolved in the research draft. The corrected-tree draft,
 decision record, unresolved list and impact assessment are aligned with each other.
 
-Normative promotion is no longer blocked by a missing product-holder decision or by the
-coherent-tree integrity review. The next step is an atomic trace remap across current
-architecture/configuration/registry documents together with normative promotion. Historical evidence
-remains preserved according to `PROJECT-CONVENTIONS.md`, including the required historical
-requirement context when an experiment referenced a subsequently removed R/C.
+Normative promotion and the atomic current-document trace remap were completed after this PASS.
+`design/NG3/requirements.md` now contains the 178-node corrected tree; `architecture.md`,
+`config-model.md`, current onboarding/deployment/helper documents and the experiment registry
+trace only to live obligations. A full active experiment-README audit added or corrected
+`Historical requirement context` wherever removed R/C IDs had been part of the experiment's
+normative basis. Historical review and result records remain unchanged.
