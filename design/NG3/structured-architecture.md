@@ -1183,8 +1183,9 @@ Component diagram
 
 ## A.001 ProductLifecycleControl
 
-Direct procedural Machinery, exposing bounded product lifecycle operations without introducing
-a long-lived lifecycle Engine or independent lifecycle policy.
+Direct procedural Machinery, coordinating independent lifecycle operations and their dependency
+order without merging their ownership or cleanup into one technical method. It does not
+introduce a long-lived lifecycle Engine or independent lifecycle policy.
 
 **Implements:**
 - `VPNG0004-R4.R4`
@@ -1206,38 +1207,43 @@ a long-lived lifecycle Engine or independent lifecycle policy.
 
 Implementation
 
-    design/NG3/code/python/rou/controller_startup.py — bounded managed-domain/lower-policy startup subassembly and phase checkpoints; does not alone publish product READY.
-    design/NG3/code/python/rou/controller_stop.py — bounded owned-domain cleanup subassembly; host-publication cleanup remains an outer lifecycle step in the current alpha composition.
-    design/NG3/code/python/rou/controller_restart.py — stop-then-start composition of the bounded controller subassembly.
-    design/NG3/code/python/rou/alpha_runtime.py — current Release-1 product/deployment readiness and shutdown composition, including HostPublicationAdapter and systemd READY publication.
+    design/NG3/code/python/rou/controller_startup.py — current bounded ordering of stack/transition/policy startup operations.
+    design/NG3/code/python/rou/controller_stop.py — current bounded ordering of independent cleanup operations.
+    design/NG3/code/python/rou/controller_restart.py — stop-then-start composition without hidden resume state.
+    design/NG3/code/python/rou/alpha_runtime.py — daemon/bootstrap composition, host helpers/publication and final systemd readiness/termination boundary.
 
 API
 
-    @start(...) — выполнить bounded startup; success существует только после required readiness/safety postconditions.
-    @stop(...) — выполнить bounded containment/cleanup; success существует только после required cleanup postconditions.
+    @start(...) — выполнить product startup через независимые lifecycle operations с соблюдением dependency order.
+    @stop(...) — выполнить product shutdown, пытаясь очистить независимые areas отдельно и удерживая основной процесс до teardown STACK.
     @restart(...) — stop + новый start из authoritative post-stop state.
     @reload(...) — optional management operation; если surface ее предоставляет, она не может молча означать restart.
 
 Architectural decisions
 
-1. `Procedural, not Engine`
-   *Lifecycle не имеет самостоятельно требуемой ongoing semantic policy/state machine. Control surface вызывает bounded orchestration и поэтому остается Direct Machinery.*
+1. `Procedural coordinator, not lifecycle monolith`
+   *Product lifecycle задает partial order независимых операций, но не превращает bootstrap, STACK, ordinary-side transition и host helpers в один общий lifecycle object или один cleanup method.*
 
-2. `Single-controller ownership`
-   *Lifecycle удерживает один hardened lifetime ownership token/session. Успех startup, interrupted cleanup и stop не могут обходить этот ownership contract.*
+2. `Startup dependency order`
+   *Bootstrap получает ownership/validated intent; базовая materialization STACK должна существовать до ordinary-side transition. Зависимые host-side exposure/helper operations выполняются только после их prerequisites.*
 
-3. `Phase-bounded startup`
-   *Candidate configuration валидируется до dependent mutation. Stop request проверяется между bounded phases; уже начатая owned work очищается под тем же ownership context и READY не публикуется после замеченного stop request.*
+3. `Shutdown dependency order`
+   *Ordinary-side transition и независимые host helpers/exposure могут быть погашены раньше STACK и не обязаны очищаться одним методом. Основной daemon process не завершается, пока teardown STACK не завершен либо не получен явный failure outcome: иначе живущие в STACK VPN-процессы могут остаться без управляющей среды.*
 
-4. `Cleanup domains remain independent`
-   *Failure одной cleanup area не отменяет bounded attempts других independent owned domains. Success stop требует свежего подтверждения обязательных absence/containment postconditions.*
+4. `Independent cleanup attempts`
+   *Failure одной cleanup area не отменяет bounded attempts других independent owned domains. Success соответствующей операции требует свежего подтверждения ее собственного postcondition.*
 
-5. `Restart adds no mechanism`
+5. `Intermediate statuses are local contracts`
+   *Имена промежуточных состояний (`done`, `complete` и т.п.) не являются compatibility boundary alpha. Они могут меняться вместе с декомпозицией; сохраняться должны ordering, ownership, safety и final product-operation semantics.*
+
+6. `Single-controller ownership`
+   *Lifecycle удерживает один hardened lifetime ownership token/session. Startup, interrupted cleanup и stop не могут обходить этот ownership contract.*
+
+7. `Restart adds no mechanism`
    *Restart не сохраняет скрытый cross-stop token, command journal или resume state; после подтвержденного stop обычный start заново получает ownership и строит state из fresh reality.*
 
-6. `Replaceable control surface`
+8. `Replaceable control surface`
    *CLI/systemd/socket/API являются deployment mechanisms вне component semantics. Alpha вправе не иметь distinct reload, если changed configuration применяется поддержанным restart path.*
-
 
 ## A.002 ConfigurationAdapter
 
@@ -1567,7 +1573,7 @@ Private-network service identity/default route или traffic-selection policy �
 API
 
     @preflight(...) — fresh-classify absent / established / conflict without creating transition.
-    @ensure(...) — create absent transition or confirm exact existing realization.
+    @ensure(...) — create absent transition, repair provable owned drift, or confirm exact existing realization.
     @destroy(...) — remove owned transition and fresh-confirm endpoint absence.
 
 Architectural decisions
@@ -1575,14 +1581,14 @@ Architectural decisions
 1. `Independent transition lifecycle`
    *Component owns only managed-L3 boundary realization. Namespace/loopback belong to `C.007`; local identity/default route belong to `C.009`.*
 
-2. `Recoverable absent transition`
-   *Exact Private-network environment with no boundary is valid and may be completed by ensure. Host-side endpoint with no environment remains conflict because name alone is insufficient ownership evidence.*
+2. `Recoverable absent transition and owned drift`
+   *Exact Private-network environment with no boundary is valid and may be completed by ensure. If transition identity/ownership is proven, divergent properties owned by this realization should be repaired and re-verified where repair is safely expressible. Host-side endpoint with no environment remains conflict because name alone is insufficient ownership evidence.*
 
 3. `Transport-ready, not portal-ready`
    *Established confirms reciprocal endpoint/backend invariants and handoff endpoints. Private ordinary-side readiness additionally requires `OrdinarySidePortalLifecycle`.*
 
-4. `Backend-specific door`
-   *Release 1 uses routed veth + Proxy ARP; reciprocal identity, UP state, Proxy ARP/rp_filter and host-side service reachability belong to this realization. Alternate netkit L3 remains behind the same contract.*
+4. `Realization-specific door`
+   *Release 1 uses routed veth + Proxy ARP; reciprocal identity, UP state, Proxy ARP/rp_filter and host-side service reachability belong to this realization. Property drift is repairable only after reciprocal identity/ownership is proven; ambiguous or foreign structure is not adopted. Alternate netkit L3 remains behind the same contract.*
 
 5. `Physical placement does not move ownership`
    *Concrete endpoints may reside in host and managed namespaces; that does not transfer host routing policy or Private service/default ownership into transition.*
@@ -1889,7 +1895,7 @@ stack-local address/default route.
 API
 
     @preflight(...) — fresh-read namespace/loopback under protective containment; absent environment is valid.
-    @ensure(...) — create absent namespace + loopback or confirm exact existing state.
+    @ensure(...) — create absent namespace + loopback, repair provable owned drift, or confirm exact existing state.
     @destroy(...) — remove environment after dependent cleanup and fresh-confirm namespace absence.
 
 Architectural decisions
@@ -1898,7 +1904,7 @@ Architectural decisions
    *Owned artifacts are namespace instance + loopback state. Absence of materialization does not remove the architectural Space.*
 
 2. `Containment before trust`
-   *Existing namespace is inspected only after fresh confirmed ForwardingGate=DISABLED.*
+   *Existing namespace is inspected only after fresh confirmed ForwardingGate=DISABLED. Once namespace ownership/identity is proven, owned environment properties such as loopback state should be repaired rather than rejected merely for drift.*
 
 3. `Environment without door is valid`
    *Exact namespace/loopback with absent ordinary-side transition is a normal recoverable intermediate state.*
@@ -1982,8 +1988,8 @@ Architectural decisions
 1. `Transition dependency, not ownership`
    *Lifecycle requires an exact current private-facing transition endpoint but does not create/delete that transition.*
 
-2. `Authoritative portal convergence`
-   *Service address/default route are VPN-GATE-owned on the dedicated boundary endpoint and may be repaired from fresh observation.*
+2. `Authoritative exclusive portal convergence`
+   *Dedicated private-facing endpoint is an exclusive realization of this portal, not a shared architectural object. Its IPv4/default-route contents are therefore exact owned state: extra or missing state is repairable drift, and whole-scope flush/rebuild is permitted for this endpoint.*
 
 3. `Cleanup before door removal`
    *Normal stop removes portal state before destroying transition. If later transition removal proves endpoint absence, that stronger postcondition proves portal artifacts cannot remain active.*
