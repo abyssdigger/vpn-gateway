@@ -121,7 +121,27 @@ user agreement. Then change only the agreed scope under the normal write gate.
 Ordinary implementation/test defects do not use this gate unless they change governing
 process.
 
-## 7. Subject ownership
+## 7. Responsibility split between operating documents
+
+The three top-level operating documents have deliberately non-overlapping responsibilities:
+
+1. `AGENTS.md` contains **general rules for the agent's work with the repository**:
+   reading discipline, write authorization, working-branch publication, `main` protection,
+   snapshots, exceptional Git-history operations, process-correction gate and ownership of
+   the other governing documents.
+2. `CONTINUOUS-DEVELOPMENT.md` contains **only the machinery required to keep an explicitly
+   requested CD session continuous and safe in time**: cycle start, real-time clock,
+   continuation across work, pause/resume, session boundary and handoff. It must not duplicate
+   general repository policy, requirement/component methodology or artifact-format rules.
+3. `PROJECT-CONVENTIONS.md` contains **only project-artifact maintenance conventions**:
+   language, formatting, review/experiment artifact handling, repository layout/lineage facts,
+   naming and CHANGELOG conventions. It must not define agent authorization, `main` write
+   policy, CD timing or requirement/component semantics.
+
+When a rule appears to belong to more than one document, keep the normative rule only in the
+owner above and use a short reference from the other document if needed.
+
+## 8. Subject ownership
 
 Do not restate detailed subject rules here.
 
