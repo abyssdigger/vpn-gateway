@@ -34,7 +34,7 @@ Transition Space остается полноценным Space: он может 
 2. `Ordinary-side transition` *Прозрачный L3-переход между `Private network` и ordinary host-side сетевой средой; отдельный заменяемый «тамбур», основная собственная семантика которого состоит в lifecycle/materialization границы.*
 3. `Private network` *Отдельная управляемая и наблюдаемая из STACK сетевая реальность, содержащая принадлежащее VPN-GATE сетевое состояние и machinery доступа к нему.*
 4. `VPN external ends` *Совокупная внешняя VPN-среда; для архитектуры VPN-GATE существенна прежде всего обращенная к нему сторона ее VPN-интерфейсов/endpoints.*
-5. `Helper-managed host` *Часть host state, которой VPN-GATE явно управляет через свои host-side helpers.*
+5. `VPN-GATE-managed host state` *Явно owned часть ordinary-host network state: core host-publication mapping и отдельно включаемые host-side helper contributions. Остальной host остается соседним ambient Space.*
 6. `Ambient host and external world` *Остальной host и внешний мир, воспринимаемый через него, не принадлежащие core ownership VPN-GATE.*
 7. `Operator` *Среда оператора VPN-GATE и его точки взаимодействия с продуктом.*
 
@@ -510,7 +510,7 @@ Interactions
 | `@ProductLifecycleControl` | validate/load candidate intent before dependent mutation | `@ConfigurationAdapter` |
 | `@ProductLifecycleControl` | preflight/ensure/destroy managed data-plane environment | `Private network.@ManagedNetworkDomainLifecycle <partial>` |
 | `@ProductLifecycleControl` | establish/remove ordinary-side managed boundary through the same current lifecycle transaction | `Ordinary-side transition.@ManagedNetworkDomainLifecycle <partial>` |
-| `@ProductLifecycleControl` | converge/cleanup enabled host-side contribution | `Helper-managed host` |
+| `@ProductLifecycleControl` | converge/cleanup enabled host-side contribution | `VPN-GATE-managed host state` |
 | `@ProductLifecycleControl` | activate/cleanup desired lower network policy | `Private network.@NetworkPolicyAdapter` |
 | `accepted normalized intent` | current structural inputs | `PayloadTrafficManager` |
 | `PayloadTrafficManager` | calculate structural semantic projection | `PayloadPolicyCalculator` |
@@ -573,7 +573,7 @@ Component diagram
         | Private network / transition|             | Private network       |
         +-----------------------------+             +-----------------------+
                   |
-                  +--------------------------> Helper-managed host
+                  +--------------------------> VPN-GATE-managed host state
 ```
 
 
@@ -624,7 +624,7 @@ in place.
 
 - stack-local IPv4 identity — собственная identity `Private network`;
 - private-side default routing decision toward ordinary side — routing state `Private network`;
-- remote Profile destination/SNAT routing selection на host — `Helper-managed host` либо
+- remote Profile destination/SNAT routing selection на host — `VPN-GATE-managed host state` либо
   administrator-owned host state;
 - host-global forwarding/firewall/NAT — ordinary host ownership, если отдельный helper
   contract явно не принимает конкретную часть этого state.
@@ -637,7 +637,7 @@ Interactions
 | `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove exact boundary state | `managed L3 boundary realization` |
 | `Private network.ordinary-side IP portal` | bidirectional IP handoff | `managed L3 boundary realization` |
 | `managed L3 boundary realization` | bidirectional IP handoff | `Ambient host and external world` |
-| `Helper-managed host` | routes selected host traffic toward the explicit managed host endpoint | `managed L3 boundary realization` |
+| `VPN-GATE-managed host state` | routes selected host traffic toward the explicit managed host endpoint | `managed L3 boundary realization` |
 
 Finding: current `ManagedNetworkDomain` lifecycle transaction crosses the
 `Private network` / `Ordinary-side transition` boundary. Its existing preflight therefore
@@ -825,6 +825,105 @@ Component diagram
 | Ordinary-side transition|                    | VPN external ends    |
 +--------------------------+                    +----------------------+
 ```
+# VPN-GATE-managed host state
+
+Явно owned часть ordinary-host network state. Этот Space существует потому, что VPN-GATE
+имеет ограниченные host-side postconditions, которые нельзя ни прятать внутрь
+`Private network`, ни смешивать с administrator-owned ambient host. В Release 1 здесь
+сосуществуют два независимых owner scope: обязательная при запрошенной server publication
+host mapping и optional peaceful host-routing contribution.
+
+API
+
+    @NetworkPolicyAdapter <partial>.observe_host_publication(...) — fresh observation отдельного host-publication owner scope.
+    @NetworkPolicyAdapter <partial>.apply_host_publication(...) — converge desired host publication mappings и fresh verify.
+    @NetworkPolicyAdapter <partial>.cleanup_host_publication(...) — удалить только owned host-publication objects и подтвердить отсутствие.
+    @HostRoutingContribution.converge(∅) — установить complete lifecycle-scoped peaceful host-routing contribution.
+    @HostRoutingContribution.cleanup(∅) — удалить только still-identifiable owned contribution.
+
+Residents
+
+1. `@NetworkPolicyAdapter <partial>` *Host-side projection того же semantic Adapter, который для Device publication координирует отдельный host mapping postcondition; host owner не сливается с managed-domain nft owner.*
+2. `@HostRoutingContribution` *Direct lifecycle Machinery optional peaceful helper. Current Release-1 realization — `LinuxPeacefulHostRoutingContribution`; continuous host-routing supervision отсутствует.*
+
+Artifacts
+
+1. `host publication mapping state` *(observed, managed)* — отдельный ownership-marked host DNAT/publication scope, переводящий только явно выбранную local host publication surface в current stack-local publication target.
+2. `peaceful host routing contribution` *(observed, managed)* — complete lifecycle-scoped host-routing state для выбранного helper traffic scope.
+    1. `helper destination route state` *(observed, managed)* — remote Profile destinations и при необходимости Profile-SNAT identity routes в dedicated helper table.
+    2. `helper dispatch RPDB state` *(observed, managed)* — selector-scoped preserve-main + helper lookup pairs и absolute managed-boundary bypass.
+
+Эти Artifacts не являются children общего «host networking» Artifact: у них разные semantic
+owners, lifecycle и postconditions. Общая Linux namespace лишь physical container.
+
+Не принадлежат этому Space:
+
+- host-global IPv4 forwarding;
+- foreign/admin routing, RPDB, nft firewall/NAT;
+- ordinary host interface/address lifecycle;
+- aggressive authoritative helper state — capability postponed и не проектируется здесь;
+- managed L3 door itself — `Ordinary-side transition`.
+
+Interactions
+
+| From | Interaction | To |
+| --- | --- | --- |
+| `STACK.PayloadTrafficManager` / policy assembly | desired Device publication | `@NetworkPolicyAdapter <partial>` |
+| `@NetworkPolicyAdapter <partial>` | observe/converge/cleanup distinct owner scope | `host publication mapping state` |
+| `@NetworkPolicyAdapter <partial>` | observe host forwarding/interface/address prerequisites without ownership | `Ambient host and external world` |
+| `Ambient host and external world` | inbound traffic to selected local publication surface | `host publication mapping state` |
+| `host publication mapping state` | DNAT toward current stack-local service/publication identity | `Ordinary-side transition` |
+| `Ordinary-side transition` | deliver publication traffic | `Private network.local publication policy` |
+| `STACK.@ProductLifecycleControl` | build/converge enabled helper contribution | `@HostRoutingContribution` |
+| `@HostRoutingContribution` | converge/cleanup | `peaceful host routing contribution` |
+| `Ambient host and external world` | selected host traffic enters helper-owned RPDB scope | `peaceful host routing contribution` |
+| `peaceful host routing contribution` | route selected traffic to explicit managed host endpoint | `Ordinary-side transition.managed L3 boundary realization` |
+| `Ordinary-side transition` | traffic emitted from Private network bypasses helper recapture and resumes ordinary host routing | `Ambient host and external world` |
+
+Findings
+
+1. `NetworkPolicyAdapter cross-Space projection` — one semantic Device publication currently
+   produces a managed-domain local-admission postcondition and a separate host mapping
+   postcondition. Keeping one Adapter identity across both Spaces is valid via `<partial>`,
+   but remains a decomposition review signal rather than evidence that host state belongs to
+   Private network.
+2. `Host forwarding prerequisite` — publication machinery may observe and report
+   host-global forwarding disabled, but current requirements do not authorize enabling it.
+3. `Peaceful helper lifecycle` — Release 1 owns only start/reload-update/stop contribution.
+   Administrator changes between lifecycle operations are not helper drift, so no Manager is
+   introduced.
+
+Component diagram
+
+```text
++---------------------------- STACK --------------------------------+
+| PayloadTrafficManager                 @ProductLifecycleControl     |
++-----------+-----------------------------------+--------------------+
+            | publication desired               | helper lifecycle
+            v                                   v
++-----------+--------------------------------------------------------+
+|                  VPN-GATE-managed host state                       |
+|                                                                    |
+| @NetworkPolicyAdapter <partial>      @HostRoutingContribution      |
+|              |                                |                    |
+|              v                                v                    |
+| [host publication mapping]      [peaceful host routing contribution]|
+|              |                                |                    |
++--------------|--------------------------------|--------------------+
+               |                                |
+               v                                v
++---------------------------+        +------------------------------+
+| Ordinary-side transition  |        | Ordinary-side transition     |
++---------------------------+        +------------------------------+
+               ^
+               |
++--------------+----------------------------------------------------+
+|                Ambient host and external world                    |
+| forwarding/interfaces/routes not explicitly owned above           |
++-------------------------------------------------------------------+
+```
+
+
 
 ## Component addenda
 
