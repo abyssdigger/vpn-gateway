@@ -72,6 +72,13 @@ Space без resident'ов для этой модели ненаблюдаем �
 Общая technical identity не создает скрытого глобального spec поверх Spaces и не заменяет
 Space-local описание ответственности/API этой partial occurrence.
 
+Для **внешнего** Space `Resident` может быть external actor/system/capability provider,
+который не является компонентом VPN-GATE и поэтому не классифицируется как
+Engine/Machinery по `design/component-model.md`. На него по-прежнему распространяются
+Space/API/Interaction rules, но отдельный VPN-GATE component addendum не требуется, если
+его внешний контракт уже достаточно описан в самом Space. Component roles и обязательные
+component specs относятся к resident'ам, являющимся архитектурными компонентами VPN-GATE.
+
 ### 2.1.1. Критерий вложенности
 
 Компонент следует показывать child'ом другого компонента в дереве `Residents`, когда
@@ -453,8 +460,9 @@ ownership. После разрешения finding принятый резуль
 resident/artifact/interaction или component spec; активный structured document не должен
 выдавать finding за принятое решение.
 
-Ниже пока сохранен существующий inline `Component addenda` для `Private network` как
-миграционное состояние до отдельного structural pass.
+Ниже существующие specs `Private network` уже собраны в `Annex C`. Annex пока неполон:
+новые resident'ы, выявленные текущим Space-pass, получают свои specs в следующем
+component-annex review unit; это не меняет завершенность самой карты Spaces.
 
 
 
@@ -755,18 +763,16 @@ Interactions
 | `@NetworkPolicyAdapter` | allocate internal lower resources | `NetworkPolicyLayoutCalculator` |
 | `@NetworkPolicyAdapter` | converge desired lower policy | `NetworkPolicyEnforcer` |
 | `NetworkPolicyEnforcer` | converge/verify payload dispatch and path routes | `payload routing state` |
-| `NetworkPolicyEnforcer` | converge/verify probe route/RPDB owners | `probe routing state` |
-| `NetworkPolicyEnforcer` | verify/prepare lower policy prerequisite | `nft policy scaffold` |
+| `@NetworkPolicyAdapter` | converge/verify dedicated probe route/RPDB owner through lower probe-routing machinery | `probe routing state` |
+| `@NetworkPolicyAdapter` | observe/prepare invariant activation prerequisite through lower scaffold machinery | `nft policy scaffold` |
 | `NetworkPolicyEnforcer` | converge/verify semantic nft owners | `Profile forwarding policy`, `Device firewall policy`, `payload NAT policy`, `local publication policy`, `VPN integration local policy`, `probe local admission policy` |
-| `NetworkPolicyEnforcer` | converge/verify established-flow association | `return-affinity state` |
+| `@NetworkPolicyAdapter` | converge/verify independently owned established-flow return-affinity postcondition under the shared safety barrier | `return-affinity state` |
 | `NetworkPolicyEnforcer` | structural safety barrier | `@ForwardingGate` |
 | `STACK` | fresh endpoint observation / binding verification | `@VPNPathAdapter` |
 | `@VPNPathAdapter` | observe current concrete endpoint generations | `VPN endpoint inventory` |
 | `VPN external ends` | provision/remove supported VPN data-plane endpoint generation | `VPN endpoint inventory` |
 | `STACK.AvailabilityProbeAgent` | execute one confirmed physical probe attempt | `@ActiveProbeDriver` |
-| `@ActiveProbeDriver` | require exact current route/selectors | `probe routing state` |
-| `@ActiveProbeDriver` | require exact local admission | `probe local admission policy` |
-| `@ActiveProbeDriver` | require exact current endpoint identity | `VPN endpoint inventory` |
+| `STACK.AvailabilityProbeAgent` | require confirmed probe execution precondition before invoking the Driver | `probe routing state`, `probe local admission policy`, `VPN endpoint inventory` |
 | `@ActiveProbeDriver` | send/receive probe IP | `VPN-side IP portal` |
 | `VPN-side IP portal` | bidirectional IP handoff | `VPN external ends` |
 | `STACK` / `NetworkPolicyEnforcer` | observe/converge barrier | `@ForwardingGate` |
@@ -1162,9 +1168,9 @@ Component diagram
 
 
 
-## Component addenda
+# Annex C. Private network components
 
-### NetworkPolicyAdapter
+## C.001 NetworkPolicyAdapter
 
 Adapter является shared boundary от owner-scoped semantic network policy клиентов STACK к
 lower network-policy domain Private network. Общая physical realization не сливает
@@ -1211,7 +1217,7 @@ Architectural decisions
 7. `Cross-Space Device publication`
    *Один normalized Device publication intent требует двух independently verified postconditions: managed-domain local admission в `Private network` и host publication mapping в `VPN-GATE-managed host state`. Host-side occurrence того же semantic Adapter показывается в соседнем Space как отдельный `NetworkPolicyAdapter <partial>`; физическое размещение host nft state не расширяет ownership этого Private-network occurrence.*
 
-### NetworkPolicyLayoutCalculator
+## C.002 NetworkPolicyLayoutCalculator
 
 Pure Calculator внутреннего resource layout. Он получает semantic owner demand и injected
 platform resource space и возвращает детерминированное распределение внутренних
@@ -1250,7 +1256,7 @@ Architectural decisions
 8. `Injected platform contract`
    *Конкретные Linux numeric pools, protocol markers и nft namespace приходят через platform contract, не из user configuration. Их конкретные значения являются evidence-gated platform facts, а не частью semantic API Calculator.*
 
-### NetworkPolicyEnforcer
+## C.003 NetworkPolicyEnforcer
 
 Enforcer отвечает только за достижение и подтверждение переданного desired state.
 Он не является Space API: в дереве `Residents` его parent — `NetworkPolicyAdapter`,
@@ -1302,7 +1308,7 @@ Findings
 
 1. `Administrative payload containment` *Future public containment capability по `VPNG0004-R5` не является режимом structural Enforcer. Ее exact lower composition остается open; текущий `ForwardingGate` может быть только частью решения, потому что отдельный ordinary-side block тоже необходим.*
 
-### VPNPathAdapter
+## C.004 VPNPathAdapter
 
 Adapter является boundary между logical VPN-path semantics и уже provisioned concrete VPN
 endpoint внутри Private network. Он наблюдает/проверяет lower-domain facts, но не создает и
@@ -1353,7 +1359,7 @@ Findings
 
 1. `Route realization ownership` *Flat architecture требует integration-specific verified gateway/onlink realization в дополнение к current binding, но structured tree пока не доказывает, является ли это методом VPNPathAdapter, отдельным child component или контрактом другого transition/VPN-end Space.*
 
-### ForwardingGate
+## C.005 ForwardingGate
 
 Самостоятельный bounded Enforcer корневого IPv4 forwarding state Private network. Его
 verified DISABLED state используется как structural safety barrier, но тот же contract нужен
@@ -1384,7 +1390,7 @@ Architectural decisions
 6. `Bounded lifecycle`
    *Enforcer не содержит hidden retry loop и не владеет continuous maintenance. Повторная попытка, если она нужна, начинается caller'ом из нового fresh state.*
 
-### ForwardingGateDriver
+## C.006 ForwardingGateDriver
 
 Технический Driver к managed-domain forwarding state. В дереве `Residents` он является
 child `ForwardingGate`, но его spec остается плоским addendum-соседом остальных компонентов
