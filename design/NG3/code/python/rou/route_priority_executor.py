@@ -13,10 +13,12 @@ from .route_priority_enforcer import (
     converge_route_priority_once,
 )
 
+RoutePriorityBackend = RoutePriorityDriver
 RoutePriorityExecutionResult = RoutePriorityEnforcementResult
 RoutePriorityExecutionStatus = RoutePriorityEnforcementStatus
 
 __all__ = [
+    "RoutePriorityBackend",
     "RoutePriorityDriver",
     "RoutePriorityEnforcementResult",
     "RoutePriorityEnforcementStatus",
