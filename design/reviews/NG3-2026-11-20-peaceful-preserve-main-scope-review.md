@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-20  
 **Branch:** `ng3-design-cycle-20261120-helper-routing-finalize-30m`  
-**Affected:** `VPNG0001-R2`, `VPNG0001-R2.R2`  
+**Affected:** `VPNG-U001-R2`, `VPNG-U001-R2.R2`  
 **Finding:** global preserve-main rule affects routing outside selected helper scope  
 **Verdict:** **CONFIRMED — ARCHITECTURE CORRECTED, IMPLEMENTATION PENDING**
 
@@ -27,5 +27,5 @@ behavior while preserving selected explicit-main precedence.
 Materialize one selector-specific preserve+dispatch pair per effective peaceful selector.
 The managed-boundary absolute `goto` bypass from EXP-079 remains unchanged.
 
-`VPNG0001-R2.R2` is returned to [`pending_closure`] until implementation and regression
+`VPNG-U001-R2.R2` is returned to [`pending_closure`] until implementation and regression
 evidence match this corrected lowering.

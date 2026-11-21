@@ -15,8 +15,8 @@ Driver/Reader/Executor boundaries under `design/component-model.md`. The result 
 for the Backend/Driver terminology comb, followed by requirement-to-architecture trace
 completion, stable evidence indexing and final review.
 
-Relevant maintainability requirements include `VPNG0007-R7.R2`,
-`VPNG0007-R7.R3.R5`, `VPNG0007-R7.R4` and `VPNG0007-R7.R6.R1`.
+Relevant maintainability requirements include `VPNG-U007-R7.R2`,
+`VPNG-U007-R7.R3.R5`, `VPNG-U007-R7.R4` and `VPNG-U007-R7.R6.R1`.
 
 ## Initial applicability assessment
 
@@ -280,9 +280,9 @@ full executable evidence matrix passes.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R2` -> `VPNG9001-R1.R1.R2`
-- `VPNG0007-R7.R3.R5` -> `VPNG9001-R1.R1.R3.R5`
-- `VPNG0007-R7.R4` -> `VPNG9001-R1.R1.R4`
-- `VPNG0007-R7.R6.R1` -> `VPNG9001-R1.R1.R6.R1`
+- `VPNG-U007-R7.R2` -> `VPNG-D001-R1.R1.R2`
+- `VPNG-U007-R7.R3.R5` -> `VPNG-D001-R1.R1.R3.R5`
+- `VPNG-U007-R7.R4` -> `VPNG-D001-R1.R1.R4`
+- `VPNG-U007-R7.R6.R1` -> `VPNG-D001-R1.R1.R6.R1`
 
 The original IDs in the historical body are intentionally preserved.

@@ -81,7 +81,7 @@ into one installed-systemd smoke:
 
 No accepted R/C requires EXP-051 itself to duplicate every already-proven policy capability.
 Adding such duplication solely for test breadth would not be justified by
-`VPNG0007-R7.R1`.
+`VPNG-U007-R7.R1`.
 
 ## Current alpha vs production/stable boundary
 
@@ -94,7 +94,7 @@ RuntimeStatusAgent semantics and alpha JSON snapshot satisfy current observabili
 choosing a stable external API/schema/path would create a user-visible interface decision
 that is not derivable autonomously from the current requirement tree.
 
-Likewise, this review does not declare the `VPNG0007-R7.R8.C2` Python-completion/Rust
+Likewise, this review does not declare the `VPNG-U007-R7.R8.C2` Python-completion/Rust
 transition gate globally satisfied. That gate requires a separate review of the complete
 non-exempt production boundary, not inference from one alpha readiness audit.
 
@@ -104,9 +104,9 @@ No R/C wording or closure state changes.
 
 Existing postponed nodes remain postponed:
 
-- `VPNG0001-R2.R3` aggressive helper, with continuous recovery/containment children;
-- `VPNG0004-R4.R7` administrative payload containment;
-- `VPNG0005-R5.R6.R4` reload orchestration when a selected interface exposes reload.
+- `VPNG-U001-R2.R3` aggressive helper, with continuous recovery/containment children;
+- `VPNG-U004-R4.R7` administrative payload containment;
+- `VPNG-U005-R5.R6.R4` reload orchestration when a selected interface exposes reload.
 
 No active `unreal`, `broken` or `rejected_closure` relationship is introduced.
 
@@ -136,7 +136,7 @@ requires an explicit product/interface decision rather than autonomous implement
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
-- `VPNG0007-R7.R8.C2` -> `VPNG9001-R1.R1.R8.C2`
+- `VPNG-U007-R7.R1` -> `VPNG-D001-R1.R1.R1`
+- `VPNG-U007-R7.R8.C2` -> `VPNG-D001-R1.R1.R8.C2`
 
 The original IDs in the historical body are intentionally preserved.

@@ -8,7 +8,7 @@
 
 **PASS.**
 
-`VPNG0005-R5.C1` remains a valid Constraint under lifecycle/recovery, but its normative role
+`VPNG-U005-R5.C1` remains a valid Constraint under lifecycle/recovery, but its normative role
 is now limited to the boundary of required automatic recovery/adoption after unsupported
 external intervention.
 
@@ -16,7 +16,7 @@ It is no longer a second blanket safety root.
 
 ## Parent/Reason review
 
-`VPNG0005-R5` requires predictable lifecycle and recovery of VPN-GATE-owned runtime state.
+`VPNG-U005-R5` requires predictable lifecycle and recovery of VPN-GATE-owned runtime state.
 
 A separate constraint is justified because arbitrary root/admin intervention can destroy or
 make ambiguous the identity/ownership facts needed for safe automatic reconstruction. Such an
@@ -48,7 +48,7 @@ This keeps `C1` a recovery-scope constraint rather than a universal reaction pol
 
 ## C1.R1 compensation
 
-`VPNG0005-R5.C1.R1` remains required and `[`closed`]`.
+`VPNG-U005-R5.C1.R1` remains required and `[`closed`]`.
 
 The administrator-facing contract now distinguishes:
 
@@ -72,11 +72,11 @@ correct because the concrete managed-domain safety postcondition is no longer co
 
 Its normative basis is the applicable safety chain, especially:
 
-- `VPNG0004-R4.R2` — unconfirmed safety-critical actual state remains restricted;
-- `VPNG0004-R4.R5` — failed/partial policy mutation must end in a verified safe result or
+- `VPNG-U004-R4.R2` — unconfirmed safety-critical actual state remains restricted;
+- `VPNG-U004-R4.R5` — failed/partial policy mutation must end in a verified safe result or
   closed traffic.
 
-`VPNG0005-R5.C1` separately explains why the same situation need not trigger a generic
+`VPNG-U005-R5.C1` separately explains why the same situation need not trigger a generic
 forensic reconstruction/adoption mechanism.
 
 Thus:
@@ -95,7 +95,7 @@ specific safety/readiness invariant
 EXP-050 remains valid selected evidence for bounded systemd VPN lifecycle and absence of a
 need for generic VPN process adoption.
 
-Its current contribution to `VPNG0005-R5.C1` is narrow:
+Its current contribution to `VPNG-U005-R5.C1` is narrow:
 
 - it supports the bounded recovery/adoption model;
 - it did not test arbitrary root damage;
@@ -117,7 +117,7 @@ The following historical reviews retain their original reasoning:
 - `NG3-2026-11-17-systemd-vpn-onboarding-exp050-35m-checkpoint.md`.
 
 Each now carries a current-interpretation note stating that historical blanket fail-closed
-wording must not be treated as the current meaning of `VPNG0005-R5.C1`.
+wording must not be treated as the current meaning of `VPNG-U005-R5.C1`.
 
 ## Architecture/document interference review
 
@@ -138,9 +138,9 @@ withholds readiness.
 
 ## Closure status
 
-`VPNG0005-R5.C1` remains `[`closed`]`.
+`VPNG-U005-R5.C1` remains `[`closed`]`.
 
-`VPNG0005-R5.C1.R1` remains `[`closed`]`.
+`VPNG-U005-R5.C1.R1` remains `[`closed`]`.
 
 The closure is narrower and more precise than before; no product recovery or safety promise
 was weakened. The removed blanket interpretation was redundant with, and less precise than,
@@ -152,8 +152,8 @@ the existing safety/readiness requirement tree.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
-- `VPNG0005-R5.C1.R1` -> `VPNG9101-R1.R1.C1.R1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.C1` -> `VPNG-M001-R1.R1.C1`
+- `VPNG-U005-R5.C1.R1` -> `VPNG-M001-R1.R1.C1.R1`
 
 The original IDs in the historical body are intentionally preserved.

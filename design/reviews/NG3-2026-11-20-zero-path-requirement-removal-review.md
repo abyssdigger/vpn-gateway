@@ -8,21 +8,21 @@
 
 **PASS.**
 
-`VPNG0004-R4.R1.R1` was removed from the current requirement tree.
+`VPNG-U004-R4.R1.R1` was removed from the current requirement tree.
 
 The node was both redundant and mis-scoped:
 
 - its "Profile does not disappear when paths = 0" statement is already owned by
-  `VPNG0001-R1.R2.R4.R4.R2`;
+  `VPNG-U001-R1.R2.R4.R4.R2`;
 - its concrete-path membership premise is already constrained by
-  `VPNG0002-R2.R2.R2`;
+  `VPNG-U002-R2.R2.R2`;
 - its fail-closed result inside VPN-GATE follows from the root safety obligation
-  `VPNG0004-R4`: managed traffic must not be forwarded by a behavior outside current
+  `VPNG-U004-R4`: managed traffic must not be forwarded by a behavior outside current
   accepted policy;
 - the deleted Purpose incorrectly described ordinary host `ambient/main` routing as if
   VPN-GATE owned it, which conflicts with the accepted host-network non-interference boundary.
 
-The immediate parent `VPNG0004-R4.R1` is about an **ambiguous/indeterminate policy result**.
+The immediate parent `VPNG-U004-R4.R1` is about an **ambiguous/indeterminate policy result**.
 A Profile with zero effective paths is not ambiguous: the permitted concrete-path set is
 unambiguously empty. The removed child therefore did not naturally refine its immediate
 parent.
@@ -35,15 +35,15 @@ The current normative chain is:
 
 ```text
 Profile logical identity persists with zero usable paths
-    <- VPNG0001-R1.R2.R4.R4.R2
+    <- VPNG-U001-R1.R2.R4.R4.R2
 
 effective concrete membership comes only from valid current bindings
-    <- VPNG0002-R2.R2.R2
+    <- VPNG-U002-R2.R2.R2
 
 zero valid concrete paths therefore means no permitted VPN forwarding result
 
 managed traffic must not be forwarded outside accepted current policy
-    <- VPNG0004-R4
+    <- VPNG-U004-R4
 ```
 
 Consequently a zero-path Profile remains present in structural policy and the selected lower
@@ -55,7 +55,7 @@ VPN-GATE.
 
 ## Traceability cleanup
 
-All current normative references to `VPNG0004-R4.R1.R1` were removed.
+All current normative references to `VPNG-U004-R4.R1.R1` were removed.
 
 - `design/NG3/config-model.md` now traces zero-path structural behavior to the Profile
   persistence / concrete-path membership requirements plus root safety.
@@ -103,7 +103,7 @@ closure/link names or their semantic values.
 
 ## Static checks
 
-Current normative files contain zero occurrences of `VPNG0004-R4.R1.R1`:
+Current normative files contain zero occurrences of `VPNG-U004-R4.R1.R1`:
 
 - `design/NG3/requirements.md`;
 - `design/NG3/config-model.md`;
@@ -115,7 +115,7 @@ requirement/process documents; they render as [`closed`] and [`decomp`: ...] ins
 
 ## Next suspicious requirement
 
-The next candidate from the original review list is `VPNG0005-R5.C1`.
+The next candidate from the original review list is `VPNG-U005-R5.C1`.
 
 Its underlying need — bounded recovery after arbitrary root/admin mutation — is plausible,
 but its current fail-closed scope must be rechecked against the newly separated distinction
@@ -128,6 +128,6 @@ host routing.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
+- `VPNG-U005-R5.C1` -> `VPNG-M001-R1.R1.C1`
 
 The original IDs in the historical body are intentionally preserved.
