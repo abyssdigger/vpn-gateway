@@ -102,3 +102,20 @@ the accepted containment decision itself.
 
 The representation is simpler and less ambiguous than nested component specs: tree shape
 answers “where does it live?”, while the flat addendum answers “what is it?”.
+
+
+## Fix verification
+
+Reviewed fixed baseline: `d54742ba43ab252a38a52190ecd97bb463020cff`.
+
+Verified:
+
+- `Residents` remains the only hierarchy representation;
+- Private-network component specs are all siblings under one `Component addenda`;
+- no component heading carries `@` or encodes parenthood by depth;
+- no component spec contains a `Subcomponents` block;
+- `<partial>` now has explicit Space-local addendum semantics;
+- the change does not alter the previously selected Private-network parent/child relations,
+  Space API, component responsibilities or safety decisions.
+
+**Final verdict: PASS.**
