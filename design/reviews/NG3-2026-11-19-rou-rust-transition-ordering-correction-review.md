@@ -2,17 +2,17 @@
 
 **Date:** 2026-11-19  
 **Cycle:** `ng3-design-cycle-20261119-post-probing-frontier-35m`  
-**Scope:** development-ordering correction for `VPNG0007-R7.R8`.
+**Scope:** development-ordering correction for `VPNG-U007-R7.R8`.
 
 ## Finding
 
 The cycle began porting already-proven pure availability contracts to Rust because
-`VPNG0007-R7.R8` defines Rust as the production runtime language and the immediate pure
+`VPNG-U007-R7.R8` defines Rust as the production runtime language and the immediate pure
 contracts were technically safe to port.
 
 That ordering was nevertheless wrong for the current project phase.
 
-`VPNG0007-R7.R8.C1` explicitly permits early alpha/beta releases to remain on the Python
+`VPNG-U007-R7.R8.C1` explicitly permits early alpha/beta releases to remain on the Python
 reference implementation so product semantics, integration applicability and operational
 behavior can be proven before paying migration cost. Porting `rou` while significant `rou`
 decisions are still changing creates two executable implementations that must be kept in sync
@@ -20,7 +20,7 @@ and consumes development effort without improving current product evidence.
 
 ## Normative correction
 
-Added `VPNG0007-R7.R8.C2`:
+Added `VPNG-U007-R7.R8.C2`:
 
 - the Rust transition of production `rou` is not current development work while the target
   `rou` decision set is still changing or lacks sufficient Python evidence;
@@ -71,10 +71,10 @@ No further Rust runtime surface is part of the current project frontier before t
 
 All accumulated occurrences remain resolved:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`;
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`;
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 ### unreal
 
@@ -101,10 +101,10 @@ Python `rou` until its intended behavior is coherently implemented and proven.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R8` -> `VPNG9001-R1.R1.R8`
-- `VPNG0007-R7.R8.C1` -> `VPNG9001-R1.R1.R8.C1`
-- `VPNG0007-R7.R8.C2` -> `VPNG9001-R1.R1.R8.C2`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R8` -> `VPNG-D001-R1.R1.R8`
+- `VPNG-U007-R7.R8.C1` -> `VPNG-D001-R1.R1.R8.C1`
+- `VPNG-U007-R7.R8.C2` -> `VPNG-D001-R1.R1.R8.C2`
 
 The original IDs in the historical body are intentionally preserved.

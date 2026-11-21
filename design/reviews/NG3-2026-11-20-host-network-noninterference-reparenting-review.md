@@ -3,8 +3,8 @@
 > **Reload correction note (2026-11-20):** the review below originally over-interpreted
 > peaceful-helper reload handling as making reload mandatory in alpha. The current tree
 > instead treats reload as a standard-but-optional lifecycle operation: semantics are defined
-> by `VPNG0005-R5.R6.R4` when supported, while
-> `VPNG0005-R5.R6.R4.C1` explicitly permits alpha releases to omit reload and require
+> by `VPNG-U005-R5.R6.R4` when supported, while
+> `VPNG-U005-R5.R6.R4.C1` explicitly permits alpha releases to omit reload and require
 > restart for configuration changes. Historical wording below is retained as review history.
 
 **Date:** 2026-11-20  
@@ -15,17 +15,17 @@
 
 **PASS for requirement placement, lifecycle scope and traceability.**
 
-The previous temporary placement of host-routing helpers under `VPNG0001-R1` failed the
+The previous temporary placement of host-routing helpers under `VPNG-U001-R1` failed the
 immediate-parent Purpose test: managed routing itself does not explain why VPN-GATE should or
 should not own ordinary-host routing.
 
 The corrected tree places the responsibility boundary directly under the primary
-`VPNG0001` promise.
+`VPNG-U001` promise.
 
 ## Corrected requirement shape
 
 ```text
-VPNG0001
+VPNG-U001
 ├─ R1  managed routing between ordinary network and VPN paths
 │
 └─ R2  bounded influence on ordinary-host networking
@@ -40,11 +40,11 @@ VPNG0001
 ```
 
 The independently useful administrative payload-containment requirement remains under the
-safety tree at `VPNG0004-R4.R7`.
+safety tree at `VPNG-U004-R4.R7`.
 
 ## Parent/Purpose review
 
-### VPNG0001-R2
+### VPNG-U001-R2
 
 The Purpose directly refines the primary promise to operate on **selected** IP traffic:
 using VPN-GATE for that selected traffic must not silently change unrelated ordinary-host
@@ -54,7 +54,7 @@ The Statement therefore bounds host-network mutation to explicitly enabled host-
 capabilities and forbids core managed forwarding from implicitly taking ownership of
 ordinary-host routing.
 
-### VPNG0001-R2.R1
+### VPNG-U001-R2.R1
 
 This child makes the non-interference boundary operational:
 
@@ -62,10 +62,10 @@ This child makes the non-interference boundary operational:
 - administrator-provided equivalent host routing is a supported deployment;
 - core VPN-GATE does not mutate ordinary-host routing merely to make its own forwarding work.
 
-`VPNG0001-R2.R1.R1` separately prevents "the administrator can do it" from becoming hidden
+`VPNG-U001-R2.R1.R1` separately prevents "the administrator can do it" from becoming hidden
 tribal knowledge: the project must publish the stable route/reachability contract.
 
-### VPNG0001-R2.R2
+### VPNG-U001-R2.R2
 
 Release 1 must provide peaceful host-routing automation, but its **use** remains optional and
 explicitly configuration-controlled.
@@ -81,21 +81,21 @@ The accepted lifecycle semantics are:
 
 The exact config spelling and Linux lowering remain `[pending_closure]`.
 
-### VPNG0001-R2.R3
+### VPNG-U001-R2.R3
 
 Aggressive host routing is a separate explicit delegation of stronger ownership, not an
 implementation mode secretly inherited by core or peaceful operation.
 
-`EXP-074` remains exact closure evidence for `VPNG0001-R2.R3.R1` only.
+`EXP-074` remains exact closure evidence for `VPNG-U001-R2.R3.R1` only.
 
 Continuous recovery and unrecoverable-alarm containment remain pending and the whole
-aggressive capability is excluded from Release 1 by `VPNG0001-R2.R3.C1`.
+aggressive capability is excluded from Release 1 by `VPNG-U001-R2.R3.C1`.
 
 ## Reload consequence
 
 The accepted peaceful-helper lifecycle requires a real Release-1 reload operation.
 
-`VPNG0005-R5.R6.R4` now requires:
+`VPNG-U005-R5.R6.R4` now requires:
 
 - explicit reload;
 - validation of the candidate configuration before mutation;
@@ -115,7 +115,7 @@ defers the general Release-1 configuration reload operation.
 The Device/Profile fields already defined in `config-model.md` remain canonical.
 
 However the complete Release-1 top-level grammar is no longer considered closed because
-`VPNG0001-R2.R2` requires an explicit peaceful-helper enable/disable choice whose spelling
+`VPNG-U001-R2.R2` requires an explicit peaceful-helper enable/disable choice whose spelling
 has not yet been selected.
 
 No provisional field name was invented during this review.
@@ -137,10 +137,10 @@ A later implementation unit must therefore:
 1. detach the authoritative owner from core/default controller composition;
 2. retain it separately as aggressive-helper prototype/evidence rather than deleting the
    proven lower mechanism;
-3. implement a peaceful lifecycle helper that satisfies `VPNG0001-R2.R2`;
+3. implement a peaceful lifecycle helper that satisfies `VPNG-U001-R2.R2`;
 4. allow the helper to be disabled while core operates with administrator-provided host
-   integration under `VPNG0001-R2.R1`;
-5. materialize the Release-1 reload operation required by `VPNG0005-R5.R6.R4`;
+   integration under `VPNG-U001-R2.R1`;
+5. materialize the Release-1 reload operation required by `VPNG-U005-R5.R6.R4`;
 6. prove equivalent core managed-forwarding behavior with helper-provided versus equivalent
    administrator-provided host routing.
 
@@ -151,19 +151,19 @@ correction itself.
 ## Traceability review
 
 Current normative artifacts contain no active references to the temporary
-`VPNG0001-R1.R4/R1.R5` subtree.
+`VPNG-U001-R1.R4/R1.R5` subtree.
 
 All new `[pending_closure]` nodes have architecture references:
 
-- `VPNG0001-R2.R1.R1`;
-- `VPNG0001-R2.R2`;
-- `VPNG0001-R2.R3`;
-- `VPNG0001-R2.R3.R2`;
-- `VPNG0001-R2.R3.R3`;
-- `VPNG0005-R5.R6.R4`.
+- `VPNG-U001-R2.R1.R1`;
+- `VPNG-U001-R2.R2`;
+- `VPNG-U001-R2.R3`;
+- `VPNG-U001-R2.R3.R2`;
+- `VPNG-U001-R2.R3.R3`;
+- `VPNG-U005-R5.R6.R4`.
 
-Closed `VPNG0001-R2`, `VPNG0001-R2.R1`, `VPNG0001-R2.R3.R1` and
-`VPNG0001-R2.R3.C1` have exact architecture references.
+Closed `VPNG-U001-R2`, `VPNG-U001-R2.R1`, `VPNG-U001-R2.R3.R1` and
+`VPNG-U001-R2.R3.C1` have exact architecture references.
 
 The previous 2026-11-20 host-routing-helper review is preserved as historical evidence of the
 first split and now explicitly states that its temporary requirement IDs were superseded by
@@ -173,7 +173,7 @@ this reparenting.
 
 The next previously identified suspicious requirement remains:
 
-`VPNG0004-R4.R1.R1`
+`VPNG-U004-R4.R1.R1`
 
 Its zero-path fail-closed safety need appears valid, but its current wording still leaks the
 old host-wide "ambient/main routing" model and must be reviewed against the corrected managed
@@ -185,7 +185,7 @@ The following requirement IDs are historical references from this record's origi
 They were later removed without a direct normative successor, so their last normative
 compact-form wording is preserved here:
 
-- `VPNG0005-R5.R6.R4` — *Чтобы поддерживаемая lifecycle integration могла использовать стандартную reload-операцию без подмены ее неявным полным restart экземпляра.* | Если поддерживаемый deployment/lifecycle interface объявляет reload доступной операцией, VPN-GATE должен сначала валидировать новую конфигурацию, затем безопасно применить требуемые изменения активных функций и считать reload успешным только после подтверждения соответствующих postconditions; неуспешный reload не должен молча объявлять новую конфигурацию действующей. [`pending_closure`]
-- `VPNG0005-R5.R6.R4.C1` — *Поскольку reload является стандартной, но не обязательной lifecycle-операцией service-manager API и не требуется для проверки базовой работоспособности ранней alpha, её реализация не должна задерживать alpha-срезы.* | Alpha releases не обязаны предоставлять reload; при отсутствии reload изменение конфигурации может требовать явного restart, а peaceful host-routing helper применяет обновленную конфигурацию при следующей поддерживаемой lifecycle-операции. Это ограничение не меняет semantics reload там, где операция объявлена поддерживаемой. [`closed`]
+- `VPNG-U005-R5.R6.R4` — *Чтобы поддерживаемая lifecycle integration могла использовать стандартную reload-операцию без подмены ее неявным полным restart экземпляра.* | Если поддерживаемый deployment/lifecycle interface объявляет reload доступной операцией, VPN-GATE должен сначала валидировать новую конфигурацию, затем безопасно применить требуемые изменения активных функций и считать reload успешным только после подтверждения соответствующих postconditions; неуспешный reload не должен молча объявлять новую конфигурацию действующей. [`pending_closure`]
+- `VPNG-U005-R5.R6.R4.C1` — *Поскольку reload является стандартной, но не обязательной lifecycle-операцией service-manager API и не требуется для проверки базовой работоспособности ранней alpha, её реализация не должна задерживать alpha-срезы.* | Alpha releases не обязаны предоставлять reload; при отсутствии reload изменение конфигурации может требовать явного restart, а peaceful host-routing helper применяет обновленную конфигурацию при следующей поддерживаемой lifecycle-операции. Это ограничение не меняет semantics reload там, где операция объявлена поддерживаемой. [`closed`]
 
 The original IDs in the historical body are intentionally preserved.

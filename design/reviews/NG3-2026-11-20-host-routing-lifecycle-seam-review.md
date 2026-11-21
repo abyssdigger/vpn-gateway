@@ -18,10 +18,10 @@ No requirement, configuration or user-visible routing behavior changes.
 
 The existing behavior is traced to:
 
-- `VPNG0001-R2.R2` — peaceful helper is lifecycle-scoped;
-- `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` —
+- `VPNG-U001-R2.R2` — peaceful helper is lifecycle-scoped;
+- `VPNG-U005-R5.R1`, `VPNG-U005-R5.R4`, `VPNG-U005-R5.R5`, `VPNG-U005-R5.R6` —
   startup/stop ownership and cleanup;
-- `VPNG0007-R7.R2`, `VPNG0007-R7.R3.R1`, `VPNG0007-R7.R6.R1` — localized,
+- `VPNG-U007-R7.R2`, `VPNG-U007-R7.R3.R1`, `VPNG-U007-R7.R6.R1` — localized,
   explicit and traceable implementation responsibilities.
 
 The controller must be able to converge and later clean an optional host-routing contribution
@@ -138,12 +138,12 @@ No requirement-state transition occurred.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R1` -> `VPNG9101-R1.R1.R1`
-- `VPNG0005-R5.R4` -> `VPNG9101-R1.R1.R4`
-- `VPNG0005-R5.R5` -> `VPNG9101-R1.R1.R5`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R2` -> `VPNG9001-R1.R1.R2`
-- `VPNG0007-R7.R3.R1` -> `VPNG9001-R1.R1.R3.R1`
-- `VPNG0007-R7.R6.R1` -> `VPNG9001-R1.R1.R6.R1`
+- `VPNG-U005-R5.R1` -> `VPNG-M001-R1.R1.R1`
+- `VPNG-U005-R5.R4` -> `VPNG-M001-R1.R1.R4`
+- `VPNG-U005-R5.R5` -> `VPNG-M001-R1.R1.R5`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R2` -> `VPNG-D001-R1.R1.R2`
+- `VPNG-U007-R7.R3.R1` -> `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-U007-R7.R6.R1` -> `VPNG-D001-R1.R1.R6.R1`
 
 The original IDs in the historical body are intentionally preserved.
