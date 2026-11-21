@@ -470,9 +470,9 @@ ownership. После разрешения finding принятый резуль
 resident/artifact/interaction или component spec; активный structured document не должен
 выдавать finding за принятое решение.
 
-Ниже существующие specs `Private network` уже собраны в `Annex C`. Annex пока неполон:
-новые resident'ы, выявленные текущим Space-pass, получают свои specs в следующем
-component-annex review unit; это не меняет завершенность самой карты Spaces.
+Текущие Annexes A–G следуют карте Spaces один к одному. Каждый resident, являющийся
+компонентом VPN-GATE, имеет Space-local spec; external residents остаются описаны только
+контрактами соответствующего Space и не получают искусственных VPN-GATE component specs.
 
 
 
@@ -1618,7 +1618,24 @@ Architectural decisions
 
 ## C.002 NetworkPolicyLayoutCalculator
 
-Pure Calculator внутреннего resource layout. Он получает semantic owner demand и injected
+Pure Calculator внутреннего resource layout.
+
+**Implements:**
+- `VPNG0001-R1.R1`
+- `VPNG0003-R3.R6`
+- `VPNG0004-R4`
+- `VPNG0004-R4.R1`
+- `VPNG0004-R4.R2`
+- `VPNG0004-R4.R5`
+- `VPNG0004-R4.R6`
+- `VPNG0005-R5.R2`
+- `VPNG0005-R5.R4`
+- `VPNG0005-R5.R5`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R3.R1`
+- `VPNG0007-R7.R3.R2`
+ Он получает semantic owner demand и injected
 platform resource space и возвращает детерминированное распределение внутренних
 routing-table, RPDB, route-marker, metric и nft namespace ресурсов.
 
@@ -1759,7 +1776,15 @@ Architectural decisions
 
 ## C.005 ForwardingGate
 
-Самостоятельный bounded Enforcer корневого IPv4 forwarding state Private network. Его
+Самостоятельный bounded Enforcer корневого IPv4 forwarding state Private network.
+
+**Implements:**
+- `VPNG0004-R4.R2`
+- `VPNG0004-R4.R3.R2`
+- `VPNG0004-R4.R4`
+- `VPNG0004-R4.R5`
+- `VPNG0004-R4.R6.R1`
+ Его
 verified DISABLED state используется как structural safety barrier, но тот же contract нужен
 startup, shutdown и recovery независимо от `NetworkPolicyAdapter`.
 
@@ -1790,7 +1815,19 @@ Architectural decisions
 
 ## C.006 ForwardingGateDriver
 
-Технический Driver к managed-domain forwarding state. В дереве `Residents` он является
+Технический Driver к managed-domain forwarding state.
+
+**Supports implementation of:**
+- `VPNG0004-R4.R2`
+- `VPNG0004-R4.R3.R2`
+- `VPNG0004-R4.R4`
+- `VPNG0004-R4.R5`
+- `VPNG0004-R4.R6.R1`
+
+Сам по себе Driver не реализует semantic requirement postcondition: он предоставляет
+technical read/write primitive для `ForwardingGate`, который выполняет fresh
+observe/mutate/re-observe verification.
+ В дереве `Residents` он является
 child `ForwardingGate`, но его spec остается плоским addendum-соседом остальных компонентов
 Space.
 
