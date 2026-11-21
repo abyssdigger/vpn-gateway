@@ -78,3 +78,19 @@ review history.
 ## Verdict
 
 **PASS after F1.**
+
+
+## Fix verification
+
+Reviewed fixed baseline: `449053fdcd15f3534f6b55e899ade4eaf4df9ecd`.
+
+Verified:
+
+- `Architectural decisions` now contains only accepted component decisions;
+- unresolved host-publication placement moved to `Findings`;
+- unresolved VPN route-realization ownership uses the same `Findings` rule;
+- the methodology explicitly states that findings are diagnostic/review state rather than
+  normative architecture;
+- no component hierarchy or Space API changed as part of the fix.
+
+**Final verdict: PASS.**
