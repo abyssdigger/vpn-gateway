@@ -455,14 +455,9 @@ Architectural decisions
 6. `Lower technical boundary`
    *Drivers/Readers/Executors и Backend-композиции предоставляют observation/actuation primitives, но не выбирают desired state и не владеют convergence. Linux JSON/argv shapes, numeric pools и platform constants принадлежат lower technical realization, а не API Enforcer.*
 
-Исходная flat architecture смешивает с этой ответственностью несколько соседних решений.
-В structured view они намеренно отделены:
+Findings
 
-- complete structural desired-state projection относится к Adapter/Calculator side и является input Enforcer;
-- raw route/RPDB/nft observation formats относятся к lower Reader/Backend;
-- корневой `ForwardingGate` является отдельным resident Private network;
-- будущий administrative payload-containment control не является разновидностью structural
-  Enforcer и требует отдельного публичного operational contract.
+1. `Administrative payload containment` *Future public containment capability по `VPNG0004-R5` не является режимом structural Enforcer. Ее exact lower composition остается open; текущий `ForwardingGate` может быть только частью решения, потому что отдельный ordinary-side block тоже необходим.*
 
 ### VPNPathAdapter
 
