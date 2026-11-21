@@ -472,9 +472,9 @@ backend detail: архитектурный контракт перехода д�
 
 API
 
-    @ManagedNetworkDomainLifecycle.observe_transition(...) — получить fresh exact/absent/conflict projection текущей boundary realization.
-    @ManagedNetworkDomainLifecycle.establish_transition(...) — материализовать отсутствующий transition и подтвердить exact usable postcondition.
-    @ManagedNetworkDomainLifecycle.remove_transition(...) — удалить owned transition realization и подтвердить отсутствие.
+    @ManagedNetworkDomainLifecycle <partial>.preflight_managed_network_domain(...) — read-only проверить существующую combined domain/boundary realization; transition-проекция результата подтверждает exact/absent либо conflict.
+    @ManagedNetworkDomainLifecycle <partial>.ensure_managed_network_domain(...) — создать отсутствующую combined realization либо подтвердить существующую; transition-проекция success означает established usable boundary.
+    @ManagedNetworkDomainLifecycle <partial>.destroy_managed_network_domain(...) — удалить owned combined realization; transition-проекция success подтверждает отсутствие boundary.
 
 Отдельного `open/closed` API сейчас нет. `established` означает, что требуемый L3 handoff
 уже пригоден для передачи IP. Возможный будущий gate для aggressive helper не проектируется
@@ -560,50 +560,152 @@ Component diagram
 # Private network
 
 Отдельная сетевая среда VPN-GATE, управляемая и наблюдаемая из STACK.
-Содержит VPN-GATE-owned сетевое состояние и resident'ов, через которые другие Spaces
-наблюдают и изменяют эту реальность. Технические детали Linux/network namespace являются
-внутренней реализацией resident'ов, пока отдельный внешний контракт не требует иного.
+Она содержит принадлежащее VPN-GATE сетевое состояние data plane и локальные capabilities,
+через которые ordinary-side и VPN-side среды становятся достижимы. Linux network namespace
+является текущей materialization этого Space, но не самим Space.
 
 API
 
+    @ManagedNetworkDomainLifecycle <partial>.preflight_managed_network_domain(...) — read-only проверить текущую materialization Private network как часть существующего combined lifecycle contract.
+    @ManagedNetworkDomainLifecycle <partial>.ensure_managed_network_domain(...) — материализовать/подтвердить Private network как часть combined lifecycle contract.
+    @ManagedNetworkDomainLifecycle <partial>.destroy_managed_network_domain(...) — удалить текущую Linux-materialization Private network как часть combined lifecycle contract.
     @NetworkPolicyAdapter.observe_owned_policy(...) — вернуть свежую owner-scoped проекцию управляемой network policy.
     @NetworkPolicyAdapter.apply(...) — применить semantic desired policy и подтвердить postcondition.
     @NetworkPolicyAdapter.cleanup(...) — удалить owned policy scope и подтвердить его отсутствие.
-    @VPNPathAdapter.observe_device_endpoints(...) — наблюдать текущие candidate endpoints в Private network.
+    @VPNPathAdapter.observe_device_endpoints(...) — наблюдать текущие candidate VPN endpoints в Private network.
     @VPNPathAdapter.verify_path_binding(...) — подтвердить однозначный current binding logical path к endpoint.
-    @ForwardingGate.observe(∅) — вернуть свежий authoritative state корневого forwarding gate.
+    @ActiveProbeDriver.execute(...) — выполнить один bounded probe через заранее подтвержденный current VPN-side execution context.
+    @ForwardingGate.observe(∅) — вернуть свежий authoritative state корневого IPv4 forwarding gate.
     @ForwardingGate.converge(...) — установить требуемое состояние gate и подтвердить его свежим наблюдением.
 
 Artifacts
 
-1. `managed network environment realization` *(observed, managed)* — текущая Linux-materialization сетевой среды, которой lifecycle machinery управляет через один exact/absent contract; этот Artifact не является самим Space `Private network`.
-    1. `network namespace instance` *(observed, managed)* — экземпляр Linux network namespace, наличие которого lifecycle machinery наблюдает, создаёт и удаляет.
-    2. `loopback operational state` *(observed, managed)* — требуемое lifecycle-инвариантом состояние namespace loopback; самостоятельно верхними клиентами не управляется.
-2. `ordinary-side IP portal` *(observed, managed; decomposition pending)* — обращённая к ordinary-side transition локальная способность `Private network` принимать и отдавать IP-трафик. Текущая Linux-realization и её точная artifact decomposition разбираются отдельно.
+1. `managed network environment realization` *(observed, managed)* — текущая Linux-materialization внутренней сетевой среды; не является самим Space.
+    1. `network namespace instance` *(observed, managed)* — Linux network namespace instance.
+    2. `loopback operational state` *(observed, managed)* — lifecycle invariant namespace loopback.
+2. `stack-local IPv4 identity` *(observed, managed)* — собственная адресуемая service identity Private network. Она не является transit next-hop identity ordinary-side transition.
+3. `ordinary-side default routing state` *(observed, managed)* — внутренняя routing decision, что ordinary-side IP достигается через текущую host boundary; current Linux realization — device-only default route.
+4. `ordinary-side IP portal` — локальная capability передачи/приема IP через прозрачный `Ordinary-side transition`. Concrete endpoint двери принадлежит transition, даже когда физически расположен в managed namespace.
+5. `VPN-side IP portal` — локальная capability отправки/приема IP через текущие VPN endpoints; не является конкретным path/interface/remote endpoint.
+6. `VPN endpoint inventory` *(observed)* — fresh inventory concrete VPN endpoint generations внутри Private network, используемый для verified logical-path binding.
+7. `IPv4 forwarding state` *(observed, managed)* — корневой forwarding barrier Private network.
+8. `payload routing state` *(observed, managed)* — единый semantic lower state payload routing.
+    1. `payload route state` *(observed, managed)*
+    2. `payload RPDB state` *(observed, managed)*
+9. `probe routing state` *(observed, managed)* — exact route+selector precondition path-specific probes.
+    1. `probe route state` *(observed, managed)*
+    2. `probe RPDB state` *(observed, managed)*
+10. `nft policy scaffold` *(observed, managed)* — invariant owned nft table/base-chain structure, являющаяся prerequisite semantic policy owners, но не parent этих owners.
+11. `Profile forwarding policy` *(observed, managed)*
+12. `Device firewall policy` *(observed, managed)*
+13. `payload NAT policy` *(observed, managed)*
+14. `local publication policy` *(observed, managed)* — local INPUT/OUTPUT admission для Device publication внутри Private network.
+15. `VPN integration local policy` *(observed, managed)* — bounded local transport admission, необходимая supported VPN integration.
+16. `probe local admission policy` *(observed, managed)* — local policy, допускающая только exact probe execution/reply context.
+17. `return-affinity state` *(observed, managed)* — общий postcondition association remote-initiated flow с исходным VPN routing domain.
+    1. `return-affinity nft association/restore policy` *(observed, managed)*
+    2. `return-affinity RPDB mark-dispatch state` *(observed, managed)*
 
-Текущий `ManagedNetworkDomain` lifecycle технически проверяет единым postcondition не только
-namespace/loopback, но и private-side boundary facts вместе с соответствующими host-side
-peer/sysctl/route facts. Эта implementation transaction boundary сама по себе не задаёт
-artifact hierarchy и не переносит host-side объекты внутрь `Private network`.
-
-Для существующей lifecycle machinery допустимы целостные состояния `absent` и `exact`.
-Частично присутствующая materialization считается ошибкой preflight; текущий `ensure`
-не трактует её как набор независимо ремонтируемых child Artifacts. `destroy` удаляет
-текущую Linux-materialization, а не архитектурный Space.
-
-Finding: lower composition и Space-boundary contract `ordinary-side IP portal` требуют
-отдельного pass по transition Space. До него managed-side interface, stack-local IPv4
-identity, endpoint sysctls, private-side default route и host-side peer/route не объявляются
-здесь автоматически отдельными child Artifacts только из-за текущей Linux-realization.
+`route-priority state` не является отдельным Artifact: priority machinery изменяет
+свойства тех же `payload route state`. Аналогично readiness probe execution является
+производным условием exact `probe routing state` + `probe local admission policy` +
+current endpoint identity, а не самостоятельным `Probe IP transport` Artifact.
 
 Residents
 
-1. `@NetworkPolicyAdapter` *Semantic boundary между policy клиентов из STACK и ее lower realization/convergence внутри Private network.*
-    1. `NetworkPolicyLayoutCalculator` *Детерминированно распределяет внутренние routing/RPDB/metric/nft resources между semantic owner scopes.*
+1. `@ManagedNetworkDomainLifecycle <partial>` *Private-network проекция текущей combined lifecycle machinery: materialization namespace/local identity/default routing; пересечение с ordinary-side transition остается decomposition finding.*
+2. `@NetworkPolicyAdapter` *Semantic boundary между policy клиентов из STACK и lower realization/convergence внутри Private network.*
+    1. `NetworkPolicyLayoutCalculator` *Детерминированно распределяет internal routing/RPDB/metric/nft resources между semantic owner scopes.*
     2. `NetworkPolicyEnforcer` *Достигает и подтверждает переданный Adapter'ом desired lower network-policy state.*
-2. `@VPNPathAdapter` *Boundary наблюдения и проверки concrete VPN endpoints, уже присутствующих в Private network.*
-3. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier; нужен как network-policy convergence, так и lifecycle/safety клиентам.*
-    1. `ForwardingGateDriver` *Технический read/mutation boundary к managed-domain forwarding state.*
+3. `@VPNPathAdapter` *Boundary fresh observation и verification concrete VPN endpoints уже присутствующих в Private network.*
+4. `@ActiveProbeDriver` *Bounded lower execution одного активного probe через заранее подтвержденные probe-policy и endpoint facts.*
+5. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier.*
+    1. `ForwardingGateDriver` *Technical read/mutation boundary к managed-domain forwarding state.*
+
+Interactions
+
+| From | Interaction | To |
+| --- | --- | --- |
+| `STACK` | lifecycle preflight / ensure / destroy | `@ManagedNetworkDomainLifecycle <partial>` |
+| `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove namespace + loopback | `managed network environment realization` |
+| `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove local service address | `stack-local IPv4 identity` |
+| `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove ordinary-side default | `ordinary-side default routing state` |
+| `@ManagedNetworkDomainLifecycle <partial>` | same current transaction also manages the door realization | `Ordinary-side transition.managed L3 boundary realization` |
+| `Ordinary-side transition` | bidirectional IP handoff | `ordinary-side IP portal` |
+| `STACK` | semantic observe/apply/cleanup | `@NetworkPolicyAdapter` |
+| `@NetworkPolicyAdapter` | allocate internal lower resources | `NetworkPolicyLayoutCalculator` |
+| `@NetworkPolicyAdapter` | converge desired lower policy | `NetworkPolicyEnforcer` |
+| `NetworkPolicyEnforcer` | converge/verify payload dispatch and path routes | `payload routing state` |
+| `NetworkPolicyEnforcer` | converge/verify probe route/RPDB owners | `probe routing state` |
+| `NetworkPolicyEnforcer` | verify/prepare lower policy prerequisite | `nft policy scaffold` |
+| `NetworkPolicyEnforcer` | converge/verify semantic nft owners | `Profile forwarding policy`, `Device firewall policy`, `payload NAT policy`, `local publication policy`, `VPN integration local policy`, `probe local admission policy` |
+| `NetworkPolicyEnforcer` | converge/verify established-flow association | `return-affinity state` |
+| `NetworkPolicyEnforcer` | structural safety barrier | `@ForwardingGate` |
+| `STACK` | fresh endpoint observation / binding verification | `@VPNPathAdapter` |
+| `@VPNPathAdapter` | observe current concrete endpoint generations | `VPN endpoint inventory` |
+| `VPN external ends` | provision/remove supported VPN data-plane endpoint generation | `VPN endpoint inventory` |
+| `STACK.AvailabilityProbeAgent` | execute one confirmed physical probe attempt | `@ActiveProbeDriver` |
+| `@ActiveProbeDriver` | require exact current route/selectors | `probe routing state` |
+| `@ActiveProbeDriver` | require exact local admission | `probe local admission policy` |
+| `@ActiveProbeDriver` | require exact current endpoint identity | `VPN endpoint inventory` |
+| `@ActiveProbeDriver` | send/receive probe IP | `VPN-side IP portal` |
+| `VPN-side IP portal` | bidirectional IP handoff | `VPN external ends` |
+| `STACK` / `NetworkPolicyEnforcer` | observe/converge barrier | `@ForwardingGate` |
+| `@ForwardingGate` | technical read/mutation | `ForwardingGateDriver` |
+| `ForwardingGateDriver` | read/write | `IPv4 forwarding state` |
+
+Finding: current `ManagedNetworkDomain` lifecycle still merges artifacts from this Space
+with `Ordinary-side transition`. The structured ownership above intentionally does not
+inherit that implementation transaction boundary.
+
+Component diagram
+
+```text
+                     +----------------------+
+                     |        STACK         |
+                     +--+----+----+----+----+
+                        |    |    |    |
+             lifecycle  |    |    |    | probe execution
+                        |    |    |    |
++-----------------------v----v----v----v-----------------------------+
+|                         Private network                             |
+|                                                                     |
+| @ManagedNetworkDomainLifecycle <partial>                            |
+|      |        |        |                                            |
+|      v        v        v                                            |
+| [environment] [stack-local /32] [ordinary default]                  |
+|                                                                     |
+| @NetworkPolicyAdapter --> NetworkPolicyLayoutCalculator             |
+|          |                                                          |
+|          +-------------> NetworkPolicyEnforcer ------+              |
+|                         |    |    |    |             |              |
+|                         v    v    v    v             v              |
+|                      routing probe  nft owners   @ForwardingGate     |
+|                                                   |                 |
+|                                                   v                 |
+|                                           ForwardingGateDriver       |
+|                                                   |                 |
+|                                                   v                 |
+|                                          [IPv4 forwarding]          |
+|                                                                     |
+| @VPNPathAdapter ----------> [VPN endpoint inventory]                 |
+|                                   ^                                 |
+|                                   |                                 |
+| @ActiveProbeDriver --------------+                                  |
+|        |                                                            |
+|        +--> [probe routing] / [probe local admission]                |
+|        |                                                            |
+|        v                                                            |
+| [VPN-side IP portal]                                                |
+|                                                                     |
+| [ordinary-side IP portal]                                           |
++-----------^--------------------------------------------+-------------+
+            |                                            |
+            | IP                                         | IP
++-----------+------------+                    +----------v-----------+
+| Ordinary-side transition|                    | VPN external ends    |
++--------------------------+                    +----------------------+
+```
 
 ## Component addenda
 
