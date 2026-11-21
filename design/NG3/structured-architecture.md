@@ -40,30 +40,37 @@ Transition Space остается полноценным Space: он может 
 
 ## 2. Нотация
 
-### 2.1. Residents и Subcomponents
+### 2.1. Residents tree и component addenda
 
 Каждый Space обязан содержать раздел `Residents`.
 
 Space без resident'ов для этой модели ненаблюдаем и неуправляем со стороны VPN-GATE и
 считается признаком недоделанной архитектуры, а не законченной пустой областью.
 
-Компонент может содержать `Subcomponents`; этот раздел приводится только когда
-subcomponents действительно существуют.
+`Residents` является **единственным источником иерархии компонентов Space**. Parent-child
+отношение показывается вложенностью обычного списка и не дублируется уровнем заголовков,
+порядком component specs или отдельными `Subcomponents`-блоками.
 
-Все списки Spaces, Residents и Subcomponents оформляются одинаково:
+Элемент дерева оформляется так:
 
 ```text
 1. `Имя` *краткое описание*
+    1. `Child` *краткое описание*
 2. `@Имя` *краткое описание*
 3. `Имя <partial>` *краткое описание*
 ```
 
-Вложенный компонент оформляется подразделом своего parent-компонента.
+Все компоненты, встречающиеся в дереве `Residents`, описываются ниже в плоском
+`Component addenda` этого Space. Все component specs внутри addendum имеют одинаковый
+уровень заголовка. Иерархия из их расположения не выводится.
+
+Если компонент представлен в Space как `<partial>` или иным review-marker, причина
+маркера поясняется в его кратком component spec.
 
 ### 2.1.1. Критерий вложенности
 
-Компонент следует помещать в `Subcomponents` parent-компонента, когда одновременно
-выполняются два условия:
+Компонент следует показывать child'ом другого компонента в дереве `Residents`, когда
+одновременно выполняются два условия:
 
 1. API компонента не востребован самостоятельно клиентами вне parent;
 2. корректность, lifecycle или используемые им инварианты существенно определяются
@@ -101,7 +108,7 @@ broker/queue/API и его client; размещение обслуживающе
 
 Префикс `@` означает непосредственный внешний вход в текущий Space.
 
-В списке Residents/Subcomponents:
+В дереве `Residents`:
 
 ```text
 @NetworkPolicyAdapter
@@ -110,7 +117,7 @@ broker/queue/API и его client; размещение обслуживающе
 означает, что API этого resident'а непосредственно востребован клиентом из другого Space и
 поэтому участвует в API текущего Space.
 
-У глубоко вложенного subcomponent префикс `@` является review signal: внешний client
+У глубоко вложенного resident префикс `@` является review signal: внешний client
 пробивает несколько уровней внутренней структуры, поэтому границу/decomposition следует
 перепроверить.
 
@@ -197,42 +204,54 @@ Residents
 Раздел `API` может быть опущен, если краткое описание Space уже однозначно отсылает к API
 помеченных `@` resident'ов и отдельный список ничего не добавляет.
 
-## 4. Форма описания компонента
+## 4. Component addenda
 
-Resident оформляется подразделом своего Space. Вложенный компонент — подразделом parent.
+После шапки Space и дерева `Residents` следует его `Component addenda`.
 
-Шапка компонента:
+Каждый resident дерева получает отдельный component spec. Все specs внутри одного Space
+оформляются на одном уровне заголовков независимо от глубины компонента в `Residents`.
+
+Пример:
 
 ```text
-## @ComponentName
+## Component addenda
 
-<краткое описание ответственности, границы и применимых suffix/prefix markers>
+### ParentComponent
+
+<краткое описание ответственности и границы>
 
 API
     @space_level_method(...)
     internal_method(...)
 
-Subcomponents
-    1. `ChildA` *краткое описание*
-    2. `@ChildB` *краткое описание*
+Architectural decisions
+    ...
+
+### ChildComponent
+
+<краткое описание ответственности и границы>
+
+API
+    internal_method(...)
 
 Architectural decisions
     ...
 ```
 
+Parenthood определяется только деревом `Residents`. Component spec не содержит
+`Subcomponents` и не кодирует parenthood уровнем заголовка.
+
 `API` перечисляет точки взаимодействия компонента до уровня метода/endpoint. `@` получают
 только те из них, которые непосредственно входят в API текущего Space.
 
-`Subcomponents` приводится только при наличии вложенных компонентов.
-
 ### Architectural decisions
 
-При первоначальном переносе под компонент собираются относящиеся к нему решения из текущей
-`design/NG3/architecture.md` без попытки одновременно исправить их decomposition.
+При первоначальном переносе под component spec собираются относящиеся к нему решения из
+текущей `design/NG3/architecture.md` без попытки одновременно исправить их decomposition.
 
 Такой блок сначала является совокупностью еще не обработанных архитектурных решений.
 Дальнейший review должен определить, какие решения действительно принадлежат компоненту,
-какие относятся к его subcomponents или другому Space, а какие обнаруживают необходимость
+какие относятся к его parent/children или другому Space, а какие обнаруживают необходимость
 нового архитектурного принципа.
 
 Перенос решения в структурированный документ не является основанием менять его requirement
@@ -258,10 +277,15 @@ API
 Residents
 
 1. `@NetworkPolicyAdapter` *Semantic boundary между policy клиентов из STACK и ее lower realization/convergence внутри Private network.*
+    1. `NetworkPolicyLayoutCalculator` *Детерминированно распределяет внутренние routing/RPDB/metric/nft resources между semantic owner scopes.*
+    2. `NetworkPolicyEnforcer` *Достигает и подтверждает переданный Adapter'ом desired lower network-policy state.*
 2. `@VPNPathAdapter` *Boundary наблюдения и проверки concrete VPN endpoints, уже присутствующих в Private network.*
 3. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier; нужен как network-policy convergence, так и lifecycle/safety клиентам.*
+    1. `ForwardingGateDriver` *Технический read/mutation boundary к managed-domain forwarding state.*
 
-## @NetworkPolicyAdapter
+## Component addenda
+
+### NetworkPolicyAdapter
 
 Adapter принимает owner-scoped semantic network policy и скрывает ее lower representation,
 allocation, observation и convergence. Payload policy и probe policy остаются разными
@@ -272,11 +296,6 @@ API
     @observe_owned_policy(...) — наблюдать текущее owned policy state.
     @apply(...) — применить desired semantic policy и подтвердить postcondition.
     @cleanup(...) — удалить owned policy и подтвердить отсутствие.
-
-Subcomponents
-
-1. `NetworkPolicyLayoutCalculator` *Детерминированно распределяет внутренние routing/RPDB/metric/nft resources между semantic owner scopes; numeric layout наружу Adapter не экспортирует.*
-2. `NetworkPolicyEnforcer` *Достигает и подтверждает переданный Adapter'ом desired lower network-policy state; сам desired state не выбирает.*
 
 Architectural decisions
 
@@ -301,9 +320,8 @@ API
 ### NetworkPolicyEnforcer
 
 Enforcer отвечает только за достижение и подтверждение переданного desired state.
-Он не является Space API: в выбранной декомпозиции его клиентом является
-`NetworkPolicyAdapter`, а independently demanded safety/lifecycle API вынесен в
-`@ForwardingGate`.
+Он не является Space API: в дереве `Residents` его parent — `NetworkPolicyAdapter`,
+а independently demanded safety/lifecycle API вынесен в sibling `@ForwardingGate`.
 
 **Implements:**
 - `VPNG0004-R4.R2`
@@ -336,7 +354,7 @@ Architectural decisions
       *Изменение membership, direction, filtering/NAT или другой structural semantics допускает временное ограничение forwarding. Enforcer принимает complete desired lower state как input и не является владельцем его semantic compilation.*
 
 3. `Structural barrier dependency`
-   *Перед allowing structural mutation Enforcer требует независимо подтвержденный `ForwardingGate=DISABLED`. Сам `ForwardingGate` не является subcomponent Enforcer: его API независимо востребован lifecycle/safety клиентами. Gate блокирует routed IPv4 forwarding, но не делает автоматически безопасным local `stack_input/stack_output` traffic; такие owner classes сохраняют собственные atomic/exact safety contracts.*
+   *Перед allowing structural mutation Enforcer требует независимо подтвержденный `ForwardingGate=DISABLED`. Сам `ForwardingGate` не является child Enforcer: его API независимо востребован lifecycle/safety клиентами. Gate блокирует routed IPv4 forwarding, но не делает автоматически безопасным local `stack_input/stack_output` traffic; такие owner classes сохраняют собственные atomic/exact safety contracts.*
 
 4. `Exact-before-release`
    *Structural state изменяется под закрытым gate: сначала restrictive guards и удаление stale activation/routing state, затем required routes и nft state, затем activation dispatch. Gate может быть открыт только после exact routing+nft postcondition; после открытия выполняется fresh final verification.*
@@ -356,7 +374,7 @@ Architectural decisions
 - будущий administrative payload-containment control не является разновидностью structural
   Enforcer и требует отдельного публичного operational contract.
 
-## @VPNPathAdapter
+### VPNPathAdapter
 
 Adapter наблюдает уже существующие в Private network concrete VPN endpoints и проверяет их
 соответствие logical VPN-path intent. Он не создает, не перемещает и не конфигурирует VPN
@@ -367,7 +385,7 @@ API
     @observe_device_endpoints(...) — получить свежие candidate endpoints из managed domain.
     @verify_path_binding(...) — подтвердить current endpoint для logical path либо вернуть absent/ambiguous/unusable result.
 
-## @ForwardingGate
+### ForwardingGate
 
 Самостоятельный Enforcer корневого IPv4 forwarding state Private network. Его verified
 DISABLED state используется как structural safety barrier, но тот же contract нужен startup,
@@ -378,6 +396,13 @@ API
     @observe(∅) — получить свежий authoritative gate state.
     @converge(...) — observe, при необходимости выполнить mutation и свежим reread подтвердить requested state.
 
-Subcomponents
+### ForwardingGateDriver
 
-1. `ForwardingGateDriver` *Технический доступ к managed-domain forwarding state: свежий read и одна mutation attempt без самостоятельного postcondition ownership.*
+Технический Driver к managed-domain forwarding state. Он предоставляет fresh observation и
+одну mutation attempt, но не владеет desired state или подтверждением более широкого
+postcondition.
+
+API
+
+    observe_forwarding_gate(∅) — вернуть свежий technical gate state.
+    set_forwarding_gate(...) — выполнить одну lower mutation attempt без implied confirmation.
