@@ -3,8 +3,8 @@
 **Status:** non-normative research artifact  
 **Branch:** `ng3-research-20261120-requirement-purpose-parent-consistency-30m`  
 **Baseline:** main snapshot 145 `623a688e4080de56e5ac14675ffca028c3865d18`  
-**Current research draft:** provisional 178-node tree in
-`NG3-2026-11-20-purpose-parent-corrected-requirements-draft.md`
+**Promoted tree:** 178-node normative tree in `design/NG3/requirements.md`; the corrected
+research copy is retained as the non-normative derivation record
 
 ## Главный вывод
 
@@ -19,9 +19,11 @@ requirement tree**.
 - **низкий functional-code churn** для уже реализованных Release-1 функций;
 - selected managed-domain/nft architecture может остаться фактически той же, но больше не
   является нормативной продуктовой семантикой сама по себе;
-- historical reviews и experiment README/results не переписываются задним числом;
-- current architecture/configuration/registry documents должны получить новый requirement
-  trace только после принятия draft как нормативного дерева.
+- historical reviews и experiment result files не переписываются задним числом;
+- experiment README при удалении R/C получает только предусмотренный §5.1
+  `Historical requirement context` с дословной старой формулировкой и актуальную traceability;
+- normative promotion и remap current architecture/configuration/registry documents выполнены
+  в этой research-ветке после итогового PASS.
 
 ## Принятый draft remap и ожидаемый эффект
 
@@ -160,8 +162,8 @@ invariants. Последние два product-holder решения сами п�
 
 **high documentation/traceability churn, low functional-code churn.**
 
-Самая трудоёмкая будущая операция — аккуратный remap `architecture.md` и связанных current
-contracts после нормативного принятия нового requirements tree. Самый опасный вид ошибки —
-механически заменить старые IDs без проверки, **какую именно часть старого Statement**
-реализовывал архитектурный блок: многие старые nodes теперь split между product capability,
-configuration contract и architecture mechanism.
+Самая трудоёмкая операция — remap `architecture.md` и связанных current contracts — выполнена
+после нормативного promotion. Remap делался по смыслу, а не глобальной заменой IDs: старые
+nodes, split между product capability, configuration contract и architecture mechanism,
+получили раздельную трассировку. Финальный stale-reference audit current NG3 documents и
+experiment dossiers подтверждает отсутствие удалённых IDs в активной traceability.
