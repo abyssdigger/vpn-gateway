@@ -2,13 +2,28 @@
 
 **Status:** PASSED — OpenVPN 2.6.14 through the EXP-049 systemd onboarding mechanism
 
+## Historical requirement context
+
+When this experiment was prepared and executed, the then-current requirement tree contained:
+
+- **[VPNG0007-R7.R7.R1.R1]** *Чтобы после подтверждения базовой запускабельности VPN проект не принял lifecycle/ownership контракт, работающий только на одном чистом запуске или на безобидной VPN-specific конфигурации.* | После PASS базового applicability gate проект должен на той же подтвержденной integration провести отдельный lifecycle experiment до принятия зависимой bounded-VPN lifecycle семантики: проверить start, stop, restart с неизмененной VPN-specific конфигурацией, restart с измененной VPN-specific конфигурацией, отсутствие зависимости нового запуска от runtime-состояния предыдущего экземпляра и поведение при aggressive VPN-specific configuration, включая hooks или другие механизмы, пытающиеся изменять routes, RPDB, NAT, firewall, sysctl или иное сетевое состояние внутри managed network domain. [`closed`]
+
+This requirement was later removed from the current tree because it prescribed a particular
+evidence sequence rather than an independent product obligation. It remains here only as the
+historical normative context that caused EXP-050 to be prepared and executed; it is not a
+current requirement link.
+
 ## Requirement traceability
 
-- `VPNG0007-R7.R7` — substantial development/evidence work is requirement-driven.
-- `VPNG0007-R7.R7.R1` — dependent VPN lifecycle work is gated by basic in-stack applicability.
-- `VPNG0007-R7.R7.R1.R1` — after applicability PASS, lifecycle and aggressive-config behavior must be tested before accepting bounded-VPN lifecycle semantics.
+Current applicability of the EXP-050 evidence maps to the product obligations it actually
+tests:
+
+- `VPNG0001-R1.R3.C1.R1.R2` — supported external VPN configuration must not silently obtain authority to mutate VPN-GATE-owned network policy/state.
 - `VPNG0001-R1.R3.C3` — Release 1 may leave external VPN runtime lifecycle ownership/supervision outside VPN-GATE.
-- `VPNG0001-R1.R3.C3.R1` — that external lifecycle must have a reproducible integration contract coordinated with VPN-GATE safety/lifecycle postconditions.
+- `VPNG0001-R1.R3.C3.R1` — that external lifecycle must have a reproducible integration contract coordinated with VPN-GATE lifecycle and safety requirements.
+- `VPNG0004-R4.R6` — external network state must not allow VPN-GATE traffic-processing rules to be bypassed or change their required outcome.
+- `VPNG0005-R5.R4` and `VPNG0005-R5.R5` — shutdown/cleanup must remove product-owned effects and continue attempting independent cleanup despite partial failures.
+- `VPNG0005-R5.R6.R2` and `VPNG0005-R5.R6.R3` — successful stop/restart must reach the required cleanup/new-start state rather than merely issue internal commands.
 - prerequisite product evidence: `VPNG0001-R1.R3.C1.R1.R1` / EXP-049.
 
 ## Dependency gate

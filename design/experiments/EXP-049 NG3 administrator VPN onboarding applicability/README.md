@@ -1,5 +1,22 @@
 # EXP-049 — administrator VPN endpoint onboarding applicability
 
+## Status
+
+Technical result and disposition are unchanged by this traceability annotation.
+
+## Historical requirement context
+
+When this experiment was prepared, the then-current requirement tree contained:
+
+- **[VPNG0001-R1.R3.C2]** *Для выполнения требования изоляции управляемой сетевой среды NG3 использует отдельный изолированный network domain, а не host network namespace как рабочее пространство маршрутизации.* | Поддерживаемый внешний VPN-канал может использоваться VPN-GATE только если его data-plane endpoint может быть представлен внутри изолированной управляемой сетевой среды; VPN-адаптер, остающийся только в обычном сетевом пространстве хоста, не считается полноценным управляемым VPN-путем NG3. [`closed`]
+- **[VPNG0001-R1.R2.R4.R6.R4]** *Чтобы client-side VPN transport/control traffic поддерживаемого Device мог работать внутри managed network domain с default-deny local policy без широких или неявных локальных разрешений.* | Device должен позволять пользователю явно описать bounded client-side transport/control flows, необходимые поддерживаемой VPN integration; такие flow intents должны ограничиваться transport/control traffic этого Device и не должны сами по себе создавать payload forwarding permission, разрешать произвольную local connectivity или требовать blanket local allow. [`closed`]
+- **[VPNG0004-R4.R6.R1.R5.R1]** *Чтобы пользовательский Device firewall ограничивал VPN payload, не заставляя пользователя одновременно администрировать внутренний control/probe plane VPN-GATE.* | Пользовательские Device firewall rules должны влиять только на managed payload forwarding, а необходимые локальные `INPUT/OUTPUT` исключения для поддерживаемых VPN-GATE control, probe, publication или integration функций должен формировать и владеть сам VPN-GATE; такие исключения не должны становиться разрешением произвольного payload forwarding или изменением firewall обычного host network namespace. [`closed`]
+
+These R/C IDs were later removed or reparented by the NG3 Purpose/parent refactor. They are
+preserved here verbatim as the historical normative context that caused this experiment to be
+prepared; they are not current requirement traceability. Current applicability is expressed
+through live R/C links elsewhere in this dossier or in the central experiment registry.
+
 **Status:** PASSED — OpenVPN 2.6.14 via systemd NetworkNamespacePath, bounded local transport admission, two clean cycles
 
 ## Requirement traceability
@@ -8,10 +25,10 @@
 - `VPNG0001-R1.R3.C1.R1` — supported integrations must provide an administrator-facing onboarding contract.
 - `VPNG0001-R1.R3.C1.R1.R1` — that contract must have reproducible end-to-end applicability evidence.
 - `VPNG0001-R1.R3.C1.R1.R2` — the supported onboarding contract must keep VPN-specific configuration policy-neutral relative to VPN-GATE-owned state.
-- `VPNG0001-R1.R3.C2` — for this integration, the managed data-plane endpoint must exist inside the isolated managed network domain.
+- `VPNG0001-R1.R3.R2` — for this integration, the managed data-plane endpoint must exist inside the isolated managed network domain.
 - `VPNG0001-R1.R3.R2` — for this integration, a logical path must have one unambiguous current concrete endpoint before use.
-- `VPNG0001-R1.R2.R4.R6.R4` — Device policy supplies bounded client-side VPN transport/control facts.
-- `VPNG0004-R4.R6.R1.R5.R1` — those facts may materialize only as explicit owned local/system exceptions under default-deny managed-domain policy.
+- `VPNG0001-R1.R3.R6.R2` — Device policy supplies bounded client-side VPN transport/control facts.
+- `VPNG0004-R4.R6` — those facts may materialize only as explicit owned local/system exceptions under default-deny managed-domain policy.
 
 The endpoint-placement, binding and forwarding checks below are therefore the **composed
 acceptance scenario for this concrete integration**, not lower mechanisms prescribed by

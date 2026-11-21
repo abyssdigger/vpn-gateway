@@ -1,5 +1,23 @@
 # EXP-051 — first functioning NG3 alpha deployment smoke
 
+## Status
+
+Technical result and disposition are unchanged by this traceability annotation.
+
+## Historical requirement context
+
+When this experiment was prepared, the then-current requirement tree contained:
+
+- **[VPNG0001-R1.R2]** *Чтобы эксплуатация продукта не зависела от ручного воспроизведения его внутренней сетевой механики оператором.* | Пользователь должен задавать требуемое поведение через продуктовую конфигурацию и управляющие операции VPN-GATE; внутренние сетевые действия должны выполняться продуктом. [`closed`]
+- **[VPNG0001-R1.R2.R4.R6.R4]** *Чтобы client-side VPN transport/control traffic поддерживаемого Device мог работать внутри managed network domain с default-deny local policy без широких или неявных локальных разрешений.* | Device должен позволять пользователю явно описать bounded client-side transport/control flows, необходимые поддерживаемой VPN integration; такие flow intents должны ограничиваться transport/control traffic этого Device и не должны сами по себе создавать payload forwarding permission, разрешать произвольную local connectivity или требовать blanket local allow. [`closed`]
+- **[VPNG0001-R1.R2.R4.R6.R3]** *Чтобы server-side VPN transports могли быть доступны извне без смешивания host-facing listener details с Profile routing policy.* | Transport publication, если требуется Device, принадлежит Device/transport boundary и в Release 1 задаётся `publish_vpn_server = "tcp|udp[/<host-IPv4|host-interface>]:<host-port-bundle>[><internal-port-bundle>]"` либо массивом таких строк. Port bundle использует ту же strict compact grammar `N[,N|A-B...]` без пробелов, duplicate/overlap ports запрещены. Отсутствие `>...` означает identity mapping каждого host port на тот же internal port; при явном internal bundle обе стороны разворачиваются в declared order в последовательности отдельных портов, должны иметь одинаковую cardinality и мапятся позиционно 1:1. Отсутствие host selector означает публикацию на допустимых host addresses. Потеря требуемой publication не должна оставаться незаметной. [`closed`]
+- **[VPNG0004-R4.R6.R1.R5.R1]** *Чтобы пользовательский Device firewall ограничивал VPN payload, не заставляя пользователя одновременно администрировать внутренний control/probe plane VPN-GATE.* | Пользовательские Device firewall rules должны влиять только на managed payload forwarding, а необходимые локальные `INPUT/OUTPUT` исключения для поддерживаемых VPN-GATE control, probe, publication или integration функций должен формировать и владеть сам VPN-GATE; такие исключения не должны становиться разрешением произвольного payload forwarding или изменением firewall обычного host network namespace. [`closed`]
+
+These R/C IDs were later removed or reparented by the NG3 Purpose/parent refactor. They are
+preserved here verbatim as the historical normative context that caused this experiment to be
+prepared; they are not current requirement traceability. Current applicability is expressed
+through live R/C links elsewhere in this dossier or in the central experiment registry.
+
 **Status:** PASSED — first installed NG3 alpha controller + OpenVPN systemd stack  
 **Date:** 2026-11-17
 
@@ -8,15 +26,15 @@
 This experiment does not add product semantics. It verifies the first deployment assembly of
 already accepted requirements and constraints:
 
-- `VPNG0001-R1.R1` / `VPNG0001-R1.R2` — controlled payload from accepted config;
+- `VPNG0001-R1.R1` / `VPNG0001-R4` — controlled payload from accepted config;
 - `VPNG0001-R1.R3.C3.R1` — externally supervised VPN runtime lifecycle integrated with VPN-GATE;
-- `VPNG0001-R1.R2.R4.R6.R4` — bounded Device client-side VPN transport/control facts;
+- `VPNG0001-R1.R3.R6.R2` — bounded Device client-side VPN transport/control facts;
 - `VPNG0004-R4.R4` / `VPNG0004-R4.R5` — fail-closed verified network policy;
 - `VPNG0005-R5.R1` / `VPNG0005-R5.R2` / `VPNG0005-R5.R3` — startup and local
   reconciliation from fresh authoritative state;
 - `VPNG0005-R5.R6.R2` / `VPNG0005-R5.R6.R3` — bounded stop/restart postconditions;
-- `VPNG0001-R1.R2.R4.R6.R3` — Device-owned server publication;
-- `VPNG0004-R4.R6.R1.R5.R1` — bounded managed local publication admission;
+- `VPNG0001-R1.R3.R6.R1` — Device-owned server publication;
+- `VPNG0004-R4.R6` — bounded managed local publication admission;
 - `VPNG0007-R7.R7` — implementation/evidence is requirements-driven.
 
 ## Current alpha boundary under test

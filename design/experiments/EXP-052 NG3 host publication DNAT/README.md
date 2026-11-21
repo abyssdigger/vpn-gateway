@@ -4,14 +4,28 @@
 
 PREPARED — evidence pending.
 
+## Historical requirement context
+
+When this experiment was prepared, the then-current requirement tree contained:
+
+- **[VPNG0001-R1.R2.R4.R6.R3]** *Чтобы server-side VPN transports могли быть доступны извне без смешивания host-facing listener details с Profile routing policy.* | Transport publication, если требуется Device, принадлежит Device/transport boundary и в Release 1 задаётся `publish_vpn_server = "tcp|udp[/<host-IPv4|host-interface>]:<host-port-bundle>[><internal-port-bundle>]"` либо массивом таких строк. Port bundle использует ту же strict compact grammar `N[,N|A-B...]` без пробелов, duplicate/overlap ports запрещены. Отсутствие `>...` означает identity mapping каждого host port на тот же internal port; при явном internal bundle обе стороны разворачиваются в declared order в последовательности отдельных портов, должны иметь одинаковую cardinality и мапятся позиционно 1:1. Отсутствие host selector означает публикацию на допустимых host addresses. Потеря требуемой publication не должна оставаться незаметной. [`closed`]
+- **[VPNG0001-R1.R2]** *Чтобы эксплуатация продукта не зависела от ручного воспроизведения его внутренней сетевой механики оператором.* | Пользователь должен задавать требуемое поведение через продуктовую конфигурацию и управляющие операции VPN-GATE; внутренние сетевые действия должны выполняться продуктом. [`closed`]
+- **[VPNG0004-R4.R6.R1.R1]** *Чтобы внутренние изменения VPN-GATE не требовали знания или изменения несвязанных сетевых объектов хоста.* | Сетевые объекты и mutable state, необходимые для внутренней маршрутизации и policy VPN-GATE, должны принадлежать управляемому сетевому домену либо явно объявленной boundary-области; произвольные host routes/rules/firewall state не должны использоваться как скрытая часть внутренней модели VPN-GATE. [`closed`]
+- **[VPNG0004-R4.R6.R1.R5.R1]** *Чтобы пользовательский Device firewall ограничивал VPN payload, не заставляя пользователя одновременно администрировать внутренний control/probe plane VPN-GATE.* | Пользовательские Device firewall rules должны влиять только на managed payload forwarding, а необходимые локальные `INPUT/OUTPUT` исключения для поддерживаемых VPN-GATE control, probe, publication или integration функций должен формировать и владеть сам VPN-GATE; такие исключения не должны становиться разрешением произвольного payload forwarding или изменением firewall обычного host network namespace. [`closed`]
+
+These R/C IDs were later removed or reparented by the NG3 Purpose/parent refactor. They are
+preserved here verbatim as the historical normative context that caused this experiment to be
+prepared; they are not current requirement traceability. Current applicability is expressed
+through live R/C links elsewhere in this dossier or in the central experiment registry.
+
 ## Requirement trace
 
 Implements / verifies implementation feasibility for:
 
-- `VPNG0001-R1.R2.R4.R6.R3` — Device-owned server-side transport publication;
-- `VPNG0001-R1.R2` — internal network actions are performed by VPN-GATE rather than manually assembled by the user;
-- `VPNG0004-R4.R6.R1.R1` — host-side mutable state used by VPN-GATE must live in an explicit owned boundary rather than ambient host state;
-- `VPNG0004-R4.R6.R1.R5.R1` — publication-specific managed-domain local admission remains a VPN-GATE-owned contribution;
+- `VPNG0001-R1.R3.R6.R1` — Device-owned server-side transport publication;
+- `VPNG0001-R4` — internal network actions are performed by VPN-GATE rather than manually assembled by the user;
+- `VPNG0004-R4.R6` — host-side mutable state used by VPN-GATE must live in an explicit owned boundary rather than ambient host state;
+- `VPNG0004-R4.R6` — publication-specific managed-domain local admission remains a VPN-GATE-owned contribution;
 - `VPNG0007-R7.R7` — this evidence unit exists only to validate an accepted requirement/architecture gap before implementation.
 
 This experiment does not change product semantics or configuration grammar.
