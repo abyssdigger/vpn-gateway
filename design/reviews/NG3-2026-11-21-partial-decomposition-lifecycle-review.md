@@ -306,3 +306,14 @@ Both original `<partial>` findings are resolved by actual ownership boundaries, 
 lifecycle behavior is implemented and exercised end-to-end, and the first mechanically
 enforced architecture-to-code trace is in place. The remaining items above are explicit
 design questions, not hidden blockers to this block.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.R1` -> `VPNG9101-R1.R1.R1`
+- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
+
+The original IDs in the historical body are intentionally preserved.
