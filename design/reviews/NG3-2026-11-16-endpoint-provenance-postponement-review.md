@@ -13,7 +13,7 @@ implement endpoint-specific firewall policy.
 
 ## Requirements
 
-### VPNG0001-R1.R3.R5
+### VPNG-U001-R1.R3.R5
 
 **Purpose / Зачем**
 
@@ -38,7 +38,7 @@ discovery contract supplies sufficient observable evidence.
 The requirement does not equate the transport endpoint with interface name, selector slot,
 inner point-to-point peer or probe target.
 
-### VPNG0001-R1.R3.R5.C1
+### VPNG-U001-R1.R3.R5.C1
 
 The Release-1 limitation is accepted because reliable transport-endpoint provenance is not
 yet proved for every supported integration and core R1 routing/binding plus explicit-target
@@ -50,7 +50,7 @@ Effective product envelope:
 - no first-release integration is required merely by R1 to discover a transport peer;
 - a provenance-dependent function must not guess or silently broaden its semantics.
 
-### VPNG0001-R1.R3.R5.C1.R1
+### VPNG-U001-R1.R3.R5.C1.R1
 
 The constraint shifts no hidden discovery work to the administrator. Instead VPN-GATE must
 make the unsupported dependent function explicit. If a function already supports an
@@ -90,11 +90,11 @@ transport peer created that concrete interface.
 ### VPNPathAdapter
 
 **Implements:**
-- `VPNG0001-R1.R3.R5`
-- `VPNG0001-R1.R3.R5.C1.R1`
+- `VPNG-U001-R1.R3.R5`
+- `VPNG-U001-R1.R3.R5.C1.R1`
 
 **Constrained by:**
-- `VPNG0001-R1.R3.R5.C1`
+- `VPNG-U001-R1.R3.R5.C1`
 
 The existing Adapter remains the technical observation boundary. A supported integration may
 enrich its exact current `PathBinding` with confirmed transport provenance.
