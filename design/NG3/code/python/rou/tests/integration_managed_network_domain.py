@@ -137,14 +137,9 @@ def main() -> int:
             "ip", "netns", "exec", namespace,
             "sysctl", "-q", "-w", "net.ipv4.ip_forward=1",
         )
-        try:
-            ensure_managed_network_domain(spec, runner)
-        except ManagedNetworkDomainError as exc:
-            assert "default route" in str(exc), str(exc)
-        else:
-            raise AssertionError(
-                "divergent existing domain was silently repaired/adopted"
-            )
+        repaired = ensure_managed_network_domain(spec, runner)
+        assert repaired.confirmed
+        assert not repaired.created
         assert (
             LinuxForwardingGateBackend(
                 runner,
@@ -152,7 +147,14 @@ def main() -> int:
             ).observe_forwarding_gate()
             is ForwardingGateState.DISABLED
         )
-        print("MANAGED_DOMAIN_DRIFT_REFUSED_FAIL_CLOSED=PASS")
+        repaired_default = runner.run(
+            (
+                "ip", "-n", namespace,
+                "-4", "route", "show", "default",
+            )
+        )
+        assert f"dev {spec.inner_interface}" in repaired_default
+        print("MANAGED_DOMAIN_PORTAL_DRIFT_REPAIRED_FAIL_CLOSED=PASS")
 
         destroy_managed_network_domain(spec, runner)
         assert not verify_managed_network_domain(spec, runner).confirmed
@@ -165,16 +167,15 @@ def main() -> int:
         print("MANAGED_DOMAIN_DESTROY=PASS")
 
         raw_run("ip", "netns", "add", namespace)
+        raw_run("ip", "-n", namespace, "link", "set", "lo", "up")
         raw_run(
             "ip", "netns", "exec", namespace,
             "sysctl", "-q", "-w", "net.ipv4.ip_forward=1",
         )
-        try:
-            ensure_managed_network_domain(spec, runner)
-        except ManagedNetworkDomainError as exc:
-            assert "partially present" in str(exc), str(exc)
-        else:
-            raise AssertionError("partial namespace-only state was adopted")
+        recovered = ensure_managed_network_domain(spec, runner)
+        assert recovered.confirmed
+        assert recovered.created
+        assert recovered.verification.host_boundary is not None
         assert (
             LinuxForwardingGateBackend(
                 runner,
@@ -182,7 +183,7 @@ def main() -> int:
             ).observe_forwarding_gate()
             is ForwardingGateState.DISABLED
         )
-        print("MANAGED_DOMAIN_PARTIAL_STATE_REFUSED=PASS")
+        print("MANAGED_ENVIRONMENT_WITHOUT_TRANSITION_RECOVERED=PASS")
 
         print("NG3 managed network domain lifecycle integration: PASS")
         return 0

@@ -16,10 +16,13 @@ class HostPublicationAdapterTests(unittest.TestCase):
     def test_observe_delegates_to_lower_backend(self):
         adapter, backend = self.adapter()
         expected = object()
-        backend.observe = Mock(return_value=expected)
-
-        self.assertIs(adapter.observe(), expected)
-        backend.observe.assert_called_once_with()
+        with patch.object(
+            LinuxHostPublicationBackend,
+            "observe",
+            return_value=expected,
+        ) as observe:
+            self.assertIs(adapter.observe(), expected)
+        observe.assert_called_once_with()
 
     def test_apply_delegates_exact_desired_state_to_verified_convergence(self):
         adapter, backend = self.adapter()

@@ -63,6 +63,7 @@ class ManagedNetworkDomainTests(unittest.TestCase):
             runner.commands,
             [
                 ("ip", "netns", "list"),
+                ("ip", "netns", "list"),
                 ("ip", "-j", "-d", "link", "show"),
             ],
         )
