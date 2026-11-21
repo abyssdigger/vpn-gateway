@@ -1206,10 +1206,10 @@ a long-lived lifecycle Engine or independent lifecycle policy.
 
 Implementation
 
-    design/NG3/code/python/rou/controller_startup.py — bounded startup composition and phase checkpoints.
-    design/NG3/code/python/rou/controller_stop.py — bounded independent cleanup composition.
-    design/NG3/code/python/rou/controller_restart.py — stop-then-start restart composition.
-    design/NG3/code/python/rou/alpha_runtime.py — Release-1 executable product/deployment assembly around these lifecycle contracts.
+    design/NG3/code/python/rou/controller_startup.py — bounded managed-domain/lower-policy startup subassembly and phase checkpoints; does not alone publish product READY.
+    design/NG3/code/python/rou/controller_stop.py — bounded owned-domain cleanup subassembly; host-publication cleanup remains an outer lifecycle step in the current alpha composition.
+    design/NG3/code/python/rou/controller_restart.py — stop-then-start composition of the bounded controller subassembly.
+    design/NG3/code/python/rou/alpha_runtime.py — current Release-1 product/deployment readiness and shutdown composition, including HostPublicationAdapter and systemd READY publication.
 
 API
 
