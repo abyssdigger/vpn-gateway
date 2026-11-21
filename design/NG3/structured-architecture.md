@@ -409,21 +409,27 @@ Annex содержит плоский набор specs. Component hierarchy за
 Inline component specs между Space sections не используются: карта Spaces остается
 непрерывной, а подробные specs находятся только в соответствующих Annexes.
 
-Для materialized component spec поддерживается двунаправленная implementation trace:
+Для materialized component spec поддерживается двунаправленная implementation trace.
 
-1. spec содержит блок `Implementation` с текущими production/reference implementation
-   units, непосредственно реализующими этот component occurrence;
-2. implementation unit содержит локальный стабильный `Architecture:` marker на Annex/spec,
-   к которому относится код;
-3. нормативная requirement trace остается в component spec. Requirement IDs в code comment
-   допустимы как convenience, но не являются вторым источником истины.
+Полный production-code edge хранится в `design/NG3/implementation-traceability.md`: каждый
+production implementation unit обязан там ровно один раз разрешаться в один или несколько
+Annex/spec IDs. Component-local блок `Implementation` остается кратким списком основных
+entry/reference units и не обязан дублировать полный lower implementation graph. Локальный
+`Architecture:` marker в таком unit является полезной самодокументацией и обязателен для
+unit, явно перечисленного в component-local `Implementation`.
+
+Нормативная requirement trace остается в component spec. Requirement IDs в code comment
+допустимы как convenience, но не являются вторым источником истины. Production unit без
+нормального requirement path допускается только как явно описанный `Architecture debt` в
+полном trace manifest; такой debt является finding и должен быть видимым механической
+проверке.
 
 Таким образом минимальная цепочка reverse trace имеет вид:
 
 ```text
 code
-    -> Architecture: Annex X.YYY
-    -> component spec
+    -> implementation trace manifest
+    -> Annex X.YYY component spec
     -> Implements / Constrained by
     -> requirement
 ```
