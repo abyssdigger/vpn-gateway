@@ -19,8 +19,8 @@ from .composite_nft_policy import (
 )
 from .device_firewall_desired import DeviceFirewallChainSpec
 from .forwarding_gate import (
-    ForwardingGateBackend,
-    ForwardingGateExecutionResult,
+    ForwardingGateDriver,
+    ForwardingGateEnforcementResult,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
@@ -78,7 +78,7 @@ class CompositeNftMutationStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class CompositeNftMutationResult:
     status: CompositeNftMutationStatus
-    barrier: ForwardingGateExecutionResult
+    barrier: ForwardingGateEnforcementResult
     initial: CompositeNftPolicyComparison | None
     final: CompositeNftPolicyComparison | None
     mutation_attempted: bool
@@ -95,7 +95,7 @@ class CompositeNftMutationResult:
 
 
 def converge_composite_nft_step_once(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     nft_backend: CompositeNftMutationBackend,
     desired: CompositeNftDesiredState,
 ) -> CompositeNftMutationResult:
@@ -351,7 +351,7 @@ def _strict_progress(
     )
 
 
-def _gate_lost(gate_backend: ForwardingGateBackend) -> bool:
+def _gate_lost(gate_backend: ForwardingGateDriver) -> bool:
     try:
         return (
             gate_backend.observe_forwarding_gate()

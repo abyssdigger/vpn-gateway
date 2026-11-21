@@ -12,11 +12,11 @@ from .instance_lock import ControllerInstanceLock
 if TYPE_CHECKING:
     from .controller_startup import ControllerStartupSession
 from .forwarding_gate import (
-    ForwardingGateExecutionResult,
+    ForwardingGateEnforcementResult,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
-from .linux_forwarding_gate import LinuxForwardingGateBackend
+from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .managed_network_domain import (
     ManagedNetworkDomainRunner,
     ManagedNetworkDomainSpec,
@@ -34,7 +34,7 @@ class ControllerStopStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class ControllerStopResult:
     status: ControllerStopStatus
-    containment: ForwardingGateExecutionResult
+    containment: ForwardingGateEnforcementResult
     cleanup_error: str | None = None
     lock_error: str | None = None
 
@@ -56,7 +56,7 @@ def cleanup_controller_owned_domain_once(
         )
 
     containment = converge_forwarding_gate_once(
-        LinuxForwardingGateBackend(runner, domain_spec.namespace),
+        LinuxForwardingGateDriver(runner, domain_spec.namespace),
         ForwardingGateState.DISABLED,
     )
 

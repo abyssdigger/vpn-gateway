@@ -69,7 +69,7 @@ from .linux_availability_cycle import (
     LinuxAvailabilityCycleResult,
     run_linux_availability_cycle_once,
 )
-from .linux_forwarding_gate import LinuxForwardingGateBackend
+from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .linux_host_publication import (
     HostPublicationConvergenceResult,
@@ -377,7 +377,7 @@ def reconcile_alpha_payload_once(
         containment_detail = "not attempted"
         try:
             containment = converge_forwarding_gate_once(
-                LinuxForwardingGateBackend(runner, domain_spec.namespace),
+                LinuxForwardingGateDriver(runner, domain_spec.namespace),
                 ForwardingGateState.DISABLED,
             )
             containment_detail = (
@@ -425,7 +425,7 @@ def reconcile_alpha_payload_once(
             diagnostic=f"desired-state rebuild failed: {type(exc).__name__}: {exc}",
         )
 
-    gate_backend = LinuxForwardingGateBackend(runner, domain_spec.namespace)
+    gate_backend = LinuxForwardingGateDriver(runner, domain_spec.namespace)
     structural_backend = LinuxStructuralPolicyBackend(
         runner=runner,
         namespace=domain_spec.namespace,
