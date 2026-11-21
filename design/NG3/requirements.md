@@ -7,8 +7,17 @@
 
 This document is the normative requirement tree for NG3.
 
-The seven primary project requirements are accepted. Their derived Requirement/Constraint
+The six current primary project requirements are accepted. Their derived Requirement/Constraint
 trees remain subject to normal requirement/constraint review.
+
+Current NG3 requirement namespaces are:
+
+- `VPNG-Uxxx` — user/product behavior and safety expectations;
+- `VPNG-D0xx` — project-holder development-cost requirements;
+- `VPNG-M0xx` — project-holder operational/maintenance-cost requirements.
+
+The namespace letter/range classifies the optimized concern; it does not change Requirement /
+Constraint ancestry semantics.
 
 Canonical compact form:
 
