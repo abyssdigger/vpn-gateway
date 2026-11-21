@@ -205,19 +205,20 @@ ComponentName <partial>
 
 Для каждого Space должны механически выполняться следующие правила:
 
-1. каждый distinct resident, показанный в дереве `Residents`, имеет component spec в
-   `Component addenda` этого Space;
-2. каждый component spec в addendum соответствует resident'у из дерева этого Space;
+1. каждый distinct resident, являющийся компонентом VPN-GATE, имеет Space-local component
+   spec в соответствующем Component Annex; external residents отдельного VPN-GATE spec не требуют;
+2. каждый component spec в Annex соответствует resident occurrence из дерева этого Space;
 3. parent-child relation существует только в дереве `Residents` и не выводится из порядка
    или heading depth specs;
-4. каждый `@Resident` имеет хотя бы одну непосредственно востребованную извне точку API,
-   отмеченную `@` в его component spec;
-5. каждая строка Space `API` разрешается в конкретную `@`-точку API resident'а из
-   `Residents`;
+4. каждый `@Resident`, являющийся компонентом VPN-GATE, имеет хотя бы одну непосредственно
+   востребованную извне точку API, отмеченную `@` в его component spec; boundary API external
+   resident'а описывается его Space contract без искусственного VPN-GATE spec;
+5. каждая строка Space `API` разрешается либо в конкретную `@`-точку API resident'а из
+   `Residents`, либо в явно объявленную `@`-точку boundary-capability Artifact;
 6. internal method без `@` не должен появляться как Space API только потому, что его parent
    экспортирует другой метод;
 7. marker `@` относится к occurrence/API относительно данного Space и не является частью
-   canonical component name в addendum heading;
+   canonical component name в Annex heading;
 8. каждый Artifact, на который ссылается interaction или component spec, объявлен в
    `Artifacts` текущего Space либо явно является boundary target другого Space;
 9. каждая нижняя техническая связь Driver/Reader/Executor заканчивается на объявленном
