@@ -40,14 +40,13 @@ The exact accepted forms, validation rules and complete example are normative in
 
 ## Remaining independent deferral
 
-Endpoint-scoped Device firewall rules remain outside Release 1 under
-`VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
+Per-path Device firewall rules remain outside Release 1 under
+`VPNG0001-R1.R4.R2.R1.C1` and the corresponding configuration constraint
+`VPNG0001-R4.R4.R6.R2.R5.C1`.
 
-That future capability requires both:
-
-- supported transport-endpoint provenance for the applicable integration; and
-- a separate accepted durable endpoint-selector grammar that does not use runtime ifname as
-  long-lived endpoint identity.
+That future capability requires an accepted durable logical-VPN-path selector grammar that
+uses the product's distinguishable logical path identity and does not expose runtime ifname,
+transport endpoint or peer as the long-lived user-facing identity.
 
 This remaining item does not reopen the ordinary Release-1 grammar above.
 
@@ -55,17 +54,17 @@ This remaining item does not reopen the ordinary Release-1 grammar above.
 
 Resolved ordinary grammar:
 
-- `VPNG0001-R1.R2.R4.R4.R4.C1`;
-- `VPNG0001-R1.R2.R4.R6.R1`;
-- `VPNG0001-R1.R2.R4.R6.R2.R1`;
-- `VPNG0001-R1.R2.R4.R6.R3`;
-- `VPNG0001-R1.R2.R4.R6.C1`;
-- `VPNG0001-R1.R2.R4.R6.R4`;
-- `VPNG0003-R3.R6.R3.R1.C1.R1`.
+- `VPNG0001-R4.R4.R4.R4.C1`;
+- `VPNG0001-R4.R4.R6.R1`;
+- `VPNG0001-R4.R4.R6.R2.R1`;
+- `VPNG0001-R4.R4.R6.R3`;
+- `VPNG0001-R4.R4.R6.C1`;
+- `VPNG0001-R4.R4.R6.R4`;
+- `VPNG0003-R3.R6.R3.R1.R1`.
 
 Still independently constrained:
 
-- `VPNG0001-R1.R2.R4.R6.R2.R5.C1`.
+- `VPNG0001-R4.R4.R6.R2.R5.C1`.
 
 ## Requirement-state inventory
 
