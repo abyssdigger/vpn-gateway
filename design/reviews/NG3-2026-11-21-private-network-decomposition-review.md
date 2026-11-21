@@ -334,3 +334,21 @@ These omissions keep the current structured document honest rather than filling 
 file/module proximity.
 
 **Final verdict on fixed baseline: PASS.**
+
+
+## Structured-addenda follow-up
+
+Reviewed baseline: `1d814a6981f6b6a16f526a0061f86479282a8ae4`.
+
+The previously accepted Enforcer decomposition has been re-expressed under the flat
+component-addenda methodology:
+
+- accepted Enforcer decisions remain in `Architectural decisions`;
+- already-resolved migration notes were removed as duplicate prose;
+- the still-open administrative containment composition moved to `Findings`;
+- the finding preserves the earlier decision that public containment is not a structural
+  Enforcer mode and that `ForwardingGate` alone cannot satisfy the full contract.
+
+No parent/child relationship, Space API or safety invariant changed.
+
+**Follow-up verdict: PASS.**
