@@ -1,6 +1,6 @@
 # NG3 lower-boundary reuse / traceability CDC
 
-**Status:** active CDC working document  
+**Status:** completed / reviewed  
 **Date:** 2026-11-21  
 **Cycle start:** 2026-11-21 23:39:50 +03  
 **Interval:** 30 minutes  
@@ -150,3 +150,126 @@ The architecture traceability test now fails if any `closed` requirement has no 
 structured-architecture entry. This completes the mechanical requirement -> architecture
 entry-point invariant while preserving component-local `Implements / Constrained by`
 mapping for requirements that genuinely belong to one component.
+
+
+## Final evidence
+
+Reviewed implementation baseline:
+
+- `f2e045285510c8d202db95efef450811bfcdfa87`
+
+GitHub Actions:
+
+- workflow: `NG3 Python`
+- run: `44949136760`
+- result: **SUCCESS — 21/21 jobs**
+- unit suite: **790 tests PASS**
+- alpha smoke: PASS
+- host publication / host managed routing: PASS
+- OpenVPN/systemd applicability: PASS
+- Debian-12 routed-veth portability: PASS
+
+Mechanical trace checks on the reviewed tree:
+
+- closed requirements: **144/144** have a structured-architecture entry point;
+- production Python implementation units: **109/109** are represented by
+  `design/NG3/implementation-traceability.md`.
+
+## Expert review
+
+### F1 — universal Linux mechanism Drivers would weaken, not improve, the architecture
+
+**Disposition:** accepted assessment; no implementation required.
+
+A universal `NftDriver`, `IpRouteDriver` or `SysctlDriver` would share executable syntax
+while discarding owner-specific observation, ownership and safety contracts. Raw runners
+remain below the component model; no generic framework was introduced.
+
+### F2 — nft namespace observation is a useful standalone Reader only at its exact contract
+
+**Disposition:** accepted; implemented.
+
+`LinuxNftNamespaceReader` is independently testable and now reused by
+`LinuxNftScaffoldDriver`. Composite nft observations retain their own link-generation
+bracketing instead of being forced through a weaker Reader contract.
+
+### F3 — narrow Backends were misnamed Drivers
+
+**Disposition:** fixed.
+
+Current production role names use Drivers for nft scaffold/owner mutation, priority-route
+technical operations and host-managed routing. Structural-policy, composite-nft,
+probe-routing and stack-return-affinity remain Backends because they are actual lower
+compositions.
+
+Historical class names remain explicit aliases only for executable-evidence compatibility.
+Two historical module filenames still contain `backend`; filenames are not architecture
+roles, and renaming them would require compatibility modules solely to preserve old evidence
+imports. This cosmetic cleanup is therefore not required for the current block.
+
+### F4 — priority Driver is not a hidden Enforcer
+
+**Disposition:** accepted.
+
+`IproutePriorityDriver` may implement one concrete semantic move using local
+add/verify/delete technical safety. It does not choose the caller's desired assignment or
+the sequence of convergence steps. `RoutePriorityEnforcer` still plans the broader
+transition and performs final desired-state verification.
+
+### F5 — host-managed routing Driver does not own host-routing policy
+
+**Disposition:** accepted.
+
+Its desired-aware observation is against an already lowered Linux contract and only exposes
+technical missing/stale/conflict facts. The peaceful helper / outer convergence code retains
+choice of desired contribution, mutation ordering, lifecycle scope and final success
+semantics.
+
+### F6 — requirement-side trace had a real completeness gap
+
+**Disposition:** fixed and mechanically enforced.
+
+The previous implementation manifest gave a strong code -> architecture path, but 60 closed
+parent/root/cross-cutting requirements had no structured-architecture entry point. The new
+coverage index maps them to real architecture owners instead of manufacturing component
+ownership. CI now rejects any closed requirement absent from structured architecture.
+
+### F7 — production-language architecture existed only in the flat document
+
+**Disposition:** fixed.
+
+The Rust production boundary, Python reference/tooling exception and safe-Rust/unsafe-FFI
+rule are now present in structured architecture and trace the relevant closed requirements.
+
+### F8 — historical compatibility surface remains explicit
+
+**Disposition:** fixed during review.
+
+The old `route_priority_executor` shim briefly lost its historical
+`RoutePriorityBackend` export during the mechanical rename. The alias was restored while
+current production remains on `RoutePriorityDriver`.
+
+## Remaining non-blocking topics
+
+1. The historical module filenames `iproute_priority_backend.py` and
+   `linux_host_managed_routing_backend.py` may eventually be renamed if executable evidence
+   no longer needs their import paths. No component/API semantics depend on this cleanup.
+2. The closed-requirement coverage index is intentionally normative and human-readable. If it
+   grows substantially, generation/checking may later move to a dedicated trace artifact,
+   but the current explicit architecture entry points should remain reviewable.
+3. `__init__.py` remains the previously declared packaging-only architecture debt in the
+   implementation trace manifest; this CDC neither creates nor worsens that debt.
+
+## Requirement-state inventory
+
+No active `decomp`, `unreal`, `broken` or `rejected_closure` requirement state was
+found in the current normative tree.
+
+## Verdict
+
+**PASS — DEVELOPMENT BLOCK COMPLETE.**
+
+The reusable-boundary decision is now explicit and applied; current lower role names follow
+the component model without introducing a generic Linux framework; closed requirements and
+production implementation are both mechanically connected to structured architecture; the
+full executable evidence matrix passes.

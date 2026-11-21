@@ -477,6 +477,8 @@ Lower Machinery переиспользуется только при совпа�
 - narrow nft scaffold/owner, route-priority и host-managed-routing boundaries являются
   Drivers.
 
+**Evidence:** `EV-00010`.
+
 
 
 ### 2.9.3. Target production-runtime language boundary
@@ -608,6 +610,8 @@ supported VPN applicability gates live in `VPN external ends`; §2.9.2 defines e
 lower reuse rather than generic frameworks; §2.9.3 defines the production-language boundary.
 Requirement semantic changes therefore require re-review of their indexed architecture
 coverage before implementation proceeds.
+
+**Evidence:** `EV-00010`.
 
 
 ## 3. Форма описания Space

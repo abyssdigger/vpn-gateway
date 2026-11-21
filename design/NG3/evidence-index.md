@@ -25,3 +25,20 @@ architecture-to-code marker discipline.
 This entry preserves the concrete historical evidence without requiring stable architecture
 text to depend on the workflow provider's run identifier.
 
+
+
+## EV-00010 — lower-boundary roles and complete bidirectional traceability
+
+**Status:** accepted  
+**Scope:** reusable lower-boundary applicability decision; role-correct Driver/Reader/Backend
+classification; exact-contract nft Reader reuse; complete closed requirement -> structured
+architecture entry-point invariant; structured production-runtime language boundary.  
+**Review:** `design/reviews/NG3-2026-11-21-lower-boundary-reuse-trace-cdc.md`  
+**Reviewed implementation baseline:** `f2e045285510c8d202db95efef450811bfcdfa87`  
+**Executable evidence:** GitHub Actions `NG3 Python` run `44949136760` — PASS,
+21/21 jobs; unit suite 790 tests PASS.  
+**Trace invariants:** 144/144 closed Requirement/Constraint IDs have a structured architecture
+entry point; 109/109 production Python units are present in the implementation trace manifest.
+
+The evidence confirms that the terminology/reuse comb did not change required network
+behavior and that the completed traceability rules are mechanically enforced.
