@@ -79,8 +79,9 @@
 Это только presentation convention: отступ не является частью нормативной семантики.
 
 Пунктуация requirement-state синтаксиса не входит в имя label/link и поэтому не
-выделяется как code. В обычном Markdown-тексте моноширинно выделяется только константное имя:
+выделяется как code. В обычном Markdown-тексте моноширинно выделяются только константные имена/значения:
 [`closed`], [`pending_closure`], [`rejected_closure`],
+[`decomposition`: `complete`], [`decomposition`: `incomplete`],
 [`decomp`: ...], [`unreal`: ...], [`broken`: ...]. Скобки, двоеточия, запятые,
 стрелки и конкретные ID/значения остаются обычным текстом. В fenced code block дополнительное
 inline-code выделение не требуется, потому что весь block уже моноширинный.
@@ -440,6 +441,52 @@ Primary Requirement
 Если при декомпозиции обнаружено, что продукту действительно требуется новое поведение, которого нет в родительском требовании, необходимо явно изменить соответствующий верхний уровень.
 
 Такое изменение не маскируется под появление еще одного дочернего требования.
+
+### Полнота декомпозиции
+
+Каждый нормативный Requirement/Constraint узел имеет явный признак:
+
+```text
+[decomposition: complete]
+[decomposition: incomplete]
+```
+
+В обычном Markdown он оформляется как
+[`decomposition`: `complete`] или [`decomposition`: `incomplete`].
+
+Признак описывает не количество уже существующих детей, а состояние нормативной
+декомпозиции самого узла.
+
+[`decomposition`: `complete`] означает одно из двух:
+
+1. узел является осознанным leaf и дальнейшее нормативное уточнение для текущего scope не
+   требуется;
+2. узел имеет непосредственных детей и их совокупность исчерпывает нормативный смысл
+   родительского узла для текущего scope.
+
+[`decomposition`: `incomplete`] означает, что на самом узле остается нормативный смысл,
+который еще не разложен достаточно для признания текущей декомпозиции исчерпывающей.
+
+Допустимы все четыре формы:
+
+```text
+incomplete + no children    -> еще не проросший root будущей ветви
+incomplete + children       -> частичная декомпозиция; у parent остается остаточный смысл
+complete   + children       -> дети исчерпывают parent
+complete   + no children    -> осознанный leaf
+```
+
+Наличие детей само по себе не делает decomposition полной. Отсутствие детей само по себе не
+делает узел leaf.
+
+При сомнении используется консервативная оценка `incomplete`: `complete` требует review,
+что текущий leaf действительно не нуждается в нормативном уточнении либо что непосредственные
+дети исчерпывают scope parent.
+
+Decomposition completeness независима от architecture closure. Узел может быть [`closed`]
+и при этом оставаться [`decomposition`: `incomplete`], если принятое архитектурное
+решение закрывает текущий Statement напрямую, но requirements holder еще не считает его
+нормативную декомпозицию законченной.
 
 ## 6. Родительская трассировка
 
@@ -1159,6 +1206,36 @@ Constrained by:
 - архитектурное решение без честной ссылки на requirement является finding;
 - отсутствие ссылки не исправляется созданием requirement задним числом.
 
+### Агрегация architecture coverage по requirement tree
+
+Architecture coverage асимметрично относительно дерева требований.
+
+**Вниз coverage не наследуется.** Точная архитектурная ссылка на parent означает coverage
+только самого parent. Его дети остаются отдельными нормативными обязательствами и требуют
+собственного coverage.
+
+**Вверх coverage может агрегироваться.** Узел считается architecturally covered, если
+выполняется хотя бы одно условие:
+
+1. нормативная архитектура содержит точную ссылку на этот узел;
+2. узел имеет [`decomposition`: `complete`] и каждый его непосредственный нормативный
+   child architecturally covered.
+
+Следствия:
+
+- `complete leaf` может быть covered только точной архитектурной ссылкой;
+- `complete parent` может не дублироваться в архитектуре, если все его непосредственные
+  дети covered;
+- `incomplete parent` не может получить полное coverage только через существующих детей:
+  у него по определению остается недекомпозированный смысл;
+- архитектурная ссылка на широкий ancestor не покрывает более конкретные descendants;
+- для Constraint точная ссылка должна использовать соответствующую semantics
+  `Constrained by` или эквивалентный явно ограничивающий trace, а не притворяться
+  `Implements`.
+
+Это правило определяет architecture coverage, но не отменяет отдельный closure status каждого
+нормативного узла.
+
 ### Requirement-driven development
 
 Требования управляют не только конечной архитектурой, но и существенной разработкой,
@@ -1336,6 +1413,8 @@ Evidence доказывает требование.
 - нормативный смысл первичного Requirement хранится в `Basis + Statement`;
 - нормативный смысл производного Requirement/Constraint хранится в `Purpose/Reason + Statement`;
 - section headings, порядок отображения и пояснительный текст не являются идентичностью узла;
+- каждый нормативный узел явно хранит состояние полноты своей нормативной декомпозиции:
+  [`decomposition`: `complete`] или [`decomposition`: `incomplete`];
 - cross-tree зависимости декомпозиции фиксируются рядом с заблокированным узлом ссылкой
   [`decomp`: <blocker> -> <pending|deblocker>];
 - архитектурная закрытость узла фиксируется только признаком [`closed`];
@@ -1431,8 +1510,10 @@ open
 Правила:
 
 - closure status определяется отдельно для каждого нормативного узла;
-- `pending_closure` и `closed` должны иметь хотя бы одну точную ссылку на свой ID в
-  нормативной архитектуре;
+- `pending_closure` должен иметь хотя бы одну точную ссылку на свой ID в нормативной
+  архитектуре;
+- `closed` должен иметь либо точную принятую architecture-ссылку на свой ID, либо
+  [`decomposition`: `complete`] и всех непосредственных нормативных детей [`closed`];
 - requirement-документ не дублирует перечень архитектурных решений;
 - узел с активной ссылкой [`decomp`: ... -> pending] не может иметь
   [`pending_closure`] или [`closed`];
@@ -1451,20 +1532,33 @@ open
 выполняться асимметричные инварианты:
 
 ```text
-node [pending_closure] -> architecture contains exact node reference    REQUIRED
-node [closed]          -> architecture contains exact node reference    REQUIRED
+node [pending_closure]
+    -> architecture contains exact node reference
 
-architecture references node -> closure label                          NOT REQUIRED
+node [closed]
+    -> architecture contains exact accepted node reference
+       OR
+       (
+         node [decomposition: complete]
+         AND every immediate normative child [closed]
+       )
+
+architecture references parent
+    -> descendant coverage is NOT implied
 ```
 
 Следовательно:
 
-- [`pending_closure`] или [`closed`] без точной архитектурной ссылки — формально
-  обнаруживаемая ошибка;
+- [`pending_closure`] без точной архитектурной ссылки — формально обнаруживаемая ошибка;
+- [`closed`] без точной архитектурной ссылки допустим только как агрегированный closure
+  полного parent'а через всех непосредственных [`closed`] детей;
+- [`decomposition`: `incomplete`] никогда не позволяет вывести closure parent'а только
+  из существующих детей;
 - архитектурная ссылка на нормативный узел без closure-label — допустимое промежуточное состояние;
 - наличие архитектурной ссылки само по себе не дает права автоматически поставить
   [`pending_closure`] или [`closed`];
-- [`closed`] требует принятого acceptance evidence;
+- [`closed`] требует принятого acceptance evidence непосредственно либо через принятый
+  closure всех детей при полной декомпозиции parent;
 - [`rejected_closure`] требует зафиксированного отрицательного acceptance/review evidence
   и никогда не считается закрытием.
 
@@ -1513,7 +1607,7 @@ acceptance/rejection evidence остается предметом review.
 Допустимая компактная форма:
 
 ```text
-**[PRODUCT0001]** *Основание: <проверяемый внешний источник>.* | Statement [pending_closure|closed|rejected_closure]
+**[PRODUCT0001]** *Основание: <проверяемый внешний источник>.* | Statement [decomposition: complete|incomplete] [pending_closure|closed|rejected_closure]
 ```
 
 Эквивалентная развернутая форма:
@@ -1536,7 +1630,7 @@ Statement:
 Допустимая компактная форма:
 
 ```text
-**[PRODUCT0001-R...]** *Purpose* | Statement [pending_closure|closed|rejected_closure]
+**[PRODUCT0001-R...]** *Purpose* | Statement [decomposition: complete|incomplete] [pending_closure|closed|rejected_closure]
 ```
 
 Эквивалентная развернутая форма:
@@ -1576,7 +1670,7 @@ Acceptance:
 Допустимая компактная форма:
 
 ```text
-**[PRODUCT0001-...C...]** *Reason* | Statement [pending_closure|closed|rejected_closure]
+**[PRODUCT0001-...C...]** *Reason* | Statement [decomposition: complete|incomplete] [pending_closure|closed|rejected_closure]
 ```
 
 Closure labels имеют ту же семантику для constraint, что и для requirement.
@@ -1629,6 +1723,13 @@ Re-entry condition:
 - имеет однозначных actor'ов для нормативно значимых действий.
 
 ### Сверху вниз
+
+Каждый нормативный узел:
+
+- имеет явный [`decomposition`: `complete`] или [`decomposition`: `incomplete`];
+- помечен `complete` только если является осознанным leaf либо его непосредственные дети
+  исчерпывают его нормативный смысл;
+- помечен `incomplete`, если на узле остается еще не разложенный нормативный смысл.
 
 Каждое производное требование:
 
