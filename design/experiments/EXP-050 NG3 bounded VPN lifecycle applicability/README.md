@@ -27,7 +27,6 @@ historical normative context that caused EXP-050 to be prepared and executed; it
 current requirement link.
 
 ## Requirement traceability
-
 Current applicability of the EXP-050 evidence maps to the product obligations it actually
 tests:
 
@@ -35,8 +34,8 @@ tests:
 - `VPNG0001-R1.R3.C3` — Release 1 may leave external VPN runtime lifecycle ownership/supervision outside VPN-GATE.
 - `VPNG0001-R1.R3.C3.R1` — that external lifecycle must have a reproducible integration contract coordinated with VPN-GATE lifecycle and safety requirements.
 - `VPNG0004-R4.R6` — external network state must not allow VPN-GATE traffic-processing rules to be bypassed or change their required outcome.
-- `VPNG0005-R5.R4` and `VPNG0005-R5.R5` — shutdown/cleanup must remove product-owned effects and continue attempting independent cleanup despite partial failures.
-- `VPNG0005-R5.R6.R2` and `VPNG0005-R5.R6.R3` — successful stop/restart must reach the required cleanup/new-start state rather than merely issue internal commands.
+- `VPNG9101-R1.R1.R4` and `VPNG9101-R1.R1.R5` — shutdown/cleanup must remove product-owned effects and continue attempting independent cleanup despite partial failures.
+- `VPNG9101-R1.R1.R6.R2` and `VPNG9101-R1.R1.R6.R3` — successful stop/restart must reach the required cleanup/new-start state rather than merely issue internal commands.
 - prerequisite product evidence: `VPNG0001-R1.R3.C1.R1.R1` / EXP-049.
 
 ## Dependency gate

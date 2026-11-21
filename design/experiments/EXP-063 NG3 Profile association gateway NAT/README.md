@@ -27,15 +27,14 @@ prepared; they are not current requirement traceability. Current applicability i
 through live R/C links elsewhere in this dossier or in the central experiment registry.
 
 ## Requirements
-
 **Implements / provides physical evidence for:**
 
 - `VPNG0001-R3`;
 
 - `VPNG0001-R4.R4.R4.R4`;
 - `VPNG0002-R2.R1.R3`;
-- `VPNG0007-R7.R3.R4`;
-- `VPNG0007-R7.R3.R4.R1`.
+- `VPNG9001-R1.R1.R3.R4`;
+- `VPNG9001-R1.R1.R3.R4.R1`.
 
 The accepted architecture already requires Profile ordinary-side gateway NAT to run only for
 already-permitted VPN->ordinary traffic after managed policy, and already rejected host-side

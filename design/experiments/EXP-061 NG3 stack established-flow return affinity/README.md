@@ -26,13 +26,12 @@ prepared; they are not current requirement traceability. Current applicability i
 through live R/C links elsewhere in this dossier or in the central experiment registry.
 
 ## Requirements
-
 - `VPNG0003-R4` — reply traffic for VPN-originated managed traffic returns through the VPN
   channel that accepted the original traffic even when another allowed channel also covers the
   sender address.
-- `VPNG0007-R7.R3.R4` — identity/state required downstream survives material boundaries or is
+- `VPNG9001-R1.R1.R3.R4` — identity/state required downstream survives material boundaries or is
   reconstructed unambiguously.
-- `VPNG0007-R7.R3.R4.R1` — automated differentiating evidence must cross the material
+- `VPNG9001-R1.R1.R3.R4.R1` — automated differentiating evidence must cross the material
   boundaries and fail if ordinary reclassification would choose a different result.
 
 ## Question
