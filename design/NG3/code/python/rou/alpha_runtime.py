@@ -82,7 +82,7 @@ from .linux_host_publication import (
     LinuxHostPublicationDriver,
 )
 from .linux_nft_scaffold import (
-    LinuxNftScaffoldBackend,
+    LinuxNftScaffoldDriver,
     SubprocessNftRunner,
 )
 from .linux_policy_platform import (
@@ -517,7 +517,7 @@ def reconcile_alpha_payload_once(
 
     activation = activate_network_policy(
         gate_backend,
-        LinuxNftScaffoldBackend(runner, domain_spec.namespace),
+        LinuxNftScaffoldDriver(runner, domain_spec.namespace),
         structural_backend,
         desired.routing,
         desired.nft,

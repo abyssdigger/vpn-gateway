@@ -29,7 +29,7 @@ from .interface_identity import InterfaceIdentity
 from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .linux_nft_scaffold import (
-    LinuxNftScaffoldBackend,
+    LinuxNftScaffoldDriver,
     NftScriptRunner,
 )
 from .linux_structural_policy import LinuxStructuralPolicyBackend
@@ -535,7 +535,7 @@ def start_controller_once(
     )
     activation = activate_network_policy(
         gate,
-        LinuxNftScaffoldBackend(
+        LinuxNftScaffoldDriver(
             runner,
             domain_spec.namespace,
         ),

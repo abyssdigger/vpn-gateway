@@ -46,7 +46,7 @@ class NftRulesetCommandRunner(Protocol):
 
 
 @dataclass(slots=True)
-class LinuxNftNamespaceBackend:
+class LinuxNftNamespaceReader:
     runner: NftRulesetCommandRunner
     namespace: str
 
@@ -198,3 +198,7 @@ def parse_nft_namespace_ruleset(
         objects=tuple(sorted(objects)),
         observed_comment=comment,
     )
+
+
+# Historical executable-evidence compatibility alias.
+LinuxNftNamespaceBackend = LinuxNftNamespaceReader

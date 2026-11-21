@@ -115,7 +115,7 @@ from .nft_namespace_inventory import (
     NG3_NFT_FAMILY,
     NG3_NFT_OWNER_COMMENT,
     NG3_NFT_TABLE,
-    LinuxNftNamespaceBackend,
+    LinuxNftNamespaceReader,
     NftNamespaceInventoryError,
     NftNamespaceObject,
     NftNamespaceObservation,
@@ -140,7 +140,7 @@ from .nft_scaffold_enforcer import (
     prepare_payload_nft_scaffold_once,
 )
 from .linux_nft_scaffold import (
-    LinuxNftScaffoldBackend,
+    LinuxNftScaffoldDriver,
     SubprocessNftRunner,
 )
 from .direct_device_route import (
@@ -681,8 +681,8 @@ __all__ = [
     "NG3_NFT_OWNER_COMMENT",
     "NG3_NFT_TABLE",
     "NftBaseChainSpec",
-    "LinuxNftNamespaceBackend",
-    "LinuxNftScaffoldBackend",
+    "LinuxNftNamespaceReader",
+    "LinuxNftScaffoldDriver",
     "NatIntent",
     "NetworkPolicyActivationResult",
     "NetworkPolicyActivationStatus",

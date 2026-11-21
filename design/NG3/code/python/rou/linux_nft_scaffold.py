@@ -52,7 +52,7 @@ class SubprocessNftRunner:
 
 
 @dataclass(slots=True)
-class LinuxNftScaffoldBackend:
+class LinuxNftScaffoldDriver:
     runner: NftScriptRunner
     namespace: str
 
@@ -144,3 +144,7 @@ def _add_chain_statement(spec: NftBaseChainSpec) -> str:
         f"type {spec.chain_type} hook {spec.hook} priority {spec.priority}; "
         f"policy {spec.policy}; comment \"{spec.comment}\"; }}\n"
     )
+
+
+# Historical executable-evidence compatibility alias.
+LinuxNftScaffoldBackend = LinuxNftScaffoldDriver
