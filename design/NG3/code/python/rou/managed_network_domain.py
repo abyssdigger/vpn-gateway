@@ -1,4 +1,16 @@
-"""Linux managed network-domain infrastructure lifecycle for NG3."""
+"""Linux lifecycle realization for Private network and ordinary-side transition.
+
+Architecture:
+- Annex B B.001 ManagedL3BoundaryLifecycle;
+- Annex C C.007 ManagedNetworkEnvironmentLifecycle;
+- Annex C C.009 OrdinarySidePortalLifecycle.
+
+The legacy managed-network-domain functions at the bottom of the public surface are
+compatibility orchestration facades, not a cross-Space component boundary.
+
+Requirement traceability: VPNG0004-R4.R6, VPNG0005-R5.R1/R2/R4/R5,
+VPNG0007-R7.R3/R7.
+"""
 
 from __future__ import annotations
 
@@ -89,80 +101,178 @@ class ManagedNetworkDomainEnsureResult:
         return self.verification.confirmed
 
 
-def verify_managed_network_domain(
+@dataclass(frozen=True, slots=True)
+class ManagedNetworkEnvironmentVerification:
+    confirmed: bool
+    errors: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedNetworkEnvironmentEnsureResult:
+    created: bool
+    verification: ManagedNetworkEnvironmentVerification
+
+    @property
+    def confirmed(self) -> bool:
+        return self.verification.confirmed
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedL3BoundaryVerification:
+    confirmed: bool
+    errors: tuple[str, ...]
+    private_boundary: InterfaceIdentity | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedL3BoundaryEnsureResult:
+    created: bool
+    verification: ManagedL3BoundaryVerification
+
+    @property
+    def confirmed(self) -> bool:
+        return self.verification.confirmed
+
+
+@dataclass(frozen=True, slots=True)
+class OrdinarySidePortalVerification:
+    confirmed: bool
+    errors: tuple[str, ...]
+
+
+def verify_managed_network_environment(
     spec: ManagedNetworkDomainSpec,
     runner: ManagedNetworkDomainRunner,
-) -> ManagedNetworkDomainVerification:
-    """Read-only exact infrastructure verification."""
-    namespaces = _namespace_names(runner)
-    if spec.namespace not in namespaces:
-        return ManagedNetworkDomainVerification(
+) -> ManagedNetworkEnvironmentVerification:
+    """Verify only Private-network namespace + loopback materialization."""
+    if spec.namespace not in _namespace_names(runner):
+        return ManagedNetworkEnvironmentVerification(
+            False,
+            (f"namespace {spec.namespace!r} is missing",),
+        )
+    loopback = _single_link(
+        _link_rows(runner, namespace=spec.namespace),
+        "lo",
+    )
+    errors = []
+    if loopback is None or "UP" not in loopback.get("flags", ()):
+        errors.append("namespace loopback is missing or not UP")
+    return ManagedNetworkEnvironmentVerification(
+        confirmed=not errors,
+        errors=tuple(errors),
+    )
+
+
+def preflight_managed_network_environment(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> bool:
+    """Contain and verify existing environment; return whether it exists."""
+    if spec.namespace not in _namespace_names(runner):
+        return False
+    _require_containment(spec, runner)
+    verification = verify_managed_network_environment(spec, runner)
+    if not verification.confirmed:
+        raise ManagedNetworkDomainError(
+            "existing managed network environment failed exact verification: "
+            + "; ".join(verification.errors)
+        )
+    return True
+
+
+def ensure_managed_network_environment(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> ManagedNetworkEnvironmentEnsureResult:
+    """Create/verify Private-network namespace + loopback only."""
+    existing = preflight_managed_network_environment(spec, runner)
+    if existing:
+        return ManagedNetworkEnvironmentEnsureResult(
+            False,
+            verify_managed_network_environment(spec, runner),
+        )
+
+    created = False
+    try:
+        runner.run(("ip", "netns", "add", spec.namespace))
+        created = True
+        _require_containment(spec, runner)
+        runner.run(
+            ("ip", "-n", spec.namespace, "link", "set", "lo", "up")
+        )
+        verification = verify_managed_network_environment(spec, runner)
+        if not verification.confirmed:
+            raise ManagedNetworkDomainError(
+                "created managed network environment failed verification: "
+                + "; ".join(verification.errors)
+            )
+        return ManagedNetworkEnvironmentEnsureResult(True, verification)
+    except Exception:
+        if created:
+            try:
+                runner.run(("ip", "netns", "del", spec.namespace))
+            except Exception:
+                pass
+        raise
+
+
+def destroy_managed_network_environment(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> None:
+    """Destroy environment only after the ordinary-side transition is absent."""
+    if spec.namespace not in _namespace_names(runner):
+        return
+    _require_containment(spec, runner)
+    if _single_link(_link_rows(runner), spec.host_interface) is not None:
+        raise ManagedNetworkDomainError(
+            "cannot destroy managed network environment while transition host endpoint exists"
+        )
+    runner.run(("ip", "netns", "del", spec.namespace))
+    if spec.namespace in _namespace_names(runner):
+        raise ManagedNetworkDomainError(
+            f"namespace {spec.namespace!r} still exists after destroy"
+        )
+
+
+def verify_managed_l3_boundary(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> ManagedL3BoundaryVerification:
+    """Verify transition artifacts without owning Private portal address/default."""
+    errors: list[str] = []
+    if spec.namespace not in _namespace_names(runner):
+        return ManagedL3BoundaryVerification(
             False,
             (f"namespace {spec.namespace!r} is missing",),
         )
 
-    errors: list[str] = []
-    host_links = _link_rows(runner)
-    namespace_links = _link_rows(runner, namespace=spec.namespace)
-
-    host = _single_link(host_links, spec.host_interface)
-    inner = _single_link(namespace_links, spec.inner_interface)
-    loopback = _single_link(namespace_links, "lo")
-
-    _verify_veth(
-        host,
-        spec.host_interface,
-        "host",
-        errors,
-    )
-    _verify_veth(
-        inner,
+    host = _single_link(_link_rows(runner), spec.host_interface)
+    inner = _single_link(
+        _link_rows(runner, namespace=spec.namespace),
         spec.inner_interface,
-        "inner",
-        errors,
     )
-    if loopback is None or "UP" not in loopback.get("flags", ()):
-        errors.append("namespace loopback is missing or not UP")
+    _verify_veth(host, spec.host_interface, "host", errors)
+    _verify_veth(inner, spec.inner_interface, "inner", errors)
 
     if host is not None and inner is not None:
-        host_ifindex = host.get("ifindex")
-        host_peer = host.get("link_index")
-        inner_ifindex = inner.get("ifindex")
-        inner_peer = inner.get("link_index")
-        if not all(
-            type(value) is int
-            for value in (
-                host_ifindex,
-                host_peer,
-                inner_ifindex,
-                inner_peer,
-            )
-        ):
+        values = (
+            host.get("ifindex"),
+            host.get("link_index"),
+            inner.get("ifindex"),
+            inner.get("link_index"),
+        )
+        if not all(type(value) is int for value in values):
             errors.append("veth peer identity is not fully observable")
-        elif (
-            host_peer != inner_ifindex
-            or inner_peer != host_ifindex
-        ):
+        elif host.get("link_index") != inner.get("ifindex") or inner.get(
+            "link_index"
+        ) != host.get("ifindex"):
             errors.append(
                 "host and namespace boundary interfaces are not reciprocal veth peers"
             )
 
-    if host is not None:
-        host_addresses = _ipv4_addresses(runner, spec.host_interface)
-        if host_addresses:
-            errors.append("managed L3 host boundary must not carry an IPv4 address")
-
-    if inner is not None:
-        inner_addresses = _ipv4_addresses(
-            runner,
-            spec.inner_interface,
-            namespace=spec.namespace,
-        )
-        if inner_addresses != frozenset((spec.inner_address,)):
-            errors.append(
-                "inner boundary IPv4 address set does not exactly match "
-                f"{spec.inner_address.with_prefixlen}"
-            )
+    if host is not None and _ipv4_addresses(runner, spec.host_interface):
+        errors.append("managed L3 host boundary must not carry an IPv4 address")
 
     if host is not None and inner is not None:
         for label, namespace, interface in (
@@ -186,43 +296,13 @@ def verify_managed_network_domain(
                     f"{label} managed L3 endpoint rp_filter is not disabled"
                 )
 
-    primary_boundary = None
-    if inner is not None and type(inner.get("ifindex")) is int:
-        try:
-            primary_boundary = InterfaceIdentity(
-                spec.inner_interface,
-                inner["ifindex"],
-            )
-        except ValueError:
-            errors.append("inner boundary interface identity is invalid")
-
-    routes = _json_array(
-        runner.run(
-            (
-                "ip", "-n", spec.namespace,
-                "-j", "-4",
-                "route", "show", "table", "main",
-            )
-        ),
-        "namespace main-route snapshot",
-    )
-    defaults = [
-        row
-        for row in routes
-        if row.get("dst", "default") == "default"
-    ]
-    if len(defaults) != 1 or not (
-        defaults[0].get("dev") == spec.inner_interface
-        and defaults[0].get("gateway") is None
-    ):
-        errors.append("namespace default route does not exactly use managed L3 inner boundary")
-
     host_routes = _json_array(
         runner.run(("ip", "-j", "-4", "route", "show", "table", "main")),
         "host main-route snapshot",
     )
     service_routes = [
-        row for row in host_routes
+        row
+        for row in host_routes
         if _route_network(row.get("dst", "default")) == spec.inner_address.network
     ]
     if len(service_routes) != 1 or not (
@@ -230,130 +310,92 @@ def verify_managed_network_domain(
         and service_routes[0].get("gateway") is None
         and service_routes[0].get("type", "unicast") == "unicast"
     ):
-        errors.append("host stack-local service route does not exactly use managed L3 host boundary")
+        errors.append(
+            "host stack-local service route does not exactly use managed L3 host boundary"
+        )
 
-    return ManagedNetworkDomainVerification(
+    identity = None
+    if inner is not None and type(inner.get("ifindex")) is int:
+        try:
+            identity = InterfaceIdentity(spec.inner_interface, inner["ifindex"])
+        except ValueError:
+            errors.append("inner boundary interface identity is invalid")
+
+    return ManagedL3BoundaryVerification(
         confirmed=not errors,
         errors=tuple(errors),
-        host_boundary=primary_boundary if not errors else None,
+        private_boundary=identity if not errors else None,
     )
 
 
-def preflight_managed_network_domain(
+def preflight_managed_l3_boundary(
     spec: ManagedNetworkDomainSpec,
     runner: ManagedNetworkDomainRunner,
-) -> ManagedNetworkDomainPreflightResult:
-    """Contain/verify existing infrastructure without creating absent state."""
+) -> bool:
+    """Classify absent/exact transition relative to the current environment."""
     namespace_exists = spec.namespace in _namespace_names(runner)
-    current_host_links = _link_rows(runner)
-    host_exists = _single_link(
-        current_host_links,
-        spec.host_interface,
-    ) is not None
-    if namespace_exists:
-        _require_containment(spec, runner)
+    host_exists = _single_link(_link_rows(runner), spec.host_interface) is not None
 
-    if not namespace_exists and not host_exists:
-        return ManagedNetworkDomainPreflightResult(
-            existing=False,
-            verification=None,
+    if not namespace_exists:
+        if host_exists:
+            raise ManagedNetworkDomainError(
+                "transition host endpoint exists without managed network environment"
+            )
+        return False
+
+    _require_containment(spec, runner)
+    inner_exists = (
+        _single_link(
+            _link_rows(runner, namespace=spec.namespace),
+            spec.inner_interface,
         )
-
-    if namespace_exists != host_exists:
+        is not None
+    )
+    if not host_exists and not inner_exists:
+        return False
+    if host_exists != inner_exists:
         raise ManagedNetworkDomainError(
-            "managed network-domain infrastructure is partially present; "
-            f"namespace_exists={namespace_exists} "
-            f"host_boundary_exists={host_exists}"
+            "ordinary-side transition is partially present; "
+            f"host_endpoint_exists={host_exists} "
+            f"private_endpoint_exists={inner_exists}"
         )
 
-    verification = verify_managed_network_domain(spec, runner)
+    verification = verify_managed_l3_boundary(spec, runner)
     if not verification.confirmed:
         raise ManagedNetworkDomainError(
-            "existing managed network domain failed exact verification: "
+            "existing ordinary-side transition failed exact verification: "
             + "; ".join(verification.errors)
         )
-    return ManagedNetworkDomainPreflightResult(
-        existing=True,
-        verification=verification,
-    )
+    return True
 
 
-def ensure_managed_network_domain(
+def ensure_managed_l3_boundary(
     spec: ManagedNetworkDomainSpec,
     runner: ManagedNetworkDomainRunner,
-) -> ManagedNetworkDomainEnsureResult:
-    """Create absent infrastructure or verify an already complete contained domain."""
-    preflight = preflight_managed_network_domain(spec, runner)
-
-    if not preflight.existing:
-        _create_managed_network_domain(spec, runner)
-        verification = verify_managed_network_domain(spec, runner)
-        if not verification.confirmed:
-            _best_effort_destroy_created(spec, runner)
-            raise ManagedNetworkDomainError(
-                "created managed network domain failed verification: "
-                + "; ".join(verification.errors)
-            )
-        return ManagedNetworkDomainEnsureResult(
-            created=True,
-            verification=verification,
+) -> ManagedL3BoundaryEnsureResult:
+    """Create/verify routed-veth transition without Private portal state."""
+    environment = verify_managed_network_environment(spec, runner)
+    if not environment.confirmed:
+        raise ManagedNetworkDomainError(
+            "managed network environment is not exact before transition ensure: "
+            + "; ".join(environment.errors)
+        )
+    existing = preflight_managed_l3_boundary(spec, runner)
+    if existing:
+        return ManagedL3BoundaryEnsureResult(
+            False,
+            verify_managed_l3_boundary(spec, runner),
         )
 
-    assert preflight.verification is not None
-    return ManagedNetworkDomainEnsureResult(
-        created=False,
-        verification=preflight.verification,
-    )
-
-
-def destroy_managed_network_domain(
-    spec: ManagedNetworkDomainSpec,
-    runner: ManagedNetworkDomainRunner,
-) -> None:
-    """Best-effort containment/removal followed by fresh absence verification."""
-    if spec.namespace in _namespace_names(runner):
-        try:
-            _require_containment(spec, runner)
-        except Exception:
-            pass
-        try:
-            runner.run(("ip", "netns", "del", spec.namespace))
-        except Exception:
-            pass
-
-    if _single_link(_link_rows(runner), spec.host_interface) is not None:
-        try:
-            runner.run(("ip", "link", "del", spec.host_interface))
-        except Exception:
-            pass
-
-    errors = []
-    if spec.namespace in _namespace_names(runner):
-        errors.append(f"namespace {spec.namespace!r} still exists")
-    current_host_links = _link_rows(runner)
-    if _single_link(current_host_links, spec.host_interface) is not None:
-        errors.append(f"host interface {spec.host_interface!r} still exists")
-    if errors:
-        raise ManagedNetworkDomainError("; ".join(errors))
-
-
-def _create_managed_network_domain(
-    spec: ManagedNetworkDomainSpec,
-    runner: ManagedNetworkDomainRunner,
-) -> None:
-    created_namespace = False
+    created_host = False
     try:
-        runner.run(("ip", "netns", "add", spec.namespace))
-        created_namespace = True
-        _require_containment(spec, runner)
-
         runner.run(
             (
                 "ip", "link", "add", spec.host_interface,
-                "type", "veth",
-                "peer", "name", spec.inner_interface,
+                "type", "veth", "peer", "name", spec.inner_interface,
             )
         )
+        created_host = True
         runner.run(
             (
                 "ip", "link", "set", spec.inner_interface,
@@ -364,29 +406,20 @@ def _create_managed_network_domain(
         runner.run(
             (
                 "ip", "-n", spec.namespace,
-                "link", "set", "lo", "up",
-            )
-        )
-        runner.run(
-            (
-                "ip", "-n", spec.namespace,
-                "addr", "add",
-                spec.inner_address.with_prefixlen,
-                "dev", spec.inner_interface,
-            )
-        )
-        runner.run(
-            (
-                "ip", "-n", spec.namespace,
                 "link", "set", spec.inner_interface, "up",
             )
         )
-
         runner.run(
-            ("sysctl", "-w", f"net.ipv4.conf.{spec.host_interface}.proxy_arp=1")
+            (
+                "sysctl", "-w",
+                f"net.ipv4.conf.{spec.host_interface}.proxy_arp=1",
+            )
         )
         runner.run(
-            ("sysctl", "-w", f"net.ipv4.conf.{spec.host_interface}.rp_filter=0")
+            (
+                "sysctl", "-w",
+                f"net.ipv4.conf.{spec.host_interface}.rp_filter=0",
+            )
         )
         runner.run(
             (
@@ -409,21 +442,15 @@ def _create_managed_network_domain(
                 "dev", spec.host_interface,
             )
         )
-        runner.run(
-            (
-                "ip", "-n", spec.namespace,
-                "-4", "route", "replace", "default",
-                "dev", spec.inner_interface,
+        verification = verify_managed_l3_boundary(spec, runner)
+        if not verification.confirmed:
+            raise ManagedNetworkDomainError(
+                "created ordinary-side transition failed verification: "
+                + "; ".join(verification.errors)
             )
-        )
+        return ManagedL3BoundaryEnsureResult(True, verification)
     except Exception:
-        if created_namespace:
-            try:
-                runner.run(("ip", "netns", "del", spec.namespace))
-            except Exception:
-                pass
-        current_host_links = _link_rows(runner)
-        if _single_link(current_host_links, spec.host_interface) is not None:
+        if created_host:
             try:
                 runner.run(("ip", "link", "del", spec.host_interface))
             except Exception:
@@ -431,14 +458,326 @@ def _create_managed_network_domain(
         raise
 
 
-def _best_effort_destroy_created(
+def destroy_managed_l3_boundary(
     spec: ManagedNetworkDomainSpec,
     runner: ManagedNetworkDomainRunner,
 ) -> None:
+    """Remove exact/owned transition; do not infer ownership from orphan names."""
+    namespace_exists = spec.namespace in _namespace_names(runner)
+    if namespace_exists:
+        _require_containment(spec, runner)
+    host = _single_link(_link_rows(runner), spec.host_interface)
+    inner = (
+        _single_link(
+            _link_rows(runner, namespace=spec.namespace),
+            spec.inner_interface,
+        )
+        if namespace_exists
+        else None
+    )
+    if host is None and inner is None:
+        return
+    if host is None or inner is None:
+        raise ManagedNetworkDomainError(
+            "cannot safely destroy partially present ordinary-side transition"
+        )
+    verification = verify_managed_l3_boundary(spec, runner)
+    if not verification.confirmed:
+        raise ManagedNetworkDomainError(
+            "cannot destroy unverified ordinary-side transition: "
+            + "; ".join(verification.errors)
+        )
+    runner.run(("ip", "link", "del", spec.host_interface))
+    host_after = _single_link(_link_rows(runner), spec.host_interface)
+    inner_after = _single_link(
+        _link_rows(runner, namespace=spec.namespace),
+        spec.inner_interface,
+    )
+    if host_after is not None or inner_after is not None:
+        raise ManagedNetworkDomainError(
+            "ordinary-side transition endpoints remain after destroy"
+        )
+
+
+def observe_ordinary_side_portal(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> OrdinarySidePortalVerification:
+    """Observe only Private-network service address + ordinary-side default."""
+    if spec.namespace not in _namespace_names(runner):
+        return OrdinarySidePortalVerification(
+            False,
+            (f"namespace {spec.namespace!r} is missing",),
+        )
+    inner = _single_link(
+        _link_rows(runner, namespace=spec.namespace),
+        spec.inner_interface,
+    )
+    if inner is None:
+        return OrdinarySidePortalVerification(
+            False,
+            (f"private boundary endpoint {spec.inner_interface!r} is missing",),
+        )
+
+    errors = []
+    addresses = _ipv4_addresses(
+        runner,
+        spec.inner_interface,
+        namespace=spec.namespace,
+    )
+    if addresses != frozenset((spec.inner_address,)):
+        errors.append(
+            "private boundary IPv4 address set does not exactly match "
+            f"{spec.inner_address.with_prefixlen}"
+        )
+
+    routes = _json_array(
+        runner.run(
+            (
+                "ip", "-n", spec.namespace,
+                "-j", "-4", "route", "show", "table", "main",
+            )
+        ),
+        "namespace main-route snapshot",
+    )
+    defaults = [
+        row for row in routes if row.get("dst", "default") == "default"
+    ]
+    if len(defaults) != 1 or not (
+        defaults[0].get("dev") == spec.inner_interface
+        and defaults[0].get("gateway") is None
+    ):
+        errors.append(
+            "namespace default route does not exactly use private boundary endpoint"
+        )
+
+    return OrdinarySidePortalVerification(
+        confirmed=not errors,
+        errors=tuple(errors),
+    )
+
+
+def ensure_ordinary_side_portal(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> OrdinarySidePortalVerification:
+    """Converge exact owned portal address/default on an exact transition."""
+    boundary = verify_managed_l3_boundary(spec, runner)
+    if not boundary.confirmed:
+        raise ManagedNetworkDomainError(
+            "ordinary-side transition is not exact before portal ensure: "
+            + "; ".join(boundary.errors)
+        )
+    _require_containment(spec, runner)
+
+    current = observe_ordinary_side_portal(spec, runner)
+    if current.confirmed:
+        return current
+
+    runner.run(
+        (
+            "ip", "-n", spec.namespace,
+            "-4", "addr", "flush", "dev", spec.inner_interface,
+        )
+    )
+    runner.run(
+        (
+            "ip", "-n", spec.namespace,
+            "addr", "add", spec.inner_address.with_prefixlen,
+            "dev", spec.inner_interface,
+        )
+    )
+    runner.run(
+        (
+            "ip", "-n", spec.namespace,
+            "-4", "route", "flush", "table", "main", "default",
+        )
+    )
+    runner.run(
+        (
+            "ip", "-n", spec.namespace,
+            "-4", "route", "replace", "default",
+            "dev", spec.inner_interface,
+        )
+    )
+    final = observe_ordinary_side_portal(spec, runner)
+    if not final.confirmed:
+        raise ManagedNetworkDomainError(
+            "ordinary-side portal convergence failed verification: "
+            + "; ".join(final.errors)
+        )
+    return final
+
+
+def cleanup_ordinary_side_portal(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> None:
+    """Remove owned Private portal state while preserving the transition itself."""
+    if spec.namespace not in _namespace_names(runner):
+        return
+    inner = _single_link(
+        _link_rows(runner, namespace=spec.namespace),
+        spec.inner_interface,
+    )
+    if inner is None:
+        return
+    _require_containment(spec, runner)
+    runner.run(
+        (
+            "ip", "-n", spec.namespace,
+            "-4", "route", "flush", "table", "main", "default",
+        )
+    )
+    runner.run(
+        (
+            "ip", "-n", spec.namespace,
+            "-4", "addr", "flush", "dev", spec.inner_interface,
+        )
+    )
+    addresses = _ipv4_addresses(
+        runner,
+        spec.inner_interface,
+        namespace=spec.namespace,
+    )
+    if addresses:
+        raise ManagedNetworkDomainError(
+            "ordinary-side portal IPv4 state remains after cleanup"
+        )
+    routes = _json_array(
+        runner.run(
+            (
+                "ip", "-n", spec.namespace,
+                "-j", "-4", "route", "show", "table", "main",
+            )
+        ),
+        "namespace main-route snapshot",
+    )
+    if any(row.get("dst", "default") == "default" for row in routes):
+        raise ManagedNetworkDomainError(
+            "ordinary-side portal default route remains after cleanup"
+        )
+
+
+# Compatibility orchestration façade for existing controller/experiment callers.
+def verify_managed_network_domain(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> ManagedNetworkDomainVerification:
+    environment = verify_managed_network_environment(spec, runner)
+    boundary = verify_managed_l3_boundary(spec, runner)
+    portal = observe_ordinary_side_portal(spec, runner)
+    errors = environment.errors + boundary.errors + portal.errors
+    return ManagedNetworkDomainVerification(
+        confirmed=not errors,
+        errors=errors,
+        host_boundary=(
+            boundary.private_boundary
+            if not errors
+            else None
+        ),
+    )
+
+
+def preflight_managed_network_domain(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> ManagedNetworkDomainPreflightResult:
+    """Classify exact full domain or safely recoverable incomplete realization."""
+    environment_exists = preflight_managed_network_environment(spec, runner)
+    boundary_exists = preflight_managed_l3_boundary(spec, runner)
+
+    if not environment_exists and not boundary_exists:
+        return ManagedNetworkDomainPreflightResult(False, None)
+
+    if environment_exists and not boundary_exists:
+        # Exact Private environment with absent transition is now recoverable.
+        return ManagedNetworkDomainPreflightResult(False, None)
+
+    portal = observe_ordinary_side_portal(spec, runner)
+    if not portal.confirmed:
+        # Exact environment + transition with drifted/absent owned portal state
+        # is recoverable by ensure_ordinary_side_portal().
+        return ManagedNetworkDomainPreflightResult(False, None)
+
+    verification = verify_managed_network_domain(spec, runner)
+    if not verification.confirmed:
+        raise ManagedNetworkDomainError(
+            "existing managed domain failed exact verification: "
+            + "; ".join(verification.errors)
+        )
+    return ManagedNetworkDomainPreflightResult(True, verification)
+
+
+def ensure_managed_network_domain(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> ManagedNetworkDomainEnsureResult:
+    """Compose the three independent lifecycle contracts in dependency order."""
+    preflight = preflight_managed_network_domain(spec, runner)
+    environment = ensure_managed_network_environment(spec, runner)
+    boundary = ensure_managed_l3_boundary(spec, runner)
+    ensure_ordinary_side_portal(spec, runner)
+    verification = verify_managed_network_domain(spec, runner)
+    if not verification.confirmed:
+        raise ManagedNetworkDomainError(
+            "decomposed managed domain failed final verification: "
+            + "; ".join(verification.errors)
+        )
+    return ManagedNetworkDomainEnsureResult(
+        created=(
+            not preflight.existing
+            or environment.created
+            or boundary.created
+        ),
+        verification=verification,
+    )
+
+
+def destroy_managed_network_domain(
+    spec: ManagedNetworkDomainSpec,
+    runner: ManagedNetworkDomainRunner,
+) -> None:
+    """Compatibility cleanup: portal -> transition -> environment, all attempted."""
+    cleanup_errors = []
+
     try:
-        destroy_managed_network_domain(spec, runner)
-    except Exception:
-        pass
+        cleanup_ordinary_side_portal(spec, runner)
+    except Exception as exc:
+        cleanup_errors.append(
+            "ordinary-side portal cleanup failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    try:
+        destroy_managed_l3_boundary(spec, runner)
+    except Exception as exc:
+        cleanup_errors.append(
+            "ordinary-side transition destroy failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    try:
+        destroy_managed_network_environment(spec, runner)
+    except Exception as exc:
+        cleanup_errors.append(
+            "managed network environment destroy failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    # Strong final absence can supersede earlier contained-artifact diagnostics.
+    namespace_absent = spec.namespace not in _namespace_names(runner)
+    host_absent = (
+        _single_link(_link_rows(runner), spec.host_interface) is None
+    )
+    if namespace_absent and host_absent:
+        return
+
+    if cleanup_errors:
+        raise ManagedNetworkDomainError("; ".join(cleanup_errors))
+    raise ManagedNetworkDomainError(
+        "managed domain cleanup did not confirm final absence"
+    )
 
 
 def _require_containment(
