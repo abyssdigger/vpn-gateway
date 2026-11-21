@@ -1,4 +1,4 @@
-"""Linux nft Driver for combined materialized NG3 policy owner classes."""
+"""Linux nft Backend composition for combined materialized NG3 policy owner classes."""
 
 from __future__ import annotations
 

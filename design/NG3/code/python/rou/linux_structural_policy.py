@@ -1,4 +1,4 @@
-"""Linux backend for one cross-domain structural NetworkPolicy snapshot/mutation."""
+"""Linux Backend composition for one cross-domain structural NetworkPolicy boundary."""
 
 from __future__ import annotations
 
