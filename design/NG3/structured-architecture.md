@@ -60,6 +60,23 @@ subcomponents действительно существуют.
 
 Вложенный компонент оформляется подразделом своего parent-компонента.
 
+### 2.1.1. Критерий вложенности
+
+Компонент следует помещать в `Subcomponents` parent-компонента, когда одновременно
+выполняются два условия:
+
+1. API компонента не востребован самостоятельно клиентами вне parent;
+2. корректность, lifecycle или используемые им инварианты существенно определяются
+   контрактом parent, поэтому независимое существование компонента на этом уровне не дает
+   отдельной архитектурной границы.
+
+Если компонент имеет самостоятельных внешних клиентов, независимый lifecycle/state contract
+или является общей зависимостью нескольких равноправных parent'ов, его следует поднимать к
+ближайшему общему уровню, а не прятать под удобного caller'а.
+
+Наличие глубокого `@` допускается как честное описание текущей архитектуры, но является
+основанием проверить, не пропущен ли такой подъем или отдельная boundary.
+
 ### 2.2. API Space
 
 API Space — объединение той части API его resident'ов, которая востребована клиентами из
@@ -224,16 +241,129 @@ traceability, semantics или evidence.
 # Private network
 
 Отдельная сетевая среда VPN-GATE, управляемая и наблюдаемая из STACK.
-Содержит сетевое состояние, которым владеет VPN-GATE, и компоненты,
-через которые это состояние наблюдается и изменяется.
+Содержит VPN-GATE-owned сетевое состояние и resident'ов, через которые другие Spaces
+наблюдают и изменяют эту реальность. Технические детали Linux/network namespace являются
+внутренней реализацией resident'ов, пока отдельный внешний контракт не требует иного.
 
 API
 
-    @NetworkPolicyAdapter.observe(...)
-    @NetworkPolicyAdapter.apply(...)
-    @NetworkPolicyAdapter.cleanup(...)
+    @NetworkPolicyAdapter.observe_owned_policy(...) — вернуть свежую owner-scoped проекцию управляемой network policy.
+    @NetworkPolicyAdapter.apply(...) — применить semantic desired policy и подтвердить postcondition.
+    @NetworkPolicyAdapter.cleanup(...) — удалить owned policy scope и подтвердить его отсутствие.
+    @VPNPathAdapter.observe_device_endpoints(...) — наблюдать текущие candidate endpoints в Private network.
+    @VPNPathAdapter.verify_path_binding(...) — подтвердить однозначный current binding logical path к endpoint.
+    @ForwardingGate.observe(∅) — вернуть свежий authoritative state корневого forwarding gate.
+    @ForwardingGate.converge(...) — установить требуемое состояние gate и подтвердить его свежим наблюдением.
 
 Residents
 
-1. `@NetworkPolicyAdapter` *Граница между semantic network policy STACK и состоянием Private network.*
+1. `@NetworkPolicyAdapter` *Semantic boundary между policy клиентов из STACK и ее lower realization/convergence внутри Private network.*
+2. `@VPNPathAdapter` *Boundary наблюдения и проверки concrete VPN endpoints, уже присутствующих в Private network.*
+3. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier; нужен как network-policy convergence, так и lifecycle/safety клиентам.*
 
+## @NetworkPolicyAdapter
+
+Adapter принимает owner-scoped semantic network policy и скрывает ее lower representation,
+allocation, observation и convergence. Payload policy и probe policy остаются разными
+semantic owners даже при общей физической реализации.
+
+API
+
+    @observe_owned_policy(...) — наблюдать текущее owned policy state.
+    @apply(...) — применить desired semantic policy и подтвердить postcondition.
+    @cleanup(...) — удалить owned policy и подтвердить отсутствие.
+
+Subcomponents
+
+1. `NetworkPolicyEnforcer` *Достигает и подтверждает переданный Adapter'ом desired lower network-policy state; сам desired state не выбирает.*
+
+Architectural decisions
+
+1. `Semantic boundary` *Upper clients не знают route-table allocation, route protocol markers, RPDB priorities, gateway/onlink representation, nft/sysctl syntax, command ordering и transaction scratch state.*
+2. `Owner separation` *Общая physical realization не сливает payload, probe и другие semantic owner scopes; ownership должен оставаться различимым при observation, mutation и cleanup.*
+3. `Lower realization` *Adapter обязан получить достаточные verified lower facts и owned-resource allocation; неизвестную gateway/onlink или другую physical realization запрещено угадывать.*
+4. `Cross-Space finding` *Существующий flat architecture также приписывает этому Adapter host-side Device publication mapping. В structured architecture этот sub-contract пока не заселяется сюда: его server находится вне Private network, а сохранение его под этим Adapter потребовало бы `<partial>` и отдельного review границы.*
+
+### NetworkPolicyEnforcer
+
+Enforcer отвечает только за достижение и подтверждение переданного desired state.
+Он не является Space API: в выбранной декомпозиции его клиентом является
+`NetworkPolicyAdapter`, а independently demanded safety/lifecycle API вынесен в
+`@ForwardingGate`.
+
+**Implements:**
+- `VPNG0004-R4.R2`
+- `VPNG0004-R4.R3`
+- `VPNG0003-R3.R9`
+- `VPNG0004-R4.R3.R2`
+- `VPNG0004-R4.R5`
+- `VPNG0005-R5.R2`
+- `VPNG0005-R5.R3`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R5`
+
+API
+
+    converge_priority(...) — изменить только effective order неизменного набора eligible paths.
+    converge_structural(...) — привести более широкое structural policy state к desired postcondition.
+
+Architectural decisions
+
+1. `Общий контракт convergence`
+   *Каждая попытка строится от fresh authoritative observation: observe -> plan -> bounded actuation -> fresh observation -> exact postcondition verification. Успех lower command не является подтверждением результата; stale plan не переигрывается, hidden retry отсутствует.*
+
+2. `Два класса transition`
+   *Pure-priority transition и structural transition имеют разные safety proofs и не должны схлопываться в один универсальный mutation algorithm.*
+
+   1. `Pure priority`
+      *Когда меняется только порядок того же eligible path set, используется make-before-break permutation внутри одного independently observable route-key domain. Path membership сохраняется; временная duplicate route допустима только для того же logical path; Profile считается converged только после fresh verification всех затронутых domains.*
+
+   2. `Structural`
+      *Изменение membership, direction, filtering/NAT или другой structural semantics допускает временное ограничение forwarding. Enforcer принимает complete desired lower state как input и не является владельцем его semantic compilation.*
+
+3. `Structural barrier dependency`
+   *Перед allowing structural mutation Enforcer требует независимо подтвержденный `ForwardingGate=DISABLED`. Сам `ForwardingGate` не является subcomponent Enforcer: его API независимо востребован lifecycle/safety клиентами.*
+
+4. `Exact-before-release`
+   *Structural state изменяется под закрытым gate: сначала restrictive guards и удаление stale activation/routing state, затем required routes и nft state, затем activation dispatch. Gate может быть открыт только после exact routing+nft postcondition; после открытия выполняется fresh final verification.*
+
+5. `Failure and recovery`
+   *После partial/failed mutation authoritative state устанавливается заново. Неподтвержденное состояние остается restrictive. Если final verification после открытия gate не проходит, Enforcer пытается вернуть gate в verified DISABLED и сообщает failure, а не success.*
+
+6. `Lower technical boundary`
+   *Drivers/Readers/Executors и Backend-композиции предоставляют observation/actuation primitives, но не выбирают desired state и не владеют convergence. Linux JSON/argv shapes, numeric pools и platform constants принадлежат lower technical realization, а не API Enforcer.*
+
+Исходная flat architecture смешивает с этой ответственностью несколько соседних решений.
+В structured view они намеренно отделены:
+
+- complete structural desired-state projection относится к Adapter/Calculator side и является input Enforcer;
+- raw route/RPDB/nft observation formats относятся к lower Reader/Backend;
+- корневой `ForwardingGate` является отдельным resident Private network;
+- будущий administrative payload-containment control не является разновидностью structural
+  Enforcer и требует отдельного публичного operational contract.
+
+## @VPNPathAdapter
+
+Adapter наблюдает уже существующие в Private network concrete VPN endpoints и проверяет их
+соответствие logical VPN-path intent. Он не создает, не перемещает и не конфигурирует VPN
+session/endpoint.
+
+API
+
+    @observe_device_endpoints(...) — получить свежие candidate endpoints из managed domain.
+    @verify_path_binding(...) — подтвердить current endpoint для logical path либо вернуть absent/ambiguous/unusable result.
+
+## @ForwardingGate
+
+Самостоятельный Enforcer корневого IPv4 forwarding state Private network. Его verified
+DISABLED state используется как structural safety barrier, но тот же contract нужен startup,
+shutdown и recovery независимо от `NetworkPolicyAdapter`.
+
+API
+
+    @observe(∅) — получить свежий authoritative gate state.
+    @converge(...) — observe, при необходимости выполнить mutation и свежим reread подтвердить requested state.
+
+Subcomponents
+
+1. `ForwardingGateDriver` *Технический доступ к managed-domain forwarding state: свежий read и одна mutation attempt без самостоятельного postcondition ownership.*
