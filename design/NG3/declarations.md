@@ -15,89 +15,13 @@ postponed with a defined re-entry condition; see `CONTINUOUS-DEVELOPMENT.md` (§
 Neither a declaration nor a deferral can silently supersede current normative
 requirements.
 
-## Resource efficiency and weak-device suitability
+## Promoted declarations
 
-VPN-GATE should remain practically suitable not only for powerful hosts but also for
-resource-constrained gateways and weak devices.
-
-Where several designs provide the required observable behavior, prefer the simpler design
-with lower steady-state CPU, memory, allocation and state-tracking cost. In particular,
-per-flow/conntrack-like state, large lifecycle tables, background bookkeeping and other
-resource-expensive machinery should not be introduced merely for theoretical completeness
-when bounded Profile/path-level state provides the needed behavior.
-
-This declaration is supporting engineering guidance only. It is intentionally not a current
-Requirement or Constraint; quantitative limits and acceptance thresholds are intentionally not promoted
-until working implementation evidence provides a useful basis for them.
-
-
-## Runtime transparency / human current-state view
-
-Preliminary user expectation: once the basic alpha functionality is operational and there is
-meaningful runtime state to observe, VPN-GATE should provide a compact human-readable current
-state view for testing and operational transparency.
-
-This is a **presentation of current runtime state**, not an effective configuration dump and
-not a round-trippable config format.
-
-The primary text view is expected to have exactly two user-facing sections.
-
-```text
-Devices
-    wg-main: wg0
-    oc-office: tun0, tun1
-    spare: not discovered
-    old-vpn: disabled
-Profiles
-    corp
-        01. wg0 available (icmp/10.20.0.1)
-        02. tun0 not available (icmp/10.20.0.1)
-        03. tun1 unchecked
-    internet
-        01. tun3 unknown (icmp/1.1.1.1)
-        02. wg2 unchecked
-    legacy: disabled
-```
-
-Formatting intent:
-
-- every nesting level uses four spaces;
-- there is no blank line between a section heading and its first row;
-- one Device occupies one line;
-- a disabled Profile is one line: `<profile>: disabled`;
-- enabled Profile interfaces are listed on indented lines;
-- Profile interface rows are explicitly numbered `01.`, `02.`, ... to emphasize that
-  their order is the **current effective routing order**, not merely configured membership.
-
-For Devices, the first-release/current view should show the Device name and currently
-discovered interface name(s), or an explicit state such as `not discovered` / `disabled`.
-If another current Device fact later proves operationally important it may be added, but
-internal Linux implementation details are not the purpose of this compact view. Future
-managed Devices may extend the same row with their operational status.
-
-For enabled Profile paths:
-
-- no configured availability check -> `unchecked`;
-- check configured but no current confirmed availability result -> `unknown (<normalized-check>)`;
-- confirmed usable -> `available (<normalized-check>)`;
-- confirmed unusable -> `not available (<normalized-check>)`.
-
-The text inside parentheses is the normalized availability-check expression, effectively the
-normalized config form such as `icmp/10.20.0.1`. Low-level probe failure details belong in
-logs rather than this compact view.
-
-This declaration is not eligible for promotion to implementation scope until the basic
-alpha runtime is operational: before routing/binding/probing produce meaningful current
-state, there is little useful state to render and little value in testing the renderer
-itself. Once the basic alpha path works, the proposal may be promoted through the normal
-requirements/design gates as an alpha testing/debugging aid.
-
-After the first release, the same semantic runtime snapshot may gain JSON and/or TOML
-renderers. Those are alternative serializations of one authoritative snapshot model, not
-separate diagnostic state models.
-
-This remains a preliminary user expectation, not a normative Requirement/Constraint, until
-the alpha runtime provides enough working evidence to promote it cleanly.
+The former declarations for resource efficiency / weak-device suitability and the compact
+human current-state view were promoted to normative operational-cost requirements
+`VPNG9101-R3` and `VPNG9101-R2.R2` respectively. Their current wording and acceptance
+state now belong only to `design/NG3/requirements.md`; Git history retains the preliminary
+declaration text.
 
 ## Post-first-release external Profile network sources
 
@@ -121,7 +45,7 @@ Candidate reload semantics for this **post-first-release external-source feature
 - malformed individual source lines should be warnings + skipped entries rather than
   automatically disabling the whole Profile.
 
-This external-source feature is intentionally not part of first-release planning. `VPNG0005-R5.R6` requires a supported way to apply changed configuration but does not require a distinct `reload` operation; the current alpha may therefore require restart. If a future management interface exposes `reload`, its behavior and result belong to that interface/architecture contract rather than to a separate product capability. This section additionally keeps rereading/merging external Profile network-list sources post-first-release. Without managed Device/VPN
+This external-source feature is intentionally not part of first-release planning. `VPNG9101-R1.R1.R6` requires a supported way to apply changed configuration but does not require a distinct `reload` operation; the current alpha may therefore require restart. If a future management interface exposes `reload`, its behavior and result belong to that interface/architecture contract rather than to a separate product capability. This section additionally keeps rereading/merging external Profile network-list sources post-first-release. Without managed Device/VPN
 configuration ownership its near-term value does not justify the external-source complexity.
 File-level failure semantics, syntax, provenance and atomicity scope are therefore left
 unspecified until that post-first-release discussion rather than treated as an accepted

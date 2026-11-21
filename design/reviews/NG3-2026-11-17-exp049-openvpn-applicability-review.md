@@ -229,3 +229,13 @@ the managed namespace and bind correctly.
 
 The remaining blocker is ours: current executable NG3 local/system policy does not yet admit
 the VPN transport needed to keep that real path usable.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R7.R1` -> `VPNG9001-R1.R1.R7.R1`
+
+The original IDs in the historical body are intentionally preserved.

@@ -6,6 +6,16 @@ PASS — see `EXP-061-result-20261118.md`.
 
 ## Historical requirement context
 
+### Requirement ID migration
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R3.R4` -> `VPNG9001-R1.R1.R3.R4`
+- `VPNG0007-R7.R3.R4.R1` -> `VPNG9001-R1.R1.R3.R4.R1`
+
+The original IDs in the historical body are intentionally preserved.
+
 When this experiment was prepared, the then-current requirement tree contained:
 
 - **[VPNG0002-R2.R6]** *Чтобы ответ на входящий трафик из VPN-канала мог быть корректно обработан его отправителем.* | Для управляемого трафика, принятого со стороны VPN через разрешенный канал, VPN-GATE должен обеспечивать передачу относящегося к нему ответного трафика обратно через тот VPN-канал, через который был принят исходный трафик; наличие других разрешенных каналов для адреса отправителя не должно само по себе менять канал такого ответа. [`closed`]

@@ -6,6 +6,15 @@ PREPARED — evidence pending.
 
 ## Historical requirement context
 
+### Requirement ID migration
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R7` -> `VPNG9001-R1.R1.R7`
+
+The original IDs in the historical body are intentionally preserved.
+
 When this experiment was prepared, the then-current requirement tree contained:
 
 - **[VPNG0001-R1.R2.R4.R6.R3]** *Чтобы server-side VPN transports могли быть доступны извне без смешивания host-facing listener details с Profile routing policy.* | Transport publication, если требуется Device, принадлежит Device/transport boundary и в Release 1 задаётся `publish_vpn_server = "tcp|udp[/<host-IPv4|host-interface>]:<host-port-bundle>[><internal-port-bundle>]"` либо массивом таких строк. Port bundle использует ту же strict compact grammar `N[,N|A-B...]` без пробелов, duplicate/overlap ports запрещены. Отсутствие `>...` означает identity mapping каждого host port на тот же internal port; при явном internal bundle обе стороны разворачиваются в declared order в последовательности отдельных портов, должны иметь одинаковую cardinality и мапятся позиционно 1:1. Отсутствие host selector означает публикацию на допустимых host addresses. Потеря требуемой publication не должна оставаться незаметной. [`closed`]

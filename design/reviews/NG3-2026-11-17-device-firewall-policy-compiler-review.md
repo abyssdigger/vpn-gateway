@@ -258,3 +258,13 @@ All six accumulated links remain **resolved**. Pending: **none**.
 The Device firewall lower namespace now has deterministic multi-path production chain
 identity and complete normalized-policy composition without persistent naming machinery or
 user-ID leakage.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
+
+The original IDs in the historical body are intentionally preserved.

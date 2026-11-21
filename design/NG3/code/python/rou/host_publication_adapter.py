@@ -2,7 +2,7 @@
 
 Architecture: structured Annex E, E.001 HostPublicationAdapter.
 Requirement traceability: VPNG0001-R1.R3.R6.R1, VPNG0001-R4.R4.R6.R3,
-VPNG0004-R4.R6, VPNG0005-R5.R1/R4/R5, VPNG0007-R7.R3/R7.
+VPNG0004-R4.R6, VPNG9101-R1.R1.R1/R4/R5, VPNG9001-R1.R1.R3/R7.
 """
 
 from __future__ import annotations

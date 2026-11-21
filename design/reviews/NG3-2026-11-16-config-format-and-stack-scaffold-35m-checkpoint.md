@@ -208,3 +208,14 @@ No user-visible syntax was selected and no product semantic choice was guessed.
 Define the smallest exact managed local/system allow policy required on top of
 `stack_input` / `stack_output` DROP for the already-supported Release-1 control/probe/
 publication/integration scenarios, with strict separation from user Device firewall policy.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+
+The original IDs in the historical body are intentionally preserved.

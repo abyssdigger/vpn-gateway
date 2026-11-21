@@ -148,3 +148,13 @@ It must not add:
 - unreal: none active.
 - broken: none active.
 - closure_rejected: none.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
+
+The original IDs in the historical body are intentionally preserved.

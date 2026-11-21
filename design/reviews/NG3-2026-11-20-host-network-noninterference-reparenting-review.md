@@ -178,3 +178,14 @@ The next previously identified suspicious requirement remains:
 Its zero-path fail-closed safety need appears valid, but its current wording still leaks the
 old host-wide "ambient/main routing" model and must be reviewed against the corrected managed
 boundary.
+
+## Requirement migration note
+
+The following requirement IDs are historical references from this record's original baseline.
+They were later removed without a direct normative successor, so their last normative
+compact-form wording is preserved here:
+
+- `VPNG0005-R5.R6.R4` — *Чтобы поддерживаемая lifecycle integration могла использовать стандартную reload-операцию без подмены ее неявным полным restart экземпляра.* | Если поддерживаемый deployment/lifecycle interface объявляет reload доступной операцией, VPN-GATE должен сначала валидировать новую конфигурацию, затем безопасно применить требуемые изменения активных функций и считать reload успешным только после подтверждения соответствующих postconditions; неуспешный reload не должен молча объявлять новую конфигурацию действующей. [`pending_closure`]
+- `VPNG0005-R5.R6.R4.C1` — *Поскольку reload является стандартной, но не обязательной lifecycle-операцией service-manager API и не требуется для проверки базовой работоспособности ранней alpha, её реализация не должна задерживать alpha-срезы.* | Alpha releases не обязаны предоставлять reload; при отсутствии reload изменение конфигурации может требовать явного restart, а peaceful host-routing helper применяет обновленную конфигурацию при следующей поддерживаемой lifecycle-операции. Это ограничение не меняет semantics reload там, где операция объявлена поддерживаемой. [`closed`]
+
+The original IDs in the historical body are intentionally preserved.

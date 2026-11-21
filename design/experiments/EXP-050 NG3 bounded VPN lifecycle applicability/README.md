@@ -4,6 +4,19 @@
 
 ## Historical requirement context
 
+### Requirement ID migration
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
+- `VPNG0005-R5.R4` -> `VPNG9101-R1.R1.R4`
+- `VPNG0005-R5.R5` -> `VPNG9101-R1.R1.R5`
+- `VPNG0005-R5.R6.R2` -> `VPNG9101-R1.R1.R6.R2`
+- `VPNG0005-R5.R6.R3` -> `VPNG9101-R1.R1.R6.R3`
+
+The original IDs in the historical body are intentionally preserved.
+
 When this experiment was prepared and executed, the then-current requirement tree contained:
 
 - **[VPNG0007-R7.R7.R1.R1]** *Чтобы после подтверждения базовой запускабельности VPN проект не принял lifecycle/ownership контракт, работающий только на одном чистом запуске или на безобидной VPN-specific конфигурации.* | После PASS базового applicability gate проект должен на той же подтвержденной integration провести отдельный lifecycle experiment до принятия зависимой bounded-VPN lifecycle семантики: проверить start, stop, restart с неизмененной VPN-specific конфигурацией, restart с измененной VPN-specific конфигурацией, отсутствие зависимости нового запуска от runtime-состояния предыдущего экземпляра и поведение при aggressive VPN-specific configuration, включая hooks или другие механизмы, пытающиеся изменять routes, RPDB, NAT, firewall, sysctl или иное сетевое состояние внутри managed network domain. [`closed`]

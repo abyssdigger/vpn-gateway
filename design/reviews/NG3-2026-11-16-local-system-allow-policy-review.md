@@ -137,3 +137,14 @@ Pending `decomp`: **none**.
 without inventing a permissive default. The next implementation-capable unit must be chosen
 per source function; probe realization remains behind its already existing Linux evidence
 gate rather than being guessed here.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+
+The original IDs in the historical body are intentionally preserved.

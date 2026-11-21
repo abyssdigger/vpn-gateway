@@ -139,3 +139,14 @@ Still outside this unit:
 The Profile-level pure-priority convergence path is now evidenced from deterministic pure
 planning through real per-domain Linux mutation and final multi-domain postcondition
 verification.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
+
+The original IDs in the historical body are intentionally preserved.

@@ -83,3 +83,13 @@ It also matches the existing requirement to prefer current authoritative state o
 
 Physical route observation can now be implemented against one route-key domain without
 losing partial-failure state.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+
+The original IDs in the historical body are intentionally preserved.

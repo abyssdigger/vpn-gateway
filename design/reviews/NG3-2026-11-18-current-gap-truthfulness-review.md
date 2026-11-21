@@ -73,3 +73,13 @@ No requirement-state transition occurred.
 The normative architecture no longer understates the current executable status capability,
 while preserving the distinction between an alpha presentation surface and a stable
 Release-1 operator API.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R6.R1` -> `VPNG9001-R1.R1.R6.R1`
+
+The original IDs in the historical body are intentionally preserved.

@@ -123,3 +123,19 @@ This is a valid first Rust production-boundary parity slice. It proves the crate
 migration shape without changing alpha behavior. The next Rust review unit should remain a
 pure dependency-adjacent contract rather than jumping directly to Linux actuation or adding a
 cross-language runtime framework.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG0007-R7.R8` -> `VPNG9001-R1.R1.R8`
+- `VPNG0007-R7.R8.C1` -> `VPNG9001-R1.R1.R8.C1`
+- `VPNG0007-R7.R8.R1` -> `VPNG9001-R1.R1.R8.R1`
+- `VPNG0007-R7.R8.R2` -> `VPNG9001-R1.R1.R8.R2`
+- `VPNG0007-R7.R8.R3` -> `VPNG9001-R1.R1.R8.R3`
+
+The original IDs in the historical body are intentionally preserved.

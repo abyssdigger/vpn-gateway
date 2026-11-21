@@ -107,3 +107,14 @@ none
 
 **ACCEPT.** The exact-context one-shot attempt boundary is covered by successful current
 workflow evidence.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+
+The original IDs in the historical body are intentionally preserved.

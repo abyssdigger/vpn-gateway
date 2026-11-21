@@ -171,3 +171,14 @@ Release 1 selects routed veth + Proxy ARP as the simplest compatible managed-L3-
 backend while retaining netkit L3 as an equivalent alternate lower realization. EXP-072 proves
 the common production host-bootstrap semantics, and the previously active EXP-060 blocker is
 resolved as an observer normalization defect.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+
+The original IDs in the historical body are intentionally preserved.

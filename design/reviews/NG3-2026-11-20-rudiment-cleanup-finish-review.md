@@ -155,3 +155,17 @@ The controller lifecycle review found no justification for deleting the lifecycl
 It did identify stale generalized naming plus a documentation/implementation sequencing gap.
 Those findings are suitable for a subsequent bounded cleanup unit and are not blockers for
 the completed carry-over work.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.R1` -> `VPNG9101-R1.R1.R1`
+- `VPNG0005-R5.R4` -> `VPNG9101-R1.R1.R4`
+- `VPNG0005-R5.R5` -> `VPNG9101-R1.R1.R5`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG0007-R7.R3.R5` -> `VPNG9001-R1.R1.R3.R5`
+
+The original IDs in the historical body are intentionally preserved.

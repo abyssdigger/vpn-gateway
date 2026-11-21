@@ -225,3 +225,17 @@ canonical config through probe policy, physical observation, bounded confirmatio
 route order and status. Remaining work is no longer the basic probing loop itself; future work
 should be classified separately (for example production Rust migration, stronger status API,
 or additional probe mechanisms).
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R2.R1` -> `VPNG9101-R1.R1.R2.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG0006-R6.R2` -> `VPNG9101-R2.R1.R2`
+- `VPNG0006-R6.R3` -> `VPNG9101-R2.R1.R3`
+
+The original IDs in the historical body are intentionally preserved.

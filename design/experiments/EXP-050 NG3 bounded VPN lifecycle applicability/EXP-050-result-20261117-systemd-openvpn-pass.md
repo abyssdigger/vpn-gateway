@@ -208,3 +208,13 @@ The historical sentence that observable invariant loss "must remain fail-closed/
 must not be read as a blanket rule sourced from `VPNG0005-R5.C1`. Where the tested runtime
 closed forwarding, that containment is justified by the concrete safety/readiness invariant
 that was lost and by the corresponding `VPNG0004` / lifecycle requirements.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
+
+The original IDs in the historical body are intentionally preserved.

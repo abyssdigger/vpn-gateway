@@ -294,3 +294,19 @@ current requirement proves it necessary.
 The controller now has an executable, phase-bounded STARTING termination contract, including
 the safety-critical post-activation/pre-READY cleanup boundary, without importing obsolete
 daemon machinery.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.R1` -> `VPNG9101-R1.R1.R1`
+- `VPNG0005-R5.R4` -> `VPNG9101-R1.R1.R4`
+- `VPNG0005-R5.R5` -> `VPNG9101-R1.R1.R5`
+- `VPNG0005-R5.R6.R1` -> `VPNG9101-R1.R1.R6.R1`
+- `VPNG0005-R5.R6.R2` -> `VPNG9101-R1.R1.R6.R2`
+- `VPNG0006-R6.R3` -> `VPNG9101-R2.R1.R3`
+- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
+
+The original IDs in the historical body are intentionally preserved.

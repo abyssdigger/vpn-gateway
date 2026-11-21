@@ -231,3 +231,14 @@ These are not blockers for the current Python-alpha Release-1 ICMP availability 
 The cycle began from a safe one-shot probe and ends with a continuously driven, bounded,
 Profile/path-scoped ICMP availability loop that has real two-path Linux evidence for failure,
 route-priority failover and sticky recovery.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+
+The original IDs in the historical body are intentionally preserved.

@@ -136,3 +136,15 @@ none
 `14d20aec42a9641654f02602c7892bfbdfa96878` passed `unit`,
 `linux-probe-runtime` and `linux-structural-inventory-shape`, including the exact-context
 and desired-context consistency strengthening.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG0007-R7.R3.R2` -> `VPNG9001-R1.R1.R3.R2`
+
+The original IDs in the historical body are intentionally preserved.

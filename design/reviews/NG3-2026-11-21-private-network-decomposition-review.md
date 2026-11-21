@@ -352,3 +352,13 @@ component-addenda methodology:
 No parent/child relationship, Space API or safety invariant changed.
 
 **Follow-up verdict: PASS.**
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+
+The original IDs in the historical body are intentionally preserved.

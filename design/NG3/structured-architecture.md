@@ -483,7 +483,7 @@ Lower Machinery переиспользуется только при совпа�
 
 ### 2.9.3. Target production-runtime language boundary
 
-**Covers:** `VPNG0007-R7.R8.R1`, `VPNG0007-R7.R8.R2`.
+**Covers:** `VPNG9001-R1.R1.R8.R1`, `VPNG9001-R1.R1.R8.R2`.
 
 Rust является target implementation boundary, а не component role и не источником product
 semantics. Финальная stable production runtime boundary включает configuration normalization,
@@ -502,7 +502,7 @@ Production Rust по умолчанию safe. `unsafe`/memory-unsafe FFI доп�
 обходить ownership/state invariants, выразимые safe Rust.
 
 Host-routing helper language exception и Python-completion ordering задаются уже принятыми
-`VPNG0007-R7.R8.C1`, `VPNG0007-R7.R8.C2`, `VPNG0007-R7.R8.C3` и остаются
+`VPNG9001-R1.R1.R8.C1`, `VPNG9001-R1.R1.R8.C2`, `VPNG9001-R1.R1.R8.C3` и остаются
 implementation-replacement constraints, а не поводом менять component semantics.
 
 ## 2.10. Closed requirement architecture coverage index
@@ -582,8 +582,8 @@ confirmation. Release-1 physical probe mechanism is ICMP only.
 
 ### Safety, recovery and operator truth
 
-**Requirements:** `VPNG0004`, `VPNG0005-R5.R2.R1`,
-`VPNG0005-R5.R3.R1`, `VPNG0005-R5.C1.R1`, `VPNG0006`.
+**Requirements:** `VPNG0004`, `VPNG9101-R1.R1.R2.R1`,
+`VPNG9101-R1.R1.R3.R1`, `VPNG9101-R1.R1.C1.R1`, `VPNG9101-R2`.
 
 **Architecture coverage:** C.003 exact/fail-closed enforcement and C.005 forwarding barrier
 provide restrictive failure behavior; A.004/A.007 and alpha reconciliation perform finite
@@ -595,12 +595,12 @@ control.
 
 ### Maintainability, continuity, evidence and development boundaries
 
-**Requirements:** `VPNG0007`, `VPNG0007-R7`, `VPNG0007-R7.R2`,
-`VPNG0007-R7.R3.R5`, `VPNG0007-R7.R3.R4`,
-`VPNG0007-R7.R3.R4.R1`, `VPNG0007-R7.R4`,
-`VPNG0007-R7.R6.R1`, `VPNG0007-R7.R6.R2`,
-`VPNG0007-R7.R7.R1`, `VPNG0007-R7.R8.R1`,
-`VPNG0007-R7.R8.R2`.
+**Requirements:** `VPNG9001-R1`, `VPNG9001-R1.R1`, `VPNG9001-R1.R1.R2`,
+`VPNG9001-R1.R1.R3.R5`, `VPNG9001-R1.R1.R3.R4`,
+`VPNG9001-R1.R1.R3.R4.R1`, `VPNG9001-R1.R1.R4`,
+`VPNG9001-R1.R1.R6.R1`, `VPNG9001-R1.R1.R6.R2`,
+`VPNG9001-R1.R1.R7.R1`, `VPNG9001-R1.R1.R8.R1`,
+`VPNG9001-R1.R1.R8.R2`.
 
 **Architecture coverage:** the Space/component decomposition and `design/component-model.md`
 localize responsibilities and lower mechanism boundaries; §2.9 implementation trace,
@@ -696,7 +696,8 @@ API
     @ProductLifecycleControl.restart(...) — скомпозировать stop + новый start из authoritative state.
     @ProductLifecycleControl.reload(...) — optional supported operation; отсутствует в текущей alpha и не подменяется скрытым restart.
     @ConfigurationAdapter.normalize(...) — принять внешнее configuration representation и вернуть validated normalized domain intents.
-    @RuntimeStatusAgent.<current snapshot publication> — предоставить текущую user-facing status projection; concrete presentation/API surface пока заменяем.
+    @RuntimeStatusAgent.<current snapshot publication> — предоставить текущую user-facing status projection.
+    RuntimeStatusTextRenderer.render(snapshot) — получить обязательный compact human-readable Devices/Profiles report; delivery surface остаётся заменяемой.
 
 Residents
 
@@ -708,6 +709,7 @@ Residents
     2. `AvailabilityPriorityCalculator` *Pure Calculator effective path order из current membership, availability problem state, active path и reserve semantics.*
 4. `AvailabilityProbeAgent` *Agent ongoing availability observation; планирует bounded checks и публикует normalized evidence, но не управляет наблюдаемой внешней доступностью.*
 5. `@RuntimeStatusAgent` *Agent current-only status composition из authoritative owner snapshots; не актуирует наблюдаемые domains.*
+    1. `RuntimeStatusTextRenderer` *Direct Calculator, чисто преобразующий RuntimeStatusSnapshot в нормативный compact Devices/Profiles text report.*
 
 Artifacts
 
@@ -749,14 +751,15 @@ Interactions
 | `AvailabilityProbeAgent` | current observation/diagnostic InfoEvent | `@RuntimeStatusAgent` |
 | `@ProductLifecycleControl` | lifecycle/readiness/cleanup projection | `@RuntimeStatusAgent` |
 | `@RuntimeStatusAgent` | compose/update | `runtime status snapshot` |
-| `@RuntimeStatusAgent` | current snapshot publication | `Operator.OperatorClient` / presentation environment |
+| `@RuntimeStatusAgent` | current snapshot publication | `RuntimeStatusTextRenderer` / other presentation environment |
+| `RuntimeStatusTextRenderer` | required compact human-readable Devices/Profiles text | `Operator.OperatorClient` / presentation environment |
 
 Findings
 
-1. `Status presentation boundary` — architecture intentionally leaves CLI/API/text/file
-   presentation replaceable. Current alpha writes `status.json`, but that file path/format is
-   not yet a stable product API; structured model therefore terminates on semantic current
-   snapshot publication rather than blessing the alpha mechanism.
+1. `Status presentation boundary` — the compact Devices/Profiles text representation is
+   now required by `VPNG9101-R2.R2.*` and is owned by `RuntimeStatusTextRenderer`.
+   The delivery mechanism remains replaceable: current alpha may publish `status.txt` beside
+   `status.json`, but neither path is thereby a stable product API.
 2. `Lifecycle decomposition` — current procedural startup directly composes lower lifecycle,
    host contribution and policy activation. No accepted need justifies a `LifecycleManager`;
    decomposition should happen only where lower Space boundaries now expose independent
@@ -1372,20 +1375,20 @@ introduce a long-lived lifecycle Engine or independent lifecycle policy.
 **Implements:**
 - `VPNG0004-R4.R4`
 - `VPNG0004-R4.R5`
-- `VPNG0005-R5.R1`
-- `VPNG0005-R5.R3`
-- `VPNG0005-R5.R4`
-- `VPNG0005-R5.R5`
-- `VPNG0005-R5.R6`
-- `VPNG0005-R5.R6.R1`
-- `VPNG0005-R5.R6.R2`
-- `VPNG0005-R5.R6.R3`
-- `VPNG0006-R6.R3`
-- `VPNG0006-R6.R4`
-- `VPNG0007-R7.R1`
+- `VPNG9101-R1.R1.R1`
+- `VPNG9101-R1.R1.R3`
+- `VPNG9101-R1.R1.R4`
+- `VPNG9101-R1.R1.R5`
+- `VPNG9101-R1.R1.R6`
+- `VPNG9101-R1.R1.R6.R1`
+- `VPNG9101-R1.R1.R6.R2`
+- `VPNG9101-R1.R1.R6.R3`
+- `VPNG9101-R2.R1.R3`
+- `VPNG9101-R2.R1.R4`
+- `VPNG9001-R1.R1.R1`
 
 **Constrained by:**
-- `VPNG0005-R5.C1`
+- `VPNG9101-R1.R1.C1`
 
 Implementation
 
@@ -1448,9 +1451,9 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG0002-R2.R4`
 - `VPNG0002-R2.R5`
 - `VPNG0004-R4.R1`
-- `VPNG0007-R7.R3.R1`
-- `VPNG0007-R7.R3.R2`
-- `VPNG0007-R7.R5`
+- `VPNG9001-R1.R1.R3.R1`
+- `VPNG9001-R1.R1.R3.R2`
+- `VPNG9001-R1.R1.R5`
 
 API
 
@@ -1491,9 +1494,9 @@ Pure Calculator, превращающий Profile selection и соответс�
 - `VPNG0003-R3.R6.R3.R1.R1.R3`
 - `VPNG0003-R3.R6.R3.R1.R1.R4`
 - `VPNG0003-R3.R6.R3.R2`
-- `VPNG0007-R7.R1`
-- `VPNG0007-R7.R3.R1`
-- `VPNG0007-R7.R5`
+- `VPNG9001-R1.R1.R1`
+- `VPNG9001-R1.R1.R3.R1`
+- `VPNG9001-R1.R1.R5`
 
 **Constrained by:**
 - `VPNG0003-R3.R6.R3.R1.C2`
@@ -1539,14 +1542,14 @@ policy.
 - `VPNG0004-R4`
 - `VPNG0004-R4.R1`
 - `VPNG0004-R4.R2`
-- `VPNG0005-R5.R2`
-- `VPNG0005-R5.R3`
-- `VPNG0006-R6.R2`
-- `VPNG0006-R6.R4`
-- `VPNG0007-R7.R1`
-- `VPNG0007-R7.R3`
-- `VPNG0007-R7.R5`
-- `VPNG0007-R7.R6`
+- `VPNG9101-R1.R1.R2`
+- `VPNG9101-R1.R1.R3`
+- `VPNG9101-R2.R1.R2`
+- `VPNG9101-R2.R1.R4`
+- `VPNG9001-R1.R1.R1`
+- `VPNG9001-R1.R1.R3`
+- `VPNG9001-R1.R1.R5`
+- `VPNG9001-R1.R1.R6`
 
 API
 
@@ -1594,8 +1597,8 @@ normalized Profile/Device intent и уже подтвержденных current 
 - `VPNG0002-R2.R4`
 - `VPNG0002-R2.R5`
 - `VPNG0002-R2.R5.R1`
-- `VPNG0007-R7.R3.R1`
-- `VPNG0007-R7.R5`
+- `VPNG9001-R1.R1.R3.R1`
+- `VPNG9001-R1.R1.R5`
 
 API
 
@@ -1635,8 +1638,8 @@ Profile-local reserve roles, established availability problems и current active
 - `VPNG0003-R3.R8`
 - `VPNG0003-R3.R8.R1`
 - `VPNG0003-R3.R8.C1`
-- `VPNG0007-R7.R1`
-- `VPNG0007-R7.R5`
+- `VPNG9001-R1.R1.R1`
+- `VPNG9001-R1.R1.R5`
 
 API
 
@@ -1668,10 +1671,10 @@ Agent ongoing availability observation. Он управляет расписан
 - `VPNG0003-R3.R6.R2`
 - `VPNG0003-R3.R6.R3`
 - `VPNG0003-R3.R6.R3.R1`
-- `VPNG0006-R6.R3`
-- `VPNG0007-R7.R1`
-- `VPNG0007-R7.R3`
-- `VPNG0007-R7.R5`
+- `VPNG9101-R2.R1.R3`
+- `VPNG9001-R1.R1.R1`
+- `VPNG9001-R1.R1.R3`
+- `VPNG9001-R1.R1.R5`
 
 API
 
@@ -1703,15 +1706,15 @@ Agent, составляющий truthful current user-facing status из authori
 других owners. Он не актуирует представляемые domains и не становится system-of-record.
 
 **Implements:**
-- `VPNG0006-R6`
-- `VPNG0006-R6.R1`
-- `VPNG0006-R6.R2`
-- `VPNG0006-R6.R3`
-- `VPNG0006-R6.R4`
-- `VPNG0007-R7.R1`
-- `VPNG0007-R7.R1.R1`
-- `VPNG0007-R7.R3.R1`
-- `VPNG0007-R7.R5`
+- `VPNG9101-R2.R1`
+- `VPNG9101-R2.R1.R1`
+- `VPNG9101-R2.R1.R2`
+- `VPNG9101-R2.R1.R3`
+- `VPNG9101-R2.R1.R4`
+- `VPNG9001-R1.R1.R1`
+- `VPNG9001-R1.R1.R1.R1`
+- `VPNG9001-R1.R1.R3.R1`
+- `VPNG9001-R1.R1.R5`
 
 API
 
@@ -1729,11 +1732,42 @@ Architectural decisions
 3. `Owners retain semantic truth`
    *StatusAgent не знает kernel commands и не переопределяет verdict владельца domain; он только соединяет current projections.*
 
-4. `Presentation is replaceable`
-   *CLI/API/text/file rendering находится вне component contract. Alpha `status.json` является текущей realization, а не stable semantic API.*
+4. `Snapshot/presentation split`
+   *Agent contract заканчивается на truthful RuntimeStatusSnapshot. Обязательный compact text является отдельным pure Calculator contract, а конкретный CLI/file/API transport остаётся presentation machinery.*
 
 5. `No hidden Profile verdict model`
    *Более сильный aggregated ProfileState не вводится без отдельного requirement; current status достаточно truthful composition существующих owner projections.*
+
+## A.009 RuntimeStatusTextRenderer
+
+Direct Calculator, преобразующий один authoritative `RuntimeStatusSnapshot` в compact
+human-readable current-state report. Он не наблюдает kernel state, не хранит историю, не
+изменяет status semantics и не является configuration serializer.
+
+**Implements:**
+- `VPNG9101-R2.R2`
+- `VPNG9101-R2.R2.R1`
+- `VPNG9101-R2.R2.R2`
+- `VPNG9101-R2.R2.R3`
+- `VPNG9101-R2.R2.R4`
+
+API
+
+    render(snapshot) -> text
+
+Architectural decisions
+
+1. `One authoritative snapshot`
+   *Renderer использует только RuntimeStatusSnapshot и не реконструирует состояние из kernel/logs.*
+
+2. `Stable human shape, replaceable delivery`
+   *Нормативны две секции Devices/Profiles, four-space nesting, Device rows, numbered effective-order path rows и availability wording. CLI/file/API path не входит в этот semantic contract.*
+
+3. `Not configuration`
+   *Report не обязан round-trip в configuration parser и не представляет effective configuration dump.*
+
+4. `No diagnostic overloading`
+   *Compact rows показывают operator-level current state. Детальные lower diagnostics остаются в blocking diagnostics/logging surfaces и не расширяют row grammar автоматически.*
 
 # Annex B. Ordinary-side transition components
 
@@ -1746,13 +1780,13 @@ Private-network service identity/default route или traffic-selection policy �
 **Implements / supports:**
 - `VPNG0001-R1.R3.R2`
 - `VPNG0004-R4.R6`
-- `VPNG0005-R5.R1`
-- `VPNG0005-R5.R2`
-- `VPNG0005-R5.R4`
-- `VPNG0005-R5.R5`
-- `VPNG0007-R7.R3`
-- `VPNG0007-R7.R3.R3`
-- `VPNG0007-R7.R7`
+- `VPNG9101-R1.R1.R1`
+- `VPNG9101-R1.R1.R2`
+- `VPNG9101-R1.R1.R4`
+- `VPNG9101-R1.R1.R5`
+- `VPNG9001-R1.R1.R3`
+- `VPNG9001-R1.R1.R3.R3`
+- `VPNG9001-R1.R1.R7`
 
 **Evidence:** `EV-00000`
 
@@ -1798,12 +1832,12 @@ lower network-policy domain Private network. Общая physical realization н�
 - `VPNG0004-R4.R2`
 - `VPNG0004-R4.R3`
 - `VPNG0004-R4.R5`
-- `VPNG0005-R5.R2`
-- `VPNG0005-R5.R3`
-- `VPNG0005-R5.R4`
-- `VPNG0007-R7.R3`
-- `VPNG0007-R7.R3.R2`
-- `VPNG0007-R7.R5`
+- `VPNG9101-R1.R1.R2`
+- `VPNG9101-R1.R1.R3`
+- `VPNG9101-R1.R1.R4`
+- `VPNG9001-R1.R1.R3`
+- `VPNG9001-R1.R1.R3.R2`
+- `VPNG9001-R1.R1.R5`
 
 API
 
@@ -1846,13 +1880,13 @@ Pure Calculator внутреннего resource layout.
 - `VPNG0004-R4.R2`
 - `VPNG0004-R4.R5`
 - `VPNG0004-R4.R6`
-- `VPNG0005-R5.R2`
-- `VPNG0005-R5.R4`
-- `VPNG0005-R5.R5`
-- `VPNG0007-R7.R1`
-- `VPNG0007-R7.R3`
-- `VPNG0007-R7.R3.R1`
-- `VPNG0007-R7.R3.R2`
+- `VPNG9101-R1.R1.R2`
+- `VPNG9101-R1.R1.R4`
+- `VPNG9101-R1.R1.R5`
+- `VPNG9001-R1.R1.R1`
+- `VPNG9001-R1.R1.R3`
+- `VPNG9001-R1.R1.R3.R1`
+- `VPNG9001-R1.R1.R3.R2`
  Он получает semantic owner demand и injected
 platform resource space и возвращает детерминированное распределение внутренних
 routing-table, RPDB, route-marker, metric и nft namespace ресурсов.
@@ -1902,10 +1936,10 @@ Enforcer отвечает только за достижение и подтве
 - `VPNG0003-R3.R9`
 - `VPNG0004-R4.R3.R2`
 - `VPNG0004-R4.R5`
-- `VPNG0005-R5.R2`
-- `VPNG0005-R5.R3`
-- `VPNG0007-R7.R1`
-- `VPNG0007-R7.R5`
+- `VPNG9101-R1.R1.R2`
+- `VPNG9101-R1.R1.R3`
+- `VPNG9001-R1.R1.R1`
+- `VPNG9001-R1.R1.R5`
 
 API
 
@@ -1958,8 +1992,8 @@ endpoint внутри Private network. Он наблюдает/проверяе�
 - `VPNG0001-R1.R3.R4.R3`
 - `VPNG0001-R1.R3.R4.R3.R1`
 - `VPNG0001-R1.R3.R4.R4`
-- `VPNG0007-R7.R3`
-- `VPNG0007-R7.R5`
+- `VPNG9001-R1.R1.R3`
+- `VPNG9001-R1.R1.R5`
 
 API
 
@@ -2071,12 +2105,12 @@ stack-local address/default route.
 
 **Implements / supports:**
 - `VPNG0004-R4.R6`
-- `VPNG0005-R5.R1`
-- `VPNG0005-R5.R2`
-- `VPNG0005-R5.R4`
-- `VPNG0005-R5.R5`
-- `VPNG0007-R7.R3`
-- `VPNG0007-R7.R7`
+- `VPNG9101-R1.R1.R1`
+- `VPNG9101-R1.R1.R2`
+- `VPNG9101-R1.R1.R4`
+- `VPNG9101-R1.R1.R5`
+- `VPNG9001-R1.R1.R3`
+- `VPNG9001-R1.R1.R7`
 
 **Evidence:** `EV-00000`
 
@@ -2122,8 +2156,8 @@ remote availability semantics.
 - `VPNG0003-R3.R6.R3`
 - `VPNG0003-R3.R6.R3.R1`
 - `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG0007-R7.R3.R2`
-- `VPNG0007-R7.R5`
+- `VPNG9001-R1.R1.R3.R2`
+- `VPNG9001-R1.R1.R5`
 
 API
 
@@ -2158,12 +2192,12 @@ ordinary-side default routing state на current private-facing endpoint.
 
 **Implements / supports:**
 - `VPNG0004-R4.R6`
-- `VPNG0005-R5.R1`
-- `VPNG0005-R5.R2`
-- `VPNG0005-R5.R4`
-- `VPNG0005-R5.R5`
-- `VPNG0007-R7.R3`
-- `VPNG0007-R7.R7`
+- `VPNG9101-R1.R1.R1`
+- `VPNG9101-R1.R1.R2`
+- `VPNG9101-R1.R1.R4`
+- `VPNG9101-R1.R1.R5`
+- `VPNG9001-R1.R1.R3`
+- `VPNG9001-R1.R1.R7`
 
 **Evidence:** `EV-00000`
 
@@ -2212,12 +2246,12 @@ local admission remains `Private network.NetworkPolicyAdapter` responsibility.
 - `VPNG0001-R1.R3.R6.R1`
 - `VPNG0001-R4.R4.R6.R3`
 - `VPNG0004-R4.R6`
-- `VPNG0005-R5.R1`
-- `VPNG0005-R5.R4`
-- `VPNG0005-R5.R5`
-- `VPNG0007-R7.R3`
-- `VPNG0007-R7.R3.R3`
-- `VPNG0007-R7.R7`
+- `VPNG9101-R1.R1.R1`
+- `VPNG9101-R1.R1.R4`
+- `VPNG9101-R1.R1.R5`
+- `VPNG9001-R1.R1.R3`
+- `VPNG9001-R1.R1.R3.R3`
+- `VPNG9001-R1.R1.R7`
 
 **Evidence:** `EV-00000`
 
@@ -2264,11 +2298,11 @@ Manager/supervisor.
 - `VPNG0001-R5.R1.R1`
 
 **Constrained by:**
-- `VPNG0007-R7.R8`
-- `VPNG0007-R7.R8.C1`
-- `VPNG0007-R7.R8.C2`
-- `VPNG0007-R7.R8.C3`
-- `VPNG0007-R7.R8.R3`
+- `VPNG9001-R1.R1.R8`
+- `VPNG9001-R1.R1.R8.C1`
+- `VPNG9001-R1.R1.R8.C2`
+- `VPNG9001-R1.R1.R8.C3`
+- `VPNG9001-R1.R1.R8.R3`
 
 API
 

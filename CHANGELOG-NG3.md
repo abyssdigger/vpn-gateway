@@ -4,6 +4,26 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Development and operational cost requirements separated
+
+Engineering requirements are now classified by the lifecycle cost they optimize rather than
+by who implements them. Development-cost requirements moved from the former `VPNG0007` tree
+under the owner-imposed `VPNG9001` root; lifecycle/observability requirements moved from the
+former `VPNG0005`/`VPNG0006` roots under the owner-imposed operational-cost `VPNG9101`
+root. Functional/user-facing VPN behavior remains in the `VPNG0001`–`VPNG0004` range.
+
+The previously preliminary weak-device/resource-efficiency expectation is now normative under
+`VPNG9101-R3`. The long-requested compact human current-state report is now normative under
+`VPNG9101-R2.R2`, with Devices/Profiles sections, four-space hierarchy, numbered current
+effective path order and normalized availability wording. Its architecture is separated into
+the existing truthful `RuntimeStatusAgent` snapshot and a pure
+`RuntimeStatusTextRenderer`; the concrete delivery path remains replaceable.
+
+Because NG3 is still alpha, the requirement model now permits project-holder-authorized ID
+migration with complete current trace remapping. Historical review/research/experiment
+records retain their original IDs and carry migration notes to current IDs; removed nodes
+without direct successors retain their original compact-form wording.
+
 ## 2026-11-20 — Core host-network ownership boundary separated from routing helpers
 
 Core VPN-GATE forwarding is now explicitly independent from ordinary-host routing ownership:
@@ -32,7 +52,7 @@ The same cleanup removed the redundant zero-path safety child that had encoded h
 membership and fail-closed managed forwarding are now traced to their existing independent
 requirements, while ordinary-host routing remains outside that core safety promise.
 
-Recovery scope was also narrowed so `VPNG0005-R5.C1` limits mandatory automatic
+Recovery scope was also narrowed so `VPNG0005-R5.C1` (moved to `VPNG9101-R1.R1.C1`) limits mandatory automatic
 forensic/adoption behavior after unsupported root/admin intervention without acting as a
 second blanket safety root. Fail-closed/readiness reactions now trace to the concrete
 invariant and its existing safety/lifecycle requirements.
