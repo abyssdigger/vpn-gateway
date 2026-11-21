@@ -1,4 +1,10 @@
-"""Bounded NG3 controller stop / owned-domain cleanup orchestration."""
+"""Bounded NG3 controller stop / owned-domain cleanup orchestration.
+
+Architecture: structured Annex A A.001 ProductLifecycleControl. Cleanup composes
+HostRoutingContribution plus C.009 OrdinarySidePortalLifecycle,
+B.001 ManagedL3BoundaryLifecycle, and C.007 ManagedNetworkEnvironmentLifecycle.
+Requirement traceability: VPNG0005-R5.R4/R5, VPNG0004-R4.R6, VPNG0007-R7.R3/R7.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +26,9 @@ from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .managed_network_domain import (
     ManagedNetworkDomainRunner,
     ManagedNetworkDomainSpec,
-    destroy_managed_network_domain,
+    cleanup_ordinary_side_portal,
+    destroy_managed_l3_boundary,
+    destroy_managed_network_environment,
 )
 
 
@@ -36,6 +44,7 @@ class ControllerStopResult:
     status: ControllerStopStatus
     containment: ForwardingGateEnforcementResult
     cleanup_error: str | None = None
+    cleanup_diagnostic: str | None = None
     lock_error: str | None = None
 
     @property
@@ -71,15 +80,45 @@ def cleanup_controller_owned_domain_once(
                 f"{type(exc).__name__}: {exc}"
             )
 
+    contained_cleanup_diagnostics: list[str] = []
+
     try:
-        destroy_managed_network_domain(domain_spec, runner)
+        cleanup_ordinary_side_portal(domain_spec, runner)
     except Exception as exc:
-        cleanup_errors.append(
-            "managed-domain destroy failed: "
+        contained_cleanup_diagnostics.append(
+            "ordinary-side portal cleanup failed: "
             f"{type(exc).__name__}: {exc}"
         )
 
+    try:
+        destroy_managed_l3_boundary(domain_spec, runner)
+    except Exception as exc:
+        contained_cleanup_diagnostics.append(
+            "ordinary-side transition destroy failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    environment_removed = False
+    try:
+        destroy_managed_network_environment(domain_spec, runner)
+        environment_removed = True
+    except Exception as exc:
+        cleanup_errors.append(
+            "managed-network environment destroy failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    if not environment_removed:
+        # Without the stronger environment-absence postcondition, earlier
+        # contained-artifact failures remain material cleanup failures.
+        cleanup_errors.extend(contained_cleanup_diagnostics)
+
     cleanup_error = "; ".join(cleanup_errors) if cleanup_errors else None
+    cleanup_diagnostic = (
+        "; ".join(contained_cleanup_diagnostics)
+        if contained_cleanup_diagnostics
+        else None
+    )
 
     if cleanup_error is not None:
         return ControllerStopResult(
@@ -90,6 +129,7 @@ def cleanup_controller_owned_domain_once(
             ),
             containment=containment,
             cleanup_error=cleanup_error,
+            cleanup_diagnostic=cleanup_diagnostic,
         )
 
     try:
@@ -104,6 +144,7 @@ def cleanup_controller_owned_domain_once(
     return ControllerStopResult(
         status=ControllerStopStatus.STOPPED,
         containment=containment,
+        cleanup_diagnostic=cleanup_diagnostic,
     )
 
 
