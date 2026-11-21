@@ -277,13 +277,13 @@ return-affinity state
 ```text
 Private network
     ActiveProbeDriver
-        -> VPN-path IP transceiver
+        -> VPN-side IP portal
              -> boundary interaction
                   -> VPN external ends.@vpn-interface endpoint
 ```
 
-Driver отправляет и принимает IP из `Private network`; VPN-interface endpoint является
-server-side API соседнего Space. Сам факт, что пакет в итоге проверяет удаленную
+Driver отправляет и принимает IP из `Private network` через `VPN-side IP portal`;
+VPN-interface endpoint является server-side API соседнего Space. Сам факт, что пакет в итоге проверяет удаленную
 доступность, не переносит Driver или remote target в `Private network`.
 
 ### 2.8. Interactions и Component diagram
@@ -422,6 +422,28 @@ API
     @VPNPathAdapter.verify_path_binding(...) — подтвердить однозначный current binding logical path к endpoint.
     @ForwardingGate.observe(∅) — вернуть свежий authoritative state корневого forwarding gate.
     @ForwardingGate.converge(...) — установить требуемое состояние gate и подтвердить его свежим наблюдением.
+
+Artifacts
+
+1. `managed network environment realization` *(observed, managed)* — текущая Linux-materialization сетевой среды, которой lifecycle machinery управляет через один exact/absent contract; этот Artifact не является самим Space `Private network`.
+    1. `network namespace instance` *(observed, managed)* — экземпляр Linux network namespace, наличие которого lifecycle machinery наблюдает, создаёт и удаляет.
+    2. `loopback operational state` *(observed, managed)* — требуемое lifecycle-инвариантом состояние namespace loopback; самостоятельно верхними клиентами не управляется.
+2. `ordinary-side IP portal` *(observed, managed; decomposition pending)* — обращённая к ordinary-side transition локальная способность `Private network` принимать и отдавать IP-трафик. Текущая Linux-realization и её точная artifact decomposition разбираются отдельно.
+
+Текущий `ManagedNetworkDomain` lifecycle технически проверяет единым postcondition не только
+namespace/loopback, но и private-side boundary facts вместе с соответствующими host-side
+peer/sysctl/route facts. Эта implementation transaction boundary сама по себе не задаёт
+artifact hierarchy и не переносит host-side объекты внутрь `Private network`.
+
+Для существующей lifecycle machinery допустимы целостные состояния `absent` и `exact`.
+Частично присутствующая materialization считается ошибкой preflight; текущий `ensure`
+не трактует её как набор независимо ремонтируемых child Artifacts. `destroy` удаляет
+текущую Linux-materialization, а не архитектурный Space.
+
+Finding: lower composition и Space-boundary contract `ordinary-side IP portal` требуют
+отдельного pass по transition Space. До него managed-side interface, stack-local IPv4
+identity, endpoint sysctls, private-side default route и host-side peer/route не объявляются
+здесь автоматически отдельными child Artifacts только из-за текущей Linux-realization.
 
 Residents
 
