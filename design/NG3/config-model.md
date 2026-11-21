@@ -32,10 +32,10 @@ rules or other internal networking objects.
 A Device may be reused by multiple Profiles.
 
 **Requirements:**
-- `VPNG0001-R4.R4`
-- `VPNG0001-R4.R4.R1`
-- `VPNG0001-R4.R4.R3`
-- `VPNG0001-R4.R4.R4`
+- `VPNG-U001-R4.R4`
+- `VPNG-U001-R4.R4.R1`
+- `VPNG-U001-R4.R4.R3`
+- `VPNG-U001-R4.R4.R4`
 
 ## 1.1. Release-1 host-routing control
 
@@ -72,7 +72,7 @@ emitted by STACK must not be captured back into STACK even when `":any"` or
 `"peaceful"`: lifecycle operations may install/update/remove identifiable helper
 contributions, but the helper does not continuously reclaim administrator changes between
 those operations. The future canonical value `"aggressive"` is reserved for the separately
-postponed authoritative helper under `VPNG0001-R5.R2` and must be rejected until that
+postponed authoritative helper under `VPNG-U001-R5.R2` and must be rejected until that
 capability completes its own requirement/design closure.
 
 The peaceful helper never enables or disables global host IPv4 forwarding. If the effective
@@ -128,7 +128,7 @@ Current ID grammar:
 
 IDs are opaque strings.
 
-**Requirement:** `VPNG0001-R4.R4.R1.C1`.
+**Requirement:** `VPNG-U001-R4.R4.R1.C1`.
 
 # 3. enabled and placeholders
 
@@ -154,9 +154,9 @@ operationally while disabled.
 An unknown Device reference is invalid.
 
 **Requirements:**
-- `VPNG0001-R4.R4.R2`
-- `VPNG0001-R4.R4.R2.R1`
-- `VPNG0001-R4.R4.R5`
+- `VPNG-U001-R4.R4.R2`
+- `VPNG-U001-R4.R4.R2.R1`
+- `VPNG-U001-R4.R4.R5`
 
 # 3.1. Recovered configuration-language principles
 
@@ -286,11 +286,11 @@ These rules implement the user's configured selector/quota order without turning
 interface naming into hidden policy.
 
 **Requirements:**
-- `VPNG0001-R1.R3.R4`
-- `VPNG0001-R1.R3.R4.R1`
-- `VPNG0001-R1.R3.R4.R2`
-- `VPNG0001-R1.R3.R4.R3`
-- `VPNG0001-R1.R3.R4.R4`
+- `VPNG-U001-R1.R3.R4`
+- `VPNG-U001-R1.R3.R4.R1`
+- `VPNG-U001-R1.R3.R4.R2`
+- `VPNG-U001-R1.R3.R4.R3`
+- `VPNG-U001-R1.R3.R4.R4`
 
 ## 4.1. Canonical Release-1 Device policy grammar
 
@@ -411,8 +411,8 @@ Rules:
 - the parser does not reorder, widen or silently repair rules.
 
 Per-path Device firewall remains outside Release 1 under product constraint
-`VPNG0001-R1.R4.R2.R1.C1` and configuration constraint
-`VPNG0001-R4.R4.R6.R2.R5.C1`; any future selector names a distinguishable logical VPN path,
+`VPNG-U001-R1.R4.R2.R1.C1` and configuration constraint
+`VPNG-U001-R4.R4.R6.R2.R5.C1`; any future selector names a distinguishable logical VPN path,
 not a runtime interface or transport endpoint.
 
 ### Server-side VPN publication
@@ -469,13 +469,13 @@ than silently ignoring it.
 
 The canonical Device policy/config grammar implements:
 
-- `VPNG0001-R4.R4.R6`;
-- `VPNG0001-R4.R4.R6.R1`;
-- `VPNG0001-R4.R4.R6.R2`;
-- `VPNG0001-R4.R4.R6.R3`;
-- `VPNG0001-R4.R4.R6.C1`;
-- `VPNG0001-R4.R4.R6.R4`;
-- `VPNG0001-R4.R5` and its canonical-config children.
+- `VPNG-U001-R4.R4.R6`;
+- `VPNG-U001-R4.R4.R6.R1`;
+- `VPNG-U001-R4.R4.R6.R2`;
+- `VPNG-U001-R4.R4.R6.R3`;
+- `VPNG-U001-R4.R4.R6.C1`;
+- `VPNG-U001-R4.R4.R6.R4`;
+- `VPNG-U001-R4.R5` and its canonical-config children.
 
 Only the canonical fields and top-level tables defined by this model are accepted for
 enabled configuration objects; unknown fields/tables are rejected rather than interpreted as
@@ -521,12 +521,12 @@ Consequences:
   interface index.
 
 **Requirements:**
-- `VPNG0001-R4.R2`
-- `VPNG0001-R1.R3.R1`
-- `VPNG0001-R1.R3.R3`
-- `VPNG0001-R1.R3.R4.R3`
-- `VPNG0001-R1.R3.R4.R3.R1`
-- `VPNG0003-R3.R1.R1`
+- `VPNG-U001-R4.R2`
+- `VPNG-U001-R1.R3.R1`
+- `VPNG-U001-R1.R3.R3`
+- `VPNG-U001-R1.R3.R4.R3`
+- `VPNG-U001-R1.R3.R4.R3.R1`
+- `VPNG-U003-R3.R1.R1`
 
 # 5. Profile
 
@@ -637,13 +637,13 @@ expected-interface selector quotas. A runtime moment with only one currently pre
 interface does not make a capacity>1 Profile valid.
 
 **Requirements:**
-- `VPNG0001-R3`
-- `VPNG0001-R4.R4.R4.R4`
-- `VPNG0001-R4.R4.R4.R4.C1`
-- `VPNG0002-R2.R1.R3`
-- `VPNG0002-R2.R3.R3`
-- `VPNG0002-R2.R3.C1`
-- `VPNG0002-R2.R3.C1.R1`.
+- `VPNG-U001-R3`
+- `VPNG-U001-R4.R4.R4.R4`
+- `VPNG-U001-R4.R4.R4.R4.C1`
+- `VPNG-U002-R2.R1.R3`
+- `VPNG-U002-R2.R3.R3`
+- `VPNG-U002-R2.R3.C1`
+- `VPNG-U002-R2.R3.C1.R1`.
 
 ## 5.2 destinations
 
@@ -676,9 +676,9 @@ An exact prefix cannot belong to more than one enabled Profile.
 Different-length overlap is allowed only with deterministic most-specific classification.
 
 **Requirements:**
-- `VPNG0002-R2.R1.R1`
-- `VPNG0002-R2.R1.R2`
-- `VPNG0002-R2.R5.R1`
+- `VPNG-U002-R2.R1.R1`
+- `VPNG-U002-R2.R1.R2`
+- `VPNG-U002-R2.R5.R1`
 
 ## 5.3 device_order
 
@@ -733,12 +733,12 @@ Newly appearing runtime endpoints must not arbitrarily reorder surviving already
 endpoints.
 
 **Requirements:**
-- `VPNG0002-R2.R2.R1`
-- `VPNG0003-R3.R1.R1`
-- `VPNG0003-R3.R4.R1`
-- `VPNG0003-R3.R4.R1.R1`
-- `VPNG0003-R3.R8`
-- `VPNG0003-R3.R8.R1`
+- `VPNG-U002-R2.R2.R1`
+- `VPNG-U003-R3.R1.R1`
+- `VPNG-U003-R3.R4.R1`
+- `VPNG-U003-R3.R4.R1.R1`
+- `VPNG-U003-R3.R8`
+- `VPNG-U003-R3.R8.R1`
 
 # 6. Profile runtime normalization
 
@@ -783,11 +783,11 @@ It must not change:
 - structural existence of the Profile.
 
 **Requirements:**
-- `VPNG0001-R4.R4.R4.R2`
-- `VPNG0001-R4.R4.R4.R3`
-- `VPNG0002-R2.R2.R2`
-- `VPNG0003-R3.R2.R1`
-- `VPNG0004-R4`
+- `VPNG-U001-R4.R4.R4.R2`
+- `VPNG-U001-R4.R4.R4.R3`
+- `VPNG-U002-R2.R2.R2`
+- `VPNG-U003-R3.R2.R1`
+- `VPNG-U004-R4`
 
 # 7. Profile-scoped availability
 
@@ -864,18 +864,18 @@ hysteresis knobs. Those remain implementation policy unless a later accepted req
 makes them user policy.
 
 **Requirements:**
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG0003-R3.R6.R3.R1.C1`
-- `VPNG0003-R3.R6.R3.R1.C2`
-- `VPNG0003-R3.R6.R3.R2`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-U003-R3.R6.R3.R1.C1`
+- `VPNG-U003-R3.R6.R3.R1.C2`
+- `VPNG-U003-R3.R6.R3.R2`
 
 ## 7.1. Canonical example for currently settled Release-1 fields
 
 This example intentionally exercises every currently settled external configuration feature. A concrete
 deployment does not need to use every optional field. The Release-1 peaceful host-routing control is defined above under
-`VPNG0001-R5.R1.R1`; a deployment may omit it and retain the non-invasive `:none` default.
+`VPNG-U001-R5.R1.R1`; a deployment may omit it and retain the non-invasive `:none` default.
 
 ```toml
 default_snat_address = "198.19.255.10"

@@ -4,9 +4,9 @@
 any explicitly selected peaceful-helper scope.
 
 **Normative requirements:**
-- `VPNG0001-R2`
-- `VPNG0001-R2.R1`
-- `VPNG0001-R2.R1.R1`
+- `VPNG-U001-R2`
+- `VPNG-U001-R2.R1`
+- `VPNG-U001-R2.R1.R1`
 
 This document describes what the ordinary host must provide to hand traffic to and receive
 traffic from the managed VPN-GATE boundary. It does not transfer ownership of ordinary-host

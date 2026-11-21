@@ -64,7 +64,7 @@ Alpha controller:
   `net.ipv4.ip_forward` и явные ordinary-host IPv4/interface selectors, но не включает global
   host forwarding и не меняет адреса/UP-state внешних ordinary host interfaces;
 - при `use_outbound_nat = false` удаленная сторона должна иметь нормальный обратный маршрут;
-- текущая alpha не предоставляет `reload`: изменение `config.toml` требует restart controller; это удовлетворяет `VPNG9101-R1.R1.R6`, поскольку requirement требует поддерживаемый способ применения изменённой конфигурации, а не отдельную операцию `reload`, и не считается alpha-gap;
+- текущая alpha не предоставляет `reload`: изменение `config.toml` требует restart controller; это удовлетворяет `VPNG-M001-R1.R1.R6`, поскольку requirement требует поддерживаемый способ применения изменённой конфигурации, а не отдельную операцию `reload`, и не считается alpha-gap;
 - текущий RuntimeStatusAgent подключён через alpha JSON surface; путь/JSON presentation пока
   являются alpha interface machinery, а не стабильным Release-1 API;
 - availability/failover входит в текущий executable alpha path: canonical `availability_check` materializes probe-local/routing preconditions, выполняется continuous ICMP observation и меняет effective path order только после принятой confirmation semantics;
@@ -261,9 +261,9 @@ VPNG_ALPHA_HOST_ROUTING_WARNING
 ## Implementation language boundary
 
 Текущий executable alpha controller остается Python reference runtime. Это явно разрешено
-`VPNG9001-R1.R1.R8.C1` для ранних alpha/beta releases и не означает, что Python принят как
+`VPNG-D001-R1.R1.R8.C1` для ранних alpha/beta releases и не означает, что Python принят как
 окончательная production/stable runtime implementation. Целевая production boundary
-определена `VPNG9001-R1.R1.R8` как Rust.
+определена `VPNG-D001-R1.R1.R8` как Rust.
 
 ## Acceptance evidence
 

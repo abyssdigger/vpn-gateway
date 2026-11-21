@@ -483,7 +483,7 @@ Lower Machinery переиспользуется только при совпа�
 
 ### 2.9.3. Target production-runtime language boundary
 
-**Covers:** `VPNG9001-R1.R1.R8.R1`, `VPNG9001-R1.R1.R8.R2`.
+**Covers:** `VPNG-D001-R1.R1.R8.R1`, `VPNG-D001-R1.R1.R8.R2`.
 
 Rust является target implementation boundary, а не component role и не источником product
 semantics. Финальная stable production runtime boundary включает configuration normalization,
@@ -502,7 +502,7 @@ Production Rust по умолчанию safe. `unsafe`/memory-unsafe FFI доп�
 обходить ownership/state invariants, выразимые safe Rust.
 
 Host-routing helper language exception и Python-completion ordering задаются уже принятыми
-`VPNG9001-R1.R1.R8.C1`, `VPNG9001-R1.R1.R8.C2`, `VPNG9001-R1.R1.R8.C3` и остаются
+`VPNG-D001-R1.R1.R8.C1`, `VPNG-D001-R1.R1.R8.C2`, `VPNG-D001-R1.R1.R8.C3` и остаются
 implementation-replacement constraints, а не поводом менять component semantics.
 
 ## 2.10. Closed requirement architecture coverage index
@@ -514,10 +514,10 @@ owners/sections, через которые реализуется соответ
 
 ### Managed VPN routing and supported VPN integration
 
-**Requirements:** `VPNG0001`, `VPNG0001-R1`, `VPNG0001-R1.R3`,
-`VPNG0001-R1.R3.C1`, `VPNG0001-R1.R3.C1.R1.R1`,
-`VPNG0001-R1.R3.C1.R1.R2`, `VPNG0001-R1.R3.C3`,
-`VPNG0001-R1.R3.C3.R1`.
+**Requirements:** `VPNG-U001`, `VPNG-U001-R1`, `VPNG-U001-R1.R3`,
+`VPNG-U001-R1.R3.C1`, `VPNG-U001-R1.R3.C1.R1.R1`,
+`VPNG-U001-R1.R3.C1.R1.R2`, `VPNG-U001-R1.R3.C3`,
+`VPNG-U001-R1.R3.C3.R1`.
 
 **Architecture coverage:** STACK `PayloadTrafficManager`, Private
 `NetworkPolicyAdapter`/`VPNPathAdapter`, ordinary-side transition, Space
@@ -528,8 +528,8 @@ configuration.
 
 ### Ordinary-host integration and helper scope
 
-**Requirements:** `VPNG0001-R2.R1`, `VPNG0001-R2.R1.R1`,
-`VPNG0001-R5.R2.R1`, `VPNG0001-R5.R2.C1`.
+**Requirements:** `VPNG-U001-R2.R1`, `VPNG-U001-R2.R1.R1`,
+`VPNG-U001-R5.R2.R1`, `VPNG-U001-R5.R2.C1`.
 
 **Architecture coverage:** Annex E `HostRoutingContribution` plus Spaces
 `VPN-GATE-managed host state` and `Ambient host and external world`. Core forwarding does
@@ -539,16 +539,16 @@ explicitly prevents peaceful helper machinery from silently acquiring them.
 
 ### Human configuration and Device/Profile policy model
 
-**Requirements:** `VPNG0001-R4.R5.R1`, `VPNG0001-R4.R5.R2`,
-`VPNG0001-R4.R5.R3`, `VPNG0001-R4.R5.R4`,
-`VPNG0001-R4.R4.R1`, `VPNG0001-R4.R4.R1.C1`,
-`VPNG0001-R4.R4.R2`, `VPNG0001-R4.R4.R2.R1`,
-`VPNG0001-R4.R4.R3`, `VPNG0001-R4.R4.R4`,
-`VPNG0001-R4.R4.R4.R2`, `VPNG0001-R4.R4.R4.R3`,
-`VPNG0001-R4.R4.R5`, `VPNG0001-R4.R4.R6`,
-`VPNG0001-R4.R4.R6.R2.R1`, `VPNG0001-R4.R4.R6.R2.R2`,
-`VPNG0001-R4.R4.R6.R2.R3`, `VPNG0001-R4.R4.R6.R2.R4`,
-`VPNG0001-R4.R4.R6.C1`.
+**Requirements:** `VPNG-U001-R4.R5.R1`, `VPNG-U001-R4.R5.R2`,
+`VPNG-U001-R4.R5.R3`, `VPNG-U001-R4.R5.R4`,
+`VPNG-U001-R4.R4.R1`, `VPNG-U001-R4.R4.R1.C1`,
+`VPNG-U001-R4.R4.R2`, `VPNG-U001-R4.R4.R2.R1`,
+`VPNG-U001-R4.R4.R3`, `VPNG-U001-R4.R4.R4`,
+`VPNG-U001-R4.R4.R4.R2`, `VPNG-U001-R4.R4.R4.R3`,
+`VPNG-U001-R4.R4.R5`, `VPNG-U001-R4.R4.R6`,
+`VPNG-U001-R4.R4.R6.R2.R1`, `VPNG-U001-R4.R4.R6.R2.R2`,
+`VPNG-U001-R4.R4.R6.R2.R3`, `VPNG-U001-R4.R4.R6.R2.R4`,
+`VPNG-U001-R4.R4.R6.C1`.
 
 **Architecture coverage:** A.002 `ConfigurationAdapter` owns strict human representation
 normalization and reference validation; A.005 `PayloadPolicyCalculator` preserves
@@ -559,8 +559,8 @@ meaning.
 
 ### Explicit VPN traffic policy and inbound first-release bound
 
-**Requirements:** `VPNG0002`, `VPNG0002-R2`, `VPNG0002-R2.R2.R2`,
-`VPNG0002-R2.R3.C1`, `VPNG0002-R2.R3.C1.R1`.
+**Requirements:** `VPNG-U002`, `VPNG-U002-R2`, `VPNG-U002-R2.R2.R2`,
+`VPNG-U002-R2.R3.C1`, `VPNG-U002-R2.R3.C1.R1`.
 
 **Architecture coverage:** A.002/A.005 define explicit Profile/Device intent and pre-actuation
 validation; A.004 derives current membership only from valid bindings; C.004 proves current
@@ -570,9 +570,9 @@ runtime discovery.
 
 ### Multi-path preference and availability adaptation
 
-**Requirements:** `VPNG0003`, `VPNG0003-R3`, `VPNG0003-R3.R1.R1`,
-`VPNG0003-R3.R2.R1`, `VPNG0003-R3.R5.R1`, `VPNG0003-R3.R5.R2`,
-`VPNG0003-R3.R6.R3.R1.C1`.
+**Requirements:** `VPNG-U003`, `VPNG-U003-R3`, `VPNG-U003-R3.R1.R1`,
+`VPNG-U003-R3.R2.R1`, `VPNG-U003-R3.R5.R1`, `VPNG-U003-R3.R5.R2`,
+`VPNG-U003-R3.R6.R3.R1.C1`.
 
 **Architecture coverage:** A.004 `PayloadTrafficManager`, A.006
 `AvailabilityPriorityCalculator`, A.007 `AvailabilityProbeAgent` and C.008
@@ -582,8 +582,8 @@ confirmation. Release-1 physical probe mechanism is ICMP only.
 
 ### Safety, recovery and operator truth
 
-**Requirements:** `VPNG0004`, `VPNG9101-R1.R1.R2.R1`,
-`VPNG9101-R1.R1.R3.R1`, `VPNG9101-R1.R1.C1.R1`, `VPNG9101-R2`.
+**Requirements:** `VPNG-U004`, `VPNG-M001-R1.R1.R2.R1`,
+`VPNG-M001-R1.R1.R3.R1`, `VPNG-M001-R1.R1.C1.R1`, `VPNG-M001-R2`.
 
 **Architecture coverage:** C.003 exact/fail-closed enforcement and C.005 forwarding barrier
 provide restrictive failure behavior; A.004/A.007 and alpha reconciliation perform finite
@@ -595,12 +595,12 @@ control.
 
 ### Maintainability, continuity, evidence and development boundaries
 
-**Requirements:** `VPNG9001-R1`, `VPNG9001-R1.R1`, `VPNG9001-R1.R1.R2`,
-`VPNG9001-R1.R1.R3.R5`, `VPNG9001-R1.R1.R3.R4`,
-`VPNG9001-R1.R1.R3.R4.R1`, `VPNG9001-R1.R1.R4`,
-`VPNG9001-R1.R1.R6.R1`, `VPNG9001-R1.R1.R6.R2`,
-`VPNG9001-R1.R1.R7.R1`, `VPNG9001-R1.R1.R8.R1`,
-`VPNG9001-R1.R1.R8.R2`.
+**Requirements:** `VPNG-D001-R1`, `VPNG-D001-R1.R1`, `VPNG-D001-R1.R1.R2`,
+`VPNG-D001-R1.R1.R3.R5`, `VPNG-D001-R1.R1.R3.R4`,
+`VPNG-D001-R1.R1.R3.R4.R1`, `VPNG-D001-R1.R1.R4`,
+`VPNG-D001-R1.R1.R6.R1`, `VPNG-D001-R1.R1.R6.R2`,
+`VPNG-D001-R1.R1.R7.R1`, `VPNG-D001-R1.R1.R8.R1`,
+`VPNG-D001-R1.R1.R8.R2`.
 
 **Architecture coverage:** the Space/component decomposition and `design/component-model.md`
 localize responsibilities and lower mechanism boundaries; §2.9 implementation trace,
@@ -757,7 +757,7 @@ Interactions
 Findings
 
 1. `Status presentation boundary` — the compact Devices/Profiles text representation is
-   now required by `VPNG9101-R2.R2.*` and is owned by `RuntimeStatusTextRenderer`.
+   now required by `VPNG-M001-R2.R2.*` and is owned by `RuntimeStatusTextRenderer`.
    The delivery mechanism remains replaceable: current alpha may publish `status.txt` beside
    `status.json`, but neither path is thereby a stable product API.
 2. `Lifecycle decomposition` — current procedural startup directly composes lower lifecycle,
@@ -1373,24 +1373,24 @@ order without merging their ownership or cleanup into one technical method. It d
 introduce a long-lived lifecycle Engine or independent lifecycle policy.
 
 **Implements:**
-- `VPNG0004-R4.R4`
-- `VPNG0004-R4.R5`
-- `VPNG9101-R1`
-- `VPNG9101-R1.R1`
-- `VPNG9101-R1.R1.R1`
-- `VPNG9101-R1.R1.R3`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9101-R1.R1.R6`
-- `VPNG9101-R1.R1.R6.R1`
-- `VPNG9101-R1.R1.R6.R2`
-- `VPNG9101-R1.R1.R6.R3`
-- `VPNG9101-R2.R1.R3`
-- `VPNG9101-R2.R1.R4`
-- `VPNG9001-R1.R1.R1`
+- `VPNG-U004-R4.R4`
+- `VPNG-U004-R4.R5`
+- `VPNG-M001-R1`
+- `VPNG-M001-R1.R1`
+- `VPNG-M001-R1.R1.R1`
+- `VPNG-M001-R1.R1.R3`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-M001-R1.R1.R6`
+- `VPNG-M001-R1.R1.R6.R1`
+- `VPNG-M001-R1.R1.R6.R2`
+- `VPNG-M001-R1.R1.R6.R3`
+- `VPNG-M001-R2.R1.R3`
+- `VPNG-M001-R2.R1.R4`
+- `VPNG-D001-R1.R1.R1`
 
 **Constrained by:**
-- `VPNG9101-R1.R1.C1`
+- `VPNG-M001-R1.R1.C1`
 
 Implementation
 
@@ -1441,21 +1441,21 @@ intents. Он является единственной границей, где
 semantic Device/Profile/binding/policy/availability contracts.
 
 **Implements:**
-- `VPNG0001-R4.R1`
-- `VPNG0001-R4.R2`
-- `VPNG0001-R4.R3`
-- `VPNG0001-R4.R4`
-- `VPNG0001-R4.R5`
-- `VPNG0001-R1.R3.C1.R1`
-- `VPNG0002-R2.R1`
-- `VPNG0002-R2.R2`
-- `VPNG0002-R2.R3`
-- `VPNG0002-R2.R4`
-- `VPNG0002-R2.R5`
-- `VPNG0004-R4.R1`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R3.R2`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U001-R4.R1`
+- `VPNG-U001-R4.R2`
+- `VPNG-U001-R4.R3`
+- `VPNG-U001-R4.R4`
+- `VPNG-U001-R4.R5`
+- `VPNG-U001-R1.R3.C1.R1`
+- `VPNG-U002-R2.R1`
+- `VPNG-U002-R2.R2`
+- `VPNG-U002-R2.R3`
+- `VPNG-U002-R2.R4`
+- `VPNG-U002-R2.R5`
+- `VPNG-U004-R4.R1`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-D001-R1.R1.R5`
 
 API
 
@@ -1488,20 +1488,20 @@ Pure Calculator, превращающий Profile selection и соответс�
 конкретный subject-scoped availability description до runtime observation.
 
 **Implements:**
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG0003-R3.R6.R3.R1.R1.R1`
-- `VPNG0003-R3.R6.R3.R1.R1.R2`
-- `VPNG0003-R3.R6.R3.R1.R1.R3`
-- `VPNG0003-R3.R6.R3.R1.R1.R4`
-- `VPNG0003-R3.R6.R3.R2`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1.R2`
+- `VPNG-U003-R3.R6.R3.R1.R1.R3`
+- `VPNG-U003-R3.R6.R3.R1.R1.R4`
+- `VPNG-U003-R3.R6.R3.R2`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R5`
 
 **Constrained by:**
-- `VPNG0003-R3.R6.R3.R1.C2`
+- `VPNG-U003-R3.R6.R3.R1.C2`
 
 API
 
@@ -1529,29 +1529,29 @@ baseline preference и bounded availability adaptation в одного writer'а
 policy.
 
 **Implements:**
-- `VPNG0001-R1.R1`
-- `VPNG0002-R2.R1`
-- `VPNG0002-R2.R2`
-- `VPNG0002-R2.R3`
-- `VPNG0002-R2.R4`
-- `VPNG0002-R2.R5`
-- `VPNG0003-R3.R1`
-- `VPNG0003-R3.R2`
-- `VPNG0003-R3.R3`
-- `VPNG0003-R3.R4`
-- `VPNG0003-R3.R5`
-- `VPNG0003-R3.R7`
-- `VPNG0004-R4`
-- `VPNG0004-R4.R1`
-- `VPNG0004-R4.R2`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R3`
-- `VPNG9101-R2.R1.R2`
-- `VPNG9101-R2.R1.R4`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R5`
-- `VPNG9001-R1.R1.R6`
+- `VPNG-U001-R1.R1`
+- `VPNG-U002-R2.R1`
+- `VPNG-U002-R2.R2`
+- `VPNG-U002-R2.R3`
+- `VPNG-U002-R2.R4`
+- `VPNG-U002-R2.R5`
+- `VPNG-U003-R3.R1`
+- `VPNG-U003-R3.R2`
+- `VPNG-U003-R3.R3`
+- `VPNG-U003-R3.R4`
+- `VPNG-U003-R3.R5`
+- `VPNG-U003-R3.R7`
+- `VPNG-U004-R4`
+- `VPNG-U004-R4.R1`
+- `VPNG-U004-R4.R2`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R3`
+- `VPNG-M001-R2.R1.R2`
+- `VPNG-M001-R2.R1.R4`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R5`
+- `VPNG-D001-R1.R1.R6`
 
 API
 
@@ -1589,18 +1589,18 @@ Pure Calculator structural payload semantics. Он строит allowed traffic/
 normalized Profile/Device intent и уже подтвержденных current bindings, не наблюдая Linux.
 
 **Implements:**
-- `VPNG0002-R2.R1`
-- `VPNG0002-R2.R1.R1`
-- `VPNG0002-R2.R1.R2`
-- `VPNG0002-R2.R2`
-- `VPNG0002-R2.R2.R1`
-- `VPNG0002-R2.R3`
-- `VPNG0002-R2.R3.R3`
-- `VPNG0002-R2.R4`
-- `VPNG0002-R2.R5`
-- `VPNG0002-R2.R5.R1`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U002-R2.R1`
+- `VPNG-U002-R2.R1.R1`
+- `VPNG-U002-R2.R1.R2`
+- `VPNG-U002-R2.R2`
+- `VPNG-U002-R2.R2.R1`
+- `VPNG-U002-R2.R3`
+- `VPNG-U002-R2.R3.R3`
+- `VPNG-U002-R2.R4`
+- `VPNG-U002-R2.R5`
+- `VPNG-U002-R2.R5.R1`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R5`
 
 API
 
@@ -1630,18 +1630,18 @@ Pure Calculator effective path order из current structural membership, baselin
 Profile-local reserve roles, established availability problems и current active path.
 
 **Implements:**
-- `VPNG0003-R3.R1`
-- `VPNG0003-R3.R2`
-- `VPNG0003-R3.R3`
-- `VPNG0003-R3.R4`
-- `VPNG0003-R3.R4.R1`
-- `VPNG0003-R3.R4.R1.R1`
-- `VPNG0003-R3.R7`
-- `VPNG0003-R3.R8`
-- `VPNG0003-R3.R8.R1`
-- `VPNG0003-R3.R8.C1`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U003-R3.R1`
+- `VPNG-U003-R3.R2`
+- `VPNG-U003-R3.R3`
+- `VPNG-U003-R3.R4`
+- `VPNG-U003-R3.R4.R1`
+- `VPNG-U003-R3.R4.R1.R1`
+- `VPNG-U003-R3.R7`
+- `VPNG-U003-R3.R8`
+- `VPNG-U003-R3.R8.R1`
+- `VPNG-U003-R3.R8.C1`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R5`
 
 API
 
@@ -1668,15 +1668,15 @@ Agent ongoing availability observation. Он управляет расписан
 публикует normalized evidence, но не управляет наблюдаемым remote availability property.
 
 **Implements:**
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R2`
-- `VPNG0003-R3.R6.R3`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG9101-R2.R1.R3`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R2`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-M001-R2.R1.R3`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R5`
 
 API
 
@@ -1708,15 +1708,15 @@ Agent, составляющий truthful current user-facing status из authori
 других owners. Он не актуирует представляемые domains и не становится system-of-record.
 
 **Implements:**
-- `VPNG9101-R2.R1`
-- `VPNG9101-R2.R1.R1`
-- `VPNG9101-R2.R1.R2`
-- `VPNG9101-R2.R1.R3`
-- `VPNG9101-R2.R1.R4`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R1.R1`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-M001-R2.R1`
+- `VPNG-M001-R2.R1.R1`
+- `VPNG-M001-R2.R1.R2`
+- `VPNG-M001-R2.R1.R3`
+- `VPNG-M001-R2.R1.R4`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R1.R1`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R5`
 
 API
 
@@ -1747,11 +1747,11 @@ human-readable current-state report. Он не наблюдает kernel state, 
 изменяет status semantics и не является configuration serializer.
 
 **Implements:**
-- `VPNG9101-R2.R2`
-- `VPNG9101-R2.R2.R1`
-- `VPNG9101-R2.R2.R2`
-- `VPNG9101-R2.R2.R3`
-- `VPNG9101-R2.R2.R4`
+- `VPNG-M001-R2.R2`
+- `VPNG-M001-R2.R2.R1`
+- `VPNG-M001-R2.R2.R2`
+- `VPNG-M001-R2.R2.R3`
+- `VPNG-M001-R2.R2.R4`
 
 API
 
@@ -1784,15 +1784,15 @@ managed-L3 door между Private network и ordinary host, не принима
 Private-network service identity/default route или traffic-selection policy соседних Spaces.
 
 **Implements / supports:**
-- `VPNG0001-R1.R3.R2`
-- `VPNG0004-R4.R6`
-- `VPNG9101-R1.R1.R1`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R3.R3`
-- `VPNG9001-R1.R1.R7`
+- `VPNG-U001-R1.R3.R2`
+- `VPNG-U004-R4.R6`
+- `VPNG-M001-R1.R1.R1`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R3.R3`
+- `VPNG-D001-R1.R1.R7`
 
 **Evidence:** `EV-00000`
 
@@ -1834,16 +1834,16 @@ lower network-policy domain Private network. Общая physical realization н�
 различные semantic owners.
 
 **Implements:**
-- `VPNG0001-R1.R1`
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R3`
-- `VPNG0004-R4.R5`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R3`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R3.R2`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U001-R1.R1`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R3`
+- `VPNG-U004-R4.R5`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R3`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-D001-R1.R1.R5`
 
 API
 
@@ -1879,20 +1879,20 @@ Architectural decisions
 Pure Calculator внутреннего resource layout.
 
 **Implements:**
-- `VPNG0001-R1.R1`
-- `VPNG0003-R3.R6`
-- `VPNG0004-R4`
-- `VPNG0004-R4.R1`
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R5`
-- `VPNG0004-R4.R6`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R3.R1`
-- `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U001-R1.R1`
+- `VPNG-U003-R3.R6`
+- `VPNG-U004-R4`
+- `VPNG-U004-R4.R1`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R5`
+- `VPNG-U004-R4.R6`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-D001-R1.R1.R3.R2`
  Он получает semantic owner demand и injected
 platform resource space и возвращает детерминированное распределение внутренних
 routing-table, RPDB, route-marker, metric и nft namespace ресурсов.
@@ -1937,15 +1937,15 @@ Enforcer отвечает только за достижение и подтве
 а independently demanded safety/lifecycle API вынесен в sibling `@ForwardingGate`.
 
 **Implements:**
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R3`
-- `VPNG0003-R3.R9`
-- `VPNG0004-R4.R3.R2`
-- `VPNG0004-R4.R5`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R3`
-- `VPNG9001-R1.R1.R1`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R3`
+- `VPNG-U003-R3.R9`
+- `VPNG-U004-R4.R3.R2`
+- `VPNG-U004-R4.R5`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R1`
+- `VPNG-D001-R1.R1.R5`
 
 API
 
@@ -1980,7 +1980,7 @@ Architectural decisions
 
 Findings
 
-1. `Administrative payload containment` *Future public containment capability по `VPNG0004-R5` не является режимом structural Enforcer. Ее exact lower composition остается open; текущий `ForwardingGate` может быть только частью решения, потому что отдельный ordinary-side block тоже необходим.*
+1. `Administrative payload containment` *Future public containment capability по `VPNG-U004-R5` не является режимом structural Enforcer. Ее exact lower composition остается open; текущий `ForwardingGate` может быть только частью решения, потому что отдельный ordinary-side block тоже необходим.*
 
 ## C.004 VPNPathAdapter
 
@@ -1989,17 +1989,17 @@ endpoint внутри Private network. Он наблюдает/проверяе�
 не управляет VPN session как таковой.
 
 **Implements:**
-- `VPNG0001-R1.R3.R1`
-- `VPNG0001-R1.R3.R2`
-- `VPNG0001-R1.R3.R3`
-- `VPNG0001-R1.R3.R4`
-- `VPNG0001-R1.R3.R4.R1`
-- `VPNG0001-R1.R3.R4.R2`
-- `VPNG0001-R1.R3.R4.R3`
-- `VPNG0001-R1.R3.R4.R3.R1`
-- `VPNG0001-R1.R3.R4.R4`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U001-R1.R3.R1`
+- `VPNG-U001-R1.R3.R2`
+- `VPNG-U001-R1.R3.R3`
+- `VPNG-U001-R1.R3.R4`
+- `VPNG-U001-R1.R3.R4.R1`
+- `VPNG-U001-R1.R3.R4.R2`
+- `VPNG-U001-R1.R3.R4.R3`
+- `VPNG-U001-R1.R3.R4.R3.R1`
+- `VPNG-U001-R1.R3.R4.R4`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R5`
 
 API
 
@@ -2037,11 +2037,11 @@ Architectural decisions
 Самостоятельный bounded Enforcer корневого IPv4 forwarding state Private network.
 
 **Implements:**
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R3.R2`
-- `VPNG0004-R4.R4`
-- `VPNG0004-R4.R5`
-- `VPNG0004-R4.R6`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R3.R2`
+- `VPNG-U004-R4.R4`
+- `VPNG-U004-R4.R5`
+- `VPNG-U004-R4.R6`
  Его
 verified DISABLED state используется как structural safety barrier, но тот же contract нужен
 startup, shutdown и recovery независимо от `NetworkPolicyAdapter`.
@@ -2076,11 +2076,11 @@ Architectural decisions
 Технический Driver к managed-domain forwarding state.
 
 **Supports implementation of:**
-- `VPNG0004-R4.R2`
-- `VPNG0004-R4.R3.R2`
-- `VPNG0004-R4.R4`
-- `VPNG0004-R4.R5`
-- `VPNG0004-R4.R6`
+- `VPNG-U004-R4.R2`
+- `VPNG-U004-R4.R3.R2`
+- `VPNG-U004-R4.R4`
+- `VPNG-U004-R4.R5`
+- `VPNG-U004-R4.R6`
 
 Сам по себе Driver не реализует semantic requirement postcondition: он предоставляет
 technical read/write primitive для `ForwardingGate`, который выполняет fresh
@@ -2110,13 +2110,13 @@ namespace + loopback. Она не материализует ordinary-side trans
 stack-local address/default route.
 
 **Implements / supports:**
-- `VPNG0004-R4.R6`
-- `VPNG9101-R1.R1.R1`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R7`
+- `VPNG-U004-R4.R6`
+- `VPNG-M001-R1.R1.R1`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R7`
 
 **Evidence:** `EV-00000`
 
@@ -2157,13 +2157,13 @@ Technical Driver одного bounded physical availability attempt через e
 remote availability semantics.
 
 **Implements:**
-- `VPNG0003-R3.R6`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R3`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG9001-R1.R1.R3.R2`
-- `VPNG9001-R1.R1.R5`
+- `VPNG-U003-R3.R6`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.R1`
+- `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-D001-R1.R1.R5`
 
 API
 
@@ -2197,13 +2197,13 @@ established `ManagedL3BoundaryLifecycle` и владеет exact stack-local IPv
 ordinary-side default routing state на current private-facing endpoint.
 
 **Implements / supports:**
-- `VPNG0004-R4.R6`
-- `VPNG9101-R1.R1.R1`
-- `VPNG9101-R1.R1.R2`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R7`
+- `VPNG-U004-R4.R6`
+- `VPNG-M001-R1.R1.R1`
+- `VPNG-M001-R1.R1.R2`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R7`
 
 **Evidence:** `EV-00000`
 
@@ -2249,15 +2249,15 @@ publication intent здесь materializes as a separate host mapping postcondit
 local admission remains `Private network.NetworkPolicyAdapter` responsibility.
 
 **Implements / supports:**
-- `VPNG0001-R1.R3.R6.R1`
-- `VPNG0001-R4.R4.R6.R3`
-- `VPNG0004-R4.R6`
-- `VPNG9101-R1.R1.R1`
-- `VPNG9101-R1.R1.R4`
-- `VPNG9101-R1.R1.R5`
-- `VPNG9001-R1.R1.R3`
-- `VPNG9001-R1.R1.R3.R3`
-- `VPNG9001-R1.R1.R7`
+- `VPNG-U001-R1.R3.R6.R1`
+- `VPNG-U001-R4.R4.R6.R3`
+- `VPNG-U004-R4.R6`
+- `VPNG-M001-R1.R1.R1`
+- `VPNG-M001-R1.R1.R4`
+- `VPNG-M001-R1.R1.R5`
+- `VPNG-D001-R1.R1.R3`
+- `VPNG-D001-R1.R1.R3.R3`
+- `VPNG-D001-R1.R1.R7`
 
 **Evidence:** `EV-00000`
 
@@ -2299,16 +2299,16 @@ Direct lifecycle Machinery optional peaceful host-routing helper. Она уст�
 Manager/supervisor.
 
 **Implements:**
-- `VPNG0001-R2`
-- `VPNG0001-R5.R1`
-- `VPNG0001-R5.R1.R1`
+- `VPNG-U001-R2`
+- `VPNG-U001-R5.R1`
+- `VPNG-U001-R5.R1.R1`
 
 **Constrained by:**
-- `VPNG9001-R1.R1.R8`
-- `VPNG9001-R1.R1.R8.C1`
-- `VPNG9001-R1.R1.R8.C2`
-- `VPNG9001-R1.R1.R8.C3`
-- `VPNG9001-R1.R1.R8.R3`
+- `VPNG-D001-R1.R1.R8`
+- `VPNG-D001-R1.R1.R8.C1`
+- `VPNG-D001-R1.R1.R8.C2`
+- `VPNG-D001-R1.R1.R8.C3`
+- `VPNG-D001-R1.R1.R8.R3`
 
 API
 

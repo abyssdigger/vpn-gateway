@@ -19,7 +19,7 @@ requirements.
 
 The former declarations for resource efficiency / weak-device suitability and the compact
 human current-state view were promoted to normative operational-cost requirements
-`VPNG9101-R3` and `VPNG9101-R2.R2` respectively. Their current wording and acceptance
+`VPNG-M001-R3` and `VPNG-M001-R2.R2` respectively. Their current wording and acceptance
 state now belong only to `design/NG3/requirements.md`; Git history retains the preliminary
 declaration text.
 
@@ -45,7 +45,7 @@ Candidate reload semantics for this **post-first-release external-source feature
 - malformed individual source lines should be warnings + skipped entries rather than
   automatically disabling the whole Profile.
 
-This external-source feature is intentionally not part of first-release planning. `VPNG9101-R1.R1.R6` requires a supported way to apply changed configuration but does not require a distinct `reload` operation; the current alpha may therefore require restart. If a future management interface exposes `reload`, its behavior and result belong to that interface/architecture contract rather than to a separate product capability. This section additionally keeps rereading/merging external Profile network-list sources post-first-release. Without managed Device/VPN
+This external-source feature is intentionally not part of first-release planning. `VPNG-M001-R1.R1.R6` requires a supported way to apply changed configuration but does not require a distinct `reload` operation; the current alpha may therefore require restart. If a future management interface exposes `reload`, its behavior and result belong to that interface/architecture contract rather than to a separate product capability. This section additionally keeps rereading/merging external Profile network-list sources post-first-release. Without managed Device/VPN
 configuration ownership its near-term value does not justify the external-source complexity.
 File-level failure semantics, syntax, provenance and atomicity scope are therefore left
 unspecified until that post-first-release discussion rather than treated as an accepted
