@@ -5,53 +5,26 @@
 **Baseline:** main snapshot 145 `623a688e4080de56e5ac14675ffca028c3865d18`  
 **Current research draft:** requirement remap through branch HEAD
 
-Этот список содержит только решения, которые **остались нерешёнными после**
-product-holder dispositions, записанных в
-`NG3-2026-11-20-requirement-refactor-decisions.md`, и после их применения к
+Исходный audit содержал 20 findings: 2 safe corrections и 18 вопросов, требовавших human
+decision. Все 18 вопросов получили product-holder disposition и применены к
 `NG3-2026-11-20-purpose-parent-corrected-requirements-draft.md`.
 
-Исходный audit содержал 20 findings: 2 safe corrections и 18 вопросов, требовавших human
-decision. В текущем draft 18 findings уже имеют disposition; остаются два.
+## Нерешённые вопросы
 
-## 1. Priority-only make-before-break continuity
+**Нет.**
 
-**Affected:** `VPNG0004-R4.R3.R1`.
+Последними закрыты:
 
-Parent `VPNG0004-R4.R3` требует безопасного policy transition: промежуточное состояние не
-должно разрешать forwarding, запрещённый старой или новой policy. Это допускает временно
-более restrictive состояние.
-
-Child дополнительно обещает не терять разрешённые paths при priority-only перестановке.
-Это уже availability/continuity guarantee, а не следствие safety parent.
-
-Нужно решить, принадлежит ли гарантия:
-
-- path-preference/availability tree `VPNG0003`;
-- отдельной continuity capability;
-- либо safety/lifecycle tree после явного product decision, что non-disruptive priority
-  transition является обязательной частью этой гарантии.
-
-## 2. Reload
-
-**Affected:** `VPNG0005-R5.R6.R4`.
-
-Lifecycle ancestry гарантирует start/stop/restart. Текущий reload-node появляется только
-условно: deployment interface должен иметь безопасную reload semantics **если** он такую
-операцию предоставляет.
-
-Нужно решить, является ли reload:
-
-- самостоятельной обязательной product capability;
-- либо контрактом deployment integration: интерфейс не должен рекламировать reload, пока
-  безопасная semantics не определена.
-
-Первый release уже допускает отсутствие reload; текущая alpha её не реализует, поэтому
-решение в основном влияет на requirement/interface placement, а не на готовый runtime.
+- priority-only continuity: прежний `VPNG0004-R4.R3.R1` перенесён в
+  `VPNG0003-R3.R9` как гарантия отсутствия искусственного разрыва при изменении только
+  эффективного порядка неизменного набора разрешённых VPN-путей;
+- `reload`: обязательная product capability удалена; возможность обновлять конфигурацию
+  поднята в `VPNG0005` / `VPNG0005-R5` / `VPNG0005-R5.R6`, а `reload` остаётся
+  необязательным механизмом интерфейса управления.
 
 ## Уже закрытые adjacent findings
 
-Следующие вопросы больше не являются unresolved и не должны снова появляться в decision
-queue:
+Следующие вопросы также не должны снова появляться в decision queue:
 
 - Profile source identity / `+snat` поднят в самостоятельную capability;
 - Device NAT/firewall и VPN transport/control capabilities отделены от config placement;
@@ -62,9 +35,11 @@ queue:
 - timing/hysteresis limitation вынесен в sibling constraint `VPNG0003-R3.R6.R3.R1.C2`;
 - host-state safety сделан mechanism-neutral, managed network domain и literal DROP остаются
   architecture/evidence;
-- protective mode поднят непосредственно под `VPNG0004`.
-- return-flow affinity перенесён из `VPNG0002-R2.R6` в прямой child `VPNG0003-R4`, сохранив позитивную same-path гарантию; это отдельный принцип выбора пути, параллельный baseline/availability preference.
-- второй VPN lifecycle evidence gate удалён из requirement tree; EXP-050 остаётся историческим evidence для соответствующих product/lifecycle/safety obligations.
+- protective mode поднят непосредственно под `VPNG0004`;
+- return-flow affinity перенесён из `VPNG0002-R2.R6` в прямой child `VPNG0003-R4`;
+- второй VPN lifecycle evidence gate удалён из requirement tree; EXP-050 остаётся
+  историческим evidence для соответствующих product/lifecycle/safety obligations.
 
-До решения двух вопросов выше нормативный remap `design/NG3/requirements.md` остаётся
-неполным.
+Нормативный remap `design/NG3/requirements.md` больше не блокируется отсутствующим
+product-holder решением. Перед promotion требуется итоговая проверка целостности research
+tree и атомарный remap актуальной traceability.
