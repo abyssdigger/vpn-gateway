@@ -35,7 +35,7 @@ Current trace:
 | AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md`, `NG3-2026-11-18-sticky-reserve-reference-code-review.md` |
 | NetworkPolicyEnforcer pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
 | NetworkPolicyEnforcer re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
-| NetworkPolicyEnforcer single-attempt observe/apply/re-observe contract | `route_priority_executor.py` | `NG3-2026-11-16-route-priority-executor-attempt-code-review.md` |
+| NetworkPolicyEnforcer single-attempt observe/apply/re-observe contract | `route_priority_enforcer.py` | `NG3-2026-11-16-route-priority-executor-attempt-code-review.md` |
 | NetworkPolicyAdapter/Enforcer owned route-key inventory projection | `route_priority_inventory.py` | `NG3-2026-11-16-route-priority-inventory-code-review.md` |
 | NetworkPolicyEnforcer bounded physical iproute2 priority backend | `iproute_priority_backend.py` | `NG3-2026-11-16-iproute-priority-backend-code-review.md` |
 | Profile-level multi-domain priority coordinator | `route_priority_profile.py` | `NG3-2026-11-16-route-priority-profile-coordinator-review.md` |
@@ -75,7 +75,7 @@ Current trace:
 | managed-netns structural forwarding gate | `forwarding_gate.py`, `linux_forwarding_gate.py` | `NG3-2026-11-16-forwarding-gate-code-review.md`, `EXP-030-result-20261116.md` |
 | nft table-level ownership observation | `nft_namespace_inventory.py` | `NG3-2026-11-16-nft-namespace-inventory-code-review.md`, `EXP-031-result-20261116.md` |
 | invariant payload nft scaffold comparison | `nft_payload_scaffold.py` | `NG3-2026-11-16-payload-nft-scaffold-code-review.md`, `EXP-032-result-20261116.md` |
-| guarded physical payload nft scaffold preparation | `nft_scaffold_executor.py`, `linux_nft_scaffold.py` | `NG3-2026-11-16-nft-scaffold-prepare-code-review.md` |
+| guarded physical payload nft scaffold preparation | `nft_scaffold_enforcer.py`, `linux_nft_scaffold.py` | `NG3-2026-11-16-nft-scaffold-prepare-code-review.md` |
 | normalized Device NAT intent -> payload masquerade desired projection | `device_policy.py`, `payload_nat_desired.py` | `NG3-2026-11-16-payload-nat-desired-code-review.md`, `EXP-033-result-20261116.md` |
 | host-side Device server publication | `host_publication_policy.py`, `linux_host_publication.py`, alpha runtime composition | `NG3-2026-11-17-host-server-publication-dnat-review.md`, EXP-052, EXP-051 extension |
 | authoritative host-routing prototype (postponed aggressive child) | `host_managed_routing.py`, `release1_host_boundary.py`, `linux_host_managed_routing.py`, `linux_host_managed_routing_backend.py`, `selected_host_boundary.py` | EXP-074; EXP-075/076 retain lower SNAT-return route facts |
