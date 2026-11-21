@@ -35,8 +35,12 @@ from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
-    destroy_managed_network_domain,
-    ensure_managed_network_domain,
+    cleanup_ordinary_side_portal,
+    destroy_managed_l3_boundary,
+    destroy_managed_network_environment,
+    ensure_managed_l3_boundary,
+    ensure_managed_network_environment,
+    ensure_ordinary_side_portal,
 )
 from rou.network_policy_layout import allocate_network_policy_layout
 from rou.payload_network_policy_desired import (
@@ -449,9 +453,17 @@ class PreparedPolicy:
         return desired
 
 
+def ensure_managed(domain_spec, runner) -> None:
+    assert ensure_managed_network_environment(domain_spec, runner).confirmed
+    assert ensure_managed_l3_boundary(domain_spec, runner).confirmed
+    assert ensure_ordinary_side_portal(domain_spec, runner).confirmed
+
+
 def cleanup_managed(domain_spec, runner) -> None:
     try:
-        destroy_managed_network_domain(domain_spec, runner)
+        cleanup_ordinary_side_portal(domain_spec, runner)
+        destroy_managed_l3_boundary(domain_spec, runner)
+        destroy_managed_network_environment(domain_spec, runner)
     except Exception as exc:
         print(f"EXP049_CLEANUP_MANAGED_FALLBACK={type(exc).__name__}:{exc}")
         command(("ip", "netns", "del", MANAGED), check=False)
@@ -477,8 +489,7 @@ def run_cycle(
     setup_server_namespace()
 
     try:
-        ensured = ensure_managed_network_domain(domain_spec, runner)
-        assert ensured.confirmed
+        ensure_managed(domain_spec, runner)
 
         systemctl("reset-failed", DOMAIN_UNIT, CLIENT_UNIT, check=False)
         systemctl("start", DOMAIN_UNIT)

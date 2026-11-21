@@ -12,9 +12,15 @@ from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.managed_network_domain import (
     ManagedNetworkDomainError,
     ManagedNetworkDomainSpec,
-    destroy_managed_network_domain,
-    ensure_managed_network_domain,
-    verify_managed_network_domain,
+    cleanup_ordinary_side_portal,
+    destroy_managed_l3_boundary,
+    destroy_managed_network_environment,
+    ensure_managed_l3_boundary,
+    ensure_managed_network_environment,
+    ensure_ordinary_side_portal,
+    observe_ordinary_side_portal,
+    verify_managed_l3_boundary,
+    verify_managed_network_environment,
 )
 
 
@@ -25,6 +31,23 @@ def raw_run(*argv: str, check: bool = True):
         text=True,
         capture_output=True,
     )
+
+
+
+def ensure_lifecycle(spec, runner):
+    environment = ensure_managed_network_environment(spec, runner)
+    boundary = ensure_managed_l3_boundary(spec, runner)
+    portal = ensure_ordinary_side_portal(spec, runner)
+    assert environment.confirmed
+    assert boundary.confirmed
+    assert portal.confirmed
+    return environment, boundary, portal
+
+
+def destroy_lifecycle(spec, runner):
+    cleanup_ordinary_side_portal(spec, runner)
+    destroy_managed_l3_boundary(spec, runner)
+    destroy_managed_network_environment(spec, runner)
 
 
 def main() -> int:
@@ -50,12 +73,12 @@ def main() -> int:
 
     cleanup()
     try:
-        created = ensure_managed_network_domain(spec, runner)
-        assert created.confirmed
-        assert created.created
-        assert created.verification.host_boundary is not None
+        environment, boundary, portal = ensure_lifecycle(spec, runner)
+        assert environment.created
+        assert boundary.created
+        assert boundary.verification.private_boundary is not None
         assert (
-            created.verification.host_boundary.ifname
+            boundary.verification.private_boundary.ifname
             == spec.inner_interface
         )
         assert (
@@ -117,9 +140,10 @@ def main() -> int:
             "ip", "netns", "exec", namespace,
             "sysctl", "-q", "-w", "net.ipv4.ip_forward=1",
         )
-        restarted = ensure_managed_network_domain(spec, runner)
-        assert restarted.confirmed
-        assert not restarted.created
+        restarted_environment, restarted_boundary, restarted_portal = ensure_lifecycle(spec, runner)
+        assert not restarted_environment.created
+        assert not restarted_boundary.created
+        assert restarted_portal.confirmed
         assert (
             LinuxForwardingGateBackend(
                 runner,
@@ -137,9 +161,10 @@ def main() -> int:
             "ip", "netns", "exec", namespace,
             "sysctl", "-q", "-w", "net.ipv4.ip_forward=1",
         )
-        repaired = ensure_managed_network_domain(spec, runner)
-        assert repaired.confirmed
-        assert not repaired.created
+        repaired_environment, repaired_boundary, repaired_portal = ensure_lifecycle(spec, runner)
+        assert not repaired_environment.created
+        assert not repaired_boundary.created
+        assert repaired_portal.confirmed
         assert (
             LinuxForwardingGateBackend(
                 runner,
@@ -156,8 +181,27 @@ def main() -> int:
         assert f"dev {spec.inner_interface}" in repaired_default
         print("MANAGED_DOMAIN_PORTAL_DRIFT_REPAIRED_FAIL_CLOSED=PASS")
 
-        destroy_managed_network_domain(spec, runner)
-        assert not verify_managed_network_domain(spec, runner).confirmed
+        raw_run("ip", "-n", namespace, "link", "set", "lo", "down")
+        raw_run("ip", "link", "set", host_interface, "down")
+        raw_run(
+            "sysctl", "-q", "-w",
+            f"net.ipv4.conf.{host_interface}.proxy_arp=0",
+        )
+        raw_run(
+            "ip", "addr", "add", "192.0.2.1/32", "dev", host_interface,
+        )
+        drift_environment, drift_boundary, _ = ensure_lifecycle(spec, runner)
+        assert drift_environment.confirmed
+        assert drift_boundary.confirmed
+        assert not json.loads(
+            runner.run(("ip", "-j", "-4", "addr", "show", "dev", host_interface))
+        )[0].get("addr_info")
+        print("MANAGED_OWNED_LIFECYCLE_DRIFT_REPAIRED=PASS")
+
+        destroy_lifecycle(spec, runner)
+        assert not verify_managed_network_environment(spec, runner).confirmed
+        assert not verify_managed_l3_boundary(spec, runner).confirmed
+        assert not observe_ordinary_side_portal(spec, runner).confirmed
         assert namespace not in runner.run(("ip", "netns", "list"))
         links = json.loads(runner.run(("ip", "-j", "link", "show")))
         assert not any(
@@ -172,10 +216,11 @@ def main() -> int:
             "ip", "netns", "exec", namespace,
             "sysctl", "-q", "-w", "net.ipv4.ip_forward=1",
         )
-        recovered = ensure_managed_network_domain(spec, runner)
-        assert recovered.confirmed
-        assert recovered.created
-        assert recovered.verification.host_boundary is not None
+        recovered_environment, recovered_boundary, recovered_portal = ensure_lifecycle(spec, runner)
+        assert not recovered_environment.created
+        assert recovered_boundary.created
+        assert recovered_portal.confirmed
+        assert recovered_boundary.verification.private_boundary is not None
         assert (
             LinuxForwardingGateBackend(
                 runner,

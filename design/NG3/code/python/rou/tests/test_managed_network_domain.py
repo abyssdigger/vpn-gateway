@@ -6,7 +6,7 @@ import unittest
 
 from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
-    preflight_managed_network_domain,
+    preflight_managed_network_environment,
 )
 
 
@@ -55,17 +55,11 @@ class ManagedNetworkDomainTests(unittest.TestCase):
 
     def test_absent_preflight_is_read_only(self):
         runner = AbsentRunner()
-        value = preflight_managed_network_domain(SPEC, runner)
-        self.assertTrue(value.confirmed)
-        self.assertFalse(value.existing)
-        self.assertIsNone(value.verification)
+        value = preflight_managed_network_environment(SPEC, runner)
+        self.assertFalse(value)
         self.assertEqual(
             runner.commands,
-            [
-                ("ip", "netns", "list"),
-                ("ip", "netns", "list"),
-                ("ip", "-j", "-d", "link", "show"),
-            ],
+            [("ip", "netns", "list")],
         )
 
 
