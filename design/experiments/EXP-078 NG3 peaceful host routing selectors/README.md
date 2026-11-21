@@ -8,7 +8,7 @@ Technical result and disposition are unchanged by this traceability annotation.
 
 When this experiment was prepared, the then-current requirement tree contained:
 
-- **[VPNG0001-R2.R2]** *Чтобы разрешенная родителем host-side автоматизация для типовой эксплуатации первого release оставалась явно управляемой и не превращалась в постоянный захват ordinary-host routing.* | Первый release должен предоставлять peaceful host-routing automation, которая через продуктовую конфигурацию по умолчанию отключена и при включении применяет route assistance только к явно выбранной администратором области ordinary-host traffic. Область должна позволять отдельно выбирать host-originated traffic, весь non-local ingress traffic или точные host ingress interfaces; traffic вне выбранной области не должен захватываться helper'ом. Peaceful helper не должен сам включать или выключать host IP forwarding. При включенной области helper устанавливает идентифицируемые host-routing contributions при start, обновляет их при поддерживаемой lifecycle reload-операции и при stop удаляет только сохранившиеся принадлежащие helper'у contributions, не удаляя заменившее их администраторское состояние. Между lifecycle-операциями helper не обязан непрерывно наблюдать или восстанавливать последующие изменения, не должен принудительно возвращать замененное администратором состояние, а такая внешняя поломка или замена сама по себе не должна переводить core managed forwarding VPN-GATE в fail-closed. [`closed`]
+- **[VPNG-U001-R2.R2]** *Чтобы разрешенная родителем host-side автоматизация для типовой эксплуатации первого release оставалась явно управляемой и не превращалась в постоянный захват ordinary-host routing.* | Первый release должен предоставлять peaceful host-routing automation, которая через продуктовую конфигурацию по умолчанию отключена и при включении применяет route assistance только к явно выбранной администратором области ordinary-host traffic. Область должна позволять отдельно выбирать host-originated traffic, весь non-local ingress traffic или точные host ingress interfaces; traffic вне выбранной области не должен захватываться helper'ом. Peaceful helper не должен сам включать или выключать host IP forwarding. При включенной области helper устанавливает идентифицируемые host-routing contributions при start, обновляет их при поддерживаемой lifecycle reload-операции и при stop удаляет только сохранившиеся принадлежащие helper'у contributions, не удаляя заменившее их администраторское состояние. Между lifecycle-операциями helper не обязан непрерывно наблюдать или восстанавливать последующие изменения, не должен принудительно возвращать замененное администратором состояние, а такая внешняя поломка или замена сама по себе не должна переводить core managed forwarding VPN-GATE в fail-closed. [`closed`]
 
 These R/C IDs were later removed or reparented by the NG3 Purpose/parent refactor. They are
 preserved here verbatim as the historical normative context that caused this experiment to be
@@ -17,12 +17,12 @@ through live R/C links elsewhere in this dossier or in the central experiment re
 
 ## Статус
 
-COMPLETE — PASS — SELECTED as privileged selector acceptance evidence for revised `VPNG0001-R5.R1.R1`.
+COMPLETE — PASS — SELECTED as privileged selector acceptance evidence for revised `VPNG-U001-R5.R1.R1`.
 
 ## Requirement trace
 
-- `VPNG0001-R2`;
-- `VPNG0001-R5.R1.R1`.
+- `VPNG-U001-R2`;
+- `VPNG-U001-R5.R1.R1`.
 
 ## Вопрос
 
@@ -86,7 +86,7 @@ PASS требует одновременно:
    совпал ни с одним helper dispatch selector;
 8. experiment не изменяет ordinary `main` routes.
 
-FAIL любого пункта возвращает revised closure `VPNG0001-R5.R1.R1` в architecture review.
+FAIL любого пункта возвращает revised closure `VPNG-U001-R5.R1.R1` в architecture review.
 
 ## Выполнение
 
