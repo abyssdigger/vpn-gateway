@@ -178,3 +178,14 @@ Return to the previously queued suspicious requirement:
 Its safety intent may still be valid, but its current Purpose/Statement must be reviewed
 against the corrected boundary because the wording still speaks in terms of Profile
 destinations escaping through ambient/main routing.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
+- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+
+The original IDs in the historical body are intentionally preserved.

@@ -223,3 +223,15 @@ Normative promotion and the atomic current-document trace remap were completed a
 trace only to live obligations. A full active experiment-README audit added or corrected
 `Historical requirement context` wherever removed R/C IDs had been part of the experiment's
 normative basis. Historical review and result records remain unchanged.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005` -> `VPNG9101-R1`
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+
+The original IDs in the historical body are intentionally preserved.

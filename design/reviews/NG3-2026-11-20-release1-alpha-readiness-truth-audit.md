@@ -129,3 +129,14 @@ Exact reviewed head `56009f23069c578e0359cf1ea2740cd38344282f`:
 The current executable-alpha documentation/test truth is consistent for availability and
 Profile SNAT. Further movement toward a production/stable Release-1 package/status interface
 requires an explicit product/interface decision rather than autonomous implementation.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
+- `VPNG0007-R7.R8.C2` -> `VPNG9001-R1.R1.R8.C2`
+
+The original IDs in the historical body are intentionally preserved.

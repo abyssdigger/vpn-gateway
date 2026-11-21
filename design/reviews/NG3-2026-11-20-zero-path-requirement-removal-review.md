@@ -121,3 +121,13 @@ Its underlying need — bounded recovery after arbitrary root/admin mutation —
 but its current fail-closed scope must be rechecked against the newly separated distinction
 between authoritative VPN-GATE-owned runtime state and administrator-owned / peaceful-helper
 host routing.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
+
+The original IDs in the historical body are intentionally preserved.
