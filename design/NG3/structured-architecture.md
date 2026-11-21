@@ -292,9 +292,21 @@ Residents
 
 ### NetworkPolicyAdapter
 
-Adapter принимает owner-scoped semantic network policy и скрывает ее lower representation,
-allocation, observation и convergence. Payload policy и probe policy остаются разными
-semantic owners даже при общей физической реализации.
+Adapter является shared boundary от owner-scoped semantic network policy клиентов STACK к
+lower network-policy domain Private network. Общая physical realization не сливает
+различные semantic owners.
+
+**Implements:**
+- `VPNG0001-R1.R1`
+- `VPNG0004-R4.R2`
+- `VPNG0004-R4.R3`
+- `VPNG0004-R4.R5`
+- `VPNG0005-R5.R2`
+- `VPNG0005-R5.R3`
+- `VPNG0005-R5.R4`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R3.R2`
+- `VPNG0007-R7.R5`
 
 API
 
@@ -304,10 +316,26 @@ API
 
 Architectural decisions
 
-1. `Semantic boundary` *Upper clients не знают route-table allocation, route protocol markers, RPDB priorities, gateway/onlink representation, nft/sysctl syntax, command ordering и transaction scratch state.*
-2. `Owner separation` *Общая physical realization не сливает payload, probe и другие semantic owner scopes; ownership должен оставаться различимым при observation, mutation и cleanup.*
-3. `Lower realization` *Adapter обязан получить достаточные verified lower facts и owned-resource allocation; неизвестную gateway/onlink или другую physical realization запрещено угадывать.*
-4. `Cross-Space finding` *Существующий flat architecture также приписывает этому Adapter host-side Device publication mapping. В structured architecture этот sub-contract пока не заселяется сюда: его server находится вне Private network, а сохранение его под этим Adapter потребовало бы `<partial>` и отдельного review границы.*
+1. `Semantic boundary`
+   *Upper callers передают semantic policy, а не Linux realization. Route tables, RPDB priorities, protocol markers, gateway/onlink representation, nft/sysctl syntax, command ordering и transaction scratch state остаются ниже Adapter.*
+
+2. `Owner preservation`
+   *Payload policy, probe policy и другие semantic owner scopes остаются различимыми при allocation, observation, mutation и cleanup даже при общей physical machinery.*
+
+3. `Realization composition`
+   *Для lower policy Adapter соединяет semantic Profile/path intent, current verified path/integration facts и internal owned-resource layout. Ни один из этих lower фактов не добавляется в human configuration только потому, что он нужен Linux.*
+
+4. `Fail-closed incomplete realization`
+   *Missing/ambiguous gateway, onlink или другой required physical fact нельзя угадывать из ambient routing либо молча выбрасывать. Зависимый lower policy остается unconfirmed/restrictive, пока достаточная realization не будет доказана.*
+
+5. `Internal resource allocation`
+   *Numeric/internal resource layout выбирается ниже semantic boundary. `NetworkPolicyLayoutCalculator` строит layout из semantic owner demand и injected platform space; route-priority realization types являются consumers этого layout, а не authority его глобального выбора.*
+
+6. `Convergence delegation`
+   *`NetworkPolicyEnforcer` получает уже выбранный desired lower state/postcondition и отвечает за его достижение/verification. Он не выбирает semantic policy и не расширяет API Space вокруг Adapter.*
+
+7. `Cross-Space finding`
+   *Flat architecture также приписывает этому Adapter host-side Device publication mapping. В structured architecture этот sub-contract пока не заселяется сюда: его server находится вне Private network, а сохранение его под этим Adapter потребовало бы `<partial>` и отдельного review границы.*
 
 ### NetworkPolicyLayoutCalculator
 
