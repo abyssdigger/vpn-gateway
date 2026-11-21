@@ -1009,6 +1009,156 @@ Component diagram
 ```
 
 
+# Ambient host and external world
+
+Обычный host и внешний IP-мир за пределами явно owned VPN-GATE state. Этот Space является
+источником/приемником ordinary-side traffic и предоставляет host/deployment mechanisms,
+которыми VPN-GATE может пользоваться или которые может наблюдать, но не получает право
+менять их только потому, что они влияют на его работу.
+
+API
+
+    @OrdinaryHostNetwork.<IP handoff> — ordinary-side IP environment, связанная с managed boundary.
+    @OrdinaryHostNetwork.<host network observation> — наблюдение interface/address/routing/forwarding prerequisites там, где это требуется owned contracts.
+    @systemd.<unit lifecycle> — selected Release-1 deployment/service-management interface для controller и explicitly bound VPN services.
+    @ExternalConfigurationSource.read(...) — предоставить external configuration representation; current deployment may realize this as host file input.
+
+Residents
+
+1. `@OrdinaryHostNetwork` *Administrator/kernel-owned ordinary host network environment: interfaces, addresses, routing/RPDB, forwarding и foreign firewall/NAT.*
+2. `@systemd` *Selected Release-1 deployment/service manager; обеспечивает controller readiness ordering и lifecycle explicitly bound VPN service units/cgroups.*
+3. `@ExternalConfigurationSource` *Replaceable source external configuration representation consumed by STACK configuration boundary.*
+
+Artifacts
+
+1. `ordinary host interface/address state` *(observed where required; not core-managed)*.
+2. `administrator routing/RPDB state` *(used; not core-managed)* — включает ordinary main/default и любые foreign policy rules вне явно reserved VPN-GATE owner scopes.
+3. `host-global IPv4 forwarding state` *(observed where required; not core-managed)*.
+4. `foreign host firewall/NAT state` *(not managed)*.
+5. `ordinary external IP connectivity` — external network reality reachable through host; VPN-GATE не принимает ее ownership.
+6. `deployment service state` — systemd controller/VPN unit state and ordering owned by deployment/service manager.
+7. `external configuration representation` — operator-maintained input representation, из которой STACK строит normalized intent.
+
+Явно owned host publication/helper objects исключены отсюда и находятся в
+`VPN-GATE-managed host state`. Managed L3 door исключена и находится в
+`Ordinary-side transition`.
+
+Interactions
+
+| From | Interaction | To |
+| --- | --- | --- |
+| `Ordinary-side transition.managed L3 boundary realization` | bidirectional ordinary-side IP handoff | `@OrdinaryHostNetwork` |
+| `@OrdinaryHostNetwork` | ordinary traffic / underlay connectivity | `ordinary external IP connectivity` |
+| `VPN-GATE-managed host state.@NetworkPolicyAdapter <partial>` | observe forwarding/interface/address prerequisites only | `@OrdinaryHostNetwork` |
+| `VPN-GATE-managed host state` | preserve foreign host network state outside explicit owner scopes | `administrator routing/RPDB state` / `foreign host firewall/NAT state` |
+| `Operator` | create/change external configuration representation | `@ExternalConfigurationSource` |
+| `@ExternalConfigurationSource` | candidate representation | `STACK.@ConfigurationAdapter` |
+| `Operator` | start/stop/restart controller deployment | `@systemd` |
+| `@systemd` | invoke/contain controller service lifecycle and wait for readiness semantics | `STACK.@ProductLifecycleControl` |
+| `Operator` | start/stop/restart supported stack-specific VPN service | `@systemd` |
+| `@systemd` | supervise explicitly bound VPN process/cgroup | `VPN external ends.@VPNChannel[]` |
+| `@systemd` | reverse dependency/order stop bound VPN service before final managed-domain teardown | `VPN external ends` / `STACK.@ProductLifecycleControl` |
+
+Finding: `Ambient breadth` — этот Space намеренно объединяет ordinary host и внешний
+ordinary IP world, пока внутри них нет самостоятельной VPN-GATE-managed semantics,
+требующей дополнительной boundary. Наличие множества Linux objects само по себе не повод
+дробить Space.
+
+Component diagram
+
+```text
++---------------------------- Operator ------------------------------+
+| config / lifecycle / VPN-service commands                          |
++----------+----------------------+----------------------------------+
+           |                      |
+           v                      v
++----------+-----------+   +------+----------------------------------+
+| ExternalConfigSource|   | systemd                                  |
++----------+-----------+   +------+----------------+-----------------+
+           |                      |                |
+           v                      v                v
++----------+-----------+     +----+-----+   +------+-----------------+
+|        STACK         |     |  STACK   |   | VPN external ends      |
++----------------------+     +----------+   +------------------------+
+
++-------------------------------------------------------------------+
+|               Ambient host and external world                     |
+|                                                                   |
+| @OrdinaryHostNetwork                                              |
+|   [interfaces/addresses] [admin routing/RPDB] [host forwarding]   |
+|   [foreign firewall/NAT]                                          |
+|              |                                                    |
+|              v                                                    |
+|      [ordinary external IP connectivity]                          |
++--------------^----------------------------------------------------+
+               |
+               | ordinary-side IP
++--------------+-------------------+
+| Ordinary-side transition          |
++-----------------------------------+
+```
+
+
+# Operator
+
+Человеческая либо automation-среда, задающая deployment/product intent и потребляющая
+наблюдаемое состояние продукта. Operator не является владельцем внутреннего semantic
+runtime state VPN-GATE и не получает implicit authority над managed lower state в обход
+опубликованных control/configuration boundaries.
+
+Residents
+
+1. `OperatorClient` *Человек или automation, использующие документированные configuration, lifecycle, VPN-onboarding и status/diagnostic surfaces.*
+
+Artifacts
+
+1. `operator configuration intent` *(managed by operator)* — желаемая Device/Profile/helper configuration до ее проверки STACK.
+2. `VPN onboarding intent` *(managed by operator)* — VPN-specific configuration/service preparation, остающаяся отделенной от VPN-GATE Device/Profile policy.
+3. `observed product status` *(observed)* — current truthful status/diagnostic projection, а не источник authoritative runtime truth.
+
+Interactions
+
+| From | Interaction | To |
+| --- | --- | --- |
+| `OperatorClient` | edit/provide candidate product configuration | `Ambient host and external world.@ExternalConfigurationSource` |
+| `OperatorClient` | product `start / stop / restart / supported update` through deployment/control mechanism | `Ambient host and external world.@systemd` / `STACK.@ProductLifecycleControl` |
+| `OperatorClient` | prepare stack-specific VPN service/config according to supported onboarding contract | `VPN external ends.@VPNChannel[]` |
+| `OperatorClient` | VPN service start/stop/restart through selected service manager | `Ambient host and external world.@systemd` |
+| `STACK.@RuntimeStatusAgent` / presentation environment | current status/diagnostics | `OperatorClient` |
+| `OperatorClient` | inspect current result; choose later explicit action if required | `observed product status` |
+
+Не существует interaction «Operator напрямую исправляет owned kernel state» как нормального
+product API. Root/admin intervention вне supported boundaries остается внешним вмешательством
+и может привести к containment/unready state; оно не превращается в штатную management
+semantics.
+
+Component diagram
+
+```text
++-------------------------------------------------------------------+
+|                              Operator                             |
+|                                                                   |
+| OperatorClient                                                    |
+|    | config             | lifecycle        | VPN onboarding       |
+|    |                    |                  |                      |
+|    +--------------------+------------------+------------------+   |
+|                                                           ^   |   |
+|                                                status ----+   |   |
++---------------------------------------------------------------|---+
+            |                    |                    |          |
+            v                    v                    v          |
++-----------+-----------+  +-----+------+  +----------+-------+  |
+| External config source|  |   systemd   |  | VPN external ends|  |
++-----------------------+  +-----+------+  +------------------+  |
+                                |                                |
+                                v                                |
+                         +------+----------------+               |
+                         |       STACK           |---------------+
+                         | lifecycle / status    |
+                         +-----------------------+
+```
+
+
 
 ## Component addenda
 
