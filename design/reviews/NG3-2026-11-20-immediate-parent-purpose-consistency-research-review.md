@@ -60,9 +60,9 @@ The resulting proposed tree is rendered in
 The current research draft has:
 
 - primary project Requirements: **7**
-- derived Requirements: **153**
+- derived Requirements: **152**
 - Constraints: **24**
-- total proposed nodes: **184**
+- total proposed nodes: **183**
 
 The count change is not itself a scope change: several old implementation/configuration nodes
 were removed or split into a product capability plus configuration Constraint/Requirement,
@@ -70,7 +70,7 @@ and managed-domain mechanism nodes were moved out of requirement semantics.
 
 ### Resolved findings
 
-The draft now has accepted dispositions for **17 of the original 20 findings**:
+The draft now has accepted dispositions for **18 of the original 20 findings**:
 
 1. former `VPNG0001-R1.R2` configuration ancestry — common configuration moved directly
    under `VPNG0001` as provisional `VPNG0001-R4`;
@@ -101,19 +101,22 @@ The draft now has accepted dispositions for **17 of the original 20 findings**:
     Constraint;
 17. remote-initiated-flow return affinity — moved from `VPNG0002-R2.R6` to direct child
     `VPNG0003-R4`; the same-path Statement is retained, while flow/network-property stability
-    is stated in Purpose. It remains separate from `VPNG0003-R3` baseline/availability preference.
+    is stated in Purpose. It remains separate from `VPNG0003-R3` baseline/availability preference;
+18. second VPN lifecycle evidence gate `VPNG0007-R7.R7.R1.R1` — removed from the requirement
+    tree as a process/evidence sequencing rule rather than a product obligation; EXP-050 remains
+    historical evidence and current trace is redirected to the applicable integration, safety
+    and lifecycle requirements.
 
 The adjacent timing/hysteresis constraint was also moved to sibling
 `VPNG0003-R3.R6.R3.R1.C2`, so it no longer depends on Device-default/Profile-override reuse.
 
 ### Remaining unresolved findings
 
-Three baseline findings still lack a product-holder disposition and remain explicitly marked
+Two baseline findings still lack a product-holder disposition and remain explicitly marked
 `RESEARCH UNRESOLVED` in the draft:
 
 1. `VPNG0004-R4.R3.R1` — priority-only make-before-break continuity;
-2. `VPNG0005-R5.R6.R4` — reload capability/contract placement;
-3. `VPNG0007-R7.R7.R1.R1` — second VPN lifecycle evidence gate placement.
+2. `VPNG0005-R5.R6.R4` — reload capability/contract placement.
 
 Their detailed questions are maintained in
 `design/NG3/research/NG3-2026-11-20-purpose-parent-unresolved-questions.md`.
@@ -177,12 +180,12 @@ No production/reference code was changed by this research refactor.
 
 ## Verdict
 
-**RESEARCH DRAFT SUBSTANTIALLY SYNCHRONIZED; THREE PRODUCT/PLACEMENT DECISIONS REMAIN.**
+**RESEARCH DRAFT SUBSTANTIALLY SYNCHRONIZED; TWO PRODUCT/PLACEMENT DECISIONS REMAIN.**
 
-The original 20 findings have been reduced to three unresolved questions. The corrected-tree
+The original 20 findings have been reduced to two unresolved questions. The corrected-tree
 draft, decision record, unresolved list and impact assessment are now aligned with each other.
 
-Normative promotion remains blocked until the remaining three findings are decided and the
+Normative promotion remains blocked until the remaining two findings are decided and the
 resulting tree is reviewed as one coherent requirement structure. After that, current
 architecture/configuration/registry documents require an atomic trace remap; historical
 reviews/experiments remain unchanged.
