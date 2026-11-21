@@ -317,10 +317,36 @@ routing-table, RPDB, route-marker, metric и nft namespace ресурсов.
 
 API
 
-    allocate(...) — построить lower owner/resource layout без observation или mutation внешней среды.
+    allocate(payload_profiles, probe_routing_demands, platform) — построить NetworkPolicyLayout без observation или mutation внешней среды.
 
 Его API не входит в API Space: numeric/internal allocation требуется только
 `NetworkPolicyAdapter` и не является самостоятельным контрактом для STACK.
+
+Architectural decisions
+
+1. `Semantic ownership first`
+   *Allocation начинается от semantic owner scopes. Kernel table/rule/protocol/metric numbers являются internal realization и не становятся identity пользователя или policy owner.*
+
+2. `Deterministic current allocation`
+   *Одинаковый accepted owner set и platform space дают одинаковый layout. Durable allocation journal/hash map не требуется, а стабильность numeric IDs между structural configuration changes не обещается.*
+
+3. `Separated resource classes`
+   *Payload и probe используют раздельные table/RPDB pools. Probe RPDB должен иметь более высокий precedence, payload RPDB — выполняться до ambient/main lookup.*
+
+4. `Payload domain completeness`
+   *Каждый enabled payload Profile получает собственную internal routing table даже при zero-path state. Zero-path Profile сохраняет table/terminal guard allocation, но не получает preference/scratch metric space.*
+
+5. `Metric workspace`
+   *Для Profile с реализованными paths выделяются strictly increasing preference slots, при необходимости отдельный scratch slot для make-before-break и отдельный terminal guard metric. Непредставимый path count отвергается до mutation.*
+
+6. `Dispatch ordering`
+   *Payload dispatch priorities распределяются детерминированно: longest prefix first, затем network address, затем Profile ID только как deterministic tie-break.*
+
+7. `Allocation is not cleanup authority`
+   *Reserved pool membership и current allocation map сами по себе не доказывают ownership произвольного kernel object. Stale/foreign cleanup требует отдельной exact observation/shape classification.*
+
+8. `Injected platform contract`
+   *Конкретные Linux numeric pools, protocol markers и nft namespace приходят через platform contract, не из user configuration. Их конкретные значения являются evidence-gated platform facts, а не частью semantic API Calculator.*
 
 ### NetworkPolicyEnforcer
 
