@@ -258,7 +258,7 @@ qualification under the structural branch.
 ### F2 — Enforcer must not own runtime retry/reconciliation
 
 The heading `Failure and recovery` risks conflating one Enforcer invocation with later
-Manager audit/retry responsibilities under `VPNG0005-R5.R2/R3`.
+Manager audit/retry responsibilities under `VPNG-U005-R5.R2/R3`.
 
 **Decision:** accepted.  
 **Resolution:** fixed by renaming/rewording the decision as a per-invocation failure
@@ -359,6 +359,6 @@ No parent/child relationship, Space API or safety invariant changed.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.R2` -> `VPNG9101-R1.R1.R2`
+- `VPNG-U005-R5.R2` -> `VPNG-M001-R1.R1.R2`
 
 The original IDs in the historical body are intentionally preserved.

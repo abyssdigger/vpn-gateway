@@ -1,6 +1,6 @@
 # NG3 2026-11-22 — human runtime status report review
 
-**Scope:** `VPNG9101-R2.R2` compact human current-state presentation, path-level availability
+**Scope:** `VPNG-M001-R2.R2` compact human current-state presentation, path-level availability
 truthfulness and installed alpha publication.
 
 ## Verdict
@@ -16,11 +16,11 @@ existing JSON presentation.
 
 Reviewed:
 
-- `VPNG9101-R2.R2`;
-- `VPNG9101-R2.R2.R1`;
-- `VPNG9101-R2.R2.R2`;
-- `VPNG9101-R2.R2.R3`;
-- `VPNG9101-R2.R2.R4`.
+- `VPNG-M001-R2.R2`;
+- `VPNG-M001-R2.R2.R1`;
+- `VPNG-M001-R2.R2.R2`;
+- `VPNG-M001-R2.R2.R3`;
+- `VPNG-M001-R2.R2.R4`.
 
 Architecture entry: `A.009 RuntimeStatusTextRenderer`.
 
@@ -95,4 +95,4 @@ No new `unreal`, `broken`, `decomp` or `rejected_closure` state is introduced.
 
 ## Closure decision
 
-The five reviewed `VPNG9101-R2.R2*` nodes may move from `pending_closure` to `closed`.
+The five reviewed `VPNG-M001-R2.R2*` nodes may move from `pending_closure` to `closed`.

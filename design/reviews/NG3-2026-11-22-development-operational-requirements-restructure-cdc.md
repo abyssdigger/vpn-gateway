@@ -12,9 +12,9 @@ and preserve historical traceability across alpha ID migration.
 The current requirement tree now classifies engineering requirements by the lifecycle process
 whose cost they optimize:
 
-- `VPNG9001` — development/change/maintenance cost;
-- `VPNG9101` — administration/diagnosis/operation cost;
-- `VPNG0001`–`VPNG0004` — functional/user-facing VPN behavior and safety.
+- `VPNG-D001` — development/change/maintenance cost;
+- `VPNG-M001` — administration/diagnosis/operation cost;
+- `VPNG-U001`–`VPNG-U004` — functional/user-facing VPN behavior and safety.
 
 This classification is independent of which development activity physically implements an
 operational requirement.
@@ -23,12 +23,12 @@ operational requirement.
 
 Current semantic migrations are:
 
-- former `VPNG0007` -> `VPNG9001-R1`, with former `VPNG0007-R7...` ->
-  `VPNG9001-R1.R1...`;
-- former `VPNG0005` -> `VPNG9101-R1`, with former `VPNG0005-R5...` ->
-  `VPNG9101-R1.R1...`;
-- former `VPNG0006` -> `VPNG9101-R2`, with former `VPNG0006-R6...` ->
-  `VPNG9101-R2.R1...`.
+- former `VPNG-U007` -> `VPNG-D001-R1`, with former `VPNG-U007-R7...` ->
+  `VPNG-D001-R1.R1...`;
+- former `VPNG-U005` -> `VPNG-M001-R1`, with former `VPNG-U005-R5...` ->
+  `VPNG-M001-R1.R1...`;
+- former `VPNG-U006` -> `VPNG-M001-R2`, with former `VPNG-U006-R6...` ->
+  `VPNG-M001-R2.R1...`.
 
 The migrated descendants preserve their previous closure/decomposition state. The new broad
 roots deliberately remain decomposition-incomplete rather than falsely claiming that all
@@ -42,13 +42,13 @@ IDs remain immutable.
 
 The former declarations were promoted rather than left as non-normative wishes:
 
-1. `VPNG9101-R2.R2` and descendants require the compact human current-state report:
+1. `VPNG-M001-R2.R2` and descendants require the compact human current-state report:
    `Devices` / `Profiles`, four-space hierarchy, one-line Device state, one-line disabled
    Profile state, numbered current effective path order, and normalized availability wording.
    These nodes are `pending_closure`; architecture now defines
    `RuntimeStatusTextRenderer` as a pure Calculator over the authoritative
    `RuntimeStatusSnapshot`.
-2. `VPNG9101-R3` captures practical suitability for resource-constrained gateways and weak
+2. `VPNG-M001-R3` captures practical suitability for resource-constrained gateways and weak
    devices. Its measurable resource envelope remains intentionally decomposition-incomplete;
    `R3.R1` records the preference for lower steady-state CPU/memory/allocation/state cost
    among behaviorally equivalent solutions.
@@ -60,7 +60,7 @@ a particular CLI/file/API path is not.
 
 Historical review/research/experiment records retain their original IDs as baseline facts.
 Affected records now carry migration notes with current IDs. One earlier reload pair,
-`VPNG0005-R5.R6.R4` / `VPNG0005-R5.R6.R4.C1`, had already been deleted before this
+`VPNG-U005-R5.R6.R4` / `VPNG-U005-R5.R6.R4.C1`, had already been deleted before this
 migration and therefore retains its complete last normative wording instead of inventing a
 successor.
 
@@ -79,7 +79,7 @@ Current branch checks:
 - closed: **144**;
 - pending closure: **39**;
 - active closed requirements missing from structured architecture: **0**;
-- old `VPNG0005/0006/0007` IDs in current requirements/architecture/structured
+- old `VPNG-U005/0006/0007` IDs in current requirements/architecture/structured
   architecture/deployment/declarations/experiment registry: **0**.
 
 The 39 pending-closure nodes are the prior 34 architecture candidates plus the five newly
@@ -128,5 +128,5 @@ wording.
 ## Next unblocked development unit
 
 The highest-priority adjacent operational gap is implementation/evidence for
-`VPNG9101-R2.R2`: render and publish the required compact human current-state report from the
+`VPNG-M001-R2.R2`: render and publish the required compact human current-state report from the
 existing `RuntimeStatusSnapshot` without creating a second status model.
