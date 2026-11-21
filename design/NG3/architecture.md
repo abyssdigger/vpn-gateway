@@ -1,11 +1,18 @@
-# VPN-GATE NG3 — Architecture Report
+# VPN-GATE NG3 — Architecture Report — OBSOLETE
 
-**Status:** NG3 architecture, current Release 1 closure with executable reference slices  
-**Cycle:** `ng3-design-cycle-20261116-primary-requirements-basis-40m`  
+**Status:** **OBSOLETE / superseded historical pre-structured architecture report**  
+**Superseded by:** `design/NG3/structured-architecture.md`  
+**Historical cycle:** `ng3-design-cycle-20261116-primary-requirements-basis-40m`  
 **Requirements:** `design/NG3/requirements.md`  
 **Component model:** `design/component-model.md`
 
-This document is an implementation report for accepted NG3 requirements.
+> Do not use this file as the current NG3 architecture source and do not add new
+> architectural decisions or closure here. It is retained so historical reviews/evidence
+> can still be read against the architecture report they referenced. Current architecture,
+> component/API/interaction contracts and requirement closure live only in
+> `design/NG3/structured-architecture.md`.
+
+This document was an implementation report for accepted NG3 requirements.
 
 It is not a source of new product semantics.
 

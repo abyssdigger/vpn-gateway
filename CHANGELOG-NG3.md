@@ -4,6 +4,14 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Structured architecture becomes authoritative
+
+The sequential architecture restructuring is complete. `design/NG3/structured-architecture.md`
+is now the single current NG3 architecture source for component/API/interaction contracts and
+requirement closure. The former flat `design/NG3/architecture.md` is retained only as an
+explicitly obsolete historical pre-structured report; existing historical references to it
+remain valid for their recorded baseline, but no new architecture decisions are added there.
+
 ## 2026-11-22 — Development and operational cost requirements separated
 
 Engineering requirements are now classified by the lifecycle cost they optimize rather than
