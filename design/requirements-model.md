@@ -1218,8 +1218,8 @@ Architecture coverage асимметрично относительно дере
 выполняется хотя бы одно условие:
 
 1. нормативная архитектура содержит точную ссылку на этот узел;
-2. узел имеет [`decomposition`: `complete`] и каждый его непосредственный нормативный
-   child architecturally covered.
+2. узел имеет [`decomposition`: `complete`], имеет хотя бы одного непосредственного
+   нормативного child и каждый такой child architecturally covered.
 
 Следствия:
 
@@ -1513,7 +1513,8 @@ open
 - `pending_closure` должен иметь хотя бы одну точную ссылку на свой ID в нормативной
   архитектуре;
 - `closed` должен иметь либо точную принятую architecture-ссылку на свой ID, либо
-  [`decomposition`: `complete`] и всех непосредственных нормативных детей [`closed`];
+  [`decomposition`: `complete`], хотя бы одного непосредственного нормативного child и всех
+  непосредственных нормативных детей [`closed`];
 - requirement-документ не дублирует перечень архитектурных решений;
 - узел с активной ссылкой [`decomp`: ... -> pending] не может иметь
   [`pending_closure`] или [`closed`];
@@ -1540,6 +1541,7 @@ node [closed]
        OR
        (
          node [decomposition: complete]
+         AND node has at least one immediate normative child
          AND every immediate normative child [closed]
        )
 
@@ -1551,7 +1553,7 @@ architecture references parent
 
 - [`pending_closure`] без точной архитектурной ссылки — формально обнаруживаемая ошибка;
 - [`closed`] без точной архитектурной ссылки допустим только как агрегированный closure
-  полного parent'а через всех непосредственных [`closed`] детей;
+  полного non-leaf parent'а через всех непосредственных [`closed`] детей;
 - [`decomposition`: `incomplete`] никогда не позволяет вывести closure parent'а только
   из существующих детей;
 - архитектурная ссылка на нормативный узел без closure-label — допустимое промежуточное состояние;
