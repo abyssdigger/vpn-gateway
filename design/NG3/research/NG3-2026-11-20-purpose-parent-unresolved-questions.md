@@ -80,7 +80,7 @@ queue:
 - host-state safety сделан mechanism-neutral, managed network domain и literal DROP остаются
   architecture/evidence;
 - protective mode поднят непосредственно под `VPNG0004`.
-- return-flow affinity перенесён под forwarding behavior `VPNG0001-R1.R1` как `VPNG0001-R1.R1.R1`, сохранив позитивную same-path гарантию.
+- return-flow affinity перенесён из `VPNG0002-R2.R6` в прямой child `VPNG0003-R4`, сохранив позитивную same-path гарантию; это отдельный принцип выбора пути, параллельный baseline/availability preference.
 
 До решения трёх вопросов выше нормативный remap `design/NG3/requirements.md` остаётся
 неполным.
