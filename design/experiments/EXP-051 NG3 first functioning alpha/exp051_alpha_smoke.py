@@ -578,6 +578,12 @@ Profiles
 """
         print("EXP051_RUNTIME_STATUS_FIRST_PATH=PASS")
         print("EXP051_RUNTIME_STATUS_TEXT_FIRST_PATH=PASS")
+        json_mtime = STATUS_PATH.stat().st_mtime_ns
+        text_mtime = STATUS_TEXT_PATH.stat().st_mtime_ns
+        time.sleep(2.2)
+        assert STATUS_PATH.stat().st_mtime_ns == json_mtime
+        assert STATUS_TEXT_PATH.stat().st_mtime_ns == text_mtime
+        print("EXP051_RUNTIME_STATUS_CHANGE_DRIVEN_PUBLICATION=PASS")
         # Remote-initiated host-local flow: the response must use the
         # selected route-based host bootstrap because +route-return opted out
         # of host conntrack return steering.

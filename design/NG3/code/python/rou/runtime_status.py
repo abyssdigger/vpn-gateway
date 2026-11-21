@@ -464,6 +464,25 @@ def _status_path_availability(
     raise ValueError(f"unknown availability status: {status.state!r}")
 
 
+class RuntimeStatusFilePublisher:
+    """Publish one current status generation only when its semantic snapshot changes."""
+
+    def __init__(self, json_path: Path, text_path: Path) -> None:
+        self._json_path = json_path
+        self._text_path = text_path
+        self._last_published: RuntimeStatusSnapshot | None = None
+
+    def publish(self, snapshot: RuntimeStatusSnapshot) -> bool:
+        if not isinstance(snapshot, RuntimeStatusSnapshot):
+            raise ValueError("snapshot must be RuntimeStatusSnapshot")
+        if snapshot == self._last_published:
+            return False
+        write_runtime_status_json(self._json_path, snapshot)
+        write_runtime_status_text(self._text_path, snapshot)
+        self._last_published = snapshot
+        return True
+
+
 def write_runtime_status_text(path: Path, snapshot: RuntimeStatusSnapshot) -> None:
     if not isinstance(snapshot, RuntimeStatusSnapshot):
         raise ValueError("snapshot must be RuntimeStatusSnapshot")
