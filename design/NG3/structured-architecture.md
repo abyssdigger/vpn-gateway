@@ -1783,7 +1783,7 @@ Architectural decisions
 - `VPNG0004-R4.R3.R2`
 - `VPNG0004-R4.R4`
 - `VPNG0004-R4.R5`
-- `VPNG0004-R4.R6.R1`
+- `VPNG0004-R4.R6`
  Его
 verified DISABLED state используется как structural safety barrier, но тот же contract нужен
 startup, shutdown и recovery независимо от `NetworkPolicyAdapter`.
@@ -1822,7 +1822,7 @@ Architectural decisions
 - `VPNG0004-R4.R3.R2`
 - `VPNG0004-R4.R4`
 - `VPNG0004-R4.R5`
-- `VPNG0004-R4.R6.R1`
+- `VPNG0004-R4.R6`
 
 Сам по себе Driver не реализует semantic requirement postcondition: он предоставляет
 technical read/write primitive для `ForwardingGate`, который выполняет fresh
@@ -1981,9 +1981,10 @@ Direct lifecycle Machinery optional peaceful host-routing helper. Она уст�
 только complete identifiable contribution выбранного helper scope и не является host-routing
 Manager/supervisor.
 
-**Implements / closes:**
+**Implements:**
 - `VPNG0001-R2`
-- `VPNG0001-R2.R2`
+- `VPNG0001-R5.R1`
+- `VPNG0001-R5.R1.R1`
 
 **Constrained by:**
 - `VPNG0007-R7.R8`
