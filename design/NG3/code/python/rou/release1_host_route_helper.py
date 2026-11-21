@@ -12,7 +12,7 @@ from .linux_host_managed_routing import (
     build_linux_peaceful_host_routing_desired,
 )
 from .linux_host_managed_routing_backend import (
-    LinuxHostManagedRoutingBackend,
+    LinuxHostManagedRoutingDriver,
     cleanup_host_managed_routing_once,
     converge_host_managed_routing_once,
 )
@@ -119,7 +119,7 @@ def build_release1_peaceful_host_routing_desired(
 
 @dataclass(slots=True)
 class LinuxPeacefulHostRoutingContribution(HostRoutingContribution):
-    backend: LinuxHostManagedRoutingBackend
+    backend: LinuxHostManagedRoutingDriver
     desired: HostManagedRoutingLinuxDesired
 
     def converge(self) -> None:
@@ -142,7 +142,7 @@ def build_linux_peaceful_host_routing_contribution(
     if desired is None:
         return None
     return LinuxPeacefulHostRoutingContribution(
-        backend=LinuxHostManagedRoutingBackend(
+        backend=LinuxHostManagedRoutingDriver(
             runner,
             NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION,
         ),

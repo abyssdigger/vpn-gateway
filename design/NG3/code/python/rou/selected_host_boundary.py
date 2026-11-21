@@ -21,7 +21,7 @@ from .linux_host_managed_routing import (
 )
 from .linux_host_managed_routing_backend import (
     HostManagedRoutingObservation,
-    LinuxHostManagedRoutingBackend,
+    LinuxHostManagedRoutingDriver,
     cleanup_host_managed_routing_once,
     converge_host_managed_routing_once,
 )
@@ -99,7 +99,7 @@ def build_selected_host_boundary_desired(
 
 @dataclass(slots=True)
 class SelectedLinuxHostBoundaryContribution(HostRoutingContribution):
-    routing_backend: LinuxHostManagedRoutingBackend
+    routing_backend: LinuxHostManagedRoutingDriver
     desired: SelectedHostBoundaryDesired
 
     def observe(self) -> SelectedHostBoundaryObservation:
@@ -239,7 +239,7 @@ def build_selected_linux_host_boundary_contribution(
 ) -> SelectedLinuxHostBoundaryContribution:
     desired = build_selected_host_boundary_desired(config, domain_spec)
     return SelectedLinuxHostBoundaryContribution(
-        routing_backend=LinuxHostManagedRoutingBackend(
+        routing_backend=LinuxHostManagedRoutingDriver(
             runner,
             NG3_HOST_MANAGED_ROUTING_LINUX_ALLOCATION,
         ),
