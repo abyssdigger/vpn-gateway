@@ -585,6 +585,11 @@ Executor не решает:
 Executor — не generic CLI/API passthrough. Его контракт задает конкретную техническую
 операцию. Детали raw invocation могут быть скрыты внутри Driver/Executor implementation.
 
+Сырой helper вида `run(argv) -> stdout/rc`, используемый только как process/transport
+injection primitive внутри Driver/Backend, сам по себе не является Reader или Executor
+компонентной модели. Такой helper находится ниже классификации Machinery roles; его локальное
+implementation-имя не создает архитектурную роль.
+
 ### 11.3. Когда Reader/Executor являются отдельными компонентами
 
 Reader и Executor описывают ответственность, а не обязательную гранулярность декомпозиции.
@@ -664,8 +669,12 @@ old Executor
         -> Enforcer
 
 old Runner
-    executed one concrete contract-defined external technical action
+    when it represented one concrete contract-defined external technical action
         -> Executor
+
+raw invocation helper such as run(argv)
+    implementation primitive below the component model;
+    may retain a local Runner-like implementation name and is not an Executor by that fact alone
 
 old read-only Driver/Backend slice
     isolated only when useful

@@ -1065,7 +1065,9 @@ The current architecture follows the component-model transition in
 `design/component-model.md`:
 
 - convergence/postcondition machinery formerly named `Executor` is now `Enforcer`;
-- lower one-operation execution formerly called `Runner` is `Executor`;
+- a former architectural `Runner` that exposes one contract-defined actuation operation is
+  now `Executor`; raw `run(argv)` process/test-injection helpers remain below the component-role
+  model and are not renamed into false Executor components;
 - read-only lower operations may be identified as `Reader` when a separate component
   boundary is useful;
 - `Backend` denotes only a stateless logical composition/facade for the project's lower API
