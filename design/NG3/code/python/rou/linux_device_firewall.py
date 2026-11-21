@@ -27,7 +27,7 @@ _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 @dataclass(slots=True)
-class LinuxDeviceFirewallBackend:
+class LinuxDeviceFirewallDriver:
     runner: NftScriptRunner
     namespace: str
 
@@ -285,3 +285,7 @@ def _render_action(rule: DeviceFirewallRuleSpec) -> str:
             return "reject"
         raise ValueError("unsupported REJECT action JSON")
     raise ValueError("unsupported Device firewall action")
+
+
+# Historical executable-evidence compatibility alias.
+LinuxDeviceFirewallBackend = LinuxDeviceFirewallDriver

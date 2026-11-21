@@ -11,7 +11,7 @@ from .linux_nft_scaffold import NftScriptRunner
 
 
 @dataclass(slots=True)
-class LinuxIntegrationLocalBackend:
+class LinuxIntegrationLocalDriver:
     runner: NftScriptRunner
     namespace: str
 
@@ -63,3 +63,7 @@ def _render_add(rule: IntegrationLocalRuleSpec) -> str:
         raise ValueError("unsupported integration-local hook")
     parts.extend(("accept", f'comment "{LOCAL_INTEGRATION_RULE_COMMENT}"'))
     return " ".join(parts)
+
+
+# Historical executable-evidence compatibility alias.
+LinuxIntegrationLocalBackend = LinuxIntegrationLocalDriver

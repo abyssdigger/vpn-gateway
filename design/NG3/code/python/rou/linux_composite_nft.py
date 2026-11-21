@@ -7,15 +7,15 @@ from dataclasses import dataclass
 from .composite_nft_mutation import CompositeNftPhysicalSnapshot
 from .device_firewall_desired import DeviceFirewallChainSpec
 from .interface_inventory import parse_ip_link_inventory
-from .linux_device_firewall import LinuxDeviceFirewallBackend
-from .linux_local_integration import LinuxIntegrationLocalBackend
+from .linux_device_firewall import LinuxDeviceFirewallDriver
+from .linux_local_integration import LinuxIntegrationLocalDriver
 from .linux_nft_scaffold import NftScriptRunner
-from .linux_local_publication import LinuxLocalPublicationBackend
-from .linux_probe_local import LinuxProbeLocalBackend
+from .linux_local_publication import LinuxLocalPublicationDriver
+from .linux_probe_local import LinuxProbeLocalDriver
 from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
 from .probe_local_mutation import ProbeLocalMutationStep
-from .linux_payload_nat import LinuxPayloadNatBackend
+from .linux_payload_nat import LinuxPayloadNatDriver
 from .nft_namespace_inventory import parse_nft_namespace_ruleset
 from .payload_forward_desired import PayloadForwardRuleSpec
 from .payload_forward_observation import (
@@ -97,64 +97,64 @@ class LinuxCompositeNftBackend:
         )
 
     def delete_device_jump(self, handle: int) -> None:
-        self._device_backend().delete_device_jump(handle)
+        self._device_driver().delete_device_jump(handle)
 
     def delete_device_child_chain(self, name: str) -> None:
-        self._device_backend().delete_device_child_chain(name)
+        self._device_driver().delete_device_child_chain(name)
 
     def create_device_chain(self, spec: DeviceFirewallChainSpec) -> None:
-        self._device_backend().create_device_chain(spec)
+        self._device_driver().create_device_chain(spec)
 
     def delete_nat_rule(self, handle: int) -> None:
-        self._nat_backend().delete_nat_rule(handle)
+        self._nat_driver().delete_nat_rule(handle)
 
     def add_nat_rule(self, spec: PayloadMasqueradeSpec) -> None:
-        self._nat_backend().add_nat_rule(spec)
+        self._nat_driver().add_nat_rule(spec)
 
     def apply_local_publication_step(
         self,
         step: LocalPublicationMutationStep,
     ) -> None:
-        self._local_publication_backend().apply_local_publication_step(step)
+        self._local_publication_driver().apply_local_publication_step(step)
 
     def apply_integration_local_step(
         self,
         step: IntegrationLocalMutationStep,
     ) -> None:
-        self._integration_local_backend().apply_integration_local_step(step)
+        self._integration_local_driver().apply_integration_local_step(step)
 
     def apply_probe_local_step(
         self,
         step: ProbeLocalMutationStep,
     ) -> None:
-        self._probe_local_backend().apply_probe_local_step(step)
+        self._probe_local_driver().apply_probe_local_step(step)
 
-    def _device_backend(self) -> LinuxDeviceFirewallBackend:
-        return LinuxDeviceFirewallBackend(
+    def _device_driver(self) -> LinuxDeviceFirewallDriver:
+        return LinuxDeviceFirewallDriver(
             runner=self.runner,
             namespace=self.namespace,
         )
 
-    def _nat_backend(self) -> LinuxPayloadNatBackend:
-        return LinuxPayloadNatBackend(
+    def _nat_driver(self) -> LinuxPayloadNatDriver:
+        return LinuxPayloadNatDriver(
             runner=self.runner,
             namespace=self.namespace,
         )
 
-    def _local_publication_backend(self) -> LinuxLocalPublicationBackend:
-        return LinuxLocalPublicationBackend(
+    def _local_publication_driver(self) -> LinuxLocalPublicationDriver:
+        return LinuxLocalPublicationDriver(
             runner=self.runner,
             namespace=self.namespace,
         )
 
-    def _integration_local_backend(self) -> LinuxIntegrationLocalBackend:
-        return LinuxIntegrationLocalBackend(
+    def _integration_local_driver(self) -> LinuxIntegrationLocalDriver:
+        return LinuxIntegrationLocalDriver(
             runner=self.runner,
             namespace=self.namespace,
         )
 
-    def _probe_local_backend(self) -> LinuxProbeLocalBackend:
-        return LinuxProbeLocalBackend(
+    def _probe_local_driver(self) -> LinuxProbeLocalDriver:
+        return LinuxProbeLocalDriver(
             runner=self.runner,
             namespace=self.namespace,
         )
