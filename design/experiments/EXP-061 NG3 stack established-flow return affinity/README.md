@@ -4,9 +4,20 @@
 
 PASS — see `EXP-061-result-20261118.md`.
 
+## Historical requirement context
+
+When this experiment was prepared, the then-current requirement tree contained:
+
+- **[VPNG0002-R2.R6]** *Чтобы ответ на входящий трафик из VPN-канала мог быть корректно обработан его отправителем.* | Для управляемого трафика, принятого со стороны VPN через разрешенный канал, VPN-GATE должен обеспечивать передачу относящегося к нему ответного трафика обратно через тот VPN-канал, через который был принят исходный трафик; наличие других разрешенных каналов для адреса отправителя не должно само по себе менять канал такого ответа. [`closed`]
+
+These R/C IDs were later removed or reparented by the NG3 Purpose/parent refactor. They are
+preserved here verbatim as the historical normative context that caused this experiment to be
+prepared; they are not current requirement traceability. Current applicability is expressed
+through live R/C links elsewhere in this dossier or in the central experiment registry.
+
 ## Requirements
 
-- `VPNG0002-R2.R6` — reply traffic for VPN-originated managed traffic returns through the VPN
+- `VPNG0003-R4` — reply traffic for VPN-originated managed traffic returns through the VPN
   channel that accepted the original traffic even when another allowed channel also covers the
   sender address.
 - `VPNG0007-R7.R3.R4` — identity/state required downstream survives material boundaries or is
