@@ -23,8 +23,8 @@ requirement tree**.
 - current architecture/configuration/registry documents должны получить новый requirement
   trace только после принятия draft как нормативного дерева.
 
-Четыре вопроса остаются открыты: return affinity, priority-only continuity, reload и второй
-VPN lifecycle evidence gate. Их impact ниже выделен отдельно.
+Три вопроса остаются открыты: priority-only continuity, reload и второй VPN lifecycle
+evidence gate. Их impact ниже выделен отдельно.
 
 ## Принятый draft remap и ожидаемый эффект
 
@@ -40,6 +40,7 @@ VPN lifecycle evidence gate. Их impact ниже выделен отдельн�
 | Availability criterion | `VPNG0003-R3.R6.R3.R1`; reuse `.R1.R1*`; ICMP-only `.C1`; timing `.C2` | **Medium trace / zero behavior.** Probe/config implementation не требует изменения |
 | Host-state safety | mechanism-neutral `VPNG0004-R4.R6` | **Very high trace / near-zero runtime.** Managed domain/netns/nft остаются выбранной архитектурой, но должны ссылаться на product invariants/functions, а не на удалённый mechanism requirement |
 | Protective mode | `VPNG0004-R5`; Release-1 limitation `.C1` | **Low current code / medium docs.** Capability остаётся postponed; future aggressive-helper composition получает честный safety owner |
+| Return-flow stability | `VPNG0001-R1.R1.R1` | **Medium trace / low code.** Existing same-path forwarding behavior сохраняется; меняется causal owner с explicit-policy tree на forwarding correctness |
 
 ## Архитектура: что меняется по смыслу
 
@@ -139,15 +140,14 @@ semantic remap.
 - managed-domain implementation:
   `managed_network_domain.py`, controller lifecycle, managed-netns routing/nft owners.
 
-Код меняется только если один из оставшихся четырёх human decisions меняет observable
+Код меняется только если один из оставшихся трёх human decisions меняет observable
 Statement либо если trace review обнаружит, что текущая реализация была необходима только
 удалённому implementation-specific requirement и не нужна новым product invariants.
 
-## Impact оставшихся четырёх решений
+## Impact оставшихся трёх решений
 
 | Finding | Если только исправить placement | Если изменить semantics |
 | --- | --- | --- |
-| `VPNG0002-R2.R6` return affinity | **Medium-high trace / low code** | **High forwarding impact**: stack-return-affinity allocation/convergence и EXP-061/076 assumptions |
 | `VPNG0004-R4.R3.R1` priority continuity | **Medium trace / zero code** | **High route-priority behavior impact** if non-disruptive continuity guarantee is removed |
 | `VPNG0005-R5.R6.R4` reload | **Low docs** | **Low current code**: alpha reload отсутствует |
 | `VPNG0007-R7.R7.R1.R1` lifecycle gate | **Docs/evidence only** | **No direct production-code impact** unless evidence policy is relaxed |
