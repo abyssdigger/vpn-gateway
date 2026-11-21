@@ -134,6 +134,7 @@ from .runtime_status import (
     RuntimeStatusAgent,
     build_configured_intent_status,
     write_runtime_status_json,
+    write_runtime_status_text,
 )
 
 
@@ -143,6 +144,7 @@ ALPHA_INNER_INTERFACE = "vnga-inner0"
 ALPHA_INNER_ADDRESS = IPv4Interface("198.19.255.2/32")
 ALPHA_RUNTIME_DIRECTORY = Path("/run/vpn-gate-alpha")
 ALPHA_STATUS_PATH = ALPHA_RUNTIME_DIRECTORY / "status.json"
+ALPHA_STATUS_TEXT_PATH = ALPHA_RUNTIME_DIRECTORY / "status.txt"
 ALPHA_AUDIT_INTERVAL_SECONDS = 1.0
 ALPHA_AVAILABILITY_DEGRADATION_THRESHOLD = 2
 ALPHA_AVAILABILITY_RECOVERY_THRESHOLD = 2
@@ -628,6 +630,11 @@ def _log(marker: str, detail: str = "") -> None:
     )
 
 
+def _write_runtime_status(snapshot) -> None:
+    write_runtime_status_json(ALPHA_STATUS_PATH, snapshot)
+    write_runtime_status_text(ALPHA_STATUS_TEXT_PATH, snapshot)
+
+
 def run_alpha_runtime(
     config_path: Path,
     *,
@@ -735,7 +742,7 @@ def run_alpha_runtime(
         status_agent = RuntimeStatusAgent(
             build_configured_intent_status(prepared.config)
         )
-        write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+        _write_runtime_status(status_agent.snapshot())
 
         availability_start = reconcile_alpha_availability_once(
             prepared,
@@ -758,7 +765,7 @@ def run_alpha_runtime(
                     )
                 ),
             )
-            write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+            _write_runtime_status(status_agent.snapshot())
             _log(
                 "VPNG_ALPHA_START_FAILED",
                 (
@@ -793,7 +800,7 @@ def run_alpha_runtime(
                     or "host publication convergence is not confirmed"
                 ),
             )
-            write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+            _write_runtime_status(status_agent.snapshot())
             _log(
                 "VPNG_ALPHA_START_FAILED",
                 (
@@ -818,7 +825,7 @@ def run_alpha_runtime(
             status_agent.confirm_availability(
                 availability_start.observation.projection.problem_owners
             )
-        write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+        _write_runtime_status(status_agent.snapshot())
 
         _log(
             "VPNG_ALPHA_READY",
@@ -883,7 +890,7 @@ def run_alpha_runtime(
                         )
                     ),
                 )
-            write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+            _write_runtime_status(status_agent.snapshot())
             if (
                 result.status is not last_status
                 or result.diagnostic != last_diagnostic
@@ -902,7 +909,7 @@ def run_alpha_runtime(
                 last_diagnostic = result.diagnostic
 
         status_agent.mark_stopping()
-        write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+        _write_runtime_status(status_agent.snapshot())
         _notify_systemd("STOPPING=1\nSTATUS=VPN-GATE alpha stopping")
         host_cleanup = HostPublicationAdapter(
             LinuxHostPublicationDriver(runner)
@@ -926,7 +933,7 @@ def run_alpha_runtime(
                     f"managed={stopped.status.value}"
                 ),
             )
-        write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
+        _write_runtime_status(status_agent.snapshot())
         _log(
             "VPNG_ALPHA_STOP",
             (

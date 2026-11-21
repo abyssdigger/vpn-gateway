@@ -1,4 +1,4 @@
-"""Current-only RuntimeStatusAgent contract and alpha JSON presentation."""
+"""Current-only RuntimeStatusAgent contract and alpha status presentation.\n\nArchitecture: A.008, A.009\n"""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 import tempfile
 from typing import Iterable
 
-from .binding import PathBinding
+from .binding import LogicalPathId, PathBinding
 from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
 from .release1_config import Release1Config, render_helper_routing_interfaces
@@ -74,6 +74,7 @@ class EffectiveProfileStatus:
 class AvailabilityProfileStatus:
     profile_id: str
     state: str
+    problem_paths: tuple[LogicalPathId, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +138,9 @@ class RuntimeStatusAgent:
         if any(not isinstance(owner, ProbePolicyOwner) for owner in owners):
             raise ValueError("problem_owners must contain ProbePolicyOwner")
         problem_profiles = {owner.profile_id for owner in owners}
+        problem_paths: dict[str, list[LogicalPathId]] = {}
+        for owner in owners:
+            problem_paths.setdefault(owner.profile_id, []).append(owner.path_id)
         enabled_profiles = {
             profile.profile_id: profile
             for profile in self._configured.profiles
@@ -168,6 +172,7 @@ class RuntimeStatusAgent:
                         else "monitoring"
                     )
                 ),
+                tuple(sorted(problem_paths.get(profile.profile_id, ()))),
             )
             for profile in self._configured.profiles
             if profile.enabled
@@ -350,23 +355,141 @@ def build_effective_profile_status(
     return tuple(result)
 
 
-def write_runtime_status_json(path: Path, snapshot: RuntimeStatusSnapshot) -> None:
-    if isinstance(path, str):
-        path = Path(path)
-    if not isinstance(path, Path) or not path.is_absolute():
-        raise ValueError("status path must be absolute")
+def render_runtime_status_text(snapshot: RuntimeStatusSnapshot) -> str:
+    """Render the normative compact Devices/Profiles current-state view."""
     if not isinstance(snapshot, RuntimeStatusSnapshot):
         raise ValueError("snapshot must be RuntimeStatusSnapshot")
 
-    parent = path.parent
-    if not parent.is_dir():
-        raise ValueError("status parent directory must already exist")
+    devices = {item.device_id: item for item in snapshot.configured_intent.devices}
+    profiles = {item.profile_id: item for item in snapshot.configured_intent.profiles}
+    availability = {item.profile_id: item for item in snapshot.availability_state}
+
+    effective = snapshot.confirmed_effective_state
+    effective_by_profile = (
+        None
+        if effective is None
+        else {item.profile_id: item for item in effective}
+    )
+
+    lines = ["Devices"]
+    if effective is None:
+        for device in snapshot.configured_intent.devices:
+            state = "disabled" if not device.enabled else "unknown"
+            lines.append(f"    {device.device_id}: {state}")
+    else:
+        paths_by_device: dict[str, dict[LogicalPathId, str]] = {}
+        for profile in effective:
+            for path in profile.ordered_paths:
+                path_id = LogicalPathId(
+                    path.device_id,
+                    path.selector_index,
+                    path.slot_index,
+                )
+                paths_by_device.setdefault(path.device_id, {})[path_id] = path.ifname
+        for device in snapshot.configured_intent.devices:
+            if not device.enabled:
+                value = "disabled"
+            else:
+                current = paths_by_device.get(device.device_id, {})
+                value = (
+                    ", ".join(current[path_id] for path_id in sorted(current))
+                    if current
+                    else "not discovered"
+                )
+            lines.append(f"    {device.device_id}: {value}")
+
+    lines.append("Profiles")
+    for profile in snapshot.configured_intent.profiles:
+        if not profile.enabled:
+            lines.append(f"    {profile.profile_id}: disabled")
+            continue
+        if effective_by_profile is None or profile.profile_id not in effective_by_profile:
+            lines.append(f"    {profile.profile_id}: unknown")
+            continue
+
+        lines.append(f"    {profile.profile_id}")
+        current = effective_by_profile[profile.profile_id]
+        availability_state = availability.get(profile.profile_id)
+        for index, path in enumerate(current.ordered_paths, start=1):
+            path_id = LogicalPathId(
+                path.device_id,
+                path.selector_index,
+                path.slot_index,
+            )
+            check = _status_availability_check(profile, path.device_id, devices)
+            state = _status_path_availability(
+                availability_state,
+                path_id,
+                check,
+            )
+            lines.append(f"        {index:02d}. {path.ifname} {state}")
+
+    return "\n".join(lines)
+
+
+def _status_availability_check(
+    profile: ConfiguredProfileStatus,
+    device_id: str,
+    devices: dict[str, ConfiguredDeviceStatus],
+) -> str | None:
+    if profile.availability_check is None:
+        return None
+    if profile.availability_check != "default":
+        return profile.availability_check
+    device = devices.get(device_id)
+    if device is None or device.availability_check is None:
+        raise ValueError(
+            f"Profile {profile.profile_id!r} default availability has no Device check for {device_id!r}"
+        )
+    return device.availability_check
+
+
+def _status_path_availability(
+    status: AvailabilityProfileStatus | None,
+    path_id: LogicalPathId,
+    check: str | None,
+) -> str:
+    if check is None:
+        return "unchecked"
+    if status is None or status.state == "unconfirmed":
+        return f"unknown ({check})"
+    if status.state == "disabled":
+        raise ValueError("availability status is disabled while a check is configured")
+    if status.state == "monitoring":
+        return f"available ({check})"
+    if status.state == "problem":
+        if path_id in status.problem_paths:
+            return f"not available ({check})"
+        return f"available ({check})"
+    raise ValueError(f"unknown availability status: {status.state!r}")
+
+
+def write_runtime_status_text(path: Path, snapshot: RuntimeStatusSnapshot) -> None:
+    if not isinstance(snapshot, RuntimeStatusSnapshot):
+        raise ValueError("snapshot must be RuntimeStatusSnapshot")
+    _write_atomic_status(path, render_runtime_status_text(snapshot) + "\n")
+
+
+def write_runtime_status_json(path: Path, snapshot: RuntimeStatusSnapshot) -> None:
+    if not isinstance(snapshot, RuntimeStatusSnapshot):
+        raise ValueError("snapshot must be RuntimeStatusSnapshot")
     payload = json.dumps(
         snapshot.to_dict(),
         sort_keys=True,
         indent=2,
         separators=(",", ": "),
     ) + "\n"
+    _write_atomic_status(path, payload)
+
+
+def _write_atomic_status(path: Path, payload: str) -> None:
+    if isinstance(path, str):
+        path = Path(path)
+    if not isinstance(path, Path) or not path.is_absolute():
+        raise ValueError("status path must be absolute")
+    parent = path.parent
+    if not parent.is_dir():
+        raise ValueError("status parent directory must already exist")
 
     fd, temporary = tempfile.mkstemp(
         prefix=f".{path.name}.",

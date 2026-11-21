@@ -1769,6 +1769,10 @@ Architectural decisions
 4. `No diagnostic overloading`
    *Compact rows показывают operator-level current state. Детальные lower diagnostics остаются в blocking diagnostics/logging surfaces и не расширяют row grammar автоматически.*
 
+Implementation
+
+    design/NG3/code/python/rou/runtime_status.py — pure text rendering from RuntimeStatusSnapshot plus atomic text publication.
+
 # Annex B. Ordinary-side transition components
 
 ## B.001 ManagedL3BoundaryLifecycle
