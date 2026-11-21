@@ -824,7 +824,92 @@ Component diagram
 +-----------+------------+                    +----------v-----------+
 | Ordinary-side transition|                    | VPN external ends    |
 +--------------------------+                    +----------------------+
+```# VPN external ends
+
+Внешняя по отношению к core VPN-GATE VPN-среда: administrator-provisioned VPN channels,
+их protocol-specific runtime/session semantics и обращенные к `Private network`
+data-plane endpoints. Physical placement не задает ownership: Release-1 OpenVPN process
+может выполняться внутри managed network namespace, оставаясь resident'ом этого Space,
+потому что VPN-specific configuration/session lifecycle принадлежат external integration.
+
+API
+
+    @VPNChannel[].<vpn-interface endpoint> — bidirectional IP endpoint текущей VPN channel generation, доступный `Private network`.
+    @VPNChannel[].<transport provenance> — optional integration-proven transport endpoint fact; отсутствует, если supported integration не умеет доказать его без inference.
+
+Residents
+
+1. `@VPNChannel[]` *Administrator-provisioned VPN integration instance. В Release 1 supported OpenVPN/systemd shape использует отдельный stack-specific service, policy-neutral VPN configuration и создает current VPN data-plane endpoint внутри managed network domain.*
+
+Artifacts
+
+1. `VPN-specific configuration` — administrator-owned protocol configuration; VPN-GATE не переписывает и не превращает ее в Device/Profile policy.
+2. `VPN channel runtime/session state` — external VPN implementation state, включая process/cgroup/session lifecycle. Для supported Release-1 service им управляет systemd, а не VPN-GATE process supervisor.
+3. `VPN endpoint generation` *(observed by VPN-GATE)* — current concrete interface generation, которую channel предоставляет в `Private network`; identity включает фактическую interface generation и не наследуется same-name replacement автоматически.
+4. `remote path availability property` *(observed)* — внешнее сетевое свойство, которое активные checks пытаются наблюдать относительно configured normalized criterion/target; VPN-GATE его не актуирует.
+5. `transport endpoint provenance` *(optional, observed)* — доказанный integration-specific transport fact exact current channel generation; не выводится из interface name/peer/ambient routes.
+
+`VPN endpoint inventory` не дублируется здесь: это локальная fresh observation projection
+в `Private network`. Аналогично availability confirmation/hysteresis принадлежат STACK,
+а не наблюдаемой внешней среде.
+
+Interactions
+
+| From | Interaction | To |
+| --- | --- | --- |
+| `Operator` | provision VPN-specific configuration / stack-specific service integration | `@VPNChannel[]` |
+| `Ambient host and external world.systemd` | start/stop/restart explicitly bound supported VPN service/cgroup | `@VPNChannel[]` |
+| `@VPNChannel[]` | maintain protocol-specific runtime/session | `VPN channel runtime/session state` |
+| `@VPNChannel[]` | realize current concrete endpoint generation | `VPN endpoint generation` |
+| `Private network.@VPNPathAdapter` | fresh observe / verify current endpoint identity | `@VPNChannel[].<vpn-interface endpoint>` |
+| `Private network.@VPNPathAdapter` | optionally consume proven integration transport fact | `@VPNChannel[].<transport provenance>` |
+| `@VPNChannel[].<vpn-interface endpoint>` | bidirectional tunneled IP handoff | `Private network.VPN-side IP portal` |
+| `@VPNChannel[]` | VPN underlay/control traffic admitted by bounded local owner | `Private network.VPN integration local policy` |
+| `@VPNChannel[]` | VPN underlay IP exits/enters ordinary side | `Private network.ordinary-side IP portal` |
+| `STACK.AvailabilityProbeAgent` via `Private network.@ActiveProbeDriver` | configured active observation | `remote path availability property` |
+| `Ambient host and external world.systemd` | supported deployment stop removes bound process/cgroup and endpoint before managed-domain teardown | `VPN channel runtime/session state` / `VPN endpoint generation` |
+
+Findings
+
+1. `Physical placement is not Space ownership` — OpenVPN `MainPID` and `vpn0` can be
+   physically inside the managed netns while VPN-specific lifecycle/configuration remains in
+   this Space. `Private network` owns observation/binding and surrounding policy, not VPN
+   session semantics.
+2. `Additional integrations` — OpenVPN/systemd is the currently evidenced Release-1
+   onboarding mechanism. Other technologies do not become supported merely because they can
+   expose a superficially similar interface; each requires applicability evidence or reviewed
+   equivalence.
+
+Component diagram
+
+```text
++---------------- Operator ----------------+    +------ Ambient host ------+
+| VPN-specific provisioning               |    | systemd service control |
++----------------+-------------------------+    +------------+-------------+
+                 |                                           |
+                 v                                           v
++----------------+--------------------------------------------------------+
+|                           VPN external ends                              |
+|                                                                          |
+| @VPNChannel[]                                                            |
+|      |                                                                   |
+|      +--> [VPN config / runtime-session state]                            |
+|      +--> [remote availability property]                                 |
+|      |                                                                   |
+|      +---- @<vpn-interface endpoint> -------------------+                 |
++--------------------------------------------------------|-----------------+
+                                                         | tunneled IP
+                                                         v
++--------------------------------------------------------+-----------------+
+|                          Private network                                 |
+| @VPNPathAdapter -> [endpoint inventory]     [VPN-side IP portal]         |
+| @ActiveProbeDriver -----------------------> configured observation       |
+| [VPN integration local policy] + [ordinary-side IP portal] <- underlay   |
++--------------------------------------------------------------------------+
 ```
+
+
+
 # VPN-GATE-managed host state
 
 Явно owned часть ordinary-host network state. Этот Space существует потому, что VPN-GATE
