@@ -1375,6 +1375,8 @@ introduce a long-lived lifecycle Engine or independent lifecycle policy.
 **Implements:**
 - `VPNG0004-R4.R4`
 - `VPNG0004-R4.R5`
+- `VPNG9101-R1`
+- `VPNG9101-R1.R1`
 - `VPNG9101-R1.R1.R1`
 - `VPNG9101-R1.R1.R3`
 - `VPNG9101-R1.R1.R4`
