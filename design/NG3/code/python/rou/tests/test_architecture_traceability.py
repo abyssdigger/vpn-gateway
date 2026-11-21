@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[6]
 STRUCTURED = ROOT / "design/NG3/structured-architecture.md"
+REQUIREMENTS = ROOT / "design/NG3/requirements.md"
 TRACE = ROOT / "design/NG3/implementation-traceability.md"
 PRODUCTION = ROOT / "design/NG3/code/python/rou"
 
@@ -97,6 +98,20 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
         for path, reason in debt.items():
             with self.subTest(debt=path):
                 self.assertTrue(reason.strip(), "architecture debt requires an explicit reason")
+
+    def test_every_closed_requirement_has_structured_architecture_entry(self):
+        architecture = STRUCTURED.read_text(encoding="utf-8")
+        closed = []
+        for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+            match = re.match(
+                r"^\s*-\s+\*\*\[(VPNG[^\]]+)\]\*\*.*\[\x60closed\x60\]\s*$",
+                line,
+            )
+            if match:
+                closed.append(match.group(1))
+        self.assertTrue(closed)
+        missing = [item for item in closed if f"\x60{item}\x60" not in architecture]
+        self.assertEqual([], missing)
 
     def test_every_trace_target_is_a_requirement_bearing_component_spec(self):
         mapping, _ = trace_manifest()

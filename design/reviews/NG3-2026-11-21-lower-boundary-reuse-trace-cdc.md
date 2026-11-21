@@ -133,3 +133,20 @@ they are actual compositions.
 Old class names remain only as explicit aliases in implementation modules so historical NG3
 executable evidence can continue to import the terminology it was recorded with. Current
 production call sites and package exports use the role-correct names.
+
+
+## Requirement-side traceability closure
+
+The previous code-side trace invariant covered every production Python unit, but a fresh
+closed-requirement scan found 60 closed Requirement/Constraint IDs with no occurrence in the
+structured architecture.
+
+The fix does not blindly append those IDs to component specs. Structured architecture now
+contains a closed-requirement coverage index grouping parent/root and cross-cutting
+requirements by their real architecture owners. The previously flat-only production-runtime
+language boundary was also migrated into the structured architecture.
+
+The architecture traceability test now fails if any `closed` requirement has no explicit
+structured-architecture entry. This completes the mechanical requirement -> architecture
+entry-point invariant while preserving component-local `Implements / Constrained by`
+mapping for requirements that genuinely belong to one component.
