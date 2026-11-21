@@ -4,19 +4,19 @@
 > used by this historical review was later normalized without changing the accepted systemd
 > architecture/evidence:
 >
-> - historical `VPNG0001-R1.R3.C1.C1` -> current `VPNG0001-R1.R3.C3`
+> - historical `VPNG-U001-R1.R3.C1.C1` -> current `VPNG-U001-R1.R3.C3`
 >   (external VPN runtime lifecycle ownership/supervision constraint);
-> - historical `VPNG0001-R1.R3.C1.C1.R1` -> current `VPNG0001-R1.R3.C3.R1`
+> - historical `VPNG-U001-R1.R3.C1.C1.R1` -> current `VPNG-U001-R1.R3.C3.R1`
 >   (external lifecycle integration contract);
-> - historical `VPNG0001-R1.R3.C1.C1.R2` -> current `VPNG0001-R1.R3.C1.R1.R2`
+> - historical `VPNG-U001-R1.R3.C1.C1.R2` -> current `VPNG-U001-R1.R3.C1.R1.R2`
 >   (policy-neutral administrator onboarding configuration);
-> - historical `VPNG0001-R1.R3.C1.C1.R3` -> current `VPNG0001-R1.R2.R4.R6.R4`
+> - historical `VPNG-U001-R1.R3.C1.C1.R3` -> current `VPNG-U001-R1.R2.R4.R6.R4`
 >   (Device client-side VPN transport/control intent).
 >
 > The concrete systemd/`NetworkNamespacePath`/`BindsTo`/`After` mechanism remains selected
 > architecture and evidence, not current generic requirement wording.
 
-> **Current requirement interpretation (2026-11-20):** `VPNG0005-R5.C1` now serves only as
+> **Current requirement interpretation (2026-11-20):** `VPNG-U005-R5.C1` now serves only as
 > the boundary of required automatic recovery/adoption after unsupported external
 > intervention. Historical statements below that directly attribute a blanket
 > fail-closed reaction to `C1` preserve the review's original reasoning, but current
@@ -51,17 +51,17 @@ supervisor.
 
 Primary closure:
 
-- `VPNG0001-R1.R3.C1.R1.R1`;
-- `VPNG0001-R1.R3.C1.C1`;
-- `VPNG0001-R1.R3.C1.C1.R1`;
-- `VPNG0001-R1.R3.C1.C1.R2`;
-- `VPNG0001-R1.R3.C1.C1.R3`;
-- `VPNG0005-R5.C1`;
-- `VPNG0005-R5.C1.R1`;
-- `VPNG0007-R7.R7.R1`;
-- `VPNG0007-R7.R7.R1.R1`.
+- `VPNG-U001-R1.R3.C1.R1.R1`;
+- `VPNG-U001-R1.R3.C1.C1`;
+- `VPNG-U001-R1.R3.C1.C1.R1`;
+- `VPNG-U001-R1.R3.C1.C1.R2`;
+- `VPNG-U001-R1.R3.C1.C1.R3`;
+- `VPNG-U005-R5.C1`;
+- `VPNG-U005-R5.C1.R1`;
+- `VPNG-U007-R7.R7.R1`;
+- `VPNG-U007-R7.R7.R1.R1`.
 
-The existing lifecycle/safety requirements under `VPNG0005-R5` remain the normative
+The existing lifecycle/safety requirements under `VPNG-U005-R5` remain the normative
 postcondition and cleanup basis.
 
 ## F1 — systemd is the Release-1 VPN process supervisor
@@ -164,7 +164,7 @@ Both clean cycles prove:
 The historical failed EXP-049 result remains retained because it is the evidence that forced
 the local-integration owner class.
 
-**Disposition:** `VPNG0001-R1.R3.C1.R1.R1` repaired from
+**Disposition:** `VPNG-U001-R1.R3.C1.R1.R1` repaired from
 `[rejected_closure]` to `[closed]`.
 
 ## F5 — EXP-050 passes same-config and changed-config restart
@@ -331,12 +331,12 @@ EXP050_RESULT=PASS
 
 Six accumulated links remain resolved:
 
-1. `VPNG0001-R1.R2`: `VPNG0005-R5 -> VPNG0005-R5.R6`.
-2. `VPNG0001-R1.R3.C1.R1`: `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`.
-3. `VPNG0001-R1.R3.C1.R1`: `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`.
-4. `VPNG0001-R1.R3.C1.R1`: `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
-5. `VPNG0001-R1.R3.C2.R1`: `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`.
-6. `VPNG0004-R4.R6.R1.R6.R1`: `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`.
+1. `VPNG-U001-R1.R2`: `VPNG-U005-R5 -> VPNG-U005-R5.R6`.
+2. `VPNG-U001-R1.R3.C1.R1`: `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`.
+3. `VPNG-U001-R1.R3.C1.R1`: `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`.
+4. `VPNG-U001-R1.R3.C1.R1`: `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
+5. `VPNG-U001-R1.R3.C2.R1`: `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`.
+6. `VPNG-U004-R4.R6.R1.R6.R1`: `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`.
 
 Pending `decomp`: **none**.
 
@@ -383,10 +383,10 @@ alpha deployment/runtime assembly.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
-- `VPNG0005-R5.C1.R1` -> `VPNG9101-R1.R1.C1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R7.R1` -> `VPNG9001-R1.R1.R7.R1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.C1` -> `VPNG-M001-R1.R1.C1`
+- `VPNG-U005-R5.C1.R1` -> `VPNG-M001-R1.R1.C1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R7.R1` -> `VPNG-D001-R1.R1.R7.R1`
 
 The original IDs in the historical body are intentionally preserved.

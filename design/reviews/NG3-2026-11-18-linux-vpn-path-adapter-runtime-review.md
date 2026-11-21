@@ -12,18 +12,18 @@ periodic alpha reconcile.
 
 **Implements:**
 
-- `VPNG0001-R1.R3.R1`;
-- `VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R3.R3`;
-- `VPNG0001-R1.R3.R4`;
-- `VPNG0001-R1.R3.R4.R1`;
-- `VPNG0001-R1.R3.R4.R2`;
-- `VPNG0001-R1.R3.R4.R3`;
-- `VPNG0001-R1.R3.R4.R3.R1`;
-- `VPNG0001-R1.R3.R4.R4`;
-- `VPNG0004-R4.R6.R1.R4`;
-- `VPNG0007-R7.R3`;
-- `VPNG0007-R7.R5`.
+- `VPNG-U001-R1.R3.R1`;
+- `VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R3.R3`;
+- `VPNG-U001-R1.R3.R4`;
+- `VPNG-U001-R1.R3.R4.R1`;
+- `VPNG-U001-R1.R3.R4.R2`;
+- `VPNG-U001-R1.R3.R4.R3`;
+- `VPNG-U001-R1.R3.R4.R3.R1`;
+- `VPNG-U001-R1.R3.R4.R4`;
+- `VPNG-U004-R4.R6.R1.R4`;
+- `VPNG-U007-R7.R3`;
+- `VPNG-U007-R7.R5`.
 
 No R/C wording or closure state changed.
 
@@ -159,7 +159,7 @@ merely implementing equivalent raw observation inline.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
-- `VPNG0007-R7.R5` -> `VPNG9001-R1.R1.R5`
+- `VPNG-U007-R7.R3` -> `VPNG-D001-R1.R1.R3`
+- `VPNG-U007-R7.R5` -> `VPNG-D001-R1.R1.R5`
 
 The original IDs in the historical body are intentionally preserved.

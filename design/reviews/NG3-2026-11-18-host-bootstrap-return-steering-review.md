@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — host bootstrap and return-steering review
 
 > **Historical requirement trace note (2026-11-20):** this review records the requirement
-> tree that was current when the review was performed. `VPNG0002-R2.R3.R1.R1`, `VPNG0002-R2.R3.R1.R1.R1`
+> tree that was current when the review was performed. `VPNG-U002-R2.R3.R1.R1`, `VPNG-U002-R2.R3.R1.R1.R1`
 > were later removed from the current requirement tree when the old direction-derived host-routing
 > ownership decomposition was rejected. References below to those IDs are historical facts about
 > what this review evaluated, not current requirement links; the review conclusions are not rewritten retroactively.
@@ -106,13 +106,13 @@ historical EXP-014.
 
 Added:
 
-- `VPNG0002-R2.R3.R1.R1` — VPN-GATE owns the narrow host bootstrap route contribution for
+- `VPNG-U002-R2.R3.R1.R1` — VPN-GATE owns the narrow host bootstrap route contribution for
   Profiles permitting ordinary-side initiation;
-- `VPNG0002-R2.R3.R1.R1.R1` — bootstrap must preserve ordinary reachability to any required
+- `VPNG-U002-R2.R3.R1.R1.R1` — bootstrap must preserve ordinary reachability to any required
   external VPN transport endpoint before a managed route can capture that endpoint;
-- `VPNG0002-R2.R3.R3.R1` — default stateful host-boundary return steering for
+- `VPNG-U002-R2.R3.R3.R1` — default stateful host-boundary return steering for
   remote-initiated flows;
-- `VPNG0002-R2.R3.R3.R1.R1` — canonical Profile opt-out `+route-return`.
+- `VPNG-U002-R2.R3.R3.R1.R1` — canonical Profile opt-out `+route-return`.
 
 The administrator responsibility boundary is intentionally conventional:
 

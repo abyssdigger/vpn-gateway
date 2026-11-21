@@ -28,7 +28,7 @@ The branch starts from the saved interrupted tip
 
 This CD first completed its already-reviewed closure bookkeeping:
 
-- `VPNG0001-R1.R3.C1.R1.R1` changed from `[pending_closure]` to `[closed]`;
+- `VPNG-U001-R1.R3.C1.R1.R1` changed from `[pending_closure]` to `[closed]`;
 - architecture applicability gate remains accepted;
 - `EXP-049` remains a planned/pending **evidence execution** gate, not an architecture
   closure blocker.

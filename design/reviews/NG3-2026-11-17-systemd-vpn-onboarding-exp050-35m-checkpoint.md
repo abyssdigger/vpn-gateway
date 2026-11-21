@@ -4,19 +4,19 @@
 > used by this historical review was later normalized without changing the accepted systemd
 > architecture/evidence:
 >
-> - historical `VPNG0001-R1.R3.C1.C1` -> current `VPNG0001-R1.R3.C3`
+> - historical `VPNG-U001-R1.R3.C1.C1` -> current `VPNG-U001-R1.R3.C3`
 >   (external VPN runtime lifecycle ownership/supervision constraint);
-> - historical `VPNG0001-R1.R3.C1.C1.R1` -> current `VPNG0001-R1.R3.C3.R1`
+> - historical `VPNG-U001-R1.R3.C1.C1.R1` -> current `VPNG-U001-R1.R3.C3.R1`
 >   (external lifecycle integration contract);
-> - historical `VPNG0001-R1.R3.C1.C1.R2` -> current `VPNG0001-R1.R3.C1.R1.R2`
+> - historical `VPNG-U001-R1.R3.C1.C1.R2` -> current `VPNG-U001-R1.R3.C1.R1.R2`
 >   (policy-neutral administrator onboarding configuration);
-> - historical `VPNG0001-R1.R3.C1.C1.R3` -> current `VPNG0001-R1.R2.R4.R6.R4`
+> - historical `VPNG-U001-R1.R3.C1.C1.R3` -> current `VPNG-U001-R1.R2.R4.R6.R4`
 >   (Device client-side VPN transport/control intent).
 >
 > The concrete systemd/`NetworkNamespacePath`/`BindsTo`/`After` mechanism remains selected
 > architecture and evidence, not current generic requirement wording.
 
-> **Current requirement interpretation (2026-11-20):** `VPNG0005-R5.C1` now serves only as
+> **Current requirement interpretation (2026-11-20):** `VPNG-U005-R5.C1` now serves only as
 > the boundary of required automatic recovery/adoption after unsupported external
 > intervention. Historical statements below that directly attribute a blanket
 > fail-closed reaction to `C1` preserve the review's original reasoning, but current
@@ -67,13 +67,13 @@ Release 1 deliberately does not auto-discover/adopt/patch arbitrary VPN units.
 
 New/repaired closures:
 
-- `VPNG0001-R1.R3.C1.R1.R1`;
-- `VPNG0001-R1.R3.C1.C1`;
-- `VPNG0001-R1.R3.C1.C1.R1`;
-- `VPNG0001-R1.R3.C1.C1.R2`;
-- `VPNG0001-R1.R3.C1.C1.R3`;
-- `VPNG0005-R5.C1`;
-- `VPNG0005-R5.C1.R1`.
+- `VPNG-U001-R1.R3.C1.R1.R1`;
+- `VPNG-U001-R1.R3.C1.C1`;
+- `VPNG-U001-R1.R3.C1.C1.R1`;
+- `VPNG-U001-R1.R3.C1.C1.R2`;
+- `VPNG-U001-R1.R3.C1.C1.R3`;
+- `VPNG-U005-R5.C1`;
+- `VPNG-U005-R5.C1.R1`.
 
 The prior EXP-049 `[rejected_closure]` is repaired and no rejected closure remains.
 
@@ -250,7 +250,7 @@ Do not add automatic vendor-unit capture unless a new requirement explicitly req
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
-- `VPNG0005-R5.C1.R1` -> `VPNG9101-R1.R1.C1.R1`
+- `VPNG-U005-R5.C1` -> `VPNG-M001-R1.R1.C1`
+- `VPNG-U005-R5.C1.R1` -> `VPNG-M001-R1.R1.C1.R1`
 
 The original IDs in the historical body are intentionally preserved.

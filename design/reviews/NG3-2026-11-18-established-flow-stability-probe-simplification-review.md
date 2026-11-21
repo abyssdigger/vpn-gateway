@@ -14,9 +14,9 @@ The project now distinguishes two very different concerns:
 
 Added:
 
-- `VPNG0003-R3.R8`
-- `VPNG0003-R3.R8.R1`
-- `VPNG0003-R3.R8.C1`
+- `VPNG-U003-R3.R8`
+- `VPNG-U003-R3.R8.R1`
+- `VPNG-U003-R3.R8.C1`
 
 Accepted semantics:
 

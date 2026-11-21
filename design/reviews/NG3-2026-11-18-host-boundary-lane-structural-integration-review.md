@@ -2,7 +2,7 @@
 
 ## Decision
 
-Conditional on adopting EXP-064 after resolving VPNG0004-R4.R6.R1.R6.R1, host-boundary behavior lanes require one new route role inside existing Profile payload tables, but they must not be represented as synthetic VPN LogicalPathId routes.
+Conditional on adopting EXP-064 after resolving VPNG-U004-R4.R6.R1.R6.R1, host-boundary behavior lanes require one new route role inside existing Profile payload tables, but they must not be represented as synthetic VPN LogicalPathId routes.
 
 The current structural routing model has only two effective route roles: terminal guard (blackhole) and VPN logical-path unicast route. ManagedRouteSpec currently encodes that assumption by requiring every unicast route to carry a LogicalPathId. structural_routing_inventory.py likewise treats every reserved unicast route using path_route_protocol as a VPN path route.
 
@@ -46,7 +46,7 @@ This review does not reopen user-facing +snat semantics, +route-return semantics
 
 ## Requirement decision gate
 
-Before this structural implementation may become production architecture, VPNG0004-R4.R6.R1.R6.R1 must be reviewed explicitly. Its Purpose is satisfied by carrying the Profile-derived host behavior class, but its current Statement literally requires an unambiguous packet association with the selected Profile across the explicit host boundary. EXP-064 does not provide that literal identity on the host side.
+Before this structural implementation may become production architecture, VPNG-U004-R4.R6.R1.R6.R1 must be reviewed explicitly. Its Purpose is satisfied by carrying the Profile-derived host behavior class, but its current Statement literally requires an unambiguous packet association with the selected Profile across the explicit host boundary. EXP-064 does not provide that literal identity on the host side.
 
 ## Remaining implementation gate
 
