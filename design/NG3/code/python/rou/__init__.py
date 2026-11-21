@@ -471,7 +471,7 @@ from .linux_policy_platform import (
     NG3_PROBE_LOCAL_PLATFORM,
 )
 from .linux_structural_routing import (
-    LinuxStructuralRoutingBackend,
+    LinuxStructuralRoutingDriver,
     LinuxStructuralRoutingError,
 )
 from .linux_probe_routing import (
@@ -714,7 +714,7 @@ __all__ = [
     "PayloadNatPhysicalSnapshot",
     "LinuxPayloadNatBackend",
     "LinuxStructuralRoutingError",
-    "LinuxStructuralRoutingBackend",
+    "LinuxStructuralRoutingDriver",
     "compare_payload_nat",
     "observe_payload_forward",
     "select_composite_nft_step",

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from .iproute_priority_backend import CommandRunner
 from .interface_inventory import parse_ip_link_inventory
-from .linux_structural_routing import LinuxStructuralRoutingBackend
+from .linux_structural_routing import LinuxStructuralRoutingDriver
 from .network_policy_layout import NetworkPolicyPlatformSpace
 from .payload_routing_desired import ManagedRouteSpec, ManagedRouteType
 from .probe_policy import (
@@ -193,5 +193,5 @@ class LinuxProbeRoutingBackend:
             )
         )
 
-    def _shared(self) -> LinuxStructuralRoutingBackend:
-        return LinuxStructuralRoutingBackend(self.runner, self.namespace)
+    def _shared(self) -> LinuxStructuralRoutingDriver:
+        return LinuxStructuralRoutingDriver(self.runner, self.namespace)
