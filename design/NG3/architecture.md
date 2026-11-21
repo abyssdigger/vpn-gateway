@@ -33,11 +33,11 @@ Current trace:
 | PayloadPolicyCalculator most-specific Profile partition/classification | `profile_prefix_partition.py`, `payload_forward_compiler.py` | `NG3-2026-11-16-profile-prefix-partition-code-review.md`, `NG3-2026-11-17-profile-forward-compiler-review.md` |
 | PayloadTrafficManager bounded availability confirmation + Profile active-route state | `availability_confirmation.py`, `availability_routing_state.py`, `availability_manager.py` | `NG3-2026-11-16-availability-confirmation-code-review.md`, `NG3-2026-11-18-availability-routing-state-review.md` |
 | AvailabilityPriorityCalculator effective-order transformation | `availability_priority.py` | `NG3-2026-11-16-availability-priority-code-review.md`, `NG3-2026-11-18-sticky-reserve-reference-code-review.md` |
-| NetworkPolicyExecutor pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
-| NetworkPolicyExecutor re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
-| NetworkPolicyExecutor single-attempt observe/apply/re-observe contract | `route_priority_executor.py` | `NG3-2026-11-16-route-priority-executor-attempt-code-review.md` |
-| NetworkPolicyAdapter/Executor owned route-key inventory projection | `route_priority_inventory.py` | `NG3-2026-11-16-route-priority-inventory-code-review.md` |
-| NetworkPolicyExecutor bounded physical iproute2 priority backend | `iproute_priority_backend.py` | `NG3-2026-11-16-iproute-priority-backend-code-review.md` |
+| NetworkPolicyEnforcer pure priority-transition planning primitive | `route_priority.py` | `NG3-2026-11-16-route-priority-planner-code-review.md` |
+| NetworkPolicyEnforcer re-observed partial-state priority convergence | `route_priority_convergence.py` | `NG3-2026-11-16-route-priority-convergence-code-review.md` |
+| NetworkPolicyEnforcer single-attempt observe/apply/re-observe contract | `route_priority_executor.py` | `NG3-2026-11-16-route-priority-executor-attempt-code-review.md` |
+| NetworkPolicyAdapter/Enforcer owned route-key inventory projection | `route_priority_inventory.py` | `NG3-2026-11-16-route-priority-inventory-code-review.md` |
+| NetworkPolicyEnforcer bounded physical iproute2 priority backend | `iproute_priority_backend.py` | `NG3-2026-11-16-iproute-priority-backend-code-review.md` |
 | Profile-level multi-domain priority coordinator | `route_priority_profile.py` | `NG3-2026-11-16-route-priority-profile-coordinator-review.md` |
 | lower Adapter route-priority realization contract | `route_priority_realization.py` | `NG3-2026-11-16-route-priority-realization-contract-review.md` |
 | shared lower network-policy deterministic allocation | `network_policy_layout.py` | `NG3-2026-11-16-network-policy-layout-allocator-review.md` |
@@ -62,7 +62,7 @@ Current trace:
 | semantic Profile forward compiler | `payload_forward_compiler.py` | `NG3-2026-11-17-profile-forward-compiler-review.md` |
 | multi-path Device firewall semantic compiler | `device_firewall_policy_compiler.py`, `device_firewall_compiler.py`, `linux_device_firewall.py` lower port-bundle rendering | `NG3-2026-11-17-device-firewall-policy-compiler-review.md`, `NG3-2026-11-17-port-bundle-correction-review.md`, `EXP-042-result-20261117-port-bundle-pass.md` |
 | complete payload lower desired-state assembly | `payload_network_policy_desired.py` | `NG3-2026-11-17-payload-network-policy-desired-review.md` |
-| guarded cross-domain structural Executor + Linux snapshot backend | `structural_policy_mutation.py`, `linux_structural_policy.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
+| guarded cross-domain structural Enforcer + Linux snapshot backend | `structural_policy_mutation.py`, `linux_structural_policy.py` | `NG3-2026-11-16-cross-domain-structural-convergence-review.md` |
 | bounded complete structural transaction coordinator | `structural_policy_transaction.py` | `NG3-2026-11-16-structural-transaction-coordinator-review.md` |
 | network-policy activation subassembly | `network_policy_activation.py` | `NG3-2026-11-17-network-policy-activation-review.md` |
 | managed network-domain infrastructure lifecycle | `managed_network_domain.py` | `NG3-2026-11-17-managed-network-domain-lifecycle-review.md`, `NG3-2026-11-19-alpha-managed-l3-lifecycle-review.md`, EXP-051 migration evidence |
@@ -1025,9 +1025,17 @@ normalized payload intent
         |                                            |
         v                                            |
 +-----------------------+                            |
-| NetworkPolicyExecutor |                            |
-|       Executor        |                            |
+| NetworkPolicyEnforcer |                            |
+|       Enforcer        |                            |
 +-----------------------+                            |
+        |                                            |
+        | uses lower API                             |
+        v                                            |
++-------------------------------+                    |
+| network-policy Backend bundle |                    |
+| composition, not component    |                    |
+| Drivers / Readers / Executors |                    |
++-------------------------------+                    |
         |                                            |
         v                                            |
 managed network domain                               |
@@ -1051,24 +1059,50 @@ managed network domain                               |
 The event-delivery mechanism is intentionally left abstract. NG3 requires the semantic edge,
 not a persistent bus, journal or replay system.
 
+### Terminology transition for current NG3 architecture
+
+The current architecture follows the component-model transition in
+`design/component-model.md`:
+
+- convergence/postcondition machinery formerly named `Executor` is now `Enforcer`;
+- lower one-operation execution formerly called `Runner` is `Executor`;
+- read-only lower operations may be identified as `Reader` when a separate component
+  boundary is useful;
+- `Backend` denotes only a stateless logical composition/facade for the project's lower API
+  to an external technical environment, not a component role;
+- a narrow mechanism boundary is a `Driver`, even when historical code named the class
+  `*Backend`.
+
+Historical review/experiment filenames and preserved evidence are not rewritten merely to
+retrofit terminology. Current architecture and current implementation names are migrated
+where they represent live component/composition contracts.
+
 The externally provisioned VPN-channel integration adds one narrow Machinery boundary:
 
 ```text
-logical VPN path intent
+administrator / external VPN integration
         |
+        | creates / places concrete data-plane endpoint
+        v
+managed network domain
+        |
+        | fresh observation
         v
 +-----------------------+
 | VPNPathAdapter        |
 |       Adapter         |
 +-----------------------+
+        ^
         |
-        v
-observed concrete endpoint
-inside managed network domain
+logical VPN path intent
+
+result:
+verified PathBinding(logical path, concrete endpoint)
 ```
 
-The Adapter resolves and verifies a binding; it does not provision or configure the VPN
-session.
+The Adapter observes, resolves and verifies a binding; it does not provision, create, move or
+configure the VPN session/endpoint. The managed-domain endpoint is an authoritative external
+fact consumed through the Adapter, not an effect produced by it.
 
 ## 3.1. External VPN-channel boundary
 
@@ -2591,7 +2625,7 @@ active normalized availability channels
         ->
 required probe-owner network policy
         ->
-shared lower NetworkPolicyAdapter / Executor
+shared lower NetworkPolicyAdapter / Enforcer
         ->
 verified probe execution precondition
         ->
@@ -2943,7 +2977,7 @@ The NetworkPolicyAdapter/lower realization layer must combine:
 - current verified path binding/transport realization;
 - internal owned-resource allocation;
 
-into the physical route-key domain requests consumed by NetworkPolicyExecutor.
+into the physical route-key domain requests consumed by NetworkPolicyEnforcer.
 
 A missing or ambiguous physical realization for an otherwise allowed logical path is not
 permission to invent a gateway, use ambient routing, or drop that path silently. It moves
@@ -3612,7 +3646,7 @@ classifier и композиции.
 **Components / interactions:** существующий нижний Linux nft
 Driver/Adapter выполняет экспериментальные команды; pure
 `NftNamespaceObservation` поставляет canonical JSON. Новый runtime
-Manager/Agent/Executor, state store и event contract не вводятся.
+Manager/Agent/Enforcer, state store и event contract не вводятся.
 Эксперимент необходим, потому что exact numeric-ifindex filter match
 с prefix и conntrack нельзя считать доказанным только на основании
 EXP-033 (тот проверял postrouting masquerade).
@@ -4252,7 +4286,7 @@ than treating them as malformed Profile rules.
 
 **Bounded guarded mutation reference slice.**
 
-`converge_device_firewall_step_once` is an Executor-style one-step convergence operation
+`converge_device_firewall_step_once` is an Enforcer-style one-step convergence operation
 behind the closed managed forwarding barrier. Its mutation order is:
 
 ```text
@@ -4284,7 +4318,7 @@ corrected to the observed nft shape and the full workflow then passed.
 
 ###### Combined Profile / Device firewall / NAT structural convergence
 
-The first combined lower-policy Executor now covers all currently materialized payload owner
+The first combined lower-policy Enforcer now covers all currently materialized payload owner
 classes in the reserved nft table:
 
 ```text
@@ -4304,7 +4338,7 @@ materialized classes is a whole-scope conflict even if each known sub-comparison
 clean.
 
 This is deliberate for `stack_input` / `stack_output`: local/system allow contributions
-are not silently accepted by the combined payload Executor until their exact lower owner
+are not silently accepted by the combined payload Enforcer until their exact lower owner
 shape has its own evidence and implementation unit.
 
 EXP-045 proves the missing Profile write primitives in coexistence with Device and NAT:
@@ -4330,7 +4364,7 @@ The addition order is intentional: a new positive Profile permission is exposed 
 its required NAT and Device restriction have already been materialized. Device jump cleanup
 remains before child-chain cleanup because nft references must be removed first.
 
-`converge_composite_nft_step_once` is the combined guarded Executor. For every step it:
+`converge_composite_nft_step_once` is the combined guarded Enforcer. For every step it:
 
 1. closes and confirms the managed IPv4 ForwardingGate;
 2. obtains one link-bracketed whole-table snapshot;
@@ -4357,7 +4391,7 @@ Device chains -> NAT. `ip_forward` remains disabled throughout. An unclassified
 `stack_input` rule produces `CONFLICT` with no mutation.
 
 This closes combined structural convergence for the currently materialized Profile,
-Device-firewall and NAT owner classes. Extending the same whole-scope Executor to
+Device-firewall and NAT owner classes. Extending the same whole-scope Enforcer to
 local/system INPUT/OUTPUT exceptions remains a separate lower-evidence unit, not a product
 semantic decision.
 
@@ -4647,7 +4681,7 @@ necessary before any runtime NAT write path is accepted.
 
 ###### Guarded NAT-only structural mutation reference slice
 
-**Component type:** a bounded direct `NetworkPolicyExecutor` operation with a lower
+**Component type:** a bounded direct `NetworkPolicyEnforcer` operation with a lower
 Linux nft Driver and the existing read-only Calculator. This is deliberately a
 partial reference slice, **not** completion of full Release 1 structural policy.
 
@@ -4667,17 +4701,17 @@ payload postrouting chain after a Device endpoint was replaced. The required
 current physical NAT desired state may need stale rule deletion and new rule
 addition, but no packet may forward during the mixed transition.
 
-**Responsibilities and interactions:** The direct Executor first converges the
+**Responsibilities and interactions:** The direct Enforcer first converges the
 owned managed-netns `ForwardingGate` to `DISABLED` and confirms a fresh read.
 An injected lower Driver obtains one nft ruleset observation bracketed by two
 fresh link inventories; relevant current `(ifname, ifindex)` identities must
 agree. Existing pure observers confirm the table/scaffold and classify every
 rule in `payload_postrouting` against the supplied normalized desired state.
-The Executor must additionally account for **every other object** in the owned
+The Enforcer must additionally account for **every other object** in the owned
 nft table; this bounded slice explicitly refuses mutation if there is any
 unsupported object or a rule in `payload_forward`. This refusal is a missing
 reference capability, not a new product-level constraint. The eventual complete
-structural Executor must combine the independently reviewed forward/probe and
+structural Enforcer must combine the independently reviewed forward/probe and
 NAT classifications rather than silently narrowing supported payload traffic.
 
 **One-step mutation / postconditions:** With no conflicts and exact current
@@ -4710,7 +4744,7 @@ completion protocol or new user configuration is introduced.
 empty forward chain and no other unknown table objects, it is safe but
 **not sufficient for the production case with materialized forward/probe
 rules**. No acceptance of first-release product scope reduction follows.
-The complete structural Executor remains separately gated on composition
+The complete structural Enforcer remains separately gated on composition
 with the full nft owner classifiers, RPDB/routes and final forwarding
 activation.
 
@@ -5023,9 +5057,9 @@ The executable pure allocator implements this contract over an injected
 - exposes reserved pool membership independently of the current allocation map so stale
   resources from a previous configuration remain classifiable for cleanup.
 
-# 10. NetworkPolicyExecutor
+# 10. NetworkPolicyEnforcer
 
-**Component type:** Executor
+**Component type:** Enforcer
 
 **Implements:**
 - `VPNG0004-R4.R2`
@@ -5038,8 +5072,47 @@ The executable pure allocator implements this contract over an injected
 - `VPNG0007-R7.R1`
 - `VPNG0007-R7.R5`
 
-The Executor converges the lower network domain from freshly observed current state to the
+The Enforcer converges the lower network domain from freshly observed current state to the
 caller-selected desired semantic state.
+
+The Enforcer is intentionally separable from lower environment access. It consumes a
+network-policy Backend composition whose purpose is only to expose the internal technical API
+needed for current observation and bounded actuation. The Backend does not choose desired
+state and does not own convergence.
+
+For the current Linux reference implementation the composition is conceptually:
+
+```text
+NetworkPolicyEnforcer
+        |
+        v
+network-policy Backend composition
+        |
+        +--> routing Driver
+        |       +-- read operation(s), where locally appropriate
+        |       +-- execute route/RPDB mutation operation(s)
+        |
+        +--> nft Backend composition
+        |       +-- nft Readers
+        |       +-- nft Drivers / Executor operations
+        |
+        +--> ForwardingGate Driver
+                +-- read current gate
+                +-- execute gate mutation
+        |
+        v
+Linux managed network domain
+```
+
+This diagram describes responsibility/composition, not a requirement to materialize every
+Reader or Executor as a separate object. A Driver may implement a simple read or execute
+operation directly when another component boundary would add no architectural value.
+
+In particular, the current narrow structural routing and forwarding-gate implementation
+classes are Drivers rather than Backends: they expose one concrete mechanism boundary and do
+not aggregate a lower API. Probe routing and structural-policy compositions may remain
+Backends where they genuinely bundle observation, multiple Drivers or owner-specific lower
+operations.
 
 The executable reference now separates a single physical-attempt contract from retry policy:
 
@@ -5056,7 +5129,7 @@ exact postcondition check
 ```
 
 A failed physical step terminates that attempt. The remaining plan is discarded, the
-Executor re-observes before returning failure, and any later attempt must re-plan from that
+Enforcer re-observes before returning failure, and any later attempt must re-plan from that
 new observation. The attempt helper contains no hidden retry loop.
 
 A successfully issued command sequence is not confirmation. Success requires a fresh final
@@ -5071,7 +5144,7 @@ Required properties:
 - after partial failure, re-observe before planning another mutation;
 - prefer a safe restrictive result when the required postcondition cannot be confirmed.
 
-The Executor distinguishes two transition classes.
+The Enforcer distinguishes two transition classes.
 
 ## 10.1. Pure priority permutation — make-before-break route-slot transaction
 
@@ -5188,13 +5261,13 @@ Its normalized recovery semantics are:
 - a path with no observed route, an inter-path metric collision, a route outside the owned
   metric space, or a structural membership difference is rejected from this priority-only
   convergence path;
-- after any partial execution failure the remaining plan is stale: the Executor must
+- after any partial execution failure the remaining plan is stale: the Enforcer must
   re-observe authoritative state and produce a new convergence plan before another mutation.
 
 The convergence planner itself is not postcondition evidence. Confirmation still belongs to
-the physical Executor/Adapter boundary after Linux mutation and re-observation.
+the physical Enforcer/Adapter boundary after Linux mutation and re-observation.
 
-The availability-specific composition above this generic Executor is intentionally thin: `availability_route_priority.py` maps the effective `PayloadProfileRequest` order produced by `AvailabilityManager` into the existing `RoutePriorityDomainRealization` / `RoutePriorityDomainRequest` contracts and invokes the existing Profile-level coordinator. It does not own a second metric namespace, planner or Linux mutation path.
+The availability-specific composition above this generic Enforcer is intentionally thin: `availability_route_priority.py` maps the effective `PayloadProfileRequest` order produced by `AvailabilityManager` into the existing `RoutePriorityDomainRealization` / `RoutePriorityDomainRequest` contracts and invokes the existing Profile-level coordinator. It does not own a second metric namespace, planner or Linux mutation path.
 
 The current executable Linux backend now closes that boundary for the **pure-priority
 single-route-key** subset:
@@ -5245,7 +5318,7 @@ NG2 product semantics are not inherited by that fact.
 If membership, direction, filtering/NAT or another structural policy dimension changes, the
 priority-only route-slot proof no longer applies.
 
-The Executor may establish/retain a restrictive guard for the affected traffic while it
+The Enforcer may establish/retain a restrictive guard for the affected traffic while it
 changes lower state, and may temporarily interrupt forwarding when necessary to preserve the
 safety postconditions.
 
@@ -5323,7 +5396,7 @@ net.ipv4.ip_forward = 0
 This sysctl belongs to the isolated managed network domain, not to the ordinary host network
 namespace.
 
-The Executor may begin allowing structural mutation only after:
+The Enforcer may begin allowing structural mutation only after:
 
 ```text
 write ip_forward = 0
@@ -5354,7 +5427,7 @@ The global barrier is chosen intentionally instead of a per-Profile nft deny rul
 - critically, it does not rely on the nft namespace being already trusted while nft
   ownership/conflict recovery is itself in progress.
 
-If the Executor cannot verify `ip_forward=0`, it must not begin or continue an allowing
+If the Enforcer cannot verify `ip_forward=0`, it must not begin or continue an allowing
 structural rebuild. From a previously verified state the requested structural transition is
 aborted. During startup/recovery from UNKNOWN state, inability to establish the barrier is a
 hard failure and no new allowing state is materialized.
@@ -5480,7 +5553,7 @@ ambient/main routing.
 RPDB addition is therefore an activation step, never a standalone preparation optimization.
 It occurs only after guarded routes and the required nft policy are exact.
 
-Delayed cleanup after barrier release is not part of the first-release structural Executor.
+Delayed cleanup after barrier release is not part of the first-release structural Enforcer.
 A future optimization may defer cleanup only for state independently proven unreachable and
 semantically irrelevant; such an optimization requires its own evidence and must not weaken
 the exact-before-release postcondition.
@@ -5554,7 +5627,7 @@ The first-release reference implementation now closes the guarded route/RPDB+nft
 without introducing another semantic owner.
 
 The invariant four-chain nft scaffold remains a separate lower bootstrap/repair prerequisite.
-The cross-domain Executor does not silently create or adopt it:
+The cross-domain Enforcer does not silently create or adopt it:
 
 ```text
 scaffold absent/incomplete
@@ -5579,7 +5652,7 @@ fresh link inventory
 The two link inventories must be identical. Route/RPDB and nft comparisons therefore consume
 one common current interface generation rather than independent nested observations.
 
-Each Executor invocation:
+Each Enforcer invocation:
 
 1. closes and rereads the managed IPv4 ForwardingGate;
 2. obtains one fresh cross-domain snapshot;
@@ -5595,7 +5668,7 @@ Each Executor invocation:
 No stale mutation plan is replayed. A later invocation always replans from fresh state.
 
 The complete structural transaction is an explicit coordinator over that one-step contract,
-not a retry loop hidden inside the Executor:
+not a retry loop hidden inside the Enforcer:
 
 ```text
 STEP_APPLIED with strict distance decrease
@@ -5651,14 +5724,14 @@ exact routing+nft while ForwardingGate=DISABLED
     -> CONFIRMED only if state is still exact and gate is ENABLED
 ```
 
-If the post-activation whole-state verification fails, the Executor immediately attempts to
+If the post-activation whole-state verification fails, the Enforcer immediately attempts to
 restore and reread `ForwardingGate=DISABLED`. A verified re-close is reported as a failed
 activation/final verification, not as success. Failure to confirm the safety re-close is a
 separate `SAFETY_RECLOSE_FAILED` result.
 
 The root forwarding barrier protects managed payload forwarding only. Publication-local
 INPUT/OUTPUT state remains governed by its EXP-047 atomic full-diff contract and is included
-in the nft exactness check; the Executor does not pretend that `ip_forward=0` blocks local
+in the nft exactness check; the Enforcer does not pretend that `ip_forward=0` blocks local
 traffic. Probe-owned local/system state must therefore participate in the same explicit
 owned local-policy exactness boundary once materialized. The historical probe-materialization
 deferral is superseded for Release 1 as recorded in section 8.1 and
