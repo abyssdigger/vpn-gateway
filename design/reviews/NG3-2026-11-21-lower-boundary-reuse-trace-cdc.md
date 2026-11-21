@@ -107,3 +107,29 @@ the component-model decomposition.
 5. expert-review the whole CDC, including this applicability assessment and any rejected
    reuse candidates;
 6. snapshot only after a clean completed development block.
+
+
+## Applied terminology comb
+
+The assessment was applied to current production call sites without introducing a universal
+Linux lower framework.
+
+Current production role names now use:
+
+- `LinuxNftNamespaceReader`;
+- `LinuxNftScaffoldDriver`;
+- `LinuxDeviceFirewallDriver`;
+- `LinuxPayloadNatDriver`;
+- `LinuxLocalPublicationDriver`;
+- `LinuxIntegrationLocalDriver`;
+- `LinuxProbeLocalDriver`;
+- `IproutePriorityDriver` / `RoutePriorityDriver`;
+- `LinuxHostManagedRoutingDriver`.
+
+Existing broad `LinuxStructuralPolicyBackend`, `LinuxCompositeNftBackend`,
+`LinuxProbeRoutingBackend` and `LinuxStackReturnAffinityBackend` remain Backends because
+they are actual compositions.
+
+Old class names remain only as explicit aliases in implementation modules so historical NG3
+executable evidence can continue to import the terminology it was recorded with. Current
+production call sites and package exports use the role-correct names.

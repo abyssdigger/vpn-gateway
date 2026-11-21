@@ -448,6 +448,35 @@ code
 evidence index либо связанному review/result artifact. Они не являются стабильными адресами
 архитектурного решения.
 
+### 2.9.2. Lower technical-boundary reuse
+
+Lower Machinery переиспользуется только при совпадении **полного технического контракта**,
+а не потому, что разные owners вызывают один executable или Linux subsystem.
+
+- Driver может объединять свои Reader/Executor operations, если их отдельное выделение не
+  дает независимой переиспользуемой/заменяемой границы.
+- Отдельный Reader/Executor вводится только при самостоятельной архитектурной ценности:
+  exact reuse, независимая замена/тестирование или заметное упрощение нескольких callers.
+- Raw `run(argv)` / stdin-script runner остается implementation primitive ниже component
+  model и не считается generic Executor.
+- Generic `NftDriver`, `IpRouteDriver`, `SysctlDriver` или универсальные
+  route/rule Readers не вводятся без совпадающего owner-safe контракта. Ownership,
+  generation-stability checks, reserved-resource classification и допустимые mutations
+  остаются в узких lower boundaries.
+- `Backend` сохраняется только для реальной stateless композиции нескольких lower
+  responsibilities/mechanisms. Узкая граница одного technical mechanism contract является
+  Driver; самостоятельная read-only operation — Reader.
+
+Текущая Release-1 realization применяет это правило так:
+
+- shared `LinuxStructuralRoutingDriver` переиспользуется payload/probe routing там, где
+  route mutation contract действительно совпадает;
+- NG3 nft namespace inventory является отдельным Reader;
+- structural-policy, composite-nft, probe-routing и stack-return-affinity остаются
+  Backend-композициями;
+- narrow nft scaffold/owner, route-priority и host-managed-routing boundaries являются
+  Drivers.
+
 
 
 ## 3. Форма описания Space
