@@ -1,7 +1,7 @@
 # NG3 2026-11-18 — selected host-boundary alpha integration review
 
 > **Historical requirement trace note (2026-11-20):** this review records the requirement
-> tree that was current when the review was performed. `VPNG0002-R2.R3.R1.R1`, `VPNG0002-R2.R3.R1.R1.R1`, `VPNG0002-R2.R3.R1.R1.R2`
+> tree that was current when the review was performed. `VPNG-U002-R2.R3.R1.R1`, `VPNG-U002-R2.R3.R1.R1.R1`, `VPNG-U002-R2.R3.R1.R1.R2`
 > were later removed from the current requirement tree when the old direction-derived host-routing
 > ownership decomposition was rejected. References below to those IDs are historical facts about
 > what this review evaluated, not current requirement links; the review conclusions are not rewritten retroactively.
@@ -20,13 +20,13 @@ No user-facing grammar or product semantics changed.
 
 **Implements:**
 
-- `VPNG0002-R2.R3.R1.R1`;
-- `VPNG0002-R2.R3.R1.R1.R1`;
-- `VPNG0002-R2.R3.R1.R1.R2`;
-- `VPNG0002-R2.R3.R3.R1`;
-- `VPNG0002-R2.R3.R3.R1.R1`;
-- `VPNG0004-R4.R6.R1.R1`;
-- `VPNG0004-R4.R6.R1.R2`.
+- `VPNG-U002-R2.R3.R1.R1`;
+- `VPNG-U002-R2.R3.R1.R1.R1`;
+- `VPNG-U002-R2.R3.R1.R1.R2`;
+- `VPNG-U002-R2.R3.R3.R1`;
+- `VPNG-U002-R2.R3.R3.R1.R1`;
+- `VPNG-U004-R4.R6.R1.R1`;
+- `VPNG-U004-R4.R6.R1.R2`.
 
 The canonical `+route-return` semantics and selected Linux mechanisms were already accepted.
 This block only closes their executable-alpha integration gap.
@@ -195,7 +195,7 @@ No requirement-state transitions occurred.
 - active `broken`: none;
 - active `[rejected_closure]`: none.
 
-The previously identified suspect `VPNG0004-R4.R6.R1.R6.R1` remains unresolved and continues
+The previously identified suspect `VPNG-U004-R4.R6.R1.R6.R1` remains unresolved and continues
 to gate Profile ordinary-side `+snat`; this block does not depend on or modify it.
 
 ## Conclusion

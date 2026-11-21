@@ -9,14 +9,14 @@ without inventing a final stable external API.
 
 **Implements:**
 
-- `VPNG0006-R6`;
-- `VPNG0006-R6.R1`;
-- `VPNG0006-R6.R2`;
-- `VPNG0006-R6.R3`;
-- `VPNG0006-R6.R4`;
-- `VPNG0007-R7.R1`;
-- `VPNG0007-R7.R1.R1`;
-- `VPNG0007-R7.R3`.
+- `VPNG-U006-R6`;
+- `VPNG-U006-R6.R1`;
+- `VPNG-U006-R6.R2`;
+- `VPNG-U006-R6.R3`;
+- `VPNG-U006-R6.R4`;
+- `VPNG-U007-R7.R1`;
+- `VPNG-U007-R7.R1.R1`;
+- `VPNG-U007-R7.R3`.
 
 The complete R6 ancestry is already closed. No requirement or product-semantic change is
 needed for this unit.
@@ -94,13 +94,13 @@ change.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0006-R6` -> `VPNG9101-R2.R1`
-- `VPNG0006-R6.R1` -> `VPNG9101-R2.R1.R1`
-- `VPNG0006-R6.R2` -> `VPNG9101-R2.R1.R2`
-- `VPNG0006-R6.R3` -> `VPNG9101-R2.R1.R3`
-- `VPNG0006-R6.R4` -> `VPNG9101-R2.R1.R4`
-- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
-- `VPNG0007-R7.R1.R1` -> `VPNG9001-R1.R1.R1.R1`
-- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
+- `VPNG-U006-R6` -> `VPNG-M001-R2.R1`
+- `VPNG-U006-R6.R1` -> `VPNG-M001-R2.R1.R1`
+- `VPNG-U006-R6.R2` -> `VPNG-M001-R2.R1.R2`
+- `VPNG-U006-R6.R3` -> `VPNG-M001-R2.R1.R3`
+- `VPNG-U006-R6.R4` -> `VPNG-M001-R2.R1.R4`
+- `VPNG-U007-R7.R1` -> `VPNG-D001-R1.R1.R1`
+- `VPNG-U007-R7.R1.R1` -> `VPNG-D001-R1.R1.R1.R1`
+- `VPNG-U007-R7.R3` -> `VPNG-D001-R1.R1.R3`
 
 The original IDs in the historical body are intentionally preserved.

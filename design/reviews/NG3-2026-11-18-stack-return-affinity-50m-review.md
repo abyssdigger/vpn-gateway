@@ -1,7 +1,7 @@
 # NG3 2026-11-18 — stack established-flow return affinity — 50m cycle review
 
 > **Historical requirement trace note (2026-11-20):** this review records the requirement
-> tree that was current when the review was performed. `VPNG0002-R2.R3.R1.R1`
+> tree that was current when the review was performed. `VPNG-U002-R2.R3.R1.R1`
 > was later removed from the current requirement tree when the old direction-derived host-routing
 > ownership decomposition was rejected. References below to that ID are historical facts about
 > what this review evaluated, not current requirement links; the review conclusions are not rewritten retroactively.
@@ -43,16 +43,16 @@ required established-flow return -> A
 
 This is the concrete scenario required by:
 
-- `VPNG0002-R2.R6`;
-- `VPNG0007-R7.R3.R4`;
-- `VPNG0007-R7.R3.R4.R1`.
+- `VPNG-U002-R2.R6`;
+- `VPNG-U007-R7.R3.R4`;
+- `VPNG-U007-R7.R3.R4.R1`.
 
-Release-1 implementation remains constrained by `VPNG0002-R2.R3.C1`: an inbound or
+Release-1 implementation remains constrained by `VPNG-U002-R2.R3.C1`: an inbound or
 bidirectional Profile has at most one eligible logical path.
 
 ## Requirement correction before implementation
 
-The first draft of `VPNG0002-R2.R6` incorrectly used internal vocabulary such as Profile,
+The first draft of `VPNG-U002-R2.R6` incorrectly used internal vocabulary such as Profile,
 path and NEW/ESTABLISHED classification in a second-level user requirement.
 
 It was corrected to the user-level contract:
@@ -73,8 +73,8 @@ strengthened so every new/changed Requirement explicitly checks that rule.
 
 The new general development requirement is:
 
-- `VPNG0007-R7.R3.R4`: cross-boundary semantic continuity;
-- `VPNG0007-R7.R3.R4.R1`: differentiating automated evidence through all material boundaries.
+- `VPNG-U007-R7.R3.R4`: cross-boundary semantic continuity;
+- `VPNG-U007-R7.R3.R4.R1`: differentiating automated evidence through all material boundaries.
 
 Its Purpose was also corrected to stay within the ancestor implementation/contract vocabulary.
 
@@ -112,7 +112,7 @@ The experiment proves all of the intended differentiating facts:
 5. removing the affinity owner restores the failure.
 
 This satisfies the differentiating-evidence requirement of
-`VPNG0007-R7.R3.R4.R1`.
+`VPNG-U007-R7.R3.R4.R1`.
 
 ## Selected Release-1 mechanism
 
@@ -230,7 +230,7 @@ Per current project guidance, these are **not automatically rewritten in this cy
 These look materially shaped by existing code/model rather than being obviously forced by the
 user-level ancestor promise.
 
-1. **`VPNG0002-R2.R1.R2`** — the exact symmetric rule
+1. **`VPNG-U002-R2.R1.R2`** — the exact symmetric rule
    “ordinary NEW selects Profile by remote destination; VPN NEW selects Profile by remote
    source restricted by ingress Device/path”.
    - The inbound ingress restriction is useful and currently prevents one VPN from shadowing
@@ -240,7 +240,7 @@ user-level ancestor promise.
    - Discussion needed: what is the simplest user-level obligation from which this exact
      classification follows?
 
-2. **`VPNG0002-R2.R2.R2`** — “Profile intent is Device-level; concrete paths arise only from
+2. **`VPNG-U002-R2.R2.R2`** — “Profile intent is Device-level; concrete paths arise only from
    bindings”.
    - The safety property “do not guess a path” is strong.
    - The specific Profile/Device/binding formulation looks architectural.
@@ -254,18 +254,18 @@ Their semantics may be valid or explicitly accepted, but their current `Purpose`
 vocabulary not introduced by ancestor Statements and therefore fails the strengthened
 requirement-gate test.
 
-1. **`VPNG0002-R2.R1.R1`** — Purpose first introduces `Profile`.
-2. **`VPNG0002-R2.R1.R2`** — Purpose relies on “Profile destination semantics” introduced by
+1. **`VPNG-U002-R2.R1.R1`** — Purpose first introduces `Profile`.
+2. **`VPNG-U002-R2.R1.R2`** — Purpose relies on “Profile destination semantics” introduced by
    a sibling, not an ancestor.
-3. **`VPNG0002-R2.R2.R1`** — Purpose first introduces Profile/user-described VPN resources.
-4. **`VPNG0002-R2.R2.R2`** — Purpose first introduces Profile/Device/binding.
-5. **`VPNG0002-R2.R3.R3`** — Purpose first introduces Profile under the generic direction
+3. **`VPNG-U002-R2.R2.R1`** — Purpose first introduces Profile/user-described VPN resources.
+4. **`VPNG-U002-R2.R2.R2`** — Purpose first introduces Profile/Device/binding.
+5. **`VPNG-U002-R2.R3.R3`** — Purpose first introduces Profile under the generic direction
    branch.
-6. **`VPNG0002-R2.R3.R3.R1`** — Purpose introduces host routing, Linux capability and the
+6. **`VPNG-U002-R2.R3.R3.R1`** — Purpose introduces host routing, Linux capability and the
    managed boundary under a user-direction branch.
-7. **`VPNG0002-R2.R3.R1.R1`** — Purpose introduces the isolated routing domain/host-boundary
+7. **`VPNG-U002-R2.R3.R1.R1`** — Purpose introduces the isolated routing domain/host-boundary
    mechanism below the user-level ordinary-to-VPN direction requirement.
-8. **`VPNG0002-R2.R5.R1`** — Purpose first introduces Profiles under the generic
+8. **`VPNG-U002-R2.R5.R1`** — Purpose first introduces Profiles under the generic
    deterministic-overlap requirement.
 
 Notes:
@@ -275,17 +275,17 @@ Notes:
   the project holder; their appearance here does not mean those decisions are being revoked;
 - the finding is that some current tree positions/Purposes may reflect reverse-engineered
   implementation structure rather than clean causal ancestry;
-- `VPNG0002-R2.R6` is not in this suspect list: its user-level wording was explicitly
+- `VPNG-U002-R2.R6` is not in this suspect list: its user-level wording was explicitly
   corrected and accepted in this cycle.
 
 ## Requirement-state inventory
 
 Current normative tree contains six `decomp` link occurrences, all resolved:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1` (two occurrences);
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2` (two occurrences);
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1` (two occurrences);
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2` (two occurrences);
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 Current active state:
 
@@ -307,7 +307,7 @@ resource:
 7. add a production-shaped privileged scenario that runs the actual lower backend rather than
    the hand-written EXP-061 commands.
 
-Only after that unit should alpha/runtime claim `VPNG0002-R2.R6` end-to-end materialization.
+Only after that unit should alpha/runtime claim `VPNG-U002-R2.R6` end-to-end materialization.
 
 ## Cycle conclusion
 
@@ -326,9 +326,9 @@ No Release-2 multi-path claim was made.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R3.R4` -> `VPNG9001-R1.R1.R3.R4`
-- `VPNG0007-R7.R3.R4.R1` -> `VPNG9001-R1.R1.R3.R4.R1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R3.R4` -> `VPNG-D001-R1.R1.R3.R4`
+- `VPNG-U007-R7.R3.R4.R1` -> `VPNG-D001-R1.R1.R3.R4.R1`
 
 The original IDs in the historical body are intentionally preserved.

@@ -17,10 +17,10 @@ EXP-064 architecture.
 
 The experiment is traceable to:
 
-- `VPNG0001-R1.R2.R4.R4.R4`;
-- `VPNG0001-R1.R2.R4.R4.R4.R1`;
-- `VPNG0004-R4.R6.R1.R6`;
-- `VPNG0004-R4.R6.R1.R6.R1`.
+- `VPNG-U001-R1.R2.R4.R4.R4`;
+- `VPNG-U001-R1.R2.R4.R4.R4.R1`;
+- `VPNG-U004-R4.R6.R1.R6`;
+- `VPNG-U004-R4.R6.R1.R6.R1`.
 
 No requirement wording was changed by this block.
 

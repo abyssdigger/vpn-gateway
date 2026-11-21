@@ -137,18 +137,18 @@ session state was added.
 
 Changed and re-reviewed:
 
-- `VPNG0003-R3`;
-- `VPNG0003-R3.R4`;
-- `VPNG0003-R3.R5.R2`;
-- `VPNG0003-R3.R7`;
-- `VPNG0003-R3.R8`;
-- `VPNG0003-R3.R8.R1`;
-- `VPNG0003-R3.R8.C1`.
+- `VPNG-U003-R3`;
+- `VPNG-U003-R3.R4`;
+- `VPNG-U003-R3.R5.R2`;
+- `VPNG-U003-R3.R7`;
+- `VPNG-U003-R3.R8`;
+- `VPNG-U003-R3.R8.R1`;
+- `VPNG-U003-R3.R8.C1`.
 
 Added:
 
-- `VPNG0003-R3.R4.R1` — explicit Profile-local reserve failback;
-- `VPNG0003-R3.R4.R1.R1` — canonical `:reserve` grammar and scope.
+- `VPNG-U003-R3.R4.R1` — explicit Profile-local reserve failback;
+- `VPNG-U003-R3.R4.R1.R1` — canonical `:reserve` grammar and scope.
 
 Current mechanical state:
 
@@ -171,12 +171,12 @@ extra architecture refs:           0
 
 Six historical decomposition-link occurrences remain resolved:
 
-1. `VPNG0005-R5 -> VPNG0005-R5.R6`;
-2. `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`;
-3. `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`;
-4. `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`;
-5. second occurrence of `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`;
-6. second occurrence of `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`.
+1. `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+2. `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`;
+3. `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`;
+4. `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`;
+5. second occurrence of `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`;
+6. second occurrence of `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`.
 
 Pending `decomp`: **none**.
 
@@ -194,7 +194,7 @@ Active: **none**.
 
 Historical repaired closure rejection:
 
-- `VPNG0001-R1.R3.C1.R1.R1` was rejected by EXP-049 when the terminal managed-local policy
+- `VPNG-U001-R1.R3.C1.R1.R1` was rejected by EXP-049 when the terminal managed-local policy
   blocked a real in-stack OpenVPN transport;
 - later supported-integration/systemd onboarding work repaired that closure and restored the
   node to `[closed]`.
@@ -274,7 +274,7 @@ routing-state framework.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

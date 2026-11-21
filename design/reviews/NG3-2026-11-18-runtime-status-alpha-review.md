@@ -11,14 +11,14 @@ the operator to reconstruct running state from journal messages or kernel comman
 
 **Implements:**
 
-- `VPNG0006-R6`;
-- `VPNG0006-R6.R1`;
-- `VPNG0006-R6.R2`;
-- `VPNG0006-R6.R3`;
-- `VPNG0006-R6.R4`;
-- `VPNG0007-R7.R1`;
-- `VPNG0007-R7.R1.R1`;
-- `VPNG0007-R7.R3`.
+- `VPNG-U006-R6`;
+- `VPNG-U006-R6.R1`;
+- `VPNG-U006-R6.R2`;
+- `VPNG-U006-R6.R3`;
+- `VPNG-U006-R6.R4`;
+- `VPNG-U007-R7.R1`;
+- `VPNG-U007-R7.R1.R1`;
+- `VPNG-U007-R7.R3`.
 
 No requirement wording or product semantics changed.
 
@@ -121,7 +121,7 @@ service exit. R6 does not require history, and this block intentionally does not
 
 Availability/failover runtime remains separately blocked by its existing probe implementation
 evidence gate. Profile ordinary-side `+snat` remains separately blocked on the explicit
-`VPNG0004-R4.R6.R1.R6.R1` requirement decision.
+`VPNG-U004-R4.R6.R1.R6.R1` requirement decision.
 
 ## Requirement-state inventory
 
@@ -145,13 +145,13 @@ renderer so a later stable presentation surface can replace it without changing 
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0006-R6` -> `VPNG9101-R2.R1`
-- `VPNG0006-R6.R1` -> `VPNG9101-R2.R1.R1`
-- `VPNG0006-R6.R2` -> `VPNG9101-R2.R1.R2`
-- `VPNG0006-R6.R3` -> `VPNG9101-R2.R1.R3`
-- `VPNG0006-R6.R4` -> `VPNG9101-R2.R1.R4`
-- `VPNG0007-R7.R1` -> `VPNG9001-R1.R1.R1`
-- `VPNG0007-R7.R1.R1` -> `VPNG9001-R1.R1.R1.R1`
-- `VPNG0007-R7.R3` -> `VPNG9001-R1.R1.R3`
+- `VPNG-U006-R6` -> `VPNG-M001-R2.R1`
+- `VPNG-U006-R6.R1` -> `VPNG-M001-R2.R1.R1`
+- `VPNG-U006-R6.R2` -> `VPNG-M001-R2.R1.R2`
+- `VPNG-U006-R6.R3` -> `VPNG-M001-R2.R1.R3`
+- `VPNG-U006-R6.R4` -> `VPNG-M001-R2.R1.R4`
+- `VPNG-U007-R7.R1` -> `VPNG-D001-R1.R1.R1`
+- `VPNG-U007-R7.R1.R1` -> `VPNG-D001-R1.R1.R1.R1`
+- `VPNG-U007-R7.R3` -> `VPNG-D001-R1.R1.R3`
 
 The original IDs in the historical body are intentionally preserved.
