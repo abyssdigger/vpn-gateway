@@ -797,10 +797,6 @@ Interactions
 | `@ForwardingGate` | technical read/mutation | `ForwardingGateDriver` |
 | `ForwardingGateDriver` | read/write | `IPv4 forwarding state` |
 
-Finding: current `ManagedNetworkDomain` lifecycle still merges artifacts from this Space
-with `Ordinary-side transition`. The structured ownership above intentionally does not
-inherit that implementation transaction boundary.
-
 Component diagram
 
 ```text
@@ -883,16 +879,11 @@ Interactions
 | `STACK.AvailabilityProbeAgent` via `Private network.@ActiveProbeDriver` | configured active observation | `remote path availability property` |
 | `Ambient host and external world.@systemd` | supported deployment stop removes bound process/cgroup and endpoint before managed-domain teardown | `VPN channel runtime/session state` / `VPN endpoint generation` |
 
-Findings
-
-1. `Physical placement is not Space ownership` — OpenVPN `MainPID` and `vpn0` can be
-   physically inside the managed netns while VPN-specific lifecycle/configuration remains in
-   this Space. `Private network` owns observation/binding and surrounding policy, not VPN
-   session semantics.
-2. `Additional integrations` — OpenVPN/systemd is the currently evidenced Release-1
-   onboarding mechanism. Other technologies do not become supported merely because they can
-   expose a superficially similar interface; each requires applicability evidence or reviewed
-   equivalence.
+Release-1 support boundary: OpenVPN/systemd является текущим evidence-backed onboarding
+mechanism. Дополнительная VPN technology не считается supported только из-за похожего
+interface shape; ее integration contract требует отдельного applicability evidence либо
+reviewed equivalence. Physical placement process/interface внутри managed netns при этом не
+переносит VPN-specific configuration/session ownership в `Private network`.
 
 Component diagram
 
@@ -977,6 +968,12 @@ Interactions
 | `peaceful host routing contribution` | route selected traffic to explicit managed host endpoint | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` |
 | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` | traffic emitted from Private network bypasses helper recapture and resumes ordinary host routing | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` |
 
+Publication machinery may observe host-global forwarding as an external prerequisite and
+report publication unready, but current ownership does not authorize enabling it. Peaceful
+host routing is lifecycle-scoped: Release 1 owns start/update/stop contribution only;
+administrator changes between lifecycle operations are not helper drift and do not justify a
+Manager.
+
 Findings
 
 1. `NetworkPolicyAdapter cross-Space projection` — one semantic Device publication currently
@@ -984,11 +981,6 @@ Findings
    postcondition. Keeping one Adapter identity across both Spaces is valid via `<partial>`,
    but remains a decomposition review signal rather than evidence that host state belongs to
    Private network.
-2. `Host forwarding prerequisite` — publication machinery may observe and report
-   host-global forwarding disabled, but current requirements do not authorize enabling it.
-3. `Peaceful helper lifecycle` — Release 1 owns only start/reload-update/stop contribution.
-   Administrator changes between lifecycle operations are not helper drift, so no Manager is
-   introduced.
 
 Component diagram
 
@@ -1070,10 +1062,10 @@ Interactions
 | `@systemd` | supervise explicitly bound VPN process/cgroup | `VPN external ends.@VPNChannel[]` |
 | `@systemd` | reverse dependency/order stops the bound VPN unit before controller final managed-domain teardown | `VPN external ends.@VPNChannel[]` / `STACK.@ProductLifecycleControl` |
 
-Finding: `Ambient breadth` — этот Space намеренно объединяет ordinary host и внешний
-ordinary IP world, пока внутри них нет самостоятельной VPN-GATE-managed semantics,
-требующей дополнительной boundary. Наличие множества Linux objects само по себе не повод
-дробить Space.
+Этот Space намеренно остается широким: ordinary host и внешний ordinary IP world не
+разделяются только из-за количества Linux/network objects. Новая boundary потребуется лишь
+при появлении самостоятельной VPN-GATE-visible/managed semantics, которой нужен собственный
+контракт.
 
 Component diagram
 
