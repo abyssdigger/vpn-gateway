@@ -11,7 +11,7 @@ product-holder dispositions, записанных в
 `NG3-2026-11-20-purpose-parent-corrected-requirements-draft.md`.
 
 Исходный audit содержал 20 findings: 2 safe corrections и 18 вопросов, требовавших human
-decision. В текущем draft 17 findings уже имеют disposition; остаются три.
+decision. В текущем draft 18 findings уже имеют disposition; остаются два.
 
 ## 1. Priority-only make-before-break continuity
 
@@ -48,23 +48,6 @@ Lifecycle ancestry гарантирует start/stop/restart. Текущий rel
 Первый release уже допускает отсутствие reload; текущая alpha её не реализует, поэтому
 решение в основном влияет на requirement/interface placement, а не на готовый runtime.
 
-## 3. Second VPN lifecycle evidence gate
-
-**Affected:** `VPNG0007-R7.R7.R1.R1`.
-
-Parent `VPNG0007-R7.R7.R1` запрещает начинать зависимую integration development до PASS
-базового applicability evidence. Child требует **после этого PASS** отдельный lifecycle /
-aggressive-configuration experiment до принятия bounded-VPN lifecycle semantics.
-
-Это следующий evidence gate, а не уточнение Statement текущего parent.
-
-Нужно выбрать placement:
-
-- sibling gate под `VPNG0007-R7.R7`;
-- evidence child конкретного VPN lifecycle requirement;
-- либо ненормативное development-process правило, если оно не является продуктовым или
-  requirement-level обязательством.
-
 ## Уже закрытые adjacent findings
 
 Следующие вопросы больше не являются unresolved и не должны снова появляться в decision
@@ -81,6 +64,7 @@ queue:
   architecture/evidence;
 - protective mode поднят непосредственно под `VPNG0004`.
 - return-flow affinity перенесён из `VPNG0002-R2.R6` в прямой child `VPNG0003-R4`, сохранив позитивную same-path гарантию; это отдельный принцип выбора пути, параллельный baseline/availability preference.
+- второй VPN lifecycle evidence gate удалён из requirement tree; EXP-050 остаётся историческим evidence для соответствующих product/lifecycle/safety obligations.
 
-До решения трёх вопросов выше нормативный remap `design/NG3/requirements.md` остаётся
+До решения двух вопросов выше нормативный remap `design/NG3/requirements.md` остаётся
 неполным.
