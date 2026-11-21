@@ -392,22 +392,50 @@ API
 
 ### ForwardingGate
 
-Самостоятельный Enforcer корневого IPv4 forwarding state Private network. Его verified
-DISABLED state используется как structural safety barrier, но тот же contract нужен startup,
-shutdown и recovery независимо от `NetworkPolicyAdapter`.
+Самостоятельный bounded Enforcer корневого IPv4 forwarding state Private network. Его
+verified DISABLED state используется как structural safety barrier, но тот же contract нужен
+startup, shutdown и recovery независимо от `NetworkPolicyAdapter`.
 
 API
 
     @observe(∅) — получить свежий authoritative gate state.
     @converge(...) — observe, при необходимости выполнить mutation и свежим reread подтвердить requested state.
 
+Architectural decisions
+
+1. `Owned state`
+   *Gate управляет IPv4 forwarding state внутри Private network. Это не host-global forwarding state и не право изменять ordinary host namespace.*
+
+2. `Verified state change`
+   *Один converge-вызов выполняет fresh observe -> optional mutation -> fresh observe. Lower write result не является подтверждением. Даже failed write может завершиться success только если независимое финальное observation уже доказывает exact desired state.*
+
+3. `Barrier postcondition`
+   *Для structural mutation достаточным barrier является только freshly observed `DISABLED`. Невозможность наблюдать или подтвердить это состояние не разрешает начинать/продолжать allowing structural rebuild.*
+
+4. `Scope of protection`
+   *`DISABLED` блокирует routed IPv4 forwarding во всем Private network и поэтому может временно затронуть Profiles, чья policy не менялась. Он не блокирует local INPUT/OUTPUT traffic; соответствующие local owner classes требуют собственных safety contracts.*
+
+5. `Mechanism independence`
+   *Gate находится ниже пользовательской configuration/policy и не зависит от Profile direction, NAT/firewall grammar или текущего resource allocation. Глобальный forwarding primitive выбран в том числе потому, что остается применимым, когда nft ownership или routing/path realization еще не доверены.*
+
+6. `Bounded lifecycle`
+   *Enforcer не содержит hidden retry loop и не владеет continuous maintenance. Повторная попытка, если она нужна, начинается caller'ом из нового fresh state.*
+
 ### ForwardingGateDriver
 
-Технический Driver к managed-domain forwarding state. Он предоставляет fresh observation и
-одну mutation attempt, но не владеет desired state или подтверждением более широкого
-postcondition.
+Технический Driver к managed-domain forwarding state. В дереве `Residents` он является
+child `ForwardingGate`, но его spec остается плоским addendum-соседом остальных компонентов
+Space.
 
 API
 
     observe_forwarding_gate(∅) — вернуть свежий technical gate state.
     set_forwarding_gate(...) — выполнить одну lower mutation attempt без implied confirmation.
+
+Architectural decisions
+
+1. `Technical boundary`
+   *Driver предоставляет только fresh observation и одну mutation attempt. Он не выбирает desired state, не подтверждает Enforcer postcondition и не владеет retry/reconciliation.*
+
+2. `Linux realization`
+   *Текущая Linux-реализация читает/изменяет managed-network-namespace `net.ipv4.ip_forward`; process/command success остается техническим результатом и не заменяет fresh observation.*
