@@ -374,7 +374,7 @@ host-routing automation capability и по-прежнему может быть 
 | Availability criterion | `VPNG0003-R3.R6.R3.R1` сохраняет ID с исправленным Purpose/Statement; Device-default/Profile-override перемещён в `.R1.R1*`; ICMP-only остаётся `.C1`; timing/hysteresis limitation вынесен в sibling `.C2` |
 | Независимость policy от host network state | `VPNG0004-R4.R6` сохраняет ID, но становится mechanism-neutral; прежний `.R1*` managed-domain subtree удалён из requirements и остаётся architecture/evidence concern |
 | Защитный режим | новый первый derived level `VPNG0004-R5`; Release-1 limitation — `.C1` |
-| Стабильность ответного трафика принятого VPN-обмена | прежний `VPNG0002-R2.R6` → `VPNG0001-R1.R1.R1` под forwarding behavior; Statement сохраняет same-path гарантию |
+| Стабильность ответного трафика принятого VPN-обмена | прежний `VPNG0002-R2.R6` → прямой ребёнок `VPNG0003-R4`; Statement сохраняет same-path гарантию |
 
 Draft после этого remap содержит 7 primary Requirements, 153 derived Requirements и
 24 Constraints, всего 184 нормативно оформленных узла в исследовательской копии.
@@ -385,12 +385,13 @@ Draft после этого remap содержит 7 primary Requirements, 153 d
 
 ## 13/18 — стабильность ответного трафика принятого VPN-обмена
 
-Нынешний `VPNG0002-R2.R6` не относится к выбору пользовательской traffic/path policy:
-пользователь не задаёт same-ingress affinity отдельным policy decision. Требование описывает
-корректное forwarding-поведение уже принятого в обслуживание обмена и поэтому должно быть
-перенесено под `VPNG0001-R1.R1`.
+Нынешний `VPNG0002-R2.R6` не относится к выбору пользовательской traffic/path policy как
+отдельного пользовательского решения, но его смысл возникает именно при наличии нескольких
+разрешённых VPN-путей: он определяет, какой из них должен использовать ответ уже принятого
+обмена. Поэтому требование должно быть прямым ребёнком `VPNG0003`, параллельным ветке
+baseline preference / availability adaptation.
 
-### Новый draft-узел — `VPNG0001-R1.R1.R1`
+### Новый draft-узел — `VPNG0003-R4`
 
 **Зачем:** чтобы ответный трафик уже принятого обмена сохранял сетевые свойства и
 работоспособность исходного пути и не оказывался произвольно перенесён на другой VPN-путь.
@@ -405,5 +406,7 @@ source identity или других сетевых свойств при про�
 этой гарантии и относится к Purpose, а не заменяет Statement отрицательной формулировкой.
 
 Это semantic reparenting существующей гарантии; оно не требует изменения уже доказанного
-forwarding behavior само по себе.
+forwarding behavior само по себе. Размещение напрямую под `VPNG0003`, а не под
+`VPNG0003-R3`, сохраняет различие между двумя основаниями выбора пути: baseline/availability
+preference и стабильностью уже принятого обмена.
 
