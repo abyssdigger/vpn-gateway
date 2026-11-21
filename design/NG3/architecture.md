@@ -146,14 +146,11 @@ These omissions are deliberate implementation freedom, not unresolved requiremen
 ## 1.1. Managed network isolation boundary ("стакан")
 
 **Implements:**
-- `VPNG0004-R4.R6`
-- `VPNG0004-R4.R6.R1`
-- `VPNG0004-R4.R6.R1.R1`
-- `VPNG0004-R4.R6.R1.R2`
-- `VPNG0004-R4.R6.R1.R3`
-- `VPNG0004-R4.R6.R1.R4`
+- `VPNG0001-R1.R1`
+- `VPNG0001-R1.R3.R2`
 - `VPNG0004-R4.R2`
 - `VPNG0004-R4.R4`
+- `VPNG0004-R4.R6`
 - `VPNG0005-R5.R1`
 - `VPNG0005-R5.R4`
 - `VPNG0007-R7.R3`
@@ -288,11 +285,8 @@ reachability. No additional host-side Profile metadata carrier is required.
 ### 1.1.2. Managed network-domain bootstrap — executable managed-L3 lifecycle
 
 **Implements:**
+- `VPNG0001-R1.R3.R2`;
 - `VPNG0004-R4.R6`;
-- `VPNG0004-R4.R6.R1`;
-- `VPNG0004-R4.R6.R1.R1`;
-- `VPNG0004-R4.R6.R1.R2`;
-- `VPNG0004-R4.R6.R1.R4`;
 - `VPNG0005-R5.R1`;
 - `VPNG0005-R5.R4`;
 - `VPNG0007-R7.R1`;
@@ -408,8 +402,7 @@ freshly verifies absence.
 
 **Constrained by:**
 - `VPNG0001-R5.R2.C1`;
-- `VPNG0004-R4.R6.R1.R1`;
-- `VPNG0004-R4.R6.R1.R2`.
+- `VPNG0004-R4.R6`.
 
 Core VPN-GATE owns managed forwarding up to the explicit ordinary-side managed boundary.
 Ordinary-host routing beyond that boundary remains administrator-owned unless the
@@ -630,11 +623,11 @@ VPN routing domain inside STACK by the independently owned established-flow affi
 
 **Constrained by:**
 - `VPNG0001-R1.R3.C1`
-- `VPNG0001-R1.R3.C2`
+- `VPNG0004-R4.R6`
 
 **Implements:**
 - `VPNG0001-R1.R3.C1.R1`
-- `VPNG0001-R1.R3.C2.R1`
+- `VPNG0001-R1.R3.R2`
 
 An administrator-provisioned VPN channel is useful to NG3 only when its data-plane endpoint
 is available inside the isolated managed network domain.
@@ -1111,7 +1104,6 @@ selected by a supported integration without changing the accepted product semant
 - `VPNG0001-R1.R3.R1`
 - `VPNG0001-R1.R3.R2`
 - `VPNG0001-R1.R3.R3`
-- `VPNG0004-R4.R6.R1.R4`
 - `VPNG0007-R7.R3.R1`
 - `VPNG0007-R7.R3.R2`
 
@@ -1156,7 +1148,6 @@ the new binding has been observed and verified.
 - `VPNG0001-R1.R3.R4.R3`
 - `VPNG0001-R1.R3.R4.R3.R1`
 - `VPNG0001-R1.R3.R4.R4`
-- `VPNG0004-R4.R6.R1.R4`
 - `VPNG0007-R7.R3`
 - `VPNG0007-R7.R5`
 
@@ -1211,17 +1202,19 @@ The semantic content of `normalized_binding_intent` is defined: it must identify
 current concrete endpoint for one logical path. The exact external selector spelling and
 protocol-specific discovery mechanics remain replaceable interface/integration details.
 
-### 3.2.1. Transport endpoint provenance
+### 3.2.1. Optional transport endpoint provenance
 
-**Implements:**
-- `VPNG0001-R1.R3.R5`
-- `VPNG0001-R1.R3.R5.C1.R1`
+Transport endpoint provenance is **not** an independent product requirement. It may remain a
+bounded lower integration fact when a supported adapter can prove it, but upper policy must
+not depend on its presence unless a later accepted requirement explicitly needs it.
 
-**Constrained by:**
-- `VPNG0001-R1.R3.R5.C1`
+**Related requirements:**
+- `VPNG0001-R1.R3.R2`;
+- `VPNG0001-R1.R3.R3`;
+- `VPNG0007-R7.R3.R2`.
 
-Transport endpoint provenance is a bounded optional fact attached to the **current verified
-path binding**, not part of stable `LogicalPathId` identity:
+When present, provenance is attached to the **current verified path binding**, not to stable
+`LogicalPathId` identity:
 
 ```text
 current PathBinding
@@ -1345,7 +1338,7 @@ the supported integration/onboarding contract beneath the Device/Profile policy 
 - `VPNG0001-R4.R4.R2.R1`
 - `VPNG0001-R4.R4.R3`
 - `VPNG0001-R4.R4.R4`
-- `VPNG0001-R4.R4.R4.R1`
+- `VPNG0003-R3.R6.R3.R1.R1`
 - `VPNG0001-R4.R4.R4.R2`
 - `VPNG0001-R4.R4.R4.R3`
 - `VPNG0001-R4.R4.R5`
@@ -1572,7 +1565,7 @@ configuration boundary. Endpoint-scoped firewall syntax remains separately defer
 **Component type:** Calculator
 
 **Implements:**
-- `VPNG0001-R4.R4.R4.R1`
+- `VPNG0003-R3.R6.R3.R1.R1`
 - `VPNG0003-R3.R6.R1`
 - `VPNG0003-R3.R6.R3.R1`
 - `VPNG0003-R3.R6.R3.R1.R1`
@@ -2648,7 +2641,7 @@ ambient state.
 - `VPNG0003-R3.R6.R3.R1`
 - `VPNG0003-R3.R6.R3.R1.R1`
 - `VPNG0004-R4.R6.R1.R5`
-- `VPNG0004-R4.R6.R1.R5.R1`
+- `VPNG0004-R4.R6`
 - `VPNG0007-R7.R1`
 - `VPNG0007-R7.R3.R2`
 
@@ -3009,7 +3002,7 @@ authority that chooses global Linux resource namespaces.
 - `VPNG0004-R4.R1`
 - `VPNG0004-R4.R2`
 - `VPNG0004-R4.R5`
-- `VPNG0004-R4.R6.R1.R1`
+- `VPNG0004-R4.R6`
 - `VPNG0005-R5.R2`
 - `VPNG0005-R5.R4`
 - `VPNG0005-R5.R5`
@@ -3211,8 +3204,10 @@ chain stack_output
 ```
 
 **Implements:**
-- `VPNG0004-R4.R6.R1.R5`;
-- `VPNG0004-R4.R6.R1.R5.R1`.
+- `VPNG0004-R4.R1`;
+- `VPNG0004-R4.R2`;
+- `VPNG0004-R4.R6`;
+- `VPNG0004-R4.R6`.
 
 These chains are appliance/control-plane policy, not the user's Device firewall. Required
 loopback, probe, publication or integration-specific local exceptions are explicit
@@ -3233,8 +3228,10 @@ scaffold itself.
 ##### Managed local/system allow policy
 
 **Implements:**
-- `VPNG0004-R4.R6.R1.R5`;
-- `VPNG0004-R4.R6.R1.R5.R1`;
+- `VPNG0004-R4.R1`;
+- `VPNG0004-R4.R2`;
+- `VPNG0004-R4.R6`;
+- `VPNG0004-R4.R6`;
 - `VPNG0001-R4.R4.R6.R3` where a supported Device publication requires local transport traffic;
 - `VPNG0001-R1.R3.C1.R1` for integration-specific local control traffic explicitly required by a supported onboarding contract.
 
@@ -3308,9 +3305,10 @@ without manufacturing new product behavior.
 
 EXP-049 first proved that a real in-stack userspace VPN needs explicit local transport
 permission, then reran successfully after that permission was materialized through the normal
-production convergence boundary. The user-facing need for bounded client-side transport/control
-facts is owned by `VPNG0001-R4.R4.R6.R4`; the default-deny local exception ownership is
-independently constrained by `VPNG0004-R4.R6.R1.R5.R1`.
+production convergence boundary. The product need for bounded client-side transport/control is owned by
+`VPNG0001-R1.R3.R6.R2` and expressed in configuration by `VPNG0001-R4.R4.R6.R4`; the
+local exception is a selected safety mechanism under `VPNG0004-R4.R1`, `VPNG0004-R4.R2`
+and `VPNG0004-R4.R6`.
 
 The normalized first-release contribution is:
 
@@ -3489,10 +3487,9 @@ must not be inferred from historical TOML examples.
 ###### Host-side Device server publication mapping — EXP-052
 
 **Implements:**
+- `VPNG0001-R1.R3.R6.R1`;
 - `VPNG0001-R4.R4.R6.R3`;
-- `VPNG0001-R4`;
-- `VPNG0004-R4.R6.R1.R1`;
-- `VPNG0004-R4.R6.R1.R5.R1`;
+- `VPNG0004-R4.R6`;
 - `VPNG0007-R7.R1`, `VPNG0007-R7.R3`, `VPNG0007-R7.R5`.
 
 One canonical Device publication has two lower postconditions:
@@ -4727,14 +4724,13 @@ forwarding barrier.
 ##### Profile source identity translation inside the managed domain
 
 **Implements:**
+- `VPNG0001-R3`;
 - `VPNG0001-R4.R4.R4.R4`;
-- `VPNG0001-R4.R4.R4.R4.R1`;
-- `VPNG0004-R4.R6.R1.R6`;
-- `VPNG0004-R4.R6.R1.R6.R1`.
+- `VPNG0002-R2.R1.R3`;
+- `VPNG0004-R4.R6`.
 
 **Constrained by:**
-- `VPNG0001-R4.R4.R4.R4.C1`;
-- `VPNG0001-R4.R4.R4.R4.C2`.
+- `VPNG0001-R4.R4.R4.R4.C1`.
 
 Profile `+snat` is a second source-translation purpose and is not Device
 `use_outbound_nat`.
@@ -6062,7 +6058,7 @@ This assembly still does not define:
 
 **Constrained by:**
 - `VPNG0001-R1.R3.C1`;
-- `VPNG0004-R4.R6.R1`;
+- `VPNG0004-R4.R6`;
 - `VPNG0007-R7.R1`.
 
 For the currently executable controller lifetime, a READY startup session owns no runtime
