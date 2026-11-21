@@ -35,11 +35,11 @@ configuration.
 
 It directly supports:
 
-- `VPNG0004-R4.R2` — command intent is not treated as active state;
-- `VPNG0004-R4.R3.R2` — structural work can establish a restrictive root barrier;
-- `VPNG0004-R4.R4` — startup can require confirmed forwarding disablement;
-- `VPNG0004-R4.R5` — post-failure state is re-observed before the caller proceeds;
-- `VPNG0004-R4.R6.R1` — the sysctl is changed only inside the managed network namespace.
+- `VPNG-U004-R4.R2` — command intent is not treated as active state;
+- `VPNG-U004-R4.R3.R2` — structural work can establish a restrictive root barrier;
+- `VPNG-U004-R4.R4` — startup can require confirmed forwarding disablement;
+- `VPNG-U004-R4.R5` — post-failure state is re-observed before the caller proceeds;
+- `VPNG-U004-R4.R6.R1` — the sysctl is changed only inside the managed network namespace.
 
 ## Executor semantics
 

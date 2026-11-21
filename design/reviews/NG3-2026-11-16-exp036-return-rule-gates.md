@@ -7,15 +7,15 @@ the already proven outbound NEW primitive.
 
 ## Requirements
 
-**Implements:** `VPNG0002-R2.R1.R2`, `VPNG0002-R2.R3.R3`,
-`VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.R3`,
-`VPNG0004-R4.R1`, `VPNG0004-R4.R2`, `VPNG0004-R4.R3.R2`.
+**Implements:** `VPNG-U002-R2.R1.R2`, `VPNG-U002-R2.R3.R3`,
+`VPNG-U001-R1.R3.R2`, `VPNG-U001-R1.R3.R3`,
+`VPNG-U004-R4.R1`, `VPNG-U004-R4.R2`, `VPNG-U004-R4.R3.R2`.
 
-**Constrained by:** `VPNG0002-R2.R3.C1`,
-`VPNG0001-R1.R2.R4.R6.C1`.
+**Constrained by:** `VPNG-U002-R2.R3.C1`,
+`VPNG-U001-R1.R2.R4.R6.C1`.
 
 Полные ancestry и closure повторно проверены в текущем NG3 tree.
-Requirement `VPNG0002-R2.R3.R3` прямо разрешает stateful обслуживание
+Requirement `VPNG-U002-R2.R3.R3` прямо разрешает stateful обслуживание
 return traffic уже допустимых flows независимо от стороны инициатора;
 оно не разрешает unsolicited reverse NEW. `R2.R1.R2` фиксирует remote
 prefix semantics, поэтому return primitive не должен терять prefix scope.
