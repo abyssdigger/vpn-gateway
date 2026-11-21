@@ -824,7 +824,9 @@ Component diagram
 +-----------+------------+                    +----------v-----------+
 | Ordinary-side transition|                    | VPN external ends    |
 +--------------------------+                    +----------------------+
-```# VPN external ends
+```
+
+# VPN external ends
 
 Внешняя по отношению к core VPN-GATE VPN-среда: administrator-provisioned VPN channels,
 их protocol-specific runtime/session semantics и обращенные к `Private network`
@@ -1206,9 +1208,8 @@ Architectural decisions
 6. `Convergence delegation`
    *`NetworkPolicyEnforcer` получает уже выбранный desired lower state/postcondition и отвечает за его достижение/verification. Он не выбирает semantic policy и не расширяет API Space вокруг Adapter.*
 
-Findings
-
-1. `Host-side publication placement` *Flat architecture также приписывает этому Adapter host-side Device publication mapping. Его server находится вне Private network; сохранение того же technical component через несколько Spaces потребовало бы `<partial>`. Окончательное расселение откладывается до structured pass по host/transition Spaces.*
+7. `Cross-Space Device publication`
+   *Один normalized Device publication intent требует двух independently verified postconditions: managed-domain local admission в `Private network` и host publication mapping в `VPN-GATE-managed host state`. Host-side occurrence того же semantic Adapter показывается в соседнем Space как отдельный `NetworkPolicyAdapter <partial>`; физическое размещение host nft state не расширяет ownership этого Private-network occurrence.*
 
 ### NetworkPolicyLayoutCalculator
 
