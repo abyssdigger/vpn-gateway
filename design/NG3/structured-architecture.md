@@ -387,6 +387,367 @@ Spaces, transaction boundary не переносится автоматичес�
 Каждому Space соответствует стабильная буква Annex. Заголовок не дублирует слово `Space`:
 
 ```text
+# Annex A. STACK components
+
+## A.001 ProductLifecycleControl
+
+Direct procedural Machinery, exposing bounded product lifecycle operations without introducing
+a long-lived lifecycle Engine or independent lifecycle policy.
+
+**Implements:**
+- `VPNG0004-R4.R4`
+- `VPNG0004-R4.R5`
+- `VPNG0005-R5.R1`
+- `VPNG0005-R5.R3`
+- `VPNG0005-R5.R4`
+- `VPNG0005-R5.R5`
+- `VPNG0005-R5.R6`
+- `VPNG0005-R5.R6.R1`
+- `VPNG0005-R5.R6.R2`
+- `VPNG0005-R5.R6.R3`
+- `VPNG0006-R6.R3`
+- `VPNG0006-R6.R4`
+- `VPNG0007-R7.R1`
+
+**Constrained by:**
+- `VPNG0005-R5.C1`
+
+API
+
+    @start(...) — выполнить bounded startup; success существует только после required readiness/safety postconditions.
+    @stop(...) — выполнить bounded containment/cleanup; success существует только после required cleanup postconditions.
+    @restart(...) — stop + новый start из authoritative post-stop state.
+    @reload(...) — optional management operation; если surface ее предоставляет, она не может молча означать restart.
+
+Architectural decisions
+
+1. `Procedural, not Engine`
+   *Lifecycle не имеет самостоятельно требуемой ongoing semantic policy/state machine. Control surface вызывает bounded orchestration и поэтому остается Direct Machinery.*
+
+2. `Single-controller ownership`
+   *Lifecycle удерживает один hardened lifetime ownership token/session. Успех startup, interrupted cleanup и stop не могут обходить этот ownership contract.*
+
+3. `Phase-bounded startup`
+   *Candidate configuration валидируется до dependent mutation. Stop request проверяется между bounded phases; уже начатая owned work очищается под тем же ownership context и READY не публикуется после замеченного stop request.*
+
+4. `Cleanup domains remain independent`
+   *Failure одной cleanup area не отменяет bounded attempts других independent owned domains. Success stop требует свежего подтверждения обязательных absence/containment postconditions.*
+
+5. `Restart adds no mechanism`
+   *Restart не сохраняет скрытый cross-stop token, command journal или resume state; после подтвержденного stop обычный start заново получает ownership и строит state из fresh reality.*
+
+6. `Replaceable control surface`
+   *CLI/systemd/socket/API являются deployment mechanisms вне component semantics. Alpha вправе не иметь distinct reload, если changed configuration применяется поддержанным restart path.*
+
+
+## A.002 ConfigurationAdapter
+
+Direct Adapter между внешним configuration representation и validated normalized domain
+intents. Он является единственной границей, где human-facing grammar превращается в
+semantic Device/Profile/binding/policy/availability contracts.
+
+**Implements:**
+- `VPNG0001-R4.R1`
+- `VPNG0001-R4.R2`
+- `VPNG0001-R4.R3`
+- `VPNG0001-R4.R4`
+- `VPNG0001-R4.R5`
+- `VPNG0001-R1.R3.C1.R1`
+- `VPNG0002-R2.R1`
+- `VPNG0002-R2.R2`
+- `VPNG0002-R2.R3`
+- `VPNG0002-R2.R4`
+- `VPNG0002-R2.R5`
+- `VPNG0004-R4.R1`
+- `VPNG0007-R7.R3.R1`
+- `VPNG0007-R7.R3.R2`
+- `VPNG0007-R7.R5`
+
+API
+
+    @normalize(...) — строго распарсить/валидировать candidate representation и вернуть explicit normalized domain intents либо rejection без dependent network mutation.
+
+Architectural decisions
+
+1. `Declarative boundary`
+   *Пользователь задает product intent, а не Linux operation recipe. Route metrics, tables, ifindex, RPDB priorities и другие lower realization values не являются input configuration.*
+
+2. `No global mutable config object`
+   *Adapter выпускает несколько explicit normalized contracts — Device, Profile, binding, policy, availability — вместо общего runtime configuration singleton.*
+
+3. `Strict canonical parsing`
+   *Unknown/ambiguous/contradictory active configuration отклоняется. Lower components не парсят повторно human strings и не repair'ят их молча.*
+
+4. `Disabled placeholders are not active objects`
+   *Known disabled Device/Profile может существовать без полной active semantic completeness; operational consumers работают только с normalized active demand.*
+
+5. `Policy-owner separation`
+   *Device transport policy, Profile payload policy, publication, VPN integration transport permission и availability selection остаются разными normalized owner classes, даже если исходно находятся рядом в TOML.*
+
+6. `No topology guessing`
+   *Concrete paths появляются только после accepted binding; availability target и integration realization не выводятся из случайных interface/route facts на configuration boundary.*
+
+
+## A.003 AvailabilityDescriptionResolver
+
+Pure Calculator, превращающий Profile selection и соответствующий Device default в один
+конкретный subject-scoped availability description до runtime observation.
+
+**Implements:**
+- `VPNG0003-R3.R6.R1`
+- `VPNG0003-R3.R6.R3.R1`
+- `VPNG0003-R3.R6.R3.R1.R1`
+- `VPNG0003-R3.R6.R3.R1.R1.R1`
+- `VPNG0003-R3.R6.R3.R1.R1.R2`
+- `VPNG0003-R3.R6.R3.R1.R1.R3`
+- `VPNG0003-R3.R6.R3.R1.R1.R4`
+- `VPNG0003-R3.R6.R3.R2`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R3.R1`
+- `VPNG0007-R7.R5`
+
+**Constrained by:**
+- `VPNG0003-R3.R6.R3.R1.C2`
+
+API
+
+    resolve_description(subject, profile_selection, device_default?) — вернуть concrete AvailabilityProbeDescription, disabled либо invalid.
+
+Architectural decisions
+
+1. `Subject scope`
+   *Identity проверки — `(Profile, logical path)`. Использование Device default копирует description, но не создает Device-global availability state/evidence.*
+
+2. `Concrete runtime input`
+   *Release-1 runtime получает уже разрешенные `ICMP + exact IPv4 target`; выбор default/override не переносится в probe execution.*
+
+3. `Pure semantic projection`
+   *Calculator не наблюдает interfaces/peers/routes, не выполняет probe и не хранит runtime state.*
+
+4. `Missing selected default is invalid`
+   *Если Profile явно требует Device default, а соответствующего валидного description нет, candidate configuration отклоняется до runtime materialization.*
+
+
+## A.004 PayloadTrafficManager
+
+Manager текущей semantic payload-policy projection. Он объединяет structural membership,
+baseline preference и bounded availability adaptation в одного writer'а effective payload
+policy.
+
+**Implements:**
+- `VPNG0001-R1.R1`
+- `VPNG0002-R2.R1`
+- `VPNG0002-R2.R2`
+- `VPNG0002-R2.R3`
+- `VPNG0002-R2.R4`
+- `VPNG0002-R2.R5`
+- `VPNG0003-R3.R1`
+- `VPNG0003-R3.R2`
+- `VPNG0003-R3.R3`
+- `VPNG0003-R3.R4`
+- `VPNG0003-R3.R5`
+- `VPNG0003-R3.R7`
+- `VPNG0004-R4`
+- `VPNG0004-R4.R1`
+- `VPNG0004-R4.R2`
+- `VPNG0005-R5.R2`
+- `VPNG0005-R5.R3`
+- `VPNG0006-R6.R2`
+- `VPNG0006-R6.R4`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R5`
+- `VPNG0007-R7.R6`
+
+API
+
+    <accepted-intent / binding / availability Events> — обновить current semantic inputs.
+    <payload projection InfoEvent> — опубликовать текущую подтвержденную semantic projection для observers.
+    <reconciliation trigger> — fresh-observe dependent lower domains и при необходимости converge через Adapters.
+
+Architectural decisions
+
+1. `One effective-policy writer`
+   *Path membership и priority adaptation принадлежат одному Manager. Их разделение на независимых Managers создало бы двух writers одной routing semantics и потребовало бы дополнительный transaction protocol.*
+
+2. `Profile survives zero-path state`
+   *Structural Profile intent остается current даже при `ordered_paths=[]`; disappearance bindings не удаляет fail-closed Profile domain.*
+
+3. `Bounded availability state`
+   *Для каждого subject сохраняются только current problem flag и bounded degradation/recovery progress. Unbounded evidence history/replay journal отсутствуют.*
+
+4. `Availability is a priority modifier`
+   *Evidence не создает membership, direction или permission. Problem paths остаются structurally present и перемещаются ниже usable paths в effective order.*
+
+5. `Sticky current active path is Profile state`
+   *Current active path удерживается только для route-level failback semantics. Это не flow/session affinity и не conntrack ownership.*
+
+6. `Fresh reconciliation`
+   *Manager хранит accepted desired semantics и при audit/event заново наблюдает reality; failed lower command sequence не ставится в durable retry queue и не replay'ится вслепую.*
+
+7. `Binding generation matters`
+   *Logical path связывается с current concrete endpoint generation; same ifname/new ifindex означает новый binding context и инвалидирует зависимые current facts.*
+
+
+## A.005 PayloadPolicyCalculator
+
+Pure Calculator structural payload semantics. Он строит allowed traffic/path policy из
+normalized Profile/Device intent и уже подтвержденных current bindings, не наблюдая Linux.
+
+**Implements:**
+- `VPNG0002-R2.R1`
+- `VPNG0002-R2.R1.R1`
+- `VPNG0002-R2.R1.R2`
+- `VPNG0002-R2.R2`
+- `VPNG0002-R2.R2.R1`
+- `VPNG0002-R2.R3`
+- `VPNG0002-R2.R3.R3`
+- `VPNG0002-R2.R4`
+- `VPNG0002-R2.R5`
+- `VPNG0002-R2.R5.R1`
+- `VPNG0007-R7.R3.R1`
+- `VPNG0007-R7.R5`
+
+API
+
+    calculate(normalized_intent, current_bindings) — вернуть complete structural payload policy без I/O и runtime history.
+
+Architectural decisions
+
+1. `Pure structural policy`
+   *Calculator определяет membership/direction/permission, но не availability ordering, Linux resource IDs или convergence steps.*
+
+2. `Profile independence`
+   *Каждый enabled Profile сохраняет собственную policy domain и destination ownership даже при отсутствии usable paths.*
+
+3. `Device policy can only narrow`
+   *Device firewall/transport policy не расширяет destinations, directions или path eligibility, заданные Profile semantics.*
+
+4. `First-release inbound capacity`
+   *Для inbound/bidirectional Profile применяется принятый Release-1 path-capacity constraint; это semantic validation, а не свойство конкретной route implementation.*
+
+5. `Flow stability is separate`
+   *Established-flow return affinity и outbound no-unnecessary-failback не выводятся из случайной route affinity: Calculator предоставляет structural intent, а соответствующие runtime/lower mechanisms остаются отдельными owners.*
+
+
+## A.006 AvailabilityPriorityCalculator
+
+Pure Calculator effective path order из current structural membership, baseline order,
+Profile-local reserve roles, established availability problems и current active path.
+
+**Implements:**
+- `VPNG0003-R3.R1`
+- `VPNG0003-R3.R2`
+- `VPNG0003-R3.R3`
+- `VPNG0003-R3.R4`
+- `VPNG0003-R3.R4.R1`
+- `VPNG0003-R3.R4.R1.R1`
+- `VPNG0003-R3.R7`
+- `VPNG0003-R3.R8`
+- `VPNG0003-R3.R8.R1`
+- `VPNG0003-R3.R8.C1`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R5`
+
+API
+
+    calculate(current_membership, baseline_order, reserve_roles, problems, current_active_path) — вернуть deterministic effective order и next active-path projection.
+
+Architectural decisions
+
+1. `No membership authority`
+   *Calculator только упорядочивает уже allowed current paths; он не создает/удаляет policy membership.*
+
+2. `Negative adaptation`
+   *Availability problem понижает path относительно usable paths, но сохраняет его structural presence.*
+
+3. `No unnecessary failback`
+   *Healthy ordinary active path остается первым после recovery другого path. Reserve active path является explicit exception: более высокий baseline usable path может его preempt.*
+
+4. `Deterministic and pure`
+   *Одинаковый current input дает один результат; timers, probes, Linux metrics и hidden history не входят в Calculator.*
+
+
+## A.007 AvailabilityProbeAgent
+
+Agent ongoing availability observation. Он управляет расписанием/контекстом observation и
+публикует normalized evidence, но не управляет наблюдаемым remote availability property.
+
+**Implements:**
+- `VPNG0003-R3.R6`
+- `VPNG0003-R3.R6.R1`
+- `VPNG0003-R3.R6.R2`
+- `VPNG0003-R3.R6.R3`
+- `VPNG0003-R3.R6.R3.R1`
+- `VPNG0006-R6.R3`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R5`
+
+API
+
+    <intent/binding synchronization> — заменить current requested subjects/contexts.
+    <timer or explicit observation trigger> — попытаться выполнить bounded current observation.
+    <AvailabilityEvidence InfoEvent> — опубликовать positive / negative / no_evidence для exact current subject/context.
+
+Architectural decisions
+
+1. `Agent, not Manager`
+   *Agent не может сделать remote path healthy/unhealthy; он только организует observation и публикует evidence.*
+
+2. `Generation-scoped context`
+   *Observation context включает exact current logical path/endpoint generation. Evidence от superseded context не влияет на current semantic state.*
+
+3. `No local-failure fabrication`
+   *Local execution/precondition failure возвращает `no_evidence`, если он сам не доказывает remote path failure.*
+
+4. `Configured criterion only`
+   *Mechanism/target приходят из concrete normalized description; Agent не выводит target из interface peer, routing или transport topology.*
+
+5. `Bounded scheduling state`
+   *Timers, current generation tokens и bounded in-flight diagnostics допустимы; unbounded observation history и durable retry journal не требуются.*
+
+
+## A.008 RuntimeStatusAgent
+
+Agent, составляющий truthful current user-facing status из authoritative current projections
+других owners. Он не актуирует представляемые domains и не становится system-of-record.
+
+**Implements:**
+- `VPNG0006-R6`
+- `VPNG0006-R6.R1`
+- `VPNG0006-R6.R2`
+- `VPNG0006-R6.R3`
+- `VPNG0006-R6.R4`
+- `VPNG0007-R7.R1`
+- `VPNG0007-R7.R1.R1`
+- `VPNG0007-R7.R3.R1`
+- `VPNG0007-R7.R5`
+
+API
+
+    <current owner-snapshot InfoEvents> — принять latest authoritative projection каждого owner.
+    @<current snapshot publication> — опубликовать RuntimeStatusSnapshot для replaceable presentation surface.
+
+Architectural decisions
+
+1. `Truthful composition`
+   *Desired/configured value не превращается в confirmed actual без authoritative confirmation. Missing/stale/conflicting input становится unknown/unconfirmed/problem.*
+
+2. `Current-only state`
+   *Agent хранит только latest relevant snapshot per source. Event history, transition reconstruction и durable status journal отсутствуют.*
+
+3. `Owners retain semantic truth`
+   *StatusAgent не знает kernel commands и не переопределяет verdict владельца domain; он только соединяет current projections.*
+
+4. `Presentation is replaceable`
+   *CLI/API/text/file rendering находится вне component contract. Alpha `status.json` является текущей realization, а не stable semantic API.*
+
+5. `No hidden Profile verdict model`
+   *Более сильный aggregated ProfileState не вводится без отдельного requirement; current status достаточно truthful composition существующих owner projections.*
+
+
+
 # Annex C. Private network components
 
 ## C.001 NetworkPolicyAdapter
