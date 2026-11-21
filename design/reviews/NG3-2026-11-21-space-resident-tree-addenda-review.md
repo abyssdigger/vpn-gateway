@@ -119,3 +119,28 @@ Verified:
   Space API, component responsibilities or safety decisions.
 
 **Final verdict: PASS.**
+
+
+## Structural-consistency extension
+
+Reviewed baseline: `387cb37d5495ebddb12cc66689819e562ba690da` and later content-preserving component-spec commits.
+
+The methodology now makes the tree/addenda/API consistency mechanically checkable.
+
+Current `Private network` validation:
+
+- 6 distinct residents in the `Residents` tree;
+- 6 corresponding component specs in `Component addenda`;
+- no orphan component spec;
+- 3 residents marked `@`;
+- every `@Resident` has at least one Space API entry;
+- 7 Space API entries;
+- all 7 resolve 1:1 to `@` methods in the corresponding component specs;
+- no component heading carries hierarchy or `@` semantics.
+
+No structural inconsistency was found.
+
+**Decision:** accepted.  
+**Resolution:** no change required.
+
+**Verdict remains PASS.**
