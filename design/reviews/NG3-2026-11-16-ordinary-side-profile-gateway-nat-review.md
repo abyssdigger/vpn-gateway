@@ -12,7 +12,7 @@ This is distinct from Device VPN-side masquerade.
 
 ## Requirement gate
 
-### VPNG0001-R1.R2.R4.R4.R4
+### VPNG-U001-R1.R2.R4.R4.R4
 
 **Purpose / Зачем:** allow VPN-originated traffic to reach ordinary-network hosts that do not
 have return routes for remote VPN prefixes without forcing route installation on every host.

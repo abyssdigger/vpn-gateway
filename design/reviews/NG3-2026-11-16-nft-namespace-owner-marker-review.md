@@ -16,10 +16,10 @@ table is safe to adopt or delete.
 
 Relevant accepted requirements:
 
-- `VPNG0004-R4.R2` — unknown critical lower state is not accepted as active;
-- `VPNG0004-R4.R5` — recovery begins from authoritative actual state;
-- `VPNG0004-R4.R6.R1.R1` — product mutable network state has explicit ownership boundaries;
-- `VPNG0007-R7.R3.R2` — Linux implementation identity remains below product policy.
+- `VPNG-U004-R4.R2` — unknown critical lower state is not accepted as active;
+- `VPNG-U004-R4.R5` — recovery begins from authoritative actual state;
+- `VPNG-U004-R4.R6.R1.R1` — product mutable network state has explicit ownership boundaries;
+- `VPNG-U007-R7.R3.R2` — Linux implementation identity remains below product policy.
 
 ## Decision
 
@@ -102,6 +102,6 @@ EXP-031 must prove on the current nftables target:
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0007-R7.R3.R2` -> `VPNG9001-R1.R1.R3.R2`
+- `VPNG-U007-R7.R3.R2` -> `VPNG-D001-R1.R1.R3.R2`
 
 The original IDs in the historical body are intentionally preserved.
