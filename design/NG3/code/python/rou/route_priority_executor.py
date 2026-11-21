@@ -6,18 +6,20 @@ without changing behavior.
 """
 
 from .route_priority_enforcer import (
-    RoutePriorityBackend,
+    RoutePriorityDriver,
     RoutePriorityEnforcementResult,
     RoutePriorityEnforcementStatus,
     RoutePrioritySnapshot,
     converge_route_priority_once,
 )
 
+RoutePriorityBackend = RoutePriorityDriver
 RoutePriorityExecutionResult = RoutePriorityEnforcementResult
 RoutePriorityExecutionStatus = RoutePriorityEnforcementStatus
 
 __all__ = [
     "RoutePriorityBackend",
+    "RoutePriorityDriver",
     "RoutePriorityEnforcementResult",
     "RoutePriorityEnforcementStatus",
     "RoutePriorityExecutionResult",

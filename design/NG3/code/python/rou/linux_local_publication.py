@@ -14,7 +14,7 @@ from .linux_nft_scaffold import NftScriptRunner
 
 
 @dataclass(slots=True)
-class LinuxLocalPublicationBackend:
+class LinuxLocalPublicationDriver:
     runner: NftScriptRunner
     namespace: str
 
@@ -94,3 +94,7 @@ def _render_add(rule: LocalPublicationRuleSpec) -> str:
             f'comment "{LOCAL_PUBLICATION_RULE_COMMENT}"',
         )
     )
+
+
+# Historical executable-evidence compatibility alias.
+LinuxLocalPublicationBackend = LinuxLocalPublicationDriver

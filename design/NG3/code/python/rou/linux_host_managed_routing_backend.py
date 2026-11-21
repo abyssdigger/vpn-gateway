@@ -1,4 +1,4 @@
-"""Strict Linux owner for ordinary-host managed-destination routing."""
+"""Strict Linux Driver for ordinary-host managed-destination routing."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ class HostManagedRoutingObservation:
 
 
 @dataclass(slots=True)
-class LinuxHostManagedRoutingBackend:
+class LinuxHostManagedRoutingDriver:
     runner: CommandRunner
     allocation: HostManagedRoutingLinuxAllocation
     network_namespace: str | None = None
@@ -200,11 +200,11 @@ class LinuxHostManagedRoutingBackend:
 
 
 def converge_host_managed_routing_once(
-    backend: LinuxHostManagedRoutingBackend,
+    backend: LinuxHostManagedRoutingDriver,
     desired: HostManagedRoutingLinuxDesired,
 ) -> HostManagedRoutingObservation:
-    if not isinstance(backend, LinuxHostManagedRoutingBackend):
-        raise ValueError("backend must be LinuxHostManagedRoutingBackend")
+    if not isinstance(backend, LinuxHostManagedRoutingDriver):
+        raise ValueError("backend must be LinuxHostManagedRoutingDriver")
 
     initial = backend.observe(desired)
     if initial.conflicts:
@@ -269,13 +269,13 @@ def converge_host_managed_routing_once(
 
 
 def cleanup_host_managed_routing_once(
-    backend: LinuxHostManagedRoutingBackend,
+    backend: LinuxHostManagedRoutingDriver,
     desired: HostManagedRoutingLinuxDesired,
     *,
     tolerate_foreign_replacements: bool = False,
 ) -> HostManagedRoutingObservation:
-    if not isinstance(backend, LinuxHostManagedRoutingBackend):
-        raise ValueError("backend must be LinuxHostManagedRoutingBackend")
+    if not isinstance(backend, LinuxHostManagedRoutingDriver):
+        raise ValueError("backend must be LinuxHostManagedRoutingDriver")
 
     current = backend.observe(desired)
     if current.conflicts and not tolerate_foreign_replacements:
@@ -517,3 +517,7 @@ def _json_array(raw, label):
     if not isinstance(value, list) or any(not isinstance(row, dict) for row in value):
         raise RuntimeError(f"{label} must be an array of objects")
     return value
+
+
+# Historical executable-evidence compatibility alias.
+LinuxHostManagedRoutingBackend = LinuxHostManagedRoutingDriver

@@ -5,8 +5,8 @@ import subprocess
 from typing import Protocol, Sequence
 
 from .nft_namespace_inventory import (
+    LinuxNftNamespaceReader,
     NftNamespaceObservation,
-    parse_nft_namespace_ruleset,
 )
 from .nft_payload_scaffold import (
     PAYLOAD_NFT_SCAFFOLD,
@@ -52,7 +52,7 @@ class SubprocessNftRunner:
 
 
 @dataclass(slots=True)
-class LinuxNftScaffoldBackend:
+class LinuxNftScaffoldDriver:
     runner: NftScriptRunner
     namespace: str
 
@@ -61,19 +61,10 @@ class LinuxNftScaffoldBackend:
             raise ValueError("namespace must be a non-empty string")
 
     def observe_nft_namespace(self) -> NftNamespaceObservation:
-        stdout = self.runner.run(
-            (
-                "ip",
-                "netns",
-                "exec",
-                self.namespace,
-                "nft",
-                "-j",
-                "list",
-                "ruleset",
-            )
-        )
-        return parse_nft_namespace_ruleset(stdout)
+        return LinuxNftNamespaceReader(
+            self.runner,
+            self.namespace,
+        ).observe_nft_namespace()
 
     def create_payload_scaffold(self) -> None:
         self.runner.run_script(
@@ -144,3 +135,7 @@ def _add_chain_statement(spec: NftBaseChainSpec) -> str:
         f"type {spec.chain_type} hook {spec.hook} priority {spec.priority}; "
         f"policy {spec.policy}; comment \"{spec.comment}\"; }}\n"
     )
+
+
+# Historical executable-evidence compatibility alias.
+LinuxNftScaffoldBackend = LinuxNftScaffoldDriver

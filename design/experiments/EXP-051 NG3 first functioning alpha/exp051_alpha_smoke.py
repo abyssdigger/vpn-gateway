@@ -642,11 +642,25 @@ def main():
             lambda: host_ping(VPN_SERVER_ADDR),
             timeout=30.0,
         )
+        wait_until(
+            "runtime status on recreated VPN generation",
+            lambda: (
+                (status := runtime_status()).get("readiness") == "ready"
+                and len(
+                    status.get("confirmed_effective_state", [{}])[0].get(
+                        "ordered_paths", []
+                    )
+                ) == 1
+                and status["confirmed_effective_state"][0]["ordered_paths"][0].get(
+                    "ifindex"
+                ) == second_ifindex
+            ),
+            timeout=30.0,
+        )
         final_alpha_journal = journal(ALPHA_UNIT)
         reconcile_markers = final_alpha_journal.count(
             "VPNG_ALPHA_RECONCILE status=reconciled"
         )
-        assert reconcile_markers >= 2, final_alpha_journal
         final_status = runtime_status()
         assert final_status["readiness"] == "ready", final_status
         final_paths = final_status["confirmed_effective_state"][0]["ordered_paths"]

@@ -79,10 +79,10 @@ from .host_publication_adapter import HostPublicationAdapter
 from .linux_host_publication import (
     HostPublicationConvergenceResult,
     HostPublicationConvergenceStatus,
-    LinuxHostPublicationBackend,
+    LinuxHostPublicationDriver,
 )
 from .linux_nft_scaffold import (
-    LinuxNftScaffoldBackend,
+    LinuxNftScaffoldDriver,
     SubprocessNftRunner,
 )
 from .linux_policy_platform import (
@@ -102,7 +102,10 @@ from .local_publication_policy import (
 )
 from .managed_network_domain import (
     ManagedNetworkDomainSpec,
-    verify_managed_network_domain,
+    ensure_managed_l3_boundary,
+    ensure_managed_network_environment,
+    ensure_ordinary_side_portal,
+    preflight_managed_network_environment,
 )
 from .network_policy_activation import (
     NetworkPolicyActivationResult,
@@ -376,8 +379,30 @@ def reconcile_alpha_payload_once(
     runner: SubprocessNftRunner,
 ) -> AlphaReconcileResult:
     """Freshly audit one Manager-owned payload domain and converge only on drift."""
-    verification = verify_managed_network_domain(domain_spec, runner)
-    if not verification.confirmed or verification.host_boundary is None:
+    lifecycle_errors: list[str] = []
+    host_boundary: InterfaceIdentity | None = None
+    try:
+        if not preflight_managed_network_environment(domain_spec, runner):
+            lifecycle_errors.append("managed network environment is absent")
+        else:
+            environment = ensure_managed_network_environment(domain_spec, runner)
+            boundary = ensure_managed_l3_boundary(domain_spec, runner)
+            portal = ensure_ordinary_side_portal(domain_spec, runner)
+            lifecycle_errors.extend(environment.verification.errors)
+            lifecycle_errors.extend(boundary.verification.errors)
+            lifecycle_errors.extend(portal.errors)
+            host_boundary = boundary.verification.private_boundary
+            if host_boundary is None:
+                lifecycle_errors.append(
+                    "ordinary-side transition has no confirmed private boundary identity"
+                )
+    except Exception as exc:
+        lifecycle_errors.append(
+            "managed lifecycle repair/verification failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    if lifecycle_errors or host_boundary is None:
         containment_detail = "not attempted"
         try:
             containment = converge_forwarding_gate_once(
@@ -397,15 +422,13 @@ def reconcile_alpha_payload_once(
                 )
             )
         except Exception as exc:
-            containment_detail = (
-                f"failed: {type(exc).__name__}: {exc}"
-            )
+            containment_detail = f"failed: {type(exc).__name__}: {exc}"
         return AlphaReconcileResult(
             AlphaReconcileStatus.FAILED,
             None,
             diagnostic=(
-                "managed network domain failed exact verification: "
-                + "; ".join(verification.errors)
+                "managed lifecycle is not recoverably exact: "
+                + "; ".join(lifecycle_errors)
                 + f"; fail-closed containment={containment_detail}"
             ),
         )
@@ -415,10 +438,10 @@ def reconcile_alpha_payload_once(
             runner,
             domain_spec.namespace,
         ).observe_interfaces(
-            required_host_boundary=verification.host_boundary,
+            required_host_boundary=host_boundary,
         ).interfaces
         desired = prepared.build_current(
-            verification.host_boundary,
+            host_boundary,
             interfaces,
         )
         host_publication_desired = prepared.build_host_publication_desired()
@@ -463,7 +486,7 @@ def reconcile_alpha_payload_once(
             and gate is ForwardingGateState.ENABLED
         ):
             host_result = HostPublicationAdapter(
-                LinuxHostPublicationBackend(runner)
+                LinuxHostPublicationDriver(runner)
             ).apply(host_publication_desired)
             if host_result.confirmed:
                 return AlphaReconcileResult(
@@ -494,7 +517,7 @@ def reconcile_alpha_payload_once(
 
     activation = activate_network_policy(
         gate_backend,
-        LinuxNftScaffoldBackend(runner, domain_spec.namespace),
+        LinuxNftScaffoldDriver(runner, domain_spec.namespace),
         structural_backend,
         desired.routing,
         desired.nft,
@@ -508,7 +531,7 @@ def reconcile_alpha_payload_once(
     )
     if activation.ready:
         host_result = HostPublicationAdapter(
-            LinuxHostPublicationBackend(runner)
+            LinuxHostPublicationDriver(runner)
         ).apply(host_publication_desired)
         if host_result.confirmed:
             return AlphaReconcileResult(
@@ -753,7 +776,7 @@ def run_alpha_runtime(
 
         host_publication_desired = prepared.build_host_publication_desired()
         host_publication_adapter = HostPublicationAdapter(
-            LinuxHostPublicationBackend(runner)
+            LinuxHostPublicationDriver(runner)
         )
         host_start = host_publication_adapter.apply(host_publication_desired)
         if not host_start.confirmed:
@@ -882,7 +905,7 @@ def run_alpha_runtime(
         write_runtime_status_json(ALPHA_STATUS_PATH, status_agent.snapshot())
         _notify_systemd("STOPPING=1\nSTATUS=VPN-GATE alpha stopping")
         host_cleanup = HostPublicationAdapter(
-            LinuxHostPublicationBackend(runner)
+            LinuxHostPublicationDriver(runner)
         ).cleanup()
         stopped = stop_controller_once(
             startup.session,

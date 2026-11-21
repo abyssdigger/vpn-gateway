@@ -5,19 +5,19 @@ from unittest.mock import Mock, patch
 
 from rou.host_publication_adapter import HostPublicationAdapter
 from rou.host_publication_policy import HostPublicationDesiredState
-from rou.linux_host_publication import LinuxHostPublicationBackend
+from rou.linux_host_publication import LinuxHostPublicationDriver
 
 
 class HostPublicationAdapterTests(unittest.TestCase):
     def adapter(self):
-        backend = LinuxHostPublicationBackend(Mock())
+        backend = LinuxHostPublicationDriver(Mock())
         return HostPublicationAdapter(backend), backend
 
     def test_observe_delegates_to_lower_backend(self):
         adapter, backend = self.adapter()
         expected = object()
         with patch.object(
-            LinuxHostPublicationBackend,
+            LinuxHostPublicationDriver,
             "observe",
             return_value=expected,
         ) as observe:

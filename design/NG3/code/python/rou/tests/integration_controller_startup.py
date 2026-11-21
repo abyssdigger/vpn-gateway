@@ -26,7 +26,9 @@ from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
-    destroy_managed_network_domain,
+    cleanup_ordinary_side_portal,
+    destroy_managed_l3_boundary,
+    destroy_managed_network_environment,
 )
 from rou.network_policy_layout import allocate_network_policy_layout
 from rou.payload_network_policy_desired import (
@@ -107,7 +109,9 @@ def main() -> int:
 
     def cleanup() -> None:
         try:
-            destroy_managed_network_domain(domain_spec, runner)
+            cleanup_ordinary_side_portal(domain_spec, runner)
+            destroy_managed_l3_boundary(domain_spec, runner)
+            destroy_managed_network_environment(domain_spec, runner)
         except Exception:
             raw_run("ip", "netns", "del", namespace, check=False)
             raw_run("ip", "link", "del", host_interface, check=False)
@@ -181,10 +185,11 @@ def main() -> int:
         assert ready.ready
         assert ready.session is not None
         assert ready.session.lock.acquired
-        assert ready.session.domain.created
+        assert ready.session.environment.created
+        assert ready.session.boundary.created
         assert ready.session.activation.ready
         assert ready.session.desired.routing.host_boundary == (
-            ready.session.domain.verification.host_boundary
+            ready.session.boundary.verification.private_boundary
         )
 
         tables = runner.run(

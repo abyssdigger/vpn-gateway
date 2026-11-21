@@ -15,7 +15,7 @@ from .probe_policy import (
 
 
 @dataclass(slots=True)
-class LinuxProbeLocalBackend:
+class LinuxProbeLocalDriver:
     runner: NftScriptRunner
     namespace: str
 
@@ -94,3 +94,7 @@ def _render_add(rule: ProbeLocalRuleSpec) -> str:
             )
         )
     raise ValueError("unsupported probe-local hook")
+
+
+# Historical executable-evidence compatibility alias.
+LinuxProbeLocalBackend = LinuxProbeLocalDriver

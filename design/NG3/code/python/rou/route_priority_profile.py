@@ -7,7 +7,7 @@ from typing import Iterable, Mapping
 
 from .binding import LogicalPathId
 from .route_priority_enforcer import (
-    RoutePriorityBackend,
+    RoutePriorityDriver,
     RoutePriorityEnforcementResult,
     RoutePrioritySnapshot,
     converge_route_priority_once,
@@ -29,7 +29,7 @@ class RoutePriorityDomainId:
 @dataclass(frozen=True, slots=True)
 class RoutePriorityDomainRequest:
     domain_id: RoutePriorityDomainId
-    backend: RoutePriorityBackend
+    backend: RoutePriorityDriver
     desired: Mapping[LogicalPathId, int]
     working_metrics: tuple[int, ...]
 

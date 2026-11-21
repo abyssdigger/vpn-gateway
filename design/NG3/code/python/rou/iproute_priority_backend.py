@@ -14,7 +14,7 @@ from .route_priority_inventory import (
 )
 
 
-class IproutePriorityBackendError(RuntimeError):
+class IproutePriorityDriverError(RuntimeError):
     pass
 
 
@@ -35,8 +35,8 @@ class SubprocessCommandRunner:
 
 
 @dataclass(slots=True)
-class IproutePriorityBackend:
-    """One physical Linux route-key domain for priority convergence."""
+class IproutePriorityDriver:
+    """Linux Driver for one physical route-key domain used by priority convergence."""
 
     runner: CommandRunner
     namespace: str
@@ -98,7 +98,7 @@ class IproutePriorityBackend:
 
         metrics = before.routes[step.path_id]
         if step.metric not in metrics or len(metrics) <= 1:
-            raise IproutePriorityBackendError(
+            raise IproutePriorityDriverError(
                 "duplicate delete is not safe in current authoritative state"
             )
 
@@ -129,19 +129,19 @@ class IproutePriorityBackend:
         self._require_all_paths_present(before)
         self._require_unique_metric_ownership(before)
         if any(len(metrics) != 1 for metrics in before.routes.values()):
-            raise IproutePriorityBackendError(
+            raise IproutePriorityDriverError(
                 "semantic move requires one current metric per logical path"
             )
 
         if before.routes[move.path_id] != frozenset((move.from_metric,)):
-            raise IproutePriorityBackendError(
+            raise IproutePriorityDriverError(
                 "move source is not the single current route metric"
             )
         if any(
             move.to_metric in metrics
             for metrics in before.routes.values()
         ):
-            raise IproutePriorityBackendError(
+            raise IproutePriorityDriverError(
                 "move destination metric is not free in current state"
             )
 
@@ -196,11 +196,11 @@ class IproutePriorityBackend:
         for spec in self.path_routes:
             name = spec.endpoint.ifname
             if by_name_before.get(name) != by_name_after.get(name):
-                raise IproutePriorityBackendError(
+                raise IproutePriorityDriverError(
                     f"relevant interface {name!r} changed during route observation"
                 )
             if by_name_after.get(name) != spec.endpoint:
-                raise IproutePriorityBackendError(
+                raise IproutePriorityDriverError(
                     f"relevant interface {name!r} no longer matches bound identity"
                 )
 
@@ -213,7 +213,7 @@ class IproutePriorityBackend:
             for metric in metrics:
                 owner = owner_by_metric.get(metric)
                 if owner is not None and owner != path_id:
-                    raise IproutePriorityBackendError(
+                    raise IproutePriorityDriverError(
                         f"metric {metric} is owned by multiple logical paths"
                     )
                 owner_by_metric[metric] = path_id
@@ -225,7 +225,7 @@ class IproutePriorityBackend:
         context: str,
     ) -> None:
         if dict(snapshot.routes) != expected:
-            raise IproutePriorityBackendError(
+            raise IproutePriorityDriverError(
                 f"{context} does not match authoritative whole-domain state"
             )
         self._require_all_paths_present(snapshot)
@@ -241,7 +241,7 @@ class IproutePriorityBackend:
             if not metrics
         ]
         if missing:
-            raise IproutePriorityBackendError(
+            raise IproutePriorityDriverError(
                 f"priority-only physical state has missing eligible paths: {missing!r}"
             )
 
@@ -252,7 +252,7 @@ class IproutePriorityBackend:
             if spec.path_id == path_id
         ]
         if len(matches) != 1:
-            raise IproutePriorityBackendError(
+            raise IproutePriorityDriverError(
                 f"unknown or ambiguous logical path {path_id!r}"
             )
         return matches[0]
@@ -318,3 +318,8 @@ class IproutePriorityBackend:
             command.append("onlink")
 
         return tuple(command)
+
+
+# Historical executable-evidence compatibility aliases.
+IproutePriorityBackendError = IproutePriorityDriverError
+IproutePriorityBackend = IproutePriorityDriver

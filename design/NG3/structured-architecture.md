@@ -409,21 +409,27 @@ Annex содержит плоский набор specs. Component hierarchy за
 Inline component specs между Space sections не используются: карта Spaces остается
 непрерывной, а подробные specs находятся только в соответствующих Annexes.
 
-Для materialized component spec поддерживается двунаправленная implementation trace:
+Для materialized component spec поддерживается двунаправленная implementation trace.
 
-1. spec содержит блок `Implementation` с текущими production/reference implementation
-   units, непосредственно реализующими этот component occurrence;
-2. implementation unit содержит локальный стабильный `Architecture:` marker на Annex/spec,
-   к которому относится код;
-3. нормативная requirement trace остается в component spec. Requirement IDs в code comment
-   допустимы как convenience, но не являются вторым источником истины.
+Полный production-code edge хранится в `design/NG3/implementation-traceability.md`: каждый
+production implementation unit обязан там ровно один раз разрешаться в один или несколько
+Annex/spec IDs. Component-local блок `Implementation` остается кратким списком основных
+entry/reference units и не обязан дублировать полный lower implementation graph. Локальный
+`Architecture:` marker в таком unit является полезной самодокументацией и обязателен для
+unit, явно перечисленного в component-local `Implementation`.
+
+Нормативная requirement trace остается в component spec. Requirement IDs в code comment
+допустимы как convenience, но не являются вторым источником истины. Production unit без
+нормального requirement path допускается только как явно описанный `Architecture debt` в
+полном trace manifest; такой debt является finding и должен быть видимым механической
+проверке.
 
 Таким образом минимальная цепочка reverse trace имеет вид:
 
 ```text
 code
-    -> Architecture: Annex X.YYY
-    -> component spec
+    -> implementation trace manifest
+    -> Annex X.YYY component spec
     -> Implements / Constrained by
     -> requirement
 ```
@@ -431,6 +437,182 @@ code
 Если один implementation unit обслуживает несколько component occurrences, marker перечисляет
 каждый из них явно. File placement, import graph или имя Linux primitive сами по себе не
 считаются архитектурной traceability.
+
+### 2.9.1. Stable evidence references
+
+Стабильная архитектура ссылается на executable/review evidence только через IDs из
+`design/NG3/evidence-index.md` вида `EV-00000`, `EV-00010`, ... . Шаг 10 оставляет
+пространство для поздних вставок без перенумерации существующих ссылок.
+
+Конкретные CI workflow/run IDs, commit SHAs и experiment result artifacts принадлежат записи
+evidence index либо связанному review/result artifact. Они не являются стабильными адресами
+архитектурного решения.
+
+### 2.9.2. Lower technical-boundary reuse
+
+Lower Machinery переиспользуется только при совпадении **полного технического контракта**,
+а не потому, что разные owners вызывают один executable или Linux subsystem.
+
+- Driver может объединять свои Reader/Executor operations, если их отдельное выделение не
+  дает независимой переиспользуемой/заменяемой границы.
+- Отдельный Reader/Executor вводится только при самостоятельной архитектурной ценности:
+  exact reuse, независимая замена/тестирование или заметное упрощение нескольких callers.
+- Raw `run(argv)` / stdin-script runner остается implementation primitive ниже component
+  model и не считается generic Executor.
+- Generic `NftDriver`, `IpRouteDriver`, `SysctlDriver` или универсальные
+  route/rule Readers не вводятся без совпадающего owner-safe контракта. Ownership,
+  generation-stability checks, reserved-resource classification и допустимые mutations
+  остаются в узких lower boundaries.
+- `Backend` сохраняется только для реальной stateless композиции нескольких lower
+  responsibilities/mechanisms. Узкая граница одного technical mechanism contract является
+  Driver; самостоятельная read-only operation — Reader.
+
+Текущая Release-1 realization применяет это правило так:
+
+- shared `LinuxStructuralRoutingDriver` переиспользуется payload/probe routing там, где
+  route mutation contract действительно совпадает;
+- NG3 nft namespace inventory является отдельным Reader;
+- structural-policy, composite-nft, probe-routing и stack-return-affinity остаются
+  Backend-композициями;
+- narrow nft scaffold/owner, route-priority и host-managed-routing boundaries являются
+  Drivers.
+
+**Evidence:** `EV-00010`.
+
+
+
+### 2.9.3. Target production-runtime language boundary
+
+**Covers:** `VPNG0007-R7.R8.R1`, `VPNG0007-R7.R8.R2`.
+
+Rust является target implementation boundary, а не component role и не источником product
+semantics. Финальная stable production runtime boundary включает configuration normalization,
+lifecycle/runtime state, policy calculation/reconciliation, VPN-path observation и
+OS/network-state observation/actuation. Для release, который заявляет соответствие этой
+финальной boundary, non-exempt runtime responsibilities должны выполняться Rust
+implementation; Python reference не может оставаться скрытой dependency этих обязанностей.
+
+Текущий `design/NG3/code/python/rou/` остается executable reference/evidence, пока
+семантика и applicability доказываются. Disposable experiments, CI/evidence harnesses, test
+fixtures, build/install tooling, code generation и research/reference implementations могут
+использовать другой подходящий язык и не мигрируют только ради production-language rule.
+
+Production Rust по умолчанию safe. `unsafe`/memory-unsafe FFI допустимы только на узкой
+необходимой lower boundary, с явным soundness invariant и focused evidence; ими нельзя
+обходить ownership/state invariants, выразимые safe Rust.
+
+Host-routing helper language exception и Python-completion ordering задаются уже принятыми
+`VPNG0007-R7.R8.C1`, `VPNG0007-R7.R8.C2`, `VPNG0007-R7.R8.C3` и остаются
+implementation-replacement constraints, а не поводом менять component semantics.
+
+## 2.10. Closed requirement architecture coverage index
+
+Этот индекс закрывает requirement -> architecture направление там, где requirement является
+parent/root либо cross-cutting contract и поэтому не должен искусственно приписываться одному
+component spec. Он не дублирует Statement: каждая группа указывает реальные архитектурные
+owners/sections, через которые реализуется соответствующее обязательство.
+
+### Managed VPN routing and supported VPN integration
+
+**Requirements:** `VPNG0001`, `VPNG0001-R1`, `VPNG0001-R1.R3`,
+`VPNG0001-R1.R3.C1`, `VPNG0001-R1.R3.C1.R1.R1`,
+`VPNG0001-R1.R3.C1.R1.R2`, `VPNG0001-R1.R3.C3`,
+`VPNG0001-R1.R3.C3.R1`.
+
+**Architecture coverage:** STACK `PayloadTrafficManager`, Private
+`NetworkPolicyAdapter`/`VPNPathAdapter`, ordinary-side transition, Space
+`VPN external ends`, A.001 lifecycle composition and the evidence-backed OpenVPN/systemd
+integration boundary. VPN runtime remains externally provisioned/supervised where the
+integration contract says so; VPN-GATE owns its own network policy rather than VPN-specific
+configuration.
+
+### Ordinary-host integration and helper scope
+
+**Requirements:** `VPNG0001-R2.R1`, `VPNG0001-R2.R1.R1`,
+`VPNG0001-R5.R2.R1`, `VPNG0001-R5.R2.C1`.
+
+**Architecture coverage:** Annex E `HostRoutingContribution` plus Spaces
+`VPN-GATE-managed host state` and `Ambient host and external world`. Core forwarding does
+not require the peaceful helper when administrator routing satisfies the host-integration
+contract. Aggressive authoritative helper semantics remain outside Release-1; E.002
+explicitly prevents peaceful helper machinery from silently acquiring them.
+
+### Human configuration and Device/Profile policy model
+
+**Requirements:** `VPNG0001-R4.R5.R1`, `VPNG0001-R4.R5.R2`,
+`VPNG0001-R4.R5.R3`, `VPNG0001-R4.R5.R4`,
+`VPNG0001-R4.R4.R1`, `VPNG0001-R4.R4.R1.C1`,
+`VPNG0001-R4.R4.R2`, `VPNG0001-R4.R4.R2.R1`,
+`VPNG0001-R4.R4.R3`, `VPNG0001-R4.R4.R4`,
+`VPNG0001-R4.R4.R4.R2`, `VPNG0001-R4.R4.R4.R3`,
+`VPNG0001-R4.R4.R5`, `VPNG0001-R4.R4.R6`,
+`VPNG0001-R4.R4.R6.R2.R1`, `VPNG0001-R4.R4.R6.R2.R2`,
+`VPNG0001-R4.R4.R6.R2.R3`, `VPNG0001-R4.R4.R6.R2.R4`,
+`VPNG0001-R4.R4.R6.C1`.
+
+**Architecture coverage:** A.002 `ConfigurationAdapter` owns strict human representation
+normalization and reference validation; A.005 `PayloadPolicyCalculator` preserves
+Device/Profile semantic separation; C.001/C.003 materialize normalized firewall/NAT/
+publication policy without leaking Linux IDs into user intent. Ordered fields remain ordered
+semantic input; set-like declarations and disabled placeholders do not acquire hidden runtime
+meaning.
+
+### Explicit VPN traffic policy and inbound first-release bound
+
+**Requirements:** `VPNG0002`, `VPNG0002-R2`, `VPNG0002-R2.R2.R2`,
+`VPNG0002-R2.R3.C1`, `VPNG0002-R2.R3.C1.R1`.
+
+**Architecture coverage:** A.002/A.005 define explicit Profile/Device intent and pre-actuation
+validation; A.004 derives current membership only from valid bindings; C.004 proves current
+endpoint bindings; C.001/C.003 materialize only allowed traffic. Release-1 multi-path
+inbound/bidirectional capacity is rejected during normalization rather than guessed after
+runtime discovery.
+
+### Multi-path preference and availability adaptation
+
+**Requirements:** `VPNG0003`, `VPNG0003-R3`, `VPNG0003-R3.R1.R1`,
+`VPNG0003-R3.R2.R1`, `VPNG0003-R3.R5.R1`, `VPNG0003-R3.R5.R2`,
+`VPNG0003-R3.R6.R3.R1.C1`.
+
+**Architecture coverage:** A.004 `PayloadTrafficManager`, A.006
+`AvailabilityPriorityCalculator`, A.007 `AvailabilityProbeAgent` and C.008
+`ActiveProbeDriver`. Baseline order and stable current binding identity are preserved;
+availability is only a negative priority modifier with bounded degradation/recovery
+confirmation. Release-1 physical probe mechanism is ICMP only.
+
+### Safety, recovery and operator truth
+
+**Requirements:** `VPNG0004`, `VPNG0005-R5.R2.R1`,
+`VPNG0005-R5.R3.R1`, `VPNG0005-R5.C1.R1`, `VPNG0006`.
+
+**Architecture coverage:** C.003 exact/fail-closed enforcement and C.005 forwarding barrier
+provide restrictive failure behavior; A.004/A.007 and alpha reconciliation perform finite
+cadence fresh observation/recovery for authoritative active state; A.001 owns bounded
+lifecycle recovery/cleanup; A.008 exposes truthful current status. Administrator-facing
+recovery documentation must preserve the ownership split between authoritative product state,
+external integration state and peaceful-helper contributions returned to administrator
+control.
+
+### Maintainability, continuity, evidence and development boundaries
+
+**Requirements:** `VPNG0007`, `VPNG0007-R7`, `VPNG0007-R7.R2`,
+`VPNG0007-R7.R3.R5`, `VPNG0007-R7.R3.R4`,
+`VPNG0007-R7.R3.R4.R1`, `VPNG0007-R7.R4`,
+`VPNG0007-R7.R6.R1`, `VPNG0007-R7.R6.R2`,
+`VPNG0007-R7.R7.R1`, `VPNG0007-R7.R8.R1`,
+`VPNG0007-R7.R8.R2`.
+
+**Architecture coverage:** the Space/component decomposition and `design/component-model.md`
+localize responsibilities and lower mechanism boundaries; §2.9 implementation trace,
+`design/NG3/implementation-traceability.md` and the EV index provide bidirectional
+trace/evidence; binding/interface generation contracts preserve cross-boundary identity;
+supported VPN applicability gates live in `VPN external ends`; §2.9.2 defines exact-contract
+lower reuse rather than generic frameworks; §2.9.3 defines the production-language boundary.
+Requirement semantic changes therefore require re-review of their indexed architecture
+coverage before implementation proceeds.
+
+**Evidence:** `EV-00010`.
+
 
 ## 3. Форма описания Space
 
@@ -1183,8 +1365,9 @@ Component diagram
 
 ## A.001 ProductLifecycleControl
 
-Direct procedural Machinery, exposing bounded product lifecycle operations without introducing
-a long-lived lifecycle Engine or independent lifecycle policy.
+Direct procedural Machinery, coordinating independent lifecycle operations and their dependency
+order without merging their ownership or cleanup into one technical method. It does not
+introduce a long-lived lifecycle Engine or independent lifecycle policy.
 
 **Implements:**
 - `VPNG0004-R4.R4`
@@ -1206,38 +1389,45 @@ a long-lived lifecycle Engine or independent lifecycle policy.
 
 Implementation
 
-    design/NG3/code/python/rou/controller_startup.py — bounded managed-domain/lower-policy startup subassembly and phase checkpoints; does not alone publish product READY.
-    design/NG3/code/python/rou/controller_stop.py — bounded owned-domain cleanup subassembly; host-publication cleanup remains an outer lifecycle step in the current alpha composition.
-    design/NG3/code/python/rou/controller_restart.py — stop-then-start composition of the bounded controller subassembly.
-    design/NG3/code/python/rou/alpha_runtime.py — current Release-1 product/deployment readiness and shutdown composition, including HostPublicationAdapter and systemd READY publication.
+    design/NG3/code/python/rou/controller_startup.py — current bounded ordering of stack/transition/policy startup operations.
+    design/NG3/code/python/rou/controller_stop.py — current bounded ordering of independent cleanup operations.
+    design/NG3/code/python/rou/controller_restart.py — stop-then-start composition without hidden resume state.
+    design/NG3/code/python/rou/alpha_runtime.py — daemon/bootstrap composition, host helpers/publication and final systemd readiness/termination boundary.
+
+**Evidence:** `EV-00000`
 
 API
 
-    @start(...) — выполнить bounded startup; success существует только после required readiness/safety postconditions.
-    @stop(...) — выполнить bounded containment/cleanup; success существует только после required cleanup postconditions.
+    @start(...) — выполнить product startup через независимые lifecycle operations с соблюдением dependency order.
+    @stop(...) — выполнить product shutdown, пытаясь очистить независимые areas отдельно и удерживая основной процесс до teardown STACK.
     @restart(...) — stop + новый start из authoritative post-stop state.
     @reload(...) — optional management operation; если surface ее предоставляет, она не может молча означать restart.
 
 Architectural decisions
 
-1. `Procedural, not Engine`
-   *Lifecycle не имеет самостоятельно требуемой ongoing semantic policy/state machine. Control surface вызывает bounded orchestration и поэтому остается Direct Machinery.*
+1. `Procedural coordinator, not lifecycle monolith`
+   *Product lifecycle задает partial order независимых операций, но не превращает bootstrap, STACK, ordinary-side transition и host helpers в один общий lifecycle object или один cleanup method.*
 
-2. `Single-controller ownership`
-   *Lifecycle удерживает один hardened lifetime ownership token/session. Успех startup, interrupted cleanup и stop не могут обходить этот ownership contract.*
+2. `Startup dependency order`
+   *Bootstrap получает ownership/validated intent; базовая materialization STACK должна существовать до ordinary-side transition. Зависимые host-side exposure/helper operations выполняются только после их prerequisites.*
 
-3. `Phase-bounded startup`
-   *Candidate configuration валидируется до dependent mutation. Stop request проверяется между bounded phases; уже начатая owned work очищается под тем же ownership context и READY не публикуется после замеченного stop request.*
+3. `Shutdown dependency order`
+   *Ordinary-side transition и независимые host helpers/exposure могут быть погашены раньше STACK и не обязаны очищаться одним методом. Основной daemon process не завершается, пока teardown STACK не завершен либо не получен явный failure outcome: иначе живущие в STACK VPN-процессы могут остаться без управляющей среды.*
 
-4. `Cleanup domains remain independent`
-   *Failure одной cleanup area не отменяет bounded attempts других independent owned domains. Success stop требует свежего подтверждения обязательных absence/containment postconditions.*
+4. `Independent cleanup attempts`
+   *Failure одной cleanup area не отменяет bounded attempts других independent owned domains. Success соответствующей операции требует свежего подтверждения ее собственного postcondition.*
 
-5. `Restart adds no mechanism`
+5. `Intermediate statuses are local contracts`
+   *Имена промежуточных состояний (`done`, `complete` и т.п.) не являются compatibility boundary alpha. Они могут меняться вместе с декомпозицией; сохраняться должны ordering, ownership, safety и final product-operation semantics.*
+
+6. `Single-controller ownership`
+   *Lifecycle удерживает один hardened lifetime ownership token/session. Startup, interrupted cleanup и stop не могут обходить этот ownership contract.*
+
+7. `Restart adds no mechanism`
    *Restart не сохраняет скрытый cross-stop token, command journal или resume state; после подтвержденного stop обычный start заново получает ownership и строит state из fresh reality.*
 
-6. `Replaceable control surface`
+8. `Replaceable control surface`
    *CLI/systemd/socket/API являются deployment mechanisms вне component semantics. Alpha вправе не иметь distinct reload, если changed configuration применяется поддержанным restart path.*
-
 
 ## A.002 ConfigurationAdapter
 
@@ -1564,10 +1754,12 @@ Private-network service identity/default route или traffic-selection policy �
 - `VPNG0007-R7.R3.R3`
 - `VPNG0007-R7.R7`
 
+**Evidence:** `EV-00000`
+
 API
 
     @preflight(...) — fresh-classify absent / established / conflict without creating transition.
-    @ensure(...) — create absent transition or confirm exact existing realization.
+    @ensure(...) — create absent transition, repair provable owned drift, or confirm exact existing realization.
     @destroy(...) — remove owned transition and fresh-confirm endpoint absence.
 
 Architectural decisions
@@ -1575,14 +1767,14 @@ Architectural decisions
 1. `Independent transition lifecycle`
    *Component owns only managed-L3 boundary realization. Namespace/loopback belong to `C.007`; local identity/default route belong to `C.009`.*
 
-2. `Recoverable absent transition`
-   *Exact Private-network environment with no boundary is valid and may be completed by ensure. Host-side endpoint with no environment remains conflict because name alone is insufficient ownership evidence.*
+2. `Recoverable absent transition and owned drift`
+   *Exact Private-network environment with no boundary is valid and may be completed by ensure. If transition identity/ownership is proven, divergent properties owned by this realization should be repaired and re-verified where repair is safely expressible. Host-side endpoint with no environment remains conflict because name alone is insufficient ownership evidence.*
 
 3. `Transport-ready, not portal-ready`
    *Established confirms reciprocal endpoint/backend invariants and handoff endpoints. Private ordinary-side readiness additionally requires `OrdinarySidePortalLifecycle`.*
 
-4. `Backend-specific door`
-   *Release 1 uses routed veth + Proxy ARP; reciprocal identity, UP state, Proxy ARP/rp_filter and host-side service reachability belong to this realization. Alternate netkit L3 remains behind the same contract.*
+4. `Realization-specific door`
+   *Release 1 uses routed veth + Proxy ARP; reciprocal identity, UP state, Proxy ARP/rp_filter and host-side service reachability belong to this realization. Property drift is repairable only after reciprocal identity/ownership is proven; ambiguous or foreign structure is not adopted. Alternate netkit L3 remains behind the same contract.*
 
 5. `Physical placement does not move ownership`
    *Concrete endpoints may reside in host and managed namespaces; that does not transfer host routing policy or Private service/default ownership into transition.*
@@ -1886,10 +2078,12 @@ stack-local address/default route.
 - `VPNG0007-R7.R3`
 - `VPNG0007-R7.R7`
 
+**Evidence:** `EV-00000`
+
 API
 
     @preflight(...) — fresh-read namespace/loopback under protective containment; absent environment is valid.
-    @ensure(...) — create absent namespace + loopback or confirm exact existing state.
+    @ensure(...) — create absent namespace + loopback, repair provable owned drift, or confirm exact existing state.
     @destroy(...) — remove environment after dependent cleanup and fresh-confirm namespace absence.
 
 Architectural decisions
@@ -1898,7 +2092,7 @@ Architectural decisions
    *Owned artifacts are namespace instance + loopback state. Absence of materialization does not remove the architectural Space.*
 
 2. `Containment before trust`
-   *Existing namespace is inspected only after fresh confirmed ForwardingGate=DISABLED.*
+   *Existing namespace is inspected only after fresh confirmed ForwardingGate=DISABLED. Once namespace ownership/identity is proven, owned environment properties such as loopback state should be repaired rather than rejected merely for drift.*
 
 3. `Environment without door is valid`
    *Exact namespace/loopback with absent ordinary-side transition is a normal recoverable intermediate state.*
@@ -1971,6 +2165,8 @@ ordinary-side default routing state на current private-facing endpoint.
 - `VPNG0007-R7.R3`
 - `VPNG0007-R7.R7`
 
+**Evidence:** `EV-00000`
+
 API
 
     @observe(...) — fresh-observe owned address/default-route state on exact current private-facing endpoint.
@@ -1982,8 +2178,8 @@ Architectural decisions
 1. `Transition dependency, not ownership`
    *Lifecycle requires an exact current private-facing transition endpoint but does not create/delete that transition.*
 
-2. `Authoritative portal convergence`
-   *Service address/default route are VPN-GATE-owned on the dedicated boundary endpoint and may be repaired from fresh observation.*
+2. `Authoritative exclusive portal convergence`
+   *Dedicated private-facing endpoint is an exclusive realization of this portal, not a shared architectural object. Its IPv4/default-route contents are therefore exact owned state: extra or missing state is repairable drift, and whole-scope flush/rebuild is permitted for this endpoint.*
 
 3. `Cleanup before door removal`
    *Normal stop removes portal state before destroying transition. If later transition removal proves endpoint absence, that stronger postcondition proves portal artifacts cannot remain active.*
@@ -2023,6 +2219,8 @@ local admission remains `Private network.NetworkPolicyAdapter` responsibility.
 - `VPNG0007-R7.R3.R3`
 - `VPNG0007-R7.R7`
 
+**Evidence:** `EV-00000`
+
 API
 
     @observe(...) — fresh-observe exact owned host publication scope and conflicts.
@@ -2050,7 +2248,7 @@ Implementation
 
     design/NG3/code/python/rou/host_publication_adapter.py — semantic Adapter wrapper.
     design/NG3/code/python/rou/host_publication_policy.py — pure desired projection.
-    design/NG3/code/python/rou/linux_host_publication.py — Linux backend.
+    design/NG3/code/python/rou/linux_host_publication.py — concrete Linux Driver for host nft/link/address/sysctl interaction.
     design/NG3/code/python/rou/alpha_runtime.py — current Release-1 runtime composition of host publication after managed local admission.
 
 

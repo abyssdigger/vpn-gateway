@@ -8,7 +8,7 @@ from .payload_nat_desired import PayloadMasqueradeSpec, PayloadNatRuleSpec, Payl
 from .payload_nat_mutation import PayloadNatPhysicalSnapshot
 
 @dataclass(slots=True)
-class LinuxPayloadNatBackend:
+class LinuxPayloadNatDriver:
     runner: NftScriptRunner
     namespace: str
     def __post_init__(self):
@@ -29,3 +29,7 @@ class LinuxPayloadNatBackend:
     def delete_nat_rule(self,handle:int):
         if type(handle) is not int or handle<0: raise ValueError("handle must be a non-negative integer")
         self.runner.run(self._cmd("nft","delete","rule","ip","vpn_gate","payload_postrouting","handle",str(handle)))
+
+
+# Historical executable-evidence compatibility alias.
+LinuxPayloadNatBackend = LinuxPayloadNatDriver

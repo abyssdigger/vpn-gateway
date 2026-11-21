@@ -25,8 +25,9 @@ from rou.linux_policy_platform import NG3_LINUX_POLICY_PLATFORM
 from rou.linux_structural_policy import LinuxStructuralPolicyBackend
 from rou.managed_network_domain import (
     ManagedNetworkDomainSpec,
-    ensure_managed_network_domain,
-    verify_managed_network_domain,
+    observe_ordinary_side_portal,
+    verify_managed_l3_boundary,
+    verify_managed_network_environment,
 )
 from rou.network_policy_activation import activate_network_policy
 
@@ -94,14 +95,17 @@ sysctl -w net.ipv4.conf.all.log_martians=1
 
 
 def fresh_policy(config: str, domain_spec, runner):
-    verification = verify_managed_network_domain(domain_spec, runner)
-    assert verification.confirmed, verification.errors
-    assert verification.host_boundary is not None
+    environment = verify_managed_network_environment(domain_spec, runner)
+    boundary = verify_managed_l3_boundary(domain_spec, runner)
+    portal = observe_ordinary_side_portal(domain_spec, runner)
+    errors = environment.errors + boundary.errors + portal.errors
+    assert environment.confirmed and boundary.confirmed and portal.confirmed, errors
+    assert boundary.private_boundary is not None
     interfaces = parse_ip_link_inventory(
         runner.run(("ip", "-n", domain_spec.namespace, "-j", "link", "show"))
     )
     prepared = e49.PreparedPolicy(config)
-    desired = prepared.build_current(verification.host_boundary, interfaces)
+    desired = prepared.build_current(boundary.private_boundary, interfaces)
     assert prepared.observed_binding is not None
     assert len(prepared.observed_binding.bindings) == 1
     return prepared, desired
@@ -283,8 +287,7 @@ def run_lifecycle_cycle(
     print(f"EXP050_CYCLE_{cycle}_BEGIN")
     e49.setup_server_namespace()
     try:
-        ensured = ensure_managed_network_domain(domain_spec, runner)
-        assert ensured.confirmed
+        e49.ensure_managed(domain_spec, runner)
 
         e49.write_systemd_units(safe_client)
         clean_units()

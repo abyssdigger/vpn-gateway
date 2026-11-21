@@ -83,15 +83,24 @@ from .forwarding_gate import (
     converge_forwarding_gate_once,
 )
 from .managed_network_domain import (
-    ManagedNetworkDomainEnsureResult,
-    ManagedNetworkDomainPreflightResult,
+    ManagedL3BoundaryEnsureResult,
+    ManagedL3BoundaryVerification,
     ManagedNetworkDomainError,
     ManagedNetworkDomainSpec,
-    ManagedNetworkDomainVerification,
-    destroy_managed_network_domain,
-    ensure_managed_network_domain,
-    preflight_managed_network_domain,
-    verify_managed_network_domain,
+    ManagedNetworkEnvironmentEnsureResult,
+    ManagedNetworkEnvironmentVerification,
+    OrdinarySidePortalVerification,
+    cleanup_ordinary_side_portal,
+    destroy_managed_l3_boundary,
+    destroy_managed_network_environment,
+    ensure_managed_l3_boundary,
+    ensure_managed_network_environment,
+    ensure_ordinary_side_portal,
+    observe_ordinary_side_portal,
+    preflight_managed_l3_boundary,
+    preflight_managed_network_environment,
+    verify_managed_l3_boundary,
+    verify_managed_network_environment,
 )
 from .linux_availability_cycle import (
     LinuxAvailabilityCycleResult,
@@ -106,7 +115,7 @@ from .nft_namespace_inventory import (
     NG3_NFT_FAMILY,
     NG3_NFT_OWNER_COMMENT,
     NG3_NFT_TABLE,
-    LinuxNftNamespaceBackend,
+    LinuxNftNamespaceReader,
     NftNamespaceInventoryError,
     NftNamespaceObject,
     NftNamespaceObservation,
@@ -131,7 +140,7 @@ from .nft_scaffold_enforcer import (
     prepare_payload_nft_scaffold_once,
 )
 from .linux_nft_scaffold import (
-    LinuxNftScaffoldBackend,
+    LinuxNftScaffoldDriver,
     SubprocessNftRunner,
 )
 from .direct_device_route import (
@@ -251,7 +260,7 @@ from .local_integration_mutation import (
     IntegrationLocalPlanError,
     select_integration_local_step,
 )
-from .linux_local_integration import LinuxIntegrationLocalBackend
+from .linux_local_integration import LinuxIntegrationLocalDriver
 from .local_publication_policy import (
     LocalPublicationDesiredState,
     LocalPublicationHook,
@@ -273,7 +282,7 @@ from .local_publication_mutation import (
     LocalPublicationPlanError,
     select_local_publication_step,
 )
-from .linux_local_publication import LinuxLocalPublicationBackend
+from .linux_local_publication import LinuxLocalPublicationDriver
 from .composite_nft_policy import (
     CompositeNftDesiredState,
     CompositeNftPolicyComparison,
@@ -299,7 +308,7 @@ from .device_firewall_mutation import (
     DeviceFirewallPhysicalSnapshot,
     converge_device_firewall_step_once,
 )
-from .linux_device_firewall import LinuxDeviceFirewallBackend
+from .linux_device_firewall import LinuxDeviceFirewallDriver
 from .device_firewall_structure import (
     DEVICE_FIREWALL_CHILD_COMMENT,
     DEVICE_FIREWALL_FALLTHROUGH_COMMENT,
@@ -320,7 +329,7 @@ from .payload_nat_mutation import (
     PayloadNatPhysicalSnapshot,
     converge_payload_nat_step_once,
 )
-from .linux_payload_nat import LinuxPayloadNatBackend
+from .linux_payload_nat import LinuxPayloadNatDriver
 from .payload_profile import (
     PayloadProfileProjectionError,
     PayloadProfileRequest,
@@ -465,7 +474,7 @@ from .probe_local_mutation import (
     ProbeLocalPlanError,
     select_probe_local_step,
 )
-from .linux_probe_local import LinuxProbeLocalBackend
+from .linux_probe_local import LinuxProbeLocalDriver
 from .linux_policy_platform import (
     NG3_LINUX_POLICY_PLATFORM,
     NG3_PROBE_LOCAL_PLATFORM,
@@ -506,8 +515,8 @@ from .route_priority_inventory import (
     parse_ip_route_priority_snapshot,
 )
 from .iproute_priority_backend import (
-    IproutePriorityBackend,
-    IproutePriorityBackendError,
+    IproutePriorityDriver,
+    IproutePriorityDriverError,
     SubprocessCommandRunner,
 )
 from .route_priority_profile import (
@@ -575,11 +584,11 @@ __all__ = [
     "IntegrationLocalConflict",
     "ObservedIntegrationLocalRule",
     "LOCAL_INTEGRATION_RULE_COMMENT",
-    "LinuxIntegrationLocalBackend",
+    "LinuxIntegrationLocalDriver",
     "LocalPublicationDeleteRef",
     "LocalPublicationMutationStep",
     "LocalPublicationPlanError",
-    "LinuxLocalPublicationBackend",
+    "LinuxLocalPublicationDriver",
     "LocalPublicationDesiredState",
     "LocalPublicationHook",
     "LocalPublicationRuleSpec",
@@ -628,7 +637,7 @@ __all__ = [
     "DeviceFirewallMutationResult",
     "DeviceFirewallMutationStatus",
     "DeviceFirewallPhysicalSnapshot",
-    "LinuxDeviceFirewallBackend",
+    "LinuxDeviceFirewallDriver",
     "DeviceFirewallRuleAction",
     "DeviceFirewallStructureConflict",
     "DeviceFirewallStructureError",
@@ -649,19 +658,21 @@ __all__ = [
     "ForwardingGateState",
     "InterfaceIdentity",
     "InterfaceInventoryError",
-    "IproutePriorityBackend",
-    "IproutePriorityBackendError",
+    "IproutePriorityDriver",
+    "IproutePriorityDriverError",
     "LinuxAvailabilityCycleResult",
     "LinuxAvailabilityCycleStatus",
     "LinuxForwardingGateDriver",
     "LinuxForwardingGateError",
     "LinuxProbeRoutingBackend",
     "LinuxProbeRoutingError",
-    "ManagedNetworkDomainEnsureResult",
-    "ManagedNetworkDomainPreflightResult",
+    "ManagedL3BoundaryEnsureResult",
+    "ManagedL3BoundaryVerification",
+    "ManagedNetworkEnvironmentEnsureResult",
+    "ManagedNetworkEnvironmentVerification",
+    "OrdinarySidePortalVerification",
     "ManagedNetworkDomainError",
     "ManagedNetworkDomainSpec",
-    "ManagedNetworkDomainVerification",
     "LogicalPathId",
     "ManagedRouteSpec",
     "ManagedRouteType",
@@ -670,8 +681,8 @@ __all__ = [
     "NG3_NFT_OWNER_COMMENT",
     "NG3_NFT_TABLE",
     "NftBaseChainSpec",
-    "LinuxNftNamespaceBackend",
-    "LinuxNftScaffoldBackend",
+    "LinuxNftNamespaceReader",
+    "LinuxNftScaffoldDriver",
     "NatIntent",
     "NetworkPolicyActivationResult",
     "NetworkPolicyActivationStatus",
@@ -712,7 +723,7 @@ __all__ = [
     "PayloadNatMutationResult",
     "PayloadNatMutationStatus",
     "PayloadNatPhysicalSnapshot",
-    "LinuxPayloadNatBackend",
+    "LinuxPayloadNatDriver",
     "LinuxStructuralRoutingError",
     "LinuxStructuralRoutingDriver",
     "compare_payload_nat",
@@ -729,10 +740,6 @@ __all__ = [
     "compare_device_firewall",
     "compile_device_firewall_policies",
     "compile_device_firewall_policy",
-    "destroy_managed_network_domain",
-    "ensure_managed_network_domain",
-    "preflight_managed_network_domain",
-    "verify_managed_network_domain",
     "compile_payload_forward_policy",
     "compare_payload_forward",
     "observe_device_firewall_structure",
@@ -787,7 +794,7 @@ __all__ = [
     "ProbeLocalDeleteRef",
     "ProbeLocalMutationStep",
     "ProbeLocalPlanError",
-    "LinuxProbeLocalBackend",
+    "LinuxProbeLocalDriver",
     "IcmpProbeDriverError",
     "IcmpProbeExecutionPolicy",
     "LinuxIcmpProbeDriver",

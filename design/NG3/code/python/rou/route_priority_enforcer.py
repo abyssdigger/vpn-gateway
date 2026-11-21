@@ -45,8 +45,8 @@ class RoutePrioritySnapshot:
         )
 
 
-class RoutePriorityBackend(Protocol):
-    """Physical boundary used by one priority-only convergence attempt."""
+class RoutePriorityDriver(Protocol):
+    """Technical Driver boundary used by one priority-only convergence attempt."""
 
     def observe_route_priority(self) -> RoutePrioritySnapshot:
         """Return a fresh authoritative owned-route snapshot."""
@@ -86,7 +86,7 @@ class RoutePriorityEnforcementResult:
 
 
 def converge_route_priority_once(
-    backend: RoutePriorityBackend,
+    backend: RoutePriorityDriver,
     desired: Mapping[LogicalPathId, int],
     working_metrics: Iterable[int],
 ) -> RoutePriorityEnforcementResult:
@@ -160,3 +160,7 @@ def _matches_desired(
         snapshot.routes[path_id] == frozenset((metric,))
         for path_id, metric in desired.items()
     )
+
+
+# Historical executable-evidence compatibility alias.
+RoutePriorityBackend = RoutePriorityDriver

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
-from .iproute_priority_backend import CommandRunner, IproutePriorityBackend
+from .iproute_priority_backend import CommandRunner, IproutePriorityDriver
 from .network_policy_layout import NetworkPolicyLayout, PayloadPolicyAllocation
 from .payload_profile import PayloadProfileRequest
 from .route_priority_domain_builder import (
@@ -153,7 +153,7 @@ def _request_for_realization(
     )
     return RoutePriorityDomainRequest(
         domain_id=realization.domain_id,
-        backend=IproutePriorityBackend(
+        backend=IproutePriorityDriver(
             runner=runner,
             namespace=namespace,
             table=realization.table,

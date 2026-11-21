@@ -29,23 +29,21 @@ from .interface_identity import InterfaceIdentity
 from .linux_forwarding_gate import LinuxForwardingGateDriver
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .linux_nft_scaffold import (
-    LinuxNftScaffoldBackend,
+    LinuxNftScaffoldDriver,
     NftScriptRunner,
 )
 from .linux_structural_policy import LinuxStructuralPolicyBackend
 from .linux_stack_return_affinity import LinuxStackReturnAffinityBackend
 from .managed_network_domain import (
-    ManagedNetworkDomainEnsureResult,
-    ManagedNetworkDomainPreflightResult,
+    ManagedL3BoundaryEnsureResult,
     ManagedNetworkDomainSpec,
-    ManagedNetworkDomainVerification,
+    ManagedNetworkEnvironmentEnsureResult,
+    OrdinarySidePortalVerification,
     ensure_managed_l3_boundary,
     ensure_managed_network_environment,
     ensure_ordinary_side_portal,
-    observe_ordinary_side_portal,
     preflight_managed_l3_boundary,
     preflight_managed_network_environment,
-    verify_managed_l3_boundary,
 )
 from .network_policy_activation import (
     NetworkPolicyActivationResult,
@@ -111,8 +109,9 @@ class ControllerStartupStatus(str, Enum):
 @dataclass(slots=True)
 class ControllerStartupSession:
     lock: ControllerInstanceLock
-    preflight: ManagedNetworkDomainPreflightResult
-    domain: ManagedNetworkDomainEnsureResult
+    environment: ManagedNetworkEnvironmentEnsureResult
+    boundary: ManagedL3BoundaryEnsureResult
+    portal: OrdinarySidePortalVerification
     interfaces: tuple[InterfaceIdentity, ...]
     desired: PayloadNetworkPolicyDesiredState
     activation: NetworkPolicyActivationResult
@@ -121,13 +120,14 @@ class ControllerStartupSession:
     def __post_init__(self) -> None:
         if not self.lock.acquired:
             raise ValueError("startup session requires an acquired lifetime lock")
-        if not self.preflight.confirmed:
-            raise ValueError("startup session requires confirmed domain preflight")
-        if not self.domain.confirmed:
-            raise ValueError("startup session requires confirmed managed domain")
+        if not self.environment.confirmed:
+            raise ValueError("startup session requires confirmed Private-network environment")
+        if not self.boundary.confirmed:
+            raise ValueError("startup session requires confirmed ordinary-side transition")
+        if not self.portal.confirmed:
+            raise ValueError("startup session requires confirmed ordinary-side portal")
         if not self.activation.ready:
-            raise ValueError("startup session requires READY network-policy activation")
-
+            raise ValueError("startup session requires confirmed network-policy activation")
 
 @dataclass(slots=True)
 class ControllerStartupStoppingContext:
@@ -145,8 +145,9 @@ class ControllerStartupStoppingContext:
 class ControllerStartupResult:
     status: ControllerStartupStatus
     session: ControllerStartupSession | None
-    preflight: ManagedNetworkDomainPreflightResult | None = None
-    domain: ManagedNetworkDomainEnsureResult | None = None
+    environment: ManagedNetworkEnvironmentEnsureResult | None = None
+    boundary: ManagedL3BoundaryEnsureResult | None = None
+    portal: OrdinarySidePortalVerification | None = None
     host_routing_contribution: HostRoutingContribution | None = None
     activation: NetworkPolicyActivationResult | None = None
     failure_containment: ForwardingGateEnforcementResult | None = None
@@ -212,8 +213,9 @@ def start_controller_once(
             diagnostic=str(exc),
         )
 
-    preflight: ManagedNetworkDomainPreflightResult | None = None
-    domain: ManagedNetworkDomainEnsureResult | None = None
+    environment: ManagedNetworkEnvironmentEnsureResult | None = None
+    boundary: ManagedL3BoundaryEnsureResult | None = None
+    portal: OrdinarySidePortalVerification | None = None
     host_routing_contribution: HostRoutingContribution | None = None
 
     if requested():
@@ -238,8 +240,9 @@ def start_controller_once(
             return ControllerStartupResult(
                 status=ControllerStartupStatus.STOPPED,
                 session=None,
-                preflight=preflight,
-                domain=domain,
+                environment=environment,
+                boundary=boundary,
+                portal=portal,
                 stop=stopped,
                 diagnostic=f"stop requested after {phase}; owned cleanup confirmed",
             )
@@ -255,8 +258,9 @@ def start_controller_once(
         return ControllerStartupResult(
             status=ControllerStartupStatus.STOP_CLEANUP_FAILED,
             session=None,
-            preflight=preflight,
-            domain=domain,
+            environment=environment,
+            boundary=boundary,
+            portal=portal,
             stop=stopped,
             stopping=stopping,
             diagnostic=(
@@ -283,8 +287,9 @@ def start_controller_once(
         return ControllerStartupResult(
             status=status,
             session=None,
-            preflight=preflight,
-            domain=domain,
+            environment=environment,
+            boundary=boundary,
+            portal=portal,
             host_routing_contribution=host_routing_contribution,
             activation=activation,
             failure_containment=containment,
@@ -293,46 +298,8 @@ def start_controller_once(
         )
 
     try:
-        environment_existing = preflight_managed_network_environment(
-            domain_spec,
-            runner,
-        )
-        boundary_existing = preflight_managed_l3_boundary(
-            domain_spec,
-            runner,
-        )
-        if environment_existing and boundary_existing:
-            portal = observe_ordinary_side_portal(domain_spec, runner)
-            if portal.confirmed:
-                boundary_verification = verify_managed_l3_boundary(
-                    domain_spec,
-                    runner,
-                )
-                if not boundary_verification.confirmed:
-                    raise RuntimeError(
-                        "transition changed during startup preflight: "
-                        + "; ".join(boundary_verification.errors)
-                    )
-                preflight = ManagedNetworkDomainPreflightResult(
-                    existing=True,
-                    verification=ManagedNetworkDomainVerification(
-                        confirmed=True,
-                        errors=(),
-                        host_boundary=boundary_verification.private_boundary,
-                    ),
-                )
-            else:
-                # Exact environment + transition with repairable owned portal drift.
-                preflight = ManagedNetworkDomainPreflightResult(
-                    existing=False,
-                    verification=None,
-                )
-        else:
-            # Exact environment without a transition is a valid recoverable baseline.
-            preflight = ManagedNetworkDomainPreflightResult(
-                existing=False,
-                verification=None,
-            )
+        preflight_managed_network_environment(domain_spec, runner)
+        preflight_managed_l3_boundary(domain_spec, runner)
     except Exception as exc:
         return fail(
             ControllerStartupStatus.DOMAIN_PREFLIGHT_FAILED,
@@ -402,23 +369,6 @@ def start_controller_once(
         )
 
     host_boundary = boundary.verification.private_boundary
-    domain = ManagedNetworkDomainEnsureResult(
-        created=environment.created or boundary.created,
-        verification=ManagedNetworkDomainVerification(
-            confirmed=(
-                environment.confirmed
-                and boundary.confirmed
-                and portal.confirmed
-                and host_boundary is not None
-            ),
-            errors=(
-                environment.verification.errors
-                + boundary.verification.errors
-                + portal.errors
-            ),
-            host_boundary=host_boundary,
-        ),
-    )
 
     interrupted = interrupted_stop("ordinary-side portal ensure")
     if interrupted is not None:
@@ -585,7 +535,7 @@ def start_controller_once(
     )
     activation = activate_network_policy(
         gate,
-        LinuxNftScaffoldBackend(
+        LinuxNftScaffoldDriver(
             runner,
             domain_spec.namespace,
         ),
@@ -661,8 +611,9 @@ def start_controller_once(
         return ControllerStartupResult(
             status=interrupted.status,
             session=None,
-            preflight=interrupted.preflight,
-            domain=interrupted.domain,
+            environment=interrupted.environment,
+            boundary=interrupted.boundary,
+            portal=interrupted.portal,
             activation=activation,
             stop=interrupted.stop,
             stopping=interrupted.stopping,
@@ -671,8 +622,9 @@ def start_controller_once(
 
     session = ControllerStartupSession(
         lock=lock,
-        preflight=preflight,
-        domain=domain,
+        environment=environment,
+        boundary=boundary,
+        portal=portal,
         interfaces=interfaces,
         desired=desired,
         activation=activation,
@@ -681,8 +633,9 @@ def start_controller_once(
     return ControllerStartupResult(
         status=ControllerStartupStatus.READY,
         session=session,
-        preflight=preflight,
-        domain=domain,
+        environment=environment,
+        boundary=boundary,
+        portal=portal,
         activation=activation,
         diagnostic=activation.diagnostic,
     )

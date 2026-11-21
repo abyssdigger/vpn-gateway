@@ -26,10 +26,7 @@ from rou.local_publication_policy import LocalPublicationDesiredState
 from rou.managed_network_domain import (
     ManagedL3BoundaryEnsureResult,
     ManagedL3BoundaryVerification,
-    ManagedNetworkDomainEnsureResult,
-    ManagedNetworkDomainPreflightResult,
     ManagedNetworkDomainSpec,
-    ManagedNetworkDomainVerification,
     ManagedNetworkEnvironmentEnsureResult,
     ManagedNetworkEnvironmentVerification,
     OrdinarySidePortalVerification,
@@ -66,26 +63,6 @@ DESIRED = PayloadNetworkPolicyDesiredState(
     ),
 )
 
-PREFLIGHT_ABSENT = ManagedNetworkDomainPreflightResult(
-    existing=False,
-    verification=None,
-)
-PREFLIGHT_EXISTING = ManagedNetworkDomainPreflightResult(
-    existing=True,
-    verification=ManagedNetworkDomainVerification(
-        confirmed=True,
-        errors=(),
-        host_boundary=HOST,
-    ),
-)
-DOMAIN = ManagedNetworkDomainEnsureResult(
-    created=True,
-    verification=ManagedNetworkDomainVerification(
-        confirmed=True,
-        errors=(),
-        host_boundary=HOST,
-    ),
-)
 CONTAINED = ForwardingGateExecutionResult(
     status=ForwardingGateExecutionStatus.SUCCESS,
     desired=ForwardingGateState.DISABLED,
@@ -214,7 +191,6 @@ class ControllerStartupTests(unittest.TestCase):
     def run_startup(
         self,
         *,
-        preflight=PREFLIGHT_ABSENT,
         prepared=None,
         activation=READY_ACTIVATION,
         runner=None,
@@ -240,16 +216,10 @@ class ControllerStartupTests(unittest.TestCase):
             events.append("preflight")
             if preflight_error:
                 raise preflight_error
-            return preflight.existing
+            return False
 
         def do_boundary_preflight(*args):
-            return preflight.existing
-
-        def observe_portal(*args):
-            return OrdinarySidePortalVerification(True, ())
-
-        def verify_boundary(*args):
-            return ManagedL3BoundaryVerification(True, (), HOST)
+            return False
 
         def loader():
             events.append("load_policy")
@@ -262,13 +232,13 @@ class ControllerStartupTests(unittest.TestCase):
             if ensure_error:
                 raise ensure_error
             return ManagedNetworkEnvironmentEnsureResult(
-                created=DOMAIN.created,
+                created=True,
                 verification=ManagedNetworkEnvironmentVerification(True, ()),
             )
 
         def ensure_boundary(*args):
             return ManagedL3BoundaryEnsureResult(
-                created=DOMAIN.created,
+                created=True,
                 verification=ManagedL3BoundaryVerification(True, (), HOST),
             )
 
@@ -307,14 +277,6 @@ class ControllerStartupTests(unittest.TestCase):
             patch(
                 "rou.controller_startup.preflight_managed_l3_boundary",
                 side_effect=do_boundary_preflight,
-            ),
-            patch(
-                "rou.controller_startup.observe_ordinary_side_portal",
-                side_effect=observe_portal,
-            ),
-            patch(
-                "rou.controller_startup.verify_managed_l3_boundary",
-                side_effect=verify_boundary,
             ),
             patch(
                 "rou.controller_startup.ensure_managed_network_environment",
