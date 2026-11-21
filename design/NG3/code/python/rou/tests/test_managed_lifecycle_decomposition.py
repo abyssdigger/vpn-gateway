@@ -39,7 +39,13 @@ class ManagedLifecycleDecompositionTests(unittest.TestCase):
             ),
             patch(
                 "rou.managed_network_domain.verify_managed_network_environment",
-                return_value=ManagedNetworkEnvironmentVerification(True, ()),
+                side_effect=(
+                    ManagedNetworkEnvironmentVerification(
+                        False,
+                        ("loopback interface is not UP",),
+                    ),
+                    ManagedNetworkEnvironmentVerification(True, ()),
+                ),
             ),
         ):
             result = ensure_managed_network_environment(SPEC, runner)
@@ -86,7 +92,14 @@ class ManagedLifecycleDecompositionTests(unittest.TestCase):
             ) as converge,
             patch(
                 "rou.managed_network_domain.verify_managed_l3_boundary",
-                return_value=repaired,
+                side_effect=(
+                    ManagedL3BoundaryVerification(
+                        confirmed=False,
+                        errors=("owned transition property drift",),
+                        private_boundary=None,
+                    ),
+                    repaired,
+                ),
             ),
         ):
             result = ensure_managed_l3_boundary(SPEC, object())
