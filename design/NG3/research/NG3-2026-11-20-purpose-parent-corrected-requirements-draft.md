@@ -1,19 +1,17 @@
-# VPN-GATE NG3 — Requirements — research purpose/parent correction draft
+# VPN-GATE NG3 — Requirements — research purpose/parent correction record
 
-> **NON-NORMATIVE RESEARCH COPY.** This file does not replace
-> `design/NG3/requirements.md`. It is a full research draft derived from snapshot 145 and
-> updated with the product-holder refactor decisions recorded in
-> `NG3-2026-11-20-requirement-refactor-decisions.md`. New and reparented IDs in this copy
-> are provisional until the normative remap is explicitly approved; unchanged branches retain
-> baseline wording and closure labels. Remaining `RESEARCH UNRESOLVED` markers identify
-> findings not resolved by that decision document.
+> **NON-NORMATIVE RESEARCH RECORD.** This file preserves the corrected-tree proposal derived
+> from snapshot 145 and the product-holder dispositions recorded in
+> `NG3-2026-11-20-requirement-refactor-decisions.md`. After the final coherent-tree PASS,
+> this proposal was promoted on the research branch to the normative
+> `design/NG3/requirements.md` and its current traceability was remapped. The IDs rendered
+> below are therefore no longer provisional on this branch. No `RESEARCH UNRESOLVED` markers
+> remain.
 
-**Status:** non-normative requirement-refactor draft
+**Status:** non-normative record of the promoted requirement refactor  
 **Research branch:** `ng3-research-20261120-requirement-purpose-parent-consistency-30m`  
 **Normative model:** `design/requirements-model.md`  
-**Architecture status:** no NG2 architecture is inherited automatically
-
-This document renders a proposed NG3 requirement tree for research; `design/NG3/requirements.md` remains normative.
+**Promoted normative tree:** `design/NG3/requirements.md`
 
 The seven primary project requirements are accepted. Their derived Requirement/Constraint
 trees remain subject to normal requirement/constraint review.
