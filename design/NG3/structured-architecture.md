@@ -657,7 +657,7 @@ Interactions
 | `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove exact boundary state | `managed L3 boundary realization` |
 | `Private network.@ordinary-side IP portal.<IP handoff>` | bidirectional IP handoff | `@managed L3 boundary realization.<private-side IP handoff>` |
 | `@managed L3 boundary realization.<host-side IP handoff>` | bidirectional IP handoff | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` |
-| `VPN-GATE-managed host state` | routes selected host traffic toward the explicit managed host endpoint | `managed L3 boundary realization` |
+| `VPN-GATE-managed host state.@peaceful host routing contribution.<selected host traffic>` | routes selected host traffic toward the explicit managed host endpoint | `@managed L3 boundary realization.<host-side IP handoff>` |
 
 Finding: current `ManagedNetworkDomain` lifecycle transaction crosses the
 `Private network` / `Ordinary-side transition` boundary. Its existing preflight therefore
@@ -848,6 +848,7 @@ API
 
     @VPNChannel[].<vpn-interface endpoint> — bidirectional IP endpoint текущей VPN channel generation, доступный `Private network`.
     @VPNChannel[].<transport provenance> — optional integration-proven transport endpoint fact; отсутствует, если supported integration не умеет доказать его без inference.
+    @VPNChannel[].<path route realization> — integration-specific capability, которая для exact verified PathBinding дает допустимую current Linux route shape (endpoint/gateway/onlink) без generic inference.
 
 Residents
 
@@ -860,6 +861,7 @@ Artifacts
 3. `VPN endpoint generation` *(observed by VPN-GATE)* — current concrete interface generation, которую channel предоставляет в `Private network`; identity включает фактическую interface generation и не наследуется same-name replacement автоматически.
 4. `remote path availability property` *(observed)* — внешнее сетевое свойство, которое активные checks пытаются наблюдать относительно configured normalized criterion/target; VPN-GATE его не актуирует.
 5. `transport endpoint provenance` *(optional, observed)* — доказанный integration-specific transport fact exact current channel generation; не выводится из interface name/peer/ambient routes.
+6. `path route-realization capability` — integration-specific available capability/contract, связывающая exact verified PathBinding с route next-hop semantics. Для доказанной direct-device integration результат имеет `gateway=none`, `onlink=false`, `dev=current endpoint`; эта форма не переносится автоматически на другие integrations.
 
 `VPN endpoint inventory` не дублируется здесь: это локальная fresh observation projection
 в `Private network`. Аналогично availability confirmation/hysteresis принадлежат STACK,
@@ -875,6 +877,7 @@ Interactions
 | `@VPNChannel[]` | realize current concrete endpoint generation | `VPN endpoint generation` |
 | `Private network.@VPNPathAdapter` | fresh observe / verify current endpoint identity | `@VPNChannel[].<vpn-interface endpoint>` |
 | `Private network.@VPNPathAdapter` | optionally consume proven integration transport fact | `@VPNChannel[].<transport provenance>` |
+| `Private network.@NetworkPolicyAdapter` | consume exact route realization for an already verified binding; never infer gateway/onlink generically | `@VPNChannel[].<path route realization>` |
 | `@VPNChannel[].<vpn-interface endpoint>` | bidirectional tunneled IP handoff | `Private network.@VPN-side IP portal.<IP handoff>` |
 | `@VPNChannel[]` | VPN underlay IP exits/enters ordinary side | `Private network.@ordinary-side IP portal.<IP handoff>` |
 | `STACK.AvailabilityProbeAgent` via `Private network.@ActiveProbeDriver` | configured active observation | `remote path availability property` |
@@ -909,6 +912,7 @@ Component diagram
 |      |                                                                  |
 |      +---- @<vpn-interface endpoint> ------------------+                 |
 |      +---- @<transport provenance>                     |                 |
+|      +---- @<path route realization>                   |                 |
 +--------------------------------------------------------|----------------+
                                                          | tunneled IP
                                                          v
@@ -1064,7 +1068,7 @@ Interactions
 | `@systemd` | invoke/contain controller service lifecycle and wait for readiness semantics | `STACK.@ProductLifecycleControl` |
 | `Operator.OperatorClient` | start/stop/restart supported stack-specific VPN service | `@systemd` |
 | `@systemd` | supervise explicitly bound VPN process/cgroup | `VPN external ends.@VPNChannel[]` |
-| `@systemd` | reverse dependency/order stop bound VPN service before final managed-domain teardown | `VPN external ends` / `STACK.@ProductLifecycleControl` |
+| `@systemd` | reverse dependency/order stops the bound VPN unit before controller final managed-domain teardown | `VPN external ends.@VPNChannel[]` / `STACK.@ProductLifecycleControl` |
 
 Finding: `Ambient breadth` — этот Space намеренно объединяет ordinary host и внешний
 ordinary IP world, пока внутри них нет самостоятельной VPN-GATE-managed semantics,
@@ -1354,9 +1358,8 @@ Architectural decisions
 7. `Optional transport provenance`
    *Если supported integration может доказать transport endpoint provenance, факт привязывается к exact current `PathBinding`, а не к стабильному `LogicalPathId`. Provenance нельзя угадывать из interface prefix/name, inner peer, ambient routes или другого unrelated lower fact; при отсутствии достаточного evidence он остается absent/unresolved.*
 
-Findings
-
-1. `Route realization ownership` *Flat architecture требует integration-specific verified gateway/onlink realization в дополнение к current binding, но structured tree пока не доказывает, является ли это методом VPNPathAdapter, отдельным child component или контрактом другого transition/VPN-end Space.*
+8. `Binding is not route realization`
+   *`VPNPathAdapter` доказывает current concrete endpoint, но не угадывает Linux `gateway/onlink`. Exact route realization предоставляет отдельная capability supported integration contract в `VPN external ends`; generic `NetworkPolicyAdapter` только потребляет этот уже доказанный lower fact. Direct-device realization является одной explicit integration capability, а не универсальным свойством bound interface.*
 
 ## C.005 ForwardingGate
 
