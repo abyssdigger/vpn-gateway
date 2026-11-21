@@ -5,8 +5,8 @@ from enum import Enum
 from typing import Protocol
 
 from .forwarding_gate import (
-    ForwardingGateBackend,
-    ForwardingGateExecutionResult,
+    ForwardingGateDriver,
+    ForwardingGateEnforcementResult,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
@@ -48,7 +48,7 @@ class PayloadNftScaffoldPrepareStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class PayloadNftScaffoldPrepareResult:
     status: PayloadNftScaffoldPrepareStatus
-    barrier: ForwardingGateExecutionResult
+    barrier: ForwardingGateEnforcementResult
     initial: NftPayloadScaffoldComparison | None
     final: NftPayloadScaffoldComparison | None
     mutation_attempted: bool
@@ -65,7 +65,7 @@ class PayloadNftScaffoldPrepareResult:
 
 
 def prepare_payload_nft_scaffold_once(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     nft_backend: PayloadNftScaffoldBackend,
 ) -> PayloadNftScaffoldPrepareResult:
     """Close root forwarding, then bootstrap/repair only the invariant nft scaffold.

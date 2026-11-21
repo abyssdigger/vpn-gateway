@@ -12,8 +12,8 @@ from enum import Enum
 
 from .composite_nft_policy import CompositeNftDesiredState
 from .forwarding_gate import (
-    ForwardingGateBackend,
-    ForwardingGateExecutionResult,
+    ForwardingGateDriver,
+    ForwardingGateEnforcementResult,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
@@ -56,12 +56,12 @@ class NetworkPolicyActivationStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class NetworkPolicyActivationResult:
     status: NetworkPolicyActivationStatus
-    initial_containment: ForwardingGateExecutionResult
+    initial_containment: ForwardingGateEnforcementResult
     scaffold: NftPayloadScaffoldComparison | None
     scaffold_prepare: PayloadNftScaffoldPrepareResult | None
     structural: StructuralPolicyTransactionResult | None
     stack_return_affinity: StackReturnAffinityConvergenceResult | None = None
-    failure_containment: ForwardingGateExecutionResult | None = None
+    failure_containment: ForwardingGateEnforcementResult | None = None
     failure_status: NetworkPolicyActivationStatus | None = None
     diagnostic: str | None = None
 
@@ -75,7 +75,7 @@ class NetworkPolicyActivationResult:
 
 
 def activate_network_policy(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     scaffold_backend: PayloadNftScaffoldBackend,
     structural_backend: StructuralPolicyMutationBackend,
     routing_desired: PayloadRoutingDesiredState,
@@ -247,8 +247,8 @@ def activate_network_policy(
 
 
 def _failed_after_containment(
-    gate_backend: ForwardingGateBackend,
-    initial_containment: ForwardingGateExecutionResult,
+    gate_backend: ForwardingGateDriver,
+    initial_containment: ForwardingGateEnforcementResult,
     failure_status: NetworkPolicyActivationStatus,
     *,
     scaffold: NftPayloadScaffoldComparison | None,

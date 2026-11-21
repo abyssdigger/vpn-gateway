@@ -16,7 +16,7 @@ class ForwardingGateCommandRunner(Protocol):
 
 
 @dataclass(slots=True)
-class LinuxForwardingGateBackend:
+class LinuxForwardingGateDriver:
     runner: ForwardingGateCommandRunner
     namespace: str
 
@@ -63,3 +63,7 @@ class LinuxForwardingGateBackend:
                 f"net.ipv4.ip_forward={value}",
             )
         )
+
+
+# Transitional alias; current code uses the Driver role name.
+LinuxForwardingGateBackend = LinuxForwardingGateDriver

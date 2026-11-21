@@ -77,8 +77,8 @@ from .interface_inventory import (
     parse_ip_link_inventory,
 )
 from .forwarding_gate import (
-    ForwardingGateExecutionResult,
-    ForwardingGateExecutionStatus,
+    ForwardingGateEnforcementResult,
+    ForwardingGateEnforcementStatus,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
@@ -99,7 +99,7 @@ from .linux_availability_cycle import (
     run_linux_availability_cycle_once,
 )
 from .linux_forwarding_gate import (
-    LinuxForwardingGateBackend,
+    LinuxForwardingGateDriver,
     LinuxForwardingGateError,
 )
 from .nft_namespace_inventory import (
@@ -644,8 +644,8 @@ __all__ = [
     "DirectDeviceRouteRealizationError",
     "Direction",
     "ExpectedInterfaceSelector",
-    "ForwardingGateExecutionResult",
-    "ForwardingGateExecutionStatus",
+    "ForwardingGateEnforcementResult",
+    "ForwardingGateEnforcementStatus",
     "ForwardingGateState",
     "InterfaceIdentity",
     "InterfaceInventoryError",
@@ -653,7 +653,7 @@ __all__ = [
     "IproutePriorityBackendError",
     "LinuxAvailabilityCycleResult",
     "LinuxAvailabilityCycleStatus",
-    "LinuxForwardingGateBackend",
+    "LinuxForwardingGateDriver",
     "LinuxForwardingGateError",
     "LinuxProbeRoutingBackend",
     "LinuxProbeRoutingError",
