@@ -7,18 +7,18 @@
 
 Reviewed against:
 
-- `VPNG0001-R1.R2.R4.R4.R1`
-- `VPNG0003-R3.R6.R1`
-- `VPNG0003-R3.R6.R3`
-- `VPNG0003-R3.R6.R3.R1`
-- `VPNG0003-R3.R6.R3.R1.C1`
-- `VPNG0003-R3.R6.R3.R1.C1.R1`
-- `VPNG0003-R3.R6.R3.R1.C1.R1.R1`
-- `VPNG0003-R3.R6.R3.R1.C1.R1.R2`
-- `VPNG0003-R3.R6.R3.R1.C1.R1.R3`
-- `VPNG0003-R3.R6.R3.R1.C1.R1.R4`
-- `VPNG0003-R3.R6.R3.R1.C1.R1.C1`
-- `VPNG0003-R3.R6.R3.R2`
+- `VPNG-U001-R1.R2.R4.R4.R1`
+- `VPNG-U003-R3.R6.R1`
+- `VPNG-U003-R3.R6.R3`
+- `VPNG-U003-R3.R6.R3.R1`
+- `VPNG-U003-R3.R6.R3.R1.C1`
+- `VPNG-U003-R3.R6.R3.R1.C1.R1`
+- `VPNG-U003-R3.R6.R3.R1.C1.R1.R1`
+- `VPNG-U003-R3.R6.R3.R1.C1.R1.R2`
+- `VPNG-U003-R3.R6.R3.R1.C1.R1.R3`
+- `VPNG-U003-R3.R6.R3.R1.C1.R1.R4`
+- `VPNG-U003-R3.R6.R3.R1.C1.R1.C1`
+- `VPNG-U003-R3.R6.R3.R2`
 
 The accepted product scenario is that one Device may serve several Profiles with different
 business reachability criteria. Availability evidence therefore remains scoped to
@@ -57,7 +57,7 @@ Profile using two Device paths with different Device defaults.
 ### F4 — Profile override must not become Device-global state
 
 Reusing a Device description is configuration reuse only. Sharing health/evidence by Device
-would violate `VPNG0003-R3.R6.R1` and break the valid scenario where two Profiles use the
+would violate `VPNG-U003-R3.R6.R1` and break the valid scenario where two Profiles use the
 same path with different criteria.
 
 **Disposition:** accepted and fixed. Concrete runtime intents remain owned by
@@ -124,10 +124,10 @@ No timing/hysteresis user knobs are added.
 
 All current links are resolved; none is pending:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`
 
 Some links appear at more than one relevant tree location; their causal status is the same.
 
@@ -159,7 +159,7 @@ failures are baseline failures and are not used as positive evidence.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

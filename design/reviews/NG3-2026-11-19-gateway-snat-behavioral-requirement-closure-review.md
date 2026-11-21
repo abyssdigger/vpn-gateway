@@ -5,13 +5,13 @@
 
 ## Scope
 
-Revalidation of `VPNG0004-R4.R6.R1.R6.R1` after replacing the old
+Revalidation of `VPNG-U004-R4.R6.R1.R6.R1` after replacing the old
 implementation-specific cross-boundary Profile-identity wording with the accepted observable
 gateway-SNAT isolation behavior.
 
 ## Requirement ancestry
 
-The revised child remains within `VPNG0004-R4.R6.R1.R6`:
+The revised child remains within `VPNG-U004-R4.R6.R1.R6`:
 
 - parent requires VPN-GATE-owned ordinary-side gateway NAT contributions to remain restricted
   to traffic for which that function is required;
@@ -46,7 +46,7 @@ host-local no-NAT and unrelated-host isolation.
 - EXP-064 disposition: `selected`;
 - stale conditional architecture language tied to literal cross-boundary Profile identity:
   removed;
-- `VPNG0004-R4.R6.R1.R6.R1`: re-closed.
+- `VPNG-U004-R4.R6.R1.R6.R1`: re-closed.
 
 No user-facing config or product capability changed. The review removes an accidental
 implementation constraint from the requirement and adopts the already-proven mechanism that
@@ -71,10 +71,10 @@ Still required:
 
 Resolved historical links remain:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`;
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`;
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 ### unreal
 
@@ -101,7 +101,7 @@ evidence work under already-accepted semantics.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
 
 The original IDs in the historical body are intentionally preserved.

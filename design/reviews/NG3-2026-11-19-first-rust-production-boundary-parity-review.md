@@ -2,17 +2,17 @@
 
 **Date:** 2026-11-19  
 **Cycle:** `ng3-design-cycle-20261119-post-probing-frontier-35m`  
-**Scope:** first production-language replacement unit under `VPNG0007-R7.R8`.
+**Scope:** first production-language replacement unit under `VPNG-U007-R7.R8`.
 
 ## Requirements
 
-- `VPNG0007-R7.R8`
-- `VPNG0007-R7.R8.C1`
-- `VPNG0007-R7.R8.R1`
-- `VPNG0007-R7.R8.R2`
-- `VPNG0007-R7.R8.R3`
-- existing availability confirmation semantics under `VPNG0003-R3.R5.R1` and
-  `VPNG0003-R3.R5.R2`.
+- `VPNG-U007-R7.R8`
+- `VPNG-U007-R7.R8.C1`
+- `VPNG-U007-R7.R8.R1`
+- `VPNG-U007-R7.R8.R2`
+- `VPNG-U007-R7.R8.R3`
+- existing availability confirmation semantics under `VPNG-U003-R3.R5.R1` and
+  `VPNG-U003-R3.R5.R2`.
 
 No requirement or user-visible behavior changed.
 
@@ -98,10 +98,10 @@ Those would add migration machinery before a concrete ported boundary requires t
 
 All accumulated occurrences remain resolved:
 
-- `VPNG0005-R5 -> VPNG0005-R5.R6`;
-- `VPNG0004-R4.R6 -> VPNG0004-R4.R6.R1`;
-- `VPNG0001-R1.R3 -> VPNG0001-R1.R3.R2`;
-- `VPNG0001-R1.R2 -> VPNG0001-R1.R2.R2`.
+- `VPNG-U005-R5 -> VPNG-U005-R5.R6`;
+- `VPNG-U004-R4.R6 -> VPNG-U004-R4.R6.R1`;
+- `VPNG-U001-R1.R3 -> VPNG-U001-R1.R3.R2`;
+- `VPNG-U001-R1.R2 -> VPNG-U001-R1.R2.R2`.
 
 ### unreal
 
@@ -130,12 +130,12 @@ cross-language runtime framework.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5` -> `VPNG9101-R1.R1`
-- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
-- `VPNG0007-R7.R8` -> `VPNG9001-R1.R1.R8`
-- `VPNG0007-R7.R8.C1` -> `VPNG9001-R1.R1.R8.C1`
-- `VPNG0007-R7.R8.R1` -> `VPNG9001-R1.R1.R8.R1`
-- `VPNG0007-R7.R8.R2` -> `VPNG9001-R1.R1.R8.R2`
-- `VPNG0007-R7.R8.R3` -> `VPNG9001-R1.R1.R8.R3`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U007-R7.R8` -> `VPNG-D001-R1.R1.R8`
+- `VPNG-U007-R7.R8.C1` -> `VPNG-D001-R1.R1.R8.C1`
+- `VPNG-U007-R7.R8.R1` -> `VPNG-D001-R1.R1.R8.R1`
+- `VPNG-U007-R7.R8.R2` -> `VPNG-D001-R1.R1.R8.R2`
+- `VPNG-U007-R7.R8.R3` -> `VPNG-D001-R1.R1.R8.R3`
 
 The original IDs in the historical body are intentionally preserved.
