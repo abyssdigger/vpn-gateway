@@ -643,10 +643,18 @@ def main():
             timeout=30.0,
         )
         wait_until(
-            "controller reconciliation after VPN-only restart",
-            lambda: journal(ALPHA_UNIT).count(
-                "VPNG_ALPHA_RECONCILE status=reconciled"
-            ) >= 2,
+            "runtime status on recreated VPN generation",
+            lambda: (
+                (status := runtime_status()).get("readiness") == "ready"
+                and len(
+                    status.get("confirmed_effective_state", [{}])[0].get(
+                        "ordered_paths", []
+                    )
+                ) == 1
+                and status["confirmed_effective_state"][0]["ordered_paths"][0].get(
+                    "ifindex"
+                ) == second_ifindex
+            ),
             timeout=30.0,
         )
         final_alpha_journal = journal(ALPHA_UNIT)

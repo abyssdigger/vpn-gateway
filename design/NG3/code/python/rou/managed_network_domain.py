@@ -149,6 +149,9 @@ def ensure_managed_network_environment(
     """Create/verify Private-network namespace + loopback only."""
     existing = preflight_managed_network_environment(spec, runner)
     if existing:
+        verification = verify_managed_network_environment(spec, runner)
+        if verification.confirmed:
+            return ManagedNetworkEnvironmentEnsureResult(False, verification)
         runner.run(("ip", "-n", spec.namespace, "link", "set", "lo", "up"))
         verification = verify_managed_network_environment(spec, runner)
         if not verification.confirmed:
@@ -349,6 +352,9 @@ def ensure_managed_l3_boundary(
         )
     existing = preflight_managed_l3_boundary(spec, runner)
     if existing:
+        verification = verify_managed_l3_boundary(spec, runner)
+        if verification.confirmed:
+            return ManagedL3BoundaryEnsureResult(False, verification)
         _converge_managed_l3_boundary_properties(spec, runner)
         verification = verify_managed_l3_boundary(spec, runner)
         if not verification.confirmed:
