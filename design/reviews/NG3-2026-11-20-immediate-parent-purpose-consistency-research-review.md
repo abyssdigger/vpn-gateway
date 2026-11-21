@@ -70,7 +70,7 @@ and managed-domain mechanism nodes were moved out of requirement semantics.
 
 ### Resolved findings
 
-The draft now has accepted dispositions for **16 of the original 20 findings**:
+The draft now has accepted dispositions for **17 of the original 20 findings**:
 
 1. former `VPNG0001-R1.R2` configuration ancestry — common configuration moved directly
    under `VPNG0001` as provisional `VPNG0001-R4`;
@@ -98,20 +98,22 @@ The draft now has accepted dispositions for **16 of the original 20 findings**:
 15. protective/containment mode — promoted to first derived level under `VPNG0004` as
     provisional `VPNG0004-R5`;
 16. Device-default/Profile-override availability reuse — moved out from under the ICMP-only
-    Constraint.
+    Constraint;
+17. remote-initiated-flow return affinity — moved from `VPNG0002-R2.R6` to forwarding
+    behavior under `VPNG0001-R1.R1` as provisional `VPNG0001-R1.R1.R1`; the same-path
+    Statement is retained, while flow/network-property stability is stated in Purpose.
 
 The adjacent timing/hysteresis constraint was also moved to sibling
 `VPNG0003-R3.R6.R3.R1.C2`, so it no longer depends on Device-default/Profile-override reuse.
 
 ### Remaining unresolved findings
 
-Four baseline findings still lack a product-holder disposition and remain explicitly marked
+Three baseline findings still lack a product-holder disposition and remain explicitly marked
 `RESEARCH UNRESOLVED` in the draft:
 
-1. `VPNG0002-R2.R6` — remote-initiated-flow return affinity;
-2. `VPNG0004-R4.R3.R1` — priority-only make-before-break continuity;
-3. `VPNG0005-R5.R6.R4` — reload capability/contract placement;
-4. `VPNG0007-R7.R7.R1.R1` — second VPN lifecycle evidence gate placement.
+1. `VPNG0004-R4.R3.R1` — priority-only make-before-break continuity;
+2. `VPNG0005-R5.R6.R4` — reload capability/contract placement;
+3. `VPNG0007-R7.R7.R1.R1` — second VPN lifecycle evidence gate placement.
 
 Their detailed questions are maintained in
 `design/NG3/research/NG3-2026-11-20-purpose-parent-unresolved-questions.md`.
@@ -175,12 +177,12 @@ No production/reference code was changed by this research refactor.
 
 ## Verdict
 
-**RESEARCH DRAFT SUBSTANTIALLY SYNCHRONIZED; FOUR PRODUCT/PLACEMENT DECISIONS REMAIN.**
+**RESEARCH DRAFT SUBSTANTIALLY SYNCHRONIZED; THREE PRODUCT/PLACEMENT DECISIONS REMAIN.**
 
-The original 20 findings have been reduced to four unresolved questions. The corrected-tree
+The original 20 findings have been reduced to three unresolved questions. The corrected-tree
 draft, decision record, unresolved list and impact assessment are now aligned with each other.
 
-Normative promotion remains blocked until the remaining four findings are decided and the
+Normative promotion remains blocked until the remaining three findings are decided and the
 resulting tree is reviewed as one coherent requirement structure. After that, current
 architecture/configuration/registry documents require an atomic trace remap; historical
 reviews/experiments remain unchanged.
