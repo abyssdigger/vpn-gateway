@@ -21,6 +21,7 @@ INNER_BOUNDARY = "vnga-inner0"
 INNER_ADDR = "198.19.255.2"
 HOST_ADDR = "198.19.255.1"  # test-only ordinary host-local /32, not boundary addressing
 STATUS_PATH = Path("/run/vpn-gate-alpha/status.json")
+STATUS_TEXT_PATH = Path("/run/vpn-gate-alpha/status.txt")
 
 SERVER_NS = "alpha-srv"
 SERVER_HOST = "alpha-srv-host"
@@ -97,6 +98,10 @@ def interface_exists(namespace, ifname):
 
 def runtime_status():
     return json.loads(STATUS_PATH.read_text(encoding="utf-8"))
+
+
+def runtime_status_text():
+    return STATUS_TEXT_PATH.read_text(encoding="utf-8")
 
 
 def host_ping(address):
@@ -412,7 +417,13 @@ def main():
         assert status["confirmed_effective_state"][0]["profile_id"] == "alpha", status
         assert status["confirmed_effective_state"][0]["ordered_paths"] == [], status
         assert status["availability_state"][0]["state"] == "disabled", status
+        assert runtime_status_text() == """Devices
+    ovpn: not discovered
+Profiles
+    alpha
+"""
         print("EXP051_RUNTIME_STATUS_ZERO_PATH=PASS")
+        print("EXP051_RUNTIME_STATUS_TEXT_ZERO_PATH=PASS")
         print("EXP051_ALPHA_CONTROLLER_READY=PASS")
 
         host_boundary_addr = json.loads(
@@ -559,7 +570,14 @@ def main():
         assert len(first_paths) == 1, first_status
         assert first_paths[0]["ifname"] == VPN_IF, first_status
         assert first_paths[0]["ifindex"] == first_ifindex, first_status
+        assert runtime_status_text() == f"""Devices
+    ovpn: {VPN_IF}
+Profiles
+    alpha
+        01. {VPN_IF} unchecked
+"""
         print("EXP051_RUNTIME_STATUS_FIRST_PATH=PASS")
+        print("EXP051_RUNTIME_STATUS_TEXT_FIRST_PATH=PASS")
         # Remote-initiated host-local flow: the response must use the
         # selected route-based host bootstrap because +route-return opted out
         # of host conntrack return steering.
@@ -668,7 +686,14 @@ def main():
         assert final_paths[0]["ifname"] == VPN_IF, final_status
         assert final_paths[0]["ifindex"] == second_ifindex, final_status
         assert final_paths[0]["ifindex"] != first_ifindex, final_status
+        assert runtime_status_text() == f"""Devices
+    ovpn: {VPN_IF}
+Profiles
+    alpha
+        01. {VPN_IF} unchecked
+"""
         print("EXP051_RUNTIME_STATUS_NEW_GENERATION=PASS")
+        print("EXP051_RUNTIME_STATUS_TEXT_NEW_GENERATION=PASS")
         print(
             f"EXP051_MANAGER_RECONCILE_COUNT=PASS:{reconcile_markers}"
         )
