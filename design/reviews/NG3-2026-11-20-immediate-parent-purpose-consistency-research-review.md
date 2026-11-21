@@ -99,9 +99,9 @@ The draft now has accepted dispositions for **17 of the original 20 findings**:
     provisional `VPNG0004-R5`;
 16. Device-default/Profile-override availability reuse — moved out from under the ICMP-only
     Constraint;
-17. remote-initiated-flow return affinity — moved from `VPNG0002-R2.R6` to forwarding
-    behavior under `VPNG0001-R1.R1` as provisional `VPNG0001-R1.R1.R1`; the same-path
-    Statement is retained, while flow/network-property stability is stated in Purpose.
+17. remote-initiated-flow return affinity — moved from `VPNG0002-R2.R6` to direct child
+    `VPNG0003-R4`; the same-path Statement is retained, while flow/network-property stability
+    is stated in Purpose. It remains separate from `VPNG0003-R3` baseline/availability preference.
 
 The adjacent timing/hysteresis constraint was also moved to sibling
 `VPNG0003-R3.R6.R3.R1.C2`, so it no longer depends on Device-default/Profile-override reuse.
