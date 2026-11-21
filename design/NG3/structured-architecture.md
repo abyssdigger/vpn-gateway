@@ -200,16 +200,121 @@ ComponentName <partial>
 6. internal method без `@` не должен появляться как Space API только потому, что его parent
    экспортирует другой метод;
 7. marker `@` относится к occurrence/API относительно данного Space и не является частью
-   canonical component name в addendum heading.
+   canonical component name в addendum heading;
+8. каждый Artifact, на который ссылается interaction или component spec, объявлен в
+   `Artifacts` текущего Space либо явно является boundary target другого Space;
+9. каждая нижняя техническая связь Driver/Reader/Executor заканчивается на объявленном
+   Artifact либо на явной Space boundary;
+10. `Interactions` и `Component diagram` представляют один и тот же граф; при
+    расхождении `Interactions` является источником истины.
 
 Нарушение этих правил считается структурным finding документа даже тогда, когда underlying
 implementation технически работает.
+
+### 2.7. Artifacts
+
+Artifact — объект, состояние или доступная способность реальности, находящаяся внутри
+Space и представляющая самостоятельный предмет observation и/или management. Artifact не
+является компонентом: Driver/Reader/Executor может наблюдать или изменять Artifact, но от
+этого Artifact не получает component API и не становится resident'ом.
+
+Space не следует отождествлять с конкретным техническим контейнером его текущей реализации.
+Например Linux network namespace может быть одним из Artifacts, материализующих
+`Private network`, но сам Space является архитектурной областью и не исчезает из модели,
+когда этот Artifact еще не создан или уже удален. Lifecycle machinery в таком случае
+создает, проверяет, приводит к требуемому состоянию или удаляет materialization Artifacts,
+а не «создает/уничтожает Space» как архитектурное понятие.
+
+Раздел `Artifacts` перечисляет самостоятельные объекты реальности Space. Для каждого
+Artifact следует указывать характер доступа там, где он полезен для чтения:
+
+- `observed` — VPN-GATE только наблюдает объект;
+- `managed` — VPN-GATE изменяет объект;
+- `observed, managed` — VPN-GATE и наблюдает, и изменяет его.
+
+Физическое расположение объекта в Linux, файле, namespace, nft table или другом контейнере
+само по себе не определяет artifact hierarchy.
+
+### 2.7.1. Иерархия Artifacts
+
+Artifact следует показывать child'ом другого Artifact только тогда, когда это отражает
+архитектурную семантику observation/management, а не физическую вложенность реализации.
+
+Parent-child relation оправдана, если lower Artifacts совместно образуют один управляемый
+объект/способность либо их lifecycle, invariants или проверяемый postcondition существенно
+определяются контрактом parent Artifact. Несколько разных Drivers могут при этом управлять
+разными lower частями одного parent Artifact.
+
+И наоборот, нахождение нескольких объектов внутри одного Linux namespace, nft table,
+процесса или другого implementation container не делает их автоматически parent/child.
+Если их можно независимо наблюдать и/или управлять ими через самостоятельные контракты,
+они остаются соседними Artifacts.
+
+Например один функциональный Artifact может состоять из нескольких independently
+materialized частей:
+
+```text
+return-affinity state
+    ├── nft flow-association state
+    └── RPDB mark-dispatch state
+```
+
+Иерархия здесь выражает общий управляемый postcondition, а не тот факт, где именно Linux
+хранит каждую часть.
+
+### 2.7.2. Artifact и граница Space
+
+Нижняя техническая связь компонента должна заканчиваться на том Artifact, который компонент
+фактически наблюдает, использует или изменяет, либо на явной границе с другим Space.
+
+Не следует придумывать локальный Artifact только для того, чтобы визуально завершить
+стрелку к чужой среде. Но и удаленная предметная цель не становится Artifact текущего Space,
+если компонент взаимодействует с ней через уже настроенную локальную транспортную
+способность.
+
+Для active probe это различие выглядит так:
+
+```text
+Private network
+    ActiveProbeDriver
+        -> VPN-path IP transceiver
+             -> boundary interaction
+                  -> VPN external ends.@vpn-interface endpoint
+```
+
+Driver отправляет и принимает IP из `Private network`; VPN-interface endpoint является
+server-side API соседнего Space. Сам факт, что пакет в итоге проверяет удаленную
+доступность, не переносит Driver или remote target в `Private network`.
+
+### 2.8. Interactions и Component diagram
+
+Раздел `Interactions` является первичным проверяемым представлением графа текущего Space.
+Он должен позволять восстановить, кто с кем взаимодействует и на каком resident/API/Artifact
+заканчивается связь. Конкретная табличная раскладка может уточняться, но каждая строка должна
+однозначно задавать source, interaction и target.
+
+При structural review должны выполняться как минимум следующие правила:
+
+1. каждый resident, участвующий в поведении Space, появляется в interaction graph;
+2. каждый внешний `@`-вход соответствует boundary interaction с другим Space;
+3. нижняя техническая связь Driver/Reader/Executor заканчивается либо на объявленном
+   Artifact текущего Space, либо на явной границе с соседним Space;
+4. interaction не ссылается на неизвестный resident, Artifact или Space;
+5. Space API соответствует boundary edges interaction graph.
+
+`Component diagram` является производной визуализацией того же графа и располагается
+последним в описании Space. Соседние Spaces на диаграмме показываются black boxes: диаграмма
+раскрывает внутренность только текущего Space.
+
+При изменении архитектуры первично изменяется `Interactions`; diagram затем
+перерисовывается/регенерируется из той же структуры. Несовпадение таблицы и diagram является
+ошибкой документации; до исправления нормативным считается `Interactions`.
 
 ## 3. Форма описания Space
 
 Каждый Space оформляется отдельным разделом.
 
-Минимальная шапка:
+Минимальная форма:
 
 ```text
 # <Space>
@@ -223,9 +328,25 @@ API
 Residents
     1. `@ResidentA` *краткое описание*
     2. `ResidentB` *краткое описание*
+
+Artifacts
+    - `Artifact A` — observed, managed
+    - `Artifact B` — observed
+
+Interactions
+
+| From | Interaction | To |
+| --- | --- | --- |
+| ... | ... | ... |
+
+Component diagram
+
+<derived diagram>
 ```
 
-Раздел `Residents` обязателен.
+`Residents`, `Artifacts` и `Interactions` обязательны для законченного Space.
+`Component diagram` располагается последним и является производной визуализацией
+`Interactions`.
 
 Раздел `API` может быть опущен, если краткое описание Space уже однозначно отсылает к API
 помеченных `@` resident'ов и отдельный список ничего не добавляет.
