@@ -438,6 +438,18 @@ code
 каждый из них явно. File placement, import graph или имя Linux primitive сами по себе не
 считаются архитектурной traceability.
 
+### 2.9.1. Stable evidence references
+
+Стабильная архитектура ссылается на executable/review evidence только через IDs из
+`design/NG3/evidence-index.md` вида `EV-00000`, `EV-00010`, ... . Шаг 10 оставляет
+пространство для поздних вставок без перенумерации существующих ссылок.
+
+Конкретные CI workflow/run IDs, commit SHAs и experiment result artifacts принадлежат записи
+evidence index либо связанному review/result artifact. Они не являются стабильными адресами
+архитектурного решения.
+
+
+
 ## 3. Форма описания Space
 
 Каждый Space оформляется отдельным разделом.
@@ -1218,6 +1230,8 @@ Implementation
     design/NG3/code/python/rou/controller_restart.py — stop-then-start composition without hidden resume state.
     design/NG3/code/python/rou/alpha_runtime.py — daemon/bootstrap composition, host helpers/publication and final systemd readiness/termination boundary.
 
+**Evidence:** `EV-00000`
+
 API
 
     @start(...) — выполнить product startup через независимые lifecycle operations с соблюдением dependency order.
@@ -1576,6 +1590,8 @@ Private-network service identity/default route или traffic-selection policy �
 - `VPNG0007-R7.R3.R3`
 - `VPNG0007-R7.R7`
 
+**Evidence:** `EV-00000`
+
 API
 
     @preflight(...) — fresh-classify absent / established / conflict without creating transition.
@@ -1898,6 +1914,8 @@ stack-local address/default route.
 - `VPNG0007-R7.R3`
 - `VPNG0007-R7.R7`
 
+**Evidence:** `EV-00000`
+
 API
 
     @preflight(...) — fresh-read namespace/loopback under protective containment; absent environment is valid.
@@ -1983,6 +2001,8 @@ ordinary-side default routing state на current private-facing endpoint.
 - `VPNG0007-R7.R3`
 - `VPNG0007-R7.R7`
 
+**Evidence:** `EV-00000`
+
 API
 
     @observe(...) — fresh-observe owned address/default-route state on exact current private-facing endpoint.
@@ -2034,6 +2054,8 @@ local admission remains `Private network.NetworkPolicyAdapter` responsibility.
 - `VPNG0007-R7.R3`
 - `VPNG0007-R7.R3.R3`
 - `VPNG0007-R7.R7`
+
+**Evidence:** `EV-00000`
 
 API
 
