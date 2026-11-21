@@ -28,14 +28,13 @@ prepared; they are not current requirement traceability. Current applicability i
 through live R/C links elsewhere in this dossier or in the central experiment registry.
 
 ## Requirement trace
-
 Implements / verifies implementation feasibility for:
 
 - `VPNG0001-R1.R3.R6.R1` — Device-owned server-side transport publication;
 - `VPNG0001-R4` — internal network actions are performed by VPN-GATE rather than manually assembled by the user;
 - `VPNG0004-R4.R6` — host-side mutable state used by VPN-GATE must live in an explicit owned boundary rather than ambient host state;
 - `VPNG0004-R4.R6` — publication-specific managed-domain local admission remains a VPN-GATE-owned contribution;
-- `VPNG0007-R7.R7` — this evidence unit exists only to validate an accepted requirement/architecture gap before implementation.
+- `VPNG9001-R1.R1.R7` — this evidence unit exists only to validate an accepted requirement/architecture gap before implementation.
 
 This experiment does not change product semantics or configuration grammar.
 
