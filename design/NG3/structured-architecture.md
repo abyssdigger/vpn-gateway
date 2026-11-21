@@ -719,6 +719,17 @@ API
     @ordinary-side IP portal.<IP handoff> — passive bidirectional ordinary-side data-plane handoff.
     @VPN-side IP portal.<IP handoff> — passive bidirectional VPN-side data-plane handoff.
 
+Residents
+
+1. `@ManagedNetworkDomainLifecycle <partial>` *Private-network проекция текущей combined lifecycle machinery: materialization namespace/local identity/default routing; пересечение с ordinary-side transition остается decomposition finding.*
+2. `@NetworkPolicyAdapter` *Semantic boundary между policy клиентов из STACK и lower realization/convergence внутри Private network.*
+    1. `NetworkPolicyLayoutCalculator` *Детерминированно распределяет internal routing/RPDB/metric/nft resources между semantic owner scopes.*
+    2. `NetworkPolicyEnforcer` *Достигает и подтверждает переданный Adapter'ом desired lower network-policy state.*
+3. `@VPNPathAdapter` *Boundary fresh observation и verification concrete VPN endpoints уже присутствующих в Private network.*
+4. `@ActiveProbeDriver` *Bounded lower execution одного активного probe через заранее подтвержденные probe-policy и endpoint facts.*
+5. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier.*
+    1. `ForwardingGateDriver` *Technical read/mutation boundary к managed-domain forwarding state.*
+
 Artifacts
 
 1. `managed network environment realization` *(observed, managed)* — текущая Linux-materialization внутренней сетевой среды; не является самим Space.
@@ -752,17 +763,6 @@ Artifacts
 производным условием exact `probe routing state` + `probe local admission policy` +
 current endpoint identity, а не самостоятельным `Probe IP transport` Artifact.
 
-Residents
-
-1. `@ManagedNetworkDomainLifecycle <partial>` *Private-network проекция текущей combined lifecycle machinery: materialization namespace/local identity/default routing; пересечение с ordinary-side transition остается decomposition finding.*
-2. `@NetworkPolicyAdapter` *Semantic boundary между policy клиентов из STACK и lower realization/convergence внутри Private network.*
-    1. `NetworkPolicyLayoutCalculator` *Детерминированно распределяет internal routing/RPDB/metric/nft resources между semantic owner scopes.*
-    2. `NetworkPolicyEnforcer` *Достигает и подтверждает переданный Adapter'ом desired lower network-policy state.*
-3. `@VPNPathAdapter` *Boundary fresh observation и verification concrete VPN endpoints уже присутствующих в Private network.*
-4. `@ActiveProbeDriver` *Bounded lower execution одного активного probe через заранее подтвержденные probe-policy и endpoint facts.*
-5. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier.*
-    1. `ForwardingGateDriver` *Technical read/mutation boundary к managed-domain forwarding state.*
-
 Interactions
 
 | From | Interaction | To |
@@ -773,6 +773,10 @@ Interactions
 | `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove ordinary-side default | `ordinary-side default routing state` |
 | `@ManagedNetworkDomainLifecycle <partial>` | same current transaction also manages the door realization | `Ordinary-side transition.managed L3 boundary realization` |
 | `Ordinary-side transition.@managed L3 boundary realization.<private-side IP handoff>` | bidirectional IP handoff | `@ordinary-side IP portal.<IP handoff>` |
+| `@ordinary-side IP portal.<IP handoff>` | ordinary→VPN payload is constrained by Profile forwarding, Device firewall, payload NAT and payload routing state | `@VPN-side IP portal.<IP handoff>` |
+| `@VPN-side IP portal.<IP handoff>` | VPN→ordinary payload is constrained by Profile forwarding, Device firewall and payload routing; return-affinity preserves the selected routing domain where required | `@ordinary-side IP portal.<IP handoff>` |
+| `VPN integration local policy` | bounds supported VPN underlay/control traffic using the ordinary-side handoff | `@ordinary-side IP portal.<IP handoff>` |
+| `@ordinary-side IP portal.<IP handoff>` | DNAT-targeted local publication traffic is admitted only by exact local publication policy | `stack-local IPv4 identity` |
 | `STACK.PayloadTrafficManager` / `STACK.@ProductLifecycleControl` | semantic observe/apply/cleanup | `@NetworkPolicyAdapter` |
 | `@NetworkPolicyAdapter` | allocate internal lower resources | `NetworkPolicyLayoutCalculator` |
 | `@NetworkPolicyAdapter` | converge desired lower policy | `NetworkPolicyEnforcer` |
@@ -800,50 +804,36 @@ inherit that implementation transaction boundary.
 Component diagram
 
 ```text
-                     +----------------------+
-                     |        STACK         |
-                     +--+----+----+----+----+
-                        |    |    |    |
-             lifecycle  |    |    |    | probe execution
-                        |    |    |    |
-+-----------------------v----v----v----v-----------------------------+
-|                         Private network                             |
-|                                                                     |
-| @ManagedNetworkDomainLifecycle <partial>                            |
-|      |        |        |                                            |
-|      v        v        v                                            |
-| [environment] [stack-local /32] [ordinary default]                  |
-|                                                                     |
-| @NetworkPolicyAdapter --> NetworkPolicyLayoutCalculator             |
-|          |                                                          |
-|          +-------------> NetworkPolicyEnforcer ------+              |
-|                         |    |    |    |             |              |
-|                         v    v    v    v             v              |
-|                      routing probe  nft owners   @ForwardingGate     |
-|                                                   |                 |
-|                                                   v                 |
-|                                           ForwardingGateDriver       |
-|                                                   |                 |
-|                                                   v                 |
-|                                          [IPv4 forwarding]          |
-|                                                                     |
-| @VPNPathAdapter ----------> [VPN endpoint inventory]                 |
-|                                   ^                                 |
-|                                   |                                 |
-| @ActiveProbeDriver --------------+                                  |
-|        |                                                            |
-|        +--> [probe routing] / [probe local admission]                |
-|        |                                                            |
-|        v                                                            |
-| [VPN-side IP portal]                                                |
-|                                                                     |
-| [ordinary-side IP portal]                                           |
-+-----------^--------------------------------------------+-------------+
-            |                                            |
-            | IP                                         | IP
-+-----------+------------+                    +----------v-----------+
-| Ordinary-side transition|                    | VPN external ends    |
-+--------------------------+                    +----------------------+
++----------------------------- STACK ------------------------------+
+| lifecycle / policy / binding / probe clients                    |
++---------+--------------------+----------------------+------------+
+          |                    |                      |
+          v                    v                      v
++---------+--------------------------------------------------------+
+|                         Private network                          |
+|                                                                  |
+| @ManagedNetworkDomainLifecycle <partial>                         |
+|      +--> [environment] [stack-local identity] [ordinary default]|
+|                                                                  |
+| @NetworkPolicyAdapter --> NetworkPolicyEnforcer                  |
+|      |                    +--> [payload routing + nft policies]   |
+|      +--> [probe routing]                                        |
+|      +--> [nft scaffold]                                         |
+|      +--> [return-affinity]                                      |
+|                                                                  |
+| @VPNPathAdapter -------> [VPN endpoint inventory]                |
+| @ForwardingGate -------> ForwardingGateDriver -> [IPv4 forwarding]|
+| @ActiveProbeDriver -------------------------------------+        |
+|                                                        |        |
+| @ordinary-side IP portal <==== managed payload =====> @VPN-side |
+|          ^                    policy                    IP portal |
++----------|-----------------------------------------------|-------+
+           |                                               |
+           | IP                                            | IP
++----------+----------------+                   +----------+----------+
+| Ordinary-side transition  |                   | VPN external ends   |
+| @private-side IP handoff   |                   | @vpn-interface API  |
++----------------------------+                   +---------------------+
 ```
 
 # VPN external ends
@@ -886,7 +876,6 @@ Interactions
 | `Private network.@VPNPathAdapter` | fresh observe / verify current endpoint identity | `@VPNChannel[].<vpn-interface endpoint>` |
 | `Private network.@VPNPathAdapter` | optionally consume proven integration transport fact | `@VPNChannel[].<transport provenance>` |
 | `@VPNChannel[].<vpn-interface endpoint>` | bidirectional tunneled IP handoff | `Private network.@VPN-side IP portal.<IP handoff>` |
-| `@VPNChannel[]` | VPN underlay/control traffic admitted by bounded local owner | `Private network.VPN integration local policy` |
 | `@VPNChannel[]` | VPN underlay IP exits/enters ordinary side | `Private network.@ordinary-side IP portal.<IP handoff>` |
 | `STACK.AvailabilityProbeAgent` via `Private network.@ActiveProbeDriver` | configured active observation | `remote path availability property` |
 | `Ambient host and external world.@systemd` | supported deployment stop removes bound process/cgroup and endpoint before managed-domain teardown | `VPN channel runtime/session state` / `VPN endpoint generation` |
@@ -905,32 +894,28 @@ Findings
 Component diagram
 
 ```text
-+---------------- Operator ----------------+    +------ Ambient host ------+
-| VPN-specific provisioning               |    | systemd service control |
-+----------------+-------------------------+    +------------+-------------+
-                 |                                           |
-                 v                                           v
-+----------------+--------------------------------------------------------+
-|                           VPN external ends                              |
-|                                                                          |
-| @VPNChannel[]                                                            |
-|      |                                                                   |
-|      +--> [VPN config / runtime-session state]                            |
-|      +--> [remote availability property]                                 |
-|      |                                                                   |
-|      +---- @<vpn-interface endpoint> -------------------+                 |
-+--------------------------------------------------------|-----------------+
++---------------- Operator ----------------+   +------ Ambient host ------+
+| VPN-specific provisioning               |   | @systemd lifecycle API  |
++----------------+-------------------------+   +------------+-------------+
+                 |                                          |
+                 v                                          v
++----------------+-------------------------------------------------------+
+|                          VPN external ends                              |
+|                                                                         |
+| @VPNChannel[]                                                           |
+|      +--> [VPN-specific configuration]                                  |
+|      +--> [VPN runtime/session state]                                   |
+|      +--> [remote availability property]                                |
+|      |                                                                  |
+|      +---- @<vpn-interface endpoint> ------------------+                 |
+|      +---- @<transport provenance>                     |                 |
++--------------------------------------------------------|----------------+
                                                          | tunneled IP
                                                          v
-+--------------------------------------------------------+-----------------+
-|                          Private network                                 |
-| @VPNPathAdapter -> [endpoint inventory]     [VPN-side IP portal]         |
-| @ActiveProbeDriver -----------------------> configured observation       |
-| [VPN integration local policy] + [ordinary-side IP portal] <- underlay   |
-+--------------------------------------------------------------------------+
++--------------------------------------------------------+----------------+
+| Private network  [ @VPN-side IP handoff / @VPNPathAdapter / probe API ]|
++-------------------------------------------------------------------------+
 ```
-
-
 
 # VPN-GATE-managed host state
 
@@ -947,6 +932,8 @@ API
     @NetworkPolicyAdapter <partial>.cleanup_host_publication(...) — удалить только owned host-publication objects и подтвердить отсутствие.
     @HostRoutingContribution.converge(∅) — установить complete lifecycle-scoped peaceful host-routing contribution.
     @HostRoutingContribution.cleanup(∅) — удалить только still-identifiable owned contribution.
+    @host publication mapping state.<selected publication traffic> — passive host-side mapping point для explicitly selected publication surface.
+    @peaceful host routing contribution.<selected host traffic> — passive dispatch point optional helper scope.
 
 Residents
 
@@ -978,11 +965,11 @@ Interactions
 | `STACK.PayloadTrafficManager` / policy assembly | desired Device publication | `@NetworkPolicyAdapter <partial>` |
 | `@NetworkPolicyAdapter <partial>` | observe/converge/cleanup distinct owner scope | `host publication mapping state` |
 | `@NetworkPolicyAdapter <partial>` | observe host forwarding/interface/address prerequisites without ownership | `Ambient host and external world.@OrdinaryHostNetwork.<host network observation>` |
-| `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | inbound traffic to selected local publication surface | `host publication mapping state` |
+| `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | inbound traffic to selected local publication surface | `@host publication mapping state.<selected publication traffic>` |
 | `host publication mapping state` | DNAT toward current stack-local service/publication identity through managed boundary | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` |
 | `STACK.@ProductLifecycleControl` | build/converge enabled helper contribution | `@HostRoutingContribution` |
 | `@HostRoutingContribution` | converge/cleanup | `peaceful host routing contribution` |
-| `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | selected host traffic enters helper-owned RPDB scope | `peaceful host routing contribution` |
+| `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | selected host traffic enters helper-owned RPDB scope | `@peaceful host routing contribution.<selected host traffic>` |
 | `peaceful host routing contribution` | route selected traffic to explicit managed host endpoint | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` |
 | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` | traffic emitted from Private network bypasses helper recapture and resumes ordinary host routing | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` |
 
