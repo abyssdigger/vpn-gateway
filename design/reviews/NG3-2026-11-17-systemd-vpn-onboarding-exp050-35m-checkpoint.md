@@ -243,3 +243,14 @@ Do not add automatic vendor-unit capture unless a new requirement explicitly req
 ## Checkpoint verdict
 
 **PASS — Release-1 systemd VPN onboarding and bounded lifecycle closed; EXP-049 + EXP-050 PASS.**
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
+- `VPNG0005-R5.C1.R1` -> `VPNG9101-R1.R1.C1.R1`
+
+The original IDs in the historical body are intentionally preserved.

@@ -376,3 +376,17 @@ policy, explicit bounded transport facts, and policy-neutral VPN-specific config
 
 The next logical unit can stop designing VPN lifecycle and move toward the first functioning
 alpha deployment/runtime assembly.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
+- `VPNG0005-R5.C1.R1` -> `VPNG9101-R1.R1.C1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+- `VPNG0007-R7.R7.R1` -> `VPNG9001-R1.R1.R7.R1`
+
+The original IDs in the historical body are intentionally preserved.

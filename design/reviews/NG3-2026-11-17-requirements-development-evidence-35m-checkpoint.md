@@ -158,3 +158,14 @@ Do not implement bounded-VPN lifecycle ownership or EXP-050 mechanics before EXP
 ## Checkpoint verdict
 
 **PASS — REQUIREMENT/DEVELOPMENT EVIDENCE-SEQUENCING UNIT COMPLETE.**
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0007-R7.R7` -> `VPNG9001-R1.R1.R7`
+- `VPNG0007-R7.R7.R1` -> `VPNG9001-R1.R1.R7.R1`
+
+The original IDs in the historical body are intentionally preserved.
