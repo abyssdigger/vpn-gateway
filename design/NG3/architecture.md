@@ -809,9 +809,10 @@ blanket rule that every observable out-of-band change closes all forwarding.
 ### 1.1.3. Release-1 bounded VPN lifecycle through systemd
 
 **Implements:**
+- `VPNG0001-R1.R3.C1.R1.R2`;
 - `VPNG0001-R1.R3.C3.R1`;
+- `VPNG0004-R4.R6`;
 - `VPNG0007-R7.R7.R1`;
-- `VPNG0007-R7.R7.R1.R1`;
 - `VPNG0005-R5.R4`;
 - `VPNG0005-R5.R5`;
 - `VPNG0005-R5.R6.R2`;
