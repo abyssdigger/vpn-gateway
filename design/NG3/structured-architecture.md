@@ -214,9 +214,17 @@ implementation технически работает.
 ### 2.7. Artifacts
 
 Artifact — объект, состояние или доступная способность реальности, находящаяся внутри
-Space и представляющая самостоятельный предмет observation и/или management. Artifact не
-является компонентом: Driver/Reader/Executor может наблюдать или изменять Artifact, но от
-этого Artifact не получает component API и не становится resident'ом.
+Space и представляющая самостоятельный предмет observation, management и/или использования
+resident'ами. Artifact не является компонентом: Driver/Reader/Executor может наблюдать,
+изменять или использовать Artifact, но от этого Artifact не получает component API и не
+становится resident'ом.
+
+Artifact inventory следует выводить прежде всего от фактических lower contracts: что
+Reader/Driver/Executor действительно наблюдает, изменяет или использует в реальности Space.
+Предметное знание о том, «что вообще существует в сети/Linux», само по себе не создает
+Artifact. Обратное тоже верно: локальная capability, через которую resident реально
+взаимодействует с boundary (например IP portal), может быть Artifact даже без отдельного
+management API, если именно на ней заканчивается осмысленная local-side interaction.
 
 Space не следует отождествлять с конкретным техническим контейнером его текущей реализации.
 Например Linux network namespace может быть одним из Artifacts, материализующих
@@ -241,14 +249,21 @@ Artifact следует показывать child'ом другого Artifact 
 архитектурную семантику observation/management, а не физическую вложенность реализации.
 
 Parent-child relation оправдана, если lower Artifacts совместно образуют один управляемый
-объект/способность либо их lifecycle, invariants или проверяемый postcondition существенно
+объект/способность либо их lifecycle, invariants или проверяемый postcondition **конститутивно**
 определяются контрактом parent Artifact. Несколько разных Drivers могут при этом управлять
 разными lower частями одного parent Artifact.
+
+Самой зависимости недостаточно. Если higher capability лишь требует другого самостоятельного
+Artifact как prerequisite/reference, но не определяет его identity/lifecycle/ownership как
+свою часть, такой Artifact остается sibling, а зависимость показывается в `Interactions`.
+Иначе artifact tree превращается в dependency graph.
 
 И наоборот, нахождение нескольких объектов внутри одного Linux namespace, nft table,
 процесса или другого implementation container не делает их автоматически parent/child.
 Если их можно независимо наблюдать и/или управлять ими через самостоятельные контракты,
-они остаются соседними Artifacts.
+они остаются соседними Artifacts. Границы Backend/Driver/Executor также не определяют
+artifact hierarchy: несколько engines могут работать с разными проекциями одного Artifact,
+а один composite engine может технически обслуживать несколько самостоятельных Artifacts.
 
 Например один функциональный Artifact может состоять из нескольких independently
 materialized частей:
@@ -285,6 +300,31 @@ Private network
 Driver отправляет и принимает IP из `Private network` через `VPN-side IP portal`;
 VPN-interface endpoint является server-side API соседнего Space. Сам факт, что пакет в итоге проверяет удаленную
 доступность, не переносит Driver или remote target в `Private network`.
+
+### 2.7.3. Transition Space и прозрачная граница
+
+Transition Space («тамбур») определяется не физическим местом его текущей реализации, а
+контрактом перехода между двумя соседними средами. Его artifacts могут физически находиться
+по разные стороны Linux namespace/process/device boundary и от этого не становятся artifacts
+соседних Spaces.
+
+«Дверь» перехода остается частью transition Space даже тогда, когда ее concrete endpoint
+физически расположен внутри соседней среды. Для соседнего Space штатно установленный
+transition может быть прозрачен: local portal воспринимается как прямая граница с дальней
+средой, а внутренняя machinery тамбура раскрывается только при рассмотрении самого
+transition Space.
+
+Transition Space может быть lifecycle-dominant: основная самостоятельная семантика состоит
+в observation/materialization/removal exact перехода, тогда как established steady state
+почти не требует собственного data-plane management. Пока отдельный gate не является
+реальным independently managed contract, состояние `established` включает пригодность
+перехода для требуемого handoff; будущие `open/closed` режимы не следует добавлять
+предвосхищением возможной реализации.
+
+При разборе implementation, который одним lifecycle transaction пересекает несколько
+Spaces, transaction boundary не переносится автоматически в artifact ownership. Каждый
+наблюдаемый/изменяемый факт раскладывается по тому Space, чей контракт обязан сохранять
+его при замене реализации перехода.
 
 ### 2.8. Interactions и Component diagram
 
