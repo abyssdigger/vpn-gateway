@@ -7,8 +7,8 @@ No Device-envelope intersection, nft compilation, mutation or forwarding activat
 
 ## Traceability
 
-**Implements:** `VPNG0002-R2.R1.R2`, `VPNG0002-R2.R3.R3`,
-`VPNG0002-R2.R5.R1`, `VPNG0004-R4.R1`.
+**Implements:** `VPNG-U002-R2.R1.R2`, `VPNG-U002-R2.R3.R3`,
+`VPNG-U002-R2.R5.R1`, `VPNG-U004-R4.R1`.
 
 Gate:
 `design/reviews/NG3-2026-11-16-profile-prefix-partition-gates.md`.

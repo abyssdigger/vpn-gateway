@@ -56,7 +56,7 @@ artifacts explicitly retain that target confirmation as open.
 
 ### F1 — the ICMP requirement itself cannot be postponed
 
-`VPNG0003-R3.R6.R3.R1.C1` requires ICMP echo as the first-release availability mechanism.
+`VPNG-U003-R3.R6.R3.R1.C1` requires ICMP echo as the first-release availability mechanism.
 
 **Disposition:** keep the requirement/architecture closure unchanged. The new deferral applies
 only to one physical Linux implementation path.
