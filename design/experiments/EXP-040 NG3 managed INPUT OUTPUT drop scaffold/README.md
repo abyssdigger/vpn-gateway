@@ -8,8 +8,8 @@ Technical result and disposition are unchanged by this traceability annotation.
 
 When this experiment was prepared, the then-current requirement tree contained:
 
-- **[VPNG0004-R4.R6.R1.R5]** *Чтобы наличие сетевого стека и локальных/forwarding hooks внутри managed domain само по себе не создавало неописанную разрешающую поверхность при неполной policy.* | VPN-GATE должен до объявления managed payload forwarding готовым поддерживать в своём managed network domain default filter policies `INPUT=DROP`, `OUTPUT=DROP` и `FORWARD=DROP`; разрешения поверх этих defaults должны быть явными owned contributions, подтверждаемыми из текущей принятой policy и внутренних product needs. [`closed`]
-- **[VPNG0004-R4.R6.R1.R5.R1]** *Чтобы пользовательский Device firewall ограничивал VPN payload, не заставляя пользователя одновременно администрировать внутренний control/probe plane VPN-GATE.* | Пользовательские Device firewall rules должны влиять только на managed payload forwarding, а необходимые локальные `INPUT/OUTPUT` исключения для поддерживаемых VPN-GATE control, probe, publication или integration функций должен формировать и владеть сам VPN-GATE; такие исключения не должны становиться разрешением произвольного payload forwarding или изменением firewall обычного host network namespace. [`closed`]
+- **[VPNG-U004-R4.R6.R1.R5]** *Чтобы наличие сетевого стека и локальных/forwarding hooks внутри managed domain само по себе не создавало неописанную разрешающую поверхность при неполной policy.* | VPN-GATE должен до объявления managed payload forwarding готовым поддерживать в своём managed network domain default filter policies `INPUT=DROP`, `OUTPUT=DROP` и `FORWARD=DROP`; разрешения поверх этих defaults должны быть явными owned contributions, подтверждаемыми из текущей принятой policy и внутренних product needs. [`closed`]
+- **[VPNG-U004-R4.R6.R1.R5.R1]** *Чтобы пользовательский Device firewall ограничивал VPN payload, не заставляя пользователя одновременно администрировать внутренний control/probe plane VPN-GATE.* | Пользовательские Device firewall rules должны влиять только на managed payload forwarding, а необходимые локальные `INPUT/OUTPUT` исключения для поддерживаемых VPN-GATE control, probe, publication или integration функций должен формировать и владеть сам VPN-GATE; такие исключения не должны становиться разрешением произвольного payload forwarding или изменением firewall обычного host network namespace. [`closed`]
 
 These R/C IDs were later removed or reparented by the NG3 Purpose/parent refactor. They are
 preserved here verbatim as the historical normative context that caused this experiment to be
@@ -26,14 +26,14 @@ remain a later policy unit.
 
 ## Requirements
 
-- `VPNG0004-R4.R1`;
+- `VPNG-U004-R4.R1`;
 
-- `VPNG0004-R4.R2`;
+- `VPNG-U004-R4.R2`;
 
-- `VPNG0004-R4.R6`;
-- `VPNG0004-R4.R6`;
-- `VPNG0004-R4.R4`;
-- `VPNG0004-R4.R2`.
+- `VPNG-U004-R4.R6`;
+- `VPNG-U004-R4.R6`;
+- `VPNG-U004-R4.R4`;
+- `VPNG-U004-R4.R2`.
 
 ## Candidate chains
 

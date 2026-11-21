@@ -200,14 +200,14 @@ EXP050_RESULT=PASS
 
 The result above is unchanged. The experiment explicitly did not test arbitrary root damage.
 
-Its current `VPNG0005-R5.C1` value is the negative recovery fact: the first release need not
+Its current `VPNG-U005-R5.C1` value is the negative recovery fact: the first release need not
 forensic-adopt arbitrary surviving processes or reconstruct untrustworthy namespace ownership
 after unsupported external intervention.
 
 The historical sentence that observable invariant loss "must remain fail-closed/diagnosable"
-must not be read as a blanket rule sourced from `VPNG0005-R5.C1`. Where the tested runtime
+must not be read as a blanket rule sourced from `VPNG-U005-R5.C1`. Where the tested runtime
 closed forwarding, that containment is justified by the concrete safety/readiness invariant
-that was lost and by the corresponding `VPNG0004` / lifecycle requirements.
+that was lost and by the corresponding `VPNG-U004` / lifecycle requirements.
 
 
 ## Requirement migration note
@@ -215,6 +215,6 @@ that was lost and by the corresponding `VPNG0004` / lifecycle requirements.
 The requirement IDs below are historical references from this record's original baseline.
 Their current NG3 IDs are:
 
-- `VPNG0005-R5.C1` -> `VPNG9101-R1.R1.C1`
+- `VPNG-U005-R5.C1` -> `VPNG-M001-R1.R1.C1`
 
 The original IDs in the historical body are intentionally preserved.
