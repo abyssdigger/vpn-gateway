@@ -179,3 +179,14 @@ none
 The real alpha primary boundary now implements the managed-L3 endpoint architecture. The
 historical primary `/30 + gateway` dependency is removed from alpha lifecycle, selected host
 bootstrap and selected stateful return.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG0005-R5` -> `VPNG9101-R1.R1`
+- `VPNG0005-R5.R6` -> `VPNG9101-R1.R1.R6`
+
+The original IDs in the historical body are intentionally preserved.
