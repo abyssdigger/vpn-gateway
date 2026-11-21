@@ -1761,7 +1761,7 @@ Architectural decisions
    *Renderer использует только RuntimeStatusSnapshot и не реконструирует состояние из kernel/logs.*
 
 2. `Stable human shape, replaceable delivery`
-   *Нормативны две секции Devices/Profiles, four-space nesting, Device rows, numbered effective-order path rows и availability wording. CLI/file/API path не входит в этот semantic contract.*
+   *Нормативны две секции Devices/Profiles, four-space nesting, Device rows, truthful `unknown` при неподтверждённом current state, numbered effective-order path rows и availability wording. CLI/file/API path не входит в этот semantic contract.*
 
 3. `Not configuration`
    *Report не обязан round-trip в configuration parser и не представляет effective configuration dump.*
