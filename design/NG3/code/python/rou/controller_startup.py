@@ -1,4 +1,10 @@
-"""Bounded NG3 controller startup orchestration."""
+"""Bounded NG3 controller startup orchestration.
+
+Architecture: structured Annex A A.001 ProductLifecycleControl composing
+B.001 ManagedL3BoundaryLifecycle and C.007/C.009 Private-network lifecycle APIs.
+Requirement traceability: VPNG0005-R5.R1/R4/R5/R6, VPNG0004-R4.R6,
+VPNG0007-R7.R3/R7.
+"""
 
 from __future__ import annotations
 
@@ -32,8 +38,14 @@ from .managed_network_domain import (
     ManagedNetworkDomainEnsureResult,
     ManagedNetworkDomainPreflightResult,
     ManagedNetworkDomainSpec,
-    ensure_managed_network_domain,
-    preflight_managed_network_domain,
+    ManagedNetworkDomainVerification,
+    ensure_managed_l3_boundary,
+    ensure_managed_network_environment,
+    ensure_ordinary_side_portal,
+    observe_ordinary_side_portal,
+    preflight_managed_l3_boundary,
+    preflight_managed_network_environment,
+    verify_managed_l3_boundary,
 )
 from .network_policy_activation import (
     NetworkPolicyActivationResult,
@@ -281,18 +293,54 @@ def start_controller_once(
         )
 
     try:
-        preflight = preflight_managed_network_domain(
+        environment_existing = preflight_managed_network_environment(
             domain_spec,
             runner,
         )
+        boundary_existing = preflight_managed_l3_boundary(
+            domain_spec,
+            runner,
+        )
+        if environment_existing and boundary_existing:
+            portal = observe_ordinary_side_portal(domain_spec, runner)
+            if portal.confirmed:
+                boundary_verification = verify_managed_l3_boundary(
+                    domain_spec,
+                    runner,
+                )
+                if not boundary_verification.confirmed:
+                    raise RuntimeError(
+                        "transition changed during startup preflight: "
+                        + "; ".join(boundary_verification.errors)
+                    )
+                preflight = ManagedNetworkDomainPreflightResult(
+                    existing=True,
+                    verification=ManagedNetworkDomainVerification(
+                        confirmed=True,
+                        errors=(),
+                        host_boundary=boundary_verification.private_boundary,
+                    ),
+                )
+            else:
+                # Exact environment + transition with repairable owned portal drift.
+                preflight = ManagedNetworkDomainPreflightResult(
+                    existing=False,
+                    verification=None,
+                )
+        else:
+            # Exact environment without a transition is a valid recoverable baseline.
+            preflight = ManagedNetworkDomainPreflightResult(
+                existing=False,
+                verification=None,
+            )
     except Exception as exc:
         return fail(
             ControllerStartupStatus.DOMAIN_PREFLIGHT_FAILED,
-            "managed-domain startup preflight failed: "
+            "managed lifecycle startup preflight failed: "
             f"{type(exc).__name__}: {exc}",
         )
 
-    interrupted = interrupted_stop("managed-domain preflight")
+    interrupted = interrupted_stop("managed lifecycle preflight")
     if interrupted is not None:
         return interrupted
 
@@ -310,22 +358,72 @@ def start_controller_once(
         return interrupted
 
     try:
-        domain = ensure_managed_network_domain(
+        environment = ensure_managed_network_environment(
             domain_spec,
             runner,
         )
     except Exception as exc:
         return fail(
             ControllerStartupStatus.DOMAIN_ENSURE_FAILED,
-            "managed-domain ensure failed: "
+            "managed-network environment ensure failed: "
             f"{type(exc).__name__}: {exc}",
         )
 
-    interrupted = interrupted_stop("managed-domain ensure")
+    interrupted = interrupted_stop("managed-network environment ensure")
     if interrupted is not None:
         return interrupted
 
-    host_boundary = domain.verification.host_boundary
+    try:
+        boundary = ensure_managed_l3_boundary(
+            domain_spec,
+            runner,
+        )
+    except Exception as exc:
+        return fail(
+            ControllerStartupStatus.DOMAIN_ENSURE_FAILED,
+            "ordinary-side transition ensure failed: "
+            f"{type(exc).__name__}: {exc}",
+        )
+
+    interrupted = interrupted_stop("ordinary-side transition ensure")
+    if interrupted is not None:
+        return interrupted
+
+    try:
+        portal = ensure_ordinary_side_portal(
+            domain_spec,
+            runner,
+        )
+    except Exception as exc:
+        return fail(
+            ControllerStartupStatus.DOMAIN_ENSURE_FAILED,
+            "ordinary-side portal ensure failed: "
+            f"{type(exc).__name__}: {exc}",
+        )
+
+    host_boundary = boundary.verification.private_boundary
+    domain = ManagedNetworkDomainEnsureResult(
+        created=environment.created or boundary.created,
+        verification=ManagedNetworkDomainVerification(
+            confirmed=(
+                environment.confirmed
+                and boundary.confirmed
+                and portal.confirmed
+                and host_boundary is not None
+            ),
+            errors=(
+                environment.verification.errors
+                + boundary.verification.errors
+                + portal.errors
+            ),
+            host_boundary=host_boundary,
+        ),
+    )
+
+    interrupted = interrupted_stop("ordinary-side portal ensure")
+    if interrupted is not None:
+        return interrupted
+
     if host_boundary is None:
         containment = _contain(domain_spec, runner)
         status = (

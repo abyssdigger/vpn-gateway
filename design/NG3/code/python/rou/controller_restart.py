@@ -1,4 +1,8 @@
-"""Bounded NG3 controller restart composition."""
+"""Bounded NG3 controller restart composition.
+
+Architecture: structured Annex A A.001 ProductLifecycleControl.
+The component spec owns normative requirement traceability.
+"""
 
 from __future__ import annotations
 

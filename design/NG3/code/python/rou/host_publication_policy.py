@@ -1,4 +1,8 @@
-"""Pure desired-state projection for Device host-side server publication."""
+"""Pure desired-state projection for Device host-side server publication.
+
+Architecture: structured Annex E E.001 HostPublicationAdapter lower pure projection.
+The component spec owns normative requirement traceability.
+"""
 
 from __future__ import annotations
 

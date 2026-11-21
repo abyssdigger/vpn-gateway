@@ -409,6 +409,29 @@ Annex содержит плоский набор specs. Component hierarchy за
 Inline component specs между Space sections не используются: карта Spaces остается
 непрерывной, а подробные specs находятся только в соответствующих Annexes.
 
+Для materialized component spec поддерживается двунаправленная implementation trace:
+
+1. spec содержит блок `Implementation` с текущими production/reference implementation
+   units, непосредственно реализующими этот component occurrence;
+2. implementation unit содержит локальный стабильный `Architecture:` marker на Annex/spec,
+   к которому относится код;
+3. нормативная requirement trace остается в component spec. Requirement IDs в code comment
+   допустимы как convenience, но не являются вторым источником истины.
+
+Таким образом минимальная цепочка reverse trace имеет вид:
+
+```text
+code
+    -> Architecture: Annex X.YYY
+    -> component spec
+    -> Implements / Constrained by
+    -> requirement
+```
+
+Если один implementation unit обслуживает несколько component occurrences, marker перечисляет
+каждый из них явно. File placement, import graph или имя Linux primitive сами по себе не
+считаются архитектурной traceability.
+
 ## 3. Форма описания Space
 
 Каждый Space оформляется отдельным разделом.
@@ -526,8 +549,8 @@ Interactions
 | `@ConfigurationAdapter` | resolve normalized availability descriptions | `AvailabilityDescriptionResolver` |
 | `@ConfigurationAdapter` | accepted normalized domain intents | `accepted normalized intent` |
 | `@ProductLifecycleControl` | validate/load candidate intent before dependent mutation | `@ConfigurationAdapter` |
-| `@ProductLifecycleControl` | preflight/ensure/destroy managed data-plane environment | `Private network.@ManagedNetworkDomainLifecycle <partial>` |
-| `@ProductLifecycleControl` | establish/remove ordinary-side managed boundary through the same current lifecycle transaction | `Ordinary-side transition.@ManagedNetworkDomainLifecycle <partial>` |
+| `@ProductLifecycleControl` | preflight/ensure/destroy managed data-plane environment | `Private network.@ManagedNetworkEnvironmentLifecycle` |
+| `@ProductLifecycleControl` | establish/remove ordinary-side managed boundary through the same current lifecycle transaction | `Ordinary-side transition.@ManagedNetworkEnvironmentLifecycle` |
 | `@ProductLifecycleControl` | converge/cleanup enabled host-side contribution | `VPN-GATE-managed host state.@HostRoutingContribution` |
 | `@ProductLifecycleControl` | activate/cleanup desired lower network policy | `Private network.@NetworkPolicyAdapter` |
 | `accepted normalized intent` | current structural inputs | `PayloadTrafficManager` |
@@ -609,19 +632,20 @@ backend detail: архитектурный контракт перехода д�
 
 API
 
-    @ManagedNetworkDomainLifecycle <partial>.preflight_managed_network_domain(...) — read-only проверить существующую combined domain/boundary realization; transition-проекция результата подтверждает exact/absent либо conflict.
-    @ManagedNetworkDomainLifecycle <partial>.ensure_managed_network_domain(...) — создать отсутствующую combined realization либо подтвердить существующую; transition-проекция success означает established usable boundary.
-    @ManagedNetworkDomainLifecycle <partial>.destroy_managed_network_domain(...) — удалить owned combined realization; transition-проекция success подтверждает отсутствие boundary.
+    @ManagedL3BoundaryLifecycle.preflight(...) — read-only классифицировать transition как absent / established / conflict относительно существующей Private-network environment.
+    @ManagedL3BoundaryLifecycle.ensure(...) — материализовать absent managed-L3 door либо подтвердить exact existing realization.
+    @ManagedL3BoundaryLifecycle.destroy(...) — удалить owned transition realization и fresh-confirm отсутствие boundary.
     @managed L3 boundary realization.<private-side IP handoff> — passive bidirectional handoff к Private network.
     @managed L3 boundary realization.<host-side IP handoff> — passive bidirectional handoff к ordinary host network.
 
-Отдельного `open/closed` API сейчас нет. `established` означает, что требуемый L3 handoff
-уже пригоден для передачи IP. Возможный будущий gate для aggressive helper не проектируется
+Отдельного `open/closed` API сейчас нет. `established` означает transport-ready L3 door с
+подтвержденными handoff endpoints; готовность Private network использовать ordinary side
+требует также exact portal state. Возможный будущий gate для aggressive helper не проектируется
 до появления отдельного принятого контракта.
 
 Residents
 
-1. `@ManagedNetworkDomainLifecycle <partial>` *Текущая lifecycle machinery, transition-проекция которой наблюдает, устанавливает и удаляет managed L3 boundary realization. Та же technical identity сейчас также обслуживает materialization `Private network`, поэтому marker является decomposition finding.*
+1. `@ManagedL3BoundaryLifecycle` *Direct lifecycle Machinery ordinary-side transition: наблюдает, материализует и удаляет exact managed-L3 boundary realization независимо от lifecycle Private-network environment и portal.*
 
 Artifacts
 
@@ -635,7 +659,7 @@ established
 conflict
 ```
 
-`established` включает exact backend invariants и usable bidirectional IP handoff.
+`established` включает exact transport/backend invariants и наличие обоих handoff endpoints. Готовность Private network использовать ordinary side дополнительно требует exact `ordinary-side IP portal` state в соседнем Space.
 `conflict` означает, что наблюдаемая reality не может быть безопасно принята как owned
 exact realization. Текущий lifecycle не обязан ремонтировать произвольную partial realization
 in place.
@@ -653,18 +677,11 @@ Interactions
 
 | From | Interaction | To |
 | --- | --- | --- |
-| `STACK.@ProductLifecycleControl` | lifecycle `observe / establish / remove` | `@ManagedNetworkDomainLifecycle <partial>` |
-| `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove exact boundary state | `managed L3 boundary realization` |
+| `STACK.@ProductLifecycleControl` | lifecycle `observe / establish / remove` | `@ManagedL3BoundaryLifecycle` |
+| `@ManagedL3BoundaryLifecycle` | observe/materialize/remove exact boundary state | `managed L3 boundary realization` |
 | `Private network.@ordinary-side IP portal.<IP handoff>` | bidirectional IP handoff | `@managed L3 boundary realization.<private-side IP handoff>` |
 | `@managed L3 boundary realization.<host-side IP handoff>` | bidirectional IP handoff | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` |
 | `VPN-GATE-managed host state.@peaceful host routing contribution.<selected host traffic>` | routes selected host traffic toward the explicit managed host endpoint | `@managed L3 boundary realization.<host-side IP handoff>` |
-
-Finding: current `ManagedNetworkDomain` lifecycle transaction crosses the
-`Private network` / `Ordinary-side transition` boundary. Its existing preflight therefore
-treats `namespace present XOR host boundary present` as one structural failure although
-the decomposed architecture admits an independently present Private network materialization
-with absent transition. This is a concrete candidate for later architecture/code
-decomposition, not a reason to merge the Spaces.
 
 Component diagram
 
@@ -678,7 +695,7 @@ Component diagram
 +----------+--------------------------------------------------+
 | Ordinary-side transition                                   |
 |                                                             |
-| @ManagedNetworkDomainLifecycle <partial>                    |
+| @ManagedL3BoundaryLifecycle                                  |
 |           |                                                 |
 |           | observe / establish / remove                    |
 |           v                                                 |
@@ -689,7 +706,7 @@ Component diagram
            | handoff                 | host-side IP handoff
            |                         |
 +----------+----------+    +---------+------------------------+
-|   Private network   |    | Helper-managed / ambient host    |
+|   Private network   |    | Managed-host / ambient host     |
 | ordinary-side       |    |                                 |
 | IP portal           |    |                                 |
 +---------------------+    +----------------------------------+
@@ -705,9 +722,12 @@ Component diagram
 
 API
 
-    @ManagedNetworkDomainLifecycle <partial>.preflight_managed_network_domain(...) — read-only проверить текущую materialization Private network как часть существующего combined lifecycle contract.
-    @ManagedNetworkDomainLifecycle <partial>.ensure_managed_network_domain(...) — материализовать/подтвердить Private network как часть combined lifecycle contract.
-    @ManagedNetworkDomainLifecycle <partial>.destroy_managed_network_domain(...) — удалить текущую Linux-materialization Private network как часть combined lifecycle contract.
+    @ManagedNetworkEnvironmentLifecycle.preflight(...) — read-only классифицировать namespace/loopback materialization как absent / exact / conflict under protective containment.
+    @ManagedNetworkEnvironmentLifecycle.ensure(...) — создать absent namespace/loopback materialization либо подтвердить exact existing state.
+    @ManagedNetworkEnvironmentLifecycle.destroy(...) — удалить environment materialization после cleanup зависимых artifacts и fresh-confirm namespace absence.
+    @OrdinarySidePortalLifecycle.observe(...) — наблюдать stack-local identity и ordinary-side default на current private-facing transition endpoint.
+    @OrdinarySidePortalLifecycle.ensure(...) — converge exact stack-local identity + ordinary-side default после established transition.
+    @OrdinarySidePortalLifecycle.cleanup(...) — удалить owned portal address/default state и fresh-confirm absence.
     @NetworkPolicyAdapter.observe_owned_policy(...) — вернуть свежую owner-scoped проекцию управляемой network policy.
     @NetworkPolicyAdapter.apply(...) — применить semantic desired policy и подтвердить postcondition.
     @NetworkPolicyAdapter.cleanup(...) — удалить owned policy scope и подтвердить его отсутствие.
@@ -721,13 +741,14 @@ API
 
 Residents
 
-1. `@ManagedNetworkDomainLifecycle <partial>` *Private-network проекция текущей combined lifecycle machinery: materialization namespace/local identity/default routing; пересечение с ordinary-side transition остается decomposition finding.*
-2. `@NetworkPolicyAdapter` *Semantic boundary между policy клиентов из STACK и lower realization/convergence внутри Private network.*
+1. `@ManagedNetworkEnvironmentLifecycle` *Direct lifecycle Machinery базовой Private-network materialization: namespace + loopback; не владеет transition door или portal address/routing.*
+2. `@OrdinarySidePortalLifecycle` *Direct lifecycle Machinery ordinary-side portal realization: stack-local identity и ordinary-side default на exact current private-facing transition endpoint.*
+3. `@NetworkPolicyAdapter` *Semantic boundary между policy клиентов из STACK и lower realization/convergence внутри Private network.*
     1. `NetworkPolicyLayoutCalculator` *Детерминированно распределяет internal routing/RPDB/metric/nft resources между semantic owner scopes.*
     2. `NetworkPolicyEnforcer` *Достигает и подтверждает переданный Adapter'ом desired lower network-policy state.*
-3. `@VPNPathAdapter` *Boundary fresh observation и verification concrete VPN endpoints уже присутствующих в Private network.*
-4. `@ActiveProbeDriver` *Bounded lower execution одного активного probe через заранее подтвержденные probe-policy и endpoint facts.*
-5. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier.*
+4. `@VPNPathAdapter` *Boundary fresh observation и verification concrete VPN endpoints уже присутствующих в Private network.*
+5. `@ActiveProbeDriver` *Bounded lower execution одного активного probe через заранее подтвержденные probe-policy и endpoint facts.*
+6. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier.*
     1. `ForwardingGateDriver` *Technical read/mutation boundary к managed-domain forwarding state.*
 
 Artifacts
@@ -767,11 +788,12 @@ Interactions
 
 | From | Interaction | To |
 | --- | --- | --- |
-| `STACK.@ProductLifecycleControl` | lifecycle preflight / ensure / destroy | `@ManagedNetworkDomainLifecycle <partial>` |
-| `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove namespace + loopback | `managed network environment realization` |
-| `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove local service address | `stack-local IPv4 identity` |
-| `@ManagedNetworkDomainLifecycle <partial>` | observe/materialize/remove ordinary-side default | `ordinary-side default routing state` |
-| `@ManagedNetworkDomainLifecycle <partial>` | same current transaction also manages the door realization | `Ordinary-side transition.managed L3 boundary realization` |
+| `STACK.@ProductLifecycleControl` | lifecycle preflight / ensure / destroy | `@ManagedNetworkEnvironmentLifecycle` |
+| `@ManagedNetworkEnvironmentLifecycle` | observe/materialize/remove namespace + loopback | `managed network environment realization` |
+| `STACK.@ProductLifecycleControl` | after transition establishment, observe/converge/cleanup portal realization | `@OrdinarySidePortalLifecycle` |
+| `@OrdinarySidePortalLifecycle` | observe/converge/remove local service address | `stack-local IPv4 identity` |
+| `@OrdinarySidePortalLifecycle` | observe/converge/remove ordinary-side default | `ordinary-side default routing state` |
+| `@OrdinarySidePortalLifecycle` | requires exact current private-side transition endpoint | `Ordinary-side transition.@managed L3 boundary realization.<private-side IP handoff>` |
 | `Ordinary-side transition.@managed L3 boundary realization.<private-side IP handoff>` | bidirectional IP handoff | `@ordinary-side IP portal.<IP handoff>` |
 | `@ordinary-side IP portal.<IP handoff>` | ordinary→VPN payload is constrained by Profile forwarding, Device firewall, payload NAT and payload routing state | `@VPN-side IP portal.<IP handoff>` |
 | `@VPN-side IP portal.<IP handoff>` | VPN→ordinary payload is constrained by Profile forwarding, Device firewall and payload routing; return-affinity preserves the selected routing domain where required | `@ordinary-side IP portal.<IP handoff>` |
@@ -808,8 +830,10 @@ Component diagram
 +---------+--------------------------------------------------------+
 |                         Private network                          |
 |                                                                  |
-| @ManagedNetworkDomainLifecycle <partial>                         |
-|      +--> [environment] [stack-local identity] [ordinary default]|
+| @ManagedNetworkEnvironmentLifecycle                             |
+|      +--> [environment: namespace + loopback]                    |
+| @OrdinarySidePortalLifecycle                                     |
+|      +--> [stack-local identity] [ordinary default]              |
 |                                                                  |
 | @NetworkPolicyAdapter --> NetworkPolicyEnforcer                  |
 |      |                    +--> [payload routing + nft policies]   |
@@ -922,9 +946,9 @@ host mapping и optional peaceful host-routing contribution.
 
 API
 
-    @NetworkPolicyAdapter <partial>.observe_host_publication(...) — fresh observation отдельного host-publication owner scope.
-    @NetworkPolicyAdapter <partial>.apply_host_publication(...) — converge desired host publication mappings и fresh verify.
-    @NetworkPolicyAdapter <partial>.cleanup_host_publication(...) — удалить только owned host-publication objects и подтвердить отсутствие.
+    @HostPublicationAdapter.observe(...) — fresh observation отдельного host-publication owner scope.
+    @HostPublicationAdapter.apply(...) — converge desired host publication mappings и fresh verify.
+    @HostPublicationAdapter.cleanup(...) — удалить только owned host-publication objects и подтвердить отсутствие.
     @HostRoutingContribution.converge(∅) — установить complete lifecycle-scoped peaceful host-routing contribution.
     @HostRoutingContribution.cleanup(∅) — удалить только still-identifiable owned contribution.
     @host publication mapping state.<selected publication traffic> — passive host-side mapping point для explicitly selected publication surface.
@@ -932,7 +956,7 @@ API
 
 Residents
 
-1. `@NetworkPolicyAdapter <partial>` *Host-side projection того же semantic Adapter, который для Device publication координирует отдельный host mapping postcondition; host owner не сливается с managed-domain nft owner.*
+1. `@HostPublicationAdapter` *Самостоятельный semantic Adapter host-side Device publication mapping; он потребляет тот же normalized publication intent, но не является occurrence `Private network.NetworkPolicyAdapter`.*
 2. `@HostRoutingContribution` *Direct lifecycle Machinery optional peaceful helper. Current Release-1 realization — `LinuxPeacefulHostRoutingContribution`; continuous host-routing supervision отсутствует.*
 
 Artifacts
@@ -957,9 +981,9 @@ Interactions
 
 | From | Interaction | To |
 | --- | --- | --- |
-| `STACK.PayloadTrafficManager` / policy assembly | desired Device publication | `@NetworkPolicyAdapter <partial>` |
-| `@NetworkPolicyAdapter <partial>` | observe/converge/cleanup distinct owner scope | `host publication mapping state` |
-| `@NetworkPolicyAdapter <partial>` | observe host forwarding/interface/address prerequisites without ownership | `Ambient host and external world.@OrdinaryHostNetwork.<host network observation>` |
+| `STACK.@ProductLifecycleControl` / runtime policy assembly | after exact managed local admission, apply desired Device publication mapping | `@HostPublicationAdapter` |
+| `@HostPublicationAdapter` | observe/converge/cleanup distinct owner scope | `host publication mapping state` |
+| `@HostPublicationAdapter` | observe host forwarding/interface/address prerequisites without ownership | `Ambient host and external world.@OrdinaryHostNetwork.<host network observation>` |
 | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | inbound traffic to selected local publication surface | `@host publication mapping state.<selected publication traffic>` |
 | `host publication mapping state` | DNAT toward current stack-local service/publication identity through managed boundary | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` |
 | `STACK.@ProductLifecycleControl` | build/converge enabled helper contribution | `@HostRoutingContribution` |
@@ -974,26 +998,18 @@ host routing is lifecycle-scoped: Release 1 owns start/update/stop contribution 
 administrator changes between lifecycle operations are not helper drift and do not justify a
 Manager.
 
-Findings
-
-1. `NetworkPolicyAdapter cross-Space projection` — one semantic Device publication currently
-   produces a managed-domain local-admission postcondition and a separate host mapping
-   postcondition. Keeping one Adapter identity across both Spaces is valid via `<partial>`,
-   but remains a decomposition review signal rather than evidence that host state belongs to
-   Private network.
-
 Component diagram
 
 ```text
 +---------------------------- STACK --------------------------------+
-| PayloadTrafficManager                 @ProductLifecycleControl     |
+| runtime policy assembly              @ProductLifecycleControl     |
 +-----------+-----------------------------------+--------------------+
-            | publication desired               | helper lifecycle
+            | publication mapping               | helper lifecycle
             v                                   v
 +-----------+--------------------------------------------------------+
 |                  VPN-GATE-managed host state                       |
 |                                                                    |
-| @NetworkPolicyAdapter <partial>      @HostRoutingContribution      |
+| @HostPublicationAdapter      @HostRoutingContribution      |
 |              |                                |                    |
 |              v                                v                    |
 | [host publication mapping]      [peaceful host routing contribution]|
@@ -1053,7 +1069,7 @@ Interactions
 | --- | --- | --- |
 | `Ordinary-side transition.managed L3 boundary realization` | bidirectional ordinary-side IP handoff | `@OrdinaryHostNetwork` |
 | `@OrdinaryHostNetwork` | ordinary traffic / underlay connectivity | `ordinary external IP connectivity` |
-| `VPN-GATE-managed host state.@NetworkPolicyAdapter <partial>` | observe forwarding/interface/address prerequisites only | `@OrdinaryHostNetwork` |
+| `VPN-GATE-managed host state.@HostPublicationAdapter` | observe forwarding/interface/address prerequisites only | `@OrdinaryHostNetwork` |
 | `Operator.OperatorClient` | create/change external configuration representation | `@ExternalConfigurationSource` |
 | `@ExternalConfigurationSource` | candidate representation | `STACK.@ConfigurationAdapter` |
 | `Operator.OperatorClient` | start/stop/restart controller deployment | `@systemd` |
@@ -1187,6 +1203,13 @@ a long-lived lifecycle Engine or independent lifecycle policy.
 
 **Constrained by:**
 - `VPNG0005-R5.C1`
+
+Implementation
+
+    design/NG3/code/python/rou/controller_startup.py — bounded managed-domain/lower-policy startup subassembly and phase checkpoints; does not alone publish product READY.
+    design/NG3/code/python/rou/controller_stop.py — bounded owned-domain cleanup subassembly; host-publication cleanup remains an outer lifecycle step in the current alpha composition.
+    design/NG3/code/python/rou/controller_restart.py — stop-then-start composition of the bounded controller subassembly.
+    design/NG3/code/python/rou/alpha_runtime.py — current Release-1 product/deployment readiness and shutdown composition, including HostPublicationAdapter and systemd READY publication.
 
 API
 
@@ -1524,48 +1547,51 @@ Architectural decisions
 
 # Annex B. Ordinary-side transition components
 
-## B.001 ManagedNetworkDomainLifecycle <partial>
+## B.001 ManagedL3BoundaryLifecycle
 
-Transition-side projection текущей combined lifecycle Machinery. Она материализует и
-проверяет exact managed-L3 door между Private network и ordinary host, не принимая ownership
-traffic-selection policy соседних Spaces.
+Direct lifecycle Machinery ordinary-side transition. Она материализует и проверяет exact
+managed-L3 door между Private network и ordinary host, не принимая ownership
+Private-network service identity/default route или traffic-selection policy соседних Spaces.
 
-**Implements:**
+**Implements / supports:**
 - `VPNG0001-R1.R3.R2`
 - `VPNG0004-R4.R6`
 - `VPNG0005-R5.R1`
+- `VPNG0005-R5.R2`
 - `VPNG0005-R5.R4`
-- `VPNG0007-R7.R1`
-- `VPNG0007-R7.R3.R1`
+- `VPNG0005-R5.R5`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R3.R3`
+- `VPNG0007-R7.R7`
 
 API
 
-    @preflight_managed_network_domain(...) — read-only подтвердить absent/exact combined realization либо вернуть structural conflict.
-    @ensure_managed_network_domain(...) — создать absent realization либо подтвердить exact existing one.
-    @destroy_managed_network_domain(...) — удалить owned realization и fresh-confirm absence.
+    @preflight(...) — fresh-classify absent / established / conflict without creating transition.
+    @ensure(...) — create absent transition or confirm exact existing realization.
+    @destroy(...) — remove owned transition and fresh-confirm endpoint absence.
 
 Architectural decisions
 
-1. `Transition projection`
-   *В этом Space component отвечает только за managed-L3 boundary realization. Namespace/local identity/default-route части той же technical transaction описываются отдельной `C.007` projection в Private network.*
+1. `Independent transition lifecycle`
+   *Component owns only managed-L3 boundary realization. Namespace/loopback belong to `C.007`; local identity/default route belong to `C.009`.*
 
-2. `Exact or absent`
-   *Current lifecycle принимает fresh absent либо exact existing state. Partial/divergent realization не repair'ится и не усыновляется in place.*
+2. `Recoverable absent transition`
+   *Exact Private-network environment with no boundary is valid and may be completed by ensure. Host-side endpoint with no environment remains conflict because name alone is insufficient ownership evidence.*
 
-3. `Established means usable`
-   *Отдельного open/closed state нет: successful establishment включает exact backend invariants и usable bidirectional IP handoff.*
+3. `Transport-ready, not portal-ready`
+   *Established confirms reciprocal endpoint/backend invariants and handoff endpoints. Private ordinary-side readiness additionally requires `OrdinarySidePortalLifecycle`.*
 
 4. `Backend-specific door`
-   *Release 1 использует routed veth + Proxy ARP: reciprocal endpoints, UP state, required Proxy ARP/rp_filter и host-side service reachability входят в exact realization. Netkit L3 остается возможным lower backend того же transition contract, а не другим product Space.*
+   *Release 1 uses routed veth + Proxy ARP; reciprocal identity, UP state, Proxy ARP/rp_filter and host-side service reachability belong to this realization. Alternate netkit L3 remains behind the same contract.*
 
 5. `Physical placement does not move ownership`
-   *Door artifacts могут физически находиться в host namespace и managed netns. Host traffic-selection routes/RPDB не становятся transition state только из-за использования host-facing endpoint.*
+   *Concrete endpoints may reside in host and managed namespaces; that does not transfer host routing policy or Private service/default ownership into transition.*
 
-Findings
+Implementation
 
-1. `Combined lifecycle decomposition`
-   *Одна current technical identity одновременно управляет Private-network materialization и transition door. Structured architecture допускает Private network present при absent transition, тогда как current preflight считает namespace XOR host boundary structural failure; это кандидат на реальную code decomposition.*
-
+    design/NG3/code/python/rou/managed_network_domain.py — decomposed boundary lifecycle functions and current routed-veth realization.
+    design/NG3/code/python/rou/controller_startup.py — ProductLifecycleControl startup composition.
+    design/NG3/code/python/rou/controller_stop.py — ProductLifecycleControl cleanup composition.
 
 # Annex C. Private network components
 
@@ -1614,7 +1640,7 @@ Architectural decisions
    *`NetworkPolicyEnforcer` получает уже выбранный desired lower state/postcondition и отвечает за его достижение/verification. Он не выбирает semantic policy и не расширяет API Space вокруг Adapter.*
 
 7. `Cross-Space Device publication`
-   *Один normalized Device publication intent требует двух independently verified postconditions: managed-domain local admission в `Private network` и host publication mapping в `VPN-GATE-managed host state`. Host-side occurrence того же semantic Adapter показывается в соседнем Space как отдельный `NetworkPolicyAdapter <partial>`; физическое размещение host nft state не расширяет ownership этого Private-network occurrence.*
+   *Один normalized Device publication intent требует двух independently verified postconditions: managed-domain local admission в `Private network` и host publication mapping в `VPN-GATE-managed host state`. Host-side occurrence того же semantic Adapter показывается в соседнем Space как отдельный `HostPublicationAdapter`; физическое размещение host nft state не расширяет ownership этого Private-network occurrence.*
 
 ## C.002 NetworkPolicyLayoutCalculator
 
@@ -1845,42 +1871,49 @@ Architectural decisions
    *Текущая Linux-реализация читает/изменяет managed-network-namespace `net.ipv4.ip_forward`; process/command success остается техническим результатом и не заменяет fresh observation.*
 
 
-## C.007 ManagedNetworkDomainLifecycle <partial>
+## C.007 ManagedNetworkEnvironmentLifecycle
 
-Private-network projection текущей combined lifecycle Machinery. Она материализует Linux
-environment, необходимый для существования управляемой сетевой реальности, но не «создает
-Space» как архитектурное понятие.
+Direct lifecycle Machinery базовой Linux-materialization Private network: named network
+namespace + loopback. Она не материализует ordinary-side transition и не конфигурирует
+stack-local address/default route.
 
-**Implements:**
-- `VPNG0001-R1.R3.R2`
+**Implements / supports:**
 - `VPNG0004-R4.R6`
 - `VPNG0005-R5.R1`
+- `VPNG0005-R5.R2`
 - `VPNG0005-R5.R4`
-- `VPNG0007-R7.R1`
-- `VPNG0007-R7.R3.R1`
+- `VPNG0005-R5.R5`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R7`
 
 API
 
-    @preflight_managed_network_domain(...) — fresh-read current materialization under protective containment.
-    @ensure_managed_network_domain(...) — create absent materialization or confirm exact existing state.
-    @destroy_managed_network_domain(...) — remove current Linux materialization and fresh-confirm required absence.
+    @preflight(...) — fresh-read namespace/loopback under protective containment; absent environment is valid.
+    @ensure(...) — create absent namespace + loopback or confirm exact existing state.
+    @destroy(...) — remove environment after dependent cleanup and fresh-confirm namespace absence.
 
 Architectural decisions
 
 1. `Space is not namespace`
-   *Owned artifacts этой projection — network namespace instance, loopback operational state, stack-local IPv4 identity и ordinary-side default routing state. Их absence не означает absence самого architectural Space.*
+   *Owned artifacts are namespace instance + loopback state. Absence of materialization does not remove the architectural Space.*
 
 2. `Containment before trust`
-   *Existing namespace проверяется только после independently confirmed ForwardingGate=DISABLED; divergent infrastructure не используется как trusted data plane.*
+   *Existing namespace is inspected only after fresh confirmed ForwardingGate=DISABLED.*
 
-3. `No arbitrary repair`
-   *Current ensure поддерживает fresh create либо exact-existing verification. Partial mixed realization является failure, а не скрытым convergence plan.*
+3. `Environment without door is valid`
+   *Exact namespace/loopback with absent ordinary-side transition is a normal recoverable intermediate state.*
 
-4. `Boundary transaction is incidental`
-   *Текущая функция одновременно меняет transition artifacts; это implementation transaction boundary, а не основание переносить door ownership в Private network.*
+4. `No transition/portal ownership`
+   *This component neither creates host-side boundary endpoints nor manages stack-local address/default routing.*
 
-5. `Bounded destroy`
-   *Destroy удаляет owned Linux materialization и проверяет absence; он не получает authority над externally provisioned VPN session semantics или unrelated host state.*
+5. `Destroy is dependency-last`
+   *Normal cleanup destroys environment only after portal/transition cleanup attempts. Namespace absence is a stronger final postcondition for all contained Private-network artifacts.*
+
+Implementation
+
+    design/NG3/code/python/rou/managed_network_domain.py — decomposed environment lifecycle functions.
+    design/NG3/code/python/rou/controller_startup.py — ProductLifecycleControl startup composition.
+    design/NG3/code/python/rou/controller_stop.py — ProductLifecycleControl cleanup composition.
 
 
 ## C.008 ActiveProbeDriver
@@ -1923,6 +1956,48 @@ Architectural decisions
    *Driver отправляет/принимает probe IP через VPN-side IP portal; remote target и VPN endpoint остаются предметностью соседнего VPN external ends / local endpoint inventory, а не становятся child artifacts Driver.*
 
 
+## C.009 OrdinarySidePortalLifecycle
+
+Direct lifecycle Machinery Private-network ordinary-side portal realization. Работает после
+established `ManagedL3BoundaryLifecycle` и владеет exact stack-local IPv4 identity +
+ordinary-side default routing state на current private-facing endpoint.
+
+**Implements / supports:**
+- `VPNG0004-R4.R6`
+- `VPNG0005-R5.R1`
+- `VPNG0005-R5.R2`
+- `VPNG0005-R5.R4`
+- `VPNG0005-R5.R5`
+- `VPNG0007-R7.R3`
+- `VPNG0007-R7.R7`
+
+API
+
+    @observe(...) — fresh-observe owned address/default-route state on exact current private-facing endpoint.
+    @ensure(...) — converge exact owned portal state and fresh-verify it.
+    @cleanup(...) — remove owned portal state and fresh-confirm absence when endpoint exists.
+
+Architectural decisions
+
+1. `Transition dependency, not ownership`
+   *Lifecycle requires an exact current private-facing transition endpoint but does not create/delete that transition.*
+
+2. `Authoritative portal convergence`
+   *Service address/default route are VPN-GATE-owned on the dedicated boundary endpoint and may be repaired from fresh observation.*
+
+3. `Cleanup before door removal`
+   *Normal stop removes portal state before destroying transition. If later transition removal proves endpoint absence, that stronger postcondition proves portal artifacts cannot remain active.*
+
+4. `No generic routing role`
+   *Payload/Profile routes remain NetworkPolicyAdapter artifacts; this lifecycle owns only stack-local identity and ordinary-side default.*
+
+Implementation
+
+    design/NG3/code/python/rou/managed_network_domain.py — decomposed portal lifecycle functions/current Linux realization.
+    design/NG3/code/python/rou/controller_startup.py — ProductLifecycleControl startup composition.
+    design/NG3/code/python/rou/controller_stop.py — ProductLifecycleControl cleanup composition.
+
+
 # Annex D. VPN external ends components
 
 Этот Space содержит только external residents/capability providers. `VPNChannel[]` не является
@@ -1931,48 +2006,52 @@ Architectural decisions
 
 # Annex E. VPN-GATE-managed host state components
 
-## E.001 NetworkPolicyAdapter <partial>
+## E.001 HostPublicationAdapter
 
-Host-side projection semantic NetworkPolicyAdapter для Device server publication. Один
-normalized publication intent здесь материализуется как отдельный host-owned mapping
-postcondition; managed-domain local admission остается другой occurrence этого Adapter в
-Private network.
+Independent Adapter Device server publication в host-side owned scope. Один normalized
+publication intent здесь materializes as a separate host mapping postcondition; managed-domain
+local admission remains `Private network.NetworkPolicyAdapter` responsibility.
 
-**Implements:**
+**Implements / supports:**
 - `VPNG0001-R1.R3.R6.R1`
 - `VPNG0001-R4.R4.R6.R3`
 - `VPNG0004-R4.R6`
-- `VPNG0007-R7.R1`
+- `VPNG0005-R5.R1`
+- `VPNG0005-R5.R4`
+- `VPNG0005-R5.R5`
 - `VPNG0007-R7.R3`
-- `VPNG0007-R7.R5`
+- `VPNG0007-R7.R3.R3`
+- `VPNG0007-R7.R7`
 
 API
 
-    @observe_host_publication(...) — fresh-observe exact owned host publication scope и conflicts.
-    @apply_host_publication(...) — converge complete desired mapping set и fresh-verify exact postcondition.
-    @cleanup_host_publication(...) — удалить только owned mappings и fresh-confirm absence.
+    @observe(...) — fresh-observe exact owned host publication scope and conflicts.
+    @apply(...) — converge complete desired mapping set and fresh-verify exact postcondition.
+    @cleanup(...) — remove only owned mappings and fresh-confirm absence.
 
 Architectural decisions
 
-1. `Independent owner scope`
-   *Host publication mapping не является Profile routing и не входит в Private-network nft owner. Одна Device publication требует отдельно подтвержденных host mapping и managed-domain local-admission postconditions.*
+1. `Independent owner/API`
+   *Host publication is not Profile routing and not Private-network nft state. Shared Device intent does not justify shared Adapter identity.*
 
-2. `Exact external claim`
-   *Physical mapping identity включает protocol, host selector/port, current stack-local target и internal port. Identical mappings могут deduplicate; один external claim с разными targets является conflict, а не rule-order policy.*
+2. `Two-postcondition publication`
+   *Requested Device publication is READY only after managed local admission is exact and host mapping is exact. Addition orders local admission before host exposure; cleanup removes host exposure first.*
 
-3. `Local-destination ownership gate`
-   *Accepted Linux DNAT realization сначала доказывает `fib daddr type local`; broader interface/port match не получает право захватывать unrelated transit.*
+3. `Exact external claim`
+   *Physical mapping identity includes protocol, host selector/port, current stack-local target and internal port. Conflicting targets for the same effective external claim fail rather than use rule order.*
 
-4. `Safe ordering across Spaces`
-   *Host mapping добавляется только после required managed local admission; stale mapping удаляется до ослабления obsolete managed local admission.*
+4. `Local-destination ownership gate`
+   *Linux DNAT first proves local destination ownership; broad interface/port matches do not capture unrelated transit.*
 
 5. `No host-global forwarding ownership`
-   *Adapter может наблюдать deployment prerequisite `net.ipv4.ip_forward` и сообщить publication unready, но не включает его.*
+   *Adapter may observe host-forwarding prerequisite and report unready but does not enable it.*
 
-Findings
+Implementation
 
-1. `Cross-Space Adapter identity`
-   *Сохранение одной semantic Adapter identity для двух independently verified Space postconditions честно показано через `<partial>` и остается decomposition review signal.*
+    design/NG3/code/python/rou/host_publication_adapter.py — semantic Adapter wrapper.
+    design/NG3/code/python/rou/host_publication_policy.py — pure desired projection.
+    design/NG3/code/python/rou/linux_host_publication.py — Linux backend.
+    design/NG3/code/python/rou/alpha_runtime.py — current Release-1 runtime composition of host publication after managed local admission.
 
 
 ## E.002 HostRoutingContribution

@@ -24,10 +24,15 @@ from rou.instance_lock import ControllerInstanceBusyError
 from rou.interface_identity import InterfaceIdentity
 from rou.local_publication_policy import LocalPublicationDesiredState
 from rou.managed_network_domain import (
+    ManagedL3BoundaryEnsureResult,
+    ManagedL3BoundaryVerification,
     ManagedNetworkDomainEnsureResult,
     ManagedNetworkDomainPreflightResult,
     ManagedNetworkDomainSpec,
     ManagedNetworkDomainVerification,
+    ManagedNetworkEnvironmentEnsureResult,
+    ManagedNetworkEnvironmentVerification,
+    OrdinarySidePortalVerification,
 )
 from rou.network_policy_activation import NetworkPolicyActivationStatus
 from rou.payload_forward_desired import PayloadForwardDesiredState
@@ -235,7 +240,16 @@ class ControllerStartupTests(unittest.TestCase):
             events.append("preflight")
             if preflight_error:
                 raise preflight_error
-            return preflight
+            return preflight.existing
+
+        def do_boundary_preflight(*args):
+            return preflight.existing
+
+        def observe_portal(*args):
+            return OrdinarySidePortalVerification(True, ())
+
+        def verify_boundary(*args):
+            return ManagedL3BoundaryVerification(True, (), HOST)
 
         def loader():
             events.append("load_policy")
@@ -247,7 +261,19 @@ class ControllerStartupTests(unittest.TestCase):
             events.append("ensure_domain")
             if ensure_error:
                 raise ensure_error
-            return DOMAIN
+            return ManagedNetworkEnvironmentEnsureResult(
+                created=DOMAIN.created,
+                verification=ManagedNetworkEnvironmentVerification(True, ()),
+            )
+
+        def ensure_boundary(*args):
+            return ManagedL3BoundaryEnsureResult(
+                created=DOMAIN.created,
+                verification=ManagedL3BoundaryVerification(True, (), HOST),
+            )
+
+        def ensure_portal(*args):
+            return OrdinarySidePortalVerification(True, ())
 
         def activate(*args):
             events.append("activate")
@@ -275,13 +301,33 @@ class ControllerStartupTests(unittest.TestCase):
                 side_effect=acquire,
             ),
             patch(
-                "rou.controller_startup.preflight_managed_network_domain",
+                "rou.controller_startup.preflight_managed_network_environment",
                 side_effect=do_preflight,
             ) as preflight_mock,
             patch(
-                "rou.controller_startup.ensure_managed_network_domain",
+                "rou.controller_startup.preflight_managed_l3_boundary",
+                side_effect=do_boundary_preflight,
+            ),
+            patch(
+                "rou.controller_startup.observe_ordinary_side_portal",
+                side_effect=observe_portal,
+            ),
+            patch(
+                "rou.controller_startup.verify_managed_l3_boundary",
+                side_effect=verify_boundary,
+            ),
+            patch(
+                "rou.controller_startup.ensure_managed_network_environment",
                 side_effect=ensure,
             ) as ensure_mock,
+            patch(
+                "rou.controller_startup.ensure_managed_l3_boundary",
+                side_effect=ensure_boundary,
+            ),
+            patch(
+                "rou.controller_startup.ensure_ordinary_side_portal",
+                side_effect=ensure_portal,
+            ),
             patch(
                 "rou.controller_startup.activate_network_policy",
                 side_effect=activate,
@@ -376,64 +422,49 @@ class ControllerStartupTests(unittest.TestCase):
 
     def test_every_post_preflight_phase_boundary_stops_before_next_phase(self):
         cases = (
-            (
-                "preflight",
-                3,
-                ["lock", "preflight", "cleanup_owned"],
-            ),
+            ("preflight", 3, ["lock", "preflight", "cleanup_owned"]),
             (
                 "policy_load",
                 4,
                 ["lock", "preflight", "load_policy", "cleanup_owned"],
             ),
             (
-                "domain_ensure",
+                "environment_ensure",
                 5,
-                [
-                    "lock",
-                    "preflight",
-                    "load_policy",
-                    "ensure_domain",
-                    "cleanup_owned",
-                ],
+                ["lock", "preflight", "load_policy", "ensure_domain", "cleanup_owned"],
+            ),
+            (
+                "transition_ensure",
+                6,
+                ["lock", "preflight", "load_policy", "ensure_domain", "cleanup_owned"],
+            ),
+            (
+                "portal_ensure",
+                7,
+                ["lock", "preflight", "load_policy", "ensure_domain", "cleanup_owned"],
             ),
             (
                 "interface_observation",
-                6,
+                8,
                 [
-                    "lock",
-                    "preflight",
-                    "load_policy",
-                    "ensure_domain",
-                    "observe_interfaces",
-                    "cleanup_owned",
+                    "lock", "preflight", "load_policy", "ensure_domain",
+                    "observe_interfaces", "cleanup_owned",
                 ],
             ),
             (
                 "desired_build",
-                7,
+                9,
                 [
-                    "lock",
-                    "preflight",
-                    "load_policy",
-                    "ensure_domain",
-                    "observe_interfaces",
-                    "build_desired",
-                    "cleanup_owned",
+                    "lock", "preflight", "load_policy", "ensure_domain",
+                    "observe_interfaces", "build_desired", "cleanup_owned",
                 ],
             ),
             (
                 "activation",
-                8,
+                10,
                 [
-                    "lock",
-                    "preflight",
-                    "load_policy",
-                    "ensure_domain",
-                    "observe_interfaces",
-                    "build_desired",
-                    "activate",
-                    "cleanup_owned",
+                    "lock", "preflight", "load_policy", "ensure_domain",
+                    "observe_interfaces", "build_desired", "activate", "cleanup_owned",
                 ],
             ),
         )
@@ -472,8 +503,8 @@ class ControllerStartupTests(unittest.TestCase):
         self.assertIsNotNone(result.stop)
         self.assertTrue(result.stop.stopped)
 
-    def test_stop_checkpoint_after_domain_ensure_blocks_interface_observation(self):
-        stop = StopSequence(False, False, False, False, True)
+    def test_stop_checkpoint_after_portal_ensure_blocks_interface_observation(self):
+        stop = StopSequence(False, False, False, False, False, False, True)
 
         result, events, lock, *_ = self.run_startup(stop_requested=stop)
 
@@ -492,6 +523,8 @@ class ControllerStartupTests(unittest.TestCase):
 
     def test_stop_after_activation_never_publishes_ready_session(self):
         stop = StopSequence(
+            False,
+            False,
             False,
             False,
             False,
@@ -525,6 +558,8 @@ class ControllerStartupTests(unittest.TestCase):
 
     def test_interrupted_cleanup_failure_retains_lock_and_context(self):
         stop = StopSequence(
+            False,
+            False,
             False,
             False,
             False,
@@ -815,7 +850,7 @@ class ControllerStartupTests(unittest.TestCase):
                 side_effect=ControllerInstanceBusyError("busy"),
             ),
             patch(
-                "rou.controller_startup.preflight_managed_network_domain",
+                "rou.controller_startup.preflight_managed_network_environment",
             ) as preflight_mock,
         ):
             result = start_controller_once(

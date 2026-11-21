@@ -62,6 +62,8 @@ class ControllerStopTests(unittest.TestCase):
         *,
         containment=CONTAINED,
         cleanup_error=None,
+        portal_cleanup_error=None,
+        boundary_cleanup_error=None,
         lock=None,
         host_routing_cleanup_error=None,
         with_host_routing=False,
@@ -82,8 +84,18 @@ class ControllerStopTests(unittest.TestCase):
             events.append("contain")
             return containment
 
-        def destroy(*args, **kwargs):
-            events.append("destroy")
+        def cleanup_portal(*args, **kwargs):
+            events.append("portal_cleanup")
+            if portal_cleanup_error is not None:
+                raise portal_cleanup_error
+
+        def destroy_boundary(*args, **kwargs):
+            events.append("boundary_destroy")
+            if boundary_cleanup_error is not None:
+                raise boundary_cleanup_error
+
+        def destroy_environment(*args, **kwargs):
+            events.append("environment_destroy")
             if cleanup_error is not None:
                 raise cleanup_error
 
@@ -101,8 +113,16 @@ class ControllerStopTests(unittest.TestCase):
                 side_effect=converge,
             ),
             patch(
-                "rou.controller_stop.destroy_managed_network_domain",
-                side_effect=destroy,
+                "rou.controller_stop.cleanup_ordinary_side_portal",
+                side_effect=cleanup_portal,
+            ),
+            patch(
+                "rou.controller_stop.destroy_managed_l3_boundary",
+                side_effect=destroy_boundary,
+            ),
+            patch(
+                "rou.controller_stop.destroy_managed_network_environment",
+                side_effect=destroy_environment,
             ),
         ):
             result = stop_controller_once(
@@ -118,7 +138,7 @@ class ControllerStopTests(unittest.TestCase):
 
         self.assertEqual(result.status, ControllerStopStatus.STOPPED)
         self.assertTrue(result.stopped)
-        self.assertEqual(events, ["contain", "destroy", "release"])
+        self.assertEqual(events, ["contain", "portal_cleanup", "boundary_destroy", "environment_destroy", "release"])
         self.assertFalse(lock.acquired)
         self.assertEqual(lock.release_count, 1)
 
@@ -128,7 +148,7 @@ class ControllerStopTests(unittest.TestCase):
         self.assertEqual(result.status, ControllerStopStatus.STOPPED)
         self.assertEqual(
             events,
-            ["contain", "host_routing_cleanup", "destroy", "release"],
+            ["contain", "host_routing_cleanup", "portal_cleanup", "boundary_destroy", "environment_destroy", "release"],
         )
         self.assertFalse(lock.acquired)
 
@@ -143,16 +163,36 @@ class ControllerStopTests(unittest.TestCase):
         )
         self.assertEqual(
             events,
-            ["contain", "host_routing_cleanup", "destroy"],
+            ["contain", "host_routing_cleanup", "portal_cleanup", "boundary_destroy", "environment_destroy"],
         )
         self.assertTrue(lock.acquired)
         self.assertIn("host routing remains", result.cleanup_error)
+
+    def test_contained_artifact_cleanup_error_is_superseded_by_environment_absence(self):
+        result, lock, events = self.run_stop(
+            portal_cleanup_error=RuntimeError("portal transient failure"),
+        )
+
+        self.assertEqual(result.status, ControllerStopStatus.STOPPED)
+        self.assertIsNone(result.cleanup_error)
+        self.assertIn("portal transient failure", result.cleanup_diagnostic)
+        self.assertEqual(
+            events,
+            [
+                "contain",
+                "portal_cleanup",
+                "boundary_destroy",
+                "environment_destroy",
+                "release",
+            ],
+        )
+        self.assertFalse(lock.acquired)
 
     def test_failed_containment_does_not_suppress_stronger_cleanup(self):
         result, lock, events = self.run_stop(containment=UNCONTAINED)
 
         self.assertEqual(result.status, ControllerStopStatus.STOPPED)
-        self.assertEqual(events, ["contain", "destroy", "release"])
+        self.assertEqual(events, ["contain", "portal_cleanup", "boundary_destroy", "environment_destroy", "release"])
         self.assertFalse(lock.acquired)
         self.assertFalse(result.containment.confirmed)
 
@@ -165,7 +205,7 @@ class ControllerStopTests(unittest.TestCase):
             result.status,
             ControllerStopStatus.CLEANUP_FAILED_CONTAINED,
         )
-        self.assertEqual(events, ["contain", "destroy"])
+        self.assertEqual(events, ["contain", "portal_cleanup", "boundary_destroy", "environment_destroy"])
         self.assertTrue(lock.acquired)
         self.assertEqual(lock.release_count, 0)
         self.assertIn("namespace remains", result.cleanup_error)
@@ -180,7 +220,7 @@ class ControllerStopTests(unittest.TestCase):
             result.status,
             ControllerStopStatus.CLEANUP_FAILED_UNCONTAINED,
         )
-        self.assertEqual(events, ["contain", "destroy"])
+        self.assertEqual(events, ["contain", "portal_cleanup", "boundary_destroy", "environment_destroy"])
         self.assertTrue(lock.acquired)
         self.assertFalse(result.containment.confirmed)
 
@@ -188,7 +228,9 @@ class ControllerStopTests(unittest.TestCase):
         session = self.session(FakeLock(acquired=False))
         with (
             patch("rou.controller_stop.converge_forwarding_gate_once") as converge,
-            patch("rou.controller_stop.destroy_managed_network_domain") as destroy,
+            patch("rou.controller_stop.cleanup_ordinary_side_portal") as portal,
+            patch("rou.controller_stop.destroy_managed_l3_boundary") as boundary,
+            patch("rou.controller_stop.destroy_managed_network_environment") as environment,
         ):
             with self.assertRaisesRegex(ValueError, "still-acquired"):
                 stop_controller_once(
@@ -198,7 +240,9 @@ class ControllerStopTests(unittest.TestCase):
                 )
 
         converge.assert_not_called()
-        destroy.assert_not_called()
+        portal.assert_not_called()
+        boundary.assert_not_called()
+        environment.assert_not_called()
 
     def test_lock_release_failure_is_observable_after_cleanup(self):
         result, lock, events = self.run_stop(
@@ -209,7 +253,7 @@ class ControllerStopTests(unittest.TestCase):
             result.status,
             ControllerStopStatus.LOCK_RELEASE_FAILED,
         )
-        self.assertEqual(events, ["contain", "destroy", "release"])
+        self.assertEqual(events, ["contain", "portal_cleanup", "boundary_destroy", "environment_destroy", "release"])
         self.assertFalse(lock.acquired)
         self.assertIn("unlock failed", result.lock_error)
 

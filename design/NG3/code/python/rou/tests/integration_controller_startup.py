@@ -138,7 +138,7 @@ def main() -> int:
         ).returncode != 0
         print("CONTROLLER_STARTUP_INVALID_CONFIG_NO_DOMAIN_CREATE=PASS")
 
-        stop_after_activation = StopOnCall(8)
+        stop_after_activation = StopOnCall(10)
         interrupted = start_controller_once(
             lock_spec,
             domain_spec,
@@ -157,7 +157,7 @@ def main() -> int:
         assert interrupted.activation.ready
         assert interrupted.stop is not None
         assert interrupted.stop.stopped
-        assert stop_after_activation.calls == 8
+        assert stop_after_activation.calls == 10
         assert namespace not in runner.run(("ip", "netns", "list"))
         assert raw_run(
             "ip", "link", "show", "dev", host_interface,
