@@ -251,16 +251,25 @@ Parenthood определяется только деревом `Residents`. Com
 
 ### Architectural decisions
 
-При первоначальном переносе под component spec собираются относящиеся к нему решения из
-текущей `design/NG3/architecture.md` без попытки одновременно исправить их decomposition.
+`Architectural decisions` содержит только принятые архитектурные решения, которые в
+текущей structured decomposition действительно принадлежат этому component spec.
 
-Такой блок сначала является совокупностью еще не обработанных архитектурных решений.
-Дальнейший review должен определить, какие решения действительно принадлежат компоненту,
-какие относятся к его parent/children или другому Space, а какие обнаруживают необходимость
-нового архитектурного принципа.
+При первоначальном переносе решения из `design/NG3/architecture.md` могут быть временно
+собраны рядом для review, но после классификации чужие решения должны быть перенесены к
+своему owner, а не оставлены как исторический мусор внутри компонента.
 
 Перенос решения в структурированный документ не является основанием менять его requirement
 traceability, semantics или evidence.
+
+### Findings
+
+`Findings` — опциональный блок для обнаруженных, но еще не разрешенных проблем
+decomposition/placement/ownership. Finding не является нормативным архитектурным решением.
+
+После разрешения finding принятый результат должен попасть в правильное дерево
+`Residents`, component spec или другой Space. История обсуждения и disposition сохраняется
+в review-артефакте, а активный structured document не должен притворяться, что finding был
+решением компонента.
 
 # Private network
 
@@ -334,8 +343,9 @@ Architectural decisions
 6. `Convergence delegation`
    *`NetworkPolicyEnforcer` получает уже выбранный desired lower state/postcondition и отвечает за его достижение/verification. Он не выбирает semantic policy и не расширяет API Space вокруг Adapter.*
 
-7. `Cross-Space finding`
-   *Flat architecture также приписывает этому Adapter host-side Device publication mapping. В structured architecture этот sub-contract пока не заселяется сюда: его server находится вне Private network, а сохранение его под этим Adapter потребовало бы `<partial>` и отдельного review границы.*
+Findings
+
+1. `Host-side publication placement` *Flat architecture также приписывает этому Adapter host-side Device publication mapping. Его server находится вне Private network; сохранение того же technical component через несколько Spaces потребовало бы `<partial>`. Окончательное расселение откладывается до structured pass по host/transition Spaces.*
 
 ### NetworkPolicyLayoutCalculator
 
@@ -480,9 +490,9 @@ Architectural decisions
 7. `Optional transport provenance`
    *Если supported integration может доказать transport endpoint provenance, факт привязывается к exact current `PathBinding`, а не к стабильному `LogicalPathId`. Provenance нельзя угадывать из interface prefix/name, inner peer, ambient routes или другого unrelated lower fact; при отсутствии достаточного evidence он остается absent/unresolved.*
 
-Маршрутная gateway/onlink realization из current binding намеренно пока не включена в этот
-spec: flat architecture требует такой lower integration fact, но точная component ownership
-этого контракта еще не установлена в structured tree.
+Findings
+
+1. `Route realization ownership` *Flat architecture требует integration-specific verified gateway/onlink realization в дополнение к current binding, но structured tree пока не доказывает, является ли это методом VPNPathAdapter, отдельным child component или контрактом другого transition/VPN-end Space.*
 
 ### ForwardingGate
 
