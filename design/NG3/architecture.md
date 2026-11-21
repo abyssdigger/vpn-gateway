@@ -2640,7 +2640,8 @@ ambient state.
 - `VPNG0003-R3.R6.R3`
 - `VPNG0003-R3.R6.R3.R1`
 - `VPNG0003-R3.R6.R3.R1.R1`
-- `VPNG0004-R4.R6.R1.R5`
+- `VPNG0004-R4.R1`
+- `VPNG0004-R4.R2`
 - `VPNG0004-R4.R6`
 - `VPNG0007-R7.R1`
 - `VPNG0007-R7.R3.R2`
@@ -6301,14 +6302,13 @@ reload
     -> report success only after required postconditions for the new configuration
 ```
 
-The reload operation implements `VPNG0005-R5.R6.R4` when the selected deployment/lifecycle
-interface exposes reload. Its exact executable orchestration remains `[pending_closure]`.
+`VPNG0005-R5.R6` requires a supported way to apply changed configuration, but it does not
+require a distinct `reload` operation. The selected management/deployment interface may expose
+`reload` only when its behavior and result are explicitly defined; it must not silently mean
+a full instance restart.
 
-**Constrained by:**
-- `VPNG0005-R5.R6.R4.C1`.
-
-Alpha releases may omit reload and require restart for configuration changes. This is an
-accepted alpha-scope constraint, not a current implementation defect.
+Alpha releases may omit `reload` and require restart for configuration changes. That is a
+valid realization of the configuration-update requirement, not an implementation defect.
 
 The control surface is not a long-lived domain Engine and owns no independent lifecycle
 policy. It invokes procedural assembly/orchestration whose postconditions are already
@@ -6434,9 +6434,9 @@ read-only exact structural audit
 ```
 
 Audit interval в alpha равен одной секунде и является локальным implementation parameter по
-§12.2, а не пользовательской latency guarantee. Current alpha не предоставляет config reload:
-изменение конфигурации требует нового start/restart. Это разрешено
-`VPNG0005-R5.R6.R4.C1` и не считается alpha implementation gap.
+§12.2, а не пользовательской latency guarantee. Current alpha не предоставляет config `reload`: изменение конфигурации требует нового
+start/restart. Это является поддерживаемым способом применения изменённой конфигурации по
+`VPNG0005-R5.R6` и не считается alpha implementation gap.
 
 Alpha deployment использует:
 
@@ -6701,22 +6701,21 @@ until a separate requirement requires it.
 | Requirement area | Architecture status |
 | --- | --- |
 | `VPNG0001-R1.R1` forwarding | represented by PayloadTrafficManager + NetworkPolicyAdapter |
-| `VPNG0001-R4` declarative operation | canonical Release-1 Device/Profile grammar fixed in `config-model.md` and normalized by ConfigurationAdapter; only endpoint-scoped future firewall selector remains deferred |
+| `VPNG0001-R4` declarative operation | canonical Release-1 Device/Profile grammar fixed in `config-model.md` and normalized by ConfigurationAdapter; only per-path future firewall selector remains deferred |
 | `VPNG0001-R1.R3` VPN-channel service | logical path identity/binding and administrator onboarding architecture accepted |
 | `VPNG0001-R2` host-network non-interference | core/host responsibility boundary accepted; core forwarding cannot depend on host-routing automation |
 | `VPNG0001-R2.R1` manual host integration | closed through `host-integration.md`: remote-prefix, Profile-SNAT identity, full-tunnel and host-forwarding prerequisites are explicit without requiring a helper |
 | `VPNG0001-R5.R1` peaceful host-routing assistance | closed: default-disabled selector scope + `peaceful` policy; EXP-078 selector semantics, EXP-079 absolute STACK bypass, EXP-080 selector-paired preserve+dispatch non-interference, lifecycle cleanup retained from EXP-077 |
-| `VPNG0001-R5.R2` aggressive host-routing assistance | postponed beyond Release 1; authoritative child R2.R3.R1 closed by EXP-074, continuous recovery/alarm containment remain pending |
+| `VPNG0001-R5.R2` aggressive host-routing assistance | postponed beyond Release 1; authoritative child `VPNG0001-R5.R2.R1` closed by EXP-074, continuous recovery/alarm containment remain pending |
 | `VPNG0001-R1.R3.C1` first-release admin provisioning | accepted constraint; no VPN provisioning Manager |
 | `VPNG0001-R1.R3.C1.R1` admin instructions/contract | required onboarding contents architecturally defined; concrete per-integration documents remain implementation work |
-| `VPNG0001-R1.R3.C2` isolated VPN data-plane endpoint | architecture constraint derived from managed-network isolation |
-| `VPNG0001-R1.R3.C2.R1` isolated-channel onboarding result | placement result architecture accepted; concrete provisioning commands remain implementation-specific |
+| managed-domain VPN endpoint placement | selected architecture under `VPNG0001-R1.R3.R2`, `VPNG0001-R1.R3.C1.R1` and `VPNG0004-R4.R6`; it is not an independent product requirement |
 | `VPNG0002-R2` subtree — payload policy | Profile destinations/direction/device_order compile deterministically through PayloadPolicyCalculator |
 | `VPNG0003-R3.R1`–`VPNG0003-R3.R5`, `VPNG0003-R3.R7` path ordering/adaptation | represented by PayloadTrafficManager + AvailabilityPriorityCalculator |
 | `VPNG0003-R3.R6` subtree — path-usability evidence | subject-specific user criterion accepted; Profile selects disabled, Device default, or same-shape Profile override, normalized to a concrete ICMP/IPv4 description before probe runtime |
 | `VPNG0004-R4` subtree — safety | isolation, verified convergence, make-before-break priority permutation and guarded structural transition accepted |
 | `VPNG0004-R5` administrative payload containment | postponed beyond Release 1; semantic control surface accepted, lower composition/evidence remains pending |
-| `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle | start/stop/restart postconditions represented; reload semantics are defined when supported, while alpha may omit reload under R5.R6.R4.C1 |
+| `VPNG0005-R5.R1`, `VPNG0005-R5.R4`, `VPNG0005-R5.R5`, `VPNG0005-R5.R6` lifecycle/config update | start/stop/restart and safe application of changed configuration are represented; alpha may require restart, while any exposed `reload` is an interface mechanism with explicitly defined behavior |
 | `VPNG0005-R5.R2`, `VPNG0005-R5.R3` recovery | local Manager reconciliation with periodic audit and fresh observation; no retry queue/replay |
 | `VPNG0006-R6.R1` configured intent visibility | RuntimeStatusAgent composes owner-published accepted intent |
 | `VPNG0006-R6.R2`, `VPNG0006-R6.R4` effective/truthful state | RuntimeStatusAgent composes authoritative current snapshots and preserves unknown/unconfirmed state |
@@ -6756,8 +6755,8 @@ The core Device/Profile human-facing configuration contract is now recovered and
 Remaining interface freedom is narrower:
 
 - parser/serialization implementation details that do not change accepted TOML semantics;
-- implementation details of a supported reload operation that do not change its accepted validation/safety postconditions; alpha may omit reload under `VPNG0005-R5.R6.R4.C1`;
-- future endpoint-scoped Device firewall syntax under its explicit Release-1 constraint;
+- implementation details of an optional supported `reload` operation, provided its interface behavior and result remain explicit and it does not silently mean full restart; alpha may omit `reload` and apply changed configuration through restart under `VPNG0005-R5.R6`;
+- future per-path Device firewall syntax under `VPNG0001-R1.R4.R2.R1.C1` and `VPNG0001-R4.R4.R6.R2.R5.C1`;
 - lower implementation details of accepted publication capabilities where architecture
   already defines semantic ownership but packaging/runtime integration may still evolve.
 
