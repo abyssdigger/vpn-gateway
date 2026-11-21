@@ -16,7 +16,9 @@ It realizes:
   contract for that externally supervised runtime;
 - `VPNG0001-R1.R3.C1.R1.R2` — VPN-specific configuration remains policy-neutral with
   respect to VPN-GATE-owned network policy;
-- `VPNG0001-R1.R2.R4.R6.R4` — Device configuration provides bounded client-side VPN
+- `VPNG0001-R1.R3.R6.R2` — supported VPN clients may receive only the transport/control
+  access needed for the channel;
+- `VPNG0001-R4.R4.R6.R4` — Device configuration expresses those bounded client-side VPN
   transport/control intents.
 
 Concrete `NetworkNamespacePath=`, `After=`, `BindsTo=`, stack-specific unit identity and
