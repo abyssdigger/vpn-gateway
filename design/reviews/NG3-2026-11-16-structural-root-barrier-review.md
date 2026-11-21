@@ -24,14 +24,14 @@ The checkpoint boundary therefore needs refinement before implementation.
 
 The relevant accepted requirements are:
 
-- `VPNG0004-R4.R2`: unconfirmed critical lower state is not treated as active;
-- `VPNG0004-R4.R3.R2`: structural transitions may interrupt forwarding but may not open a
+- `VPNG-U004-R4.R2`: unconfirmed critical lower state is not treated as active;
+- `VPNG-U004-R4.R3.R2`: structural transitions may interrupt forwarding but may not open a
   state forbidden by old/new policy;
-- `VPNG0004-R4.R4`: startup does not declare forwarding ready before a safe boundary is
+- `VPNG-U004-R4.R4`: startup does not declare forwarding ready before a safe boundary is
   confirmed;
-- `VPNG0004-R4.R5`: partial failure must re-establish authoritative state or remain
+- `VPNG-U004-R4.R5`: partial failure must re-establish authoritative state or remain
   restricted;
-- `VPNG0004-R4.R6.R1`: managed network state belongs to an isolated managed domain.
+- `VPNG-U004-R4.R6.R1`: managed network state belongs to an isolated managed domain.
 
 No requirement promises uninterrupted forwarding during a structural change.
 

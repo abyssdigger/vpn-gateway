@@ -4,12 +4,12 @@
 **Cycle:** `ng3-design-cycle-20261116-lower-policy-layout-40m`
 
 > **Historical requirement note (2026-11-20):** this review was performed while
-> `VPNG0004-R4.R1.R1` existed in the then-current tree with the meaning that a zero-path
+> `VPNG-U004-R4.R1.R1` existed in the then-current tree with the meaning that a zero-path
 > Profile remained fail-closed instead of falling through ambient routing. That node was later
 > removed as redundant and mis-scoped: Profile persistence is covered by
-> `VPNG0001-R1.R2.R4.R4.R2`, concrete-path membership by `VPNG0002-R2.R2.R2`, and the
-> prohibition on forwarding managed traffic outside accepted policy by `VPNG0004-R4`.
-> The reference below to `VPNG0004-R4.R1.R1` is a historical review fact, not a current
+> `VPNG-U001-R1.R2.R4.R4.R2`, concrete-path membership by `VPNG-U002-R2.R2.R2`, and the
+> prohibition on forwarding managed traffic outside accepted policy by `VPNG-U004-R4`.
+> The reference below to `VPNG-U004-R4.R1.R1` is a historical review fact, not a current
 > requirement link.
 
 ## Trigger
@@ -33,11 +33,11 @@ Therefore a physical RPDB switch is not an independent route-only transaction.
 
 This follows directly from:
 
-- `VPNG0004-R4.R3.R2` — structural changes may restrict forwarding but must not open a
+- `VPNG-U004-R4.R3.R2` — structural changes may restrict forwarding but must not open a
   state forbidden by old/new policy;
-- `VPNG0004-R4.R2` — unconfirmed critical lower state is not treated as active;
-- `VPNG0004-R4.R5` — partial mutation requires fresh authoritative recovery;
-- `VPNG0004-R4.R1.R1` — zero-path Profile destinations remain fail-closed rather than
+- `VPNG-U004-R4.R2` — unconfirmed critical lower state is not treated as active;
+- `VPNG-U004-R4.R5` — partial mutation requires fresh authoritative recovery;
+- `VPNG-U004-R4.R1.R1` — zero-path Profile destinations remain fail-closed rather than
   falling through ambient routing.
 
 No new requirement is needed.
