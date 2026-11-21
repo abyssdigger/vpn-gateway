@@ -310,6 +310,37 @@ server-side API соседнего Space. Сам факт, что пакет в 
 перерисовывается/регенерируется из той же структуры. Несовпадение таблицы и diagram является
 ошибкой документации; до исправления нормативным считается `Interactions`.
 
+### 2.9. Размещение component specs
+
+В целевой форме документа сначала описываются все Spaces: их границы, API, `Residents`,
+`Artifacts`, `Interactions` и `Component diagram`. Подробные component specs
+располагаются после карты Spaces как Annexes, а не вставляются между описаниями Spaces.
+
+Каждому Space соответствует стабильная буква Annex. Заголовок не дублирует слово `Space`:
+
+```text
+# Annex C. Private network components
+
+## C.001 NetworkPolicyAdapter
+## C.002 NetworkPolicyEnforcer
+...
+```
+
+Annex содержит плоский набор specs. Component hierarchy задается только деревом
+`Residents` соответствующего Space и не кодируется ни порядком specs, ни глубиной
+заголовков.
+
+Буква Annex принадлежит Space. Если компонент архитектурно переезжает в другой Space,
+меняется и его адрес в structured document. Для `<partial>` каждый Space содержит
+собственный local spec соответствующей occurrence; скрытого общего spec поверх Spaces нет.
+
+Для крупного проекта Annex может быть вынесен в отдельный документ без изменения этой
+адресации и семантики.
+
+Пока structured migration не завершена, уже перенесенные inline-блоки
+`Component addenda` допускаются как временная форма. Их наличие не отменяет целевое
+правило и не делает inline placement частью архитектурной семантики.
+
 ## 3. Форма описания Space
 
 Каждый Space оформляется отдельным разделом.
@@ -351,67 +382,29 @@ Component diagram
 Раздел `API` может быть опущен, если краткое описание Space уже однозначно отсылает к API
 помеченных `@` resident'ов и отдельный список ничего не добавляет.
 
-## 4. Component addenda
+## 4. Component Annexes
 
-После шапки Space и дерева `Residents` следует его `Component addenda`.
+Целевая структура component specs задана в §2.9: specs всех Spaces собираются после
+описаний Spaces в Annexes и остаются плоскими относительно `Residents`.
 
-Каждый resident дерева получает отдельный component spec. Все specs внутри одного Space
-оформляются на одном уровне заголовков независимо от глубины компонента в `Residents`.
+Каждый resident получает отдельный Space-local spec с описанием ответственности, API,
+requirement traceability, архитектурных решений и при необходимости unresolved
+`Findings`. `@` получают только те точки component API, которые непосредственно входят
+в API соответствующего Space.
 
-Пример:
+`Architectural decisions` содержит только принятые решения, которые в текущей structured
+decomposition действительно принадлежат этому component spec. Перенос решения из
+`design/NG3/architecture.md` сам по себе не меняет его semantics, requirement traceability
+или evidence.
 
-```text
-## Component addenda
+`Findings` является ненормативным блоком обнаруженных проблем decomposition/placement/
+ownership. После разрешения finding принятый результат переносится в правильный Space,
+resident/artifact/interaction или component spec; активный structured document не должен
+выдавать finding за принятое решение.
 
-### ParentComponent
+Ниже пока сохранен существующий inline `Component addenda` для `Private network` как
+миграционное состояние до отдельного structural pass.
 
-<краткое описание ответственности и границы>
-
-API
-    @space_level_method(...)
-    internal_method(...)
-
-Architectural decisions
-    ...
-
-### ChildComponent
-
-<краткое описание ответственности и границы>
-
-API
-    internal_method(...)
-
-Architectural decisions
-    ...
-```
-
-Parenthood определяется только деревом `Residents`. Component spec не содержит
-`Subcomponents` и не кодирует parenthood уровнем заголовка.
-
-`API` перечисляет точки взаимодействия компонента до уровня метода/endpoint. `@` получают
-только те из них, которые непосредственно входят в API текущего Space.
-
-### Architectural decisions
-
-`Architectural decisions` содержит только принятые архитектурные решения, которые в
-текущей structured decomposition действительно принадлежат этому component spec.
-
-При первоначальном переносе решения из `design/NG3/architecture.md` могут быть временно
-собраны рядом для review, но после классификации чужие решения должны быть перенесены к
-своему owner, а не оставлены как исторический мусор внутри компонента.
-
-Перенос решения в структурированный документ не является основанием менять его requirement
-traceability, semantics или evidence.
-
-### Findings
-
-`Findings` — опциональный блок для обнаруженных, но еще не разрешенных проблем
-decomposition/placement/ownership. Finding не является нормативным архитектурным решением.
-
-После разрешения finding принятый результат должен попасть в правильное дерево
-`Residents`, component spec или другой Space. История обсуждения и disposition сохраняется
-в review-артефакте, а активный structured document не должен притворяться, что finding был
-решением компонента.
 
 # Private network
 
