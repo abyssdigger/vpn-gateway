@@ -14,8 +14,8 @@ from .composite_nft_policy import (
 )
 from .device_firewall_desired import DeviceFirewallChainSpec
 from .forwarding_gate import (
-    ForwardingGateBackend,
-    ForwardingGateExecutionResult,
+    ForwardingGateDriver,
+    ForwardingGateEnforcementResult,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
@@ -126,13 +126,13 @@ class StructuralPolicyMutationStatus(str, Enum):
 @dataclass(frozen=True, slots=True)
 class StructuralPolicyMutationResult:
     status: StructuralPolicyMutationStatus
-    barrier: ForwardingGateExecutionResult
+    barrier: ForwardingGateEnforcementResult
     initial: StructuralPolicyComparison | None
     final: StructuralPolicyComparison | None
     mutation_attempted: bool
     step: StructuralPolicyMutationStep | None = None
-    activation: ForwardingGateExecutionResult | None = None
-    safety_reclose: ForwardingGateExecutionResult | None = None
+    activation: ForwardingGateEnforcementResult | None = None
+    safety_reclose: ForwardingGateEnforcementResult | None = None
     diagnostic: str | None = None
 
     @property
@@ -193,7 +193,7 @@ def compare_structural_policy(
 
 
 def converge_structural_policy_step_once(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     backend: StructuralPolicyMutationBackend,
     routing_desired: PayloadRoutingDesiredState,
     nft_desired: CompositeNftDesiredState,
@@ -223,8 +223,8 @@ def converge_structural_policy_step_once(
         *,
         attempted: bool = False,
         step: StructuralPolicyMutationStep | None = None,
-        activation: ForwardingGateExecutionResult | None = None,
-        safety_reclose: ForwardingGateExecutionResult | None = None,
+        activation: ForwardingGateEnforcementResult | None = None,
+        safety_reclose: ForwardingGateEnforcementResult | None = None,
         diagnostic: str | None = None,
     ) -> StructuralPolicyMutationResult:
         return StructuralPolicyMutationResult(
@@ -453,7 +453,7 @@ def converge_structural_policy_step_once(
 
 
 def _activate_exact(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     backend: StructuralPolicyMutationBackend,
     routing_desired: PayloadRoutingDesiredState,
     nft_desired: CompositeNftDesiredState,
@@ -644,7 +644,7 @@ def _strict_progress(
     )
 
 
-def _gate_lost(gate_backend: ForwardingGateBackend) -> bool:
+def _gate_lost(gate_backend: ForwardingGateDriver) -> bool:
     try:
         return (
             gate_backend.observe_forwarding_gate()

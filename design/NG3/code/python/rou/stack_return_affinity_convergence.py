@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
-from .forwarding_gate import ForwardingGateBackend, ForwardingGateState
+from .forwarding_gate import ForwardingGateDriver, ForwardingGateState
 from .stack_return_affinity import StackReturnAffinityDesired
 
 
@@ -71,7 +71,7 @@ class StackReturnAffinityConvergenceResult:
 
 
 def converge_stack_return_affinity_once(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     backend: StackReturnAffinityBackend,
     desired: StackReturnAffinityDesired,
 ) -> StackReturnAffinityConvergenceResult:

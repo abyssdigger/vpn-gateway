@@ -11,7 +11,7 @@ from enum import Enum
 
 from .host_routing_contribution import HostRoutingContribution
 from .forwarding_gate import (
-    ForwardingGateBackend,
+    ForwardingGateDriver,
     ForwardingGateState,
     converge_forwarding_gate_once,
 )
@@ -125,7 +125,7 @@ class SelectedLinuxHostBoundaryContribution(HostRoutingContribution):
 
 
 def reconcile_selected_host_boundary_runtime_once(
-    gate_backend: ForwardingGateBackend,
+    gate_backend: ForwardingGateDriver,
     contribution: SelectedLinuxHostBoundaryContribution | None,
 ) -> SelectedHostBoundaryRuntimeResult:
     """Audit/repair the authoritative alpha host-routing prototype under containment."""
