@@ -138,6 +138,7 @@ def cleanup_controller_owned_domain_once(
         return ControllerStopResult(
             status=ControllerStopStatus.LOCK_RELEASE_FAILED,
             containment=containment,
+            cleanup_diagnostic=cleanup_diagnostic,
             lock_error=f"{type(exc).__name__}: {exc}",
         )
 

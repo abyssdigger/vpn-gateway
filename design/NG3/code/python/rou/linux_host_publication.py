@@ -1,4 +1,8 @@
-"""Strict host-namespace nft Driver/Executor for server publication."""
+"""Strict host-namespace nft Driver/Executor for server publication.
+
+Architecture: structured Annex E E.001 HostPublicationAdapter Linux backend.
+The component spec owns normative requirement traceability.
+"""
 
 from __future__ import annotations
 

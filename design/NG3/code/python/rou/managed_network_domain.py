@@ -714,7 +714,7 @@ def ensure_managed_network_domain(
     runner: ManagedNetworkDomainRunner,
 ) -> ManagedNetworkDomainEnsureResult:
     """Compose the three independent lifecycle contracts in dependency order."""
-    preflight = preflight_managed_network_domain(spec, runner)
+    preflight_managed_network_domain(spec, runner)
     environment = ensure_managed_network_environment(spec, runner)
     boundary = ensure_managed_l3_boundary(spec, runner)
     ensure_ordinary_side_portal(spec, runner)
@@ -725,11 +725,7 @@ def ensure_managed_network_domain(
             + "; ".join(verification.errors)
         )
     return ManagedNetworkDomainEnsureResult(
-        created=(
-            not preflight.existing
-            or environment.created
-            or boundary.created
-        ),
+        created=environment.created or boundary.created,
         verification=verification,
     )
 

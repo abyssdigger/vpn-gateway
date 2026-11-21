@@ -1590,7 +1590,8 @@ Architectural decisions
 Implementation
 
     design/NG3/code/python/rou/managed_network_domain.py — decomposed boundary lifecycle functions and current routed-veth realization.
-    design/NG3/code/python/rou/controller_startup.py / controller_stop.py — ProductLifecycleControl composition.
+    design/NG3/code/python/rou/controller_startup.py — ProductLifecycleControl startup composition.
+    design/NG3/code/python/rou/controller_stop.py — ProductLifecycleControl cleanup composition.
 
 # Annex C. Private network components
 
@@ -1911,7 +1912,8 @@ Architectural decisions
 Implementation
 
     design/NG3/code/python/rou/managed_network_domain.py — decomposed environment lifecycle functions.
-    design/NG3/code/python/rou/controller_startup.py / controller_stop.py — ProductLifecycleControl composition.
+    design/NG3/code/python/rou/controller_startup.py — ProductLifecycleControl startup composition.
+    design/NG3/code/python/rou/controller_stop.py — ProductLifecycleControl cleanup composition.
 
 
 ## C.008 ActiveProbeDriver
@@ -1992,7 +1994,8 @@ Architectural decisions
 Implementation
 
     design/NG3/code/python/rou/managed_network_domain.py — decomposed portal lifecycle functions/current Linux realization.
-    design/NG3/code/python/rou/controller_startup.py / controller_stop.py — ProductLifecycleControl composition.
+    design/NG3/code/python/rou/controller_startup.py — ProductLifecycleControl startup composition.
+    design/NG3/code/python/rou/controller_stop.py — ProductLifecycleControl cleanup composition.
 
 
 # Annex D. VPN external ends components
