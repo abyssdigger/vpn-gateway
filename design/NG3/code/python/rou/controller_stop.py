@@ -3,7 +3,7 @@
 Architecture: structured Annex A A.001 ProductLifecycleControl. Cleanup composes
 HostRoutingContribution plus C.009 OrdinarySidePortalLifecycle,
 B.001 ManagedL3BoundaryLifecycle, and C.007 ManagedNetworkEnvironmentLifecycle.
-Requirement traceability: VPNG9101-R1.R1.R4/R5, VPNG0004-R4.R6, VPNG9001-R1.R1.R3/R7.
+Requirement traceability: VPNG-M001-R1.R1.R4/R5, VPNG-U004-R4.R6, VPNG-D001-R1.R1.R3/R7.
 """
 
 from __future__ import annotations

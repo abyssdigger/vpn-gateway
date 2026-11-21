@@ -8,8 +8,8 @@ Architecture:
 The public surface follows the decomposed architecture directly; alpha keeps no compatibility
 facade for the superseded combined managed-domain lifecycle.
 
-Requirement traceability: VPNG0004-R4.R6, VPNG9101-R1.R1.R1/R2/R4/R5,
-VPNG9001-R1.R1.R3/R7.
+Requirement traceability: VPNG-U004-R4.R6, VPNG-M001-R1.R1.R1/R2/R4/R5,
+VPNG-D001-R1.R1.R3/R7.
 """
 
 from __future__ import annotations
