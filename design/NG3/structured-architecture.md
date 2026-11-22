@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — структурированная архитектура
 
 **Статус:** текущая authoritative архитектура NG3  
-**Предыдущий плоский отчет:** `design/NG3/architecture.md` — **OBSOLETE / superseded**  
+**Предыдущий плоский отчет:** `design/NG3/architecture.md` — **RETIRED tombstone**  
 **Компонентная модель:** `design/component-model.md`  
 **Требования:** `design/NG3/requirements.md`
 
