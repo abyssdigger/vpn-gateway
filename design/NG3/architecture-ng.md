@@ -780,7 +780,7 @@ Residents
 3. `PayloadTrafficManager` *Manager текущей semantic payload-policy среды: structural intent, binding projection, availability confirmation и effective path order.*
     1. `PayloadPolicyCalculator` *Pure Calculator structural payload policy из normalized intent и уже подтвержденных внешних фактов.*
     2. `AvailabilityPriorityCalculator` *Pure Calculator effective path order из current membership, availability problem state, active path и reserve semantics.*
-4. `@ProtectiveModeManager` *Manager явного защитного режима продукта: владеет запрошенным/подтвержденным состоянием режима, continuous confirmation и безопасным выходом.*
+4. `@ProtectiveModeManager <partial>` *Manager явного защитного режима продукта: владеет запрошенным/подтвержденным состоянием режима, continuous confirmation и безопасным выходом.*
 5. `AvailabilityProbeAgent` *Agent ongoing availability observation; планирует bounded checks и публикует normalized evidence, но не управляет наблюдаемой внешней доступностью.*
 6. `@RuntimeStatusAgent` *Agent current-only status composition из authoritative owner snapshots; не актуирует наблюдаемые domains.*
     1. `RuntimeStatusTextRenderer` *Direct Calculator, чисто преобразующий RuntimeStatusSnapshot в нормативный compact Devices/Profiles text report.*
@@ -1018,7 +1018,7 @@ Residents
 5. `@ActiveProbeDriver` *Bounded lower execution одного активного probe через заранее подтвержденные probe-policy и endpoint facts.*
 6. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier.*
     1. `ForwardingGateDriver` *Technical read/mutation boundary к managed-domain forwarding state.*
-7. `@ProtectivePayloadGate` *Bounded Enforcer dedicated protective-mode containment: ordinary-boundary INPUT/OUTPUT и весь IPv4 FORWARD.*
+7. `@ProtectivePayloadGate <partial>` *Bounded Enforcer dedicated protective-mode containment: ordinary-boundary INPUT/OUTPUT и весь IPv4 FORWARD.*
 
 Artifacts
 
@@ -1235,8 +1235,8 @@ Residents
 
 1. `@HostPublicationAdapter` *Самостоятельный semantic Adapter host-side Device publication mapping; он потребляет тот же normalized publication intent, но не является occurrence `Private network.NetworkPolicyAdapter`.*
 2. `@HostRoutingContribution` *Direct lifecycle Machinery optional peaceful helper. Current Release-1 realization — `LinuxPeacefulHostRoutingContribution`; continuous host-routing supervision отсутствует.*
-3. `@AggressiveHostRoutingManager` *Manager continuous ownership явно включенной aggressive host-routing области.*
-    1. `AggressiveHostRoutingEnforcer` *Bounded Enforcer составного postcondition: managed delivery подтверждена, non-managed escape запрещен.*
+3. `@AggressiveHostRoutingManager <partial>` *Manager continuous ownership явно включенной aggressive host-routing области.*
+    1. `AggressiveHostRoutingEnforcer <partial>` *Bounded Enforcer составного postcondition: managed delivery подтверждена, non-managed escape запрещен.*
 
 Artifacts
 
@@ -1957,6 +1957,8 @@ Integration note
 
 ## A.011 ProtectiveModeManager
 
+**Implementation status:** `<partial>` — архитектурный контракт принят, production implementation этого Manager еще не materialized и не получает фиктивный code trace.
+
 Manager явного административного защитного режима. Он владеет source-scoped request set и
 confirmed/problem состоянием public protective mode и непрерывно поддерживает gate, пока хотя
 бы один авторизованный source сохраняет запрос защиты.
@@ -2459,6 +2461,8 @@ Implementation
 
 ## C.010 ProtectivePayloadGate
 
+**Implementation status:** `<partial>` — архитектурный контракт и lower evidence приняты, production Enforcer еще не materialized и не получает фиктивный code trace.
+
 Bounded Enforcer dedicated protective-mode containment state Private network.
 
 **Implements / supports:**
@@ -2593,6 +2597,8 @@ Architectural decisions
 
 ## E.003 AggressiveHostRoutingManager
 
+**Implementation status:** `<partial>` — архитектурный контракт принят, production continuous Manager еще не materialized и не получает фиктивный code trace.
+
 Manager continuous ownership отдельно включенной authoritative host-routing области. Он
 выбирает desired aggressive state из принятого intent/current boundary context, периодически
 подтверждает effective postcondition и инициирует recovery или protective escalation.
@@ -2629,6 +2635,8 @@ Architectural decisions
 
 
 ## E.004 AggressiveHostRoutingEnforcer
+
+**Implementation status:** `<partial>` — архитектурный контракт принят, production bounded Enforcer еще не materialized и не получает фиктивный code trace.
 
 Bounded Enforcer одного composite aggressive postcondition. Он не выбирает continuous policy
 и не является отдельным Manager.

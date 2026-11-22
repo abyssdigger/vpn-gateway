@@ -126,6 +126,24 @@ def component_specs() -> dict[str, str]:
     return result
 
 
+def partial_component_names() -> set[str]:
+    text = ARCHITECTURE.read_text(encoding="utf-8")
+    return set(
+        re.findall(
+            r"^\s*\d+\. \x60@?([A-Za-z][A-Za-z0-9]+) <partial>\x60",
+            text,
+            re.MULTILINE,
+        )
+    )
+
+
+def component_name(body: str) -> str:
+    heading = re.match(r"^## [A-G]\.\d{3}\s+([^\n]+)$", body)
+    if heading is None:
+        raise AssertionError("component spec has no canonical heading")
+    return heading.group(1).strip()
+
+
 class StructuredArchitectureTraceabilityTests(unittest.TestCase):
     def test_every_requirement_has_exactly_one_status(self):
         nodes = requirement_nodes()
@@ -231,16 +249,31 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
                         r"\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*",
                     )
 
+    def test_every_partial_component_explains_implementation_gap(self):
+        partial = partial_component_names()
+        specs = component_specs()
+        by_name = {component_name(body): (spec_id, body) for spec_id, body in specs.items()}
+        self.assertTrue(partial)
+        for name in partial:
+            with self.subTest(component=name):
+                self.assertIn(name, by_name)
+                _, body = by_name[name]
+                self.assertIn("**Implementation status:** `<partial>`", body)
+
     def test_every_requirement_bearing_materialized_component_has_code_trace(self):
         mapping, _ = trace_manifest()
         reverse: dict[str, set[str]] = {}
         for path, targets in mapping.items():
             for spec_id in targets:
                 reverse.setdefault(spec_id, set()).add(path)
+        partial = partial_component_names()
         for spec_id, body in component_specs().items():
-            if re.search(
-                r"\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*",
-                body,
+            if (
+                re.search(
+                    r"\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*",
+                    body,
+                )
+                and component_name(body) not in partial
             ):
                 with self.subTest(spec=spec_id):
                     self.assertIn(spec_id, reverse)
