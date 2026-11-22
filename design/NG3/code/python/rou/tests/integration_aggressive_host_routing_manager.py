@@ -7,7 +7,10 @@ import time
 from ipaddress import IPv4Network
 
 import integration_aggressive_host_routing_enforcer as topo
-from rou.aggressive_host_routing_enforcer import build_aggressive_host_routing_desired
+from rou.aggressive_host_routing_enforcer import (
+    AggressiveHostRoutingEnforcer,
+    build_aggressive_host_routing_desired,
+)
 from rou.aggressive_host_routing_manager import (
     AGGRESSIVE_PROTECTIVE_SOURCE,
     AggressiveHostRoutingManager,
@@ -71,8 +74,7 @@ def main() -> int:
             topo.STACK,
         )
         manager = AggressiveHostRoutingManager(
-            routing,
-            guard,
+            AggressiveHostRoutingEnforcer(routing, guard),
             protective,
             protective_driver,
             topo.BS,

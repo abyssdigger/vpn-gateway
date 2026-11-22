@@ -13,11 +13,8 @@ from typing import Callable
 from .aggressive_host_routing_enforcer import (
     AggressiveHostRoutingDesired,
     AggressiveHostRoutingEnforcementResult,
-    converge_aggressive_host_routing_active_once,
-    converge_aggressive_host_routing_inactive_once,
+    AggressiveHostRoutingEnforcer,
 )
-from .linux_aggressive_escape_guard import LinuxAggressiveEscapeGuardDriver
-from .linux_host_managed_routing_backend import LinuxHostManagedRoutingDriver
 from .protective_mode_manager import ProtectiveModeManager
 from .protective_payload_gate import ProtectivePayloadGateDriver
 
@@ -41,8 +38,7 @@ class AggressiveHostRoutingManagerProjection:
 
 @dataclass(slots=True)
 class AggressiveHostRoutingManager:
-    routing_driver: LinuxHostManagedRoutingDriver
-    guard_driver: LinuxAggressiveEscapeGuardDriver
+    enforcer: AggressiveHostRoutingEnforcer
     protective_manager: ProtectiveModeManager
     protective_driver: ProtectivePayloadGateDriver
     protective_boundary_interface: str
@@ -65,10 +61,8 @@ class AggressiveHostRoutingManager:
     _operation_lock: Lock = field(default_factory=Lock, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        if not isinstance(self.routing_driver, LinuxHostManagedRoutingDriver):
-            raise ValueError("routing_driver must be LinuxHostManagedRoutingDriver")
-        if not isinstance(self.guard_driver, LinuxAggressiveEscapeGuardDriver):
-            raise ValueError("guard_driver must be LinuxAggressiveEscapeGuardDriver")
+        if not isinstance(self.enforcer, AggressiveHostRoutingEnforcer):
+            raise ValueError("enforcer must be AggressiveHostRoutingEnforcer")
         if not isinstance(self.protective_manager, ProtectiveModeManager):
             raise ValueError("protective_manager must be ProtectiveModeManager")
         if (
@@ -98,11 +92,7 @@ class AggressiveHostRoutingManager:
         with self._operation_lock:
             if self._thread is not None and self._thread.is_alive():
                 raise RuntimeError("aggressive host-routing Manager is already active")
-            result = converge_aggressive_host_routing_active_once(
-                self.routing_driver,
-                self.guard_driver,
-                desired,
-            )
+            result = self.enforcer.converge_active(desired)
             if not result.confirmed_active:
                 self._desired = desired
                 self._publish_failure(result)
@@ -136,11 +126,7 @@ class AggressiveHostRoutingManager:
             desired = self._desired
             if desired is None:
                 return self.current_state()
-            result = converge_aggressive_host_routing_active_once(
-                self.routing_driver,
-                self.guard_driver,
-                desired,
-            )
+            result = self.enforcer.converge_active(desired)
             if result.confirmed_active:
                 release_ok = self._clear_own_protective_request()
                 self._set_projection(
@@ -171,11 +157,7 @@ class AggressiveHostRoutingManager:
                 self._thread = None
                 return self.current_state()
 
-            result = converge_aggressive_host_routing_inactive_once(
-                self.routing_driver,
-                self.guard_driver,
-                desired,
-            )
+            result = self.enforcer.converge_inactive(desired)
             if not result.confirmed_inactive:
                 self._set_projection(
                     AggressiveHostRoutingManagerStatus.PROBLEM,
