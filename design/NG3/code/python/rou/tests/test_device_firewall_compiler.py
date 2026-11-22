@@ -150,6 +150,52 @@ class DeviceFirewallCompilerTests(unittest.TestCase):
             only_scoped.chains[0].rules[0].terminal_fallthrough
         )
 
+    def test_exact_if_selector_filters_rule_but_keeps_explicit_drop(self):
+        selected = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.OUT,
+            action=DeviceFirewallAction.DENY,
+            protocol="udp",
+            destination_ports=53,
+            path_ifname="vpn0",
+        )
+        unscoped = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.OUT,
+            action=DeviceFirewallAction.ALLOW,
+            protocol="icmp",
+        )
+        policy = DeviceFirewallPolicyIntent("wg-main", (selected, unscoped))
+
+        matching = compile_device_firewall_policy(
+            policy,
+            HOST,
+            VPN,
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+        )
+        self.assertEqual(
+            [rule.action for rule in matching.chains[0].rules],
+            [
+                DeviceFirewallRuleAction.DROP,
+                DeviceFirewallRuleAction.RETURN,
+                DeviceFirewallRuleAction.DROP,
+            ],
+        )
+
+        other = compile_device_firewall_policy(
+            policy,
+            HOST,
+            InterfaceIdentity("vpn1", 21),
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+        )
+        self.assertEqual(
+            [rule.action for rule in other.chains[0].rules],
+            [
+                DeviceFirewallRuleAction.RETURN,
+                DeviceFirewallRuleAction.DROP,
+            ],
+        )
+
     def test_tcp_ports_compile_to_exp042_canonical_shape(self):
         rule = DeviceFirewallRuleIntent(
             direction=DeviceFirewallDirection.OUT,
