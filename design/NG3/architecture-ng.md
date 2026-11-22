@@ -667,6 +667,168 @@ coverage before implementation proceeds.
 **Evidence:** `EV-00010`.
 
 
+## 2.11. Pending closure candidate: aggressive host routing and protective mode
+
+Этот раздел содержит **architecture candidate**, подготовленный после re-entry/research
+`VPNG-U001-R5.R2*` и `VPNG-U004-R5*`. Пока соответствующие requirements имеют
+`pending_closure`, описанные ниже будущие компоненты **не входят** в текущие Residents/Annex
+как принятая materialized architecture и не получают фиктивный Implementation trace.
+
+Принятие candidate должно либо перенести эти роли в соответствующие Space-local Residents и
+Component Annex specs, либо явно заменить candidate другим решением.
+
+Research/evidence:
+
+- `design/NG3/research/NG3-2026-11-22-aggressive-protective-research.md`;
+- EXP-081 — отвергает прежний EXP-074-only closure для `VPNG-U001-R5.R2.R1`;
+- EXP-083 — подтверждает single Private-network protective gate;
+- EXP-084 — подтверждает independent aggressive managed-egress escape guard.
+
+### 2.11.1. Aggressive host-routing ownership candidate
+
+**Requirements:** `VPNG-U001-R5.R2`, `VPNG-U001-R5.R2.R1`,
+`VPNG-U001-R5.R2.R2`, `VPNG-U001-R5.R2.R3`,
+`VPNG-U001-R5.R2.R3.R1`, `VPNG-U001-R5.R2.R3.R2`.
+
+Candidate ownership:
+
+1. `AggressiveHostRoutingManager` — будущий Manager Space
+   `VPN-GATE-managed host state`. Он владеет long-running semantic state только явно
+   включенного aggressive scope и не меняет E.002 peaceful `HostRoutingContribution`.
+2. `AggressiveHostRoutingEnforcer` — bounded lower Enforcer managed route/RPDB
+   postcondition; текущие EXP-074 lower primitives могут быть переиспользованы после
+   исправления observation contract.
+3. `AggressiveEscapeGuard` — независимый bounded lower Enforcer helper-owned fail-closed
+   egress postcondition, доказанного EXP-084 типа.
+
+Candidate active invariant:
+
+```text
+aggressive scope CONFIRMED
+    =
+    exact current managed-boundary binding
+    AND aggressive routing postcondition exact
+    AND aggressive escape-guard postcondition exact
+```
+
+Escape guard не выбирает маршрут. Для каждого destination активного aggressive scope он
+запрещает соответствующему local/forwarded host traffic покинуть ordinary HOST через egress,
+не являющийся exact current managed boundary. Поэтому competing RPDB policy может временно
+сделать routing postcondition неверным, но не может превратить окно до следующего Manager
+audit в silent ordinary-path leak.
+
+Activation ordering candidate:
+
+1. получить fresh current managed-boundary identity/generation;
+2. materialize и fresh-verify escape guard для нового scope;
+3. converge routing/RPDB postcondition;
+4. fresh-verify routing + guard + boundary generation;
+5. только после этого опубликовать aggressive scope как confirmed active.
+
+Deactivation ordering candidate:
+
+1. перестать заявлять scope как confirmed active;
+2. удалить/отключить aggressive routing capture и fresh-verify его отсутствие;
+3. только после этого удалить escape guard.
+
+Continuous ownership:
+
+- rtnetlink route/rule notifications могут быть wakeup trigger;
+- notification delivery не является source of truth;
+- с конечной cadence Manager выполняет fresh full observation owned routing/guard state и
+  relevant competing policy, способной отменить effective routing guarantee;
+- stale plan не replay'ится: recovery каждый раз строится от свежего observation;
+- если routing postcondition нарушен, escape guard остается активным во время recovery;
+- если точное безопасное recovery невозможно, Manager сохраняет helper-local containment и
+  запрашивает public protective mode `VPNG-U004-R5`;
+- невозможность подтвердить local containment или requested protective result публикуется как
+  explicit problem, а не как healthy aggressive state.
+
+EXP-081 требует заменить текущий narrow `LinuxHostManagedRoutingDriver.observe(...)`
+contract: observation только owned table/rule objects недостаточно для semantic Manager
+postcondition. Конкретная Linux decomposition полного observer contract остается
+implementation decision после принятия этого candidate.
+
+### 2.11.2. Protective-mode ownership candidate
+
+**Requirements:** `VPNG-U004-R5`, `VPNG-U004-R5.R1`,
+`VPNG-U004-R5.R2`, `VPNG-U004-R5.R3`, `VPNG-U004-R5.R4`.
+
+Candidate ownership:
+
+1. `ProtectiveModeManager` — будущий STACK Manager public protective semantic state.
+   Operator/automation и `AggressiveHostRoutingManager` являются независимыми request
+   sources; aggressive helper не становится владельцем global protective mode.
+2. `ProtectivePayloadGate` — будущий bounded Enforcer Space `Private network`, владеющий
+   только dedicated protective containment state. Linux lower candidate — отдельная nftables
+   table из EXP-083.
+
+Candidate gate postcondition:
+
+```text
+protective gate ENABLED
+    ->
+    ordinary-side managed-boundary IP INPUT blocked
+    AND ordinary-side managed-boundary IP OUTPUT blocked
+    AND Private-network IP FORWARD blocked
+```
+
+Gate не уничтожает managed namespace, interfaces, routes, bindings, Device/Profile intent или
+diagnostic owner projections. Он является отдельным owned containment state и не подменяет
+C.005 `ForwardingGate`: C.005 сохраняет structural-transition semantics, тогда как
+`ProtectivePayloadGate` реализует explicit public mode.
+
+Public semantic operations candidate:
+
+```text
+request_protective_active()
+    -> success only after fresh protective-gate confirmation
+    -> failure/problem otherwise; requested protective intent is not silently cleared
+
+request_protective_inactive()
+    -> keep protective gate active
+    -> fresh-confirm applicable normal desired/binding/policy readiness
+    -> remove protective gate as one owned lower operation
+    -> success only after fresh absence + normal-state confirmation
+```
+
+While protective intent remains active:
+
+- Manager performs finite-cadence fresh observation of the dedicated gate;
+- lower notifications may only accelerate reconciliation;
+- missing/conflicting/unknown gate state is not treated as protection;
+- exact owned gate is restored when safe;
+- inability to prove the protective postcondition remains explicit problem state.
+
+Safe leave composes with `VPNG-U004-R4.R3` / `VPNG-U004-R4.R3.R2`: normal traffic is not
+released merely because a leave request was received. The gate remains active until the
+normal state required for release is freshly confirmed, then the single dedicated gate is
+removed. A failed leave therefore remains fail-closed.
+
+### 2.11.3. Relationship between the two candidates
+
+The safety composition is intentionally asymmetric:
+
+```text
+aggressive routing drift
+    -> independent aggressive escape guard already blocks ordinary-path escape
+    -> AggressiveHostRoutingManager attempts fresh recovery
+    -> unrecoverable/unconfirmed
+         -> keep local guard
+         -> request ProtectiveModeManager active
+              -> confirmed: global controlled-area containment
+              -> problem: local aggressive containment remains; explicit alarm
+```
+
+Public protective mode does not depend on aggressive helper being configured. Conversely,
+aggressive helper does not treat a successful request submission as proof that protective mode
+is active; it may release its own local containment only under its explicit disable/recovery
+contract.
+
+No user-facing CLI spelling, persistence format or implementation language is selected by
+this candidate.
+
+
 ## 3. Форма описания Space
 
 Каждый Space оформляется отдельным разделом.
