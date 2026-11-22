@@ -102,6 +102,7 @@ class FirewallRuleConfig:
     source_ports: PortBundle | None = None
     destination_ipv4_cidr: ipaddress.IPv4Network | None = None
     destination_ports: PortBundle | None = None
+    private_peer_ipv4: ipaddress.IPv4Address | None = None
     comment: str | None = None
 
 
@@ -734,11 +735,12 @@ def _parse_firewall_rule(value: str, where: str) -> FirewallRuleConfig:
     source_ports = None
     destination_network = None
     destination_ports = None
+    private_peer = None
     seen: set[str] = set()
 
     while index < len(tokens):
         clause = tokens[index]
-        if clause not in {"from", "to"}:
+        if clause not in {"from", "to", "via"}:
             raise Release1ConfigError(
                 f"{where} has unexpected token {clause!r}"
             )
@@ -748,6 +750,26 @@ def _parse_firewall_rule(value: str, where: str) -> FirewallRuleConfig:
             )
         seen.add(clause)
         index += 1
+
+        if clause == "via":
+            if index >= len(tokens) or tokens[index] != "peer":
+                raise Release1ConfigError(
+                    f"{where} via clause must be 'via peer <IPv4>'"
+                )
+            index += 1
+            if index >= len(tokens):
+                raise Release1ConfigError(
+                    f"{where} via peer clause requires an IPv4 address"
+                )
+            try:
+                private_peer = ipaddress.IPv4Address(tokens[index])
+            except ipaddress.AddressValueError as exc:
+                raise Release1ConfigError(
+                    f"{where} via peer must be an IPv4 address: {exc}"
+                ) from None
+            index += 1
+            continue
+
         if index >= len(tokens):
             raise Release1ConfigError(
                 f"{where} {clause} clause requires an IPv4 CIDR"
@@ -774,6 +796,7 @@ def _parse_firewall_rule(value: str, where: str) -> FirewallRuleConfig:
         source_ports=source_ports,
         destination_ipv4_cidr=destination_network,
         destination_ports=destination_ports,
+        private_peer_ipv4=private_peer,
         comment=comment,
     )
 
