@@ -1082,31 +1082,29 @@ def run_alpha_runtime(
                 result.status is not last_status
                 or result.diagnostic != last_diagnostic
             )
-            if result.status is AlphaReconcileStatus.RECONCILED:
-                log(
-                    OperationalLogLevel.DEBUG,
-                    POLICY_LOG_TAG,
-                    "policy_applied",
-                    status=result.status.value,
-                )
-            elif (
-                result.status is AlphaReconcileStatus.FAILED
-                and changed_result
-            ):
-                log(
-                    OperationalLogLevel.ERROR,
-                    POLICY_LOG_TAG,
-                    "reconcile_failed",
-                    status=result.status.value,
-                    diagnostic=result.diagnostic,
-                )
-            elif changed_result:
-                log(
-                    OperationalLogLevel.DEBUG,
-                    POLICY_LOG_TAG,
-                    "reconcile_confirmed",
-                    status=result.status.value,
-                )
+            if changed_result:
+                if result.status is AlphaReconcileStatus.FAILED:
+                    log(
+                        OperationalLogLevel.ERROR,
+                        POLICY_LOG_TAG,
+                        "reconcile_failed",
+                        status=result.status.value,
+                        diagnostic=result.diagnostic,
+                    )
+                elif result.status is AlphaReconcileStatus.RECONCILED:
+                    log(
+                        OperationalLogLevel.DEBUG,
+                        POLICY_LOG_TAG,
+                        "policy_applied",
+                        status=result.status.value,
+                    )
+                else:
+                    log(
+                        OperationalLogLevel.DEBUG,
+                        POLICY_LOG_TAG,
+                        "reconcile_confirmed",
+                        status=result.status.value,
+                    )
             if changed_result:
                 _notify_systemd(
                     f"STATUS=VPN-GATE alpha reconcile {result.status.value}"

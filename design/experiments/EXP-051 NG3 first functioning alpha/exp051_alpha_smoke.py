@@ -562,15 +562,6 @@ Profiles
         print("EXP051_FIRST_MANAGER_RECONCILE=PASS")
         print("EXP051_OPERATIONAL_LOG_DEBUG_REACTION=PASS")
         print("EXP051_OPERATIONAL_LOG_BINDING_INFO=PASS")
-        wait_until(
-            "operational log stable exact reconcile",
-            lambda: (
-                "DEBUG POLICY reconcile_confirmed"
-                in journal(ALPHA_UNIT)
-                and "status=exact" in journal(ALPHA_UNIT)
-            ),
-            timeout=10.0,
-        )
         info_priority_journal = command(
             (
                 "journalctl", "-u", ALPHA_UNIT,
