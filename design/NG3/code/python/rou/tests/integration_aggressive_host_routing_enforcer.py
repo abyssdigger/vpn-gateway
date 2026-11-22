@@ -127,6 +127,8 @@ def setup() -> None:
         ns(name, "sysctl", "-qw", "net.ipv4.conf.default.rp_filter=0")
     ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{BH}.proxy_arp=1")
     ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{BS}.proxy_arp=1")
+    ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{BH}.rp_filter=0")
+    ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{BS}.rp_filter=0")
 
 
 def main() -> int:
