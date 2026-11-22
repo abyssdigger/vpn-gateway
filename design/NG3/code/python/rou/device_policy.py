@@ -57,6 +57,7 @@ class DeviceFirewallRuleIntent:
     destination_ports: PortBundle | int | None = None
     source_ipv4_cidr: IPv4Network | None = None
     destination_ipv4_cidr: IPv4Network | None = None
+    path_ifname: str | None = None
     private_peer_ipv4: IPv4Address | None = None
     comment: str | None = None
 
@@ -86,12 +87,27 @@ class DeviceFirewallRuleIntent:
                 raise ValueError(
                     f"{field_name} must be IPv4Network when present"
                 )
+        if self.path_ifname is not None:
+            if (
+                not isinstance(self.path_ifname, str)
+                or not self.path_ifname
+                or any(ch.isspace() for ch in self.path_ifname)
+                or "*" in self.path_ifname
+                or len(self.path_ifname.encode("utf-8")) > 15
+            ):
+                raise ValueError(
+                    "path_ifname must be an exact Linux interface name when present"
+                )
         if (
             self.private_peer_ipv4 is not None
             and not isinstance(self.private_peer_ipv4, IPv4Address)
         ):
             raise ValueError(
                 "private_peer_ipv4 must be IPv4Address when present"
+            )
+        if self.path_ifname is not None and self.private_peer_ipv4 is not None:
+            raise ValueError(
+                "path_ifname and private_peer_ipv4 are mutually exclusive"
             )
         if self.comment is not None and not isinstance(self.comment, str):
             raise ValueError("comment must be text when present")
