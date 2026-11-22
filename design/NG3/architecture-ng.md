@@ -1957,7 +1957,7 @@ Integration note
 
 ## A.011 ProtectiveModeManager
 
-**Implementation status:** `<partial>` — архитектурный контракт принят, production implementation этого Manager еще не materialized и не получает фиктивный code trace.
+**Implementation status:** `<partial>` — production Manager core source-scoped requests, C.010 convergence и safe-release/re-containment уже materialized; periodic runtime scheduling и supported operator/control wiring еще не materialized.
 
 Manager явного административного защитного режима. Он владеет source-scoped request set и
 confirmed/problem состоянием public protective mode и непрерывно поддерживает gate, пока хотя
@@ -1994,6 +1994,10 @@ Architectural decisions
 
 5. `State preservation`
    *Protective mode меняет отдельный containment Artifact и не использует teardown namespace/routes/interfaces/configuration intent как штатный способ остановки трафика.*
+
+Implementation
+
+    design/NG3/code/python/rou/protective_mode_manager.py — source-scoped Manager core, bounded C.010 composition, blocked-leave handling and safety re-containment attempt.
 
 # Annex B. Ordinary-side transition components
 

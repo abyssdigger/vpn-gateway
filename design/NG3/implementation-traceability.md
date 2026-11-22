@@ -62,6 +62,10 @@ A production unit without a normal requirement path may appear only under `Archi
 
 - `design/NG3/code/python/rou/runtime_status.py`
 
+## Trace: `A.011`
+
+- `design/NG3/code/python/rou/protective_mode_manager.py`
+
 ## Trace: `A.010`
 
 - `design/NG3/code/python/rou/operational_log.py`

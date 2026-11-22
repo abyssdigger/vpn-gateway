@@ -211,6 +211,13 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_protective_payload_gate.py
+      - name: A.011 protective mode Manager core
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_protective_mode_manager.py
       - name: NG3 forwarding-gate backend integration
         env:
           PYTHONPATH: design/NG3/code/python
