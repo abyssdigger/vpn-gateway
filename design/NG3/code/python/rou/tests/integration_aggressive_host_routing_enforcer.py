@@ -118,8 +118,10 @@ def setup() -> None:
     ns(HOST, "ip", "route", "add", f"{TARGET}/32", "via", GW_IP, "dev", HU)
     ns(STACK, "ip", "route", "add", f"{TARGET}/32", "via", REMOTE_LINK, "dev", SR)
     ns(REMOTE, "ip", "route", "add", "10.86.1.0/24", "via", STACK_REMOTE)
+    ns(REMOTE, "ip", "route", "add", f"{HOST_BOUNDARY}/32", "via", STACK_REMOTE)
     ns(GW, "ip", "route", "add", "10.86.1.0/24", "via", HOST_UP)
     ns(STACK, "ip", "route", "add", "10.86.1.0/24", "via", HOST_BOUNDARY, "dev", BS)
+    ns(STACK, "ip", "route", "add", f"{HOST_BOUNDARY}/32", "dev", BS)
 
     for name in (HOST, STACK):
         ns(name, "sysctl", "-qw", "net.ipv4.ip_forward=1")
