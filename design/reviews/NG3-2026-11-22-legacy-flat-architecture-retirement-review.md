@@ -5,7 +5,7 @@ analysis and transfer of the last architecture-level decision.
 
 ## Verdict
 
-**PASS — flat architecture body can be retired.**
+**PASS — flat architecture body can be removed from the current tree.**
 
 ## Checks
 
@@ -22,6 +22,7 @@ analysis and transfer of the last architecture-level decision.
   tombstone state. Historical review/research/evidence references are intentionally preserved.
 - The last full flat body is preserved by Git history at
   `38607e247f39a87a361a4541e3dace6585c8d52a`.
+- The current `design/NG3/architecture.md` path is removed rather than retained as a tombstone.
 
 ## Requirement impact
 

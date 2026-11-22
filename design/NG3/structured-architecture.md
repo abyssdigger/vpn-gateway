@@ -1,7 +1,7 @@
 # VPN-GATE NG3 — структурированная архитектура
 
 **Статус:** текущая authoritative архитектура NG3  
-**Предыдущий плоский отчет:** `design/NG3/architecture.md` — **RETIRED tombstone**  
+**Предыдущий плоский отчет:** удалён из current tree; последнее полное тело — `38607e247f39a87a361a4541e3dace6585c8d52a:design/NG3/architecture.md`  
 **Компонентная модель:** `design/component-model.md`  
 **Требования:** `design/NG3/requirements.md`
 
@@ -9,10 +9,10 @@
 Новые архитектурные решения, изменения component/API/interaction contracts и architecture
 closure requirements вносятся и трассируются здесь.
 
-`design/NG3/architecture.md` сохранен только как tombstone бывшего pre-structured report.
-Полное последнее тело плоского отчета доступно в Git history на baseline
+Бывший `design/NG3/architecture.md` удалён из current tree. Полное последнее тело плоского
+отчета доступно в Git history на baseline
 `38607e247f39a87a361a4541e3dace6585c8d52a`; старые ссылки в review/research/evidence
-продолжают обозначать соответствующий исторический baseline и не делают плоский отчет
+продолжают обозначать соответствующий исторический baseline и не делают удалённый отчет
 текущим источником архитектуры.
 
 ## 1. Проект

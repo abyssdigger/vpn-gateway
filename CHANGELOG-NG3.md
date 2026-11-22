@@ -22,8 +22,8 @@ journal-priority filtering.
 
 The sequential architecture restructuring is complete. `design/NG3/structured-architecture.md`
 is now the single current NG3 architecture source for component/API/interaction contracts and
-requirement closure. The former flat `design/NG3/architecture.md` has now been reduced to a
-tombstone; its last full body remains available in Git history at
+requirement closure. The former flat `design/NG3/architecture.md` has now been removed from the current tree;
+its last full body remains available in Git history at
 `38607e247f39a87a361a4541e3dace6585c8d52a`. Residual material was audited: the only
 architecture-level item not already represented elsewhere, the deliberate omission of
 unrequired generic machinery, was transferred to structured architecture §2.9.4.

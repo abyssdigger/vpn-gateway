@@ -12,7 +12,7 @@
 **Нормативного текущего архитектурного решения, существующего только в
 `design/NG3/architecture.md`, не найдено.**
 
-Плоский отчет можно заменить tombstone-файлом. Историческое тело остается доступным через
+Плоский отчет можно удалить из current tree. Историческое тело остается доступным через
 Git history; переписывать исторические review/evidence, которые ссылались на него на своем
 baseline, не требуется.
 
@@ -140,8 +140,8 @@ Structured architecture сохраняет требуемые архитекту
 `design/NG3/architecture.md` относится к тому tree/commit baseline, на котором запись была
 создана.
 
-После retirement текущий path является tombstone. Для чтения последнего полного тела перед
-удалением используется:
+После retirement текущий path удалён из current tree. Для чтения последнего полного тела
+используется:
 
 `38607e247f39a87a361a4541e3dace6585c8d52a:design/NG3/architecture.md`
 
@@ -155,7 +155,7 @@ Structured architecture сохраняет требуемые архитекту
 - current implementation trace: `implementation-traceability.md`;
 - concrete Linux facts: code/tests + experiments/reviews;
 - historical flat architecture: Git history;
-- `architecture.md`: только tombstone.
+- `architecture.md`: отсутствует в current tree; историческое тело доступно через Git history.
 
 Дополнительной requirement decomposition для retirement не требуется: исследование не
 обнаружило новой продуктовой семантики или capability gap.
