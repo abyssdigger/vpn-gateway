@@ -1,6 +1,6 @@
 # NG3 — Raspberry Pi 2 resource-envelope future target
 
-**Status:** DEFERRED FUTURE TARGET / not a current release gate  
+**Status:** POSTPONED FUTURE TARGET / not a current release gate  
 **Created:** 2026-11-22  
 **Requirements:** `VPNG-M001-R3.R2`, `VPNG-M001-R3.R2.R1`
 
@@ -58,8 +58,8 @@ retained, translated or replaced.
 
 ## Requirement-state inventory
 
-- `VPNG-M001-R3.R2`: `decomposition: incomplete`, deferred;
-- `VPNG-M001-R3.R2.R1`: `decomposition: incomplete`, deferred;
+- `VPNG-M001-R3.R2`: `decomposition: incomplete`, [`postponed`];
+- `VPNG-M001-R3.R2.R1`: `decomposition: incomplete`, [`postponed`];
 - active `decomp`: none introduced;
 - active `unreal`: none;
 - active `broken`: none;
