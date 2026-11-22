@@ -9,9 +9,11 @@
 Новые архитектурные решения, изменения component/API/interaction contracts и architecture
 closure requirements вносятся и трассируются здесь.
 
-`design/NG3/architecture.md` сохранен только как исторический pre-structured architecture
-report. Его старые ссылки в review/research/evidence продолжают обозначать соответствующий
-исторический baseline и не делают плоский отчет текущим источником архитектуры.
+`design/NG3/architecture.md` сохранен только как tombstone бывшего pre-structured report.
+Полное последнее тело плоского отчета доступно в Git history на baseline
+`38607e247f39a87a361a4541e3dace6585c8d52a`; старые ссылки в review/research/evidence
+продолжают обозначать соответствующий исторический baseline и не делают плоский отчет
+текущим источником архитектуры.
 
 ## 1. Проект
 
@@ -505,6 +507,29 @@ Production Rust по умолчанию safe. `unsafe`/memory-unsafe FFI доп�
 Host-routing helper language exception и Python-completion ordering задаются уже принятыми
 `VPNG-D001-R1.R1.R8.C1`, `VPNG-D001-R1.R1.R8.C2`, `VPNG-D001-R1.R1.R8.C3` и остаются
 implementation-replacement constraints, а не поводом менять component semantics.
+
+
+### 2.9.4. Deliberately omitted machinery
+
+Текущая архитектура намеренно не вводит универсальные механизмы, для которых нет
+самостоятельного принятого Requirement/Constraint. Это применение
+`VPNG-D001-R1.R1.R1`, а не обещание никогда не вводить такие механизмы.
+
+Без нового принятого требования или обнаруженного необходимого контракта не вводятся:
+
+- global event journal или generic reliable replay bus;
+- universal revision/epoch framework;
+- global availability state machine или attempt-history storage;
+- отдельный route-priority Manager или отдельный availability route writer;
+- independent global lifecycle Engine/LifecycleManager;
+- configuration super-object, объединяющий внутренние состояния всех subsystem;
+- universal probe-mechanism framework шире узкого `ActiveProbeDriver` contract;
+- kernel-specific routing allocation objects в upper Managers;
+- generic Linux subsystem Drivers/Readers только ради общей формы вызова.
+
+Конкретные компоненты могут появиться позже, если новый принятый requirement делает их
+необходимыми. До этого отсутствие такой machinery считается частью минимально достаточной
+архитектуры, а не незакрытым architecture gap.
 
 ## 2.10. Closed requirement architecture coverage index
 
