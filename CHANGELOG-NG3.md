@@ -4,6 +4,25 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Aggressive routing and protective architecture accepted
+
+The previously reviewed aggressive/protective candidate was simplified and materialized into
+the current Space/Annex architecture. Aggressive ownership is now E.003
+`AggressiveHostRoutingManager` plus child E.004 `AggressiveHostRoutingEnforcer`; the
+EXP-084 escape guard remains an independently verifiable Enforcer-owned state rather than a
+separate component. Protective mode is A.011 `ProtectiveModeManager` plus C.010
+`ProtectivePayloadGate`.
+
+Protective requests are source-scoped so operator/automation and aggressive-failure
+escalation cannot clear one another's protection. The final source may release the gate only
+after the normal release precondition is freshly confirmed. The accepted architecture review
+is `design/reviews/NG3-2026-11-22-aggressive-protective-architecture-acceptance-review.md`.
+
+All 11 aggressive/protective nodes moved from `pending_closure` to `closed`. Current
+normative inventory is 213 nodes: 200 `closed`, 10 `postponed`, 3 `permanent`, and
+zero `open`, `pending_closure` or `rejected_closure`. This milestone is architecture
+closure only; production implementation remains a separate development block.
+
 ## 2026-11-22 — Aggressive routing and protective mode re-entered and researched
 
 The postponed aggressive host-routing and administrative protective-mode branches were
