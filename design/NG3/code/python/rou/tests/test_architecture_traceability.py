@@ -138,7 +138,7 @@ def partial_component_names() -> set[str]:
 
 
 def component_name(body: str) -> str:
-    heading = re.match(r"^## [A-G]\.\d{3}\s+([^\n]+)$", body)
+    heading = re.match(r"^## [A-G]\.\d{3}\s+([^\n]+)", body)
     if heading is None:
         raise AssertionError("component spec has no canonical heading")
     return heading.group(1).strip()
