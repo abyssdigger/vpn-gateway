@@ -194,6 +194,61 @@ class DeviceFirewallPolicyCompilerTests(unittest.TestCase):
         self.assertEqual(len(desired.chains[2].rules), 1)
         self.assertTrue(desired.chains[2].rules[0].terminal_fallthrough)
 
+    def test_device_wide_exact_if_and_peer_rules_share_one_ordered_policy(self):
+        peer_a0 = IPv4Address("172.20.130.6")
+        peer_a1 = IPv4Address("172.20.130.5")
+        policy = DeviceFirewallPolicyIntent(
+            "a",
+            (
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.ALLOW,
+                    protocol="icmp",
+                ),
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.DENY,
+                    protocol="udp",
+                    destination_ports=53,
+                    path_ifname=EP_A0.ifname,
+                ),
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.REJECT,
+                    protocol="tcp",
+                    private_peer_ipv4=peer_a1,
+                ),
+            ),
+        )
+        desired = compile_device_firewall_policies(
+            (policy,),
+            (
+                RoutePriorityPathRoute(PATH_A0, EP_A0),
+                RoutePriorityPathRoute(PATH_A1, EP_A1),
+            ),
+            HOST,
+            {
+                EP_A0: peer_a0,
+                EP_A1: peer_a1,
+            },
+        )
+        self.assertEqual(
+            [rule.action_json for rule in desired.chains[0].rules],
+            [
+                '{"return":null}',
+                '{"drop":null}',
+                '{"drop":null}',
+            ],
+        )
+        self.assertEqual(
+            [rule.action_json for rule in desired.chains[2].rules],
+            [
+                '{"return":null}',
+                '{"reject":{"type":"tcp reset"}}',
+                '{"drop":null}',
+            ],
+        )
+
     def test_private_peer_observation_is_required_only_for_scoped_policy(self):
         peer = IPv4Address("172.20.130.6")
         scoped = DeviceFirewallPolicyIntent(
