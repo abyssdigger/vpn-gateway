@@ -17,6 +17,7 @@ jobs:
       - name: Create Rel.0.1 at the pre-CDC main gate
         env:
           TARGET_SHA: 5730e896483b7cfe526d823208cb18f2b5b43742
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git init tag-work
