@@ -1,6 +1,6 @@
 # NG3 — developer execution trace decision gate
 
-**Status:** BLOCKED — descendant contracts require explicit project-holder decision  
+**Status:** POSTPONED — descendant contracts require explicit project-holder re-entry decision  
 **Created:** 2026-11-22  
 **Requirement:** `VPNG-D001-R2`
 
@@ -53,9 +53,8 @@ as an accidental workaround.
 
 ## Requirement-state inventory
 
-- `VPNG-D001-R2`: `decomposition: complete`, intentionally without architecture closure;
-- `VPNG-D001-R2.R1`–`R4`: `decomposition: incomplete`, intentionally without architecture
-  closure;
+- `VPNG-D001-R2`: `decomposition: complete`, [`postponed`];
+- `VPNG-D001-R2.R1`–`R4`: `decomposition: incomplete`, [`postponed`];
 - active `decomp`: none introduced;
 - active `unreal`: none;
 - active `broken`: none;

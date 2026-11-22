@@ -38,9 +38,9 @@ expanded bundle cardinality and positional 1:1 mapping. `allow_vpn_client` remai
 The exact accepted forms, validation rules and complete example are normative in
 `design/NG3/config-model.md`.
 
-## Remaining independent deferral
+## Remaining independent postponement
 
-Per-path Device firewall rules remain outside Release 1 under
+Per-path Device firewall rules are [`postponed`] outside Release 1 under
 `VPNG-U001-R1.R4.R2.R1.C1` and the corresponding configuration constraint
 `VPNG-U001-R4.R4.R6.R2.R5.C1`.
 
@@ -62,9 +62,12 @@ Resolved ordinary grammar:
 - `VPNG-U001-R4.R4.R6.R4`;
 - `VPNG-U003-R3.R6.R3.R1.R1`.
 
-Still independently constrained:
+Postponed capability and accepted Release-1 constraints:
 
-- `VPNG-U001-R4.R4.R6.R2.R5.C1`.
+- `VPNG-U001-R1.R4.R2.R1`: [`postponed`];
+- `VPNG-U001-R4.R4.R6.R2.R5`: [`postponed`];
+- `VPNG-U001-R1.R4.R2.R1.C1`: [`closed`];
+- `VPNG-U001-R4.R4.R6.R2.R5.C1`: [`closed`].
 
 ## Requirement-state inventory
 

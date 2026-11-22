@@ -533,6 +533,7 @@ VPN-GATE owns its own network policy rather than VPN-specific configuration.
 ### Ordinary-host integration and helper scope
 
 **Requirements:** `VPNG-U001-R2.R1`, `VPNG-U001-R2.R1.R1`,
+`VPNG-U001-R5`, `VPNG-U001-R5.R1`, `VPNG-U001-R5.R1.R1`,
 `VPNG-U001-R5.R2.R1`, `VPNG-U001-R5.R2.C1`.
 
 **Architecture coverage:** Annex E `HostRoutingContribution` plus Spaces
@@ -543,16 +544,22 @@ explicitly prevents peaceful helper machinery from silently acquiring them.
 
 ### Human configuration and Device/Profile policy model
 
-**Requirements:** `VPNG-U001-R4.R5.R1`, `VPNG-U001-R4.R5.R2`,
+**Requirements:** `VPNG-U001-R4`,
+`VPNG-U001-R1.R4`, `VPNG-U001-R1.R4.R1`, `VPNG-U001-R1.R4.R2`,
+`VPNG-U001-R1.R4.R2.R1.C1`,
+`VPNG-U001-R4.R5.R1`, `VPNG-U001-R4.R5.R2`,
 `VPNG-U001-R4.R5.R3`, `VPNG-U001-R4.R5.R4`,
 `VPNG-U001-R4.R4.R1`, `VPNG-U001-R4.R4.R1.C1`,
 `VPNG-U001-R4.R4.R2`, `VPNG-U001-R4.R4.R2.R1`,
 `VPNG-U001-R4.R4.R3`, `VPNG-U001-R4.R4.R4`,
 `VPNG-U001-R4.R4.R4.R2`, `VPNG-U001-R4.R4.R4.R3`,
+`VPNG-U001-R4.R4.R4.R4`, `VPNG-U001-R4.R4.R4.R4.C1`,
 `VPNG-U001-R4.R4.R5`, `VPNG-U001-R4.R4.R6`,
-`VPNG-U001-R4.R4.R6.R3`, `VPNG-U001-R4.R4.R6.R4`,
+`VPNG-U001-R4.R4.R6.R1`, `VPNG-U001-R4.R4.R6.R2`,
 `VPNG-U001-R4.R4.R6.R2.R1`, `VPNG-U001-R4.R4.R6.R2.R2`,
 `VPNG-U001-R4.R4.R6.R2.R3`, `VPNG-U001-R4.R4.R6.R2.R4`,
+`VPNG-U001-R4.R4.R6.R2.R5.C1`,
+`VPNG-U001-R4.R4.R6.R3`, `VPNG-U001-R4.R4.R6.R4`,
 `VPNG-U001-R4.R4.R6.C1`.
 
 **Architecture coverage:** A.002 `ConfigurationAdapter` owns strict human representation
@@ -561,6 +568,17 @@ Device/Profile semantic separation; C.001/C.003 materialize normalized firewall/
 publication policy without leaking Linux IDs into user intent. Ordered fields remain ordered
 semantic input; set-like declarations and disabled placeholders do not acquire hidden runtime
 meaning.
+
+### Inbound source identity, packet matching and return affinity
+
+**Requirements:** `VPNG-U001-R3`, `VPNG-U002-R2.R1.R3`,
+`VPNG-U003-R4`.
+
+**Architecture coverage:** A.005/C.001/C.003 preserve literal payload source/destination/type
+matching before managed source translation; Profile source identity translation remains
+inside the managed policy boundary rather than rewriting the meaning of the policy match.
+C.001-owned return-affinity state preserves the accepted VPN ingress routing domain for
+established return traffic instead of reclassifying it onto another allowed path.
 
 ### Explicit VPN traffic policy and inbound first-release bound
 
@@ -587,7 +605,8 @@ confirmation. Release-1 physical probe mechanism is ICMP only.
 
 ### Safety, recovery and operator truth
 
-**Requirements:** `VPNG-U004`, `VPNG-M001-R1.R1.R2.R1`,
+**Requirements:** `VPNG-U004`, `VPNG-U004-R4.R6`,
+`VPNG-U004-R5.C1`, `VPNG-M001-R1.R1.R2.R1`,
 `VPNG-M001-R1.R1.R3.R1`, `VPNG-M001-R1.R1.C1.R1`, `VPNG-M001-R2`.
 
 **Architecture coverage:** C.003 exact/fail-closed enforcement and C.005 forwarding barrier
