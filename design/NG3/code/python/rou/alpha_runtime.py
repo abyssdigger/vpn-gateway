@@ -483,10 +483,35 @@ def reconcile_alpha_payload_once(
         )
         host_publication_desired = prepared.build_host_publication_desired()
     except Exception as exc:
+        containment_detail = "not attempted"
+        try:
+            containment = converge_forwarding_gate_once(
+                LinuxForwardingGateDriver(runner, domain_spec.namespace),
+                ForwardingGateState.DISABLED,
+            )
+            containment_detail = (
+                "confirmed"
+                if containment.confirmed
+                else (
+                    "not confirmed"
+                    + (
+                        f": {containment.diagnostic}"
+                        if containment.diagnostic
+                        else ""
+                    )
+                )
+            )
+        except Exception as containment_exc:
+            containment_detail = (
+                f"failed: {type(containment_exc).__name__}: {containment_exc}"
+            )
         return AlphaReconcileResult(
             AlphaReconcileStatus.FAILED,
             None,
-            diagnostic=f"desired-state rebuild failed: {type(exc).__name__}: {exc}",
+            diagnostic=(
+                f"desired-state rebuild failed: {type(exc).__name__}: {exc}; "
+                f"fail-closed containment={containment_detail}"
+            ),
         )
 
     gate_backend = LinuxForwardingGateDriver(runner, domain_spec.namespace)
