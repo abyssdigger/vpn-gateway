@@ -44,6 +44,10 @@ Current experiment directories:
 | EXP-078 | scoped peaceful host-routing selectors |
 | EXP-079 | managed-boundary absolute helper bypass |
 | EXP-080 | scoped preserve-main non-interference |
+| EXP-081 | aggressive-helper RPDB precedence gap / rejected closure evidence |
+| EXP-082 | two-barrier protective lower containment feasibility |
+| EXP-083 | single Private-network protective gate |
+| EXP-084 | aggressive independent managed-egress escape guard |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -93,10 +97,14 @@ Canonical dispositions:
 | EXP-071 | PASS | selected | Retained as comparative selection evidence: netkit is a viable alternative managed-L3 realization, but no demonstrated steady-state dataplane advantage justifies Release-1 dual-backend machinery over the Debian-12-compatible routed-veth boundary. It does **not** define a current netkit capability. |
 | EXP-072 | PASS | selected | Retained selected fact: device-only managed-prefix routing works on the current routed-veth/Proxy-ARP endpoint; its netkit equivalence result remains future-backend evidence. Its former paired-RPDB host-bootstrap semantics are not current simple-helper architecture; EXP-074 separately covers the aggressive authoritative child. |
 | EXP-073 | PASS | historical_only | Logical state: **PROVEN FACT / SUPERSEDED DESIGN**. The tested gateway-less stateful host-return owner lost applicability because that owner was removed. Core return affinity is now owned inside STACK; EXP-074 covers only the postponed aggressive host-routing child, while Profile-SNAT reverse lower evidence remains in EXP-075/076. |
-| EXP-074 | PASS | selected | Exact closure evidence for `VPNG-U001-R5.R2.R1`, the authoritative managed-destination child of the aggressive host-routing helper. The aggressive capability is constrained out of Release 1; EXP-074 does not define simple-helper or core host-routing semantics. |
+| EXP-074 | PASS | selected | Retained narrow lower evidence that the aggressive managed table defeats competing routes inside host table `main`, preserves local delivery and avoids managed-boundary recapture. EXP-081 proved this is **not** sufficient closure for `VPNG-U001-R5.R2.R1` because an earlier foreign RPDB rule can bypass the current owner. |
 | EXP-075 | PASS with rejected baseline | selected | Selected lower evidence for the SNAT-identity route form across the addressless managed-L3 boundary. Core Profile SNAT still promises only source identity at the managed boundary; helper/admin host reachability is separate. Partially supersedes only EXP-070's reverse-route extrapolation. |
 | EXP-076 | PASS | selected | Current combined core Profile-SNAT dataplane acceptance evidence. Its tested host-return route remains ancillary integration evidence, not a core host-routing ownership promise. Supersedes EXP-064 for Profile-SNAT applicability/metadata-carrier need; EXP-063 remains retained negative carrier evidence. |
 | EXP-077 | PASS | selected | Selected complementary evidence for peaceful-helper main-first precedence and lifecycle-safe non-destructive cleanup. After scoped selectors were introduced, its former global behavior is the `:any` subcase; EXP-078 extends rather than supersedes it. |
 | EXP-078 | PASS | selected | Selected privileged acceptance evidence for revised `VPNG-U001-R5.R1.R1` selector scope: host-local, external, exact ingress, union and any dispatch preserve unselected ordinary-host routing, administrator non-default precedence and managed-boundary bypass. |
 | EXP-079 | PASS | selected | Selected reusable lower evidence for absolute managed-boundary no-recapture: `iif <boundary> goto <post-helper nop>` skips helper lookup even when ordinary routing has no result; applies to peaceful and postponed aggressive helpers. |
 | EXP-080 | PASS | selected | Selected correctness evidence for peaceful selector scope: global preserve-main can reorder unselected administrator RPDB policy; per-selector preserve+dispatch preserves unselected routing while retaining selected explicit-main precedence. |
+| EXP-081 | PASS / negative architecture finding | selected | Selected evidence rejecting the former EXP-074-only closure candidate for `VPNG-U001-R5.R2.R1`: an earlier foreign RPDB rule bypasses managed dispatch while the old owner still reports its own state exact. |
+| EXP-082 | PASS | not_selected | Proves a two-barrier composition (Private ForwardingGate + host-boundary netdev gate) can realize the protective transit postcondition while preserving runtime topology. Not selected because independent barriers create avoidable release-order complexity; EXP-083 provides one owned gate. |
+| EXP-083 | PASS | selected | Selected lower candidate for `VPNG-U004-R5` traffic containment: one dedicated Private-network nft table blocks ordinary-boundary INPUT/OUTPUT and all IPv4 FORWARD traffic without tearing down runtime state. |
+| EXP-084 | PASS | selected | Selected lower candidate for aggressive fail-closed safety: an independently owned nft escape guard permits correct managed egress but drops local/forwarded managed traffic if RPDB policy redirects it to a non-managed egress, removing leakage dependence on drift-detection latency. |
