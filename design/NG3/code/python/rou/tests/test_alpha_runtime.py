@@ -261,6 +261,48 @@ device_order = ["oc"]
         )
         self.assertFalse(ordinary.requires_private_peer_observation)
 
+    def test_alpha_exact_if_firewall_is_path_scoped_without_peer_observation(self):
+        config = """
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn*/2"]
+use_outbound_nat = false
+firewall = [
+    "out deny udp to 10.253.0.1/32:53 via if vpn0",
+    "out allow icmp to 10.253.0.1/32",
+]
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.253.0.1/32"]
+device_order = ["oc"]
+"""
+        prepared = AlphaPreparedPolicy.from_text(
+            config,
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        self.assertFalse(prepared.requires_private_peer_observation)
+
+        host_boundary = InterfaceIdentity("vnga-inner0", 7)
+        vpn_a = InterfaceIdentity("vpn0", 11)
+        vpn_b = InterfaceIdentity("vpn1", 12)
+        desired = prepared.build_current(
+            host_boundary,
+            (
+                InterfaceIdentity("lo", 1),
+                host_boundary,
+                vpn_a,
+                vpn_b,
+            ),
+        )
+
+        self.assertEqual(len(desired.nft.device_firewall.chains), 4)
+        first_out = desired.nft.device_firewall.chains[0]
+        second_out = desired.nft.device_firewall.chains[2]
+        self.assertEqual(len(first_out.rules), 3)
+        self.assertEqual(len(second_out.rules), 2)
+
     def test_path_observation_failure_closes_forwarding(self):
         prepared = AlphaPreparedPolicy.from_text(
             CONFIG,
