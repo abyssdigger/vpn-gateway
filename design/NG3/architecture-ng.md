@@ -2643,8 +2643,6 @@ Architectural decisions
 
 ## E.004 AggressiveHostRoutingEnforcer
 
-**Implementation status:** `<partial>` — архитектурный контракт принят, production bounded Enforcer еще не materialized и не получает фиктивный code trace.
-
 Bounded Enforcer одного composite aggressive postcondition. Он не выбирает continuous policy
 и не является отдельным Manager.
 
@@ -2681,6 +2679,13 @@ Architectural decisions
 
 6. `Full-tunnel non-recapture`
    *При managed scope `0.0.0.0/0` escape protection не трактует весь non-boundary traffic как утечку. EXP-085 требует сохранять host-local delivery и трафик, уже пришедший через exact managed boundary в ordinary network, одновременно запрещая local/forwarded managed outbound через non-managed egress.*
+
+Implementation
+
+    design/NG3/code/python/rou/aggressive_host_routing_enforcer.py — bounded E.004 activation/deactivation ordering and composite result.
+    design/NG3/code/python/rou/linux_aggressive_escape_guard.py — independently owned nft escape-protection state with full-tunnel exemptions.
+    design/NG3/code/python/rou/linux_aggressive_routing_authority.py — fresh RPDB authority verification that rejects any non-owned rule able to execute before aggressive dispatch.
+
 
 # Annex F. Ambient host and external world components
 

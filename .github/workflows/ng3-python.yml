@@ -663,6 +663,11 @@ jobs:
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-085 NG3 aggressive full-tunnel guard/exp085_aggressive_full_tunnel_guard.py"
+      - name: E.004 production aggressive host-routing Enforcer
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          design/NG3/code/python/rou/tests/integration_aggressive_host_routing_enforcer.py
       - name: EXP-078 scoped peaceful host routing selectors
         run: >-
           sudo python3
