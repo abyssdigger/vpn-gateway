@@ -1590,8 +1590,8 @@ Architectural decisions
 6. `No topology guessing`
    *Concrete paths появляются только после accepted binding; availability target и integration realization не выводятся из случайных interface/route facts на configuration boundary.*
 
-7. `Rule-local private-peer selector`
-   *Опциональный `via peer <IPv4>` нормализуется как semantic path-applicability predicate одного Device firewall rule. IPv4 означает private/inner point-to-point peer, а не external VPN transport endpoint и не payload address; отдельный user-facing path object или runtime ifname для этого selector не создаётся.*
+7. `Rule-local path selector`
+   *Device firewall rule имеет ровно один из трёх scopes: без `via` — все current paths Device; `via if <exact-ifname>` — current path этого Device с указанным exact interface name; `via peer <IPv4>` — current P2P path этого Device с указанным verified private/inner peer. Два вида `via` взаимоисключающи и не создают отдельного user-facing path object; peer не означает external VPN transport endpoint или payload address.*
 
 
 ## A.003 AvailabilityDescriptionResolver
@@ -1738,7 +1738,7 @@ Architectural decisions
    *Established-flow return affinity и outbound no-unnecessary-failback не выводятся из случайной route affinity: Calculator предоставляет structural intent, а соответствующие runtime/lower mechanisms остаются отдельными owners.*
 
 6. `Path-relative Device-rule applicability`
-   *Ordered Device firewall intent может содержать rule-local private-peer predicate. Rule без predicate применим ко всем current paths Device; rule с predicate применим только к current path с соответствующим verified private/inner peer fact. Это сужает область применения rule и не создаёт Profile membership, destination или path eligibility.*
+   *Ordered Device firewall intent может содержать не более одного rule-local path predicate. Rule без predicate применим ко всем current paths Device; `via if` применим только к current path с соответствующим exact ifname; `via peer` — только к current path с соответствующим verified private/inner peer fact. Это изменяет только область применимости rule и не создаёт Profile membership, destination или path eligibility.*
 
 
 ## A.006 AvailabilityPriorityCalculator
@@ -2114,10 +2114,10 @@ Architectural decisions
    *Один normalized Device publication intent требует двух independently verified postconditions: managed-domain local admission в `Private network` и host publication mapping в `VPN-GATE-managed host state`. Host-side occurrence того же semantic Adapter показывается в соседнем Space как отдельный `HostPublicationAdapter`; физическое размещение host nft state не расширяет ownership этого Private-network occurrence.*
 
 8. `Path-scoped Device firewall lowering`
-   *Для каждого current exact path Adapter сохраняет исходный порядок Device firewall rules и исключает только rules, чьё `via peer` predicate доказанно относится к другому path. Rule без selector остаётся Device-wide. Explicit firewall остаётся одной ordered policy с terminal no-match DROP даже если после path filtering не осталось explicit rules; отдельный path-policy gate или второй user policy object не вводится.*
+   *Для каждого current exact path Adapter сохраняет исходный порядок Device firewall rules и исключает только rules, чей optional selector не относится к этому path. Rule без selector остаётся Device-wide; `via if` сравнивается с уже текущим exact interface name path binding; `via peer` — с verified private-peer fact C.004. Explicit firewall остаётся одной ordered policy с terminal no-match DROP даже если после path filtering не осталось explicit rules; отдельный path-policy gate или второй user policy object не вводится.*
 
-9. `Private-peer uncertainty is restrictive and demand-scoped`
-   *Peer selector разрешается только из verified current path facts C.004. Если `via peer` отсутствует во всех rules, peer observation вообще не является prerequisite policy realization. Если selector запрошен, confirmed absence другого peer является обычным non-match; observation failure либо неоднозначное совпадение requested peer не трактуется как отсутствие restriction и не разрешает allowing structural policy для затронутого Device.*
+9. `Selector evidence is minimal and Device-scoped`
+   *Exact-if selector использует только уже подтверждённый current PathBinding и не добавляет observation dependency. Peer selector разрешается только из verified current path facts C.004. Если `via peer` отсутствует во всех rules, peer observation вообще не является prerequisite policy realization. Если peer selector запрошен, confirmed absence другого peer является обычным non-match; observation failure либо неоднозначное совпадение requested peer не трактуется как отсутствие restriction и не разрешает allowing structural policy для затронутого Device.*
 
 ## C.002 NetworkPolicyLayoutCalculator
 
@@ -2270,13 +2270,16 @@ Architectural decisions
 6. `No upper policy ownership`
    *Adapter не выбирает Profile policy, Device preference, payload eligibility или availability health и не определяет human configuration grammar.*
 
-7. `Private P2P peer is a demand-scoped endpoint fact, not path identity`
+7. `Exact-if selector consumes existing binding identity`
+   *Rule-local `via if <exact-ifname>` не требует нового observation contract: applicability проверяется только после обычного Device binding по current exact `InterfaceIdentity(ifname, ifindex)`. Совпадение имени вне current paths этого Device не имеет значения.*
+
+8. `Private P2P peer is a demand-scoped endpoint fact, not path identity`
    *Для current Linux point-to-point endpoint Adapter может fresh-observe inner/private peer IPv4 из interface address state и привязать его только к exact `(ifname, ifindex)` generation. Эта дополнительная observation требуется только когда accepted Device policy содержит `via peer`; конфигурация без такого selector сохраняет прежний link-only endpoint-observation contract. При запрошенной peer observation link/address snapshots должны быть взаимно совместимы; race/mismatch является observation failure. Peer fact не создаёт Device ownership: selector resolution выполняется только после обычного Device binding.*
 
-8. `Inner peer is not transport provenance`
+9. `Inner peer is not transport provenance`
    *Private/inner point-to-point peer принципиально отличен от external VPN transport/server endpoint. EXP-039 подтверждает, что inner peer виден generic TUN address observation, тогда как userspace transport endpoint из него не выводится. Если supported integration отдельно доказывает transport provenance, он по-прежнему привязывается к exact current `PathBinding` и не подменяется inner peer.*
 
-9. `Binding is not route realization`
+10. `Binding is not route realization`
    *`VPNPathAdapter` доказывает current concrete endpoint, но не угадывает Linux `gateway/onlink`. Exact route realization предоставляет отдельная capability supported integration contract в `VPN external ends`; generic `NetworkPolicyAdapter` только потребляет этот уже доказанный lower fact. Direct-device realization является одной explicit integration capability, а не универсальным свойством bound interface.*
 
 ## C.005 ForwardingGate
