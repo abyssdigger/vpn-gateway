@@ -9,6 +9,9 @@ on:
     branches-ignore: [ legacy-main-rc, legacy-main-ng1-2, legacy-main-ng3 ]
     paths:
       - "design/NG3/code/python/**"
+      - "design/NG3/requirements.md"
+      - "design/NG3/architecture-ng.md"
+      - "design/NG3/implementation-traceability.md"
       - ".github/workflows/ng3-python.yml"
       - "design/experiments/EXP-028 NG3 lower policy platform space/**"
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
@@ -53,6 +56,9 @@ on:
     branches: [ main ]
     paths:
       - "design/NG3/code/python/**"
+      - "design/NG3/requirements.md"
+      - "design/NG3/architecture-ng.md"
+      - "design/NG3/implementation-traceability.md"
       - ".github/workflows/ng3-python.yml"
       - "design/experiments/EXP-028 NG3 lower policy platform space/**"
       - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
