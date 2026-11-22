@@ -10,6 +10,16 @@ ARCHITECTURE = ROOT / "design/NG3/architecture-ng.md"
 REQUIREMENTS = ROOT / "design/NG3/requirements.md"
 TRACE = ROOT / "design/NG3/implementation-traceability.md"
 PRODUCTION = ROOT / "design/NG3/code/python/rou"
+DEFERRALS = ROOT / "design/deferrals"
+REVIEWS = ROOT / "design/reviews"
+REQUIREMENT_STATUSES = (
+    "open",
+    "pending_closure",
+    "closed",
+    "rejected_closure",
+    "postponed",
+    "permanent",
+)
 
 
 def declared_python_implementations() -> tuple[tuple[str, Path], ...]:
@@ -81,6 +91,44 @@ def component_specs() -> dict[str, str]:
 
 
 class StructuredArchitectureTraceabilityTests(unittest.TestCase):
+    def test_every_requirement_has_exactly_one_status(self):
+        nodes = []
+        for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+            match = re.match(r"^\s*-\s+\*\*\[(VPNG[^\]]+)\]\*\*", line)
+            if not match:
+                continue
+            statuses = [
+                status
+                for status in REQUIREMENT_STATUSES
+                if f"[\x60{status}\x60]" in line
+            ]
+            nodes.append(match.group(1))
+            with self.subTest(requirement=match.group(1)):
+                self.assertEqual(
+                    1,
+                    len(statuses),
+                    f"requirement must have exactly one status, found {statuses}",
+                )
+        self.assertTrue(nodes)
+
+    def test_every_postponed_requirement_has_explicit_record(self):
+        record_text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for root in (DEFERRALS, REVIEWS)
+            for path in root.glob("*.md")
+        )
+        postponed = []
+        for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+            match = re.match(
+                r"^\s*-\s+\*\*\[(VPNG[^\]]+)\]\*\*.*\[\x60postponed\x60\]\s*$",
+                line,
+            )
+            if match:
+                postponed.append(match.group(1))
+        self.assertTrue(postponed)
+        missing = [item for item in postponed if f"\x60{item}\x60" not in record_text]
+        self.assertEqual([], missing)
+
     def test_declared_python_implementations_have_reverse_architecture_marker(self):
         declarations = declared_python_implementations()
         self.assertTrue(declarations)
