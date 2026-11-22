@@ -456,6 +456,8 @@ This does not introduce a generic VPN-path identity system. WireGuard public key
 CN/session IDs, L2TP tunnel/session IDs and external transport endpoints are not canonical
 Device-firewall selectors under the current contract. Paths already expressible by exact
 interface and/or remote payload network continue to use those simpler existing semantics.
+If no active Device firewall rule contains `via peer`, private-peer address observation is not
+a prerequisite for Device/path binding or firewall realization.
 
 ### Server-side VPN publication
 
