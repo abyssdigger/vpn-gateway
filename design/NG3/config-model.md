@@ -398,7 +398,8 @@ The Device firewall is an ordered array of one-line rules:
 
 ```toml
 firewall = [
-    "out allow tcp to 10.20.0.0/16:80,443,8000-8007 # web bundle",
+    "out allow tcp to 10.20.0.0/16:80,443,8000-8007 # all current Device paths",
+    "out deny udp to 10.20.0.53/32:53 via if wg0 # only the current wg0 path",
     "out deny udp to 10.20.0.53/32:53 via peer 172.20.130.6 # only this P2P path",
     "out allow icmp to 10.20.0.0/16",
     "in allow tcp from 10.20.0.0/16:1024-65535 to 10.0.0.10/32:22 # SSH to bastion",
@@ -413,7 +414,7 @@ Rule grammar:
     [tcp|udp|icmp]
     [from <IPv4-CIDR>[:port-bundle]]
     [to <IPv4-CIDR>[:port-bundle]]
-    [via peer <IPv4>]
+    [via if <exact-ifname> | via peer <IPv4>]
     [ # <comment>]
 ```
 
@@ -425,13 +426,17 @@ Rules:
 - `out` means ordinary/host boundary -> VPN path;
 - `in` means VPN path -> ordinary/host boundary;
 - source/destination are literal packet fields at Device filtering time;
-- optional `via peer <IPv4>` is a path-applicability predicate, not a payload predicate;
-- its IPv4 value is the private/inner point-to-point peer observed on the current Device
-  interface, never the external VPN transport/server endpoint;
-- a rule without `via peer` applies to every current path of the Device; a rule with it
-  participates in the ordered policy only for the uniquely matching current path;
-- the peer value is written once in the rule; no separate path declaration is required solely
-  to make that rule addressable;
+- an optional `via` clause is a path-applicability predicate, not a payload predicate;
+- `via if <exact-ifname>` selects only a current path of this Device whose exact interface
+  name equals the operand;
+- `via peer <IPv4>` selects only the current point-to-point path of this Device whose
+  observed private/inner peer equals the operand; this IPv4 is never the external VPN
+  transport/server endpoint;
+- a rule contains at most one `via` clause, so `via if` and `via peer` are mutually
+  exclusive;
+- a rule without `via` applies to every current path of the Device;
+- the selector value is written once in the rule; no separate path declaration is required
+  solely to make that rule addressable;
 - a `port-bundle` is one or more comma-separated items with no whitespace;
 - one item is either exact `N` or inclusive range `A-B`;
 - every port is in `1..65535`, every range has `A <= B`;
@@ -445,19 +450,23 @@ Rules:
 - a non-empty explicit firewall has terminal no-match DROP;
 - the parser does not reorder, widen or silently repair rules.
 
-The current per-path selector is deliberately narrow. It exists for dynamic point-to-point
-members whose exact runtime interface cannot be known in advance and whose payload remote
-networks do not distinguish the intended member. Resolution is performed only among current
-paths already belonging to the Device. Confirmed absence of the requested peer means that the
-rule currently selects no path; ambiguous matching or failed peer observation is not treated
-as proof that the restriction is absent and must remain fail-closed.
+The current path-selector surface is deliberately small: Device-wide by omission, exact
+current interface, or private/inner point-to-point peer. Resolution is performed only among
+current paths already belonging to the Device; a matching host/private-network interface that
+is not a current path of that Device is irrelevant.
+
+`via if` uses the already verified current PathBinding and introduces no additional
+observation dependency. `via peer` exists for dynamic point-to-point members whose exact
+runtime interface cannot be known in advance and whose payload remote networks do not
+distinguish the intended member. Confirmed absence of the requested peer means that the rule
+currently selects no path; ambiguous matching or failed peer observation is not treated as
+proof that the restriction is absent and must remain fail-closed.
 
 This does not introduce a generic VPN-path identity system. WireGuard public keys, OpenVPN
 CN/session IDs, L2TP tunnel/session IDs and external transport endpoints are not canonical
-Device-firewall selectors under the current contract. Paths already expressible by exact
-interface and/or remote payload network continue to use those simpler existing semantics.
-If no active Device firewall rule contains `via peer`, private-peer address observation is not
-a prerequisite for Device/path binding or firewall realization.
+Device-firewall selectors under the current contract. If no active Device firewall rule
+contains `via peer`, private-peer address observation is not a prerequisite for Device/path
+binding or firewall realization.
 
 ### Server-side VPN publication
 
