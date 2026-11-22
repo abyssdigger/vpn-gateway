@@ -235,7 +235,7 @@ Migration note является дополнением к историческо
 - если узел удален без прямого преемника — **дословная полная compact-form формулировка**
   R/C на нормативном baseline, относительно которого эксперимент был подготовлен или
   выполнен: для Requirement — весь `Basis/Purpose | Statement`, для Constraint — весь
-  `Reason | Statement`, включая существовавший closure label;
+  `Reason | Statement`, включая существовавший requirement status;
 - пояснение, что исходный ID относится к историческому baseline и не является текущей
   requirement traceability;
 - если evidence сохраняет актуальную применимость — действующие R/C, которым теперь
