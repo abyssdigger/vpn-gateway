@@ -4,6 +4,20 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Aggressive host-routing Enforcer materialized
+
+E.004 `AggressiveHostRoutingEnforcer` now has production implementation. Activation
+freshly confirms the independent escape guard before aggressive routing capture and accepts
+success only after a new owner/RPDB/guard observation. Earlier foreign RPDB policy is no
+longer invisible: it makes authority unconfirmed while the escape guard keeps managed
+traffic fail-closed.
+
+The production guard incorporates EXP-085 full-tunnel exemptions for host-local delivery and
+managed-boundary return traffic. Deactivation reconfirms the guard, removes routing capture,
+verifies that removal and only then releases the guard. E.004 is no longer `<partial>`.
+Review:
+`design/reviews/NG3-2026-11-22-aggressive-host-routing-enforcer-implementation-review.md`.
+
 ## 2026-11-22 — Protective mode Manager core materialized
 
 A.011 now has a production source-scoped Manager core composed with C.010. Independent
