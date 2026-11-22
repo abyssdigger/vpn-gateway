@@ -4,6 +4,22 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Aggressive host-routing continuous Manager materialized
+
+E.003 `AggressiveHostRoutingManager` now has production continuous ownership. Initial
+activation requires a confirmed E.004 composite postcondition; a finite-cadence audit loop
+then re-observes/reconciles through E.004 and escalates unconfirmed authority through its own
+source-scoped A.011 request. Confirmed recovery clears only that source and remains subject
+to STACK's normal-release precondition.
+
+The final implementation also seals the E.003 -> E.004 component boundary behind an
+`AggressiveHostRoutingEnforcer` facade and serializes A.011 public state/mutations for the
+new concurrent request source. Release-1 configuration remains peaceful-only under
+`VPNG-U001-R5.R2.C1`. E.003 is no longer `<partial>`; together with the previously
+materialized E.004 this completes the accepted aggressive host-routing implementation block.
+Review:
+`design/reviews/NG3-2026-11-22-aggressive-host-routing-manager-implementation-review.md`.
+
 ## 2026-11-22 — Aggressive host-routing Enforcer materialized
 
 E.004 `AggressiveHostRoutingEnforcer` now has production implementation. Activation

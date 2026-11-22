@@ -176,6 +176,10 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/protective_payload_gate.py`
 - `design/NG3/code/python/rou/linux_protective_payload_gate.py`
 
+## Trace: `E.003`
+
+- `design/NG3/code/python/rou/aggressive_host_routing_manager.py`
+
 ## Trace: `E.004`
 
 - `design/NG3/code/python/rou/aggressive_host_routing_enforcer.py`

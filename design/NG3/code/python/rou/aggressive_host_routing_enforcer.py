@@ -74,6 +74,47 @@ class AggressiveHostRoutingEnforcementResult:
         return self.status is AggressiveHostRoutingEnforcementStatus.INACTIVE_CONFIRMED
 
 
+@dataclass(slots=True)
+class AggressiveHostRoutingEnforcer:
+    """E.004 component facade hiding its lower Linux Drivers from E.003."""
+
+    routing_driver: LinuxHostManagedRoutingDriver
+    guard_driver: LinuxAggressiveEscapeGuardDriver
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.routing_driver, LinuxHostManagedRoutingDriver):
+            raise ValueError(
+                "routing_driver must be LinuxHostManagedRoutingDriver"
+            )
+        if not isinstance(
+            self.guard_driver,
+            LinuxAggressiveEscapeGuardDriver,
+        ):
+            raise ValueError(
+                "guard_driver must be LinuxAggressiveEscapeGuardDriver"
+            )
+
+    def converge_active(
+        self,
+        desired: AggressiveHostRoutingDesired,
+    ) -> AggressiveHostRoutingEnforcementResult:
+        return converge_aggressive_host_routing_active_once(
+            self.routing_driver,
+            self.guard_driver,
+            desired,
+        )
+
+    def converge_inactive(
+        self,
+        desired: AggressiveHostRoutingDesired,
+    ) -> AggressiveHostRoutingEnforcementResult:
+        return converge_aggressive_host_routing_inactive_once(
+            self.routing_driver,
+            self.guard_driver,
+            desired,
+        )
+
+
 def build_aggressive_host_routing_desired(
     plan: HostManagedRoutingPlan,
     *,

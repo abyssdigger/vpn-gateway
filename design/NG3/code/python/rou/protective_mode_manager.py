@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from threading import RLock
 
 from .protective_payload_gate import (
     ProtectivePayloadGateDesired,
@@ -56,6 +57,7 @@ class ProtectiveModeActionResult:
 class ProtectiveModeManager:
     _sources: set[str] = field(default_factory=set, init=False, repr=False)
     _release_pending: bool = field(default=False, init=False, repr=False)
+    _lock: RLock = field(default_factory=RLock, init=False, repr=False)
     _projection: ProtectiveModeProjection = field(
         default_factory=lambda: ProtectiveModeProjection(
             frozenset(),
@@ -66,7 +68,8 @@ class ProtectiveModeManager:
     )
 
     def current_state(self) -> ProtectiveModeProjection:
-        return self._projection
+        with self._lock:
+            return self._projection
 
     def request_active(
         self,
@@ -74,11 +77,12 @@ class ProtectiveModeManager:
         boundary_interface: str,
         driver: ProtectivePayloadGateDriver,
     ) -> ProtectiveModeActionResult:
-        self._validate_source(source)
-        self._validate_boundary(boundary_interface)
-        self._sources.add(source)
-        self._release_pending = False
-        return self._ensure_active(boundary_interface, driver)
+        with self._lock:
+            self._validate_source(source)
+            self._validate_boundary(boundary_interface)
+            self._sources.add(source)
+            self._release_pending = False
+            return self._ensure_active(boundary_interface, driver)
 
     def request_inactive(
         self,
@@ -88,20 +92,21 @@ class ProtectiveModeManager:
         normal_release_confirmed: bool,
         driver: ProtectivePayloadGateDriver,
     ) -> ProtectiveModeActionResult:
-        self._validate_source(source)
-        self._validate_boundary(boundary_interface)
-        if type(normal_release_confirmed) is not bool:
-            raise ValueError("normal_release_confirmed must be bool")
-        self._sources.discard(source)
-        if self._sources:
-            self._release_pending = False
-            return self._ensure_active(boundary_interface, driver)
-        self._release_pending = True
-        return self.reconcile_once(
-            boundary_interface,
-            normal_release_confirmed=normal_release_confirmed,
-            driver=driver,
-        )
+        with self._lock:
+            self._validate_source(source)
+            self._validate_boundary(boundary_interface)
+            if type(normal_release_confirmed) is not bool:
+                raise ValueError("normal_release_confirmed must be bool")
+            self._sources.discard(source)
+            if self._sources:
+                self._release_pending = False
+                return self._ensure_active(boundary_interface, driver)
+            self._release_pending = True
+            return self.reconcile_once(
+                boundary_interface,
+                normal_release_confirmed=normal_release_confirmed,
+                driver=driver,
+            )
 
     def reconcile_once(
         self,
@@ -110,94 +115,95 @@ class ProtectiveModeManager:
         normal_release_confirmed: bool,
         driver: ProtectivePayloadGateDriver,
     ) -> ProtectiveModeActionResult:
-        self._validate_boundary(boundary_interface)
-        if type(normal_release_confirmed) is not bool:
-            raise ValueError("normal_release_confirmed must be bool")
+        with self._lock:
+            self._validate_boundary(boundary_interface)
+            if type(normal_release_confirmed) is not bool:
+                raise ValueError("normal_release_confirmed must be bool")
 
-        if self._sources:
-            self._release_pending = False
-            return self._ensure_active(boundary_interface, driver)
+            if self._sources:
+                self._release_pending = False
+                return self._ensure_active(boundary_interface, driver)
 
-        if not self._release_pending:
-            self._projection = ProtectiveModeProjection(
-                frozenset(),
-                ProtectiveModeStatus.INACTIVE,
+            if not self._release_pending:
+                self._projection = ProtectiveModeProjection(
+                    frozenset(),
+                    ProtectiveModeStatus.INACTIVE,
+                )
+                return ProtectiveModeActionResult(
+                    ProtectiveModeActionStatus.INACTIVE_CONFIRMED,
+                    self._projection,
+                )
+
+            if not normal_release_confirmed:
+                active = self._ensure_active(boundary_interface, driver)
+                if active.confirmed_active:
+                    self._projection = ProtectiveModeProjection(
+                        frozenset(),
+                        ProtectiveModeStatus.ACTIVE,
+                        "leave blocked: normal release precondition is not confirmed",
+                    )
+                    return ProtectiveModeActionResult(
+                        ProtectiveModeActionStatus.LEAVE_BLOCKED,
+                        self._projection,
+                    )
+                return active
+
+            disabled = converge_protective_payload_gate_once(
+                driver,
+                ProtectivePayloadGateDesired(
+                    ProtectivePayloadGateState.DISABLED
+                ),
             )
-            return ProtectiveModeActionResult(
-                ProtectiveModeActionStatus.INACTIVE_CONFIRMED,
-                self._projection,
-            )
+            if disabled.confirmed:
+                self._release_pending = False
+                self._projection = ProtectiveModeProjection(
+                    frozenset(),
+                    ProtectiveModeStatus.INACTIVE,
+                )
+                return ProtectiveModeActionResult(
+                    ProtectiveModeActionStatus.INACTIVE_CONFIRMED,
+                    self._projection,
+                )
 
-        if not normal_release_confirmed:
-            active = self._ensure_active(boundary_interface, driver)
-            if active.confirmed_active:
+            reclosed = converge_protective_payload_gate_once(
+                driver,
+                ProtectivePayloadGateDesired(
+                    ProtectivePayloadGateState.ENABLED,
+                    boundary_interface,
+                ),
+            )
+            if reclosed.confirmed:
+                diagnostic = (
+                    "protective leave was not confirmed; protective gate "
+                    "was independently re-confirmed active"
+                )
+                if disabled.diagnostic:
+                    diagnostic += f": {disabled.diagnostic}"
                 self._projection = ProtectiveModeProjection(
                     frozenset(),
                     ProtectiveModeStatus.ACTIVE,
-                    "leave blocked: normal release precondition is not confirmed",
+                    diagnostic,
                 )
                 return ProtectiveModeActionResult(
-                    ProtectiveModeActionStatus.LEAVE_BLOCKED,
+                    ProtectiveModeActionStatus.LEAVE_FAILED_RECONTAINED,
                     self._projection,
                 )
-            return active
 
-        disabled = converge_protective_payload_gate_once(
-            driver,
-            ProtectivePayloadGateDesired(
-                ProtectivePayloadGateState.DISABLED
-            ),
-        )
-        if disabled.confirmed:
-            self._release_pending = False
-            self._projection = ProtectiveModeProjection(
-                frozenset(),
-                ProtectiveModeStatus.INACTIVE,
-            )
-            return ProtectiveModeActionResult(
-                ProtectiveModeActionStatus.INACTIVE_CONFIRMED,
-                self._projection,
-            )
-
-        reclosed = converge_protective_payload_gate_once(
-            driver,
-            ProtectivePayloadGateDesired(
-                ProtectivePayloadGateState.ENABLED,
-                boundary_interface,
-            ),
-        )
-        if reclosed.confirmed:
             diagnostic = (
-                "protective leave was not confirmed; protective gate "
-                "was independently re-confirmed active"
+                "protective leave was not confirmed and fail-closed "
+                "re-containment could not be confirmed"
             )
-            if disabled.diagnostic:
-                diagnostic += f": {disabled.diagnostic}"
+            if reclosed.diagnostic:
+                diagnostic += f": {reclosed.diagnostic}"
             self._projection = ProtectiveModeProjection(
                 frozenset(),
-                ProtectiveModeStatus.ACTIVE,
+                ProtectiveModeStatus.PROBLEM,
                 diagnostic,
             )
             return ProtectiveModeActionResult(
-                ProtectiveModeActionStatus.LEAVE_FAILED_RECONTAINED,
+                ProtectiveModeActionStatus.SAFETY_RECLOSE_FAILED,
                 self._projection,
             )
-
-        diagnostic = (
-            "protective leave was not confirmed and fail-closed "
-            "re-containment could not be confirmed"
-        )
-        if reclosed.diagnostic:
-            diagnostic += f": {reclosed.diagnostic}"
-        self._projection = ProtectiveModeProjection(
-            frozenset(),
-            ProtectiveModeStatus.PROBLEM,
-            diagnostic,
-        )
-        return ProtectiveModeActionResult(
-            ProtectiveModeActionStatus.SAFETY_RECLOSE_FAILED,
-            self._projection,
-        )
 
     def _ensure_active(
         self,

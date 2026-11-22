@@ -668,6 +668,11 @@ jobs:
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           design/NG3/code/python/rou/tests/integration_aggressive_host_routing_enforcer.py
+      - name: E.003 continuous aggressive host-routing Manager
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          design/NG3/code/python/rou/tests/integration_aggressive_host_routing_manager.py
       - name: EXP-078 scoped peaceful host routing selectors
         run: >-
           sudo python3
