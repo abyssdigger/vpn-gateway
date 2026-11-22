@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from ipaddress import IPv4Address
+from typing import Iterable, Mapping
 
 from .composite_nft_policy import CompositeNftDesiredState
 from .device_firewall_policy_compiler import (
@@ -89,6 +90,7 @@ def build_payload_network_policy_desired_state(
     probe_local_rules: Iterable[ProbeLocalRuleSpec] = (),
     stack_return_affinity_platform: StackReturnAffinityPlatformSpace | None = None,
     profile_snat_policies: Iterable[ProfileSnatPolicyIntent] = (),
+    path_private_peers: Mapping[InterfaceIdentity, IPv4Address | None] | None = None,
 ) -> PayloadNetworkPolicyDesiredState:
     """Compose exact current payload lower desired state without I/O."""
     if not isinstance(layout, NetworkPolicyLayout):
@@ -199,6 +201,7 @@ def build_payload_network_policy_desired_state(
             current_firewall_policies,
             current_path_routes,
             host_boundary,
+            path_private_peers,
         )
     except DeviceFirewallPolicyCompileError as exc:
         raise PayloadNetworkPolicyProjectionError(
