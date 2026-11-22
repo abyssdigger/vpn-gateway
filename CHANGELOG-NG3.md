@@ -4,6 +4,19 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Protective mode Manager core materialized
+
+A.011 now has a production source-scoped Manager core composed with C.010. Independent
+operator/automation and aggressive-failure sources cannot clear one another; the final source
+cannot release containment until the normal release precondition is confirmed. A failed or
+unconfirmed gate release immediately attempts safety re-containment and distinguishes
+confirmed re-close from an explicit safety-reclose failure.
+
+A.011 remains `<partial>`: periodic runtime scheduling, supported operator/control wiring
+and restart semantics for outstanding requests are intentionally not claimed by the callable
+core. Review:
+`design/reviews/NG3-2026-11-22-protective-mode-manager-core-implementation-review.md`.
+
 ## 2026-11-22 — Protective payload gate materialized
 
 Accepted architecture component C.010 `ProtectivePayloadGate` now has production Python
