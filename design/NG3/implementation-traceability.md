@@ -167,6 +167,11 @@ A production unit without a normal requirement path may appear only under `Archi
 
 - `design/NG3/code/python/rou/icmp_probe_driver.py`
 
+## Trace: `C.010`
+
+- `design/NG3/code/python/rou/protective_payload_gate.py`
+- `design/NG3/code/python/rou/linux_protective_payload_gate.py`
+
 ## Trace: `E.001`
 
 - `design/NG3/code/python/rou/host_publication_adapter.py`
