@@ -1,0 +1,31 @@
+name: Create Rel.0.1 tag
+
+on:
+  push:
+    branches:
+      - ng3-aggressive-candidate-simplification-20261122
+    paths:
+      - .github/workflows/create-rel-0-1-tag.yml
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Rel.0.1 at the pre-CDC main gate
+        env:
+          TARGET_SHA: 5730e896483b7cfe526d823208cb18f2b5b43742
+        run: |
+          set -euo pipefail
+          git init tag-work
+          cd tag-work
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --tags origin "refs/tags/Rel.0.1" >/dev/null 2>&1; then
+            echo "Rel.0.1 already exists; refusing to move it"
+            exit 1
+          fi
+          git fetch --no-tags --depth=1 origin "${TARGET_SHA}"
+          git tag Rel.0.1 "${TARGET_SHA}"
+          git push origin "refs/tags/Rel.0.1"
