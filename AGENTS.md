@@ -63,6 +63,10 @@ whether work can proceed is not write authorization.
 Outside CD, an explicit edit/implementation instruction authorizes that change on a working
 branch. It does **not** authorize `main`.
 
+Authorization is operation-specific: permission to modify repository artifacts does not imply
+permission to move `main`; permission to publish one completed result to `main` does not
+carry forward to a later result.
+
 Write authorization must be present in active context; do not infer it across a context
 transition.
 
@@ -87,6 +91,32 @@ publish/snapshot the accepted result to `main`.
 
 During active CD, normal completed-development-block snapshots are included in CD
 authorization unless the user explicitly changes/disables snapshot publication.
+
+### Mandatory pre-`main` authorization check
+
+Immediately before any operation that can move or replace the `main` ref, identify the
+authorization source in the active user context.
+
+Outside active CD, that source must be an explicit user instruction to publish, snapshot,
+merge, commit or otherwise place the relevant result in `main`. An instruction to edit,
+apply or implement a change without naming `main` is not sufficient.
+
+During CD, verify immediately before the `main` operation that CD is currently active under
+`CONTINUOUS-DEVELOPMENT.md` and has not been paused by a later user intervention. If current
+CD authorization cannot be established from the active context, treat CD as inactive for
+`main` publication.
+
+The following are never authorization to update `main`:
+
+- the agent's own plan, proposal or prior statement that it intends to publish/snapshot;
+- completion of a review unit or development block;
+- PASS review, green CI, clean consistency check or other evidence of readiness;
+- semantic approval or an instruction to edit/apply/implement a change without explicit
+  `main` publication wording;
+- previous `main` authorization for a different completed result.
+
+If the check cannot name a valid authorization source, do not mutate `main`. Leave the
+verified result on the working branch and report its exact head/tree for user approval.
 
 A normal snapshot:
 
