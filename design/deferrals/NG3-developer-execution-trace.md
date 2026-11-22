@@ -1,10 +1,10 @@
 # NG3 — developer execution trace decision gate
 
-**Status:** BLOCKED — explicit project-holder decision required  
+**Status:** BLOCKED — descendant contracts require explicit project-holder decision  
 **Created:** 2026-11-22  
 **Requirement:** `VPNG-D001-R2`
 
-## Accepted need
+## Accepted need and current decomposition
 
 VPN-GATE needs a separately enableable developer execution trace capable of reconstructing
 internal execution paths more deeply than the ordinary DEBUG operational log.
@@ -17,32 +17,45 @@ DEBUG  = how a component reacted at semantic component level
 TRACE  = how execution proceeded inside the component
 ```
 
-Operational logging work must not silently implement TRACE semantics.
+TRACE is not an operational log level. It is explicitly enabled through configuration and
+uses a separately specified external trace file.
 
-## Blocked decisions
+The parent requirement is now decomposition-complete at the decision-boundary level:
 
-Architecture and implementation remain blocked until the project holder separately decides at
-least:
+- `VPNG-D001-R2.R1` — instrumented code/function/control-flow/state coverage boundary;
+- `VPNG-D001-R2.R2` — argument/result/internal-state representation and data safety;
+- `VPNG-D001-R2.R3` — external trace-file lifecycle, sink failure and backpressure semantics;
+- `VPNG-D001-R2.R4` — ordering/correlation, format-stability and performance-perturbation contract.
 
-- exact function-entry/function-return coverage boundary;
-- which branch decisions must be recorded;
-- parameter/result representation and truncation rules;
-- explicit destination/file lifecycle and rotation expectations;
-- acceptable timing/performance perturbation;
-- secret/sensitive-data policy for arguments and returned values;
-- whether the trace format has any stability promise;
-- whether trace instrumentation is source-level/manual, generated, runtime-assisted or a
-  combination.
+Each child remains intentionally `decomposition: incomplete`.
+
+## Blocking rule
+
+Architecture and implementation remain blocked until whoever explicitly removes this decision
+gate performs the further requirement decomposition needed for R1-R4 and obtains the
+project-holder decisions required by that refinement.
+
+The blocker must not be bypassed by silently choosing:
+
+- exact function/control-flow/state-transition coverage;
+- secret/redaction/truncation behavior;
+- file create/append/rotation/failure behavior;
+- ordering/correlation/stability/performance guarantees.
+
+The choice of manual, generated, runtime-assisted or mixed instrumentation is an architecture
+decision after the requirements above are sufficiently decomposed.
 
 ## Re-entry condition
 
-Resume only after an explicit decision on the trace contract. Until then no production
-instrumentation, config field or logging level named `trace` should be added merely as an
-extension of operational logging.
+Resume trace architecture/implementation only after the project holder explicitly removes the
+gate or authorizes the next decomposition pass. Operational DEBUG must not grow TRACE semantics
+as an accidental workaround.
 
 ## Requirement-state inventory
 
-- `VPNG-D001-R2`: `decomposition: incomplete`, intentionally without architecture closure;
+- `VPNG-D001-R2`: `decomposition: complete`, intentionally without architecture closure;
+- `VPNG-D001-R2.R1`–`R4`: `decomposition: incomplete`, intentionally without architecture
+  closure;
 - active `decomp`: none introduced;
 - active `unreal`: none;
 - active `broken`: none;
