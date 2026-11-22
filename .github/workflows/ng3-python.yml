@@ -34,6 +34,7 @@ on:
       - "design/NG3/deployment/alpha/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-082 NG3 protective lower containment/**"
+      - "design/experiments/EXP-083 NG3 private protective gate/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
       - "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/**"
@@ -192,6 +193,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-082 NG3 protective lower containment/exp082_protective_lower_containment.py"
+      - name: EXP-083 single Private-network protective gate
+        run: >-
+          sudo python3
+          "design/experiments/EXP-083 NG3 private protective gate/exp083_private_protective_gate.py"
       - name: NG3 forwarding-gate backend integration
         env:
           PYTHONPATH: design/NG3/code/python
