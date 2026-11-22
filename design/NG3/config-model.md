@@ -39,6 +39,30 @@ A Device may be reused by multiple Profiles.
 
 ## 1.1. Release-1 host-routing control
 
+## 1.2. Release-1 operational logging
+
+Release 1 exposes one canonical root logging threshold:
+
+```toml
+log_level = "info"
+```
+
+Accepted values are exactly `"error"`, `"warning"`, `"info"` and `"debug"`.
+Omission means `"info"`, preserving useful ordinary operational logging without requiring a
+new field in existing alpha configurations. The threshold is inclusive: `info` emits
+INFO/WARNING/ERROR, while `debug` additionally emits component-reaction records.
+
+This field controls only operational logging under `VPNG-M001-R2.R3`. It does not enable the
+separately deferred developer execution trace under `VPNG-D001-R2`.
+
+Exact log line punctuation and journald metadata are not configuration semantics.
+
+**Requirements:**
+- `VPNG-M001-R2.R3.R1`
+- `VPNG-M001-R2.R3.R2`
+
+
+
 Release 1 separates **which ordinary-host traffic may be assisted** from **how strongly the
 helper owns that routing area**:
 

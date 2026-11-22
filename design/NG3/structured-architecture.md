@@ -1780,6 +1780,69 @@ Implementation
 
     design/NG3/code/python/rou/runtime_status.py — pure text rendering from RuntimeStatusSnapshot plus atomic text publication.
 
+## A.010 OperationalLogAdapter
+
+Direct Adapter, переводящий semantic operational records компонентов VPN-GATE в logging
+facility текущего deployment. Он не является current-state owner, не заменяет
+`RuntimeStatusAgent` и не является developer execution trace.
+
+**Implements:**
+- `VPNG-M001-R2.R3`
+- `VPNG-M001-R2.R3.R1`
+- `VPNG-M001-R2.R3.R2`
+- `VPNG-M001-R2.R3.R2.R1`
+- `VPNG-M001-R2.R3.R2.R2`
+- `VPNG-M001-R2.R3.R2.R3`
+- `VPNG-M001-R2.R3.R2.R4`
+- `VPNG-M001-R2.R3.R3`
+- `VPNG-M001-R2.R3.R4`
+- `VPNG-M001-R2.R3.R5`
+- `VPNG-M001-R2.R3.R6`
+- `VPNG-M001-R2.R3.R6.C1`
+
+API
+
+    emit(level, component_tag, message, safe_context) -> emitted | suppressed
+
+Architectural decisions
+
+1. `Severity is product semantics`
+   *Threshold ordering is DEBUG < INFO < WARNING < ERROR. Components classify records by the
+   requirement semantics rather than by implementation convenience; the Adapter only filters
+   records below the configured minimum.*
+
+2. `Event/reaction split`
+   *INFO describes material environment/lifecycle transitions; DEBUG describes component-level
+   reaction or changed semantic desired/effective state. A periodic audit that observes no
+   semantic transition emits neither an INFO copy nor a DEBUG reaction copy.*
+
+3. `Component log identity`
+   *Every component that emits attributed records owns one explicit implementation constant
+   named `LOG_TAG`. All its attributed records use that value. The value is log-oriented and
+   is not derived automatically from class/module/architecture names. Requirement constraint
+   `VPNG-M001-R2.R3.R6.C1` limits the tag to six characters.*
+
+4. `Safe context boundary`
+   *Callers pass only diagnostic context already safe for operational disclosure. Credentials,
+   key material and equivalent secret-bearing values are not valid operational-log context.
+   The Adapter must not obtain secrets merely in order to redact them.*
+
+5. `Human log, not stable machine protocol`
+   *Release 1 requires operator-readable level/tag/context semantics, but exact punctuation,
+   field ordering and journal transport metadata are replaceable presentation details unless a
+   later requirement promotes them to a machine-consumed API.*
+
+6. `Deployment boundary`
+   *Current systemd alpha emits to its standard process stream captured by journald. That
+   transport is alpha deployment machinery, not a requirement that all future deployments use
+   systemd/journald.*
+
+Implementation target
+
+    design/NG3/code/python/rou/operational_log.py — threshold/filter/format Direct Adapter.
+    component modules — local LOG_TAG constants for attributed records.
+    design/NG3/code/python/rou/alpha_runtime.py — alpha composition and transition emission.
+
 # Annex B. Ordinary-side transition components
 
 ## B.001 ManagedL3BoundaryLifecycle
