@@ -1,7 +1,13 @@
 from ipaddress import IPv4Address
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
-from rou.alpha_runtime import AlphaPreparedPolicy
+from rou.alpha_runtime import (
+    AlphaPreparedPolicy,
+    AlphaReconcileStatus,
+    reconcile_alpha_payload_once,
+)
 from rou.host_publication_policy import HostPublicationSelectorKind
 from rou.interface_identity import InterfaceIdentity
 from rou.payload_routing_desired import ManagedRouteType
@@ -254,6 +260,68 @@ device_order = ["oc"]
             local_address=IPv4Address("198.19.255.2"),
         )
         self.assertFalse(ordinary.requires_private_peer_observation)
+
+    def test_path_observation_failure_closes_forwarding(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG,
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        host_boundary = InterfaceIdentity("vnga-inner0", 7)
+        environment = SimpleNamespace(
+            verification=SimpleNamespace(errors=()),
+        )
+        boundary = SimpleNamespace(
+            verification=SimpleNamespace(
+                errors=(),
+                private_boundary=host_boundary,
+            ),
+        )
+        portal = SimpleNamespace(errors=())
+        containment = SimpleNamespace(
+            confirmed=True,
+            diagnostic=None,
+        )
+
+        with (
+            patch(
+                "rou.alpha_runtime.preflight_managed_network_environment",
+                return_value=True,
+            ),
+            patch(
+                "rou.alpha_runtime.ensure_managed_network_environment",
+                return_value=environment,
+            ),
+            patch(
+                "rou.alpha_runtime.ensure_managed_l3_boundary",
+                return_value=boundary,
+            ),
+            patch(
+                "rou.alpha_runtime.ensure_ordinary_side_portal",
+                return_value=portal,
+            ),
+            patch(
+                "rou.alpha_runtime.LinuxVpnPathAdapter"
+            ) as adapter_type,
+            patch(
+                "rou.alpha_runtime.converge_forwarding_gate_once",
+                return_value=containment,
+            ) as contain,
+        ):
+            adapter_type.return_value.observe_interfaces.side_effect = (
+                RuntimeError("private-peer observation unavailable")
+            )
+            result = reconcile_alpha_payload_once(
+                prepared,
+                SimpleNamespace(namespace="managed"),
+                object(),
+            )
+
+        self.assertIs(result.status, AlphaReconcileStatus.FAILED)
+        self.assertIn(
+            "fail-closed containment=confirmed",
+            result.diagnostic or "",
+        )
+        contain.assert_called_once()
 
     def test_alpha_materializes_canonical_device_nat_and_firewall(self):
         prepared = AlphaPreparedPolicy.from_text(
