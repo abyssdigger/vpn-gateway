@@ -1018,7 +1018,7 @@ Residents
 5. `@ActiveProbeDriver` *Bounded lower execution одного активного probe через заранее подтвержденные probe-policy и endpoint facts.*
 6. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier.*
     1. `ForwardingGateDriver` *Technical read/mutation boundary к managed-domain forwarding state.*
-7. `@ProtectivePayloadGate <partial>` *Bounded Enforcer dedicated protective-mode containment: ordinary-boundary INPUT/OUTPUT и весь IPv4 FORWARD.*
+7. `@ProtectivePayloadGate` *Bounded Enforcer dedicated protective-mode containment: ordinary-boundary INPUT/OUTPUT и весь IPv4 FORWARD.*
 
 Artifacts
 
@@ -2461,8 +2461,6 @@ Implementation
 
 ## C.010 ProtectivePayloadGate
 
-**Implementation status:** `<partial>` — архитектурный контракт и lower evidence приняты, production Enforcer еще не materialized и не получает фиктивный code trace.
-
 Bounded Enforcer dedicated protective-mode containment state Private network.
 
 **Implements / supports:**
@@ -2494,6 +2492,11 @@ Architectural decisions
 
 5. `Independent from structural ForwardingGate`
    *C.005 остается structural-transition barrier. Protective mode не переопределяет его API/ownership и не зависит от изменения `ip_forward`.*
+
+Implementation
+
+    design/NG3/code/python/rou/protective_payload_gate.py — C.010 bounded convergence contract and explicit observation/result states.
+    design/NG3/code/python/rou/linux_protective_payload_gate.py — strict Linux nft observation and one-transaction owned mutation realization.
 
 # Annex E. VPN-GATE-managed host state components
 
