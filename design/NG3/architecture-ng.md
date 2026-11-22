@@ -559,13 +559,16 @@ VPN-GATE owns its own network policy rather than VPN-specific configuration.
 
 **Requirements:** `VPNG-U001-R2.R1`, `VPNG-U001-R2.R1.R1`,
 `VPNG-U001-R5`, `VPNG-U001-R5.R1`, `VPNG-U001-R5.R1.R1`,
-`VPNG-U001-R5.R2.R1`, `VPNG-U001-R5.R2.C1`.
+`VPNG-U001-R5.R2.C1`.
 
 **Architecture coverage:** Annex E `HostRoutingContribution` plus Spaces
 `VPN-GATE-managed host state` and `Ambient host and external world`. Core forwarding does
 not require the peaceful helper when administrator routing satisfies the host-integration
 contract. Aggressive authoritative helper semantics remain outside Release-1; E.002
-explicitly prevents peaceful helper machinery from silently acquiring them.
+explicitly prevents peaceful helper machinery from silently acquiring them. The earlier
+EXP-074 candidate for `VPNG-U001-R5.R2.R1` is not current closure: EXP-081 demonstrated an
+earlier foreign RPDB-policy bypass, so that node remains outside this closed-coverage index
+pending a replacement authoritative-policy candidate.
 
 ### Human configuration and Device/Profile policy model
 
