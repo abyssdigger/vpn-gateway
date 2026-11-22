@@ -78,8 +78,11 @@ def compile_device_firewall_policy(
         rule
         for rule in policy.rules
         if (
-            rule.private_peer_ipv4 is None
-            or rule.private_peer_ipv4 == path_private_peer
+            (rule.path_ifname is None or rule.path_ifname == path.ifname)
+            and (
+                rule.private_peer_ipv4 is None
+                or rule.private_peer_ipv4 == path_private_peer
+            )
         )
     )
     out_rules = tuple(
