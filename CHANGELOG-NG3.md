@@ -4,6 +4,20 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Protective payload gate materialized
+
+Accepted architecture component C.010 `ProtectivePayloadGate` now has production Python
+implementation. The bounded Enforcer strictly observes one dedicated owner-marked nft table,
+mutates only absent or proven-owned state, repairs owned drift by one nft transaction and
+freshly verifies the resulting postcondition. Conflicting/foreign state is refused rather
+than adopted.
+
+The live C.010 integration passed enable, owned-drift repair, disable and foreign-conflict
+refusal while the same job retained EXP-083 and C.005 evidence. C.010 is no longer
+`<partial>`; A.011, E.003 and E.004 remain partial pending their own implementation.
+Implementation review:
+`design/reviews/NG3-2026-11-22-protective-payload-gate-implementation-review.md`.
+
 ## 2026-11-22 — Aggressive routing and protective architecture accepted
 
 The previously reviewed aggressive/protective candidate was simplified and materialized into
