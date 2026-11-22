@@ -143,6 +143,8 @@ def setup() -> None:
 
     ns(ORD, "ip", "route", "add", f"{VPN1_TARGET}/32", "via", HOST_ORD)
     ns(ORD, "ip", "route", "add", f"{VPN2_TARGET}/32", "via", HOST_ORD)
+    ns(ORD, "ip", "route", "add", "198.18.82.0/30", "via", HOST_ORD)
+    ns(ORD, "ip", "route", "add", "198.18.82.4/30", "via", HOST_ORD)
     ns(HOST, "ip", "route", "add", f"{VPN1_TARGET}/32", "via", STACK_BOUNDARY, "dev", BH)
     ns(HOST, "ip", "route", "add", f"{VPN2_TARGET}/32", "via", STACK_BOUNDARY, "dev", BH)
     ns(HOST, "ip", "route", "add", "198.18.82.0/30", "via", STACK_BOUNDARY, "dev", BH)
