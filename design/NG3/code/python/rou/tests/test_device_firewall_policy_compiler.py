@@ -171,6 +171,29 @@ class DeviceFirewallPolicyCompilerTests(unittest.TestCase):
         self.assertEqual(len(a0_out.rules), 3)
         self.assertEqual(len(a1_out.rules), 2)
 
+    def test_exact_if_selector_needs_no_private_peer_observation(self):
+        scoped = DeviceFirewallPolicyIntent(
+            "a",
+            (
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.DENY,
+                    path_ifname=EP_A0.ifname,
+                ),
+            ),
+        )
+        desired = compile_device_firewall_policies(
+            (scoped,),
+            (
+                RoutePriorityPathRoute(PATH_A0, EP_A0),
+                RoutePriorityPathRoute(PATH_A1, EP_A1),
+            ),
+            HOST,
+        )
+        self.assertEqual(len(desired.chains[0].rules), 2)
+        self.assertEqual(len(desired.chains[2].rules), 1)
+        self.assertTrue(desired.chains[2].rules[0].terminal_fallthrough)
+
     def test_private_peer_observation_is_required_only_for_scoped_policy(self):
         peer = IPv4Address("172.20.130.6")
         scoped = DeviceFirewallPolicyIntent(
