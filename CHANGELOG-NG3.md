@@ -9,9 +9,9 @@ evidence remain authoritative in their own artifacts.
 The postponed aggressive host-routing and administrative protective-mode branches were
 explicitly re-entered for a focused CDC. EXP-081 demonstrated that the former EXP-074-only
 authoritative-routing closure was incomplete: an earlier foreign RPDB rule can bypass the
-managed dispatch while the old owner still reports its own state exact. Accordingly
-`VPNG-U001-R5.R2.R1` is now `rejected_closure`, while EXP-074 remains valid narrow
-evidence against competing routes inside host table `main`.
+managed dispatch while the old owner still reports its own state exact. The old closure was
+therefore rejected during research; EXP-074 remains valid narrow evidence against competing
+routes inside host table `main`.
 
 EXP-083 selected a simpler protective lower candidate: one dedicated Private-network nft
 table can block ordinary-boundary INPUT/OUTPUT and all IPv4 FORWARD traffic while preserving
@@ -22,11 +22,15 @@ continuous aggressive observation includes relevant competing policy, aggressive
 containment is separated from broader protective escalation, and protective mode now has
 explicit control, traffic, state-preservation and continuous/safe-leave descendants.
 
-This block intentionally stops at reviewed research input rather than claiming new
-architecture closure. Current inventory is 213 normative nodes: 189 `closed`, 10 `open`,
-1 `rejected_closure`, 10 `postponed`, 3 `permanent`, and 0 `pending_closure`.
-The accepted research review is
-`design/reviews/NG3-2026-11-22-aggressive-protective-research-review.md`.
+The accepted research direction is now materialized as authoritative-architecture §2.11,
+explicitly marked as a **pending closure candidate** rather than current Residents/component
+specs. All 11 affected aggressive/protective nodes therefore have exact architecture
+references and are `pending_closure`; no implementation or final architecture acceptance is
+claimed. Current inventory is 213 normative nodes: 189 `closed`, 11 `pending_closure`,
+10 `postponed`, 3 `permanent`, and zero `open` or `rejected_closure`.
+The research and candidate reviews are
+`design/reviews/NG3-2026-11-22-aggressive-protective-research-review.md` and
+`design/reviews/NG3-2026-11-22-aggressive-protective-architecture-candidate-review.md`.
 
 ## 2026-11-22 — Requirement status made mandatory and permanent principles classified
 
