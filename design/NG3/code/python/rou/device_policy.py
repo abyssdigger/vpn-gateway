@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from .port_bundle import PortBundle
 
@@ -57,6 +57,7 @@ class DeviceFirewallRuleIntent:
     destination_ports: PortBundle | int | None = None
     source_ipv4_cidr: IPv4Network | None = None
     destination_ipv4_cidr: IPv4Network | None = None
+    private_peer_ipv4: IPv4Address | None = None
     comment: str | None = None
 
     def __post_init__(self) -> None:
@@ -85,6 +86,13 @@ class DeviceFirewallRuleIntent:
                 raise ValueError(
                     f"{field_name} must be IPv4Network when present"
                 )
+        if (
+            self.private_peer_ipv4 is not None
+            and not isinstance(self.private_peer_ipv4, IPv4Address)
+        ):
+            raise ValueError(
+                "private_peer_ipv4 must be IPv4Address when present"
+            )
         if self.comment is not None and not isinstance(self.comment, str):
             raise ValueError("comment must be text when present")
 
