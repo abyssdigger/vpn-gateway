@@ -9,7 +9,7 @@ analysis and transfer of the last architecture-level decision.
 
 ## Checks
 
-- `design/NG3/structured-architecture.md` remains the sole authoritative current architecture.
+- `design/NG3/architecture-ng.md` remains the sole authoritative current architecture.
 - All current architecture component/API/interaction semantics formerly represented by the
   flat report have structured owners.
 - The old §15 deliberate-omission decision is now represented in structured §2.9.4.

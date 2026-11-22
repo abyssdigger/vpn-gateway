@@ -6,14 +6,14 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[6]
-STRUCTURED = ROOT / "design/NG3/structured-architecture.md"
+ARCHITECTURE = ROOT / "design/NG3/architecture-ng.md"
 REQUIREMENTS = ROOT / "design/NG3/requirements.md"
 TRACE = ROOT / "design/NG3/implementation-traceability.md"
 PRODUCTION = ROOT / "design/NG3/code/python/rou"
 
 
 def declared_python_implementations() -> tuple[tuple[str, Path], ...]:
-    lines = STRUCTURED.read_text(encoding="utf-8").splitlines()
+    lines = ARCHITECTURE.read_text(encoding="utf-8").splitlines()
     current_spec = None
     in_implementation = False
     result = []
@@ -71,7 +71,7 @@ def trace_manifest() -> tuple[dict[str, tuple[str, ...]], dict[str, str]]:
 
 
 def component_specs() -> dict[str, str]:
-    text = STRUCTURED.read_text(encoding="utf-8")
+    text = ARCHITECTURE.read_text(encoding="utf-8")
     matches = list(re.finditer(r"^## ([A-G]\.\d{3})\s+.+$", text, re.MULTILINE))
     result = {}
     for index, match in enumerate(matches):
@@ -100,7 +100,7 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
                 self.assertTrue(reason.strip(), "architecture debt requires an explicit reason")
 
     def test_every_closed_requirement_has_structured_architecture_entry(self):
-        architecture = STRUCTURED.read_text(encoding="utf-8")
+        architecture = ARCHITECTURE.read_text(encoding="utf-8")
         closed = []
         for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
             match = re.match(

@@ -20,7 +20,7 @@ journal-priority filtering.
 
 ## 2026-11-22 — Structured architecture becomes authoritative
 
-The sequential architecture restructuring is complete. `design/NG3/structured-architecture.md`
+The sequential architecture restructuring is complete. `design/NG3/architecture-ng.md`
 is now the single current NG3 architecture source for component/API/interaction contracts and
 requirement closure. The former flat `design/NG3/architecture.md` has now been removed from the current tree;
 its last full body remains available in Git history at

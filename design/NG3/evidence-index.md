@@ -1,7 +1,7 @@
 # NG3 evidence index
 
 **Status:** normative stable evidence-address registry  
-**Architecture:** `design/NG3/structured-architecture.md`
+**Architecture:** `design/NG3/architecture-ng.md`
 
 Evidence IDs are stable addresses. New top-level entries normally advance by 10
 (`EV-00000`, `EV-00010`, ...); intermediate values may be inserted later without

@@ -1,7 +1,7 @@
 # NG3 production implementation trace
 
 **Status:** normative architecture trace manifest  
-**Architecture:** `design/NG3/structured-architecture.md`  
+**Architecture:** `design/NG3/architecture-ng.md`  
 **Scope:** production Python reference runtime under `design/NG3/code/python/rou/*.py`
 
 This manifest is the exhaustive code-to-architecture edge for the current Python reference runtime. Every production Python unit appears exactly once below and resolves to one or more component specs. The referenced component specs own normative requirement traceability.
