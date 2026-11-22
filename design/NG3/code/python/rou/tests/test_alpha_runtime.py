@@ -201,6 +201,60 @@ class AlphaPreparedPolicyTests(unittest.TestCase):
                 local_address=IPv4Address("198.19.255.2"),
             )
 
+    def test_alpha_private_peer_firewall_is_path_scoped(self):
+        config = """
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn*/2"]
+use_outbound_nat = false
+firewall = [
+    "out deny udp to 10.253.0.1/32:53 via peer 172.20.130.6",
+    "out allow icmp to 10.253.0.1/32",
+]
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.253.0.1/32"]
+device_order = ["oc"]
+"""
+        prepared = AlphaPreparedPolicy.from_text(
+            config,
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        self.assertTrue(prepared.requires_private_peer_observation)
+
+        host_boundary = InterfaceIdentity("vnga-inner0", 7)
+        vpn_a = InterfaceIdentity("vpn0", 11)
+        vpn_b = InterfaceIdentity("vpn1", 12)
+        desired = prepared.build_current(
+            host_boundary,
+            (
+                InterfaceIdentity("lo", 1),
+                host_boundary,
+                vpn_a,
+                vpn_b,
+            ),
+            path_private_peers={
+                InterfaceIdentity("lo", 1): None,
+                host_boundary: None,
+                vpn_a: IPv4Address("172.20.130.6"),
+                vpn_b: IPv4Address("172.20.130.5"),
+            },
+        )
+
+        self.assertEqual(len(desired.nft.device_firewall.chains), 4)
+        first_out = desired.nft.device_firewall.chains[0]
+        second_out = desired.nft.device_firewall.chains[2]
+        self.assertEqual(len(first_out.rules), 3)
+        self.assertEqual(len(second_out.rules), 2)
+
+        ordinary = AlphaPreparedPolicy.from_text(
+            CONFIG,
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        self.assertFalse(ordinary.requires_private_peer_observation)
+
     def test_alpha_materializes_canonical_device_nat_and_firewall(self):
         prepared = AlphaPreparedPolicy.from_text(
             CONFIG.replace(
