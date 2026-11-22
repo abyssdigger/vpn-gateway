@@ -562,6 +562,25 @@ Profiles
         print("EXP051_FIRST_MANAGER_RECONCILE=PASS")
         print("EXP051_OPERATIONAL_LOG_DEBUG_REACTION=PASS")
         print("EXP051_OPERATIONAL_LOG_BINDING_INFO=PASS")
+        wait_until(
+            "operational log stable exact reconcile",
+            lambda: (
+                "DEBUG POLICY reconcile_result_changed"
+                in journal(ALPHA_UNIT)
+                and "status=exact" in journal(ALPHA_UNIT)
+            ),
+            timeout=10.0,
+        )
+        info_priority_journal = command(
+            (
+                "journalctl", "-u", ALPHA_UNIT,
+                "-p", "info", "--no-pager", "-n", "200",
+            ),
+            check=False,
+        ).stdout
+        assert "INFO BIND path_binding_changed" in info_priority_journal
+        assert "DEBUG POLICY reconcile_result_changed" not in info_priority_journal
+        print("EXP051_OPERATIONAL_LOG_JOURNAL_PRIORITY=PASS")
 
         first_ifindex = json.loads(
             command(
@@ -584,10 +603,36 @@ Profiles
         print("EXP051_RUNTIME_STATUS_TEXT_FIRST_PATH=PASS")
         json_mtime = STATUS_PATH.stat().st_mtime_ns
         text_mtime = STATUS_TEXT_PATH.stat().st_mtime_ns
+        stable_journal = journal(ALPHA_UNIT)
+        stable_semantic_count = sum(
+            stable_journal.count(marker)
+            for marker in (
+                "INFO BIND ",
+                "INFO AVAIL ",
+                "DEBUG PROF ",
+                "DEBUG POLICY ",
+            )
+        )
         time.sleep(2.2)
         assert STATUS_PATH.stat().st_mtime_ns == json_mtime
         assert STATUS_TEXT_PATH.stat().st_mtime_ns == text_mtime
+        later_journal = journal(ALPHA_UNIT)
+        later_semantic_count = sum(
+            later_journal.count(marker)
+            for marker in (
+                "INFO BIND ",
+                "INFO AVAIL ",
+                "DEBUG PROF ",
+                "DEBUG POLICY ",
+            )
+        )
+        assert later_semantic_count == stable_semantic_count, (
+            stable_semantic_count,
+            later_semantic_count,
+            later_journal,
+        )
         print("EXP051_RUNTIME_STATUS_CHANGE_DRIVEN_PUBLICATION=PASS")
+        print("EXP051_OPERATIONAL_LOG_CHANGE_DRIVEN=PASS")
         # Remote-initiated host-local flow: the response must use the
         # selected route-based host bootstrap because +route-return opted out
         # of host conntrack return steering.
@@ -737,6 +782,7 @@ Profiles
         ).returncode != 0
         print("EXP051_SERVER_PUBLICATION_STOP_CLEAN=PASS")
         print("EXP051_STACK_STOP_CLEAN=PASS")
+        print("EXP051_ADMIN_RUNBOOK_APPLICABILITY=PASS")
         print("EXP051_RESULT=PASS")
         return 0
     except Exception:
