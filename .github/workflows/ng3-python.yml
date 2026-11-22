@@ -23,6 +23,7 @@ on:
       - "design/experiments/EXP-074 NG3 host managed routing/**"
       - "design/experiments/EXP-081 NG3 aggressive RPDB precedence gap/**"
       - "design/experiments/EXP-084 NG3 aggressive escape guard/**"
+      - "design/experiments/EXP-085 NG3 aggressive full-tunnel guard/**"
       - "design/experiments/EXP-077 NG3 peaceful host routing/**"
       - "design/experiments/EXP-078 NG3 peaceful host routing selectors/**"
       - "design/experiments/EXP-079 NG3 managed boundary helper bypass/**"
@@ -657,6 +658,11 @@ jobs:
           env PYTHONPATH=design/NG3/code/python
           sudo --preserve-env=PYTHONPATH python3
           "design/experiments/EXP-084 NG3 aggressive escape guard/exp084_aggressive_escape_guard.py"
+      - name: EXP-085 aggressive full-tunnel escape guard
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-085 NG3 aggressive full-tunnel guard/exp085_aggressive_full_tunnel_guard.py"
       - name: EXP-078 scoped peaceful host routing selectors
         run: >-
           sudo python3
