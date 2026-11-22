@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from rou.port_bundle import PortBundle, PortSpan
 from rou.device_policy import (
@@ -99,6 +99,22 @@ class DeviceFirewallPolicyIntentTests(unittest.TestCase):
         )
         self.assertEqual(rule.source_ipv4_cidr, source)
         self.assertEqual(rule.destination_ipv4_cidr, destination)
+
+    def test_private_peer_selector_is_typed_internal_semantics(self):
+        peer = IPv4Address("172.20.130.6")
+        rule = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.OUT,
+            action=DeviceFirewallAction.DENY,
+            private_peer_ipv4=peer,
+        )
+        self.assertEqual(rule.private_peer_ipv4, peer)
+
+        with self.assertRaisesRegex(ValueError, "private_peer_ipv4"):
+            DeviceFirewallRuleIntent(
+                direction=DeviceFirewallDirection.OUT,
+                action=DeviceFirewallAction.DENY,
+                private_peer_ipv4="172.20.130.6",  # type: ignore[arg-type]
+            )
 
     def test_protocol_vocabulary_is_not_selected_here(self):
         rule = DeviceFirewallRuleIntent(
