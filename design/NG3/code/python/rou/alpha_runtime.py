@@ -650,7 +650,9 @@ def _binding_map(
     bindings: tuple[PathBinding, ...],
 ) -> dict[LogicalPathId, str]:
     return {
-        binding.path_id: binding.endpoint.ifname
+        binding.path_id: (
+            f"{binding.endpoint.ifname}@{binding.endpoint.ifindex}"
+        )
         for binding in bindings
     }
 

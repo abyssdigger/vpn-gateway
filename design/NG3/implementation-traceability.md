@@ -62,6 +62,17 @@ A production unit without a normal requirement path may appear only under `Archi
 
 - `design/NG3/code/python/rou/runtime_status.py`
 
+## Trace: `A.010`
+
+- `design/NG3/code/python/rou/operational_log.py`
+- `design/NG3/code/python/rou/alpha_runtime.py`
+- `design/NG3/code/python/rou/binding.py`
+- `design/NG3/code/python/rou/availability_manager.py`
+- `design/NG3/code/python/rou/payload_profile.py`
+- `design/NG3/code/python/rou/network_policy_activation.py`
+- `design/NG3/code/python/rou/release1_host_route_helper.py`
+- `design/NG3/code/python/rou/controller_startup.py`
+
 ## Trace: `B.001`, `C.007`, `C.009`
 
 - `design/NG3/code/python/rou/managed_network_domain.py`

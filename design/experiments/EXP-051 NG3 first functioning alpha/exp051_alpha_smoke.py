@@ -248,7 +248,8 @@ verb 3
     )
 
     (etc / "config.toml").write_text(
-        f"""helper_routing_interfaces = ":local"
+        f"""log_level = "debug"
+helper_routing_interfaces = ":local"
 helper_routing_policy = "peaceful"
 
 [device.ovpn]
@@ -555,9 +556,12 @@ Profiles
             timeout=30.0,
         )
         first_alpha_journal = journal(ALPHA_UNIT)
-        assert "VPNG_ALPHA_RECONCILE status=reconciled" in first_alpha_journal
+        assert "DEBUG POLICY reconcile_result_changed" in first_alpha_journal
+        assert "INFO BIND path_binding_changed" in first_alpha_journal
         print("EXP051_FIRST_PAYLOAD=PASS")
         print("EXP051_FIRST_MANAGER_RECONCILE=PASS")
+        print("EXP051_OPERATIONAL_LOG_DEBUG_REACTION=PASS")
+        print("EXP051_OPERATIONAL_LOG_BINDING_INFO=PASS")
 
         first_ifindex = json.loads(
             command(
@@ -683,8 +687,15 @@ Profiles
         )
         final_alpha_journal = journal(ALPHA_UNIT)
         reconcile_markers = final_alpha_journal.count(
-            "VPNG_ALPHA_RECONCILE status=reconciled"
+            "DEBUG POLICY reconcile_result_changed"
         )
+        assert (
+            f"current={VPN_IF}@{first_ifindex}" in final_alpha_journal
+        ), final_alpha_journal
+        assert (
+            f"current={VPN_IF}@{second_ifindex}" in final_alpha_journal
+        ), final_alpha_journal
+        print("EXP051_OPERATIONAL_LOG_ENDPOINT_GENERATION=PASS")
         final_status = runtime_status()
         assert final_status["readiness"] == "ready", final_status
         final_paths = final_status["confirmed_effective_state"][0]["ordered_paths"]
