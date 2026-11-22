@@ -74,7 +74,7 @@ instead of inventing semantics locally.
 
 ### Requirement work
 
-For requirement semantics, refinement, constraints, closure labels and requirement-tree
+For requirement semantics, refinement, constraints, requirement status and requirement-tree
 maintenance, follow `design/requirements-model.md` and the relevant current-stage
 Requirement/Constraint ancestry.
 
