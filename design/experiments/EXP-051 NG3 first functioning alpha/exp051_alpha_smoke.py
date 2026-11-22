@@ -556,7 +556,7 @@ Profiles
             timeout=30.0,
         )
         first_alpha_journal = journal(ALPHA_UNIT)
-        assert "DEBUG POLICY reconcile_result_changed" in first_alpha_journal
+        assert "DEBUG POLICY policy_applied" in first_alpha_journal
         assert "INFO BIND path_binding_changed" in first_alpha_journal
         print("EXP051_FIRST_PAYLOAD=PASS")
         print("EXP051_FIRST_MANAGER_RECONCILE=PASS")
@@ -565,7 +565,7 @@ Profiles
         wait_until(
             "operational log stable exact reconcile",
             lambda: (
-                "DEBUG POLICY reconcile_result_changed"
+                "DEBUG POLICY policy_applied"
                 in journal(ALPHA_UNIT)
                 and "status=exact" in journal(ALPHA_UNIT)
             ),
@@ -579,7 +579,7 @@ Profiles
             check=False,
         ).stdout
         assert "INFO BIND path_binding_changed" in info_priority_journal
-        assert "DEBUG POLICY reconcile_result_changed" not in info_priority_journal
+        assert "DEBUG POLICY policy_applied" not in info_priority_journal
         print("EXP051_OPERATIONAL_LOG_JOURNAL_PRIORITY=PASS")
 
         first_ifindex = json.loads(
@@ -732,7 +732,7 @@ Profiles
         )
         final_alpha_journal = journal(ALPHA_UNIT)
         reconcile_markers = final_alpha_journal.count(
-            "DEBUG POLICY reconcile_result_changed"
+            "DEBUG POLICY policy_applied"
         )
         assert (
             f"current={VPN_IF}@{first_ifindex}" in final_alpha_journal

@@ -794,6 +794,18 @@ def run_alpha_runtime(
         logger_holder["logger"] = OperationalLogAdapter(
             prepared.config.log_level
         )
+        log(
+            OperationalLogLevel.INFO,
+            LIFE_LOG_TAG,
+            "config_accepted",
+            devices=len(prepared.config.structural.active_device_ids),
+            profiles=sum(
+                1
+                for profile in prepared.config.structural.profiles.values()
+                if profile.enabled
+            ),
+            log_level=prepared.config.log_level.value,
+        )
         validate_release1_helper_routing_scope(
             prepared.config,
             domain_spec,
@@ -1066,30 +1078,41 @@ def run_alpha_runtime(
             last_problem_owners = current_problem_owners
 
             status_publisher.publish(status_agent.snapshot())
-            if (
+            changed_result = (
                 result.status is not last_status
                 or result.diagnostic != last_diagnostic
+            )
+            if result.status is AlphaReconcileStatus.RECONCILED:
+                log(
+                    OperationalLogLevel.DEBUG,
+                    POLICY_LOG_TAG,
+                    "policy_applied",
+                    status=result.status.value,
+                )
+            elif (
+                result.status is AlphaReconcileStatus.FAILED
+                and changed_result
             ):
                 log(
-                    (
-                        OperationalLogLevel.ERROR
-                        if result.status is AlphaReconcileStatus.FAILED
-                        else OperationalLogLevel.DEBUG
-                    ),
+                    OperationalLogLevel.ERROR,
                     POLICY_LOG_TAG,
-                    (
-                        "reconcile_failed"
-                        if result.status is AlphaReconcileStatus.FAILED
-                        else "reconcile_result_changed"
-                    ),
+                    "reconcile_failed",
                     status=result.status.value,
                     diagnostic=result.diagnostic,
                 )
+            elif changed_result:
+                log(
+                    OperationalLogLevel.DEBUG,
+                    POLICY_LOG_TAG,
+                    "reconcile_confirmed",
+                    status=result.status.value,
+                )
+            if changed_result:
                 _notify_systemd(
                     f"STATUS=VPN-GATE alpha reconcile {result.status.value}"
                 )
-                last_status = result.status
-                last_diagnostic = result.diagnostic
+            last_status = result.status
+            last_diagnostic = result.diagnostic
 
         status_agent.mark_stopping()
         status_publisher.publish(status_agent.snapshot())

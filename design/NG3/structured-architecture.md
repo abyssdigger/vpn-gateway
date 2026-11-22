@@ -589,10 +589,11 @@ confirmation. Release-1 physical probe mechanism is ICMP only.
 **Architecture coverage:** C.003 exact/fail-closed enforcement and C.005 forwarding barrier
 provide restrictive failure behavior; A.004/A.007 and alpha reconciliation perform finite
 cadence fresh observation/recovery for authoritative active state; A.001 owns bounded
-lifecycle recovery/cleanup; A.008 exposes truthful current status. Administrator-facing
-recovery documentation must preserve the ownership split between authoritative product state,
-external integration state and peaceful-helper contributions returned to administrator
-control.
+lifecycle recovery/cleanup; A.008/A.009 expose truthful current status and A.010 provides
+separate event/reaction history without making logs the source of current truth.
+Administrator-facing recovery documentation must preserve the ownership split between
+authoritative product state, external integration state and peaceful-helper contributions
+returned to administrator control.
 
 ### Maintainability, continuity, evidence and development boundaries
 
