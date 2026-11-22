@@ -565,7 +565,7 @@ Profiles
         wait_until(
             "operational log stable exact reconcile",
             lambda: (
-                "DEBUG POLICY policy_applied"
+                "DEBUG POLICY reconcile_confirmed"
                 in journal(ALPHA_UNIT)
                 and "status=exact" in journal(ALPHA_UNIT)
             ),

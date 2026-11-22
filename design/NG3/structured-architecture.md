@@ -1839,11 +1839,16 @@ Architectural decisions
    DEBUG/INFO/WARNING/ERROR filtering. That transport is alpha deployment machinery, not a
    requirement that all future deployments use systemd/journald.*
 
-Implementation target
+Implementation
 
     design/NG3/code/python/rou/operational_log.py — threshold/filter/format Direct Adapter.
-    component modules — local LOG_TAG constants for attributed records.
-    design/NG3/code/python/rou/alpha_runtime.py — alpha composition and transition emission.
+
+Integration note
+
+    Existing architecture-owned component modules declare their local LOG_TAG constants, and
+    A.001 alpha composition emits semantic transitions/reactions through A.010. Those files
+    retain their existing single architecture ownership in implementation-traceability; A.010
+    does not claim them as duplicate implementation owners.
 
 # Annex B. Ordinary-side transition components
 
