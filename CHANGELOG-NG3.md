@@ -4,6 +4,22 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Requirement status made mandatory and permanent principles classified
+
+The Requirement/Constraint model now uses one mandatory `requirement status` enum:
+`open | pending_closure | closed | rejected_closure | postponed | permanent`. Missing status
+is no longer an implicit open state. `permanent` identifies obligations that remain applicable
+to current and future architecture and therefore cannot be finitely architecture-closed; the
+status is explicitly non-inherited.
+
+Current NG3 inventory is 190 `closed`, 14 `postponed`, 3 `permanent`, and zero
+`open`, `pending_closure`, `rejected_closure` or statusless nodes. The permanent nodes
+are `VPNG-D001`, `VPNG-M001` and `VPNG-M001-R3.R1`; weak-device suitability parent
+`VPNG-M001-R3` is explicitly postponed with the Raspberry Pi 2 resource-evidence branch.
+Traceability tests now enforce mandatory/mutually exclusive status, closure references and
+postponement records. The integrity and current permanent-conformance review is
+`design/reviews/NG3-2026-11-22-requirement-status-permanent-integrity-review.md`.
+
 ## 2026-11-22 — Current requirements closure frontier cleared
 
 The remaining 17 `pending_closure` Requirement/Constraint nodes were re-reviewed against the
