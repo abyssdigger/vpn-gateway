@@ -518,14 +518,17 @@ owners/sections, через которые реализуется соответ
 **Requirements:** `VPNG-U001`, `VPNG-U001-R1`, `VPNG-U001-R1.R3`,
 `VPNG-U001-R1.R3.C1`, `VPNG-U001-R1.R3.C1.R1.R1`,
 `VPNG-U001-R1.R3.C1.R1.R2`, `VPNG-U001-R1.R3.C3`,
-`VPNG-U001-R1.R3.C3.R1`.
+`VPNG-U001-R1.R3.C3.R1`, `VPNG-U001-R1.R3.R6`,
+`VPNG-U001-R1.R3.R6.R1`, `VPNG-U001-R1.R3.R6.R2`.
 
 **Architecture coverage:** STACK `PayloadTrafficManager`, Private
 `NetworkPolicyAdapter`/`VPNPathAdapter`, ordinary-side transition, Space
 `VPN external ends`, A.001 lifecycle composition and the evidence-backed OpenVPN/systemd
-integration boundary. VPN runtime remains externally provisioned/supervised where the
-integration contract says so; VPN-GATE owns its own network policy rather than VPN-specific
-configuration.
+integration boundary. Bounded client transport/control admission is normalized by A.002 and
+materialized through C.001 local-integration policy; server transport publication uses the
+two-postcondition C.001 managed-local admission plus E.001 host publication mapping. VPN
+runtime remains externally provisioned/supervised where the integration contract says so;
+VPN-GATE owns its own network policy rather than VPN-specific configuration.
 
 ### Ordinary-host integration and helper scope
 
@@ -547,6 +550,7 @@ explicitly prevents peaceful helper machinery from silently acquiring them.
 `VPNG-U001-R4.R4.R3`, `VPNG-U001-R4.R4.R4`,
 `VPNG-U001-R4.R4.R4.R2`, `VPNG-U001-R4.R4.R4.R3`,
 `VPNG-U001-R4.R4.R5`, `VPNG-U001-R4.R4.R6`,
+`VPNG-U001-R4.R4.R6.R3`, `VPNG-U001-R4.R4.R6.R4`,
 `VPNG-U001-R4.R4.R6.R2.R1`, `VPNG-U001-R4.R4.R6.R2.R2`,
 `VPNG-U001-R4.R4.R6.R2.R3`, `VPNG-U001-R4.R4.R6.R2.R4`,
 `VPNG-U001-R4.R4.R6.C1`.
@@ -1449,6 +1453,8 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U001-R4.R3`
 - `VPNG-U001-R4.R4`
 - `VPNG-U001-R4.R5`
+- `VPNG-U001-R4.R4.R6.R3`
+- `VPNG-U001-R4.R4.R6.R4`
 - `VPNG-U001-R1.R3.C1.R1`
 - `VPNG-U002-R2.R1`
 - `VPNG-U002-R2.R2`
@@ -1910,6 +1916,7 @@ lower network-policy domain Private network. Общая physical realization н�
 
 **Implements:**
 - `VPNG-U001-R1.R1`
+- `VPNG-U001-R1.R3.R6.R2`
 - `VPNG-U004-R4.R2`
 - `VPNG-U004-R4.R3`
 - `VPNG-U004-R4.R5`
