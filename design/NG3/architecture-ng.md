@@ -565,10 +565,26 @@ VPN-GATE owns its own network policy rather than VPN-specific configuration.
 `VPN-GATE-managed host state` and `Ambient host and external world`. Core forwarding does
 not require the peaceful helper when administrator routing satisfies the host-integration
 contract. Aggressive authoritative helper semantics remain outside Release-1; E.002
-explicitly prevents peaceful helper machinery from silently acquiring them. The earlier
-EXP-074 candidate for `VPNG-U001-R5.R2.R1` is not current closure: EXP-081 demonstrated an
-earlier foreign RPDB-policy bypass, so that node remains outside this closed-coverage index
-pending a replacement authoritative-policy candidate.
+explicitly prevents peaceful helper machinery from silently acquiring them. Current aggressive
+architecture is separated into E.003/E.004 and remains constrained out of Release 1 by
+`VPNG-U001-R5.R2.C1`; it is not folded into the peaceful helper.
+
+### Aggressive host routing and administrative protective mode
+
+**Requirements:** `VPNG-U001-R5.R2`, `VPNG-U001-R5.R2.R1`,
+`VPNG-U001-R5.R2.R2`, `VPNG-U001-R5.R2.R3`,
+`VPNG-U001-R5.R2.R3.R1`, `VPNG-U001-R5.R2.R3.R2`,
+`VPNG-U004-R5`, `VPNG-U004-R5.R1`, `VPNG-U004-R5.R2`,
+`VPNG-U004-R5.R3`, `VPNG-U004-R5.R4`.
+
+**Architecture coverage:** E.003 `AggressiveHostRoutingManager` owns continuous aggressive
+semantics and escalation; child E.004 `AggressiveHostRoutingEnforcer` owns bounded composite
+routing + escape-protection convergence with fail-closed ordering. A.011
+`ProtectiveModeManager` owns source-scoped public protective requests, continuous
+confirmation and safe release; C.010 `ProtectivePayloadGate` owns the single
+Private-network containment gate. EXP-081 rejects owned-object-only routing authority,
+EXP-084 validates independent aggressive escape protection, and EXP-083 validates the
+selected one-gate protective lower mechanism.
 
 ### Human configuration and Device/Profile policy model
 
@@ -667,176 +683,6 @@ coverage before implementation proceeds.
 **Evidence:** `EV-00010`.
 
 
-## 2.11. Pending closure candidate: aggressive host routing and protective mode
-
-Этот раздел содержит **architecture candidate**, подготовленный после re-entry/research
-`VPNG-U001-R5.R2*` и `VPNG-U004-R5*`. Пока соответствующие requirements имеют
-`pending_closure`, описанные ниже будущие компоненты **не входят** в текущие Residents/Annex
-как принятая materialized architecture и не получают фиктивный Implementation trace.
-
-Принятие candidate должно либо перенести эти роли в соответствующие Space-local Residents и
-Component Annex specs, либо явно заменить candidate другим решением.
-
-Research/evidence:
-
-- `design/NG3/research/NG3-2026-11-22-aggressive-protective-research.md`;
-- EXP-081 — отвергает прежний EXP-074-only closure для `VPNG-U001-R5.R2.R1`;
-- EXP-083 — подтверждает single Private-network protective gate;
-- EXP-084 — подтверждает independent aggressive managed-egress escape guard.
-
-### 2.11.1. Aggressive host-routing ownership candidate
-
-**Requirements:** `VPNG-U001-R5.R2`, `VPNG-U001-R5.R2.R1`,
-`VPNG-U001-R5.R2.R2`, `VPNG-U001-R5.R2.R3`,
-`VPNG-U001-R5.R2.R3.R1`, `VPNG-U001-R5.R2.R3.R2`.
-
-Candidate ownership:
-
-1. `AggressiveHostRoutingManager` — будущий Manager Space
-   `VPN-GATE-managed host state`. Он владеет непрерывно поддерживаемым состоянием только
-   явно включенной aggressive-области и не меняет E.002 peaceful
-   `HostRoutingContribution`.
-2. `AggressiveHostRoutingEnforcer` — bounded Enforcer одного составного postcondition:
-   требуемая доставка управляемой области через текущую managed boundary должна быть
-   подтверждена, а передача этой области через иной ordinary-host egress должна быть
-   запрещена. Enforcer может использовать несколько lower mechanisms внутри одного
-   convergence-контракта; отдельный архитектурный компонент для escape guard не требуется.
-
-Owned lower state Enforcer'а включает как минимум два независимо проверяемых Artifact:
-
-- aggressive routing state;
-- aggressive escape-guard state, доказанного EXP-084 типа.
-
-Candidate active invariant:
-
-```text
-aggressive scope CONFIRMED
-    =
-    exact current managed-boundary binding
-    AND effective aggressive delivery confirmed
-    AND non-managed escape impossible
-```
-
-Escape-guard state не выбирает маршрут. Для каждого destination активной aggressive-области
-он запрещает соответствующему local/forwarded host traffic покинуть ordinary HOST через
-egress, отличный от exact current managed boundary. Поэтому ошибочное внешнее решение
-маршрутизации может временно нарушить delivery postcondition, но не превращает окно до
-следующей проверки Manager'ом в silent ordinary-path leak.
-
-Safe bounded convergence принадлежит Enforcer'у, а не Manager'у:
-
-Activation:
-
-1. получить current managed-boundary identity/generation;
-2. materialize и fresh-verify escape-guard state для нового scope;
-3. converge routing state;
-4. fresh-verify composite postcondition + boundary generation;
-5. вернуть success только после подтверждения всего составного postcondition.
-
-Deactivation:
-
-1. удалить/отключить aggressive routing capture и fresh-verify его отсутствие;
-2. только после этого удалить escape-guard state;
-3. вернуть success только после подтверждения требуемого неактивного состояния.
-
-Continuous ownership:
-
-- Manager периодически, с конечным интервалом, заново подтверждает **effective aggressive
-  postcondition**, а не пытается сам классифицировать все возможные причины его нарушения;
-- rtnetlink route/rule notifications могут использоваться как wakeup trigger, но не как
-  source of truth;
-- каждый audit/recovery начинается с нового authoritative observation;
-- при нарушении routing postcondition escape-guard state остается активным во время recovery;
-- если точное безопасное recovery невозможно, Manager сохраняет локальную защитную блокировку
-  и запрашивает public protective mode `VPNG-U004-R5`;
-- невозможность подтвердить локальную блокировку или запрошенный protective result
-  публикуется как explicit problem, а не как healthy aggressive state.
-
-EXP-081 требует, чтобы lower verification доказывала фактическое выполнение составного
-postcondition, а не только точность принадлежащих VPN-GATE table/rule objects. Какие именно
-Linux state/queries нужны для такого доказательства — RPDB inspection, effective lookup или
-другая эквивалентная проверка — остается implementation decision и не является обязанностью
-`AggressiveHostRoutingManager`.
-
-### 2.11.2. Protective-mode ownership candidate
-
-**Requirements:** `VPNG-U004-R5`, `VPNG-U004-R5.R1`,
-`VPNG-U004-R5.R2`, `VPNG-U004-R5.R3`, `VPNG-U004-R5.R4`.
-
-Candidate ownership:
-
-1. `ProtectiveModeManager` — будущий STACK Manager public protective semantic state.
-   Operator/automation и `AggressiveHostRoutingManager` являются независимыми request
-   sources; aggressive helper не становится владельцем global protective mode.
-2. `ProtectivePayloadGate` — будущий bounded Enforcer Space `Private network`, владеющий
-   только dedicated protective containment state. Linux lower candidate — отдельная nftables
-   table из EXP-083.
-
-Candidate gate postcondition:
-
-```text
-protective gate ENABLED
-    ->
-    ordinary-side managed-boundary IP INPUT blocked
-    AND ordinary-side managed-boundary IP OUTPUT blocked
-    AND Private-network IP FORWARD blocked
-```
-
-Gate не уничтожает managed namespace, interfaces, routes, bindings, Device/Profile intent или
-diagnostic owner projections. Он является отдельным owned containment state и не подменяет
-C.005 `ForwardingGate`: C.005 сохраняет structural-transition semantics, тогда как
-`ProtectivePayloadGate` реализует explicit public mode.
-
-Public semantic operations candidate:
-
-```text
-request_protective_active()
-    -> success only after fresh protective-gate confirmation
-    -> failure/problem otherwise; requested protective intent is not silently cleared
-
-request_protective_inactive()
-    -> keep protective gate active
-    -> fresh-confirm applicable normal desired/binding/policy readiness
-    -> remove protective gate as one owned lower operation
-    -> success only after fresh absence + normal-state confirmation
-```
-
-While protective intent remains active:
-
-- Manager performs finite-cadence fresh observation of the dedicated gate;
-- lower notifications may only accelerate reconciliation;
-- missing/conflicting/unknown gate state is not treated as protection;
-- exact owned gate is restored when safe;
-- inability to prove the protective postcondition remains explicit problem state.
-
-Safe leave composes with `VPNG-U004-R4.R3` / `VPNG-U004-R4.R3.R2`: normal traffic is not
-released merely because a leave request was received. The gate remains active until the
-normal state required for release is freshly confirmed, then the single dedicated gate is
-removed. A failed leave therefore remains fail-closed.
-
-### 2.11.3. Relationship between the two candidates
-
-The safety composition is intentionally asymmetric:
-
-```text
-aggressive routing drift
-    -> independent aggressive escape guard already blocks ordinary-path escape
-    -> AggressiveHostRoutingManager attempts fresh recovery
-    -> unrecoverable/unconfirmed
-         -> keep local guard
-         -> request ProtectiveModeManager active
-              -> confirmed: global controlled-area containment
-              -> problem: local aggressive containment remains; explicit alarm
-```
-
-Public protective mode does not depend on aggressive helper being configured. Conversely,
-aggressive helper does not treat a successful request submission as proof that protective mode
-is active; it may release its own local containment only under its explicit disable/recovery
-contract.
-
-No user-facing CLI spelling, persistence format or implementation language is selected by
-this candidate.
-
 
 ## 3. Форма описания Space
 
@@ -919,6 +765,9 @@ API
     @ProductLifecycleControl.stop(...) — выполнить bounded containment/cleanup и сообщить success только после требуемых cleanup postconditions.
     @ProductLifecycleControl.restart(...) — скомпозировать stop + новый start из authoritative state.
     @ProductLifecycleControl.reload(...) — optional supported operation; отсутствует в текущей alpha и не подменяется скрытым restart.
+    @ProtectiveModeManager.request_active(source, ...) — установить source-scoped запрос защиты; success возвращается только после подтверждения полного protective postcondition.
+    @ProtectiveModeManager.request_inactive(source, ...) — снять запрос только данного source; gate может быть снят лишь когда других active sources нет и normal release precondition подтвержден.
+    @ProtectiveModeManager.current_state(∅) — вернуть текущий набор request sources и confirmed / problem protective state.
     @ConfigurationAdapter.normalize(...) — принять внешнее configuration representation и вернуть validated normalized domain intents.
     @RuntimeStatusAgent.<current snapshot publication> — предоставить текущую user-facing status projection.
     RuntimeStatusTextRenderer.render(snapshot) — получить обязательный compact human-readable Devices/Profiles report; delivery surface остаётся заменяемой.
@@ -931,8 +780,9 @@ Residents
 3. `PayloadTrafficManager` *Manager текущей semantic payload-policy среды: structural intent, binding projection, availability confirmation и effective path order.*
     1. `PayloadPolicyCalculator` *Pure Calculator structural payload policy из normalized intent и уже подтвержденных внешних фактов.*
     2. `AvailabilityPriorityCalculator` *Pure Calculator effective path order из current membership, availability problem state, active path и reserve semantics.*
-4. `AvailabilityProbeAgent` *Agent ongoing availability observation; планирует bounded checks и публикует normalized evidence, но не управляет наблюдаемой внешней доступностью.*
-5. `@RuntimeStatusAgent` *Agent current-only status composition из authoritative owner snapshots; не актуирует наблюдаемые domains.*
+4. `@ProtectiveModeManager <partial>` *Manager явного защитного режима продукта: владеет запрошенным/подтвержденным состоянием режима, continuous confirmation и безопасным выходом.*
+5. `AvailabilityProbeAgent` *Agent ongoing availability observation; планирует bounded checks и публикует normalized evidence, но не управляет наблюдаемой внешней доступностью.*
+6. `@RuntimeStatusAgent` *Agent current-only status composition из authoritative owner snapshots; не актуирует наблюдаемые domains.*
     1. `RuntimeStatusTextRenderer` *Direct Calculator, чисто преобразующий RuntimeStatusSnapshot в нормативный compact Devices/Profiles text report.*
 
 Artifacts
@@ -945,13 +795,16 @@ Artifacts
     4. `effective path-order state` *(observed, managed)* — current active path/effective order; не per-flow affinity.
 3. `availability observation context` *(observed, managed)* — current requested subjects, cadence, bounded in-flight identities/generation tokens и diagnostics `AvailabilityProbeAgent`.
 4. `controller ownership/readiness session` *(observed, managed)* — bounded procedural lifecycle state, включая retained single-controller ownership и текущий READY/cleanup result. Его наличие не превращает lifecycle в Engine.
-5. `runtime status snapshot` *(observed, managed)* — current-only composition authoritative snapshots; не event history и не system-of-record.
+5. `protective mode state` *(observed, managed)* — current source-scoped request set и confirmed/problem projection public protective mode; подтвержденный active state требует exact `Private network.protective payload gate state`.
+6. `runtime status snapshot` *(observed, managed)* — current-only composition authoritative snapshots; не event history и не system-of-record.
 
 Interactions
 
 | From | Interaction | To |
 | --- | --- | --- |
 | `Operator.OperatorClient` / deployment control | `start / stop / restart / optional reload` | `@ProductLifecycleControl` |
+| `Operator.OperatorClient` / authorized automation | request protective active / inactive | `@ProtectiveModeManager` |
+| `VPN-GATE-managed host state.@AggressiveHostRoutingManager` | add/remove its own protective request around unrecoverable aggressive-routing failure/recovery | `@ProtectiveModeManager` |
 | `@ProductLifecycleControl` | acquire/release single-controller ownership and maintain bounded session | `controller ownership/readiness session` |
 | `Ambient host and external world.@ExternalConfigurationSource` | candidate configuration representation | `@ConfigurationAdapter` |
 | `@ConfigurationAdapter` | resolve normalized availability descriptions | `AvailabilityDescriptionResolver` |
@@ -967,6 +820,9 @@ Interactions
 | `PayloadTrafficManager` | observe/verify current endpoint bindings | `Private network.@VPNPathAdapter` |
 | `PayloadTrafficManager` | apply/reconcile current desired lower policy | `Private network.@NetworkPolicyAdapter` |
 | `PayloadTrafficManager` | own/update current semantic state | `payload semantic state` |
+| `payload semantic state` / `controller ownership/readiness session` | current normal-release precondition | `@ProtectiveModeManager` |
+| `@ProtectiveModeManager` | converge/verify dedicated protective containment | `Private network.@ProtectivePayloadGate` |
+| `@ProtectiveModeManager` | own/update requested and confirmed mode | `protective mode state` |
 | `accepted normalized intent` / current bindings | synchronize requested observation subjects | `AvailabilityProbeAgent` |
 | `AvailabilityProbeAgent` | own current check schedule/context | `availability observation context` |
 | `AvailabilityProbeAgent` | execute one physical check | `Private network.@ActiveProbeDriver` |
@@ -999,9 +855,9 @@ Component diagram
 |                                  STACK                                   |
 |                                                                          |
 | @ProductLifecycleControl ----------------------------+                   |
-|       |                |               |             |                   |
-|       |                |               |             v                   |
-|       |                |               |      @RuntimeStatusAgent        |
+| @ProtectiveModeManager -------------------------+     |                   |
+|       |                |               |        |    v                   |
+|       |                |               |        | @RuntimeStatusAgent    |
 |       |                |               |             ^                   |
 |       v                |               |             | InfoEvents        |
 | @ConfigurationAdapter  |               |      +------+---------+         |
@@ -1021,6 +877,7 @@ Component diagram
                   |                                               |
         +---------v-------------------+             +-------------v---------+
         | Private network / transition|             | Private network       |
+        | @ProtectivePayloadGate <-----+             | physical probe        |
         +-----------------------------+             +-----------------------+
                   |
                   +--------------------------> VPN-GATE-managed host state
@@ -1049,8 +906,8 @@ API
 
 Отдельного `open/closed` API сейчас нет. `established` означает transport-ready L3 door с
 подтвержденными handoff endpoints; готовность Private network использовать ordinary side
-требует также exact portal state. Возможный будущий gate для aggressive helper не проектируется
-до появления отдельного принятого контракта.
+требует также exact portal state. Aggressive host-routing protection принадлежит `VPN-GATE-managed host state` E.003/E.004
+и не меняет API самого transition.
 
 Residents
 
@@ -1145,6 +1002,8 @@ API
     @ActiveProbeDriver.execute(...) — выполнить один bounded probe через заранее подтвержденный current VPN-side execution context.
     @ForwardingGate.observe(∅) — вернуть свежий authoritative state корневого IPv4 forwarding gate.
     @ForwardingGate.converge(...) — установить требуемое состояние gate и подтвердить его свежим наблюдением.
+    @ProtectivePayloadGate.observe(∅) — свежим наблюдением подтвердить exact dedicated protective containment state.
+    @ProtectivePayloadGate.converge(...) — установить ENABLED/DISABLED protective postcondition и подтвердить его свежим наблюдением.
     @ordinary-side IP portal.<IP handoff> — passive bidirectional ordinary-side data-plane handoff.
     @VPN-side IP portal.<IP handoff> — passive bidirectional VPN-side data-plane handoff.
 
@@ -1159,6 +1018,7 @@ Residents
 5. `@ActiveProbeDriver` *Bounded lower execution одного активного probe через заранее подтвержденные probe-policy и endpoint facts.*
 6. `@ForwardingGate` *Самостоятельный verified control корневого IPv4 forwarding barrier.*
     1. `ForwardingGateDriver` *Technical read/mutation boundary к managed-domain forwarding state.*
+7. `@ProtectivePayloadGate <partial>` *Bounded Enforcer dedicated protective-mode containment: ordinary-boundary INPUT/OUTPUT и весь IPv4 FORWARD.*
 
 Artifacts
 
@@ -1171,20 +1031,21 @@ Artifacts
 5. `VPN-side IP portal` — локальная capability отправки/приема IP через текущие VPN endpoints; не является конкретным path/interface/remote endpoint.
 6. `VPN endpoint inventory` *(observed)* — fresh inventory concrete VPN endpoint generations внутри Private network, используемый для verified logical-path binding.
 7. `IPv4 forwarding state` *(observed, managed)* — корневой forwarding barrier Private network.
-8. `payload routing state` *(observed, managed)* — единый semantic lower state payload routing.
+8. `protective payload gate state` *(observed, managed)* — dedicated protective-mode containment state, отдельный от normal payload policy и structural `IPv4 forwarding state`.
+9. `payload routing state` *(observed, managed)* — единый semantic lower state payload routing.
     1. `payload route state` *(observed, managed)*
     2. `payload RPDB state` *(observed, managed)*
-9. `probe routing state` *(observed, managed)* — exact route+selector precondition path-specific probes.
+10. `probe routing state` *(observed, managed)* — exact route+selector precondition path-specific probes.
     1. `probe route state` *(observed, managed)*
     2. `probe RPDB state` *(observed, managed)*
-10. `nft policy scaffold` *(observed, managed)* — invariant owned nft table/base-chain structure, являющаяся prerequisite semantic policy owners, но не parent этих owners.
-11. `Profile forwarding policy` *(observed, managed)*
-12. `Device firewall policy` *(observed, managed)*
-13. `payload NAT policy` *(observed, managed)*
-14. `local publication policy` *(observed, managed)* — local INPUT/OUTPUT admission для Device publication внутри Private network.
-15. `VPN integration local policy` *(observed, managed)* — bounded local transport admission, необходимая supported VPN integration.
-16. `probe local admission policy` *(observed, managed)* — local policy, допускающая только exact probe execution/reply context.
-17. `return-affinity state` *(observed, managed)* — общий postcondition association remote-initiated flow с исходным VPN routing domain.
+11. `nft policy scaffold` *(observed, managed)* — invariant owned nft table/base-chain structure, являющаяся prerequisite semantic policy owners, но не parent этих owners.
+12. `Profile forwarding policy` *(observed, managed)*
+13. `Device firewall policy` *(observed, managed)*
+14. `payload NAT policy` *(observed, managed)*
+15. `local publication policy` *(observed, managed)* — local INPUT/OUTPUT admission для Device publication внутри Private network.
+16. `VPN integration local policy` *(observed, managed)* — bounded local transport admission, необходимая supported VPN integration.
+17. `probe local admission policy` *(observed, managed)* — local policy, допускающая только exact probe execution/reply context.
+18. `return-affinity state` *(observed, managed)* — общий postcondition association remote-initiated flow с исходным VPN routing domain.
     1. `return-affinity nft association/restore policy` *(observed, managed)*
     2. `return-affinity RPDB mark-dispatch state` *(observed, managed)*
 
@@ -1225,6 +1086,8 @@ Interactions
 | `@ActiveProbeDriver` | send/receive probe IP | `@VPN-side IP portal.<IP handoff>` |
 | `@VPN-side IP portal.<IP handoff>` | bidirectional IP handoff | `VPN external ends.@VPNChannel[].<vpn-interface endpoint>` |
 | `STACK.@ProductLifecycleControl` | lifecycle/preflight/stop containment | `@ForwardingGate` |
+| `STACK.@ProtectiveModeManager` | observe/converge dedicated protective containment | `@ProtectivePayloadGate` |
+| `@ProtectivePayloadGate` | own/verify | `protective payload gate state` |
 | `@ForwardingGate` | technical read/mutation | `ForwardingGateDriver` |
 | `ForwardingGateDriver` | read/write | `IPv4 forwarding state` |
 
@@ -1252,6 +1115,7 @@ Component diagram
 |                                                                  |
 | @VPNPathAdapter -------> [VPN endpoint inventory]                |
 | @ForwardingGate -------> ForwardingGateDriver -> [IPv4 forwarding]|
+| @ProtectivePayloadGate -> [protective payload gate]               |
 | @ActiveProbeDriver -------------------------------------+        |
 |                                                        |        |
 | @ordinary-side IP portal <==== managed payload =====> @VPN-side |
@@ -1350,8 +1214,9 @@ Component diagram
 Явно owned часть ordinary-host network state. Этот Space существует потому, что VPN-GATE
 имеет ограниченные host-side postconditions, которые нельзя ни прятать внутрь
 `Private network`, ни смешивать с administrator-owned ambient host. В Release 1 здесь
-сосуществуют два независимых owner scope: обязательная при запрошенной server publication
-host mapping и optional peaceful host-routing contribution.
+сосуществуют два owner scope: обязательная при запрошенной server publication host mapping
+и optional peaceful host-routing contribution. Отдельный явно включаемый aggressive owner
+scope определен архитектурой, но ограничен из Release 1 требованием `VPNG-U001-R5.R2.C1`.
 
 API
 
@@ -1360,6 +1225,9 @@ API
     @HostPublicationAdapter.cleanup(...) — удалить только owned host-publication objects и подтвердить отсутствие.
     @HostRoutingContribution.converge(∅) — установить complete lifecycle-scoped peaceful host-routing contribution.
     @HostRoutingContribution.cleanup(∅) — удалить только still-identifiable owned contribution.
+    @AggressiveHostRoutingManager.activate(...) — установить и подтвердить initial aggressive postcondition и начать continuous ownership.
+    @AggressiveHostRoutingManager.deactivate(∅) — прекратить continuous ownership, безопасно снять routing capture и затем escape protection.
+    @AggressiveHostRoutingManager.current_state(∅) — вернуть current confirmed / degraded / problem projection.
     @host publication mapping state.<selected publication traffic> — passive host-side mapping point для explicitly selected publication surface.
     @peaceful host routing contribution.<selected host traffic> — passive dispatch point optional helper scope.
 
@@ -1367,6 +1235,8 @@ Residents
 
 1. `@HostPublicationAdapter` *Самостоятельный semantic Adapter host-side Device publication mapping; он потребляет тот же normalized publication intent, но не является occurrence `Private network.NetworkPolicyAdapter`.*
 2. `@HostRoutingContribution` *Direct lifecycle Machinery optional peaceful helper. Current Release-1 realization — `LinuxPeacefulHostRoutingContribution`; continuous host-routing supervision отсутствует.*
+3. `@AggressiveHostRoutingManager <partial>` *Manager continuous ownership явно включенной aggressive host-routing области.*
+    1. `AggressiveHostRoutingEnforcer <partial>` *Bounded Enforcer составного postcondition: managed delivery подтверждена, non-managed escape запрещен.*
 
 Artifacts
 
@@ -1374,6 +1244,9 @@ Artifacts
 2. `peaceful host routing contribution` *(observed, managed)* — complete lifecycle-scoped host-routing state для выбранного helper traffic scope.
     1. `helper destination route state` *(observed, managed)* — remote Profile destinations и при необходимости Profile-SNAT identity routes в dedicated helper table.
     2. `helper dispatch RPDB state` *(observed, managed)* — selector-scoped preserve-main + helper lookup pairs и absolute managed-boundary bypass.
+3. `aggressive host-routing state` *(observed, managed)* — current desired/confirmed/problem projection continuous aggressive owner.
+    1. `aggressive routing state` *(observed, managed)* — owned route/RPDB realization требуемой managed delivery.
+    2. `aggressive escape-protection state` *(observed, managed)* — independently verifiable fail-closed state, запрещающий managed scope уйти через non-managed egress.
 
 Эти Artifacts не являются children общего «host networking» Artifact: у них разные semantic
 owners, lifecycle и postconditions. Общая Linux namespace лишь physical container.
@@ -1383,7 +1256,6 @@ owners, lifecycle и postconditions. Общая Linux namespace лишь physica
 - host-global IPv4 forwarding;
 - foreign/admin routing, RPDB, nft firewall/NAT;
 - ordinary host interface/address lifecycle;
-- aggressive authoritative helper state — capability postponed и не проектируется здесь;
 - managed L3 door itself — `Ordinary-side transition`.
 
 Interactions
@@ -1397,6 +1269,11 @@ Interactions
 | `host publication mapping state` | DNAT toward current stack-local service/publication identity through managed boundary | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` |
 | `STACK.@ProductLifecycleControl` | build/converge enabled helper contribution | `@HostRoutingContribution` |
 | `@HostRoutingContribution` | converge/cleanup | `peaceful host routing contribution` |
+| `STACK.@ProductLifecycleControl` | activate/deactivate configured aggressive helper against current managed-boundary generation | `@AggressiveHostRoutingManager` |
+| `@AggressiveHostRoutingManager` | bounded converge/verify current desired aggressive state | `AggressiveHostRoutingEnforcer` |
+| `AggressiveHostRoutingEnforcer` | converge/verify owned routing + escape-protection state | `aggressive host-routing state` |
+| `AggressiveHostRoutingEnforcer` | observe effective host routing facts without ownership | `Ambient host and external world.@OrdinaryHostNetwork.<host network observation>` |
+| `@AggressiveHostRoutingManager` | request global protective mode after unrecoverable/unconfirmed local guarantee | `STACK.@ProtectiveModeManager` |
 | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | selected host traffic enters helper-owned RPDB scope | `@peaceful host routing contribution.<selected host traffic>` |
 | `peaceful host routing contribution` | route selected traffic to explicit managed host endpoint | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` |
 | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` | traffic emitted from Private network bypasses helper recapture and resumes ordinary host routing | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` |
@@ -1418,10 +1295,12 @@ Component diagram
 +-----------+--------------------------------------------------------+
 |                  VPN-GATE-managed host state                       |
 |                                                                    |
-| @HostPublicationAdapter      @HostRoutingContribution      |
+| @HostPublicationAdapter      @HostRoutingContribution              |
+| @AggressiveHostRoutingManager -> AggressiveHostRoutingEnforcer      |
 |              |                                |                    |
 |              v                                v                    |
 | [host publication mapping]      [peaceful host routing contribution]|
+|                                  [aggressive routing + escape state] |
 |              |                                |                    |
 +--------------|--------------------------------|--------------------+
                |                                |
@@ -1550,6 +1429,7 @@ Interactions
 | --- | --- | --- |
 | `OperatorClient` | edit/provide candidate product configuration | `Ambient host and external world.@ExternalConfigurationSource` |
 | `OperatorClient` | product `start / stop / restart / supported update` through deployment/control mechanism | `Ambient host and external world.@systemd` / `STACK.@ProductLifecycleControl` |
+| `OperatorClient` / authorized automation | request protective active / inactive and inspect current mode result | `STACK.@ProtectiveModeManager` |
 | `OperatorClient` | prepare stack-specific VPN service/config according to supported onboarding contract | `VPN external ends.@VPNChannel[]` |
 | `OperatorClient` | VPN service start/stop/restart through selected service manager | `Ambient host and external world.@systemd` |
 | `STACK.@RuntimeStatusAgent` / presentation environment | current status/diagnostics | `OperatorClient` |
@@ -1567,9 +1447,9 @@ Component diagram
 |                              Operator                             |
 |                                                                   |
 | OperatorClient                                                    |
-|    | config             | lifecycle        | VPN onboarding       |
-|    |                    |                  |                      |
-|    +--------------------+------------------+------------------+   |
+|    | config             | lifecycle/protective control | VPN onboarding |
+|    |                    |                           |                |
+|    +--------------------+---------------------------+------------+   |
 |                                                           ^   |   |
 |                                                status ----+   |   |
 +---------------------------------------------------------------|---+
@@ -2074,6 +1954,47 @@ Integration note
     retain their existing single architecture ownership in implementation-traceability; A.010
     does not claim them as duplicate implementation owners.
 
+
+## A.011 ProtectiveModeManager
+
+**Implementation status:** `<partial>` — архитектурный контракт принят, production implementation этого Manager еще не materialized и не получает фиктивный code trace.
+
+Manager явного административного защитного режима. Он владеет source-scoped request set и
+confirmed/problem состоянием public protective mode и непрерывно поддерживает gate, пока хотя
+бы один авторизованный source сохраняет запрос защиты.
+
+**Implements / supports:**
+- `VPNG-U004-R5`
+- `VPNG-U004-R5.R1`
+- `VPNG-U004-R5.R2`
+- `VPNG-U004-R5.R3`
+- `VPNG-U004-R5.R4`
+
+**Evidence:** EXP-083 lower containment evidence.
+
+API
+
+    @request_active(source, ...) — добавить/обновить запрос данного source и вернуть success только после fresh confirmation полного protective postcondition.
+    @request_inactive(source, ...) — снять только запрос данного source; если другие sources остаются active, gate сохраняется; иначе подтвердить normal release precondition, снять gate и вернуть success только после final verification.
+    @current_state(∅) — вернуть current request-source set и confirmed / problem projection.
+
+Architectural decisions
+
+1. `Independent public owner`
+   *Protective mode не является побочным режимом aggressive helper или C.003 structural transition. Operator/automation и E.003 являются независимыми request sources, но gate и агрегированное состояние режима принадлежат этому Manager. Один source не может снять запрос другого.*
+
+2. `Confirmed entry`
+   *Принятие команды не означает active. Manager считает режим подтвержденным только после fresh exact C.010 protective-gate postcondition.*
+
+3. `Continuous confirmation`
+   *Пока requested intent active, Manager с конечной cadence начинает каждый audit из нового observation и восстанавливает C.010 state, если exact safe recovery возможно. Wakeup events могут ускорять audit, но не являются source of truth.*
+
+4. `Safe leave`
+   *C.010 gate может сниматься только когда source-scoped request set пуст. После этого Manager заново подтверждает применимое normal desired/binding/policy readiness по authoritative owner projections STACK. Failed validation или failed gate removal оставляют gate active и публикуют problem result. Optional aggressive recovery снимает только свой request source; его local escape protection остается ответственностью E.003/E.004 и не создает обратного synchronous вызова A.011 -> E.003.*
+
+5. `State preservation`
+   *Protective mode меняет отдельный containment Artifact и не использует teardown namespace/routes/interfaces/configuration intent как штатный способ остановки трафика.*
+
 # Annex B. Ordinary-side transition components
 
 ## B.001 ManagedL3BoundaryLifecycle
@@ -2278,9 +2199,6 @@ Architectural decisions
 6. `Lower technical boundary`
    *Drivers/Readers/Executors и Backend-композиции предоставляют observation/actuation primitives, но не выбирают desired state и не владеют convergence. Linux JSON/argv shapes, numeric pools и platform constants принадлежат lower technical realization, а не API Enforcer.*
 
-Findings
-
-1. `Administrative payload containment` *Future public containment capability по `VPNG-U004-R5` не является режимом structural Enforcer. Ее exact lower composition остается open; текущий `ForwardingGate` может быть только частью решения, потому что отдельный ordinary-side block тоже необходим.*
 
 ## C.004 VPNPathAdapter
 
@@ -2540,6 +2458,43 @@ Implementation
 компонентом VPN-GATE, поэтому отдельные VPN-GATE component specs в Annex D не требуются.
 
 
+
+## C.010 ProtectivePayloadGate
+
+**Implementation status:** `<partial>` — архитектурный контракт и lower evidence приняты, production Enforcer еще не materialized и не получает фиктивный code trace.
+
+Bounded Enforcer dedicated protective-mode containment state Private network.
+
+**Implements / supports:**
+- `VPNG-U004-R5`
+- `VPNG-U004-R5.R2`
+- `VPNG-U004-R5.R3`
+- `VPNG-U004-R5.R4`
+
+**Evidence:** EXP-083.
+
+API
+
+    @observe(∅) — fresh-observe exact dedicated protective containment state.
+    @converge(ENABLED|DISABLED) — достичь и fresh-verify requested protective postcondition либо вернуть failure.
+
+Architectural decisions
+
+1. `One owned gate`
+   *Protective containment является одним independently owned Artifact, а не композицией C.005 с отдельным host-side gate. EXP-082 остается feasibility evidence, но не selected architecture.*
+
+2. `Complete IPv4 containment`
+   *ENABLED запрещает ordinary-boundary IPv4 INPUT, ordinary-boundary IPv4 OUTPUT и весь IPv4 FORWARD внутри Private network. Поэтому ordinary->VPN, VPN->ordinary и VPN->VPN не требуют разных public gates.*
+
+3. `Preserve runtime state`
+   *Gate не уничтожает namespace, interfaces, routes, bindings или normal policy state. Linux candidate EXP-083 реализует gate отдельной owned nft table.*
+
+4. `Bounded verification`
+   *Один converge-вызов выполняет fresh observation -> optional bounded mutation -> fresh observation. Continuous retry/recovery принадлежит A.011.*
+
+5. `Independent from structural ForwardingGate`
+   *C.005 остается structural-transition barrier. Protective mode не переопределяет его API/ownership и не зависит от изменения `ip_forward`.*
+
 # Annex E. VPN-GATE-managed host state components
 
 ## E.001 HostPublicationAdapter
@@ -2636,8 +2591,86 @@ Architectural decisions
    *External-ingress helper scope может требовать administrator-provided host IPv4 forwarding; helper только диагностирует prerequisite и не включает global sysctl.*
 
 7. `Peaceful is not aggressive`
-   *Authoritative aggressive routing, continuous repair и administrative containment остаются отдельной postponed capability; существующая peaceful Machinery не получает эти semantics.*
+   *Authoritative aggressive routing и continuous repair принадлежат E.003/E.004; administrative containment принадлежит A.011/C.010. Существующая peaceful Machinery не получает эти semantics.*
 
+
+
+## E.003 AggressiveHostRoutingManager
+
+**Implementation status:** `<partial>` — архитектурный контракт принят, production continuous Manager еще не materialized и не получает фиктивный code trace.
+
+Manager continuous ownership отдельно включенной authoritative host-routing области. Он
+выбирает desired aggressive state из принятого intent/current boundary context, периодически
+подтверждает effective postcondition и инициирует recovery или protective escalation.
+
+**Implements / supports:**
+- `VPNG-U001-R5.R2`
+- `VPNG-U001-R5.R2.R2`
+- `VPNG-U001-R5.R2.R3`
+- `VPNG-U001-R5.R2.R3.R2`
+
+**Constrained by:** `VPNG-U001-R5.R2.C1`
+
+**Evidence:** EXP-081, EXP-084.
+
+API
+
+    @activate(...) — выполнить initial E.004 convergence и начать continuous ownership только после confirmed composite postcondition.
+    @deactivate(∅) — прекратить continuous ownership и через E.004 подтвердить safe inactive state.
+    @current_state(∅) — вернуть current confirmed / degraded / problem projection.
+
+Architectural decisions
+
+1. `Continuous semantic owner`
+   *Manager, а не peaceful E.002 и не lower Driver, владеет обязанностью поддерживать aggressive guarantee между lifecycle operations.*
+
+2. `Observe the guarantee`
+   *Periodic audit подтверждает effective aggressive postcondition, а не пытается перечислить все виды foreign routing policy. Linux lower verification обязана учитывать факты, способные опровергнуть actual delivery.*
+
+3. `Fresh reconciliation`
+   *Каждый audit/recovery начинается с нового authoritative observation. Rtnetlink notifications допустимы как wakeup, но не заменяют finite-cadence resynchronization.*
+
+4. `Fail-closed escalation`
+   *Если E.004 не может восстановить/подтвердить delivery, local escape protection остается активной, а Manager устанавливает собственный source-scoped request в A.011. После подтвержденного recovery либо явного отключения aggressive mode E.003 снимает только свой request source. Failure подтвердить local/global containment остается explicit problem state.*
+
+
+## E.004 AggressiveHostRoutingEnforcer
+
+**Implementation status:** `<partial>` — архитектурный контракт принят, production bounded Enforcer еще не materialized и не получает фиктивный code trace.
+
+Bounded Enforcer одного composite aggressive postcondition. Он не выбирает continuous policy
+и не является отдельным Manager.
+
+**Implements / supports:**
+- `VPNG-U001-R5.R2`
+- `VPNG-U001-R5.R2.R1`
+- `VPNG-U001-R5.R2.R3`
+- `VPNG-U001-R5.R2.R3.R1`
+
+**Evidence:** EXP-074 (narrow routing mechanics), EXP-081 (rejected narrow-only authority),
+EXP-084 (escape protection).
+
+API
+
+    converge(active_desired) — fresh-observe, установить escape protection до routing capture, converge routing, затем fresh-verify complete composite postcondition.
+    converge(inactive_desired) — снять и fresh-verify routing capture до release escape protection, затем подтвердить inactive postcondition.
+
+Architectural decisions
+
+1. `Composite postcondition`
+   *Active success требует одновременно exact current managed-boundary generation, подтвержденную effective delivery managed scope и невозможность non-managed escape.*
+
+2. `Escape protection is state, not component`
+   *Aggressive escape-protection state independently observable/owned, но не имеет самостоятельного product client или lifecycle. Поэтому это lower Artifact внутри одного Enforcer contract, а не отдельный component boundary.*
+
+3. `Fail-closed ordering`
+   *Activation materializes/verifies escape protection before enabling routing capture. Deactivation removes/verifies routing capture before releasing escape protection. Partial transition может deny traffic, но не должен открыть ordinary-path leak.*
+
+4. `Effective verification`
+   *EXP-081 запрещает считать точность только VPN-GATE-owned table/rule objects доказательством authority. Linux realization может проверять RPDB/effective lookup или эквивалентные факты, но такая taxonomy остается lower implementation detail.*
+
+5. `Bounded ownership`
+   *Enforcer завершает каждый вызов success/failure после fresh verification и не содержит hidden continuous retry; следующий recovery attempt принадлежит E.003.*
 
 # Annex F. Ambient host and external world components
 
