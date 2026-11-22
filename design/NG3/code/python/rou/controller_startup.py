@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol
+from ipaddress import IPv4Address
+from typing import Mapping, Protocol
 
 from .host_routing_contribution import HostRoutingContribution
 from .forwarding_gate import (
@@ -64,10 +65,19 @@ LOG_TAG = "LIFE"
 
 
 class PreparedPayloadPolicy(Protocol):
+    @property
+    def requires_private_peer_observation(self) -> bool:
+        """Whether current policy requires fresh private-P2P peer facts."""
+
     def build_current(
         self,
         host_boundary: InterfaceIdentity,
         interfaces: tuple[InterfaceIdentity, ...],
+        *,
+        path_private_peers: Mapping[
+            InterfaceIdentity,
+            IPv4Address | None,
+        ] | None = None,
     ) -> PayloadNetworkPolicyDesiredState:
         """Build complete current lower desired state from fresh interface facts."""
 
