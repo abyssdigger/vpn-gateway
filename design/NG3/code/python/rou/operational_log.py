@@ -27,6 +27,13 @@ _LEVEL_ORDER = {
     OperationalLogLevel.ERROR: 40,
 }
 
+_SYSLOG_PRIORITY = {
+    OperationalLogLevel.DEBUG: 7,
+    OperationalLogLevel.INFO: 6,
+    OperationalLogLevel.WARNING: 4,
+    OperationalLogLevel.ERROR: 3,
+}
+
 
 class OperationalLogAdapter:
     """Direct Adapter from semantic operational records to one deployment log stream."""
@@ -40,7 +47,7 @@ class OperationalLogAdapter:
         if not isinstance(minimum_level, OperationalLogLevel):
             raise ValueError("minimum_level must be OperationalLogLevel")
         self._minimum_level = minimum_level
-        self._sink = sink if sink is not None else self._default_sink
+        self._sink = sink
 
     @property
     def minimum_level(self) -> OperationalLogLevel:
@@ -79,12 +86,14 @@ class OperationalLogAdapter:
         line = f"{level.value.upper()} {component_tag} {event}"
         if fields:
             line += " " + fields
-        self._sink(line)
+        if self._sink is None:
+            print(
+                f"<{_SYSLOG_PRIORITY[level]}>{line}",
+                flush=True,
+            )
+        else:
+            self._sink(line)
         return True
-
-    @staticmethod
-    def _default_sink(line: str) -> None:
-        print(line, flush=True)
 
 
 def _render_value(value: str | int | float | bool | None) -> str:

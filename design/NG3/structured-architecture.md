@@ -1833,9 +1833,10 @@ Architectural decisions
    later requirement promotes them to a machine-consumed API.*
 
 6. `Deployment boundary`
-   *Current systemd alpha emits to its standard process stream captured by journald. That
-   transport is alpha deployment machinery, not a requirement that all future deployments use
-   systemd/journald.*
+   *Current systemd alpha emits to its standard process stream captured by journald and prefixes
+   the stream with the corresponding syslog priority so journal metadata preserves
+   DEBUG/INFO/WARNING/ERROR filtering. That transport is alpha deployment machinery, not a
+   requirement that all future deployments use systemd/journald.*
 
 Implementation target
 

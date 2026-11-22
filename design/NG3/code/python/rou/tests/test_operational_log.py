@@ -1,4 +1,6 @@
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 
 from rou.operational_log import (
     OperationalLogAdapter,
@@ -60,6 +62,20 @@ class OperationalLogAdapterTests(unittest.TestCase):
                 "TOOLONG",
                 "event",
             )
+
+    def test_default_systemd_stream_preserves_standard_priority(self):
+        logger = OperationalLogAdapter(OperationalLogLevel.DEBUG)
+        output = StringIO()
+        with redirect_stdout(output):
+            logger.emit(
+                OperationalLogLevel.WARNING,
+                "HOST",
+                "host_forwarding_disabled",
+            )
+        self.assertEqual(
+            output.getvalue(),
+            "<4>WARNING HOST host_forwarding_disabled\n",
+        )
 
     def test_complex_context_is_rejected_instead_of_dumped(self):
         logger = OperationalLogAdapter(sink=lambda _line: None)
