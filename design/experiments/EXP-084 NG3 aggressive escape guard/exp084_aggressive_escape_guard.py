@@ -157,6 +157,10 @@ def setup() -> None:
         ns(name, "sysctl", "-qw", "net.ipv4.ip_forward=1")
         ns(name, "sysctl", "-qw", "net.ipv4.conf.all.rp_filter=0")
         ns(name, "sysctl", "-qw", "net.ipv4.conf.default.rp_filter=0")
+    ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{BH}.proxy_arp=1")
+    ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{BS}.proxy_arp=1")
+    ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{BH}.rp_filter=0")
+    ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{BS}.rp_filter=0")
 
 
 def desired():
@@ -222,7 +226,12 @@ def main() -> int:
 
         baseline_route = route_get_forwarded()
         assert baseline_route.get("dev") == BH, baseline_route
-        assert ping(LAN) and ping(HOST)
+        baseline_lan = ping(LAN)
+        baseline_host = ping(HOST)
+        assert baseline_lan and baseline_host, {
+            "lan": baseline_lan,
+            "host": baseline_host,
+        }
         print("EXP084_BASELINE_MANAGED_PATH=PASS", flush=True)
 
         install_guard()
