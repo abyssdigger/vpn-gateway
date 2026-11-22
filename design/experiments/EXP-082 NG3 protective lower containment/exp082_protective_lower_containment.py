@@ -31,6 +31,8 @@ STACK_A = "198.18.82.1"
 VPN1_LINK = "198.18.82.2"
 STACK_B = "198.18.82.5"
 VPN2_LINK = "198.18.82.6"
+HOST_BOUNDARY = "100.64.82.1"
+STACK_BOUNDARY = "100.64.82.2"
 VPN1_TARGET = "203.0.113.81"
 VPN2_TARGET = "203.0.113.82"
 NFT_TABLE = "vpng_protective_test"
@@ -119,6 +121,8 @@ def setup() -> None:
 
     ns(ORD, "ip", "addr", "add", f"{ORD_IP}/24", "dev", OH)
     ns(HOST, "ip", "addr", "add", f"{HOST_ORD}/24", "dev", HO)
+    ns(HOST, "ip", "addr", "add", f"{HOST_BOUNDARY}/30", "dev", BH)
+    ns(STACK, "ip", "addr", "add", f"{STACK_BOUNDARY}/30", "dev", BS)
     ns(STACK, "ip", "addr", "add", f"{STACK_A}/30", "dev", SA)
     ns(VPN1, "ip", "addr", "add", f"{VPN1_LINK}/30", "dev", AS)
     ns(STACK, "ip", "addr", "add", f"{STACK_B}/30", "dev", SB)
@@ -139,23 +143,25 @@ def setup() -> None:
 
     ns(ORD, "ip", "route", "add", f"{VPN1_TARGET}/32", "via", HOST_ORD)
     ns(ORD, "ip", "route", "add", f"{VPN2_TARGET}/32", "via", HOST_ORD)
-    ns(HOST, "ip", "route", "add", f"{VPN1_TARGET}/32", "dev", BH)
-    ns(HOST, "ip", "route", "add", f"{VPN2_TARGET}/32", "dev", BH)
+    ns(HOST, "ip", "route", "add", f"{VPN1_TARGET}/32", "via", STACK_BOUNDARY, "dev", BH)
+    ns(HOST, "ip", "route", "add", f"{VPN2_TARGET}/32", "via", STACK_BOUNDARY, "dev", BH)
+    ns(HOST, "ip", "route", "add", "198.18.82.0/30", "via", STACK_BOUNDARY, "dev", BH)
+    ns(HOST, "ip", "route", "add", "198.18.82.4/30", "via", STACK_BOUNDARY, "dev", BH)
     ns(STACK, "ip", "route", "add", f"{VPN1_TARGET}/32", "via", VPN1_LINK, "dev", SA)
     ns(STACK, "ip", "route", "add", f"{VPN2_TARGET}/32", "via", VPN2_LINK, "dev", SB)
 
-    ns(STACK, "ip", "route", "add", "10.82.1.0/24", "dev", BS)
+    ns(STACK, "ip", "route", "add", "10.82.1.0/24", "via", HOST_BOUNDARY, "dev", BS)
     ns(VPN1, "ip", "route", "add", "10.82.1.0/24", "via", STACK_A)
     ns(VPN2, "ip", "route", "add", "10.82.1.0/24", "via", STACK_B)
     ns(VPN1, "ip", "route", "add", f"{VPN2_TARGET}/32", "via", STACK_A)
     ns(VPN2, "ip", "route", "add", f"{VPN1_TARGET}/32", "via", STACK_B)
+    ns(VPN1, "ip", "route", "add", "198.18.82.4/30", "via", STACK_A)
+    ns(VPN2, "ip", "route", "add", "198.18.82.0/30", "via", STACK_B)
 
     for name in (HOST, STACK):
         ns(name, "sysctl", "-qw", "net.ipv4.ip_forward=1")
         ns(name, "sysctl", "-qw", "net.ipv4.conf.all.rp_filter=0")
         ns(name, "sysctl", "-qw", "net.ipv4.conf.default.rp_filter=0")
-    ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{BH}.proxy_arp=1")
-    ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{BS}.proxy_arp=1")
     ns(HOST, "sysctl", "-qw", f"net.ipv4.conf.{BH}.rp_filter=0")
     ns(STACK, "sysctl", "-qw", f"net.ipv4.conf.{BS}.rp_filter=0")
 
