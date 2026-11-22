@@ -748,9 +748,9 @@ API
     @ProductLifecycleControl.stop(...) — выполнить bounded containment/cleanup и сообщить success только после требуемых cleanup postconditions.
     @ProductLifecycleControl.restart(...) — скомпозировать stop + новый start из authoritative state.
     @ProductLifecycleControl.reload(...) — optional supported operation; отсутствует в текущей alpha и не подменяется скрытым restart.
-    @ProtectiveModeManager.request_active(...) — запросить защитный режим; success возвращается только после подтверждения полного protective postcondition.
-    @ProtectiveModeManager.request_inactive(...) — запросить выход; трафик разрешается только после подтверждения применимого normal state и успешного снятия protective gate.
-    @ProtectiveModeManager.current_state(∅) — вернуть текущий confirmed / problem protective state.
+    @ProtectiveModeManager.request_active(source, ...) — установить source-scoped запрос защиты; success возвращается только после подтверждения полного protective postcondition.
+    @ProtectiveModeManager.request_inactive(source, ...) — снять запрос только данного source; gate может быть снят лишь когда других active sources нет и normal release precondition подтвержден.
+    @ProtectiveModeManager.current_state(∅) — вернуть текущий набор request sources и confirmed / problem protective state.
     @ConfigurationAdapter.normalize(...) — принять внешнее configuration representation и вернуть validated normalized domain intents.
     @RuntimeStatusAgent.<current snapshot publication> — предоставить текущую user-facing status projection.
     RuntimeStatusTextRenderer.render(snapshot) — получить обязательный compact human-readable Devices/Profiles report; delivery surface остаётся заменяемой.
@@ -778,7 +778,7 @@ Artifacts
     4. `effective path-order state` *(observed, managed)* — current active path/effective order; не per-flow affinity.
 3. `availability observation context` *(observed, managed)* — current requested subjects, cadence, bounded in-flight identities/generation tokens и diagnostics `AvailabilityProbeAgent`.
 4. `controller ownership/readiness session` *(observed, managed)* — bounded procedural lifecycle state, включая retained single-controller ownership и текущий READY/cleanup result. Его наличие не превращает lifecycle в Engine.
-5. `protective mode state` *(observed, managed)* — current requested/confirmed/problem projection public protective mode; подтвержденный active state требует exact `Private network.protective payload gate state`.
+5. `protective mode state` *(observed, managed)* — current source-scoped request set и confirmed/problem projection public protective mode; подтвержденный active state требует exact `Private network.protective payload gate state`.
 6. `runtime status snapshot` *(observed, managed)* — current-only composition authoritative snapshots; не event history и не system-of-record.
 
 Interactions
@@ -787,7 +787,7 @@ Interactions
 | --- | --- | --- |
 | `Operator.OperatorClient` / deployment control | `start / stop / restart / optional reload` | `@ProductLifecycleControl` |
 | `Operator.OperatorClient` / authorized automation | request protective active / inactive | `@ProtectiveModeManager` |
-| `VPN-GATE-managed host state.@AggressiveHostRoutingManager` | request protective active after unrecoverable aggressive-routing failure | `@ProtectiveModeManager` |
+| `VPN-GATE-managed host state.@AggressiveHostRoutingManager` | add/remove its own protective request around unrecoverable aggressive-routing failure/recovery | `@ProtectiveModeManager` |
 | `@ProductLifecycleControl` | acquire/release single-controller ownership and maintain bounded session | `controller ownership/readiness session` |
 | `Ambient host and external world.@ExternalConfigurationSource` | candidate configuration representation | `@ConfigurationAdapter` |
 | `@ConfigurationAdapter` | resolve normalized availability descriptions | `AvailabilityDescriptionResolver` |
@@ -806,7 +806,6 @@ Interactions
 | `payload semantic state` / `controller ownership/readiness session` | current normal-release precondition | `@ProtectiveModeManager` |
 | `@ProtectiveModeManager` | converge/verify dedicated protective containment | `Private network.@ProtectivePayloadGate` |
 | `@ProtectiveModeManager` | own/update requested and confirmed mode | `protective mode state` |
-| `@ProtectiveModeManager` | current protective projection InfoEvent | `@RuntimeStatusAgent` |
 | `accepted normalized intent` / current bindings | synchronize requested observation subjects | `AvailabilityProbeAgent` |
 | `AvailabilityProbeAgent` | own current check schedule/context | `availability observation context` |
 | `AvailabilityProbeAgent` | execute one physical check | `Private network.@ActiveProbeDriver` |
@@ -839,9 +838,9 @@ Component diagram
 |                                  STACK                                   |
 |                                                                          |
 | @ProductLifecycleControl ----------------------------+                   |
-|       |                |               |             |                   |
-|       |                |               |             v                   |
-|       |                |               |      @RuntimeStatusAgent        |
+| @ProtectiveModeManager -------------------------+     |                   |
+|       |                |               |        |    v                   |
+|       |                |               |        | @RuntimeStatusAgent    |
 |       |                |               |             ^                   |
 |       v                |               |             | InfoEvents        |
 | @ConfigurationAdapter  |               |      +------+---------+         |
@@ -861,6 +860,7 @@ Component diagram
                   |                                               |
         +---------v-------------------+             +-------------v---------+
         | Private network / transition|             | Private network       |
+        | @ProtectivePayloadGate <-----+             | physical probe        |
         +-----------------------------+             +-----------------------+
                   |
                   +--------------------------> VPN-GATE-managed host state
@@ -1257,7 +1257,6 @@ Interactions
 | `AggressiveHostRoutingEnforcer` | converge/verify owned routing + escape-protection state | `aggressive host-routing state` |
 | `AggressiveHostRoutingEnforcer` | observe effective host routing facts without ownership | `Ambient host and external world.@OrdinaryHostNetwork.<host network observation>` |
 | `@AggressiveHostRoutingManager` | request global protective mode after unrecoverable/unconfirmed local guarantee | `STACK.@ProtectiveModeManager` |
-| `@AggressiveHostRoutingManager` | current aggressive projection InfoEvent | `STACK.@RuntimeStatusAgent` |
 | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` | selected host traffic enters helper-owned RPDB scope | `@peaceful host routing contribution.<selected host traffic>` |
 | `peaceful host routing contribution` | route selected traffic to explicit managed host endpoint | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` |
 | `Ordinary-side transition.@managed L3 boundary realization.<host-side IP handoff>` | traffic emitted from Private network bypasses helper recapture and resumes ordinary host routing | `Ambient host and external world.@OrdinaryHostNetwork.<IP handoff>` |
@@ -1413,6 +1412,7 @@ Interactions
 | --- | --- | --- |
 | `OperatorClient` | edit/provide candidate product configuration | `Ambient host and external world.@ExternalConfigurationSource` |
 | `OperatorClient` | product `start / stop / restart / supported update` through deployment/control mechanism | `Ambient host and external world.@systemd` / `STACK.@ProductLifecycleControl` |
+| `OperatorClient` / authorized automation | request protective active / inactive and inspect current mode result | `STACK.@ProtectiveModeManager` |
 | `OperatorClient` | prepare stack-specific VPN service/config according to supported onboarding contract | `VPN external ends.@VPNChannel[]` |
 | `OperatorClient` | VPN service start/stop/restart through selected service manager | `Ambient host and external world.@systemd` |
 | `STACK.@RuntimeStatusAgent` / presentation environment | current status/diagnostics | `OperatorClient` |
@@ -1430,9 +1430,9 @@ Component diagram
 |                              Operator                             |
 |                                                                   |
 | OperatorClient                                                    |
-|    | config             | lifecycle        | VPN onboarding       |
-|    |                    |                  |                      |
-|    +--------------------+------------------+------------------+   |
+|    | config             | lifecycle/protective control | VPN onboarding |
+|    |                    |                           |                |
+|    +--------------------+---------------------------+------------+   |
 |                                                           ^   |   |
 |                                                status ----+   |   |
 +---------------------------------------------------------------|---+
@@ -1940,8 +1940,9 @@ Integration note
 
 ## A.011 ProtectiveModeManager
 
-Manager явного административного защитного режима. Он владеет requested/confirmed/problem
-состоянием public protective mode и непрерывно поддерживает его, пока режим запрошен активным.
+Manager явного административного защитного режима. Он владеет source-scoped request set и
+confirmed/problem состоянием public protective mode и непрерывно поддерживает gate, пока хотя
+бы один авторизованный source сохраняет запрос защиты.
 
 **Implements / supports:**
 - `VPNG-U004-R5`
@@ -1954,14 +1955,14 @@ Manager явного административного защитного ре�
 
 API
 
-    @request_active(...) — установить requested active intent и вернуть success только после fresh confirmation полного protective postcondition.
-    @request_inactive(...) — сохранить gate active, подтвердить normal release precondition, снять gate и вернуть success только после final verification.
-    @current_state(∅) — вернуть current requested / confirmed / problem projection.
+    @request_active(source, ...) — добавить/обновить запрос данного source и вернуть success только после fresh confirmation полного protective postcondition.
+    @request_inactive(source, ...) — снять только запрос данного source; если другие sources остаются active, gate сохраняется; иначе подтвердить normal release precondition, снять gate и вернуть success только после final verification.
+    @current_state(∅) — вернуть current request-source set и confirmed / problem projection.
 
 Architectural decisions
 
 1. `Independent public owner`
-   *Protective mode не является побочным режимом aggressive helper или C.003 structural transition. Operator/automation и E.003 могут быть request sources, но состояние режима принадлежит этому Manager.*
+   *Protective mode не является побочным режимом aggressive helper или C.003 structural transition. Operator/automation и E.003 являются независимыми request sources, но gate и агрегированное состояние режима принадлежат этому Manager. Один source не может снять запрос другого.*
 
 2. `Confirmed entry`
    *Принятие команды не означает active. Manager считает режим подтвержденным только после fresh exact C.010 protective-gate postcondition.*
@@ -1970,7 +1971,7 @@ Architectural decisions
    *Пока requested intent active, Manager с конечной cadence начинает каждый audit из нового observation и восстанавливает C.010 state, если exact safe recovery возможно. Wakeup events могут ускорять audit, но не являются source of truth.*
 
 4. `Safe leave`
-   *Перед снятием C.010 gate Manager заново подтверждает применимое normal desired/binding/policy readiness по authoritative owner projections STACK. Failed validation или failed gate removal оставляют режим fail-closed и публикуют problem result.*
+   *C.010 gate может сниматься только когда source-scoped request set пуст. После этого Manager заново подтверждает применимое normal desired/binding/policy readiness по authoritative owner projections STACK. Failed validation или failed gate removal оставляют gate active и публикуют problem result. Optional aggressive recovery снимает только свой request source; его local escape protection остается ответственностью E.003/E.004 и не создает обратного synchronous вызова A.011 -> E.003.*
 
 5. `State preservation`
    *Protective mode меняет отдельный containment Artifact и не использует teardown namespace/routes/interfaces/configuration intent как штатный способ остановки трафика.*
@@ -2607,7 +2608,7 @@ Architectural decisions
    *Каждый audit/recovery начинается с нового authoritative observation. Rtnetlink notifications допустимы как wakeup, но не заменяют finite-cadence resynchronization.*
 
 4. `Fail-closed escalation`
-   *Если E.004 не может восстановить/подтвердить delivery, local escape protection остается активной, а Manager запрашивает A.011 protective mode. Failure подтвердить local/global containment остается explicit problem state.*
+   *Если E.004 не может восстановить/подтвердить delivery, local escape protection остается активной, а Manager устанавливает собственный source-scoped request в A.011. После подтвержденного recovery либо явного отключения aggressive mode E.003 снимает только свой request source. Failure подтвердить local/global containment остается explicit problem state.*
 
 
 ## E.004 AggressiveHostRoutingEnforcer
