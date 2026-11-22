@@ -84,7 +84,10 @@ leaving them unlabeled.
 Postpone:
 
 - `VPNG-D001-R2`;
-- `VPNG-D001-R2.R1`–`R4`.
+- `VPNG-D001-R2.R1`;
+- `VPNG-D001-R2.R2`;
+- `VPNG-D001-R2.R3`;
+- `VPNG-D001-R2.R4`.
 
 The accepted need remains normative. The separate trace deferral defines re-entry and requires
 the future owner to complete the four descendant contracts before architecture/implementation.
@@ -115,3 +118,14 @@ it must no longer be used merely as a visual marker for "maybe later".
 
 `postponed` means "accepted normative future work, explicitly outside the current frontier"
 and must carry a review/evidence basis and re-entry semantics.
+
+
+## Structured trace hygiene
+
+The same review adds exact current structured-architecture references for the remaining
+Release-1 `pending_closure` parents whose implementation/evidence already existed but whose
+current IDs had been left out of the structured coverage index by the earlier purpose-parent
+refactor. This does not close those requirements in this review; it only restores the model
+invariant that a `pending_closure` node has an exact normative architecture reference.
+
+The three constraint nodes closed by this review also receive exact structured references.
