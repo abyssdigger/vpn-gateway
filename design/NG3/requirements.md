@@ -22,9 +22,9 @@ Constraint ancestry semantics.
 Canonical compact form:
 
 ```text
-- **[PRODUCT0001]** Basis | Statement [decomposition: complete|incomplete] [pending_closure|closed|rejected_closure]       — primary R
-    - **[PRODUCT0001-R...]** Purpose | Statement [decomposition: complete|incomplete] [pending_closure|closed|rejected_closure] — derived R
-        - **[PRODUCT0001-...C...]** Reason | Statement [decomposition: complete|incomplete] [pending_closure|closed|rejected_closure] — C
+- **[PRODUCT0001]** Basis | Statement [decomposition: complete|incomplete] [open|pending_closure|closed|rejected_closure|postponed|permanent]       — primary R
+    - **[PRODUCT0001-R...]** Purpose | Statement [decomposition: complete|incomplete] [open|pending_closure|closed|rejected_closure|postponed|permanent] — derived R
+        - **[PRODUCT0001-...C...]** Reason | Statement [decomposition: complete|incomplete] [open|pending_closure|closed|rejected_closure|postponed|permanent] — C
 ```
 
 The normative tree is rendered as a real nested Markdown list: each requirement-tree level
@@ -38,12 +38,15 @@ source answering «откуда это требование взято?». For a
 **зачем**; for a constraint it answers **почему**. The part after `|` is the normative
 statement.
 
-The optional closure label records acceptance state only:
+Every normative Requirement/Constraint has exactly one requirement status:
+[`open`] means the accepted node is active but has no sufficient closure candidate yet;
 [`pending_closure`] means an architecture candidate exists but is not yet accepted;
 [`closed`] means it has been accepted as sufficient for the current scope;
-[`rejected_closure`] means the candidate failed acceptance. Requirements do not list the
-architectural decisions themselves; those are found by searching architecture documents for
-the requirement/constraint ID.
+[`rejected_closure`] means the candidate failed acceptance;
+[`postponed`] means the accepted obligation is explicitly outside the current development/release frontier;
+[`permanent`] means the obligation remains continuously applicable and is not subject to finite architecture closure.
+Requirements do not list the architectural decisions themselves; those are found by searching
+architecture documents for the requirement/constraint ID.
 
 Section headings below are only human-readable grouping. They are not requirements and do
 not participate in the requirement tree.
