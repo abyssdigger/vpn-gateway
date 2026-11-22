@@ -1236,7 +1236,7 @@ Residents
 1. `@HostPublicationAdapter` *Самостоятельный semantic Adapter host-side Device publication mapping; он потребляет тот же normalized publication intent, но не является occurrence `Private network.NetworkPolicyAdapter`.*
 2. `@HostRoutingContribution` *Direct lifecycle Machinery optional peaceful helper. Current Release-1 realization — `LinuxPeacefulHostRoutingContribution`; continuous host-routing supervision отсутствует.*
 3. `@AggressiveHostRoutingManager <partial>` *Manager continuous ownership явно включенной aggressive host-routing области.*
-    1. `AggressiveHostRoutingEnforcer <partial>` *Bounded Enforcer составного postcondition: managed delivery подтверждена, non-managed escape запрещен.*
+    1. `AggressiveHostRoutingEnforcer` *Bounded Enforcer составного postcondition: managed delivery подтверждена, non-managed escape запрещен.*
 
 Artifacts
 
