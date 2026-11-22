@@ -81,10 +81,14 @@ def _is_standard_local_rule(row: dict) -> bool:
     table = row.get("table", row.get("lookup"))
     if table not in ("local", 255, "255"):
         return False
+    if not _neutral_prefix_selector(row.get("src"), row.get("srclen")):
+        return False
+    if not _neutral_prefix_selector(row.get("dst"), row.get("dstlen")):
+        return False
     selectors = {
-        "src", "src_len", "dst", "dst_len", "fwmark", "fwmask",
-        "uidrange", "sport", "dport", "ipproto", "iif", "oif",
-        "goto", "nop", "suppress_prefixlen", "suppress_prefixlength",
+        "fwmark", "fwmask", "uidrange", "sport", "dport", "ipproto",
+        "iif", "oif", "goto", "nop",
+        "suppress_prefixlen", "suppress_prefixlength",
     }
     return not any(key in row for key in selectors)
 
@@ -101,12 +105,21 @@ def _is_owned_bypass(
     table = row.get("table", row.get("lookup"))
     if table not in ("main", 254, "254"):
         return False
+    if not _neutral_prefix_selector(row.get("src"), row.get("srclen")):
+        return False
+    if not _neutral_prefix_selector(row.get("dst"), row.get("dstlen")):
+        return False
     forbidden = {
-        "src", "src_len", "dst", "dst_len", "fwmark", "fwmask",
-        "uidrange", "sport", "dport", "ipproto", "oif",
-        "goto", "nop", "suppress_prefixlen", "suppress_prefixlength",
+        "fwmark", "fwmask", "uidrange", "sport", "dport", "ipproto",
+        "oif", "goto", "nop", "suppress_prefixlen", "suppress_prefixlength",
     }
     return not any(key in row for key in forbidden)
+
+
+def _neutral_prefix_selector(value: object, length: object) -> bool:
+    if value in (None, "all", "0.0.0.0/0"):
+        return length in (None, 0, "0")
+    return False
 
 
 def _decimal(value: object) -> int | None:
