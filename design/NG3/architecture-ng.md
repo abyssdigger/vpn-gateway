@@ -2116,8 +2116,8 @@ Architectural decisions
 8. `Path-scoped Device firewall lowering`
    *Для каждого current exact path Adapter сохраняет исходный порядок Device firewall rules и исключает только rules, чьё `via peer` predicate доказанно относится к другому path. Rule без selector остаётся Device-wide. Explicit firewall остаётся одной ordered policy с terminal no-match DROP даже если после path filtering не осталось explicit rules; отдельный path-policy gate или второй user policy object не вводится.*
 
-9. `Private-peer uncertainty is restrictive`
-   *Peer selector разрешается только из verified current path facts C.004. Confirmed absence другого peer является обычным non-match; observation failure либо неоднозначное совпадение requested peer не трактуется как отсутствие restriction и не разрешает allowing structural policy для затронутого Device.*
+9. `Private-peer uncertainty is restrictive and demand-scoped`
+   *Peer selector разрешается только из verified current path facts C.004. Если `via peer` отсутствует во всех rules, peer observation вообще не является prerequisite policy realization. Если selector запрошен, confirmed absence другого peer является обычным non-match; observation failure либо неоднозначное совпадение requested peer не трактуется как отсутствие restriction и не разрешает allowing structural policy для затронутого Device.*
 
 ## C.002 NetworkPolicyLayoutCalculator
 
@@ -2247,7 +2247,7 @@ endpoint внутри Private network. Он наблюдает/проверяе�
 
 API
 
-    @observe_device_endpoints(...) — получить свежие candidate endpoints из Private network вместе с confirmed private/inner P2P peer fact либо confirmed absence такого fact для exact endpoint generation.
+    @observe_device_endpoints(require_private_peer=false) — получить свежие candidate endpoints из Private network; при `require_private_peer=true` дополнительно получить confirmed private/inner P2P peer fact либо confirmed absence такого fact для exact endpoint generation.
     @verify_path_binding(...) — подтвердить current endpoint для logical path либо вернуть absent/ambiguous/wrong-domain/unusable result.
 
 Architectural decisions
@@ -2270,8 +2270,8 @@ Architectural decisions
 6. `No upper policy ownership`
    *Adapter не выбирает Profile policy, Device preference, payload eligibility или availability health и не определяет human configuration grammar.*
 
-7. `Private P2P peer is an endpoint fact, not path identity`
-   *Для current Linux point-to-point endpoint Adapter может fresh-observe inner/private peer IPv4 из interface address state и привязать его только к exact `(ifname, ifindex)` generation. Link/address snapshots должны быть взаимно совместимы; race/mismatch является observation failure. Peer fact не создаёт Device ownership: selector resolution выполняется только после обычного Device binding.*
+7. `Private P2P peer is a demand-scoped endpoint fact, not path identity`
+   *Для current Linux point-to-point endpoint Adapter может fresh-observe inner/private peer IPv4 из interface address state и привязать его только к exact `(ifname, ifindex)` generation. Эта дополнительная observation требуется только когда accepted Device policy содержит `via peer`; конфигурация без такого selector сохраняет прежний link-only endpoint-observation contract. При запрошенной peer observation link/address snapshots должны быть взаимно совместимы; race/mismatch является observation failure. Peer fact не создаёт Device ownership: selector resolution выполняется только после обычного Device binding.*
 
 8. `Inner peer is not transport provenance`
    *Private/inner point-to-point peer принципиально отличен от external VPN transport/server endpoint. EXP-039 подтверждает, что inner peer виден generic TUN address observation, тогда как userspace transport endpoint из него не выводится. Если supported integration отдельно доказывает transport provenance, он по-прежнему привязывается к exact current `PathBinding` и не подменяется inner peer.*
