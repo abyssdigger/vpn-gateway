@@ -116,6 +116,32 @@ class DeviceFirewallPolicyIntentTests(unittest.TestCase):
                 private_peer_ipv4="172.20.130.6",  # type: ignore[arg-type]
             )
 
+    def test_exact_if_selector_is_typed_and_mutually_exclusive(self):
+        rule = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.OUT,
+            action=DeviceFirewallAction.DENY,
+            path_ifname="vpn0",
+        )
+        self.assertEqual(rule.path_ifname, "vpn0")
+        self.assertIsNone(rule.private_peer_ipv4)
+
+        with self.assertRaisesRegex(ValueError, "mutually exclusive"):
+            DeviceFirewallRuleIntent(
+                direction=DeviceFirewallDirection.OUT,
+                action=DeviceFirewallAction.DENY,
+                path_ifname="vpn0",
+                private_peer_ipv4=IPv4Address("172.20.130.6"),
+            )
+
+        for invalid in ("", "vpn*", "1234567890123456", "vpn 0"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "path_ifname"):
+                    DeviceFirewallRuleIntent(
+                        direction=DeviceFirewallDirection.OUT,
+                        action=DeviceFirewallAction.DENY,
+                        path_ifname=invalid,
+                    )
+
     def test_protocol_vocabulary_is_not_selected_here(self):
         rule = DeviceFirewallRuleIntent(
             direction=DeviceFirewallDirection.OUT,
