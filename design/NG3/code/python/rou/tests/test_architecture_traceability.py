@@ -22,6 +22,42 @@ REQUIREMENT_STATUSES = (
 )
 
 
+def requirement_nodes() -> tuple[dict[str, object], ...]:
+    result: list[dict[str, object]] = []
+    stack: list[dict[str, object]] = []
+    for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
+        match = re.match(
+            r"^(\s*)-\s+\*\*\[(VPNG[^\]]+)\]\*\*.*"
+            r"\[\x60decomposition\x60:\s*\x60(complete|incomplete)\x60\]",
+            line,
+        )
+        if not match:
+            continue
+        indent, requirement_id, decomposition = match.groups()
+        level = len(indent) // 4
+        statuses = [
+            status
+            for status in REQUIREMENT_STATUSES
+            if f"[\x60{status}\x60]" in line
+        ]
+        while len(stack) > level:
+            stack.pop()
+        parent = stack[level - 1]["id"] if level else None
+        node: dict[str, object] = {
+            "id": requirement_id,
+            "decomposition": decomposition,
+            "statuses": tuple(statuses),
+            "parent": parent,
+        }
+        result.append(node)
+        if len(stack) == level:
+            stack.append(node)
+        else:
+            stack[level] = node
+            del stack[level + 1 :]
+    return tuple(result)
+
+
 def declared_python_implementations() -> tuple[tuple[str, Path], ...]:
     lines = ARCHITECTURE.read_text(encoding="utf-8").splitlines()
     current_spec = None
@@ -92,24 +128,25 @@ def component_specs() -> dict[str, str]:
 
 class StructuredArchitectureTraceabilityTests(unittest.TestCase):
     def test_every_requirement_has_exactly_one_status(self):
-        nodes = []
-        for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
-            match = re.match(r"^\s*-\s+\*\*\[(VPNG[^\]]+)\]\*\*", line)
-            if not match:
-                continue
-            statuses = [
-                status
-                for status in REQUIREMENT_STATUSES
-                if f"[\x60{status}\x60]" in line
-            ]
-            nodes.append(match.group(1))
-            with self.subTest(requirement=match.group(1)):
+        nodes = requirement_nodes()
+        self.assertTrue(nodes)
+        for node in nodes:
+            with self.subTest(requirement=node["id"]):
                 self.assertEqual(
                     1,
-                    len(statuses),
-                    f"requirement must have exactly one status, found {statuses}",
+                    len(node["statuses"]),
+                    f"requirement must have exactly one status, found {node['statuses']}",
                 )
-        self.assertTrue(nodes)
+
+    def test_pending_closure_requirements_have_structured_architecture_entry(self):
+        architecture = ARCHITECTURE.read_text(encoding="utf-8")
+        pending = [
+            str(node["id"])
+            for node in requirement_nodes()
+            if node["statuses"] == ("pending_closure",)
+        ]
+        missing = [item for item in pending if f"\x60{item}\x60" not in architecture]
+        self.assertEqual([], missing)
 
     def test_every_postponed_requirement_has_explicit_record(self):
         record_text = "\n".join(
@@ -117,16 +154,27 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
             for root in (DEFERRALS, REVIEWS)
             for path in root.glob("*.md")
         )
-        postponed = []
-        for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
-            match = re.match(
-                r"^\s*-\s+\*\*\[(VPNG[^\]]+)\]\*\*.*\[\x60postponed\x60\]\s*$",
-                line,
-            )
-            if match:
-                postponed.append(match.group(1))
+        postponed = [
+            str(node["id"])
+            for node in requirement_nodes()
+            if node["statuses"] == ("postponed",)
+        ]
         self.assertTrue(postponed)
         missing = [item for item in postponed if f"\x60{item}\x60" not in record_text]
+        self.assertEqual([], missing)
+
+    def test_rejected_closure_requirements_have_explicit_record(self):
+        record_text = "\n".join(
+            path.read_text(encoding="utf-8")
+            for root in (DEFERRALS, REVIEWS)
+            for path in root.glob("*.md")
+        )
+        rejected = [
+            str(node["id"])
+            for node in requirement_nodes()
+            if node["statuses"] == ("rejected_closure",)
+        ]
+        missing = [item for item in rejected if f"\x60{item}\x60" not in record_text]
         self.assertEqual([], missing)
 
     def test_declared_python_implementations_have_reverse_architecture_marker(self):
@@ -147,19 +195,29 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
             with self.subTest(debt=path):
                 self.assertTrue(reason.strip(), "architecture debt requires an explicit reason")
 
-    def test_every_closed_requirement_has_structured_architecture_entry(self):
+    def test_closed_requirements_have_direct_or_aggregate_architecture_closure(self):
         architecture = ARCHITECTURE.read_text(encoding="utf-8")
-        closed = []
-        for line in REQUIREMENTS.read_text(encoding="utf-8").splitlines():
-            match = re.match(
-                r"^\s*-\s+\*\*\[(VPNG[^\]]+)\]\*\*.*\[\x60closed\x60\]\s*$",
-                line,
-            )
-            if match:
-                closed.append(match.group(1))
+        nodes = requirement_nodes()
+        children: dict[str, list[dict[str, object]]] = {}
+        for node in nodes:
+            parent = node["parent"]
+            if parent is not None:
+                children.setdefault(str(parent), []).append(node)
+
+        closed = [node for node in nodes if node["statuses"] == ("closed",)]
         self.assertTrue(closed)
-        missing = [item for item in closed if f"\x60{item}\x60" not in architecture]
-        self.assertEqual([], missing)
+        for node in closed:
+            requirement_id = str(node["id"])
+            if f"\x60{requirement_id}\x60" in architecture:
+                continue
+            immediate = children.get(requirement_id, [])
+            with self.subTest(requirement=requirement_id):
+                self.assertEqual("complete", node["decomposition"])
+                self.assertTrue(immediate, "aggregate closure requires immediate children")
+                self.assertTrue(
+                    all(child["statuses"] == ("closed",) for child in immediate),
+                    "aggregate closure requires every immediate child to be closed",
+                )
 
     def test_every_trace_target_is_a_requirement_bearing_component_spec(self):
         mapping, _ = trace_manifest()
