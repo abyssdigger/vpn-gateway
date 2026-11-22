@@ -2,12 +2,13 @@
 #
 # This alpha runtime materializes Device outbound NAT, ordinary Device firewall,
 # Device-owned VPN client transport/control allow and publish_vpn_server.
-# It still rejects availability_check and Profile +snat until those complete
-# lower runtime paths are assembled. Publication requires pre-existing host
-# forwarding and any explicit host IPv4/interface selector.
+# availability_check and Profile +snat are part of the current alpha path.
+# Publication still requires pre-existing host forwarding and any explicit
+# host IPv4/interface selector.
 #
 # Host-routing assistance is disabled by default. Select traffic explicitly:
 # ":local", ":external", ":any", or exact ingress names such as "eth0,br0".
+log_level = "info"
 helper_routing_interfaces = ":none"
 helper_routing_policy = "peaceful"
 

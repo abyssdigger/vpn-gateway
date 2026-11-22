@@ -17,6 +17,7 @@ from typing import Any, Mapping
 from .config import ConfigError, _parse_structural_root
 from .domain import Direction, StructuralConfig
 from .port_bundle import PortBundle, PortSpan
+from .operational_log import OperationalLogLevel
 
 
 _TOP_LEVEL_KEYS = frozenset(
@@ -24,6 +25,7 @@ _TOP_LEVEL_KEYS = frozenset(
         "default_snat_address",
         "helper_routing_interfaces",
         "helper_routing_policy",
+        "log_level",
         "device",
         "profile",
     }
@@ -156,6 +158,7 @@ class Release1Config:
     default_snat_address: ipaddress.IPv4Address | None = None
     helper_routing_interfaces: tuple[HelperRoutingSelector, ...] = ()
     helper_routing_policy: HelperRoutingPolicy = HelperRoutingPolicy.PEACEFUL
+    log_level: OperationalLogLevel = OperationalLogLevel.INFO
 
 
 def parse_release1_config(text: str) -> Release1Config:
@@ -177,6 +180,7 @@ def parse_release1_config(text: str) -> Release1Config:
             "top level has unsupported field(s): " + ", ".join(unknown_top)
         )
 
+    log_level = _parse_operational_log_level(raw.get("log_level", "info"))
     default_snat_address = _parse_optional_snat_address(
         raw.get("default_snat_address"),
         "default_snat_address",
@@ -345,6 +349,18 @@ def parse_release1_config(text: str) -> Release1Config:
         default_snat_address=default_snat_address,
         helper_routing_interfaces=helper_routing_interfaces,
         helper_routing_policy=helper_routing_policy,
+        log_level=log_level,
+    )
+
+
+def _parse_operational_log_level(value: Any) -> OperationalLogLevel:
+    if isinstance(value, str):
+        try:
+            return OperationalLogLevel(value)
+        except ValueError:
+            pass
+    raise Release1ConfigError(
+        'log_level must be exactly one of "error", "warning", "info", "debug"'
     )
 
 

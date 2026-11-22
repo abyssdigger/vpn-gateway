@@ -33,9 +33,20 @@ import sys
 import threading
 from typing import Iterable
 
-from .availability_manager import AvailabilityManager, AvailabilityManagerPolicy
-from .binding import DeviceBindingState, PathBinding, project_device_bindings
+from .availability_manager import (
+    LOG_TAG as AVAIL_LOG_TAG,
+    AvailabilityManager,
+    AvailabilityManagerPolicy,
+)
+from .binding import (
+    LOG_TAG as BIND_LOG_TAG,
+    DeviceBindingState,
+    LogicalPathId,
+    PathBinding,
+    project_device_bindings,
+)
 from .controller_startup import (
+    LOG_TAG as LIFE_LOG_TAG,
     ControllerStartupStatus,
     start_controller_once,
 )
@@ -108,6 +119,7 @@ from .managed_network_domain import (
     preflight_managed_network_environment,
 )
 from .network_policy_activation import (
+    LOG_TAG as POLICY_LOG_TAG,
     NetworkPolicyActivationResult,
     activate_network_policy,
 )
@@ -115,13 +127,19 @@ from .payload_network_policy_desired import (
     PayloadNetworkPolicyDesiredState,
     build_payload_network_policy_desired_state,
 )
-from .payload_profile import PayloadProfileRequest, build_payload_profile_requests
+from .payload_profile import (
+    LOG_TAG as PROF_LOG_TAG,
+    PayloadProfileRequest,
+    build_payload_profile_requests,
+)
 from .payload_nat_desired import ProfileSnatPolicyIntent
 from .probe_desired import ProbeDesiredAssembly, build_probe_desired_assembly
 from .probe_runtime import AvailabilityProbeRuntime
 from .route_priority_inventory import RoutePriorityPathRoute
 from .release1_config import Release1Config, parse_release1_config
+from .operational_log import OperationalLogAdapter, OperationalLogLevel
 from .release1_host_route_helper import (
+    LOG_TAG as HOST_LOG_TAG,
     LinuxPeacefulHostRoutingContribution,
     build_linux_peaceful_host_routing_contribution,
     helper_routing_uses_external_ingress,
@@ -622,11 +640,103 @@ def _notify_systemd(message: str) -> bool:
     return True
 
 
-def _log(marker: str, detail: str = "") -> None:
-    print(
-        marker + (f" {detail}" if detail else ""),
-        flush=True,
+def _path_label(path_id: LogicalPathId) -> str:
+    return (
+        f"{path_id.device_id}:{path_id.selector_index}:{path_id.slot_index}"
     )
+
+
+def _binding_map(
+    bindings: tuple[PathBinding, ...],
+) -> dict[LogicalPathId, str]:
+    return {
+        binding.path_id: (
+            f"{binding.endpoint.ifname}@{binding.endpoint.ifindex}"
+        )
+        for binding in bindings
+    }
+
+
+def _emit_binding_transitions(
+    logger: OperationalLogAdapter,
+    previous: tuple[PathBinding, ...],
+    current: tuple[PathBinding, ...],
+) -> None:
+    before = _binding_map(previous)
+    after = _binding_map(current)
+    for path_id in sorted(set(before) | set(after)):
+        old = before.get(path_id)
+        new = after.get(path_id)
+        if old == new:
+            continue
+        logger.emit(
+            OperationalLogLevel.INFO,
+            BIND_LOG_TAG,
+            "path_binding_changed",
+            device=path_id.device_id,
+            path=_path_label(path_id),
+            previous=old,
+            current=new,
+        )
+
+
+def _profile_orders(
+    profiles: tuple[PayloadProfileRequest, ...],
+) -> dict[str, tuple[str, ...]]:
+    return {
+        profile.profile_id: tuple(
+            _path_label(path)
+            for path in profile.ordered_paths
+        )
+        for profile in profiles
+    }
+
+
+def _emit_profile_reactions(
+    logger: OperationalLogAdapter,
+    previous: tuple[PayloadProfileRequest, ...],
+    current: tuple[PayloadProfileRequest, ...],
+) -> None:
+    before = _profile_orders(previous)
+    after = _profile_orders(current)
+    for profile_id in sorted(set(before) | set(after)):
+        old = before.get(profile_id, ())
+        new = after.get(profile_id, ())
+        if old == new:
+            continue
+        logger.emit(
+            OperationalLogLevel.DEBUG,
+            PROF_LOG_TAG,
+            "effective_order_changed",
+            profile=profile_id,
+            previous=",".join(old) or "-",
+            current=",".join(new) or "-",
+        )
+
+
+def _emit_availability_transitions(
+    logger: OperationalLogAdapter,
+    previous_problem_owners,
+    current_problem_owners,
+) -> None:
+    before = frozenset(previous_problem_owners)
+    after = frozenset(current_problem_owners)
+    for owner in sorted(after - before):
+        logger.emit(
+            OperationalLogLevel.INFO,
+            AVAIL_LOG_TAG,
+            "path_unavailable",
+            profile=owner.profile_id,
+            path=_path_label(owner.path_id),
+        )
+    for owner in sorted(before - after):
+        logger.emit(
+            OperationalLogLevel.INFO,
+            AVAIL_LOG_TAG,
+            "path_available",
+            profile=owner.profile_id,
+            path=_path_label(owner.path_id),
+        )
 
 
 def run_alpha_runtime(
@@ -651,9 +761,25 @@ def run_alpha_runtime(
     domain_spec = _domain_spec()
     stop_event = threading.Event()
     holder: dict[str, AlphaPreparedPolicy] = {}
+    logger_holder = {
+        "logger": OperationalLogAdapter(OperationalLogLevel.INFO)
+    }
+
+    def log(level, tag, event, **context):
+        return logger_holder["logger"].emit(
+            level,
+            tag,
+            event,
+            **context,
+        )
 
     def request_stop(signum, _frame):
-        _log("VPNG_ALPHA_STOP_REQUESTED", f"signal={signum}")
+        log(
+            OperationalLogLevel.INFO,
+            LIFE_LOG_TAG,
+            "stop_requested",
+            signal=signum,
+        )
         stop_event.set()
 
     previous_sigterm = signal.signal(signal.SIGTERM, request_stop)
@@ -665,6 +791,21 @@ def run_alpha_runtime(
             text,
             local_address=domain_spec.inner_address.ip,
         )
+        logger_holder["logger"] = OperationalLogAdapter(
+            prepared.config.log_level
+        )
+        log(
+            OperationalLogLevel.INFO,
+            LIFE_LOG_TAG,
+            "config_accepted",
+            devices=len(prepared.config.structural.active_device_ids),
+            profiles=sum(
+                1
+                for profile in prepared.config.structural.profiles.values()
+                if profile.enabled
+            ),
+            log_level=prepared.config.log_level.value,
+        )
         validate_release1_helper_routing_scope(
             prepared.config,
             domain_spec,
@@ -675,15 +816,19 @@ def run_alpha_runtime(
                     "/proc/sys/net/ipv4/ip_forward"
                 ).read_text(encoding="ascii").strip()
             except OSError as exc:
-                _log(
-                    "VPNG_ALPHA_HOST_ROUTING_WARNING",
-                    f"unable_to_read_ipv4_forwarding={exc!r}",
+                log(
+                    OperationalLogLevel.WARNING,
+                    HOST_LOG_TAG,
+                    "host_forwarding_observation_failed",
+                    diagnostic=f"{type(exc).__name__}: {exc}",
                 )
             else:
                 if host_forwarding == "0":
-                    _log(
-                        "VPNG_ALPHA_HOST_ROUTING_WARNING",
-                        "external_ingress_selected ipv4_forwarding=disabled",
+                    log(
+                        OperationalLogLevel.WARNING,
+                        HOST_LOG_TAG,
+                        "host_forwarding_disabled",
+                        selector="external",
                     )
         holder["policy"] = prepared
         return prepared
@@ -714,9 +859,12 @@ def run_alpha_runtime(
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
         )
         if startup.status is not ControllerStartupStatus.READY:
-            _log(
-                "VPNG_ALPHA_START_FAILED",
-                f"status={startup.status.value} diagnostic={startup.diagnostic!r}",
+            log(
+                OperationalLogLevel.ERROR,
+                LIFE_LOG_TAG,
+                "start_failed",
+                status=startup.status.value,
+                diagnostic=startup.diagnostic,
             )
             return 1
 
@@ -764,14 +912,14 @@ def run_alpha_runtime(
                 ),
             )
             status_publisher.publish(status_agent.snapshot())
-            _log(
-                "VPNG_ALPHA_START_FAILED",
-                (
-                    "status=availability_unready "
-                    f"availability={availability_start.status.value} "
-                    f"diagnostic={availability_start.diagnostic!r} "
-                    f"managed_cleanup={stopped.status.value}"
-                ),
+            log(
+                OperationalLogLevel.ERROR,
+                LIFE_LOG_TAG,
+                "start_failed",
+                status="availability_unready",
+                availability=availability_start.status.value,
+                diagnostic=availability_start.diagnostic,
+                managed_cleanup=stopped.status.value,
             )
             return (
                 1
@@ -799,14 +947,14 @@ def run_alpha_runtime(
                 ),
             )
             status_publisher.publish(status_agent.snapshot())
-            _log(
-                "VPNG_ALPHA_START_FAILED",
-                (
-                    "status=host_publication_unready "
-                    f"diagnostic={host_start.diagnostic!r} "
-                    f"host_cleanup={host_cleanup.status.value} "
-                    f"managed_cleanup={stopped.status.value}"
-                ),
+            log(
+                OperationalLogLevel.ERROR,
+                LIFE_LOG_TAG,
+                "start_failed",
+                status="host_publication_unready",
+                diagnostic=host_start.diagnostic,
+                host_cleanup=host_cleanup.status.value,
+                managed_cleanup=stopped.status.value,
             )
             return (
                 1
@@ -824,13 +972,28 @@ def run_alpha_runtime(
                 availability_start.observation.projection.problem_owners
             )
         status_publisher.publish(status_agent.snapshot())
+        _emit_binding_transitions(
+            logger_holder["logger"],
+            (),
+            prepared.last_bindings,
+        )
+        initial_problem_owners = (
+            availability_start.observation.projection.problem_owners
+            if availability_start.observation is not None
+            else frozenset()
+        )
+        _emit_availability_transitions(
+            logger_holder["logger"],
+            frozenset(),
+            initial_problem_owners,
+        )
 
-        _log(
-            "VPNG_ALPHA_READY",
-            (
-                f"namespace={domain_spec.namespace} "
-                f"netns_path=/run/netns/{domain_spec.namespace}"
-            ),
+        log(
+            OperationalLogLevel.INFO,
+            LIFE_LOG_TAG,
+            "ready",
+            namespace=domain_spec.namespace,
+            netns_path=f"/run/netns/{domain_spec.namespace}",
         )
         _notify_systemd(
             "READY=1\n"
@@ -839,7 +1002,10 @@ def run_alpha_runtime(
 
         last_status: AlphaReconcileStatus | None = None
         last_diagnostic: str | None = None
+        last_problem_owners = initial_problem_owners
         while not stop_event.wait(audit_interval_seconds):
+            previous_bindings = prepared.last_bindings
+            previous_profiles = prepared.last_profiles
             # Peaceful host-routing assistance is lifecycle-scoped. Ordinary-host
             # route changes after successful start are administrator-owned and do
             # not gate core managed-domain reconciliation.
@@ -888,23 +1054,63 @@ def run_alpha_runtime(
                         )
                     ),
                 )
+            current_problem_owners = (
+                availability_result.observation.projection.problem_owners
+                if availability_result is not None
+                and availability_result.observation is not None
+                else last_problem_owners
+            )
+            _emit_binding_transitions(
+                logger_holder["logger"],
+                previous_bindings,
+                prepared.last_bindings,
+            )
+            _emit_availability_transitions(
+                logger_holder["logger"],
+                last_problem_owners,
+                current_problem_owners,
+            )
+            _emit_profile_reactions(
+                logger_holder["logger"],
+                previous_profiles,
+                prepared.last_profiles,
+            )
+            last_problem_owners = current_problem_owners
+
             status_publisher.publish(status_agent.snapshot())
-            if (
+            changed_result = (
                 result.status is not last_status
                 or result.diagnostic != last_diagnostic
-            ):
-                _log(
-                    "VPNG_ALPHA_RECONCILE",
-                    (
-                        f"status={result.status.value} "
-                        f"diagnostic={result.diagnostic!r}"
-                    ),
-                )
+            )
+            if changed_result:
+                if result.status is AlphaReconcileStatus.FAILED:
+                    log(
+                        OperationalLogLevel.ERROR,
+                        POLICY_LOG_TAG,
+                        "reconcile_failed",
+                        status=result.status.value,
+                        diagnostic=result.diagnostic,
+                    )
+                elif result.status is AlphaReconcileStatus.RECONCILED:
+                    log(
+                        OperationalLogLevel.DEBUG,
+                        POLICY_LOG_TAG,
+                        "policy_applied",
+                        status=result.status.value,
+                    )
+                else:
+                    log(
+                        OperationalLogLevel.DEBUG,
+                        POLICY_LOG_TAG,
+                        "reconcile_confirmed",
+                        status=result.status.value,
+                    )
+            if changed_result:
                 _notify_systemd(
                     f"STATUS=VPN-GATE alpha reconcile {result.status.value}"
                 )
-                last_status = result.status
-                last_diagnostic = result.diagnostic
+            last_status = result.status
+            last_diagnostic = result.diagnostic
 
         status_agent.mark_stopping()
         status_publisher.publish(status_agent.snapshot())
@@ -932,15 +1138,20 @@ def run_alpha_runtime(
                 ),
             )
         status_publisher.publish(status_agent.snapshot())
-        _log(
-            "VPNG_ALPHA_STOP",
+        log(
             (
-                f"status={stopped.status.value} "
-                f"host_publication_cleanup={host_cleanup.status.value} "
-                f"host_publication_error={host_cleanup.diagnostic!r} "
-                f"cleanup_error={stopped.cleanup_error!r} "
-                f"lock_error={stopped.lock_error!r}"
+                OperationalLogLevel.INFO
+                if host_cleanup.confirmed
+                and stopped.status is ControllerStopStatus.STOPPED
+                else OperationalLogLevel.ERROR
             ),
+            LIFE_LOG_TAG,
+            "stop_complete",
+            status=stopped.status.value,
+            host_publication_cleanup=host_cleanup.status.value,
+            host_publication_error=host_cleanup.diagnostic,
+            cleanup_error=stopped.cleanup_error,
+            lock_error=stopped.lock_error,
         )
         return (
             0
@@ -981,9 +1192,11 @@ def main(argv: Iterable[str] | None = None) -> int:
             audit_interval_seconds=args.audit_interval,
         )
     except Exception as exc:
-        _log(
-            "VPNG_ALPHA_FATAL",
-            f"{type(exc).__name__}: {exc}",
+        OperationalLogAdapter(OperationalLogLevel.INFO).emit(
+            OperationalLogLevel.ERROR,
+            LIFE_LOG_TAG,
+            "fatal",
+            diagnostic=f"{type(exc).__name__}: {exc}",
         )
         return 1
 

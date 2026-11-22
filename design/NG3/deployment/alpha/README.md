@@ -6,6 +6,9 @@
 
 Эта сборка предназначена для первого реального запуска NG3 reference runtime. Она не
 является финальным Release-1 packaging contract и не вводит новую конфигурационную семантику.
+
+Краткая последовательная инструкция администратора вынесена в
+`design/NG3/admin-runbook.md`; этот deployment README остаётся подробным alpha contract/evidence note.
 После requirement/design review 2026-11-20 alpha использует выбранный Release-1 peaceful
 host-routing helper. Отдельный authoritative host-routing owner сохранён только как
 prototype/evidence для отложенного aggressive helper и в alpha lifecycle не подключён.
@@ -237,26 +240,19 @@ cycle без установленной проблемы либо `problem` пр
 `(Profile, logical path)`. Эти значения описывают только current bounded state и не обещают
 историю наблюдений. JSON schema/path пока не объявлены стабильным Release-1 внешним API.
 
-## Диагностика
+## Operational logging и диагностика
+
+Operational logging управляется root-полем `log_level = "error" | "warning" | "info" | "debug"`;
+default — `info`. Записи имеют normalized component tags и сохраняют стандартную severity в
+journald. Текущий administrator workflow, значение tags и действия для ERROR/WARNING/INFO/DEBUG
+описаны в `design/NG3/admin-runbook.md`.
 
 ```sh
-journalctl -u vpn-gate-alpha.service
-journalctl -u vpn-gate-alpha-openvpn.service
+journalctl -fu vpn-gate-alpha.service
+journalctl -u vpn-gate-alpha.service -p warning --no-pager
 ```
 
-Текущие implementation markers:
-
-```text
-VPNG_ALPHA_READY
-VPNG_ALPHA_RECONCILE status=exact
-VPNG_ALPHA_RECONCILE status=reconciled
-VPNG_ALPHA_RECONCILE status=failed
-VPNG_ALPHA_STOP
-VPNG_ALPHA_FATAL
-VPNG_ALPHA_HOST_ROUTING_WARNING
-```
-
-Это не финальный user-facing status API.
+Developer execution trace этим механизмом не предоставляется.
 
 ## Implementation language boundary
 
