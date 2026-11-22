@@ -4,6 +4,20 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Current requirements closure frontier cleared
+
+The remaining 17 `pending_closure` Requirement/Constraint nodes were re-reviewed against the
+current authoritative architecture and executable evidence and moved to `closed`. The closure
+covers Device-scoped NAT/firewall policy, Profile source identity, canonical configuration,
+peaceful host-routing automation, packet matching, availability criterion aggregation,
+priority-only reorder, established-flow return affinity and managed-policy non-interference.
+
+No postponed capability was re-entered or silently narrowed. The current normative inventory is
+therefore 190 `closed`, 0 `pending_closure`, 13 `postponed`, 0 `rejected_closure`, plus
+the four intentionally statusless open roots/frontier nodes. The acceptance record is
+`design/reviews/NG3-2026-11-22-remaining-pending-closure-review.md`; the reviewed executable
+baseline is `NG3 Python` run `45027427711`, which passed all 21 jobs on the same main tree.
+
 ## 2026-11-22 — Operational logging and administrator runbook verified
 
 The alpha now has configurable operational logging with canonical
