@@ -141,8 +141,11 @@ Current canonical forms include:
 Historical `nat`, `traffic_envelope`, publication shorthand, `interface_balancing` and
 top-level `integration.*` remain prototype/evidence syntax and are not aliases.
 
-Only endpoint-scoped Device firewall syntax remains independently deferred under its explicit
-Release-1 provenance constraint. Future availability timing knobs would require a new
+Device firewall path scope is now canonical: an unqualified rule applies to every current
+path of the Device, `via if <exact-ifname>` selects one current Device path by its already
+verified interface binding, and `via peer <IPv4>` selects a dynamic point-to-point path by
+its observed private/inner peer. The two `via` forms are mutually exclusive; private peer is
+not an external transport endpoint. Future availability timing knobs would require a new
 configuration-format decision if a requirement ever makes them user policy.
 
 # 3. Device and binding

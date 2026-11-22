@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from ipaddress import IPv4Address
 
 from rou.binding import LogicalPathId
 from rou.device_firewall_policy_compiler import (
@@ -132,6 +133,191 @@ class DeviceFirewallPolicyCompilerTests(unittest.TestCase):
                 (EP_A1, HOST),
             },
         )
+
+    def test_private_peer_rules_are_resolved_per_current_path(self):
+        peer_a0 = IPv4Address("172.20.130.6")
+        peer_a1 = IPv4Address("172.20.130.5")
+        policy = DeviceFirewallPolicyIntent(
+            "a",
+            (
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.DENY,
+                    protocol="udp",
+                    destination_ports=53,
+                    private_peer_ipv4=peer_a0,
+                ),
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.ALLOW,
+                    protocol="icmp",
+                ),
+            ),
+        )
+        desired = compile_device_firewall_policies(
+            (policy,),
+            (
+                RoutePriorityPathRoute(PATH_A0, EP_A0),
+                RoutePriorityPathRoute(PATH_A1, EP_A1),
+            ),
+            HOST,
+            {
+                EP_A0: peer_a0,
+                EP_A1: peer_a1,
+            },
+        )
+        a0_out = desired.chains[0]
+        a1_out = desired.chains[2]
+        self.assertEqual(len(a0_out.rules), 3)
+        self.assertEqual(len(a1_out.rules), 2)
+
+    def test_exact_if_selector_needs_no_private_peer_observation(self):
+        scoped = DeviceFirewallPolicyIntent(
+            "a",
+            (
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.DENY,
+                    path_ifname=EP_A0.ifname,
+                ),
+            ),
+        )
+        desired = compile_device_firewall_policies(
+            (scoped,),
+            (
+                RoutePriorityPathRoute(PATH_A0, EP_A0),
+                RoutePriorityPathRoute(PATH_A1, EP_A1),
+            ),
+            HOST,
+        )
+        self.assertEqual(len(desired.chains[0].rules), 2)
+        self.assertEqual(len(desired.chains[2].rules), 1)
+        self.assertTrue(desired.chains[2].rules[0].terminal_fallthrough)
+
+    def test_device_wide_exact_if_and_peer_rules_share_one_ordered_policy(self):
+        peer_a0 = IPv4Address("172.20.130.6")
+        peer_a1 = IPv4Address("172.20.130.5")
+        policy = DeviceFirewallPolicyIntent(
+            "a",
+            (
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.ALLOW,
+                    protocol="icmp",
+                ),
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.DENY,
+                    protocol="udp",
+                    destination_ports=53,
+                    path_ifname=EP_A0.ifname,
+                ),
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.REJECT,
+                    protocol="tcp",
+                    private_peer_ipv4=peer_a1,
+                ),
+            ),
+        )
+        desired = compile_device_firewall_policies(
+            (policy,),
+            (
+                RoutePriorityPathRoute(PATH_A0, EP_A0),
+                RoutePriorityPathRoute(PATH_A1, EP_A1),
+            ),
+            HOST,
+            {
+                EP_A0: peer_a0,
+                EP_A1: peer_a1,
+            },
+        )
+        self.assertEqual(
+            [rule.action_json for rule in desired.chains[0].rules],
+            [
+                '{"return":null}',
+                '{"drop":null}',
+                '{"drop":null}',
+            ],
+        )
+        self.assertEqual(
+            [rule.action_json for rule in desired.chains[2].rules],
+            [
+                '{"return":null}',
+                '{"reject":{"type":"tcp reset"}}',
+                '{"drop":null}',
+            ],
+        )
+
+    def test_private_peer_observation_is_required_only_for_scoped_policy(self):
+        peer = IPv4Address("172.20.130.6")
+        scoped = DeviceFirewallPolicyIntent(
+            "a",
+            (
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.DENY,
+                    private_peer_ipv4=peer,
+                ),
+            ),
+        )
+        with self.assertRaisesRegex(
+            DeviceFirewallPolicyCompileError,
+            "observation is required",
+        ):
+            compile_device_firewall_policies(
+                (scoped,),
+                (RoutePriorityPathRoute(PATH_A0, EP_A0),),
+                HOST,
+            )
+
+        ordinary = compile_device_firewall_policies(
+            (explicit("a"),),
+            (RoutePriorityPathRoute(PATH_A0, EP_A0),),
+            HOST,
+        )
+        self.assertEqual(len(ordinary.chains), 2)
+
+    def test_missing_or_ambiguous_private_peer_facts_fail_closed(self):
+        peer = IPv4Address("172.20.130.6")
+        scoped = DeviceFirewallPolicyIntent(
+            "a",
+            (
+                DeviceFirewallRuleIntent(
+                    direction=DeviceFirewallDirection.OUT,
+                    action=DeviceFirewallAction.DENY,
+                    private_peer_ipv4=peer,
+                ),
+            ),
+        )
+        routes = (
+            RoutePriorityPathRoute(PATH_A0, EP_A0),
+            RoutePriorityPathRoute(PATH_A1, EP_A1),
+        )
+        with self.assertRaisesRegex(
+            DeviceFirewallPolicyCompileError,
+            "observation is missing",
+        ):
+            compile_device_firewall_policies(
+                (scoped,),
+                routes,
+                HOST,
+                {EP_A0: peer},
+            )
+
+        with self.assertRaisesRegex(
+            DeviceFirewallPolicyCompileError,
+            "ambiguous",
+        ):
+            compile_device_firewall_policies(
+                (scoped,),
+                routes,
+                HOST,
+                {
+                    EP_A0: peer,
+                    EP_A1: peer,
+                },
+            )
 
     def test_missing_policy_for_current_path_is_not_implicit_allow(self):
         with self.assertRaisesRegex(

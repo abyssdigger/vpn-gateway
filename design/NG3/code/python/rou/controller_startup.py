@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Protocol
+from ipaddress import IPv4Address
+from typing import Mapping, Protocol
 
 from .host_routing_contribution import HostRoutingContribution
 from .forwarding_gate import (
@@ -64,10 +65,19 @@ LOG_TAG = "LIFE"
 
 
 class PreparedPayloadPolicy(Protocol):
+    @property
+    def requires_private_peer_observation(self) -> bool:
+        """Whether current policy requires fresh private-P2P peer facts."""
+
     def build_current(
         self,
         host_boundary: InterfaceIdentity,
         interfaces: tuple[InterfaceIdentity, ...],
+        *,
+        path_private_peers: Mapping[
+            InterfaceIdentity,
+            IPv4Address | None,
+        ] | None = None,
     ) -> PayloadNetworkPolicyDesiredState:
         """Build complete current lower desired state from fresh interface facts."""
 
@@ -396,12 +406,17 @@ def start_controller_once(
         )
 
     try:
-        interfaces = LinuxVpnPathAdapter(
+        require_private_peer = bool(
+            getattr(prepared, "requires_private_peer_observation", False)
+        )
+        path_observation = LinuxVpnPathAdapter(
             runner,
             domain_spec.namespace,
         ).observe_interfaces(
             required_host_boundary=host_boundary,
-        ).interfaces
+            require_private_peer=require_private_peer,
+        )
+        interfaces = path_observation.interfaces
     except Exception as exc:
         containment = _contain(domain_spec, runner)
         status = (
@@ -427,9 +442,17 @@ def start_controller_once(
         return interrupted
 
     try:
-        desired = prepared.build_current(
-            host_boundary,
-            interfaces,
+        desired = (
+            prepared.build_current(
+                host_boundary,
+                interfaces,
+                path_private_peers=path_observation.private_peers,
+            )
+            if require_private_peer
+            else prepared.build_current(
+                host_boundary,
+                interfaces,
+            )
         )
         if not isinstance(desired, PayloadNetworkPolicyDesiredState):
             raise TypeError(

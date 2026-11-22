@@ -437,6 +437,12 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/exp039_tun_transport_provenance.py"
+      - name: Private-peer VPNPathAdapter integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH python3
+          design/NG3/code/python/rou/tests/integration_vpn_path_private_peer.py
 
   linux-exp049-openvpn:
     runs-on: ubuntu-latest

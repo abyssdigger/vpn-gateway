@@ -481,6 +481,95 @@ destinations = ["192.0.2.0/24"]
 device_order = ["oc"]
 """)
 
+    def test_firewall_private_peer_selector_is_strict_and_normalized(self):
+        cfg = parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn*/2"]
+use_outbound_nat = false
+firewall = [
+    "out deny udp to 10.20.0.53/32:53 via peer 172.20.130.6 # saratov DNS",
+]
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.20.0.0/16"]
+device_order = ["oc"]
+""")
+        rule = cfg.devices["oc"].firewall[0]
+        self.assertEqual(
+            rule.private_peer_ipv4,
+            ipaddress.IPv4Address("172.20.130.6"),
+        )
+        self.assertEqual(rule.comment, "saratov DNS")
+
+        for invalid in (
+            "out deny udp to 10.20.0.53/32:53 via 172.20.130.6",
+            "out deny udp to 10.20.0.53/32:53 via peer",
+            "out deny udp to 10.20.0.53/32:53 via peer 2001:db8::1",
+            "out deny udp via peer 172.20.130.6 via peer 172.20.130.5",
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(Release1ConfigError):
+                    parse_release1_config(f"""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn*/2"]
+use_outbound_nat = false
+firewall = ["{invalid}"]
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.20.0.0/16"]
+device_order = ["oc"]
+""")
+
+    def test_firewall_exact_if_selector_is_strict_and_normalized(self):
+        cfg = parse_release1_config("""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn*/2"]
+use_outbound_nat = false
+firewall = [
+    "out deny udp to 10.20.0.53/32:53 via if vpn0 # exact member",
+]
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.20.0.0/16"]
+device_order = ["oc"]
+""")
+        rule = cfg.devices["oc"].firewall[0]
+        self.assertEqual(rule.path_ifname, "vpn0")
+        self.assertIsNone(rule.private_peer_ipv4)
+        self.assertEqual(rule.comment, "exact member")
+
+        for invalid in (
+            "out deny udp to 10.20.0.53/32:53 via if",
+            "out deny udp to 10.20.0.53/32:53 via if vpn*",
+            "out deny udp to 10.20.0.53/32:53 via if 1234567890123456",
+            "out deny udp to 10.20.0.53/32:53 via banana vpn0",
+            "out deny udp via if vpn0 via peer 172.20.130.6",
+        ):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(Release1ConfigError):
+                    parse_release1_config(f"""
+[device.oc]
+enabled = true
+expected_interfaces = ["vpn*/2"]
+use_outbound_nat = false
+firewall = ["{invalid}"]
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.20.0.0/16"]
+device_order = ["oc"]
+""")
+
     def test_client_allow_and_publication_forms_are_strict(self):
         cfg = parse_release1_config("""
 [device.client]

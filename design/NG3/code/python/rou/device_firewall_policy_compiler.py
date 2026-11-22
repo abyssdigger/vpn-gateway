@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from ipaddress import IPv4Address
+from typing import Iterable, Mapping
 
 from .device_firewall_compiler import (
     DeviceFirewallCompileError,
@@ -22,6 +23,7 @@ def compile_device_firewall_policies(
     policies: Iterable[DeviceFirewallPolicyIntent],
     path_routes: Iterable[RoutePriorityPathRoute],
     host_boundary: InterfaceIdentity,
+    private_peers: Mapping[InterfaceIdentity, IPv4Address | None] | None = None,
 ) -> DeviceFirewallDesiredState:
     """Compile normalized Device policy over all current payload paths.
 
@@ -74,6 +76,58 @@ def compile_device_firewall_policies(
         for path_id in sorted(route_by_path)
     )
 
+    peer_scoped: dict[str, frozenset[IPv4Address]] = {}
+    for device_id, policy in policy_by_device.items():
+        requested = frozenset(
+            rule.private_peer_ipv4
+            for rule in (policy.rules or ())
+            if rule.private_peer_ipv4 is not None
+        )
+        if requested:
+            peer_scoped[device_id] = requested
+
+    if peer_scoped and private_peers is None:
+        raise DeviceFirewallPolicyCompileError(
+            "private-peer observation is required by Device firewall policy"
+        )
+
+    if private_peers is not None:
+        for endpoint, peer in private_peers.items():
+            if not isinstance(endpoint, InterfaceIdentity):
+                raise DeviceFirewallPolicyCompileError(
+                    "private_peers keys must be InterfaceIdentity"
+                )
+            if peer is not None and not isinstance(peer, IPv4Address):
+                raise DeviceFirewallPolicyCompileError(
+                    "private_peers values must be IPv4Address or None"
+                )
+
+        for route in ordered_routes:
+            if (
+                route.path_id.device_id in peer_scoped
+                and route.endpoint not in private_peers
+            ):
+                raise DeviceFirewallPolicyCompileError(
+                    "private-peer observation is missing for current Device path: "
+                    f"{route.path_id!r}"
+                )
+
+        for device_id, requested in peer_scoped.items():
+            for peer in requested:
+                matches = tuple(
+                    route
+                    for route in ordered_routes
+                    if (
+                        route.path_id.device_id == device_id
+                        and private_peers.get(route.endpoint) == peer
+                    )
+                )
+                if len(matches) > 1:
+                    raise DeviceFirewallPolicyCompileError(
+                        "private-peer selector is ambiguous for Device "
+                        f"{device_id!r}: {peer}"
+                    )
+
     chains = []
     for ordinal, route in enumerate(ordered_routes):
         policy = policy_by_device.get(route.path_id.device_id)
@@ -90,6 +144,11 @@ def compile_device_firewall_policies(
                 route.endpoint,
                 out_chain_name=f"df_out_{ordinal:08x}",
                 in_chain_name=f"df_in_{ordinal:08x}",
+                path_private_peer=(
+                    None
+                    if private_peers is None
+                    else private_peers.get(route.endpoint)
+                ),
             )
         except DeviceFirewallCompileError as exc:
             raise DeviceFirewallPolicyCompileError(str(exc)) from exc

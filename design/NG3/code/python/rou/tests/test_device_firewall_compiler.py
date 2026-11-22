@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import unittest
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from rou.device_firewall_compiler import (
     DeviceFirewallCompileError,
@@ -81,6 +81,120 @@ class DeviceFirewallCompilerTests(unittest.TestCase):
         )
         self.assertTrue(out_chain.rules[-1].terminal_fallthrough)
         self.assertTrue(in_chain.rules[-1].terminal_fallthrough)
+
+    def test_private_peer_selector_filters_rule_but_keeps_explicit_drop(self):
+        peer = IPv4Address("172.20.130.6")
+        selected = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.OUT,
+            action=DeviceFirewallAction.DENY,
+            protocol="udp",
+            destination_ports=53,
+            private_peer_ipv4=peer,
+        )
+        unscoped = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.OUT,
+            action=DeviceFirewallAction.ALLOW,
+            protocol="icmp",
+        )
+        policy = DeviceFirewallPolicyIntent(
+            "oc",
+            (selected, unscoped),
+        )
+
+        matching = compile_device_firewall_policy(
+            policy,
+            HOST,
+            VPN,
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+            path_private_peer=peer,
+        )
+        self.assertEqual(
+            [rule.action for rule in matching.chains[0].rules],
+            [
+                DeviceFirewallRuleAction.DROP,
+                DeviceFirewallRuleAction.RETURN,
+                DeviceFirewallRuleAction.DROP,
+            ],
+        )
+
+        other = compile_device_firewall_policy(
+            policy,
+            HOST,
+            VPN,
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+            path_private_peer=IPv4Address("172.20.130.5"),
+        )
+        self.assertEqual(
+            [rule.action for rule in other.chains[0].rules],
+            [
+                DeviceFirewallRuleAction.RETURN,
+                DeviceFirewallRuleAction.DROP,
+            ],
+        )
+
+        only_scoped = compile_device_firewall_policy(
+            DeviceFirewallPolicyIntent("oc", (selected,)),
+            HOST,
+            VPN,
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+            path_private_peer=IPv4Address("172.20.130.5"),
+        )
+        self.assertEqual(
+            [rule.action for rule in only_scoped.chains[0].rules],
+            [DeviceFirewallRuleAction.DROP],
+        )
+        self.assertTrue(
+            only_scoped.chains[0].rules[0].terminal_fallthrough
+        )
+
+    def test_exact_if_selector_filters_rule_but_keeps_explicit_drop(self):
+        selected = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.OUT,
+            action=DeviceFirewallAction.DENY,
+            protocol="udp",
+            destination_ports=53,
+            path_ifname="vpn0",
+        )
+        unscoped = DeviceFirewallRuleIntent(
+            direction=DeviceFirewallDirection.OUT,
+            action=DeviceFirewallAction.ALLOW,
+            protocol="icmp",
+        )
+        policy = DeviceFirewallPolicyIntent("wg-main", (selected, unscoped))
+
+        matching = compile_device_firewall_policy(
+            policy,
+            HOST,
+            VPN,
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+        )
+        self.assertEqual(
+            [rule.action for rule in matching.chains[0].rules],
+            [
+                DeviceFirewallRuleAction.DROP,
+                DeviceFirewallRuleAction.RETURN,
+                DeviceFirewallRuleAction.DROP,
+            ],
+        )
+
+        other = compile_device_firewall_policy(
+            policy,
+            HOST,
+            InterfaceIdentity("vpn1", 21),
+            out_chain_name="dfw_out",
+            in_chain_name="dfw_in",
+        )
+        self.assertEqual(
+            [rule.action for rule in other.chains[0].rules],
+            [
+                DeviceFirewallRuleAction.RETURN,
+                DeviceFirewallRuleAction.DROP,
+            ],
+        )
 
     def test_tcp_ports_compile_to_exp042_canonical_shape(self):
         rule = DeviceFirewallRuleIntent(

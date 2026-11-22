@@ -31,7 +31,7 @@ import signal
 import socket
 import sys
 import threading
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from .availability_manager import (
     LOG_TAG as AVAIL_LOG_TAG,
@@ -219,10 +219,23 @@ class AlphaPreparedPolicy:
             ) from exc
         return prepared
 
+    @property
+    def requires_private_peer_observation(self) -> bool:
+        return any(
+            rule.private_peer_ipv4 is not None
+            for device_id in self.config.structural.active_device_ids
+            for rule in (self.config.devices[device_id].firewall or ())
+        )
+
     def build_current(
         self,
         host_boundary: InterfaceIdentity,
         interfaces: tuple[InterfaceIdentity, ...],
+        *,
+        path_private_peers: Mapping[
+            InterfaceIdentity,
+            IPv4Address | None,
+        ] | None = None,
     ) -> PayloadNetworkPolicyDesiredState:
         projection = project_device_bindings(
             self.config.structural.device_binding_intents,
@@ -281,6 +294,8 @@ class AlphaPreparedPolicy:
                             destination_ports=rule.destination_ports,
                             source_ipv4_cidr=rule.source_ipv4_cidr,
                             destination_ipv4_cidr=rule.destination_ipv4_cidr,
+                            path_ifname=rule.path_ifname,
+                            private_peer_ipv4=rule.private_peer_ipv4,
                             comment=rule.comment,
                         )
                         for rule in self.config.devices[device_id].firewall
@@ -337,6 +352,7 @@ class AlphaPreparedPolicy:
             probe_local_rules=probe_assembly.probe.local_rules,
             stack_return_affinity_platform=NG3_STACK_RETURN_AFFINITY_PLATFORM,
             profile_snat_policies=profile_snat_policies,
+            path_private_peers=path_private_peers,
         )
         self.last_bindings = projection.bindings
         self.last_baseline_profiles = profiles
@@ -453,22 +469,53 @@ def reconcile_alpha_payload_once(
         )
 
     try:
-        interfaces = LinuxVpnPathAdapter(
+        path_observation = LinuxVpnPathAdapter(
             runner,
             domain_spec.namespace,
         ).observe_interfaces(
             required_host_boundary=host_boundary,
-        ).interfaces
+            require_private_peer=prepared.requires_private_peer_observation,
+        )
         desired = prepared.build_current(
             host_boundary,
-            interfaces,
+            path_observation.interfaces,
+            path_private_peers=(
+                path_observation.private_peers
+                if prepared.requires_private_peer_observation
+                else None
+            ),
         )
         host_publication_desired = prepared.build_host_publication_desired()
     except Exception as exc:
+        containment_detail = "not attempted"
+        try:
+            containment = converge_forwarding_gate_once(
+                LinuxForwardingGateDriver(runner, domain_spec.namespace),
+                ForwardingGateState.DISABLED,
+            )
+            containment_detail = (
+                "confirmed"
+                if containment.confirmed
+                else (
+                    "not confirmed"
+                    + (
+                        f": {containment.diagnostic}"
+                        if containment.diagnostic
+                        else ""
+                    )
+                )
+            )
+        except Exception as containment_exc:
+            containment_detail = (
+                f"failed: {type(containment_exc).__name__}: {containment_exc}"
+            )
         return AlphaReconcileResult(
             AlphaReconcileStatus.FAILED,
             None,
-            diagnostic=f"desired-state rebuild failed: {type(exc).__name__}: {exc}",
+            diagnostic=(
+                f"desired-state rebuild failed: {type(exc).__name__}: {exc}; "
+                f"fail-closed containment={containment_detail}"
+            ),
         )
 
     gate_backend = LinuxForwardingGateDriver(runner, domain_spec.namespace)

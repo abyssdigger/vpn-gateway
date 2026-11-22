@@ -2,7 +2,11 @@
 
 The active `main` contains only experiments belonging to the current NG3 line.
 Historical experiments EXP-001..EXP-027 remain preserved on the corresponding legacy
-branches and may be referenced explicitly when their kernel claim is reused.
+branches and may be referenced explicitly when their kernel claim is reused. The current NG3
+cross-generation index of reusable findings is
+[`design/NG3/experiment-evidence-transition.md`](NG3/experiment-evidence-transition.md); use
+that index to locate retained historical evidence before reopening an already-tested platform
+or transport question.
 
 Current experiment directories:
 

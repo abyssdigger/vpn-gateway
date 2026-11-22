@@ -273,10 +273,25 @@ Class: PROVEN and highly reusable.
 OpenConnect findings:
 
 - simultaneous sessions create independent concrete interfaces;
+- the same server-side local VPN address can coexist on those interfaces with distinct
+  point-to-point private peers;
+- the first post-EXP-009 RC3 model used that evidence as
+  `PeerBinding(peer, exact-ifname, ifindex)`, derived only from an unambiguous
+  `(local_address, peer)` match; creation order, suffix order and peer-list position were
+  explicitly rejected as association keys;
 - interface disappearance removes dependent route;
 - returning interface does not recreate daemon-owned route automatically;
 - direct-device route works;
 - an existing preferred route can remain while forwarding behind it is dead.
+
+Historical interpretation:
+
+The later interface-centric RC3 refactor removed transport `peers` / `PeerBinding` from the
+**routing model** because OpenConnect direct-device routing and WireGuard `AllowedIPs`
+selection made that abstraction unnecessary for routes. It did not disprove the observed
+private-peer fact or the private-peer -> exact-current-interface association. That evidence
+remains reusable when another feature specifically needs to distinguish simultaneous dynamic
+point-to-point members.
 
 WireGuard findings:
 

@@ -7,7 +7,7 @@ realization are intentionally outside this unit.
 from __future__ import annotations
 
 import json
-from ipaddress import IPv4Network
+from ipaddress import IPv4Address, IPv4Network
 
 from .device_firewall_desired import (
     DeviceFirewallChainSpec,
@@ -35,6 +35,7 @@ def compile_device_firewall_policy(
     *,
     out_chain_name: str,
     in_chain_name: str,
+    path_private_peer: IPv4Address | None = None,
 ) -> DeviceFirewallDesiredState:
     """Compile one Device/path policy into exact lower child-chain desired data.
 
@@ -73,14 +74,25 @@ def compile_device_firewall_policy(
     if policy.rules is None:
         return DeviceFirewallDesiredState(chains=())
 
+    applicable_rules = tuple(
+        rule
+        for rule in policy.rules
+        if (
+            (rule.path_ifname is None or rule.path_ifname == path.ifname)
+            and (
+                rule.private_peer_ipv4 is None
+                or rule.private_peer_ipv4 == path_private_peer
+            )
+        )
+    )
     out_rules = tuple(
         _compile_rule(rule)
-        for rule in policy.rules
+        for rule in applicable_rules
         if rule.direction is DeviceFirewallDirection.OUT
     )
     in_rules = tuple(
         _compile_rule(rule)
-        for rule in policy.rules
+        for rule in applicable_rules
         if rule.direction is DeviceFirewallDirection.IN
     )
 
