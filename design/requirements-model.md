@@ -1530,9 +1530,11 @@ closure может быть, например:
 Такой узел считается архитектурно **не закрытым** и блокирует реализацию поведения, которое
 зависит от отвергнутого closure.
 
-После переработки архитектуры [`rejected_closure`] заменяется на
-[`pending_closure`] для нового closure-кандидата либо, если review одновременно исключает
-capability из текущего frontier, на [`postponed`].
+После отклонения candidate узел остается [`rejected_closure`], пока сохраняется предмет
+отрицательного review. Если candidate явно снят без замены и требование остается в активном
+frontier, status становится [`open`]; после переработки архитектуры — [`pending_closure`]
+для нового closure-кандидата; если review одновременно исключает capability из текущего
+frontier — [`postponed`].
 
 #### `postponed`
 
@@ -1567,8 +1569,9 @@ re-entry/applicability review, который подтверждает:
 2. уже существующая architecture действительно покрывает его текущий scope;
 3. принятое evidence достаточно для closure именно этого R/C, а не только похожей функции.
 
-Если хотя бы одно из этих условий не выполнено, узел возвращается в
-[`pending_closure`] либо остается [`postponed`] до следующего решения.
+Если re-entry выполнен, но достаточного closure еще нет, узел становится [`open`] при
+отсутствии конкретного closure candidate либо [`pending_closure`] при наличии candidate.
+Если re-entry не выполнен, узел остается [`postponed`] до следующего решения.
 
 #### `permanent`
 
@@ -1598,6 +1601,7 @@ open
   -> pending_closure
        -> closed
        -> rejected_closure
+            -> open
             -> pending_closure
             -> postponed
   -> closed          # если candidate и acceptance возникли в одном review unit
@@ -1651,7 +1655,7 @@ closure-кандидат и достаточная приемка появляю
   sibling/descendant только если его собственный текущий scope и decomposition позволяют
   такой closure. Статус [`permanent`] не наследуется ни в одном направлении.
 
-### Формально проверяемые инварианты closure
+### Формально проверяемые инварианты статуса требования
 
 Для текущего requirement tree и набора нормативных architecture artifacts должны
 выполняться асимметричные инварианты:
