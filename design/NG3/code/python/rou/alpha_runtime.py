@@ -31,7 +31,7 @@ import signal
 import socket
 import sys
 import threading
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from .availability_manager import (
     LOG_TAG as AVAIL_LOG_TAG,
@@ -232,7 +232,10 @@ class AlphaPreparedPolicy:
         host_boundary: InterfaceIdentity,
         interfaces: tuple[InterfaceIdentity, ...],
         *,
-        path_private_peers=None,
+        path_private_peers: Mapping[
+            InterfaceIdentity,
+            IPv4Address | None,
+        ] | None = None,
     ) -> PayloadNetworkPolicyDesiredState:
         projection = project_device_bindings(
             self.config.structural.device_binding_intents,
