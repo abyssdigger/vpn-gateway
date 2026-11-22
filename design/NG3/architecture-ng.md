@@ -569,6 +569,23 @@ explicitly prevents peaceful helper machinery from silently acquiring them. Curr
 architecture is separated into E.003/E.004 and remains constrained out of Release 1 by
 `VPNG-U001-R5.R2.C1`; it is not folded into the peaceful helper.
 
+### Aggressive host routing and administrative protective mode
+
+**Requirements:** `VPNG-U001-R5.R2`, `VPNG-U001-R5.R2.R1`,
+`VPNG-U001-R5.R2.R2`, `VPNG-U001-R5.R2.R3`,
+`VPNG-U001-R5.R2.R3.R1`, `VPNG-U001-R5.R2.R3.R2`,
+`VPNG-U004-R5`, `VPNG-U004-R5.R1`, `VPNG-U004-R5.R2`,
+`VPNG-U004-R5.R3`, `VPNG-U004-R5.R4`.
+
+**Architecture coverage:** E.003 `AggressiveHostRoutingManager` owns continuous aggressive
+semantics and escalation; child E.004 `AggressiveHostRoutingEnforcer` owns bounded composite
+routing + escape-protection convergence with fail-closed ordering. A.011
+`ProtectiveModeManager` owns source-scoped public protective requests, continuous
+confirmation and safe release; C.010 `ProtectivePayloadGate` owns the single
+Private-network containment gate. EXP-081 rejects owned-object-only routing authority,
+EXP-084 validates independent aggressive escape protection, and EXP-083 validates the
+selected one-gate protective lower mechanism.
+
 ### Human configuration and Device/Profile policy model
 
 **Requirements:** `VPNG-U001-R4`,
