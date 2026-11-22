@@ -1235,7 +1235,7 @@ Residents
 
 1. `@HostPublicationAdapter` *Самостоятельный semantic Adapter host-side Device publication mapping; он потребляет тот же normalized publication intent, но не является occurrence `Private network.NetworkPolicyAdapter`.*
 2. `@HostRoutingContribution` *Direct lifecycle Machinery optional peaceful helper. Current Release-1 realization — `LinuxPeacefulHostRoutingContribution`; continuous host-routing supervision отсутствует.*
-3. `@AggressiveHostRoutingManager <partial>` *Manager continuous ownership явно включенной aggressive host-routing области.*
+3. `@AggressiveHostRoutingManager` *Manager continuous ownership явно включенной aggressive host-routing области.*
     1. `AggressiveHostRoutingEnforcer` *Bounded Enforcer составного postcondition: managed delivery подтверждена, non-managed escape запрещен.*
 
 Artifacts
@@ -2604,8 +2604,6 @@ Architectural decisions
 
 ## E.003 AggressiveHostRoutingManager
 
-**Implementation status:** `<partial>` — архитектурный контракт принят, production continuous Manager еще не materialized и не получает фиктивный code trace.
-
 Manager continuous ownership отдельно включенной authoritative host-routing области. Он
 выбирает desired aggressive state из принятого intent/current boundary context, периодически
 подтверждает effective postcondition и инициирует recovery или protective escalation.
@@ -2639,6 +2637,11 @@ Architectural decisions
 
 4. `Fail-closed escalation`
    *Если E.004 не может восстановить/подтвердить delivery, local escape protection остается активной, а Manager устанавливает собственный source-scoped request в A.011. После подтвержденного recovery либо явного отключения aggressive mode E.003 снимает только свой request source. Failure подтвердить local/global containment остается explicit problem state.*
+
+Implementation
+
+    design/NG3/code/python/rou/aggressive_host_routing_manager.py — initial E.004 confirmation, finite-cadence continuous audit/recovery thread, current projection and source-scoped A.011 escalation/release composition.
+
 
 
 ## E.004 AggressiveHostRoutingEnforcer
