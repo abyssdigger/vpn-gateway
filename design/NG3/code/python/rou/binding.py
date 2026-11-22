@@ -7,6 +7,8 @@ from typing import Iterable, Mapping
 from .domain import DeviceBindingIntent, ExpectedInterfaceSelector
 from .interface_identity import InterfaceIdentity
 
+LOG_TAG = "BIND"
+
 
 class BindingProjectionError(ValueError):
     pass

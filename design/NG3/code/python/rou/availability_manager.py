@@ -18,6 +18,8 @@ from .payload_profile import PayloadProfileRequest
 from .probe_runtime import ProbeEvidence, ProbeObservationContext
 from .release1_config import Release1Config
 
+LOG_TAG = "AVAIL"
+
 
 class AvailabilityManagerError(ValueError):
     pass

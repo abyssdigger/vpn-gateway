@@ -41,6 +41,8 @@ from .structural_policy_transaction import (
     converge_structural_policy,
 )
 
+LOG_TAG = "POLICY"
+
 
 class NetworkPolicyActivationStatus(str, Enum):
     READY = "ready"

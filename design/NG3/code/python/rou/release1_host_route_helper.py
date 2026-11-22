@@ -21,6 +21,8 @@ from .linux_policy_platform import NG3_PEACEFUL_HOST_ROUTING_LINUX_ALLOCATION
 from .managed_network_domain import ManagedNetworkDomainSpec
 from .release1_config import HelperRoutingSelectorKind, Release1Config
 
+LOG_TAG = "HOST"
+
 
 def _lower_dispatch_selectors(
     config: Release1Config,

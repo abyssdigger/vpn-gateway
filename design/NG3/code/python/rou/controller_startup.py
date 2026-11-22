@@ -60,6 +60,8 @@ from .controller_stop import (
     cleanup_controller_owned_domain_once,
 )
 
+LOG_TAG = "LIFE"
+
 
 class PreparedPayloadPolicy(Protocol):
     def build_current(

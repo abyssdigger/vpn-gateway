@@ -7,6 +7,8 @@ from typing import Iterable
 from .binding import LogicalPathId, PathBinding
 from .domain import Direction, ProfileStructuralIntent
 
+LOG_TAG = "PROF"
+
 
 class PayloadProfileProjectionError(ValueError):
     pass

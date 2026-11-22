@@ -3,6 +3,7 @@ import unittest
 
 from rou.domain import Direction
 from rou.port_bundle import PortBundle, PortSpan
+from rou.operational_log import OperationalLogLevel
 from rou.release1_config import (
     HelperRoutingPolicy,
     HelperRoutingSelectorKind,
@@ -13,6 +14,29 @@ from rou.release1_config import (
 
 
 class Release1ConfigTests(unittest.TestCase):
+    def test_operational_log_level_defaults_to_info_and_is_strict(self):
+        self.assertIs(
+            parse_release1_config("").log_level,
+            OperationalLogLevel.INFO,
+        )
+        for value, expected in (
+            ("error", OperationalLogLevel.ERROR),
+            ("warning", OperationalLogLevel.WARNING),
+            ("info", OperationalLogLevel.INFO),
+            ("debug", OperationalLogLevel.DEBUG),
+        ):
+            with self.subTest(value=value):
+                self.assertIs(
+                    parse_release1_config(f'log_level = "{value}"').log_level,
+                    expected,
+                )
+        for invalid in ("TRACE", "trace", "INFO", "verbose"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(Release1ConfigError, "log_level"):
+                    parse_release1_config(f'log_level = "{invalid}"')
+        with self.assertRaisesRegex(Release1ConfigError, "log_level"):
+            parse_release1_config("log_level = true")
+
     def test_helper_routing_defaults_are_noninvasive_and_peaceful(self):
         cfg = parse_release1_config("")
         self.assertEqual(cfg.helper_routing_interfaces, ())
