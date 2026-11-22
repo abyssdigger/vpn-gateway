@@ -2,7 +2,7 @@
 
 **Status:** POSTPONED FUTURE TARGET / not a current release gate  
 **Created:** 2026-11-22  
-**Requirements:** `VPNG-M001-R3.R2`, `VPNG-M001-R3.R2.R1`
+**Requirements:** `VPNG-M001-R3`, `VPNG-M001-R3.R2`, `VPNG-M001-R3.R2.R1`
 
 ## Accepted future target
 
@@ -34,11 +34,16 @@ traffic mix, VPN implementation matrix or measurement methodology solely to clos
 `VPNG-M001-R3.R1` remains an active engineering preference: equally correct designs should
 still avoid unnecessary steady-state CPU, memory, allocation and bookkeeping cost.
 
+The broader `VPNG-M001-R3` resource-constrained suitability obligation is also postponed:
+there is no current accepted resource-suitability acceptance envelope independent of the
+Raspberry Pi 2 target. This deferral covers its unproven weak-device suitability and
+associated acceptance work, **not** the active engineering preference in
+`VPNG-M001-R3.R1`, which remains permanently applicable to relevant design decisions.
 The concrete Raspberry Pi 2 acceptance branch remains intentionally incomplete and deferred.
 
 ## Re-entry
 
-Resume decomposition/evidence for `VPNG-M001-R3.R2*` only after an explicit project-holder
+Resume decomposition/evidence for `VPNG-M001-R3` and `VPNG-M001-R3.R2*` only after an explicit project-holder
 decision that weak-device acceptance has become useful enough to justify the work.
 
 The re-entry pass must define at least:
@@ -58,6 +63,8 @@ retained, translated or replaced.
 
 ## Requirement-state inventory
 
+- `VPNG-M001-R3`: `decomposition: incomplete`, [`postponed`];
+- `VPNG-M001-R3.R1`: `decomposition: complete`, [`permanent`];
 - `VPNG-M001-R3.R2`: `decomposition: incomplete`, [`postponed`];
 - `VPNG-M001-R3.R2.R1`: `decomposition: incomplete`, [`postponed`];
 - active `decomp`: none introduced;

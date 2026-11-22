@@ -80,7 +80,7 @@
 
 Пунктуация requirement-state синтаксиса не входит в имя label/link и поэтому не
 выделяется как code. В обычном Markdown-тексте моноширинно выделяются только константные имена/значения:
-[`closed`], [`pending_closure`], [`rejected_closure`], [`postponed`],
+[`open`], [`pending_closure`], [`closed`], [`rejected_closure`], [`postponed`], [`permanent`],
 [`decomposition`: `complete`], [`decomposition`: `incomplete`],
 [`decomp`: ...], [`unreal`: ...], [`broken`: ...]. Скобки, двоеточия, запятые,
 стрелки и конкретные ID/значения остаются обычным текстом. В fenced code block дополнительное
@@ -1249,7 +1249,7 @@ Architecture coverage асимметрично относительно дере
   `Constrained by` или эквивалентный явно ограничивающий trace, а не притворяться
   `Implements`.
 
-Это правило определяет architecture coverage, но не отменяет отдельный closure status каждого
+Это правило определяет architecture coverage, но не отменяет отдельный статус требования для каждого
 нормативного узла.
 
 ### Requirement-driven development
@@ -1433,10 +1433,12 @@ Evidence доказывает требование.
   [`decomposition`: `complete`] или [`decomposition`: `incomplete`];
 - cross-tree зависимости декомпозиции фиксируются рядом с заблокированным узлом ссылкой
   [`decomp`: <blocker> -> <pending|deblocker>];
-- closure/frontier status узла фиксируется не более чем одним из взаимоисключающих labels
-  [`pending_closure`], [`closed`], [`rejected_closure`] или [`postponed`]; архитектурная
-  закрытость фиксируется только [`closed`], а [`postponed`] явно исключает принятое
-  обязательство из текущего development/release frontier;
+- каждый нормативный узел обязан иметь ровно один статус требования из взаимоисключающих
+  labels [`open`], [`pending_closure`], [`closed`], [`rejected_closure`], [`postponed`] или
+  [`permanent`];
+  архитектурная закрытость фиксируется только [`closed`], [`postponed`] исключает
+  обязательство из текущего development/release frontier, а [`permanent`] задает
+  постоянно действующее обязательство без конечного architecture closure;
 - requirement-документ не хранит ссылки на конкретные архитектурные решения: чтобы
   определить, чем закрыт нормативный узел, необходимо найти его стабильный ID в архитектурных
   документах;
@@ -1445,24 +1447,37 @@ Evidence доказывает требование.
 - Git history сохраняет историю текста и достаточен как журнал редакционных изменений на
   текущем этапе проекта.
 
-### Статус closure / development frontier
+### Статус требования
 
-Для каждого нормативного requirement/constraint узла допускается не более одного
-closure/frontier-label:
+Каждый нормативный Requirement/Constraint обязан иметь ровно один статус требования
+(requirement status):
 
 ```text
+[open]
 [pending_closure]
 [closed]
 [rejected_closure]
 [postponed]
+[permanent]
 ```
 
-Эти labels образуют один взаимоисключающий enum. Они независимы от
-[`decomposition`: `complete|incomplete`].
+Эти labels образуют один обязательный взаимоисключающий enum. Они независимы от
+[`decomposition`: `complete|incomplete`]. Отсутствие status у принятого нормативного узла
+является ошибкой модели, а не неявным `open`.
 
-Отсутствие closure/frontier-label означает, что узел остается открытым в текущем нормативном
-дереве и для него еще не зафиксировано ни достаточное architecture closure, ни явное решение
-исключить его из текущего development/release frontier.
+#### `open`
+
+[`open`] означает:
+
+> Requirement/Constraint принят, находится в текущем development/release frontier, но для
+> него еще нет достаточного принятого architecture closure и нет closure candidate,
+> претендующего на приемку как достаточный.
+
+[`open`] является обычным активным состоянием нового или вновь открытого нормативного узла.
+Оно не означает draft/candidate requirement и не ослабляет обязательность Statement.
+Decomposition, исследование, проектирование и evidence work могут выполняться из этого
+состояния. Как только появляется конкретный architecture closure candidate, status становится
+[`pending_closure`], если приемка не выполнена в том же review unit.
 
 #### `pending_closure`
 
@@ -1515,9 +1530,11 @@ closure может быть, например:
 Такой узел считается архитектурно **не закрытым** и блокирует реализацию поведения, которое
 зависит от отвергнутого closure.
 
-После переработки архитектуры [`rejected_closure`] заменяется на
-[`pending_closure`] для нового closure-кандидата либо, если review одновременно исключает
-capability из текущего frontier, на [`postponed`].
+После отклонения candidate узел остается [`rejected_closure`], пока сохраняется предмет
+отрицательного review. Если candidate явно снят без замены и требование остается в активном
+frontier, status становится [`open`]; после переработки архитектуры — [`pending_closure`]
+для нового closure-кандидата; если review одновременно исключает capability из текущего
+frontier — [`postponed`].
 
 #### `postponed`
 
@@ -1552,8 +1569,30 @@ re-entry/applicability review, который подтверждает:
 2. уже существующая architecture действительно покрывает его текущий scope;
 3. принятое evidence достаточно для closure именно этого R/C, а не только похожей функции.
 
-Если хотя бы одно из этих условий не выполнено, узел возвращается в
-[`pending_closure`] либо остается [`postponed`] до следующего решения.
+Если re-entry выполнен, но достаточного closure еще нет, узел становится [`open`] при
+отсутствии конкретного closure candidate либо [`pending_closure`] при наличии candidate.
+Если re-entry не выполнен, узел остается [`postponed`] до следующего решения.
+
+#### `permanent`
+
+[`permanent`] означает:
+
+> Requirement/Constraint действует постоянно: каждое применимое текущее и будущее
+> архитектурное решение обязано ему соответствовать, но никакое конечное множество
+> архитектурных решений не является достаточным closure этого узла.
+
+Для [`permanent`] не создается closure candidate и не требуется closure evidence. Вместо
+этого при принятии или изменении каждого применимого архитектурного решения проверяется
+соответствие Statement постоянного требования. Нарушение является review finding и должно
+быть разрешено; оно не переводит [`permanent`] в [`rejected_closure`] автоматически.
+
+[`permanent`] не наследуется: статус каждого родителя и потомка определяется отдельно.
+Наличие [`closed`] или [`postponed`] потомков не меняет статус [`permanent`] родителя,
+и наоборот. Постоянный статус не требует обязательной ссылки из каждого компонента на
+этот Requirement/Constraint: применимость и соответствие проверяются на уровне решений.
+
+Переход из [`permanent`] в иной статус допустим только после явного пересмотра нормативной
+семантики/применимости требования; обычный architecture closure такого перехода не создает.
 
 #### Нормальный lifecycle
 
@@ -1562,31 +1601,39 @@ open
   -> pending_closure
        -> closed
        -> rejected_closure
+            -> open
             -> pending_closure
             -> postponed
+  -> closed          # если candidate и acceptance возникли в одном review unit
+  -> permanent       # постоянное обязательство; обычного closure нет
   -> postponed
+       -> open               # после re-entry, если closure candidate еще не выбран
        -> pending_closure
-       -> closed          # только через re-entry/applicability review
+       -> closed             # только через re-entry/applicability review
        -> rejected_closure
 ```
 
-Если closure-кандидат и достаточная приемка появляются в одном review unit, отдельный
-промежуточный commit с [`pending_closure`] не обязателен: это состояние является
-семантической стадией, а не требованием к истории Git.
+Если новый нормативный узел создается и в том же review unit уже получает другой корректный
+status, отдельный промежуточный commit с [`open`] не обязателен. Аналогично, если
+closure-кандидат и достаточная приемка появляются в одном review unit, отдельный
+промежуточный commit с [`pending_closure`] не обязателен: эти состояния являются
+семантическими стадиями, а не требованиями к истории Git.
 
 Аналогично, [`postponed`] не является обязательной промежуточной стадией: это явное
-решение о frontier, а не способ отложить постановку точного closure status.
+решение о frontier, а не способ отложить постановку точного статуса требования.
 
 Правила:
 
-- closure/frontier status определяется отдельно для каждого нормативного узла;
-- labels [`pending_closure`], [`closed`], [`rejected_closure`] и
-  [`postponed`] взаимно исключают друг друга;
+- статус требования определяется отдельно для каждого нормативного узла и обязателен;
+- labels [`open`], [`pending_closure`], [`closed`], [`rejected_closure`], [`postponed`] и
+  [`permanent`] взаимно исключают друг друга;
 - `pending_closure` должен иметь хотя бы одну точную ссылку на свой ID в нормативной
   архитектуре;
 - `closed` должен иметь либо точную принятую architecture-ссылку на свой ID, либо
   [`decomposition`: `complete`], хотя бы одного непосредственного нормативного child и всех
   непосредственных нормативных детей [`closed`];
+- `permanent` не может быть `closed` и не требует architecture closure; применимые
+  архитектурные решения должны проходить conformance review;
 - `postponed` должен иметь явный postponement/re-entry review/evidence record; наличие
   architecture refs или уже реализованного фрагмента не превращает его автоматически в
   [`pending_closure`] или [`closed`];
@@ -1597,20 +1644,29 @@ open
 - `rejected_closure` должен иметь зафиксированный review/evidence, объясняющий, почему
   closure был отвергнут;
 - после смыслового изменения `Purpose`, `Reason`, `Statement`, применимого constraint
-  или значимой decomposition dependency прежний closure/frontier status снимается до
-  повторного review;
+  или значимой decomposition dependency прежний статус требования должен быть пересмотрен;
+  если достаточного основания для иного status больше нет, узел переводится в [`open`],
+  а не остается без status;
 - появление нового дочернего узла требует повторно проверить status затронутого родителя,
   но не обязательно автоматически его отменяет, если прежнее review остается применимо;
-- status родителя не выводится автоматически из status детей: [`postponed`] parent может
-  иметь уже [`closed`] child, а [`closed`] parent может иметь future sibling/descendant
-  только если его собственный текущий scope и decomposition позволяют такой closure.
+- статус родителя не выводится автоматически из статуса детей: [`postponed`] parent может
+  иметь [`closed`] или [`permanent`] child, [`permanent`] parent — потомков с любыми
+  допустимыми собственными статусами, а [`closed`] parent может иметь future
+  sibling/descendant только если его собственный текущий scope и decomposition позволяют
+  такой closure. Статус [`permanent`] не наследуется ни в одном направлении.
 
-### Формально проверяемые инварианты closure
+### Формально проверяемые инварианты статуса требования
 
 Для текущего requirement tree и набора нормативных architecture artifacts должны
 выполняться асимметричные инварианты:
 
 ```text
+every normative node
+    -> exactly one requirement status label
+
+node [open]
+    -> no sufficient architecture closure/candidate is currently accepted for this node
+
 node [pending_closure]
     -> architecture contains exact node reference
 
@@ -1626,6 +1682,10 @@ node [closed]
 node [postponed]
     -> explicit postponement/re-entry review or evidence record exists
 
+node [permanent]
+    -> no finite architecture closure is required or implied
+    -> every applicable architecture decision is subject to conformance review
+
 architecture references parent
     -> descendant coverage is NOT implied
 ```
@@ -1637,7 +1697,9 @@ architecture references parent
   полного non-leaf parent'а через всех непосредственных [`closed`] детей;
 - [`decomposition`: `incomplete`] никогда не позволяет вывести closure parent'а только
   из существующих детей;
-- архитектурная ссылка на нормативный узел без closure-label — допустимое промежуточное состояние;
+- отсутствие статуса требования у нормативного узла — формально обнаруживаемая ошибка;
+- архитектурная ссылка на [`open`] узел допустима как частичное/недостаточное coverage, но
+  сама по себе не превращает status в [`pending_closure`] или [`closed`];
 - наличие архитектурной ссылки само по себе не дает права автоматически поставить
   [`pending_closure`] или [`closed`];
 - [`closed`] требует принятого acceptance evidence непосредственно либо через принятый
@@ -1645,10 +1707,15 @@ architecture references parent
 - [`rejected_closure`] требует зафиксированного отрицательного acceptance/review evidence
   и никогда не считается закрытием;
 - [`postponed`] требует явного review/evidence основания, не считается architecture closure
-  и исключает узел из текущего development/release frontier до re-entry.
+  и исключает узел из текущего development/release frontier до re-entry;
+- [`permanent`] не считается architecture closure и не требует точной architecture-ссылки
+  из каждого применимого решения, но требует постоянной проверки соответствия
+  применимых архитектурных решений.
 
-Механическая проверка должна проверять ссылки и взаимоисключение labels. Достаточность
-acceptance/rejection evidence остается предметом review.
+Механическая проверка должна проверять наличие ровно одного допустимого status у каждого
+нормативного узла, взаимоисключение labels, обязательные architecture references для
+[`pending_closure`]/[`closed`] по правилам выше и наличие postponement record для
+[`postponed`]. Достаточность acceptance/rejection/conformance evidence остается предметом review.
 
 Полноценный отдельный **semantic requirements change journal** в эту модель пока не входит.
 Он должен вводиться только тогда, когда появится реальная потребность хранить и анализировать
@@ -1692,7 +1759,7 @@ acceptance/rejection evidence остается предметом review.
 Допустимая компактная форма:
 
 ```text
-**[PRODUCT0001]** *Основание: <проверяемый внешний источник>.* | Statement [decomposition: complete|incomplete] [pending_closure|closed|rejected_closure|postponed]
+**[PRODUCT0001]** *Основание: <проверяемый внешний источник>.* | Statement [decomposition: complete|incomplete] [open|pending_closure|closed|rejected_closure|postponed|permanent]
 ```
 
 Эквивалентная развернутая форма:
@@ -1715,7 +1782,7 @@ Statement:
 Допустимая компактная форма:
 
 ```text
-**[PRODUCT0001-R...]** *Purpose* | Statement [decomposition: complete|incomplete] [pending_closure|closed|rejected_closure|postponed]
+**[PRODUCT0001-R...]** *Purpose* | Statement [decomposition: complete|incomplete] [open|pending_closure|closed|rejected_closure|postponed|permanent]
 ```
 
 Эквивалентная развернутая форма:
@@ -1730,7 +1797,7 @@ Statement:
 что система обязана обеспечивать
 ```
 
-[`pending_closure`], [`closed`], [`rejected_closure`] и [`postponed`] имеют одинаковую семантику
+[`open`], [`pending_closure`], [`closed`], [`rejected_closure`], [`postponed`] и [`permanent`] имеют одинаковую семантику
 для первичных и производных requirements.
 
 Иерархический ID производного узла уже кодирует первичный корень и непосредственного
@@ -1755,10 +1822,10 @@ Acceptance:
 Допустимая компактная форма:
 
 ```text
-**[PRODUCT0001-...C...]** *Reason* | Statement [decomposition: complete|incomplete] [pending_closure|closed|rejected_closure|postponed]
+**[PRODUCT0001-...C...]** *Reason* | Statement [decomposition: complete|incomplete] [open|pending_closure|closed|rejected_closure|postponed|permanent]
 ```
 
-Closure labels имеют ту же семантику для constraint, что и для requirement.
+Значения requirement status имеют ту же семантику для constraint, что и для requirement.
 
 Эквивалентная развернутая форма:
 
