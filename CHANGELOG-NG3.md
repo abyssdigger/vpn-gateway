@@ -4,6 +4,20 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+## 2026-11-22 — Operational logging and administrator runbook verified
+
+The alpha now has configurable operational logging with canonical
+`error | warning | info | debug` threshold semantics, normalized component log tags,
+transition-driven INFO/DEBUG emission and standard journald priority preservation. Current
+status remains a separate truth surface rather than being reconstructed from logs. Developer
+execution tracing is explicitly separate and remains blocked pending its own contract.
+
+A concise `design/NG3/admin-runbook.md` now covers installation, Device/Profile
+configuration, supported OpenVPN/systemd preparation, start/stop/restart, runtime status,
+traffic verification, monitoring and operator reactions to log severities. EXP-051 executes
+the material runbook path on Debian 13/systemd, including VPN-only endpoint regeneration and
+journal-priority filtering.
+
 ## 2026-11-22 — Structured architecture becomes authoritative
 
 The sequential architecture restructuring is complete. `design/NG3/structured-architecture.md`

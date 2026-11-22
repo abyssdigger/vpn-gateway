@@ -97,7 +97,7 @@ material are owned by the external VPN configuration and are not passed to this 
 
 Source/evidence commit: `d3787abfce7bfa9059ba919a9a032d9c09017e4d`.
 
-GitHub Actions run `44989015020`:
+GitHub Actions run `44989015020`: **21/21 jobs PASS**.
 
 - unit: **PASS**, 800 tests;
 - installed Debian 13/systemd alpha smoke: **PASS**;

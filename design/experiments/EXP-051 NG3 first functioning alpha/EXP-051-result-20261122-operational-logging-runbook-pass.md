@@ -5,7 +5,8 @@
 **Source commit:** `d3787abfce7bfa9059ba919a9a032d9c09017e4d`  
 **GitHub Actions run:** `44989015020`  
 **Unit job:** `137105803566` — PASS, 800 tests  
-**Installed alpha smoke job:** `137105803801` — PASS
+**Installed alpha smoke job:** `137105803801` — PASS  
+**Full workflow:** 21/21 jobs PASS
 
 ## Requirement traceability
 
