@@ -80,7 +80,7 @@
 
 Пунктуация requirement-state синтаксиса не входит в имя label/link и поэтому не
 выделяется как code. В обычном Markdown-тексте моноширинно выделяются только константные имена/значения:
-[`closed`], [`pending_closure`], [`rejected_closure`], [`postponed`],
+[`closed`], [`pending_closure`], [`rejected_closure`], [`postponed`], [`permanent`],
 [`decomposition`: `complete`], [`decomposition`: `incomplete`],
 [`decomp`: ...], [`unreal`: ...], [`broken`: ...]. Скобки, двоеточия, запятые,
 стрелки и конкретные ID/значения остаются обычным текстом. В fenced code block дополнительное
@@ -1249,7 +1249,7 @@ Architecture coverage асимметрично относительно дере
   `Constrained by` или эквивалентный явно ограничивающий trace, а не притворяться
   `Implements`.
 
-Это правило определяет architecture coverage, но не отменяет отдельный closure status каждого
+Это правило определяет architecture coverage, но не отменяет отдельный статус требования для каждого
 нормативного узла.
 
 ### Requirement-driven development
