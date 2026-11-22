@@ -693,13 +693,19 @@ Research/evidence:
 Candidate ownership:
 
 1. `AggressiveHostRoutingManager` — будущий Manager Space
-   `VPN-GATE-managed host state`. Он владеет long-running semantic state только явно
-   включенного aggressive scope и не меняет E.002 peaceful `HostRoutingContribution`.
-2. `AggressiveHostRoutingEnforcer` — bounded lower Enforcer managed route/RPDB
-   postcondition; текущие EXP-074 lower primitives могут быть переиспользованы после
-   исправления observation contract.
-3. `AggressiveEscapeGuard` — независимый bounded lower Enforcer helper-owned fail-closed
-   egress postcondition, доказанного EXP-084 типа.
+   `VPN-GATE-managed host state`. Он владеет непрерывно поддерживаемым состоянием только
+   явно включенной aggressive-области и не меняет E.002 peaceful
+   `HostRoutingContribution`.
+2. `AggressiveHostRoutingEnforcer` — bounded Enforcer одного составного postcondition:
+   требуемая доставка управляемой области через текущую managed boundary должна быть
+   подтверждена, а передача этой области через иной ordinary-host egress должна быть
+   запрещена. Enforcer может использовать несколько lower mechanisms внутри одного
+   convergence-контракта; отдельный архитектурный компонент для escape guard не требуется.
+
+Owned lower state Enforcer'а включает как минимум два независимо проверяемых Artifact:
+
+- aggressive routing state;
+- aggressive escape-guard state, доказанного EXP-084 типа.
 
 Candidate active invariant:
 
@@ -707,47 +713,50 @@ Candidate active invariant:
 aggressive scope CONFIRMED
     =
     exact current managed-boundary binding
-    AND aggressive routing postcondition exact
-    AND aggressive escape-guard postcondition exact
+    AND effective aggressive delivery confirmed
+    AND non-managed escape impossible
 ```
 
-Escape guard не выбирает маршрут. Для каждого destination активного aggressive scope он
-запрещает соответствующему local/forwarded host traffic покинуть ordinary HOST через egress,
-не являющийся exact current managed boundary. Поэтому competing RPDB policy может временно
-сделать routing postcondition неверным, но не может превратить окно до следующего Manager
-audit в silent ordinary-path leak.
+Escape-guard state не выбирает маршрут. Для каждого destination активной aggressive-области
+он запрещает соответствующему local/forwarded host traffic покинуть ordinary HOST через
+egress, отличный от exact current managed boundary. Поэтому ошибочное внешнее решение
+маршрутизации может временно нарушить delivery postcondition, но не превращает окно до
+следующей проверки Manager'ом в silent ordinary-path leak.
 
-Activation ordering candidate:
+Safe bounded convergence принадлежит Enforcer'у, а не Manager'у:
 
-1. получить fresh current managed-boundary identity/generation;
-2. materialize и fresh-verify escape guard для нового scope;
-3. converge routing/RPDB postcondition;
-4. fresh-verify routing + guard + boundary generation;
-5. только после этого опубликовать aggressive scope как confirmed active.
+Activation:
 
-Deactivation ordering candidate:
+1. получить current managed-boundary identity/generation;
+2. materialize и fresh-verify escape-guard state для нового scope;
+3. converge routing state;
+4. fresh-verify composite postcondition + boundary generation;
+5. вернуть success только после подтверждения всего составного postcondition.
 
-1. перестать заявлять scope как confirmed active;
-2. удалить/отключить aggressive routing capture и fresh-verify его отсутствие;
-3. только после этого удалить escape guard.
+Deactivation:
+
+1. удалить/отключить aggressive routing capture и fresh-verify его отсутствие;
+2. только после этого удалить escape-guard state;
+3. вернуть success только после подтверждения требуемого неактивного состояния.
 
 Continuous ownership:
 
-- rtnetlink route/rule notifications могут быть wakeup trigger;
-- notification delivery не является source of truth;
-- с конечной cadence Manager выполняет fresh full observation owned routing/guard state и
-  relevant competing policy, способной отменить effective routing guarantee;
-- stale plan не replay'ится: recovery каждый раз строится от свежего observation;
-- если routing postcondition нарушен, escape guard остается активным во время recovery;
-- если точное безопасное recovery невозможно, Manager сохраняет helper-local containment и
-  запрашивает public protective mode `VPNG-U004-R5`;
-- невозможность подтвердить local containment или requested protective result публикуется как
-  explicit problem, а не как healthy aggressive state.
+- Manager периодически, с конечным интервалом, заново подтверждает **effective aggressive
+  postcondition**, а не пытается сам классифицировать все возможные причины его нарушения;
+- rtnetlink route/rule notifications могут использоваться как wakeup trigger, но не как
+  source of truth;
+- каждый audit/recovery начинается с нового authoritative observation;
+- при нарушении routing postcondition escape-guard state остается активным во время recovery;
+- если точное безопасное recovery невозможно, Manager сохраняет локальную защитную блокировку
+  и запрашивает public protective mode `VPNG-U004-R5`;
+- невозможность подтвердить локальную блокировку или запрошенный protective result
+  публикуется как explicit problem, а не как healthy aggressive state.
 
-EXP-081 требует заменить текущий narrow `LinuxHostManagedRoutingDriver.observe(...)`
-contract: observation только owned table/rule objects недостаточно для semantic Manager
-postcondition. Конкретная Linux decomposition полного observer contract остается
-implementation decision после принятия этого candidate.
+EXP-081 требует, чтобы lower verification доказывала фактическое выполнение составного
+postcondition, а не только точность принадлежащих VPN-GATE table/rule objects. Какие именно
+Linux state/queries нужны для такого доказательства — RPDB inspection, effective lookup или
+другая эквивалентная проверка — остается implementation decision и не является обязанностью
+`AggressiveHostRoutingManager`.
 
 ### 2.11.2. Protective-mode ownership candidate
 
