@@ -396,12 +396,17 @@ def start_controller_once(
         )
 
     try:
-        interfaces = LinuxVpnPathAdapter(
+        require_private_peer = bool(
+            getattr(prepared, "requires_private_peer_observation", False)
+        )
+        path_observation = LinuxVpnPathAdapter(
             runner,
             domain_spec.namespace,
         ).observe_interfaces(
             required_host_boundary=host_boundary,
-        ).interfaces
+            require_private_peer=require_private_peer,
+        )
+        interfaces = path_observation.interfaces
     except Exception as exc:
         containment = _contain(domain_spec, runner)
         status = (
@@ -427,9 +432,17 @@ def start_controller_once(
         return interrupted
 
     try:
-        desired = prepared.build_current(
-            host_boundary,
-            interfaces,
+        desired = (
+            prepared.build_current(
+                host_boundary,
+                interfaces,
+                path_private_peers=path_observation.private_peers,
+            )
+            if require_private_peer
+            else prepared.build_current(
+                host_boundary,
+                interfaces,
+            )
         )
         if not isinstance(desired, PayloadNetworkPolicyDesiredState):
             raise TypeError(
