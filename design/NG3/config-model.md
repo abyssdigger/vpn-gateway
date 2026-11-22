@@ -39,28 +39,6 @@ A Device may be reused by multiple Profiles.
 
 ## 1.1. Release-1 host-routing control
 
-## 1.2. Release-1 operational logging
-
-Release 1 exposes one canonical root logging threshold:
-
-```toml
-log_level = "info"
-```
-
-Accepted values are exactly `"error"`, `"warning"`, `"info"` and `"debug"`.
-Omission means `"info"`, preserving useful ordinary operational logging without requiring a
-new field in existing alpha configurations. The threshold is inclusive: `info` emits
-INFO/WARNING/ERROR, while `debug` additionally emits component-reaction records.
-
-This field controls only operational logging under `VPNG-M001-R2.R3`. It does not enable the
-separately deferred developer execution trace under `VPNG-D001-R2`.
-
-Exact log line punctuation and journald metadata are not configuration semantics.
-
-**Requirements:**
-- `VPNG-M001-R2.R3.R1`
-- `VPNG-M001-R2.R3.R2`
-
 
 
 Release 1 separates **which ordinary-host traffic may be assisted** from **how strongly the
@@ -107,6 +85,28 @@ sysctl remains with the administrator.
 The defaults deliberately make installation non-invasive: omitting both fields leaves
 ordinary-host routing untouched.
 
+## 1.2. Release-1 operational logging
+
+Release 1 exposes one canonical root logging threshold:
+
+```toml
+log_level = "info"
+```
+
+Accepted values are exactly `"error"`, `"warning"`, `"info"` and `"debug"`.
+Omission means `"info"`, preserving useful ordinary operational logging without requiring a
+new field in existing alpha configurations. The threshold is inclusive: `info` emits
+INFO/WARNING/ERROR, while `debug` additionally emits component-reaction records.
+
+This field controls only operational logging under `VPNG-M001-R2.R3`. It does not enable the
+separately deferred developer execution trace under `VPNG-D001-R2`.
+
+Exact log line punctuation and journald metadata are not configuration semantics.
+
+**Requirements:**
+- `VPNG-M001-R2.R3.R1`
+- `VPNG-M001-R2.R3.R2`
+
 # 2. Current human-facing representation
 
 The human-facing surface uses TOML root policy plus named Device/Profile tables. The optional
@@ -115,7 +115,9 @@ bare `+snat`:
 
 ```toml
 default_snat_address = "198.19.255.10"
-helper_routing_interfaces = ":none"\nhelper_routing_policy = "peaceful"
+log_level = "info"
+helper_routing_interfaces = ":none"
+helper_routing_policy = "peaceful"
 
 [device.oc-main]
 enabled = true
