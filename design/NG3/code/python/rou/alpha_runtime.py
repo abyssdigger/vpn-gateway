@@ -294,6 +294,7 @@ class AlphaPreparedPolicy:
                             destination_ports=rule.destination_ports,
                             source_ipv4_cidr=rule.source_ipv4_cidr,
                             destination_ipv4_cidr=rule.destination_ipv4_cidr,
+                            path_ifname=rule.path_ifname,
                             private_peer_ipv4=rule.private_peer_ipv4,
                             comment=rule.comment,
                         )
