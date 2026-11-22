@@ -102,6 +102,6 @@ def _render_value(value: str | int | float | bool | None) -> str:
     if type(value) is bool:
         return "true" if value else "false"
     text = str(value)
-    if text and all(ch.isalnum() or ch in "._:/-," for ch in text):
+    if text and all(ch.isalnum() or ch in "._:/-,@" for ch in text):
         return text
     return repr(text)
