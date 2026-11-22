@@ -44,7 +44,7 @@ namespace references или неизвестные сетевые объекты
 
 ```sh
 apt-get update
-apt-get install -y python3 iproute2 iputils-ping nftables
+apt-get install -y python3 iproute2 iputils-ping nftables procps
 ```
 
 Для OpenVPN example дополнительно:
