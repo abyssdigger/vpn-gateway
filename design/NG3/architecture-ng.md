@@ -2655,7 +2655,7 @@ Bounded Enforcer одного composite aggressive postcondition. Он не вы
 - `VPNG-U001-R5.R2.R3.R1`
 
 **Evidence:** EXP-074 (narrow routing mechanics), EXP-081 (rejected narrow-only authority),
-EXP-084 (escape protection).
+EXP-084 (prefix-scoped escape protection), EXP-085 (full-tunnel escape-protection exemptions).
 
 API
 
@@ -2678,6 +2678,9 @@ Architectural decisions
 
 5. `Bounded ownership`
    *Enforcer завершает каждый вызов success/failure после fresh verification и не содержит hidden continuous retry; следующий recovery attempt принадлежит E.003.*
+
+6. `Full-tunnel non-recapture`
+   *При managed scope `0.0.0.0/0` escape protection не трактует весь non-boundary traffic как утечку. EXP-085 требует сохранять host-local delivery и трафик, уже пришедший через exact managed boundary в ordinary network, одновременно запрещая local/forwarded managed outbound через non-managed egress.*
 
 # Annex F. Ambient host and external world components
 

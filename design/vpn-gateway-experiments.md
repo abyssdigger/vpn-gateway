@@ -48,6 +48,7 @@ Current experiment directories:
 | EXP-082 | two-barrier protective lower containment feasibility |
 | EXP-083 | single Private-network protective gate |
 | EXP-084 | aggressive independent managed-egress escape guard |
+| EXP-085 | aggressive full-tunnel escape-guard exemptions |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -108,3 +109,4 @@ Canonical dispositions:
 | EXP-082 | PASS | not_selected | Proves a two-barrier composition (Private ForwardingGate + host-boundary netdev gate) can realize the protective transit postcondition while preserving runtime topology. Not selected because independent barriers create avoidable release-order complexity; EXP-083 provides one owned gate. |
 | EXP-083 | PASS | selected | Selected lower candidate for `VPNG-U004-R5` traffic containment: one dedicated Private-network nft table blocks ordinary-boundary INPUT/OUTPUT and all IPv4 FORWARD traffic without tearing down runtime state. |
 | EXP-084 | PASS | selected | Selected lower candidate for aggressive fail-closed safety: an independently owned nft escape guard permits correct managed egress but drops local/forwarded managed traffic if RPDB policy redirects it to a non-managed egress, removing leakage dependence on drift-detection latency. |
+| EXP-085 | PASS | selected | Extends EXP-084 to `0.0.0.0/0`: selected evidence that full-tunnel escape protection can still preserve host-local delivery and traffic already arriving from the managed boundary while blocking local/forwarded ordinary-uplink escape after RPDB drift. |
