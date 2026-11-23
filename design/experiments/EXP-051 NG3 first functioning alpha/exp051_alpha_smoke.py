@@ -22,6 +22,7 @@ INNER_ADDR = "198.19.255.2"
 HOST_ADDR = "198.19.255.1"  # test-only ordinary host-local /32, not boundary addressing
 STATUS_PATH = Path("/run/vpn-gate-alpha/status.json")
 STATUS_TEXT_PATH = Path("/run/vpn-gate-alpha/status.txt")
+EXPECTED_VERSION = Path("VERSION").read_text(encoding="ascii").strip()
 
 SERVER_NS = "alpha-srv"
 SERVER_HOST = "alpha-srv-host"
@@ -389,6 +390,12 @@ def main():
 
         # Install actual deployment files/code from the checked-out repository.
         command(("sh", "design/NG3/deployment/alpha/install.sh"))
+        assert (
+            Path("/usr/lib/vpn-gate-alpha/VERSION")
+            .read_text(encoding="ascii")
+            .strip()
+            == EXPECTED_VERSION
+        )
         shutil.copy2(
             "design/NG3/deployment/alpha/vpn-gate-alpha-openvpn.service.example",
             "/etc/systemd/system/vpn-gate-alpha-openvpn.service",
@@ -411,6 +418,7 @@ def main():
         assert Path(f"/run/netns/{MANAGED}").exists()
         assert interface_exists(MANAGED, INNER_BOUNDARY)
         status = runtime_status()
+        assert status["version"] == EXPECTED_VERSION, status
         assert status["readiness"] == "ready", status
         assert status["blocking_problems"] == [], status
         assert status["unknown_or_unconfirmed_fields"] == [], status
@@ -418,7 +426,8 @@ def main():
         assert status["confirmed_effective_state"][0]["profile_id"] == "alpha", status
         assert status["confirmed_effective_state"][0]["ordered_paths"] == [], status
         assert status["availability_state"][0]["state"] == "disabled", status
-        assert runtime_status_text() == """Devices
+        assert runtime_status_text() == f"""VPN-GATE {EXPECTED_VERSION}
+Devices
     ovpn: not discovered
 Profiles
     alpha
@@ -584,7 +593,8 @@ Profiles
         assert len(first_paths) == 1, first_status
         assert first_paths[0]["ifname"] == VPN_IF, first_status
         assert first_paths[0]["ifindex"] == first_ifindex, first_status
-        assert runtime_status_text() == f"""Devices
+        assert runtime_status_text() == f"""VPN-GATE {EXPECTED_VERSION}
+Devices
     ovpn: {VPN_IF}
 Profiles
     alpha
@@ -733,13 +743,15 @@ Profiles
         ), final_alpha_journal
         print("EXP051_OPERATIONAL_LOG_ENDPOINT_GENERATION=PASS")
         final_status = runtime_status()
+        assert final_status["version"] == EXPECTED_VERSION, final_status
         assert final_status["readiness"] == "ready", final_status
         final_paths = final_status["confirmed_effective_state"][0]["ordered_paths"]
         assert len(final_paths) == 1, final_status
         assert final_paths[0]["ifname"] == VPN_IF, final_status
         assert final_paths[0]["ifindex"] == second_ifindex, final_status
         assert final_paths[0]["ifindex"] != first_ifindex, final_status
-        assert runtime_status_text() == f"""Devices
+        assert runtime_status_text() == f"""VPN-GATE {EXPECTED_VERSION}
+Devices
     ovpn: {VPN_IF}
 Profiles
     alpha
