@@ -30,6 +30,7 @@ from .forwarding_gate import (
     ForwardingGateEnforcementResult,
     ForwardingGateState,
     converge_forwarding_gate_once,
+    forwarding_gate_is_lost,
 )
 from .interface_identity import InterfaceIdentity
 from .nft_namespace_inventory import NftNamespaceObject, NftNamespaceObservation
@@ -242,7 +243,7 @@ def converge_device_firewall_step_once(
         )
 
     if initial.desired_confirmed:
-        if _gate_lost(gate_backend):
+        if forwarding_gate_is_lost(gate_backend):
             return result(
                 DeviceFirewallMutationStatus.BARRIER_LOST,
                 initial,
@@ -254,7 +255,7 @@ def converge_device_firewall_step_once(
             initial,
         )
 
-    if _gate_lost(gate_backend):
+    if forwarding_gate_is_lost(gate_backend):
         return result(
             DeviceFirewallMutationStatus.BARRIER_LOST,
             initial,
@@ -300,7 +301,7 @@ def converge_device_firewall_step_once(
     except Exception as exc:
         observation_error = exc
 
-    if _gate_lost(gate_backend):
+    if forwarding_gate_is_lost(gate_backend):
         return result(
             DeviceFirewallMutationStatus.BARRIER_LOST,
             initial,
@@ -388,14 +389,6 @@ def _strict_progress(
     )
 
 
-def _gate_lost(gate_backend: ForwardingGateDriver) -> bool:
-    try:
-        return (
-            gate_backend.observe_forwarding_gate()
-            is not ForwardingGateState.DISABLED
-        )
-    except Exception:
-        return True
 
 
 def _object_payload(item: NftNamespaceObject) -> dict:

@@ -18,6 +18,7 @@ from .forwarding_gate import (
     ForwardingGateEnforcementResult,
     ForwardingGateState,
     converge_forwarding_gate_once,
+    forwarding_gate_is_lost,
 )
 from .interface_identity import InterfaceIdentity
 from .local_integration_mutation import IntegrationLocalMutationStep
@@ -304,7 +305,7 @@ def converge_structural_policy_step_once(
             diagnostic="structural state is not exact but no safe step exists",
         )
 
-    if _gate_lost(gate_backend):
+    if forwarding_gate_is_lost(gate_backend):
         return result(
             StructuralPolicyMutationStatus.BARRIER_LOST,
             initial,
@@ -385,7 +386,7 @@ def converge_structural_policy_step_once(
             ),
         )
 
-    if _gate_lost(gate_backend):
+    if forwarding_gate_is_lost(gate_backend):
         return result(
             StructuralPolicyMutationStatus.BARRIER_LOST,
             initial,
@@ -467,7 +468,7 @@ def _activate_exact(
     step: StructuralPolicyMutationStep | None = None,
     inherited_diagnostic: str | None = None,
 ) -> StructuralPolicyMutationResult:
-    if _gate_lost(gate_backend):
+    if forwarding_gate_is_lost(gate_backend):
         return result_factory(
             StructuralPolicyMutationStatus.BARRIER_LOST,
             initial_comparison,
@@ -644,11 +645,3 @@ def _strict_progress(
     )
 
 
-def _gate_lost(gate_backend: ForwardingGateDriver) -> bool:
-    try:
-        return (
-            gate_backend.observe_forwarding_gate()
-            is not ForwardingGateState.DISABLED
-        )
-    except Exception:
-        return True
