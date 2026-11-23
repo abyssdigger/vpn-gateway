@@ -442,7 +442,7 @@ port = 1701
 [lac qa]
 lns = 198.19.252.2
 pppoptfile = {client_ppp}
-autodial = yes
+autodial = no
 redial = no
 length bit = yes
 """,
@@ -484,7 +484,33 @@ Restart=no
         )
         controller_start()
         systemctl("start", unit)
-        wait_path("ppp0")
+        wait_until(
+            "L2TP control socket",
+            lambda: Path("/run/qa-l2tp-control").exists(),
+        )
+        ns(
+            MANAGED,
+            "xl2tpd-control",
+            "-c", "/run/qa-l2tp-control",
+            "connect-lac", "qa",
+        )
+        try:
+            wait_path("ppp0")
+        except Exception:
+            print("RELEASE_QA_L2TP_SYSTEMD=" + systemctl(
+                "status", unit, "--no-pager", "--full", check=False
+            ).stdout.replace("\n", "\\n"))
+            print("RELEASE_QA_L2TP_JOURNAL=" + command(
+                ("journalctl", "-u", unit, "--no-pager", "-n", "200"),
+                check=False,
+            ).stdout.replace("\n", "\\n"))
+            print("RELEASE_QA_L2TP_LINKS=" + ns(
+                MANAGED, "ip", "-br", "link", check=False
+            ).stdout.replace("\n", "\\n"))
+            print("RELEASE_QA_L2TP_SERVER_LOG=" + (
+                root / "server.log"
+            ).read_text(encoding="utf-8", errors="replace").replace("\n", "\\n"))
+            raise
         wait_ping("10.73.0.1")
         print("RELEASE_QA_L2TP_PAYLOAD=PASS")
         systemctl("stop", unit)
