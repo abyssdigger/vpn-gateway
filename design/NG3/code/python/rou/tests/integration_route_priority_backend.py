@@ -7,7 +7,7 @@ import subprocess
 from rou.binding import LogicalPathId
 from rou.interface_inventory import parse_ip_link_inventory
 from rou.iproute_priority_backend import (
-    IproutePriorityBackend,
+    IproutePriorityDriver,
     SubprocessCommandRunner,
 )
 from rou.route_priority_enforcer import (
@@ -66,7 +66,7 @@ def main():
             "dev", "pathb",
         )
 
-        backend = IproutePriorityBackend(
+        backend = IproutePriorityDriver(
             runner=runner,
             namespace=ns,
             table=TABLE,
@@ -121,7 +121,7 @@ def main():
             "dev", "pathb",
         )
 
-        backend2 = IproutePriorityBackend(
+        backend2 = IproutePriorityDriver(
             runner=runner,
             namespace=ns,
             table=TABLE,

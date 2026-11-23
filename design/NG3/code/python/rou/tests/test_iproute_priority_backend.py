@@ -7,8 +7,8 @@ import unittest
 from rou.binding import LogicalPathId
 from rou.interface_identity import InterfaceIdentity
 from rou.iproute_priority_backend import (
-    IproutePriorityBackend,
-    IproutePriorityBackendError,
+    IproutePriorityDriver,
+    IproutePriorityDriverError,
 )
 from rou.route_priority import RoutePriorityMove
 from rou.route_priority_convergence import RoutePriorityDeleteDuplicate
@@ -80,7 +80,7 @@ class ScriptedRunner:
 
 
 def backend(runner):
-    return IproutePriorityBackend(
+    return IproutePriorityDriver(
         runner=runner,
         namespace="vpng-test",
         table=100,
@@ -101,7 +101,7 @@ def backend(runner):
     )
 
 
-class IproutePriorityBackendTests(unittest.TestCase):
+class IproutePriorityDriverTests(unittest.TestCase):
     def test_observation_uses_link_sandwich_and_filtered_route_context(self):
         runner = ScriptedRunner([routes_json((10,), (20,))])
         snapshot = backend(runner).observe_route_priority()
@@ -127,7 +127,7 @@ class IproutePriorityBackendTests(unittest.TestCase):
             [link_json(), link_json(a=changed)],
         )
         with self.assertRaisesRegex(
-            IproutePriorityBackendError,
+            IproutePriorityDriverError,
             "changed during route observation",
         ):
             backend(runner).observe_route_priority()
@@ -164,7 +164,7 @@ class IproutePriorityBackendTests(unittest.TestCase):
             ]
         )
         with self.assertRaisesRegex(
-            IproutePriorityBackendError,
+            IproutePriorityDriverError,
             "add-before-delete verification",
         ):
             backend(runner).move_route_priority(RoutePriorityMove(A, 10, 30))
@@ -184,7 +184,7 @@ class IproutePriorityBackendTests(unittest.TestCase):
             ]
         )
         with self.assertRaisesRegex(
-            IproutePriorityBackendError,
+            IproutePriorityDriverError,
             "whole-domain state",
         ):
             backend(runner).move_route_priority(RoutePriorityMove(A, 10, 30))
@@ -199,7 +199,7 @@ class IproutePriorityBackendTests(unittest.TestCase):
     def test_move_refuses_preexisting_duplicate_on_other_path(self):
         runner = ScriptedRunner([routes_json((10,), (20, 40))])
         with self.assertRaisesRegex(
-            IproutePriorityBackendError,
+            IproutePriorityDriverError,
             "one current metric per logical path",
         ):
             backend(runner).move_route_priority(RoutePriorityMove(A, 10, 30))
@@ -219,7 +219,7 @@ class IproutePriorityBackendTests(unittest.TestCase):
             ]
         )
         with self.assertRaisesRegex(
-            IproutePriorityBackendError,
+            IproutePriorityDriverError,
             "whole-domain state",
         ):
             backend(runner).delete_duplicate_route(
@@ -249,7 +249,7 @@ class IproutePriorityBackendTests(unittest.TestCase):
     def test_duplicate_delete_refuses_last_route_copy(self):
         runner = ScriptedRunner([routes_json((10,), (20,))])
         with self.assertRaisesRegex(
-            IproutePriorityBackendError,
+            IproutePriorityDriverError,
             "not safe",
         ):
             backend(runner).delete_duplicate_route(
@@ -262,7 +262,7 @@ class IproutePriorityBackendTests(unittest.TestCase):
     def test_move_refuses_when_another_eligible_path_is_missing(self):
         runner = ScriptedRunner([routes_json((10,), ())])
         with self.assertRaisesRegex(
-            IproutePriorityBackendError,
+            IproutePriorityDriverError,
             "missing eligible paths",
         ):
             backend(runner).move_route_priority(RoutePriorityMove(A, 10, 30))

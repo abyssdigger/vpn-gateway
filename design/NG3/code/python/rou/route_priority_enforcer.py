@@ -160,7 +160,3 @@ def _matches_desired(
         snapshot.routes[path_id] == frozenset((metric,))
         for path_id, metric in desired.items()
     )
-
-
-# Historical executable-evidence compatibility alias.
-RoutePriorityBackend = RoutePriorityDriver

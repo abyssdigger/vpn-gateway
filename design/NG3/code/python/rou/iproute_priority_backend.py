@@ -318,8 +318,3 @@ class IproutePriorityDriver:
             command.append("onlink")
 
         return tuple(command)
-
-
-# Historical executable-evidence compatibility aliases.
-IproutePriorityBackendError = IproutePriorityDriverError
-IproutePriorityBackend = IproutePriorityDriver
