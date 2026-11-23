@@ -732,7 +732,7 @@ jobs:
         run: |
           set -euo pipefail
           sh release/0.1.0/build-bundle.sh
-          sha256sum -c dist/vpn-gate-0.1.0.tar.gz.sha256
+          (cd dist && sha256sum -c vpn-gate-0.1.0.tar.gz.sha256)
       - name: Deploy bundle and verify WireGuard OpenConnect L2TP
         run: |
           set -euo pipefail
