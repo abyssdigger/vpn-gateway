@@ -277,3 +277,112 @@ The review nevertheless found real defects that the current tests allow:
 
 No corrective architecture/code change has been made yet. The next CDC step should be chosen
 after owner discussion of these findings.
+
+## Follow-up disposition — release/fulfillment methodology CDC
+
+**Follow-up branch:** `ng3-release-fulfillment-methodology-cdc-20261123`  
+**Resolved through:** `041611cc7c3ad5a34a553921a943fe05e574d2b9`
+
+The owner discussion following this review changed the interpretation of one non-finding and
+accepted all corrective trace/documentation findings. The original baseline facts above are
+kept as the historical result of the first pass; this section records their later disposition.
+
+### F1 — full manifest component edges
+
+**Decision:** accepted.  
+**Resolution:** fixed.
+
+The exhaustive manifest now includes the previously missing B.001/C.007/C.009 edges for
+`controller_startup.py` and `controller_stop.py`, and the E.001 edge for
+`alpha_runtime.py`. A new invariant test requires every component-local `Implementation`
+edge to be contained in the full manifest.
+
+### F2 — C.010 Annex placement
+
+**Decision:** accepted.  
+**Resolution:** fixed.
+
+C.010 `ProtectivePayloadGate` now resides in Annex C, consistent with its stable component
+ID and Private-network Space.
+
+### F3 — stale Annex-C example
+
+**Decision:** accepted.  
+**Resolution:** fixed.
+
+The §2.9 example now shows C.001 `NetworkPolicyAdapter`, C.002
+`NetworkPolicyLayoutCalculator` and C.003 `NetworkPolicyEnforcer`, using the new canonical
+component-heading notation.
+
+### F4 — shared/aggressive host-routing trace and stale wording
+
+**Decision:** accepted.  
+**Resolution:** fixed.
+
+The shared lower route-plan/Linux lowering/driver units are now traced to both E.002 and
+E.004. `release1_host_boundary.py`, whose current purpose is the aggressive-routing evidence
+path, is traced to E.004 rather than peaceful E.002. Production docstrings no longer describe
+the current aggressive path as postponed.
+
+No new architecture component was introduced: the existing shared lower technical helper
+remains below the two accepted owners.
+
+### F5 — mechanical traceability enforcement
+
+**Decision:** accepted.  
+**Resolution:** fixed for normative invariants.
+
+The traceability test now enforces:
+
+1. canonical component spec headings and unique IDs;
+2. Annex letter / component-ID agreement;
+3. one `full|partial|none` status on every component requirement edge;
+4. an explicit materialization-gap explanation for every non-`full` component;
+5. containment of every component-local `Implementation` edge in the exhaustive manifest;
+6. code trace for every component having a `full` or `partial` materialized contribution.
+
+A second hand-maintained file-to-requirement table was deliberately not created. Resolved
+file -> component -> requirement paths remain mechanically composable from the two normative
+edges. The prerelease fulfillment review is a snapshot of that resolution for a candidate,
+not another live source of truth.
+
+### N1 correction — A.011 is a fulfillment anomaly
+
+The original N1 remains correct only in its narrow status-model claim: `closed` means
+accepted architecture closure and therefore does not by itself assert complete code.
+
+It was too weak as an implementation-consistency conclusion. A.011 has two direct normative
+fulfillment gaps:
+
+- `VPNG-U004-R5` / `VPNG-U004-R5.R1` are `partial` because supported
+  operator/control wiring is absent;
+- `VPNG-U004-R5.R4` is `partial` because one-shot reconciliation exists but the required
+  finite-cadence periodic reconciliation is not materialized.
+
+These are now explicit per-requirement materialization states in the architecture and are
+therefore visible to the current anomaly-only prerelease fulfillment policy.
+
+### Updated verdict
+
+**CONSISTENT CORE; IDENTIFIED TRACE DEFECTS RESOLVED; IMPLEMENTATION FULFILLMENT GAPS NOW
+EXPLICIT.**
+
+Current normative inventory after acceptance of the release-development branch is:
+
+- 220 normative nodes;
+- 209 `closed`;
+- 8 `postponed`;
+- 3 `permanent`;
+- zero `open`, `pending_closure` or `rejected_closure`.
+
+The architecture contains exactly the same 209 distinct current `closed` requirement IDs
+and no current non-`closed` requirement references.
+
+Current non-`full` component requirement edges are exactly:
+
+- A.008 / `VPNG-D001-R3.R1.R1` — `none`, permitted before the first actual release by
+  `VPNG-D001-R3.C1`;
+- A.011 / `VPNG-U004-R5` — `partial`;
+- A.011 / `VPNG-U004-R5.R1` — `partial`;
+- A.011 / `VPNG-U004-R5.R4` — `partial`.
+
