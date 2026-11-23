@@ -283,6 +283,7 @@ def test_openconnect():
     unit = "vpn-gate-openconnect-qa.service"
     setup_remote(namespace, host_if, remote_if, "198.19.253.1/30", "198.19.253.2/30")
     root = Path(tempfile.mkdtemp(prefix="qa-oc-"))
+    root.chmod(0o755)
     server = None
     try:
         cert = root / "server.pem"
@@ -355,7 +356,23 @@ Restart=no
         write_controller_config("oc", "vpn-corp", "tcp>198.19.253.2:4443", "10.72.0.1")
         controller_start()
         systemctl("start", unit)
-        wait_path("vpn-corp")
+        try:
+            wait_path("vpn-corp")
+        except Exception:
+            print("RELEASE_QA_OPENCONNECT_SYSTEMD=" + systemctl(
+                "status", unit, "--no-pager", "--full", check=False
+            ).stdout.replace("\n", "\\n"))
+            print("RELEASE_QA_OPENCONNECT_JOURNAL=" + command(
+                ("journalctl", "-u", unit, "--no-pager", "-n", "200"),
+                check=False,
+            ).stdout.replace("\n", "\\n"))
+            print("RELEASE_QA_OPENCONNECT_LINKS=" + ns(
+                MANAGED, "ip", "-br", "link", check=False
+            ).stdout.replace("\n", "\\n"))
+            print("RELEASE_QA_OCSERV_LOG=" + (
+                root / "ocserv.log"
+            ).read_text(encoding="utf-8", errors="replace").replace("\n", "\\n"))
+            raise
         wait_ping("10.72.0.1")
         print("RELEASE_QA_OPENCONNECT_PAYLOAD=PASS")
         systemctl("stop", unit)
