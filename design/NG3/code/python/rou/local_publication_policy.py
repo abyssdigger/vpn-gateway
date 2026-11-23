@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from .ip_port import IP_PORT_MAX, IP_PORT_MIN, is_ip_port
 from enum import Enum
 from ipaddress import IPv4Address
 from typing import Iterable
@@ -37,8 +38,8 @@ class PublicationLocalEndpointIntent:
             raise ValueError("protocol must be PublicationProtocol")
         if not isinstance(self.local_address, IPv4Address):
             raise ValueError("local_address must be IPv4Address")
-        if type(self.internal_port) is not int or not 1 <= self.internal_port <= 65535:
-            raise ValueError("internal_port must be an integer in [1, 65535]")
+        if not is_ip_port(self.internal_port):
+            raise ValueError(f"internal_port must be an integer in [{IP_PORT_MIN}, {IP_PORT_MAX}]")
         if not isinstance(self.host_boundary, InterfaceIdentity):
             raise ValueError("host_boundary must be InterfaceIdentity")
 
