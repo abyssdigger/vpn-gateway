@@ -37,6 +37,7 @@ on:
       - "design/experiments/EXP-052 NG3 host publication DNAT/**"
       - "design/experiments/EXP-061 NG3 stack established-flow return affinity/**"
       - "design/NG3/deployment/alpha/**"
+      - "release/0.1.0/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-082 NG3 protective lower containment/**"
       - "design/experiments/EXP-083 NG3 private protective gate/**"
@@ -74,6 +75,7 @@ on:
       - "design/experiments/EXP-052 NG3 host publication DNAT/**"
       - "design/experiments/EXP-061 NG3 stack established-flow return affinity/**"
       - "design/NG3/deployment/alpha/**"
+      - "release/0.1.0/**"
       - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
       - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
       - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
@@ -719,3 +721,63 @@ jobs:
           sudo python3
           "design/experiments/EXP-070 NG3 routed stack endpoint/exp070_routed_stack_endpoint.py"
 
+
+
+  release-0-1-0-deployment-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build release bundle
+        run: |
+          set -euo pipefail
+          sh release/0.1.0/build-bundle.sh
+          sha256sum -c dist/vpn-gate-0.1.0.tar.gz.sha256
+      - name: Deploy bundle and verify WireGuard OpenConnect L2TP
+        run: |
+          set -euo pipefail
+          docker rm -f ng3-release-qa >/dev/null 2>&1 || true
+          trap 'docker rm -f ng3-release-qa >/dev/null 2>&1 || true' EXIT
+
+          docker run -d --name ng3-release-qa --privileged --cgroupns=host \
+            --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -v /lib/modules:/lib/modules:ro \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            debian:13 \
+            bash -lc '
+              set -e
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                systemd systemd-sysv dbus \
+                python3 iproute2 iputils-ping nftables procps openssl kmod \
+                wireguard-tools openconnect ocserv xl2tpd ppp
+              mkdir -p /dev/net
+              if [ ! -e /dev/net/tun ]; then
+                mknod /dev/net/tun c 10 200
+              fi
+              if [ ! -e /dev/ppp ]; then
+                mknod /dev/ppp c 108 0
+              fi
+              modprobe wireguard || true
+              modprobe ppp_generic || true
+              modprobe pppol2tp || true
+              exec /sbin/init
+            '
+
+          for attempt in $(seq 1 90); do
+            if docker exec ng3-release-qa systemctl show-environment >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              docker logs ng3-release-qa
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker exec ng3-release-qa bash -lc '
+            set -e
+            python3 release/0.1.0/qa/release_deployment_qa.py
+          '
