@@ -27,6 +27,8 @@ from .structural_routing_inventory import (
 
 @dataclass(slots=True)
 class LinuxStructuralPolicyBackend:
+    """Compose Linux routing+nft Drivers behind the structural Enforcer boundary."""
+
     runner: NftScriptRunner
     namespace: str
     platform: NetworkPolicyPlatformSpace

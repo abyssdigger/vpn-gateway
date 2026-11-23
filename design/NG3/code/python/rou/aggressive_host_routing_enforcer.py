@@ -122,6 +122,7 @@ def build_aggressive_host_routing_desired(
     allocation: HostManagedRoutingLinuxAllocation,
     stack_service_address: IPv4Address | None = None,
 ) -> AggressiveHostRoutingDesired:
+    """Lower accepted aggressive host-routing intent to E.004 desired state."""
     routing = build_linux_host_managed_routing_desired(
         plan,
         host_interface=host_interface,
@@ -145,6 +146,7 @@ def converge_aggressive_host_routing_active_once(
     guard_driver: LinuxAggressiveEscapeGuardDriver,
     desired: AggressiveHostRoutingDesired,
 ) -> AggressiveHostRoutingEnforcementResult:
+    """Confirm guard first, then routing and authority; never report partial success."""
     try:
         converge_aggressive_escape_guard_once(guard_driver, desired.guard)
     except Exception as exc:
@@ -201,6 +203,7 @@ def converge_aggressive_host_routing_inactive_once(
     guard_driver: LinuxAggressiveEscapeGuardDriver,
     desired: AggressiveHostRoutingDesired,
 ) -> AggressiveHostRoutingEnforcementResult:
+    """Remove aggressive capture only while independently confirmed containment exists."""
     # Deactivation must restore/reconfirm the local guard before touching routing.
     try:
         converge_aggressive_escape_guard_once(guard_driver, desired.guard)

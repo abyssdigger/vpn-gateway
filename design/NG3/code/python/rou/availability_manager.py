@@ -55,6 +55,8 @@ class AvailabilityManagerProjection:
 
 @dataclass(slots=True)
 class AvailabilityManager:
+    """Own current availability confirmation and effective path-order state."""
+
     policy: AvailabilityManagerPolicy
     _subjects: dict[ProbePolicyOwner, AvailabilitySubjectState] = field(
         default_factory=dict,

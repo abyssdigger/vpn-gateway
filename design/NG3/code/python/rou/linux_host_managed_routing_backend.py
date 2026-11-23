@@ -45,6 +45,8 @@ class HostManagedRoutingObservation:
 
 @dataclass(slots=True)
 class LinuxHostManagedRoutingDriver:
+    """Observe and mutate only the allocated host-routing owner scope."""
+
     runner: CommandRunner
     allocation: HostManagedRoutingLinuxAllocation
     network_namespace: str | None = None
@@ -203,6 +205,7 @@ def converge_host_managed_routing_once(
     backend: LinuxHostManagedRoutingDriver,
     desired: HostManagedRoutingLinuxDesired,
 ) -> HostManagedRoutingObservation:
+    """Converge one host-routing owner to exact desired state with capture-safe ordering."""
     if not isinstance(backend, LinuxHostManagedRoutingDriver):
         raise ValueError("backend must be LinuxHostManagedRoutingDriver")
 
@@ -274,6 +277,7 @@ def cleanup_host_managed_routing_once(
     *,
     tolerate_foreign_replacements: bool = False,
 ) -> HostManagedRoutingObservation:
+    """Remove owned capture before routes and verify the remaining host state freshly."""
     if not isinstance(backend, LinuxHostManagedRoutingDriver):
         raise ValueError("backend must be LinuxHostManagedRoutingDriver")
 

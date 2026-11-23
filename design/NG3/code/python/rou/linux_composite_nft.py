@@ -28,6 +28,8 @@ from .payload_nat_desired import PayloadMasqueradeSpec
 
 @dataclass(slots=True)
 class LinuxCompositeNftBackend:
+    """Compose semantic nft-owner Drivers for unified structural mutation steps."""
+
     runner: NftScriptRunner
     namespace: str
 
