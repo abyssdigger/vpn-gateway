@@ -8,6 +8,7 @@ import json
 from typing import Iterable
 
 from .interface_identity import InterfaceIdentity
+from .ip_port import is_ip_port
 from .local_integration_policy import (
     IntegrationLocalDesiredState,
     IntegrationLocalHook,
@@ -267,7 +268,7 @@ def _port_match_any(expr):
         protocol = IntegrationTransportProtocol(payload.get("protocol"))
     except ValueError:
         raise ValueError("unsupported integration-local protocol") from None
-    if type(right) is not int or not 1 <= right <= 65535:
+    if not is_ip_port(right):
         raise ValueError("invalid integration-local port")
     return protocol, field, right
 

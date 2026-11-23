@@ -24,7 +24,7 @@ from .nft_payload_scaffold import (
     compare_payload_nft_scaffold,
 )
 from .nft_scaffold_enforcer import (
-    PayloadNftScaffoldBackend,
+    PayloadNftScaffoldDriver,
     PayloadNftScaffoldPrepareResult,
     prepare_payload_nft_scaffold_once,
 )
@@ -78,7 +78,7 @@ class NetworkPolicyActivationResult:
 
 def activate_network_policy(
     gate_backend: ForwardingGateDriver,
-    scaffold_backend: PayloadNftScaffoldBackend,
+    scaffold_backend: PayloadNftScaffoldDriver,
     structural_backend: StructuralPolicyMutationBackend,
     routing_desired: PayloadRoutingDesiredState,
     nft_desired: CompositeNftDesiredState,

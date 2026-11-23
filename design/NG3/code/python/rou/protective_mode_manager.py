@@ -55,6 +55,8 @@ class ProtectiveModeActionResult:
 
 @dataclass(slots=True)
 class ProtectiveModeManager:
+    """Own source-scoped protective requests and fail-closed gate release state."""
+
     _sources: set[str] = field(default_factory=set, init=False, repr=False)
     _release_pending: bool = field(default=False, init=False, repr=False)
     _lock: RLock = field(default_factory=RLock, init=False, repr=False)

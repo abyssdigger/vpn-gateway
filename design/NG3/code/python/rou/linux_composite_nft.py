@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .composite_nft_mutation import CompositeNftPhysicalSnapshot
 from .device_firewall_desired import DeviceFirewallChainSpec
+from .interface_identity import InterfaceIdentity
 from .interface_inventory import parse_ip_link_inventory
 from .linux_device_firewall import LinuxDeviceFirewallDriver
 from .linux_local_integration import LinuxIntegrationLocalDriver
@@ -16,7 +16,10 @@ from .local_integration_mutation import IntegrationLocalMutationStep
 from .local_publication_mutation import LocalPublicationMutationStep
 from .probe_local_mutation import ProbeLocalMutationStep
 from .linux_payload_nat import LinuxPayloadNatDriver
-from .nft_namespace_inventory import parse_nft_namespace_ruleset
+from .nft_namespace_inventory import (
+    NftNamespaceObservation,
+    parse_nft_namespace_ruleset,
+)
 from .payload_forward_desired import PayloadForwardRuleSpec
 from .payload_forward_observation import (
     PAYLOAD_FORWARD_NEW_COMMENT,
@@ -26,8 +29,18 @@ from .payload_forward_observation import (
 from .payload_nat_desired import PayloadMasqueradeSpec
 
 
+@dataclass(frozen=True, slots=True)
+class CompositeNftPhysicalSnapshot:
+    """Stable link-generation bracket plus the corresponding nft observation."""
+
+    observation: NftNamespaceObservation
+    interfaces: tuple[InterfaceIdentity, ...]
+
+
 @dataclass(slots=True)
 class LinuxCompositeNftBackend:
+    """Compose semantic nft-owner Drivers for unified structural mutation steps."""
+
     runner: NftScriptRunner
     namespace: str
 
@@ -44,6 +57,8 @@ class LinuxCompositeNftBackend:
         )
 
     def observe_composite_snapshot(self) -> CompositeNftPhysicalSnapshot:
+        """Return the combined nft scope inside one stable link generation."""
+
         before = self._links()
         nft = parse_nft_namespace_ruleset(
             self.runner.run(

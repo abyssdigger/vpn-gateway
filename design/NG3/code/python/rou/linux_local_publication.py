@@ -15,6 +15,8 @@ from .linux_nft_scaffold import NftScriptRunner
 
 @dataclass(slots=True)
 class LinuxLocalPublicationDriver:
+    """Apply atomic nft diffs for the managed local-publication owner class."""
+
     runner: NftScriptRunner
     namespace: str
 
@@ -29,6 +31,8 @@ class LinuxLocalPublicationDriver:
         self,
         step: LocalPublicationMutationStep,
     ) -> None:
+        """Apply one preplanned local-admission diff without choosing policy."""
+
         if not isinstance(step, LocalPublicationMutationStep):
             raise ValueError("step must be LocalPublicationMutationStep")
 
@@ -94,7 +98,3 @@ def _render_add(rule: LocalPublicationRuleSpec) -> str:
             f'comment "{LOCAL_PUBLICATION_RULE_COMMENT}"',
         )
     )
-
-
-# Historical executable-evidence compatibility alias.
-LinuxLocalPublicationBackend = LinuxLocalPublicationDriver

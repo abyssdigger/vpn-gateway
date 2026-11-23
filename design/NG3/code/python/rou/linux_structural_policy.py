@@ -27,6 +27,8 @@ from .structural_routing_inventory import (
 
 @dataclass(slots=True)
 class LinuxStructuralPolicyBackend:
+    """Compose Linux routing+nft Drivers behind the structural Enforcer boundary."""
+
     runner: NftScriptRunner
     namespace: str
     platform: NetworkPolicyPlatformSpace
@@ -38,6 +40,8 @@ class LinuxStructuralPolicyBackend:
             raise ValueError("platform must be NetworkPolicyPlatformSpace")
 
     def observe_structural_snapshot(self) -> StructuralPolicyPhysicalSnapshot:
+        """Fresh-observe routing+nft state inside one stable interface generation."""
+
         before = self._links()
         routes = self.runner.run(
             (

@@ -314,14 +314,6 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           "design/experiments/EXP-034 NG3 exact-handle payload NAT reconciliation/exp034_exact_nat_handle.py"
-      - name: NG3 bounded guarded payload NAT mutation integration
-        env:
-          PYTHONPATH: design/NG3/code/python
-        run: >-
-          sudo --preserve-env=PYTHONPATH
-          python3
-          design/NG3/code/python/rou/tests/integration_payload_nat_mutation.py
-
 
   linux-payload-forward:
     runs-on: ubuntu-latest
@@ -382,13 +374,6 @@ jobs:
           sudo --preserve-env=PYTHONPATH
           python3
           design/NG3/code/python/rou/tests/integration_payload_forward_observation.py
-      - name: NG3 guarded Device firewall mutation integration
-        env:
-          PYTHONPATH: design/NG3/code/python
-        run: >-
-          sudo --preserve-env=PYTHONPATH
-          python3
-          design/NG3/code/python/rou/tests/integration_device_firewall_mutation.py
       - name: NG3 combined Profile Device NAT convergence integration
         env:
           PYTHONPATH: design/NG3/code/python

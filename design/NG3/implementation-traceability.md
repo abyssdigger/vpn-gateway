@@ -22,6 +22,10 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/port_bundle.py`
 - `design/NG3/code/python/rou/release1_config.py`
 
+## Trace: `A.002`, `C.001`, `C.003`, `E.001`
+
+- `design/NG3/code/python/rou/ip_port.py`
+
 ## Trace: `A.003`
 
 - `design/NG3/code/python/rou/availability_description.py`
@@ -102,11 +106,9 @@ A production unit without a normal requirement path may appear only under `Archi
 
 ## Trace: `C.003`
 
-- `design/NG3/code/python/rou/composite_nft_mutation.py`
 - `design/NG3/code/python/rou/composite_nft_plan.py`
 - `design/NG3/code/python/rou/composite_nft_policy.py`
 - `design/NG3/code/python/rou/device_firewall_compare.py`
-- `design/NG3/code/python/rou/device_firewall_mutation.py`
 - `design/NG3/code/python/rou/device_firewall_structure.py`
 - `design/NG3/code/python/rou/iproute_priority_backend.py`
 - `design/NG3/code/python/rou/linux_composite_nft.py`
@@ -127,10 +129,8 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/nft_namespace_inventory.py`
 - `design/NG3/code/python/rou/nft_payload_scaffold.py`
 - `design/NG3/code/python/rou/nft_scaffold_enforcer.py`
-- `design/NG3/code/python/rou/nft_scaffold_executor.py`
 - `design/NG3/code/python/rou/payload_forward_compare.py`
 - `design/NG3/code/python/rou/payload_forward_observation.py`
-- `design/NG3/code/python/rou/payload_nat_mutation.py`
 - `design/NG3/code/python/rou/payload_nat_observation.py`
 - `design/NG3/code/python/rou/payload_routing_compare.py`
 - `design/NG3/code/python/rou/probe_local_mutation.py`
@@ -141,7 +141,6 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/route_priority.py`
 - `design/NG3/code/python/rou/route_priority_convergence.py`
 - `design/NG3/code/python/rou/route_priority_enforcer.py`
-- `design/NG3/code/python/rou/route_priority_executor.py`
 - `design/NG3/code/python/rou/route_priority_inventory.py`
 - `design/NG3/code/python/rou/route_priority_profile.py`
 - `design/NG3/code/python/rou/stack_return_affinity.py`
@@ -200,7 +199,6 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/linux_host_managed_routing_backend.py`
 - `design/NG3/code/python/rou/release1_host_boundary.py`
 - `design/NG3/code/python/rou/release1_host_route_helper.py`
-- `design/NG3/code/python/rou/selected_host_boundary.py`
 
 ## Architecture debt
 

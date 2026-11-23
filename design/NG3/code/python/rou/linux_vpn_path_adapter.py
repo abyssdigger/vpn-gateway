@@ -56,6 +56,8 @@ class LinuxVpnPathAdapter:
         required_host_boundary: InterfaceIdentity | None = None,
         require_private_peer: bool = False,
     ) -> VpnPathInterfaceObservation:
+        """Fresh-observe exact link generations and, on demand, coherent P2P peers."""
+
         if (
             required_host_boundary is not None
             and not isinstance(required_host_boundary, InterfaceIdentity)

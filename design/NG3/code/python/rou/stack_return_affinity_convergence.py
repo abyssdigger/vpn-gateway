@@ -25,6 +25,8 @@ class StackReturnAffinityObservation:
 
 
 class StackReturnAffinityBackend(Protocol):
+    """Backend contract for complete reserved return-affinity observation/mutation."""
+
     def observe(self, desired: StackReturnAffinityDesired) -> StackReturnAffinityObservation:
         """Observe/classify the reserved owner against one exact desired state."""
 

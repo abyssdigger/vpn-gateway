@@ -12,6 +12,8 @@ from .linux_nft_scaffold import NftScriptRunner
 
 @dataclass(slots=True)
 class LinuxIntegrationLocalDriver:
+    """Apply atomic nft diffs for the integration-local owner class."""
+
     runner: NftScriptRunner
     namespace: str
 
@@ -19,6 +21,8 @@ class LinuxIntegrationLocalDriver:
         return ("ip", "netns", "exec", self.namespace, *args)
 
     def apply_integration_local_step(self, step: IntegrationLocalMutationStep) -> None:
+        """Apply one preplanned delete/add transaction; this method does not replan."""
+
         lines: list[str] = []
         for ref in step.delete_rules:
             chain = "stack_input" if ref.hook is IntegrationLocalHook.INPUT else "stack_output"
@@ -63,7 +67,3 @@ def _render_add(rule: IntegrationLocalRuleSpec) -> str:
         raise ValueError("unsupported integration-local hook")
     parts.extend(("accept", f'comment "{LOCAL_INTEGRATION_RULE_COMMENT}"'))
     return " ".join(parts)
-
-
-# Historical executable-evidence compatibility alias.
-LinuxIntegrationLocalBackend = LinuxIntegrationLocalDriver

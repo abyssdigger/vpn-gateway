@@ -11,6 +11,8 @@ class ForwardingGateState(str, Enum):
 
 
 class ForwardingGateDriver(Protocol):
+    """Lower Driver contract for fresh observation and unconfirmed gate mutation."""
+
     def observe_forwarding_gate(self) -> ForwardingGateState:
         """Return one fresh authoritative managed-netns forwarding state."""
 
@@ -140,6 +142,20 @@ def converge_forwarding_gate_once(
         mutation_attempted=mutation_attempted,
         diagnostic="fresh final forwarding-gate state does not match desired",
     )
+
+
+def forwarding_gate_is_lost(driver: ForwardingGateDriver) -> bool:
+    """Return True unless a fresh observation proves the gate is DISABLED.
+
+    Observation failure is deliberately treated as lost containment.
+    """
+    try:
+        return (
+            driver.observe_forwarding_gate()
+            is not ForwardingGateState.DISABLED
+        )
+    except Exception:
+        return True
 
 
 # Transitional aliases for code/evidence written before the component-model rename.

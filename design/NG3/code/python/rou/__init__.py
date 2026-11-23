@@ -48,7 +48,7 @@ from .binding import (
     WaitingCandidate,
     project_device_bindings,
 )
-from .config import ConfigError, parse_structural_config
+from .config import ConfigError
 from .domain import (
     DeviceBindingIntent,
     DeviceStructuralIntent,
@@ -295,19 +295,7 @@ from .composite_nft_plan import (
     CompositeNftStepKind,
     select_composite_nft_step,
 )
-from .composite_nft_mutation import (
-    CompositeNftMutationResult,
-    CompositeNftMutationStatus,
-    CompositeNftPhysicalSnapshot,
-    converge_composite_nft_step_once,
-)
 from .linux_composite_nft import LinuxCompositeNftBackend
-from .device_firewall_mutation import (
-    DeviceFirewallMutationResult,
-    DeviceFirewallMutationStatus,
-    DeviceFirewallPhysicalSnapshot,
-    converge_device_firewall_step_once,
-)
 from .linux_device_firewall import LinuxDeviceFirewallDriver
 from .device_firewall_structure import (
     DEVICE_FIREWALL_CHILD_COMMENT,
@@ -322,12 +310,6 @@ from .device_firewall_structure import (
     ObservedDeviceFirewallJump,
     ObservedDeviceFirewallRule,
     observe_device_firewall_structure,
-)
-from .payload_nat_mutation import (
-    PayloadNatMutationResult,
-    PayloadNatMutationStatus,
-    PayloadNatPhysicalSnapshot,
-    converge_payload_nat_step_once,
 )
 from .linux_payload_nat import LinuxPayloadNatDriver
 from .payload_profile import (
@@ -569,9 +551,6 @@ __all__ = [
     "CompositeNftMutationStep",
     "CompositeNftPlanError",
     "CompositeNftStepKind",
-    "CompositeNftMutationResult",
-    "CompositeNftMutationStatus",
-    "CompositeNftPhysicalSnapshot",
     "IntegrationLocalDesiredState",
     "IntegrationLocalHook",
     "IntegrationLocalRuleSpec",
@@ -634,9 +613,6 @@ __all__ = [
     "DeviceFirewallComparisonError",
     "DeviceFirewallPolicyCompileError",
     "DeviceFirewallCompileError",
-    "DeviceFirewallMutationResult",
-    "DeviceFirewallMutationStatus",
-    "DeviceFirewallPhysicalSnapshot",
     "LinuxDeviceFirewallDriver",
     "DeviceFirewallRuleAction",
     "DeviceFirewallStructureConflict",
@@ -720,16 +696,12 @@ __all__ = [
     "PayloadNatComparison",
     "PayloadNatObservationError",
     "PayloadNatRuleConflict",
-    "PayloadNatMutationResult",
-    "PayloadNatMutationStatus",
-    "PayloadNatPhysicalSnapshot",
     "LinuxPayloadNatDriver",
     "LinuxStructuralRoutingError",
     "LinuxStructuralRoutingDriver",
     "compare_payload_nat",
     "observe_payload_forward",
     "select_composite_nft_step",
-    "converge_composite_nft_step_once",
     "build_integration_local_desired",
     "compare_integration_local",
     "select_integration_local_step",
@@ -743,7 +715,6 @@ __all__ = [
     "compile_payload_forward_policy",
     "compare_payload_forward",
     "observe_device_firewall_structure",
-    "converge_payload_nat_step_once",
     "PAYLOAD_FORWARD_CHAIN",
     "PAYLOAD_FORWARD_COMMENT",
     "PAYLOAD_NFT_SCAFFOLD",
@@ -889,7 +860,6 @@ __all__ = [
     "converge_structural_policy",
     "select_structural_policy_step",
     "compare_payload_routing",
-    "converge_device_firewall_step_once",
     "converge_forwarding_gate_once",
     "converge_route_priority_once",
     "converge_route_priority_profile_once",
@@ -900,7 +870,6 @@ __all__ = [
     "plan_route_priority_convergence",
     "plan_route_priority_moves",
     "parse_release1_config",
-    "parse_structural_config",
     "prepare_payload_nft_scaffold_once",
     "project_device_bindings",
     "realize_direct_device_path_routes",

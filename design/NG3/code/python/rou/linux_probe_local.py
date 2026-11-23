@@ -16,6 +16,8 @@ from .probe_policy import (
 
 @dataclass(slots=True)
 class LinuxProbeLocalDriver:
+    """Apply atomic nft diffs for the probe-local owner class."""
+
     runner: NftScriptRunner
     namespace: str
 
@@ -27,6 +29,8 @@ class LinuxProbeLocalDriver:
         return ("ip", "netns", "exec", self.namespace, *args)
 
     def apply_probe_local_step(self, step: ProbeLocalMutationStep) -> None:
+        """Apply one preplanned probe-local diff without owning convergence."""
+
         if not isinstance(step, ProbeLocalMutationStep):
             raise ValueError("step must be ProbeLocalMutationStep")
 

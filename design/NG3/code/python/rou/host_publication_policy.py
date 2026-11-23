@@ -7,6 +7,7 @@ The component spec owns normative requirement traceability.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from .ip_port import IP_PORT_MAX, IP_PORT_MIN, is_ip_port
 from enum import Enum
 from ipaddress import IPv4Address
 from typing import Iterable
@@ -59,8 +60,8 @@ class HostPublicationMappingIntent:
             ("host_port", self.host_port),
             ("internal_port", self.internal_port),
         ):
-            if type(value) is not int or not 1 <= value <= 65535:
-                raise ValueError(f"{name} must be an integer in [1, 65535]")
+            if not is_ip_port(value):
+                raise ValueError(f"{name} must be an integer in [{IP_PORT_MIN}, {IP_PORT_MAX}]")
         if not isinstance(self.internal_address, IPv4Address):
             raise ValueError("internal_address must be IPv4Address")
 

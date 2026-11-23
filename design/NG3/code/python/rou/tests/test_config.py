@@ -3,7 +3,8 @@ from __future__ import annotations
 import ipaddress
 import unittest
 
-from rou import ConfigError, Direction, SelectorKind, parse_structural_config
+from rou import ConfigError, Direction, SelectorKind
+from support_structural_config import parse_structural_config
 
 
 class StructuralConfigTests(unittest.TestCase):

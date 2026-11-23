@@ -31,6 +31,8 @@ class LinuxProtectivePayloadGateError(ValueError):
 
 @dataclass(slots=True)
 class LinuxProtectivePayloadGateDriver:
+    """Observe and mutate only the C.010-owned protective nft table."""
+
     runner: NftScriptRunner
     namespace: str
 
@@ -42,6 +44,8 @@ class LinuxProtectivePayloadGateDriver:
         self,
         desired: ProtectivePayloadGateDesired,
     ) -> ProtectivePayloadGateObservation:
+        """Classify the reserved protective table against exact desired state."""
+
         stdout = self.runner.run(self._cmd("nft", "-j", "list", "ruleset"))
         return parse_protective_payload_gate_ruleset(stdout, desired)
 
@@ -50,6 +54,8 @@ class LinuxProtectivePayloadGateDriver:
         desired: ProtectivePayloadGateDesired,
         initial: ProtectivePayloadGateObservation,
     ) -> None:
+        """Mutate only proven absent/owned state; effective confirmation is separate."""
+
         if not isinstance(desired, ProtectivePayloadGateDesired):
             raise ValueError("desired must be ProtectivePayloadGateDesired")
         if not isinstance(initial, ProtectivePayloadGateObservation):

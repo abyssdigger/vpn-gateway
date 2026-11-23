@@ -19,6 +19,7 @@ from .host_publication_policy import (
 )
 from .linux_nft_scaffold import NftScriptRunner
 from .local_publication_policy import PublicationProtocol
+from .ip_port import is_ip_port
 
 
 HOST_PUBLICATION_TABLE = "vpn_gate_publication"
@@ -71,6 +72,8 @@ class HostPublicationConvergenceResult:
 
 @dataclass(slots=True)
 class LinuxHostPublicationDriver:
+    """Observe prerequisites and mutate only the E.001-owned host publication scope."""
+
     runner: NftScriptRunner
     network_namespace: str | None = None
 
@@ -82,6 +85,8 @@ class LinuxHostPublicationDriver:
             raise ValueError("network_namespace must be non-empty text or None")
 
     def observe(self) -> HostPublicationPhysicalObservation:
+        """Fresh-observe owned host DNAT state plus the forwarding prerequisite."""
+
         forwarding = self._forwarding()
         raw = self.runner.run(self._cmd("nft", "-j", "-y", "list", "ruleset"))
         return _parse_observation(raw, forwarding)
@@ -133,6 +138,8 @@ class LinuxHostPublicationDriver:
         return tuple(dict.fromkeys(diagnostics))
 
     def replace(self, desired: HostPublicationDesiredState) -> None:
+        """Atomically replace conflict-free owned publication state with desired state."""
+
         if not isinstance(desired, HostPublicationDesiredState):
             raise ValueError("desired must be HostPublicationDesiredState")
         current = self.observe()
@@ -500,7 +507,7 @@ def _decode_rule(payload: dict) -> HostPublicationRuleSpec:
                     if (
                         protocol is not None
                         or type(right) is not int
-                        or not 1 <= right <= 65535
+                        or not is_ip_port(right)
                     ):
                         raise ValueError("invalid/duplicate host publication port match")
                     protocol = parsed_protocol
@@ -527,7 +534,7 @@ def _decode_rule(payload: dict) -> HostPublicationRuleSpec:
             except (TypeError, ValueError):
                 raise ValueError("invalid host publication DNAT address") from None
             port = dnat.get("port")
-            if type(port) is not int or not 1 <= port <= 65535:
+            if not is_ip_port(port):
                 raise ValueError("invalid host publication DNAT port")
             internal_port = port
             continue

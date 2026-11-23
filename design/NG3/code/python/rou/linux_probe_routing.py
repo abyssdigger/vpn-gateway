@@ -42,6 +42,8 @@ class LinuxProbeRoutingBackend:
     def observe_probe_routing_snapshot(
         self,
     ) -> ProbeRoutingPhysicalSnapshot:
+        """Fresh-observe route/RPDB state inside one stable link-generation bracket."""
+
         before = self._links()
         routes = self.runner.run(
             (

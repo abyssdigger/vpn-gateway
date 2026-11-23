@@ -82,6 +82,8 @@ class AggressiveEscapeGuardObservation:
 
 @dataclass(slots=True)
 class LinuxAggressiveEscapeGuardDriver:
+    """Observe and replace only the E.004-owned aggressive escape guard state."""
+
     runner: NftScriptRunner
     network_namespace: str | None = None
 
@@ -96,6 +98,8 @@ class LinuxAggressiveEscapeGuardDriver:
         self,
         desired: AggressiveEscapeGuardDesired,
     ) -> AggressiveEscapeGuardObservation:
+        """Classify the reserved guard table against one exact desired postcondition."""
+
         raw = self.runner.run(self._cmd("nft", "-j", "list", "ruleset"))
         return parse_aggressive_escape_guard_ruleset(raw, desired)
 
@@ -104,6 +108,8 @@ class LinuxAggressiveEscapeGuardDriver:
         desired: AggressiveEscapeGuardDesired,
         initial: AggressiveEscapeGuardObservation,
     ) -> None:
+        """Replace a proven absent/owned guard state; confirmation remains separate."""
+
         if not isinstance(desired, AggressiveEscapeGuardDesired):
             raise ValueError("desired must be AggressiveEscapeGuardDesired")
         if not isinstance(initial, AggressiveEscapeGuardObservation):

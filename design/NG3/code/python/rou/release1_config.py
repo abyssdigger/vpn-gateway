@@ -15,6 +15,7 @@ import tomllib
 from typing import Any, Mapping
 
 from .config import ConfigError, _parse_structural_root
+from .ip_port import IP_PORT_MAX, IP_PORT_MIN, is_ip_port
 from .domain import Direction, StructuralConfig
 from .port_bundle import PortBundle, PortSpan
 from .operational_log import OperationalLogLevel
@@ -202,7 +203,7 @@ def parse_release1_config(text: str) -> Release1Config:
     for profile_id, raw_body in raw_profiles.items():
         body = _table(raw_body, f"profile.{profile_id}")
         normalized = dict(body)
-        if _is_enabled(body):
+        if body.get("enabled") is True:
             direction, effective_snat_address = _parse_direction(
                 body.get("direction"),
                 f"profile.{profile_id}.direction",
@@ -469,10 +470,6 @@ def _table(value: Any, where: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise Release1ConfigError(f"{where} must be a TOML table")
     return value
-
-
-def _is_enabled(body: dict[str, Any]) -> bool:
-    return body.get("enabled") is True
 
 
 def _parse_direction(
@@ -930,10 +927,10 @@ def _port(value: Any, where: str) -> int:
         parsed = value
     else:
         raise Release1ConfigError(
-            f"{where} must be an integer in [1, 65535]"
+            f"{where} must be an integer in [{IP_PORT_MIN}, {IP_PORT_MAX}]"
         )
-    if not 1 <= parsed <= 65535:
+    if not is_ip_port(parsed):
         raise Release1ConfigError(
-            f"{where} must be an integer in [1, 65535]"
+            f"{where} must be an integer in [{IP_PORT_MIN}, {IP_PORT_MAX}]"
         )
     return parsed

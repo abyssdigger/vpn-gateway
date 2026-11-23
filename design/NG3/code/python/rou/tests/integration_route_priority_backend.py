@@ -7,11 +7,11 @@ import subprocess
 from rou.binding import LogicalPathId
 from rou.interface_inventory import parse_ip_link_inventory
 from rou.iproute_priority_backend import (
-    IproutePriorityBackend,
+    IproutePriorityDriver,
     SubprocessCommandRunner,
 )
-from rou.route_priority_executor import (
-    RoutePriorityExecutionStatus,
+from rou.route_priority_enforcer import (
+    RoutePriorityEnforcementStatus,
     converge_route_priority_once,
 )
 from rou.route_priority_inventory import RoutePriorityPathRoute
@@ -66,7 +66,7 @@ def main():
             "dev", "pathb",
         )
 
-        backend = IproutePriorityBackend(
+        backend = IproutePriorityDriver(
             runner=runner,
             namespace=ns,
             table=TABLE,
@@ -84,7 +84,7 @@ def main():
             {A: 20, B: 10},
             (10, 20, 30),
         )
-        assert swapped.status is RoutePriorityExecutionStatus.SUCCESS
+        assert swapped.status is RoutePriorityEnforcementStatus.SUCCESS
         assert swapped.final.routes[A] == frozenset((20,))
         assert swapped.final.routes[B] == frozenset((10,))
 
@@ -104,7 +104,7 @@ def main():
             {A: 10, B: 20},
             (10, 20, 30),
         )
-        assert recovered.status is RoutePriorityExecutionStatus.SUCCESS
+        assert recovered.status is RoutePriorityEnforcementStatus.SUCCESS
         assert recovered.final.routes[A] == frozenset((10,))
         assert recovered.final.routes[B] == frozenset((20,))
 
@@ -121,7 +121,7 @@ def main():
             "dev", "pathb",
         )
 
-        backend2 = IproutePriorityBackend(
+        backend2 = IproutePriorityDriver(
             runner=runner,
             namespace=ns,
             table=TABLE,

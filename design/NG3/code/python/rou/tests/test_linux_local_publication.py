@@ -4,7 +4,7 @@ import unittest
 from ipaddress import IPv4Address
 
 from rou.interface_identity import InterfaceIdentity
-from rou.linux_local_publication import LinuxLocalPublicationBackend
+from rou.linux_local_publication import LinuxLocalPublicationDriver
 from rou.local_publication_mutation import (
     LocalPublicationDeleteRef,
     LocalPublicationMutationStep,
@@ -35,10 +35,10 @@ class FakeRunner:
         return ""
 
 
-class LinuxLocalPublicationBackendTests(unittest.TestCase):
+class LinuxLocalPublicationDriverTests(unittest.TestCase):
     def test_add_pair_is_one_transaction_output_then_input(self):
         runner = FakeRunner()
-        backend = LinuxLocalPublicationBackend(runner, "managed")
+        backend = LinuxLocalPublicationDriver(runner, "managed")
         output = LocalPublicationRuleSpec(
             LocalPublicationHook.OUTPUT,
             PublicationProtocol.TCP,
@@ -72,7 +72,7 @@ class LinuxLocalPublicationBackendTests(unittest.TestCase):
 
     def test_delete_pair_keeps_chain_identity_with_handle(self):
         runner = FakeRunner()
-        backend = LinuxLocalPublicationBackend(runner, "managed")
+        backend = LinuxLocalPublicationDriver(runner, "managed")
         backend.apply_local_publication_step(
             LocalPublicationMutationStep(
                 delete_rules=(
@@ -96,7 +96,7 @@ class LinuxLocalPublicationBackendTests(unittest.TestCase):
 
     def test_udp_rule_uses_udp_exact_port_shape(self):
         runner = FakeRunner()
-        backend = LinuxLocalPublicationBackend(runner, "managed")
+        backend = LinuxLocalPublicationDriver(runner, "managed")
         backend.apply_local_publication_step(
             LocalPublicationMutationStep(
                 delete_rules=(),

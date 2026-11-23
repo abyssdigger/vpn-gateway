@@ -5,8 +5,8 @@ import unittest
 from rou.binding import LogicalPathId
 from rou.route_priority import RoutePriorityMove
 from rou.route_priority_convergence import RoutePriorityDeleteDuplicate
-from rou.route_priority_executor import (
-    RoutePriorityExecutionStatus,
+from rou.route_priority_enforcer import (
+    RoutePriorityEnforcementStatus,
     RoutePrioritySnapshot,
     converge_route_priority_once,
 )
@@ -81,7 +81,7 @@ class RoutePriorityExecutorTests(unittest.TestCase):
             {A: 20, B: 10},
             (10, 20, 30),
         )
-        self.assertEqual(result.status, RoutePriorityExecutionStatus.SUCCESS)
+        self.assertEqual(result.status, RoutePriorityEnforcementStatus.SUCCESS)
         self.assertTrue(result.confirmed)
         self.assertEqual(result.final.routes[A], frozenset((20,)))
         self.assertEqual(result.final.routes[B], frozenset((10,)))
@@ -98,7 +98,7 @@ class RoutePriorityExecutorTests(unittest.TestCase):
             (10, 20, 30),
         )
 
-        self.assertEqual(result.status, RoutePriorityExecutionStatus.APPLY_FAILED)
+        self.assertEqual(result.status, RoutePriorityEnforcementStatus.APPLY_FAILED)
         self.assertFalse(result.confirmed)
         self.assertEqual(result.completed_steps, ())
         self.assertIsInstance(result.failed_step, RoutePriorityMove)
@@ -116,14 +116,14 @@ class RoutePriorityExecutorTests(unittest.TestCase):
             {A: 20, B: 10},
             (10, 20, 30),
         )
-        self.assertEqual(failed.status, RoutePriorityExecutionStatus.APPLY_FAILED)
+        self.assertEqual(failed.status, RoutePriorityEnforcementStatus.APPLY_FAILED)
 
         recovered = converge_route_priority_once(
             backend,
             {A: 20, B: 10},
             (10, 20, 30),
         )
-        self.assertEqual(recovered.status, RoutePriorityExecutionStatus.SUCCESS)
+        self.assertEqual(recovered.status, RoutePriorityEnforcementStatus.SUCCESS)
         self.assertIsInstance(
             recovered.planned_steps[0],
             RoutePriorityDeleteDuplicate,
@@ -141,7 +141,7 @@ class RoutePriorityExecutorTests(unittest.TestCase):
             (10, 20, 30),
         )
 
-        self.assertEqual(result.status, RoutePriorityExecutionStatus.APPLY_FAILED)
+        self.assertEqual(result.status, RoutePriorityEnforcementStatus.APPLY_FAILED)
         self.assertIsInstance(
             result.failed_step,
             RoutePriorityDeleteDuplicate,
@@ -162,7 +162,7 @@ class RoutePriorityExecutorTests(unittest.TestCase):
 
         # A later planned move observes the stale in-memory physical state and
         # fails; this is still apply failure, not false success.
-        self.assertEqual(result.status, RoutePriorityExecutionStatus.APPLY_FAILED)
+        self.assertEqual(result.status, RoutePriorityEnforcementStatus.APPLY_FAILED)
         self.assertFalse(result.confirmed)
         self.assertGreaterEqual(backend.observations, 2)
 
@@ -175,7 +175,7 @@ class RoutePriorityExecutorTests(unittest.TestCase):
             (10, 20, 30),
         )
 
-        self.assertEqual(result.status, RoutePriorityExecutionStatus.SUCCESS)
+        self.assertEqual(result.status, RoutePriorityEnforcementStatus.SUCCESS)
         self.assertEqual(result.planned_steps, ())
         self.assertEqual(backend.observations, 2)
 
@@ -199,7 +199,7 @@ class RoutePriorityExecutorTests(unittest.TestCase):
 
         self.assertEqual(
             result.status,
-            RoutePriorityExecutionStatus.POSTCONDITION_FAILED,
+            RoutePriorityEnforcementStatus.POSTCONDITION_FAILED,
         )
         self.assertFalse(result.confirmed)
         self.assertEqual(result.completed_steps, ())

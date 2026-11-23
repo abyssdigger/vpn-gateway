@@ -38,6 +38,8 @@ class AggressiveHostRoutingManagerProjection:
 
 @dataclass(slots=True)
 class AggressiveHostRoutingManager:
+    """Continuously audit aggressive routing and escalate loss of authority safely."""
+
     enforcer: AggressiveHostRoutingEnforcer
     protective_manager: ProtectiveModeManager
     protective_driver: ProtectivePayloadGateDriver

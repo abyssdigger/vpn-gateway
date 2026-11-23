@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from .ip_port import IP_PORT_MAX, IP_PORT_MIN, is_ip_port
 from enum import Enum
 from ipaddress import IPv4Address
 from typing import Iterable
@@ -48,12 +49,12 @@ class IntegrationLocalTransportIntent:
             raise ValueError("local_address must be IPv4Address")
         if not isinstance(self.remote_address, IPv4Address):
             raise ValueError("remote_address must be IPv4Address")
-        if type(self.remote_port) is not int or not 1 <= self.remote_port <= 65535:
-            raise ValueError("remote_port must be an integer in [1, 65535]")
+        if not is_ip_port(self.remote_port):
+            raise ValueError(f"remote_port must be an integer in [{IP_PORT_MIN}, {IP_PORT_MAX}]")
         if self.local_port is not None and (
-            type(self.local_port) is not int or not 1 <= self.local_port <= 65535
+            not is_ip_port(self.local_port)
         ):
-            raise ValueError("local_port must be None or an integer in [1, 65535]")
+            raise ValueError(f"local_port must be None or an integer in [{IP_PORT_MIN}, {IP_PORT_MAX}]")
 
 
 @dataclass(frozen=True, order=True, slots=True)
