@@ -202,7 +202,6 @@ def test_wireguard():
 PrivateKey = {server_private}
 Address = 10.70.0.1/32
 ListenPort = 51820
-Table = off
 
 [Peer]
 PublicKey = {client_public}

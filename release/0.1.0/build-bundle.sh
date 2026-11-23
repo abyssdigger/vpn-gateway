@@ -32,5 +32,8 @@ ARCHIVE="$OUT/$NAME.tar.gz"
     tar --sort=name --owner=0 --group=0 --numeric-owner \
         --mtime="@${SOURCE_DATE_EPOCH:-0}" -czf "$ARCHIVE" "$NAME"
 )
-sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+(
+    cd "$OUT"
+    sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+)
 printf '%s\n' "$ARCHIVE" "$ARCHIVE.sha256"
