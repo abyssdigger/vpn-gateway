@@ -51,7 +51,7 @@ class DeviceFirewallPhysicalSnapshot:
     interfaces: tuple[InterfaceIdentity, ...]
 
 
-class DeviceFirewallMutationBackend(Protocol):
+class DeviceFirewallMutationDriver(Protocol):
     def observe_device_firewall_snapshot(self) -> DeviceFirewallPhysicalSnapshot:
         """Return nft observation bracketed by stable fresh link inventories."""
 
@@ -188,7 +188,7 @@ def _classify(
 
 def converge_device_firewall_step_once(
     gate_backend: ForwardingGateDriver,
-    firewall_backend: DeviceFirewallMutationBackend,
+    firewall_backend: DeviceFirewallMutationDriver,
     desired: DeviceFirewallDesiredState,
 ) -> DeviceFirewallMutationResult:
     if not isinstance(desired, DeviceFirewallDesiredState):

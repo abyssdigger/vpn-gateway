@@ -30,7 +30,7 @@ class PayloadNatPhysicalSnapshot:
     interfaces: tuple[InterfaceIdentity, ...]
 
 
-class PayloadNatMutationBackend(Protocol):
+class PayloadNatMutationDriver(Protocol):
     def observe_nat_snapshot(self) -> PayloadNatPhysicalSnapshot:
         """Return nft observation bracketed by stable fresh link inventories."""
 
@@ -155,7 +155,7 @@ def _exact_step_postcondition(
 
 def converge_payload_nat_step_once(
     gate_backend: ForwardingGateDriver,
-    nat_backend: PayloadNatMutationBackend,
+    nat_backend: PayloadNatMutationDriver,
     desired: PayloadNatDesiredState,
 ) -> PayloadNatMutationResult:
     """One fail-closed NAT mutation attempt; never re-enable forwarding.

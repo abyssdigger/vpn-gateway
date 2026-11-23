@@ -21,7 +21,7 @@ from .nft_payload_scaffold import (
 )
 
 
-class PayloadNftScaffoldBackend(Protocol):
+class PayloadNftScaffoldDriver(Protocol):
     def observe_nft_namespace(self) -> NftNamespaceObservation:
         """Return one fresh full-ruleset ownership observation."""
 
@@ -66,7 +66,7 @@ class PayloadNftScaffoldPrepareResult:
 
 def prepare_payload_nft_scaffold_once(
     gate_backend: ForwardingGateDriver,
-    nft_backend: PayloadNftScaffoldBackend,
+    nft_backend: PayloadNftScaffoldDriver,
 ) -> PayloadNftScaffoldPrepareResult:
     """Close root forwarding, then bootstrap/repair only the invariant nft scaffold.
 
