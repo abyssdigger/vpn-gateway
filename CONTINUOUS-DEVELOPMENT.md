@@ -258,5 +258,9 @@ requirements, its material architecture/implementation is traceable to them, req
 evidence has passed, and review has no unresolved finding that can materially affect
 correctness, safety or required behavior.
 
+Completion of a CD scope or development block is not a release decision and does not by itself
+create a release candidate. Release preparation, fulfillment review, version accounting and
+publication follow the project release methodology in `PROJECT-CONVENTIONS.md`.
+
 If final review finds a material issue, fix it and re-review the affected changed baseline.
 Repeated clean reviews without intervening changes are not required.
