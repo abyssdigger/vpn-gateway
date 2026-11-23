@@ -226,6 +226,11 @@ been migrated from `converge_composite_nft_step_once()` to the current
 step passed, proving those owners through the current Enforcer path before historical
 orchestration is removed.
 
+Full NG3 Python workflow `45120631463` on code head
+`76c44f3640f62c900bd72d61e06a3b6b9b456f6d` completed **SUCCESS**; all 21 jobs passed,
+including `unit`, `linux-payload-nat`, `linux-payload-forward`,
+`linux-alpha-smoke` and the migrated combined structural live test.
+
 The remaining safe cleanup sequence is now narrow:
 
 1. move the three physical snapshot types to their actual Linux Driver/Backend modules and
