@@ -708,8 +708,8 @@ Requirement semantic changes therefore require re-review of their indexed archit
 coverage before implementation proceeds. Release-model process obligations
 `VPNG-D001-R3`, `.R1`, `.R2`, `.R3` and `.C1` are materialized by
 `PROJECT-CONVENTIONS.md` §10; runtime observability for `VPNG-D001-R3.R1.R1` belongs to
-A.008 and remains [`none`] until preparation of the first actual release permits and requires
-that implementation.
+A.008 and is [`full`] for Release-1 / 0.1.0: the canonical root `VERSION` value is
+published by the supported JSON and compact-text current-status presentations.
 
 **Evidence:** `EV-00010`.
 
