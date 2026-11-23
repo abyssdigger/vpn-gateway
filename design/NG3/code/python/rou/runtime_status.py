@@ -18,9 +18,9 @@ from .release1_config import Release1Config, render_helper_routing_interfaces
 
 
 _SEMVER_PATTERN = re.compile(
-    r"^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
-    r"(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?"
-    r"(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    r"^(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)"
+    r"(?:-[0-9A-Za-z-]+(?:[.][0-9A-Za-z-]+)*)?"
+    r"(?:[+][0-9A-Za-z-]+(?:[.][0-9A-Za-z-]+)*)?$"
 )
 
 

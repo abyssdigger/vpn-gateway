@@ -1867,7 +1867,7 @@ Agent, составляющий truthful current user-facing status из authori
 - `VPNG-D001-R1.R1.R5` — [`full`]
 - `VPNG-D001-R3.R1.R1` — [`full`]
 
-**Пробел материализации:** версия в поддерживаемом представлении текущего состояния еще не материализована; до подготовки первого фактического выпуска это допускает `VPNG-D001-R3.C1`.
+**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status.
 
 API
 
