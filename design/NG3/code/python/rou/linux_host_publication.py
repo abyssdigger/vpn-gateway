@@ -19,6 +19,7 @@ from .host_publication_policy import (
 )
 from .linux_nft_scaffold import NftScriptRunner
 from .local_publication_policy import PublicationProtocol
+from .ip_port import is_ip_port
 
 
 HOST_PUBLICATION_TABLE = "vpn_gate_publication"
@@ -500,7 +501,7 @@ def _decode_rule(payload: dict) -> HostPublicationRuleSpec:
                     if (
                         protocol is not None
                         or type(right) is not int
-                        or not 1 <= right <= 65535
+                        or not is_ip_port(right)
                     ):
                         raise ValueError("invalid/duplicate host publication port match")
                     protocol = parsed_protocol
@@ -527,7 +528,7 @@ def _decode_rule(payload: dict) -> HostPublicationRuleSpec:
             except (TypeError, ValueError):
                 raise ValueError("invalid host publication DNAT address") from None
             port = dnat.get("port")
-            if type(port) is not int or not 1 <= port <= 65535:
+            if not is_ip_port(port):
                 raise ValueError("invalid host publication DNAT port")
             internal_port = port
             continue

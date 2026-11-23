@@ -15,6 +15,7 @@ import tomllib
 from typing import Any, Mapping
 
 from .config import ConfigError, _parse_structural_root
+from .ip_port import IP_PORT_MAX, IP_PORT_MIN, is_ip_port
 from .domain import Direction, StructuralConfig
 from .port_bundle import PortBundle, PortSpan
 from .operational_log import OperationalLogLevel
@@ -926,10 +927,10 @@ def _port(value: Any, where: str) -> int:
         parsed = value
     else:
         raise Release1ConfigError(
-            f"{where} must be an integer in [1, 65535]"
+            f"{where} must be an integer in [${IP_PORT_MIN}, ${IP_PORT_MAX}]"
         )
-    if not 1 <= parsed <= 65535:
+    if not is_ip_port(parsed):
         raise Release1ConfigError(
-            f"{where} must be an integer in [1, 65535]"
+            f"{where} must be an integer in [${IP_PORT_MIN}, ${IP_PORT_MAX}]"
         )
     return parsed

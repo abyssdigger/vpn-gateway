@@ -19,6 +19,7 @@ from .device_firewall_structure import (
     DeviceFirewallRuleAction,
 )
 from .interface_inventory import parse_ip_link_inventory
+from .ip_port import is_ip_port
 from .linux_nft_scaffold import NftScriptRunner
 from .nft_namespace_inventory import parse_nft_namespace_ruleset
 
@@ -199,7 +200,7 @@ def _render_predicate(rule: DeviceFirewallRuleSpec) -> str:
 
 def _render_port_operand(value: object) -> str:
     if type(value) is int:
-        if not 1 <= value <= 65535:
+        if not is_ip_port(value):
             raise ValueError("invalid lower Device firewall port")
         return str(value)
 
@@ -219,7 +220,7 @@ def _render_port_operand(value: object) -> str:
         for item in items:
             if type(item) is int:
                 first = last = item
-                if not 1 <= item <= 65535:
+                if not is_ip_port(item):
                     raise ValueError("invalid lower Device firewall port set item")
                 rendered.append(str(item))
             elif isinstance(item, dict) and set(item) == {"range"}:
@@ -242,8 +243,8 @@ def _port_range(value: object) -> tuple[int, int]:
         or len(value) != 2
         or type(value[0]) is not int
         or type(value[1]) is not int
-        or not 1 <= value[0] <= 65535
-        or not 1 <= value[1] <= 65535
+        or not is_ip_port(value[0])
+        or not is_ip_port(value[1])
         or value[0] > value[1]
     ):
         raise ValueError("invalid lower Device firewall port range")
