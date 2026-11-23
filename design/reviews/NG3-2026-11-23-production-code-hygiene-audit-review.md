@@ -20,9 +20,11 @@ tests and experiment scripts.
 
 The pass found real hygiene debt, but no evidence of a broad unreachable-code problem.
 
-The cleanup has continued beyond the first slice. F8 and the direct F10 finding are now
-implemented; F9 documentation work and F11 superseded-convergence evidence migration remain
-open, so this audit is still not a completed development block.
+The cleanup has continued beyond the first slice. F8 and the direct F10 finding are
+implemented; architecture-facing F9 documentation has started; F11 live evidence has been
+migrated to the current structural Enforcer, but the superseded orchestration deletion and
+the remaining bounded F9 Driver pass are still open. This audit is therefore not yet a
+completed development block.
 
 ## Findings and dispositions
 
@@ -156,24 +158,27 @@ invariant is shared. This avoids both magic-value drift and a larger artificial 
 abstraction. The new production unit is explicitly traced to the component scopes that
 consume the invariant.
 
-### F9 — code-level documentation is systematically incomplete
+### F9 — useful code-level documentation boundary is only partially materialized
 
 **Decision:** accepted.  
-**Resolution:** open cleanup finding.
+**Resolution:** partial; lower Driver layer still requires the same bounded pass.
 
-Implementation traceability is strong at module level, but the mechanical public-symbol pass
-found missing docstrings across almost every production module. This is not confined to
-obvious data holders; multiple public architecture-facing functions/classes lack local API
-documentation.
+The audit rejected a blanket "docstring every enum/dataclass" rewrite. The useful boundary is:
 
-A blanket "docstring every enum/dataclass" rewrite is not justified. The next documentation
-pass should define and apply a useful boundary:
-
-- architecture-facing component classes and public callable contracts require local
-  responsibility/semantic docstrings;
+- architecture-facing component/Machinery classes and public callable contracts require local
+  responsibility/semantic documentation;
 - non-obvious algorithms require invariant/failure-semantics documentation;
-- trivial immutable data carriers may rely on field names/type contracts when the meaning is
-  already unambiguous.
+- trivial immutable data carriers may rely on field names/type contracts when their meaning
+  is already unambiguous.
+
+The first architecture-facing gaps have now been documented locally, including
+`AvailabilityManager`, `ProtectiveModeManager`, `AggressiveHostRoutingManager`,
+aggressive E.004 build/activation/deactivation operations, `LinuxStructuralPolicyBackend`,
+`LinuxCompositeNftBackend`, and the host-managed-routing Driver/convergence operations.
+
+This materially improves the semantic boundary documentation without adding ritual comments
+to data carriers. The remaining work is a bounded pass over lower Driver/Reader/Executor
+classes and non-trivial public operations that still rely only on module-level prose.
 
 ### F10 — symbol-level reachability and one-call-site audit found one test-only production API
 
@@ -198,10 +203,10 @@ ProductLifecycleControl API even though the current alpha does not call it inter
 
 No additional unused private helper/constant layer was found by the completed symbol pass.
 
-### F11 — superseded per-owner convergence APIs remain coupled to historical live evidence
+### F11 — superseded per-owner convergence APIs remain after live-evidence migration
 
 **Decision:** accepted.  
-**Resolution:** open cleanup finding; do not delete before evidence migration.
+**Resolution:** evidence migration started and proven; orchestration deletion remains open.
 
 The current runtime converges nft policy through the unified structural
 `NetworkPolicyEnforcer` / `StructuralPolicyTransaction`. The following older orchestration
@@ -215,19 +220,24 @@ They survive because dedicated unit/integration evidence still invokes them. The
 also contain lower primitives that current code still reuses, notably physical snapshot types
 and `apply_composite_nft_step()`.
 
-Deleting these modules wholesale would therefore both break current Drivers and discard live
-NAT/Device-firewall evidence. The safe cleanup sequence is:
+The combined live Profile + Device firewall + NAT + local-publication integration has now
+been migrated from `converge_composite_nft_step_once()` to the current
+`StructuralPolicyTransaction` using an nft-only structural desired state. The migrated CI
+step passed, proving those owners through the current Enforcer path before historical
+orchestration is removed.
 
-1. move/retain the genuinely current lower snapshot/dispatch primitives at their proper
-   Driver/structural boundary;
-2. migrate the dedicated live NAT and Device-firewall convergence evidence to the current
-   structural Enforcer path (the present structural integration does not exercise those
-   desired owners);
-3. remove the superseded per-owner orchestration types/functions/tests and obsolete workflow
-   steps;
-4. rerun full structural/live evidence.
+The remaining safe cleanup sequence is now narrow:
 
-This is a component/evidence migration, not a mechanical dead-code deletion.
+1. move the three physical snapshot types to their actual Linux Driver/Backend modules and
+   retain only genuinely current observation/mutation primitives;
+2. move the composite nft step dispatcher into the structural Enforcer boundary;
+3. remove the three superseded per-owner orchestration modules and their unit/dedicated
+   integration tests;
+4. remove the two now-redundant dedicated workflow steps while keeping the migrated combined
+   structural live evidence;
+5. update package exports/traceability and rerun the full workflow.
+
+This is no longer blocked on evidence design; it is an atomic code/evidence cleanup unit.
 
 ## Requirement / architecture impact
 
