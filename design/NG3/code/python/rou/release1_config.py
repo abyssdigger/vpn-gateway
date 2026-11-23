@@ -927,10 +927,10 @@ def _port(value: Any, where: str) -> int:
         parsed = value
     else:
         raise Release1ConfigError(
-            f"{where} must be an integer in [${IP_PORT_MIN}, ${IP_PORT_MAX}]"
+            f"{where} must be an integer in [{IP_PORT_MIN}, {IP_PORT_MAX}]"
         )
     if not is_ip_port(parsed):
         raise Release1ConfigError(
-            f"{where} must be an integer in [${IP_PORT_MIN}, ${IP_PORT_MAX}]"
+            f"{where} must be an integer in [{IP_PORT_MIN}, {IP_PORT_MAX}]"
         )
     return parsed

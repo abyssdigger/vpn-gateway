@@ -22,6 +22,10 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/port_bundle.py`
 - `design/NG3/code/python/rou/release1_config.py`
 
+## Trace: `A.002`, `C.001`, `C.003`, `E.001`
+
+- `design/NG3/code/python/rou/ip_port.py`
+
 ## Trace: `A.003`
 
 - `design/NG3/code/python/rou/availability_description.py`
