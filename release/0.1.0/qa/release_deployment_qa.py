@@ -196,23 +196,24 @@ def test_wireguard():
         client_private = command(("wg", "genkey")).stdout.strip()
         client_public = command(("wg", "pubkey"), input_text=client_private + "\n").stdout.strip()
 
-        server_conf = root / "wg-server.conf"
-        server_conf.write_text(
-            f"""[Interface]
-PrivateKey = {server_private}
-Address = 10.70.0.1/32
-ListenPort = 51820
-
-[Peer]
-PublicKey = {client_public}
-AllowedIPs = 10.70.0.2/32
-""",
-            encoding="utf-8",
-        )
-        server_conf.chmod(0o600)
-        ns(namespace, "wg-quick", "up", str(server_conf))
-
         Path("/etc/wireguard").mkdir(parents=True, exist_ok=True)
+        server_key = Path("/etc/wireguard/qa-server.key")
+        server_key.write_text(server_private + "\n", encoding="ascii")
+        server_key.chmod(0o600)
+        ns(namespace, "ip", "link", "add", "wg-server", "type", "wireguard")
+        ns(namespace, "ip", "addr", "add", "10.70.0.1/32", "dev", "wg-server")
+        ns(
+            namespace,
+            "wg", "set", "wg-server",
+            "private-key", str(server_key),
+            "listen-port", "51820",
+            "peer", client_public,
+            "allowed-ips", "10.70.0.2/32",
+        )
+        ns(namespace, "ip", "link", "set", "wg-server", "up")
+        ns(namespace, "ip", "route", "replace", "10.70.0.2/32", "dev", "wg-server")
+
+
         client_conf = Path("/etc/wireguard/wg-corp.conf")
         client_conf.write_text(
             f"""[Interface]
@@ -261,7 +262,6 @@ ExecStop=/usr/bin/wg-quick down %i
     finally:
         systemctl("stop", unit, check=False)
         controller_stop()
-        ns(namespace, "wg-quick", "down", str(root / "wg-server.conf"), check=False)
         cleanup_remote(namespace, host_if)
         shutil.rmtree(root, ignore_errors=True)
 
