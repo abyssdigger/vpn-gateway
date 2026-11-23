@@ -200,7 +200,6 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/linux_host_managed_routing_backend.py`
 - `design/NG3/code/python/rou/release1_host_boundary.py`
 - `design/NG3/code/python/rou/release1_host_route_helper.py`
-- `design/NG3/code/python/rou/selected_host_boundary.py`
 
 ## Architecture debt
 
