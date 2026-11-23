@@ -130,3 +130,14 @@ and L2TP in the tested Debian 13 systemd environment.**
 The QA result is evidence for the tested source head only. A source change that affects bundle
 contents, installation, deployment integration, runtime behavior, or release-version presentation
 requires the applicable checks to be repeated.
+
+
+## Applicability to final release metadata preparation
+
+The product-bundle build inputs validated by this report are intentionally unchanged during the
+subsequent release-metadata finalization. The added requirements coverage, project snapshot,
+release-asset builder, process records, and release-asset upload logic do not enter
+`vpn-gate-0.1.0.tar.gz`.
+
+The final fulfillment review is responsible for comparing the frozen release candidate with the
+tested product-bundle baseline and confirming that no bundle/runtime/deployment input changed.

@@ -16,11 +16,22 @@ From the repository root:
 sh release/0.1.0/build-bundle.sh
 ```
 
-The default output directory is `dist/`. The build produces:
+The default output directory is `dist/`. Build the product bundle and project snapshot:
+
+```sh
+sh release/0.1.0/build-bundle.sh
+sh release/0.1.0/build-project-snapshot.sh
+```
+
+The release asset set contains:
 
 ```text
 vpn-gate-0.1.0.tar.gz
 vpn-gate-0.1.0.tar.gz.sha256
+vpn-gate-0.1.0-project-snapshot.tar.gz
+vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
+QA-REPORT.md
+REQUIREMENTS-COVERAGE.md
 ```
 
 The archive is self-contained for installation. It contains the runtime package, canonical
@@ -50,3 +61,13 @@ fail-closed guarantees remain applicable independently.
 
 This directory prepares a candidate. Publication as an actual product release still requires
 the candidate-specific fulfillment review and the separate projectholder release decision.
+
+
+## Project snapshot
+
+`project-snapshot/` is the release-time project record. It contains the exact requirements,
+architecture and NG3 changelog copied into the release branch before it is frozen. The separate
+project-snapshot archive is intended to be published alongside the product bundle.
+
+`REQUIREMENTS-COVERAGE.md` is the complete 0.1.0 R/C disposition matrix; it is distinct from
+the anomaly-oriented fulfillment review.
