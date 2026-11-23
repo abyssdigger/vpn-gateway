@@ -106,6 +106,8 @@ class SubprocessProbeCommandRunner:
 
 @dataclass(slots=True)
 class LinuxIcmpProbeDriver:
+    """Execute one bounded ICMP probe in the exact requested network context."""
+
     runner: ProbeCommandRunner
     namespace: str
     process_uid: int
@@ -135,6 +137,8 @@ class LinuxIcmpProbeDriver:
         self,
         context: ProbeObservationContext,
     ) -> ProbeTechnicalObservation:
+        """Classify one ping attempt as reply, no-reply, or local execution error."""
+
         if not isinstance(context, ProbeObservationContext):
             raise IcmpProbeDriverError(
                 "context must be ProbeObservationContext"

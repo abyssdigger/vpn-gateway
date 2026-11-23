@@ -53,6 +53,8 @@ class SubprocessNftRunner:
 
 @dataclass(slots=True)
 class LinuxNftScaffoldDriver:
+    """Observe and materialize only the invariant owned nft scaffold."""
+
     runner: NftScriptRunner
     namespace: str
 
@@ -61,12 +63,16 @@ class LinuxNftScaffoldDriver:
             raise ValueError("namespace must be a non-empty string")
 
     def observe_nft_namespace(self) -> NftNamespaceObservation:
+        """Return one fresh full-ruleset ownership observation."""
+
         return LinuxNftNamespaceReader(
             self.runner,
             self.namespace,
         ).observe_nft_namespace()
 
     def create_payload_scaffold(self) -> None:
+        """Create the complete invariant table/chains in one nft transaction."""
+
         self.runner.run_script(
             self._script_command(),
             _full_scaffold_script(),
@@ -76,6 +82,8 @@ class LinuxNftScaffoldDriver:
         self,
         missing: tuple[NftBaseChainSpec, ...],
     ) -> None:
+        """Add an already-classified subset of missing invariant chains atomically."""
+
         if not isinstance(missing, tuple) or not missing:
             raise ValueError("missing must be a non-empty tuple")
         known = set(PAYLOAD_NFT_SCAFFOLD)

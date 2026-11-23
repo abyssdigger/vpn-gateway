@@ -63,6 +63,8 @@ class LinuxHostManagedRoutingDriver:
         self,
         desired: HostManagedRoutingLinuxDesired,
     ) -> HostManagedRoutingObservation:
+        """Fresh-classify the allocated host route/RPDB owner scope against desired."""
+
         if not isinstance(desired, HostManagedRoutingLinuxDesired):
             raise ValueError("desired must be HostManagedRoutingLinuxDesired")
         route_rows = _json_array(

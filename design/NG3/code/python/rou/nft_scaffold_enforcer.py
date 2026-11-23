@@ -22,6 +22,8 @@ from .nft_payload_scaffold import (
 
 
 class PayloadNftScaffoldDriver(Protocol):
+    """Lower Driver contract for invariant scaffold observation and mutation only."""
+
     def observe_nft_namespace(self) -> NftNamespaceObservation:
         """Return one fresh full-ruleset ownership observation."""
 

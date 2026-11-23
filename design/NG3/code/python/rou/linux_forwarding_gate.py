@@ -17,6 +17,8 @@ class ForwardingGateCommandRunner(Protocol):
 
 @dataclass(slots=True)
 class LinuxForwardingGateDriver:
+    """Read and mutate only managed-netns IPv4 forwarding state."""
+
     runner: ForwardingGateCommandRunner
     namespace: str
 
@@ -25,6 +27,8 @@ class LinuxForwardingGateDriver:
             raise ValueError("namespace must be a non-empty string")
 
     def observe_forwarding_gate(self) -> ForwardingGateState:
+        """Read the effective net.ipv4.ip_forward value from the managed namespace."""
+
         stdout = self.runner.run(
             (
                 "ip",
@@ -49,6 +53,8 @@ class LinuxForwardingGateDriver:
         self,
         desired: ForwardingGateState,
     ) -> None:
+        """Issue one sysctl mutation; callers must verify the effective postcondition."""
+
         if not isinstance(desired, ForwardingGateState):
             raise ValueError("desired must be ForwardingGateState")
         value = 1 if desired is ForwardingGateState.ENABLED else 0

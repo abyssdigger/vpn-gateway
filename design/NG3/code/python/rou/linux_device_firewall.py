@@ -60,6 +60,8 @@ class LinuxDeviceFirewallDriver:
     def observe_device_firewall_snapshot(
         self,
     ) -> DeviceFirewallPhysicalSnapshot:
+        """Fresh-observe nft state inside one stable interface-generation bracket."""
+
         before = self._links()
         nft = parse_nft_namespace_ruleset(
             self.runner.run(
@@ -104,6 +106,8 @@ class LinuxDeviceFirewallDriver:
         self,
         spec: DeviceFirewallChainSpec,
     ) -> None:
+        """Create one compiled child chain and insert its dispatch before Profile rules."""
+
         if not isinstance(spec, DeviceFirewallChainSpec):
             raise ValueError("spec must be DeviceFirewallChainSpec")
         _validate_identifier(spec.child_chain_name)

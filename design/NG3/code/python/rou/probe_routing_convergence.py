@@ -35,6 +35,8 @@ class ProbeRoutingPhysicalSnapshot:
 
 
 class ProbeRoutingConvergenceBackend(Protocol):
+    """Lower Backend contract for one probe-owned routing convergence scope."""
+
     def observe_probe_routing_snapshot(
         self,
     ) -> ProbeRoutingPhysicalSnapshot: ...

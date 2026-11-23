@@ -72,6 +72,8 @@ class HostPublicationConvergenceResult:
 
 @dataclass(slots=True)
 class LinuxHostPublicationDriver:
+    """Observe prerequisites and mutate only the E.001-owned host publication scope."""
+
     runner: NftScriptRunner
     network_namespace: str | None = None
 
@@ -83,6 +85,8 @@ class LinuxHostPublicationDriver:
             raise ValueError("network_namespace must be non-empty text or None")
 
     def observe(self) -> HostPublicationPhysicalObservation:
+        """Fresh-observe owned host DNAT state plus the forwarding prerequisite."""
+
         forwarding = self._forwarding()
         raw = self.runner.run(self._cmd("nft", "-j", "-y", "list", "ruleset"))
         return _parse_observation(raw, forwarding)
@@ -134,6 +138,8 @@ class LinuxHostPublicationDriver:
         return tuple(dict.fromkeys(diagnostics))
 
     def replace(self, desired: HostPublicationDesiredState) -> None:
+        """Atomically replace conflict-free owned publication state with desired state."""
+
         if not isinstance(desired, HostPublicationDesiredState):
             raise ValueError("desired must be HostPublicationDesiredState")
         current = self.observe()

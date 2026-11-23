@@ -46,6 +46,8 @@ class _NftInventory:
 
 @dataclass(slots=True)
 class LinuxStackReturnAffinityBackend:
+    """Compose nft and RPDB primitives for the managed return-affinity owner."""
+
     runner: NftScriptRunner
     namespace: str
     platform: StackReturnAffinityPlatformSpace | None = None
@@ -94,6 +96,8 @@ class LinuxStackReturnAffinityBackend:
         )
 
     def observe(self, desired: StackReturnAffinityDesired) -> StackReturnAffinityObservation:
+        """Fresh-classify the complete reserved nft+RPDB scope against desired state."""
+
         if self.platform is None:
             raise ValueError("platform is required for authoritative affinity observation")
         nft = _parse_nft_inventory(
@@ -180,6 +184,8 @@ class LinuxStackReturnAffinityBackend:
         desired: StackReturnAffinityDesired,
         observed: StackReturnAffinityObservation,
     ) -> None:
+        """Replace only a classified ABSENT/STALE owner after a fresh conflict check."""
+
         if observed.status not in {
             StackReturnAffinityOwnerStatus.ABSENT,
             StackReturnAffinityOwnerStatus.STALE,
@@ -197,6 +203,8 @@ class LinuxStackReturnAffinityBackend:
                 self.add_rule(rule)
 
     def cleanup_owned(self) -> None:
+        """Remove the complete reserved owner or refuse any conflicting/unknown state."""
+
         if self.platform is None:
             raise ValueError("platform is required for authoritative affinity cleanup")
         nft = _parse_nft_inventory(

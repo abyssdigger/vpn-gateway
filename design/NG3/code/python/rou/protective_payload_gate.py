@@ -63,6 +63,8 @@ class ProtectivePayloadGateObservation:
 
 
 class ProtectivePayloadGateDriver(Protocol):
+    """Lower C.010 Driver contract; convergence and confirmation stay above it."""
+
     def observe_protective_payload_gate(
         self,
         desired: ProtectivePayloadGateDesired,

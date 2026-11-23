@@ -47,6 +47,8 @@ class NftRulesetCommandRunner(Protocol):
 
 @dataclass(slots=True)
 class LinuxNftNamespaceReader:
+    """Read the complete nft ruleset and classify the reserved NG3 namespace."""
+
     runner: NftRulesetCommandRunner
     namespace: str
 
@@ -55,6 +57,8 @@ class LinuxNftNamespaceReader:
             raise ValueError("namespace must be a non-empty string")
 
     def observe_nft_namespace(self) -> NftNamespaceObservation:
+        """Return one fresh ownership/classification observation of the full ruleset."""
+
         stdout = self.runner.run(
             (
                 "ip",

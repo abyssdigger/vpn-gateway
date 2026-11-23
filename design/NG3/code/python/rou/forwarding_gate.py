@@ -11,6 +11,8 @@ class ForwardingGateState(str, Enum):
 
 
 class ForwardingGateDriver(Protocol):
+    """Lower Driver contract for fresh observation and unconfirmed gate mutation."""
+
     def observe_forwarding_gate(self) -> ForwardingGateState:
         """Return one fresh authoritative managed-netns forwarding state."""
 
