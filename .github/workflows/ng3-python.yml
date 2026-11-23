@@ -781,3 +781,11 @@ jobs:
             set -e
             python3 release/0.1.0/qa/release_deployment_qa.py
           '
+      - name: Upload validated release candidate bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpn-gate-0.1.0-candidate
+          path: |
+            dist/vpn-gate-0.1.0.tar.gz
+            dist/vpn-gate-0.1.0.tar.gz.sha256
+          if-no-files-found: error
