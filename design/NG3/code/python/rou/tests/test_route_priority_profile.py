@@ -6,7 +6,7 @@ import unittest
 from rou.binding import LogicalPathId
 from rou.route_priority import RoutePriorityMove
 from rou.route_priority_convergence import RoutePriorityDeleteDuplicate
-from rou.route_priority_executor import RoutePrioritySnapshot
+from rou.route_priority_enforcer import RoutePrioritySnapshot
 from rou.route_priority_profile import (
     RoutePriorityDomainId,
     RoutePriorityDomainRequest,

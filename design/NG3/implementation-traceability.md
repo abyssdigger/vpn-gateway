@@ -127,7 +127,6 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/nft_namespace_inventory.py`
 - `design/NG3/code/python/rou/nft_payload_scaffold.py`
 - `design/NG3/code/python/rou/nft_scaffold_enforcer.py`
-- `design/NG3/code/python/rou/nft_scaffold_executor.py`
 - `design/NG3/code/python/rou/payload_forward_compare.py`
 - `design/NG3/code/python/rou/payload_forward_observation.py`
 - `design/NG3/code/python/rou/payload_nat_mutation.py`
@@ -141,7 +140,6 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/route_priority.py`
 - `design/NG3/code/python/rou/route_priority_convergence.py`
 - `design/NG3/code/python/rou/route_priority_enforcer.py`
-- `design/NG3/code/python/rou/route_priority_executor.py`
 - `design/NG3/code/python/rou/route_priority_inventory.py`
 - `design/NG3/code/python/rou/route_priority_profile.py`
 - `design/NG3/code/python/rou/stack_return_affinity.py`
