@@ -152,6 +152,7 @@ from .runtime_status import (
     RuntimeStatusAgent,
     RuntimeStatusFilePublisher,
     build_configured_intent_status,
+    read_release_version,
 )
 
 
@@ -162,6 +163,7 @@ ALPHA_INNER_ADDRESS = IPv4Interface("198.19.255.2/32")
 ALPHA_RUNTIME_DIRECTORY = Path("/run/vpn-gate-alpha")
 ALPHA_STATUS_PATH = ALPHA_RUNTIME_DIRECTORY / "status.json"
 ALPHA_STATUS_TEXT_PATH = ALPHA_RUNTIME_DIRECTORY / "status.txt"
+ALPHA_VERSION_PATH = Path("/usr/lib/vpn-gate-alpha/VERSION")
 ALPHA_AUDIT_INTERVAL_SECONDS = 1.0
 ALPHA_AVAILABILITY_DEGRADATION_THRESHOLD = 2
 ALPHA_AVAILABILITY_RECOVERY_THRESHOLD = 2
@@ -795,6 +797,12 @@ def run_alpha_runtime(
         raise AlphaRuntimeError("alpha runtime must run as root")
     if audit_interval_seconds <= 0:
         raise ValueError("audit_interval_seconds must be positive")
+    try:
+        release_version = read_release_version(ALPHA_VERSION_PATH)
+    except (OSError, ValueError) as exc:
+        raise AlphaRuntimeError(
+            f"release VERSION is unavailable or invalid at {ALPHA_VERSION_PATH}: {exc}"
+        ) from exc
 
     runner = SubprocessNftRunner()
     probe_driver = LinuxIcmpProbeDriver(
@@ -929,7 +937,8 @@ def run_alpha_runtime(
                 "alpha startup returned an unexpected host-routing helper"
             )
         status_agent = RuntimeStatusAgent(
-            build_configured_intent_status(prepared.config)
+            build_configured_intent_status(prepared.config),
+            version=release_version,
         )
         status_publisher = RuntimeStatusFilePublisher(
             ALPHA_STATUS_PATH,

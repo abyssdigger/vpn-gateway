@@ -7,6 +7,7 @@ from enum import Enum
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 from typing import Iterable
 
@@ -14,6 +15,13 @@ from .binding import LogicalPathId, PathBinding
 from .network_policy_layout import ProbePolicyOwner
 from .payload_profile import PayloadProfileRequest
 from .release1_config import Release1Config, render_helper_routing_interfaces
+
+
+_SEMVER_PATTERN = re.compile(
+    r"^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
+    r"(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?"
+    r"(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+)
 
 
 class RuntimeReadiness(str, Enum):
@@ -79,6 +87,7 @@ class AvailabilityProfileStatus:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeStatusSnapshot:
+    version: str
     configured_intent: ConfiguredIntentStatus
     confirmed_effective_state: tuple[EffectiveProfileStatus, ...] | None
     availability_state: tuple[AvailabilityProfileStatus, ...]
@@ -95,9 +104,17 @@ class RuntimeStatusSnapshot:
 class RuntimeStatusAgent:
     """Retain only the latest current status projection; never own represented policy."""
 
-    def __init__(self, configured_intent: ConfiguredIntentStatus) -> None:
+    def __init__(
+        self,
+        configured_intent: ConfiguredIntentStatus,
+        *,
+        version: str = "development",
+    ) -> None:
         if not isinstance(configured_intent, ConfiguredIntentStatus):
             raise ValueError("configured_intent must be ConfiguredIntentStatus")
+        if not isinstance(version, str) or not version:
+            raise ValueError("version must be non-empty text")
+        self._version = version
         self._configured = configured_intent
         self._effective: tuple[EffectiveProfileStatus, ...] | None = None
         self._availability = tuple(
@@ -223,6 +240,7 @@ class RuntimeStatusAgent:
 
     def snapshot(self) -> RuntimeStatusSnapshot:
         return RuntimeStatusSnapshot(
+            version=self._version,
             configured_intent=self._configured,
             confirmed_effective_state=self._effective,
             availability_state=self._availability,
@@ -230,6 +248,18 @@ class RuntimeStatusAgent:
             blocking_problems=self._problems,
             unknown_or_unconfirmed_fields=self._unknown,
         )
+
+
+def read_release_version(path: Path) -> str:
+    """Read and validate the canonical release VERSION value."""
+    if isinstance(path, str):
+        path = Path(path)
+    if not isinstance(path, Path):
+        raise ValueError("version path must be pathlib.Path or text")
+    version = path.read_text(encoding="ascii").strip()
+    if not _SEMVER_PATTERN.fullmatch(version):
+        raise ValueError(f"invalid Semantic Versioning release value: {version!r}")
+    return version
 
 
 def build_configured_intent_status(config: Release1Config) -> ConfiguredIntentStatus:
@@ -371,7 +401,7 @@ def render_runtime_status_text(snapshot: RuntimeStatusSnapshot) -> str:
         else {item.profile_id: item for item in effective}
     )
 
-    lines = ["Devices"]
+    lines = [f"VPN-GATE {snapshot.version}", "Devices"]
     if effective is None:
         for device in snapshot.configured_intent.devices:
             state = "disabled" if not device.enabled else "unknown"
