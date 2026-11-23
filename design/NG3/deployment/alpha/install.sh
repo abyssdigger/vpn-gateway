@@ -6,6 +6,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../../../.." && pwd)
 install -d -m 0755 /usr/lib/vpn-gate-alpha
 rm -rf /usr/lib/vpn-gate-alpha/rou
 cp -a "$ROOT/design/NG3/code/python/rou" /usr/lib/vpn-gate-alpha/rou
+install -m 0644 "$ROOT/VERSION" /usr/lib/vpn-gate-alpha/VERSION
 
 install -d -m 0755 /etc/vpn-gate-alpha
 if [ ! -e /etc/vpn-gate-alpha/config.toml ]; then

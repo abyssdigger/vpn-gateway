@@ -18,6 +18,7 @@ from rou.runtime_status import (
     RuntimeStatusAgent,
     RuntimeStatusFilePublisher,
     build_configured_intent_status,
+    read_release_version,
     render_runtime_status_text,
     write_runtime_status_json,
     write_runtime_status_text,
@@ -258,7 +259,8 @@ availability_check = "default"
 
         self.assertEqual(
             render_runtime_status_text(agent.snapshot()),
-            """Devices
+            """VPN-GATE development
+Devices
     ovpn: vpn0, vpn1
 Profiles
     alpha
@@ -270,7 +272,8 @@ Profiles
         agent = RuntimeStatusAgent(self.configured())
         self.assertEqual(
             render_runtime_status_text(agent.snapshot()),
-            """Devices
+            """VPN-GATE development
+Devices
     ovpn: unknown
 Profiles
     alpha: unknown""",
@@ -315,7 +318,8 @@ Profiles
             write_runtime_status_text(path, agent.snapshot())
             self.assertEqual(
                 path.read_text(encoding="utf-8"),
-                """Devices
+                """VPN-GATE development
+Devices
     ovpn: unknown
 Profiles
     alpha: unknown
@@ -326,12 +330,22 @@ Profiles
                 ("status.txt",),
             )
 
+    def test_release_version_reader_uses_canonical_semver_text(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "VERSION"
+            path.write_text("0.1.0\n", encoding="ascii")
+            self.assertEqual(read_release_version(path), "0.1.0")
+            path.write_text("release-1\n", encoding="ascii")
+            with self.assertRaisesRegex(ValueError, "Semantic Versioning"):
+                read_release_version(path)
+
     def test_json_publisher_replaces_one_current_snapshot(self):
         agent = RuntimeStatusAgent(self.configured())
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "status.json"
             write_runtime_status_json(path, agent.snapshot())
             first = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(first["version"], "development")
             self.assertEqual(first["readiness"], "starting")
             self.assertIsNone(first["confirmed_effective_state"])
 

@@ -5,6 +5,21 @@ reviews, experiments or transient implementation details. Requirements, architec
 evidence remain authoritative in their own artifacts.
 
 
+## 2026-11-23 — Release-1 / 0.1.0 candidate prepared and deployment-validated
+
+The first actual release candidate now has canonical version `0.1.0`, a self-contained source
+bundle, English deployment documentation, and release-version publication through the supported
+JSON and compact-text current-status surfaces.
+
+The generated bundle was installed from its archive in a Debian 13/systemd QA environment and
+passed real payload/lifecycle checks with WireGuard, OpenConnect, and L2TP/PPP. The persistent
+QA record is `release/0.1.0/QA-REPORT.md`; the version-specific fulfillment review is
+`design/reviews/NG3-0.1.0-2026-11-23-release-fulfillment-review.md`.
+
+The candidate is ready for the separate projectholder release decision; this milestone does not
+itself publish `v0.1.0`.
+
+
 ## 2026-11-23 — Release development and implementation fulfillment made explicit
 
 NG3 now has an accepted release-based development branch under `VPNG-D001-R3*`. Actual
