@@ -202,7 +202,7 @@ def parse_release1_config(text: str) -> Release1Config:
     for profile_id, raw_body in raw_profiles.items():
         body = _table(raw_body, f"profile.{profile_id}")
         normalized = dict(body)
-        if _is_enabled(body):
+        if body.get("enabled") is True:
             direction, effective_snat_address = _parse_direction(
                 body.get("direction"),
                 f"profile.{profile_id}.direction",
@@ -469,10 +469,6 @@ def _table(value: Any, where: str) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise Release1ConfigError(f"{where} must be a TOML table")
     return value
-
-
-def _is_enabled(body: dict[str, Any]) -> bool:
-    return body.get("enabled") is True
 
 
 def _parse_direction(
