@@ -53,27 +53,62 @@ state.
 
 Repository state is read-only unless:
 
-1. the user's active instruction explicitly orders the specific repository/artifact change;
-   or
+1. the user's active instruction explicitly authorizes the requested operation under the rules
+   below; or
 2. the user explicitly starts/resumes CD, authorizing writes within its active scope.
 
 Discussion, review, brainstorming, semantic approval, “yes/ok/looks good”, or a question about
 whether work can proceed is not write authorization.
 
-Outside CD, an explicit edit/implementation instruction authorizes that change on a working
-branch. It does **not** authorize `main`.
+### Outside-CD repository authorization
 
-Authorization is operation-specific: permission to modify repository artifacts does not imply
-permission to move `main`; permission to publish one completed result to `main` does not
-carry forward to a later result.
+Outside active CD, repository operations are authorized only by explicit user instructions and
+only within the scope of those instructions.
+
+A request to change repository content authorizes content changes only when the user explicitly
+identifies the file or files to create, modify or delete, or identifies a concrete directory whose
+files are the requested change scope. General discussion, review conclusions, accepted proposals,
+or requests such as “update the project documentation” do not by themselves authorize repository
+mutation.
+
+Authorization to change repository content does not by itself authorize recording or publishing
+those changes in GitHub.
+
+Recording results in GitHub requires a separate explicit user instruction to commit, publish,
+record, push or otherwise preserve the requested result in the repository.
+
+When GitHub recording is authorized, work must be performed either:
+
+- on a new dedicated working branch; or
+- on an existing branch explicitly identified by the user.
+
+Outside active CD, the agent must not independently choose an existing branch as a writable
+target.
+
+If the user explicitly identifies `main` as the working target, that instruction is not sufficient
+to begin mutation. Before any work on `main`, the agent must ask for and receive a separate
+confirmation that the requested work may be performed directly on `main`.
+
+Authorization to work on one branch or to record one result does not authorize creation,
+movement, replacement or deletion of other branches or tags.
+
+During active CD, creation and use of the dedicated CD working branch and normal publication
+defined by the CD process are covered by active CD authorization unless the user explicitly
+restricts them.
+
+Authorization is operation-specific and result-specific. Permission to record one completed
+result does not carry forward to a later result.
 
 Write authorization must be present in active context; do not infer it across a context
 transition.
 
 ## 4. Working branches and commit publication
 
-Authorized work uses a dedicated working branch unless the user explicitly requests another
-safe target.
+A working branch may be created or selected only when its use is authorized under §3.
+
+During active CD, the dedicated CD working branch is authorized by the active CD session.
+Outside active CD, creating a new working branch requires GitHub-recording authorization under
+§3; an instruction to edit or implement repository content alone is not sufficient.
 
 Every created commit must be published to GitHub immediately and verified on the expected
 remote branch before another commit is created.
@@ -86,8 +121,10 @@ state and any unverified work accurately.
 
 `main` is not a development branch.
 
-Outside active CD, a `main` update requires an explicit user instruction to
-publish/snapshot the accepted result to `main`.
+Outside active CD, direct work on `main` requires the two-step authorization in §3:
+the user must first identify `main` as the target and then separately confirm direct work there
+before mutation begins. Publication of a previously prepared result to `main` likewise requires
+an explicit instruction covering that publication.
 
 During active CD, normal completed-development-block snapshots are included in CD
 authorization unless the user explicitly changes/disables snapshot publication.
@@ -97,9 +134,11 @@ authorization unless the user explicitly changes/disables snapshot publication.
 Immediately before any operation that can move or replace the `main` ref, identify the
 authorization source in the active user context.
 
-Outside active CD, that source must be an explicit user instruction to publish, snapshot,
-merge, commit or otherwise place the relevant result in `main`. An instruction to edit,
-apply or implement a change without naming `main` is not sufficient.
+Outside active CD, that source must satisfy the applicable §3 authorization path. For direct
+work on `main`, both the user's identification of `main` as the target and the later separate
+confirmation must be present in active context. For publication of a previously prepared result,
+an explicit instruction to publish, snapshot, merge, commit or otherwise place that result in
+`main` is required.
 
 During CD, verify immediately before the `main` operation that CD is currently active under
 `CONTINUOUS-DEVELOPMENT.md` and has not been paused by a later user intervention. If current
