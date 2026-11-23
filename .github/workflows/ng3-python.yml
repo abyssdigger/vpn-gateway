@@ -749,7 +749,7 @@ jobs:
             bash -lc '
               set -e
               apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                 systemd systemd-sysv dbus \
                 python3 iproute2 iputils-ping nftables procps openssl kmod \
                 wireguard-tools openconnect ocserv xl2tpd ppp
