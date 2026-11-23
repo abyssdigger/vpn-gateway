@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from rou import parse_structural_config
+from support_structural_config import parse_structural_config
 from rou.binding import DeviceBindingState, LogicalPathId, PathBinding, project_device_bindings
 from rou.interface_identity import InterfaceIdentity
 from rou.payload_profile import build_payload_profile_requests

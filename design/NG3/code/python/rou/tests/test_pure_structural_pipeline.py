@@ -3,6 +3,8 @@ from __future__ import annotations
 import ipaddress
 import unittest
 
+from support_structural_config import parse_structural_config
+
 from rou import (
     AvailabilityPriorityError,
     DeviceBindingState,
@@ -22,7 +24,6 @@ from rou import (
     NG3_LINUX_POLICY_PLATFORM,
     parse_ip_link_inventory,
     parse_release1_config,
-    parse_structural_config,
     project_device_bindings,
     realize_direct_device_path_routes,
 )

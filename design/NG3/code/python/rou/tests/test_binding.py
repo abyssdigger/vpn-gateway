@@ -10,7 +10,7 @@ from rou.binding import (
 )
 from rou.domain import DeviceBindingIntent, ExpectedInterfaceSelector, SelectorKind
 from rou.interface_identity import InterfaceIdentity
-from rou.config import parse_structural_config
+from support_structural_config import parse_structural_config
 
 
 def prefix(device_id: str = "oc", quota: int = 2, value: str = "vpns") -> DeviceBindingIntent:
