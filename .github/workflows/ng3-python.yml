@@ -373,7 +373,8 @@ jobs:
         run: >-
           sudo --preserve-env=PYTHONPATH
           python3
-          design/NG3/code/python/rou/tests/integration_payload_forward_observation.py      - name: NG3 combined Profile Device NAT convergence integration
+          design/NG3/code/python/rou/tests/integration_payload_forward_observation.py
+      - name: NG3 combined Profile Device NAT convergence integration
         env:
           PYTHONPATH: design/NG3/code/python
         run: >-
