@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ipaddress
 import re
-import tomllib
 from typing import Any
 
 from .domain import (
@@ -26,26 +25,6 @@ _DEVICE_STRUCTURAL_KEYS = frozenset({"enabled", "expected_interfaces"})
 _PROFILE_STRUCTURAL_KEYS = frozenset(
     {"enabled", "direction", "destinations", "device_order"}
 )
-
-
-def parse_structural_config(text: str) -> StructuralConfig:
-    """Parse the bounded NG3 structural Device/Profile configuration slice.
-
-    This lower parser accepts only the structural Device/Profile slice used by
-    isolated structural tests. The canonical human-facing surface is parsed by
-    release1_config.py.
-    """
-    try:
-        raw = tomllib.loads(text)
-    except (tomllib.TOMLDecodeError, TypeError) as exc:
-        raise ConfigError(f"invalid TOML: {exc}") from None
-
-    return _parse_structural_root(
-        raw,
-        top_level_keys=_TOP_LEVEL_KEYS,
-        device_keys=_DEVICE_STRUCTURAL_KEYS,
-        profile_keys=_PROFILE_STRUCTURAL_KEYS,
-    )
 
 
 def _parse_structural_root(

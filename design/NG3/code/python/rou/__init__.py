@@ -48,7 +48,7 @@ from .binding import (
     WaitingCandidate,
     project_device_bindings,
 )
-from .config import ConfigError, parse_structural_config
+from .config import ConfigError
 from .domain import (
     DeviceBindingIntent,
     DeviceStructuralIntent,
@@ -900,7 +900,6 @@ __all__ = [
     "plan_route_priority_convergence",
     "plan_route_priority_moves",
     "parse_release1_config",
-    "parse_structural_config",
     "prepare_payload_nft_scaffold_once",
     "project_device_bindings",
     "realize_direct_device_path_routes",
