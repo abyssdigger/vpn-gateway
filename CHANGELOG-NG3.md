@@ -4,6 +4,28 @@ This log records **major verified steps** in the active NG3 lineage, not individ
 reviews, experiments or transient implementation details. Requirements, architecture and
 evidence remain authoritative in their own artifacts.
 
+
+## 2026-11-23 — Release development and implementation fulfillment made explicit
+
+NG3 now has an accepted release-based development branch under `VPNG-D001-R3*`. Actual
+product releases must have a project release-numbering/accounting/publication method, a
+source-state identity, a prerelease requirement-fulfillment review and a separate subsequent
+release decision. The current pre-first-release development state remains intentionally free
+of release-candidate/version discipline under `VPNG-D001-R3.C1`; no `VERSION` file or
+actual release candidate is created by this change.
+
+Structured architecture now records `full`, `partial` or `none` on every component
+requirement edge. This exposes the previously coarse A.011 state precisely: supported
+operator/control wiring is incomplete for `VPNG-U004-R5/R5.R1`, and the finite-cadence
+periodic confirmation required by `VPNG-U004-R5.R4` is not materialized. A.008 also records
+release-version status publication as `none` until an actual release is prepared.
+
+Canonical component headings now use bracketed IDs such as `[A.011]`; traceability guards
+check Annex placement, per-edge materialization state and complete component-to-file edges.
+The same block repaired C.010 Annex placement, stale Annex-C notation, missing manifest edges
+and shared E.002/E.004 host-routing trace. Acceptance review:
+`design/reviews/NG3-2026-11-23-release-fulfillment-methodology-review.md`.
+
 ## 2026-11-22 — Aggressive host-routing continuous Manager materialized
 
 E.003 `AggressiveHostRoutingManager` now has production continuous ownership. Initial

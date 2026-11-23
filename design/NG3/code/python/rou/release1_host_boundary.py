@@ -1,7 +1,8 @@
-"""Release-1 config -> postponed aggressive host-routing prototype intent.
+"""Release-1 config -> aggressive host-routing evidence-plan intent.
 
-The historical module name is retained only for the executable aggressive-helper evidence
-path. The alpha runtime does not import this module for Release-1 peaceful host routing.
+The historical module name is retained for the executable aggressive-routing evidence path.
+The current peaceful runtime does not import this module; production aggressive ownership is
+E.003/E.004.
 """
 
 from __future__ import annotations

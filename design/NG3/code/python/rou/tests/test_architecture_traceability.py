@@ -20,6 +20,7 @@ REQUIREMENT_STATUSES = (
     "postponed",
     "permanent",
 )
+MATERIALIZATION_STATUSES = ("full", "partial", "none")
 
 
 def requirement_nodes() -> tuple[dict[str, object], ...]:
@@ -58,13 +59,21 @@ def requirement_nodes() -> tuple[dict[str, object], ...]:
     return tuple(result)
 
 
+def annex_text() -> str:
+    text = ARCHITECTURE.read_text(encoding="utf-8")
+    marker = "# Annex A. STACK components"
+    if marker not in text:
+        raise AssertionError("canonical Annex A marker missing")
+    return text[text.index(marker):]
+
+
 def declared_python_implementations() -> tuple[tuple[str, Path], ...]:
-    lines = ARCHITECTURE.read_text(encoding="utf-8").splitlines()
+    lines = annex_text().splitlines()
     current_spec = None
     in_implementation = False
     result = []
     for line in lines:
-        heading = re.match(r"^## ([A-G]\.\d{3})\s+", line)
+        heading = re.match(r"^## \[([A-G]\.\d{3})\]\s+", line)
         if heading:
             current_spec = heading.group(1)
             in_implementation = False
@@ -117,28 +126,48 @@ def trace_manifest() -> tuple[dict[str, tuple[str, ...]], dict[str, str]]:
 
 
 def component_specs() -> dict[str, str]:
-    text = ARCHITECTURE.read_text(encoding="utf-8")
-    matches = list(re.finditer(r"^## ([A-G]\.\d{3})\s+.+$", text, re.MULTILINE))
-    result = {}
+    text = annex_text()
+    matches = list(
+        re.finditer(r"^## \[([A-G]\.\d{3})\]\s+.+$", text, re.MULTILINE)
+    )
+    result: dict[str, str] = {}
     for index, match in enumerate(matches):
+        spec_id = match.group(1)
+        if spec_id in result:
+            raise AssertionError(f"duplicate canonical component spec: {spec_id}")
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
-        result[match.group(1)] = text[match.start():end]
+        result[spec_id] = text[match.start():end]
     return result
 
 
-def partial_component_names() -> set[str]:
-    text = ARCHITECTURE.read_text(encoding="utf-8")
-    return set(
-        re.findall(
-            r"^\s*\d+\. \x60@?([A-Za-z][A-Za-z0-9]+) <partial>\x60",
-            text,
-            re.MULTILINE,
-        )
-    )
+def component_requirement_edges(body: str) -> tuple[tuple[str, str], ...]:
+    result: list[tuple[str, str]] = []
+    in_edges = False
+    for line in body.splitlines():
+        if re.match(
+            r"^\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*$",
+            line,
+        ):
+            in_edges = True
+            continue
+        if not in_edges:
+            continue
+        if line.startswith("- \x60VPNG-"):
+            match = re.match(
+                r"^- \x60(VPNG-[^\x60]+)\x60 — \[\x60(full|partial|none)\x60\]$",
+                line,
+            )
+            if match is None:
+                raise AssertionError(f"requirement edge lacks materialization status: {line}")
+            result.append((match.group(1), match.group(2)))
+            continue
+        if not line.strip() or line.startswith("**"):
+            in_edges = False
+    return tuple(result)
 
 
 def component_name(body: str) -> str:
-    heading = re.match(r"^## [A-G]\.\d{3}\s+([^\n]+)", body)
+    heading = re.match(r"^## \[[A-G]\.\d{3}\]\s+([^\n]+)", body)
     if heading is None:
         raise AssertionError("component spec has no canonical heading")
     return heading.group(1).strip()
@@ -249,32 +278,63 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
                         r"\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*",
                     )
 
-    def test_every_partial_component_explains_implementation_gap(self):
-        partial = partial_component_names()
-        specs = component_specs()
-        by_name = {component_name(body): (spec_id, body) for spec_id, body in specs.items()}
-        self.assertTrue(partial)
-        for name in partial:
-            with self.subTest(component=name):
-                self.assertIn(name, by_name)
-                _, body = by_name[name]
-                self.assertIn("**Implementation status:** `<partial>`", body)
+    def test_component_ids_are_unique_and_match_annex(self):
+        text = annex_text()
+        current_annex = None
+        seen: set[str] = set()
+        for line in text.splitlines():
+            annex = re.match(r"^# Annex ([A-G])\.", line)
+            if annex:
+                current_annex = annex.group(1)
+                continue
+            heading = re.match(r"^## \[([A-G]\.\d{3})\]\s+", line)
+            if heading:
+                spec_id = heading.group(1)
+                self.assertNotIn(spec_id, seen)
+                seen.add(spec_id)
+                self.assertIsNotNone(current_annex)
+                self.assertEqual(current_annex, spec_id[0])
+        self.assertEqual(set(component_specs()), seen)
 
-    def test_every_requirement_bearing_materialized_component_has_code_trace(self):
+    def test_every_requirement_edge_has_materialization_status(self):
+        specs = component_specs()
+        self.assertTrue(specs)
+        for spec_id, body in specs.items():
+            if re.search(
+                r"\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*",
+                body,
+            ):
+                with self.subTest(spec=spec_id):
+                    self.assertTrue(component_requirement_edges(body))
+
+    def test_non_full_requirement_edges_explain_the_gap(self):
+        for spec_id, body in component_specs().items():
+            edges = component_requirement_edges(body)
+            non_full = [edge for edge in edges if edge[1] != "full"]
+            if non_full:
+                with self.subTest(spec=spec_id):
+                    self.assertRegex(
+                        body,
+                        r"\*\*Пробел(?:ы)? материализации:\*\*",
+                    )
+
+    def test_component_local_implementation_edges_are_in_full_manifest(self):
+        mapping, _ = trace_manifest()
+        for spec_id, path in declared_python_implementations():
+            rel = str(path.relative_to(ROOT))
+            with self.subTest(spec=spec_id, path=rel):
+                self.assertIn(rel, mapping)
+                self.assertIn(spec_id, mapping[rel])
+
+    def test_every_materialized_component_has_code_trace(self):
         mapping, _ = trace_manifest()
         reverse: dict[str, set[str]] = {}
         for path, targets in mapping.items():
             for spec_id in targets:
                 reverse.setdefault(spec_id, set()).add(path)
-        partial = partial_component_names()
         for spec_id, body in component_specs().items():
-            if (
-                re.search(
-                    r"\*\*(?:Implements|Implements / supports|Supports implementation of):\*\*",
-                    body,
-                )
-                and component_name(body) not in partial
-            ):
+            edges = component_requirement_edges(body)
+            if any(status in {"full", "partial"} for _, status in edges):
                 with self.subTest(spec=spec_id):
                     self.assertIn(spec_id, reverse)
                     self.assertTrue(reverse[spec_id])

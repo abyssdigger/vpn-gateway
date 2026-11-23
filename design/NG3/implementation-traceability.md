@@ -8,13 +8,19 @@ This manifest is the exhaustive code-to-architecture edge for the current Python
 
 A production unit without a normal requirement path may appear only under `Architecture debt` with an explicit reason. Such an entry is a visible finding, not an accepted substitute for requirements.
 
-## Trace: `A.001`
+## Trace: `A.001`, `E.001`
 
 - `design/NG3/code/python/rou/alpha_runtime.py`
+
+## Trace: `A.001`
+
 - `design/NG3/code/python/rou/controller_restart.py`
+- `design/NG3/code/python/rou/instance_lock.py`
+
+## Trace: `A.001`, `B.001`, `C.007`, `C.009`
+
 - `design/NG3/code/python/rou/controller_startup.py`
 - `design/NG3/code/python/rou/controller_stop.py`
-- `design/NG3/code/python/rou/instance_lock.py`
 
 ## Trace: `A.002`
 
@@ -191,14 +197,20 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/host_publication_policy.py`
 - `design/NG3/code/python/rou/linux_host_publication.py`
 
-## Trace: `E.002`
+## Trace: `E.002`, `E.004`
 
 - `design/NG3/code/python/rou/host_managed_routing.py`
-- `design/NG3/code/python/rou/host_routing_contribution.py`
 - `design/NG3/code/python/rou/linux_host_managed_routing.py`
 - `design/NG3/code/python/rou/linux_host_managed_routing_backend.py`
-- `design/NG3/code/python/rou/release1_host_boundary.py`
+
+## Trace: `E.002`
+
+- `design/NG3/code/python/rou/host_routing_contribution.py`
 - `design/NG3/code/python/rou/release1_host_route_helper.py`
+
+## Trace: `E.004`
+
+- `design/NG3/code/python/rou/release1_host_boundary.py`
 
 ## Architecture debt
 
