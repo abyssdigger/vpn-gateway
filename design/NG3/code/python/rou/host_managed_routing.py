@@ -1,9 +1,8 @@
 """Pure ordinary-host route-set projection shared by host-routing helpers.
 
 This layer only derives which remote prefixes and Profile-SNAT identities may require host
-reachability. It does not choose precedence/ownership semantics: the Release-1 peaceful
-helper and postponed aggressive helper lower the same route-set through different Linux
-ordering/lifecycle contracts.
+reachability. It does not choose precedence/ownership semantics: the Release-1 peaceful helper and the current aggressive host-routing path lower the same
+route-set through different Linux ordering/lifecycle contracts.
 
 Profile permission and established-flow affinity remain inside the managed domain.
 """
