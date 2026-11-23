@@ -20,9 +20,9 @@ tests and experiment scripts.
 
 The pass found real hygiene debt, but no evidence of a broad unreachable-code problem.
 
-The first cleanup slice is implemented through code head
-`b40762103dcc6ebb184d3236dc6e6dcfe9373654`. Full CI is still running at the time this
-review record is written, so this audit is not yet a completed development block.
+The cleanup has continued beyond the first slice. F8 and the direct F10 finding are now
+implemented; F9 documentation work and F11 superseded-convergence evidence migration remain
+open, so this audit is still not a completed development block.
 
 ## Findings and dispositions
 
@@ -137,23 +137,24 @@ unbounded retry loops.
 This finding does not claim compiler-grade whole-program reachability proof; remaining
 symbol/call-site review continues under the same audit.
 
-### F8 — repeated IP port bounds are a real magic-value duplication
+### F8 — repeated IP port bounds were a real magic-value duplication
 
 **Decision:** accepted.  
-**Resolution:** open cleanup finding.
+**Resolution:** fixed.
 
-The literal bounds `1..65535` are independently encoded in at least:
+The same IP transport-port invariant had been independently encoded as literal `1..65535`
+checks across configuration, semantic policy, observation and Linux-lower code.
 
-- `port_bundle.py`;
-- `local_integration_policy.py`;
-- `local_publication_policy.py`;
-- `host_publication_policy.py`;
-- `release1_config.py`;
-- `linux_host_publication.py`;
-- `linux_device_firewall.py`.
+A small technical primitive `ip_port.py` now owns:
 
-The next cleanup unit should introduce one canonical port-bound definition/validator without
-creating reverse dependencies between semantic and Linux-lower modules.
+- `IP_PORT_MIN`;
+- `IP_PORT_MAX`;
+- `is_ip_port()`.
+
+Callers keep their context-specific diagnostics and policy semantics; only the scalar range
+invariant is shared. This avoids both magic-value drift and a larger artificial utility
+abstraction. The new production unit is explicitly traced to the component scopes that
+consume the invariant.
 
 ### F9 — code-level documentation is systematically incomplete
 
@@ -174,15 +175,59 @@ pass should define and apply a useful boundary:
 - trivial immutable data carriers may rely on field names/type contracts when the meaning is
   already unambiguous.
 
-### F10 — remaining unused-symbol and one-call-site audit is not yet complete
+### F10 — symbol-level reachability and one-call-site audit found one test-only production API
 
-**Decision:** unresolved within this cycle slice.
+**Decision:** accepted.  
+**Resolution:** fixed for the direct finding; follow-up superseded-convergence finding split
+out below.
 
-Module-level production caller inventory is complete. Symbol-level call-site classification
-is only partially complete; therefore this review does not yet claim that every unused
-private/public symbol, local constant or single-caller function has been eliminated.
+The audit covered all current production modules and classified low-occurrence top-level
+functions/classes/constants against local callers, production imports, current evidence use
+and architecture-facing API contracts.
 
-The next CDC should continue from this finding rather than repeating the module inventory.
+`config.parse_structural_config()` was the clear production/test leakage: its own docstring
+said it existed for isolated structural tests, while the canonical human-facing
+ConfigurationAdapter is `release1_config.py` and production normalization already calls the
+lower `_parse_structural_root()` directly.
+
+The wrapper was moved to test support and removed from the production package/export facade.
+
+Low production caller count alone was not used as a deletion rule. In particular,
+`restart_controller_once()` remains because `restart` is an explicit A.001
+ProductLifecycleControl API even though the current alpha does not call it internally.
+
+No additional unused private helper/constant layer was found by the completed symbol pass.
+
+### F11 — superseded per-owner convergence APIs remain coupled to historical live evidence
+
+**Decision:** accepted.  
+**Resolution:** open cleanup finding; do not delete before evidence migration.
+
+The current runtime converges nft policy through the unified structural
+`NetworkPolicyEnforcer` / `StructuralPolicyTransaction`. The following older orchestration
+APIs have no current production caller:
+
+- `converge_device_firewall_step_once()`;
+- `converge_payload_nat_step_once()`;
+- `converge_composite_nft_step_once()`.
+
+They survive because dedicated unit/integration evidence still invokes them. Their modules
+also contain lower primitives that current code still reuses, notably physical snapshot types
+and `apply_composite_nft_step()`.
+
+Deleting these modules wholesale would therefore both break current Drivers and discard live
+NAT/Device-firewall evidence. The safe cleanup sequence is:
+
+1. move/retain the genuinely current lower snapshot/dispatch primitives at their proper
+   Driver/structural boundary;
+2. migrate the dedicated live NAT and Device-firewall convergence evidence to the current
+   structural Enforcer path (the present structural integration does not exercise those
+   desired owners);
+3. remove the superseded per-owner orchestration types/functions/tests and obsolete workflow
+   steps;
+4. rerun full structural/live evidence.
+
+This is a component/evidence migration, not a mechanical dead-code deletion.
 
 ## Requirement / architecture impact
 
