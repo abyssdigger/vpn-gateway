@@ -348,7 +348,7 @@ After=vpn-gate-alpha.service
 Type=simple
 NetworkNamespacePath=/run/netns/vpn-gate-alpha
 EnvironmentFile=/etc/vpn-gate-alpha/openconnect-qa.env
-ExecStart=/bin/sh -c 'printf "%s\\n" "$QA_OC_PASSWORD" | exec /usr/sbin/openconnect --non-inter --passwd-on-stdin --user=qa --no-dtls --interface=vpn-corp --script=/usr/lib/vpn-gate-alpha/openconnect-policy-neutral.sh --servercert={pin} https://198.19.253.2:4443'
+ExecStart=/bin/sh -c 'printf "%%s\\n" "$QA_OC_PASSWORD" | exec /usr/sbin/openconnect --non-inter --passwd-on-stdin --user=qa --no-dtls --interface=vpn-corp --script=/usr/lib/vpn-gate-alpha/openconnect-policy-neutral.sh --servercert={pin} https://198.19.253.2:4443'
 Restart=no
 """,
         )
