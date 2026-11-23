@@ -106,11 +106,9 @@ A production unit without a normal requirement path may appear only under `Archi
 
 ## Trace: `C.003`
 
-- `design/NG3/code/python/rou/composite_nft_mutation.py`
 - `design/NG3/code/python/rou/composite_nft_plan.py`
 - `design/NG3/code/python/rou/composite_nft_policy.py`
 - `design/NG3/code/python/rou/device_firewall_compare.py`
-- `design/NG3/code/python/rou/device_firewall_mutation.py`
 - `design/NG3/code/python/rou/device_firewall_structure.py`
 - `design/NG3/code/python/rou/iproute_priority_backend.py`
 - `design/NG3/code/python/rou/linux_composite_nft.py`
@@ -133,7 +131,6 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/nft_scaffold_enforcer.py`
 - `design/NG3/code/python/rou/payload_forward_compare.py`
 - `design/NG3/code/python/rou/payload_forward_observation.py`
-- `design/NG3/code/python/rou/payload_nat_mutation.py`
 - `design/NG3/code/python/rou/payload_nat_observation.py`
 - `design/NG3/code/python/rou/payload_routing_compare.py`
 - `design/NG3/code/python/rou/probe_local_mutation.py`

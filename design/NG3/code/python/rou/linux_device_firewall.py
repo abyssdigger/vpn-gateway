@@ -1,4 +1,4 @@
-"""Linux nft Driver for bounded guarded Device-firewall mutation."""
+"""Linux nft Driver for Device-firewall observation and mutation primitives."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from .device_firewall_desired import (
     DeviceFirewallChainSpec,
     DeviceFirewallRuleSpec,
 )
-from .device_firewall_mutation import DeviceFirewallPhysicalSnapshot
 from .device_firewall_structure import (
     DEVICE_FIREWALL_CHILD_COMMENT,
     DEVICE_FIREWALL_FALLTHROUGH_COMMENT,
@@ -18,10 +17,22 @@ from .device_firewall_structure import (
     DEVICE_FIREWALL_RULE_COMMENT,
     DeviceFirewallRuleAction,
 )
+from .interface_identity import InterfaceIdentity
 from .interface_inventory import parse_ip_link_inventory
 from .ip_port import is_ip_port
 from .linux_nft_scaffold import NftScriptRunner
-from .nft_namespace_inventory import parse_nft_namespace_ruleset
+from .nft_namespace_inventory import (
+    NftNamespaceObservation,
+    parse_nft_namespace_ruleset,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceFirewallPhysicalSnapshot:
+    """Stable link-generation bracket plus the corresponding nft observation."""
+
+    observation: NftNamespaceObservation
+    interfaces: tuple[InterfaceIdentity, ...]
 
 
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -29,6 +40,8 @@ _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 @dataclass(slots=True)
 class LinuxDeviceFirewallDriver:
+    """Observe and mutate the owned Device-firewall nft representation."""
+
     runner: NftScriptRunner
     namespace: str
 

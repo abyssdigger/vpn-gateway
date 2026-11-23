@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
-from .composite_nft_mutation import apply_composite_nft_step
+from .composite_nft_plan import CompositeNftMutationStep, CompositeNftStepKind
 from .composite_nft_policy import (
     CompositeNftDesiredState,
     CompositeNftPolicyComparison,
@@ -605,9 +605,49 @@ def _apply_step(
         backend.add_rule(step.desired_rule)
     elif step.kind is StructuralPolicyStepKind.APPLY_NFT_STEP:
         assert step.nft_step is not None
-        apply_composite_nft_step(backend, step.nft_step)
+        _apply_composite_nft_step(backend, step.nft_step)
     else:
         raise ValueError(f"unsupported structural step {step.kind!r}")
+
+
+def _apply_composite_nft_step(
+    backend: StructuralPolicyMutationBackend,
+    step: CompositeNftMutationStep,
+) -> None:
+    """Dispatch one planned nft-owner mutation through the structural Backend."""
+
+    if step.kind is CompositeNftStepKind.DELETE_PROFILE_RULE:
+        assert step.handle is not None
+        backend.delete_profile_rule(step.handle)
+    elif step.kind is CompositeNftStepKind.ADD_PROFILE_RULE:
+        assert step.profile_rule is not None
+        backend.add_profile_rule(step.profile_rule)
+    elif step.kind is CompositeNftStepKind.DELETE_DEVICE_JUMP:
+        assert step.handle is not None
+        backend.delete_device_jump(step.handle)
+    elif step.kind is CompositeNftStepKind.DELETE_DEVICE_CHAIN:
+        assert step.chain_name is not None
+        backend.delete_device_child_chain(step.chain_name)
+    elif step.kind is CompositeNftStepKind.CREATE_DEVICE_CHAIN:
+        assert step.device_chain is not None
+        backend.create_device_chain(step.device_chain)
+    elif step.kind is CompositeNftStepKind.DELETE_NAT_RULE:
+        assert step.handle is not None
+        backend.delete_nat_rule(step.handle)
+    elif step.kind is CompositeNftStepKind.ADD_NAT_RULE:
+        assert step.nat_rule is not None
+        backend.add_nat_rule(step.nat_rule)
+    elif step.kind is CompositeNftStepKind.APPLY_LOCAL_PUBLICATION:
+        assert step.local_publication_step is not None
+        backend.apply_local_publication_step(step.local_publication_step)
+    elif step.kind is CompositeNftStepKind.APPLY_LOCAL_INTEGRATION:
+        assert step.local_integration_step is not None
+        backend.apply_integration_local_step(step.local_integration_step)
+    elif step.kind is CompositeNftStepKind.APPLY_PROBE_LOCAL:
+        assert step.probe_local_step is not None
+        backend.apply_probe_local_step(step.probe_local_step)
+    else:
+        raise ValueError(f"unsupported composite nft step {step.kind!r}")
 
 
 def structural_policy_distance(value: StructuralPolicyComparison) -> int:
