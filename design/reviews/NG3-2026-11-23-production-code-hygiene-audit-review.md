@@ -1,6 +1,6 @@
 # NG3 2026-11-23 — production Python code-hygiene audit
 
-**Status:** in progress  
+**Status:** complete  
 **Scope:** current NG3 production Python under `design/NG3/code/python/rou/`, excluding
 tests and experiment scripts.
 
@@ -18,13 +18,15 @@ tests and experiment scripts.
 
 ## Current verdict
 
-The pass found real hygiene debt, but no evidence of a broad unreachable-code problem.
+The production-Python hygiene audit is complete for the requested scope. The pass found real
+cleanup debt, but no broad unreachable-code or non-terminating-loop problem. Findings F1-F11
+are resolved, or explicitly retained where a low call count corresponds to a real
+architecture/evidence API.
 
-The cleanup has continued beyond the first slice. F8 and the direct F10 finding are
-implemented; architecture-facing F9 documentation has started; F11 live evidence has been
-migrated to the current structural Enforcer, but the superseded orchestration deletion and
-the remaining bounded F9 Driver pass are still open. This audit is therefore not yet a
-completed development block.
+The final tree removes superseded production surfaces, centralizes the duplicated port
+invariant, aligns technical boundaries with the accepted component model, and documents the
+non-trivial lower Machinery contracts without adding ritual comments to obvious data
+carriers. No unresolved hygiene finding remains in the audited scope.
 
 ## Findings and dispositions
 
@@ -122,7 +124,8 @@ Single call count alone is not treated as sufficient deletion criterion.
 
 ### F7 — no literal dead branches or non-terminating convergence loops were found
 
-**Decision:** accepted current evidence; continue structural reachability review.
+**Decision:** accepted.  
+**Resolution:** closed by the completed mechanical and symbol/call-site passes.
 
 A mechanical source pass over all production modules found no literal dead constructs such as
 `if False`, `while False`, `if 0` or `while 0`.
@@ -136,8 +139,9 @@ Both have explicit terminal returns for confirmed/failure/regression conditions 
 strictly decreasing distance/rank after every successful mutation step. They are not
 unbounded retry loops.
 
-This finding does not claim compiler-grade whole-program reachability proof; remaining
-symbol/call-site review continues under the same audit.
+This finding does not claim compiler-grade whole-program reachability proof. The completed
+F10 symbol/call-site pass supplied the structural follow-up and found no additional
+unreachable private helper/constant layer beyond the explicitly resolved findings.
 
 ### F8 — repeated IP port bounds were a real magic-value duplication
 
@@ -158,27 +162,33 @@ invariant is shared. This avoids both magic-value drift and a larger artificial 
 abstraction. The new production unit is explicitly traced to the component scopes that
 consume the invariant.
 
-### F9 — useful code-level documentation boundary is only partially materialized
+### F9 — useful code-level documentation boundary was incompletely materialized
 
 **Decision:** accepted.  
-**Resolution:** partial; lower Driver layer still requires the same bounded pass.
+**Resolution:** fixed.
 
-The audit rejected a blanket "docstring every enum/dataclass" rewrite. The useful boundary is:
+The audit rejected a blanket "docstring every enum/dataclass" rewrite. The applied boundary is:
 
 - architecture-facing component/Machinery classes and public callable contracts require local
   responsibility/semantic documentation;
 - non-obvious algorithms require invariant/failure-semantics documentation;
-- trivial immutable data carriers may rely on field names/type contracts when their meaning
-  is already unambiguous.
+- trivial immutable data carriers and obvious one-line lower delegates may rely on names and
+  type contracts.
 
-The first architecture-facing gaps have now been documented locally, including
+The first pass documented the upper architecture-facing gaps, including
 `AvailabilityManager`, `ProtectiveModeManager`, `AggressiveHostRoutingManager`,
 aggressive E.004 build/activation/deactivation operations, `LinuxStructuralPolicyBackend`,
-`LinuxCompositeNftBackend`, and the host-managed-routing Driver/convergence operations.
+`LinuxCompositeNftBackend`, and host-managed-routing Driver/convergence operations.
 
-This materially improves the semantic boundary documentation without adding ritual comments
-to data carriers. The remaining work is a bounded pass over lower Driver/Reader/Executor
-classes and non-trivial public operations that still rely only on module-level prose.
+The closing bounded pass covered the remaining meaningful lower boundary: fresh-observation
+Readers/Drivers, owned-scope mutation Drivers, composed lower Backends, and non-trivial
+`observe`/`apply`/`replace`/`cleanup` operations. In particular it documented the
+forwarding-gate, nft scaffold/namespace, VPN-path observation, probe routing/execution,
+Device firewall, local publication/integration/probe, protective gate, aggressive escape
+guard, host publication/routing and stack-return-affinity boundaries.
+
+The pass intentionally did not add comments to self-evident data carriers or trivial
+`add/delete` delegation methods.
 
 ### F10 — symbol-level reachability and one-call-site audit found one test-only production API
 
@@ -203,46 +213,61 @@ ProductLifecycleControl API even though the current alpha does not call it inter
 
 No additional unused private helper/constant layer was found by the completed symbol pass.
 
-### F11 — superseded per-owner convergence APIs remain after live-evidence migration
+### F11 — superseded per-owner convergence APIs remained after live-evidence migration
 
 **Decision:** accepted.  
-**Resolution:** evidence migration started and proven; orchestration deletion remains open.
+**Resolution:** fixed.
 
 The current runtime converges nft policy through the unified structural
-`NetworkPolicyEnforcer` / `StructuralPolicyTransaction`. The following older orchestration
-APIs have no current production caller:
+`NetworkPolicyEnforcer` / `StructuralPolicyTransaction`. The three obsolete orchestration
+entry points have now been removed:
 
 - `converge_device_firewall_step_once()`;
 - `converge_payload_nat_step_once()`;
 - `converge_composite_nft_step_once()`.
 
-They survive because dedicated unit/integration evidence still invokes them. Their modules
-also contain lower primitives that current code still reuses, notably physical snapshot types
-and `apply_composite_nft_step()`.
+The cleanup retained the real lower technical primitives while removing the duplicate
+convergence ownership:
 
-The combined live Profile + Device firewall + NAT + local-publication integration has now
-been migrated from `converge_composite_nft_step_once()` to the current
-`StructuralPolicyTransaction` using an nft-only structural desired state. The migrated CI
-step passed, proving those owners through the current Enforcer path before historical
-orchestration is removed.
+1. `DeviceFirewallPhysicalSnapshot`, `PayloadNatPhysicalSnapshot` and
+   `CompositeNftPhysicalSnapshot` moved beside their actual Linux Driver/Backend
+   observation implementations;
+2. composite nft step dispatch moved into the structural Enforcer implementation boundary;
+3. the three superseded orchestration modules, their old unit tests and their dedicated
+   Device/NAT integration tests were removed;
+4. the two redundant workflow steps were removed while the migrated combined
+   Profile + Device firewall + NAT + local-publication structural integration remains;
+5. package exports and implementation traceability were cleaned accordingly.
 
-Full NG3 Python workflow `45120631463` on code head
-`76c44f3640f62c900bd72d61e06a3b6b9b456f6d` completed **SUCCESS**; all 21 jobs passed,
-including `unit`, `linux-payload-nat`, `linux-payload-forward`,
-`linux-alpha-smoke` and the migrated combined structural live test.
+The first workflow publication exposed a YAML line-join introduced while deleting a workflow
+step; it was corrected immediately in `3cfeac0dc34966eb3e9e626c3b16532e84f018f9`.
+The resulting F11 tree then passed the full NG3 Python workflow
+`45130205311`.
 
-The remaining safe cleanup sequence is now narrow:
+After the closing F9 documentation pass, full NG3 Python workflow `45130648285` on head
+`f99e2e56948493c1809f7234b282545885bdbd70` completed **SUCCESS, 21/21 jobs**.
+This includes `unit`, `linux-payload-nat`, `linux-payload-forward`,
+`linux-alpha-smoke`, `linux-debian12-routed-veth` and the migrated structural live
+evidence.
 
-1. move the three physical snapshot types to their actual Linux Driver/Backend modules and
-   retain only genuinely current observation/mutation primitives;
-2. move the composite nft step dispatcher into the structural Enforcer boundary;
-3. remove the three superseded per-owner orchestration modules and their unit/dedicated
-   integration tests;
-4. remove the two now-redundant dedicated workflow steps while keeping the migrated combined
-   structural live evidence;
-5. update package exports/traceability and rerun the full workflow.
+## Final implementation review
 
-This is no longer blocked on evidence design; it is an atomic code/evidence cleanup unit.
+The final implementation was checked against current requirements, `architecture-ng.md`
+and the accepted component model.
+
+- **Requirement semantics:** unchanged. The audit removed implementation debt and did not
+  change user-visible policy semantics or requirement status.
+- **C.003 ownership:** preserved and clarified. Desired-state convergence, safety barriers,
+  strict progress and postcondition verification remain in the structural Enforcer.
+- **Lower technical boundary:** Drivers/Readers/Backend compositions only observe or execute
+  already-selected technical operations; the deleted per-owner modules no longer duplicate
+  convergence ownership.
+- **Evidence:** current combined structural integration exercises the surviving path, and the
+  final full workflow is green.
+- **Scope control:** the branch delta against the pre-audit `main` contains only the audit,
+  its tests/evidence/workflow adjustments, traceability update and this review artifact.
+
+No review finding remains open.
 
 ## Requirement / architecture impact
 
