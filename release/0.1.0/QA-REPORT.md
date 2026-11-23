@@ -1,8 +1,8 @@
 # VPN-GATE 0.1.0 release-candidate QA report
 
 **Release scope:** Release-1 / `0.1.0`  
-**Tested source head:** `bad3c071ffde87315de686e35e99666afdcd3795`  
-**Workflow run:** `45253823627`  
+**Tested release-set head:** `8a299116e492ee8462b870bd20f9f0f643e9a941`  
+**Workflow run:** `45258483111`  
 **QA job:** `release-0-1-0-deployment-qa`  
 **QA job result:** **PASS**
 
@@ -21,12 +21,18 @@ The checksum file was verified before deployment.
 The validated GitHub Actions artifact is:
 
 - artifact name: `vpn-gate-0.1.0-candidate`;
-- artifact ID: `14856894209`;
-- uploaded artifact size: **313846 bytes**;
+- artifact ID: `14859447074`;
+- uploaded artifact size: **416194 bytes**;
 - uploaded artifact ZIP digest:
-  `sha256:c8ed09312e0af7faf91df7c7e1e7bba472c0997f85fec7a220452cac0654eaaa`.
+  `sha256:566311fea9bcb33cefa72aaa3945d75de72d1aee3292821b68ddafe00f6f2a62`.
 
-The uploaded artifact contains the release tarball and its checksum file.
+Before deployment the workflow verified:
+
+- `vpn-gate-0.1.0.tar.gz: OK`;
+- `vpn-gate-0.1.0-project-snapshot.tar.gz: OK`.
+
+The uploaded artifact contains the product tarball/checksum, project-snapshot
+tarball/checksum, `QA-REPORT.md`, and `REQUIREMENTS-COVERAGE.md`.
 
 ## Environment
 
@@ -127,17 +133,22 @@ and remains deployment-specific.
 deployment boundary and provides working payload/lifecycle behavior with WireGuard, OpenConnect,
 and L2TP in the tested Debian 13 systemd environment.**
 
-The QA result is evidence for the tested source head only. A source change that affects bundle
-contents, installation, deployment integration, runtime behavior, or release-version presentation
-requires the applicable checks to be repeated.
+The QA result is evidence for the tested release-set head and may be carried across only a
+proved metadata-only change that cannot affect the tested bundle or project snapshot. Any source
+change that affects bundle contents, installation, deployment integration, runtime behavior,
+release-version presentation, requirements coverage, or project-snapshot contents requires the
+applicable checks to be repeated.
 
 
-## Applicability to final release metadata preparation
+## Release-record commit applicability
 
-The product-bundle build inputs validated by this report are intentionally unchanged during the
-subsequent release-metadata finalization. The added requirements coverage, project snapshot,
-release-asset builder, process records, and release-asset upload logic do not enter
-`vpn-gate-0.1.0.tar.gz`.
+This report records the complete release-set QA executed on
+`8a299116e492ee8462b870bd20f9f0f643e9a941`.
 
-The final fulfillment review is responsible for comparing the frozen release candidate with the
-tested product-bundle baseline and confirming that no bundle/runtime/deployment input changed.
+The commit that materializes this updated QA report on `release/0.1.0` changes only
+`release/0.1.0/QA-REPORT.md`. It does not change the product bundle, project-snapshot
+contents, requirements coverage, installer, deployment contract, runtime, or QA implementation.
+
+The final fulfillment review must verify that exact one-file difference before applying this QA
+result to the frozen post-report candidate. The normal release workflow also reruns on that
+candidate, providing an additional exact-candidate check.
