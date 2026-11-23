@@ -441,6 +441,31 @@ code
 каждый из них явно. File placement, import graph или имя Linux primitive сами по себе не
 считаются архитектурной traceability.
 
+
+
+Канонический heading component spec записывает стабильный ID в квадратных скобках, например
+`## [A.011] ProtectiveModeManager`. Обычное текстовое упоминание использует `A.011`.
+Если ID является текстом гиперссылки, допустима обычная Markdown-форма
+`[A.011](...)`; она не является каноническим spec heading.
+
+Каждая requirement-связь в блоках `Implements`, `Implements / supports` и
+`Supports implementation of` имеет явный статус материализации:
+
+- [`full`] — вся текущая архитектурная обязанность данного компонента по указанному R/C
+  материализована в production implementation и имеет требуемую для этой обязанности
+  implementation/evidence traceability;
+- [`partial`] — материализована только часть текущей архитектурной обязанности компонента;
+  конкретный отсутствующий остаток обязан быть явно описан в этом component spec;
+- [`none`] — production materialization текущей архитектурной обязанности компонента
+  отсутствует; component spec обязан явно назвать отсутствующую часть и применимый gate,
+  constraint или другую причину, если она существует.
+
+Этот статус относится только к вкладу данного компонента в R/C и не заменяет requirement
+status. Фактическое исполнение требования определяется по совокупности всех обязательных
+архитектурных вкладов с учетом применимых constraints. Изменение реализации внутри уже
+заявленного `full`, `partial` или `none` не требует редакции архитектуры, пока не
+меняется сам статус или архитектурная обязанность.
+
 ### 2.9.1. Stable evidence references
 
 Стабильная архитектура ссылается на executable/review evidence только через IDs из
@@ -669,7 +694,9 @@ returned to administrator control.
 `VPNG-D001-R1.R1.R3.R4.R1`, `VPNG-D001-R1.R1.R4`,
 `VPNG-D001-R1.R1.R6.R1`, `VPNG-D001-R1.R1.R6.R2`,
 `VPNG-D001-R1.R1.R7.R1`, `VPNG-D001-R1.R1.R8.R1`,
-`VPNG-D001-R1.R1.R8.R2`.
+`VPNG-D001-R1.R1.R8.R2`, `VPNG-D001-R3`, `VPNG-D001-R3.R1`,
+`VPNG-D001-R3.R1.R1`, `VPNG-D001-R3.R2`, `VPNG-D001-R3.R3`,
+`VPNG-D001-R3.C1`.
 
 **Architecture coverage:** the Space/component decomposition and `design/component-model.md`
 localize responsibilities and lower mechanism boundaries; §2.9 implementation trace,
@@ -678,7 +705,11 @@ trace/evidence; binding/interface generation contracts preserve cross-boundary i
 supported VPN applicability gates live in `VPN external ends`; §2.9.2 defines exact-contract
 lower reuse rather than generic frameworks; §2.9.3 defines the production-language boundary.
 Requirement semantic changes therefore require re-review of their indexed architecture
-coverage before implementation proceeds.
+coverage before implementation proceeds. Release-model process obligations
+`VPNG-D001-R3`, `.R1`, `.R2`, `.R3` and `.C1` are materialized by
+`PROJECT-CONVENTIONS.md` §10; runtime observability for `VPNG-D001-R3.R1.R1` belongs to
+A.008 and remains [`none`] until preparation of the first actual release permits and requires
+that implementation.
 
 **Evidence:** `EV-00010`.
 
@@ -780,7 +811,7 @@ Residents
 3. `PayloadTrafficManager` *Manager текущей semantic payload-policy среды: structural intent, binding projection, availability confirmation и effective path order.*
     1. `PayloadPolicyCalculator` *Pure Calculator structural payload policy из normalized intent и уже подтвержденных внешних фактов.*
     2. `AvailabilityPriorityCalculator` *Pure Calculator effective path order из current membership, availability problem state, active path и reserve semantics.*
-4. `@ProtectiveModeManager <partial>` *Manager явного защитного режима продукта: владеет запрошенным/подтвержденным состоянием режима, continuous confirmation и безопасным выходом.*
+4. `@ProtectiveModeManager` *Manager явного защитного режима продукта: владеет запрошенным/подтвержденным состоянием режима, continuous confirmation и безопасным выходом.*
 5. `AvailabilityProbeAgent` *Agent ongoing availability observation; планирует bounded checks и публикует normalized evidence, но не управляет наблюдаемой внешней доступностью.*
 6. `@RuntimeStatusAgent` *Agent current-only status composition из authoritative owner snapshots; не актуирует наблюдаемые domains.*
     1. `RuntimeStatusTextRenderer` *Direct Calculator, чисто преобразующий RuntimeStatusSnapshot в нормативный compact Devices/Profiles text report.*
@@ -1470,29 +1501,29 @@ Component diagram
 
 # Annex A. STACK components
 
-## A.001 ProductLifecycleControl
+## [A.001] ProductLifecycleControl
 
 Direct procedural Machinery, coordinating independent lifecycle operations and their dependency
 order without merging their ownership or cleanup into one technical method. It does not
 introduce a long-lived lifecycle Engine or independent lifecycle policy.
 
 **Implements:**
-- `VPNG-U004-R4.R4`
-- `VPNG-U004-R4.R5`
-- `VPNG-M001-R1`
-- `VPNG-M001-R1.R1`
-- `VPNG-M001-R1.R1.R1`
-- `VPNG-M001-R1.R1.R3`
-- `VPNG-M001-R1.R1.R4`
-- `VPNG-M001-R1.R1.R5`
-- `VPNG-M001-R1.R1.R6`
-- `VPNG-M001-R1.R1.R6.R1`
-- `VPNG-M001-R1.R1.R6.R2`
-- `VPNG-M001-R1.R1.R6.R3`
-- `VPNG-M001-R2.R1.R3`
-- `VPNG-M001-R2.R1.R4`
-- `VPNG-M001-R2.R1.R5`
-- `VPNG-D001-R1.R1.R1`
+- `VPNG-U004-R4.R4` — [`full`]
+- `VPNG-U004-R4.R5` — [`full`]
+- `VPNG-M001-R1` — [`full`]
+- `VPNG-M001-R1.R1` — [`full`]
+- `VPNG-M001-R1.R1.R1` — [`full`]
+- `VPNG-M001-R1.R1.R3` — [`full`]
+- `VPNG-M001-R1.R1.R4` — [`full`]
+- `VPNG-M001-R1.R1.R5` — [`full`]
+- `VPNG-M001-R1.R1.R6` — [`full`]
+- `VPNG-M001-R1.R1.R6.R1` — [`full`]
+- `VPNG-M001-R1.R1.R6.R2` — [`full`]
+- `VPNG-M001-R1.R1.R6.R3` — [`full`]
+- `VPNG-M001-R2.R1.R3` — [`full`]
+- `VPNG-M001-R2.R1.R4` — [`full`]
+- `VPNG-M001-R2.R1.R5` — [`full`]
+- `VPNG-D001-R1.R1.R1` — [`full`]
 
 **Constrained by:**
 - `VPNG-M001-R1.R1.C1`
@@ -1539,32 +1570,32 @@ Architectural decisions
 8. `Replaceable control surface`
    *CLI/systemd/socket/API являются deployment mechanisms вне component semantics. Alpha вправе не иметь distinct reload, если changed configuration применяется поддержанным restart path.*
 
-## A.002 ConfigurationAdapter
+## [A.002] ConfigurationAdapter
 
 Direct Adapter между внешним configuration representation и validated normalized domain
 intents. Он является единственной границей, где human-facing grammar превращается в
 semantic Device/Profile/binding/policy/availability contracts.
 
 **Implements:**
-- `VPNG-U001-R4.R1`
-- `VPNG-U001-R4.R2`
-- `VPNG-U001-R4.R3`
-- `VPNG-U001-R4.R4`
-- `VPNG-U001-R4.R5`
-- `VPNG-U001-R4.R4.R6.R2.R1`
-- `VPNG-U001-R4.R4.R6.R2.R5`
-- `VPNG-U001-R4.R4.R6.R3`
-- `VPNG-U001-R4.R4.R6.R4`
-- `VPNG-U001-R1.R3.C1.R1`
-- `VPNG-U002-R2.R1`
-- `VPNG-U002-R2.R2`
-- `VPNG-U002-R2.R3`
-- `VPNG-U002-R2.R4`
-- `VPNG-U002-R2.R5`
-- `VPNG-U004-R4.R1`
-- `VPNG-D001-R1.R1.R3.R1`
-- `VPNG-D001-R1.R1.R3.R2`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-U001-R4.R1` — [`full`]
+- `VPNG-U001-R4.R2` — [`full`]
+- `VPNG-U001-R4.R3` — [`full`]
+- `VPNG-U001-R4.R4` — [`full`]
+- `VPNG-U001-R4.R5` — [`full`]
+- `VPNG-U001-R4.R4.R6.R2.R1` — [`full`]
+- `VPNG-U001-R4.R4.R6.R2.R5` — [`full`]
+- `VPNG-U001-R4.R4.R6.R3` — [`full`]
+- `VPNG-U001-R4.R4.R6.R4` — [`full`]
+- `VPNG-U001-R1.R3.C1.R1` — [`full`]
+- `VPNG-U002-R2.R1` — [`full`]
+- `VPNG-U002-R2.R2` — [`full`]
+- `VPNG-U002-R2.R3` — [`full`]
+- `VPNG-U002-R2.R4` — [`full`]
+- `VPNG-U002-R2.R5` — [`full`]
+- `VPNG-U004-R4.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3.R2` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
 
 API
 
@@ -1594,23 +1625,23 @@ Architectural decisions
    *Device firewall rule имеет ровно один из трёх scopes: без `via` — все current paths Device; `via if <exact-ifname>` — current path этого Device с указанным exact interface name; `via peer <IPv4>` — current P2P path этого Device с указанным verified private/inner peer. Два вида `via` взаимоисключающи и не создают отдельного user-facing path object; peer не означает external VPN transport endpoint или payload address.*
 
 
-## A.003 AvailabilityDescriptionResolver
+## [A.003] AvailabilityDescriptionResolver
 
 Pure Calculator, превращающий Profile selection и соответствующий Device default в один
 конкретный subject-scoped availability description до runtime observation.
 
 **Implements:**
-- `VPNG-U003-R3.R6.R1`
-- `VPNG-U003-R3.R6.R3.R1`
-- `VPNG-U003-R3.R6.R3.R1.R1`
-- `VPNG-U003-R3.R6.R3.R1.R1.R1`
-- `VPNG-U003-R3.R6.R3.R1.R1.R2`
-- `VPNG-U003-R3.R6.R3.R1.R1.R3`
-- `VPNG-U003-R3.R6.R3.R1.R1.R4`
-- `VPNG-U003-R3.R6.R3.R2`
-- `VPNG-D001-R1.R1.R1`
-- `VPNG-D001-R1.R1.R3.R1`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-U003-R3.R6.R1` — [`full`]
+- `VPNG-U003-R3.R6.R3.R1` — [`full`]
+- `VPNG-U003-R3.R6.R3.R1.R1` — [`full`]
+- `VPNG-U003-R3.R6.R3.R1.R1.R1` — [`full`]
+- `VPNG-U003-R3.R6.R3.R1.R1.R2` — [`full`]
+- `VPNG-U003-R3.R6.R3.R1.R1.R3` — [`full`]
+- `VPNG-U003-R3.R6.R3.R1.R1.R4` — [`full`]
+- `VPNG-U003-R3.R6.R3.R2` — [`full`]
+- `VPNG-D001-R1.R1.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3.R1` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
 
 **Constrained by:**
 - `VPNG-U003-R3.R6.R3.R1.C2`
@@ -1634,36 +1665,36 @@ Architectural decisions
    *Если Profile явно требует Device default, а соответствующего валидного description нет, candidate configuration отклоняется до runtime materialization.*
 
 
-## A.004 PayloadTrafficManager
+## [A.004] PayloadTrafficManager
 
 Manager текущей semantic payload-policy projection. Он объединяет structural membership,
 baseline preference и bounded availability adaptation в одного writer'а effective payload
 policy.
 
 **Implements:**
-- `VPNG-U001-R1.R1`
-- `VPNG-U002-R2.R1`
-- `VPNG-U002-R2.R2`
-- `VPNG-U002-R2.R3`
-- `VPNG-U002-R2.R4`
-- `VPNG-U002-R2.R5`
-- `VPNG-U003-R3.R1`
-- `VPNG-U003-R3.R2`
-- `VPNG-U003-R3.R3`
-- `VPNG-U003-R3.R4`
-- `VPNG-U003-R3.R5`
-- `VPNG-U003-R3.R7`
-- `VPNG-U004-R4`
-- `VPNG-U004-R4.R1`
-- `VPNG-U004-R4.R2`
-- `VPNG-M001-R1.R1.R2`
-- `VPNG-M001-R1.R1.R3`
-- `VPNG-M001-R2.R1.R2`
-- `VPNG-M001-R2.R1.R4`
-- `VPNG-D001-R1.R1.R1`
-- `VPNG-D001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R5`
-- `VPNG-D001-R1.R1.R6`
+- `VPNG-U001-R1.R1` — [`full`]
+- `VPNG-U002-R2.R1` — [`full`]
+- `VPNG-U002-R2.R2` — [`full`]
+- `VPNG-U002-R2.R3` — [`full`]
+- `VPNG-U002-R2.R4` — [`full`]
+- `VPNG-U002-R2.R5` — [`full`]
+- `VPNG-U003-R3.R1` — [`full`]
+- `VPNG-U003-R3.R2` — [`full`]
+- `VPNG-U003-R3.R3` — [`full`]
+- `VPNG-U003-R3.R4` — [`full`]
+- `VPNG-U003-R3.R5` — [`full`]
+- `VPNG-U003-R3.R7` — [`full`]
+- `VPNG-U004-R4` — [`full`]
+- `VPNG-U004-R4.R1` — [`full`]
+- `VPNG-U004-R4.R2` — [`full`]
+- `VPNG-M001-R1.R1.R2` — [`full`]
+- `VPNG-M001-R1.R1.R3` — [`full`]
+- `VPNG-M001-R2.R1.R2` — [`full`]
+- `VPNG-M001-R2.R1.R4` — [`full`]
+- `VPNG-D001-R1.R1.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
+- `VPNG-D001-R1.R1.R6` — [`full`]
 
 API
 
@@ -1695,26 +1726,26 @@ Architectural decisions
    *Logical path связывается с current concrete endpoint generation; same ifname/new ifindex означает новый binding context и инвалидирует зависимые current facts.*
 
 
-## A.005 PayloadPolicyCalculator
+## [A.005] PayloadPolicyCalculator
 
 Pure Calculator structural payload semantics. Он строит allowed traffic/path policy из
 normalized Profile/Device intent и уже подтвержденных current bindings, не наблюдая Linux.
 
 **Implements:**
-- `VPNG-U001-R1.R4.R2.R1`
-- `VPNG-U001-R1.R4.R2.R1.R1`
-- `VPNG-U002-R2.R1`
-- `VPNG-U002-R2.R1.R1`
-- `VPNG-U002-R2.R1.R2`
-- `VPNG-U002-R2.R2`
-- `VPNG-U002-R2.R2.R1`
-- `VPNG-U002-R2.R3`
-- `VPNG-U002-R2.R3.R3`
-- `VPNG-U002-R2.R4`
-- `VPNG-U002-R2.R5`
-- `VPNG-U002-R2.R5.R1`
-- `VPNG-D001-R1.R1.R3.R1`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-U001-R1.R4.R2.R1` — [`full`]
+- `VPNG-U001-R1.R4.R2.R1.R1` — [`full`]
+- `VPNG-U002-R2.R1` — [`full`]
+- `VPNG-U002-R2.R1.R1` — [`full`]
+- `VPNG-U002-R2.R1.R2` — [`full`]
+- `VPNG-U002-R2.R2` — [`full`]
+- `VPNG-U002-R2.R2.R1` — [`full`]
+- `VPNG-U002-R2.R3` — [`full`]
+- `VPNG-U002-R2.R3.R3` — [`full`]
+- `VPNG-U002-R2.R4` — [`full`]
+- `VPNG-U002-R2.R5` — [`full`]
+- `VPNG-U002-R2.R5.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3.R1` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
 
 API
 
@@ -1741,24 +1772,24 @@ Architectural decisions
    *Ordered Device firewall intent может содержать не более одного rule-local path predicate. Rule без predicate применим ко всем current paths Device; `via if` применим только к current path с соответствующим exact ifname; `via peer` — только к current path с соответствующим verified private/inner peer fact. Это изменяет только область применимости rule и не создаёт Profile membership, destination или path eligibility.*
 
 
-## A.006 AvailabilityPriorityCalculator
+## [A.006] AvailabilityPriorityCalculator
 
 Pure Calculator effective path order из current structural membership, baseline order,
 Profile-local reserve roles, established availability problems и current active path.
 
 **Implements:**
-- `VPNG-U003-R3.R1`
-- `VPNG-U003-R3.R2`
-- `VPNG-U003-R3.R3`
-- `VPNG-U003-R3.R4`
-- `VPNG-U003-R3.R4.R1`
-- `VPNG-U003-R3.R4.R1.R1`
-- `VPNG-U003-R3.R7`
-- `VPNG-U003-R3.R8`
-- `VPNG-U003-R3.R8.R1`
-- `VPNG-U003-R3.R8.C1`
-- `VPNG-D001-R1.R1.R1`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-U003-R3.R1` — [`full`]
+- `VPNG-U003-R3.R2` — [`full`]
+- `VPNG-U003-R3.R3` — [`full`]
+- `VPNG-U003-R3.R4` — [`full`]
+- `VPNG-U003-R3.R4.R1` — [`full`]
+- `VPNG-U003-R3.R4.R1.R1` — [`full`]
+- `VPNG-U003-R3.R7` — [`full`]
+- `VPNG-U003-R3.R8` — [`full`]
+- `VPNG-U003-R3.R8.R1` — [`full`]
+- `VPNG-U003-R3.R8.C1` — [`full`]
+- `VPNG-D001-R1.R1.R1` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
 
 API
 
@@ -1779,21 +1810,21 @@ Architectural decisions
    *Одинаковый current input дает один результат; timers, probes, Linux metrics и hidden history не входят в Calculator.*
 
 
-## A.007 AvailabilityProbeAgent
+## [A.007] AvailabilityProbeAgent
 
 Agent ongoing availability observation. Он управляет расписанием/контекстом observation и
 публикует normalized evidence, но не управляет наблюдаемым remote availability property.
 
 **Implements:**
-- `VPNG-U003-R3.R6`
-- `VPNG-U003-R3.R6.R1`
-- `VPNG-U003-R3.R6.R2`
-- `VPNG-U003-R3.R6.R3`
-- `VPNG-U003-R3.R6.R3.R1`
-- `VPNG-M001-R2.R1.R3`
-- `VPNG-D001-R1.R1.R1`
-- `VPNG-D001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-U003-R3.R6` — [`full`]
+- `VPNG-U003-R3.R6.R1` — [`full`]
+- `VPNG-U003-R3.R6.R2` — [`full`]
+- `VPNG-U003-R3.R6.R3` — [`full`]
+- `VPNG-U003-R3.R6.R3.R1` — [`full`]
+- `VPNG-M001-R2.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
 
 API
 
@@ -1819,21 +1850,24 @@ Architectural decisions
    *Timers, current generation tokens и bounded in-flight diagnostics допустимы; unbounded observation history и durable retry journal не требуются.*
 
 
-## A.008 RuntimeStatusAgent
+## [A.008] RuntimeStatusAgent
 
 Agent, составляющий truthful current user-facing status из authoritative current projections
 других owners. Он не актуирует представляемые domains и не становится system-of-record.
 
 **Implements:**
-- `VPNG-M001-R2.R1`
-- `VPNG-M001-R2.R1.R1`
-- `VPNG-M001-R2.R1.R2`
-- `VPNG-M001-R2.R1.R3`
-- `VPNG-M001-R2.R1.R4`
-- `VPNG-D001-R1.R1.R1`
-- `VPNG-D001-R1.R1.R1.R1`
-- `VPNG-D001-R1.R1.R3.R1`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-M001-R2.R1` — [`full`]
+- `VPNG-M001-R2.R1.R1` — [`full`]
+- `VPNG-M001-R2.R1.R2` — [`full`]
+- `VPNG-M001-R2.R1.R3` — [`full`]
+- `VPNG-M001-R2.R1.R4` — [`full`]
+- `VPNG-D001-R1.R1.R1` — [`full`]
+- `VPNG-D001-R1.R1.R1.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3.R1` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
+- `VPNG-D001-R3.R1.R1` — [`none`]
+
+**Пробел материализации:** представление версии в текущем runtime/status еще не материализовано; до подготовки первого фактического выпуска это допускает `VPNG-D001-R3.C1`.
 
 API
 
@@ -1860,18 +1894,18 @@ Architectural decisions
 6. `No hidden Profile verdict model`
    *Более сильный aggregated ProfileState не вводится без отдельного requirement; current status достаточно truthful composition существующих owner projections.*
 
-## A.009 RuntimeStatusTextRenderer
+## [A.009] RuntimeStatusTextRenderer
 
 Direct Calculator, преобразующий один authoritative `RuntimeStatusSnapshot` в compact
 human-readable current-state report. Он не наблюдает kernel state, не хранит историю, не
 изменяет status semantics и не является configuration serializer.
 
 **Implements:**
-- `VPNG-M001-R2.R2`
-- `VPNG-M001-R2.R2.R1`
-- `VPNG-M001-R2.R2.R2`
-- `VPNG-M001-R2.R2.R3`
-- `VPNG-M001-R2.R2.R4`
+- `VPNG-M001-R2.R2` — [`full`]
+- `VPNG-M001-R2.R2.R1` — [`full`]
+- `VPNG-M001-R2.R2.R2` — [`full`]
+- `VPNG-M001-R2.R2.R3` — [`full`]
+- `VPNG-M001-R2.R2.R4` — [`full`]
 
 API
 
@@ -1895,25 +1929,25 @@ Implementation
 
     design/NG3/code/python/rou/runtime_status.py — pure text rendering from RuntimeStatusSnapshot plus atomic text publication.
 
-## A.010 OperationalLogAdapter
+## [A.010] OperationalLogAdapter
 
 Direct Adapter, переводящий semantic operational records компонентов VPN-GATE в logging
 facility текущего deployment. Он не является current-state owner, не заменяет
 `RuntimeStatusAgent` и не является developer execution trace.
 
 **Implements:**
-- `VPNG-M001-R2.R3`
-- `VPNG-M001-R2.R3.R1`
-- `VPNG-M001-R2.R3.R2`
-- `VPNG-M001-R2.R3.R2.R1`
-- `VPNG-M001-R2.R3.R2.R2`
-- `VPNG-M001-R2.R3.R2.R3`
-- `VPNG-M001-R2.R3.R2.R4`
-- `VPNG-M001-R2.R3.R3`
-- `VPNG-M001-R2.R3.R4`
-- `VPNG-M001-R2.R3.R5`
-- `VPNG-M001-R2.R3.R6`
-- `VPNG-M001-R2.R3.R6.C1`
+- `VPNG-M001-R2.R3` — [`full`]
+- `VPNG-M001-R2.R3.R1` — [`full`]
+- `VPNG-M001-R2.R3.R2` — [`full`]
+- `VPNG-M001-R2.R3.R2.R1` — [`full`]
+- `VPNG-M001-R2.R3.R2.R2` — [`full`]
+- `VPNG-M001-R2.R3.R2.R3` — [`full`]
+- `VPNG-M001-R2.R3.R2.R4` — [`full`]
+- `VPNG-M001-R2.R3.R3` — [`full`]
+- `VPNG-M001-R2.R3.R4` — [`full`]
+- `VPNG-M001-R2.R3.R5` — [`full`]
+- `VPNG-M001-R2.R3.R6` — [`full`]
+- `VPNG-M001-R2.R3.R6.C1` — [`full`]
 
 API
 
@@ -1965,20 +1999,23 @@ Integration note
     does not claim them as duplicate implementation owners.
 
 
-## A.011 ProtectiveModeManager
+## [A.011] ProtectiveModeManager
 
-**Implementation status:** `<partial>` — production Manager core source-scoped requests, C.010 convergence и safe-release/re-containment уже materialized; periodic runtime scheduling и supported operator/control wiring еще не materialized.
 
 Manager явного административного защитного режима. Он владеет source-scoped request set и
 confirmed/problem состоянием public protective mode и непрерывно поддерживает gate, пока хотя
 бы один авторизованный source сохраняет запрос защиты.
 
 **Implements / supports:**
-- `VPNG-U004-R5`
-- `VPNG-U004-R5.R1`
-- `VPNG-U004-R5.R2`
-- `VPNG-U004-R5.R3`
-- `VPNG-U004-R5.R4`
+- `VPNG-U004-R5` — [`partial`]
+- `VPNG-U004-R5.R1` — [`partial`]
+- `VPNG-U004-R5.R2` — [`full`]
+- `VPNG-U004-R5.R3` — [`full`]
+- `VPNG-U004-R5.R4` — [`partial`]
+
+**Пробелы материализации:**
+- `VPNG-U004-R5` и `VPNG-U004-R5.R1`: отсутствует поддерживаемое подключение операторского/управляющего интерфейса к публичным операциям Manager;
+- `VPNG-U004-R5.R4`: реализована однократная сверка и безопасный выход, но отсутствует периодический запуск сверки с требуемым конечным интервалом.
 
 **Evidence:** EXP-083 lower containment evidence.
 
@@ -2011,22 +2048,22 @@ Implementation
 
 # Annex B. Ordinary-side transition components
 
-## B.001 ManagedL3BoundaryLifecycle
+## [B.001] ManagedL3BoundaryLifecycle
 
 Direct lifecycle Machinery ordinary-side transition. Она материализует и проверяет exact
 managed-L3 door между Private network и ordinary host, не принимая ownership
 Private-network service identity/default route или traffic-selection policy соседних Spaces.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R2`
-- `VPNG-U004-R4.R6`
-- `VPNG-M001-R1.R1.R1`
-- `VPNG-M001-R1.R1.R2`
-- `VPNG-M001-R1.R1.R4`
-- `VPNG-M001-R1.R1.R5`
-- `VPNG-D001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R3.R3`
-- `VPNG-D001-R1.R1.R7`
+- `VPNG-U001-R1.R3.R2` — [`full`]
+- `VPNG-U004-R4.R6` — [`full`]
+- `VPNG-M001-R1.R1.R1` — [`full`]
+- `VPNG-M001-R1.R1.R2` — [`full`]
+- `VPNG-M001-R1.R1.R4` — [`full`]
+- `VPNG-M001-R1.R1.R5` — [`full`]
+- `VPNG-D001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R3.R3` — [`full`]
+- `VPNG-D001-R1.R1.R7` — [`full`]
 
 **Evidence:** `EV-00000`
 
@@ -2061,28 +2098,28 @@ Implementation
 
 # Annex C. Private network components
 
-## C.001 NetworkPolicyAdapter
+## [C.001] NetworkPolicyAdapter
 
 Adapter является shared boundary от owner-scoped semantic network policy клиентов STACK к
 lower network-policy domain Private network. Общая physical realization не сливает
 различные semantic owners.
 
 **Implements:**
-- `VPNG-U001-R1.R1`
-- `VPNG-U001-R1.R3.R6.R2`
-- `VPNG-U001-R1.R4.R2.R1`
-- `VPNG-U001-R1.R4.R2.R1.R1`
-- `VPNG-U001-R4.R4.R6.R2.R1`
-- `VPNG-U001-R4.R4.R6.R2.R5`
-- `VPNG-U004-R4.R2`
-- `VPNG-U004-R4.R3`
-- `VPNG-U004-R4.R5`
-- `VPNG-M001-R1.R1.R2`
-- `VPNG-M001-R1.R1.R3`
-- `VPNG-M001-R1.R1.R4`
-- `VPNG-D001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R3.R2`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-U001-R1.R1` — [`full`]
+- `VPNG-U001-R1.R3.R6.R2` — [`full`]
+- `VPNG-U001-R1.R4.R2.R1` — [`full`]
+- `VPNG-U001-R1.R4.R2.R1.R1` — [`full`]
+- `VPNG-U001-R4.R4.R6.R2.R1` — [`full`]
+- `VPNG-U001-R4.R4.R6.R2.R5` — [`full`]
+- `VPNG-U004-R4.R2` — [`full`]
+- `VPNG-U004-R4.R3` — [`full`]
+- `VPNG-U004-R4.R5` — [`full`]
+- `VPNG-M001-R1.R1.R2` — [`full`]
+- `VPNG-M001-R1.R1.R3` — [`full`]
+- `VPNG-M001-R1.R1.R4` — [`full`]
+- `VPNG-D001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R3.R2` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
 
 API
 
@@ -2119,25 +2156,25 @@ Architectural decisions
 9. `Selector evidence is minimal and Device-scoped`
    *Exact-if selector использует только уже подтверждённый current PathBinding и не добавляет observation dependency. Peer selector разрешается только из verified current path facts C.004. Если `via peer` отсутствует во всех rules, peer observation вообще не является prerequisite policy realization. Если peer selector запрошен, confirmed absence другого peer является обычным non-match; observation failure либо неоднозначное совпадение requested peer не трактуется как отсутствие restriction и не разрешает allowing structural policy для затронутого Device.*
 
-## C.002 NetworkPolicyLayoutCalculator
+## [C.002] NetworkPolicyLayoutCalculator
 
 Pure Calculator внутреннего resource layout.
 
 **Implements:**
-- `VPNG-U001-R1.R1`
-- `VPNG-U003-R3.R6`
-- `VPNG-U004-R4`
-- `VPNG-U004-R4.R1`
-- `VPNG-U004-R4.R2`
-- `VPNG-U004-R4.R5`
-- `VPNG-U004-R4.R6`
-- `VPNG-M001-R1.R1.R2`
-- `VPNG-M001-R1.R1.R4`
-- `VPNG-M001-R1.R1.R5`
-- `VPNG-D001-R1.R1.R1`
-- `VPNG-D001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R3.R1`
-- `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-U001-R1.R1` — [`full`]
+- `VPNG-U003-R3.R6` — [`full`]
+- `VPNG-U004-R4` — [`full`]
+- `VPNG-U004-R4.R1` — [`full`]
+- `VPNG-U004-R4.R2` — [`full`]
+- `VPNG-U004-R4.R5` — [`full`]
+- `VPNG-U004-R4.R6` — [`full`]
+- `VPNG-M001-R1.R1.R2` — [`full`]
+- `VPNG-M001-R1.R1.R4` — [`full`]
+- `VPNG-M001-R1.R1.R5` — [`full`]
+- `VPNG-D001-R1.R1.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R3.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3.R2` — [`full`]
  Он получает semantic owner demand и injected
 platform resource space и возвращает детерминированное распределение внутренних
 routing-table, RPDB, route-marker, metric и nft namespace ресурсов.
@@ -2175,22 +2212,22 @@ Architectural decisions
 8. `Injected platform contract`
    *Конкретные Linux numeric pools, protocol markers и nft namespace приходят через platform contract, не из user configuration. Их конкретные значения являются evidence-gated platform facts, а не частью semantic API Calculator.*
 
-## C.003 NetworkPolicyEnforcer
+## [C.003] NetworkPolicyEnforcer
 
 Enforcer отвечает только за достижение и подтверждение переданного desired state.
 Он не является Space API: в дереве `Residents` его parent — `NetworkPolicyAdapter`,
 а independently demanded safety/lifecycle API вынесен в sibling `@ForwardingGate`.
 
 **Implements:**
-- `VPNG-U004-R4.R2`
-- `VPNG-U004-R4.R3`
-- `VPNG-U003-R3.R9`
-- `VPNG-U004-R4.R3.R2`
-- `VPNG-U004-R4.R5`
-- `VPNG-M001-R1.R1.R2`
-- `VPNG-M001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R1`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-U004-R4.R2` — [`full`]
+- `VPNG-U004-R4.R3` — [`full`]
+- `VPNG-U003-R3.R9` — [`full`]
+- `VPNG-U004-R4.R3.R2` — [`full`]
+- `VPNG-U004-R4.R5` — [`full`]
+- `VPNG-M001-R1.R1.R2` — [`full`]
+- `VPNG-M001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R1` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
 
 API
 
@@ -2224,26 +2261,26 @@ Architectural decisions
    *Drivers/Readers/Executors и Backend-композиции предоставляют observation/actuation primitives, но не выбирают desired state и не владеют convergence. Linux JSON/argv shapes, numeric pools и platform constants принадлежат lower technical realization, а не API Enforcer.*
 
 
-## C.004 VPNPathAdapter
+## [C.004] VPNPathAdapter
 
 Adapter является boundary между logical VPN-path semantics и уже provisioned concrete VPN
 endpoint внутри Private network. Он наблюдает/проверяет lower-domain facts, но не создает и
 не управляет VPN session как таковой.
 
 **Implements:**
-- `VPNG-U001-R1.R3.R1`
-- `VPNG-U001-R1.R4.R2.R1.R1`
-- `VPNG-U001-R4.R4.R6.R2.R5`
-- `VPNG-U001-R1.R3.R2`
-- `VPNG-U001-R1.R3.R3`
-- `VPNG-U001-R1.R3.R4`
-- `VPNG-U001-R1.R3.R4.R1`
-- `VPNG-U001-R1.R3.R4.R2`
-- `VPNG-U001-R1.R3.R4.R3`
-- `VPNG-U001-R1.R3.R4.R3.R1`
-- `VPNG-U001-R1.R3.R4.R4`
-- `VPNG-D001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-U001-R1.R3.R1` — [`full`]
+- `VPNG-U001-R1.R4.R2.R1.R1` — [`full`]
+- `VPNG-U001-R4.R4.R6.R2.R5` — [`full`]
+- `VPNG-U001-R1.R3.R2` — [`full`]
+- `VPNG-U001-R1.R3.R3` — [`full`]
+- `VPNG-U001-R1.R3.R4` — [`full`]
+- `VPNG-U001-R1.R3.R4.R1` — [`full`]
+- `VPNG-U001-R1.R3.R4.R2` — [`full`]
+- `VPNG-U001-R1.R3.R4.R3` — [`full`]
+- `VPNG-U001-R1.R3.R4.R3.R1` — [`full`]
+- `VPNG-U001-R1.R3.R4.R4` — [`full`]
+- `VPNG-D001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
 
 API
 
@@ -2282,16 +2319,16 @@ Architectural decisions
 10. `Binding is not route realization`
    *`VPNPathAdapter` доказывает current concrete endpoint, но не угадывает Linux `gateway/onlink`. Exact route realization предоставляет отдельная capability supported integration contract в `VPN external ends`; generic `NetworkPolicyAdapter` только потребляет этот уже доказанный lower fact. Direct-device realization является одной explicit integration capability, а не универсальным свойством bound interface.*
 
-## C.005 ForwardingGate
+## [C.005] ForwardingGate
 
 Самостоятельный bounded Enforcer корневого IPv4 forwarding state Private network.
 
 **Implements:**
-- `VPNG-U004-R4.R2`
-- `VPNG-U004-R4.R3.R2`
-- `VPNG-U004-R4.R4`
-- `VPNG-U004-R4.R5`
-- `VPNG-U004-R4.R6`
+- `VPNG-U004-R4.R2` — [`full`]
+- `VPNG-U004-R4.R3.R2` — [`full`]
+- `VPNG-U004-R4.R4` — [`full`]
+- `VPNG-U004-R4.R5` — [`full`]
+- `VPNG-U004-R4.R6` — [`full`]
  Его
 verified DISABLED state используется как structural safety barrier, но тот же contract нужен
 startup, shutdown и recovery независимо от `NetworkPolicyAdapter`.
@@ -2321,16 +2358,16 @@ Architectural decisions
 6. `Bounded lifecycle`
    *Enforcer не содержит hidden retry loop и не владеет continuous maintenance. Повторная попытка, если она нужна, начинается caller'ом из нового fresh state.*
 
-## C.006 ForwardingGateDriver
+## [C.006] ForwardingGateDriver
 
 Технический Driver к managed-domain forwarding state.
 
 **Supports implementation of:**
-- `VPNG-U004-R4.R2`
-- `VPNG-U004-R4.R3.R2`
-- `VPNG-U004-R4.R4`
-- `VPNG-U004-R4.R5`
-- `VPNG-U004-R4.R6`
+- `VPNG-U004-R4.R2` — [`full`]
+- `VPNG-U004-R4.R3.R2` — [`full`]
+- `VPNG-U004-R4.R4` — [`full`]
+- `VPNG-U004-R4.R5` — [`full`]
+- `VPNG-U004-R4.R6` — [`full`]
 
 Сам по себе Driver не реализует semantic requirement postcondition: он предоставляет
 technical read/write primitive для `ForwardingGate`, который выполняет fresh
@@ -2353,20 +2390,20 @@ Architectural decisions
    *Текущая Linux-реализация читает/изменяет managed-network-namespace `net.ipv4.ip_forward`; process/command success остается техническим результатом и не заменяет fresh observation.*
 
 
-## C.007 ManagedNetworkEnvironmentLifecycle
+## [C.007] ManagedNetworkEnvironmentLifecycle
 
 Direct lifecycle Machinery базовой Linux-materialization Private network: named network
 namespace + loopback. Она не материализует ordinary-side transition и не конфигурирует
 stack-local address/default route.
 
 **Implements / supports:**
-- `VPNG-U004-R4.R6`
-- `VPNG-M001-R1.R1.R1`
-- `VPNG-M001-R1.R1.R2`
-- `VPNG-M001-R1.R1.R4`
-- `VPNG-M001-R1.R1.R5`
-- `VPNG-D001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R7`
+- `VPNG-U004-R4.R6` — [`full`]
+- `VPNG-M001-R1.R1.R1` — [`full`]
+- `VPNG-M001-R1.R1.R2` — [`full`]
+- `VPNG-M001-R1.R1.R4` — [`full`]
+- `VPNG-M001-R1.R1.R5` — [`full`]
+- `VPNG-D001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R7` — [`full`]
 
 **Evidence:** `EV-00000`
 
@@ -2400,20 +2437,20 @@ Implementation
     design/NG3/code/python/rou/controller_stop.py — ProductLifecycleControl cleanup composition.
 
 
-## C.008 ActiveProbeDriver
+## [C.008] ActiveProbeDriver
 
 Technical Driver одного bounded physical availability attempt через exact current VPN path.
 Он скрывает mechanism-specific execution от Agent и не владеет scheduling, confirmation или
 remote availability semantics.
 
 **Implements:**
-- `VPNG-U003-R3.R6`
-- `VPNG-U003-R3.R6.R1`
-- `VPNG-U003-R3.R6.R3`
-- `VPNG-U003-R3.R6.R3.R1`
-- `VPNG-U003-R3.R6.R3.R1.R1`
-- `VPNG-D001-R1.R1.R3.R2`
-- `VPNG-D001-R1.R1.R5`
+- `VPNG-U003-R3.R6` — [`full`]
+- `VPNG-U003-R3.R6.R1` — [`full`]
+- `VPNG-U003-R3.R6.R3` — [`full`]
+- `VPNG-U003-R3.R6.R3.R1` — [`full`]
+- `VPNG-U003-R3.R6.R3.R1.R1` — [`full`]
+- `VPNG-D001-R1.R1.R3.R2` — [`full`]
+- `VPNG-D001-R1.R1.R5` — [`full`]
 
 API
 
@@ -2440,20 +2477,20 @@ Architectural decisions
    *Driver отправляет/принимает probe IP через VPN-side IP portal; remote target и VPN endpoint остаются предметностью соседнего VPN external ends / local endpoint inventory, а не становятся child artifacts Driver.*
 
 
-## C.009 OrdinarySidePortalLifecycle
+## [C.009] OrdinarySidePortalLifecycle
 
 Direct lifecycle Machinery Private-network ordinary-side portal realization. Работает после
 established `ManagedL3BoundaryLifecycle` и владеет exact stack-local IPv4 identity +
 ordinary-side default routing state на current private-facing endpoint.
 
 **Implements / supports:**
-- `VPNG-U004-R4.R6`
-- `VPNG-M001-R1.R1.R1`
-- `VPNG-M001-R1.R1.R2`
-- `VPNG-M001-R1.R1.R4`
-- `VPNG-M001-R1.R1.R5`
-- `VPNG-D001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R7`
+- `VPNG-U004-R4.R6` — [`full`]
+- `VPNG-M001-R1.R1.R1` — [`full`]
+- `VPNG-M001-R1.R1.R2` — [`full`]
+- `VPNG-M001-R1.R1.R4` — [`full`]
+- `VPNG-M001-R1.R1.R5` — [`full`]
+- `VPNG-D001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R7` — [`full`]
 
 **Evidence:** `EV-00000`
 
@@ -2484,22 +2521,15 @@ Implementation
     design/NG3/code/python/rou/controller_stop.py — ProductLifecycleControl cleanup composition.
 
 
-# Annex D. VPN external ends components
-
-Этот Space содержит только external residents/capability providers. `VPNChannel[]` не является
-компонентом VPN-GATE, поэтому отдельные VPN-GATE component specs в Annex D не требуются.
-
-
-
-## C.010 ProtectivePayloadGate
+## [C.010] ProtectivePayloadGate
 
 Bounded Enforcer dedicated protective-mode containment state Private network.
 
 **Implements / supports:**
-- `VPNG-U004-R5`
-- `VPNG-U004-R5.R2`
-- `VPNG-U004-R5.R3`
-- `VPNG-U004-R5.R4`
+- `VPNG-U004-R5` — [`full`]
+- `VPNG-U004-R5.R2` — [`full`]
+- `VPNG-U004-R5.R3` — [`full`]
+- `VPNG-U004-R5.R4` — [`full`]
 
 **Evidence:** EXP-083.
 
@@ -2530,24 +2560,31 @@ Implementation
     design/NG3/code/python/rou/protective_payload_gate.py — C.010 bounded convergence contract and explicit observation/result states.
     design/NG3/code/python/rou/linux_protective_payload_gate.py — strict Linux nft observation and one-transaction owned mutation realization.
 
+# Annex D. VPN external ends components
+
+Этот Space содержит только external residents/capability providers. `VPNChannel[]` не является
+компонентом VPN-GATE, поэтому отдельные VPN-GATE component specs в Annex D не требуются.
+
+
+
 # Annex E. VPN-GATE-managed host state components
 
-## E.001 HostPublicationAdapter
+## [E.001] HostPublicationAdapter
 
 Independent Adapter Device server publication в host-side owned scope. Один normalized
 publication intent здесь materializes as a separate host mapping postcondition; managed-domain
 local admission remains `Private network.NetworkPolicyAdapter` responsibility.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R6.R1`
-- `VPNG-U001-R4.R4.R6.R3`
-- `VPNG-U004-R4.R6`
-- `VPNG-M001-R1.R1.R1`
-- `VPNG-M001-R1.R1.R4`
-- `VPNG-M001-R1.R1.R5`
-- `VPNG-D001-R1.R1.R3`
-- `VPNG-D001-R1.R1.R3.R3`
-- `VPNG-D001-R1.R1.R7`
+- `VPNG-U001-R1.R3.R6.R1` — [`full`]
+- `VPNG-U001-R4.R4.R6.R3` — [`full`]
+- `VPNG-U004-R4.R6` — [`full`]
+- `VPNG-M001-R1.R1.R1` — [`full`]
+- `VPNG-M001-R1.R1.R4` — [`full`]
+- `VPNG-M001-R1.R1.R5` — [`full`]
+- `VPNG-D001-R1.R1.R3` — [`full`]
+- `VPNG-D001-R1.R1.R3.R3` — [`full`]
+- `VPNG-D001-R1.R1.R7` — [`full`]
 
 **Evidence:** `EV-00000`
 
@@ -2582,16 +2619,16 @@ Implementation
     design/NG3/code/python/rou/alpha_runtime.py — current Release-1 runtime composition of host publication after managed local admission.
 
 
-## E.002 HostRoutingContribution
+## [E.002] HostRoutingContribution
 
 Direct lifecycle Machinery optional peaceful host-routing helper. Она устанавливает и удаляет
 только complete identifiable contribution выбранного helper scope и не является host-routing
 Manager/supervisor.
 
 **Implements:**
-- `VPNG-U001-R2`
-- `VPNG-U001-R5.R1`
-- `VPNG-U001-R5.R1.R1`
+- `VPNG-U001-R2` — [`full`]
+- `VPNG-U001-R5.R1` — [`full`]
+- `VPNG-U001-R5.R1.R1` — [`full`]
 
 **Constrained by:**
 - `VPNG-D001-R1.R1.R8`
@@ -2630,17 +2667,17 @@ Architectural decisions
 
 
 
-## E.003 AggressiveHostRoutingManager
+## [E.003] AggressiveHostRoutingManager
 
 Manager continuous ownership отдельно включенной authoritative host-routing области. Он
 выбирает desired aggressive state из принятого intent/current boundary context, периодически
 подтверждает effective postcondition и инициирует recovery или protective escalation.
 
 **Implements / supports:**
-- `VPNG-U001-R5.R2`
-- `VPNG-U001-R5.R2.R2`
-- `VPNG-U001-R5.R2.R3`
-- `VPNG-U001-R5.R2.R3.R2`
+- `VPNG-U001-R5.R2` — [`full`]
+- `VPNG-U001-R5.R2.R2` — [`full`]
+- `VPNG-U001-R5.R2.R3` — [`full`]
+- `VPNG-U001-R5.R2.R3.R2` — [`full`]
 
 **Constrained by:** `VPNG-U001-R5.R2.C1`
 
@@ -2672,16 +2709,16 @@ Implementation
 
 
 
-## E.004 AggressiveHostRoutingEnforcer
+## [E.004] AggressiveHostRoutingEnforcer
 
 Bounded Enforcer одного composite aggressive postcondition. Он не выбирает continuous policy
 и не является отдельным Manager.
 
 **Implements / supports:**
-- `VPNG-U001-R5.R2`
-- `VPNG-U001-R5.R2.R1`
-- `VPNG-U001-R5.R2.R3`
-- `VPNG-U001-R5.R2.R3.R1`
+- `VPNG-U001-R5.R2` — [`full`]
+- `VPNG-U001-R5.R2.R1` — [`full`]
+- `VPNG-U001-R5.R2.R3` — [`full`]
+- `VPNG-U001-R5.R2.R3.R1` — [`full`]
 
 **Evidence:** EXP-074 (narrow routing mechanics), EXP-081 (rejected narrow-only authority),
 EXP-084 (prefix-scoped escape protection), EXP-085 (full-tunnel escape-protection exemptions).
