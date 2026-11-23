@@ -19,7 +19,7 @@ from rou.device_policy import (
 from rou.forwarding_gate import ForwardingGateState
 from rou.interface_inventory import parse_ip_link_inventory
 from rou.iproute_priority_backend import SubprocessCommandRunner
-from rou.linux_device_firewall import LinuxDeviceFirewallBackend
+from rou.linux_device_firewall import LinuxDeviceFirewallDriver
 from rou.linux_forwarding_gate import LinuxForwardingGateBackend
 from rou.linux_nft_scaffold import SubprocessNftRunner
 from rou.port_bundle import PortBundle, PortSpan
@@ -108,7 +108,7 @@ def main():
             runner=SubprocessCommandRunner(),
             namespace=namespace,
         )
-        backend = LinuxDeviceFirewallBackend(
+        backend = LinuxDeviceFirewallDriver(
             runner=SubprocessNftRunner(),
             namespace=namespace,
         )

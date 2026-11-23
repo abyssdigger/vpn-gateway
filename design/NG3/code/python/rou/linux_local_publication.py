@@ -94,7 +94,3 @@ def _render_add(rule: LocalPublicationRuleSpec) -> str:
             f'comment "{LOCAL_PUBLICATION_RULE_COMMENT}"',
         )
     )
-
-
-# Historical executable-evidence compatibility alias.
-LinuxLocalPublicationBackend = LinuxLocalPublicationDriver

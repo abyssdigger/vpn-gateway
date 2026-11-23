@@ -285,7 +285,3 @@ def _render_action(rule: DeviceFirewallRuleSpec) -> str:
             return "reject"
         raise ValueError("unsupported REJECT action JSON")
     raise ValueError("unsupported Device firewall action")
-
-
-# Historical executable-evidence compatibility alias.
-LinuxDeviceFirewallBackend = LinuxDeviceFirewallDriver

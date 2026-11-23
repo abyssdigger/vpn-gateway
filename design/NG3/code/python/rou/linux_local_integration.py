@@ -63,7 +63,3 @@ def _render_add(rule: IntegrationLocalRuleSpec) -> str:
         raise ValueError("unsupported integration-local hook")
     parts.extend(("accept", f'comment "{LOCAL_INTEGRATION_RULE_COMMENT}"'))
     return " ".join(parts)
-
-
-# Historical executable-evidence compatibility alias.
-LinuxIntegrationLocalBackend = LinuxIntegrationLocalDriver

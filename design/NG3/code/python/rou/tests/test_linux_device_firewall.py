@@ -9,7 +9,7 @@ from rou.device_firewall_desired import (
 )
 from rou.device_firewall_structure import DeviceFirewallRuleAction
 from rou.interface_identity import InterfaceIdentity
-from rou.linux_device_firewall import LinuxDeviceFirewallBackend
+from rou.linux_device_firewall import LinuxDeviceFirewallDriver
 
 
 HOST = InterfaceIdentity("host0", 10)
@@ -39,10 +39,10 @@ def match(left: dict, right: object) -> str:
     )
 
 
-class LinuxDeviceFirewallBackendTests(unittest.TestCase):
+class LinuxDeviceFirewallDriverTests(unittest.TestCase):
     def test_create_renders_ordered_rules_then_insert_jump(self):
         runner = FakeRunner()
-        backend = LinuxDeviceFirewallBackend(runner, "managed")
+        backend = LinuxDeviceFirewallDriver(runner, "managed")
         spec = DeviceFirewallChainSpec(
             ingress=HOST,
             egress=VPN,
@@ -106,7 +106,7 @@ class LinuxDeviceFirewallBackendTests(unittest.TestCase):
 
     def test_port_range_and_set_operands_render_as_nft_syntax(self):
         runner = FakeRunner()
-        backend = LinuxDeviceFirewallBackend(runner, "managed")
+        backend = LinuxDeviceFirewallDriver(runner, "managed")
         spec = DeviceFirewallChainSpec(
             ingress=HOST,
             egress=VPN,
@@ -136,7 +136,7 @@ class LinuxDeviceFirewallBackendTests(unittest.TestCase):
 
     def test_invalid_or_overlapping_port_set_is_rejected(self):
         runner = FakeRunner()
-        backend = LinuxDeviceFirewallBackend(runner, "managed")
+        backend = LinuxDeviceFirewallDriver(runner, "managed")
         spec = DeviceFirewallChainSpec(
             ingress=HOST,
             egress=VPN,
@@ -159,7 +159,7 @@ class LinuxDeviceFirewallBackendTests(unittest.TestCase):
 
     def test_generic_reject_renders_bare_reject(self):
         runner = FakeRunner()
-        backend = LinuxDeviceFirewallBackend(runner, "managed")
+        backend = LinuxDeviceFirewallDriver(runner, "managed")
         spec = DeviceFirewallChainSpec(
             ingress=HOST,
             egress=VPN,
@@ -180,7 +180,7 @@ class LinuxDeviceFirewallBackendTests(unittest.TestCase):
 
     def test_delete_jump_uses_exact_handle(self):
         runner = FakeRunner()
-        backend = LinuxDeviceFirewallBackend(runner, "managed")
+        backend = LinuxDeviceFirewallDriver(runner, "managed")
         backend.delete_device_jump(77)
         self.assertEqual(
             runner.commands[-1],
@@ -193,7 +193,7 @@ class LinuxDeviceFirewallBackendTests(unittest.TestCase):
 
     def test_delete_chain_flushes_before_delete_in_one_script(self):
         runner = FakeRunner()
-        backend = LinuxDeviceFirewallBackend(runner, "managed")
+        backend = LinuxDeviceFirewallDriver(runner, "managed")
         backend.delete_device_child_chain("dfw_out")
         self.assertEqual(
             runner.scripts[-1],
@@ -203,7 +203,7 @@ class LinuxDeviceFirewallBackendTests(unittest.TestCase):
 
     def test_unsafe_child_identifier_is_rejected(self):
         runner = FakeRunner()
-        backend = LinuxDeviceFirewallBackend(runner, "managed")
+        backend = LinuxDeviceFirewallDriver(runner, "managed")
         spec = DeviceFirewallChainSpec(
             ingress=HOST,
             egress=VPN,
