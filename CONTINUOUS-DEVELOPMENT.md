@@ -19,16 +19,17 @@ CD execution.
 Before any other CD preparation:
 
 1. choose `CYCLE_INTERVAL`: the user-specified interval, otherwise **30 minutes**;
-2. obtain fresh real current time and record it as `CYCLE_START_TIME`;
+2. obtain fresh real current time in UTC and record it as `CYCLE_START_TIME` using an explicit UTC offset (`Z` or `+00:00`);
 3. read this document if it has not already been read unchanged in the current response;
 4. apply the `AGENTS.md` reading gate to the actual CD task and read only the relevant
    normative/project documents;
 5. create/select the dedicated CD working branch.
 
-If fresh real time cannot be obtained, do not begin autonomous CD mutation.
+If fresh real UTC time cannot be obtained, do not begin autonomous CD mutation.
 
 The clock starts before mandatory reading or preparation. Commit timestamps are not a
-substitute for `CYCLE_START_TIME`.
+substitute for `CYCLE_START_TIME`. Local timezone, inferred location and changes of either
+during the session do not participate in the CD clock.
 
 ## 2. Review units and development blocks
 
@@ -168,7 +169,8 @@ A publication failure is therefore an immediate CD stop condition.
 ## 9. Time checks
 
 After **every commit**, and at development-block/handoff boundaries, obtain fresh real current
-time and compare it with `CYCLE_START_TIME`.
+time in UTC and compare that UTC instant with the UTC `CYCLE_START_TIME`. All recorded CD
+clock-check timestamps use an explicit UTC offset (`Z` or `+00:00`).
 
 Do not reset `CYCLE_START_TIME` because:
 
@@ -236,7 +238,7 @@ At the stop:
 
 The handoff contains only what is needed to resume cheaply:
 
-- `CYCLE_INTERVAL` and `CYCLE_START_TIME`;
+- `CYCLE_INTERVAL` and UTC `CYCLE_START_TIME`;
 - active branch and current verified head;
 - base/`main` snapshot when relevant;
 - completed review units/development blocks;
