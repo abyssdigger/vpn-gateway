@@ -169,6 +169,30 @@ A normal snapshot:
 Before snapshotting, verify source/target heads, expected ancestry/tree and absence of an
 incompatible `main` update. The user may explicitly choose another snapshot boundary.
 
+### Post-publication ref hygiene
+
+Dedicated working branches are temporary work surfaces, not archival records.
+
+After a snapshot/merge/publication has made a completed working-branch result durable in the
+intended target lineage, the agent must end the publication step by explicitly reminding the
+projectholder to clean up the now-redundant refs.
+
+The reminder must include:
+
+- a proposed annotated source tag for the actual published working-branch source tip when that
+  source identity is not already preserved by an equivalent tag;
+- the exact source-tip commit SHA the proposed tag should reference;
+- an explicit reminder to delete the completed working branch once the projectholder is satisfied
+  that the published result and source identity are preserved.
+
+Source-tag naming follows the established project style:
+`ng3-...-source` for named snapshots and `ng3-snapshot-<N>-source` for numbered snapshots.
+
+The reminder is mandatory; the mutations are not. Creating, moving, replacing or deleting any
+tag or branch still requires the explicit authorization applicable under §3 and §5. The agent
+must not silently leave completed temporary branches accumulating merely because ref deletion is
+not automatically authorized.
+
 ### Exceptional history operations
 
 Reset/rewrite/force-update of published `main`, retrospective snapshot reconstruction,
