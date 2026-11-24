@@ -15,3 +15,4 @@ DEL_BRANCH	ng3-methodology-device-manager-cdc-20261124
 ADD_TAG	ng3-snapshot-exp088-wireguard-ten-peer-evidence-source	15f4c2ea3c79341bb695c503bba8fbfe56b6db47	EXP-088 ten-peer WireGuard evidence.
 ADD_TAG	ng3-snapshot-managed-device-wireguard-component-architecture-source	901755a64ca24053d5eb3cffb9ea5fdbb367c86d	Managed Device and WireGuard component architecture.
 ADD_TAG	ng3-snapshot-exp088-device-manager-cdc-ref-hygiene-source	refs/remotes/origin/ng3-exp088-device-manager-cdc-20261124	EXP-088 and managed Device architecture CDC ref-hygiene source.
+DEL_BRANCH	ng3-exp088-device-manager-cdc-20261124
