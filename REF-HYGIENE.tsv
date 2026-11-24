@@ -16,3 +16,9 @@ ADD_TAG	ng3-snapshot-exp088-wireguard-ten-peer-evidence-source	15f4c2ea3c79341bb
 ADD_TAG	ng3-snapshot-managed-device-wireguard-component-architecture-source	901755a64ca24053d5eb3cffb9ea5fdbb367c86d	Managed Device and WireGuard component architecture.
 ADD_TAG	ng3-snapshot-exp088-device-manager-cdc-ref-hygiene-source	refs/remotes/origin/ng3-exp088-device-manager-cdc-20261124	EXP-088 and managed Device architecture CDC ref-hygiene source.
 DEL_BRANCH	ng3-exp088-device-manager-cdc-20261124
+ADD_TAG	ng3-snapshot-managed-wireguard-config-contract-source	dd2a3bdde1e522159db457a94677b914383af280	Managed WireGuard configuration contract.
+ADD_TAG	ng3-snapshot-managed-wireguard-config-normalization-source	2580f84fdb9f174c615c70757d1415dc2fe18288	Managed WireGuard configuration normalization.
+ADD_TAG	ng3-snapshot-current-managed-config-loading-source	b615cf462d13904b490e2915458b79e15252e95f	Current managed configuration loading.
+ADD_TAG	ng3-snapshot-direct-wireguard-d001-lifecycle-source	1010bcde7a1ad342e490bdb79e1355f5dd1e7dd7	Direct WireGuard D.001 lifecycle selection.
+ADD_TAG	ng3-snapshot-device-manager-architecture-cdc-ref-hygiene-source	refs/remotes/origin/ng3-device-manager-architecture-cdc-20261124	Device Manager architecture CDC ref-hygiene source.
+DEL_BRANCH	ng3-device-manager-architecture-cdc-20261124
