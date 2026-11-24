@@ -1,5 +1,3 @@
 # scripts: ./ref-hygiene-add-tags.sh ./ref-hygiene-delete-branches.sh
 # format: ADD_TAG<TAB>tag<TAB>target<TAB>annotation
 # format: DEL_BRANCH<TAB>branch
-
-# MANUAL: replace lightweight tag minimal-working-alpha at 5730e896483b7cfe526d823208cb18f2b5b43742 with an annotated tag at the same commit; preserve its historical-marker annotation.
