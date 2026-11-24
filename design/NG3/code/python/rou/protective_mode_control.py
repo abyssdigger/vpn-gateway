@@ -52,7 +52,8 @@ class ProtectiveModeControlService:
     audit_interval_seconds: float = 1.0
     logger: OperationalLogAdapter | None = None
     _stop: Event = field(default_factory=Event, init=False, repr=False)
-    _thread: Thread | None = field(default=None, init=False, repr=False)
+    _control_thread: Thread | None = field(default=None, init=False, repr=False)
+    _audit_thread: Thread | None = field(default=None, init=False, repr=False)
     _server: socket.socket | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -76,7 +77,13 @@ class ProtectiveModeControlService:
             raise ValueError("logger must be OperationalLogAdapter or None")
 
     def start(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
+        if (
+            self._control_thread is not None
+            and self._control_thread.is_alive()
+        ) or (
+            self._audit_thread is not None
+            and self._audit_thread.is_alive()
+        ):
             raise ProtectiveModeControlError(
                 "protective-mode control service is already running"
             )
@@ -117,12 +124,18 @@ class ProtectiveModeControlService:
 
         self._server = server
         self._stop.clear()
-        self._thread = Thread(
+        self._control_thread = Thread(
             target=self._serve,
-            name="vpn-gate-protective-mode",
+            name="vpn-gate-protective-control",
             daemon=True,
         )
-        self._thread.start()
+        self._audit_thread = Thread(
+            target=self._audit_loop,
+            name="vpn-gate-protective-audit",
+            daemon=True,
+        )
+        self._control_thread.start()
+        self._audit_thread.start()
         self._emit(
             OperationalLogLevel.INFO,
             "control_ready",
@@ -137,29 +150,26 @@ class ProtectiveModeControlService:
                 server.close()
             except OSError:
                 pass
-        thread = self._thread
-        if thread is not None and thread.is_alive():
-            thread.join(timeout=max(1.0, self.audit_interval_seconds * 2.0))
-        self._thread = None
+        for thread in (self._control_thread, self._audit_thread):
+            if thread is not None and thread.is_alive():
+                thread.join(
+                    timeout=max(1.0, self.audit_interval_seconds * 2.0)
+                )
+        self._control_thread = None
+        self._audit_thread = None
         self._server = None
         self.socket_path.unlink(missing_ok=True)
 
     def _serve(self) -> None:
         server = self._server
         assert server is not None
-        next_audit = monotonic() + self.audit_interval_seconds
+        server.settimeout(0.25)
 
         while not self._stop.is_set():
-            now = monotonic()
-            timeout = max(
-                0.01,
-                min(0.25, next_audit - now),
-            )
-            server.settimeout(timeout)
             try:
                 connection, _ = server.accept()
             except socket.timeout:
-                connection = None
+                continue
             except OSError as exc:
                 if self._stop.is_set():
                     break
@@ -168,15 +178,16 @@ class ProtectiveModeControlService:
                     "control_accept_failed",
                     diagnostic=f"{type(exc).__name__}: {exc}",
                 )
-                connection = None
+                continue
 
-            if connection is not None:
-                self._handle_connection(connection)
+            # A malformed/abandoned root-side request must not hold the control
+            # worker forever. Periodic safety audit is independent below.
+            connection.settimeout(max(1.0, self.audit_interval_seconds * 2.0))
+            self._handle_connection(connection)
 
-            now = monotonic()
-            if now >= next_audit:
-                self._audit_once()
-                next_audit = now + self.audit_interval_seconds
+    def _audit_loop(self) -> None:
+        while not self._stop.wait(self.audit_interval_seconds):
+            self._audit_once()
 
     def _handle_connection(self, connection: socket.socket) -> None:
         with connection:

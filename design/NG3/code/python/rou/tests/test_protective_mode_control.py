@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import tempfile
+import socket
 from threading import RLock
 from time import monotonic, sleep
 import unittest
@@ -138,6 +139,36 @@ class ProtectiveModeControlServiceTests(unittest.TestCase):
                 service.stop()
 
             self.assertFalse(socket_path.exists())
+
+    def test_stalled_control_client_does_not_stop_periodic_repair(self):
+        with tempfile.TemporaryDirectory() as root:
+            socket_path = Path(root) / "control.sock"
+            driver = FakeDriver()
+            manager = ProtectiveModeManager()
+            service = ProtectiveModeControlService(
+                manager,
+                driver,
+                "stack0",
+                lambda: True,
+                RLock(),
+                socket_path=socket_path,
+                audit_interval_seconds=0.05,
+            )
+            service.start()
+            stalled = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                self.assertTrue(
+                    request_protective_control(
+                        socket_path, "active", source="operator"
+                    )["ok"]
+                )
+                stalled.connect(str(socket_path))
+                stalled.sendall(b'{"action":"status"')
+                driver.force_absent()
+                wait_until(lambda: driver.enabled, timeout=0.5)
+            finally:
+                stalled.close()
+                service.stop()
 
     def test_source_scoping_survives_control_surface(self):
         with tempfile.TemporaryDirectory() as root:
