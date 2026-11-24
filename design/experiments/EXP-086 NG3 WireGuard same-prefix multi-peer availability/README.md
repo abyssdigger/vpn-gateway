@@ -2,7 +2,7 @@
 
 ## Status
 
-PREPARED — execution pending.
+COMPLETE — PASS / NEGATIVE FEASIBILITY FINDING.
 
 ## Requirement / architecture context
 
@@ -90,3 +90,23 @@ PASS не запрещает иные реализации, в частност�
 Второй вариант не является заменой WireGuard cryptokey routing обычным FIB routing: он,
 наоборот, делает WireGuard peer ownership отдельным управляемым lower state и требует
 самостоятельного architecture/product review.
+
+
+## Result
+
+Privileged execution completed successfully.
+
+- source commit: `70d44af5388b7d0d2ad8d5b76dfbde5729ec59bf`;
+- GitHub Actions run: `45320595770`;
+- job: `linux-wireguard-multipeer` (`138198006146`);
+- result record: `EXP-086-result-20261124.md`.
+
+Observed result:
+
+- the same exact remote prefix was owned by exactly one peer of one `wg0`;
+- changing only Linux route metrics through that common `wg0` did not change the actual peer;
+- moving WireGuard `AllowedIPs` ownership moved the payload to the other peer.
+
+The requested direct reuse of the ordinary availability route-priority mechanism is therefore
+not feasible for two same-prefix peers behind one WireGuard interface. The existing NG3
+WireGuard cryptokey-routing boundary is confirmed.
