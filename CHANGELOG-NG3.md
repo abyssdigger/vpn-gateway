@@ -5,6 +5,23 @@ reviews, experiments or transient implementation details. Requirements, architec
 evidence remain authoritative in their own artifacts.
 
 
+## 2026-11-24 — Release scope gate corrected; full Protective mode materialized
+
+The first 0.1.0 publication-preparation attempt is explicitly failed because it had no prior
+approved release-specific projectholder scope and therefore incorrectly treated the
+`VPNG-U004-R5.C1` omission as available. `release/0.1.0/RELEASE-SCOPE.md` is now the
+approved Release-1 contract: 0.1.0 does **not** exercise that omission and requires full
+Protective mode.
+
+A.011 now has supported root-local operator/automation enter/leave/status control, source-scoped
+requests, independent finite-cadence fresh audit/repair, serialized fresh normal-state
+confirmation before final leave, and fail-closed retention after unsuccessful leave. Linux
+end-to-end evidence blocks ordinary-boundary input/output and VPN-path forwarding while keeping
+runtime objects intact; installed-bundle QA additionally proves enter/block, drift repair,
+safe leave, failed-leave retention, recovery release and unchanged WireGuard/OpenConnect/L2TP
+payload/lifecycle behavior.
+
+
 ## 2026-11-23 — Release-1 / 0.1.0 candidate prepared and deployment-validated
 
 The first actual release candidate now has canonical version `0.1.0`, a self-contained source
@@ -16,8 +33,10 @@ passed real payload/lifecycle checks with WireGuard, OpenConnect, and L2TP/PPP. 
 QA record is `release/0.1.0/QA-REPORT.md`; the version-specific fulfillment review is
 `design/reviews/NG3-0.1.0-2026-11-23-release-fulfillment-review.md`.
 
-The candidate is ready for the separate projectholder release decision; this milestone does not
-itself publish `v0.1.0`.
+At that time the candidate was considered ready for a separate projectholder release decision;
+the 2026-11-24 release-scope correction later invalidated that readiness verdict as publication
+basis because no approved release-specific scope had preceded the attempt. No `v0.1.0` was
+published from it.
 
 
 ## 2026-11-23 — Release development and implementation fulfillment made explicit

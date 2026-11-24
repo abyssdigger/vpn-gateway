@@ -2007,17 +2007,22 @@ confirmed/problem состоянием public protective mode и непреры�
 бы один авторизованный source сохраняет запрос защиты.
 
 **Implements / supports:**
-- `VPNG-U004-R5` — [`partial`]
-- `VPNG-U004-R5.R1` — [`partial`]
+- `VPNG-U004-R5` — [`full`]
+- `VPNG-U004-R5.R1` — [`full`]
 - `VPNG-U004-R5.R2` — [`full`]
 - `VPNG-U004-R5.R3` — [`full`]
-- `VPNG-U004-R5.R4` — [`partial`]
+- `VPNG-U004-R5.R4` — [`full`]
 
-**Пробелы материализации:**
-- `VPNG-U004-R5` и `VPNG-U004-R5.R1`: отсутствует поддерживаемое подключение операторского/управляющего интерфейса к публичным операциям Manager;
-- `VPNG-U004-R5.R4`: реализована однократная сверка и безопасный выход, но отсутствует периодический запуск сверки с требуемым конечным интервалом.
+**Материализация:** публичные source-scoped операции подключены к root-local operator/automation
+control surface; отдельный audit worker с конечной cadence fresh-наблюдает C.010 gate независимо
+от control-client lifecycle и восстанавливает exact owned drift. Финальный leave сериализован с
+normal reconciliation, заново подтверждает обычное desired/runtime состояние и сохраняет/
+восстанавливает protective block при неподтвержденном выходе.
 
-**Evidence:** EXP-083 lower containment evidence.
+**Evidence:** EXP-083 lower containment evidence;
+`tests/integration_protective_mode_manager.py`;
+`tests/integration_protective_mode_runtime.py`;
+`release/0.1.0/qa/release_deployment_qa.py`.
 
 API
 
@@ -2045,6 +2050,8 @@ Architectural decisions
 Implementation
 
     design/NG3/code/python/rou/protective_mode_manager.py — source-scoped Manager core, bounded C.010 composition, blocked-leave handling and safety re-containment attempt.
+    design/NG3/code/python/rou/protective_mode_control.py — replaceable root-local control machinery plus independent finite-cadence audit worker owned by A.011.
+    design/NG3/code/python/rou/alpha_runtime.py — Release-1 composition, normal-state serialization and A.011 lifecycle wiring.
 
 # Annex B. Ordinary-side transition components
 

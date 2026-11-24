@@ -37,6 +37,9 @@ Alpha controller:
   восстанавливает его host routes в секундном audit loop и не закрывает внутренний forwarding
   из-за последующей замены маршрута администратором;
 - не требует restart controller после `systemctl restart` отдельного VPN service;
+- предоставляет root-only `vpn-gate-control protective status|enter|leave`; enter возвращает
+  success только после подтвержденной защитной блокировки, а active режим периодически
+  fresh-проверяет и восстанавливает отдельный owned protective gate;
 - при stop выполняет bounded controller cleanup после того, как systemd dependency ordering
   остановил bound VPN service;
 - публикует ту же текущую status-проекцию в `/run/vpn-gate-alpha/status.json` и человекочитаемый compact report в `/run/vpn-gate-alpha/status.txt` только при изменении semantic snapshot (periodic audit сам по себе файлы не переписывает): accepted intent,
@@ -219,6 +222,36 @@ systemctl stop vpn-gate-alpha.service
 Через `BindsTo` + ordering systemd сначала останавливает bound VPN service/cgroup, после чего
 controller завершает managed-domain cleanup. Successful stop требует отсутствия managed netns
 и host boundary.
+
+## Protective mode
+
+Установленный root-only control surface:
+
+```sh
+vpn-gate-control protective status
+vpn-gate-control protective enter
+vpn-gate-control protective leave
+```
+
+Для независимой automation-source допустим собственный source ID:
+
+```sh
+vpn-gate-control protective enter --source automation:maintenance
+vpn-gate-control protective leave --source automation:maintenance
+```
+
+Один source не снимает запрос другого. `enter` возвращает success только после fresh
+подтверждения полного protective gate. Пока хотя бы один source active, Manager с конечной
+cadence повторно наблюдает gate и восстанавливает exact owned drift.
+
+Финальный `leave` сначала под lock заново подтверждает применимое обычное desired/runtime
+state. Если это подтверждение или снятие gate не удалось, команда возвращает non-zero,
+protective block сохраняется, а problem остается наблюдаемым.
+
+Control socket находится в `/run/vpn-gate-alpha/control.sock` внутри systemd
+`RuntimeDirectoryMode=0700`; текущий deployment surface предназначен для root/authorized
+automation. Socket/CLI являются replaceable deployment machinery, а не отдельной product
+семантикой.
 
 ## Текущий status
 

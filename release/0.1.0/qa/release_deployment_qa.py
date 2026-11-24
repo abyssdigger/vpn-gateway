@@ -255,6 +255,91 @@ ExecStop=/usr/bin/wg-quick down %i
         wait_path("wg-corp")
         wait_ping("10.70.0.1")
         print("RELEASE_QA_WIREGUARD_PAYLOAD=PASS")
+
+        control = ("/usr/sbin/vpn-gate-control", "protective")
+        initial = json.loads(command((*control, "status")).stdout)
+        assert initial["ok"] is True, initial
+        assert initial["protective"]["status"] == "inactive", initial
+
+        entered = json.loads(command((*control, "enter")).stdout)
+        assert entered["ok"] is True, entered
+        assert entered["protective"]["status"] == "active", entered
+        assert not ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_ENTER_BLOCK=PASS")
+
+        ns(
+            MANAGED,
+            "nft",
+            "delete",
+            "table",
+            "inet",
+            "vpn_gate_protective",
+        )
+        wait_until(
+            "Protective mode periodic gate repair",
+            lambda: ns(
+                MANAGED,
+                "nft",
+                "list",
+                "table",
+                "inet",
+                "vpn_gate_protective",
+                check=False,
+            ).returncode == 0,
+        )
+        assert not ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_PERIODIC_REPAIR=PASS")
+
+        leave_command = command((*control, "leave"), check=False)
+        if leave_command.returncode != 0:
+            print(
+                "RELEASE_QA_PROTECTIVE_LEAVE_STDOUT="
+                + leave_command.stdout.replace("\n", "\\n")
+            )
+            print(
+                "RELEASE_QA_PROTECTIVE_JOURNAL="
+                + command(
+                    ("journalctl", "-u", CONTROLLER, "--no-pager", "-n", "200"),
+                    check=False,
+                ).stdout.replace("\n", "\\n")
+            )
+            raise RuntimeError(
+                "Protective mode leave failed: "
+                + leave_command.stdout.strip()
+            )
+        left = json.loads(leave_command.stdout)
+        assert left["ok"] is True, left
+        assert left["protective"]["status"] == "inactive", left
+        wait_ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_SAFE_LEAVE=PASS")
+
+        reentered = json.loads(command((*control, "enter")).stdout)
+        assert reentered["ok"] is True, reentered
+        assert not ping("10.70.0.1")
+
+        ns(MANAGED, "nft", "delete", "table", "ip", "vpn_gate")
+        ns(MANAGED, "nft", "add", "table", "ip", "vpn_gate")
+        blocked_leave = command((*control, "leave"), check=False)
+        assert blocked_leave.returncode != 0, blocked_leave
+        blocked = json.loads(blocked_leave.stdout)
+        assert blocked["ok"] is False, blocked
+        assert blocked["action_status"] == "leave_blocked", blocked
+        assert blocked["protective"]["status"] == "active", blocked
+        assert not ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_FAILED_LEAVE_RETAINS_BLOCK=PASS")
+
+        ns(MANAGED, "nft", "delete", "table", "ip", "vpn_gate")
+        wait_until(
+            "Protective mode release after normal-state recovery",
+            lambda: (
+                json.loads(command((*control, "status")).stdout)
+                ["protective"]["status"]
+                == "inactive"
+            ),
+        )
+        wait_ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_RECOVERY_RELEASE=PASS")
+
         systemctl("stop", unit)
         wait_no_path()
         controller_stop()

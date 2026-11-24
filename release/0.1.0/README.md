@@ -24,8 +24,9 @@ vpn-gate-0.1.0.tar.gz.sha256
 ```
 
 The archive is self-contained for installation. It contains the runtime package, canonical
-`VERSION`, installer, controller systemd unit, configuration example, deployment guide, and
-the policy-neutral OpenConnect helper used by the documented example.
+`VERSION`, installer, controller systemd unit, configuration example, deployment guide,
+the policy-neutral OpenConnect helper used by the documented example, and the root-only
+`vpn-gate-control` Protective-mode client.
 
 ## Install
 
@@ -44,9 +45,10 @@ host-wide IPv4 forwarding. It preserves an existing `/etc/vpn-gate-alpha/config.
 
 ## Release scope notes
 
-Release 0.1.0 uses the accepted Release-1 configuration and dataplane semantics. Protective mode
-is not part of the required first-release feature set under `VPNG-U004-R5.C1`; the ordinary
-fail-closed guarantees remain applicable independently.
+Release 0.1.0 is governed by `RELEASE-SCOPE.md`. For this release the omission permitted by
+`VPNG-U004-R5.C1` is explicitly **not exercised**: full Protective mode is a release
+commitment. The aggressive host-routing helper remains outside 0.1.0 scope under
+`VPNG-U001-R5.R2.C1`.
 
 This directory prepares a candidate. Publication as an actual product release still requires
 the candidate-specific fulfillment review and the separate projectholder release decision.

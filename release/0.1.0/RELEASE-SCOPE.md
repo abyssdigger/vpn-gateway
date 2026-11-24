@@ -45,13 +45,17 @@ Therefore 0.1.0 requires, end-to-end:
 - repair/re-application of violated protective blocking when exact safe restoration is possible;
 - exit only after applicable ordinary desired state is freshly confirmed and protective blocking
   is successfully removed;
-- failed/unconfirmed exit must retain the traffic block and expose an explicit problem result;
-- automatic initiation paths required by the aggressive-routing failure requirements must
-  converge to the same Protective mode semantics.
+- failed/unconfirmed exit must retain the traffic block and expose an explicit problem result.
 
-Any `partial` or `none` materialization of these commitments is a release blocker for 0.1.0.
+Any `partial` or `none` materialization of these A.011 commitments is a release blocker for
+0.1.0.
 
 ## Accepted omissions / deferred scope
+
+The release does not require the aggressive host-routing helper family
+`VPNG-U001-R5.R2*`; the omission permitted by `VPNG-U001-R5.R2.C1` **is exercised** for
+0.1.0. Existing aggressive-helper implementation/evidence remains outside the Release-1 runtime
+scope and does not make its automatic Protective-mode escalation path a 0.1.0 commitment.
 
 The release does not require the formally postponed developer execution trace family
 `VPNG-D001-R2*`.

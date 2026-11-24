@@ -208,6 +208,39 @@ If L2TP is protected by IPsec, the additional IKE/ESP/NAT-T transport/control re
 outside this simple UDP/1701 example and must be represented/allowed according to the actual
 underlay integration rather than inferred from the L2TP payload interface.
 
+## Protective mode
+
+The installed release provides a root-only control client:
+
+```sh
+vpn-gate-control protective status
+vpn-gate-control protective enter
+vpn-gate-control protective leave
+```
+
+`enter` succeeds only after VPN-GATE freshly confirms the dedicated Protective gate. While
+active, the controller blocks IPv4 traffic through the ordinary managed boundary in both
+directions and forwarding between VPN paths, while preserving managed runtime objects and
+diagnostic context.
+
+The Manager periodically re-observes the gate and repairs exact owned drift. A final `leave`
+first freshly confirms the applicable normal desired state and then removes the gate. If that
+precondition or gate removal cannot be confirmed, `leave` returns non-zero and traffic remains
+blocked/re-contained.
+
+Independent authorized automation may use a separate source identity:
+
+```sh
+vpn-gate-control protective enter --source automation:maintenance
+vpn-gate-control protective leave --source automation:maintenance
+```
+
+Sources are independent; one source cannot clear another source's request.
+
+The current deployment mechanism is a root-only Unix socket at
+`/run/vpn-gate-alpha/control.sock`. Socket/CLI are replaceable deployment machinery; the
+Protective-mode semantics are owned by VPN-GATE rather than by this transport.
+
 ## Operational checks
 
 A deployment is not ready merely because the VPN process is running. Check all of:

@@ -73,6 +73,28 @@ class ProtectiveModeManager:
         with self._lock:
             return self._projection
 
+    def confirm_inactive(
+        self,
+        boundary_interface: str,
+        *,
+        normal_release_confirmed: bool,
+        driver: ProtectivePayloadGateDriver,
+    ) -> ProtectiveModeActionResult:
+        """Fresh-confirm an inactive public state against the lower gate."""
+        with self._lock:
+            self._validate_boundary(boundary_interface)
+            if type(normal_release_confirmed) is not bool:
+                raise ValueError("normal_release_confirmed must be bool")
+            if self._sources:
+                self._release_pending = False
+                return self._ensure_active(boundary_interface, driver)
+            self._release_pending = True
+            return self.reconcile_once(
+                boundary_interface,
+                normal_release_confirmed=normal_release_confirmed,
+                driver=driver,
+            )
+
     def request_active(
         self,
         source: str,
