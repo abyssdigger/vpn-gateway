@@ -20,14 +20,21 @@ CLIENT_INNER = "10.200.0.1"
 
 
 def host(*args: str, check: bool = True, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    completed = subprocess.run(
         args,
-        check=check,
+        check=False,
         text=True,
         input=input_text,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    if check and completed.returncode != 0:
+        raise RuntimeError(
+            f"command failed rc={completed.returncode}: {args!r}\\n"
+            f"stdout:\\n{completed.stdout}\\n"
+            f"stderr:\\n{completed.stderr}"
+        )
+    return completed
 
 
 def ns(namespace: str, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
