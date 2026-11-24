@@ -1,7 +1,8 @@
 # VPN-GATE NG3 alpha — краткая инструкция администратора
 
-**Status:** current alpha operator runbook  
-**Verified deployment:** Debian 13 + systemd, root deployment  
+**Status:** development/alpha operator runbook; not the Release-1 publication guide  
+**Release-1 administrator guide:** `release/0.1.0/DEPLOYMENT.md`  
+**Verified alpha deployment:** Debian 13 + systemd, root deployment  
 **Controller unit:** `vpn-gate-alpha.service`  
 **Current managed netns:** `/run/netns/vpn-gate-alpha`
 
@@ -9,7 +10,9 @@
 установка controller, Device/Profile configuration, подготовка поддержанного OpenVPN/systemd
 канала, запуск, проверка, monitoring и реакция на operational log.
 
-Это инструкция для текущей alpha, а не обещание окончательного packaging/API Release 1.
+Это инструкция для checkout/development alpha. Для фактического выпуска 0.1.0
+администраторским source of procedure является `release/0.1.0/DEPLOYMENT.md`, который
+упаковывается в release bundle и проходит отдельный documentation-driven walkthrough.
 
 ## 1. Что принадлежит кому
 

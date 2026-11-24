@@ -32,6 +32,7 @@ fi
 install -m 0644 "$ROOT/vpn-gate-alpha.service" \
     /etc/systemd/system/vpn-gate-alpha.service
 install -d -m 0755 /usr/share/doc/vpn-gate
+install -m 0644 "$ROOT/README.md" /usr/share/doc/vpn-gate/README.md
 install -m 0644 "$ROOT/DEPLOYMENT.md" /usr/share/doc/vpn-gate/DEPLOYMENT.md
 
 python3 -m compileall -q /usr/lib/vpn-gate-alpha/rou
