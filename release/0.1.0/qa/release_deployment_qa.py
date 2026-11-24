@@ -255,6 +255,47 @@ ExecStop=/usr/bin/wg-quick down %i
         wait_path("wg-corp")
         wait_ping("10.70.0.1")
         print("RELEASE_QA_WIREGUARD_PAYLOAD=PASS")
+
+        control = ("/usr/sbin/vpn-gate-control", "protective")
+        initial = json.loads(command((*control, "status")).stdout)
+        assert initial["ok"] is True, initial
+        assert initial["protective"]["status"] == "inactive", initial
+
+        entered = json.loads(command((*control, "enter")).stdout)
+        assert entered["ok"] is True, entered
+        assert entered["protective"]["status"] == "active", entered
+        assert not ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_ENTER_BLOCK=PASS")
+
+        ns(
+            MANAGED,
+            "nft",
+            "delete",
+            "table",
+            "inet",
+            "vpn_gate_protective",
+        )
+        wait_until(
+            "Protective mode periodic gate repair",
+            lambda: ns(
+                MANAGED,
+                "nft",
+                "list",
+                "table",
+                "inet",
+                "vpn_gate_protective",
+                check=False,
+            ).returncode == 0,
+        )
+        assert not ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_PERIODIC_REPAIR=PASS")
+
+        left = json.loads(command((*control, "leave")).stdout)
+        assert left["ok"] is True, left
+        assert left["protective"]["status"] == "inactive", left
+        wait_ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_SAFE_LEAVE=PASS")
+
         systemctl("stop", unit)
         wait_no_path()
         controller_stop()

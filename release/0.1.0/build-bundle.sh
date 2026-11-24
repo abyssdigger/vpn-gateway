@@ -23,7 +23,11 @@ cp "$ROOT/design/NG3/deployment/alpha/config.example.toml" "$TMP/$NAME/config.ex
 cp "$ROOT/release/0.1.0/install.sh" "$TMP/$NAME/install.sh"
 cp "$ROOT/release/0.1.0/DEPLOYMENT.md" "$TMP/$NAME/DEPLOYMENT.md"
 cp "$ROOT/release/0.1.0/openconnect-policy-neutral.sh" "$TMP/$NAME/openconnect-policy-neutral.sh"
-chmod 0755 "$TMP/$NAME/install.sh" "$TMP/$NAME/openconnect-policy-neutral.sh"
+cp "$ROOT/release/0.1.0/vpn-gate-control" "$TMP/$NAME/vpn-gate-control"
+chmod 0755 \
+    "$TMP/$NAME/install.sh" \
+    "$TMP/$NAME/openconnect-policy-neutral.sh" \
+    "$TMP/$NAME/vpn-gate-control"
 
 mkdir -p "$OUT"
 ARCHIVE="$OUT/$NAME.tar.gz"

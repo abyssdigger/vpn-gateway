@@ -22,6 +22,7 @@ cp -a "$ROOT/rou" /usr/lib/vpn-gate-alpha/rou
 install -m 0644 "$ROOT/VERSION" /usr/lib/vpn-gate-alpha/VERSION
 install -m 0755 "$ROOT/openconnect-policy-neutral.sh" \
     /usr/lib/vpn-gate-alpha/openconnect-policy-neutral.sh
+install -m 0755 "$ROOT/vpn-gate-control" /usr/sbin/vpn-gate-control
 
 install -d -m 0755 /etc/vpn-gate-alpha
 if [ ! -e /etc/vpn-gate-alpha/config.toml ]; then
