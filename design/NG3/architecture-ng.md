@@ -1629,9 +1629,9 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U002-R2.R3.C1.R1` — [`full`]
 - `VPNG-U002-R2.R4` — [`full`]
 - `VPNG-U002-R2.R5` — [`full`]
-- `VPNG-U001-R1.R3.R7` — [`partial`]
-- `VPNG-U001-R1.R3.R7.R1` — [`partial`]
-- `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R7` — [`full`]
+- `VPNG-U001-R1.R3.R7.R1` — [`full`]
+- `VPNG-U001-R1.R3.R8` — [`full`]
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R2` — [`full`]
@@ -1678,14 +1678,14 @@ Architectural decisions
 
 **Материализация:** `parse_current_config` в
 `design/NG3/code/python/rou/release1_config.py` строго разбирает `managed_vpn`,
-сохраняет прежний `parse_release1_config`, выводит точный binding selector и UDP-разрешения
+сохраняет прежний `parse_release1_config`, выводит точное условие привязки и разрешения UDP
 из одного источника, нормализует упорядоченный набор WireGuard-пиров и ссылки на секреты,
 а также выводит общие префиксы из действующих `Profile.destinations`.
-
-**Пробел материализации:** рабочий путь загрузки конфигурации продукта пока продолжает
-использовать исторический `parse_release1_config` и не передает новые нормализованные
-намерения A.012/D.001/D.002. Поэтому вклад A.002 по R7/R8 остается [`partial`], несмотря на
-готовый и протестированный разбор.
+`AlphaPreparedPolicy.from_text` использует этот current-разбор как рабочую точку загрузки:
+внешняя конфигурация продолжает через совместимый базовый контракт, а наличие `managed_vpn`
+до materialization A.012/D.001/D.002 явно отклоняется до создания prepared policy и до любой
+сетевой мутации. Таким образом A.002 полностью материализует собственную обязанность
+нормализации, не присваивая обязанности последующих компонентов.
 
 ## [A.003] AvailabilityDescriptionResolver
 

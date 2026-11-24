@@ -6,6 +6,7 @@ from unittest.mock import patch
 from rou.alpha_runtime import (
     AlphaPreparedPolicy,
     AlphaReconcileStatus,
+    AlphaRuntimeError,
     reconcile_alpha_payload_once,
 )
 from rou.host_publication_policy import HostPublicationSelectorKind
@@ -29,6 +30,48 @@ device_order = ["ovpn"]
 
 
 class AlphaPreparedPolicyTests(unittest.TestCase):
+    def test_managed_vpn_is_recognized_and_rejected_before_runtime(self):
+        with self.assertRaisesRegex(
+            AlphaRuntimeError,
+            "managed_vpn configuration is recognized.*wg-main",
+        ):
+            AlphaPreparedPolicy.from_text(
+                """
+[device.wg-main]
+enabled = true
+use_outbound_nat = true
+
+[device.wg-main.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/etc/vpn-gate/secrets/wg-main.key"
+
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-a"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+
+[profile.alpha]
+enabled = true
+direction = "outbound"
+destinations = ["10.253.0.0/16"]
+device_order = ["wg-main"]
+""",
+                local_address=IPv4Address("198.19.255.2"),
+            )
+
+    def test_external_device_still_uses_current_parser_compatibility_path(self):
+        prepared = AlphaPreparedPolicy.from_text(
+            CONFIG,
+            local_address=IPv4Address("198.19.255.2"),
+        )
+        self.assertEqual(
+            tuple(prepared.config.structural.devices),
+            ("ovpn",),
+        )
+
     def test_zero_path_is_fail_closed_but_admits_vpn_transport(self):
         prepared = AlphaPreparedPolicy.from_text(
             CONFIG,
