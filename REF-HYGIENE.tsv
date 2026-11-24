@@ -1,0 +1,31 @@
+# scripts: ./ref-hygiene-add-tags.sh ./ref-hygiene-delete-branches.sh
+# format: ADD_TAG<TAB>tag<TAB>target<TAB>annotation
+# format: DEL_BRANCH<TAB>branch
+
+ADD_TAG	ng3-snapshot-release-0.1.0-candidate-source	4b4f7b030c6aad64b0ac4dafa9620f645fdda16e	Source tip for published Release 0.1.0 candidate snapshot 3d1acbdf8b4ee4e90cc1aac18a8625a387c3117a
+ADD_TAG	ng3-snapshot-release-artifact-model-source	912eb30d612c82e97e290961fcc4a4eadbc6190f	Source tip for published release artifact model snapshot d7c8b94ebad7bb6d49d14d71a08e03b881b251c2
+ADD_TAG	ng3-snapshot-post-publication-ref-hygiene-source	c753c536566b19402d1a09014c458ed6fc092fee	Source tip for published post-publication ref hygiene snapshot 4139d3579b2a39d750f658e5dfbbfb671635dddc
+ADD_TAG	ng3-snapshot-release-0.1.0-finalization-source	ca7bfa683712413f388c025f5fe729fa7c48a2ba	Source tip for published Release 0.1.0 finalization snapshot a9269729c6fb779c7f8d8c3140f15660001e01a4
+ADD_TAG	ng3-snapshot-release-scope-gate-source	af68192d724152567a8131e35e18e5d59b8d5826	Source tip for published release scope gate snapshot 91db12f123d39cff82a4a5eca866f580e94a3827
+ADD_TAG	ng3-snapshot-release-0.1.0-protective-mode-source	e4c5d6b75c6aed2e88122e7a4d52ebb4be788ee0	Source tip for published Release 0.1.0 Protective mode snapshot c76617d9f384e71a7f54d3ca0f1f6146112fd311
+ADD_TAG	ng3-snapshot-release-0.1.0-attempt2-pre-staging-source	9e945d80a26b20ef56d4c97ab9445ef6b3bb05dc	Source tip for published Release 0.1.0 attempt-2 pre-staging snapshot b04ee5e7f0c33d673836dc01c2587f2e1ce4cb4a
+ADD_TAG	ng3-snapshot-documentation-driven-release-acceptance-source	16c3ce5e39163c9d7b1338b69f8c765200d432f5	Source tip for published documentation-driven release acceptance snapshot fcc20da1f009ef1010fa56314371d71b7f38fb2d
+ADD_TAG	ng3-snapshot-release-0.1.0-documentation-acceptance-source	3fa63d0886b79681803a3757a917464a76b85a7d	Source tip for published Release 0.1.0 documentation acceptance snapshot 8055eb0dd655de91a7a93e77669e426493dbc6e6
+ADD_TAG	ng3-release-0.1.0-attempt1-failed	7cb662055a898d8a8aa0dce0163259e28e896bd7	Historical failed Release 0.1.0 attempt 1
+ADD_TAG	ng3-release-0.1.0-attempt2-pre-documentation-review-source	11b8025193fac47796720e6e60635983aab2864e	Historical pre-documentation Release 0.1.0 attempt-2 review source
+ADD_TAG	ng3-snapshot-release-0.1.0-final-documentation-aware-fulfillment-source	e7abc6e98906e1426bd77bac23c05824a012e5d7	Source tip for published final documentation-aware Release 0.1.0 fulfillment snapshot 6284d7862d64d1722366d5d3ab073cd3c8aa2727
+ADD_TAG	ng3-snapshot-wg-multipeer-availability-source	6a44d3e340516df734f0b04b50c6fa42f282f6db	Source tip for EXP-086 WireGuard same-prefix multi-peer availability work
+ADD_TAG	ng3-snapshot-wg-allowedips-runtime-source	431e7eb2704013395bbb6e7f3d9c8f2fa3ee6cfa	Source tip for published EXP-086 and EXP-087 WireGuard peer availability snapshot 95b7646246a71000ccf37f5e87c8794eb0da790f
+ADD_TAG	ng3-snapshot-ref-hygiene-ledger-source	refs/remotes/origin/ng3-ref-hygiene-ledger-20261124	Source tip for published operational ref hygiene ledger and helpers
+
+# MANUAL: replace lightweight tag minimal-working-alpha at 5730e896483b7cfe526d823208cb18f2b5b43742 with an annotated tag at the same commit; preserve its historical-marker annotation.
+
+DEL_BRANCH	archive/release-0.1.0-attempt1-failed
+DEL_BRANCH	ng3-release-0.1.0-cdc-20261123
+DEL_BRANCH	ng3-release-0.1.0-finalization-cdc-20261123
+DEL_BRANCH	ng3-release-scope-protective-mode-cdc-20261124
+DEL_BRANCH	ng3-release-0.1.0-attempt2-cdc-20261124
+DEL_BRANCH	ng3-release-doc-walkthrough-cdc-20261124
+DEL_BRANCH	ng3-wg-multipeer-availability-cdc-20261124
+DEL_BRANCH	ng3-wg-allowedips-runtime-cdc-20261124
+DEL_BRANCH	ng3-ref-hygiene-ledger-20261124
