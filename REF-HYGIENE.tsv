@@ -1,3 +1,14 @@
 # scripts: ./ref-hygiene-add-tags.sh ./ref-hygiene-delete-branches.sh
 # format: ADD_TAG<TAB>tag<TAB>target<TAB>annotation
 # format: DEL_BRANCH<TAB>branch
+
+ADD_TAG	ng3-snapshot-language-external-basis-methodology-source	03eaf061e3739745ee2bf7bee99766137d176be9	Language and external-basis methodology.
+ADD_TAG	ng3-snapshot-explicit-requirement-basis-source	43227d82a10895385ca84ccf7e556322452641b1	Explicit NG3 external requirement basis.
+ADD_TAG	ng3-snapshot-frozen-0.1.0-qa-isolation-source	edd0406a83b6ecf22323b1ce9033bd74719d9a72	Frozen 0.1.0 QA isolation.
+ADD_TAG	ng3-snapshot-stable-evidence-addresses-source	3c020c77adc49f8743ae14a8390b905a4b417d02	Stable NG3 evidence addresses.
+ADD_TAG	ng3-snapshot-architecture-traceability-hygiene-source	7a2d66af1a5c4fc639be80768affd0b3b94f713e	NG3 architecture traceability hygiene.
+ADD_TAG	ng3-snapshot-managed-device-wireguard-research-source	2111606a473ea465efd9a8b9501a55bd62116f46	Managed Device and WireGuard multipeer research.
+ADD_TAG	ng3-snapshot-managed-device-requirement-opening-source	b312f2f0c270bde2e17017778a2833b1ff28848e	Managed Device requirement opening.
+ADD_TAG	ng3-snapshot-exp088-wireguard-ten-peer-design-source	236b73809ae612462bae01def641700fc0e01664	EXP-088 WireGuard ten-peer design.
+ADD_TAG	ng3-snapshot-methodology-device-manager-cdc-ref-hygiene-source	refs/remotes/origin/ng3-methodology-device-manager-cdc-20261124	Methodology and managed Device CDC ref-hygiene source.
+DEL_BRANCH	ng3-methodology-device-manager-cdc-20261124
