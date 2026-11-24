@@ -157,7 +157,11 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/structural_policy_transaction.py`
 - `design/NG3/code/python/rou/structural_routing_inventory.py`
 
-## Trace: `D.001`\n\n- `design/NG3/code/python/rou/managed_wireguard_adapter.py`\n\n## Trace: `C.004`
+## Trace: `D.001`
+
+- `design/NG3/code/python/rou/managed_wireguard_adapter.py`
+
+## Trace: `C.004`
 
 - `design/NG3/code/python/rou/binding.py`
 - `design/NG3/code/python/rou/direct_device_route.py`
