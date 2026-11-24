@@ -42,3 +42,47 @@ entry point; 109/109 production Python units are present in the implementation t
 
 The evidence confirms that the terminology/reuse comb did not change required network
 behavior and that the completed traceability rules are mechanically enforced.
+
+
+## EV-00020 — private peer observation and transport-provenance separation
+
+**Status:** accepted  
+**Scope:** demand-scoped observation of a point-to-point interface private/inner peer; exact
+association with the current interface generation; separation of that inner peer from an
+external VPN transport/server endpoint.  
+**Review:** `design/reviews/NG3-2026-11-23-private-peer-path-firewall-design-review.md`  
+**Executable evidence:** EXP-039 — PASS; the generic TUN address observation exposes the
+private/inner peer while not providing the userspace VPN transport endpoint.
+
+This entry is the stable evidence address for architecture that consumes the private-peer fact
+without treating it as transport provenance.
+
+
+## EV-00030 — protective-mode lower containment selection
+
+**Status:** accepted  
+**Scope:** feasibility and selection of the dedicated Private-network protective containment
+state while preserving namespace, interfaces, routes and normal policy state.  
+**Reviews:** `design/reviews/NG3-2026-11-22-aggressive-protective-architecture-acceptance-review.md`;
+`design/reviews/NG3-2026-11-22-protective-payload-gate-implementation-review.md`.  
+**Executable evidence:** EXP-082 — PASS / not selected two-barrier composition;
+EXP-083 — PASS / selected single owned protective gate.
+
+This entry preserves both the rejected-complexity comparison and the selected one-gate lower
+mechanism behind one stable architecture evidence address.
+
+
+## EV-00040 — aggressive routing authority and escape protection
+
+**Status:** accepted  
+**Scope:** authoritative host-routing verification, independent fail-closed escape protection,
+activation/deactivation ordering and full-tunnel exemptions.  
+**Reviews:** `design/reviews/NG3-2026-11-22-aggressive-protective-architecture-acceptance-review.md`;
+`design/reviews/NG3-2026-11-22-aggressive-host-routing-enforcer-implementation-review.md`;
+`design/reviews/NG3-2026-11-22-aggressive-host-routing-manager-implementation-review.md`.  
+**Executable evidence:** EXP-074 — retained narrow routing mechanics; EXP-081 — accepted
+negative evidence against owned-object-only authority; EXP-084 — PASS prefix-scoped escape
+protection; EXP-085 — PASS full-tunnel escape-protection exemptions.
+
+This entry is the stable evidence address for E.003/E.004 routing-authority and containment
+decisions.
