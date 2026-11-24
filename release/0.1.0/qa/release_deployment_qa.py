@@ -313,6 +313,33 @@ ExecStop=/usr/bin/wg-quick down %i
         wait_ping("10.70.0.1")
         print("RELEASE_QA_PROTECTIVE_SAFE_LEAVE=PASS")
 
+        reentered = json.loads(command((*control, "enter")).stdout)
+        assert reentered["ok"] is True, reentered
+        assert not ping("10.70.0.1")
+
+        ns(MANAGED, "nft", "delete", "table", "ip", "vpn_gate")
+        ns(MANAGED, "nft", "add", "table", "ip", "vpn_gate")
+        blocked_leave = command((*control, "leave"), check=False)
+        assert blocked_leave.returncode != 0, blocked_leave
+        blocked = json.loads(blocked_leave.stdout)
+        assert blocked["ok"] is False, blocked
+        assert blocked["action_status"] == "leave_blocked", blocked
+        assert blocked["protective"]["status"] == "active", blocked
+        assert not ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_FAILED_LEAVE_RETAINS_BLOCK=PASS")
+
+        ns(MANAGED, "nft", "delete", "table", "ip", "vpn_gate")
+        wait_until(
+            "Protective mode release after normal-state recovery",
+            lambda: (
+                json.loads(command((*control, "status")).stdout)
+                ["protective"]["status"]
+                == "inactive"
+            ),
+        )
+        wait_ping("10.70.0.1")
+        print("RELEASE_QA_PROTECTIVE_RECOVERY_RELEASE=PASS")
+
         systemctl("stop", unit)
         wait_no_path()
         controller_stop()
