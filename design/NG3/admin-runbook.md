@@ -252,7 +252,52 @@ ping -c 3 10.20.0.1
 traffic к `vnga-host0`; точный contract и примеры находятся в
 `design/NG3/host-integration.md`.
 
-## 8. Monitoring
+## 8. Protective mode
+
+Protective mode — явная аварийная/административная блокировка IP traffic через управляемую
+область без teardown runtime state.
+
+Проверить состояние:
+
+```sh
+vpn-gate-control protective status
+```
+
+Включить:
+
+```sh
+vpn-gate-control protective enter
+```
+
+Success означает, что отдельный owned protective gate уже fresh-подтвержден. После этого
+ordinary-boundary IP traffic в обоих направлениях и forwarding между VPN paths закрыты, но
+managed netns, interfaces, intent и diagnostic context сохраняются.
+
+Снять:
+
+```sh
+vpn-gate-control protective leave
+```
+
+Success означает, что controller сначала заново подтвердил применимое ordinary desired state,
+а затем успешно снял protective gate. Non-zero результат leave нельзя трактовать как снятый
+режим: блокировка сохраняется либо переустанавливается fail-closed.
+
+Для независимых automation request sources:
+
+```sh
+vpn-gate-control protective enter --source automation:maintenance
+vpn-gate-control protective leave --source automation:maintenance
+```
+
+Запросы source-scoped: один source не может снять активный запрос другого. Во время active
+режима Manager периодически fresh-наблюдает отдельный protective gate и восстанавливает его
+после exact-owned drift.
+
+Текущий control socket root-only:
+`/run/vpn-gate-alpha/control.sock`.
+
+## 9. Monitoring
 
 Текущий человекочитаемый state:
 
@@ -281,7 +326,7 @@ journalctl -fu vpn-gate-alpha-openvpn.service
 Не смешивайте два источника: controller log объясняет VPN-GATE policy/reaction, OpenVPN log —
 protocol/session implementation.
 
-## 9. Что означает operational log
+## 10. Что означает operational log
 
 Форма записи:
 
@@ -356,7 +401,7 @@ DEBUG POLICY reconcile_result_changed ...
 DEBUG отвечает на вопрос «что пересчитал/применил компонент», но не трассирует каждую
 function/branch. Обычно держите `log_level = "info"`; включайте `debug` на время разбора.
 
-## 10. Restart и stop
+## 11. Restart и stop
 
 Restart только VPN:
 
