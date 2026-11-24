@@ -110,6 +110,14 @@ class LinuxManagedWireGuardAdapter:
         if not isinstance(self.network_namespace, str) or not self.network_namespace:
             raise ValueError("network_namespace must be non-empty text")
 
+    def desired_generation(
+        self,
+        device_id: str,
+        desired: ManagedWireGuardConfig,
+    ) -> str:
+        """Validate current secret inputs and return the desired base-generation token."""
+        return self._prepare(device_id, desired).generation
+
     def observe(self, device_id: str) -> ManagedWireGuardObservation:
         marker = _owner_marker(device_id)
         row = self._owned_link(marker)
