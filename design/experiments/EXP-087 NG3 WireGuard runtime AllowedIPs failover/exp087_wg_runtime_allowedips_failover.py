@@ -163,7 +163,7 @@ def allowed_ips() -> dict[str, tuple[str, ...]]:
         if values.strip() == "(none)":
             result[peer] = ()
         else:
-            result[peer] = tuple(value.strip() for value in values.split(","))
+            result[peer] = tuple(values.replace(",", " ").split())
     return result
 
 
