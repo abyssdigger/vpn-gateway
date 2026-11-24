@@ -89,7 +89,7 @@ decisions.
 
 ## EV-00050 — WireGuard same-prefix peer ownership and managed-realization boundary
 
-**Status:** accepted lower evidence; architecture selection in progress  
+**Status:** selected  
 **Scope:** one WireGuard interface with multiple peers that can serve the same remote prefix;
 exclusive `AllowedIPs` ownership; permanent peer-specific in-tunnel probe prefixes; runtime
 owner transfer without interface restart; safe no-owner base configuration; restart reset;
@@ -104,5 +104,5 @@ generation-scoped confirmation.
 
 EXP-088 additionally observed one live 200-packet A-to-B transition with zero packet loss and
 no third-peer payload replies. This observation is not a universal transactional-atomicity
-guarantee for `wg set`; architecture must still confirm exact post-apply `AllowedIPs`
-state before publishing a new realization generation.
+guarantee for `wg set`; selected architecture A.012/D.001/D.002/D.003 therefore confirms
+exact post-apply `AllowedIPs` state before publishing a new realization generation.
