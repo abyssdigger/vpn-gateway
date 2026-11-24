@@ -27,6 +27,8 @@ Normal subject owners:
 
 `CONTINUOUS-DEVELOPMENT.md` is **not** a general prerequisite. Read it when the user
 explicitly starts/resumes CD, or when the task itself edits/reviews CD process.
+Do not read `CONTINUOUS-DEVELOPMENT.md` merely because a task resembles CD work; reading or
+planning under that document must not itself activate CD.
 
 For product/implementation changes, read the relevant requirement ancestry and relevant
 architecture/component-model sections. Do not force unrelated requirements/architecture into
@@ -59,6 +61,36 @@ Repository state is read-only unless:
 
 Discussion, review, brainstorming, semantic approval, “yes/ok/looks good”, or a question about
 whether work can proceed is not write authorization.
+
+### CD activation gate
+
+CD is inactive by default.
+
+A new CD session may start only when the user's active instruction explicitly names CD/CDC
+or otherwise unambiguously instructs the agent to start a continuous-development session.
+
+Examples of sufficient authorization:
+
+- "новый CDC";
+- "запускай CDC";
+- "начинаем CD";
+- "продолжаем CDC" when a previously active session is being resumed.
+
+The following do **not** start or resume CD:
+
+- "давай проверим";
+- "проверь";
+- "исследуй";
+- "сделай эксперимент";
+- "давай попробуем";
+- requests to implement, review, test or investigate something;
+- a task that would normally or conveniently be performed under CD;
+- the agent's own proposal to use CD.
+
+If explicit CD activation wording is absent, treat CD as inactive and apply the outside-CD
+authorization rules, even when the requested work is substantial or experimental.
+
+The agent must not convert an ordinary task into CD on the user's behalf.
 
 ### Outside-CD repository authorization
 
