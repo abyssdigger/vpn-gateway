@@ -19,6 +19,7 @@ on:
       - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
       - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
       - "design/experiments/EXP-068 NG3 continuous availability failover/**"
+      - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"
       - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
       - "design/experiments/EXP-074 NG3 host managed routing/**"
       - "design/experiments/EXP-081 NG3 aggressive RPDB precedence gap/**"
@@ -68,6 +69,7 @@ on:
       - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
       - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
       - "design/experiments/EXP-068 NG3 continuous availability failover/**"
+      - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -185,6 +187,20 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-068 NG3 continuous availability failover/exp068_continuous_availability.py"
+
+
+  linux-wireguard-multipeer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WireGuard networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping wireguard-tools
+      - name: EXP-086 WireGuard same-prefix multi-peer availability
+        run: >-
+          sudo python3
+          "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/exp086_wg_same_prefix_multi_peer.py"
 
 
   linux-forwarding-barrier:
