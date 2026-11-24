@@ -1,0 +1,505 @@
+# VPN-GATE NG3 — Requirements — research purpose/parent correction record
+
+> **NON-NORMATIVE RESEARCH RECORD.** This file preserves the corrected-tree proposal derived
+> from snapshot 145 and the product-holder dispositions recorded in
+> `NG3-2026-11-20-requirement-refactor-decisions.md`. After the final coherent-tree PASS,
+> this proposal was promoted on the research branch to the normative
+> `design/NG3/requirements.md` and its current traceability was remapped. The IDs rendered
+> below are therefore no longer provisional on this branch. No `RESEARCH UNRESOLVED` markers
+> remain.
+
+**Status:** non-normative record of the promoted requirement refactor  
+**Research branch:** `ng3-research-20261120-requirement-purpose-parent-consistency-30m`  
+**Normative model:** `design/requirements-model.md`  
+**Promoted normative tree:** `design/NG3/requirements.md`
+
+The seven primary project requirements are accepted. Their derived Requirement/Constraint
+trees remain subject to normal requirement/constraint review.
+
+Canonical compact form:
+
+```text
+- **[PRODUCT0001]** Basis | Statement [pending_closure|closed|rejected_closure]       — primary R
+    - **[PRODUCT0001-R...]** Purpose | Statement [pending_closure|closed|rejected_closure] — derived R
+        - **[PRODUCT0001-...C...]** Reason | Statement [pending_closure|closed|rejected_closure] — C
+```
+
+The normative tree is rendered as a real nested Markdown list: each requirement-tree level
+adds four spaces before the list marker. Wrapped lines therefore retain the indentation of
+their whole Requirement/Constraint paragraph; causal trace lines (`decomp`, `unreal`,
+`broken`) remain aligned as continuations of the owning list item. This indentation is
+presentation only and has no normative meaning.
+
+For a primary project requirement the italicized part is **Основание**: a verifiable external
+source answering «откуда это требование взято?». For a derived requirement it answers
+**зачем**; for a constraint it answers **почему**. The part after `|` is the normative
+statement.
+
+The optional closure label records acceptance state only:
+[`pending_closure`] means an architecture candidate exists but is not yet accepted;
+[`closed`] means it has been accepted as sufficient for the current scope;
+[`rejected_closure`] means the candidate failed acceptance. Requirements do not list the
+architectural decisions themselves; those are found by searching architecture documents for
+the requirement/constraint ID.
+
+Section headings below are only human-readable grouping. They are not requirements and do
+not participate in the requirement tree.
+
+No NG2 component, state machine, event, Linux mechanism or configuration object becomes an
+NG3 requirement merely because it existed before.
+
+## VPN routing and VPN-channel service
+
+- **[VPNG-U001]** *Основание: интервью заказчика с аналитиком, 2026-11-15; требование зафиксировано в initial NG3 requirement tree commit `4b3785b5c228782768afe317d4f09386fd46b440` от 2026-11-15 21:14:07 +03:00; тема: управляемый VPN-маршрутизатор.* | VPN-GATE должен позволять пользователю использовать продукт как управляемый сетевой узел для передачи выбранного IP-трафика через VPN без ручной сборки требуемого поведения из низкоуровневых сетевых команд. [`closed`]
+
+    - **[VPNG-U001-R1]** *Чтобы пользователь мог использовать VPN-GATE как управляемый сетевой узел для передачи выбранного IP-трафика через VPN, не собирая поведение продукта вручную из низкоуровневых сетевых команд.* | VPN-GATE должен предоставлять управляемую маршрутизацию выбранного IP-трафика между обычной сетью и настроенными VPN-путями. [`closed`]
+
+        - **[VPNG-U001-R1.R1]** *Чтобы трафик, принятый продуктом в обслуживание, действительно мог проходить через предназначенный для него VPN-путь в требуемом направлении.* | Для принятого в обслуживание IP-трафика VPN-GATE должен обеспечивать необходимое forwarding поведение между обычной сетью и разрешенными VPN-путями. [`closed`]
+
+
+        - **[VPNG-U001-R1.R3]** *Чтобы VPN-GATE мог использовать подготовленные VPN-соединения как реальные пути передачи управляемого трафика.* | VPN-GATE должен уметь принимать в обслуживание поддерживаемые VPN-каналы, однозначно идентифицировать их и использовать как VPN-пути в соответствии с текущей политикой. [`closed`]
+
+            - **[VPNG-U001-R1.R3.R1]** *Чтобы normalized policy, availability и status могли различать VPN-пути независимо от случайной идентичности текущего runtime-объекта.* | Каждый VPN-путь, полученный из Device binding semantics и используемый продуктом, должен иметь однозначную логическую идентичность, стабильную для соответствующего Device/selector/slot binding lifecycle и отличимую от конкретного текущего data-plane endpoint. [`closed`]
+
+            - **[VPNG-U001-R1.R3.R2]** *Чтобы конкретный внешний VPN endpoint мог безопасно использоваться как именно тот путь, который указан в политике.* | До использования VPN-пути VPN-GATE должен иметь однозначный текущий binding между логической идентичностью пути и конкретным data-plane endpoint; отсутствие, неоднозначность или несоответствие binding не должны приводить к использованию endpoint как этого VPN-пути. [`closed`]
+
+            - **[VPNG-U001-R1.R3.R3]** *Чтобы замена или пересоздание внешнего VPN endpoint не оставляли старый runtime-объект неявно действующим представителем логического пути.* | При изменении текущего binding новый concrete endpoint может представлять тот же логический VPN-путь только после подтверждения нового binding; superseded endpoint после этого не должен считаться текущим endpoint этого пути. [`closed`]
+
+            - **[VPNG-U001-R1.R3.R4]** *Чтобы пользователь мог описать ожидаемые runtime endpoints внешнего Device до их фактического появления и не зависеть от ручного назначения каждого обнаруженного интерфейса.* | Enabled Device должен задавать непустой ordered набор `expected_interfaces`, по которому VPN-GATE однозначно распознает допустимые runtime interface endpoints этого Device и допускает их к binding только в пределах заданных selector semantics. [`closed`]
+
+                - **[VPNG-U001-R1.R3.R4.R1]** *Чтобы точный интерфейс и семейство динамически создаваемых интерфейсов можно было описать одной предсказуемой моделью.* | Expected-interface selector должен поддерживать exact interface identity с quota 1 и prefix-family selector с явной положительной quota; prefix selector без quota не должен молча получать неявную емкость. [`closed`]
+
+                - **[VPNG-U001-R1.R3.R4.R2]** *Чтобы один runtime interface не мог одновременно и неоднозначно представлять несколько активных Devices.* | Expected-interface selectors должны быть не пересекающимися внутри одного Device и между Devices, одновременно активными в текущем configuration intent; VPN-GATE должен отклонять неоднозначный binding до использования endpoint. [`closed`]
+
+                - **[VPNG-U001-R1.R3.R4.R3]** *Чтобы временное отсутствие или появление дополнительных runtime interfaces не меняло пользовательский смысл Device.* | Runtime binding должен отличать user-declared expected-interface capacity от фактически обнаруженных endpoints; отсутствие ожидаемого endpoint не создает другой Device, а endpoint сверх selector quota не должен неявно становиться управляемым путем. [`closed`]
+
+                    - **[VPNG-U001-R1.R3.R4.R3.R1]** *Чтобы replacement или появление соседнего endpoint не меняли идентичность уже известного пути и не ломали Profile preference/status.* | Каждый admitted selector slot должен соответствовать стабильной logical path identity, производной от Device identity, selector position и stable slot; concrete endpoint является текущим binding этой logical identity и может заменяться без изменения самой identity после подтверждения нового binding. [`closed`]
+
+                - **[VPNG-U001-R1.R3.R4.R4]** *Чтобы объявление Device само по себе не запускало управление сетевым ресурсом, который пользователь пока ни для чего не использует.* | Device считается active для discovery/binding только если он enabled и referenced хотя бы одним enabled Profile; disabled или не referenced Device не должен создавать active binding/path behavior. [`closed`]
+
+            - **[VPNG-U001-R1.R3.C1]** *Первый релиз сознательно ограничен использованием VPN-каналов, заранее развернутых и базово настроенных администратором во внешней эксплуатационной среде; автоматическое provisioning VPN-инфраструктуры не входит в принятый first-release scope.* | VPN-GATE первого релиза не обязан самостоятельно создавать и конфигурировать VPN-каналы; администратор должен заранее развернуть и настроить поддерживаемый VPN-канал так, чтобы VPN-GATE мог принять его в обслуживание. [`closed`]
+
+                - **[VPNG-U001-R1.R3.C1.R1]** *Чтобы администратор мог выполнить возложенную на него часть без знания внутренних деталей реализации VPN-GATE.* | Проект VPN-GATE должен предоставлять для каждого поддерживаемого способа внешнего развертывания VPN-канала инструкции и необходимый контракт, позволяющие администратору сделать канал однозначно видимым и пригодным для управления и использования VPN-GATE. [`closed`]
+
+                    - **[VPNG-U001-R1.R3.C1.R1.R1]** *Чтобы заявленная поддержка внешнего VPN-канала не оставалась только формальной схемой без доказанной эксплуатационной применимости.* | Для каждого способа внешнего развертывания VPN-канала, объявленного поддерживаемым первым release, проект должен иметь воспроизводимое acceptance evidence, подтверждающее, что администратор, следуя опубликованному onboarding contract и не изменяя внутренний код VPN-GATE, может подготовить канал до состояния, в котором VPN-GATE принимает его в обслуживание и использует в соответствии со всеми применимыми требованиями этого поддерживаемого способа интеграции. [`closed`]
+
+                    - **[VPNG-U001-R1.R3.C1.R1.R2]** *Чтобы администратор мог подготовить VPN-specific configuration, не передавая внешней VPN implementation неявное право изменять сетевую policy, которой владеет VPN-GATE.* | Onboarding contract каждой поддерживаемой integration должен явно отделять VPN-specific configuration/state от VPN-GATE-owned network policy/state и описывать integration-specific ограничения или настройки, необходимые для policy-neutral использования канала; конфликтующие hooks или эквивалентные network mutations не должны молча считаться поддерживаемыми и должны быть отключены, вынесены за границу integration либо иначе явно разрешены отдельным применимым requirement. [`closed`]
+
+            - **[VPNG-U001-R1.R3.C3]** *Поскольку принятие VPN-GATE прямого ownership и supervision внешних VPN runtime/process/service существенно расширяет lifecycle responsibility продукта и не требуется для использования поддерживаемого VPN-канала, когда его runtime lifecycle надёжно обеспечивает внешняя эксплуатационная среда.* | Первый release не обязан обнаруживать, создавать, усыновлять или брать под непосредственный supervision процессы/services внешних VPN implementations; lifecycle такого runtime может оставаться под контролем администратора или внешнего lifecycle manager, если поддерживаемый integration contract обеспечивает необходимую координацию с lifecycle и safety postconditions VPN-GATE. [`closed`]
+
+                - **[VPNG-U001-R1.R3.C3.R1]** *Чтобы внешнее ownership lifecycle поддерживаемого VPN runtime не превращало эксплуатацию канала в ручную координацию и не оставляло его runtime несогласованным с lifecycle VPN-GATE.* | Для каждого поддерживаемого способа integration, где lifecycle VPN runtime остаётся внешним, проект должен предоставлять воспроизводимый lifecycle integration contract, достаточный для поддерживаемых start/stop/restart операций этого runtime и для согласования его lifetime с VPN-GATE так, чтобы выполнялись все применимые lifecycle и safety postconditions; этот contract не должен требовать прямого process supervision со стороны VPN-GATE. [`closed`]
+
+
+            - **[VPNG-U001-R1.R3.R6]** *Чтобы VPN-канал, принятый VPN-GATE в обслуживание, мог обмениваться необходимым для своей работы транспортным и управляющим трафиком.* | VPN-GATE должен обеспечивать необходимые сетевые условия для транспортного и управляющего обмена поддерживаемого VPN-канала в пределах контролируемой им области. [`pending_closure`]
+
+                - **[VPNG-U001-R1.R3.R6.R1]** *Чтобы поддерживаемый VPN-сервер мог принимать необходимые внешние соединения.* | VPN-GATE должен позволять обеспечивать внешнюю доступность транспортного трафика поддерживаемого VPN-сервера, когда она требуется для работы используемого VPN-канала. [`pending_closure`]
+
+                - **[VPNG-U001-R1.R3.R6.R2]** *Чтобы поддерживаемый VPN-клиент мог устанавливать и поддерживать VPN-соединение при ограниченной локальной сетевой политике.* | VPN-GATE должен позволять пропускать необходимый транспортный и управляющий трафик поддерживаемого VPN-клиента без предоставления ему произвольного доступа к локальной сети. [`pending_closure`]
+
+        - **[VPNG-U001-R1.R4]** *Чтобы управляемая маршрутизация могла учитывать требования, относящиеся к использованию конкретного VPN-ресурса, без расширения общей политики трафика.* | VPN-GATE должен позволять пользователю задавать дополнительную политику обработки трафика для конкретного VPN-ресурса; такая политика не должна создавать разрешения, отсутствующие в общей политике трафика. [`pending_closure`]
+
+            - **[VPNG-U001-R1.R4.R1]** *Чтобы пользователь мог скрыть от удалённой стороны исходные адреса обычной сети при передаче трафика через VPN-ресурс.* | VPN-GATE должен позволять пользователю применять NAT для сокрытия исходных адресов обычной сети в трафике, передаваемом через выбранный VPN-ресурс. [`pending_closure`]
+
+            - **[VPNG-U001-R1.R4.R2]** *Чтобы пользователь мог исключать из разрешённого трафика то, что недопустимо при использовании конкретного VPN-ресурса.* | VPN-GATE должен позволять пользователю задавать дополнительные ограничения трафика в зависимости от VPN-ресурса, через который этот трафик передаётся; такие ограничения могут только сужать разрешения, заданные общей политикой трафика. [`pending_closure`]
+
+                - **[VPNG-U001-R1.R4.R2.R1]** *Чтобы ограничение, относящееся только к одному из путей VPN-ресурса, не приходилось распространять на остальные его пути.* | VPN-GATE должен позволять пользователю задавать дополнительные ограничения трафика для отдельного различимого VPN-пути. [`pending_closure`]
+
+                    - **[VPNG-U001-R1.R4.R2.R1.C1]** *Поскольку надёжное связывание пользовательского ограничения с отдельным VPN-путём ещё не подтверждено для всех поддерживаемых VPN-интеграций первого релиза.* | Первый релиз может поддерживать дополнительные ограничения только на уровне VPN-ресурса целиком и не обязан позволять задавать их для отдельного VPN-пути. [`pending_closure`]
+
+    - **[VPNG-U001-R2]** *Чтобы использование VPN-GATE для передачи выбранного IP-трафика не меняло сетевое поведение хоста, не относящееся к выбранной пользователем функции VPN-GATE.* | VPN-GATE должен ограничивать изменения ordinary-host network state теми объектами и эффектами, которые необходимы явно включенным host-side функциям продукта; использование core managed forwarding само по себе не должно требовать передачи VPN-GATE управления ordinary-host routing или иной несвязанной сетевой политикой хоста. [`closed`]
+
+        - **[VPNG-U001-R2.R1]** *Чтобы core managed forwarding действительно не требовал управления ordinary-host routing со стороны VPN-GATE, когда эту маршрутизацию обеспечивает администратор.* | Core managed forwarding VPN-GATE должен корректно работать без host-routing helper, если администратор самостоятельно обеспечил ordinary-host routing и другие deployment prerequisites, необходимые для доставки требуемого трафика в VPN-GATE и обратно; core VPN-GATE не должен сам изменять ordinary-host routing только ради собственной forwarding-работоспособности. [`closed`]
+
+            - **[VPNG-U001-R2.R1.R1]** *Чтобы администратор мог воспроизводимо обеспечить требуемую ordinary-host routing без знания внутренних Linux-объектов и скрытых предположений VPN-GATE.* | Проект должен предоставлять стабильный host-integration contract и административные инструкции, достаточные для ручной настройки ordinary-host routing, необходимой для доставки поддерживаемого трафика в VPN-GATE и обратно; этот контракт не должен требовать использования host-routing helper. [`closed`]
+
+    - **[VPNG-U001-R3]** *Чтобы пользователь мог применять дополнительную сетевую политику к входящему через VPN трафику не только по исходным адресам удалённых узлов.* | VPN-GATE должен позволять пользователю делать входящий через VPN трафик от разных источников различимым в обычной сети для последующего дополнительного управления. [`pending_closure`]
+
+    - **[VPNG-U001-R4]** *Чтобы пользователь мог задавать поддерживаемое поведение VPN-GATE через устойчивый продуктовый интерфейс, не воспроизводя внутренние механизмы его реализации.* | VPN-GATE должен предоставлять пользовательскую конфигурацию для задания поддерживаемого настраиваемого поведения продукта; конфигурация должна выражать пользовательское намерение и не требовать задания внутренних объектов и операций реализации. [`pending_closure`]
+
+        - **[VPNG-U001-R4.R1]** *Чтобы пользователь описывал намерение продукта, а не последовательность Linux/networking действий.* | Продуктовая конфигурация должна выражать логические сущности и связи, необходимые принятым требованиям, без обязанности пользователя задавать внутренние route/rule/firewall/process операции VPN-GATE. [`closed`]
+
+        - **[VPNG-U001-R4.R2]** *Чтобы администратор мог описать заранее подготовленные VPN resources без ручного именования каждого случайно появившегося runtime endpoint.* | Декларативный контракт конфигурации должен позволять задать Device identity и binding expectations, достаточные для детерминированного получения логических VPN-путей и их текущих data-plane endpoint bindings. [`closed`]
+
+        - **[VPNG-U001-R4.R3]** *Чтобы ошибочная декларативная конфигурация не превращалась в частично примененное или случайное сетевое состояние.* | VPN-GATE должен до применения зависящих сетевых изменений отклонять конфигурацию, из которой нельзя однозначно получить требуемые логические сущности, связи и обязательные binding/policy намерения; VPN-GATE должен оставлять причину отказа наблюдаемой. [`closed`]
+
+        - **[VPNG-U001-R4.R5]** *Чтобы human-facing config был однозначным административным контрактом, а не эвристическим языком, который разные версии могут «понимать» по-разному.* | Для каждого поддерживаемого user-facing поля VPN-GATE должен принимать один определенный canonical semantic form, отвергать неоднозначные/некорректные значения вместо молчаливого исправления и не требовать от пользователя повторного задания значений, которые однозначно выводятся из конфигурации или runtime observations. [`closed`]
+
+            - **[VPNG-U001-R4.R5.R1]** *Чтобы конфигурационные идентификаторы, поля и enum-значения оставались читаемыми и однозначными для человека и tooling.* | Human-facing schema должен использовать стабильные opaque object IDs, semantic snake_case field names, настоящие TOML booleans и одну canonical lowercase textual representation для каждого enum-like значения; VPN-GATE не должен неявно принимать aliases вроде нескольких spelling одного и того же semantic value. [`closed`]
+
+            - **[VPNG-U001-R4.R5.R2]** *Чтобы ошибочный network policy input не менял смысл через скрытую canonicalization.* | VPN-GATE должен выполнять strict semantic validation IPv4/CIDR и других policy values: в частности, он должен отклонять destination CIDR с host bits вместо silent canonicalization, бессмысленные duplicate declarations и недопустимые/неоднозначные ranges/references. [`closed`]
+
+            - **[VPNG-U001-R4.R5.R3]** *Чтобы пользовательский config описывал намерение, а не внутренние вычисляемые параметры Linux-реализации.* | Derived/redundant quantities и implementation identifiers (например aggregate Device quota, runtime ifindex, route metric/table/rule priority) не должны становиться обязательными user-facing полями, если их значение однозначно выводится продуктом и они не являются самостоятельным user policy knob. [`closed`]
+
+            - **[VPNG-U001-R4.R5.R4]** *Чтобы порядок элементов не превращался в скрытую policy там, где пользователь его не задавал.* | Collection order должен влиять на semantics только для полей, явно определенных как ordered policy (например `device_order` и `expected_interfaces`); для set-like declarations вроде `destinations` порядок записи не должен менять результат. [`closed`]
+
+        - **[VPNG-U001-R4.R4]** *Чтобы пользователь мог описывать ожидаемое сетевое поведение устойчивыми предметными сущностями, а не смешивать сетевую потребность с текущими runtime-интерфейсами.* | Пользовательская конфигурация должна предоставлять именованные сущности `Device` и `Profile`: Device описывает ожидаемый внешний VPN/network resource и его binding expectations, а Profile описывает пользовательскую сетевую потребность и связывает ее с разрешенными Devices. [`closed`]
+
+            - **[VPNG-U001-R4.R4.R1]** *Чтобы пользователь мог стабильно ссылаться на одну и ту же логическую сущность из других частей конфигурации, status и diagnostics.* | Каждый Device и Profile должен иметь стабильный уникальный user-visible ID; ссылки между сущностями должны использовать этот ID, а runtime interface name, metric или случайный object identity не должны подменять пользовательскую идентичность. [`closed`]
+
+                - **[VPNG-U001-R4.R4.R1.C1]** *В текущем human-facing contract не определена отдельная quoting/escaping semantics для Device/Profile IDs, поэтому идентификаторы должны оставаться однозначными в простой canonical textual form.* | В текущем human-facing contract Device/Profile ID ограничен формой `[a-z0-9][a-z0-9-]*`; dots, underscores, whitespace и uppercase не поддерживаются, leading digit допустим, а ID должен трактоваться как opaque string, не как число или системный identifier. [`closed`]
+
+            - **[VPNG-U001-R4.R4.R2]** *Чтобы пользователь мог заранее описать будущую или временно неиспользуемую часть конфигурации без ее фактической активации.* | Device и Profile должны иметь явное `enabled` состояние без неявного default; disabled объект может существовать как именованный placeholder и не должен сам по себе создавать active routing/binding behavior. [`closed`]
+
+                - **[VPNG-U001-R4.R4.R2.R1]** *Чтобы placeholder не требовал преждевременно заполнять еще не определенную будущую конфигурацию.* | Для `enabled = false` остальные поля Device/Profile могут отсутствовать и не должны проходить глубокую semantic validation, кроме корректности самой внешней структуры и идентичности объекта. [`closed`]
+
+            - **[VPNG-U001-R4.R4.R3]** *Чтобы один и тот же внешний VPN/network resource можно было переиспользовать в нескольких независимых пользовательских сетевых потребностях.* | Device должен быть отдельной от Profile сущностью; один Device может быть referenced несколькими Profiles, а Device-specific binding expectations не должны дублироваться внутри каждого Profile. [`closed`]
+
+            - **[VPNG-U001-R4.R4.R4]** *Чтобы Profile оставался описанием пользовательского намерения, а не снимком текущей Linux-реализации.* | Enabled Profile должен явно задавать direction, непустой набор remote destinations и непустой ordered список Device IDs; Profile не должен требовать от пользователя задания runtime interface names, Linux metrics или внутренних route/rule/firewall объектов. [`closed`]
+
+                - **[VPNG-U001-R4.R4.R4.R2]** *Чтобы исчезновение, замена или временное отсутствие transport paths не уничтожали саму пользовательскую сетевую потребность.* | Profile должен существовать как независимый logical routing/payload-policy domain независимо от текущего числа пригодных concrete paths; binding/path availability изменяют возможность и порядок materialization, но не идентичность, destinations или direction самого Profile. [`closed`]
+
+                - **[VPNG-U001-R4.R4.R4.R3]** *Чтобы пользовательская модель Profile не смешивалась с VPN transport implementation.* | Profile не должен идентифицироваться с VPN interface, peer, tunnel/session, route metric, probe target или набором Linux rules; эти объекты могут обслуживать Profile через отдельные binding/normalization/materialization boundaries. [`closed`]
+
+
+                - **[VPNG-U001-R4.R4.R4.R4]** *Чтобы пользователь мог через конфигурацию запросить предусмотренную `VPNG-U001-R3` различимость входящего через VPN трафика, не задавая внутренние NAT-операции.* | Конфигурация должна позволять для Profile явно выбрать отсутствие source translation, использование общей заданной source identity или явную IPv4 source identity для входящего через VPN трафика. [`pending_closure`]
+
+                    - **[VPNG-U001-R4.R4.R4.R4.C1]** *Поскольку в Release 1 различимость входящего трафика выражается через Profile source translation, а адрес translation является частью того же пользовательского решения, отдельные независимые Profile toggles/поля создавали бы бессмысленные сочетания и разрывали бы одну policy на несколько мест.* | В Release 1 opt-in Profile source translation кодируется только в `direction`: допустимы `inbound+snat`, `inbound+snat>IPv4`, `bidirectional+snat` и `bidirectional+snat>IPv4`; базовые `inbound`/`bidirectional` означают отсутствие translation, `outbound+snat...` недопустим. Голый `+snat` использует top-level `default_snat_address`, а `+snat>IPv4` переопределяет его для данного Profile; если enabled Profile использует голый `+snat`, отсутствие `default_snat_address` является ошибкой конфигурации. Отдельного Profile-поля gateway/SNAT нет. [`pending_closure`]
+
+            - **[VPNG-U001-R4.R4.R5]** *Чтобы ссылки на конфигурационные сущности были предсказуемыми и не создавали скрытых объектов.* | Enabled Profile может ссылаться только на объявленные Device IDs; VPN-GATE должен отклонять конфигурацию с unknown Device reference, а ссылку на известный disabled Device должен трактовать как допустимую и означающую, что такой Device временно не участвует operationally без изменения самого Profile intent. [`closed`]
+
+            - **[VPNG-U001-R4.R4.R6]** *Чтобы transport-specific свойства не приходилось дублировать в каждом Profile и чтобы они не смешивались с Profile routing need.* | Device должен быть местом пользовательского описания transport/path policy, общей для его concrete paths и независимой от Profile payload need; такие свойства могут включать NAT intent, ordered Device firewall policy и transport publication intent, если соответствующая capability поддерживается продуктом. [`closed`]
+
+                - **[VPNG-U001-R4.R4.R6.R1]** *Чтобы пользователь мог однозначно включить или отключить NAT-сокрытие обычной сети для конкретного VPN-ресурса и чтобы оно не возникало неявно.* | Для enabled Device, который в текущей enabled-конфигурации может обслуживать ordinary→VPN traffic, конфигурация первого релиза должна явно задавать boolean `use_outbound_nat`: `true` включает предусмотренное `VPNG-U001-R1.R4.R1` NAT-сокрытие, `false` оставляет исходные адреса без такого преобразования. Для Device без ordinary→VPN роли параметр не требуется. [`pending_closure`]
+
+                - **[VPNG-U001-R4.R4.R6.R2]** *Чтобы пользователь мог через конфигурацию задавать предусмотренные `VPNG-U001-R1.R4.R2` дополнительные ограничения для конкретного VPN-ресурса.* | Device-конфигурация должна позволять описать дополнительные ограничения payload-трафика, применяемые только как сужение общей политики трафика; конкретная Release-1 grammar и порядок интерпретации правил определяются потомками этого конфигурационного контракта. [`pending_closure`]
+
+                    - **[VPNG-U001-R4.R4.R6.R2.R1]** *Чтобы пользователь мог описывать ограничения Device в привычной последовательной firewall-модели и понимать влияние порядка правил без скрытой оптимизации со стороны VPN-GATE.* | VPN-GATE должен сохранять заданный пользователем порядок `firewall = [...]`; Release-1 rule string имеет форму `<in|out> <allow|deny|reject> [tcp|udp|icmp] [from <IPv4-CIDR>[:port-bundle]] [to <IPv4-CIDR>[:port-bundle]]` с опциональным trailing comment, а первый применимый terminal verdict определяет результат Device firewall. `port-bundle` допустим только с TCP/UDP и состоит без пробелов из одного или нескольких comma-separated элементов `N` или `A-B`, где каждый порт в `1..65535`, `A <= B`, а один физический порт не может повторяться или входить в пересекающиеся элементы bundle; VPN-GATE должен сохранять declared item order и не должен переставлять правила или исправлять широкое раннее правило ради более позднего. [`closed`]
+
+                    - **[VPNG-U001-R4.R4.R6.R2.R2]** *Чтобы пользовательские `IN/OUT` не требовали знания Linux FORWARD semantics и при этом однозначно соответствовали фактическому направлению пакета относительно VPN Device.* | VPN-GATE должен трактовать в Device firewall `OUT` как payload packet, входящий через ordinary/host boundary и уходящий через current concrete path этого Device, а `IN` — как packet, входящий через current concrete path Device и уходящий через ordinary/host boundary; source/destination addresses и ports должны означать буквальные L3/L4 поля payload packet в точке этой фильтрации, а не адреса внешнего VPN transport или значения после последующего VPN-GATE source NAT. [`closed`]
+
+                    - **[VPNG-U001-R4.R4.R6.R2.R3]** *Чтобы отсутствие Device firewall configuration сохраняло прежний смысл «Device не вводит дополнительного ограничения», а явное ограничение не получало скрытого разрешающего fallthrough.* | Если пользователь не задаёт Device firewall rules, VPN-GATE должен нормализовать Device firewall к эквивалентной permissive policy, разрешающей любой поддерживаемый payload в обоих направлениях `IN` и `OUT`; если пользователь задал хотя бы одно явное правило, VPN-GATE должен сохранить только явную ordered policy, а отсутствие совпавшего terminal verdict должно завершаться `DROP`. [`closed`]
+
+                    - **[VPNG-U001-R4.R4.R6.R2.R4]** *Чтобы Device firewall оставался защитой управляемого VPN-трафика, а не превращал VPN-GATE в универсальный host firewall.* | VPN-GATE должен применять пользовательскую Device firewall policy только к payload traffic, который проходит между обычной сетью и current concrete VPN paths этого Device в пределах трафика, контролируемого VPN-GATE; эта policy не должна захватывать произвольный host-local или host-to-host traffic вне VPN-GATE managed payload path. [`closed`]
+
+                    - **[VPNG-U001-R4.R4.R6.R2.R5]** *Чтобы при нескольких VPN-путях одного Device пользователь мог выразить ограничение, относящееся только к одному различимому пути, не привязывая долгоживущую policy к случайному runtime имени интерфейса или транспортной конечной точке.* | Когда per-path ограничения поддерживаются продуктом, конфигурационный контракт должен позволять ссылаться на различимый логический VPN-путь; runtime ifname и transport endpoint/peer не должны становиться пользовательской идентичностью такого selector. [`pending_closure`]
+
+                        - **[VPNG-U001-R4.R4.R6.R2.R5.C1]** *Поскольку первый release по ограничению `VPNG-U001-R1.R4.R2.R1.C1` не обязан поддерживать дополнительные ограничения для отдельного VPN-пути.* | Release-1 Device firewall configuration не обязана предоставлять selector отдельного VPN-пути; дополнительные ограничения могут задаваться для VPN-ресурса целиком. [`pending_closure`]
+
+                - **[VPNG-U001-R4.R4.R6.R3]** *Чтобы пользователь мог через конфигурацию запросить предусмотренную `VPNG-U001-R1.R3.R6.R1` внешнюю доступность поддерживаемого VPN-сервера.* | Release-1 Device-конфигурация должна предоставлять явное описание необходимой публикации транспортного трафика поддерживаемого VPN-сервера без предоставления произвольного payload-доступа. [`pending_closure`]
+
+                - **[VPNG-U001-R4.R4.R6.R4]** *Чтобы пользователь мог через конфигурацию задать предусмотренный `VPNG-U001-R1.R3.R6.R2` необходимый транспортный и управляющий трафик поддерживаемого VPN-клиента.* | Release-1 Device-конфигурация должна позволять явно описывать ограниченные transport/control flows поддерживаемого VPN-клиента без предоставления ему произвольного доступа к локальной сети. [`pending_closure`]
+
+                - **[VPNG-U001-R4.R4.R6.C1]** *Поскольку несколько исторических prototype spellings описывают те же transport-policy semantics, Release 1 нужен один канонический внешний язык без скрытых compatibility aliases.* | Каноническая Release-1 Device grammar использует `use_outbound_nat` для VPN-side source NAT, `allow_vpn_client` для точных client-side transport/control flows, `publish_vpn_server` для host-side server publication и ordered однострочный `firewall`; parser должен отклонять исторические `nat`, `traffic_envelope`, `publications`, top-level `[integration.*]` и иные неподтвержденные aliases. Per-path Device firewall syntax остаётся отдельно ограничена `VPNG-U001-R4.R4.R6.R2.R5.C1`. [`closed`]
+
+    - **[VPNG-U001-R5]** *Чтобы пользователь мог использовать VPN-GATE для передачи выбранного трафика без обязательного ручного сопровождения необходимой для этого маршрутизации на хосте.* | VPN-GATE должен позволять пользователю явно включать автоматизацию маршрутизации на хосте, необходимую для доставки выбранного трафика к VPN-GATE и обратно. [`pending_closure`]
+
+        - **[VPNG-U001-R5.R1]** *Чтобы автоматизация маршрутизации могла использоваться без передачи VPN-GATE постоянного управления маршрутизацией хоста.* | VPN-GATE должен предоставлять простой режим автоматизации маршрутизации, который изменяет только явно выбранную пользователем область маршрутизации и не поддерживает внесённое состояние под непрерывным авторитетным управлением между операциями жизненного цикла. [`pending_closure`]
+
+            - **[VPNG-U001-R5.R1.R1]** *Чтобы простой режим автоматизации был явно управляемым и воспроизводимо ограничивал область вмешательства в первом release.* | Первый release должен предоставлять peaceful host-routing automation, которая через продуктовую конфигурацию по умолчанию отключена и при включении применяет route assistance только к явно выбранной администратором области ordinary-host traffic. Область должна позволять отдельно выбирать host-originated traffic, весь non-local ingress traffic или точные host ingress interfaces; traffic вне выбранной области не должен захватываться helper'ом. Peaceful helper не должен сам включать или выключать host IP forwarding. При включенной области helper устанавливает идентифицируемые host-routing contributions при start, обновляет их при поддерживаемой lifecycle reload-операции и при stop удаляет только сохранившиеся принадлежащие helper'у contributions, не удаляя заменившее их администраторское состояние. Между lifecycle-операциями helper не обязан непрерывно наблюдать или восстанавливать последующие изменения, не должен принудительно возвращать замененное администратором состояние, а такая внешняя поломка или замена сама по себе не должна переводить core managed forwarding VPN-GATE в fail-closed. [`pending_closure`]
+
+        - **[VPNG-U001-R5.R2]** *Чтобы более сильный host-side ownership возникал только как отдельное явное решение администратора и не становился неявным свойством ordinary core forwarding или peaceful automation.* | VPN-GATE должен предоставлять отдельно включаемый aggressive host-routing helper, который во время своей активности считает явно переданную ему host-routing область авторитетно управляемой, поддерживает требуемую доставку к VPN-GATE вопреки конкурирующим изменениям ordinary host routing и при невозможности подтвердить безопасное состояние должен переходить к fail-closed containment вместо продолжения работы с неопределенной маршрутизацией. [`pending_closure`]
+
+            - **[VPNG-U001-R5.R2.R1]** *Чтобы ordinary host routing не могла незаметно обойти явно выбранную администратором authoritative host-routing guarantee.* | Для destination, принятого aggressive host-routing helper под управление, конкурирующая ordinary host routing policy не должна переопределять выбранную helper'ом доставку этого destination к VPN-GATE; host-local delivery и трафик, уже переданный VPN-GATE в обычную сеть, не должны из-за этого захватываться обратно, а несвязанное ordinary host routing state не должно становиться объектом произвольной мутации helper'а. [`closed`]
+
+            - **[VPNG-U001-R5.R2.R2]** *Чтобы authoritative host-routing guarantee не существовала только в момент запуска и не исчезала тихо после внешнего изменения принадлежащего helper'у состояния.* | Пока aggressive host-routing helper активен, он должен с конечной cadence повторно наблюдать существенное helper-owned host-routing state и восстанавливать требуемое состояние после обнаруженного drift, если точное безопасное восстановление возможно. [`pending_closure`]
+
+            - **[VPNG-U001-R5.R2.R3]** *Чтобы невосстановимое нарушение authoritative host-routing guarantee не превращалось в неизвестную потенциально разрешающую передачу трафика.* | Если aggressive host-routing helper не может восстановить или подтвердить состояние, необходимое для его routing guarantee, он должен установить доступное ему host-side fail-closed containment и инициировать защитный режим `VPNG-U004-R5`; невозможность подтвердить требуемое containment должна оставаться явной аварией. [`pending_closure`]
+
+            - **[VPNG-U001-R5.R2.C1]** *Поскольку непрерывная защита ordinary-host routing от внешнего вмешательства и безопасная аварийная композиция с административным containment существенно расширяют host-integration и recovery scope, тогда как первый рабочий релиз может использовать peaceful lifecycle helper или полностью административную host routing.* | Первый release не обязан предоставлять aggressive host-routing helper и связанные с ним continuous-recovery / unrecoverable-alarm guarantees; отсутствие этой capability не должно запрещать peaceful host-routing helper или полностью ручное управление host routing администратором. [`closed`]
+
+## Explicit traffic policy
+
+- **[VPNG-U002]** *Основание: интервью заказчика с аналитиком, 2026-11-15; требование зафиксировано в initial NG3 requirement tree commit `4b3785b5c228782768afe317d4f09386fd46b440` от 2026-11-15 21:14:07 +03:00; тема: явная пользовательская политика использования VPN.* | VPN-GATE должен использовать VPN для управляемого трафика как следствие явного решения пользователя, а не как побочный эффект наличия работоспособного VPN-пути. [`closed`]
+
+    - **[VPNG-U002-R2]** *Чтобы использование VPN было следствием явного решения пользователя, а не побочным эффектом наличия работоспособного VPN-пути.* | Пользователь должен иметь возможность явно определить, какой трафик VPN-GATE обслуживает, через какие VPN-пути этот трафик разрешено передавать и в каком направлении. [`closed`]
+
+        - **[VPNG-U002-R2.R1]** *Чтобы можно было однозначно отличить управляемый VPN-GATE трафик от остального трафика системы.* | Политика должна однозначно определять, какой трафик входит в область управления VPN-GATE. [`closed`]
+
+            - **[VPNG-U002-R2.R1.R1]** *Чтобы Profile мог прямо выражать remote network need пользователя.* | Enabled Profile должен задавать непустой набор strict IPv4 CIDR `destinations`, определяющий его remote/VPN-side prefixes; list order не должен иметь routing semantics, а некорректные/нестрогие CIDR не должны молча canonicalize-иться. [`closed`]
+
+            - **[VPNG-U002-R2.R1.R2]** *Чтобы одна Profile destination semantics одинаково определяла нужную remote сеть в обоих направлениях передачи.* | Для ordinary/host-to-VPN NEW traffic VPN-GATE должен выбирать Profile по remote destination prefix; для VPN-to-ordinary/host NEW traffic VPN-GATE должен выбирать Profile по remote source prefix только среди Profiles, разрешающих фактический ingress Device/path. [`closed`]
+
+            - **[VPNG-U002-R2.R1.R3]** *Чтобы пользователь мог отличать трафик, к которому должна применяться заданная политика VPN-GATE, по существенным свойствам самого трафика.* | VPN-GATE должен позволять пользователю ограничивать трафик по его источнику, получателю и типу независимо от разрешённого направления передачи и от преобразований трафика внутри области, контролируемой VPN-GATE. [`pending_closure`]
+
+        - **[VPNG-U002-R2.R2]** *Чтобы динамическое состояние системы не могло само расширять разрешенный пользователем набор VPN-путей.* | Для каждого управляемого класса трафика политика должна однозначно определять набор VPN-путей, через которые этот трафик разрешено передавать. [`closed`]
+
+            - **[VPNG-U002-R2.R2.R2]** *Чтобы Profile intent оставался Device-level пользовательской политикой, а concrete paths появлялись только после безопасного binding.* | Profile задает допустимые Devices и их порядок, а effective concrete path membership должен получаться только из текущих валидных bindings этих Devices; отсутствие или неоднозначность binding не должны подменяться угадыванием concrete interface/peer. [`closed`]
+
+            - **[VPNG-U002-R2.R2.R1]** *Чтобы Profile явно определял, какие пользовательски описанные VPN resources разрешено использовать для его трафика.* | `Profile.device_order` должен быть непустым ordered списком уникальных Device IDs; только enabled Devices из этого списка и их допустимо bound paths могут участвовать в forwarding данного Profile. [`closed`]
+
+        - **[VPNG-U002-R2.R3]** *Чтобы разрешение одного направления передачи не становилось неявным разрешением другого.* | Политика должна однозначно определять разрешенное направление передачи управляемого трафика. [`closed`]
+
+            - **[VPNG-U002-R2.R3.R3]** *Чтобы направление Profile было читаемым пользовательским policy decision, а не выводилось из topology.* | Enabled Profile должен явно задавать одно из `outbound`, `inbound`, `bidirectional`: outbound разрешает инициирование новых flows от ordinary-side boundary в сторону Profile destinations через разрешенные VPN-пути, inbound — от разрешенного VPN path к ordinary-side boundary, bidirectional — оба направления; return traffic уже допустимых flows может обслуживаться statefully независимо от стороны инициатора. [`closed`]
+
+            - **[VPNG-U002-R2.R3.C1]** *Потому что безопасная return-path semantics для remote-initiated flow при нескольких одновременно допустимых VPN paths ещё не подтверждена на целевой платформе, а первый release не должен обещать неподтвержденный multi-path inbound behavior.* | В первом release Profile с direction `inbound` или `bidirectional` поддерживается только если его текущая принятая конфигурация может породить не более одного eligible logical VPN path; multi-path inbound/bidirectional относится к будущему release и требует отдельной архитектуры/evidence. [`closed`]
+
+                - **[VPNG-U002-R2.R3.C1.R1]** *Чтобы неподдерживаемая multi-path inbound/bidirectional topology не возникала неожиданно после runtime discovery и не требовала угадывать безопасное поведение на лету.* | VPN-GATE должен на этапе config normalization до сетевой actuation отклонять enabled Profile с direction `inbound` или `bidirectional`, если суммарная максимально возможная eligible logical-path capacity его currently enabled referenced Devices превышает 1; VPN-GATE должен выдавать явную диагностируемую причину отказа. [`closed`]
+
+        - **[VPNG-U002-R2.R4]** *Чтобы наличие работающего VPN или автоматически обнаруженной пригодности пути не изменяло пользовательскую политику доступа.* | Трафик или VPN-путь, не разрешенные текущей политикой, не должны становиться разрешенными из-за доступности, автоматического failover, recovery или иного runtime-состояния. [`closed`]
+
+        - **[VPNG-U002-R2.R5]** *Чтобы одинаковая конфигурация не приводила к различному поведению при неоднозначном совпадении нескольких правил.* | Если к одному трафику применимы несколько частей политики, VPN-GATE должен получать один детерминированный эффективный результат либо явно отклонять неоднозначную конфигурацию. [`closed`]
+
+            - **[VPNG-U002-R2.R5.R1]** *Чтобы несколько Profiles с пересекающимися remote prefixes не делали классификацию случайной.* | Одинаковый destination prefix не должен принадлежать более чем одному enabled Profile; overlap разных prefix lengths может быть допустим только при детерминированной most-specific классификации, а для VPN-to-host traffic классификация должна учитывать только Profiles, разрешающие фактический ingress Device/path, чтобы более специфичный prefix другого Device не затенял допустимый Profile. [`closed`]
+
+## Path preference and availability
+
+- **[VPNG-U003]** *Основание: интервью заказчика с аналитиком, 2026-11-15; требование зафиксировано в initial NG3 requirement tree commit `4b3785b5c228782768afe317d4f09386fd46b440` от 2026-11-15 21:14:07 +03:00; тема: предсказуемое использование нескольких разрешённых VPN-путей.* | Если пользователь разрешил для трафика несколько VPN-путей, VPN-GATE должен обеспечивать предсказуемое использование этих путей и сохранять практическую работоспособность удалённого соединения при деградации предпочтительного пути. [`closed`]
+
+    - **[VPNG-U003-R3]** *Чтобы при наличии нескольких разрешённых пользователем VPN-путей трафик использовал их предсказуемо и сохранял практическую работоспособность при деградации предпочтительного пути.* | Если пользователь разрешил для данного трафика несколько VPN-путей, VPN-GATE должен использовать заданный пользователем порядок как baseline preference, автоматически уходить с подтверждённо проблемного active path и не выполнять ненужный failback с уже работающего пути только ради восстановления baseline order, кроме явно заданного пользователем резервного поведения. [`closed`]
+
+        - **[VPNG-U003-R3.R1]** *Чтобы при нормальной работе выбор между несколькими разрешёнными пользователем путями соответствовал намерению пользователя.* | Пользователь должен иметь возможность задать детерминированный порядок предпочтения нескольких разрешённых путей, а VPN-GATE должен использовать этот порядок как настроенный baseline preference. [`closed`]
+
+            - **[VPNG-U003-R3.R1.R1]** *Чтобы пользовательский порядок Devices и ожиданий внутри Device сохранялся при появлении нескольких runtime endpoints.* | Для Profile настроенный baseline preference должен следовать иерархии `Profile.device_order -> Device.expected_interfaces order -> stable runtime slot внутри selector quota`; появление нового endpoint не должно произвольно переставлять уже bound survivors. [`closed`]
+
+        - **[VPNG-U003-R3.R2]** *Чтобы availability-механизм не подменял собой пользовательскую политику.* | Автоматическая адаптация по состоянию пути может изменять только эффективное предпочтение среди уже разрешенных путей и не должна изменять их policy membership. [`closed`]
+
+            - **[VPNG-U003-R3.R2.R1]** *Чтобы временная проблема path не переписывала смысл Profile и не превращала runtime health в источник structural policy.* | Availability outcome может использоваться только как отрицательный модификатор effective priority конкретного Profile-path; он не должен изменять Profile destinations, direction, Device membership, binding eligibility или структурный payload-policy request. [`closed`]
+
+        - **[VPNG-U003-R3.R3]** *Чтобы новый трафик не продолжал предпочитать путь, для которого получены достаточные признаки практической непригодности, когда существует разрешённая пользователем пригодная альтернатива.* | После достаточного подтверждения проблемы на предпочтительном пути VPN-GATE должен понизить его эффективное предпочтение относительно разрешенных путей без подтвержденной проблемы. [`closed`]
+
+        - **[VPNG-U003-R3.R4]** *Чтобы временная деградация не превращалась в постоянное изменение пользовательской политики и одновременно не вызывала ненужный failback с уже работающего пути.* | После достаточного подтверждения восстановления путь должен перестать считаться availability-проблемным и вернуться к своей baseline-позиции среди standby-путей; текущий пригодный active path по умолчанию должен сохранять вершину effective order. [`closed`]
+
+            - **[VPNG-U003-R3.R4.R1]** *Чтобы администратор мог быстро уходить с принципиально резервного, дорогого или лимитированного канала, когда снова доступен более предпочтительный путь.* | Для membership Device внутри конкретного Profile пользователь должен иметь возможность явно задать reserve-роль; если active path принадлежит reserve membership, любой текущий пригодный path с более высокой baseline preference должен иметь право вытеснить его с вершины effective order. [`closed`]
+
+                - **[VPNG-U003-R3.R4.R1.R1]** *Чтобы reserve-роль была локальной policy конкретного Profile и задавалась компактно без изменения глобальной сущности Device.* | В canonical Release-1 `device_order` reserve membership должна записываться как `<deviceid>:reserve`; отсутствие suffix означает обычное sticky membership, один и тот же Device может иметь разную reserve-роль в разных Profiles, а неизвестный membership suffix должен отклоняться как config error. [`closed`]
+
+        - **[VPNG-U003-R3.R5]** *Чтобы единичное, кратковременное или случайное наблюдение не вызывало ненужной перестройки маршрутизации.* | Переход между нормальным и пониженным предпочтением должен требовать достаточного подтверждения деградации и восстановления, чтобы единичное случайное наблюдение само по себе не вызывало переключение. [`closed`]
+
+            - **[VPNG-U003-R3.R5.R1]** *Чтобы единичная потеря или отсутствие одного положительного наблюдения не понижали путь, который практически остается пригодным.* | Путь без установленной availability-проблемы должен переходить в пониженное предпочтение только после достижения конечного policy-defined порога подтверждения деградации по актуальным evidence/evaluation boundaries. [`closed`]
+
+            - **[VPNG-U003-R3.R5.R2]** *Чтобы случайное единичное успешное наблюдение не возвращало проблемный путь из пониженного состояния раньше устойчивого восстановления.* | Путь с установленной availability-проблемой должен переставать считаться проблемным только после достижения конечного policy-defined порога актуальных положительных свидетельств восстановления; само снятие problem-state не обязано вытеснять текущий пригодный active path. [`closed`]
+
+        - **[VPNG-U003-R3.R6]** *Чтобы автоматическая адаптация опиралась на сведения, действительно относящиеся к текущей пригодности конкретного пути, а не на догадку о его состоянии.* | VPN-GATE должен получать достаточно актуальные сведения о пригодности каждого пути, для которого включена автоматическая availability-адаптация, используя механизм наблюдения, достаточный для поддерживаемого сценария. [`closed`]
+
+            - **[VPNG-U003-R3.R6.R1]** *Чтобы сведения о пригодности одного Profile-path не изменяли решение для другого Profile, даже если они используют тот же Device/interface.* | Каждое availability-свидетельство, используемое для адаптации, должно быть однозначно связано с availability subject = (Profile, logical VPN path); физический interface/endpoint сам по себе не является достаточной идентичностью availability. [`closed`]
+
+            - **[VPNG-U003-R3.R6.R2]** *Чтобы старое наблюдение не изменяло решение после замены наблюдаемого экземпляра пути или существенного изменения контекста, к которому относилось это наблюдение.* | Availability-свидетельство, потерявшее актуальность для текущего экземпляра или контекста пути, не должно влиять на текущее effective preference. [`closed`]
+
+            - **[VPNG-U003-R3.R6.R3]** *Чтобы формально успешное наблюдение локального объекта не скрывало отказ, который делает VPN-путь непригодным в реально поддерживаемом сценарии.* | Механизм получения availability evidence должен наблюдать свойство, достаточное для выявления тех видов непригодности пути, которые существенны для поддерживаемых продуктовых сценариев. [`closed`]
+
+                - **[VPNG-U003-R3.R6.R3.R1]** *Чтобы пользователь мог выбирать наиболее подходящий для его целей критерий доступности удалённой сети через VPN-путь.* | VPN-GATE должен позволять пользователю задавать на уровне Profile механизм проверки доступности и, когда выбранный механизм этого требует, цель проверки. [`pending_closure`]
+
+                    - **[VPNG-U003-R3.R6.R3.R1.R1]** *Чтобы пользователь мог переиспользовать типовой критерий проверки Device и при необходимости задать иной критерий для конкретной бизнес-задачи Profile.* | Release-1 config должен позволять enabled Device задать default availability-check description, а enabled Profile — либо выбрать этот Device default, либо задать собственное availability-check description того же формата; отсутствие Profile availability-check отключает active check для этого Profile. [`closed`]
+
+                        - **[VPNG-U003-R3.R6.R3.R1.R1.R1]** *Чтобы default-проверка Device была явной и не зависела от эвристического вывода remote endpoint.* | Default availability-check description Device должен явно задавать механизм проверки и его target; в Release 1 поддерживается механизм `icmp` с одним точным IPv4 target. [`closed`]
+
+                        - **[VPNG-U003-R3.R6.R3.R1.R1.R2]** *Чтобы выбор Device default не менял Profile-scoped semantics availability.* | Если Profile выбирает default availability-check, для каждого его availability subject = (Profile, logical VPN path) должен использоваться default description соответствующего Device; результат проверки остаётся отдельным evidence данного Profile/path, даже если тот же Device/path используется другим Profile. [`closed`]
+
+                        - **[VPNG-U003-R3.R6.R3.R1.R1.R3]** *Чтобы разные бизнес-задачи Profiles могли иметь разные критерии пригодности одного и того же VPN-пути.* | Profile должен иметь возможность вместо Device default задать собственное availability-check description того же формата; такое описание полностью заменяет Device default для availability subjects этого Profile. [`closed`]
+
+                        - **[VPNG-U003-R3.R6.R3.R1.R1.R4]** *Чтобы ссылка на default не превращалась в неявную или частично определённую проверку.* | Если enabled Profile выбирает Device default, каждый enabled Device, разрешённый этому Profile, должен иметь валидное default availability-check description; иначе конфигурация должна быть отклонена до runtime materialization. [`closed`]
+
+                    - **[VPNG-U003-R3.R6.R3.R1.C1]** *Для первого release принят минимальный достаточный active-check scope: необходимость универсального probe framework не подтверждена требованиями до реализации и проверки базового ICMP path.* | В первом release поддерживаемым пользовательским механизмом availability-проверки является ICMP echo; конфигурация и architecture contracts не должны считать TCP, UDP, HTTP или иной механизм уже поддерживаемым. [`closed`]
+
+                    - **[VPNG-U003-R3.R6.R3.R1.C2]** *Поскольку timing/hysteresis не подтверждены как пользовательская policy первого release и не являются следствием выбора Device default или Profile override.* | Release 1 не обязан предоставлять availability interval, timeout, failure-count или hysteresis knobs в user-facing config. [`closed`]
+
+                - **[VPNG-U003-R3.R6.R3.R2]** *Чтобы probe runtime никогда не получал неоднозначную цель проверки.* | До формирования runtime probe demand VPN-GATE должен разрешить Profile availability selection для каждого availability subject в одно конкретное поддерживаемое probe description с одним IPv4 target; невозможность разрешить selection должна завершаться диагностируемым отказом до запуска probe. [`closed`]
+
+        - **[VPNG-U003-R3.R7]** *Чтобы само включение availability-функции не ухудшало или произвольно изменяло нормальное поведение маршрутизации.* | До первого availability-driven failover effective order должен совпадать с настроенным baseline preference; после failover текущий пригодный non-reserve active path может оставаться первым, а остальные пригодные пути должны сохранять взаимный baseline order. [`closed`]
+
+        - **[VPNG-U003-R3.R8]** *Чтобы восстановление более предпочтительного VPN-пути не ухудшало уже работающий трафик переключением, которое не требуется для сохранения доступности.* | Пока текущий active logical VPN path остаётся пригодным, восстановление или появление другого более предпочтительного пути само по себе не должно вытеснять его с вершины effective order, если active membership не помечено пользователем как резервное. [`closed`]
+
+            - **[VPNG-U003-R3.R8.R1]** *Чтобы sticky-поведение не превращало восстановившийся хороший путь в искусственно последний и сохраняло пользовательскую baseline policy для следующего failover.* | Восстановившийся пригодный path должен занимать свою baseline-позицию относительно остальных standby-путей, но не выше текущего пригодного non-reserve active path. [`closed`]
+
+            - **[VPNG-U003-R3.R8.C1]** *Потому что исчезновение или фактическая непригодность active data-plane path в обычной IP-сети уже является реальной границей failover, на которой transport/session может потерять пакеты или оборваться независимо от VPN-GATE.* | При потере active path VPN-GATE в первом release не обязан сохранять его внешнюю source identity, буферизовать или повторно передавать пакеты, вести per-flow path state либо обеспечивать бесшовную миграцию transport/session semantics; последующий трафик может использовать следующий разрешённый пригодный путь по текущей effective policy. [`closed`]
+
+        - **[VPNG-U003-R3.R9]** *Чтобы изменение эффективного порядка уже разрешённых VPN-путей само по себе не приводило к потере работоспособного пути и разрыву передачи только из-за применения нового порядка.* | Если изменяется только эффективный порядок неизменного набора разрешённых VPN-путей, VPN-GATE должен применять это изменение без временного вывода какого-либо из этих путей из доступных для передачи трафика. [`pending_closure`]
+
+
+    - **[VPNG-U003-R4]** *Чтобы при наличии нескольких разрешённых VPN-путей ответный трафик уже принятого обмена сохранял сетевые свойства и работоспособность исходного пути, а другой разрешённый путь не выбирался произвольно только потому, что он также доступен.* | Для управляемого трафика, принятого со стороны VPN через разрешённый VPN-путь, VPN-GATE должен передавать относящийся к нему ответный трафик через тот же VPN-путь; наличие других разрешённых VPN-путей для адреса отправителя не должно само по себе менять путь такого ответа. [`pending_closure`]
+## Safety under uncertainty and failure
+
+- **[VPNG-U004]** *Основание: интервью заказчика с аналитиком, 2026-11-15; требование зафиксировано в initial NG3 requirement tree commit `4b3785b5c228782768afe317d4f09386fd46b440` от 2026-11-15 21:14:07 +03:00; тема: безопасное поведение при ошибке и неопределённости.* | VPN-GATE должен предотвращать передачу управляемого трафика способом, который пользователь не разрешил, когда ошибка, неполная конфигурация или непроверенное состояние не позволяют подтвердить допустимость передачи. [`closed`]
+
+    - **[VPNG-U004-R4]** *Чтобы ошибка, неполная конфигурация или непроверенное состояние не приводили к передаче управляемого трафика способом, который пользователь не разрешал.* | VPN-GATE не должен передавать управляемый трафик способом, не разрешенным текущей политикой или безопасность которого продукт не может подтвердить; при существенной неопределенности предпочтителен отказ от передачи. [`closed`]
+
+        - **[VPNG-U004-R4.R1]** *Чтобы отсутствие однозначного policy result не превращалось в неявное разрешение.* | Если VPN-GATE не может однозначно определить разрешенное поведение для управляемого трафика, такой трафик не должен получать неявный VPN forwarding. [`closed`]
+
+        - **[VPNG-U004-R4.R2]** *Чтобы продукт не считал желаемое сетевое состояние фактически действующим без подтверждения.* | Если фактическое сетевое состояние, критичное для безопасной передачи, неизвестно или не может быть подтверждено, VPN-GATE должен сохранять или устанавливать безопасное ограничивающее поведение до получения достаточного подтверждения. [`closed`]
+
+        - **[VPNG-U004-R4.R3]** *Чтобы корректная конечная конфигурация не достигалась через промежуточное состояние с неразрешенной передачей трафика.* | VPN-GATE должен выполнять изменение effective network policy так, чтобы промежуточные состояния не создавали передачу, запрещенную до или после изменения. [`closed`]
+
+            - **[VPNG-U004-R4.R3.R2]** *Чтобы более широкое изменение policy не требовало небезопасного сохранения forwarding любой ценой.* | Если transition изменяет membership, direction, filtering/NAT или другую структурную semantics помимо одной перестановки приоритета, VPN-GATE может временно ограничить затронутый forwarding, когда это необходимо для выполнения safety postconditions, но не должен открывать передачу, запрещенную старой или новой policy. [`closed`]
+
+        - **[VPNG-U004-R4.R4]** *Чтобы запуск процесса не открывал трафик до построения и проверки требуемой политики.* | До подтверждения безопасной исходной сетевой границы VPN-GATE не должен считать payload forwarding готовым к использованию. [`closed`]
+
+        - **[VPNG-U004-R4.R5]** *Чтобы ошибка посреди изменения сетевого состояния не оставляла продукт в неизвестном разрешающем режиме.* | После частично выполненного или неуспешного изменения network policy VPN-GATE должен повторно установить авторитетное фактическое состояние и либо безопасно довести его до требуемого результата, либо оставить соответствующий трафик закрытым. [`closed`]
+
+        - **[VPNG-U004-R4.R6]** *Чтобы внешнее сетевое состояние хоста не могло нарушать правила обработки управляемого трафика VPN-GATE.* | VPN-GATE должен обеспечивать выполнение своей действующей политики для управляемого трафика независимо от несвязанного сетевого состояния хоста; такое состояние не должно позволять обходить установленные VPN-GATE ограничения или изменять требуемый результат обработки управляемого трафика. [`pending_closure`]
+
+    - **[VPNG-U004-R5]** *Чтобы при подозрении на опасное или некорректное сетевое состояние оператор или автоматика могли немедленно прекратить прохождение IP-трафика через контролируемую VPN-GATE область, сохранив возможность определить причину проблемы и безопасно восстановить работу.* | VPN-GATE должен предоставлять защитный режим полного запрета IP-трафика с сохранением состояния продукта, необходимого для диагностики и последующего восстановления, а именно запрещать передачу из обычной сети в VPN-GATE, из VPN-GATE в обычную сеть и между VPN-путями внутри VPN-GATE. [`pending_closure`]
+
+        - **[VPNG-U004-R5.C1]** *Поскольку отдельный защитный режим и его end-to-end доказательство не требуются для базового первого рабочего релиза, а обязательные fail-closed гарантии core forwarding сохраняются независимо от наличия этого режима.* | Первый release не обязан предоставлять защитный режим; его отсутствие не должно ослаблять уже обязательные fail-closed гарантии VPN-GATE. [`pending_closure`]
+
+## Lifecycle and recovery
+
+- **[VPNG-U005]** *Основание: интервью заказчика с аналитиком, 2026-11-15; требование зафиксировано в initial NG3 requirement tree commit `4b3785b5c228782768afe317d4f09386fd46b440` от 2026-11-15 21:14:07 +03:00; уточнение project holder в проектной сессии 2026-11-21: возможность обновлять конфигурацию включена в это продуктовое обязательство; тема: предсказуемый жизненный цикл, обновление конфигурации и восстановление.* | Оператор должен иметь возможность предсказуемо запускать, эксплуатировать, обновлять конфигурацию, перезапускать и останавливать VPN-GATE без ручной уборки или восстановления внутренних сетевых объектов продукта. [`pending_closure`]
+
+    - **[VPNG-U005-R5]** *Чтобы VPN-GATE можно было предсказуемо запускать, эксплуатировать, обновлять конфигурацию, перезапускать и останавливать без ручной уборки или восстановления его внутренних сетевых объектов.* | VPN-GATE должен управлять жизненным циклом принадлежащего ему runtime-состояния и применением изменённой конфигурации, восстанавливать требуемое состояние после обычных восстановимых изменений среды и явно сообщать, когда безопасное восстановление невозможно. [`pending_closure`]
+
+        - **[VPNG-U005-R5.R1]** *Чтобы одинаковая допустимая конфигурация приводила к воспроизводимому рабочему состоянию.* | Startup должен из безопасной исходной границы построить и подтвердить необходимое runtime-состояние до объявления соответствующих функций готовыми. [`closed`]
+
+        - **[VPNG-U005-R5.R2]** *Чтобы обычное изменение или потеря принадлежащего продукту runtime-состояния не требовали ручного пересоздания всей системы.* | Во время работы VPN-GATE должен уметь обнаруживать существенное расхождение между требуемым и фактическим состоянием, которое соответствующая активная функция сохраняет под авторитетным ownership VPN-GATE, и восстанавливать его, если это безопасно и возможно. Host-routing contributions простого helper'а по `VPNG-U001-R5.R1` после успешной lifecycle-операции не остаются под таким continuous ownership и поэтому не подпадают под эту runtime-recovery гарантию до следующей явной lifecycle-операции helper'а. [`closed`]
+
+            - **[VPNG-U005-R5.R2.R1]** *Чтобы тихое внешнее изменение принадлежащего VPN-GATE состояния было обнаружено даже без нового действия пользователя.* | Пока соответствующая функция VPN-GATE активна, обнаружение существенного drift не должно зависеть только от прихода новой конфигурации или управляющей операции; продукт должен повторно наблюдать принадлежащее ему фактическое состояние с конечной cadence, достаточной для обычного автоматического восстановления. [`closed`]
+
+        - **[VPNG-U005-R5.R3]** *Чтобы временный технический отказ не становился постоянной потерей функции после исчезновения его причины.* | Операция, не выполненная из-за восстановимой ошибки, должна оставаться повторяемой из актуального подтвержденного состояния без необходимости перезапуска всего продукта, если этого не требует сама внешняя среда. [`closed`]
+
+            - **[VPNG-U005-R5.R3.R1]** *Чтобы после временного отказа пользователь не был обязан повторно отправлять уже действующее намерение только для запуска восстановления.* | Если требуемое состояние остается актуальным после восстановимой ошибки, VPN-GATE должен самостоятельно выполнить последующую попытку его достижения после нового наблюдения фактического состояния; повтор не должен требовать нового пользовательского request. [`closed`]
+
+        - **[VPNG-U005-R5.R4]** *Чтобы остановленный или удаленный VPN-GATE не продолжал незаметно влиять на сетевое поведение системы.* | После успешного shutdown/cleanup не должны оставаться активные сетевые или процессные ресурсы, принадлежащие остановленному экземпляру VPN-GATE и продолжающие влиять на трафик. [`closed`]
+
+        - **[VPNG-U005-R5.R5]** *Чтобы отказ одной независимой части cleanup не мешал попытке безопасно убрать другие принадлежащие продукту части состояния.* | Если несколько независимо управляемых областей требуют cleanup или recovery, ошибка одной области не должна сама по себе отменять попытку обработать остальные; все существенные ошибки должны оставаться наблюдаемыми. [`closed`]
+
+        - **[VPNG-U005-R5.C1]** *Поскольку произвольное root/admin вмешательство вне поддерживаемого lifecycle может уничтожить или сделать неоднозначными признаки identity/ownership, необходимые для безопасного автоматического восстановления, такое вмешательство не всегда является обычным recoverable drift.* | Гарантии автоматического lifecycle/recovery первого release не обязаны распространяться на состояние, которое активная функция сохраняет под authoritative ownership VPN-GATE и которое было произвольно изменено или удалено вне поддерживаемого lifecycle, если требуемое безопасное состояние нельзя однозначно восстановить из принятой конфигурации и свежего наблюдаемого состояния. VPN-GATE не обязан искать или усыновлять произвольные surviving processes, восстанавливать неизвестные namespace references либо реконструировать состояние из недостоверных остатков внешнего вмешательства. Последствия потери конкретного инварианта для forwarding, readiness и других активных функций определяются соответствующими safety/readiness/recovery requirements, а не этим constraint. Состояние, не находящееся под authoritative ownership VPN-GATE, включая ordinary-host routing после lifecycle-операции peaceful helper по `VPNG-U001-R5.R1`, этим constraint не охватывается. [`closed`]
+
+            - **[VPNG-U005-R5.C1.R1]** *Чтобы ограничение recovery не превращалось для администратора в скрытую ловушку.* | Административная документация должна явно различать состояние под authoritative ownership VPN-GATE, administrator-owned integration state и состояние, которое peaceful helper после lifecycle-операции возвращает под контроль администратора; для authoritative state она должна обозначать границу поддерживаемого lifecycle и описывать действия администратора, необходимые после неподдерживаемого out-of-band повреждения до возврата к штатному start/recovery. [`closed`]
+
+        - **[VPNG-U005-R5.R6]** *Чтобы оператор управлял жизненным циклом и применением конфигурации VPN-GATE через продуктовые операции, а не вручную воспроизводил внутренние сетевые действия.* | VPN-GATE должен предоставлять поддерживаемые операции запуска, остановки и перезапуска экземпляра, а также поддерживаемый способ применения изменённой конфигурации; успешное выполнение должно определяться достижением соответствующего безопасного итогового состояния, а не фактом выдачи внутренних команд. [`pending_closure`]
+
+            - **[VPNG-U005-R5.R6.R1]** *Чтобы успешный start означал готовый к эксплуатации экземпляр, а не только запущенный процесс.* | Операция start должна считаться успешной только после выполнения и подтверждения startup postconditions, требуемых текущей конфигурацией и safety policy. [`closed`]
+
+            - **[VPNG-U005-R5.R6.R2]** *Чтобы успешный stop означал прекращение влияния экземпляра на сеть.* | Операция stop должна считаться успешной только после выполнения требуемого cleanup принадлежащего экземпляру активного состояния либо должна явно сообщить о неполном cleanup. [`closed`]
+
+            - **[VPNG-U005-R5.R6.R3]** *Чтобы restart не требовал ручного устранения следов предыдущего экземпляра.* | Операция restart должна обеспечивать безопасный переход от текущего экземпляра к состоянию, эквивалентному успешному новому start после необходимого stop/cleanup; неполное завершение предыдущего состояния не должно молча объявляться успешным restart. [`closed`]
+
+
+## Observability
+
+- **[VPNG-U006]** *Основание: интервью заказчика с аналитиком, 2026-11-15; требование зафиксировано в initial NG3 requirement tree commit `4b3785b5c228782768afe317d4f09386fd46b440` от 2026-11-15 21:14:07 +03:00; тема: наблюдаемость фактического и эффективного состояния.* | Оператор должен иметь возможность определить фактическое поведение VPN-GATE и причину невозможности выполнить требуемую политику без реконструкции внутреннего состояния по логам и kernel-командам. [`closed`]
+
+    - **[VPNG-U006-R6]** *Чтобы оператор мог понять фактическое поведение VPN-GATE и причину невозможности выполнить требуемую политику, не восстанавливая внутреннее состояние по логам и kernel-командам.* | VPN-GATE должен предоставлять наблюдаемую текущую проекцию существенного настроенного, фактического и эффективного состояния, а также проблем, мешающих выполнить требуемую политику. [`closed`]
+
+        - **[VPNG-U006-R6.R1]** *Чтобы оператор мог проверить, какое поведение продукт считает требуемым.* | Оператор должен иметь возможность определить существенную текущую конфигурацию и policy intent, используемые VPN-GATE. [`closed`]
+
+        - **[VPNG-U006-R6.R2]** *Чтобы оператор мог понять, какие разрешенные VPN-пути фактически участвуют в текущем выборе и каков их effective order.* | Оператор должен иметь возможность определить текущий набор разрешённых для использования путей, существенное availability-состояние и effective preference, применяемые VPN-GATE к управляемому трафику. [`closed`]
+
+        - **[VPNG-U006-R6.R3]** *Чтобы невозможность выполнить требование не выглядела как молчаливое отсутствие функции.* | Существенные проблемы, из-за которых требуемая policy, lifecycle operation или safety postcondition не могут быть выполнены, должны быть доступны оператору. [`closed`]
+
+        - **[VPNG-U006-R6.R4]** *Чтобы observability не сообщала желаемое состояние как фактическое.* | Текущая status-проекция должна различать требуемое, подтвержденное фактическое и неизвестное/неподтвержденное состояние там, где это различие влияет на пользовательское понимание поведения или safety. [`closed`]
+
+## Implementation quality
+
+- **[VPNG-U007]** *Основание: интервью заказчика с аналитиком, 2026-11-15; требование зафиксировано в initial NG3 requirement tree commit `4b3785b5c228782768afe317d4f09386fd46b440` от 2026-11-15 21:14:07 +03:00; тема: сопровождаемость и контролируемая сложность реализации.* | Разработчики и применяемые в проекте AI-инструменты должны иметь возможность безопасно развивать и сопровождать VPN-GATE без превращения продукта в неоправданно универсальную систему или хрупкий монолит. [`closed`]
+
+    - **[VPNG-U007-R7]** *Чтобы VPN-GATE можно было безопасно развивать и сопровождать живыми разработчиками и AI, не превращая продукт ни в универсальную систему из ненужных механизмов, ни в хрупкий монолит, изменение которого требует понимания всего кода сразу.* | Реализация VPN-GATE должна быть минимально достаточной для принятых требований, сопровождаемой и понятной, допускать локальное изменение и параллельную разработку через явные внутренние контракты и не содержать сложности, не оправданной требованиями или реальными целевыми сценариями. [`closed`]
+
+        - **[VPNG-U007-R7.R1]** *Чтобы развитие продукта не создавало состояния, компоненты и универсальные механизмы, которые увеличивают стоимость сопровождения без продуктовой ценности.* | Каждый существенный механизм, состояние, очередь, lifecycle, retry policy, interaction и компонент должны быть необходимы для конкретного принятого требования или ограничения; неоправданная общность должна удаляться или не создаваться. [`closed`]
+
+            - **[VPNG-U007-R7.R1.R1]** *Чтобы локальная задача не превращалась в систему хранения и воспроизведения истории без необходимости.* | Если требование может быть полностью выполнено текущим или ограниченным агрегированным состоянием, реализация не должна вводить неограниченную историю, журнал или replay-механику. [`closed`]
+
+        - **[VPNG-U007-R7.R2]** *Чтобы сопровождение и review не зависели от знания неявной глобальной механики одним автором.* | Существенные обязанности, состояния, контракты и причины проектных решений должны быть локализованы и документированы настолько, чтобы разработчик или AI мог определить назначение блока, его границы и последствия изменения без реконструкции всей системы. [`closed`]
+
+        - **[VPNG-U007-R7.R3]** *Чтобы изменения внутри одной области не распространялись на несвязанные части продукта через неявные зависимости.* | Внутренние области реализации должны взаимодействовать через явные контракты, скрывающие детали, которые не требуются соседней области. [`closed`]
+
+            - **[VPNG-U007-R7.R3.R1]** *Чтобы зависимость между частями системы была видима для разработки, review и тестирования.* | Материальная межкомпонентная зависимость должна быть представлена явным контрактом, определяющим необходимые входы, выходы и семантику взаимодействия. [`closed`]
+
+            - **[VPNG-U007-R7.R3.R2]** *Чтобы замена или изменение внутреннего механизма нижней области не требовали переделки верхней policy без продуктовой причины.* | Внутренние технические детали одной предметной области не должны пересекать ее контрактную границу, если они не нужны другой области для выполнения собственного принятого требования. [`closed`]
+
+            - **[VPNG-U007-R7.R3.R3]** *Чтобы исправление или развитие одной ответственности можно было выполнять и проверять изолированно.* | Изменение реализации внутри стабильного внутреннего контракта не должно требовать изменения несвязанных потребителей этого контракта. [`closed`]
+
+            - **[VPNG-U007-R7.R3.R5]** *Чтобы общая логика VPN-GATE не закрепляла случайный выбор конкретного внешнего/платформенного механизма там, где несколько механизмов способны реализовать один и тот же принятый внутренний контракт.* | Если практические lower-level механизмы могут реализовать одну и ту же требуемую семантику без различия продуктового поведения, общая логика должна зависеть от семантического внутреннего контракта, а mechanism-specific observation/actuation должны быть локализованы за lower boundary; замена или добавление такого механизма не должны требовать отдельной продуктовой версии или изменения несвязанной upper policy, если внешняя причина не требует иного. [`closed`]
+
+            - **[VPNG-U007-R7.R3.R4]** *Чтобы разделение реализации на взаимодействующие внутренние области не уничтожало информацию, от которой зависит корректность поведения соседней области, и не превращало явный контракт в скрытую повторную догадку.* | Если корректность downstream-операции зависит от logical identity, association или state, установленной на более раннем этапе обработки, каждая материальная архитектурная граница на пути к месту потребления должна либо явно сохранять эту identity/state, либо иметь доказанный однозначный способ восстановить её из authoritative facts; повторная классификация по неполному или семантически более слабому набору признаков не считается эквивалентом continuity без отдельного доказательства эквивалентности. [`closed`]
+
+                - **[VPNG-U007-R7.R3.R4.R1]** *Чтобы continuity не оставалась неявным предположением design review и потеря нужной identity/state обнаруживалась до интеграции пользовательского сценария.* | Для каждой существенной cross-boundary dependency на ранее установленную identity/state development unit должен иметь автоматизированный test/evidence, проходящий через все материальные границы от точки установления association до точки её использования и проверяющий как минимум один различающий сценарий, в котором потеря association и обычная повторная классификация дали бы другой результат; evidence должен подтверждать сохранение/однозначное восстановление правильной identity либо явный fail-closed/failure outcome при невозможности continuity. [`closed`]
+
+        - **[VPNG-U007-R7.R4]** *Чтобы независимые части продукта можно было проектировать, реализовывать и проверять параллельно без постоянной сериализации работы через общий внутренний код.* | Архитектура должна позволять выделять независимые review/development units с явными контрактными границами и достаточным локальным evidence, когда требования не создают неизбежной общей транзакционной ответственности. [`closed`]
+
+        - **[VPNG-U007-R7.R5]** *Чтобы декомпозиция NG3 использовала единый проверяемый словарь обязанностей и взаимодействий вместо ad-hoc архитектурных ролей.* | Архитектура и реализация NG3 должны соответствовать `design/component-model.md`; существенное отклонение допускается только после явного изменения требования, ограничения или самой компонентной модели через review. [`closed`]
+
+        - **[VPNG-U007-R7.R6]** *Чтобы архитектура оставалась отчетом о реализации принятых требований, а не становилась самостоятельным источником новых функций и сложности.* | Каждое существенное архитектурное решение NG3 должно явно ссылаться на наиболее конкретные requirement/constraint IDs, которые его требуют или ограничивают; решение без честной трассировки является finding. [`closed`]
+
+            - **[VPNG-U007-R7.R6.R1]** *Чтобы можно было как найти реализацию требования, так и установить причину существования архитектурного элемента.* | Документация должна позволять пройти по связям `requirement -> architecture -> implementation/evidence` и обратно `architecture -> requirement/constraint`. [`closed`]
+
+            - **[VPNG-U007-R7.R6.R2]** *Чтобы изменение смысла требования не оставляло архитектуру, формально ссылающуюся на уже другой contract.* | Изменение requirement/constraint требует повторной проверки архитектурных решений, ссылающихся на измененный узел или его затронутых потомков, до продолжения реализации. [`closed`]
+
+        - **[VPNG-U007-R7.R7]** *Чтобы развитие VPN-GATE оставалось управляемым, предсказуемым и доказуемым, а реализация или эксперимент не становились самостоятельным источником продуктовой семантики.* | Каждый существенный development/evidence unit должен быть необходим для реализации, проверки или честного закрытия конкретного принятого Requirement/Constraint и до начала работы иметь явную трассировку к этому R/C и ожидаемому результату evidence/review. [`closed`]
+
+            - **[VPNG-U007-R7.R7.R1]** *Чтобы разработка интеграции не закрепляла lifecycle, ownership или safety решения поверх недоказанной базовой возможности использовать реальный VPN в целевой среде VPN-GATE.* | Зависимая разработка интеграции, предполагающая использование поддерживаемого VPN как пути VPN-GATE, должна начинаться только после воспроизводимого PASS базового applicability evidence, требуемого `VPNG-U001-R1.R3.C1.R1.R1`; FAIL этого gate должен сначала вернуть затронутые integration assumptions в requirement/architecture review. [`closed`]
+
+        - **[VPNG-U007-R7.R8]** *Чтобы требуемая `VPNG-U007-R7` безопасная сопровождаемость long-running привилегированного runtime не зависела от ручного предотвращения классов memory-management дефектов и от менее предсказуемой runtime performance-модели там, где локальные изменения непосредственно влияют на сетевую policy.* | Целевая production-реализация VPN-GATE runtime должна быть выполнена на Rust. Production runtime включает код, непосредственно участвующий в lifecycle, configuration normalization, runtime state, policy calculation/reconciliation, VPN-path observation и взаимодействии с сетевым состоянием ОС. [`closed`]
+
+            - **[VPNG-U007-R7.R8.C1]** *Поскольку ранние releases прежде всего должны проверить продуктовую семантику, integration applicability и эксплуатационную пригодность, а обязательный предварительный перенос уже работающего reference runtime на Rust замедлил бы получение такого evidence без изменения пользовательского поведения.* | Требование целевой реализации production runtime на Rust не является release gate для первых alpha/beta releases VPN-GATE. Ранние releases могут использовать существующую реализацию на другом языке, включая Python reference implementation, пока такой release явно не объявлен окончательной production/stable реализацией. Переход на Rust должен быть выполнен до release, для которого проект впервые заявляет соответствие целевой production implementation boundary этого требования. [`closed`]
+
+            - **[VPNG-U007-R7.R8.C2]** *Поскольку перенос ещё меняющегося `rou` в Rust создаёт второй исполняемый источник истины, заставляет синхронно переделывать две реализации при каждом архитектурном решении и расходует время до того, как само поведение доказано.* | Rust-transition production runtime `rou` не должен становиться текущей разработческой работой, пока целевой набор решений `rou` для соответствующего production boundary не реализован как связный executable Python reference и не апробирован на достаточном unit/integration/operational evidence. До выполнения этого gate новые Rust-порты `rou`, production cutover и расширение Rust runtime surface должны быть postponed; Python остаётся единственной текущей executable reference implementation для проверки меняющейся семантики. После выполнения gate переход на Rust выполняется как implementation replacement с сохранением уже доказанных contracts. [`closed`]
+
+            - **[VPNG-U007-R7.R8.C3]** *Поскольку project holder отдельно исключил host-routing helper из автоматического language cutover и требует рассматривать его перенос на Rust как самостоятельное проектное решение, а не как неявное следствие общей production-runtime boundary.* | Реализации host-routing helper, выполняющие `VPNG-U001-R5.R1` и `VPNG-U001-R5.R2`, могут оставаться на Python после первого product release и после перевода остальной целевой production runtime boundary на Rust. Требование `VPNG-U007-R7.R8` само по себе не является основанием для их переноса на Rust. Такой перенос допускается только после отдельного явного решения project holder; до этого Python implementation helper'а является разрешённой production implementation для этой ограниченной ответственности. [`closed`]
+
+            - **[VPNG-U007-R7.R8.R1]** *Чтобы выбор Rust для production runtime не запрещал более дешевые и удобные инструменты там, где их свойства не входят в runtime safety/performance boundary продукта.* | Другие языки допускаются для disposable experiments, evidence/CI harnesses, test fixtures, build/install tooling, code generation и исследовательских/reference implementations, если такой код не становится частью окончательной production runtime implementation boundary. [`closed`]
+
+            - **[VPNG-U007-R7.R8.R2]** *Чтобы наличие Rust само по себе не создавало ложного утверждения о memory safety при произвольном использовании небезопасных границ.* | `unsafe` Rust и memory-unsafe FFI в production runtime должны быть ограничены минимально необходимыми lower-level boundaries, локализованы, иметь явное техническое обоснование и не использоваться для обхода invariants, выразимых средствами safe Rust. [`closed`]
+
+            - **[VPNG-U007-R7.R8.R3]** *Чтобы текущие executable Python implementations не превратились по инерции из design/evidence artifacts в неподтвержденную окончательную production architecture.* | Python-код, созданный в NG3 для reference implementation, экспериментов и executable evidence, должен рассматриваться как источник проверяемого поведения и реализации принятых contracts. Его использование в ранних releases допускается `VPNG-U007-R7.R8.C1`; для host-routing helper отдельное исключение и gate перехода определены `VPNG-U007-R7.R8.C3`. Для остальных responsibilities, входящих в эффективную Rust production boundary, Python reference implementation не отменяет обязательный перенос на Rust; такой перенос должен сохранять соответствующие requirement, architecture и evidence contracts без изменения продуктовой семантики только по причине смены языка. [`closed`]
+
+## Initial acceptance/evidence expectations
+
+This table adds no new requirement semantics.
+
+| L1 | Minimum final evidence type |
+| --- | --- |
+| `VPNG-U001-R1` | end-to-end VPN-path forwarding and externally provisioned channel onboarding scenario |
+| `VPNG-U002-R2` | policy acceptance/rejection scenarios |
+| `VPNG-U003-R3` | deterministic failover/failback scenarios with path-state changes |
+| `VPNG-U004-R4` | negative/failure scenarios proving no unintended forwarding |
+| `VPNG-U005-R5` | startup, drift, retry and shutdown lifecycle scenarios |
+| `VPNG-U006-R6` | status projection checked against authoritative runtime state |
+| `VPNG-U007-R7` | architecture/review traceability plus isolated-change evidence |
+
+## Constraint policy for this NG3 pass
+
+No NG2 implementation constraint is accepted into NG3 merely by inheritance.
+
+`VPNG-U001-R1.R3.C1` is accepted explicitly for the first product release: VPN-channel
+provisioning/configuration remains an administrator responsibility, while VPN-GATE must
+provide the instructions/contract required to consume those channels.
+
+Other candidate constraints discovered while building the NG3 architecture must be added at
+the requirement node whose promise they actually restrict and must pass normal constraint
+lifting before they become accepted NG3 constraints.
+
+
+## Requirement migration note
+
+The requirement IDs below are historical references from this record's original baseline.
+Their current NG3 IDs are:
+
+- `VPNG-U005` -> `VPNG-M001-R1`
+- `VPNG-U005-R5` -> `VPNG-M001-R1.R1`
+- `VPNG-U005-R5.C1` -> `VPNG-M001-R1.R1.C1`
+- `VPNG-U005-R5.C1.R1` -> `VPNG-M001-R1.R1.C1.R1`
+- `VPNG-U005-R5.R1` -> `VPNG-M001-R1.R1.R1`
+- `VPNG-U005-R5.R2` -> `VPNG-M001-R1.R1.R2`
+- `VPNG-U005-R5.R2.R1` -> `VPNG-M001-R1.R1.R2.R1`
+- `VPNG-U005-R5.R3` -> `VPNG-M001-R1.R1.R3`
+- `VPNG-U005-R5.R3.R1` -> `VPNG-M001-R1.R1.R3.R1`
+- `VPNG-U005-R5.R4` -> `VPNG-M001-R1.R1.R4`
+- `VPNG-U005-R5.R5` -> `VPNG-M001-R1.R1.R5`
+- `VPNG-U005-R5.R6` -> `VPNG-M001-R1.R1.R6`
+- `VPNG-U005-R5.R6.R1` -> `VPNG-M001-R1.R1.R6.R1`
+- `VPNG-U005-R5.R6.R2` -> `VPNG-M001-R1.R1.R6.R2`
+- `VPNG-U005-R5.R6.R3` -> `VPNG-M001-R1.R1.R6.R3`
+- `VPNG-U006` -> `VPNG-M001-R2`
+- `VPNG-U006-R6` -> `VPNG-M001-R2.R1`
+- `VPNG-U006-R6.R1` -> `VPNG-M001-R2.R1.R1`
+- `VPNG-U006-R6.R2` -> `VPNG-M001-R2.R1.R2`
+- `VPNG-U006-R6.R3` -> `VPNG-M001-R2.R1.R3`
+- `VPNG-U006-R6.R4` -> `VPNG-M001-R2.R1.R4`
+- `VPNG-U007` -> `VPNG-D001-R1`
+- `VPNG-U007-R7` -> `VPNG-D001-R1.R1`
+- `VPNG-U007-R7.R1` -> `VPNG-D001-R1.R1.R1`
+- `VPNG-U007-R7.R1.R1` -> `VPNG-D001-R1.R1.R1.R1`
+- `VPNG-U007-R7.R2` -> `VPNG-D001-R1.R1.R2`
+- `VPNG-U007-R7.R3` -> `VPNG-D001-R1.R1.R3`
+- `VPNG-U007-R7.R3.R1` -> `VPNG-D001-R1.R1.R3.R1`
+- `VPNG-U007-R7.R3.R2` -> `VPNG-D001-R1.R1.R3.R2`
+- `VPNG-U007-R7.R3.R3` -> `VPNG-D001-R1.R1.R3.R3`
+- `VPNG-U007-R7.R3.R4` -> `VPNG-D001-R1.R1.R3.R4`
+- `VPNG-U007-R7.R3.R4.R1` -> `VPNG-D001-R1.R1.R3.R4.R1`
+- `VPNG-U007-R7.R3.R5` -> `VPNG-D001-R1.R1.R3.R5`
+- `VPNG-U007-R7.R4` -> `VPNG-D001-R1.R1.R4`
+- `VPNG-U007-R7.R5` -> `VPNG-D001-R1.R1.R5`
+- `VPNG-U007-R7.R6` -> `VPNG-D001-R1.R1.R6`
+- `VPNG-U007-R7.R6.R1` -> `VPNG-D001-R1.R1.R6.R1`
+- `VPNG-U007-R7.R6.R2` -> `VPNG-D001-R1.R1.R6.R2`
+- `VPNG-U007-R7.R7` -> `VPNG-D001-R1.R1.R7`
+- `VPNG-U007-R7.R7.R1` -> `VPNG-D001-R1.R1.R7.R1`
+- `VPNG-U007-R7.R8` -> `VPNG-D001-R1.R1.R8`
+- `VPNG-U007-R7.R8.C1` -> `VPNG-D001-R1.R1.R8.C1`
+- `VPNG-U007-R7.R8.C2` -> `VPNG-D001-R1.R1.R8.C2`
+- `VPNG-U007-R7.R8.C3` -> `VPNG-D001-R1.R1.R8.C3`
+- `VPNG-U007-R7.R8.R1` -> `VPNG-D001-R1.R1.R8.R1`
+- `VPNG-U007-R7.R8.R2` -> `VPNG-D001-R1.R1.R8.R2`
+- `VPNG-U007-R7.R8.R3` -> `VPNG-D001-R1.R1.R8.R3`
+
+The original IDs in the historical body are intentionally preserved.

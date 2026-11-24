@@ -1,0 +1,833 @@
+name: NG3 Python
+
+concurrency:
+  group: ng3-python-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches-ignore: [ legacy-main-rc, legacy-main-ng1-2, legacy-main-ng3 ]
+    paths:
+      - "design/NG3/code/python/**"
+      - "design/NG3/requirements.md"
+      - "design/NG3/architecture-ng.md"
+      - "design/NG3/implementation-traceability.md"
+      - ".github/workflows/ng3-python.yml"
+      - "design/experiments/EXP-028 NG3 lower policy platform space/**"
+      - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
+      - "design/experiments/EXP-065 NG3 probe RPDB selector shape/**"
+      - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
+      - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
+      - "design/experiments/EXP-068 NG3 continuous availability failover/**"
+      - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"
+      - "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/**"
+      - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
+      - "design/experiments/EXP-074 NG3 host managed routing/**"
+      - "design/experiments/EXP-081 NG3 aggressive RPDB precedence gap/**"
+      - "design/experiments/EXP-084 NG3 aggressive escape guard/**"
+      - "design/experiments/EXP-085 NG3 aggressive full-tunnel guard/**"
+      - "design/experiments/EXP-077 NG3 peaceful host routing/**"
+      - "design/experiments/EXP-078 NG3 peaceful host routing selectors/**"
+      - "design/experiments/EXP-079 NG3 managed boundary helper bypass/**"
+      - "design/experiments/EXP-080 NG3 scoped preserve-main non-interference/**"
+      - "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/**"
+      - "design/experiments/EXP-076 NG3 combined Profile SNAT/**"
+      - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
+      - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
+      - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
+      - "design/experiments/EXP-051 NG3 first functioning alpha/**"
+      - "design/experiments/EXP-052 NG3 host publication DNAT/**"
+      - "design/experiments/EXP-061 NG3 stack established-flow return affinity/**"
+      - "design/NG3/deployment/alpha/**"
+      - "release/0.1.0/**"
+      - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
+      - "design/experiments/EXP-082 NG3 protective lower containment/**"
+      - "design/experiments/EXP-083 NG3 private protective gate/**"
+      - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
+      - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
+      - "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/**"
+      - "design/experiments/EXP-034 NG3 exact-handle payload NAT reconciliation/**"
+      - "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/**"
+      - "design/experiments/EXP-040 NG3 managed INPUT OUTPUT drop scaffold/**"
+      - "design/experiments/EXP-041 NG3 ordered Device firewall child chain/**"
+      - "design/experiments/EXP-042 NG3 Device firewall predicate JSON/**"
+      - "design/experiments/EXP-043 NG3 Device firewall active reject/**"
+      - "design/experiments/EXP-044 NG3 Device firewall jump insertion/**"
+      - "design/experiments/EXP-045 NG3 composite Profile forward mutation/**"
+      - "design/experiments/EXP-046 NG3 publication local admission/**"
+      - "design/experiments/EXP-047 NG3 atomic local publication mutation/**"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "design/NG3/code/python/**"
+      - "design/NG3/requirements.md"
+      - "design/NG3/architecture-ng.md"
+      - "design/NG3/implementation-traceability.md"
+      - ".github/workflows/ng3-python.yml"
+      - "design/experiments/EXP-028 NG3 lower policy platform space/**"
+      - "design/experiments/EXP-029 NG3 structural routing inventory shape/**"
+      - "design/experiments/EXP-065 NG3 probe RPDB selector shape/**"
+      - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
+      - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
+      - "design/experiments/EXP-068 NG3 continuous availability failover/**"
+      - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"
+      - "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/**"
+      - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
+      - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
+      - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
+      - "design/experiments/EXP-051 NG3 first functioning alpha/**"
+      - "design/experiments/EXP-052 NG3 host publication DNAT/**"
+      - "design/experiments/EXP-061 NG3 stack established-flow return affinity/**"
+      - "design/NG3/deployment/alpha/**"
+      - "release/0.1.0/**"
+      - "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/**"
+      - "design/experiments/EXP-031 NG3 nft namespace owner marker/**"
+      - "design/experiments/EXP-032 NG3 payload nft scaffold/**"
+      - "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/**"
+      - "design/experiments/EXP-034 NG3 exact-handle payload NAT reconciliation/**"
+      - "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/**"
+      - "design/experiments/EXP-040 NG3 managed INPUT OUTPUT drop scaffold/**"
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Compile
+        run: python3 -m compileall -q design/NG3/code/python/rou
+      - name: Unit tests
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          python3 -m unittest discover
+          -s design/NG3/code/python/rou/tests
+          -p 'test_*.py' -v
+
+
+  linux-route-priority:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: NG3 route-priority Linux integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_route_priority_backend.py
+
+
+  linux-policy-platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Linux policy tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-028 lower policy platform space
+        run: >-
+          sudo python3
+          "design/experiments/EXP-028 NG3 lower policy platform space/exp028_lower_policy_space.py"
+
+
+  linux-structural-inventory-shape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2
+      - name: EXP-029 structural routing inventory shape
+        run: >-
+          sudo python3
+          "design/experiments/EXP-029 NG3 structural routing inventory shape/exp029_inventory_shape.py"
+      - name: EXP-048 structural payload route RPDB mutation
+        run: >-
+          sudo python3
+          "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/exp048_structural_route_rpdb_mutation.py"
+      - name: EXP-065 probe RPDB selector shape
+        run: >-
+          sudo python3
+          "design/experiments/EXP-065 NG3 probe RPDB selector shape/exp065_probe_rpdb_selector.py"
+      - name: EXP-066 probe local nft owner shape
+        run: >-
+          sudo python3
+          "design/experiments/EXP-066 NG3 probe local nft owner shape/exp066_probe_local_nft_shape.py"
+
+
+  linux-probe-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux probe tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables util-linux
+      - name: EXP-067 one-shot ICMP Driver execution
+        run: >-
+          sudo python3
+          "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/exp067_icmp_driver.py"
+      - name: EXP-068 continuous availability failover
+        run: >-
+          sudo python3
+          "design/experiments/EXP-068 NG3 continuous availability failover/exp068_continuous_availability.py"
+
+
+  linux-wireguard-multipeer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install WireGuard networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping wireguard-tools
+      - name: EXP-086 WireGuard same-prefix multi-peer availability
+        run: >-
+          sudo python3
+          "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/exp086_wg_same_prefix_multi_peer.py"
+      - name: EXP-087 WireGuard runtime AllowedIPs failover
+        run: >-
+          sudo python3
+          "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/exp087_wg_runtime_allowedips_failover.py"
+
+
+  linux-forwarding-barrier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping procps nftables
+      - name: EXP-030 managed-netns forwarding barrier
+        run: >-
+          sudo python3
+          "design/experiments/EXP-030 NG3 managed-netns forwarding barrier/exp030_forwarding_barrier.py"
+      - name: EXP-082 protective lower containment
+        run: >-
+          sudo python3
+          "design/experiments/EXP-082 NG3 protective lower containment/exp082_protective_lower_containment.py"
+      - name: EXP-083 single Private-network protective gate
+        run: >-
+          sudo python3
+          "design/experiments/EXP-083 NG3 private protective gate/exp083_private_protective_gate.py"
+      - name: C.010 production protective payload gate
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_protective_payload_gate.py
+      - name: A.011 protective mode Manager core
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_protective_mode_manager.py
+      - name: A.011 protective mode runtime control and data-plane
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_protective_mode_runtime.py
+      - name: NG3 forwarding-gate backend integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_forwarding_gate_backend.py
+
+
+  linux-nft-owner-marker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install nftables
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-031 nft namespace owner marker
+        run: >-
+          sudo python3
+          "design/experiments/EXP-031 NG3 nft namespace owner marker/exp031_nft_owner_marker.py"
+      - name: NG3 nft namespace inventory integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_nft_namespace_inventory.py
+
+
+  linux-payload-nft-scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables procps
+      - name: EXP-032 payload nft scaffold
+        run: >-
+          sudo python3
+          "design/experiments/EXP-032 NG3 payload nft scaffold/exp032_payload_nft_scaffold.py"
+      - name: EXP-040 managed INPUT OUTPUT drop scaffold
+        run: >-
+          sudo python3
+          "design/experiments/EXP-040 NG3 managed INPUT OUTPUT drop scaffold/exp040_stack_io_drop.py"
+      - name: NG3 payload nft scaffold comparison integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_nft_payload_scaffold.py
+      - name: NG3 payload nft scaffold prepare integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_nft_scaffold_prepare.py
+
+
+  linux-payload-nat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables procps
+      - name: EXP-033 exact-ifindex payload masquerade
+        run: >-
+          sudo python3
+          "design/experiments/EXP-033 NG3 exact-ifindex payload masquerade/exp033_payload_masquerade.py"
+      - name: NG3 live payload NAT observation integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_payload_nat_observation.py
+      - name: NG3 live Profile SNAT materialization
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_profile_snat.py
+      - name: EXP-034 exact-handle stale NAT deletion
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          "design/experiments/EXP-034 NG3 exact-handle payload NAT reconciliation/exp034_exact_nat_handle.py"
+
+  linux-payload-forward:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables procps
+      - name: EXP-035 exact-ifindex NEW-forward admission
+        run: >-
+          sudo python3
+          "design/experiments/EXP-035 NG3 exact-ifindex NEW-forward admission/exp035_new_forward_admission.py"
+      - name: EXP-036 prefix-scoped stateful return
+        run: >-
+          sudo python3
+          "design/experiments/EXP-036 NG3 prefix-scoped stateful return/exp036_prefix_scoped_return.py"
+      - name: EXP-037 production-shape payload_forward JSON
+        run: >-
+          sudo python3
+          "design/experiments/EXP-037 NG3 production-shape payload-forward JSON/exp037_payload_forward_json.py"
+      - name: EXP-038 payload_forward prefix-boundary JSON
+        run: >-
+          sudo python3
+          "design/experiments/EXP-038 NG3 payload-forward prefix-boundary JSON/exp038_prefix_boundary_json.py"
+      - name: EXP-041 ordered Device firewall child chain
+        run: >-
+          sudo python3
+          "design/experiments/EXP-041 NG3 ordered Device firewall child chain/exp041_device_firewall_child.py"
+      - name: EXP-042 Device firewall predicate JSON
+        run: >-
+          sudo python3
+          "design/experiments/EXP-042 NG3 Device firewall predicate JSON/exp042_device_firewall_predicates.py"
+      - name: EXP-043 Device firewall active REJECT
+        run: >-
+          sudo python3
+          "design/experiments/EXP-043 NG3 Device firewall active reject/exp043_device_firewall_reject.py"
+      - name: EXP-044 Device firewall jump insertion
+        run: >-
+          sudo python3
+          "design/experiments/EXP-044 NG3 Device firewall jump insertion/exp044_device_firewall_jump_insert.py"
+      - name: EXP-045 composite Profile forward mutation
+        run: >-
+          sudo python3
+          "design/experiments/EXP-045 NG3 composite Profile forward mutation/exp045_profile_forward_mutation.py"
+      - name: EXP-046 publication local admission
+        run: >-
+          sudo python3
+          "design/experiments/EXP-046 NG3 publication local admission/exp046_publication_local_admission.py"
+      - name: EXP-047 atomic local publication mutation
+        run: >-
+          sudo python3
+          "design/experiments/EXP-047 NG3 atomic local publication mutation/exp047_atomic_local_publication.py"
+      - name: NG3 strict payload_forward observer integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_payload_forward_observation.py
+      - name: NG3 combined Profile Device NAT convergence integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_composite_nft_mutation.py
+      - name: NG3 cross-domain structural convergence integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_structural_policy_mutation.py
+      - name: NG3 network policy activation integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_network_policy_activation.py
+      - name: NG3 managed network domain lifecycle integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_managed_network_domain.py
+      - name: NG3 bounded controller startup integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_controller_startup.py
+
+  linux-endpoint-provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2
+      - name: EXP-039 generic TUN transport endpoint provenance
+        run: >-
+          sudo python3
+          "design/experiments/EXP-039 NG3 generic TUN transport endpoint provenance/exp039_tun_transport_provenance.py"
+      - name: Private-peer VPNPathAdapter integration
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH python3
+          design/NG3/code/python/rou/tests/integration_vpn_path_private_peer.py
+
+  linux-exp049-openvpn:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: EXP-049 real OpenVPN + systemd onboarding on Debian 13
+        run: |
+          set -euo pipefail
+          docker rm -f ng3-exp049 >/dev/null 2>&1 || true
+          trap 'docker rm -f ng3-exp049 >/dev/null 2>&1 || true' EXIT
+
+          docker run -d --name ng3-exp049 --privileged --cgroupns=host \
+            --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            debian:13 \
+            bash -lc '
+              set -e
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                systemd systemd-sysv dbus \
+                python3 iproute2 iputils-ping nftables procps openvpn openssl
+              mkdir -p /dev/net
+              if [ ! -e /dev/net/tun ]; then
+                mknod /dev/net/tun c 10 200
+              fi
+              exec /sbin/init
+            '
+
+          for attempt in $(seq 1 90); do
+            if docker exec ng3-exp049 systemctl show-environment >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              docker logs ng3-exp049
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker exec ng3-exp049 bash -lc '
+            set -e
+            PYTHONPATH=design/NG3/code/python \
+              python3 "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/exp049_openvpn_onboarding.py"
+          '
+
+          docker exec ng3-exp049 bash -lc '
+            set -e
+            PYTHONPATH=design/NG3/code/python \
+              python3 "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/exp050_openvpn_systemd_lifecycle.py"
+          '
+
+  linux-alpha-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: EXP-051 installed NG3 alpha smoke on Debian 13 systemd
+        run: |
+          set -euo pipefail
+          docker rm -f ng3-alpha >/dev/null 2>&1 || true
+          trap 'docker rm -f ng3-alpha >/dev/null 2>&1 || true' EXIT
+
+          docker run -d --name ng3-alpha --privileged --cgroupns=host \
+            --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            debian:13 \
+            bash -lc '
+              set -e
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                systemd systemd-sysv dbus \
+                python3 iproute2 iputils-ping nftables procps openvpn openssl
+              mkdir -p /dev/net
+              if [ ! -e /dev/net/tun ]; then
+                mknod /dev/net/tun c 10 200
+              fi
+              exec /sbin/init
+            '
+
+          for attempt in $(seq 1 90); do
+            if docker exec ng3-alpha systemctl show-environment >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              docker logs ng3-alpha
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker exec ng3-alpha bash -lc '
+            set -e
+            python3 "design/experiments/EXP-051 NG3 first functioning alpha/exp051_alpha_smoke.py"
+          '
+
+  linux-host-publication-dnat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-052 host-side server publication DNAT
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-052 NG3 host publication DNAT/exp052_host_publication_dnat.py"
+
+
+  linux-stack-return-affinity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables conntrack
+      - name: EXP-061 stack established-flow return affinity
+        run: >-
+          sudo python3
+          "design/experiments/EXP-061 NG3 stack established-flow return affinity/exp061_stack_return_affinity.py"
+
+
+  linux-stack-return-affinity-owner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: Production stack return-affinity owner evidence
+        run: >-
+          sudo python3
+          "design/NG3/code/python/rou/tests/integration_stack_return_affinity_owner.py"
+
+
+  linux-debian12-routed-veth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install QEMU and cloud image tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-image-utils curl
+      - name: Boot Debian 12 kernel and run routed-veth probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            -o debian12.qcow2 \
+            https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
+
+          PROBE='design/experiments/EXP-070 NG3 routed stack endpoint/exp070_debian12_routed_veth.sh'
+          B64="$(base64 -w0 "$PROBE")"
+          cat > user-data <<EOF
+          #cloud-config
+          write_files:
+            - path: /root/exp070.sh
+              permissions: '0755'
+              encoding: b64
+              content: $B64
+          runcmd:
+            - [ /bin/sh, -c, '/root/exp070.sh >/dev/ttyS0 2>&1; rc=\$?; echo EXP070_D12_CLOUD_INIT_RC=\$rc >/dev/ttyS0; poweroff -f' ]
+          EOF
+          cat > meta-data <<'EOF'
+          instance-id: exp070-debian12
+          local-hostname: exp070-debian12
+          EOF
+          cloud-localds seed.img user-data meta-data
+
+          set +e
+          timeout 300 qemu-system-x86_64 \
+            -machine accel=tcg \
+            -m 1024 -smp 2 \
+            -nographic -no-reboot \
+            -drive file=debian12.qcow2,format=qcow2,if=virtio \
+            -drive file=seed.img,format=raw,if=virtio \
+            > vm.log 2>&1
+          qemu_rc=$?
+          set -e
+          cat vm.log
+          if [[ $qemu_rc -eq 124 ]]; then
+            echo 'Debian 12 guest timed out' >&2
+            exit 1
+          fi
+          grep -F 'EXP070_D12_KERNEL=6.1.' vm.log
+          grep -F 'EXP070_D12_NO_PROXY=EXPECTED_FAIL' vm.log
+          grep -F 'EXP070_D12_PROXY_ARP=PASS' vm.log
+          grep -F 'EXP070_D12_RESULT=PASS' vm.log
+
+  linux-host-managed-routing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping
+      - name: EXP-074 authoritative host managed routing
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-074 NG3 host managed routing/exp074_host_managed_routing.py"
+      - name: EXP-081 aggressive RPDB precedence gap
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-081 NG3 aggressive RPDB precedence gap/exp081_aggressive_rpdb_precedence_gap.py"
+      - name: EXP-084 aggressive independent escape guard
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-084 NG3 aggressive escape guard/exp084_aggressive_escape_guard.py"
+      - name: EXP-085 aggressive full-tunnel escape guard
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-085 NG3 aggressive full-tunnel guard/exp085_aggressive_full_tunnel_guard.py"
+      - name: E.004 production aggressive host-routing Enforcer
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          design/NG3/code/python/rou/tests/integration_aggressive_host_routing_enforcer.py
+      - name: E.003 continuous aggressive host-routing Manager
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          design/NG3/code/python/rou/tests/integration_aggressive_host_routing_manager.py
+      - name: EXP-078 scoped peaceful host routing selectors
+        run: >-
+          sudo python3
+          "design/experiments/EXP-078 NG3 peaceful host routing selectors/exp078_peaceful_host_routing_selectors.py"
+      - name: EXP-079 managed-boundary absolute helper bypass
+        run: >-
+          sudo python3
+          "design/experiments/EXP-079 NG3 managed boundary helper bypass/exp079_managed_boundary_helper_bypass.py"
+      - name: EXP-080 scoped preserve-main non-interference
+        run: >-
+          sudo python3
+          "design/experiments/EXP-080 NG3 scoped preserve-main non-interference/exp080_scoped_preserve_main.py"
+  linux-profile-snat-reverse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-075 Profile SNAT identity reverse reachability
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-075 NG3 Profile SNAT reverse reachability/exp075_profile_snat_reverse.py"
+
+  linux-profile-snat-combined:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 nftables
+      - name: EXP-076 combined Profile SNAT dataplane
+        run: >-
+          env PYTHONPATH=design/NG3/code/python
+          sudo --preserve-env=PYTHONPATH python3
+          "design/experiments/EXP-076 NG3 combined Profile SNAT/exp076_combined_profile_snat.py"
+
+  linux-routed-stack-endpoint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux networking tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iproute2 iputils-ping nftables
+      - name: EXP-070 routed stack endpoint
+        run: >-
+          sudo python3
+          "design/experiments/EXP-070 NG3 routed stack endpoint/exp070_routed_stack_endpoint.py"
+
+
+
+  release-0-1-0-deployment-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release records and build release assets
+        run: |
+          set -euo pipefail
+          python3 release/0.1.0/qa/validate_release_records.py
+          sh release/0.1.0/build-bundle.sh
+          sh release/0.1.0/build-project-snapshot.sh
+          (
+            cd dist
+            sha256sum -c vpn-gate-0.1.0.tar.gz.sha256
+            sha256sum -c vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
+            printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_BEGIN'
+            cat vpn-gate-0.1.0.tar.gz.sha256
+            cat vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
+            printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_END'
+          )
+      - name: Walk published administrator procedure and run negative QA
+        run: |
+          set -euo pipefail
+          docker rm -f ng3-release-qa >/dev/null 2>&1 || true
+          trap 'docker rm -f ng3-release-qa >/dev/null 2>&1 || true' EXIT
+
+          docker run -d --name ng3-release-qa --privileged --cgroupns=host \
+            --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            -v /lib/modules:/lib/modules:ro \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            debian:13 \
+            bash -lc '
+              set -e
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                systemd systemd-sysv dbus python3 kmod openssl ocserv
+              mkdir -p /dev/net
+              if [ ! -e /dev/net/tun ]; then
+                mknod /dev/net/tun c 10 200
+              fi
+              if [ ! -e /dev/ppp ]; then
+                mknod /dev/ppp c 108 0
+              fi
+              modprobe wireguard || true
+              modprobe ppp_generic || true
+              modprobe pppol2tp || true
+              exec /sbin/init
+            '
+
+          for attempt in $(seq 1 90); do
+            if docker exec ng3-release-qa systemctl show-environment >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              docker logs ng3-release-qa
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker exec ng3-release-qa bash -lc '
+            set -e
+            python3 release/0.1.0/qa/release_deployment_qa.py
+          '
+      - name: Upload validated release candidate bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: vpn-gate-0.1.0-candidate
+          path: |
+            dist/vpn-gate-0.1.0.tar.gz
+            dist/vpn-gate-0.1.0.tar.gz.sha256
+            dist/vpn-gate-0.1.0-project-snapshot.tar.gz
+            dist/vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
+            release/0.1.0/QA-REPORT.md
+            release/0.1.0/REQUIREMENTS-COVERAGE.md
+            release/0.1.0/RELEASE-SCOPE.md
+          if-no-files-found: error

@@ -1,0 +1,113 @@
+name: Actual main lineage guard
+
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  lineage-hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject legacy artifacts in the active lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad=0
+
+          reject() {
+            echo "::error file=$1::legacy artifact is not allowed on the active main lineage"
+            bad=1
+          }
+
+          while IFS= read -r path; do
+            case "$path" in
+              design/RC*/*|design/NG1/*|design/NG2/*)
+                reject "$path"
+                ;;
+              .github/workflows/rc*-python.yml|.github/workflows/ng1-python.yml|.github/workflows/ng2-python.yml)
+                reject "$path"
+                ;;
+              design/experiments/*)
+                case "$path" in
+                  design/experiments/README.md|design/experiments/*" NG3 "*/*) ;;
+                  *) reject "$path" ;;
+                esac
+                ;;
+              design/reviews/*)
+                case "$path" in
+                  design/reviews/NG3-*.md|design/reviews/README.md) ;;
+                  *) reject "$path" ;;
+                esac
+                ;;
+              design/deferrals/*)
+                case "$path" in
+                  design/deferrals/NG3-*.md) ;;
+                  *) reject "$path" ;;
+                esac
+                ;;
+            esac
+          done < <(git ls-files)
+
+          mapfile -t workflows < <(git ls-files '.github/workflows/*' | sort)
+          expected=(
+            ".github/workflows/actual-main-hygiene.yml"
+            ".github/workflows/ng3-python.yml"
+            ".github/workflows/ng3-rust.yml"
+          )
+          if [[ "${workflows[*]}" != "${expected[*]}" ]]; then
+            echo "::error::unexpected workflow set on active lineage"
+            printf 'actual:   %s\n' "${workflows[*]}"
+            printf 'expected: %s\n' "${expected[*]}"
+            bad=1
+          fi
+
+          if (( bad != 0 )); then
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          tracked = subprocess.check_output(
+              ["git", "ls-files", "-z"]
+          ).decode().split("\0")
+          tracked = [p for p in tracked if p]
+
+          required_prefix = {
+              "design/NG1/": "legacy-main-ng1-2:design/NG1/",
+              "design/NG2/": "legacy-main-ng1-2:design/NG2/",
+              "design/RC2/": "legacy-main-rc:design/RC2/",
+              "design/RC3/": "legacy-main-rc:design/RC3/",
+          }
+
+          errors = []
+          for name in tracked:
+              if name == ".github/workflows/actual-main-hygiene.yml":
+                  continue
+              path = Path(name)
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except (UnicodeDecodeError, IsADirectoryError):
+                  continue
+              for lineno, line in enumerate(text.splitlines(), 1):
+                  for local_ref, qualified_ref in required_prefix.items():
+                      if local_ref in line and qualified_ref not in line:
+                          errors.append(
+                              f"{name}:{lineno}: unqualified legacy path {local_ref}"
+                          )
+
+          if errors:
+              for error in errors:
+                  print(f"::error::{error}")
+              raise SystemExit(1)
+
+          print("ACTUAL_MAIN_UNQUALIFIED_LEGACY_PATH_REFS=0")
+          PY
+
+          echo "ACTUAL_MAIN_LEGACY_ARTIFACTS=0"
