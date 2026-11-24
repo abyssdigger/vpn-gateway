@@ -85,6 +85,7 @@ from .linux_availability_cycle import (
     run_linux_availability_cycle_once,
 )
 from .linux_forwarding_gate import LinuxForwardingGateDriver
+from .linux_protective_payload_gate import LinuxProtectivePayloadGateDriver
 from .linux_vpn_path_adapter import LinuxVpnPathAdapter
 from .host_publication_adapter import HostPublicationAdapter
 from .linux_host_publication import (
@@ -135,6 +136,11 @@ from .payload_profile import (
 from .payload_nat_desired import ProfileSnatPolicyIntent
 from .probe_desired import ProbeDesiredAssembly, build_probe_desired_assembly
 from .probe_runtime import AvailabilityProbeRuntime
+from .protective_mode_control import (
+    DEFAULT_CONTROL_PATH,
+    ProtectiveModeControlService,
+)
+from .protective_mode_manager import ProtectiveModeManager
 from .route_priority_inventory import RoutePriorityPathRoute
 from .release1_config import Release1Config, parse_release1_config
 from .operational_log import OperationalLogAdapter, OperationalLogLevel
@@ -163,6 +169,7 @@ ALPHA_INNER_ADDRESS = IPv4Interface("198.19.255.2/32")
 ALPHA_RUNTIME_DIRECTORY = Path("/run/vpn-gate-alpha")
 ALPHA_STATUS_PATH = ALPHA_RUNTIME_DIRECTORY / "status.json"
 ALPHA_STATUS_TEXT_PATH = ALPHA_RUNTIME_DIRECTORY / "status.txt"
+ALPHA_CONTROL_PATH = DEFAULT_CONTROL_PATH
 ALPHA_VERSION_PATH = Path("/usr/lib/vpn-gate-alpha/VERSION")
 ALPHA_AUDIT_INTERVAL_SECONDS = 1.0
 ALPHA_AVAILABILITY_DEGRADATION_THRESHOLD = 2
@@ -815,6 +822,8 @@ def run_alpha_runtime(
     )
     domain_spec = _domain_spec()
     stop_event = threading.Event()
+    normal_operation_lock = threading.RLock()
+    protective_service: ProtectiveModeControlService | None = None
     holder: dict[str, AlphaPreparedPolicy] = {}
     logger_holder = {
         "logger": OperationalLogAdapter(OperationalLogLevel.INFO)
@@ -983,6 +992,19 @@ def run_alpha_runtime(
                 else 2
             )
 
+        def reconcile_normal_once_unlocked():
+            with normal_operation_lock:
+                result, availability_result = reconcile_normal_once_unlocked()
+            return result, availability_result
+
+        def normal_release_confirmed_unlocked() -> bool:
+            result, availability_result = reconcile_normal_once_unlocked()
+            return (
+                result.ready
+                and availability_result is not None
+                and availability_result.confirmed
+            )
+
         host_publication_desired = prepared.build_host_publication_desired()
         host_publication_adapter = HostPublicationAdapter(
             LinuxHostPublicationDriver(runner)
@@ -1028,6 +1050,55 @@ def run_alpha_runtime(
                 availability_start.observation.projection.problem_owners
             )
         status_publisher.publish(status_agent.snapshot())
+
+        protective_manager = ProtectiveModeManager()
+        protective_driver = LinuxProtectivePayloadGateDriver(
+            runner,
+            domain_spec.namespace,
+        )
+        protective_service = ProtectiveModeControlService(
+            protective_manager,
+            protective_driver,
+            ALPHA_INNER_INTERFACE,
+            normal_release_confirmed_unlocked,
+            normal_operation_lock,
+            socket_path=ALPHA_CONTROL_PATH,
+            audit_interval_seconds=audit_interval_seconds,
+            logger=logger_holder["logger"],
+        )
+        try:
+            protective_service.start()
+        except Exception as exc:
+            host_cleanup = host_publication_adapter.cleanup()
+            stopped = stop_controller_once(
+                startup.session,
+                domain_spec,
+                runner,
+            )
+            status_agent.mark_unconfirmed(
+                readiness=RuntimeReadiness.FAILED,
+                problem=(
+                    "protective-mode control startup failed: "
+                    f"{type(exc).__name__}: {exc}"
+                ),
+            )
+            status_publisher.publish(status_agent.snapshot())
+            log(
+                OperationalLogLevel.ERROR,
+                LIFE_LOG_TAG,
+                "start_failed",
+                status="protective_mode_unready",
+                diagnostic=f"{type(exc).__name__}: {exc}",
+                host_cleanup=host_cleanup.status.value,
+                managed_cleanup=stopped.status.value,
+            )
+            return (
+                1
+                if host_cleanup.confirmed
+                and stopped.status is ControllerStopStatus.STOPPED
+                else 2
+            )
+
         _emit_binding_transitions(
             logger_holder["logger"],
             (),
@@ -1168,6 +1239,10 @@ def run_alpha_runtime(
             last_status = result.status
             last_diagnostic = result.diagnostic
 
+        if protective_service is not None:
+            protective_service.stop()
+            protective_service = None
+
         status_agent.mark_stopping()
         status_publisher.publish(status_agent.snapshot())
         _notify_systemd("STOPPING=1\nSTATUS=VPN-GATE alpha stopping")
@@ -1216,6 +1291,8 @@ def run_alpha_runtime(
             else 2
         )
     finally:
+        if protective_service is not None:
+            protective_service.stop()
         signal.signal(signal.SIGTERM, previous_sigterm)
         signal.signal(signal.SIGINT, previous_sigint)
 
