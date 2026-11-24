@@ -4,10 +4,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 import re
 import subprocess
-import tempfile
 import time
 
 
@@ -224,20 +222,14 @@ def apply_client_base_config(
     peers: tuple[Peer, ...],
 ) -> None:
     config = render_client_base_config(client_private, peers)
-    with tempfile.NamedTemporaryFile(
-        "w",
-        encoding="utf-8",
-        prefix="exp088-wg0-",
-        suffix=".conf",
-        delete=False,
-    ) as handle:
-        handle.write(config)
-        path = handle.name
-    os.chmod(path, 0o600)
-    try:
-        ns(CLIENT, "wg", "setconf", "wg0", path)
-    finally:
-        os.unlink(path)
+    ns(
+        CLIENT,
+        "wg",
+        "setconf",
+        "wg0",
+        "/dev/stdin",
+        input_text=config,
+    )
 
 
 def create_client_wireguard(
