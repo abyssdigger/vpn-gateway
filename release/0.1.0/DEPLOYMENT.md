@@ -36,6 +36,10 @@ stack-specific VPN service directly inside the managed namespace.
 3. Configure one Device with that interface and transport fact. Example:
 
 ```toml
+log_level = "info"
+helper_routing_interfaces = ":local"
+helper_routing_policy = "peaceful"
+
 [device.corp]
 enabled = true
 expected_interfaces = ["vpn-corp"]
@@ -137,6 +141,12 @@ ExecStop=/usr/bin/wg-quick down %i
 WantedBy=multi-user.target
 ```
 
+After installing the wrapper unit, reload systemd:
+
+```sh
+systemctl daemon-reload
+```
+
 For the example above, the Device side can use:
 
 ```toml
@@ -178,7 +188,7 @@ After=vpn-gate-alpha.service
 Type=simple
 NetworkNamespacePath=/run/netns/vpn-gate-alpha
 EnvironmentFile=/etc/vpn-gate-alpha/openconnect-%i.env
-ExecStart=/bin/sh -c 'printf "%s\\n" "$VPN_GATE_OC_PASSWORD" | exec /usr/sbin/openconnect \
+ExecStart=/bin/sh -c 'printf "%%s\\n" "$VPN_GATE_OC_PASSWORD" | exec /usr/sbin/openconnect \
     --non-inter --passwd-on-stdin --user="$VPN_GATE_OC_USER" \
     --interface=vpn-%i \
     --script=/usr/lib/vpn-gate-alpha/openconnect-policy-neutral.sh \
@@ -199,10 +209,11 @@ VPN_GATE_OC_PASSWORD=replace-me
 VPN_GATE_OC_SERVERCERT=pin-sha256:replace-with-server-public-key-pin
 ```
 
-Protect the environment file:
+Protect the environment file and reload the installed unit:
 
 ```sh
 chmod 0600 /etc/vpn-gate-alpha/openconnect-corp.env
+systemctl daemon-reload
 ```
 
 Put protocol and other VPN-specific options in `openconnect-corp.conf`. Keep authentication
@@ -299,6 +310,12 @@ ExecStart=/usr/sbin/xl2tpd -D \
     -p /run/vpn-gate-l2tp-corp.pid \
     -C /run/vpn-gate-l2tp-corp-control
 Restart=no
+```
+
+Reload systemd after installing the service:
+
+```sh
+systemctl daemon-reload
 ```
 
 After starting the controller and L2TP service, request the documented LAC connection:

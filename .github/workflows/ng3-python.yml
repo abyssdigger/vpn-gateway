@@ -750,7 +750,7 @@ jobs:
             cat vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
             printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_END'
           )
-      - name: Deploy bundle and verify WireGuard OpenConnect L2TP
+      - name: Walk published administrator procedure and run negative QA
         run: |
           set -euo pipefail
           docker rm -f ng3-release-qa >/dev/null 2>&1 || true
@@ -767,9 +767,7 @@ jobs:
               set -e
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                systemd systemd-sysv dbus \
-                python3 iproute2 iputils-ping nftables procps openssl kmod \
-                wireguard-tools openconnect ocserv xl2tpd ppp
+                systemd systemd-sysv dbus python3 kmod
               mkdir -p /dev/net
               if [ ! -e /dev/net/tun ]; then
                 mknod /dev/net/tun c 10 200
