@@ -757,7 +757,27 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect frozen 0.1.0 release changes
+        id: release_scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$base" HEAD -- release/0.1.0; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Validate release records and build release assets
+        if: steps.release_scope.outputs.run == 'true'
         run: |
           set -euo pipefail
           python3 release/0.1.0/qa/validate_release_records.py
@@ -773,6 +793,7 @@ jobs:
             printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_END'
           )
       - name: Walk published administrator procedure and run negative QA
+        if: steps.release_scope.outputs.run == 'true'
         run: |
           set -euo pipefail
           docker rm -f ng3-release-qa >/dev/null 2>&1 || true
@@ -819,6 +840,7 @@ jobs:
             python3 release/0.1.0/qa/release_deployment_qa.py
           '
       - name: Upload validated release candidate bundle
+        if: steps.release_scope.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: vpn-gate-0.1.0-candidate
