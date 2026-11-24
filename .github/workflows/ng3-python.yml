@@ -745,6 +745,10 @@ jobs:
             cd dist
             sha256sum -c vpn-gate-0.1.0.tar.gz.sha256
             sha256sum -c vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
+            printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_BEGIN'
+            cat vpn-gate-0.1.0.tar.gz.sha256
+            cat vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
+            printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_END'
           )
       - name: Deploy bundle and verify WireGuard OpenConnect L2TP
         run: |
