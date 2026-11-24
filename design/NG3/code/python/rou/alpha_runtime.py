@@ -999,11 +999,30 @@ def run_alpha_runtime(
 
         def normal_release_confirmed_unlocked() -> bool:
             result, availability_result = reconcile_normal_once_unlocked()
-            return (
+            confirmed = (
                 result.ready
                 and availability_result is not None
                 and availability_result.confirmed
             )
+            if not confirmed:
+                log(
+                    OperationalLogLevel.WARNING,
+                    POLICY_LOG_TAG,
+                    "protective_release_precondition_unconfirmed",
+                    payload_status=result.status.value,
+                    payload_diagnostic=result.diagnostic,
+                    availability_status=(
+                        availability_result.status.value
+                        if availability_result is not None
+                        else "not_attempted"
+                    ),
+                    availability_diagnostic=(
+                        availability_result.diagnostic
+                        if availability_result is not None
+                        else None
+                    ),
+                )
+            return confirmed
 
         host_publication_desired = prepared.build_host_publication_desired()
         host_publication_adapter = HostPublicationAdapter(

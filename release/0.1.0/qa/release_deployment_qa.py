@@ -290,7 +290,24 @@ ExecStop=/usr/bin/wg-quick down %i
         assert not ping("10.70.0.1")
         print("RELEASE_QA_PROTECTIVE_PERIODIC_REPAIR=PASS")
 
-        left = json.loads(command((*control, "leave")).stdout)
+        leave_command = command((*control, "leave"), check=False)
+        if leave_command.returncode != 0:
+            print(
+                "RELEASE_QA_PROTECTIVE_LEAVE_STDOUT="
+                + leave_command.stdout.replace("\n", "\\n")
+            )
+            print(
+                "RELEASE_QA_PROTECTIVE_JOURNAL="
+                + command(
+                    ("journalctl", "-u", CONTROLLER, "--no-pager", "-n", "200"),
+                    check=False,
+                ).stdout.replace("\n", "\\n")
+            )
+            raise RuntimeError(
+                "Protective mode leave failed: "
+                + leave_command.stdout.strip()
+            )
+        left = json.loads(leave_command.stdout)
         assert left["ok"] is True, left
         assert left["protective"]["status"] == "inactive", left
         wait_ping("10.70.0.1")
