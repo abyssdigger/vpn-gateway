@@ -993,8 +993,20 @@ def run_alpha_runtime(
             )
 
         def reconcile_normal_once_unlocked():
-            with normal_operation_lock:
-                result, availability_result = reconcile_normal_once_unlocked()
+            result = reconcile_alpha_payload_once(
+                prepared,
+                domain_spec,
+                runner,
+            )
+            availability_result = (
+                reconcile_alpha_availability_once(
+                    prepared,
+                    runner,
+                    probe_driver,
+                )
+                if result.ready
+                else None
+            )
             return result, availability_result
 
         def normal_release_confirmed_unlocked() -> bool:
@@ -1155,20 +1167,8 @@ def run_alpha_runtime(
             # Peaceful host-routing assistance is lifecycle-scoped. Ordinary-host
             # route changes after successful start are administrator-owned and do
             # not gate core managed-domain reconciliation.
-            result = reconcile_alpha_payload_once(
-                prepared,
-                domain_spec,
-                runner,
-            )
-            availability_result = (
-                reconcile_alpha_availability_once(
-                    prepared,
-                    runner,
-                    probe_driver,
-                )
-                if result.ready
-                else None
-            )
+            with normal_operation_lock:
+                result, availability_result = reconcile_normal_once_unlocked()
             if (
                 result.ready
                 and availability_result is not None
