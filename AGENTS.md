@@ -205,25 +205,31 @@ incompatible `main` update. The user may explicitly choose another snapshot boun
 
 Dedicated working branches are temporary work surfaces, not archival records.
 
+Deferred tag/branch hygiene is tracked only in the root `REF-HYGIENE.tsv` operational ledger.
+Fulfillment reviews, experiment reviews and other historical evidence artifacts must not maintain
+a cumulative live ref-cleanup list; they may only state that required operations were recorded in
+the canonical ledger.
+
 After a snapshot/merge/publication has made a completed working-branch result durable in the
-intended target lineage, the agent must end the publication step by explicitly reminding the
-projectholder to clean up the now-redundant refs.
+intended target lineage:
 
-The reminder must include:
-
-- a proposed annotated source tag for the actual published working-branch source tip when that
+- append an `ADD_TAG` operation for the actual published working-branch source tip when that
   source identity is not already preserved by an equivalent tag;
-- the exact source-tip commit SHA the proposed tag should reference;
-- an explicit reminder to delete the completed working branch once the projectholder is satisfied
-  that the published result and source identity are preserved.
+- append a `DEL_BRANCH` operation for the completed temporary branch.
 
 Source-tag naming follows the established project style:
 `ng3-...-source` for named snapshots and `ng3-snapshot-<N>-source` for numbered snapshots.
 
-The reminder is mandatory; the mutations are not. Creating, moving, replacing or deleting any
-tag or branch still requires the explicit authorization applicable under §3 and §5. The agent
-must not silently leave completed temporary branches accumulating merely because ref deletion is
-not automatically authorized.
+The first line of `REF-HYGIENE.tsv` identifies the helper scripts that consume its operation
+rows. The scripts treat the ledger as read-only input and must never rewrite or prune it.
+
+When the projectholder explicitly requests ref-hygiene reconciliation, compare the ledger with
+the actual GitHub ref state and remove only operations already satisfied by that state. Do not
+infer completion from an old review or from a previous script run.
+
+Creating, moving, replacing or deleting any tag or branch still requires the explicit
+authorization applicable under §3 and §5. Recording an operation in `REF-HYGIENE.tsv` is not
+authorization to execute it.
 
 ### Exceptional history operations
 
