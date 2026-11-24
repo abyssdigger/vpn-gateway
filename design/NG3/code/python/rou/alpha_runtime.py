@@ -1,7 +1,8 @@
 """First executable NG3 alpha runtime assembly.
 
-Architecture: structured Annex A A.001 ProductLifecycleControl and
-Annex E E.001 HostPublicationAdapter runtime composition.
+Architecture: structured Annex A A.001 ProductLifecycleControl,
+A.011 ProtectiveModeManager, and Annex E E.001 HostPublicationAdapter
+runtime composition.
 The component specs own normative requirement traceability.
 
 This module assembles the first executable NG3 runtime from accepted Release-1
