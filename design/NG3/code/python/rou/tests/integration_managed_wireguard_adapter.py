@@ -81,7 +81,8 @@ def main() -> None:
         ns("ip", "link", "set", "lo", "up")
 
         private_a, _ = keypair()
-        private_b, public_b = keypair()
+        _, public_b = keypair()
+        private_c, _ = keypair()
         psk = run("wg", "genpsk").strip()
 
         with tempfile.TemporaryDirectory(prefix="ng3-d001-wg-") as root_text:
@@ -166,7 +167,7 @@ def main() -> None:
             private_path.chmod(0o600)
             print("D001_WG_SECRET_PRECONDITION=PASS")
 
-            private_path.write_text(private_b + "\n", encoding="ascii")
+            private_path.write_text(private_c + "\n", encoding="ascii")
             private_path.chmod(0o600)
             changed = adapter.converge_present("wg-main", desired)
             assert changed.interface is not None
