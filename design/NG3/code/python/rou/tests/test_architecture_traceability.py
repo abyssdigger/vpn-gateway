@@ -10,8 +10,7 @@ ARCHITECTURE = ROOT / "design/NG3/architecture-ng.md"
 REQUIREMENTS = ROOT / "design/NG3/requirements.md"
 TRACE = ROOT / "design/NG3/implementation-traceability.md"
 PRODUCTION = ROOT / "design/NG3/code/python/rou"
-DEFERRALS = ROOT / "design/deferrals"
-REVIEWS = ROOT / "design/reviews"
+STATUS_BASIS = ROOT / "design/NG3/requirement-status-basis.md"
 REQUIREMENT_STATUSES = (
     "open",
     "pending_closure",
@@ -57,6 +56,26 @@ def requirement_nodes() -> tuple[dict[str, object], ...]:
             stack[level] = node
             del stack[level + 1 :]
     return tuple(result)
+
+
+def external_status_basis() -> dict[tuple[str, str], str]:
+    result: dict[tuple[str, str], str] = {}
+    for line in STATUS_BASIS.read_text(encoding="utf-8").splitlines():
+        status_match = re.search(r"\| статус \x60([a-z_]+)\x60 \|", line)
+        path_match = re.search(r"\| \x60([^\x60]+\.md)\x60 \|$", line)
+        if status_match is None or path_match is None:
+            continue
+        status = status_match.group(1)
+        path = path_match.group(1)
+        requirement_ids = re.findall(r"\x60(VPNG-[^\x60]+)\x60", line)
+        if not requirement_ids:
+            raise AssertionError(f"external status basis row has no requirement IDs: {line}")
+        for requirement_id in requirement_ids:
+            key = (status, requirement_id)
+            if key in result:
+                raise AssertionError(f"duplicate external status basis: {key}")
+            result[key] = path
+    return result
 
 
 def annex_text() -> str:
@@ -195,34 +214,33 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
         missing = [item for item in pending if f"\x60{item}\x60" not in architecture]
         self.assertEqual([], missing)
 
-    def test_every_postponed_requirement_has_explicit_record(self):
-        record_text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for root in (DEFERRALS, REVIEWS)
-            for path in root.glob("*.md")
+    def test_external_requirement_status_basis_is_explicit(self):
+        requirements_text = REQUIREMENTS.read_text(encoding="utf-8")
+        self.assertIn(
+            "\x60design/NG3/requirement-status-basis.md\x60",
+            requirements_text,
         )
-        postponed = [
-            str(node["id"])
-            for node in requirement_nodes()
-            if node["statuses"] == ("postponed",)
-        ]
-        self.assertTrue(postponed)
-        missing = [item for item in postponed if f"\x60{item}\x60" not in record_text]
-        self.assertEqual([], missing)
+        basis = external_status_basis()
 
-    def test_rejected_closure_requirements_have_explicit_record(self):
-        record_text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for root in (DEFERRALS, REVIEWS)
-            for path in root.glob("*.md")
-        )
-        rejected = [
-            str(node["id"])
-            for node in requirement_nodes()
-            if node["statuses"] == ("rejected_closure",)
-        ]
-        missing = [item for item in rejected if f"\x60{item}\x60" not in record_text]
-        self.assertEqual([], missing)
+        for status in ("postponed", "rejected_closure"):
+            expected = {
+                str(node["id"])
+                for node in requirement_nodes()
+                if node["statuses"] == (status,)
+            }
+            actual = {
+                requirement_id
+                for basis_status, requirement_id in basis
+                if basis_status == status
+            }
+            self.assertEqual(expected, actual, status)
+
+            for requirement_id in sorted(expected):
+                path = ROOT / basis[(status, requirement_id)]
+                with self.subTest(status=status, requirement=requirement_id):
+                    self.assertTrue(path.is_file(), f"missing basis document: {path}")
+                    content = path.read_text(encoding="utf-8")
+                    self.assertIn(f"\x60{requirement_id}\x60", content)
 
     def test_declared_python_implementations_have_reverse_architecture_marker(self):
         declarations = declared_python_implementations()
