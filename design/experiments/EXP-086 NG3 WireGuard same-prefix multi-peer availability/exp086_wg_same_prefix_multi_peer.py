@@ -3,10 +3,7 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 import subprocess
-import tempfile
 import time
 
 
@@ -37,8 +34,21 @@ def host(*args: str, check: bool = True, input_text: str | None = None) -> subpr
     return completed
 
 
-def ns(namespace: str, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return host("ip", "netns", "exec", namespace, *args, check=check)
+def ns(
+    namespace: str,
+    *args: str,
+    check: bool = True,
+    input_text: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    return host(
+        "ip",
+        "netns",
+        "exec",
+        namespace,
+        *args,
+        check=check,
+        input_text=input_text,
+    )
 
 
 def cleanup() -> None:
@@ -46,13 +56,10 @@ def cleanup() -> None:
         host("ip", "netns", "del", namespace, check=False)
 
 
-def keypair(directory: Path, name: str) -> tuple[Path, str]:
+def keypair() -> tuple[str, str]:
     private = host("wg", "genkey").stdout.strip()
-    private_path = directory / f"{name}.key"
-    private_path.write_text(private + "\n", encoding="utf-8")
-    os.chmod(private_path, 0o600)
     public = host("wg", "pubkey", input_text=private + "\n").stdout.strip()
-    return private_path, public
+    return private, public
 
 
 def allowed_ips() -> dict[str, tuple[str, ...]]:
@@ -156,10 +163,10 @@ def setup_underlay() -> None:
     ns(PEER_B, "ip", "link", "set", "b-c", "up")
 
 
-def setup_wireguard(directory: Path) -> tuple[str, str]:
-    client_key, client_public = keypair(directory, "client")
-    a_key, a_public = keypair(directory, "a")
-    b_key, b_public = keypair(directory, "b")
+def setup_wireguard() -> tuple[str, str]:
+    client_key, client_public = keypair()
+    a_key, a_public = keypair()
+    b_key, b_public = keypair()
 
     ns(CLIENT, "ip", "link", "add", "wg0", "type", "wireguard")
     ns(CLIENT, "ip", "addr", "add", f"{CLIENT_INNER}/32", "dev", "wg0")
@@ -169,13 +176,14 @@ def setup_wireguard(directory: Path) -> tuple[str, str]:
         "set",
         "wg0",
         "private-key",
-        str(client_key),
+        "/dev/stdin",
         "peer",
         a_public,
         "endpoint",
         "192.0.2.2:51821",
         "allowed-ips",
         REMOTE_PREFIX,
+        input_text=client_key + "\n",
     )
     ns(
         CLIENT,
@@ -203,13 +211,14 @@ def setup_wireguard(directory: Path) -> tuple[str, str]:
             "set",
             ifname,
             "private-key",
-            str(private_key),
+            "/dev/stdin",
             "listen-port",
             listen_port,
             "peer",
             client_public,
             "allowed-ips",
             f"{CLIENT_INNER}/32",
+            input_text=private_key + "\n",
         )
         ns(namespace, "ip", "route", "add", f"{CLIENT_INNER}/32", "dev", ifname)
         ns(namespace, "ip", "link", "set", ifname, "up")
@@ -221,80 +230,79 @@ def main() -> None:
     cleanup()
     try:
         setup_underlay()
-        with tempfile.TemporaryDirectory(prefix="exp086-") as temp:
-            a_public, b_public = setup_wireguard(Path(temp))
+        a_public, b_public = setup_wireguard()
 
-            ownership = allowed_ips()
-            owner = owner_for_prefix(ownership)
-            if owner != b_public:
-                raise RuntimeError(
-                    "second same-prefix assignment did not transfer ownership to peer B; "
-                    f"state={ownership!r}"
-                )
-            if REMOTE_PREFIX in ownership.get(a_public, ()):
-                raise RuntimeError(f"peer A unexpectedly still owns {REMOTE_PREFIX}")
-            print(f"EXP086_ALLOWEDIPS_STATE={ownership}")
-            print("EXP086_ALLOWEDIPS_EXCLUSIVE=PASS")
-
-            # Two otherwise different Linux priorities still collapse to the same egress
-            # interface. The lower metric is intentionally changed between payload attempts.
-            add_payload_routes(10, 20)
-            before = transfers()
-            ping_remote()
-            after = transfers()
-            selected_before = selected_peer(before, after)
-            if selected_before != owner:
-                raise RuntimeError(
-                    f"payload used {selected_before}, expected AllowedIPs owner {owner}"
-                )
-
-            add_payload_routes(200, 5)
-            before = transfers()
-            ping_remote()
-            after = transfers()
-            selected_after = selected_peer(before, after)
-            if selected_after != selected_before:
-                raise RuntimeError(
-                    "changing Linux route metrics changed WireGuard peer unexpectedly: "
-                    f"{selected_before} -> {selected_after}"
-                )
-            route = ns(CLIENT, "ip", "route", "get", REMOTE_IP).stdout.strip()
-            print(f"EXP086_FIB_ROUTE={route}")
-            print(f"EXP086_FIB_SELECTED_PEER={selected_after}")
-            print("EXP086_FIB_PRIORITY_PEER_UNCHANGED=PASS")
-
-            # Move only cryptokey destination ownership to A. Linux egress remains wg0.
-            ns(
-                CLIENT,
-                "wg",
-                "set",
-                "wg0",
-                "peer",
-                a_public,
-                "allowed-ips",
-                REMOTE_PREFIX,
+        ownership = allowed_ips()
+        owner = owner_for_prefix(ownership)
+        if owner != b_public:
+            raise RuntimeError(
+                "second same-prefix assignment did not transfer ownership to peer B; "
+                f"state={ownership!r}"
             )
-            switched_state = allowed_ips()
-            switched_owner = owner_for_prefix(switched_state)
-            if switched_owner != a_public or switched_owner == owner:
-                raise RuntimeError(
-                    "AllowedIPs ownership did not move to peer A as expected; "
-                    f"state={switched_state!r}"
-                )
+        if REMOTE_PREFIX in ownership.get(a_public, ()):
+            raise RuntimeError(f"peer A unexpectedly still owns {REMOTE_PREFIX}")
+        print(f"EXP086_ALLOWEDIPS_STATE={ownership}")
+        print("EXP086_ALLOWEDIPS_EXCLUSIVE=PASS")
 
-            before = transfers()
-            ping_remote()
-            after = transfers()
-            selected_switched = selected_peer(before, after)
-            if selected_switched != switched_owner:
-                raise RuntimeError(
-                    f"payload used {selected_switched}, expected new AllowedIPs owner "
-                    f"{switched_owner}"
-                )
-            print(f"EXP086_SWITCHED_ALLOWEDIPS_STATE={switched_state}")
-            print(f"EXP086_SWITCHED_SELECTED_PEER={selected_switched}")
-            print("EXP086_ALLOWEDIPS_OWNER_SWITCH=PASS")
-            print("EXP086_RESULT=PASS")
+        # Two otherwise different Linux priorities still collapse to the same egress
+        # interface. The lower metric is intentionally changed between payload attempts.
+        add_payload_routes(10, 20)
+        before = transfers()
+        ping_remote()
+        after = transfers()
+        selected_before = selected_peer(before, after)
+        if selected_before != owner:
+            raise RuntimeError(
+                f"payload used {selected_before}, expected AllowedIPs owner {owner}"
+            )
+
+        add_payload_routes(200, 5)
+        before = transfers()
+        ping_remote()
+        after = transfers()
+        selected_after = selected_peer(before, after)
+        if selected_after != selected_before:
+            raise RuntimeError(
+                "changing Linux route metrics changed WireGuard peer unexpectedly: "
+                f"{selected_before} -> {selected_after}"
+            )
+        route = ns(CLIENT, "ip", "route", "get", REMOTE_IP).stdout.strip()
+        print(f"EXP086_FIB_ROUTE={route}")
+        print(f"EXP086_FIB_SELECTED_PEER={selected_after}")
+        print("EXP086_FIB_PRIORITY_PEER_UNCHANGED=PASS")
+
+        # Move only cryptokey destination ownership to A. Linux egress remains wg0.
+        ns(
+            CLIENT,
+            "wg",
+            "set",
+            "wg0",
+            "peer",
+            a_public,
+            "allowed-ips",
+            REMOTE_PREFIX,
+        )
+        switched_state = allowed_ips()
+        switched_owner = owner_for_prefix(switched_state)
+        if switched_owner != a_public or switched_owner == owner:
+            raise RuntimeError(
+                "AllowedIPs ownership did not move to peer A as expected; "
+                f"state={switched_state!r}"
+            )
+
+        before = transfers()
+        ping_remote()
+        after = transfers()
+        selected_switched = selected_peer(before, after)
+        if selected_switched != switched_owner:
+            raise RuntimeError(
+                f"payload used {selected_switched}, expected new AllowedIPs owner "
+                f"{switched_owner}"
+            )
+        print(f"EXP086_SWITCHED_ALLOWEDIPS_STATE={switched_state}")
+        print(f"EXP086_SWITCHED_SELECTED_PEER={selected_switched}")
+        print("EXP086_ALLOWEDIPS_OWNER_SWITCH=PASS")
+        print("EXP086_RESULT=PASS")
     finally:
         cleanup()
 
