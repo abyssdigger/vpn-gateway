@@ -3,7 +3,7 @@
 The Release-1 parser remains frozen to its historical surface. The current parser
 layers explicit managed-VPN intent on top without changing Release-1 semantics.
 Lower runtime materializers consume typed results; they do not parse user strings.
-""
+"""
 
 from __future__ import annotations
 
