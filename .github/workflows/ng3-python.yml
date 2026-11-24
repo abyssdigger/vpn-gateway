@@ -201,6 +201,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/exp086_wg_same_prefix_multi_peer.py"
+      - name: EXP-087 WireGuard runtime AllowedIPs failover
+        run: >-
+          sudo python3
+          "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/exp087_wg_runtime_allowedips_failover.py"
 
 
   linux-forwarding-barrier:
