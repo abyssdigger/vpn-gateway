@@ -1,14 +1,17 @@
-"""Canonical Release-1 human-facing VPN-GATE configuration grammar.
+"""Canonical VPN-GATE configuration grammar and normalization.
 
-This module owns only external syntax validation and normalization. Lower runtime
-materializers consume the typed result; they must not parse these strings again.
-"""
+The Release-1 parser remains frozen to its historical surface. The current parser
+layers explicit managed-VPN intent on top without changing Release-1 semantics.
+Lower runtime materializers consume typed results; they do not parse user strings.
+""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
+import base64
 import ipaddress
+from pathlib import PurePosixPath
 from types import MappingProxyType
 import re
 import tomllib
@@ -164,17 +167,164 @@ class Release1Config:
     log_level: OperationalLogLevel = OperationalLogLevel.INFO
 
 
-def parse_release1_config(text: str) -> Release1Config:
-    """Parse the canonical Release-1 TOML surface.
+class ManagedVpnKind(str, Enum):
+    WIREGUARD = "wireguard"
 
-    Unknown fields in enabled objects are rejected. Disabled placeholders retain
-    the structural model's shallow-validation semantics.
-    """
+
+@dataclass(frozen=True, slots=True)
+class ManagedWireGuardPeerConfig:
+    peer_id: str
+    public_key: str
+    endpoint_address: ipaddress.IPv4Address
+    endpoint_port: int
+    probe_target: ipaddress.IPv4Address
+    preshared_key_file: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedWireGuardConfig:
+    kind: ManagedVpnKind
+    interface: str
+    address: ipaddress.IPv4Interface
+    private_key_file: str
+    listen_port: int | None
+    peers: tuple[ManagedWireGuardPeerConfig, ...]
+    shared_prefixes: tuple[ipaddress.IPv4Network, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CurrentConfig:
+    base: Release1Config
+    managed_vpns: Mapping[str, ManagedWireGuardConfig]
+
+    @property
+    def structural(self) -> StructuralConfig:
+        return self.base.structural
+
+    @property
+    def devices(self) -> Mapping[str, DeviceRelease1Config]:
+        return self.base.devices
+
+    @property
+    def profiles(self) -> Mapping[str, ProfileRelease1Config]:
+        return self.base.profiles
+
+
+def parse_current_config(text: str) -> CurrentConfig:
+    """Parse the current surface while preserving Release-1 compatibility."""
+    try:
+        raw = tomllib.loads(text)
+    except (tomllib.TOMLDecodeError, TypeError) as exc:
+        raise CurrentConfigError(f"invalid TOML: {exc}") from None
+    return _parse_current_raw(raw)
+
+
+class CurrentConfigError(Release1ConfigError):
+    pass
+
+
+def _parse_current_raw(raw: Any) -> CurrentConfig:
+    if not isinstance(raw, dict):
+        raise CurrentConfigError("top level must be a TOML table")
+
+    raw_devices = raw.get("device", {})
+    if not isinstance(raw_devices, dict):
+        raise CurrentConfigError("device must be a TOML table")
+
+    transformed = dict(raw)
+    transformed_devices: dict[str, Any] = {}
+    managed_bases: dict[str, ManagedWireGuardConfig] = {}
+
+    for device_id, raw_body in raw_devices.items():
+        if not isinstance(raw_body, dict):
+            transformed_devices[device_id] = raw_body
+            continue
+
+        body = dict(raw_body)
+        if body.get("enabled") is True and "managed_vpn" in body:
+            where = f"device.{device_id}"
+            if "expected_interfaces" in body:
+                raise CurrentConfigError(
+                    f"{where} must not combine managed_vpn and expected_interfaces"
+                )
+            if "allow_vpn_client" in body:
+                raise CurrentConfigError(
+                    f"{where} must not combine managed_vpn and allow_vpn_client"
+                )
+            managed = _parse_managed_wireguard(
+                body["managed_vpn"],
+                f"{where}.managed_vpn",
+            )
+            managed_bases[device_id] = managed
+            body.pop("managed_vpn")
+            body["expected_interfaces"] = [managed.interface]
+            body["allow_vpn_client"] = [
+                _render_managed_peer_transport(managed, peer)
+                for peer in managed.peers
+            ]
+        elif "managed_vpn" in body:
+            # Disabled placeholders remain intentionally shallow.
+            body.pop("managed_vpn")
+
+        transformed_devices[device_id] = body
+
+    transformed["device"] = transformed_devices
+    try:
+        base = _parse_release1_raw(transformed)
+    except Release1ConfigError as exc:
+        raise CurrentConfigError(str(exc)) from None
+
+    managed: dict[str, ManagedWireGuardConfig] = {}
+    for device_id, intent in managed_bases.items():
+        shared = {
+            network
+            for profile in base.structural.profiles.values()
+            if profile.enabled and device_id in profile.device_order
+            for network in profile.destinations
+        }
+        shared_prefixes = tuple(
+            sorted(
+                shared,
+                key=lambda network: (
+                    int(network.network_address),
+                    network.prefixlen,
+                ),
+            )
+        )
+        exact_business_targets = {
+            network.network_address
+            for network in shared_prefixes
+            if network.prefixlen == 32
+        }
+        for peer in intent.peers:
+            if peer.probe_target in exact_business_targets:
+                raise CurrentConfigError(
+                    f"device.{device_id}.managed_vpn peer {peer.peer_id!r} "
+                    f"probe_target {peer.probe_target} is also an exact Profile "
+                    "destination"
+                )
+        managed[device_id] = replace(
+            intent,
+            shared_prefixes=shared_prefixes,
+        )
+
+    return CurrentConfig(
+        base=base,
+        managed_vpns=MappingProxyType(managed),
+    )
+
+
+def parse_release1_config(text: str) -> Release1Config:
+    """Parse the canonical Release-1 TOML surface."""
     try:
         raw = tomllib.loads(text)
     except (tomllib.TOMLDecodeError, TypeError) as exc:
         raise Release1ConfigError(f"invalid TOML: {exc}") from None
+    return _parse_release1_raw(raw)
 
+
+def _parse_release1_raw(raw: Any) -> Release1Config:
+    """Normalize an already parsed Release-1 document."""
     if not isinstance(raw, dict):
         raise Release1ConfigError("top level must be a TOML table")
     unknown_top = sorted(set(raw) - _TOP_LEVEL_KEYS)
@@ -354,6 +504,272 @@ def parse_release1_config(text: str) -> Release1Config:
         helper_routing_policy=helper_routing_policy,
         log_level=log_level,
     )
+
+
+_MANAGED_VPN_KEYS = frozenset(
+    {
+        "kind",
+        "interface",
+        "address",
+        "private_key_file",
+        "listen_port",
+        "peers",
+    }
+)
+_MANAGED_WG_PEER_KEYS = frozenset(
+    {
+        "id",
+        "public_key",
+        "endpoint",
+        "probe_target",
+        "preshared_key_file",
+    }
+)
+_CURRENT_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+
+def _parse_managed_wireguard(value: Any, where: str) -> ManagedWireGuardConfig:
+    if not isinstance(value, dict):
+        raise CurrentConfigError(f"{where} must be a TOML table")
+    _reject_current_unknown(value, _MANAGED_VPN_KEYS, where)
+
+    if value.get("kind") != ManagedVpnKind.WIREGUARD.value:
+        raise CurrentConfigError(
+            f'{where}.kind must be exactly "wireguard"'
+        )
+
+    interface = value.get("interface")
+    if (
+        not isinstance(interface, str)
+        or not _IFNAME_RE.fullmatch(interface)
+        or len(interface.encode("utf-8")) > 15
+    ):
+        raise CurrentConfigError(
+            f"{where}.interface must be an exact Linux interface name"
+        )
+
+    address_value = value.get("address")
+    if not isinstance(address_value, str):
+        raise CurrentConfigError(
+            f"{where}.address must be a canonical IPv4 interface prefix"
+        )
+    try:
+        address = ipaddress.ip_interface(address_value)
+    except ValueError:
+        raise CurrentConfigError(
+            f"{where}.address must be a canonical IPv4 interface prefix"
+        ) from None
+    if (
+        not isinstance(address, ipaddress.IPv4Interface)
+        or str(address) != address_value
+    ):
+        raise CurrentConfigError(
+            f"{where}.address must be a canonical IPv4 interface prefix"
+        )
+
+    private_key_file = _parse_secret_file_reference(
+        value.get("private_key_file"),
+        f"{where}.private_key_file",
+    )
+
+    listen_port_value = value.get("listen_port")
+    if listen_port_value is None:
+        listen_port = None
+    elif (
+        type(listen_port_value) is not int
+        or not IP_PORT_MIN <= listen_port_value <= IP_PORT_MAX
+    ):
+        raise CurrentConfigError(
+            f"{where}.listen_port must be an integer in "
+            f"{IP_PORT_MIN}..{IP_PORT_MAX}"
+        )
+    else:
+        listen_port = listen_port_value
+
+    raw_peers = value.get("peers")
+    if not isinstance(raw_peers, list) or not raw_peers:
+        raise CurrentConfigError(
+            f"{where}.peers must be a non-empty array of tables"
+        )
+    peers = tuple(
+        _parse_managed_wireguard_peer(
+            item,
+            f"{where}.peers[{index}]",
+        )
+        for index, item in enumerate(raw_peers)
+    )
+
+    for label, values in (
+        ("id", [peer.peer_id for peer in peers]),
+        ("public_key", [peer.public_key for peer in peers]),
+        ("probe_target", [peer.probe_target for peer in peers]),
+    ):
+        if len(set(values)) != len(values):
+            raise CurrentConfigError(
+                f"{where}.peers contains duplicate {label}"
+            )
+
+    return ManagedWireGuardConfig(
+        kind=ManagedVpnKind.WIREGUARD,
+        interface=interface,
+        address=address,
+        private_key_file=private_key_file,
+        listen_port=listen_port,
+        peers=peers,
+    )
+
+
+def _parse_managed_wireguard_peer(
+    value: Any,
+    where: str,
+) -> ManagedWireGuardPeerConfig:
+    if not isinstance(value, dict):
+        raise CurrentConfigError(f"{where} must be a TOML table")
+    _reject_current_unknown(value, _MANAGED_WG_PEER_KEYS, where)
+
+    peer_id = value.get("id")
+    if not isinstance(peer_id, str) or not _CURRENT_ID_RE.fullmatch(peer_id):
+        raise CurrentConfigError(
+            f"{where}.id must match [a-z0-9][a-z0-9-]*"
+        )
+
+    public_key = _parse_wireguard_public_key(
+        value.get("public_key"),
+        f"{where}.public_key",
+    )
+    endpoint_address, endpoint_port = _parse_wireguard_endpoint(
+        value.get("endpoint"),
+        f"{where}.endpoint",
+    )
+    probe_target = _parse_exact_ipv4(
+        value.get("probe_target"),
+        f"{where}.probe_target",
+    )
+
+    preshared = value.get("preshared_key_file")
+    preshared_key_file = (
+        None
+        if preshared is None
+        else _parse_secret_file_reference(
+            preshared,
+            f"{where}.preshared_key_file",
+        )
+    )
+
+    return ManagedWireGuardPeerConfig(
+        peer_id=peer_id,
+        public_key=public_key,
+        endpoint_address=endpoint_address,
+        endpoint_port=endpoint_port,
+        probe_target=probe_target,
+        preshared_key_file=preshared_key_file,
+    )
+
+
+def _parse_wireguard_public_key(value: Any, where: str) -> str:
+    if not isinstance(value, str):
+        raise CurrentConfigError(
+            f"{where} must be a canonical WireGuard public key"
+        )
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except (ValueError, TypeError):
+        raise CurrentConfigError(
+            f"{where} must be a canonical WireGuard public key"
+        ) from None
+    if (
+        len(decoded) != 32
+        or base64.b64encode(decoded).decode("ascii") != value
+    ):
+        raise CurrentConfigError(
+            f"{where} must be a canonical WireGuard public key"
+        )
+    return value
+
+
+def _parse_wireguard_endpoint(
+    value: Any,
+    where: str,
+) -> tuple[ipaddress.IPv4Address, int]:
+    if not isinstance(value, str) or value.count(":") != 1:
+        raise CurrentConfigError(
+            f"{where} must be exact-IPv4:UDP-port"
+        )
+    address_text, port_text = value.split(":", 1)
+    address = _parse_exact_ipv4(address_text, f"{where} address")
+    if not port_text.isdigit():
+        raise CurrentConfigError(
+            f"{where} UDP port must be an integer"
+        )
+    port = int(port_text)
+    if (
+        str(port) != port_text
+        or not IP_PORT_MIN <= port <= IP_PORT_MAX
+    ):
+        raise CurrentConfigError(
+            f"{where} UDP port must be in {IP_PORT_MIN}..{IP_PORT_MAX}"
+        )
+    return address, port
+
+
+def _parse_exact_ipv4(value: Any, where: str) -> ipaddress.IPv4Address:
+    if not isinstance(value, str):
+        raise CurrentConfigError(f"{where} must be an exact IPv4 address")
+    try:
+        address = ipaddress.IPv4Address(value)
+    except ipaddress.AddressValueError:
+        raise CurrentConfigError(
+            f"{where} must be an exact IPv4 address"
+        ) from None
+    if str(address) != value:
+        raise CurrentConfigError(
+            f"{where} must be a canonical exact IPv4 address"
+        )
+    return address
+
+
+def _parse_secret_file_reference(value: Any, where: str) -> str:
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise CurrentConfigError(
+            f"{where} must be a canonical absolute file path"
+        )
+    path = PurePosixPath(value)
+    if (
+        not path.is_absolute()
+        or value == "/"
+        or str(path) != value
+        or ".." in path.parts
+    ):
+        raise CurrentConfigError(
+            f"{where} must be a canonical absolute file path"
+        )
+    return value
+
+
+def _render_managed_peer_transport(
+    intent: ManagedWireGuardConfig,
+    peer: ManagedWireGuardPeerConfig,
+) -> str:
+    local = (
+        ""
+        if intent.listen_port is None
+        else f":{intent.listen_port}"
+    )
+    return (
+        f"udp{local}>{peer.endpoint_address}:{peer.endpoint_port}"
+    )
+
+
+def _reject_current_unknown(
+    body: Mapping[str, Any],
+    allowed: frozenset[str],
+    where: str,
+) -> None:
+    unknown = sorted(set(body) - allowed)
+    if unknown:
+        raise CurrentConfigError(
+            f"{where} has unsupported field(s): {', '.join(unknown)}"
+        )
 
 
 def _parse_operational_log_level(value: Any) -> OperationalLogLevel:

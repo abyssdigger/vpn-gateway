@@ -605,13 +605,13 @@ private_key_file = "/etc/vpn-gate/secrets/wg-main.key"
 
 [[device.wg-main.managed_vpn.peers]]
 id = "edge-a"
-public_key = "BASE64-WIREGUARD-PUBLIC-KEY-A"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
 endpoint = "198.51.100.10:51820"
 probe_target = "10.201.0.1"
 
 [[device.wg-main.managed_vpn.peers]]
 id = "edge-b"
-public_key = "BASE64-WIREGUARD-PUBLIC-KEY-B"
+public_key = "ISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0A="
 endpoint = "198.51.100.11:51820"
 probe_target = "10.201.0.2"
 preshared_key_file = "/etc/vpn-gate/secrets/wg-main-edge-b.psk"
