@@ -220,8 +220,8 @@ def setup_wireguard() -> tuple[str, str]:
             f"{CLIENT_INNER}/32",
             input_text=private_key + "\n",
         )
-        ns(namespace, "ip", "route", "add", f"{CLIENT_INNER}/32", "dev", ifname)
         ns(namespace, "ip", "link", "set", ifname, "up")
+        ns(namespace, "ip", "route", "add", f"{CLIENT_INNER}/32", "dev", ifname)
 
     return a_public, b_public
 
