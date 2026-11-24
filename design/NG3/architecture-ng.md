@@ -1749,7 +1749,7 @@ policy.
 - `VPNG-U004-R4` — [`full`]
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-U004-R4.R2` — [`full`]
-- `VPNG-U001-R1.R3.R7.R3` — [`none`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`none`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
@@ -2131,9 +2131,9 @@ Manager текущей базовой VPN-реализации только дл
 базовой реализации. Внешне управляемые Devices в его предметную область не входят.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R7` — [`none`]
-- `VPNG-U001-R1.R3.R7.R1` — [`none`]
-- `VPNG-U001-R1.R3.R7.R2` — [`none`]
+- `VPNG-U001-R1.R3.R7` — [`full`]
+- `VPNG-U001-R1.R3.R7.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R2` — [`full`]
 - `VPNG-U001-R1.R3.R7.R3` — [`none`]
 
 API
@@ -2721,6 +2721,10 @@ API
     @converge_absent(device_id) — остановить и удалить только принадлежащую VPN-GATE реализацию и свежим наблюдением подтвердить ее отсутствие.
     @observe(device_id) — заново наблюдать принадлежащую VPN-GATE базовую реализацию либо доказанное отсутствие/problem, не принимая под управление внешний экземпляр.
 
+Implementation
+
+    design/NG3/code/python/rou/managed_wireguard_adapter.py — Linux Direct Adapter для базового поколения управляемого WireGuard: безопасное чтение ссылок на секреты, ownership marker, fresh observation, подтвержденные present/absent и перезапуск измененного базового поколения.
+
 Architectural decisions
 
 1. `Только явно переданное владение`
@@ -2756,9 +2760,16 @@ Architectural decisions
 11. `Диспетчер служб остается свойством конкретной VPN-интеграции`
    *OpenVPN/OpenConnect/L2TP могут использовать systemd или другой service lifecycle, если это требуется их полным нижним контрактом. Совпадение команды `systemctl` не вводит универсальный `SystemdDriver` и не заставляет WireGuard становиться службой.*
 
-**Evidence:** `EV-00050`, `EV-00060`.
+**Evidence:** `EV-00050`, `EV-00060`, `EV-00070`.
 
-**Пробел материализации:** Для WireGuard выбран и подтвержден нижний direct-kernel lifecycle (`EV-00060`), но рабочий D.001 Adapter еще не реализует этот контракт. Для daemon-based VPN нижняя service realization остается integration-specific. Существующие внешние VPN-службы остаются во внешнем управлении.
+**Материализация:** Рабочий `LinuxManagedWireGuardAdapter` реализует выбранную
+WireGuard-границу D.001: перед изменением проверяет файлы секретов, отличает принадлежащий
+интерфейс по устойчивому ownership marker, не усыновляет одноименный внешний объект,
+подтверждает exact base-state свежим наблюдением, сохраняет D.002-owned изменяемые
+`AllowedIPs` при неизменном базовом поколении и выполняет измененное базовое поколение через
+подтвержденное отсутствие старого интерфейса. Порядок пиров не входит в D.001 base generation,
+поскольку является политикой D.002. Для daemon-based VPN нижняя service realization остается
+integration-specific; существующие внешние VPN-службы остаются во внешнем управлении.
 
 ## [D.002] WireGuardPeerManager
 

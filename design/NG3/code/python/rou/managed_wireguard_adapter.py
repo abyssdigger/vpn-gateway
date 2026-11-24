@@ -1,4 +1,7 @@
-"""Linux D.001 realization for explicitly managed WireGuard base instances."""
+"""Linux D.001 realization for explicitly managed WireGuard base instances.
+
+Architecture: D.001 ManagedVPNAdapter.
+"""
 
 from __future__ import annotations
 
