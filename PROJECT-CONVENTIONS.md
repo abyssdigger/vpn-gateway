@@ -362,12 +362,59 @@ CHANGELOG служит хронологией, а не нормативным и
 `VPNG-D001-R3.C1`: подготовка кандидата на выпуск, номер релизной версии и предрелизная
 проверка фактического исполнения требований не обязательны.
 
-### 10.1. Нумерация, identity и release branch
+### 10.1. Release cycle, утвержденный scope, identity и release branch
+
+Release cycle начинается с release-specific product decision, а не со сборки bundle или
+создания `release/<version>`.
+
+До **любого** перехода к подготовке публикации конкретного выпуска должен существовать
+`release/<version>/RELEASE-SCOPE.md` со статусом `approved`, явно принятый projectholder.
+До этого gate допустимы обсуждение будущей версии, разработка и подготовка scope proposal,
+но недопустимы:
+
+- объявление candidate готовым к публикации;
+- создание/замораживание release candidate как основания для выпуска;
+- release QA/REQCOV/fulfillment review, предназначенные служить основанием решения о публикации;
+- утверждение release readiness.
+
+`RELEASE-SCOPE.md` является release-specific projectholder contract. Он не изменяет
+нормативный Requirement/Constraint tree и не может ослаблять его, но может выбирать более
+сильный release scope, чем минимально допускают Constraints. В частности, если Constraint
+разрешает выпуск без некоторой функции, projectholder может явно **не воспользоваться**
+этим разрешением и сделать функцию обязательной для конкретного выпуска.
+
+Минимальное содержание `RELEASE-SCOPE.md`:
+
+- версия и scope label;
+- состояние `proposed` или `approved`;
+- явно включенные capabilities/feature families;
+- разрешенные требованиями omissions, которыми для этого выпуска решено воспользоваться;
+- разрешенные omissions, которыми решено **не** пользоваться;
+- release-specific commitments projectholder, не противоречащие нормативным требованиям;
+- известные release evidence/deployment boundaries, если они являются частью решения о scope;
+- дата/контекст projectholder approval.
+
+После утверждения scope обычный порядок release cycle:
+
+1. implementation/architecture/evidence closure против **requirements + approved release scope**;
+2. только после отсутствия scope blockers — подготовка release-specific records/assets;
+3. создание/обновление `release/<version>` как staging branch;
+4. project snapshot + полный REQCOV против requirements **и** approved release scope;
+5. QA фактически собираемого release set;
+6. freeze candidate SHA;
+7. fulfillment review exact frozen candidate;
+8. отдельное projectholder release decision;
+9. публикация `v<version>` и release assets.
+
+Если выясняется, что release preparation/review был выполнен без предварительно утвержденного
+`RELEASE-SCOPE.md`, такая попытка не может быть основанием для publication decision и должна
+быть явно отмечена как **failed release-cycle attempt**. Ее QA/review evidence может оставаться
+исторически полезным, но readiness verdict этой попытки не переносится на следующий attempt.
 
 Для релизных версий используется Semantic Versioning 2.0.0 в форме
 `MAJOR.MINOR.PATCH`. До объявления стабильной совместимости допустимы версии `0.x.y`.
 
-При начале подготовки конкретного выпуска:
+После scope gate при подготовке конкретного выпуска:
 
 1. кандидату назначается предполагаемый номер версии до финальной предрелизной проверки;
 2. единственным каноническим источником номера версии в состоянии исходного кода является
@@ -400,10 +447,11 @@ Release branch после публикации может быть удален�
 
 Для `<version>` обязательный комплект включает как минимум:
 
+- `RELEASE-SCOPE.md` — утвержденный release-specific projectholder contract;
 - продуктовый архив `vpn-gate-<version>.tar.gz` и его SHA-256;
 - `QA-REPORT.md` — отчет проверки установки и работоспособности публикуемого bundle;
 - `REQUIREMENTS-COVERAGE.md` — полный release-specific coverage текущего нормативного
-  Requirement/Constraint tree;
+  Requirement/Constraint tree **с учетом утвержденного `RELEASE-SCOPE.md`**;
 - project snapshot, содержащий как минимум:
   - текущие нормативные requirements стадии;
   - текущую нормативную architecture стадии;
@@ -425,13 +473,24 @@ release-candidate состояния, для которого готовится
 
 `release/<version>/REQUIREMENTS-COVERAGE.md` не заменяет нормативный requirements tree и
 не меняет requirement status. Это release-specific снимок применимости и исполнения каждого
-текущего нормативного Requirement/Constraint.
+текущего нормативного Requirement/Constraint **в контексте утвержденного release scope**.
+
+Coverage source of truth для конкретного выпуска — совместное чтение:
+
+1. нормативного Requirement/Constraint tree;
+2. `release/<version>/RELEASE-SCOPE.md`.
+
+Release scope не может разрешить то, что требования запрещают, но может сделать обязательной
+для выпуска функцию, отсутствие которой Constraint лишь допускает. В таком случае разрешенная
+Constraint omission **не** считается доступной для данного release candidate, а неполная
+реализация выбранной функции является release blocker.
 
 Coverage обязан перечислить **каждый** нормативный R/C текущей стадии и зафиксировать как
 минимум:
 
 - ID;
 - requirement status на release candidate;
+- применимое release-scope решение/commitment, если оно меняет минимально допустимую границу;
 - release disposition;
 - architecture/closure/conformance basis, применимый к этому disposition;
 - релевантное acceptance/evidence основание либо явное указание, почему конечное closure
@@ -472,6 +531,8 @@ Fulfillment review обязан зафиксировать как минимум
 - предполагаемую версию;
 - точный commit SHA проверяемого состояния исходного кода;
 - действующую политику охвата;
+- identity и статус утвержденного `RELEASE-SCOPE.md`;
+- подтверждение отсутствия unresolved blockers относительно requirements + approved release scope;
 - ссылку на release-specific `REQUIREMENTS-COVERAGE.md`;
 - ссылку на `QA-REPORT.md` и identity проверенного product bundle;
 - найденные состояния, требующие внимания по действующей policy;
@@ -491,6 +552,8 @@ Fulfillment review является снимком проверки конкре
 - `pending_closure` и `rejected_closure` в текущих требованиях;
 - связи архитектурных компонентов с требованиями со статусом материализации `partial` или
   `none`;
+- release-scope commitments, для которых фактическая materialization/evidence неполны даже
+  тогда, когда общий Constraint разрешал бы более слабый выпуск;
 - случаи, где архитектура заявляет `full`, но фактическая трассировка реализации и
   подтверждающих материалов этому противоречит.
 
