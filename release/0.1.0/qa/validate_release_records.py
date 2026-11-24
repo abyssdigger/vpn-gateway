@@ -21,13 +21,6 @@ NODE_RE = re.compile(
     r"\[\`decomposition\`: \`(complete|incomplete)\`\] "
     r"\[\`(closed|postponed|permanent|open|pending_closure|rejected_closure)\`\]"
 )
-ROW_RE = re.compile(
-    r"^\| \`(VPNG-[A-Z0-9.-]+)\` \| \`(complete|incomplete)\` "
-    r"\| \`(closed|postponed|permanent|open|pending_closure|rejected_closure)\` "
-    r"\| .* \| \`([^\`]+)\` \|"
-)
-
-
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -56,7 +49,18 @@ def main() -> int:
     node_map = {node_id: (decomp, status) for node_id, decomp, status in nodes}
     assert len(node_map) == len(nodes)
 
-    rows = ROW_RE.findall(read(COVERAGE))
+    rows = []
+    for line in read(COVERAGE).splitlines():
+        if not line.startswith("| `VPNG-"):
+            continue
+        cells = [cell.strip() for cell in line.strip("|").split("|")]
+        assert len(cells) == 7, (len(cells), line)
+        node_id = cells[0].strip("`")
+        decomp = cells[1].strip("`")
+        status = cells[2].strip("`")
+        disposition = cells[4].strip("`")
+        rows.append((node_id, decomp, status, disposition))
+
     assert len(rows) == len(nodes), (len(rows), len(nodes))
     row_ids = [row[0] for row in rows]
     duplicates = [item for item, count in Counter(row_ids).items() if count != 1]
