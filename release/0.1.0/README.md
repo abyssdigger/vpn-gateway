@@ -30,11 +30,16 @@ vpn-gate-0.1.0-project-snapshot.tar.gz
 vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
 QA-REPORT.md
 REQUIREMENTS-COVERAGE.md
+RELEASE-SCOPE.md
 ```
 
 The product archive contains the runtime package, canonical `VERSION`, installer, controller
-systemd unit, configuration example, deployment guide, policy-neutral OpenConnect helper and
-root-local `vpn-gate-control` client.
+systemd unit, configuration example, this README, the tested deployment/administrator guide,
+policy-neutral OpenConnect helper and root-local `vpn-gate-control` client.
+
+The supported installation and operation path for this release is the sequence in
+`DEPLOYMENT.md`. Release QA executes that published path end to end rather than relying only
+on implementation-level knowledge.
 
 ## Install
 

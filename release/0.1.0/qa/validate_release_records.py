@@ -106,7 +106,11 @@ def main() -> int:
     assert not nonfull_edges, nonfull_edges
 
     qa = read(RELEASE / "QA-REPORT.md")
-    assert "Attempt:" in qa or "Tested release-set head:" in qa
+    if "**Status:** **PENDING**" in qa:
+        assert "no PASS verdict" in qa
+    else:
+        assert "Tested release-set head:" in qa
+        assert "**PASS" in qa or "result:** **PASS**" in qa
 
     print("RELEASE_RECORDS_SCOPE=PASS")
     print("RELEASE_RECORDS_SNAPSHOT=PASS")

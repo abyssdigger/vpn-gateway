@@ -1,149 +1,205 @@
-# VPN-GATE 0.1.0 release-candidate QA report — attempt 2
+# VPN-GATE 0.1.0 release-candidate QA report — documentation-driven acceptance
 
 **Release scope:** Release-1 / `0.1.0`  
 **Approved scope:** `release/0.1.0/RELEASE-SCOPE.md`  
-**Attempt:** 2  
-**Tested release-set head:** `4f0ef6ce91d32a3691575adbfdd69990bc5b8340`  
-**Workflow run:** `45306006515`  
-**QA job:** `release-0-1-0-deployment-qa` / `138149998905`  
+**Tested release-set head:** `a48350396c6ff22f06ca6f59e404a6e9e38c040b`  
+**Workflow run:** `45313040992`  
+**QA job:** `release-0-1-0-deployment-qa` / `138173272991`  
 **QA job result:** **PASS**
+
+## Documentation-driven acceptance verdict
+
+**PASS — the published 0.1.0 administrator procedure was executed end to end on the actual
+generated release bundle and proved operationally applicable in the declared Debian 13/systemd
+evidence boundary.**
+
+The walkthrough treated the release-published documentation as the source of the administrator
+procedure. QA-only setup was limited to creation of disposable remote peers/container/kernel
+facilities; product installation/configuration/VPN client setup/operator actions followed the
+published release path.
+
+## Tested documentation identity
+
+The product archive contained the exact documents used by the walkthrough:
+
+- `README.md` SHA-256:
+  `32b1a7982601637d8d88e5927d4f0a6bf5d31924b4def3880e62071f6bac7d7c`;
+- `DEPLOYMENT.md` SHA-256:
+  `1b63421d815be53c736b2a53489bf4a2a7ac9fc0835200f87046e6a1891ff01b`.
+
+The installer copied those same documents into `/usr/share/doc/vpn-gate/`, and the walkthrough
+verified byte equality between bundled and installed copies.
 
 ## Release-record gate
 
-Before any bundle deployment, the exact tested head passed the release-record consistency gate:
+Before deployment the exact tested head passed:
 
 - `RELEASE_RECORDS_SCOPE=PASS`;
 - `RELEASE_RECORDS_SNAPSHOT=PASS`;
 - `RELEASE_RECORDS_COVERAGE_220=PASS`;
 - `RELEASE_RECORDS_ARCHITECTURE_FULL=PASS`.
 
-The gate verifies the approved 0.1.0 scope, exact project-snapshot copies, all 220 current
-Requirement/Constraint rows and the absence of current normative architecture
-`partial`/`none` materialization edges.
+## Release asset identity
 
-## Candidate assets
+Product archive:
 
-The tested source head built and checksum-verified:
+`vpn-gate-0.1.0.tar.gz`
 
-- `vpn-gate-0.1.0.tar.gz`  
-  SHA-256: `c703eff07d1f9739d544b836bc5aa767a655bce8890520c5533117aa9a28b74a`;
-- `vpn-gate-0.1.0-project-snapshot.tar.gz`  
-  SHA-256: `cb141fc4b82adc140343e80c02f9e36f3fc163d7eadcf636533dc6571edb195f`.
+SHA-256:
 
-Both checksum files were verified before deployment:
+`ad86d5c0089d5dca65fdda826c36054b6da7f7e20e120445d2c52b8bd0a81a7b`
 
-- `vpn-gate-0.1.0.tar.gz: OK`;
-- `vpn-gate-0.1.0-project-snapshot.tar.gz: OK`.
+Project-snapshot archive:
 
-The validated GitHub Actions artifact is:
+`vpn-gate-0.1.0-project-snapshot.tar.gz`
+
+SHA-256:
+
+`cb141fc4b82adc140343e80c02f9e36f3fc163d7eadcf636533dc6571edb195f`
+
+Validated Actions artifact:
 
 - name: `vpn-gate-0.1.0-candidate`;
-- artifact ID: `14881151700`;
-- uploaded artifact size: **424204 bytes**;
-- uploaded artifact ZIP digest:
-  `sha256:dbcc3c6c71914853cf31c216626e33a008511d1a2c492b509d61ce7904913d6d`.
+- artifact ID: `14883549614`;
+- size: **426367 bytes**;
+- ZIP digest:
+  `sha256:28524e99dd361aa18fa6378898dc78941f851d323d21146aa828a7e1ec2e8b79`.
 
-The uploaded artifact contains the product archive/checksum, project-snapshot
-archive/checksum, `QA-REPORT.md`, `REQUIREMENTS-COVERAGE.md`, and
-`RELEASE-SCOPE.md`.
+## Environment boundary
 
-## Environment
+The walkthrough used a privileged Debian 13 systemd container on a GitHub-hosted Linux runner.
 
-The actual generated release bundle was installed into a privileged **Debian 13** systemd
-container on a GitHub-hosted Linux runner. The QA environment used real supported integration
-implementations:
+The outer QA harness preinstalled only environment machinery required to run the disposable
+systemd test environment and remote OpenConnect peer (`systemd`, `dbus`, Python, `kmod`,
+`openssl`, `ocserv`). VPN-GATE runtime prerequisites and all three client VPN
+implementations were then installed through the commands in the published administrator guide.
 
-- `wireguard-tools`;
-- `openconnect` with a local `ocserv` peer;
-- `xl2tpd` and `ppp`.
+This remains container/kernel evidence, not a claim of separate physical-host validation.
 
-The installed canonical version was required to be `0.1.0`, and the supported JSON/text
-runtime status surfaces had to publish the same release version before payload tests were
-accepted.
+## Administrator walkthrough
 
-## Protective mode
+| Published procedure | Administrator-visible confirmation | Result |
+| --- | --- | --- |
+| Extract release bundle | bundled README/DEPLOYMENT present | PASS |
+| Debian 13 base prerequisites | documented packages install successfully | PASS |
+| Run release installer | installed version `0.1.0`; installed docs byte-identical | PASS |
+| Create VPN-GATE config | documented Device/Profile grammar accepted | PASS |
+| WireGuard package/config/service | `wg-corp` shown in built-in current status | PASS |
+| WireGuard payload | real Profile payload succeeds | PASS |
+| WireGuard service stop/restart | path disappears/reappears without controller restart | PASS |
+| OpenConnect package/config/service | `vpn-corp` shown in built-in current status | PASS |
+| OpenConnect payload | real Profile payload succeeds against disposable `ocserv` peer | PASS |
+| OpenConnect service stop/restart | path disappears/reappears without controller restart | PASS |
+| L2TP/PPP package/config/service | `ppp0` shown in built-in current status | PASS |
+| L2TP/PPP payload | real Profile payload succeeds | PASS |
+| L2TP service stop/restart | path disappears/reappears without controller restart | PASS |
+| Protective initial status | built-in control reports `inactive` | PASS |
+| Protective manual enter + status | built-in control reports `active`; real payload is blocked | PASS |
+| Protective manual leave + status | built-in control reports `inactive`; real payload is restored | PASS |
 
-**PASS**
+The walkthrough emitted:
 
-The installed release bundle exercised the approved mandatory Protective-mode scope through
-the installed `vpn-gate-control` surface.
+- `DOC_WALKTHROUGH_BUNDLE_EXTRACT=PASS`;
+- `DOC_WALKTHROUGH_BASE_PREREQUISITES=PASS`;
+- `DOC_WALKTHROUGH_BUNDLE_INSTALL=PASS`;
+- `DOC_WALKTHROUGH_WIREGUARD_PREREQUISITES=PASS`;
+- `DOC_WALKTHROUGH_WIREGUARD_DIAGNOSTICS=PASS`;
+- `DOC_WALKTHROUGH_WIREGUARD_PAYLOAD=PASS`;
+- `DOC_WALKTHROUGH_WIREGUARD_STOP_STATUS=PASS`;
+- `DOC_WALKTHROUGH_WIREGUARD_RESTART_DIAGNOSTICS=PASS`;
+- `DOC_WALKTHROUGH_WIREGUARD_RESTART_PAYLOAD=PASS`;
+- `DOC_WALKTHROUGH_OPENCONNECT_PREREQUISITES=PASS`;
+- `DOC_WALKTHROUGH_OPENCONNECT_DIAGNOSTICS=PASS`;
+- `DOC_WALKTHROUGH_OPENCONNECT_PAYLOAD=PASS`;
+- `DOC_WALKTHROUGH_OPENCONNECT_STOP_STATUS=PASS`;
+- `DOC_WALKTHROUGH_OPENCONNECT_RESTART_DIAGNOSTICS=PASS`;
+- `DOC_WALKTHROUGH_OPENCONNECT_RESTART_PAYLOAD=PASS`;
+- `DOC_WALKTHROUGH_L2TP_PREREQUISITES=PASS`;
+- `DOC_WALKTHROUGH_L2TP_DIAGNOSTICS=PASS`;
+- `DOC_WALKTHROUGH_L2TP_PAYLOAD=PASS`;
+- `DOC_WALKTHROUGH_L2TP_STOP_STATUS=PASS`;
+- `DOC_WALKTHROUGH_L2TP_RESTART_DIAGNOSTICS=PASS`;
+- `DOC_WALKTHROUGH_L2TP_RESTART_PAYLOAD=PASS`;
+- `DOC_WALKTHROUGH_PROTECTIVE_INITIAL_STATUS=PASS`;
+- `DOC_WALKTHROUGH_PROTECTIVE_ENTER_STATUS_PAYLOAD=PASS`;
+- `DOC_WALKTHROUGH_PROTECTIVE_LEAVE_STATUS_PAYLOAD=PASS`;
+- `DOC_WALKTHROUGH_ADMINISTRATOR_PROCEDURE=PASS`;
+- `RELEASE_QA_DOCUMENTATION_WALKTHROUGH=PASS`.
 
-Observed evidence:
+## Built-in diagnostics used by the walkthrough
 
-- `RELEASE_QA_PROTECTIVE_ENTER_BLOCK=PASS` — confirmed entry blocks tested payload;
-- `RELEASE_QA_PROTECTIVE_PERIODIC_REPAIR=PASS` — out-of-band deletion of the owned
-  protective gate is detected and repaired;
-- `RELEASE_QA_PROTECTIVE_SAFE_LEAVE=PASS` — fresh-confirmed normal state permits safe exit;
-- `RELEASE_QA_PROTECTIVE_FAILED_LEAVE_RETAINS_BLOCK=PASS` — deliberately unconfirmed
-  ordinary state causes explicit failed leave while traffic stays blocked;
-- `RELEASE_QA_PROTECTIVE_RECOVERY_RELEASE=PASS` — after normal-state recovery, protective
-  release converges safely.
+For each VPN integration, the administrator-visible checks executed the published diagnostic
+commands:
 
-This directly covers the release-specific decision **not** to exercise
-`VPNG-U004-R5.C1`.
+- `systemctl --no-pager --full status vpn-gate-alpha.service`;
+- `head -1 /run/vpn-gate-alpha/status.txt`;
+- `cat /run/vpn-gate-alpha/status.txt`;
+- `python3 -m json.tool /run/vpn-gate-alpha/status.json`;
+- `journalctl -u vpn-gate-alpha.service -p warning --no-pager`;
+- `ip netns exec vpn-gate-alpha ip -br link`.
 
-## WireGuard / wg-quick
+The expected current tunnel interface had to be visible in both current-state data and the
+managed namespace before real payload was accepted.
 
-**PASS**
+Protective mode used the published built-in
+`vpn-gate-control protective status` surface before enter, after enter and after leave.
 
-The real WireGuard client ran inside the managed namespace with policy-neutral
-`Table = off`; VPN-GATE discovered the path, owned the tested payload route and preserved
-controller lifetime across VPN lifecycle.
+## Additional negative/safety QA
 
-Evidence:
+The following checks were performed **after** the successful ordinary administrator path and do
+not substitute for it:
+
+- out-of-band deletion of the owned Protective gate followed by periodic repair:
+  `RELEASE_QA_PROTECTIVE_PERIODIC_REPAIR=PASS`;
+- deliberately unconfirmed ordinary state followed by failed leave while payload remains blocked:
+  `RELEASE_QA_PROTECTIVE_FAILED_LEAVE_RETAINS_BLOCK=PASS`;
+- normal-state recovery followed by safe automatic release:
+  `RELEASE_QA_PROTECTIVE_RECOVERY_RELEASE=PASS`.
+
+Compatibility markers also remain PASS:
 
 - `RELEASE_QA_WIREGUARD_PAYLOAD=PASS`;
-- `RELEASE_QA_WIREGUARD_LIFECYCLE=PASS`.
-
-## OpenConnect
-
-**PASS**
-
-The real Debian OpenConnect client ran against a local `ocserv` peer using the release
-bundle's policy-neutral helper. VPN-GATE discovered the path and owned the tested payload
-routing.
-
-Evidence:
-
+- `RELEASE_QA_WIREGUARD_LIFECYCLE=PASS`;
 - `RELEASE_QA_OPENCONNECT_PAYLOAD=PASS`;
-- `RELEASE_QA_OPENCONNECT_LIFECYCLE=PASS`.
-
-## L2TP / PPP
-
-**PASS**
-
-Real `xl2tpd`/`ppp` processes established the documented simple L2TP/UDP deployment
-shape; VPN-GATE discovered the resulting PPP path and carried real payload.
-
-Evidence:
-
+- `RELEASE_QA_OPENCONNECT_LIFECYCLE=PASS`;
 - `RELEASE_QA_L2TP_PAYLOAD=PASS`;
-- `RELEASE_QA_L2TP_LIFECYCLE=PASS`.
+- `RELEASE_QA_L2TP_LIFECYCLE=PASS`;
+- `RELEASE_QA_PROTECTIVE_ENTER_BLOCK=PASS`;
+- `RELEASE_QA_PROTECTIVE_SAFE_LEAVE=PASS`;
+- `RELEASE_QA_RESULT=PASS`.
 
-This does not claim L2TP/IPsec deployment validation.
+## Applicability discovered by the walkthrough
+
+The strict walkthrough found two documentation defects before reaching PASS:
+
+1. the original Debian WireGuard package command pulled a recommended kernel image that is not
+   required for the already-supported host kernel and was not installable in the declared
+   container evidence boundary; the documented command now uses
+   `--no-install-recommends`;
+2. the original L2TP service recipe omitted the runtime directory required by
+   `xl2tpd-control`; the documented service now owns `RuntimeDirectory=xl2tpd`.
+
+Both fixes were made to the administrator procedure itself and then re-executed by the
+walkthrough. They are evidence that this acceptance checks documentation applicability rather
+than merely replaying an implementation test.
 
 ## Overall verdict
 
-**PASS — attempt-2 release assets are internally consistent, the generated 0.1.0 product bundle
-installs successfully, full mandatory Protective mode passes installed-bundle checks, and
-WireGuard/OpenConnect/L2TP payload/lifecycle behavior remains working in the tested Debian 13
-systemd environment.**
+**PASS — the 0.1.0 administrator procedure is proven applicable for installation,
+configuration, documented WireGuard/OpenConnect/plain-L2TP integrations, built-in diagnostics,
+real payload, VPN service lifecycle and manual Protective-mode operation within the declared
+Debian 13/systemd evidence boundary.**
 
-Final marker:
-
-`RELEASE_QA_RESULT=PASS`
+L2TP evidence remains plain L2TP/UDP + PPP; it does not claim L2TP/IPsec validation.
 
 ## QA-report commit applicability
 
 This report records QA executed on
-`4f0ef6ce91d32a3691575adbfdd69990bc5b8340`.
+`a48350396c6ff22f06ca6f59e404a6e9e38c040b`.
 
 The commit that materializes this report changes only
-`release/0.1.0/QA-REPORT.md`. That file is not an input to the product tarball or the project
-snapshot archive, so this report may be carried to the post-report candidate under
-`PROJECT-CONVENTIONS.md` §10.4. The final fulfillment review must verify that applicability;
-the normal branch workflow also reruns on the post-report head and therefore provides an
-additional exact-head check.
+`release/0.1.0/QA-REPORT.md`; that file is not an input to the product tarball or project
+snapshot. The exact post-report branch workflow must nevertheless rerun before a new frozen
+candidate/fulfillment review is accepted.
 
-This PASS does **not** revive the failed first release-cycle attempt and is not a release
-decision.
+This PASS is evidence, not a projectholder release decision.
