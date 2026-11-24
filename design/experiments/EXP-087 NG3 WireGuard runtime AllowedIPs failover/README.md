@@ -1,6 +1,6 @@
 # EXP-087 — WireGuard runtime AllowedIPs failover
 
-**Status:** PREPARED  
+**Status:** RUNNING — privileged runtime evidence pending  
 **Date:** 2026-11-24
 
 ## Question
