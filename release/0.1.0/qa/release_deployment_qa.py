@@ -555,6 +555,7 @@ def test_l2tp():
         "apt-get install -y --no-install-recommends xl2tpd ppp",
         "/etc/ppp/options.vpn-gate-corp",
         "/etc/xl2tpd/xl2tpd-vpn-gate-corp.conf",
+        "RuntimeDirectory=xl2tpd",
         "NetworkNamespacePath=/run/netns/vpn-gate-alpha",
         "connect-lac corp",
     )
@@ -650,6 +651,8 @@ After=vpn-gate-alpha.service
 
 [Service]
 Type=simple
+RuntimeDirectory=xl2tpd
+RuntimeDirectoryMode=0755
 NetworkNamespacePath=/run/netns/vpn-gate-alpha
 ExecStart=/usr/sbin/xl2tpd -D -c /etc/xl2tpd/xl2tpd-vpn-gate-corp.conf -p /run/vpn-gate-l2tp-corp.pid -C /run/vpn-gate-l2tp-corp-control
 Restart=no

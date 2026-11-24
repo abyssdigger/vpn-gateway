@@ -304,6 +304,8 @@ After=vpn-gate-alpha.service
 
 [Service]
 Type=simple
+RuntimeDirectory=xl2tpd
+RuntimeDirectoryMode=0755
 NetworkNamespacePath=/run/netns/vpn-gate-alpha
 ExecStart=/usr/sbin/xl2tpd -D \
     -c /etc/xl2tpd/xl2tpd-vpn-gate-corp.conf \
