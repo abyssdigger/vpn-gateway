@@ -607,9 +607,9 @@ semantics and escalation; child E.004 `AggressiveHostRoutingEnforcer` owns bound
 routing + escape-protection convergence with fail-closed ordering. A.011
 `ProtectiveModeManager` owns source-scoped public protective requests, continuous
 confirmation and safe release; C.010 `ProtectivePayloadGate` owns the single
-Private-network containment gate. EXP-081 rejects owned-object-only routing authority,
-EXP-084 validates independent aggressive escape protection, and EXP-083 validates the
-selected one-gate protective lower mechanism.
+Private-network containment gate. `EV-00040` подтверждает необходимость проверять
+фактическую маршрутизационную гарантию и независимо блокировать выход через обычный путь;
+`EV-00030` подтверждает выбранный единый механизм защитного режима.
 
 ### Human configuration and Device/Profile policy model
 
@@ -2019,7 +2019,7 @@ control surface; отдельный audit worker с конечной cadence fre
 normal reconciliation, заново подтверждает обычное desired/runtime состояние и сохраняет/
 восстанавливает protective block при неподтвержденном выходе.
 
-**Evidence:** EXP-083 lower containment evidence;
+**Evidence:** `EV-00030`;
 `tests/integration_protective_mode_manager.py`;
 `tests/integration_protective_mode_runtime.py`;
 `release/0.1.0/qa/release_deployment_qa.py`.
@@ -2321,7 +2321,7 @@ Architectural decisions
    *Для current Linux point-to-point endpoint Adapter может fresh-observe inner/private peer IPv4 из interface address state и привязать его только к exact `(ifname, ifindex)` generation. Эта дополнительная observation требуется только когда accepted Device policy содержит `via peer`; конфигурация без такого selector сохраняет прежний link-only endpoint-observation contract. При запрошенной peer observation link/address snapshots должны быть взаимно совместимы; race/mismatch является observation failure. Peer fact не создаёт Device ownership: selector resolution выполняется только после обычного Device binding.*
 
 9. `Inner peer is not transport provenance`
-   *Private/inner point-to-point peer принципиально отличен от external VPN transport/server endpoint. EXP-039 подтверждает, что inner peer виден generic TUN address observation, тогда как userspace transport endpoint из него не выводится. Если supported integration отдельно доказывает transport provenance, он по-прежнему привязывается к exact current `PathBinding` и не подменяется inner peer.*
+   *Внутренний адрес удаленной стороны point-to-point-интерфейса принципиально отличается от внешней транспортной точки VPN-соединения или сервера. `EV-00020` подтверждает, что такой внутренний адрес виден при обычном наблюдении адресов TUN-интерфейса, тогда как транспортная точка VPN, реализованного в пользовательском пространстве, из этих данных не выводится. Если поддерживаемая интеграция отдельно подтверждает происхождение транспортной точки, она по-прежнему связывается с точным текущим `PathBinding` и не подменяется внутренним адресом удаленной стороны.*
 
 10. `Binding is not route realization`
    *`VPNPathAdapter` доказывает current concrete endpoint, но не угадывает Linux `gateway/onlink`. Exact route realization предоставляет отдельная capability supported integration contract в `VPN external ends`; generic `NetworkPolicyAdapter` только потребляет этот уже доказанный lower fact. Direct-device realization является одной explicit integration capability, а не универсальным свойством bound interface.*
@@ -2538,7 +2538,7 @@ Bounded Enforcer dedicated protective-mode containment state Private network.
 - `VPNG-U004-R5.R3` — [`full`]
 - `VPNG-U004-R5.R4` — [`full`]
 
-**Evidence:** EXP-083.
+**Evidence:** `EV-00030`.
 
 API
 
@@ -2548,13 +2548,13 @@ API
 Architectural decisions
 
 1. `One owned gate`
-   *Protective containment является одним independently owned Artifact, а не композицией C.005 с отдельным host-side gate. EXP-082 остается feasibility evidence, но не selected architecture.*
+   *Защитное ограничение трафика является одним самостоятельно наблюдаемым и управляемым Artifact, а не композицией C.005 с отдельным host-side gate. Результаты, сведенные в `EV-00030`, подтверждают техническую осуществимость двухбарьерного варианта, но выбранная архитектура использует один владеющий этим состоянием компонент.*
 
 2. `Complete IPv4 containment`
    *ENABLED запрещает ordinary-boundary IPv4 INPUT, ordinary-boundary IPv4 OUTPUT и весь IPv4 FORWARD внутри Private network. Поэтому ordinary->VPN, VPN->ordinary и VPN->VPN не требуют разных public gates.*
 
 3. `Preserve runtime state`
-   *Gate не уничтожает namespace, interfaces, routes, bindings или normal policy state. Linux candidate EXP-083 реализует gate отдельной owned nft table.*
+   *Gate не уничтожает namespace, interfaces, routes, bindings или normal policy state. Подтвержденный в `EV-00030` вариант Linux-реализации использует отдельную принадлежащую компоненту таблицу nftables.*
 
 4. `Bounded verification`
    *Один converge-вызов выполняет fresh observation -> optional bounded mutation -> fresh observation. Continuous retry/recovery принадлежит A.011.*
@@ -2688,7 +2688,7 @@ Manager continuous ownership отдельно включенной authoritative
 
 **Constrained by:** `VPNG-U001-R5.R2.C1`
 
-**Evidence:** EXP-081, EXP-084.
+**Evidence:** `EV-00040`.
 
 API
 
@@ -2727,8 +2727,7 @@ Bounded Enforcer одного composite aggressive postcondition. Он не вы
 - `VPNG-U001-R5.R2.R3` — [`full`]
 - `VPNG-U001-R5.R2.R3.R1` — [`full`]
 
-**Evidence:** EXP-074 (narrow routing mechanics), EXP-081 (rejected narrow-only authority),
-EXP-084 (prefix-scoped escape protection), EXP-085 (full-tunnel escape-protection exemptions).
+**Evidence:** `EV-00040`.
 
 API
 
@@ -2747,13 +2746,13 @@ Architectural decisions
    *Activation materializes/verifies escape protection before enabling routing capture. Deactivation removes/verifies routing capture before releasing escape protection. Partial transition может deny traffic, но не должен открыть ordinary-path leak.*
 
 4. `Effective verification`
-   *EXP-081 запрещает считать точность только VPN-GATE-owned table/rule objects доказательством authority. Linux realization может проверять RPDB/effective lookup или эквивалентные факты, но такая taxonomy остается lower implementation detail.*
+   *Отрицательный результат, сведенный в `EV-00040`, не позволяет считать точность только принадлежащих VPN-GATE table/rule objects доказательством фактической маршрутизационной гарантии. Linux-реализация может проверять RPDB/effective lookup или эквивалентные факты, но их классификация остается подробностью нижнего уровня реализации.*
 
 5. `Bounded ownership`
    *Enforcer завершает каждый вызов success/failure после fresh verification и не содержит hidden continuous retry; следующий recovery attempt принадлежит E.003.*
 
 6. `Full-tunnel non-recapture`
-   *При managed scope `0.0.0.0/0` escape protection не трактует весь non-boundary traffic как утечку. EXP-085 требует сохранять host-local delivery и трафик, уже пришедший через exact managed boundary в ordinary network, одновременно запрещая local/forwarded managed outbound через non-managed egress.*
+   *При управляемой области `0.0.0.0/0` защита от выхода через обычный путь не трактует весь трафик вне managed boundary как утечку. Проверка полного туннеля, сведенная в `EV-00040`, подтверждает необходимость сохранять локальную доставку host и трафик, уже пришедший через точную managed boundary в обычную сеть, одновременно запрещая управляемый исходящий трафик через посторонний egress.*
 
 Implementation
 
