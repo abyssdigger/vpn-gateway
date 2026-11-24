@@ -400,11 +400,12 @@ Release cycle начинается с release-specific product decision, а не
 2. только после отсутствия scope blockers — подготовка release-specific records/assets;
 3. создание/обновление `release/<version>` как staging branch;
 4. project snapshot + полный REQCOV против requirements **и** approved release scope;
-5. QA фактически собираемого release set;
-6. freeze candidate SHA;
-7. fulfillment review exact frozen candidate;
-8. отдельное projectholder release decision;
-9. публикация `v<version>` и release assets.
+5. documentation-driven acceptance всех публикуемых admin/user procedures;
+6. остальной QA фактически собираемого release set;
+7. freeze candidate SHA;
+8. fulfillment review exact frozen candidate;
+9. отдельное projectholder release decision;
+10. публикация `v<version>` и release assets.
 
 Если выясняется, что release preparation/review был выполнен без предварительно утвержденного
 `RELEASE-SCOPE.md`, такая попытка не может быть основанием для publication decision и должна
@@ -513,6 +514,56 @@ Coverage обязан перечислить **каждый** нормативн
 
 ### 10.4. QA и предрелизная проверка фактического исполнения
 
+До fulfillment review обязательна **documentation-driven acceptance** публикуемой
+администраторской/пользовательской документации, если такая документация задает поддерживаемый
+путь установки, настройки, эксплуатации или диагностики продукта.
+
+Documentation-driven acceptance доказывает не только корректность механизмов, но и фактическую
+применимость опубликованной инструкции как самостоятельного operational path. Для этого:
+
+1. тест начинается с заявленной чистой/минимальной supported environment и использует
+   фактически собираемый release bundle;
+2. установка продукта, создание конфигурации, настройка поддерживаемых интеграций и штатные
+   operator actions выполняются **в порядке и способом, описанными опубликованной документацией**;
+3. тест не может молча использовать недокументированные product-specific команды, файлы,
+   значения конфигурации или знания внутреннего QA-кода для прохождения документированного пути;
+4. harness/environment setup, необходимый только для создания disposable peers/containers/
+   namespaces, допустим, но должен быть отделен от действий, которые обязан уметь выполнить
+   администратор;
+5. каждый проверяемый шаг связывается с конкретным разделом/идентификатором опубликованной
+   документации и фиксирует:
+   - действие/команду администратора;
+   - ожидаемый внешний результат;
+   - фактически наблюденный результат;
+   - способ штатного наблюдения результата;
+6. где инструкция предлагает встроенную диагностику/current-state surface, acceptance обязан
+   использовать ее для подтверждения admin-visible результата; dataplane-свойства дополнительно
+   проверяются реальным payload, когда это применимо;
+7. все поддерживаемые release-specific examples/integration paths, заявленные документацией как
+   рабочие для выпуска, проходят этот walkthrough, а не заменяются unit/integration evidence
+   более низкого уровня;
+8. fault injection, drift repair и иные safety-negative tests являются дополнительным QA и не
+   заменяют успешное прохождение обычного опубликованного administrator path;
+9. изменение инструкции, installer, example config, release bundle или runtime behavior,
+   способное изменить документированный operational path, инвалидирует соответствующий
+   documentation-driven acceptance и требует повторного walkthrough.
+
+Для NG3 Release-1 documentation-driven acceptance обязан как минимум пройти опубликованный путь:
+
+- установка VPN-GATE из release bundle;
+- создание/проверка release configuration;
+- настройка и фактический запуск документированных WireGuard, OpenConnect и L2TP integrations;
+- проверка каждой интеграции через поддерживаемую встроенную диагностику/current-state surface
+  и реальный payload;
+- ручной Protective-mode status/enter/status/leave/status через опубликованный operator
+  interface;
+- подтверждение Protective-mode эффекта и выхода через встроенную диагностику и реальный
+  payload.
+
+QA report обязан перечислить проверенные документы и их identity/digest, результаты
+documentation-driven walkthrough по разделам/шагам и отдельно результаты дополнительного
+negative/fault-injection QA.
+
 До отдельного решения о выпуске должны существовать два различных evidence artifacts:
 
 1. `release/<version>/QA-REPORT.md`, подтверждающий установку и требуемую работоспособность
@@ -535,6 +586,8 @@ Fulfillment review обязан зафиксировать как минимум
 - подтверждение отсутствия unresolved blockers относительно requirements + approved release scope;
 - ссылку на release-specific `REQUIREMENTS-COVERAGE.md`;
 - ссылку на `QA-REPORT.md` и identity проверенного product bundle;
+- подтверждение PASS documentation-driven acceptance для всех применимых опубликованных
+  admin/user procedures, с identity проверенных документов;
 - найденные состояния, требующие внимания по действующей policy;
 - результат проверки доступности версии через поддерживаемое представление текущего
   состояния работающего продукта и ее совпадения с предполагаемой версией выпуска;
@@ -562,9 +615,11 @@ policy anomaly gate. Policy может быть позднее расширен�
 `VPNG-D001-R3.R2`.
 
 QA может быть выполнен на предшествующем commit только если последующая разница до review
-candidate доказанно не меняет product-bundle inputs, installer, deployment contract, runtime
-behavior или иное проверяемое QA свойство; это различие должно быть явно зафиксировано в
-QA/fulfillment evidence. В противном случае QA выполняется повторно.
+candidate доказанно не меняет product-bundle inputs, installer, опубликованную admin/user
+documentation, example configuration, deployment contract, runtime behavior или иное
+проверяемое QA свойство; это различие должно быть явно зафиксировано в QA/fulfillment evidence.
+В противном случае соответствующий QA, включая documentation-driven walkthrough, выполняется
+повторно.
 
 ### 10.5. Решение о выпуске, публикация и повторная проверка
 
