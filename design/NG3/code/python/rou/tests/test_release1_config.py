@@ -7,7 +7,10 @@ from rou.operational_log import OperationalLogLevel
 from rou.release1_config import (
     HelperRoutingPolicy,
     HelperRoutingSelectorKind,
+    CurrentConfigError,
+    ManagedVpnKind,
     Release1ConfigError,
+    parse_current_config,
     parse_release1_config,
     render_helper_routing_interfaces,
 )
@@ -890,6 +893,254 @@ direction = "outbound"
 destinations = ["10.0.0.0/8"]
 device_order = ["oc", "oc:reserve"]
 """)
+
+    def test_managed_wireguard_normalizes_without_actuation(self):
+        cfg = parse_current_config("""
+[device.wg-main]
+enabled = true
+use_outbound_nat = true
+
+[device.wg-main.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/etc/vpn-gate/secrets/wg-main.key"
+listen_port = 51820
+
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-a"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-b"
+public_key = "ISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0A="
+endpoint = "198.51.100.11:51820"
+probe_target = "10.201.0.2"
+preshared_key_file = "/etc/vpn-gate/secrets/edge-b.psk"
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["0.0.0.0/0"]
+device_order = ["wg-main"]
+""")
+        managed = cfg.managed_vpns["wg-main"]
+        self.assertIs(managed.kind, ManagedVpnKind.WIREGUARD)
+        self.assertEqual(managed.interface, "wg0")
+        self.assertEqual(
+            managed.address,
+            ipaddress.IPv4Interface("10.200.0.1/32"),
+        )
+        self.assertEqual(
+            tuple(peer.peer_id for peer in managed.peers),
+            ("edge-a", "edge-b"),
+        )
+        self.assertEqual(
+            managed.shared_prefixes,
+            (ipaddress.IPv4Network("0.0.0.0/0"),),
+        )
+        selector = cfg.structural.devices["wg-main"].expected_interfaces[0]
+        self.assertEqual(selector.value, "wg0")
+        self.assertEqual(selector.quota, 1)
+        self.assertEqual(
+            [
+                (item.protocol, str(item.remote_address), item.remote_port, item.local_port)
+                for item in cfg.devices["wg-main"].allow_vpn_client
+            ],
+            [
+                ("udp", "198.51.100.10", 51820, 51820),
+                ("udp", "198.51.100.11", 51820, 51820),
+            ],
+        )
+
+    def test_current_parser_preserves_external_device_contract(self):
+        text = """
+[device.external-wg]
+enabled = true
+expected_interfaces = ["wg0"]
+use_outbound_nat = true
+allow_vpn_client = "udp>198.51.100.10:51820"
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["external-wg"]
+"""
+        current = parse_current_config(text)
+        release1 = parse_release1_config(text)
+        self.assertEqual(current.base, release1)
+        self.assertEqual(dict(current.managed_vpns), {})
+
+    def test_managed_wireguard_rejects_duplicate_user_sources(self):
+        for extra, expected in (
+            ('expected_interfaces = ["wg0"]', "expected_interfaces"),
+            ('allow_vpn_client = "udp>198.51.100.10:51820"', "allow_vpn_client"),
+        ):
+            with self.subTest(extra=extra):
+                with self.assertRaisesRegex(CurrentConfigError, expected):
+                    parse_current_config(f"""
+[device.wg-main]
+enabled = true
+use_outbound_nat = true
+{extra}
+
+[device.wg-main.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/etc/vpn-gate/secrets/wg.key"
+
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-a"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+
+[profile.corp]
+enabled = true
+direction = "outbound"
+destinations = ["10.0.0.0/8"]
+device_order = ["wg-main"]
+""")
+
+    def test_managed_wireguard_peer_identity_is_strict_and_unique(self):
+        base = """
+[device.wg-main]
+enabled = true
+
+[device.wg-main.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/etc/vpn-gate/secrets/wg.key"
+
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-a"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+
+[[device.wg-main.managed_vpn.peers]]
+id = "{second_id}"
+public_key = "{second_key}"
+endpoint = "198.51.100.11:51820"
+probe_target = "{second_probe}"
+"""
+        cases = (
+            ("edge-a", "ISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0A=", "10.201.0.2", "duplicate id"),
+            ("edge-b", "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=", "10.201.0.2", "duplicate public_key"),
+            ("edge-b", "ISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0A=", "10.201.0.1", "duplicate probe_target"),
+        )
+        for second_id, second_key, second_probe, expected in cases:
+            with self.subTest(expected=expected):
+                with self.assertRaisesRegex(CurrentConfigError, expected):
+                    parse_current_config(
+                        base.format(
+                            second_id=second_id,
+                            second_key=second_key,
+                            second_probe=second_probe,
+                        )
+                    )
+
+    def test_managed_wireguard_rejects_invalid_scalar_forms(self):
+        template = """
+[device.wg-main]
+enabled = true
+
+[device.wg-main.managed_vpn]
+kind = "wireguard"
+interface = {interface}
+address = {address}
+private_key_file = {private_key}
+
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-a"
+public_key = {public_key}
+endpoint = {endpoint}
+probe_target = {probe_target}
+"""
+        cases = (
+            ('"wg/0"', '"10.200.0.1/32"', '"/etc/key"', '"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="', '"198.51.100.10:51820"', '"10.201.0.1"', "interface"),
+            ('"wg0"', '"10.200.0.1/255.255.255.255"', '"/etc/key"', '"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="', '"198.51.100.10:51820"', '"10.201.0.1"', "address"),
+            ('"wg0"', '"10.200.0.1/32"', '"relative.key"', '"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="', '"198.51.100.10:51820"', '"10.201.0.1"', "private_key_file"),
+            ('"wg0"', '"10.200.0.1/32"', '"/etc/key"', '"not-a-key"', '"198.51.100.10:51820"', '"10.201.0.1"', "public_key"),
+            ('"wg0"', '"10.200.0.1/32"', '"/etc/key"', '"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="', '"vpn.example:51820"', '"10.201.0.1"', "endpoint"),
+            ('"wg0"', '"10.200.0.1/32"', '"/etc/key"', '"AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="', '"198.51.100.10:51820"', '"10.201.0.01"', "probe_target"),
+        )
+        for interface, address, private_key, public_key, endpoint, probe_target, expected in cases:
+            with self.subTest(expected=expected):
+                with self.assertRaisesRegex(CurrentConfigError, expected):
+                    parse_current_config(
+                        template.format(
+                            interface=interface,
+                            address=address,
+                            private_key=private_key,
+                            public_key=public_key,
+                            endpoint=endpoint,
+                            probe_target=probe_target,
+                        )
+                    )
+
+    def test_probe_target_may_be_inside_broad_profile_but_not_exact_business_target(self):
+        broad = parse_current_config("""
+[device.wg]
+enabled = true
+use_outbound_nat = true
+[device.wg.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/etc/wg.key"
+[[device.wg.managed_vpn.peers]]
+id = "edge"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+[profile.all]
+enabled = true
+direction = "outbound"
+destinations = ["0.0.0.0/0"]
+device_order = ["wg"]
+""")
+        self.assertEqual(
+            broad.managed_vpns["wg"].shared_prefixes,
+            (ipaddress.IPv4Network("0.0.0.0/0"),),
+        )
+
+        with self.assertRaisesRegex(CurrentConfigError, "exact Profile destination"):
+            parse_current_config("""
+[device.wg]
+enabled = true
+use_outbound_nat = true
+[device.wg.managed_vpn]
+kind = "wireguard"
+interface = "wg0"
+address = "10.200.0.1/32"
+private_key_file = "/etc/wg.key"
+[[device.wg.managed_vpn.peers]]
+id = "edge"
+public_key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+[profile.probe-collision]
+enabled = true
+direction = "outbound"
+destinations = ["10.201.0.1/32"]
+device_order = ["wg"]
+""")
+
+    def test_disabled_managed_placeholder_remains_shallow(self):
+        cfg = parse_current_config("""
+[device.future]
+enabled = false
+[device.future.managed_vpn]
+anything = "ignored while disabled"
+""")
+        self.assertFalse(cfg.structural.devices["future"].enabled)
+        self.assertEqual(dict(cfg.managed_vpns), {})
 
     def test_disabled_placeholders_remain_shallow(self):
         cfg = parse_release1_config("""

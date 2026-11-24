@@ -59,6 +59,12 @@ from .domain import (
     StructuralConfig,
 )
 from .release1_config import (
+    parse_current_config,
+    ManagedWireGuardPeerConfig,
+    ManagedWireGuardConfig,
+    ManagedVpnKind,
+    CurrentConfigError,
+    CurrentConfig,
     Release1Config,
     Release1ConfigError,
     parse_release1_config,
@@ -520,6 +526,12 @@ from .route_priority_domain_builder import (
 )
 
 __all__ = [
+    "parse_current_config",
+    "ManagedWireGuardPeerConfig",
+    "ManagedWireGuardConfig",
+    "ManagedVpnKind",
+    "CurrentConfigError",
+    "CurrentConfig",
     "AvailabilityDescriptionResolutionError",
     "AvailabilityManager",
     "AvailabilityManagerError",
