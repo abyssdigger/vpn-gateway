@@ -198,7 +198,10 @@ def write_unit(name, body):
 
 
 def install_packages(*packages):
-    command(("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", *packages))
+    command((
+        "env", "DEBIAN_FRONTEND=noninteractive",
+        "apt-get", "install", "-y", "--no-install-recommends", *packages,
+    ))
 
 
 def verify_admin_diagnostics(stack, ifname):
@@ -274,7 +277,7 @@ def install_bundle():
 def test_wireguard():
     require_documentation(
         "## WireGuard / wg-quick example",
-        "apt-get install -y wireguard-tools",
+        "apt-get install -y --no-install-recommends wireguard-tools",
         "Table = off",
         "NetworkNamespacePath=/run/netns/vpn-gate-alpha",
         'expected_interfaces = ["wg-corp"]',
@@ -393,7 +396,7 @@ def cert_pin(cert):
 def test_openconnect():
     require_documentation(
         "## OpenConnect example",
-        "apt-get install -y openconnect",
+        "apt-get install -y --no-install-recommends openconnect",
         "VPN_GATE_OC_SERVER=",
         "VPN_GATE_OC_USER=",
         "VPN_GATE_OC_PASSWORD=",
@@ -549,7 +552,7 @@ WantedBy=multi-user.target
 def test_l2tp():
     require_documentation(
         "## L2TP client integration",
-        "apt-get install -y xl2tpd ppp",
+        "apt-get install -y --no-install-recommends xl2tpd ppp",
         "/etc/ppp/options.vpn-gate-corp",
         "/etc/xl2tpd/xl2tpd-vpn-gate-corp.conf",
         "NetworkNamespacePath=/run/netns/vpn-gate-alpha",

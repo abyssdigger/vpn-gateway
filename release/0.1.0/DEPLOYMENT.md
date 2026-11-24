@@ -100,7 +100,7 @@ teardown.
 Install WireGuard on Debian 13:
 
 ```sh
-apt-get install -y wireguard-tools
+apt-get install -y --no-install-recommends wireguard-tools
 ```
 
 Use a dedicated configuration such as
@@ -169,7 +169,7 @@ the integration.
 Install OpenConnect on Debian 13:
 
 ```sh
-apt-get install -y openconnect
+apt-get install -y --no-install-recommends openconnect
 ```
 
 The following password-authenticated example is deliberately explicit so the non-interactive
@@ -249,7 +249,7 @@ the managed namespace and create its PPP data-plane interface there.
 Install the Debian 13 client implementation:
 
 ```sh
-apt-get install -y xl2tpd ppp
+apt-get install -y --no-install-recommends xl2tpd ppp
 ```
 
 For an exact `ppp0` deployment:
