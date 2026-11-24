@@ -784,11 +784,12 @@ resident/artifact/interaction или component spec; активный structured
 
 # STACK
 
-Внутренняя control-plane среда VPN-GATE. Здесь живут semantic Engines и Machinery,
-которые принимают/нормализуют intent, поддерживают текущую payload-policy проекцию,
-планируют наблюдение availability, оркестрируют bounded lifecycle и собирают truthful
-runtime status. STACK не является data-plane network namespace: воздействие на сетевую
-реальность выполняется через API соседних Spaces.
+Внутренняя управляющая среда VPN-GATE. Здесь находятся смысловые Engines и Machinery,
+которые принимают и нормализуют пользовательское намерение, поддерживают текущую проекцию
+политики полезного трафика, управляют явно переданным продукту жизненным циклом Devices,
+планируют наблюдение доступности и собирают правдивое текущее состояние. STACK не является
+сетевым пространством данных: воздействие на сетевую реальность выполняется через API
+соседних Spaces.
 
 API
 
@@ -800,6 +801,7 @@ API
     @ProtectiveModeManager.request_inactive(source, ...) — снять запрос только данного source; gate может быть снят лишь когда других active sources нет и normal release precondition подтвержден.
     @ProtectiveModeManager.current_state(∅) — вернуть текущий набор request sources и confirmed / problem protective state.
     @ConfigurationAdapter.normalize(...) — принять внешнее configuration representation и вернуть validated normalized domain intents.
+    @ManagedDeviceManager.<current managed Device realization> — предоставить подтвержденное текущее состояние явно управляемого Device, включая базовое и integration-specific поколения.
     @RuntimeStatusAgent.<current snapshot publication> — предоставить текущую user-facing status projection.
     @RuntimeStatusTextRenderer.render(snapshot) — получить обязательный compact human-readable Devices/Profiles report; delivery surface остаётся заменяемой.
 
@@ -808,13 +810,14 @@ Residents
 1. `@ProductLifecycleControl` *Direct procedural Machinery product lifecycle; не является Engine и не вводит самостоятельную lifecycle policy/state machine.*
 2. `@ConfigurationAdapter` *Direct boundary от external configuration representation к validated normalized domain intents.*
     1. `AvailabilityDescriptionResolver` *Pure Calculator, разрешающий Profile/Device availability description без runtime topology inference.*
-3. `PayloadTrafficManager` *Manager текущей semantic payload-policy среды: structural intent, binding projection, availability confirmation и effective path order.*
-    1. `PayloadPolicyCalculator` *Pure Calculator structural payload policy из normalized intent и уже подтвержденных внешних фактов.*
-    2. `AvailabilityPriorityCalculator` *Pure Calculator effective path order из current membership, availability problem state, active path и reserve semantics.*
-4. `@ProtectiveModeManager` *Manager явного защитного режима продукта: владеет запрошенным/подтвержденным состоянием режима, continuous confirmation и безопасным выходом.*
-5. `AvailabilityProbeAgent` *Agent ongoing availability observation; планирует bounded checks и публикует normalized evidence, но не управляет наблюдаемой внешней доступностью.*
-6. `@RuntimeStatusAgent` *Agent current-only status composition из authoritative owner snapshots; не актуирует наблюдаемые domains.*
-    1. `@RuntimeStatusTextRenderer` *Direct Calculator, чисто преобразующий RuntimeStatusSnapshot в нормативный compact Devices/Profiles text report.*
+3. `PayloadTrafficManager` *Manager текущей смысловой политики полезного трафика: структурный состав путей, проекция привязок, подтверждение доступности и действующий порядок путей.*
+    1. `PayloadPolicyCalculator` *Pure Calculator структурной политики полезного трафика из нормализованного намерения и уже подтвержденных внешних фактов.*
+    2. `AvailabilityPriorityCalculator` *Pure Calculator действующего порядка путей из текущего состава, состояния доступности, активного пути и reserve-семантики.*
+4. `@ManagedDeviceManager` *Manager жизненного цикла только тех Devices, управление VPN которых явно передано VPN-GATE; владеет потребностью в базовой VPN-реализации и ее подтвержденным поколением.*
+5. `@ProtectiveModeManager` *Manager явного защитного режима продукта: владеет запрошенным и подтвержденным состоянием режима, непрерывным подтверждением и безопасным выходом.*
+6. `AvailabilityProbeAgent` *Agent наблюдения доступности; планирует ограниченные проверки и публикует нормализованные свидетельства, но не управляет наблюдаемой внешней доступностью.*
+7. `@RuntimeStatusAgent` *Agent композиции текущего состояния из авторитетных проекций владельцев; не изменяет наблюдаемые области.*
+    1. `@RuntimeStatusTextRenderer` *Direct Calculator, чисто преобразующий RuntimeStatusSnapshot в нормативное компактное текстовое представление Devices/Profiles.*
 
 Artifacts
 
@@ -827,7 +830,8 @@ Artifacts
 3. `availability observation context` *(observed, managed)* — current requested subjects, cadence, bounded in-flight identities/generation tokens и diagnostics `AvailabilityProbeAgent`.
 4. `controller ownership/readiness session` *(observed, managed)* — bounded procedural lifecycle state, включая retained single-controller ownership и текущий READY/cleanup result. Его наличие не превращает lifecycle в Engine.
 5. `protective mode state` *(observed, managed)* — current source-scoped request set и confirmed/problem projection public protective mode; подтвержденный active state требует exact `Private network.protective payload gate state`.
-6. `runtime status snapshot` *(observed, managed)* — current-only composition authoritative snapshots; не event history и не system-of-record.
+6. `managed Device lifecycle state` *(observed, managed)* — текущая потребность в явно управляемых Devices, желаемое поколение их базовой VPN-конфигурации и подтвержденная базовая VPN-реализация; состояние внешне управляемых Devices здесь не хранится.
+7. `runtime status snapshot` *(observed, managed)* — current-only composition authoritative snapshots; не event history и не system-of-record.
 
 Interactions
 
@@ -845,7 +849,15 @@ Interactions
 | `@ProductLifecycleControl` | establish/remove ordinary-side managed boundary through the same current lifecycle transaction | `Ordinary-side transition.@ManagedNetworkEnvironmentLifecycle` |
 | `@ProductLifecycleControl` | converge/cleanup enabled host-side contribution | `VPN-GATE-managed host state.@HostRoutingContribution` |
 | `@ProductLifecycleControl` | activate/cleanup desired lower network policy | `Private network.@NetworkPolicyAdapter` |
+| `@ProductLifecycleControl` | при остановке продукта потребовать отсутствие всех управляемых Devices и дождаться подтвержденной очистки до уничтожения Private network | `@ManagedDeviceManager` |
 | `accepted normalized intent` | current structural inputs | `PayloadTrafficManager` |
+| `accepted normalized intent` | явное намерение управлять Device; отсутствие означает внешнее владение | `@ManagedDeviceManager` |
+| `PayloadTrafficManager` | текущая проекция, подтверждающая отсутствие зависимого использования Device политикой полезного трафика | `@ManagedDeviceManager` |
+| `@ManagedDeviceManager` | привести к требуемому состоянию и наблюдать явно принадлежащую VPN-GATE базовую VPN-реализацию | `VPN external ends.@ManagedVPNAdapter` |
+| `@ManagedDeviceManager` | хранить и обновлять подтвержденное поколение базовой реализации | `managed Device lifecycle state` |
+| `@ManagedDeviceManager` | подтвержденная базовая реализация и нормализованный набор пиров | `VPN external ends.@WireGuardPeerManager` |
+| `VPN external ends.@WireGuardPeerManager` | подтвержденное/problem состояние пиров и поколение реализации | `@ManagedDeviceManager` |
+| `@ManagedDeviceManager` | текущая реализация Device, включая integration-specific generation | `PayloadTrafficManager` / `AvailabilityProbeAgent` / `@RuntimeStatusAgent` |
 | `PayloadTrafficManager` | calculate structural semantic projection | `PayloadPolicyCalculator` |
 | `PayloadTrafficManager` | calculate effective availability-dependent ordering | `AvailabilityPriorityCalculator` |
 | `PayloadTrafficManager` | observe/verify current endpoint bindings | `Private network.@VPNPathAdapter` |
@@ -871,10 +883,10 @@ Findings
    now required by `VPNG-M001-R2.R2.*` and is owned by `RuntimeStatusTextRenderer`.
    The delivery mechanism remains replaceable: current alpha may publish `status.txt` beside
    `status.json`, but neither path is thereby a stable product API.
-2. `Lifecycle decomposition` — current procedural startup directly composes lower lifecycle,
-   host contribution and policy activation. No accepted need justifies a `LifecycleManager`;
-   decomposition should happen only where lower Space boundaries now expose independent
-   Machinery contracts.
+2. `Граница жизненного цикла управляемого Device` — `VPNG-U001-R1.R3.R7*` создает ранее
+   отсутствовавшую потребность в долгоживущем Manager, но только для явно управляемых Devices.
+   Общий порядок запуска и остановки продукта остается процедурной Machinery A.001 и не
+   заменяется глобальным lifecycle Manager.
 
 Component diagram
 
@@ -966,7 +978,7 @@ in place.
 - stack-local IPv4 identity — собственная identity `Private network`;
 - private-side default routing decision toward ordinary side — routing state `Private network`;
 - remote Profile destination/SNAT routing selection на host — `VPN-GATE-managed host state` либо
-  administrator-owned host state;
+  принадлежащей администратору host state;
 - host-global forwarding/firewall/NAT — ordinary host ownership, если отдельный helper
   contract явно не принимает конкретную часть этого state.
 
@@ -1113,6 +1125,8 @@ Interactions
 | `@VPNPathAdapter` | observe current concrete endpoint generations | `VPN endpoint inventory` |
 | `VPN external ends.@VPNChannel[].<vpn-interface endpoint>` | presence/replacement/removal changes the freshly observed endpoint set | `VPN endpoint inventory` |
 | `STACK.AvailabilityProbeAgent` | execute one confirmed physical probe attempt | `@ActiveProbeDriver` |
+| `VPN external ends.@WireGuardPeerManager` | подготовить/очистить отдельное owner-scoped предусловие проверки пира | `@NetworkPolicyAdapter` |
+| `VPN external ends.@WireGuardPeerManager` | выполнить одну проверку постоянного /32 конкретного пира через current binding | `@ActiveProbeDriver` |
 | `STACK.AvailabilityProbeAgent` | require confirmed probe execution precondition before invoking the Driver | `probe routing state`, `probe local admission policy`, `VPN endpoint inventory` |
 | `@ActiveProbeDriver` | send/receive probe IP | `@VPN-side IP portal.<IP handoff>` |
 | `@VPN-side IP portal.<IP handoff>` | bidirectional IP handoff | `VPN external ends.@VPNChannel[].<vpn-interface endpoint>` |
@@ -1162,30 +1176,41 @@ Component diagram
 
 # VPN external ends
 
-Внешняя по отношению к core VPN-GATE VPN-среда: administrator-provisioned VPN channels,
-их protocol-specific runtime/session semantics и обращенные к `Private network`
-data-plane endpoints. Physical placement не задает ownership: Release-1 OpenVPN process
-может выполняться внутри managed network namespace, оставаясь resident'ом этого Space,
-потому что VPN-specific configuration/session lifecycle принадлежат external integration.
+VPN-специфичная среда по другую сторону общих смыслов Device/Profile. Она содержит как
+внешне подготовленные VPN-каналы, так и реализации, управление которыми явно передано VPN-GATE.
+Физическое размещение не задает владение: один VPN-процесс может выполняться внутри
+управляемом network namespace, оставаясь в этом Space. Владение его конфигурацией и жизненным
+циклом определяется только явным режимом конкретного Device.
 
 API
 
     @VPNChannel[].<vpn-interface endpoint> — bidirectional IP endpoint текущей VPN channel generation, доступный `Private network`.
     @VPNChannel[].<transport provenance> — optional integration-proven transport endpoint fact; отсутствует, если supported integration не умеет доказать его без inference.
     @VPNChannel[].<path route realization> — integration-specific capability, которая для exact verified PathBinding дает допустимую current Linux route shape (endpoint/gateway/onlink) без generic inference.
+    @ManagedVPNAdapter.converge_present(desired_base) — для явно управляемого Device привести принадлежащую базовую VPN-конфигурацию/экземпляр к desired generation и fresh-confirm результат.
+    @ManagedVPNAdapter.converge_absent(device_id) — удалить только принадлежащую VPN-GATE базовую VPN-реализацию и fresh-confirm отсутствие.
+    @ManagedVPNAdapter.observe(device_id) — fresh-observe exact owned base realization без неявного adoption внешнего экземпляра.
+    @WireGuardPeerManager.<current realization publication> — публиковать confirmed/problem peer-realization с поколением, не меняющим LogicalPathId.
+    @WireGuardPeerOwnershipEnforcer.converge(desired) — bounded converge полного desired AllowedIPs peer-owner state с fresh verification.
 
 Residents
 
-1. `@VPNChannel[]` *Administrator-provisioned VPN integration instance. В Release 1 supported OpenVPN/systemd shape использует отдельный stack-specific service, policy-neutral VPN configuration и создает current VPN data-plane endpoint внутри managed network domain.*
+1. `@VPNChannel[]` *Конкретный экземпляр поддерживаемой VPN-интеграции. Он может оставаться полностью внешне управляемым либо, после явного включения управления для Device, иметь базовую реализацию под управлением VPN-GATE.*
+2. `@ManagedVPNAdapter` *Direct Adapter от нормализованного контракта управляемого Device к подготовке, запуску, остановке и свежему подтверждению базовой реализации конкретной VPN-технологии.*
+3. `@WireGuardPeerManager` *Manager изменяемого владения общим префиксом для управляемого WireGuard: наблюдает пригодность пиров, выбирает текущего владельца и публикует подтвержденное поколение реализации.*
+    1. `@WireGuardPeerOwnershipEnforcer` *Direct Enforcer полного требуемого состояния владельца в `AllowedIPs`; не выбирает пира и не планирует проверки.*
 
 Artifacts
 
-1. `VPN-specific configuration` — administrator-owned protocol configuration; VPN-GATE не переписывает и не превращает ее в Device/Profile policy.
-2. `VPN channel runtime/session state` — external VPN implementation state, включая process/cgroup/session lifecycle. Для supported Release-1 service им управляет systemd, а не VPN-GATE process supervisor.
+1. `VPN-specific configuration` — конфигурации конкретной VPN-технологии. Для внешнего Device она остается принадлежащей администратору; для явно управляемого Device VPN-GATE владеет только своим точно ограниченным экземпляром/путем конфигурации и не превращает его содержимое в Device/Profile policy.
+2. `VPN channel runtime/session state` — состояние процесса/службы/сессии VPN. Внешний режим оставляет его внешнему lifecycle owner; режим управления VPN-GATE допускает изменение только через D.001 и только в пределах явно принятого области владения Device.
 3. `VPN endpoint generation` *(observed by VPN-GATE)* — current concrete interface generation, которую channel предоставляет в `Private network`; identity включает фактическую interface generation и не наследуется same-name replacement автоматически.
 4. `remote path availability property` *(observed)* — внешнее сетевое свойство, которое активные checks пытаются наблюдать относительно configured normalized criterion/target; VPN-GATE его не актуирует.
 5. `transport endpoint provenance` *(optional, observed)* — доказанный integration-specific transport fact exact current channel generation; не выводится из interface name/peer/ambient routes.
 6. `path route-realization capability` — integration-specific available capability/contract, связывающая exact verified PathBinding с route next-hop semantics. Для доказанной direct-device integration результат имеет `gateway=none`, `onlink=false`, `dev=current endpoint`; эта форма не переносится автоматически на другие integrations.
+7. `managed VPN base realization` *(observed, managed)* — подтвержденное D.001 состояние принадлежащих VPN-GATE protocol configuration + service/session generation; успешная команда сама по себе таким состоянием не является.
+8. `WireGuard peer readiness properties` *(observed)* — техническая пригодность отдельных configured peer members, наблюдаемая через их постоянные in-tunnel probe /32; это не Profile business availability.
+9. `WireGuard peer realization` *(observed, managed)* — exact подтвержденное состояние владельца общего префикса и поколение реализации для одного текущего управляемого `wg0`; изменение владельца или базового поколения инвалидирует прежний контекст поколения.
 
 `VPN endpoint inventory` не дублируется здесь: это локальная fresh observation projection
 в `Private network`. Аналогично availability confirmation/hysteresis принадлежат STACK,
@@ -1197,6 +1222,15 @@ Interactions
 | --- | --- | --- |
 | `Operator.OperatorClient` | provision VPN-specific configuration / stack-specific service integration | `@VPNChannel[]` |
 | `Ambient host and external world.@systemd` | start/stop/restart explicitly bound supported VPN service/cgroup | `@VPNChannel[]` |
+| `STACK.@ManagedDeviceManager` | desired managed base realization / cleanup | `@ManagedVPNAdapter` |
+| `@ManagedVPNAdapter` | create/update/stop only explicitly owned protocol configuration and service/session | `@VPNChannel[]` / `managed VPN base realization` |
+| `STACK.PayloadTrafficManager` | confirmed current PathBinding for managed wg0 | `@WireGuardPeerManager` |
+| `STACK.@ManagedDeviceManager` | confirmed managed WireGuard base realization / desired peer set | `@WireGuardPeerManager` |
+| `@WireGuardPeerManager` | materialize distinct peer-probe precondition | `Private network.@NetworkPolicyAdapter` |
+| `@WireGuardPeerManager` | execute one exact peer-specific /32 check | `Private network.@ActiveProbeDriver` |
+| `@WireGuardPeerManager` | converge selected shared-prefix owner | `@WireGuardPeerOwnershipEnforcer` |
+| `@WireGuardPeerOwnershipEnforcer` | fresh observe / complete-state wg set / fresh verify | `WireGuard peer realization` |
+| `@WireGuardPeerManager` | опубликовать подтвержденное/problem состояние и поколение реализации | `STACK.@ManagedDeviceManager` |
 | `@VPNChannel[]` | maintain protocol-specific runtime/session | `VPN channel runtime/session state` |
 | `@VPNChannel[]` | realize current concrete endpoint generation | `VPN endpoint generation` |
 | `Private network.@VPNPathAdapter` | fresh observe / verify current endpoint identity | `@VPNChannel[].<vpn-interface endpoint>` |
@@ -1207,44 +1241,46 @@ Interactions
 | `STACK.AvailabilityProbeAgent` via `Private network.@ActiveProbeDriver` | configured active observation | `remote path availability property` |
 | `Ambient host and external world.@systemd` | supported deployment stop removes bound process/cgroup and endpoint before managed-domain teardown | `VPN channel runtime/session state` / `VPN endpoint generation` |
 
-Release-1 support boundary: OpenVPN/systemd является текущим evidence-backed onboarding
-mechanism. Дополнительная VPN technology не считается supported только из-за похожего
-interface shape; ее integration contract требует отдельного applicability evidence либо
-reviewed equivalence. Physical placement process/interface внутри managed netns при этом не
-переносит VPN-specific configuration/session ownership в `Private network`.
+Release-1 support boundary сохраняется без изменения: существующие внешне управляемые
+OpenVPN/systemd и другие опубликованные интеграции не становятся управляемыми автоматически.
+Новый D.001 применяется только после явного включения управления для Device. Поддержка управляемой конкретной
+VPN technology требует собственного integration contract и applicability evidence; общий
+interface shape не дает такого права. `EV-00050` подтверждает нижний WireGuard-механизм
+peer ownership, но не определяет пользовательский формат секретов или реализацию диспетчера служб D.001.
 
 Component diagram
 
 ```text
-+---------------- Operator ----------------+   +------ Ambient host ------+
-| VPN-specific provisioning               |   | @systemd lifecycle API  |
-+----------------+-------------------------+   +------------+-------------+
-                 |                                          |
-                 v                                          v
-+----------------+-------------------------------------------------------+
-|                          VPN external ends                              |
-|                                                                         |
-| @VPNChannel[]                                                           |
-|      +--> [VPN-specific configuration]                                  |
-|      +--> [VPN runtime/session state]                                   |
-|      +--> [remote availability property]                                |
-|      |                                                                  |
-|      +---- @<vpn-interface endpoint> ------------------+                 |
-|      +---- @<transport provenance>                     |                 |
-|      +---- @<path route realization>                   |                 |
-+--------------------------------------------------------|----------------+
-                                                         | tunneled IP
-                                                         v
-+--------------------------------------------------------+----------------+
-| Private network  [ @VPN-side IP handoff / @VPNPathAdapter / probe API ]|
-+-------------------------------------------------------------------------+
++----------------------------- STACK --------------------------------+
+| ManagedDeviceManager        PayloadTrafficManager / ProbeAgent     |
++-----------+--------------------------+------------------------------+
+            |                          ^
+            v                          | realization generation
++-----------+--------------------------+------------------------------+
+|                       VPN external ends                             |
+|                                                                     |
+| @ManagedVPNAdapter --> @VPNChannel[] --> [base realization]        |
+|                              |                                      |
+|                              +--> [vpn-interface endpoint]          |
+|                                                                     |
+| @WireGuardPeerManager                                                |
+|      | peer probes --> Private network.@ActiveProbeDriver           |
+|      +--> @WireGuardPeerOwnershipEnforcer                           |
+|              +--> [WireGuard peer realization + generation]        |
++------------------------------+--------------------------------------+
+                               |
+                               | tunneled IP
+                               v
++------------------------------+--------------------------------------+
+| Private network: @VPNPathAdapter / policy / probe execution         |
++---------------------------------------------------------------------+
 ```
 
 # VPN-GATE-managed host state
 
 Явно owned часть ordinary-host network state. Этот Space существует потому, что VPN-GATE
 имеет ограниченные host-side postconditions, которые нельзя ни прятать внутрь
-`Private network`, ни смешивать с administrator-owned ambient host. В Release 1 здесь
+`Private network`, ни смешивать с принадлежащей администратору ambient host. В Release 1 здесь
 сосуществуют два owner scope: обязательная при запрошенной server publication host mapping
 и optional peaceful host-routing contribution. Отдельный явно включаемый aggressive owner
 scope определен архитектурой, но ограничен из Release 1 требованием `VPNG-U001-R5.R2.C1`.
@@ -1593,6 +1629,9 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U002-R2.R3.C1.R1` — [`full`]
 - `VPNG-U002-R2.R4` — [`full`]
 - `VPNG-U002-R2.R5` — [`full`]
+- `VPNG-U001-R1.R3.R7` — [`none`]
+- `VPNG-U001-R1.R3.R7.R1` — [`none`]
+- `VPNG-U001-R1.R3.R8` — [`none`]
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R2` — [`full`]
@@ -1628,6 +1667,10 @@ Architectural decisions
 7. `Rule-local path selector`
    *Device firewall rule имеет ровно один из трёх scopes: без `via` — все current paths Device; `via if <exact-ifname>` — current path этого Device с указанным exact interface name; `via peer <IPv4>` — current P2P path этого Device с указанным verified private/inner peer. Два вида `via` взаимоисключающи и не создают отдельного user-facing path object; peer не означает external VPN transport endpoint или payload address.*
 
+8. `Явное намерение управлять Device`
+   *Нормализованное намерение управления VPN существует только после явного выбора пользователя для конкретного Device. Если такого выбора нет, конфигурация и жизненный цикл VPN остаются во внешнем управлении. Для управляемого WireGuard нормализованный контракт отделяет долговечную базовую конфигурацию и список пиров от изменяемого владельца общего префикса в `AllowedIPs`. Точное написание пользовательских полей и источник секретов этим архитектурным решением не задаются.*
+
+**Пробел материализации:** Нормализация явного режима управления Device и WireGuard peer-set еще не реализована; окончательное пользовательское написание полей и контракт секретов будут определены отдельным конфигурационным review.
 
 ## [A.003] AvailabilityDescriptionResolver
 
@@ -1691,6 +1734,8 @@ policy.
 - `VPNG-U004-R4` — [`full`]
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-U004-R4.R2` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`none`]
+- `VPNG-U001-R1.R3.R8` — [`none`]
 - `VPNG-M001-R1.R1.R2` — [`full`]
 - `VPNG-M001-R1.R1.R3` — [`full`]
 - `VPNG-M001-R2.R1.R2` — [`full`]
@@ -1726,9 +1771,13 @@ Architectural decisions
 6. `Fresh reconciliation`
    *Manager хранит accepted desired semantics и при audit/event заново наблюдает reality; failed lower command sequence не ставится в durable retry queue и не replay'ится вслепую.*
 
-7. `Binding generation matters`
-   *Logical path связывается с current concrete endpoint generation; same ifname/new ifindex означает новый binding context и инвалидирует зависимые current facts.*
+7. `Поколения привязки и реализации интеграции различаются`
+   *Логический путь связан с текущим поколением конкретного endpoint. То же имя интерфейса при новом ifindex означает новый контекст привязки и делает зависимые факты устаревшими. Для управляемого WireGuard с несколькими пирами дополнительно учитывается поколение подтвержденной `WireGuardPeerRealization`: смена владельца общего префикса меняет фактическую реализацию пути, даже когда `LogicalPathId` и `(ifname, ifindex)` не изменились.*
 
+8. `Готовность управляемого WireGuard не равна привязке`
+   *Подтвержденный `PathBinding` к `wg0` сохраняет идентичность логического пути, но сам по себе не доказывает, что общий префикс полезного трафика назначен пригодному пиру. До подтвержденной `WireGuardPeerRealization` такой путь не считается готовым для зависимой материализации полезного трафика. Пиры не становятся синтетическими `LogicalPathId`.*
+
+**Пробел материализации:** Текущая реализация не получает подтвержденное поколение WireGuard peer-realization и поэтому еще не умеет использовать его как дополнительное условие готовности пути или как основание структурной потребности управляемого Device.
 
 ## [A.005] PayloadPolicyCalculator
 
@@ -1821,6 +1870,7 @@ Agent ongoing availability observation. Он управляет расписан
 
 **Implements:**
 - `VPNG-U003-R3.R6` — [`full`]
+- `VPNG-U001-R1.R3.R8` — [`none`]
 - `VPNG-U003-R3.R6.R1` — [`full`]
 - `VPNG-U003-R3.R6.R2` — [`full`]
 - `VPNG-U003-R3.R6.R3` — [`full`]
@@ -1841,8 +1891,8 @@ Architectural decisions
 1. `Agent, not Manager`
    *Agent не может сделать remote path healthy/unhealthy; он только организует observation и публикует evidence.*
 
-2. `Generation-scoped context`
-   *Observation context включает exact current logical path/endpoint generation. Evidence от superseded context не влияет на current semantic state.*
+2. `Контекст привязан к поколениям реализации`
+   *Контекст наблюдения включает точный текущий логический путь, поколение endpoint и, когда интеграция меняет фактическую транспортную реализацию за тем же endpoint, поколение этой реализации. Для управляемого WireGuard смена выбранного пира делает прежнее свидетельство доступности Profile устаревшим, даже если `LogicalPathId` и `wg0` остались прежними.*
 
 3. `No local-failure fabrication`
    *Local execution/precondition failure возвращает `no_evidence`, если он сам не доказывает remote path failure.*
@@ -1853,6 +1903,7 @@ Architectural decisions
 5. `Bounded scheduling state`
    *Timers, current generation tokens и bounded in-flight diagnostics допустимы; unbounded observation history и durable retry journal не требуются.*
 
+**Пробел материализации:** Текущий контекст availability не содержит поколение выбранного WireGuard-пира; после реализации D.002 его нужно включить в ключ актуальности свидетельства.
 
 ## [A.008] RuntimeStatusAgent
 
@@ -2057,6 +2108,53 @@ Implementation
     design/NG3/code/python/rou/protective_mode_control.py — replaceable root-local control machinery plus independent finite-cadence audit worker owned by A.011.
     design/NG3/code/python/rou/alpha_runtime.py — Release-1 composition, normal-state serialization and A.011 lifecycle wiring.
 
+## [A.012] ManagedDeviceManager
+
+Manager текущей базовой VPN-реализации только для Devices, которым пользователь явно
+передал управление VPN-GATE. Он преобразует структурную потребность Device в требование
+наличия или отсутствия VPN-экземпляра, вызывает D.001 и публикует подтвержденное поколение
+базовой реализации. Внешне управляемые Devices в его предметную область не входят.
+
+**Implements / supports:**
+- `VPNG-U001-R1.R3.R7` — [`none`]
+- `VPNG-U001-R1.R3.R7.R1` — [`none`]
+- `VPNG-U001-R1.R3.R7.R2` — [`none`]
+- `VPNG-U001-R1.R3.R7.R3` — [`none`]
+
+API
+
+    <нормализованное намерение управления / структурная потребность / текущая проекция политики полезного трафика> — заменить текущий требуемый контекст.
+    <reconciliation trigger> — заново наблюдать фактическое состояние и при необходимости привести его к требуемому через D.001.
+    <ManagedDeviceRealization InfoEvent> — публиковать подтвержденное отсутствие/наличие с поколением либо problem.
+
+Architectural decisions
+
+1. `Только явное включение управления`
+   *Manager вообще не создает управляемое состояние для Device без явного нормализованного намерения управления. Внешний Device продолжает появляться только через наблюдение и привязку C.004, как до введения R7.*
+
+2. `Структурная потребность — первый контракт подключения по потребности`
+   *VPN-экземпляр требуется только тогда, когда Device включен и используется хотя бы одним включенным Profile. Первый пакет, время простоя и иная активация по фактическому трафику этим Manager не выводятся.*
+
+3. `Поколение базовой реализации задано явно`
+   *Manager различает желаемое поколение конфигурации и подтвержденное D.001 поколение фактической реализации. Команда запуска или сам факт существования службы не превращаются в подтвержденное поколение.*
+
+4. `Наличие VPN не равно готовности пути`
+   *Успешная реализация D.001 лишь позволяет VPN-endpoint появиться. C.004 независимо заново наблюдает и подтверждает `PathBinding`; для WireGuard по R8 D.002 дополнительно подтверждает реализацию выбранного пира. Manager не подменяет ни одну из этих границ.*
+
+5. `VPN-экземпляр удаляется после зависимостей`
+   *При исчезновении структурной потребности политика полезного трафика должна перестать использовать Device, а специфичное для VPN динамическое состояние должно быть снято до подтвержденного удаления базовой реализации D.001. Независимые действия, сужающие доступ, могут идти параллельно, но базовый VPN-экземпляр удаляется последним относительно принадлежащих продукту зависимостей.*
+
+6. `Общая остановка продукта сохраняет единственного владельца`
+   *A.001 при общей остановке задает отсутствие потребности во всех управляемых Devices и ожидает подтвержденного A.012 отсутствия до уничтожения Private network. Это не превращает A.001 во второго владельца состояния и не делает A.012 глобальным Manager жизненного цикла.*
+
+7. `Ограниченное восстановление из свежего состояния`
+   *Неудача D.001 публикуется как problem; новую попытку можно выполнить по событию или с конечной периодичностью. Долговечного журнала команд и слепого повторного выполнения нет: каждая попытка начинается с нового наблюдения фактического состояния.*
+
+8. `Правдивое текущее состояние`
+   *A.012 передает A.008 желаемое и подтвержденное поколения, а также problem-state. Для внешне управляемого Device отсутствие состояния A.012 не изображается как результат управляемого жизненного цикла.*
+
+**Пробел материализации:** Компонент отсутствует в рабочей реализации; не реализованы ни управление структурной потребностью Device, ни подтвержденное поколение базовой VPN-реализации, ни упорядоченная очистка перед удалением VPN-экземпляра.
+
 # Annex B. Ordinary-side transition components
 
 ## [B.001] ManagedL3BoundaryLifecycle
@@ -2117,6 +2215,7 @@ lower network-policy domain Private network. Общая physical realization н�
 
 **Implements:**
 - `VPNG-U001-R1.R1` — [`full`]
+- `VPNG-U001-R1.R3.R8` — [`none`]
 - `VPNG-U001-R1.R3.R6.R2` — [`full`]
 - `VPNG-U001-R1.R4.R2.R1` — [`full`]
 - `VPNG-U001-R1.R4.R2.R1.R1` — [`full`]
@@ -2169,6 +2268,11 @@ Architectural decisions
 
 10. `Локальное разрешение probe является производным состоянием`
    *`probe local admission policy` не является самостоятельной пользовательской политикой. C.001/C.003 формируют ее как нижнюю часть точного предусловия выполнения проверки доступности, которым владеют A.007/C.008 по требованиям `VPNG-U003-R3.R6*`. Это состояние может разрешать только трафик, необходимый для конкретной попытки проверки и ее ответа, и не может расширять разрешения Profile или Device для полезного трафика.*
+
+11. `Проверка WireGuard-пира имеет отдельного смыслового владельца`
+   *Проверка постоянного внутритуннельного /32 конкретного WireGuard-пира может использовать ту же нижнюю Machinery маршрутизации и локального допуска только при отдельной области владения и точном текущем `PathBinding`. Это состояние служит D.002 для выбора пира, не является свидетельством доступности Profile, не меняет политику Profile и не создает разрешений для полезного трафика.*
+
+**Пробел материализации:** Отдельная owner-scoped политика маршрутизации и локального допуска для проверки WireGuard-пиров еще не материализована.
 
 ## [C.002] NetworkPolicyLayoutCalculator
 
@@ -2328,7 +2432,7 @@ Architectural decisions
    *Rule-local `via if <exact-ifname>` не требует нового observation contract: applicability проверяется только после обычного Device binding по current exact `InterfaceIdentity(ifname, ifindex)`. Совпадение имени вне current paths этого Device не имеет значения.*
 
 8. `Private P2P peer is a demand-scoped endpoint fact, not path identity`
-   *Для current Linux point-to-point endpoint Adapter может fresh-observe inner/private peer IPv4 из interface address state и привязать его только к exact `(ifname, ifindex)` generation. Эта дополнительная observation требуется только когда accepted Device policy содержит `via peer`; конфигурация без такого selector сохраняет прежний link-only endpoint-observation contract. При запрошенной peer observation link/address snapshots должны быть взаимно совместимы; race/mismatch является observation failure. Peer fact не создаёт Device ownership: selector resolution выполняется только после обычного Device binding.*
+   *Для current Linux point-to-point endpoint Adapter может fresh-observe inner/private peer IPv4 из interface address state и привязать его только к exact `(ifname, ifindex)` generation. Эта дополнительная observation требуется только когда accepted Device policy содержит `via peer`; конфигурация без такого selector сохраняет прежний link-only endpoint-observation contract. При запрошенной peer observation link/address snapshots должны быть взаимно совместимы; race/mismatch является observation failure. Peer fact не создаёт области владения Device: selector resolution выполняется только после обычного Device binding.*
 
 9. `Inner peer is not transport provenance`
    *Внутренний адрес удаленной стороны point-to-point-интерфейса принципиально отличается от внешней транспортной точки VPN-соединения или сервера. `EV-00020` подтверждает, что такой внутренний адрес виден при обычном наблюдении адресов TUN-интерфейса, тогда как транспортная точка VPN, реализованного в пользовательском пространстве, из этих данных не выводится. Если поддерживаемая интеграция отдельно подтверждает происхождение транспортной точки, она по-прежнему связывается с точным текущим `PathBinding` и не подменяется внутренним адресом удаленной стороны.*
@@ -2462,6 +2566,7 @@ remote availability semantics.
 
 **Implements:**
 - `VPNG-U003-R3.R6` — [`full`]
+- `VPNG-U001-R1.R3.R8` — [`none`]
 - `VPNG-U003-R3.R6.R1` — [`full`]
 - `VPNG-U003-R3.R6.R3` — [`full`]
 - `VPNG-U003-R3.R6.R3.R1` — [`full`]
@@ -2493,6 +2598,10 @@ Architectural decisions
 6. `Portal boundary`
    *Driver отправляет/принимает probe IP через VPN-side IP portal; remote target и VPN endpoint остаются предметностью соседнего VPN external ends / local endpoint inventory, а не становятся child artifacts Driver.*
 
+7. `Повторное использование точного контракта одной проверки`
+   *D.002 вправе использовать этот Driver для проверки конкретного WireGuard-пира только после материализации отдельного предусловия с собственным владельцем. Совпадает полный технический контракт: одна точная цель через один точный текущий endpoint, ограниченный срок выполнения и технический результат `reply/no_reply/local_error`. Смысл результата как признака пригодности WireGuard-пира определяет D.002, а не A.007.*
+
+**Пробел материализации:** Driver еще не подключен к D.002 и не получает отдельное подтвержденное предусловие проверки WireGuard-пира.
 
 ## [C.009] OrdinarySidePortalLifecycle
 
@@ -2579,10 +2688,127 @@ Implementation
 
 # Annex D. VPN external ends components
 
-Этот Space содержит только external residents/capability providers. `VPNChannel[]` не является
-компонентом VPN-GATE, поэтому отдельные VPN-GATE component specs в Annex D не требуются.
+## [D.001] ManagedVPNAdapter
 
+Direct Adapter от нормализованного намерения управляемого Device к базовой реализации
+конкретной поддерживаемой VPN-интеграции. Он не выбирает политику Profile, не определяет
+доступность бизнес-сети и не принимает под управление уже существующие внешние VPN-службы.
 
+**Implements / supports:**
+- `VPNG-U001-R1.R3.R7` — [`none`]
+- `VPNG-U001-R1.R3.R7.R1` — [`none`]
+- `VPNG-U001-R1.R3.R7.R2` — [`none`]
+- `VPNG-U001-R1.R3.R7.R3` — [`none`]
+
+API
+
+    @converge_present(desired_base) — заново наблюдать принадлежащую VPN-GATE область, подготовить или обновить конфигурацию и VPN-экземпляр, затем вернуть success только после свежего подтверждения требуемой базовой реализации.
+    @converge_absent(device_id) — остановить и удалить только принадлежащую VPN-GATE реализацию и свежим наблюдением подтвердить ее отсутствие.
+    @observe(device_id) — заново наблюдать принадлежащую VPN-GATE базовую реализацию либо доказанное отсутствие/problem, не принимая под управление внешний экземпляр.
+
+Architectural decisions
+
+1. `Только явно переданное владение`
+   *D.001 вызывается только для Device с явно нормализованным намерением управления. Если такого намерения нет, существующие конфигурация и служба администратора остаются внешними, а C.004 продолжает прежнее наблюдение и привязку.*
+
+2. `Завершение определяется подтвержденным результатом`
+   *Успех означает подтвержденное фактическое состояние, а не запись файла, нулевой код завершения команды диспетчера служб или отправку запроса. Желаемое поколение конфигурации и подтвержденное поколение работающего VPN-экземпляра различаются явно.*
+
+3. `Особенности VPN-технологии остаются ниже Adapter`
+   *OpenVPN, WireGuard, L2TP и другие поддерживаемые интеграции могут требовать разных способов подготовки конфигурации, запуска и наблюдения. Совпадение команды systemd не создает самостоятельный универсальный `SystemdDriver`; нижняя граница переиспользуется только при совпадении полного технического контракта.*
+
+4. `Измененная базовая конфигурация образует новое поколение`
+   *Если изменение принадлежащей конфигурации нельзя доказанно применить точной операцией reload конкретной интеграции, D.001 выполняет stop → подтвержденное отсутствие → новую базовую конфигурацию → start → свежее подтверждение. Скрытого состояния продолжения между поколениями нет.*
+
+5. `Базовая конфигурация WireGuard не содержит изменяемого владельца общего префикса`
+   *Для WireGuard под управлением D.002 базовая реализация содержит постоянные идентичности пиров, их транспортные точки и индивидуальные проверочные /32, но не содержит текущего владельца общего префикса полезного трафика. После полного перезапуска базовой реализации владелец сначала отсутствует и выбирается заново по свежему наблюдению.*
+
+6. `Секреты являются входом, а не скрытым хранилищем`
+   *D.001 может получать нормализованные ссылки на секреты, но эта архитектура не выбирает их пользовательское написание, место хранения или механизм ротации. Эти решения обязательны до materialization R7 и не могут быть придуманы внутри Adapter.*
+
+**Evidence:** `EV-00050` подтверждает для WireGuard границу базовой реализации, состояния без владельца и перезапуска; другие VPN-интеграции требуют собственных доказательств.
+
+**Пробел материализации:** Рабочая реализация управляемой подготовки конфигурации и подтвержденного жизненного цикла VPN отсутствует; существующие поддерживаемые VPN-службы остаются во внешнем управлении.
+
+## [D.002] WireGuardPeerManager
+
+Manager изменяемой реализации пиров одного явно управляемого WireGuard Device. Он выбирает
+подтвержденного владельца общего префикса полезного трафика среди настроенных пиров, управляет
+поколением этой реализации и публикует текущее подтвержденное либо проблемное состояние.
+
+**Implements / supports:**
+- `VPNG-U001-R1.R3.R8` — [`none`]
+- `VPNG-U003-R3.R6.R2` — [`none`]
+
+**Evidence:** `EV-00050`
+
+API
+
+    <подтвержденная базовая реализация WireGuard / нормализованный порядок пиров / текущий PathBinding> — заменить текущий контекст.
+    <timer or explicit reconciliation trigger> — заново наблюдать пригодность пиров и определить требуемого владельца.
+    @<current realization publication> — публиковать подтвержденного владельца и поколение реализации либо отсутствие владельца/problem.
+
+Architectural decisions
+
+1. `Пир не является LogicalPathId`
+   *Все альтернативные пиры одного `wg0` остаются внутренними членами одной реализации WireGuard. Их выбор не создает дополнительные Device slots, `LogicalPathId` или `PathBinding`.*
+
+2. `Три вида поколения различаются`
+   *Поколение базовой VPN-реализации D.001, поколение конкретного интерфейса C.004 и поколение выбранного пира D.002 являются разными фактами. Замена любого из этих оснований делает зависимый контекст выбора пира устаревшим.*
+
+3. `Индивидуальная проверка пира не является доступностью Profile`
+   *Каждый настроенный пир имеет постоянный внутритуннельный /32, используемый только для технического выбора пира. `reply/no_reply` для этого адреса не доказывает доступность бизнес-сети Profile и не подменяет A.007.*
+
+4. `Состояние выбора ограничено текущими фактами`
+   *Manager хранит только текущий упорядоченный набор пиров, ограниченный прогресс подтверждения, подтвержденного владельца либо problem и поколение реализации. История попыток и долговечный журнал повторного выполнения не требуются.*
+
+5. `Начальное и неопределенное состояние не имеют владельца`
+   *После нового базового поколения общий префикс не назначается до подтверждения пригодного пира. Если фактическое состояние владельца после изменения неизвестно или не соответствует допустимой форме, Manager публикует problem/unconfirmed; A.004 не считает такой путь готовым для зависимой материализации полезного трафика.*
+
+6. `Восстановление пира само по себе не означает возврат на него`
+   *Первый владелец выбирается по нормализованному порядку. При подтвержденной непригодности текущего владельца выбирается наиболее предпочтительный из подтвержденно пригодных. Само восстановление более предпочтительного пира не вводит отсутствующую в R8 политику принудительного возврата; такое поведение требует отдельного нормативного решения.*
+
+7. `Поколение меняется только после подтверждения`
+   *Новое поколение реализации публикуется лишь после свежего подтверждения D.003 точного требуемого `AllowedIPs`. После публикации нового поколения прежнее свидетельство доступности Profile считается устаревшим, даже если `LogicalPathId` и ifindex не изменились.*
+
+8. `Текущие доказательства не требуют отдельного ограничения трафика на время переключения`
+   *`EV-00050` не выявил потерь или передачи полезного трафика третьему пиру при проверенном переносе полного состояния. Поэтому отдельное защитное ограничение трафика не вводится без новых доказательств. Частично примененное или неоднозначное состояние никогда не считается новым подтвержденным поколением и переводит путь в problem/unconfirmed.*
+
+**Пробел материализации:** Рабочая реализация выбора WireGuard-пира, его отдельного наблюдения и поколения peer-realization отсутствует.
+
+## [D.003] WireGuardPeerOwnershipEnforcer
+
+Direct Enforcer одного полного требуемого состояния `AllowedIPs` для текущей базовой
+реализации управляемого WireGuard. Он не выбирает пира, не планирует проверки и не владеет
+поколением смысловой реализации.
+
+**Implements / supports:**
+- `VPNG-U001-R1.R3.R8` — [`none`]
+
+**Evidence:** `EV-00050`
+
+API
+
+    @converge(desired) — заново наблюдать точные AllowedIPs текущих пиров, при необходимости применить полное требуемое состояние владельца, затем повторить наблюдение и вернуть SUCCESS только при точном совпадении с требуемым состоянием.
+
+Architectural decisions
+
+1. `Применяется полное требуемое состояние`
+   *Вызывающий компонент передает полное состояние всех затронутых пиров: постоянные проверочные /32 сохраняются, общий префикс полезного трафика присутствует ровно у выбранного владельца либо отсутствует у всех. Последовательные операции добавления и удаления не являются смысловым API.*
+
+2. `Успех определяется свежим подтверждением`
+   *Код завершения `wg set` не является подтверждением. Ошибка наблюдения, отсутствие пира, неоднозначный владелец или несовпадение после применения дают failure/unconfirmed.*
+
+3. `Переключение пира не переписывает базовую конфигурацию`
+   *Обычный перенос владельца не переписывает базовую конфигурацию D.001 и не требует перезапуска `wg0`. Полный перезапуск базовой реализации, напротив, уничтожает изменяемое состояние владельца и требует нового цикла выбора D.002.*
+
+4. `В Enforcer нет скрытой политики выбора`
+   *D.003 не знает порядок предпочтения пиров, hysteresis, смысл Profile или историю доступности. Его задача ограничена достижением точного нижнего postcondition одного вызова.*
+
+5. `Наблюдение не превращается в заявление об атомарности`
+   *Текущие доказательства позволяют применять полное состояние без отдельного защитного ограничения трафика, но не объявляют `wg set` универсально транзакционным. Архитектурная гарантия строится на границе свежего подтверждения, а не на предположении о неделимости команды.*
+
+**Пробел материализации:** Рабочий Enforcer полного состояния `AllowedIPs` с обязательным свежим подтверждением отсутствует.
 
 # Annex E. VPN-GATE-managed host state components
 

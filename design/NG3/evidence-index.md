@@ -86,3 +86,23 @@ protection; EXP-085 — PASS full-tunnel escape-protection exemptions.
 
 This entry is the stable evidence address for E.003/E.004 routing-authority and containment
 decisions.
+
+## EV-00050 — WireGuard same-prefix peer ownership and managed-realization boundary
+
+**Status:** selected  
+**Scope:** one WireGuard interface with multiple peers that can serve the same remote prefix;
+exclusive `AllowedIPs` ownership; permanent peer-specific in-tunnel probe prefixes; runtime
+owner transfer without interface restart; safe no-owner base configuration; restart reset;
+fresh confirmation and generation-scoped stale-evidence rejection.  
+**Reviews:** `design/reviews/NG3-2026-11-24-EXP-086-wireguard-multipeer-availability-review.md`;
+`design/reviews/NG3-2026-11-24-EXP-087-wireguard-runtime-allowedips-review.md`;
+`design/reviews/NG3-2026-11-24-EXP-088-wireguard-ten-peer-result-review.md`.  
+**Executable evidence:** EXP-086 — PASS / ordinary Linux route priority cannot select
+same-prefix peers behind one `wg0`; EXP-087 — PASS / two-peer runtime ownership feasibility;
+EXP-088 — PASS / ten-peer base lifecycle, ordered failover, restart reset and
+generation-scoped confirmation.
+
+EXP-088 additionally observed one live 200-packet A-to-B transition with zero packet loss and
+no third-peer payload replies. This observation is not a universal transactional-atomicity
+guarantee for `wg set`; selected architecture A.012/D.001/D.002/D.003 therefore confirms
+exact post-apply `AllowedIPs` state before publishing a new realization generation.
