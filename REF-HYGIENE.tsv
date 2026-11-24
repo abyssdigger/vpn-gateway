@@ -1,5 +1,5 @@
 # scripts: ./ref-hygiene-add-tags.sh ./ref-hygiene-delete-branches.sh
-# format: ADD_TAG<TAB>tag<TAB>commit<TAB>annotation
+# format: ADD_TAG<TAB>tag<TAB>target<TAB>annotation
 # format: DEL_BRANCH<TAB>branch
 
 ADD_TAG	ng3-snapshot-release-0.1.0-candidate-source	4b4f7b030c6aad64b0ac4dafa9620f645fdda16e	Source tip for published Release 0.1.0 candidate snapshot 3d1acbdf8b4ee4e90cc1aac18a8625a387c3117a
@@ -16,6 +16,7 @@ ADD_TAG	ng3-release-0.1.0-attempt2-pre-documentation-review-source	11b8025193fac
 ADD_TAG	ng3-snapshot-release-0.1.0-final-documentation-aware-fulfillment-source	e7abc6e98906e1426bd77bac23c05824a012e5d7	Source tip for published final documentation-aware Release 0.1.0 fulfillment snapshot 6284d7862d64d1722366d5d3ab073cd3c8aa2727
 ADD_TAG	ng3-snapshot-wg-multipeer-availability-source	6a44d3e340516df734f0b04b50c6fa42f282f6db	Source tip for EXP-086 WireGuard same-prefix multi-peer availability work
 ADD_TAG	ng3-snapshot-wg-allowedips-runtime-source	431e7eb2704013395bbb6e7f3d9c8f2fa3ee6cfa	Source tip for published EXP-086 and EXP-087 WireGuard peer availability snapshot 95b7646246a71000ccf37f5e87c8794eb0da790f
+ADD_TAG	ng3-snapshot-ref-hygiene-ledger-source	refs/remotes/origin/ng3-ref-hygiene-ledger-20261124	Source tip for published operational ref hygiene ledger and helpers
 
 # MANUAL: replace lightweight tag minimal-working-alpha at 5730e896483b7cfe526d823208cb18f2b5b43742 with an annotated tag at the same commit; preserve its historical-marker annotation.
 
@@ -27,3 +28,4 @@ DEL_BRANCH	ng3-release-0.1.0-attempt2-cdc-20261124
 DEL_BRANCH	ng3-release-doc-walkthrough-cdc-20261124
 DEL_BRANCH	ng3-wg-multipeer-availability-cdc-20261124
 DEL_BRANCH	ng3-wg-allowedips-runtime-cdc-20261124
+DEL_BRANCH	ng3-ref-hygiene-ledger-20261124
