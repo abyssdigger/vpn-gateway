@@ -1,6 +1,6 @@
 # EXP-089 — прямая базовая реализация управляемого WireGuard Device
 
-**Статус:** PREPARED / UNPROVEN  
+**Статус:** COMPLETE — PASS / DIRECT WIREGUARD BASE LIFECYCLE CONFIRMED  
 **Дата:** 2026-11-24
 
 ## Связь с требованиями
