@@ -5,6 +5,10 @@
 **Normative model:** `design/requirements-model.md`  
 **Architecture status:** no NG2 architecture is inherited automatically
 
+Внешние основания нормативно значимых свойств, которые нельзя проверить непосредственно
+по этому дереву требований, перечислены в каноническом реестре
+`design/NG3/requirement-status-basis.md`.
+
 This document is the normative requirement tree for NG3.
 
 The six current primary project requirements are accepted. Their derived Requirement/Constraint
