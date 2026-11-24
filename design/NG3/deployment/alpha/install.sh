@@ -7,6 +7,8 @@ install -d -m 0755 /usr/lib/vpn-gate-alpha
 rm -rf /usr/lib/vpn-gate-alpha/rou
 cp -a "$ROOT/design/NG3/code/python/rou" /usr/lib/vpn-gate-alpha/rou
 install -m 0644 "$ROOT/VERSION" /usr/lib/vpn-gate-alpha/VERSION
+install -m 0755 "$ROOT/design/NG3/deployment/alpha/vpn-gate-control" \
+    /usr/sbin/vpn-gate-control
 
 install -d -m 0755 /etc/vpn-gate-alpha
 if [ ! -e /etc/vpn-gate-alpha/config.toml ]; then
