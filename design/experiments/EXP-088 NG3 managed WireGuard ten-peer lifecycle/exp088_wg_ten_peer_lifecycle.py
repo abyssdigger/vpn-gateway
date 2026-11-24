@@ -345,7 +345,7 @@ def reply_peer(
     peers: tuple[Peer, ...],
     result: subprocess.CompletedProcess[str],
 ) -> str:
-    ttls = [int(value) for value in re.findall(r"ttl=(\\d+)", result.stdout)]
+    ttls = [int(value) for value in re.findall(r"ttl=(\d+)", result.stdout)]
     if not ttls:
         raise RuntimeError(f"successful ping has no TTL evidence:\n{result.stdout}")
     if len(set(ttls)) != 1:
@@ -525,7 +525,7 @@ def transition_observation(
     transmitted, received = parse_ping_summary(stdout)
     loss = transmitted - received
 
-    reply_ttls = [int(value) for value in re.findall(r"ttl=(\\d+)", stdout)]
+    reply_ttls = [int(value) for value in re.findall(r"ttl=(\d+)", stdout)]
     peer_by_ttl = {peer.response_ttl: peer.label for peer in peers}
     reply_counts: dict[str, int] = {}
     unknown_ttls: list[int] = []
