@@ -767,7 +767,7 @@ jobs:
               set -e
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-                systemd systemd-sysv dbus python3 kmod
+                systemd systemd-sysv dbus python3 kmod openssl ocserv
               mkdir -p /dev/net
               if [ ! -e /dev/net/tun ]; then
                 mknod /dev/net/tun c 10 200

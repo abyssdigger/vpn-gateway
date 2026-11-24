@@ -402,8 +402,8 @@ def test_openconnect():
         "NetworkNamespacePath=/run/netns/vpn-gate-alpha",
     )
     install_packages("openconnect")
-    # Remote ocserv and certificate generation are QA-harness-only peer setup.
-    install_packages("ocserv", "openssl")
+    # Remote ocserv and certificate generation are QA-harness-only peer setup
+    # and are preinstalled by the outer disposable-environment harness.
     doc_pass("OPENCONNECT_PREREQUISITES")
     namespace = "qa-oc-srv"
     host_if, remote_if = "qoc-h", "qoc-r"
@@ -821,8 +821,8 @@ def test_protective_negative(payload_address):
 def cleanup_global():
     for unit in (
         "vpn-gate-wg@wg-corp.service",
-        "vpn-gate-openconnect-qa.service",
-        "vpn-gate-l2tp-qa.service",
+        "vpn-gate-openconnect@corp.service",
+        "vpn-gate-l2tp-corp.service",
     ):
         systemctl("stop", unit, check=False)
     systemctl("stop", CONTROLLER, check=False)
@@ -859,7 +859,7 @@ def main():
         print("RELEASE_QA_RESULT=PASS")
         return 0
     finally:
-        if command(("command", "-v", "ip"), check=False).returncode == 0:
+        if shutil.which("ip") is not None:
             cleanup_global()
         if "original_forward" in locals():
             command(("sysctl", "-w", f"net.ipv4.ip_forward={original_forward}"), check=False)
