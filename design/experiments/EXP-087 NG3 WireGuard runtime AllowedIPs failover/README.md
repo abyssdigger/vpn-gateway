@@ -1,6 +1,6 @@
 # EXP-087 — WireGuard runtime AllowedIPs failover
 
-**Status:** RUNNING — privileged runtime evidence pending  
+**Status:** COMPLETE — PASS / FEASIBILITY CONFIRMED  
 **Date:** 2026-11-24
 
 ## Question
@@ -86,3 +86,23 @@ EXP087_FAILOVER_TO_B=PASS
 EXP087_RECOVERY_TO_A=PASS
 EXP087_RESULT=PASS
 ```
+
+
+## Result
+
+Privileged Linux/WireGuard evidence passed at source commit
+`4ae88f67d3cd02f64f04f99e9a62cb3876abea76`, GitHub Actions run
+`45333802569`, job `linux-wireguard-multipeer` (`138241133580`).
+
+All H1-H5 passed:
+
+- `AllowedIPs` ownership was changed at runtime using only `wg set`; no config file was
+  created, edited or reloaded;
+- the reachable underlay transport endpoint was not a usable ICMP target when the probe was
+  forced through `wg0`;
+- permanent peer-specific in-tunnel `/32` targets independently selected peer A and peer B
+  behind the same `wg0`;
+- moving the shared payload prefix to B after A became unavailable moved real payload to B;
+- restoring A and moving the shared prefix back moved real payload back to A.
+
+Detailed evidence: [EXP-087-result-20261124.md](EXP-087-result-20261124.md).
