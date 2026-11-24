@@ -45,8 +45,27 @@ def keypair() -> tuple[str, str]:
 def config_text(
     private_path: Path,
     psk_path: Path,
-    peer_public: str,
+    peer_a_public: str,
+    peer_b_public: str,
+    *,
+    reverse_peers: bool = False,
 ) -> str:
+    peer_a = f"""
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-a"
+public_key = "{peer_a_public}"
+endpoint = "198.51.100.10:51820"
+probe_target = "10.201.0.1"
+preshared_key_file = "{psk_path}"
+"""
+    peer_b = f"""
+[[device.wg-main.managed_vpn.peers]]
+id = "edge-b"
+public_key = "{peer_b_public}"
+endpoint = "198.51.100.11:51820"
+probe_target = "10.201.0.2"
+"""
+    peers = peer_b + peer_a if reverse_peers else peer_a + peer_b
     return f"""
 [device.wg-main]
 enabled = true
@@ -58,14 +77,7 @@ interface = "wg0"
 address = "10.200.0.1/32"
 private_key_file = "{private_path}"
 listen_port = 51820
-
-[[device.wg-main.managed_vpn.peers]]
-id = "edge-a"
-public_key = "{peer_public}"
-endpoint = "198.51.100.10:51820"
-probe_target = "10.201.0.1"
-preshared_key_file = "{psk_path}"
-
+{peers}
 [profile.corp]
 enabled = true
 direction = "outbound"
@@ -81,8 +93,9 @@ def main() -> None:
         ns("ip", "link", "set", "lo", "up")
 
         private_a, _ = keypair()
-        _, public_b = keypair()
-        private_c, _ = keypair()
+        _, peer_a_public = keypair()
+        _, peer_b_public = keypair()
+        private_c, public_c = keypair()
         psk = run("wg", "genpsk").strip()
 
         with tempfile.TemporaryDirectory(prefix="ng3-d001-wg-") as root_text:
@@ -95,7 +108,12 @@ def main() -> None:
             psk_path.chmod(0o600)
 
             cfg = parse_current_config(
-                config_text(private_path, psk_path, public_b)
+                config_text(
+                    private_path,
+                    psk_path,
+                    peer_a_public,
+                    peer_b_public,
+                )
             )
             desired = cfg.managed_vpns["wg-main"]
             adapter = LinuxManagedWireGuardAdapter(
@@ -133,12 +151,29 @@ def main() -> None:
                 raise AssertionError("same desired generation changed")
             print("D001_WG_IDEMPOTENT_PRESENT=PASS")
 
+            reordered_desired = parse_current_config(
+                config_text(
+                    private_path,
+                    psk_path,
+                    peer_a_public,
+                    peer_b_public,
+                    reverse_peers=True,
+                )
+            ).managed_vpns["wg-main"]
+            reordered = adapter.converge_present("wg-main", reordered_desired)
+            assert reordered.interface is not None
+            if reordered.interface.ifindex != first_ifindex:
+                raise AssertionError("peer preference reorder recreated base interface")
+            if reordered.confirmed_generation != first.confirmed_generation:
+                raise AssertionError("peer preference reorder changed D.001 base generation")
+            print("D001_WG_PEER_ORDER_NOT_BASE_GENERATION=PASS")
+
             ns(
                 "wg",
                 "set",
                 "wg0",
                 "peer",
-                public_b,
+                peer_a_public,
                 "allowed-ips",
                 "10.201.0.1/32,10.77.0.0/24",
             )
@@ -174,7 +209,7 @@ def main() -> None:
             if changed.confirmed_generation == first.confirmed_generation:
                 raise AssertionError("same-path private-key change kept old generation")
             observed_public = ns("wg", "show", "wg0", "public-key").strip()
-            if observed_public != public_b:
+            if observed_public != public_c:
                 raise AssertionError("changed private-key generation was not applied")
             allowed = ns("wg", "show", "wg0", "allowed-ips")
             if "10.77.0.0/24" in allowed:

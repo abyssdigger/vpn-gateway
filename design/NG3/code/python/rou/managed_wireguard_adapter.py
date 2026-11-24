@@ -290,15 +290,18 @@ class LinuxManagedWireGuardAdapter:
             "address": str(desired.address),
             "interface_public_key": interface_public_key,
             "listen_port": desired.listen_port,
-            "peers": [
-                {
-                    "public_key": peer.public_key,
-                    "endpoint": peer.endpoint,
-                    "probe_prefix": peer.probe_prefix,
-                    "preshared_digest": peer.preshared_digest,
-                }
-                for peer in peers
-            ],
+            "peers": sorted(
+                (
+                    {
+                        "public_key": peer.public_key,
+                        "endpoint": peer.endpoint,
+                        "probe_prefix": peer.probe_prefix,
+                        "preshared_digest": peer.preshared_digest,
+                    }
+                    for peer in peers
+                ),
+                key=lambda item: item["public_key"],
+            ),
         }
         generation = hashlib.sha256(
             json.dumps(
