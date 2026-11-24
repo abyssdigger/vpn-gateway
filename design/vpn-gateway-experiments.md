@@ -55,7 +55,7 @@ Current experiment directories:
 | EXP-085 | aggressive full-tunnel escape-guard exemptions |
 | EXP-086 | WireGuard same-prefix multi-peer route-priority feasibility |
 | EXP-087 | WireGuard runtime `AllowedIPs` failover with peer-specific probe targets |
-| EXP-088 | managed WireGuard ten-peer lifecycle / shared-prefix ownership boundary |
+| EXP-088 | managed WireGuard ten-peer lifecycle / shared-prefix ownership boundary |\n| EXP-089 | direct managed WireGuard base lifecycle / ownership boundary |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.

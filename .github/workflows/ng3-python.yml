@@ -21,7 +21,7 @@ on:
       - "design/experiments/EXP-068 NG3 continuous availability failover/**"
       - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"
       - "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/**"
-      - "design/experiments/EXP-088 NG3 managed WireGuard ten-peer lifecycle/**"
+      - "design/experiments/EXP-088 NG3 managed WireGuard ten-peer lifecycle/**"\n      - "design/experiments/EXP-089 NG3 direct managed WireGuard lifecycle/**"
       - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
       - "design/experiments/EXP-074 NG3 host managed routing/**"
       - "design/experiments/EXP-081 NG3 aggressive RPDB precedence gap/**"
@@ -73,7 +73,7 @@ on:
       - "design/experiments/EXP-068 NG3 continuous availability failover/**"
       - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"
       - "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/**"
-      - "design/experiments/EXP-088 NG3 managed WireGuard ten-peer lifecycle/**"
+      - "design/experiments/EXP-088 NG3 managed WireGuard ten-peer lifecycle/**"\n      - "design/experiments/EXP-089 NG3 direct managed WireGuard lifecycle/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -213,6 +213,10 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-088 NG3 managed WireGuard ten-peer lifecycle/exp088_wg_ten_peer_lifecycle.py"
+      - name: EXP-089 direct managed WireGuard base lifecycle
+        run: >-
+          sudo python3
+          "design/experiments/EXP-089 NG3 direct managed WireGuard lifecycle/exp089_direct_managed_wg_lifecycle.py"
 
 
   linux-forwarding-barrier:
