@@ -2436,7 +2436,7 @@ Architectural decisions
    *Owned artifacts are namespace instance + loopback state. Absence of materialization does not remove the architectural Space.*
 
 2. `Containment before trust`
-   *До признания существующего namespace пригодным разрешены вход в него и чтение состояния ForwardingGate, необходимые только для установления защитного ограничения. Наблюдение и исправление остальных принадлежащих VPN-GATE свойств среды начинается лишь после свежего подтверждения `ForwardingGate=DISABLED`. После подтверждения ownership/identity отклонение принадлежащих среде свойств, например состояния loopback, исправляется, а не считается само по себе основанием отвергнуть среду.*
+   *До признания существующего namespace пригодным разрешены вход в него и чтение состояния ForwardingGate, необходимые только для установления защитного ограничения. Наблюдение и исправление остальных принадлежащих VPN-GATE свойств среды начинается лишь после свежего подтверждения `ForwardingGate=DISABLED`. После подтверждения принадлежности и идентичности среды отклонение ее управляемых свойств, например состояния loopback-интерфейса, исправляется, а не считается само по себе основанием отвергнуть среду.*
 
 3. `Environment without door is valid`
    *Exact namespace/loopback with absent ordinary-side transition is a normal recoverable intermediate state.*
