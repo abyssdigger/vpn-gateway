@@ -53,6 +53,8 @@ Current experiment directories:
 | EXP-083 | single Private-network protective gate |
 | EXP-084 | aggressive independent managed-egress escape guard |
 | EXP-085 | aggressive full-tunnel escape-guard exemptions |
+| EXP-086 | WireGuard same-prefix multi-peer route-priority feasibility |
+| EXP-087 | WireGuard runtime `AllowedIPs` failover with peer-specific probe targets |
 
 Each experiment directory owns its README, harness and result evidence. The experiment number
 is stable; historical results are not renumbered when referenced from NG3.
@@ -114,3 +116,5 @@ Canonical dispositions:
 | EXP-083 | PASS | selected | Selected lower candidate for `VPNG-U004-R5` traffic containment: one dedicated Private-network nft table blocks ordinary-boundary INPUT/OUTPUT and all IPv4 FORWARD traffic without tearing down runtime state. |
 | EXP-084 | PASS | selected | Selected lower candidate for aggressive fail-closed safety: an independently owned nft escape guard permits correct managed egress but drops local/forwarded managed traffic if RPDB policy redirects it to a non-managed egress, removing leakage dependence on drift-detection latency. |
 | EXP-085 | PASS | selected | Extends EXP-084 to `0.0.0.0/0`: selected evidence that full-tunnel escape protection can still preserve host-local delivery and traffic already arriving from the managed boundary while blocking local/forwarded ordinary-uplink escape after RPDB drift. |
+| EXP-086 | PASS / negative feasibility finding | selected | Proves on real WireGuard that two same-prefix peers behind one `wg0` cannot be selected by ordinary Linux route-priority availability: exact-prefix `AllowedIPs` ownership is exclusive, FIB metric changes leave peer selection unchanged, and moving `AllowedIPs` ownership moves the payload. This confirms the current cryptokey-routing boundary; generic availability reuse requires distinct WG interfaces, while single-interface switching would require a new WireGuard-specific ownership contract. |
+| EXP-087 | PASS / feasibility confirmed | deferred | Proves that one `wg0` can keep multiple independently probeable peers by giving each peer a permanent in-tunnel probe `/32`, while a shared payload prefix is moved at runtime with `wg set ... allowed-ips ...`; real payload follows failover and recovery without config-file rewrite. The underlay WireGuard transport endpoint is not a usable target for the current `ping -I wg0` probe shape. Production/service-manager adoption is explicitly deferred until a later product decision after normal Release-1 operational trial. |
