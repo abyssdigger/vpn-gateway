@@ -1,3 +1,0 @@
-# scripts: ./ref-hygiene-add-tags.sh ./ref-hygiene-delete-branches.sh
-# format: ADD_TAG<TAB>tag<TAB>target<TAB>annotation
-# format: DEL_BRANCH<TAB>branch

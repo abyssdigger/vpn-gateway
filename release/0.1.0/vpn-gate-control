@@ -1,5 +1,0 @@
-#!/bin/sh
-set -eu
-
-exec env PYTHONPATH=/usr/lib/vpn-gate-alpha \
-    /usr/bin/python3 -m rou.protective_mode_control "$@"
