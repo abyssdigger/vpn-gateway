@@ -51,27 +51,13 @@ File-level failure semantics, syntax, provenance and atomicity scope are therefo
 unspecified until that post-first-release discussion rather than treated as an accepted
 deferral.
 
-## Future VPN configuration and lifecycle automation
+## Promoted: VPN configuration and lifecycle automation
 
-Preliminary future-product expectation: VPN-GATE may eventually support automation of
-supported VPN implementations using data already present in the gate configuration.
+The former future declaration for VPN configuration generation and lifecycle automation was
+promoted on 2026-11-24 to normative requirement branch `VPNG-U001-R1.R3.R7*`.
 
-Potential future scope includes:
+The current requirement tree now owns the product decision: Device management is explicit,
+externally prepared Devices remain supported when management is not enabled, and managed
+WireGuard multi-peer work is an open requirement rather than a declaration. Detailed design
+remains unresolved and is tracked by the current research/review artifacts.
 
-```text
-VPN config templates / rendered configuration
-start command
-reload command
-restart command
-stop command
-```
-
-The intent is to make automatic VPN setup and lifecycle control possible without treating
-those concrete commands/templates as part of the core Profile/Device policy model.
-
-This capability is **not proposed as part of the current release scope**. Current releases
-may continue to consume externally managed VPN interfaces/processes. Before any implementation,
-a later requirement/design cycle must define supported integrations, template inputs and
-ownership, command execution/security boundaries, idempotency, failure handling, privilege
-model, and the exact relationship between VPN lifecycle state and VPN-GATE desired-state
-publication.
