@@ -19,7 +19,8 @@ on:
       - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
       - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
       - "design/experiments/EXP-068 NG3 continuous availability failover/**"
-      - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"\n      - "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/**"
+      - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"
+      - "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/**"
       - "design/experiments/EXP-070 NG3 routed stack endpoint/**"
       - "design/experiments/EXP-074 NG3 host managed routing/**"
       - "design/experiments/EXP-081 NG3 aggressive RPDB precedence gap/**"
@@ -69,7 +70,8 @@ on:
       - "design/experiments/EXP-066 NG3 probe local nft owner shape/**"
       - "design/experiments/EXP-067 NG3 one-shot ICMP driver execution/**"
       - "design/experiments/EXP-068 NG3 continuous availability failover/**"
-      - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"\n      - "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/**"
+      - "design/experiments/EXP-086 NG3 WireGuard same-prefix multi-peer availability/**"
+      - "design/experiments/EXP-087 NG3 WireGuard runtime AllowedIPs failover/**"
       - "design/experiments/EXP-048 NG3 structural payload route RPDB mutation/**"
       - "design/experiments/EXP-049 NG3 administrator VPN onboarding applicability/**"
       - "design/experiments/EXP-050 NG3 bounded VPN lifecycle applicability/**"
@@ -765,10 +767,12 @@ jobs:
             cd dist
             sha256sum -c vpn-gate-0.1.0.tar.gz.sha256
             sha256sum -c vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
-            printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_BEGIN'
+            printf '%s
+' 'RELEASE_ASSET_CHECKSUMS_BEGIN'
             cat vpn-gate-0.1.0.tar.gz.sha256
             cat vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
-            printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_END'
+            printf '%s
+' 'RELEASE_ASSET_CHECKSUMS_END'
           )
       - name: Walk published administrator procedure and run negative QA
         run: |
