@@ -219,6 +219,13 @@ jobs:
         run: >-
           sudo python3
           "design/experiments/EXP-089 NG3 direct managed WireGuard lifecycle/exp089_direct_managed_wg_lifecycle.py"
+      - name: D.001 production managed WireGuard Adapter
+        env:
+          PYTHONPATH: design/NG3/code/python
+        run: >-
+          sudo --preserve-env=PYTHONPATH
+          python3
+          design/NG3/code/python/rou/tests/integration_managed_wireguard_adapter.py
 
 
   linux-forwarding-barrier:
