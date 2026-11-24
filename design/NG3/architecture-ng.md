@@ -801,7 +801,7 @@ API
     @ProtectiveModeManager.current_state(∅) — вернуть текущий набор request sources и confirmed / problem protective state.
     @ConfigurationAdapter.normalize(...) — принять внешнее configuration representation и вернуть validated normalized domain intents.
     @RuntimeStatusAgent.<current snapshot publication> — предоставить текущую user-facing status projection.
-    RuntimeStatusTextRenderer.render(snapshot) — получить обязательный compact human-readable Devices/Profiles report; delivery surface остаётся заменяемой.
+    @RuntimeStatusTextRenderer.render(snapshot) — получить обязательный compact human-readable Devices/Profiles report; delivery surface остаётся заменяемой.
 
 Residents
 
@@ -814,7 +814,7 @@ Residents
 4. `@ProtectiveModeManager` *Manager явного защитного режима продукта: владеет запрошенным/подтвержденным состоянием режима, continuous confirmation и безопасным выходом.*
 5. `AvailabilityProbeAgent` *Agent ongoing availability observation; планирует bounded checks и публикует normalized evidence, но не управляет наблюдаемой внешней доступностью.*
 6. `@RuntimeStatusAgent` *Agent current-only status composition из authoritative owner snapshots; не актуирует наблюдаемые domains.*
-    1. `RuntimeStatusTextRenderer` *Direct Calculator, чисто преобразующий RuntimeStatusSnapshot в нормативный compact Devices/Profiles text report.*
+    1. `@RuntimeStatusTextRenderer` *Direct Calculator, чисто преобразующий RuntimeStatusSnapshot в нормативный compact Devices/Profiles text report.*
 
 Artifacts
 
@@ -862,8 +862,8 @@ Interactions
 | `AvailabilityProbeAgent` | current observation/diagnostic InfoEvent | `@RuntimeStatusAgent` |
 | `@ProductLifecycleControl` | lifecycle/readiness/cleanup projection | `@RuntimeStatusAgent` |
 | `@RuntimeStatusAgent` | compose/update | `runtime status snapshot` |
-| `@RuntimeStatusAgent` | current snapshot publication | `RuntimeStatusTextRenderer` / other presentation environment |
-| `RuntimeStatusTextRenderer` | required compact human-readable Devices/Profiles text | `Operator.OperatorClient` / presentation environment |
+| `@RuntimeStatusAgent` | current snapshot publication | `@RuntimeStatusTextRenderer` / other presentation environment |
+| `@RuntimeStatusTextRenderer` | required compact human-readable Devices/Profiles text | `Operator.OperatorClient` / presentation environment |
 
 Findings
 
@@ -1590,12 +1590,16 @@ semantic Device/Profile/binding/policy/availability contracts.
 - `VPNG-U002-R2.R1` — [`full`]
 - `VPNG-U002-R2.R2` — [`full`]
 - `VPNG-U002-R2.R3` — [`full`]
+- `VPNG-U002-R2.R3.C1.R1` — [`full`]
 - `VPNG-U002-R2.R4` — [`full`]
 - `VPNG-U002-R2.R5` — [`full`]
 - `VPNG-U004-R4.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R1` — [`full`]
 - `VPNG-D001-R1.R1.R3.R2` — [`full`]
 - `VPNG-D001-R1.R1.R5` — [`full`]
+
+**Constrained by:**
+- `VPNG-U001-R4.R4.R6.R2.R5.C1`
 
 API
 
@@ -1909,7 +1913,7 @@ human-readable current-state report. Он не наблюдает kernel state, 
 
 API
 
-    render(snapshot) -> text
+    @render(snapshot) -> text
 
 Architectural decisions
 
@@ -2158,10 +2162,13 @@ Architectural decisions
    *Один normalized Device publication intent требует двух independently verified postconditions: managed-domain local admission в `Private network` и host publication mapping в `VPN-GATE-managed host state`. Host-side occurrence того же semantic Adapter показывается в соседнем Space как отдельный `HostPublicationAdapter`; физическое размещение host nft state не расширяет ownership этого Private-network occurrence.*
 
 8. `Path-scoped Device firewall lowering`
-   *Для каждого current exact path Adapter сохраняет исходный порядок Device firewall rules и исключает только rules, чей optional selector не относится к этому path. Rule без selector остаётся Device-wide; `via if` сравнивается с уже текущим exact interface name path binding; `via peer` — с verified private-peer fact C.004. Explicit firewall остаётся одной ordered policy с terminal no-match DROP даже если после path filtering не осталось explicit rules; отдельный path-policy gate или второй user policy object не вводится.*
+   *Для каждого current exact path Adapter сохраняет исходный порядок Device firewall rules и исключает только rules, чей optional selector не относится к этому path. Rule без selector остаётся Device-wide; `via if` сравнивается с уже текущим exact interface name path binding; `via peer` — с verified private-peer fact C.004. Explicit firewall остаётся одной ordered policy с terminal no-match DROP даже если после path filtering не осталось explicit rules; отдельный path-policy gate или второй user policy object не вводится. Сопоставление полей `IN/OUT` выполняется в цепочке `forward` до последующего преобразования исходного адреса VPN-GATE. Поэтому адреса и порты в Device firewall означают буквальные L3/L4-поля полезного трафика в этой точке фильтрации, а не внешнюю транспортную точку VPN и не значения после NAT.*
 
 9. `Selector evidence is minimal and Device-scoped`
    *Exact-if selector использует только уже подтверждённый current PathBinding и не добавляет observation dependency. Peer selector разрешается только из verified current path facts C.004. Если `via peer` отсутствует во всех rules, peer observation вообще не является prerequisite policy realization. Если peer selector запрошен, confirmed absence другого peer является обычным non-match; observation failure либо неоднозначное совпадение requested peer не трактуется как отсутствие restriction и не разрешает allowing structural policy для затронутого Device.*
+
+10. `Локальное разрешение probe является производным состоянием`
+   *`probe local admission policy` не является самостоятельной пользовательской политикой. C.001/C.003 формируют ее как нижнюю часть точного предусловия выполнения проверки доступности, которым владеют A.007/C.008 по требованиям `VPNG-U003-R3.R6*`. Это состояние может разрешать только трафик, необходимый для конкретной попытки проверки и ее ответа, и не может расширять разрешения Profile или Device для полезного трафика.*
 
 ## [C.002] NetworkPolicyLayoutCalculator
 
@@ -2218,6 +2225,9 @@ Architectural decisions
 
 8. `Injected platform contract`
    *Конкретные Linux numeric pools, protocol markers и nft namespace приходят через platform contract, не из user configuration. Их конкретные значения являются evidence-gated platform facts, а не частью semantic API Calculator.*
+
+9. `Граница вклада в безопасность`
+   *Для `VPNG-U004-R4` полный вклад C.002 ограничен представимостью внутреннего распределения ресурсов: непредставимое или противоречивое распределение должно быть отклонено до изменения сетевого состояния. Ограничивающее применение политики и подтверждение безопасного состояния принадлежат C.003/C.005. Поэтому [`full`] у C.002 означает полную материализацию обязанности именно этого компонента, а не самостоятельное выполнение им всего `VPNG-U004-R4`.*
 
 ## [C.003] NetworkPolicyEnforcer
 
@@ -2426,7 +2436,7 @@ Architectural decisions
    *Owned artifacts are namespace instance + loopback state. Absence of materialization does not remove the architectural Space.*
 
 2. `Containment before trust`
-   *Existing namespace is inspected only after fresh confirmed ForwardingGate=DISABLED. Once namespace ownership/identity is proven, owned environment properties such as loopback state should be repaired rather than rejected merely for drift.*
+   *До признания существующего namespace пригодным разрешены вход в него и чтение состояния ForwardingGate, необходимые только для установления защитного ограничения. Наблюдение и исправление остальных принадлежащих VPN-GATE свойств среды начинается лишь после свежего подтверждения `ForwardingGate=DISABLED`. После подтверждения принадлежности и идентичности среды отклонение ее управляемых свойств, например состояния loopback-интерфейса, исправляется, а не считается само по себе основанием отвергнуть среду.*
 
 3. `Environment without door is valid`
    *Exact namespace/loopback with absent ordinary-side transition is a normal recoverable intermediate state.*
@@ -2726,6 +2736,8 @@ Bounded Enforcer одного composite aggressive postcondition. Он не вы
 - `VPNG-U001-R5.R2.R1` — [`full`]
 - `VPNG-U001-R5.R2.R3` — [`full`]
 - `VPNG-U001-R5.R2.R3.R1` — [`full`]
+
+**Constrained by:** `VPNG-U001-R5.R2.C1`
 
 **Evidence:** `EV-00040`.
 
