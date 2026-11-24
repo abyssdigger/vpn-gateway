@@ -148,7 +148,7 @@ class LinuxManagedWireGuardAdapter:
 
         created_identity: InterfaceIdentity | None = None
         try:
-            self.runner.run(
+            self._run(
                 (
                     "ip",
                     "-n",
@@ -158,7 +158,8 @@ class LinuxManagedWireGuardAdapter:
                     desired.interface,
                     "type",
                     "wireguard",
-                )
+                ),
+                "managed WireGuard create",
             )
             created = self._link_by_name(desired.interface)
             if created is None or _link_kind(created) != "wireguard":
@@ -167,7 +168,7 @@ class LinuxManagedWireGuardAdapter:
                 )
             created_identity = _identity(created)
 
-            self.runner.run(
+            self._run(
                 (
                     "ip",
                     "-n",
@@ -178,13 +179,15 @@ class LinuxManagedWireGuardAdapter:
                     desired.interface,
                     "alias",
                     prepared.marker,
-                )
+                ),
+                "managed WireGuard ownership-marker apply",
             )
-            self.runner.run_script(
+            self._run_script(
                 self._ns_command("wg", "setconf", desired.interface, "/dev/stdin"),
                 _render_setconf(prepared),
+                "managed WireGuard base configuration apply",
             )
-            self.runner.run(
+            self._run(
                 (
                     "ip",
                     "-n",
@@ -194,9 +197,10 @@ class LinuxManagedWireGuardAdapter:
                     str(desired.address),
                     "dev",
                     desired.interface,
-                )
+                ),
+                "managed WireGuard address apply",
             )
-            self.runner.run(
+            self._run(
                 (
                     "ip",
                     "-n",
@@ -205,7 +209,8 @@ class LinuxManagedWireGuardAdapter:
                     "set",
                     desired.interface,
                     "up",
-                )
+                ),
+                "managed WireGuard link activation",
             )
 
             confirmed = self._owned_link(prepared.marker)
@@ -256,9 +261,10 @@ class LinuxManagedWireGuardAdapter:
             desired.private_key_file,
             "private_key_file",
         )
-        interface_public_key = self.runner.run_script(
+        interface_public_key = self._run_script(
             ("wg", "pubkey"),
             private_key + "\n",
+            "WireGuard public-key derivation",
         ).strip()
         _validate_wireguard_key(
             interface_public_key,
@@ -340,18 +346,19 @@ class LinuxManagedWireGuardAdapter:
         }:
             return False
 
-        dump = self.runner.run(
+        dump = self._run(
             self._ns_command(
                 "wg",
                 "show",
                 prepared.config.interface,
                 "dump",
-            )
+            ),
+            "WireGuard state observation",
         )
         return _dump_matches(dump, prepared)
 
     def _ipv4_addresses(self, ifname: str) -> set[str]:
-        raw = self.runner.run(
+        raw = self._run(
             (
                 "ip",
                 "-n",
@@ -361,7 +368,8 @@ class LinuxManagedWireGuardAdapter:
                 "show",
                 "dev",
                 ifname,
-            )
+            ),
+            "managed WireGuard address observation",
         )
         try:
             rows = json.loads(raw)
@@ -422,7 +430,7 @@ class LinuxManagedWireGuardAdapter:
             raise ManagedWireGuardError(
                 "managed WireGuard ownership changed before delete"
             )
-        self.runner.run(
+        self._run(
             (
                 "ip",
                 "-n",
@@ -430,7 +438,8 @@ class LinuxManagedWireGuardAdapter:
                 "link",
                 "del",
                 identity.ifname,
-            )
+            ),
+            "managed WireGuard delete",
         )
 
     def _cleanup_created(
@@ -447,7 +456,7 @@ class LinuxManagedWireGuardAdapter:
             alias = current.get("ifalias")
             if alias not in (None, "", marker):
                 return
-            self.runner.run(
+            self._run(
                 (
                     "ip",
                     "-n",
@@ -455,7 +464,8 @@ class LinuxManagedWireGuardAdapter:
                     "link",
                     "del",
                     identity.ifname,
-                )
+                ),
+                "failed-create cleanup",
             )
         except Exception:
             # The original failure is authoritative; uncertain cleanup remains visible
@@ -494,7 +504,7 @@ class LinuxManagedWireGuardAdapter:
         return matches[0] if matches else None
 
     def _link_rows(self) -> list[dict[str, object]]:
-        raw = self.runner.run(
+        raw = self._run(
             (
                 "ip",
                 "-n",
@@ -503,7 +513,8 @@ class LinuxManagedWireGuardAdapter:
                 "-j",
                 "link",
                 "show",
-            )
+            ),
+            "managed WireGuard link observation",
         )
         try:
             rows = json.loads(raw)
@@ -520,6 +531,35 @@ class LinuxManagedWireGuardAdapter:
                 "managed-link inventory contains a non-object row"
             )
         return rows
+
+    def _run(
+        self,
+        argv: Sequence[str],
+        context: str,
+    ) -> str:
+        try:
+            return self.runner.run(argv)
+        except ManagedWireGuardError:
+            raise
+        except Exception as exc:
+            raise ManagedWireGuardError(
+                f"{context} failed: {type(exc).__name__}: {exc}"
+            ) from exc
+
+    def _run_script(
+        self,
+        argv: Sequence[str],
+        script: str,
+        context: str,
+    ) -> str:
+        try:
+            return self.runner.run_script(argv, script)
+        except ManagedWireGuardError:
+            raise
+        except Exception as exc:
+            raise ManagedWireGuardError(
+                f"{context} failed: {type(exc).__name__}: {exc}"
+            ) from exc
 
     def _ns_command(self, *argv: str) -> tuple[str, ...]:
         return (
@@ -657,10 +697,6 @@ def _dump_matches(text: str, prepared: _PreparedBase) -> bool:
     if len(peer_rows) != len(expected):
         return False
 
-    dynamic_prefixes = {
-        str(prefix)
-        for prefix in prepared.config.shared_prefixes
-    }
     seen: set[str] = set()
     for row in peer_rows:
         if len(row) < 5:
@@ -681,10 +717,8 @@ def _dump_matches(text: str, prepared: _PreparedBase) -> bool:
         }
         if peer.probe_prefix not in actual_allowed:
             return False
-        extras = actual_allowed - {peer.probe_prefix}
-        if not extras <= dynamic_prefixes:
-            return False
-
+        # Additional AllowedIPs are D.002-owned runtime state. D.001 verifies
+        # only its permanent peer probe prefix and does not police their owner.
         if peer.preshared_digest is None:
             if preshared_key not in _NONE_PRESHARED_KEYS:
                 return False
