@@ -22,3 +22,7 @@ ADD_TAG	ng3-snapshot-current-managed-config-loading-source	b615cf462d13904b490e2
 ADD_TAG	ng3-snapshot-direct-wireguard-d001-lifecycle-source	1010bcde7a1ad342e490bdb79e1355f5dd1e7dd7	Direct WireGuard D.001 lifecycle selection.
 ADD_TAG	ng3-snapshot-device-manager-architecture-cdc-ref-hygiene-source	refs/remotes/origin/ng3-device-manager-architecture-cdc-20261124	Device Manager architecture CDC ref-hygiene source.
 DEL_BRANCH	ng3-device-manager-architecture-cdc-20261124
+ADD_TAG	ng3-snapshot-production-d001-managed-wireguard-adapter-source	cbb453faba4f8af1157400314b03782baffc4ce8	Production D.001 managed WireGuard Adapter.
+ADD_TAG	ng3-snapshot-partial-a012-managed-device-orchestration-source	0d8484f814543b476b50476917742f6703b7d637	Partial A.012 managed Device orchestration core.
+ADD_TAG	ng3-snapshot-wireguard-d001-cdc-ref-hygiene-source	refs/remotes/origin/ng3-wireguard-d001-cdc-20261124	WireGuard D.001 and A.012 core CDC ref-hygiene source.
+DEL_BRANCH	ng3-wireguard-d001-cdc-20261124
