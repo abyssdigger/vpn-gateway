@@ -2131,9 +2131,9 @@ Manager текущей базовой VPN-реализации только дл
 базовой реализации. Внешне управляемые Devices в его предметную область не входят.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R7` — [`full`]
-- `VPNG-U001-R1.R3.R7.R1` — [`full`]
-- `VPNG-U001-R1.R3.R7.R2` — [`full`]
+- `VPNG-U001-R1.R3.R7` — [`none`]
+- `VPNG-U001-R1.R3.R7.R1` — [`none`]
+- `VPNG-U001-R1.R3.R7.R2` — [`none`]
 - `VPNG-U001-R1.R3.R7.R3` — [`none`]
 
 API
@@ -2710,10 +2710,10 @@ Direct Adapter от нормализованного намерения упра
 доступность бизнес-сети и не принимает под управление уже существующие внешние VPN-службы.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R7` — [`none`]
-- `VPNG-U001-R1.R3.R7.R1` — [`none`]
-- `VPNG-U001-R1.R3.R7.R2` — [`none`]
-- `VPNG-U001-R1.R3.R7.R3` — [`none`]
+- `VPNG-U001-R1.R3.R7` — [`full`]
+- `VPNG-U001-R1.R3.R7.R1` — [`full`]
+- `VPNG-U001-R1.R3.R7.R2` — [`full`]
+- `VPNG-U001-R1.R3.R7.R3` — [`full`]
 
 API
 
