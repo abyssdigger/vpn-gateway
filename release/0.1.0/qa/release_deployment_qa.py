@@ -198,7 +198,6 @@ def write_unit(name, body):
 
 
 def install_packages(*packages):
-    command(("apt-get", "update"))
     command(("env", "DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-y", *packages))
 
 
