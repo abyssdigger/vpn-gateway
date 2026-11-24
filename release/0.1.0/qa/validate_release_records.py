@@ -95,8 +95,15 @@ def main() -> int:
             assert dispositions[node_id] == "conformance-applicable", node_id
 
     architecture = read(ARCH)
-    assert "[`partial`]" not in architecture
-    assert "[`none`]" not in architecture
+    nonfull_edges = [
+        line
+        for line in architecture.splitlines()
+        if re.match(
+            r"^- \`VPNG-[A-Z0-9.-]+\` — \[\`(?:partial|none)\`\]$",
+            line,
+        )
+    ]
+    assert not nonfull_edges, nonfull_edges
 
     qa = read(RELEASE / "QA-REPORT.md")
     assert "Attempt:" in qa or "Tested release-set head:" in qa
