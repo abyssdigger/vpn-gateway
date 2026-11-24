@@ -20,17 +20,10 @@ set -u
 script_dir="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ledger="${1:-$script_dir/REF-HYGIENE.tsv}"
 
-while IFS=
+while IFS=$'\t' read -r command tag target annotation; do
     [[ -z "${command:-}" || "$command" == \#* ]] && continue
     [[ "$command" == "ADD_TAG" ]] || continue
 
     git tag -a "$tag" "$target" -m "$annotation"
-    git push origin "refs/tags/$tag"
-done < "$ledger"
-\t' read -r command tag target annotation; do
-    [[ -z "${command:-}" || "$command" == \#* ]] && continue
-    [[ "$command" == "ADD_TAG" ]] || continue
-
-    git tag -a "$tag" "$commit" -m "$annotation"
     git push origin "refs/tags/$tag"
 done < "$ledger"
