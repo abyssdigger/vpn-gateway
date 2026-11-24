@@ -204,6 +204,13 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
                     f"requirement must have exactly one status, found {node['statuses']}",
                 )
 
+    def test_stable_architecture_uses_only_stable_evidence_addresses(self):
+        architecture = ARCHITECTURE.read_text(encoding="utf-8")
+        self.assertIsNone(
+            re.search(r"\bEXP-\d+\b", architecture),
+            "stable architecture must reference experiment evidence only through EV IDs",
+        )
+
     def test_pending_closure_requirements_have_structured_architecture_entry(self):
         architecture = ARCHITECTURE.read_text(encoding="utf-8")
         pending = [
