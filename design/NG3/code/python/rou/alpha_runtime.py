@@ -143,7 +143,7 @@ from .protective_mode_control import (
 )
 from .protective_mode_manager import ProtectiveModeManager
 from .route_priority_inventory import RoutePriorityPathRoute
-from .release1_config import Release1Config, parse_release1_config
+from .release1_config import Release1Config, parse_current_config
 from .operational_log import OperationalLogAdapter, OperationalLogLevel
 from .release1_host_route_helper import (
     LOG_TAG as HOST_LOG_TAG,
@@ -213,7 +213,14 @@ class AlphaPreparedPolicy:
         *,
         local_address: IPv4Address,
     ) -> "AlphaPreparedPolicy":
-        config = parse_release1_config(text)
+        current = parse_current_config(text)
+        if current.managed_vpns:
+            managed_ids = ", ".join(sorted(current.managed_vpns))
+            raise AlphaRuntimeError(
+                "managed_vpn configuration is recognized but managed VPN "
+                f"lifecycle is not materialized for Device(s): {managed_ids}"
+            )
+        config = current.base
 
         prepared = cls(
             local_address=local_address,
