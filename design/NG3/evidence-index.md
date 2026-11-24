@@ -140,3 +140,22 @@ The production integration proves that D.001 does not restart the base interface
 preference reorder or for D.002-owned mutable `AllowedIPs`; a private-key change at the same
 configured file path produces a new confirmed base generation and resets mutable shared-prefix
 ownership through the selected absent-before-present restart.
+
+## EV-00080 — A.012 managed Device orchestration core
+
+**Status:** accepted / partial materialization  
+**Scope:** current-only orchestration of explicit managed-Device demand over D.001: external
+Devices remain out of scope; structurally demanded managed Devices request confirmed presence;
+desired and confirmed base generations remain distinct; desired absence waits for explicit
+dependency release; removed management remains tracked until owned absence is confirmed; D.001
+failures become problem state rather than false confirmation.  
+**Implementation:** `design/NG3/code/python/rou/managed_device_manager.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_managed_device_manager.py`.  
+**Review:** `design/reviews/NG3-2026-11-24-managed-device-manager-core-review.md`.  
+**Executable evidence:** GitHub Actions run `45479580505`, job `unit`
+`138748981952` — PASS on source
+`eef712648e60c112e9276a865599f3e80964a240`.
+
+This evidence does not claim runtime materialization. Alpha startup/reload/stop wiring,
+dependency-release confirmation from current product policy, and A.008 publication remain
+explicit follow-up work.
