@@ -735,11 +735,21 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Build release bundle
+      - name: Validate release records and build release assets
         run: |
           set -euo pipefail
+          python3 release/0.1.0/qa/validate_release_records.py
           sh release/0.1.0/build-bundle.sh
-          (cd dist && sha256sum -c vpn-gate-0.1.0.tar.gz.sha256)
+          sh release/0.1.0/build-project-snapshot.sh
+          (
+            cd dist
+            sha256sum -c vpn-gate-0.1.0.tar.gz.sha256
+            sha256sum -c vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
+            printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_BEGIN'
+            cat vpn-gate-0.1.0.tar.gz.sha256
+            cat vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
+            printf '%s\n' 'RELEASE_ASSET_CHECKSUMS_END'
+          )
       - name: Deploy bundle and verify WireGuard OpenConnect L2TP
         run: |
           set -euo pipefail
@@ -795,4 +805,9 @@ jobs:
           path: |
             dist/vpn-gate-0.1.0.tar.gz
             dist/vpn-gate-0.1.0.tar.gz.sha256
+            dist/vpn-gate-0.1.0-project-snapshot.tar.gz
+            dist/vpn-gate-0.1.0-project-snapshot.tar.gz.sha256
+            release/0.1.0/QA-REPORT.md
+            release/0.1.0/REQUIREMENTS-COVERAGE.md
+            release/0.1.0/RELEASE-SCOPE.md
           if-no-files-found: error
