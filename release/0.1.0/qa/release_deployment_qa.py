@@ -842,7 +842,6 @@ def main():
     os_release = Path("/etc/os-release").read_text(encoding="utf-8")
     assert 'VERSION_ID="13"' in os_release or "VERSION_ID=13" in os_release, os_release
 
-    original_forward = command(("sysctl", "-n", "net.ipv4.ip_forward")).stdout.strip()
     bundle_root = None
     try:
         bundle_root = install_bundle()
