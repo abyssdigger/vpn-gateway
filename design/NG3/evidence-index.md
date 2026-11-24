@@ -120,3 +120,23 @@ technical interface ownership marker.
 
 This entry selects the direct kernel lifecycle as the WireGuard-specific lower realization.
 It does not select a universal process/service driver for daemon-based VPN integrations.
+
+## EV-00070 — production D.001 managed WireGuard Adapter
+
+**Status:** accepted  
+**Scope:** production realization of the selected D.001 WireGuard base-lifecycle contract:
+safe secret-file preconditions, explicit ownership, foreign-object rejection, confirmed
+present/absent, idempotent unchanged generation, same-path secret rotation, and strict
+separation from D.002-owned peer preference and mutable payload `AllowedIPs`.  
+**Implementation:** `design/NG3/code/python/rou/managed_wireguard_adapter.py`.  
+**Integration evidence:** `design/NG3/code/python/rou/tests/integration_managed_wireguard_adapter.py`.  
+**Review:** `design/reviews/NG3-2026-11-24-managed-wireguard-adapter-implementation-review.md`.  
+**Executable evidence:** GitHub Actions run `45477609885`, job
+`linux-wireguard-multipeer` `138741997228` — PASS; `unit`,
+`linux-alpha-smoke`, and frozen Release-0.1.0 isolation also PASS on source
+`3435600145081f08275a943b1d6a20c544e8398d`.
+
+The production integration proves that D.001 does not restart the base interface for a peer
+preference reorder or for D.002-owned mutable `AllowedIPs`; a private-key change at the same
+configured file path produces a new confirmed base generation and resets mutable shared-prefix
+ownership through the selected absent-before-present restart.
