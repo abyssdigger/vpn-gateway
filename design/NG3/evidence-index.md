@@ -106,3 +106,17 @@ EXP-088 additionally observed one live 200-packet A-to-B transition with zero pa
 no third-peer payload replies. This observation is not a universal transactional-atomicity
 guarantee for `wg set`; selected architecture A.012/D.001/D.002/D.003 therefore confirms
 exact post-apply `AllowedIPs` state before publishing a new realization generation.
+
+## EV-00060 — direct managed WireGuard base lifecycle
+
+**Status:** accepted  
+**Scope:** direct kernel WireGuard base realization for D.001: secret-file preconditions,
+same-name foreign-object rejection, confirmed create/present/restart/absent postconditions and
+technical interface ownership marker.  
+**Result:** `design/experiments/EXP-089 NG3 direct managed WireGuard lifecycle/EXP-089-result-20261124.md`  
+**Review:** `design/reviews/NG3-2026-11-24-EXP-089-direct-wireguard-lifecycle-review.md`  
+**Executable evidence:** EXP-089 — PASS, GitHub Actions run `45467124175`, job
+`138705009864`.
+
+This entry selects the direct kernel lifecycle as the WireGuard-specific lower realization.
+It does not select a universal process/service driver for daemon-based VPN integrations.
