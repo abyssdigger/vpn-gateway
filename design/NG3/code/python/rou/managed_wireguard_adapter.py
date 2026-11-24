@@ -6,7 +6,6 @@ import base64
 from dataclasses import dataclass
 from enum import Enum
 import hashlib
-from ipaddress import IPv4Network
 import json
 import os
 from pathlib import Path
@@ -15,7 +14,7 @@ import subprocess
 from typing import Protocol, Sequence
 
 from .interface_identity import InterfaceIdentity
-from .release1_config import ManagedWireGuardConfig, ManagedWireGuardPeerConfig
+from .release1_config import ManagedWireGuardConfig
 
 
 _OWNER_PREFIX = "vpn-gate:managed-vpn:"
