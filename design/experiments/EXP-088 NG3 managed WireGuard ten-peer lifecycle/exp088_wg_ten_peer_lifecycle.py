@@ -34,6 +34,10 @@ class Peer:
     def probe_prefix(self) -> str:
         return f"{self.probe_ip}/32"
 
+    @property
+    def response_ttl(self) -> int:
+        return 64 + self.index
+
 
 @dataclass(frozen=True)
 class AvailabilityEvidence:
@@ -130,6 +134,12 @@ def setup_underlay(peers: tuple[Peer, ...]) -> None:
     for peer in peers:
         host("ip", "netns", "add", peer.namespace)
         ns(peer.namespace, "ip", "link", "set", "lo", "up")
+        ns(
+            peer.namespace,
+            "sh",
+            "-c",
+            f"printf '%s\\n' {peer.response_ttl} > /proc/sys/net/ipv4/ip_default_ttl",
+        )
 
         host(
             "ip",
@@ -296,23 +306,6 @@ def sent_delta(
     return after.get(label, (0, 0))[1] - before.get(label, (0, 0))[1]
 
 
-def selected_peer(
-    before: dict[str, tuple[int, int]],
-    after: dict[str, tuple[int, int]],
-) -> str:
-    changed = [
-        label
-        for label in after
-        if sent_delta(before, after, label) > 0
-    ]
-    if len(changed) != 1:
-        raise RuntimeError(
-            f"expected one peer tx counter to increase, got {changed!r}; "
-            f"before={before!r} after={after!r}"
-        )
-    return changed[0]
-
-
 def ping(
     target: str,
     *,
@@ -334,13 +327,34 @@ def ping(
     )
 
 
-def require_ping(target: str, *, count: int = 2) -> None:
+def require_ping(
+    target: str,
+    *,
+    count: int = 2,
+) -> subprocess.CompletedProcess[str]:
     result = ping(target, count=count, timeout=2)
     if result.returncode != 0:
         raise RuntimeError(
             f"ping to {target} failed unexpectedly:\n"
             f"{result.stdout}{result.stderr}"
         )
+    return result
+
+
+def reply_peer(
+    peers: tuple[Peer, ...],
+    result: subprocess.CompletedProcess[str],
+) -> str:
+    ttls = [int(value) for value in re.findall(r"ttl=(\\d+)", result.stdout)]
+    if not ttls:
+        raise RuntimeError(f"successful ping has no TTL evidence:\n{result.stdout}")
+    if len(set(ttls)) != 1:
+        raise RuntimeError(f"ping replies came from multiple peer TTLs: {ttls!r}")
+    ttl = ttls[0]
+    matches = [peer.label for peer in peers if peer.response_ttl == ttl]
+    if len(matches) != 1:
+        raise RuntimeError(f"reply TTL {ttl} does not identify exactly one peer")
+    return matches[0]
 
 
 def require_no_ping(target: str) -> None:
@@ -405,20 +419,12 @@ def apply_payload_owner(
 
 
 def payload_selected_peer(peers: tuple[Peer, ...], *, count: int = 2) -> str:
-    before = transfers(peers)
-    require_ping(REMOTE_IP, count=count)
-    time.sleep(0.1)
-    after = transfers(peers)
-    return selected_peer(before, after)
+    return reply_peer(peers, require_ping(REMOTE_IP, count=count))
 
 
 def verify_probe_discrimination(peers: tuple[Peer, ...]) -> None:
     for peer in peers:
-        before = transfers(peers)
-        require_ping(peer.probe_ip)
-        time.sleep(0.05)
-        after = transfers(peers)
-        actual = selected_peer(before, after)
+        actual = reply_peer(peers, require_ping(peer.probe_ip))
         if actual != peer.label:
             raise RuntimeError(
                 f"probe {peer.probe_ip} selected peer {actual}, "
@@ -486,7 +492,6 @@ def transition_observation(
         CLIENT,
         "ping",
         "-n",
-        "-q",
         "-I",
         "wg0",
         "-c",
@@ -520,26 +525,54 @@ def transition_observation(
     transmitted, received = parse_ping_summary(stdout)
     loss = transmitted - received
 
+    reply_ttls = [int(value) for value in re.findall(r"ttl=(\\d+)", stdout)]
+    peer_by_ttl = {peer.response_ttl: peer.label for peer in peers}
+    reply_counts: dict[str, int] = {}
+    unknown_ttls: list[int] = []
+    for ttl in reply_ttls:
+        label = peer_by_ttl.get(ttl)
+        if label is None:
+            unknown_ttls.append(ttl)
+        else:
+            reply_counts[label] = reply_counts.get(label, 0) + 1
+
     post_before = transfers(peers)
-    require_ping(REMOTE_IP, count=20)
+    post_peer = payload_selected_peer(peers, count=20)
     time.sleep(0.1)
     post_after = transfers(peers)
     post_old_delta = sent_delta(post_before, post_after, owner_a.label)
     post_new_delta = sent_delta(post_before, post_after, owner_b.label)
-    if post_old_delta != 0 or post_new_delta <= 0:
+    if post_peer != owner_b.label:
         raise RuntimeError(
-            "after confirmed switch, payload did not remain exclusively on peer B: "
-            f"old_delta={post_old_delta}, new_delta={post_new_delta}"
+            f"after confirmed switch payload used peer {post_peer}, expected B"
+        )
+
+    unexpected = {
+        label: count
+        for label, count in reply_counts.items()
+        if label not in {owner_a.label, owner_b.label}
+    }
+    if unknown_ttls:
+        raise RuntimeError(f"transition replies had unknown TTLs: {unknown_ttls!r}")
+    if unexpected:
+        raise RuntimeError(
+            f"transition payload reached unexpected peers: {unexpected!r}"
         )
 
     old_during = sent_delta(before_apply, after_apply, owner_a.label)
     new_during = sent_delta(before_apply, after_apply, owner_b.label)
     elapsed_ms = (confirmed - started) * 1000.0
+    counts_text = ",".join(
+        f"{label}:{reply_counts.get(label, 0)}"
+        for label in (owner_a.label, owner_b.label)
+    )
     return (
         f"lost_packets={loss};"
         f"confirm_ms={elapsed_ms:.3f};"
+        f"reply_peers={counts_text};"
         f"old_tx_bytes_during_confirm={old_during};"
         f"new_tx_bytes_during_confirm={new_during};"
+        f"post_confirm_peer={post_peer};"
         f"post_confirm_old_tx_bytes={post_old_delta};"
         f"post_confirm_new_tx_bytes={post_new_delta}"
     )
