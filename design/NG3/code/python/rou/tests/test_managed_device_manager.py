@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 
+from rou.interface_identity import InterfaceIdentity
 from rou.managed_device_manager import (
     ManagedDeviceDesiredState,
     ManagedDeviceManager,
@@ -32,6 +33,7 @@ device_order = ["wg-main"]
         f"""
 [device.wg-main]
 enabled = true
+use_outbound_nat = true
 
 [device.wg-main.managed_vpn]
 kind = "wireguard"
@@ -88,10 +90,7 @@ class FakeLifecycle:
             device_id,
             ManagedWireGuardState.PRESENT,
             confirmed_generation=self.generation,
-            interface=__import__(
-                "rou.interface_identity",
-                fromlist=["InterfaceIdentity"],
-            ).InterfaceIdentity(desired.interface, 7),
+            interface=InterfaceIdentity(desired.interface, 7),
         )
         self.state[device_id] = observation
         return observation
@@ -134,10 +133,7 @@ class ManagedDeviceManagerTests(unittest.TestCase):
         lifecycle.state["wg-main"] = ManagedWireGuardObservation(
             "wg-main",
             ManagedWireGuardState.PRESENT,
-            interface=__import__(
-                "rou.interface_identity",
-                fromlist=["InterfaceIdentity"],
-            ).InterfaceIdentity("wg0", 7),
+            interface=InterfaceIdentity("wg0", 7),
         )
         manager = ManagedDeviceManager(lifecycle)
         item = manager.reconcile(managed_config(referenced=False))[0]
