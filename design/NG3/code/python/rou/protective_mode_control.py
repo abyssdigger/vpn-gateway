@@ -183,11 +183,25 @@ class ProtectiveModeControlService:
             # A malformed/abandoned root-side request must not hold the control
             # worker forever. Periodic safety audit is independent below.
             connection.settimeout(max(1.0, self.audit_interval_seconds * 2.0))
-            self._handle_connection(connection)
+            try:
+                self._handle_connection(connection)
+            except Exception as exc:
+                self._emit(
+                    OperationalLogLevel.ERROR,
+                    "control_connection_failed",
+                    diagnostic=f"{type(exc).__name__}: {exc}",
+                )
 
     def _audit_loop(self) -> None:
         while not self._stop.wait(self.audit_interval_seconds):
-            self._audit_once()
+            try:
+                self._audit_once()
+            except Exception as exc:
+                self._emit(
+                    OperationalLogLevel.ERROR,
+                    "audit_worker_failed",
+                    diagnostic=f"{type(exc).__name__}: {exc}",
+                )
 
     def _handle_connection(self, connection: socket.socket) -> None:
         with connection:
