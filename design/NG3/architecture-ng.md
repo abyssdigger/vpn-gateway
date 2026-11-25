@@ -2859,13 +2859,13 @@ Manager изменяемой peer/group realization одного явно упр
 - `VPNG-U001-R1.R3.R8.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R2` — [`full`]
 - `VPNG-U001-R1.R3.R8.R3` — [`full`]
-- `VPNG-U001-R1.R3.R8.R3.R1` — [`none`]
+- `VPNG-U001-R1.R3.R8.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8.R4` — [`full`]
 - `VPNG-U001-R1.R3.R8.R5` — [`full`]
 - `VPNG-U001-R1.R3.R8.R6` — [`full`]
 - `VPNG-U003-R3.R6.R2` — [`partial`]
 
-**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`
+**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`
 
 API
 
@@ -2913,24 +2913,26 @@ peer-health cache, поэтому один технический peer probe м�
 current reserve owner допускает failback к более предпочтительному fresh-confirmed ordinary
 candidate. Confirmed peer failure приводит к независимому пересчету затронутых groups;
 group без пригодного кандидата получает no-owner, не блокируя подтвержденный owner другой
-group. D.003 получает один полный exact peer -> AllowedIPs desired state со всеми group
-bundles; Device-wide D.002 generation публикуется только после fresh D.003 confirmation и
-изменяется при base/interface/group-policy/group-owner context change.
-`wireguard_peer_probe_executor.py` сохраняет production peer-probe execution against
-confirmed C.001 readiness. Старый internal `ManagedWireGuardConfig.shared_prefixes`
-one-group bridge удален.
+group. Для endpoint-bearing group Manager выполняет bounded candidate sequence: fresh
+technical peer `REPLY` -> один полный D.003 desired для всех groups -> fresh exact D.003
+confirmation -> fresh group endpoint attempt. Endpoint `REPLY` подтверждает кандидата;
+`NO_REPLY` отвергает только этот candidate для этой group в текущем reconciliation и
+запускает следующий разрешенный technical candidate через новый полный D.003 postcondition;
+`LOCAL_ERROR` завершает reconciliation как unconfirmed/problem и не становится negative
+reachability evidence. Если endpoint-кандидаты исчерпаны, group получает no-owner и ее
+payload prefixes удаляются следующим exact D.003 state. Любая смена ownership map возвращает
+state machine к D.003, поэтому окончательный successful pass проверяет endpoint-bearing
+groups уже относительно последнего exact ownership state. Rejected candidate set конечен
+числом membership peers и не хранится между reconciliation. Device-wide D.002 generation
+публикуется только после применимых final postconditions; group availability target входит в
+generation context, поэтому изменение target инвалидирует прежнюю realization. Peer и group
+executors используют принятые C.001 scoped-readiness/C.008 seams.
 
-**Пробел материализации:** C.001/C.008 lower seam для optional group endpoint теперь
-существует: stable group semantic owner, общий bound physical projector, scoped readiness и
-production group executor приняты в `EV-00170`. Сам D.002 Manager пока намеренно отвергает
-group policy с endpoint до mutation: еще не реализована state-machine последовательность
-`candidate peer REPLY -> D.003 exact transfer -> fresh group endpoint attempt -> accept/reject
-candidate`, включая переход к следующему разрешенному peer после confirmed group
-`NO_REPLY` и fail-closed handling `LOCAL_ERROR`. Также остаются combined
-A.007+D.002 alpha/runtime composition, periodic/explicit trigger/status publication и
-обязательная инвалидизация зависимого A.007 evidence после D.002 generation change. D.003
-split-group kernel acceptance остается отдельным lower evidence gap. Поэтому общий вклад
-D.002 в R8 и его R8.R3.R1 edge остаются неполными.
+**Пробел материализации:** D.002 component-local group endpoint semantics теперь закрыты,
+но общий R8 остается неполным до combined A.007+D.002 alpha/runtime probe-plane composition,
+periodic/explicit reconciliation trigger и status publication, обязательной инвалидизации
+зависимого A.007 evidence после D.002 generation change и focused D.003 split-group kernel
+acceptance.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 

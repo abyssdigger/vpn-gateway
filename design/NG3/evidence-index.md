@@ -367,3 +367,28 @@ and cannot execute physical I/O without the exact confirmed
 group / Device mismatches and an out-of-group target before I/O. Peer and group projection
 share `bound_probe_policy.py`; the review therefore does not accept two divergent copies of
 the same physical projector.
+
+## EV-00180 — D.002 recoverable-group endpoint candidate validation
+
+**Status:** accepted / full D.002 component-local contribution to
+`VPNG-U001-R1.R3.R8.R3.R1`  
+**Scope:** bounded candidate evaluation for endpoint-bearing WireGuard recoverable groups:
+fresh technical peer suitability, exact D.003 ownership confirmation, fresh group endpoint
+check through that ownership, group-local candidate rejection on confirmed `NO_REPLY`,
+fail-closed handling of `LOCAL_ERROR`, exact no-owner convergence when candidates are
+exhausted, reserve failback compatibility, and generation invalidation when group endpoint
+policy changes.  
+**Implementation:** `design/NG3/code/python/rou/wireguard_peer_manager.py`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_wireguard_peer_manager.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-d002-group-endpoint-review.md`.  
+**Executable evidence:** GitHub Actions run `45576973824`, unit job
+`139077314434` — PASS on source
+`7e9cc424ef2d23f00eb49465eb3a96ee4ea03ae6`.
+
+The tests prove that a group endpoint is checked only after D.003 has confirmed the complete
+candidate ownership map; confirmed endpoint `NO_REPLY` moves only that group to its next
+allowed technical candidate while sibling ownership is preserved; `LOCAL_ERROR` invalidates
+the current D.002 realization rather than acting as remote unavailability; exhausting all
+candidates converges an exact no-owner state; and a failed end-to-end check of a recovered
+preferred ordinary peer can restore the still-valid reserve owner. A change of the configured
+group endpoint changes the Device-wide D.002 generation.
