@@ -169,6 +169,7 @@ def component_specs() -> dict[str, str]:
 
 
 def component_requirement_edges(body: str) -> tuple[tuple[str, str], ...]:
+    validate_component_trace_syntax(body)
     result: list[tuple[str, str]] = []
     in_edges = False
     for line in body.splitlines():

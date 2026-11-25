@@ -621,3 +621,28 @@ The focused Manager acceptance proves that only the D.002 generation changes whi
 loses current force and old evidence is rejected. Separate A.004 ordinary-path stickiness may
 remain, demonstrating that routing history is not being misclassified as availability evidence.
 
+## EV-00290 — trace/model hygiene and canonical architecture-edge grammar
+
+**Status:** accepted  
+**Scope:** canonical list-form component trace grammar; rejection of inline/dangling typed
+edges; explicit neutral `Coverage nodes` semantics in the requirement model; optional
+component-local `Evidence:` semantics with EV-only payload when present; canonical
+materialization explanation label; independence of requirement status from component-local
+`full|partial|none`; canonical literal `projectholder` role identifier; and historical
+supersession of stale EV-00110 materialization wording.  
+**Requirements/model:** `VPNG-D001-R1.R1.R5`, `VPNG-D001-R1.R1.R6`,
+`VPNG-D001-R1.R1.R6.R1`; `design/requirements-model.md` §14.  
+**External review:** `design/reviews/NG3-2026-11-25-external-trace-model-hygiene-review.md`.  
+**Review/response:** `design/reviews/NG3-2026-11-25-trace-model-hygiene-response.md`.  
+**Implementation/evidence:** `design/NG3/architecture-ng.md`,
+`design/NG3/code/python/rou/tests/test_architecture_traceability.py`,
+`PROJECT-CONVENTIONS.md`.  
+**Executable evidence:** GitHub Actions run `45616634226` on source
+`d772f9595e3989e1f4bf77b242a6d7ae9e2d2043` — **25/25 PASS**; unit job
+`139213608704` — PASS. Actual-main lineage run `45616634403` — PASS.
+
+The review confirmed that the old green gate could miss a Requirement-looking materialization
+line following an inline `Constrained by` heading. The canonical grammar now permits only
+list-form `Implements` and `Constrained by` blocks and rejects trace-looking lines outside
+those blocks. No second/parallel validation script was introduced.
+
