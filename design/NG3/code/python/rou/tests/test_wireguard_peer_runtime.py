@@ -141,6 +141,17 @@ def base_realization(*, problem=None):
     )
 
 
+def retained_base_realization(*, confirmed_generation="base-a"):
+    return ManagedDeviceRealization(
+        device_id="wg",
+        desired_state=ManagedDeviceDesiredState.ABSENT,
+        desired_generation=None,
+        confirmed_state=ManagedWireGuardState.PRESENT,
+        confirmed_generation=confirmed_generation,
+        waiting_for_dependencies=True,
+    )
+
+
 class SnapshotObserver:
     def __init__(self, events=None):
         self.calls = 0
@@ -409,6 +420,51 @@ class WireGuardPeerRuntimeCoordinatorTests(unittest.TestCase):
             WireGuardPeerRuntimeCoordinator().reconcile(
                 self.config,
                 (base_realization(problem="D.001 failed"),),
+                (ROUTE,),
+                self.assembly,
+                snapshot_observer=self.observer,
+                probe_driver=driver,
+                ownership=self.ownership,
+                platform=NG3_LINUX_POLICY_PLATFORM,
+            )
+
+        self.assertEqual(driver.calls, [])
+        self.assertEqual(self.ownership.calls, [])
+        self.assertEqual(self.observer.calls, 0)
+
+    def test_exact_retained_d001_generation_is_usable_before_release(self):
+        driver = Driver(
+            {
+                PEER_A_TARGET: [reply()],
+                GROUP_TARGET: [reply()],
+            }
+        )
+
+        result = WireGuardPeerRuntimeCoordinator().reconcile(
+            self.config,
+            (retained_base_realization(),),
+            (ROUTE,),
+            self.assembly,
+            snapshot_observer=self.observer,
+            probe_driver=driver,
+            ownership=self.ownership,
+            platform=NG3_LINUX_POLICY_PLATFORM,
+        )
+
+        self.assertTrue(result.confirmed)
+        self.assertTrue(result.ready)
+        self.assertEqual(len(self.ownership.calls), 1)
+
+    def test_unverified_retained_d001_generation_is_rejected(self):
+        driver = Driver({})
+
+        with self.assertRaisesRegex(
+            WireGuardPeerRuntimeError,
+            "no confirmed current D.001 base generation",
+        ):
+            WireGuardPeerRuntimeCoordinator().reconcile(
+                self.config,
+                (retained_base_realization(confirmed_generation=None),),
                 (ROUTE,),
                 self.assembly,
                 snapshot_observer=self.observer,
