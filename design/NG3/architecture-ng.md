@@ -2809,9 +2809,10 @@ integration-specific; существующие внешние VPN-службы �
 
 ## [D.002] WireGuardPeerManager
 
-Manager изменяемой реализации пиров одного явно управляемого WireGuard Device. Он выбирает
-подтвержденного владельца общего префикса полезного трафика среди настроенных пиров, управляет
-поколением этой реализации и публикует текущее подтвержденное либо проблемное состояние.
+Manager изменяемой peer/group realization одного явно управляемого WireGuard Device. Он
+поддерживает отдельное техническое evidence пиров, выбирает подтвержденного владельца для
+каждой recoverable network group, управляет поколением этой realization и публикует текущее
+подтвержденное либо проблемное состояние.
 
 **Implements / supports:**
 - `VPNG-U001-R1.R3.R8` — [`partial`]
@@ -2821,76 +2822,95 @@ Manager изменяемой реализации пиров одного явн
 
 API
 
-    <подтвержденная базовая реализация WireGuard / нормализованный порядок пиров / текущий PathBinding> — заменить текущий контекст.
-    <timer or explicit reconciliation trigger> — заново наблюдать пригодность пиров и определить требуемого владельца.
-    @<current realization publication> — публиковать подтвержденного владельца и поколение реализации либо отсутствие владельца/problem.
+    <подтвержденная базовая реализация WireGuard / нормализованные peer и recoverable-group policies / текущий PathBinding> — заменить текущий контекст.
+    <timer or explicit reconciliation trigger> — fresh-наблюдать нужные peer/group evidence и определить требуемую group -> peer ownership map.
+    @<current realization publication> — публиковать подтвержденную ownership map и generation либо отсутствие владельцев/problem.
 
 Architectural decisions
 
 1. `Пир не является LogicalPathId`
-   *Все альтернативные пиры одного `wg0` остаются внутренними членами одной реализации WireGuard. Их выбор не создает дополнительные Device slots, `LogicalPathId` или `PathBinding`.*
+   *Все альтернативные пиры одного `wg0` остаются внутренними членами одной реализации WireGuard. Их выбор для одной или нескольких групп не создает дополнительные Device slots, `LogicalPathId` или `PathBinding`.*
 
-2. `Три вида поколения различаются`
-   *Поколение базовой VPN-реализации D.001, поколение конкретного интерфейса C.004 и поколение выбранного пира D.002 являются разными фактами. Замена любого из этих оснований делает зависимый контекст выбора пира устаревшим.*
+2. `Base/interface/group-ownership generations различаются`
+   *Поколение базовой VPN-реализации D.001, поколение конкретного интерфейса C.004 и D.002 realization, включающая текущую group -> peer ownership map, являются разными фактами. Замена любого основания делает зависимое evidence устаревшим. Первая безопасная реализация может консервативно менять один Device-wide D.002 generation при смене любой группы; более узкая group generation допустима только при явной безопасной привязке зависимых availability subjects.*
 
-3. `Индивидуальная проверка пира не является доступностью Profile`
-   *Каждый настроенный пир имеет постоянный внутритуннельный /32, используемый только для технического выбора пира. `reply/no_reply` для этого адреса не доказывает доступность бизнес-сети Profile и не подменяет A.007.*
+3. `Peer health не является group/Profile availability`
+   *Каждый настроенный пир имеет постоянный внутритуннельный `probe_target /32`, используемый как техническое evidence этого пира. `reply/no_reply` для него не доказывает доступность recoverable group или Profile. Optional group endpoint является отдельным semantic evidence текущего владельца группы; он обязан лежать внутри payload bundle группы и не совпадать ни с одним permanent peer `probe_target`.*
 
-4. `Состояние выбора ограничено текущими фактами`
-   *Manager хранит только текущий упорядоченный набор пиров, ограниченный прогресс подтверждения, подтвержденного владельца либо problem и поколение реализации. История попыток и долговечный журнал повторного выполнения не требуются.*
+4. `Состояние ограничено текущими фактами`
+   *Manager хранит только текущие normalized peer/group policies, ограниченный прогресс подтверждения, current group ownership, актуальные evidence/problem и generation. История попыток и долговечный журнал повторного выполнения не требуются.*
 
-5. `Начальное и неопределенное состояние не имеют владельца`
-   *После нового базового поколения общий префикс не назначается до подтверждения пригодного пира. Если фактическое состояние владельца после изменения неизвестно или не соответствует допустимой форме, Manager публикует problem/unconfirmed; A.004 не считает такой путь готовым для зависимой материализации полезного трафика.*
+5. `Каждая группа может не иметь владельца`
+   *После нового base/group context ни одна группа не обязана сохранять прежнего владельца без актуального подтверждения. Если для группы нет подтвержденного пригодного разрешенного кандидата либо фактическое ownership state неоднозначно, эта группа имеет no-confirmed-owner/problem; известный непригодный последний кандидат не сохраняется владельцем только ради continuity.*
 
-6. `Восстановление пира само по себе не означает возврат на него`
-   *Первый владелец выбирается по порядку `managed_vpn.peers`. При подтвержденной непригодности текущего владельца выбирается наиболее предпочтительный из подтвержденно пригодных. Само восстановление более предпочтительного пира не вводит отсутствующую в R8 политику принудительного возврата; такое поведение требует отдельного нормативного решения.*
+6. `Preference policy group-local и повторяет ordinary/reserve semantics Profile`
+   *Каждая группа имеет baseline order разрешенных peer memberships. Пригодный ordinary current owner sticky и не вытесняется одним восстановлением более предпочтительного ordinary peer. Reserve — свойство membership пира внутри конкретной группы, а не глобального peer; current reserve owner может быть вытеснен более предпочтительным пригодным ordinary candidate. Общая normalized ordered-membership machinery допустима только как type-safe reuse; Profile и recoverable group остаются разными semantic owners.*
 
-7. `Общий набор сетей не повторяется в списке пиров`
-   *Изменяемые общие префиксы выводятся из `destinations` включенных Profiles, использующих этот Device. Все пиры одного текущего набора являются альтернативами для полного выведенного набора. Уникальный `probe_target` каждого пира остается постоянным техническим /32 и не входит в общие префиксы.*
+7. `Peer failure и group failure имеют разные scopes`
+   *Confirmed peer failure делает независимо recoverable все группы, которыми он владеет, даже если у группы нет endpoint. Confirmed group-endpoint failure при живом current peer делает recoverable только эту группу. Candidate сначала должен иметь fresh positive peer evidence; если у группы есть endpoint, после D.003-confirmed transfer этот endpoint проверяется через нового owner. `no_reply` отклоняет кандидата для этой группы; `local_error` остается unconfirmed/problem и не является отрицательным health evidence.*
 
-8. `Поколение меняется только после подтверждения`
-   *Новое поколение реализации публикуется лишь после свежего подтверждения D.003 точного требуемого `AllowedIPs`. После публикации нового поколения прежнее свидетельство доступности Profile считается устаревшим, даже если `LogicalPathId` и ifindex не изменились.*
+8. `One-group case является частным случаем`
+   *Одна группа, содержащая весь mutable payload-prefix set и разрешающая все managed peers без собственного endpoint, семантически совпадает с текущим one-selected-peer D.002 prototype. Отдельный legacy runtime mode для этого случая не нужен.*
 
-9. `Текущие доказательства не требуют отдельного ограничения трафика на время переключения`
-   *`EV-00050` не выявил потерь или передачи полезного трафика третьему пиру при проверенном переносе полного состояния. Поэтому отдельное защитное ограничение трафика не вводится без новых доказательств. Частично примененное или неоднозначное состояние никогда не считается новым подтвержденным поколением и переводит путь в problem/unconfirmed.*
+9. `Generation публикуется только после применимых fresh postconditions`
+   *Новая D.002 realization считается confirmed только после D.003 fresh exact `AllowedIPs` postcondition и, когда у группы настроен endpoint, после применимого positive group check через нового owner. Evidence предыдущего owner не остается current только потому, что `LogicalPathId`, `wg0` и ifindex не изменились.*
 
-**Материализация:** `design/NG3/code/python/rou/wireguard_peer_manager.py` содержит current-only Manager core. Он принимает подтвержденный D.001 base generation и current path realization, использует отдельный peer-probe port с `WireGuardPeerProbeOwner`, сохраняет текущего владельца при его fresh `reply` без принудительного failback, после `no_reply` выбирает наиболее предпочтительный из fresh-confirmed пригодных пиров и передает D.003 полный desired `AllowedIPs` state. `local_error` текущего владельца не трактуется как подтвержденная непригодность и переводит current projection в problem/unconfirmed. Новое peer-realization generation вычисляется и публикуется только после confirmed D.003 postcondition; смена base generation, interface generation, ordered peer context, shared-prefix set либо владельца меняет generation. Наличие `problem` никогда не сохраняет прежнее generation как current evidence. `design/NG3/code/python/rou/wireguard_peer_probe_executor.py` материализует production peer-probe port: он требует точный `WireGuardPeerProbeOwner`/target/current-interface key в отдельном confirmed C.001 precondition и только после этого вызывает общий C.008 physical ICMP Driver.
+10. `Shared probe plane не сливает semantic evidence`
+    *Peer probes и будущие group endpoint probes используют общий C.008 physical ICMP contract и общий C.001 collision-free convergence scope вместе с A.007 только через distinct semantic owners и owner-scoped readiness. Физически совпадающие lower objects могут переиспользоваться, но peer/group/Profile verdicts не объединяются.*
 
-**Пробел материализации:** D.002 core еще не подключен к alpha/runtime composition. Не материализованы: совместное добавление A.007 и peer-probe demand в один нижний C.001 convergence scope с раздельными owner-subset readiness decisions; периодический/explicit trigger D.002; публикация D.002 realization в A.008; и обязательная инвалидизация A.007 Profile-availability evidence при смене peer generation. Поэтому D.002 остается [`partial`] и R8 в целом не закрывается.
+**Материализация:** текущий `wireguard_peer_manager.py` материализует one-group degenerate
+case: один shared-prefix bundle, один selected peer, sticky ordinary selection, peer-specific
+technical probes и D.003 exact convergence. `wireguard_peer_probe_executor.py` materializes
+production peer-probe execution against confirmed C.001 readiness.
+
+**Пробел материализации:** generalized R8 требует normalized recoverable-group input,
+group-local candidate/reserve policy, independent group ownership state, optional group endpoint
+probe owner/executor, multi-group generation/publication and alpha/runtime composition. До этой
+перестройки также остается ранее выявленный C.001 owner-subset readiness gap и обязательная
+инвалидизация зависимого A.007 evidence. Поэтому D.002 остается [`partial`].
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 
-Direct Enforcer одного полного требуемого состояния `AllowedIPs` для текущей базовой
-реализации управляемого WireGuard. Он не выбирает пира, не планирует проверки и не владеет
-поколением смысловой реализации.
+Direct Enforcer одного полного требуемого `AllowedIPs` state для текущей базовой реализации
+управляемого WireGuard. Он не выбирает peer/group owners, не планирует проверки и не владеет
+generation смысловой realization.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R8` — [`full`]
+- `VPNG-U001-R1.R3.R8` — [`partial`]
 
 **Evidence:** `EV-00050`, `EV-00100`
 
 API
 
-    @converge(desired) — заново наблюдать точные AllowedIPs текущих пиров, при необходимости применить полное требуемое состояние владельца, затем повторить наблюдение и вернуть SUCCESS только при точном совпадении с требуемым состоянием.
+    @converge(desired) — заново наблюдать точные AllowedIPs текущих пиров, при необходимости применить полное требуемое состояние, затем повторить наблюдение и вернуть SUCCESS только при точном совпадении с требуемым состоянием.
 
 Architectural decisions
 
 1. `Применяется полное требуемое состояние`
-   *Вызывающий компонент передает полное состояние всех затронутых пиров: постоянные проверочные /32 сохраняются, общий префикс полезного трафика присутствует ровно у выбранного владельца либо отсутствует у всех. Последовательные операции добавления и удаления не являются смысловым API.*
+   *Вызывающий компонент передает полный peer -> AllowedIPs projection для всех managed peers. Permanent peer-probe /32 сохраняются; mutable payload bundles могут одновременно принадлежать разным peers, причем каждый effective mutable prefix присутствует ровно у требуемого owner либо отсутствует у всех в no-owner state. Последовательные операции добавления/удаления отдельных групп не являются смысловым API.*
 
 2. `Успех определяется свежим подтверждением`
-   *Код завершения `wg set` не является подтверждением. Ошибка наблюдения, отсутствие пира, неоднозначный владелец или несовпадение после применения дают failure/unconfirmed.*
+   *Код завершения `wg set` не является подтверждением. Ошибка наблюдения, отсутствие пира, неоднозначное состояние или несовпадение после применения дают failure/unconfirmed.*
 
-3. `Переключение пира не переписывает базовую конфигурацию`
-   *Обычный перенос владельца не переписывает базовую конфигурацию D.001 и не требует перезапуска `wg0`. Полный перезапуск базовой реализации, напротив, уничтожает изменяемое состояние владельца и требует нового цикла выбора D.002.*
+3. `Переключение group ownership не переписывает базовую конфигурацию`
+   *Обычный перенос одной или нескольких групп не переписывает базовую конфигурацию D.001 и не требует перезапуска `wg0`. Полный перезапуск базовой реализации уничтожает изменяемое ownership state и требует нового цикла D.002.*
 
 4. `В Enforcer нет скрытой политики выбора`
-   *D.003 не знает порядок предпочтения пиров, hysteresis, смысл Profile или историю доступности. Его задача ограничена достижением точного нижнего postcondition одного вызова.*
+   *D.003 не знает baseline order, ordinary/reserve roles, group endpoints, hysteresis, смысл Profile или историю availability. Его задача ограничена достижением exact lower postcondition одного вызова.*
 
 5. `Наблюдение не превращается в заявление об атомарности`
-   *Текущие доказательства позволяют применять полное состояние без отдельного защитного ограничения трафика, но не объявляют `wg set` универсально транзакционным. Архитектурная гарантия строится на границе свежего подтверждения, а не на предположении о неделимости команды.*
+   *Архитектурная гарантия строится на fresh-confirmed exact postcondition, а не на предположении, что `wg set` является универсально неделимой транзакцией. Неопределенное/частично примененное состояние не является подтвержденной D.002 realization.*
 
-**Материализация:** `design/NG3/code/python/rou/wireguard_peer_ownership.py` содержит bounded production Enforcer полного desired `AllowedIPs` state: перед мутацией fresh-проверяет D.001-owned interface identity, не принимает неожиданный/неполный peer set, применяет один полный `wg set` state и считает успехом только свежо наблюденное точное postcondition. Командная ошибка сама по себе не определяет verdict: если fresh post-state exact, результат confirmed; неоднозначное или несовпадающее состояние остается unconfirmed. Kernel integration EV-00100 подтверждает перенос общего префикса между двумя реальными пирами с сохранением постоянных probe /32 и без перезапуска текущего `wg0`.
+**Материализация:** `wireguard_peer_ownership.py` уже принимает arbitrary complete
+per-peer `allowed_ips` tuples, fresh-проверяет D.001-owned interface identity, не принимает
+unexpected/incomplete peer set, применяет один полный `wg set` state и fresh-confirm exact
+postcondition. Эта lower форма структурно способна представить split ownership нескольких
+groups.
+
+**Пробел материализации:** существующее kernel evidence EV-00100 подтверждает перенос одного
+общего payload prefix между двумя peers, но не одновременный exact split нескольких group
+bundles между разными peers. После расширения R8 focused executable acceptance этой формы
+обязателен до возврата D.003 edge в [`full`].
 
 # Annex E. VPN-GATE-managed host state components
 
