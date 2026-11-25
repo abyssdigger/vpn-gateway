@@ -1595,7 +1595,12 @@ Implementation
     design/NG3/code/python/rou/controller_restart.py — stop-then-start composition without hidden resume state.
     design/NG3/code/python/rou/alpha_runtime.py — daemon/bootstrap composition, host helpers/publication and final systemd readiness/termination boundary.
 
-**Evidence:** `EV-00000`
+Current alpha normal reconciliation also orders D.001 base confirmation -> payload/full probe-plane
+convergence -> D.002 peer/group reconciliation before current-status publication. The same normal
+reconciliation path is used by the periodic audit and the protective-mode explicit normal-release
+precondition; startup performs the initial D.002 trigger before READY publication.
+
+**Evidence:** `EV-00000`, `EV-00240`
 
 API
 
@@ -1985,7 +1990,7 @@ Agent, составляющий truthful current user-facing status из authori
 - `VPNG-D001-R1.R1.R5` — [`full`]
 - `VPNG-D001-R3.R1.R1` — [`full`]
 
-**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status. Тот же current snapshot принимает `ManagedDeviceRealization` от A.012 и сохраняет для каждого явно управляемого Device желаемое и подтвержденное поколения базовой VPN-реализации, confirmed state и problem/waiting state; A.008 не выводит эти значения из configuration intent самостоятельно. Snapshot также принимает authoritative `WireGuardPeerRealization` от D.002 — current group owners, D.002 generation и problem state — как отдельную typed projection; это состояние входит в semantic snapshot/JSON, но не расширяет нормативную compact-text grammar A.009 автоматически. **Evidence:** `EV-00220`.
+**Материализация:** release version читается из канонического корневого `VERSION` и входит в текущий A.008 snapshot; alpha/release presentation публикует ее и в JSON, и в compact text status. Тот же current snapshot принимает `ManagedDeviceRealization` от A.012 и сохраняет для каждого явно управляемого Device желаемое и подтвержденное поколения базовой VPN-реализации, confirmed state и problem/waiting state; A.008 не выводит эти значения из configuration intent самостоятельно. Snapshot также принимает authoritative `WireGuardPeerRealization` от D.002 — current group owners, D.002 generation и problem state — как отдельную typed projection; это состояние входит в semantic snapshot/JSON, но не расширяет нормативную compact-text grammar A.009 автоматически. Alpha теперь подает результат каждого состоявшегося D.002 trigger в A.008; если новый D.002 trigger не состоялся из-за broader D.001/C.001 failure, прежняя projection удаляется и поле помечается unknown. Локальная D.002 problem переводит runtime в DEGRADED, сохраняя уже подтвержденные unrelated effective/availability projections. **Evidence:** `EV-00220`, `EV-00240`.
 
 API
 
@@ -2893,7 +2898,7 @@ Manager изменяемой peer/group realization одного явно упр
 - `VPNG-U001-R1.R3.R8.R6` — [`full`]
 - `VPNG-U003-R3.R6.R2` — [`partial`]
 
-**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`, `EV-00210`, `EV-00230`
+**Evidence:** `EV-00050`, `EV-00120`, `EV-00130`, `EV-00150`, `EV-00170`, `EV-00180`, `EV-00200`, `EV-00210`, `EV-00230`, `EV-00240`
 
 API
 
@@ -2965,12 +2970,19 @@ owner-scoped C.001 readiness. Group endpoint readiness наблюдается п
 current path удаляет retained Manager state; confirmed no-owner realization остается
 отличимой от local/unconfirmed runtime problem.
 
-**Пробел материализации:** coordinator core закрыт `EV-00230`, C.001 production lower
-convergence/scoped-A.007 consumption — `EV-00210`, а A.008 уже способен хранить
-authoritative D.002 realization в semantic status snapshot (`EV-00220`). Общий R8 остается
-неполным до вызова coordinator из periodic/explicit alpha reconciliation, передачи результата
-в A.008 publication path и инвалидизации зависимого A.007 evidence после D.002 generation
-change. D.003 split-group kernel acceptance закрыт EV-00190.
+Alpha runtime теперь вызывает retained coordinator после подтвержденной full-union C.001
+probe-routing convergence: один initial trigger выполняется до READY, periodic audit повторяет
+его на каждом normal reconciliation, а protective-mode normal-release check использует тот же
+explicit reconciliation path. Authoritative D.002 realizations передаются A.008 перед
+publication. Confirmed no-owner остается валидным current state и не является local runtime
+failure; D.002 problem дает DEGRADED, сохраняя подтвержденный unrelated effective state.
+Если новый D.002 trigger не состоялся, старая status projection не сохраняется как current.
+
+**Пробел материализации:** runtime trigger/status composition закрыта `EV-00240`. Общий R8
+остается [`partial`] только из-за `VPNG-U001-R1.R3.R8.R6`: A.007 availability evidence
+еще не включает применимое D.002 generation в currentness identity и потому требует отдельной
+инвалидации после подтвержденной смены group ownership. D.003 split-group kernel acceptance
+закрыт EV-00190.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 

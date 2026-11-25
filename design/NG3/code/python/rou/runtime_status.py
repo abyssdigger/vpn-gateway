@@ -233,6 +233,22 @@ class RuntimeStatusAgent:
             if profile.enabled
         )
 
+    def mark_degraded(
+        self,
+        *,
+        problem: str,
+        unknown_fields: Iterable[str] = (),
+    ) -> None:
+        """Report a local owner problem without invalidating unrelated projections."""
+        if not isinstance(problem, str) or not problem:
+            raise ValueError("problem must be non-empty text")
+        fields = tuple(sorted(set(unknown_fields)))
+        if any(not isinstance(item, str) or not item for item in fields):
+            raise ValueError("unknown fields must be non-empty text")
+        self._readiness = RuntimeReadiness.DEGRADED
+        self._problems = (problem,)
+        self._unknown = fields
+
     def mark_unconfirmed(
         self,
         *,

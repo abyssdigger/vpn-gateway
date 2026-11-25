@@ -262,6 +262,42 @@ availability_check = "default"
         self.assertEqual(effective[0].ordered_paths[0].ifname, "vpn0")
         self.assertEqual(effective[0].ordered_paths[0].ifindex, 11)
 
+    def test_degraded_owner_problem_preserves_confirmed_effective_state(self):
+        agent = RuntimeStatusAgent(self.configured())
+        path = LogicalPathId("ovpn", 0, 0)
+        endpoint = InterfaceIdentity("vpn0", 11)
+        agent.confirm_effective(
+            (
+                PayloadProfileRequest(
+                    "alpha",
+                    Direction.OUTBOUND,
+                    (IPv4Network("10.253.0.0/24"),),
+                    (path,),
+                ),
+            ),
+            (PathBinding(path, endpoint),),
+        )
+        agent.mark_degraded(
+            problem="D.002 current realization is unconfirmed",
+            unknown_fields=("wireguard_peer_realizations",),
+        )
+
+        snapshot = agent.snapshot()
+        self.assertIs(snapshot.readiness, RuntimeReadiness.DEGRADED)
+        self.assertIsNotNone(snapshot.confirmed_effective_state)
+        self.assertEqual(
+            snapshot.confirmed_effective_state[0].ordered_paths[0].ifindex,
+            11,
+        )
+        self.assertEqual(
+            snapshot.blocking_problems,
+            ("D.002 current realization is unconfirmed",),
+        )
+        self.assertEqual(
+            snapshot.unknown_or_unconfirmed_fields,
+            ("wireguard_peer_realizations",),
+        )
+
     def test_failure_invalidates_previous_confirmed_effective_state(self):
         agent = RuntimeStatusAgent(self.configured())
         path = LogicalPathId("ovpn", 0, 0)

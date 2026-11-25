@@ -99,6 +99,11 @@ from .managed_wireguard_adapter import (
     LinuxManagedWireGuardAdapter,
     ManagedWireGuardState,
 )
+from .wireguard_peer_ownership import WireGuardPeerOwnershipEnforcer
+from .wireguard_peer_runtime import (
+    WireGuardPeerRuntimeCoordinator,
+    WireGuardPeerRuntimeResult,
+)
 from .host_publication_adapter import HostPublicationAdapter
 from .linux_host_publication import (
     HostPublicationConvergenceResult,
@@ -787,6 +792,47 @@ def reconcile_alpha_availability_once(
     return result
 
 
+def reconcile_alpha_wireguard_peers_once(
+    prepared: AlphaPreparedPolicy,
+    managed_realizations: tuple[ManagedDeviceRealization, ...],
+    coordinator: WireGuardPeerRuntimeCoordinator,
+    runner: SubprocessNftRunner,
+    probe_driver: LinuxIcmpProbeDriver,
+    ownership: WireGuardPeerOwnershipEnforcer,
+) -> WireGuardPeerRuntimeResult:
+    """Run one D.002 trigger from the current accepted alpha probe plane."""
+    if prepared.last_probe_assembly is None:
+        raise AlphaRuntimeError(
+            "WireGuard peer reconciliation requires a current probe desired assembly"
+        )
+    return coordinator.reconcile(
+        prepared.current_config,
+        managed_realizations,
+        prepared.last_path_routes,
+        prepared.last_probe_assembly,
+        snapshot_observer=LinuxStructuralPolicyBackend(
+            runner=runner,
+            namespace=ALPHA_NAMESPACE,
+            platform=NG3_LINUX_POLICY_PLATFORM,
+        ),
+        probe_driver=probe_driver,
+        ownership=ownership,
+        platform=NG3_LINUX_POLICY_PLATFORM,
+    )
+
+
+def _wireguard_peer_problem(
+    result: WireGuardPeerRuntimeResult,
+) -> str | None:
+    for realization in result.realizations:
+        if realization.problem is not None:
+            return (
+                f"managed WireGuard Device {realization.device_id!r}: "
+                f"{realization.problem}"
+            )
+    return None
+
+
 def _domain_spec() -> ManagedNetworkDomainSpec:
     return ManagedNetworkDomainSpec(
         namespace=ALPHA_NAMESPACE,
@@ -928,8 +974,18 @@ def run_alpha_runtime(
         ) from exc
 
     runner = SubprocessNftRunner()
+    managed_wireguard_adapter = LinuxManagedWireGuardAdapter(
+        runner,
+        ALPHA_NAMESPACE,
+    )
     managed_device_manager = ManagedDeviceManager(
-        LinuxManagedWireGuardAdapter(runner, ALPHA_NAMESPACE)
+        managed_wireguard_adapter
+    )
+    wireguard_peer_runtime = WireGuardPeerRuntimeCoordinator()
+    wireguard_peer_ownership = WireGuardPeerOwnershipEnforcer(
+        runner,
+        ALPHA_NAMESPACE,
+        managed_wireguard_adapter,
     )
     managed_realizations_holder: dict[str, tuple[ManagedDeviceRealization, ...]] = {
         "current": ()
@@ -1114,6 +1170,7 @@ def run_alpha_runtime(
                 )
                 managed_realizations_holder["current"] = shutdown_realizations
                 status_agent.confirm_managed_devices(shutdown_realizations)
+                status_agent.confirm_wireguard_peers(())
                 problem = _managed_device_problem(
                     shutdown_realizations,
                     require_absent=True,
@@ -1136,16 +1193,58 @@ def run_alpha_runtime(
             runner,
             probe_driver,
         )
-        if not availability_start.confirmed:
+        wireguard_start: WireGuardPeerRuntimeResult | None = None
+        wireguard_start_error: str | None = None
+        if (
+            availability_start.probe_routing is not None
+            and availability_start.probe_routing.confirmed
+        ):
+            try:
+                wireguard_start = reconcile_alpha_wireguard_peers_once(
+                    prepared,
+                    managed_realizations_holder["current"],
+                    wireguard_peer_runtime,
+                    runner,
+                    probe_driver,
+                    wireguard_peer_ownership,
+                )
+                status_agent.confirm_wireguard_peers(
+                    wireguard_start.realizations
+                )
+                wireguard_start_error = _wireguard_peer_problem(
+                    wireguard_start
+                )
+            except Exception as exc:
+                status_agent.confirm_wireguard_peers(())
+                wireguard_start_error = (
+                    "WireGuard peer reconciliation failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+        if (
+            not availability_start.confirmed
+            or wireguard_start_error is not None
+        ):
             host_cleanup, managed_cleanup_error, stopped = stop_owned_runtime()
             status_agent.mark_unconfirmed(
                 readiness=RuntimeReadiness.FAILED,
                 problem=(
-                    availability_start.diagnostic
+                    wireguard_start_error
+                    or availability_start.diagnostic
                     or (
                         "availability startup cycle is not confirmed: "
                         f"{availability_start.status.value}"
                     )
+                ),
+                unknown_fields=(
+                    (
+                        "confirmed_effective_state",
+                        "wireguard_peer_realizations",
+                    )
+                    if (
+                        prepared.current_config.wireguard_groups
+                        and wireguard_start is None
+                    )
+                    else ("confirmed_effective_state",)
                 ),
             )
             status_publisher.publish(status_agent.snapshot())
@@ -1155,7 +1254,10 @@ def run_alpha_runtime(
                 "start_failed",
                 status="availability_unready",
                 availability=availability_start.status.value,
-                diagnostic=availability_start.diagnostic,
+                diagnostic=(
+                    wireguard_start_error
+                    or availability_start.diagnostic
+                ),
                 host_cleanup=host_cleanup.status.value,
                 managed_device_cleanup_error=managed_cleanup_error,
                 managed_cleanup=(
@@ -1181,12 +1283,15 @@ def run_alpha_runtime(
             status_agent.confirm_managed_devices(managed_realizations)
             managed_problem = _managed_device_problem(managed_realizations)
             if managed_problem is not None:
+                status_agent.confirm_wireguard_peers(())
                 return (
                     AlphaReconcileResult(
                         AlphaReconcileStatus.FAILED,
                         None,
                         diagnostic=managed_problem,
                     ),
+                    None,
+                    None,
                     None,
                 )
             result = reconcile_alpha_payload_once(
@@ -1203,14 +1308,55 @@ def run_alpha_runtime(
                 if result.ready
                 else None
             )
-            return result, availability_result
+            wireguard_result = None
+            wireguard_error = None
+            if (
+                availability_result is not None
+                and availability_result.probe_routing is not None
+                and availability_result.probe_routing.confirmed
+            ):
+                try:
+                    wireguard_result = reconcile_alpha_wireguard_peers_once(
+                        prepared,
+                        managed_realizations,
+                        wireguard_peer_runtime,
+                        runner,
+                        probe_driver,
+                        wireguard_peer_ownership,
+                    )
+                    status_agent.confirm_wireguard_peers(
+                        wireguard_result.realizations
+                    )
+                    wireguard_error = _wireguard_peer_problem(
+                        wireguard_result
+                    )
+                except Exception as exc:
+                    status_agent.confirm_wireguard_peers(())
+                    wireguard_error = (
+                        "WireGuard peer reconciliation failed: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+            if wireguard_result is None:
+                status_agent.confirm_wireguard_peers(())
+            return (
+                result,
+                availability_result,
+                wireguard_result,
+                wireguard_error,
+            )
 
         def normal_release_confirmed_unlocked() -> bool:
-            result, availability_result = reconcile_normal_once_unlocked()
+            (
+                result,
+                availability_result,
+                _wireguard_result,
+                wireguard_error,
+            ) = reconcile_normal_once_unlocked()
             confirmed = (
                 result.ready
                 and availability_result is not None
                 and availability_result.confirmed
+                and wireguard_error is None
             )
             if not confirmed:
                 log(
@@ -1229,6 +1375,7 @@ def run_alpha_runtime(
                         if availability_result is not None
                         else None
                     ),
+                    wireguard_diagnostic=wireguard_error,
                 )
             return confirmed
 
@@ -1368,20 +1515,50 @@ def run_alpha_runtime(
             # route changes after successful start are administrator-owned and do
             # not gate core managed-domain reconciliation.
             with normal_operation_lock:
-                result, availability_result = reconcile_normal_once_unlocked()
+                (
+                    result,
+                    availability_result,
+                    wireguard_result,
+                    wireguard_error,
+                ) = reconcile_normal_once_unlocked()
             if (
                 result.ready
                 and availability_result is not None
                 and availability_result.confirmed
+                and wireguard_error is None
             ):
                 status_agent.confirm_effective(
                     prepared.last_profiles,
                     prepared.last_bindings,
+                    readiness=RuntimeReadiness.READY,
                 )
                 if availability_result.observation is not None:
                     status_agent.confirm_availability(
                         availability_result.observation.projection.problem_owners
                     )
+            elif (
+                result.ready
+                and availability_result is not None
+                and availability_result.confirmed
+                and wireguard_error is not None
+            ):
+                status_agent.confirm_effective(
+                    prepared.last_profiles,
+                    prepared.last_bindings,
+                    readiness=RuntimeReadiness.DEGRADED,
+                )
+                if availability_result.observation is not None:
+                    status_agent.confirm_availability(
+                        availability_result.observation.projection.problem_owners
+                    )
+                status_agent.mark_degraded(
+                    problem=wireguard_error,
+                    unknown_fields=(
+                        ("wireguard_peer_realizations",)
+                        if wireguard_result is None
+                        else ()
+                    ),
+                )
             else:
                 status_agent.mark_unconfirmed(
                     readiness=RuntimeReadiness.DEGRADED,
@@ -1398,6 +1575,14 @@ def run_alpha_runtime(
                             if availability_result is not None
                             else f"alpha reconcile failed: {result.status.value}"
                         )
+                    ),
+                    unknown_fields=(
+                        (
+                            "confirmed_effective_state",
+                            "wireguard_peer_realizations",
+                        )
+                        if prepared.current_config.wireguard_groups
+                        else ("confirmed_effective_state",)
                     ),
                 )
             current_problem_owners = (
