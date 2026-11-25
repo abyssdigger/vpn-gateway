@@ -2856,9 +2856,9 @@ Direct Enforcer одного полного требуемого состоян�
 поколением смысловой реализации.
 
 **Implements / supports:**
-- `VPNG-U001-R1.R3.R8` — [`partial`]
+- `VPNG-U001-R1.R3.R8` — [`full`]
 
-**Evidence:** `EV-00050`
+**Evidence:** `EV-00050`, `EV-00100`
 
 API
 
@@ -2881,9 +2881,7 @@ Architectural decisions
 5. `Наблюдение не превращается в заявление об атомарности`
    *Текущие доказательства позволяют применять полное состояние без отдельного защитного ограничения трафика, но не объявляют `wg set` универсально транзакционным. Архитектурная гарантия строится на границе свежего подтверждения, а не на предположении о неделимости команды.*
 
-**Материализация:** `design/NG3/code/python/rou/wireguard_peer_ownership.py` содержит production-shaped bounded Enforcer полного desired `AllowedIPs` state: перед мутацией fresh-проверяет D.001-owned interface identity, не принимает неожиданный/неполный peer set, применяет один полный `wg set` state и считает успехом только свежо наблюденное точное postcondition. Командная ошибка сама по себе не определяет verdict: если fresh post-state exact, результат confirmed; неоднозначное или несовпадающее состояние остается unconfirmed. Kernel integration этого production Enforcer еще не выполнен, поэтому component-local materialization остается [`partial`].
-
-**Пробел материализации:** production Enforcer еще не прошел отдельную kernel integration с реальным WireGuard interface, реальными peer rows и runtime переносом полного `AllowedIPs` state; до этого D.003 остается [`partial`].
+**Материализация:** `design/NG3/code/python/rou/wireguard_peer_ownership.py` содержит bounded production Enforcer полного desired `AllowedIPs` state: перед мутацией fresh-проверяет D.001-owned interface identity, не принимает неожиданный/неполный peer set, применяет один полный `wg set` state и считает успехом только свежо наблюденное точное postcondition. Командная ошибка сама по себе не определяет verdict: если fresh post-state exact, результат confirmed; неоднозначное или несовпадающее состояние остается unconfirmed. Kernel integration EV-00100 подтверждает перенос общего префикса между двумя реальными пирами с сохранением постоянных probe /32 и без перезапуска текущего `wg0`.
 
 # Annex E. VPN-GATE-managed host state components
 
