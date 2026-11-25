@@ -161,10 +161,16 @@ The global process-correction gate and all repository/Git authorization rules ar
 
 All CD commits use the dedicated working branch for the cycle/current continuation.
 
-Commit publication, verification, publication-failure behavior, `main` protection and
-snapshot rules are defined only by `AGENTS.md`.
+Commit publication, remote-publication verification, publication-failure behavior, `main`
+protection and snapshot rules are defined only by `AGENTS.md`.
 
-A publication failure is therefore an immediate CD stop condition.
+Failure to publish a commit, failure to confirm the expected remote ref, or ambiguous remote
+state is therefore an immediate CD stop condition.
+
+A failed CI/test/review/evidence result after an unambiguously successful publication is not
+itself a CD stop condition. Diagnose it before further mutation and, when `AGENTS.md` permits
+a bounded corrective change within the current accepted scope, fix and re-validate it as part
+of the same CD.
 
 ## 9. Time checks
 
@@ -215,7 +221,9 @@ Early stop before the session boundary is appropriate only when:
 - a required human decision blocks meaningful continuation;
 - an external blocker prevents further meaningful work;
 - there is no sufficiently defined unblocked development block;
-- publication fails;
+- publication fails or remote publication state is ambiguous;
+- a validation failure cannot be safely corrected within the current authorized and accepted
+  scope without a human decision or exceptional repository recovery;
 - the remaining session margin is insufficient for safe work plus handoff.
 
 Do not manufacture work just to fill the clock.
