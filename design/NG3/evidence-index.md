@@ -482,3 +482,27 @@ configuration or kernel state. Equivalent snapshots remain subject to the existi
 change-driven publication contract. A.009 compact text remains unchanged: its normative
 Device/Profile grammar is not extended merely because a richer semantic snapshot exists.
 
+## EV-00230 — D.002 retained runtime coordinator core
+
+**Status:** accepted / D.002 runtime-coordinator core; alpha trigger/status feed remain pending  
+**Scope:** one retained `WireGuardPeerManager` per active managed WireGuard Device; exact
+confirmed D.001 base-generation prerequisite; exact current path and probe-owner-union
+validation before mutation; fresh owner-scoped C.001 readiness immediately before each peer or
+group physical attempt; D.003-before-group-probe sequencing; Manager-state discard when the
+current path disappears; and explicit separation of confirmed no-owner from local runtime
+failure.  
+**Implementation:** `design/NG3/code/python/rou/wireguard_peer_runtime.py`,
+`design/NG3/implementation-traceability.md`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_wireguard_peer_runtime.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-d002-runtime-coordinator-review.md`.  
+**Executable evidence:** GitHub Actions run `45587522999`, unit job
+`139112974553` — PASS on source
+`3d3860e7bc253444bb3072d1f37ae6d562ce284c`.
+
+The focused suite proves retained sticky Manager state across repeated triggers, state discard
+when the current path disappears, fail-closed rejection of inconsistent D.001 generation and
+stale D.002 owner/path inputs before probe or D.003 mutation, and exact sequencing
+`fresh peer readiness -> peer probe -> D.003 -> fresh group readiness -> group probe`.
+A realization with no confirmed group owner but no local problem remains a confirmed D.002
+state rather than being conflated with a coordinator failure.
+
