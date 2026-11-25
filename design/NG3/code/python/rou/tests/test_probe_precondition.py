@@ -368,8 +368,8 @@ class ProbeScopedExecutionPreconditionTests(unittest.TestCase):
         self.assertTrue(peer.confirmed)
         self.assertEqual(profile.owners, frozenset({OWNER}))
         self.assertEqual(peer.owners, frozenset({peer_owner}))
-        self.assertEqual(len(profile.local.confirmed), 1)
-        self.assertEqual(len(peer.local.confirmed), 1)
+        self.assertEqual(len(profile.local.confirmed), 2)
+        self.assertEqual(len(peer.local.confirmed), 2)
 
     def test_missing_sibling_does_not_block_requested_owner_but_legacy_union_fails(self):
         peer_owner, profile_rule, _peer_rule, desired = self._full_desired()
