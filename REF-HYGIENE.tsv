@@ -42,3 +42,5 @@ ADD_TAG	ng3-snapshot-shared-probe-plane-readiness-design-source	d67bf873c46f4114
 DEL_BRANCH	ng3-shared-probe-plane-design-cdc-20261125
 ADD_TAG	ng3-snapshot-binding-release-compatibility-source	34a202113bf0148511906989e1c158440d71f8b2	Binding-release compatibility policy and requirement classification.
 DEL_BRANCH	ng3-compatibility-wg-groups-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-recoverable-groups-source	ae33615f08b5ebd69e8c9e6be001c31640fc84e6	WireGuard recoverable network-group requirement and architecture design.
+DEL_BRANCH	ng3-wireguard-recoverable-groups-cdc-20261125
