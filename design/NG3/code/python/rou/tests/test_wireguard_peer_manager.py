@@ -5,7 +5,6 @@ import unittest
 
 from rou.binding import LogicalPathId
 from rou.interface_identity import InterfaceIdentity
-from rou.managed_wireguard_adapter import ManagedWireGuardState
 from rou.probe_runtime import (
     ProbeTechnicalObservation,
     ProbeTechnicalOutcome,
@@ -269,6 +268,28 @@ class WireGuardPeerManagerTests(unittest.TestCase):
         )
         self.assertEqual(second.selected_peer_id, "b")
         self.assertNotEqual(second.generation, first.generation)
+
+    def test_duplicate_peer_identity_is_rejected_before_probe_or_mutation(self):
+        duplicate = ManagedWireGuardPeerConfig(
+            peer_id="a",
+            public_key="other-key",
+            endpoint_address=IPv4Address("198.51.100.11"),
+            endpoint_port=51820,
+            probe_target=IPv4Address("10.201.0.9"),
+        )
+        probe = Probe({"a": [reply()]})
+        ownership = Ownership()
+        with self.assertRaisesRegex(ValueError, "peer IDs must be unique"):
+            WireGuardPeerManager().reconcile(
+                "wg",
+                config(peers=(A, duplicate)),
+                base_generation="base-a",
+                path_route=ROUTE,
+                probe=probe,
+                ownership=ownership,
+            )
+        self.assertEqual(probe.calls, [])
+        self.assertEqual(ownership.calls, [])
 
     def test_base_or_interface_generation_change_changes_peer_generation(self):
         manager = WireGuardPeerManager()

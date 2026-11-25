@@ -24,7 +24,6 @@ from .route_priority_inventory import RoutePriorityPathRoute
 from .wireguard_peer_ownership import (
     WireGuardPeerAllowedIPs,
     WireGuardPeerOwnershipDesired,
-    WireGuardPeerOwnershipEnforcer,
     WireGuardPeerOwnershipResult,
 )
 
@@ -136,7 +135,7 @@ class _PeerContext:
     base_generation: str
     path_route: RoutePriorityPathRoute
     ordered_peers: tuple[ManagedWireGuardPeerConfig, ...]
-    shared_prefixes: tuple[object, ...]
+    shared_prefixes: tuple[IPv4Network, ...]
 
 
 @dataclass(slots=True)
@@ -345,6 +344,11 @@ class WireGuardPeerManager:
         if not config.peers:
             raise WireGuardPeerManagerError(
                 "managed WireGuard peer set must not be empty"
+            )
+        peer_ids = tuple(peer.peer_id for peer in config.peers)
+        if len(peer_ids) != len(set(peer_ids)):
+            raise WireGuardPeerManagerError(
+                "managed WireGuard peer IDs must be unique"
             )
         return _PeerContext(
             device_id=device_id,
