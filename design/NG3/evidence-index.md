@@ -207,7 +207,9 @@ responsibilities.
 
 ## EV-00110 — reusable WireGuard peer-probe lower seam
 
-**Status:** accepted / C.008 full, C.001 partial for R8  
+**Status:** accepted historical lower-seam evidence  
+**Historical baseline disposition:** C.008 full; C.001 partial for R8 at this review baseline.  
+**Current materialization superseded by:** `EV-00200`, `EV-00210`, `EV-00280`.  
 **Scope:** removal of A.007 semantic-owner coupling from the physical ICMP Driver; distinct
 `WireGuardPeerProbeOwner(device_id, peer_id)`; shared deterministic probe resource allocation;
 peer-specific /32 route/RPDB/local-admission projection through one current path; and generic
@@ -225,8 +227,10 @@ The tests prove that the peer-owner projection is physically equivalent to the a
 A.007 probe route/RPDB/local-admission shape while retaining a distinct semantic owner, and
 that the extracted physical ICMP context renders the same command as the legacy A.007 wrapper.
 No new Linux mechanism is introduced, so separate kernel evidence is not required for this
-refactor/projection seam. Runtime composition of peer-probe demand remains a D.002-dependent
-C.001 gap.
+refactor/projection seam. At this historical baseline, runtime composition of peer-probe demand
+remained a D.002-dependent C.001 gap. That gap was later closed by the combined probe-plane
+composition/runtime and generation-currentness work registered at `EV-00200`, `EV-00210`
+and `EV-00280`; EV-00110 must not be read as the current C.001 materialization status.
 
 ## EV-00120 — D.002 WireGuard peer Manager core
 
@@ -616,4 +620,29 @@ The focused Manager acceptance proves that only the D.002 generation changes whi
 `LogicalPathId` and exact interface identity stay equal: old availability-problem confirmation
 loses current force and old evidence is rejected. Separate A.004 ordinary-path stickiness may
 remain, demonstrating that routing history is not being misclassified as availability evidence.
+
+## EV-00290 — trace/model hygiene and canonical architecture-edge grammar
+
+**Status:** accepted  
+**Scope:** canonical list-form component trace grammar; rejection of inline/dangling typed
+edges; explicit neutral `Coverage nodes` semantics in the requirement model; optional
+component-local `Evidence:` semantics with EV-only payload when present; canonical
+materialization explanation label; independence of requirement status from component-local
+`full|partial|none`; canonical literal `projectholder` role identifier; and historical
+supersession of stale EV-00110 materialization wording.  
+**Requirements/model:** `VPNG-D001-R1.R1.R5`, `VPNG-D001-R1.R1.R6`,
+`VPNG-D001-R1.R1.R6.R1`; `design/requirements-model.md` §14.  
+**External review:** `design/reviews/NG3-2026-11-25-external-trace-model-hygiene-review.md`.  
+**Review/response:** `design/reviews/NG3-2026-11-25-trace-model-hygiene-response.md`.  
+**Implementation/evidence:** `design/NG3/architecture-ng.md`,
+`design/NG3/code/python/rou/tests/test_architecture_traceability.py`,
+`PROJECT-CONVENTIONS.md`.  
+**Executable evidence:** GitHub Actions run `45616634226` on source
+`d772f9595e3989e1f4bf77b242a6d7ae9e2d2043` — **25/25 PASS**; unit job
+`139213608704` — PASS. Actual-main lineage run `45616634403` — PASS.
+
+The review confirmed that the old green gate could miss a Requirement-looking materialization
+line following an inline `Constrained by` heading. The canonical grammar now permits only
+list-form `Implements` and `Constrained by` blocks and rejects trace-looking lines outside
+those blocks. No second/parallel validation script was introduced.
 
