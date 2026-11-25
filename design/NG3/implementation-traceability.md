@@ -68,6 +68,10 @@ A production unit without a normal requirement path may appear only under `Archi
 - `design/NG3/code/python/rou/probe_precondition.py`
 - `design/NG3/code/python/rou/probe_runtime.py`
 
+## Trace: `A.007`, `C.001`, `D.002`
+
+- `design/NG3/code/python/rou/probe_plane_desired.py`
+
 ## Trace: `A.008`, `A.009`
 
 - `design/NG3/code/python/rou/runtime_status.py`
