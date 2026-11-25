@@ -117,9 +117,13 @@ When GitHub recording is authorized, work must be performed either:
 Outside active CD, the agent must not independently choose an existing branch as a writable
 target.
 
-If the user explicitly identifies `main` as the working target, that instruction is not sufficient
-to begin mutation. Before any work on `main`, the agent must ask for and receive a separate
-confirmation that the requested work may be performed directly on `main`.
+Merely identifying `main` as the working target is not sufficient to begin mutation. Before
+any work on `main`, the user must explicitly authorize direct work there.
+
+Wording that unambiguously grants direct work on `main` — for example, `Можно сразу в main`,
+`пиши напрямую в main`, or an equivalent explicit instruction — counts as that authorization
+and does not require an additional ritual confirmation. A bare target statement such as
+`сделай в main` without explicit direct-write permission does not.
 
 Authorization to work on one branch or to record one result does not authorize creation,
 movement, replacement or deletion of other branches or tags.
@@ -142,12 +146,21 @@ During active CD, the dedicated CD working branch is authorized by the active CD
 Outside active CD, creating a new working branch requires GitHub-recording authorization under
 §3; an instruction to edit or implement repository content alone is not sufficient.
 
-Every created commit must be published to GitHub immediately and verified on the expected
-remote branch before another commit is created.
+Every created commit must be published to GitHub immediately and its publication must be
+verified before another commit is created: the expected remote branch/ref must unambiguously
+point to the published commit SHA.
 
-On publication/verification failure, stop repository mutation; do not create another commit,
-perform prolonged recovery, force-update or rewrite history. Report the last verified remote
-state and any unverified work accurately.
+If publication fails, the expected remote ref cannot be confirmed, or remote state is
+ambiguous, stop repository mutation. Do not create another commit, perform prolonged recovery,
+force-update or rewrite history. Report the last verified remote state and any unverified work
+accurately.
+
+A CI, test, review, evidence or other validation failure after successful publication is not a
+publication failure. Stop further mutation while diagnosing the failure read-only. If the cause
+is understood and a bounded corrective change is available within the current authorized and
+accepted scope, without a new human product decision, history rewrite, force-update or other
+exceptional recovery, make the corrective change, publish it normally and validate again.
+Otherwise stop and report the blocker.
 
 ## 5. `main` protection and snapshots
 
@@ -167,10 +180,11 @@ Immediately before any operation that can move or replace the `main` ref, identi
 authorization source in the active user context.
 
 Outside active CD, that source must satisfy the applicable §3 authorization path. For direct
-work on `main`, both the user's identification of `main` as the target and the later separate
-confirmation must be present in active context. For publication of a previously prepared result,
-an explicit instruction to publish, snapshot, merge, commit or otherwise place that result in
-`main` is required.
+work on `main`, active context must contain explicit direct-write permission as defined in §3.
+An instruction such as `Можно сразу в main` or `пиши напрямую в main` both identifies the
+target and supplies that permission; no second confirmation is required. For publication of a
+previously prepared result, an explicit instruction to publish, snapshot, merge, commit or
+otherwise place that result in `main` is required.
 
 During CD, verify immediately before the `main` operation that CD is currently active under
 `CONTINUOUS-DEVELOPMENT.md` and has not been paused by a later user intervention. If current
@@ -183,7 +197,7 @@ The following are never authorization to update `main`:
 - completion of a review unit or development block;
 - PASS review, green CI, clean consistency check or other evidence of readiness;
 - semantic approval or an instruction to edit/apply/implement a change without explicit
-  `main` publication wording;
+  `main` direct-write/publication wording;
 - previous `main` authorization for a different completed result.
 
 If the check cannot name a valid authorization source, do not mutate `main`. Leave the
