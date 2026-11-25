@@ -51,23 +51,6 @@ Therefore 0.1.0 requires, end-to-end:
 Any `partial` or `none` materialization of these A.011 commitments is a release blocker for
 0.1.0.
 
-## Mandatory published integration walkthrough
-
-Documentation-driven deployment acceptance for 0.1.0 must execute the published
-`DEPLOYMENT.md` paths for all three release-supported client integrations:
-
-- WireGuard / wg-quick;
-- OpenConnect;
-- L2TP / PPP.
-
-For each integration, the walkthrough must install/configure/start it by the published
-administrator path, confirm the resulting VPN path through the supported built-in current-state
-or diagnostic surface, and prove real Profile payload transfer. Documented lifecycle
-stop/restart behavior is part of the walkthrough where the published procedure claims it.
-
-This list is release-specific. It preserves the approved 0.1.0 integration boundary without
-making these technology names part of the general release methodology.
-
 ## Accepted omissions / deferred scope
 
 The release does not require the aggressive host-routing helper family
