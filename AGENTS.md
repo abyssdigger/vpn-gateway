@@ -30,6 +30,10 @@ explicitly starts/resumes CD, or when the task itself edits/reviews CD process.
 Do not read `CONTINUOUS-DEVELOPMENT.md` merely because a task resembles CD work; reading or
 planning under that document must not itself activate CD.
 
+`INTERACTIVE-DEVELOPMENT.md` is likewise **not** a general prerequisite. Read it only when
+the projectholder explicitly starts/resumes interactive/in-dialog execution of active CD, or
+when the task edits/reviews the ID process itself. Reading it must not activate or resume CD.
+
 For product/implementation changes, read the relevant requirement ancestry and relevant
 architecture/component-model sections. Do not force unrelated requirements/architecture into
 documentation, process or repository-maintenance tasks.
