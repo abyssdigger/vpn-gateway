@@ -50,3 +50,5 @@ ADD_TAG	ng3-snapshot-wireguard-group-normalization-source	8afb45ca779312c93b86e7
 DEL_BRANCH	ng3-wireguard-group-normalization-cdc-20261125
 ADD_TAG	ng3-snapshot-runtime-service-privilege-policy-source	958bbed6f3ccfc1eab8be76fc421ae6ae5365fb4	Runtime service account privilege-minimization policy.
 DEL_BRANCH	ng3-runtime-service-privilege-policy-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-d002-groups-source	6c8b05f403c3e8997be651977b314f34f6377914	Generalized D.002 recoverable-group Manager core.
+DEL_BRANCH	ng3-wireguard-d002-groups-cdc-20261125
