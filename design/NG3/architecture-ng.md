@@ -2296,7 +2296,7 @@ lower network-policy domain Private network. Общая physical realization н�
 - `VPNG-U001-R1.R1` — [`full`]
 - `VPNG-U001-R1.R3.R8` — [`partial`]
 - `VPNG-U001-R1.R3.R8.R1` — [`partial`]
-- `VPNG-U001-R1.R3.R8.R3.R1` — [`none`]
+- `VPNG-U001-R1.R3.R8.R3.R1` — [`full`]
 - `VPNG-U001-R1.R3.R6.R2` — [`full`]
 - `VPNG-U001-R1.R4.R2.R1` — [`full`]
 - `VPNG-U001-R1.R4.R2.R1.R1` — [`full`]
@@ -2356,11 +2356,11 @@ Architectural decisions
 12. `Общий physical probe plane не означает общий readiness verdict`
    *A.007 и D.002 используют один collision-free allocation/physical convergence scope, поэтому lower desired state должен сходиться как полный union всех текущих probe owners и sibling-owner state нельзя считать stale только потому, что конкретный consumer его не запрашивал. Readiness при этом подтверждается отдельно для semantic owner subset из одного fresh physical snapshot. Scoped verification обязана знать полный accepted union: физические объекты другого принятого owner игнорируются как sibling state, физически совпадающий rule может удовлетворять нескольким owners, а неизвестный owned объект вне полного accepted union остается конфликтом и не маскируется как sibling. Generalized R8 добавляет отдельный group-endpoint semantic owner рядом с A.007 Profile owner и WireGuard peer owner; group verdict не наследует peer/Profile verdict даже при совпадении physical target/rule. Таким образом missing/problem одного accepted semantic owner не обязан автоматически запрещать точный sibling attempt, но неприписываемый конфликт общей probe ownership boundary остается fail-closed.*
 
-**Материализация:** lower probe owner различает A.007 `ProbePolicyOwner(profile_id, LogicalPathId)` и отдельный `WireGuardPeerProbeOwner(device_id, peer_id)`; общий resource layout сохраняет owner scopes раздельными. `wireguard_peer_probe_policy.py` проецирует permanent peer /32 через уже подтвержденный current path в ту же physical route/RPDB/local-admission форму, что и A.007, не создавая нового `LogicalPathId`. `verify_probe_execution_precondition_scoped(snapshot, full_desired, requested_owners, platform)` материализует owner-scoped readiness из одного fresh snapshot и полного accepted union: missing sibling state не блокирует requested owner, missing requested state блокирует, physical local rule может подтверждать несколько semantic owners, а reserved probe object вне полного union остается global fail-closed stale/conflict. Legacy whole-scope `verify_probe_execution_precondition` сохранен без изменения semantics. `ProbeExecutionPrecondition` и exact execution gate принимают только requested confirmed contexts.
+**Материализация:** lower probe owners теперь различают A.007 `ProbePolicyOwner(profile_id, LogicalPathId)`, peer technical owner `WireGuardPeerProbeOwner(device_id, peer_id)` и stable recoverable-group owner `WireGuardGroupProbeOwner(profile_id, device_id)`. Group owner намеренно не содержит current `peer_id`: peer является изменяемым владельцем группы, а не частью ее semantic identity. Peer и group wrappers используют один `bound_probe_policy.py` projector и потому имеют одинаковый physical route/RPDB/local-admission contract без создания новых `LogicalPathId`. `verify_probe_execution_precondition_scoped(snapshot, full_desired, requested_owners, platform)` материализует owner-scoped readiness из одного fresh snapshot и полного accepted union: missing sibling state не блокирует requested owner, missing requested state блокирует, physical local rule может подтверждать несколько semantic owners, а reserved probe object вне полного union остается global fail-closed stale/conflict. `WireGuardGroupProbeExecutor` требует exact confirmed group context до обращения к общему C.008 ICMP Driver и дополнительно проверяет canonical group identity и внутригрупповую цель. Legacy whole-scope verifier сохранен без изменения semantics.
 
-**Evidence:** `EV-00160`.
+**Evidence:** `EV-00160`, `EV-00170`.
 
-**Пробел материализации:** peer-probe desired state еще не включен в рабочую alpha composition общего `NetworkPolicyAdapter` desired/convergence, поэтому scoped verifier пока является готовым lower seam, а не runtime wiring. Generalized R8 дополнительно требует отдельный `WireGuardGroupProbeOwner`-equivalent desired/projection/executor для optional group endpoints; его пока нет. После этого остаются combined A.007+D.002 convergence/trigger/status composition и downstream evidence invalidation. Поэтому R8/R8.R1 остаются [`partial`], а R8.R3.R1 contribution C.001 — [`none`].
+**Пробел материализации:** peer/group probe desired state еще не включен в рабочую alpha composition общего `NetworkPolicyAdapter` desired/convergence, поэтому принятые owner/projection/readiness/executor seams пока не являются runtime wiring. Для R8.R3.R1 C.001 lower contribution закрыт, но D.002 Manager еще не выполняет post-transfer group endpoint check и по-прежнему отвергает такую group policy до mutation. После Manager integration остаются combined A.007+D.002 convergence/trigger/status composition и downstream evidence invalidation. Поэтому R8/R8.R1 остаются [`partial`].
 
 ## [C.002] NetworkPolicyLayoutCalculator
 
@@ -2903,7 +2903,7 @@ Architectural decisions
    *Новая D.002 realization считается confirmed только после D.003 fresh exact `AllowedIPs` postcondition и, когда у группы настроен endpoint, после применимого positive group check через нового owner. Evidence предыдущего owner не остается current только потому, что `LogicalPathId`, `wg0` и ifindex не изменились.*
 
 10. `Shared probe plane не сливает semantic evidence`
-    *Peer probes и будущие group endpoint probes используют общий C.008 physical ICMP contract и общий C.001 collision-free convergence scope вместе с A.007 только через distinct semantic owners и owner-scoped readiness. Физически совпадающие lower objects могут переиспользоваться, но peer/group/Profile verdicts не объединяются.*
+    *Peer probes и group endpoint probes используют общий C.008 physical ICMP contract и общий C.001 collision-free convergence scope вместе с A.007 только через distinct semantic owners и owner-scoped readiness. Stable group-probe owner совпадает с canonical group identity `(profile_id, device_id)`; current peer не входит в эту identity и проверяется D.002 sequencing через fresh D.003 ownership postcondition перед group attempt. Физически совпадающие lower objects могут переиспользоваться, но peer/group/Profile verdicts не объединяются.*
 
 **Материализация:** `wireguard_peer_manager.py` принимает typed
 `ManagedWireGuardGroupConfig` inputs A.002 и хранит current `group -> peer` ownership map,
@@ -2920,13 +2920,17 @@ bundles; Device-wide D.002 generation публикуется только пос
 confirmed C.001 readiness. Старый internal `ManagedWireGuardConfig.shared_prefixes`
 one-group bridge удален.
 
-**Пробел материализации:** optional group endpoint пока намеренно не принимается D.002 core:
-валидная group policy с endpoint отклоняется до probe/mutation, пока не существует отдельный
-group-probe semantic owner/executor. Также остаются C.001 owner-subset readiness,
-alpha/runtime composition, periodic/explicit trigger/status publication и обязательная
-инвалидизация зависимого A.007 evidence после D.002 generation change. D.003 split-group
-kernel acceptance остается отдельным lower evidence gap. Поэтому общий вклад D.002 в R8
-остается [`partial`], несмотря на [`full`] component-local group-selection edges.
+**Пробел материализации:** C.001/C.008 lower seam для optional group endpoint теперь
+существует: stable group semantic owner, общий bound physical projector, scoped readiness и
+production group executor приняты в `EV-00170`. Сам D.002 Manager пока намеренно отвергает
+group policy с endpoint до mutation: еще не реализована state-machine последовательность
+`candidate peer REPLY -> D.003 exact transfer -> fresh group endpoint attempt -> accept/reject
+candidate`, включая переход к следующему разрешенному peer после confirmed group
+`NO_REPLY` и fail-closed handling `LOCAL_ERROR`. Также остаются combined
+A.007+D.002 alpha/runtime composition, periodic/explicit trigger/status publication и
+обязательная инвалидизация зависимого A.007 evidence после D.002 generation change. D.003
+split-group kernel acceptance остается отдельным lower evidence gap. Поэтому общий вклад
+D.002 в R8 и его R8.R3.R1 edge остаются неполными.
 
 ## [D.003] WireGuardPeerOwnershipEnforcer
 
