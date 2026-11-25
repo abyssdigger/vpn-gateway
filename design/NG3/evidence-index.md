@@ -392,3 +392,22 @@ the current D.002 realization rather than acting as remote unavailability; exhau
 candidates converges an exact no-owner state; and a failed end-to-end check of a recovered
 preferred ordinary peer can restore the still-valid reserve owner. A change of the configured
 group endpoint changes the Device-wide D.002 generation.
+
+## EV-00190 — production D.003 split-group WireGuard ownership
+
+**Status:** accepted / full D.003 generalized R8 lower materialization  
+**Scope:** production-kernel exact complete `AllowedIPs` convergence with two independent
+payload group bundles simultaneously owned by different managed WireGuard peers, while each
+peer retains its permanent technical probe /32 and the shared WireGuard interface identity is
+preserved.  
+**Implementation:** `design/NG3/code/python/rou/wireguard_peer_ownership.py`.  
+**Kernel evidence:** `design/NG3/code/python/rou/tests/integration_wireguard_peer_ownership.py`.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-d003-split-ownership-review.md`.  
+**Executable evidence:** GitHub Actions run `45577901507`,
+`linux-wireguard-peer-ownership` job `139080276853` — PASS on source
+`ae1b626a0f52f87b53996872793473e51bc0cc75`; unit job `139080276823` — PASS.
+
+The kernel run emitted `D003_WG_SPLIT_GROUP_OWNERSHIP=PASS` after fresh-confirming a complete
+state in which `10.77.0.0/24` belonged only to peer A and `10.88.0.0/24` belonged only to
+peer B. Both permanent peer probe /32s remained present, the old opposite group ownership was
+absent, and the common `wg0` ifindex remained unchanged.
