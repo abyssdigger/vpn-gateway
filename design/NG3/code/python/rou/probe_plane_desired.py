@@ -99,6 +99,14 @@ def build_probe_plane_desired_assembly(
         route_by_path[route.path_id] = route
         endpoint_owner[route.endpoint] = route.path_id
 
+    profile_by_id: dict[str, PayloadProfileRequest] = {}
+    for profile in profiles:
+        if profile.profile_id in profile_by_id:
+            raise ProbePlaneDesiredAssemblyError(
+                f"payload_profiles contains duplicate Profile {profile.profile_id!r}"
+            )
+        profile_by_id[profile.profile_id] = profile
+
     profile_paths = frozenset(
         path
         for profile in profiles
@@ -111,6 +119,11 @@ def build_probe_plane_desired_assembly(
 
     bound: list[BoundProbeIntent] = []
     for intent in availability:
+        profile = profile_by_id.get(intent.owner.profile_id)
+        if profile is None or intent.owner.path_id not in profile.ordered_paths:
+            raise ProbePlaneDesiredAssemblyError(
+                "availability owner is outside current Profile/path membership"
+            )
         path_route = route_by_path.get(intent.owner.path_id)
         if path_route is None:
             raise ProbePlaneDesiredAssemblyError(
@@ -125,7 +138,31 @@ def build_probe_plane_desired_assembly(
             )
         )
 
-    for intent in (*peers, *groups):
+    for intent in peers:
+        current = route_by_path.get(intent.path_route.path_id)
+        if current != intent.path_route:
+            raise ProbePlaneDesiredAssemblyError(
+                f"D.002 probe intent is not bound to the accepted current path: "
+                f"{intent.owner!r}"
+            )
+        bound.append(
+            BoundProbeIntent(
+                intent.owner,
+                intent.target,
+                intent.path_route,
+                intent.mechanism,
+            )
+        )
+
+    for intent in groups:
+        profile = profile_by_id.get(intent.owner.profile_id)
+        if (
+            profile is None
+            or intent.path_route.path_id not in profile.ordered_paths
+        ):
+            raise ProbePlaneDesiredAssemblyError(
+                "group probe owner is outside current Profile/path membership"
+            )
         current = route_by_path.get(intent.path_route.path_id)
         if current != intent.path_route:
             raise ProbePlaneDesiredAssemblyError(

@@ -74,10 +74,10 @@ def group() -> WireGuardGroupProbeIntent:
 
 
 class ProbePlaneDesiredAssemblyTests(unittest.TestCase):
-    def build(self, *, peers=(None, None)):
+    def build(self, *, peers=None):
         peer_intents = (
             (peer_a(), peer_b())
-            if peers == (None, None)
+            if peers is None
             else peers
         )
         return build_probe_plane_desired_assembly(
@@ -162,6 +162,45 @@ class ProbePlaneDesiredAssemblyTests(unittest.TestCase):
                 (availability(),),
                 (stale_peer,),
                 (group(),),
+                (ROUTE,),
+                NG3_LINUX_POLICY_PLATFORM,
+                NG3_PROBE_LOCAL_PLATFORM,
+            )
+
+    def test_availability_owner_must_belong_to_current_profile_path(self):
+        wrong = AvailabilityProbeIntent(
+            ProbePolicyOwner("other", PATH),
+            GROUP_TARGET,
+        )
+        with self.assertRaisesRegex(
+            ProbePlaneDesiredAssemblyError,
+            "availability owner is outside current Profile/path membership",
+        ):
+            build_probe_plane_desired_assembly(
+                (profile(),),
+                (wrong,),
+                (peer_a(),),
+                (group(),),
+                (ROUTE,),
+                NG3_LINUX_POLICY_PLATFORM,
+                NG3_PROBE_LOCAL_PLATFORM,
+            )
+
+    def test_group_owner_must_belong_to_current_profile_path(self):
+        wrong = WireGuardGroupProbeIntent(
+            WireGuardGroupProbeOwner("other", "wg"),
+            GROUP_TARGET,
+            ROUTE,
+        )
+        with self.assertRaisesRegex(
+            ProbePlaneDesiredAssemblyError,
+            "group probe owner is outside current Profile/path membership",
+        ):
+            build_probe_plane_desired_assembly(
+                (profile(),),
+                (availability(),),
+                (peer_a(),),
+                (wrong,),
                 (ROUTE,),
                 NG3_LINUX_POLICY_PLATFORM,
                 NG3_PROBE_LOCAL_PLATFORM,
