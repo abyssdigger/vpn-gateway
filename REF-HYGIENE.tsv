@@ -76,3 +76,5 @@ ADD_TAG	ng3-snapshot-typed-trace-evidence-gates-source	7117a5372882c2be3a6928b60
 DEL_BRANCH	ng3-trace-evidence-gates-cdc-20261125
 ADD_TAG	ng3-snapshot-release-methodology-dedup-source	287392037b8949c965dc948e5b4363a80c14f7a3	Release methodology ownership deduplication and frozen-record consistency.
 DEL_BRANCH	ng3-release-methodology-dedup-cdc-20261125
+ADD_TAG	ng3-snapshot-architecture-coverage-labels-source	c98ee4db8ab8f9313f2bbadfad24a9eaa0541c5d	Canonical component trace labels and neutral coverage-index vocabulary.
+DEL_BRANCH	ng3-coverage-label-cleanup-cdc-20261125
