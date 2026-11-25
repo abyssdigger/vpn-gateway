@@ -139,6 +139,13 @@ def main() -> None:
                 raise AssertionError("confirmed generation is missing")
             assert first.interface is not None
             first_ifindex = first.interface.ifindex
+            confirmed_read_only = adapter.confirm_present("wg-main", desired)
+            if confirmed_read_only.confirmed_generation != first.confirmed_generation:
+                raise AssertionError("read-only exact generation confirmation diverged")
+            assert confirmed_read_only.interface is not None
+            if confirmed_read_only.interface.ifindex != first_ifindex:
+                raise AssertionError("read-only exact confirmation changed interface identity")
+            print("D001_WG_READONLY_GENERATION_CONFIRMED=PASS")
             print("D001_WG_START_CONFIRMED=PASS")
 
             repeated = adapter.converge_present("wg-main", desired)
@@ -202,6 +209,20 @@ def main() -> None:
 
             private_path.write_text(private_c + "\n", encoding="ascii")
             private_path.chmod(0o600)
+            try:
+                adapter.confirm_present("wg-main", desired)
+            except ManagedWireGuardError:
+                pass
+            else:
+                raise AssertionError(
+                    "read-only confirmation accepted stale managed base generation"
+                )
+            current = adapter.observe("wg-main")
+            assert current.interface is not None
+            if current.interface.ifindex != first_ifindex:
+                raise AssertionError("read-only mismatch check mutated interface")
+            print("D001_WG_READONLY_GENERATION_MISMATCH=PASS")
+
             changed = adapter.converge_present("wg-main", desired)
             assert changed.interface is not None
             if changed.confirmed_generation == first.confirmed_generation:
