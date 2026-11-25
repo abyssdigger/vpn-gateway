@@ -1,6 +1,6 @@
 # Methodology hardening — project response and rationale — 2026-11-25
 
-**Source proposal:** `design/reviews/METHODOLOGY-2026-11-25-cross-contract-hardening-source.md`.
+**Source proposal:** `design/reviews/NG3-2026-11-25-methodology-cross-contract-hardening-source.md`.
 
 **Trigger:** independent review of the GPT-6 warm-presence evaluation exposed one inherited
 cross-contract conflict, one partial-transition race, stale materialization wording and an
