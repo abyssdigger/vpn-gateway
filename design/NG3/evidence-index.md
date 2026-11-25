@@ -506,3 +506,31 @@ stale D.002 owner/path inputs before probe or D.003 mutation, and exact sequenci
 A realization with no confirmed group owner but no local problem remains a confirmed D.002
 state rather than being conflated with a coordinator failure.
 
+## EV-00240 — alpha D.002 reconciliation and status integration
+
+**Status:** accepted / production alpha invocation and A.008 publication path; R8.R6 generation
+coupling remains pending  
+**Scope:** initial, periodic and protective-release D.002 trigger composition after confirmed
+full-union C.001 probe-routing convergence; reuse of the retained D.002 coordinator and exact
+D.003 enforcer; publication of authoritative `WireGuardPeerRealization` through A.008;
+confirmed no-owner handling without false local failure; DEGRADED reporting for local D.002
+problem without invalidating unrelated confirmed effective state; and stale D.002 status
+invalidation when a new trigger cannot be established or D.001 is removed.  
+**Implementation:** `design/NG3/code/python/rou/alpha_runtime.py`,
+`design/NG3/code/python/rou/runtime_status.py`,
+`design/NG3/implementation-traceability.md`.  
+**Unit evidence:** `design/NG3/code/python/rou/tests/test_alpha_runtime.py`,
+`design/NG3/code/python/rou/tests/test_runtime_status.py`, plus EV-00230 coordinator tests.  
+**Review:** `design/reviews/NG3-2026-11-25-wireguard-d002-alpha-integration-review.md`.  
+**Executable evidence:** GitHub Actions run `45588860316`, unit job
+`139117569301` — PASS on source
+`ac8969d706d9127308df28f1eb3ea5f5515cc57f`.
+
+The alpha helper test proves that the current `ProbePlaneDesiredAssembly`, current path routes
+and authoritative D.001 realization are passed to the retained coordinator with a fresh Linux
+structural snapshot observer. Status tests prove that a D.002-local degradation can preserve
+already confirmed effective state while explicitly marking only the D.002 projection unknown
+when no authoritative realization exists. Code-path review confirms the same normal
+reconciliation function is used by periodic audit and protective-mode explicit normal-release
+checks, while startup performs an initial D.002 trigger before READY.
+
