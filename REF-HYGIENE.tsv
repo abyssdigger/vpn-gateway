@@ -58,3 +58,5 @@ ADD_TAG	ng3-snapshot-wireguard-group-probe-seam-source	c909b7130efcc8cb20d137525
 DEL_BRANCH	ng3-wireguard-group-probe-seam-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-d002-group-endpoint-source	829c999e424bf8e769f0c0e4b3e9712e5246c7c9	D.002 recoverable-group endpoint candidate validation.
 DEL_BRANCH	ng3-wireguard-d002-group-endpoint-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-d003-split-ownership-source	00a5d8bba45e612d7fbf69d30d9406faed934981	Production D.003 split-group WireGuard ownership kernel acceptance.
+DEL_BRANCH	ng3-wireguard-d003-split-kernel-cdc-20261125
