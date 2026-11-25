@@ -459,6 +459,11 @@ class WireGuardPeerManager:
                 raise WireGuardPeerManagerError(
                     "recoverable group peer membership must not be empty"
                 )
+            for membership in group.peer_memberships:
+                if not isinstance(membership, WireGuardPeerMembershipConfig):
+                    raise WireGuardPeerManagerError(
+                        "recoverable group peer membership has invalid type"
+                    )
             membership_ids = [
                 membership.peer_id
                 for membership in group.peer_memberships
@@ -472,12 +477,11 @@ class WireGuardPeerManager:
                 raise WireGuardPeerManagerError(
                     f"recoverable group references unknown peer {unknown[0]!r}"
                 )
-            for membership in group.peer_memberships:
-                if not isinstance(membership, WireGuardPeerMembershipConfig):
-                    raise WireGuardPeerManagerError(
-                        "recoverable group peer membership has invalid type"
-                    )
             for prefix in group.prefixes:
+                if not isinstance(prefix, IPv4Network):
+                    raise WireGuardPeerManagerError(
+                        "recoverable group prefix bundle has invalid type"
+                    )
                 previous = exact_prefix_owners.get(prefix)
                 if previous is not None:
                     raise WireGuardPeerManagerError(
