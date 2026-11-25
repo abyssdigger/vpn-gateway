@@ -93,6 +93,12 @@ CD adds no parallel component model.
 Implementation may proceed only when the relevant requirement and architecture decisions are
 sufficient for that implementation scope.
 
+For a non-trivial materialization, the gate also requires the applicable checks from
+`design/requirements-model.md` and `design/component-model.md`: the affected-obligation
+impact frontier, semantic composition of component contracts and partial-transition semantics
+where the implementation contains multi-step state-changing behavior. This includes inherited
+architecture whose consequences first become observable in the current unit.
+
 If the implementation would have to choose new product semantics, ownership, observable
 behavior or an unresolved architecture contract, return to the governing normative artifact.
 
@@ -137,6 +143,24 @@ treated as accepted.
 Review the actual unit against its governing requirements/contracts and evidence. Do not
 reconstruct unrelated parts of the project merely to perform a local review.
 
+Within the same review unit, perform two analytical directions:
+
+1. **contract-conformance pass** — does the actual design/implementation satisfy the accepted
+   contracts and claimed postconditions;
+2. **counterexample pass** — in what permitted state, event ordering, execution context or
+   failure point can the implementation violate an accepted obligation even when its main
+   local operations behave as designed.
+
+For stateful multi-step mechanisms the counterexample pass includes partial execution after
+material side effects, using the transition rules from `design/component-model.md`.
+Evidence claims remain limited to properties actually tested under
+`design/requirements-model.md`; a successful steady-state path does not silently prove a
+different startup/recovery/failure context. Current-state documentation whose truth depends on
+the change is checked under `PROJECT-CONVENTIONS.md`.
+
+These are two directions of one expert review, not two review units, two documents or a
+requirement to invoke a second reviewer/model.
+
 Every material finding receives an explicit disposition according to
 `PROJECT-CONVENTIONS.md`.
 
@@ -152,7 +176,11 @@ postponements belong in the project's deferral mechanism defined by the relevant
 conventions/artifacts.
 
 When the governing requirements/model require a human product decision, stop the dependent
-scope and ask. Continue independent unblocked work when useful and allowed by the active CD.
+scope and ask. Before escalating, apply the real-ambiguity check from
+`design/requirements-model.md`: do not ask the human to choose among alternatives already
+excluded by accepted obligations or alternatives that exist only by introducing a new,
+unaccepted constraint. Continue independent unblocked work when useful and allowed by the
+active CD.
 
 The global process-correction gate and all repository/Git authorization rules are owned by
 `AGENTS.md`, not this document.
