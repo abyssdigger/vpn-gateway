@@ -511,8 +511,6 @@ Lower Machinery переиспользуется только при совпа�
 
 ### 2.9.3. Target production-runtime language boundary
 
-**Covers:** `VPNG-D001-R1.R1.R8`, `VPNG-D001-R1.R1.R8.R1`, `VPNG-D001-R1.R1.R8.R2`, `VPNG-D001-R1.R1.R8.R3`.
-
 Rust является target implementation boundary, а не component role и не источником product
 semantics. Финальная stable production runtime boundary включает configuration normalization,
 lifecycle/runtime state, policy calculation/reconciliation, VPN-path observation и
@@ -565,7 +563,7 @@ owners/sections, через которые реализуется соответ
 
 ### Managed VPN routing and supported VPN integration
 
-**Requirements:** `VPNG-U001`, `VPNG-U001-R1`, `VPNG-U001-R1.R3`,
+**Coverage nodes:** `VPNG-U001`, `VPNG-U001-R1`, `VPNG-U001-R1.R3`,
 `VPNG-U001-R1.R3.C1`, `VPNG-U001-R1.R3.C1.R1.R1`,
 `VPNG-U001-R1.R3.C1.R1.R2`, `VPNG-U001-R1.R3.C3`,
 `VPNG-U001-R1.R3.C3.R1`, `VPNG-U001-R1.R3.R6`,
@@ -582,7 +580,7 @@ VPN-GATE owns its own network policy rather than VPN-specific configuration.
 
 ### Ordinary-host integration and helper scope
 
-**Requirements:** `VPNG-U001-R2.R1`, `VPNG-U001-R2.R1.R1`,
+**Coverage nodes:** `VPNG-U001-R2.R1`, `VPNG-U001-R2.R1.R1`,
 `VPNG-U001-R5`, `VPNG-U001-R5.R1`, `VPNG-U001-R5.R1.R1`,
 `VPNG-U001-R5.R2.C1`.
 
@@ -596,7 +594,7 @@ architecture is separated into E.003/E.004 and remains constrained out of Releas
 
 ### Aggressive host routing and administrative protective mode
 
-**Requirements:** `VPNG-U001-R5.R2`, `VPNG-U001-R5.R2.R1`,
+**Coverage nodes:** `VPNG-U001-R5.R2`, `VPNG-U001-R5.R2.R1`,
 `VPNG-U001-R5.R2.R2`, `VPNG-U001-R5.R2.R3`,
 `VPNG-U001-R5.R2.R3.R1`, `VPNG-U001-R5.R2.R3.R2`,
 `VPNG-U004-R5`, `VPNG-U004-R5.R1`, `VPNG-U004-R5.R2`,
@@ -613,7 +611,7 @@ Private-network containment gate. `EV-00040` подтверждает необх
 
 ### Human configuration and Device/Profile policy model
 
-**Requirements:** `VPNG-U001-R4`,
+**Coverage nodes:** `VPNG-U001-R4`,
 `VPNG-U001-R1.R4`, `VPNG-U001-R1.R4.R1`, `VPNG-U001-R1.R4.R2`,
 `VPNG-U001-R1.R4.R2.R1.C1`,
 `VPNG-U001-R4.R5.R1`, `VPNG-U001-R4.R5.R2`,
@@ -640,7 +638,7 @@ meaning.
 
 ### Inbound source identity, packet matching and return affinity
 
-**Requirements:** `VPNG-U001-R3`, `VPNG-U002-R2.R1.R3`,
+**Coverage nodes:** `VPNG-U001-R3`, `VPNG-U002-R2.R1.R3`,
 `VPNG-U003-R4`.
 
 **Architecture coverage:** A.005/C.001/C.003 preserve literal payload source/destination/type
@@ -651,7 +649,7 @@ established return traffic instead of reclassifying it onto another allowed path
 
 ### Explicit VPN traffic policy and inbound first-release bound
 
-**Requirements:** `VPNG-U002`, `VPNG-U002-R2`, `VPNG-U002-R2.R2.R2`,
+**Coverage nodes:** `VPNG-U002`, `VPNG-U002-R2`, `VPNG-U002-R2.R2.R2`,
 `VPNG-U002-R2.R3.C1`, `VPNG-U002-R2.R3.C1.R1`.
 
 **Architecture coverage:** A.002/A.005 define explicit Profile/Device intent and pre-actuation
@@ -662,7 +660,7 @@ runtime discovery.
 
 ### Multi-path preference and availability adaptation
 
-**Requirements:** `VPNG-U003`, `VPNG-U003-R3`, `VPNG-U003-R3.R1.R1`,
+**Coverage nodes:** `VPNG-U003`, `VPNG-U003-R3`, `VPNG-U003-R3.R1.R1`,
 `VPNG-U003-R3.R2.R1`, `VPNG-U003-R3.R5.R1`, `VPNG-U003-R3.R5.R2`,
 `VPNG-U003-R3.R6.R3.R1.C1`.
 
@@ -674,7 +672,7 @@ confirmation. Release-1 physical probe mechanism is ICMP only.
 
 ### Safety, recovery and operator truth
 
-**Requirements:** `VPNG-U004`, `VPNG-U004-R4.R6`,
+**Coverage nodes:** `VPNG-U004`, `VPNG-U004-R4.R6`,
 `VPNG-U004-R5.C1`, `VPNG-M001-R1.R1.R2.R1`,
 `VPNG-M001-R1.R1.R3.R1`, `VPNG-M001-R1.R1.C1.R1`, `VPNG-M001-R2`.
 
@@ -689,7 +687,7 @@ returned to administrator control.
 
 ### Runtime service privilege boundary
 
-**Requirements:** `VPNG-M001-R5`, `VPNG-M001-R5.R1`, `VPNG-M001-R5.R1.R1`,
+**Coverage nodes:** `VPNG-M001-R5`, `VPNG-M001-R5.R1`, `VPNG-M001-R5.R1.R1`,
 `VPNG-M001-R5.R1.R2`, `VPNG-M001-R5.R2`, `VPNG-M001-R5.R3`,
 `VPNG-M001-R5.C1`.
 
@@ -711,12 +709,13 @@ Release-1 architecture gap. Когда release scope впервые не исп�
 
 ### Maintainability, continuity, evidence and development boundaries
 
-**Requirements:** `VPNG-D001-R1`, `VPNG-D001-R1.R1`, `VPNG-D001-R1.R1.R2`,
+**Coverage nodes:** `VPNG-D001-R1`, `VPNG-D001-R1.R1`, `VPNG-D001-R1.R1.R2`,
 `VPNG-D001-R1.R1.R3.R5`, `VPNG-D001-R1.R1.R3.R4`,
 `VPNG-D001-R1.R1.R3.R4.R1`, `VPNG-D001-R1.R1.R4`,
 `VPNG-D001-R1.R1.R6.R1`, `VPNG-D001-R1.R1.R6.R2`,
-`VPNG-D001-R1.R1.R7.R1`, `VPNG-D001-R1.R1.R8.R1`,
-`VPNG-D001-R1.R1.R8.R2`, `VPNG-D001-R3`, `VPNG-D001-R3.R1`,
+`VPNG-D001-R1.R1.R7.R1`, `VPNG-D001-R1.R1.R8`,
+`VPNG-D001-R1.R1.R8.R1`, `VPNG-D001-R1.R1.R8.R2`,
+`VPNG-D001-R1.R1.R8.R3`, `VPNG-D001-R3`, `VPNG-D001-R3.R1`,
 `VPNG-D001-R3.R1.R1`, `VPNG-D001-R3.R2`, `VPNG-D001-R3.R3`,
 `VPNG-D001-R3.C1`, `VPNG-M001-R4`, `VPNG-M001-R4.C1`, `VPNG-M001-R4.C2`.
 

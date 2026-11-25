@@ -225,7 +225,7 @@ def explicit_coverage_index_ids() -> frozenset[str]:
     result: set[str] = set()
     in_requirements = False
     for line in section.splitlines():
-        if line.startswith("**Requirements:**"):
+        if line.startswith("**Coverage nodes:**"):
             in_requirements = True
             result.update(
                 re.findall(r"\x60(VPNG-[^\x60]+)\x60", line)
@@ -246,15 +246,6 @@ def explicit_architecture_coverage_ids() -> frozenset[str]:
         result.update(item[0] for item in component_requirement_edges(body))
         result.update(component_constraint_edges(body))
 
-    architecture = ARCHITECTURE.read_text(encoding="utf-8")
-    for match in re.finditer(
-        r"^\*\*Covers:\*\*(.+)$",
-        architecture,
-        re.MULTILINE,
-    ):
-        result.update(
-            re.findall(r"\x60(VPNG-[^\x60]+)\x60", match.group(1))
-        )
     return frozenset(result)
 
 
@@ -497,6 +488,17 @@ class StructuredArchitectureTraceabilityTests(unittest.TestCase):
             if "**Implements:**" in body:
                 with self.subTest(spec=spec_id):
                     self.assertTrue(component_requirement_edges(body))
+
+    def test_coverage_index_uses_neutral_node_label(self):
+        architecture = ARCHITECTURE.read_text(encoding="utf-8")
+        self.assertNotIn("**Covers:**", architecture)
+        start = architecture.index(
+            "## 2.10. Closed requirement architecture coverage index"
+        )
+        end = architecture.index("\n## 3.", start)
+        section = architecture[start:end]
+        self.assertNotIn("**Requirements:**", section)
+        self.assertIn("**Coverage nodes:**", section)
 
     def test_component_edges_are_typed_requirement_vs_constraint(self):
         nodes = {str(node["id"]): node for node in requirement_nodes()}
