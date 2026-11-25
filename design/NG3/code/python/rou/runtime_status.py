@@ -100,7 +100,7 @@ class RuntimeStatusSnapshot:
     readiness: RuntimeReadiness
     blocking_problems: tuple[str, ...]
     unknown_or_unconfirmed_fields: tuple[str, ...]
-    # Last demand calculated from fresh structural presence, not a payload verdict.
+    # A.013 diagnostic projection from the last confirmed normal binding, not actuation.
     managed_profile_demands: tuple[ProfileManagedDeviceDemand, ...] | None = None
 
     def to_dict(self) -> dict[str, object]:

@@ -17,6 +17,7 @@ from rou.alpha_runtime import (
     converge_alpha_managed_device_presence,
     reconcile_alpha_payload_once,
     reconcile_alpha_availability_wireguard_once,
+    refresh_alpha_managed_demand_status,
     release_alpha_undemanded_devices,
 )
 from rou.binding import PathBinding
@@ -322,6 +323,13 @@ warm_paths = 1
             final_payload = reconcile_alpha_payload_once(prepared, domain, runner)
             assert final_payload.ready, final_payload.diagnostic
             assert {b.path_id.device_id for b in prepared.last_bindings} == {"wg-main"}
+            status.confirm_managed_devices(released_realizations)
+            refresh_alpha_managed_demand_status(prepared, status)
+            demand = status.snapshot().managed_profile_demands[0]
+            assert demand.regular_present == 1
+            assert demand.regular_deficit == 0
+            assert demand.reserve_present == 0
+            print("A012_RUNTIME_POST_RELEASE_DEMAND_STATUS=PASS")
             print("A012_RUNTIME_MAKE_BEFORE_BREAK=PASS")
 
             _release_alpha_managed_device_dependencies(

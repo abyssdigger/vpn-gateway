@@ -659,6 +659,21 @@ def release_alpha_undemanded_devices(
     ), bool(safe_ids)
 
 
+def refresh_alpha_managed_demand_status(
+    prepared: AlphaPreparedPolicy,
+    agent: RuntimeStatusAgent,
+) -> None:
+    """Project diagnostics from the last confirmed normal binding observation.
+
+    The caller must have confirmed the current binding-dependent policy.
+    This read-only A.013 calculation does not actuate a new desired set;
+    A.012's accepted desired and confirmed states remain separate.
+    """
+    agent.confirm_managed_demand(
+        project_final(prepared.current_config, prepared.last_bindings)
+    )
+
+
 def _release_alpha_managed_device_dependencies(
     desired: PayloadNetworkPolicyDesiredState,
     domain_spec: ManagedNetworkDomainSpec,
@@ -1437,9 +1452,7 @@ def run_alpha_runtime(
         status_agent.confirm_managed_devices(
             managed_realizations_holder["current"]
         )
-        status_agent.confirm_managed_demand(
-            managed_convergence_holder["current"].projection
-        )
+        refresh_alpha_managed_demand_status(prepared, status_agent)
         status_publisher.publish(status_agent.snapshot())
 
         def stop_owned_runtime():
@@ -1599,7 +1612,6 @@ def run_alpha_runtime(
             managed_realizations = convergence.realizations
             managed_realizations_holder["current"] = managed_realizations
             status_agent.confirm_managed_devices(managed_realizations)
-            status_agent.confirm_managed_demand(convergence.projection)
             for problem in convergence.attempt_problems:
                 log(OperationalLogLevel.WARNING, LIFE_LOG_TAG, "managed_presence_failed",
                     device_id=problem.device_id, diagnostic=problem.problem)
@@ -1650,6 +1662,10 @@ def run_alpha_runtime(
                     else:
                         availability_result = None
                         wireguard_result = None
+            if result.ready:
+                refresh_alpha_managed_demand_status(prepared, status_agent)
+            else:
+                status_agent.confirm_managed_demand(None)
             status_agent.confirm_wireguard_peers(
                 ()
                 if wireguard_result is None
@@ -1738,6 +1754,7 @@ def run_alpha_runtime(
             prepared.last_profiles,
             prepared.last_bindings,
         )
+        refresh_alpha_managed_demand_status(prepared, status_agent)
         managed_problem = _managed_device_problem(managed_realizations_holder["current"])
         if managed_problem is not None:
             status_agent.mark_degraded(problem=managed_problem)
@@ -1906,8 +1923,14 @@ def run_alpha_runtime(
                             if prepared.current_config.wireguard_groups else ()
                         )
                         + (
-                            ("managed_device_realizations", "managed_profile_demands")
+                            ("managed_profile_demands",)
                             if status_agent.snapshot().managed_profile_demands is None
+                            else ()
+                        )
+                        + (
+                            ("managed_device_realizations",)
+                            if prepared.current_config.managed_vpns
+                            and not managed_realizations_holder["current"]
                             else ()
                         )
                     ),
