@@ -66,3 +66,5 @@ ADD_TAG	ng3-snapshot-probe-plane-alpha-runtime-source	6bdadfa6d1abdd47788ac24d7d
 DEL_BRANCH	ng3-probe-plane-alpha-runtime-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-d002-runtime-status-source	2b60751de9620e66b8462cd283cbbef8a8b9abc5	A.008 semantic status carrier for authoritative D.002 realization.
 DEL_BRANCH	ng3-wireguard-d002-runtime-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-d002-runtime-coordinator-source	aa5b8f3aa55758d32c7e79414b1000959b092024	Retained D.002 runtime coordinator core.
+DEL_BRANCH	ng3-wireguard-d002-runtime-coordinator-cdc-20261125
