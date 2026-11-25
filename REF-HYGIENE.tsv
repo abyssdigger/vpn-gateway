@@ -56,3 +56,5 @@ ADD_TAG	ng3-snapshot-probe-owner-scoped-readiness-source	eecc567b1dcc096b570fb23
 DEL_BRANCH	ng3-probe-owner-scoped-readiness-cdc-20261125
 ADD_TAG	ng3-snapshot-wireguard-group-probe-seam-source	c909b7130efcc8cb20d1375250f5855bb0544b14	WireGuard recoverable-group probe lower seam.
 DEL_BRANCH	ng3-wireguard-group-probe-seam-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-d002-group-endpoint-source	829c999e424bf8e769f0c0e4b3e9712e5246c7c9	D.002 recoverable-group endpoint candidate validation.
+DEL_BRANCH	ng3-wireguard-d002-group-endpoint-cdc-20261125
