@@ -138,6 +138,11 @@ def base_realization(*, problem=None):
             else None
         ),
         problem=problem,
+        confirmed_interface=(
+            ROUTE.endpoint
+            if problem is None
+            else None
+        ),
     )
 
 
@@ -149,6 +154,7 @@ def retained_base_realization(*, confirmed_generation="base-a"):
         confirmed_state=ManagedWireGuardState.PRESENT,
         confirmed_generation=confirmed_generation,
         waiting_for_dependencies=True,
+        confirmed_interface=ROUTE.endpoint,
     )
 
 
@@ -494,6 +500,36 @@ class WireGuardPeerRuntimeCoordinatorTests(unittest.TestCase):
             WireGuardPeerRuntimeCoordinator().reconcile(
                 self.config,
                 (inconsistent,),
+                (ROUTE,),
+                self.assembly,
+                snapshot_observer=self.observer,
+                probe_driver=driver,
+                ownership=self.ownership,
+                platform=NG3_LINUX_POLICY_PLATFORM,
+            )
+
+        self.assertEqual(driver.calls, [])
+        self.assertEqual(self.ownership.calls, [])
+        self.assertEqual(self.observer.calls, 0)
+
+    def test_stale_d001_interface_identity_blocks_before_probe_or_mutation(self):
+        stale_base = ManagedDeviceRealization(
+            device_id="wg",
+            desired_state=ManagedDeviceDesiredState.PRESENT,
+            desired_generation="base-a",
+            confirmed_state=ManagedWireGuardState.PRESENT,
+            confirmed_generation="base-a",
+            confirmed_interface=InterfaceIdentity("wg0", ROUTE.endpoint.ifindex + 1),
+        )
+        driver = Driver({})
+
+        with self.assertRaisesRegex(
+            WireGuardPeerRuntimeError,
+            "D.001 interface identity is stale",
+        ):
+            WireGuardPeerRuntimeCoordinator().reconcile(
+                self.config,
+                (stale_base,),
                 (ROUTE,),
                 self.assembly,
                 snapshot_observer=self.observer,
