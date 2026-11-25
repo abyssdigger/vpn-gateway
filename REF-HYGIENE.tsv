@@ -78,3 +78,5 @@ ADD_TAG	ng3-snapshot-release-methodology-dedup-source	287392037b8949c965dc948e5b
 DEL_BRANCH	ng3-release-methodology-dedup-cdc-20261125
 ADD_TAG	ng3-snapshot-architecture-coverage-labels-source	c98ee4db8ab8f9313f2bbadfad24a9eaa0541c5d	Canonical component trace labels and neutral coverage-index vocabulary.
 DEL_BRANCH	ng3-coverage-label-cleanup-cdc-20261125
+ADD_TAG	ng3-snapshot-wireguard-r8r6-runtime-ordering-source	a36598006753f45f4cc152491a69668742766bf6	R8.R6 D.002/A.007 generation-currentness ordering and stale-evidence invalidation.
+DEL_BRANCH	ng3-wireguard-r8r6-runtime-ordering-cdc-20261125
