@@ -5,6 +5,22 @@ reviews, experiments or transient implementation details. Requirements, architec
 evidence remain authoritative in their own artifacts.
 
 
+## 2026-11-25 — Managed Device lifecycle requirement branch closed
+
+The explicitly managed Device lifecycle under `VPNG-U001-R1.R3.R7*` now has accepted
+requirement closure. The current configuration contract, A.012 `ManagedDeviceManager` and
+D.001 managed WireGuard Adapter jointly cover explicit management opt-in, preservation of
+externally prepared Devices, structural-demand-driven presence, desired/confirmed generation
+separation, confirmed start/stop/restart behavior, secret-sensitive generation changes and
+dependency-safe teardown.
+
+The closure review found no remaining product or architecture decision inside the R7 scope.
+Packet-triggered activation and idle-time disconnect remain deliberately outside R7.R3 rather
+than hidden unfinished Device-manager work. The existing implementation/evidence in
+`EV-00070`, `EV-00080` and `EV-00090` remains the acceptance basis; no duplicate lifecycle
+implementation was added.
+
+
 ## 2026-11-25 — WireGuard ownership changes now invalidate stale Profile availability evidence
 
 Generalized managed-WireGuard recovery now closes the remaining R8.R6 currentness gap. The
