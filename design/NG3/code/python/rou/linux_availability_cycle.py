@@ -22,9 +22,11 @@ from .network_policy_layout import NetworkPolicyPlatformSpace
 from .payload_profile import PayloadProfileRequest
 from .probe_attempt import ProbeAttemptDriver
 from .probe_desired import ProbeDesiredAssembly
+from .probe_plane_desired import ProbePlaneDesiredAssembly
 from .probe_precondition import (
     ProbeExecutionPrecondition,
     verify_probe_execution_precondition,
+    verify_probe_execution_precondition_scoped,
 )
 from .probe_routing_convergence import (
     ProbeRoutingTransactionResult,
@@ -61,7 +63,7 @@ def run_linux_availability_cycle_once(
     config: Release1Config,
     baseline_profiles: Iterable[PayloadProfileRequest],
     path_routes: Iterable[RoutePriorityPathRoute],
-    assembly: ProbeDesiredAssembly,
+    assembly: ProbeDesiredAssembly | ProbePlaneDesiredAssembly,
     runtime: AvailabilityProbeRuntime,
     manager: AvailabilityManager,
     driver: ProbeAttemptDriver,
@@ -102,11 +104,22 @@ def run_linux_availability_cycle_once(
             namespace=namespace,
             platform=platform,
         ).observe_structural_snapshot()
-        precondition = verify_probe_execution_precondition(
-            snapshot,
-            assembly.probe,
-            platform,
-        )
+        if isinstance(assembly, ProbePlaneDesiredAssembly):
+            precondition = verify_probe_execution_precondition_scoped(
+                snapshot,
+                assembly.probe,
+                frozenset(
+                    intent.owner
+                    for intent in assembly.availability_intents
+                ),
+                platform,
+            )
+        else:
+            precondition = verify_probe_execution_precondition(
+                snapshot,
+                assembly.probe,
+                platform,
+            )
     except Exception as exc:
         return LinuxAvailabilityCycleResult(
             LinuxAvailabilityCycleStatus.FAILED,

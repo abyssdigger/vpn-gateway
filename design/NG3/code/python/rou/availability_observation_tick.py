@@ -12,6 +12,7 @@ from .availability_manager import (
 from .payload_profile import PayloadProfileRequest
 from .probe_attempt import ProbeAttemptDriver, execute_probe_attempt_once
 from .probe_desired import ProbeDesiredAssembly
+from .probe_plane_desired import ProbePlaneDesiredAssembly
 from .probe_precondition import ProbeExecutionPrecondition
 from .probe_runtime import AvailabilityProbeRuntime, ProbeEvidence
 from .release1_config import Release1Config
@@ -33,7 +34,7 @@ def run_availability_observation_tick(
     config: Release1Config,
     baseline_profiles: Iterable[PayloadProfileRequest],
     path_routes: Iterable[RoutePriorityPathRoute],
-    assembly: ProbeDesiredAssembly,
+    assembly: ProbeDesiredAssembly | ProbePlaneDesiredAssembly,
     precondition: ProbeExecutionPrecondition,
     runtime: AvailabilityProbeRuntime,
     manager: AvailabilityManager,
@@ -48,9 +49,12 @@ def run_availability_observation_tick(
     profiles = tuple(baseline_profiles)
     routes = tuple(path_routes)
 
-    if not isinstance(assembly, ProbeDesiredAssembly):
+    if not isinstance(
+        assembly,
+        (ProbeDesiredAssembly, ProbePlaneDesiredAssembly),
+    ):
         raise AvailabilityObservationTickError(
-            "assembly must be ProbeDesiredAssembly"
+            "assembly must be a supported probe desired assembly"
         )
     if not isinstance(precondition, ProbeExecutionPrecondition):
         raise AvailabilityObservationTickError(
@@ -65,7 +69,12 @@ def run_availability_observation_tick(
             "manager must be AvailabilityManager"
         )
 
-    runtime.configure(assembly.intents, routes)
+    availability_intents = (
+        assembly.availability_intents
+        if isinstance(assembly, ProbePlaneDesiredAssembly)
+        else assembly.intents
+    )
+    runtime.configure(availability_intents, routes)
     projection = manager.synchronize(
         runtime.current_contexts,
         profiles,
